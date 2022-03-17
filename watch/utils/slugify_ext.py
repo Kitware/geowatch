@@ -49,7 +49,7 @@ def _trunc_op(string, max_length, trunc_loc):
     total_len = len(string)
     mid_pos = int(total_len * trunc_loc)
 
-    num_remove = max(total_len - max_length, 0)
+    num_remove = max(total_len - max_length, 1)
     import ubelt as ub
     import numpy as np
     recommend = min(max(4, int(np.ceil(np.log(num_remove)))), 32)

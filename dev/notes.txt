@@ -81,3 +81,82 @@ __notes__ = """
   pyyaml >= 5.4.1
 """
 
+
+# One of the models that was packaged incorrectly
+FUSION_EXPERIMENT_SC_DM_wv_p8_V133_epoch=120-step=123903.pt
+
+python -m watch.tasks.fusion.predict \
+    --write_probs=True \
+    --write_preds=False \
+    --with_class=auto \
+    --with_saliency=auto \
+    --with_change=False \
+    --package_fpath=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/packages/FUSION_EXPERIMENT_SC_DM_wv_p8_V133/FUSION_EXPERIMENT_SC_DM_wv_p8_V133_epoch=120-step=123903.pt \
+    --pred_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/FUSION_EXPERIMENT_SC_DM_wv_p8_V133/pred_FUSION_EXPERIMENT_SC_DM_wv_p8_V133_epoch=120-step=123903/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json \
+    --test_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/combo_DILM_nowv_vali.kwcoco.json \
+    --num_workers=4 \
+    --compress=DEFLATE \
+    --gpus=0, \
+    --batch_size=1
+
+
+smartwatch visualize /home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/FUSION_EXPERIMENT_SC_DM_wv_p8_V133/pred_FUSION_EXPERIMENT_SC_DM_wv_p8_V133_epoch=120-step=123903/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json --channels="Site Preparation|Active Construction|Post Construction"
+
+
+smartwatch intensity_histograms /home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/FUSION_EXPERIMENT_SC_DM_wv_p8_V133/pred_FUSION_EXPERIMENT_SC_DM_wv_p8_V133_epoch=120-step=123903/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json
+
+
+python -m watch.tasks.fusion.evaluate \
+    --true_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/combo_DILM_nowv_vali.kwcoco.json \
+    --pred_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/FUSION_EXPERIMENT_SC_DM_wv_p8_V133/pred_FUSION_EXPERIMENT_SC_DM_wv_p8_V133_epoch=120-step=123903/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json \
+      --eval_dpath=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/eval/FUSION_EXPERIMENT_SC_DM_wv_p8_V133/pred_FUSION_EXPERIMENT_SC_DM_wv_p8_V133_epoch=120-step=123903/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/predcfg_abd043ec/eval \
+      --score_space=video \
+      --draw_curves=1 \
+      --draw_heatmaps=1 \
+      --workers=2
+
+
+
+ANOTHER ERROR I FOUND:
+
+
+Found 626 tasks                                                                                                                                                                     
+submit reformat jobs 313/313... rate=2774.61 Hz, eta=0:00:00, total=0:00:00                                                                                                         
+reformat images 626/626... rate=5.75 Hz, eta=0:00:00, total=0:01:480                                                                                                                
+finalize image move 626/626... rate=1671.25 Hz, eta=0:00:00, total=0:00:00                                                                                                          
+++ [[ 0 == \0 ]]                                                                                                                                                                    
+++ let _QUEUE_NUM_FINISHED=_QUEUE_NUM_FINISHED+1                                                                                                                                    
+++ set +x                                                                                                                                                                           
+{"status": "run", "finished": 4, "errored": 0, "total": 9, "name": "queue_quantize-jobs_0", "rootid": "2022-03-16T181559+5_bfdaaf61"}                                               
+++ python -m watch.cli.coco_reformat_channels --src=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/BASELINE_EXPERIMENT_V001/pred_BASELINE_EXPERIM
+ENT_V001_epoch=11-step=62759-v2/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json '--quantize=not_salient|salient,Site Preparation|Active C
+onstruction|Post Construction|No Activity' '--remove=not_salient,negative,ignore,negative,positive,background|Unknown' --workers=0                                                  
+config = {                                                                                                                                                                          
+    'nodata': -9999,                                                                                                                                                                
+    'quantize': 'not_salient|salient,Site Preparation|Active Construction|Post Construction|No Activity',                                                                           
+    'remove': 'not_salient,negative,ignore,negative,positive,background|Unknown',                                                                                                   
+    'src': '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/BASELINE_EXPERIMENT_V001/pred_BASELINE_EXPERIMENT_V001_epoch=11-step=62759-v2/Drop2-Al
+igned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json',                                                                                                
+    'workers': 0,                                                                                                                                                                   
+}                                                                                                                                                                                   
+Found 626 tasks                                                                                                                                                                     
+submit reformat jobs 313/313... rate=3150.32 Hz, eta=0:00:00, total=0:00:00                                                                                                         
+reformat images   0/626... rate=0 Hz, eta=?, total=0:00:00Traceback (most recent call last):                                                                                        
+  File "/home/joncrall/.pyenv/versions/3.9.9/lib/python3.9/runpy.py", line 197, in _run_module_as_main                                                                              
+    return _run_code(code, main_globals, None,                                                                                                                                      
+  File "/home/joncrall/.pyenv/versions/3.9.9/lib/python3.9/runpy.py", line 87, in _run_code                                                                                         
+    exec(code, run_globals)                  
+  File "/home/joncrall/code/watch/watch/cli/coco_reformat_channels.py", line 263, in <module>
+    main(cmdline=True)                       
+  File "/home/joncrall/code/watch/watch/cli/coco_reformat_channels.py", line 129, in main
+    fpath, new_fpath, new_obj = job.result()                                              
+  File "/home/joncrall/.pyenv/versions/3.9.9/lib/python3.9/concurrent/futures/_base.py", line 438, in result
+    return self.__get_result()               
+  File "/home/joncrall/code/ubelt/ubelt/util_futures.py", line 107, in _Future__get_result
+    self._run()                              
+  File "/home/joncrall/code/ubelt/ubelt/util_futures.py", line 65, in _run                
+    result = self.func(*self.args, **self.kw)                                             
+  File "/home/joncrall/code/watch/watch/cli/coco_reformat_channels.py", line 201, in reformat_obj
+    raise NotImplementedError                
+NotImplementedError                          
+

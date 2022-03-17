@@ -36,15 +36,19 @@ def main():
                         default=False,
                         help="Assume the data is in subdirectories relative "
                              "to the output KWCOCO manifest")
-    parser.add_argument("--populate-watch-fields",
-                        action='store_true',
-                        default=False,
-                        help="Populate video / watch fields")
     parser.add_argument("--from-collated",
                         action='store_true',
                         default=False,
                         help="Data to convert has been run through TA-1 "
                              "collation")
+    parser.add_argument("--ignore_duplicates",
+                        action='store_true',
+                        default=False,
+                        help="Ignore duplicate items when creating the kwcoco file")
+    parser.add_argument("--populate-watch-fields",
+                        action='store_true',
+                        default=False,
+                        help="Populate video / watch fields")
     parser.add_argument("-j", "--jobs",
                         type=str,
                         default=1,
@@ -52,7 +56,6 @@ def main():
                         help="Number of jobs to run in parallel")
 
     ta1_stac_to_kwcoco(**vars(parser.parse_args()))
-
     return 0
 
 
@@ -319,7 +322,8 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
                        assume_relative=False,
                        populate_watch_fields=False,
                        jobs=1,
-                       from_collated=False):
+                       from_collated=False,
+                       ignore_duplicates=False):
 
     from watch.utils.lightning_ext import util_globals
     jobs = util_globals.coerce_num_workers(jobs)
@@ -362,7 +366,11 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
     for job in executor.as_completed(desc='collect jobs'):
         kwcoco_img = job.result()
         if kwcoco_img is not None:
-            output_dset.add_image(**kwcoco_img)
+            try:
+                output_dset.add_image(**kwcoco_img)
+            except ValueError:
+                if not ignore_duplicates:
+                    raise
 
     if populate_watch_fields:
         video_id = output_dset.add_video(name=ub.hash_data(catalog.to_dict()))

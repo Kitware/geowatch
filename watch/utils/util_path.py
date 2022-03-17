@@ -1,7 +1,7 @@
 import os
 import ubelt as ub
 import pathlib
-from watch.utils.util_pattern import Pattern
+from watch.utils import util_pattern
 
 
 def coercepath(path_like):
@@ -100,18 +100,6 @@ def coerce_patterned_paths(data, expected_extension=None):
     return paths
 
 
-def _coerce_multipattern(pattern):
-    if pattern is None:
-        pattern_ = None
-    else:
-        if not ub.iterable(pattern):
-            pattern_ = [pattern]
-        else:
-            pattern_ = pattern
-        pattern_ = [Pattern.coerce(pat, hint='glob') for pat in pattern_]
-    return pattern_
-
-
 def find(pattern=None, dpath=None, include=None, exclude=None, type=None,
          recursive=True, followlinks=False):
     """
@@ -183,21 +171,23 @@ def find(pattern=None, dpath=None, include=None, exclude=None, type=None,
     if dpath is None:
         dpath = os.getcwd()
 
-    # Define helper for checking inclusion / exclusion
-    include_ = _coerce_multipattern(include)
-    exclude_ = _coerce_multipattern(exclude)
-    main_pattern = Pattern.coerce(pattern, hint='glob')
+    include_ = (None if include is None else
+                util_pattern.MultiPattern(include, hint='glob'))
+    exclude_ = (None if exclude is None else
+                util_pattern.MultiPattern(exclude, hint='glob'))
+
+    main_pattern = util_pattern.Pattern.coerce(pattern, hint='glob')
 
     def is_included(name):
         if not main_pattern.match(name):
             return False
 
         if exclude_ is not None:
-            if any(pat.match(name) for pat in exclude_):
+            if exclude_.match(name):
                 return False
 
         if include_ is not None:
-            if any(pat.match(name) for pat in include_):
+            if include_.match(name):
                 return True
             else:
                 return False
@@ -217,3 +207,16 @@ def find(pattern=None, dpath=None, include=None, exclude=None, type=None,
 
         if not recursive:
             break
+
+
+def file_from_text(text):
+    """
+    Create a StringIO object from text to use as a file.
+
+    # Probably does not belong in util_path
+    """
+    import io
+    file = io.StringIO()
+    file.write(text)
+    file.seek(0)
+    return file

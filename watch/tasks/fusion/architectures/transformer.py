@@ -630,7 +630,7 @@ def _build_global_configs():
         'p2': dict(n_layers=2, embedding_size=64, n_heads=4),
         'p2w': dict(n_layers=2, embedding_size=128, n_heads=8),
 
-        'p3': dict(n_layers=4, embedding_size=128, n_heads=4),
+        'p3': dict(n_layers=3, embedding_size=128, n_heads=4),
         'p4': dict(n_layers=4, embedding_size=128, n_heads=4),
 
         'p8': dict(n_layers=8, embedding_size=128, n_heads=4),

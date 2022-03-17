@@ -1,15 +1,45 @@
 """
 Helper for scheduling a set of prediction + evaluation jobs
 
-python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation
+python -m watch.tasks.fusion.schedule_evaluation
+
+
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+EXPT_PATTERN="*"
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_nowv_vali.kwcoco.json
+python -m watch.tasks.fusion.schedule_evaluation \
+        --gpus="0,1" \
+        --model_globstr="$DVC_DPATH/models/fusion/eval3_candidates/packages/${EXPT_PATTERN}/*.pt" \
+        --test_dataset="$VALI_FPATH" \
+        --run=0 --skip_existing=True
+
+
 """
 import ubelt as ub
-from watch.utils import tmux_queue
+import scriptconfig as scfg
 
 
-def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
-                        run=False, with_rich=0, with_status=True,
-                        virtualenv_cmd=None, skip_existing=False):
+class ScheduleEvaluationConfig(scfg.Config):
+    """
+    Builds commands and optionally schedules them.
+    """
+    default = {
+        'model_globstr': scfg.Value(None, help='one or more glob patterns that match the models to predict/evaluate on'),
+        'test_dataset': scfg.Value(None, help='path to the test dataset to predict/evaluate on'),
+        'gpus': scfg.Value('auto', help='if using tmux or serial, indicate which gpus are available for use as a comma separated list: e.g. 0,1'),
+        'run': scfg.Value(False, help='if False, only prints the commands, otherwise executes them'),
+        'virtualenv_cmd': scfg.Value(None, help='command to activate a virtualenv if needed. (might have issues with slurm backend)'),
+        'skip_existing': scfg.Value(False, help='if True dont submit commands where the expected products already exist'),
+        'backend': scfg.Value('tmux', help='can be tmux, slurm, or maybe serial in the future'),
+
+        'enable_eval': scfg.Value(True, help='if False, then evaluation is not run'),
+        'enable_pred': scfg.Value(True, help='if False, then prediction is not run'),
+    }
+
+
+def schedule_evaluation(cmdline=False, **kwargs):
     """
     First ensure that models have been copied to the DVC repo in the
     appropriate path. (as noted by model_dpath)
@@ -119,16 +149,20 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
     """
     import watch
     from watch.tasks.fusion import organize
-    import json
+    # import json
+
+    config = ScheduleEvaluationConfig(cmdline=cmdline, data=kwargs)
+    model_globstr = config['model_globstr']
+    test_dataset = config['test_dataset']
 
     if model_globstr is None and test_dataset is None:
-        dvc_dpath = watch.find_smart_dvc_dpath()
-        model_globstr = str(dvc_dpath / 'models/fusion/SC-20201117/*/*.pt')
-        test_dataset = dvc_dpath / 'Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json'
-
-        # hack for train set
-        # test_dataset = dvc_dpath / 'Drop1-Aligned-L1/combo_train_US_R001_small_nowv.kwcoco.json'
-        gpus = 'auto'
+        raise ValueError('model_globstr and test_dataset are required')
+        # dvc_dpath = watch.find_smart_dvc_dpath()
+        # model_globstr = str(dvc_dpath / 'models/fusion/SC-20201117/*/*.pt')
+        # test_dataset = dvc_dpath / 'Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json'
+        # # hack for train set
+        # # test_dataset = dvc_dpath / 'Drop1-Aligned-L1/combo_train_US_R001_small_nowv.kwcoco.json'
+        # gpus = 'auto'
 
     dvc_dpath = watch.find_smart_dvc_dpath()
 
@@ -159,9 +193,9 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
     with_saliency = 'auto'
     with_class = 'auto'
 
-    with_pred = True  # TODO: allow caching
-    with_eval = True
-    workers_per_queue = 5
+    with_pred = config['enable_pred']  # TODO: allow caching
+    with_eval = config['enable_eval']
+    workers_per_queue = 4
     recompute = False
 
     # HARD CODED
@@ -173,8 +207,6 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
     # test_dataset_fpath = dvc_dpath / 'Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json'
     test_dataset_fpath = ub.Path(test_dataset)
     assert test_dataset_fpath.exists()
-
-    stamp = ub.timestamp() + '_' + ub.hash_data([])[0:8]
 
     def package_metadata(package_fpath):
         # Hack for choosing one model from this "type"
@@ -227,6 +259,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
     tmux_schedule_dpath = dvc_dpath / '_tmp_tmux_schedule'
     tmux_schedule_dpath.mkdir(exist_ok=True)
 
+    gpus = config['gpus']
     print('gpus = {!r}'.format(gpus))
     if gpus == 'auto':
         # Use all unused gpus
@@ -247,19 +280,41 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
         'DVC_DPATH': dvc_dpath,
     }
 
-    tq = tmux_queue.TMUXMultiQueue(
-        name=stamp, size=len(GPUS), environ=environ, gres=GPUS,
-        dpath=tmux_schedule_dpath)
+    # queue = tmux_queue.TMUXMultiQueue(
+    #     size=len(GPUS), environ=environ, gres=GPUS,
+    #     dpath=tmux_schedule_dpath)
+
+    # queue = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
+    if config['backend'] == 'slurm':
+        from watch.utils import slurm_queue
+        queue = slurm_queue.SlurmQueue(name='schedule-eval')
+    elif config['backend'] == 'tmux':
+        from watch.utils import tmux_queue
+        queue = tmux_queue.TMUXMultiQueue(name='schedule-eval',
+                                          size=len(GPUS), environ=environ,
+                                          dpath=tmux_schedule_dpath)
+    else:
+        raise KeyError(config['backend'])
+
+    virtualenv_cmd = config['virtualenv_cmd']
     if virtualenv_cmd:
-        tq.add_header_command(virtualenv_cmd)
+        queue.add_header_command(virtualenv_cmd)
 
     recompute_pred = recompute
     recompute_eval = recompute or 0
 
-    for info, queue in zip(packages_to_eval, tq):
+    pred_cfg = {}
+
+    skip_existing = config['skip_existing']
+
+    for info in packages_to_eval:
         package_fpath = info['fpath']
-        suggestions = organize.suggest_paths(package_fpath=package_fpath, test_dataset=test_dataset_fpath)
-        suggestions = json.loads(suggestions)
+        suggestions = organize.suggest_paths(
+            package_fpath=package_fpath,
+            test_dataset=test_dataset_fpath,
+            sidecar2=True, as_json=False,
+            pred_cfg=pred_cfg,
+        )
 
         pred_dataset_fpath = ub.Path(suggestions['pred_dataset'])  # NOQA
         eval_metrics_fpath = ub.Path(suggestions['eval_dpath']) / 'curves/measures2.json'
@@ -283,6 +338,12 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
         print('has_eval = {!r}'.format(has_eval))
         print('has_pred = {!r}'.format(has_pred))
 
+        # import ubelt as ub
+        # ub.util_hash._HASHABLE_EXTENSIONS.register(pathlib.Path)( lambda x: (b'PATH', str))
+        # import os
+        name_suffix = '_' + ub.hash_data(str(package_fpath))[0:8]
+
+        pred_job = None
         if with_pred:
             pred_command = ub.codeblock(
                 r'''
@@ -303,15 +364,24 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
             if not recompute_pred:
                 # Only run the command if its expected output does not exist
                 pred_command = (
-                    '[[ -f "{pred_dataset}" ]] || '.format(**suggestions) +
+                    'test -f "{pred_dataset}" || '.format(**suggestions) +
                     pred_command
                 )
-
             if recompute_pred or not (skip_existing and (has_pred or has_eval)):
                 if not has_eval:
-                    queue.submit(pred_command)
+                    name = 'pred' + name_suffix
+                    # from math import ceil
+                    # FIXME: slurm cpu arg seems to be cut in half
+                    # int(ceil(workers_per_queue / 2))
+                    pred_cpus = workers_per_queue
+                    pred_job = queue.submit(pred_command, gpus=1, name=name, cpus=pred_cpus)
 
         if with_eval:
+            if not with_pred:
+                # can only eval predictions that exist, and they wont be computed here
+                if not pred_dataset_fpath.exists():
+                    continue
+
             eval_command = ub.codeblock(
                 r'''
                 python -m watch.tasks.fusion.evaluate \
@@ -320,31 +390,36 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
                       --eval_dpath={eval_dpath} \
                       --score_space=video \
                       --draw_curves=1 \
-                      --draw_heatmaps=1
+                      --draw_heatmaps=1 \
+                      --workers=2
                 ''').format(**suggestions)
             if not recompute_eval:
                 # TODO: use a real stamp file
                 # Only run the command if its expected output does not exist
                 eval_command = (
-                    '[[ -f "{eval_metrics}" ]] || '.format(**suggestions) +
+                    'test -f "{eval_metrics}" || '.format(**suggestions) +
                     eval_command
                 )
             if recompute_eval or not (skip_existing and has_eval):
-                queue.submit(eval_command)
+                name = 'eval' + name_suffix
+                queue.submit(eval_command, depends=pred_job, name=name, cpus=2)
+            # TODO: memory
 
-    print('tq = {!r}'.format(tq))
-    # print(f'{len(tq)=}')
-    tq.rprint(with_status=with_status, with_rich=with_rich)
+    print('queue = {!r}'.format(queue))
+    # print(f'{len(queue)=}')
+    with_status = 0
+    with_rich = 0
+    queue.rprint(with_status=with_status, with_rich=with_rich)
 
     # RUN
-    if run:
+    if config['run']:
         # ub.cmd('bash ' + str(driver_fpath), verbose=3, check=True)
-        tq.run()
-        agg_state = tq.monitor()
+        queue.run()
+        agg_state = queue.monitor()
         if not agg_state['errored']:
-            tq.kill()
+            queue.kill()
     else:
-        driver_fpath = tq.write()
+        driver_fpath = queue.write()
         print('Wrote script: to run execute:\n{}'.format(driver_fpath))
 
     """
@@ -369,6 +444,8 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
 
 def updates_dvc_measures():
     """
+    DEPRECATE
+
     Add results of pixel evaluations to DVC
     """
     import watch
@@ -436,5 +513,4 @@ if __name__ == '__main__':
 
         python ~/code/watch/watch/tasks/fusion/schedule_evaluation.py gather_measures
     """
-    import fire
-    fire.Fire()
+    schedule_evaluation(cmdline=True)

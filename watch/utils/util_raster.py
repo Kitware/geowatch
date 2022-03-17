@@ -120,7 +120,8 @@ def mask(raster: Union[rasterio.DatasetReader, str],
          convex_hull=False,
          as_poly=True,
          tolerance=None,
-         max_polys=None):
+         max_polys=None,
+         use_overview=0):
     """
     Compute a raster's valid data mask in pixel coordinates.
 
@@ -145,6 +146,11 @@ def mask(raster: Union[rasterio.DatasetReader, str],
             of Python convention).
 
         tolerance (int): if specified, simplifies the valid polygon.
+
+        use_overview (int):
+            if non-zero uses the closest overview if it is available.
+            This increases computation time, but gives a better polygon when
+            use_overview is closer to 0.
 
     Returns:
         If as_poly, a shapely Polygon or MultiPolygon bounding the valid
@@ -216,6 +222,8 @@ def mask(raster: Union[rasterio.DatasetReader, str],
         with TemporaryEnvironment({'PROJ_LIB': None, 'PROJ_DEBUG': '3'}):
 
             img = _ensure_open(raster)
+            img_height = img.height
+            img_width = img.width
 
             # Work at the coarsest overview level for speed
             overviews = {
@@ -228,7 +236,10 @@ def mask(raster: Union[rasterio.DatasetReader, str],
                     img.close()
                     # Open image with a higher overview level
                     # https://github.com/rasterio/rasterio/issues/1504
-                    requested_overview = len(overview_levels) - 1
+                    if use_overview < 0:
+                        use_overview = len(overview_levels) + use_overview
+
+                    requested_overview = min(max(use_overview, 0), len(overview_levels) - 1)
                     img = rasterio.open(img.name,
                                         'r',
                                         overview_level=requested_overview)
@@ -295,6 +306,10 @@ def mask(raster: Union[rasterio.DatasetReader, str],
                 img.close()
 
         if convex_hull:
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    'ignore', 'Input image is entirely zero',
+                    category=UserWarning)
             mask_img = convex_hull_image(mask_img).astype(np.uint8)
 
         if not as_poly:
@@ -312,20 +327,37 @@ def mask(raster: Union[rasterio.DatasetReader, str],
                     break
 
         if tolerance is not None:
-            polys = [poly.buffer(0).simplify(tolerance) for poly in polys]
+            scaled_tolerance = tolerance
+            if scale_factor is not None:
+                scaled_tolerance = tolerance / scale_factor
+            polys = [poly.buffer(0).simplify(scaled_tolerance) for poly in polys]
+
         mask_poly = shp.ops.unary_union(polys).buffer(0)
+
         if tolerance is not None:
-            mask_poly.simplify(tolerance)
+            mask_poly = mask_poly.simplify(scaled_tolerance)
 
         # do this again to fix any weirdness from union
         if convex_hull:
             mask_poly = mask_poly.convex_hull
 
         if scale_factor is not None:
+            # Move from area space into point space?
+            # mask_poly = shapely.affinity.translate(mask_poly, xoff=-0.5, yoff=-0.5)
             mask_poly = shapely.affinity.scale(mask_poly,
                                                xfact=scale_factor,
                                                yfact=scale_factor,
-                                               origin=(0, 0))
+                                               origin=(0.0, 0.0))
+            # Using overviews to compute a polygon has slack.
+            # Buffer to account for this.
+            mask_poly = mask_poly.buffer(scale_factor)
+
+            # Clip to the bounds
+            bounds = shapely.geometry.box(0, 0, img_width, img_height)
+            mask_poly = mask_poly.intersection(bounds)
+
+            if tolerance is not None:
+                mask_poly = mask_poly.simplify(tolerance)
 
     return mask_poly
 
