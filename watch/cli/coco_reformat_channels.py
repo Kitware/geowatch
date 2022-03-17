@@ -4,6 +4,7 @@ import scriptconfig as scfg
 import xarray as xr
 import kwimage
 import numpy as np
+import os
 from kwcoco.channel_spec import FusedChannelSpec
 
 
@@ -30,13 +31,14 @@ def main(cmdline=False, **kwargs):
     Example:
         >>> from watch.cli.coco_reformat_channels import *  # NOQA
         >>> import kwcoco
+        >>> import kwarray
+        >>> import shutil
         >>> # Make a dataset we can modify inplace
         >>> orig_dset = kwcoco.CocoDataset.demo('vidshapes1-msi')
         >>> orig_dset.reroot(absolute=False)
         >>> orig_bundle = ub.Path(orig_dset.bundle_dpath)
         >>> new_bundle = ub.Path.appdir('kwcoco/tests/test_reformat_channels')
         >>> new_bundle.delete().ensuredir()
-        >>> import shutil
         >>> shutil.copytree(orig_bundle, new_bundle, dirs_exist_ok=True)
         >>> new_fpath = new_bundle / 'data.kwcoco.json'
         >>> orig_dset.dump(new_fpath)
@@ -140,7 +142,6 @@ def main(cmdline=False, **kwargs):
         # Point of no return
 
         # Finalize everything by executing move
-        import os
         os.rename(tmp_fpath, dset.fpath)
         for task in ub.ProgIter(finalize_tasks, desc='finalize image move'):
             os.rename(task['src'], task['dst'])
