@@ -228,7 +228,7 @@ def main(cmdline=False, **kwargs):
         uncropped_fielded_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}_fielded.kwcoco.json'
         uncropped_fielded_kwcoco_fpath = uncropped_fielded_kwcoco_fpath.shrinkuser(home='$HOME')
 
-        cache_prefix = '[[ -f {uncropped_prep_kwcoco_fpath} ]] || ' if config['cache'] else ''
+        cache_prefix = '[[ -f {uncropped_fielded_kwcoco_fpath} ]] || ' if config['cache'] else ''
         add_fields_job = queue.submit(ub.codeblock(
             rf'''
             # PREPARE Uncropped datasets (usually for debugging)
@@ -242,7 +242,7 @@ def main(cmdline=False, **kwargs):
             '''), depends=convert_job)
 
         uncropped_coco_paths.append(uncropped_fielded_kwcoco_fpath)
-        union_depends_jobs.append(convert_job)
+        union_depends_jobs.append(add_fields_job)
 
     if len(uncropped_coco_paths) == 1:
         uncropped_final_kwcoco_fpath = uncropped_coco_paths[0]
@@ -262,9 +262,8 @@ def main(cmdline=False, **kwargs):
             '''), depends=union_depends_jobs)
         uncropped_final_jobs = [union_job]
 
-    uncropped_prep_kwcoco_fpath = uncropped_dpath / 'data_prepped.kwcoco.json'
-    uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.shrinkuser(home='$HOME')
-
+    # uncropped_prep_kwcoco_fpath = uncropped_dpath / 'data_prepped.kwcoco.json'
+    # uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.shrinkuser(home='$HOME')
     # select_images_query = config['select_images']
     # if select_images_query:
     #     suffix = '_' + ub.hash_data(select_images_query)[0:8]
@@ -301,7 +300,7 @@ def main(cmdline=False, **kwargs):
         # MAIN WORKHORSE CROP IMAGES
         # Crop big images to the geojson regions
         {job_environ_str}python -m watch.cli.coco_align_geotiffs \
-            --src "{uncropped_prep_kwcoco_fpath}" \
+            --src "{uncropped_final_kwcoco_fpath}" \
             --dst "{aligned_imgonly_kwcoco_fpath}" \
             --regions "{region_dpath / '*.geojson'}" \
             --workers={config['align_workers']} \
