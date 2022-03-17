@@ -290,9 +290,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
         queue = slurm_queue.SlurmQueue(name='schedule-eval')
     elif config['backend'] == 'tmux':
         from watch.utils import tmux_queue
-        queue = tmux_queue.TMUXMultiQueue(name='schedule-eval',
-                                          size=len(GPUS), environ=environ,
-                                          dpath=tmux_schedule_dpath)
+        queue = tmux_queue.TMUXMultiQueue(
+            name='schedule-eval', size=len(GPUS), environ=environ,
+            dpath=tmux_schedule_dpath, gres=GPUS)
     else:
         raise KeyError(config['backend'])
 
