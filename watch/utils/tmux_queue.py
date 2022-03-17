@@ -377,7 +377,7 @@ class TMUXMultiQueue(PathIdentifiable):
         wcc_groups = []
         for wcc in list(nx.weakly_connected_components(graph)):
             sub = graph.subgraph(wcc)
-            if 1:
+            if 0:
                 print(nx.forest_str(nx.minimum_spanning_arborescence(sub)))
             wcc_order = list(nx.topological_sort(sub))
             wcc_groups.append(wcc_order)
