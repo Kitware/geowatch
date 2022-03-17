@@ -9,6 +9,7 @@ import ubelt as ub
 
 
 # # FIXME: Hard-coded category aliases.
+# https://smartgitlab.com/TE/standards
 # # The correct way to handle these would be to have some information in the
 # # kwcoco category dictionary that specifies how the categories should be
 # # interpreted.
@@ -21,11 +22,12 @@ import ubelt as ub
 
 
 # TODO: ensure consistency with IARPA?
-# https://smartgitlab.com/TE/annotations/-/wikis/Alternate-Site-Type
-# https://smartgitlab.com/TE/metrics-and-test-framework/-/blob/main/evaluation.py#L1205
+# https://smartgitlab.com/TE/annotations/-/wikis/Annotation-Status-Types
+# https://smartgitlab.com/TE/metrics-and-test-framework/-/blob/main/iarpa_smart_metrics/evaluation.py#L1205
 # NOTE: A "Status" is not a category.
 # It indicates what sort of annotation detail is available.
 HUERISTIC_STATUS_DATA = [
+    {'name': 'positive_annotated_static', 'color': 'black'},
     {'name': 'positive_annotated', 'color': 'black'},
     {'name': 'positive_partial', 'color': 'black'},
     {'name': 'positive_pending', 'color': 'black'},
@@ -87,10 +89,10 @@ CATEGORIES = [
         'name': 'positive',
         'color': 'palegreen',
         'scored': False,
-        'conditional_tags': [
-            TAG_IF('positive', CONDITION('TASK_EQ', 'saliency')),
-            TAG_IF('ignore', CONDITION('TASK_EQ', 'class')),
-        ],
+        # 'conditional_tags': [
+        #     TAG_IF('positive', CONDITION('TASK_EQ', 'saliency')),
+        #     TAG_IF('ignore', CONDITION('TASK_EQ', 'class')),
+        # ],
     },
 
     {
@@ -98,9 +100,9 @@ CATEGORIES = [
         'color': 'gray',
         'scored': False,
         'tags': ['background'],
-        'conditional_tags': [
-            TAG_IF('hard_negative', CONDITION('TASK_EQ', 'class')),
-        ],
+        # 'conditional_tags': [
+        #     TAG_IF('hard_negative', CONDITION('TASK_EQ', 'class')),
+        # ],
     },
 
     {
@@ -121,32 +123,32 @@ CATEGORIES = [
         'color': 'darkturquoise',
         'scored': True,
         'tags': ['positive'],
-        'conditional_tags': [
-            TAG_IF('background', CONDITION('TASK_EQ', 'saliency')),
-            # Only positive if task=CLASS and has context
-            TAG_IF('positive', ALL(
-                CONDITION('TASK_EQ', 'class'),
-                CONDITION('ALSO_HAS', [
-                    'Site Preparation', 'Active Construction', 'No Activity'],
-                )
-            )),
-        ],
+        # 'conditional_tags': [
+        #     TAG_IF('background', CONDITION('TASK_EQ', 'saliency')),
+        #     # Only positive if task=CLASS and has context
+        #     TAG_IF('positive', ALL(
+        #         CONDITION('TASK_EQ', 'class'),
+        #         CONDITION('ALSO_HAS', [
+        #             'Site Preparation', 'Active Construction', 'No Activity'],
+        #         )
+        #     )),
+        # ],
     },
     {
         'name': 'No Activity',
         'color': 'tomato',
         'scored': True,
         'tags': ['saliency'],
-        'conditional_tags': [
-            TAG_IF('background', CONDITION('TASK_EQ', 'saliency')),
-            # Only positive if task=CLASS and has context
-            TAG_IF('positive', ALL(
-                CONDITION('TASK_EQ', 'class'),
-                CONDITION('ALSO_HAS', [
-                    'Site Preparation', 'Active Construction', 'No Activity'],
-                )
-            )),
-        ],
+        # 'conditional_tags': [
+        #     TAG_IF('background', CONDITION('TASK_EQ', 'saliency')),
+        #     # Only positive if task=CLASS and has context
+        #     TAG_IF('positive', ALL(
+        #         CONDITION('TASK_EQ', 'class'),
+        #         CONDITION('ALSO_HAS', [
+        #             'Site Preparation', 'Active Construction', 'No Activity'],
+        #         )
+        #     )),
+        # ],
     },
 ]
 
@@ -248,7 +250,9 @@ CATEGORIES_UNSCORED = [c for c in CATEGORIES if not c.get('scored', False)]
 # UNDISTINGUISHED_CLASSES =  {c['name'] for c in CATEGORIES if 'saliency' in c.get('tags', {})}
 IGNORE_CLASSNAMES = {'ignore', 'Unknown'}
 BACKGROUND_CLASSES = {'background'}
+NEGATIVE_CLASSES = {'negative'}
 UNDISTINGUISHED_CLASSES =  {'positive'}
+CONTEXT_CLASSES = {'No Activity', 'Post Construction'}
 # 'background',
 # 'No Activity',
 # 'Post Construction',
@@ -281,6 +285,7 @@ CATEGORIES_DCT = {
     },
     'negative': {
         'scored': [
+            # Maybe this should not be marked as "scored", because it isn't
             {'name': 'No Activity', 'color': 'tomato'},
         ],
         'unscored': [
@@ -389,6 +394,7 @@ PHASE_STATUS_TO_KWCOCO_CATNAME = {
     'positive_pending': 'positive',  # Does not have phase labels
     'positive_partial': 'positive',  # Does not have phase labels
     'positive_annotated': None,  # This must have a category already do not map
+    'positive_annotated_static': None,  # This must have a category already do not map
 }
 
 CONFUSION_COLOR_SCHEME = {

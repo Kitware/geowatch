@@ -31,6 +31,8 @@ pip install GDAL==3.3.1 --find-links https://girder.github.io/large_image_wheels
 
 pip install dvc[all]>=2.9.3
 
+pip install lru-dict || echo "unable to install lru-dict"
+
 fix_opencv_conflicts(){
     __doc__="
     Check to see if the wrong opencv is installed, and perform steps to clean

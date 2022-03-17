@@ -77,17 +77,19 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>> import watch
         >>> import kwcoco
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
-        >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data_nowv.kwcoco.json'
+        >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/combo_ILM.kwcoco.json'
+        >>> #coco_fpath = dvc_dpath / 'Aligned-Drop2-TA1-2022-03-07/combo_DILM.kwcoco.json'
         >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/combo_DILM.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> images = dset.images()
-        >>> sub_images = dset.videos(names=['KR_R002']).images[0]
-        >>> train_dataset = dset.subset(sub_images.lookup('id'))
+        >>> train_dataset = dset
+        >>> #sub_images = dset.videos(names=['KR_R002']).images[0]
+        >>> #train_dataset = dset.subset(sub_images.lookup('id'))
         >>> test_dataset = None
         >>> img = ub.peek(train_dataset.imgs.values())
         >>> chan_info = kwcoco_extensions.coco_channel_stats(dset)
         >>> #channels = chan_info['common_channels']
-        >>> channels = 'blue|green|red'
+        >>> channels = 'blue|green|red|nir|swir16|swir22,forest|bare_ground,matseg_0|matseg_1|matseg_2,invariants.0:3,cloudmask'
         >>> #channels = 'blue|green|red|depth'
         >>> #chan_spec = kwcoco.channel_spec.FusedChannelSpec.coerce(channels)
         >>> #channels = None
@@ -110,12 +112,19 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>> )
         >>> datamodule.setup('fit')
         >>> dl = datamodule.train_dataloader()
-        >>> #batch = next(iter(dl))
         >>> dataset = dl.dataset
         >>> dataset.requested_tasks['change'] = False
         >>> dataset.disable_augmenter = True
-
         >>> tr = 0
+        >>> item, *_ = batch = [dataset[tr]]
+        >>> #item, *_ = batch = next(iter(dl))
+        >>> # Visualize
+        >>> canvas = datamodule.draw_batch(batch)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas, doclf=1)
+        >>> kwplot.show_if_requested()
 
         if 0:
             tr = {
@@ -130,15 +139,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             tr = {
                 'gids': ([905]),
                 'space_slice': (slice(0, 512, None), slice(0, 512, None))}
-
-        >>> batch = [dataset[tr]]
-        >>> # Visualize
-        >>> canvas = datamodule.draw_batch(batch)
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> kwplot.autompl()
-        >>> kwplot.imshow(canvas, doclf=1)
-        >>> kwplot.show_if_requested()
 
     Example:
         >>> # xdoctest: +SKIP
@@ -167,7 +167,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>> )
         >>> self.setup('fit')
         >>> dl = self.train_dataloader()
-        >>> batch = next(iter(dl))
+        >>> item, *_ = batch = next(iter(dl))
         >>> expect_shape = (batch_size, time_steps, len(chan_spec), chip_size, chip_size)
         >>> assert len(batch) == batch_size
         >>> for item in batch:
@@ -209,6 +209,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         use_conditional_classes=True,
         ignore_dilate=11,
         min_spacetime_weight=0.5,
+        dist_weights=False,
     ):
         """
         Args:
@@ -275,6 +276,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             use_conditional_classes=use_conditional_classes,
             ignore_dilate=ignore_dilate,
             min_spacetime_weight=min_spacetime_weight,
+            dist_weights=dist_weights,
         )
         for _k, _v in self.common_dataset_kwargs.items():
             setattr(self, _k, _v)
@@ -425,6 +427,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             '--ignore_dilate', default=11, type=smartcast, help=ub.paragraph('Dilation applied to ignore masks.'))
         parser.add_argument(
             '--min_spacetime_weight', default=0.5, type=smartcast, help=ub.paragraph('Minimum space-time dilation weight'))
+
+        parser.add_argument(
+            '--dist_weights', default=0, type=smartcast, help=ub.paragraph('To use distance-transform based weights on annotations or not'))
 
         return parent_parser
 
@@ -831,8 +836,10 @@ class KWCocoVideoDataset(data.Dataset):
         use_conditional_classes=True,
         ignore_dilate=11,
         min_spacetime_weight=0.5,
+        dist_weights=False
     ):
 
+        self.dist_weights = dist_weights
         self.match_histograms = match_histograms
         self.normalize_perframe = normalize_perframe
         self.resample_invalid_frames = resample_invalid_frames
@@ -901,6 +908,7 @@ class KWCocoVideoDataset(data.Dataset):
             )
             self.length = len(new_sample_grid['targets'])
         else:
+            # TODO Cache this step
             negative_classes = (self.ignore_classes | self.background_classes)
             new_sample_grid = sample_video_spacetime_targets(
                 sampler.dset, window_dims=sample_shape,
@@ -1141,7 +1149,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> channels = 'B10|B8a|B1|B8'
             >>> sample_shape = (5, 530, 610)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, diff_inputs=0)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, diff_inputs=0, dist_weights=1)
             >>> item = self[0]
             >>> canvas = self.draw_item(item)
             >>> # xdoctest: +REQUIRES(--show)
@@ -1272,6 +1280,18 @@ class KWCocoVideoDataset(data.Dataset):
         gid_to_sample = {}
         gid_to_isbad = {}
 
+        # NOTES ON CLOUDMASK
+        # https://github.com/GERSL/Fmask#46-version
+        # The cloudmask band is a class-idx based raster with labels
+        # 0 => clear land pixel
+        # 1 => clear water pixel
+        # 2 => cloud shadow
+        # 3 => snow
+        # 4 => cloud
+        # 255 => no observation
+
+        # TODO: this could be a specially handled frame like ASI.
+
         def sample_one_frame(gid):
             coco_img = coco_dset.coco_image(gid)
             sensor_channels = (self.sample_channels & coco_img.channels).normalize()
@@ -1279,6 +1299,7 @@ class KWCocoVideoDataset(data.Dataset):
             tr_frame['gids'] = [gid]
             sample_streams = {}
             first_with_annot = with_annots
+
             for stream in sensor_channels.streams():
                 tr_frame['channels'] = stream
                 # TODO: FIXME: Use the correct nodata value here!
@@ -1288,11 +1309,29 @@ class KWCocoVideoDataset(data.Dataset):
                     padkw={'constant_values': np.nan},
                     dtype=np.float32
                 )
+                WV_NODATA_HACK = 1
+                if WV_NODATA_HACK:
+                    # Should be fixed in drop3
+                    if coco_img.img.get('sensor_coarse') == 'WV':
+                        if set(stream).issubset({'blue', 'green', 'red'}):
+                            mask = (sample['im'] == 0)
+                            sample['im'][mask] = np.nan
+
                 # dont ask for annotations multiple times
-                if not np.all(np.isnan(sample['im'])):
+                invalid_mask = np.isnan(sample['im'])
+                if not np.all(invalid_mask):
                     sample_streams[stream.spec] = sample
                     if 'annots' in sample:
                         first_with_annot = False
+                else:
+                    # HACK: if the red channel is all bad, discard the frame
+                    # This can be removed once nodata is correctly propogated
+                    # in the team features. OR we can add a feature where we
+                    # keep track of an image wide observation mask and use that
+                    # instead of using red as a proxy for it.
+                    if 'red' in set(stream):
+                        sample_streams = []
+                        break
 
             gid_to_isbad[gid] = len(sample_streams) == 0
             gid_to_sample[gid] = sample_streams
@@ -1567,6 +1606,9 @@ class KWCocoVideoDataset(data.Dataset):
                 ann_aids = dets.data['aids']
                 ann_cids = dets.data['cids']
                 ann_tids = dets.data['tids']
+
+                frame_poly_weights = np.ones(space_shape, dtype=np.float32)
+
                 # Note: it is important to respect class indexes, ids, and
                 # name mappings
                 # TODO: layer ordering? Multiclass prediction?
@@ -1592,7 +1634,6 @@ class KWCocoVideoDataset(data.Dataset):
                                 poly.fill(frame_class_ohe[orig_cidx], value=1)
                             elif new_class_catname not in self.background_classes:
                                 poly.fill(frame_class_ohe[new_class_cidx], value=1)
-
                     else:
                         cidx = self.classes.id_to_idx[cid]
                         catname = self.classes.id_to_node[cid]
@@ -1616,15 +1657,31 @@ class KWCocoVideoDataset(data.Dataset):
                             poly.fill(frame_class_ohe[cidx], value=1)
                             poly.fill(frame_saliency, value=1)
 
+                    if self.dist_weights:
+                        # New feature where we encode that we care much more about
+                        # segmenting the inside of the object than the outside.
+                        # Effectively boundaries become uncertain.
+                        import cv2
+                        poly_mask = np.zeros_like(frame_class_ohe[0])
+                        poly_mask = poly.fill(poly_mask, value=1)
+                        dist = cv2.distanceTransform(poly_mask, cv2.DIST_L2, 3)
+                        max_dist = dist.max()
+                        if max_dist > 0:
+                            dist_weight = dist / max_dist
+                            weight_mask = dist_weight + (1 - poly_mask)
+                            frame_poly_weights = frame_poly_weights * weight_mask
+
+                frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
+
                 # Postprocess (Dilate?) the truth map
                 for cidx, class_map in enumerate(frame_class_ohe):
                     # class_map = util_kwimage.morphology(class_map, 'dilate', kernel=5)
                     frame_cidxs[class_map > 0] = cidx
 
                 if self.upweight_centers:
-                    frame_weights = space_weights * time_weights[time_idx]
+                    frame_weights = space_weights * time_weights[time_idx] * frame_poly_weights
                 else:
-                    frame_weights = 1.0
+                    frame_weights = frame_poly_weights
 
                 # Dilate ignore masks (dont care about the surrounding area
                 # either)
@@ -2135,6 +2192,10 @@ class KWCocoVideoDataset(data.Dataset):
             >>> kwplot.autompl()
             >>> kwplot.imshow(canvas)
             >>> kwplot.show_if_requested()
+
+        Ignore:
+            import xdev
+            globals().update(xdev.get_func_kwargs(KWCocoVideoDataset.draw_item))
         """
         builder = BatchVisualizationBuilder(
             item=item, item_output=item_output,
@@ -2270,6 +2331,7 @@ class BatchVisualizationBuilder:
         return canvas
 
     def _prepare_frame_metadata(builder):
+        import more_itertools
         item = builder.item
         combinable_channels = builder.combinable_channels
 
@@ -2319,14 +2381,23 @@ class BatchVisualizationBuilder:
                     frame_chan_datas.append(chan_data)
             full_mode_code = ','.join(list(frame_item['modes'].keys()))
 
-            unused_frame_chan_names_set = ub.oset(frame_chan_names)
-            frame_available_chans = []
-            for combinable in combinable_channels:
-                if combinable.issubset(unused_frame_chan_names_set):
-                    frame_available_chans.append(tuple(combinable))
-                    unused_frame_chan_names_set.difference_update(combinable)
-            frame_available_chans.extend(
-                [(c,) for c in unused_frame_chan_names_set])
+            # Determine what single and combinable channels exist per stream
+            perstream_available = []
+            for mode_code in frame_modes.keys():
+                code_list = kwcoco.FusedChannelSpec.coerce(mode_code).normalize().as_list()
+                code_set = ub.oset(code_list)
+                stream_combinables = []
+                for combinable in combinable_channels:
+                    if combinable.issubset(code_set):
+                        stream_combinables.append(combinable)
+                remain = code_set - set(ub.flatten(stream_combinables))
+                stream_singletons = [(c,) for c in remain]
+                # Prioritize combinable channels in each stream first
+                stream_available = list(map(tuple, stream_combinables)) + stream_singletons
+                perstream_available.append(stream_available)
+
+            # Prioritize choosing a balance of channels from each stream
+            frame_available_chans = list(more_itertools.roundrobin(*perstream_available))
 
             frame_meta = {
                 'full_mode_code': full_mode_code,
@@ -2344,14 +2415,17 @@ class BatchVisualizationBuilder:
         # Determine which frames to visualize For each frame choose N channels
         # such that common channels are aligned, visualize common channels in
         # the first rows and then fill with whatever is left
-        chan_freq = ub.dict_hist(ub.flatten(frame_meta['frame_available_chans']
-                                            for frame_meta in frame_metas))
-        chan_priority = {k: (v, len(k), -idx) for idx, (k, v)
-                         in enumerate(chan_freq.items())}
+        # chan_freq = ub.dict_hist(ub.flatten(frame_meta['frame_available_chans']
+        #                                     for frame_meta in frame_metas))
+        # chan_priority = {k: (v, len(k), -idx) for idx, (k, v)
+        #                  in enumerate(chan_freq.items())}
         for frame_meta in frame_metas:
             chan_keys = frame_meta['frame_available_chans']
-            frame_priority = ub.dict_isect(chan_priority, chan_keys)
-            chosen = ub.argsort(frame_priority, reverse=True)[0:builder.max_channels]
+            # print('chan_keys = {!r}'.format(chan_keys))
+            # frame_priority = ub.dict_isect(chan_priority, chan_keys)
+            # chosen = ub.argsort(frame_priority, reverse=True)[0:builder.max_channels]
+            # print('chosen = {!r}'.format(chosen))
+            chosen = chan_keys[0:builder.max_channels]
             frame_meta['chans_to_use'] = chosen
 
         # Gather channels to visualize
@@ -2439,11 +2513,14 @@ class BatchVisualizationBuilder:
             for frame_meta in frame_metas:
                 for row in frame_meta['chan_rows']:
                     raw_signal = row['raw_signal']
-                    try:
-                        norm_signal = kwimage.normalize_intensity(raw_signal, nodata=0).copy()
-                    except Exception:
+                    needs_norm = np.nanmin(raw_signal) < 0 or np.nanmax(raw_signal) > 1
+                    if needs_norm:
+                        try:
+                            norm_signal = kwimage.normalize_intensity(raw_signal).copy()
+                        except Exception:
+                            norm_signal = raw_signal.copy()
+                    else:
                         norm_signal = raw_signal.copy()
-                    # norm_signal = kwimage.normalize(raw_signal).copy()
                     norm_signal = np.nan_to_num(norm_signal)
                     norm_signal = util_kwimage.ensure_false_color(norm_signal)
                     norm_signal = kwimage.atleast_3channels(norm_signal)

@@ -68,8 +68,14 @@ class ProjectAnnotationsConfig(scfg.Config):
 
         'site_models': scfg.Value(None, help=ub.paragraph(
             '''
-            Geospatial geojson annotation files. Either a path to a file, or a
-            directory.
+            Geospatial geojson "site" annotation files. Either a path to a
+            file, or a directory.
+            ''')),
+
+        'region_models': scfg.Value(None, help=ub.paragraph(
+            '''
+            Geospatial geojson "region" annotation files. Containing site
+            summaries.  Either a path to a file, or a directory.
             ''')),
 
         'viz_dpath': scfg.Value(None, help=ub.paragraph(
@@ -110,7 +116,8 @@ def main(cmdline=False, **kwargs):
         >>> import tempfile
         >>> dvc_dpath = util_data.find_smart_dvc_dpath()
         >>> #kwcoco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
-        >>> kwcoco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
+        >>> #kwcoco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
+        >>> kwcoco_fpath = dvc_dpath / 'Aligned-Drop2-TA1-2022-03-07/data.kwcoco.json'
         >>> dpath = ub.Path(ub.ensure_app_cache_dir('watch/tests/project_annots'))
         >>> cmdline = False
         >>> output_fpath = dpath / 'data.kwcoco.json'
@@ -120,10 +127,12 @@ def main(cmdline=False, **kwargs):
         >>>     'dst': output_fpath,
         >>>     'viz_dpath': viz_dpath,
         >>>     'site_models': dvc_dpath / 'annotations/site_models',
+        >>>     'region_models': dvc_dpath / 'annotations/region_models',
         >>> }
         >>> main(**kwargs)
     """
     import geopandas as gpd  # NOQA
+    from watch.utils import util_gis
     config = ProjectAnnotationsConfig(default=kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
@@ -150,17 +159,40 @@ def main(cmdline=False, **kwargs):
 
     # Read the external CRS84 annotations from the site models
     sites = []
-    from watch.utils import util_gis
-    for fpath in ub.ProgIter(site_geojson_fpaths, desc='load geojson annots'):
+    for fpath in ub.ProgIter(site_geojson_fpaths, desc='load geojson site-models'):
         gdf = util_gis.read_geojson(fpath)
         sites.append(gdf)
+
+    regions = []
+    if config['region_models'] is not None:
+        region_geojson_fpaths = util_path.coerce_patterned_paths(config['region_models'], '.geojson')
+        for fpath in ub.ProgIter(region_geojson_fpaths, desc='load geojson region-models'):
+
+            if fpath.stem == 'IN_C000':
+                # HACK: Remove when shi region is fixed.
+                continue
+
+            gdf = util_gis.read_geojson(fpath)
+            regions.append(gdf)
+
+            # if 1:
+            #     region_rows = gdf[gdf['type'] == 'region']
+            #     assert len(region_rows) == 1
+            #     region_row = region_rows.iloc[0]
+            #     if region_row['region_id'] != fpath.stem:
+            #         print(gdf)
+            #         print(region_row['region_id'])
+            #         print('fpath = {!r}'.format(fpath))
+            #         raise AssertionError
 
     if config['clear_existing']:
         coco_dset.clear_annotations()
 
+    region_id_to_sites = expand_site_models_with_site_summaries(sites, regions)
+
     propogate = config['propogate']
     propogated_annotations, all_drawable_infos = assign_sites_to_images(
-        coco_dset, sites, propogate, geospace_lookup=geospace_lookup)
+        coco_dset, region_id_to_sites, propogate, geospace_lookup=geospace_lookup)
 
     for ann in propogated_annotations:
         coco_dset.add_annotation(**ann)
@@ -171,6 +203,8 @@ def main(cmdline=False, **kwargs):
     coco_dset.dump(coco_dset.fpath)
 
     viz_dpath = config['viz_dpath']
+    if viz_dpath == 'auto':
+        viz_dpath = (coco_dset.fpath.parent / '_viz_project_anns')
     if viz_dpath:
         import kwplot
         kwplot.autoplt()
@@ -191,7 +225,329 @@ def main(cmdline=False, **kwargs):
             fig.savefig(plot_fpath)
 
 
-def assign_sites_to_images(coco_dset, sites, propogate, geospace_lookup='auto'):
+def expand_site_models_with_site_summaries(sites, regions):
+    """
+    Takes all site summaries from region models that do not have a
+    corresponding site model and makes a "pseudo-site-model" for use in BAS.
+
+    Returns:
+        Dict[str, List[DataFrame]] : region_id_to_sites  :
+            a mapping from region names to a list of site models both
+            real and/or pseudo.
+    """
+    import pandas as pd
+    import geojson
+    import watch
+    import json
+    from watch.utils import util_gis
+
+    dummy_start_date = '1970-01-01'
+    dummy_end_date = '2101-01-01'
+
+    if __debug__:
+        # Check assumptions about site models
+        for site_df in ub.ProgIter(sites, desc='checking site assumptions'):
+            first = site_df.iloc[0]
+            rest = site_df.iloc[1:]
+            assert first['type'] == 'site', 'first row must have type of site'
+            assert first['region_id'] is not None, 'first row must have a region id'
+            assert rest['type'].apply(lambda x: x == 'observation').all(), (
+                'rest of row must have type observation')
+            assert rest['region_id'].apply(lambda x: x is None).all(), (
+                'rest of row must have region_id=None')
+
+    region_id_to_site_summaries = {}
+    region_id_region_row = {}
+    for region_df in ub.ProgIter(regions, desc='checking region assumptions', verbose=3):
+        is_region = region_df['type'] == 'region'
+        region_part = region_df[is_region]
+        assert len(region_part) == 1, 'must have exactly one region in each region file'
+        assert region_part['region_id'].apply(lambda x: x is not None).all(), 'regions must have region ids'
+
+        region_row = region_part.iloc[0]
+        region_id = region_row['region_id']
+        region_id_region_row[region_id] = region_row
+        assert region_id not in region_id_to_site_summaries
+
+        # Hack to set all region-ids
+        region_df.loc[:, 'region_id'] = region_id
+        sites_part = region_df[~is_region]
+        assert (sites_part['type'] == 'site_summary').all(), 'rest of data must be site summaries'
+        assert sites_part['region_id'].apply(lambda x: (x is None) or x == region_id).all(), (
+            'site-summaries do not have region ids (unless we make them)')
+        region_id_to_site_summaries[region_id] = sites_part
+
+        # Check datetime errors
+        sitesum_start_dates = sites_part['start_date'].apply(lambda x: util_time.coerce_datetime(x or dummy_start_date))
+        sitesum_end_dates = sites_part['end_date'].apply(lambda x: util_time.coerce_datetime(x or dummy_end_date))
+        has_bad_time_range = sitesum_start_dates > sitesum_end_dates
+        bad_dates = sites_part[has_bad_time_range]
+        if len(bad_dates):
+            print('BAD DATES')
+            print(bad_dates)
+
+    region_id_to_sites = ub.group_items(sites, lambda x: x.iloc[0]['region_id'])
+
+    region_id_to_num_sitesumms = ub.map_vals(len, region_id_to_site_summaries)
+    region_id_to_num_sites = ub.map_vals(len, region_id_to_sites)
+    print('region_id_to_num_sitesumms = {}'.format(ub.repr2(region_id_to_num_sitesumms, nl=1, sort=0)))
+    print('region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1, sort=0)))
+
+    if 1:
+        site_rows1 = []
+        for region_id, region_sites in region_id_to_sites.items():
+            for site in region_sites:
+                site_sum_rows = site[site['type'] == 'site']
+                assert len(site_sum_rows) == 1
+                site_rows1.append(site_sum_rows)
+
+        site_rows2 = []
+        for region_id, site_summaries in region_id_to_site_summaries.items():
+            site_rows2.append(site_summaries)
+
+        site_df1 = pd.concat(site_rows1).reset_index()
+        site_df2 = pd.concat(site_rows2).reset_index()
+        assert len(set(site_df1['site_id'])) == len(site_df1), 'site ids must be unique'
+        assert len(set(site_df2['site_id'])) == len(site_df2), 'site ids must be unique'
+        site_df1 = site_df1.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
+        site_df2 = site_df2.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
+
+        print(site_df1)
+        print(site_df2)
+
+        common_site_ids = sorted(set(site_df1['site_id']) & set(site_df2['site_id']))
+        common1 = site_df1.loc[common_site_ids]
+        common2 = site_df2.loc[common_site_ids]
+
+        common_columns = common1.columns.intersection(common2.columns)
+        common_columns = common_columns.drop(['type', 'region_id'])
+
+        col_to_flags = {}
+        for col in common_columns:
+            error_flags = ~(
+                (common1[col] == common2[col]) |
+                (common1[col].isnull() & common2[col].isnull()))
+            col_to_flags[col] = error_flags
+
+        print('col errors: ' + repr(ub.map_vals(sum, col_to_flags)))
+        any_error_flag = np.logical_or.reduce(list(col_to_flags.values()))
+        total_error_rows = any_error_flag.sum()
+        print('total_error_rows = {!r}'.format(total_error_rows))
+        if total_error_rows:
+            error1 = common1[any_error_flag]
+            error2 = common2[any_error_flag]
+            columns = ['site_id', 'version', 'mgrs', 'start_date', 'end_date', 'status', 'originator', 'score', 'model_content', 'validated']
+            def reorder_columns(df, columns):
+                remain = df.columns.difference(columns)
+                return df.reindex(columns=(columns + list(remain)))
+            error1 = reorder_columns(error1, columns)
+            error2 = reorder_columns(error2, columns)
+            print('Disagree rows for site models')
+            print(error1.drop(['type', 'region_id', 'misc_info'], axis=1))
+            print('Disagree rows for region models')
+            print(error2.drop(['type', 'region_id', 'validate'], axis=1))
+
+        # Find sites that only have a site-summary
+        summary_only_site_ids = sorted(set(site_df2['site_id']) - set(site_df1['site_id']))
+        region_id_to_only_site_summaries = dict(list(site_df2.loc[summary_only_site_ids].groupby('region_id')))
+
+        region_id_to_num_only_sitesumms = ub.map_vals(len, region_id_to_only_site_summaries)
+        print('region_id_to_num_only_sitesumms = {}'.format(ub.repr2(region_id_to_num_only_sitesumms, nl=1, sort=0)))
+
+        # Transform site-summaries without corresponding sites into pseudo-site
+        # observations
+        # https://smartgitlab.com/TE/standards/-/wikis/Site-Model-Specification
+
+        # if 0:
+        #     # Use the json schema to ensure we are coding this correctly
+        #     import jsonref
+        #     from watch.rc.registry import load_site_model_schema
+        #     site_model_schema = load_site_model_schema()
+        #     # Expand the schema
+        #     site_model_schema = jsonref.loads(jsonref.dumps(site_model_schema))
+        #     site_model_schema['definitions']['_site_properties']['properties'].keys()
+        #     list(ub.flatten([list(p['properties'].keys()) for p in site_model_schema['definitions']['unassociated_site_properties']['allOf']]))
+        #     list(site_model_schema['definitions']['unassociated_site_properties']['properties'].keys())
+        #     list(ub.flatten([list(p['properties'].keys()) for p in site_model_schema['definitions']['associated_site_properties']['allOf']]))
+        #     list(site_model_schema['definitions']['associated_site_properties']['properties'].keys())
+        #     site_model_schema['definitions']['observation_properties']['properties']
+
+        # observation_properties = [
+        #     'type', 'observation_date', 'source', 'sensor_name',
+        #     'current_phase', 'is_occluded', 'is_site_boundary', 'score',
+        #     'misc_info'
+        # ]
+        site_properites = [
+            'type', 'version', 'mgrs', 'status', 'model_content', 'start_date',
+            'end_date', 'originator', 'score', 'validated', 'misc_info',
+            'region_id', 'site_id']
+
+        # resolver = jsonschema.RefResolver.from_schema(site_model_schema)
+        # site_model_schema[
+
+        region_id_to_num_sites = ub.map_vals(len, region_id_to_sites)
+        print('BEFORE region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1)))
+
+        for region_id, sitesummaries in region_id_to_only_site_summaries.items():
+            region_row = region_id_region_row[region_id]
+
+            # Use region start/end date if the site does not have them
+            region_start_date = region_row['start_date'] or dummy_start_date
+            region_end_date = region_row['end_date'] or dummy_end_date
+
+            region_start_date, region_end_date = sorted(
+                [region_start_date, region_end_date], key=util_time.coerce_datetime)
+
+            for _, site_summary in sitesummaries.iterrows():
+                geom = site_summary['geometry']
+
+                poly_json = kwimage.Polygon.from_shapely(geom.convex_hull).to_geojson()
+                mpoly_json = kwimage.MultiPolygon.from_shapely(geom).to_geojson()
+
+                has_keys = site_summary.index.intersection(site_properites)
+                # missing_keys = pd.Index(site_properites).difference(site_summary.index)
+                psudo_site_prop = site_summary[has_keys].to_dict()
+                psudo_site_prop['type'] = 'site'
+                # TODO: how to handle missing start / end dates?
+                start_date = site_summary['start_date'] or region_start_date
+                end_date = site_summary['end_date'] or region_end_date
+
+                # hack
+                start_date, end_date = sorted(
+                    [start_date, end_date], key=util_time.coerce_datetime)
+
+                psudo_site_prop['start_date'] = start_date
+                psudo_site_prop['end_date'] = end_date
+
+                start_datetime = util_time.coerce_datetime(start_date)
+                end_datetime = util_time.coerce_datetime(end_date)
+
+                assert start_datetime <= end_datetime
+
+                observation_prop_template = {
+                    'type': 'observation',
+                    'observation_date': None,
+                    # 'source': None,
+                    # 'sensor_name': None,
+                    # 'current_phase': None,
+                    # 'is_occluded': None,
+                    # 'is_site_boundary': None,
+                    'score': float(site_summary['score']),
+                    # 'misc_info': None,
+                }
+
+                psudo_site_features = [
+                    geojson.Feature(
+                        properties=psudo_site_prop, geometry=poly_json,
+                    )
+                ]
+                psudo_site_features.append(
+                    geojson.Feature(
+                        properties=ub.dict_union(observation_prop_template, {
+                            'observation_date': start_date,
+                            'current_phase': None,
+                        }),
+                        geometry=mpoly_json)
+                )
+                psudo_site_features.append(
+                    geojson.Feature(
+                        properties=ub.dict_union(observation_prop_template, {
+                            'observation_date': end_date,
+                            'current_phase': None,
+                        }),
+                        geometry=mpoly_json)
+                )
+                psudo_site_model = geojson.FeatureCollection(psudo_site_features)
+                pseudo_gpd = util_gis.read_geojson(watch.utils.util_path.file_from_text(json.dumps(psudo_site_model)))
+                region_id_to_sites[region_id].append(pseudo_gpd)
+                # if 1:
+                #     from watch.rc.registry import load_site_model_schema
+                #     site_model_schema = load_site_model_schema()
+                #     real_site_model = json.loads(ub.Path('/media/joncrall/flash1/smart_watch_dvc/annotations/site_models/BR_R002_0009.geojson').read_text())
+                #     ret = jsonschema.validate(real_site_model, schema=site_model_schema)
+                #     import jsonschema
+                #     ret = jsonschema.validate(psudo_site_model, schema=site_model_schema)
+
+        region_id_to_num_sites = ub.map_vals(len, region_id_to_sites)
+        print('AFTER (sitesummary) region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1)))
+
+    if 0:
+        site_high_level_summaries = []
+        for region_id, region_sites in region_id_to_sites.items():
+            print('=== {} ==='.format(region_id))
+            for site_gdf in region_sites:
+                site_summary_row = site_gdf.iloc[0]
+                site_rows = site_gdf.iloc[1:]
+                track_id = site_summary_row['site_id']
+                status = site_summary_row['status']
+                summary = {
+                    'region_id': region_id,
+                    'track_id': track_id,
+                    'status': status,
+                    'start_date': site_summary_row['start_date'],
+                    'end_date': site_summary_row['end_date'],
+                    'unique_phases': site_rows['current_phase'].unique(),
+                }
+                # print('summary = {}'.format(ub.repr2(summary, nl=0)))
+                site_high_level_summaries.append(summary)
+
+        df = pd.DataFrame(site_high_level_summaries)
+        for region_id, subdf in df.groupby('region_id'):
+            print('=== {} ==='.format(region_id))
+            subdf = subdf.sort_values('status')
+            print(subdf.to_string())
+
+    if __debug__:
+        for region_id, region_sites in ub.ProgIter(region_id_to_sites.items(), desc='validate sites'):
+            for site_df in region_sites:
+                validate_site_dataframe(site_df)
+
+    return region_id_to_sites
+
+
+def validate_site_dataframe(site_df):
+    from dateutil.parser import parse
+    import numpy as np
+    dummy_start_date = '1970-01-01'  # hack, could be more robust here
+    dummy_end_date = '2101-01-01'
+    first = site_df.iloc[0]
+    rest = site_df.iloc[1:]
+    assert first['type'] == 'site', 'first row must have type of site'
+    assert first['region_id'] is not None, 'first row must have a region id'
+    assert rest['type'].apply(lambda x: x == 'observation').all(), (
+        'rest of row must have type observation')
+    assert rest['region_id'].apply(lambda x: x is None).all(), (
+        'rest of row must have region_id=None')
+
+    site_start_date = first['start_date'] or dummy_start_date
+    site_end_date = first['end_date'] or dummy_end_date
+    site_start_datetime = parse(site_start_date)
+    site_end_datetime = parse(site_end_date)
+
+    if site_end_datetime < site_start_datetime:
+        print('\n\nBAD SITE DATES:')
+        print(first)
+
+    status = {}
+    # Check datetime errors in observations
+    try:
+        obs_dates = [None if x is None else parse(x) for x in rest['observation_date']]
+        obs_isvalid = [x is None for x in obs_dates]
+        valid_obs_dates = list(ub.compress(obs_dates, obs_isvalid))
+        if not all(valid_obs_dates):
+            # null_obs_sites.append(first[['site_id', 'status']].to_dict())
+            pass
+        valid_deltas = np.array([d.total_seconds() for d in np.diff(valid_obs_dates)])
+        assert (valid_deltas >= 0).all(), 'observations must be sorted temporally'
+    except AssertionError as ex:
+        print('ex = {!r}'.format(ex))
+        print(site_df)
+        raise
+
+    return status
+
+
+def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lookup='auto'):
     """
     Given a coco dataset (with geo information) and a list of geojson sites,
     determines which images each site-annotations should go on.
@@ -214,37 +570,9 @@ def assign_sites_to_images(coco_dset, sites, propogate, geospace_lookup='auto'):
         video_gdf['geometry'].iloc[0] = combined
         video_gdfs.append(video_gdf)
         vidid_to_imgdf[vidid] = subdf
-    videos_gdf = pd.concat(video_gdfs)
+    videos_gdf = pd.concat(video_gdfs, ignore_index=True)
 
     PROJECT_ENDSTATE = True
-
-    region_id_to_sites = ub.group_items(sites, lambda x: x.iloc[0]['region_id'])
-
-    if 0:
-        site_high_level_summaries = []
-        for region_id, region_sites in region_id_to_sites.items():
-            print('=== {} ==='.format(region_id))
-            for site_gdf in region_sites:
-                site_summary_row = site_gdf.iloc[0]
-                site_rows = site_gdf.iloc[1:]
-                track_id = site_summary_row['site_id']
-                status = site_summary_row['status']
-                summary = {
-                    'region_id': region_id,
-                    'track_id': track_id,
-                    'status': status,
-                    'start_date': site_summary_row['start_date'],
-                    'end_date': site_summary_row['end_date'],
-                    'unique_phases': site_rows['current_phase'].unique(),
-                }
-                print('summary = {}'.format(ub.repr2(summary, nl=1)))
-                site_high_level_summaries.append(summary)
-
-        df = pd.DataFrame(site_high_level_summaries)
-        for region_id, subdf in df.groupby('region_id'):
-            print('=== {} ==='.format(region_id))
-            subdf = subdf.sort_values('status')
-            print(subdf.to_string())
 
     # Ensure colors and categories
     from watch import heuristics
@@ -267,29 +595,14 @@ def assign_sites_to_images(coco_dset, sites, propogate, geospace_lookup='auto'):
         geospace_lookup = not coco_video_names.issubset(region_ids)
         print('geospace_lookup = {!r}'.format(geospace_lookup))
 
-    def coerce_datetime2(data):
-        """ Is this a monad 🦋 ? """
-        if data is None:
-            return data
-        else:
-            return util_time.coerce_datetime(data)
-
-    propogated_annotations = []
-    for region_id, region_sites in region_id_to_sites.items():
-
-        # Find the video associated with this region
-        # If this assumption is not valid, we could refactor to loop through
-        # each site, do the geospatial lookup, etc...
-        # but this is faster if we know regions are consistent
-        if not geospace_lookup:
-            try:
-                video = coco_dset.index.name_to_video[region_id]
-            except KeyError:
-                print('No region-id match for region_id={}'.format(region_id))
-                continue
-            video_id = video['id']
-            # video_name = video['name']
-        else:
+    # Find the video associated with each region
+    # If this assumption is not valid, we could refactor to loop through
+    # each site, do the geospatial lookup, etc...
+    # but this is faster if we know regions are consistent
+    video_id_to_region_id = {}
+    if geospace_lookup:
+        # Association via geospace lookup
+        for region_id, region_sites in region_id_to_sites.items():
             video_ids = []
             for site_gdf in region_sites:
                 # determine which video it the site belongs to
@@ -308,7 +621,27 @@ def assign_sites_to_images(coco_dset, sites, propogate, geospace_lookup='auto'):
                 print('No geo-space match for region_id={}'.format(region_id))
                 continue
             video_id = video_ids[0]
+            video_id_to_region_id[video_id] = region_id
+    else:
+        # Association via video name
+        for region_id, region_sites in region_id_to_sites.items():
+            try:
+                video = coco_dset.index.name_to_video[region_id]
+            except KeyError:
+                print('No region-id match for region_id={}'.format(region_id))
+                continue
+            video_id = video['id']
+            video_id_to_region_id[video_id] = region_id
 
+    def coerce_datetime2(data):
+        """ Is this a monad 🦋 ? """
+        return None if data is None else util_time.coerce_datetime(data)
+
+    print('Found Association: video_id_to_region_id = {}'.format(ub.repr2(video_id_to_region_id, nl=1)))
+    propogated_annotations = []
+    for video_id, region_id in video_id_to_region_id.items():
+        region_sites = region_id_to_sites[region_id]
+        print(f'{region_id=} {video_id=} #sites={len(region_sites)}')
         # Grab the images data frame for that video
         subimg_df = vidid_to_imgdf[video_id]
         region_image_dates = np.array(list(map(dateutil.parser.parse, subimg_df['date_captured'])))
@@ -345,26 +678,63 @@ def assign_sites_to_images(coco_dset, sites, propogate, geospace_lookup='auto'):
             if end_date is not None and observation_dates[-1] != end_date:
                 raise AssertionError
 
+            # Assuming observations are sorted by date
+            assert all([d.total_seconds() >= 0 for d in np.diff(observation_dates)])
+
             # Determine the first image each site-observation will be
             # associated with and then propogate them forward as necessary.
+
+            # NOTE: github.com/Erotemic/misc/learn/viz_searchsorted.py if you
+            # need to remember or explain how searchsorted works
+
+            # To future-propogate:
+            # (1) assign each observation to its nearest image (temporally)
+            # without "going over" (i.e. the assigned image must be at or after
+            # the observation)
+            # (2) Splitting the image observations and taking all but the first
+            # gives all current-and-future images for each observation that
+            # happen before the next observation.
             try:
-                found_idxs = np.searchsorted(region_image_dates, observation_dates, 'left')
+                found_forward_idxs = np.searchsorted(region_image_dates, observation_dates, 'left')
             except TypeError:
                 # handle  can't compare offset-naive and offset-aware datetimes
                 region_image_dates = [util_time.ensure_timezone(dt)
                                       for dt in region_image_dates]
                 observation_dates = [util_time.ensure_timezone(dt)
                                      for dt in observation_dates]
-                found_idxs = np.searchsorted(region_image_dates, observation_dates, 'left')
+                found_forward_idxs = np.searchsorted(region_image_dates, observation_dates, 'left')
 
-            image_idxs_per_observation = np.split(region_image_indexes, found_idxs)[1:]
+            image_index_bins = np.split(region_image_indexes, found_forward_idxs)
+            forward_image_idxs_per_observation = image_index_bins[1:]
+
+            # To past-propogate:
+            # (1) assign each observation to its nearest image (temporally)
+            # without "going under" (i.e. the assigned image must be at or
+            # before the observation)
+            # (2) Splitting the image observations and taking all but the last
+            # gives all current-and-past-only images for each observation that
+            # happen after the previous observation.
+            # NOTE: we only really need to backward propogate the first label
+            # (if we even want to do that at all)
+            found_backward_idxs = np.searchsorted(region_image_dates, observation_dates, 'right')
+            backward_image_idxs_per_observation = np.split(region_image_indexes, found_backward_idxs)[:-1]
+
+            # TODO: use heuristic module
+            HEURISTIC_END_STATES = {
+                'Post Construction'
+            }
+            HEURISTIC_START_STATES = {
+                'No Activity',
+            }
 
             # Create annotations on each frame we are associated with
             site_anns = []
             drawable_summary = []
-            for gxs, site_row in zip(image_idxs_per_observation, site_rows.to_dict(orient='records')):
-                site_row['geometry']
-                gids = region_gids[gxs]
+            _iter = zip(forward_image_idxs_per_observation,
+                        backward_image_idxs_per_observation,
+                        site_rows.to_dict(orient='records'))
+            for annot_idx, (forward_gxs, backward_gxs, site_row) in enumerate(_iter):
+
                 site_row_datetime = coerce_datetime2(site_row['observation_date'])
                 assert site_row_datetime is not None
 
@@ -396,33 +766,110 @@ def assign_sites_to_images(coco_dset, sites, propogate, geospace_lookup='auto'):
                 ]
                 assert len(site_polygons) == len(site_catnames)
 
-                for gid in gids:
-                    img = coco_dset.imgs[gid]
-                    img_datetime = util_time.coerce_datetime(img['date_captured'])
-                    if propogate or img_datetime == site_row_datetime:
-                        hack = 0
-                        for catname, poly in zip(site_catnames, site_polygons):
-                            # TODO: use heuristic module
-                            if catname == 'Post Construction':
-                                # Don't project end-states of we dont want to
-                                if not PROJECT_ENDSTATE:
-                                    continue
-                            if hack == 0:
-                                propogated_on.append(img_datetime)
-                                hack = 1
-                            cid = coco_dset.ensure_category(catname)
-                            cat = coco_dset.index.cats[cid]
-                            category_colors.append(cat['color'])
-                            categories.append(catname)
-                            img['date_captured']
-                            ann = {
-                                'image_id': gid,
-                                'segmentation_geos': poly,
-                                'status': status,
-                                'category_id': cid,
-                                'track_id': track_id,
-                            }
-                            site_anns.append(ann)
+                # A bit hacky, clean up logic later
+                current_and_forward_gids = region_gids[forward_gxs]
+                backward_gids = region_gids[backward_gxs]
+                forward_gids = []
+                current_gids = []
+                current_and_forward_gids = sorted(
+                    current_and_forward_gids,
+                    key=lambda gid: util_time.coerce_datetime(coco_dset.imgs[gid]['date_captured']))
+
+                # Always propogate at least to the nearest frame?
+                # TODO: could have better rules about what counts as a frame
+                # the annotation "belongs" to and what counts as a forward
+                # propogation frame.
+                current_gids = current_and_forward_gids[0:1]
+                forward_gids = current_and_forward_gids[1:None]
+
+                # Propogate each subsite
+                for subsite_catname, poly in zip(site_catnames, site_polygons):
+
+                    # Determine if this subsite propogates forward and/or backward
+                    propogate_gids = []
+                    propogate_gids.extend(current_gids)
+                    if PROJECT_ENDSTATE or catname not in HEURISTIC_END_STATES:
+                        propogate_gids.extend(forward_gids)
+                    # Only need to backpropogate the first label (and maybe even not that?)
+                    if annot_idx == 0 and catname in HEURISTIC_START_STATES:
+                        propogate_gids.extend(backward_gids)
+
+                    for gid in propogate_gids:
+                        img = coco_dset.imgs[gid]
+                        img_datetime = util_time.coerce_datetime(img['date_captured'])
+
+                        propogated_on.append(img_datetime)
+
+                        cid = coco_dset.ensure_category(subsite_catname)
+                        cat = coco_dset.index.cats[cid]
+                        category_colors.append(cat['color'])
+                        categories.append(subsite_catname)
+                        ann = {
+                            'image_id': gid,
+                            'segmentation_geos': poly,
+                            'status': status,
+                            'category_id': cid,
+                            'track_id': track_id,
+                        }
+                        site_anns.append(ann)
+
+                # if propogate and needs_forward_propogate:
+                #     for gid in forward_gids:
+                #         img = coco_dset.imgs[gid]
+                #         img_datetime = util_time.coerce_datetime(img['date_captured'])
+                #         if propogate or img_datetime == site_row_datetime:
+                #             hack = 0
+                #             for subsite_catname, poly in zip(site_catnames, site_polygons):
+                #                 if subsite_catname in HEURISTIC_END_STATES:
+                #                     # Don't project end-states of we dont want to
+                #                     if not PROJECT_ENDSTATE:
+                #                         continue
+                #                 if hack == 0:
+                #                     propogated_on.append(img_datetime)
+                #                     hack = 1
+                #                 cid = coco_dset.ensure_category(subsite_catname)
+                #                 cat = coco_dset.index.cats[cid]
+                #                 category_colors.append(cat['color'])
+                #                 categories.append(subsite_catname)
+                #                 img['date_captured']
+                #                 ann = {
+                #                     'image_id': gid,
+                #                     'segmentation_geos': poly,
+                #                     'status': status,
+                #                     'category_id': cid,
+                #                     'track_id': track_id,
+                #                 }
+                #                 site_anns.append(ann)
+
+                # if propogate and needs_backward_propogate:
+                #     forward_gids = region_gids[forward_gxs]
+                #     for gid in backward_gids:
+                #         img = coco_dset.imgs[gid]
+                #         img_datetime = util_time.coerce_datetime(img['date_captured'])
+                #         if propogate or img_datetime == site_row_datetime:
+                #             hack = 0
+                #             for catname, poly in zip(site_catnames, site_polygons):
+                #                 if catname in HEURISTIC_END_STATES:
+                #                     # Don't project end-states of we dont want to
+                #                     if not PROJECT_ENDSTATE:
+                #                         continue
+                #                 if hack == 0:
+                #                     propogated_on.append(img_datetime)
+                #                     hack = 1
+                #                 cid = coco_dset.ensure_category(catname)
+                #                 cat = coco_dset.index.cats[cid]
+                #                 category_colors.append(cat['color'])
+                #                 categories.append(catname)
+                #                 img['date_captured']
+                #                 ann = {
+                #                     'image_id': gid,
+                #                     'segmentation_geos': poly,
+                #                     'status': status,
+                #                     'category_id': cid,
+                #                     'track_id': track_id,
+                #                 }
+                #                 site_anns.append(ann)
+
                 drawable_summary.append(row_summary)
             propogated_annotations.extend(site_anns)
             drawable_region_sites.append(drawable_summary)

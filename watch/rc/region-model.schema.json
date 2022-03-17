@@ -63,7 +63,7 @@
         "comments": {"type": ["string", "null"]}
       },
       "required": [
-        "type", "region_id", "version", "mgrs", "model_content", "start_date", "end_date", "originator", "comments"
+        "type", "region_id", "version", "mgrs", "model_content", "start_date", "end_date", "originator"
       ]
     },
     "site_summary_properties": {

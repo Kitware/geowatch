@@ -56,6 +56,11 @@ def main():
                         default=False,
                         help='Replace asset hrefs with GDAL Virtual File '
                              'System links')
+    parser.add_argument('--catalog_fpath',
+                        type=str,
+                        default=None,
+                        required=False,
+                        help='Name of the ouptut catalog. Defaults to <outdir>/catalog.json')
 
     parser.add_argument('--relative', default=False,
                         action='store_true', help='if true use relative paths')
@@ -163,13 +168,18 @@ def ingress_item(feature,
             else:
                 asset_href_for_download = asset_href
 
+            # Need to reparse the href if it switched from http to s3
+            parsed_asset_href = urlparse(asset_href_for_download)
+
             if virtual:
                 if parsed_asset_href.scheme == 's3':
                     asset['href'] = '/vsis3/{}{}'.format(
                         parsed_asset_href.netloc,
                         parsed_asset_href.path)
                 elif parsed_asset_href.scheme in {'http', 'https'}:
-                    asset['href'] = '/vsicurl/{}'.format(asset_href)
+                    asset['href'] = '/vsicurl/{}{}'.format(
+                        parsed_asset_href.netloc,
+                        parsed_asset_href.path)
                 else:
                     print("* Unsupported URI scheme '{}' for virtual ingress; "
                           "not updating href: {}".format(
@@ -242,6 +252,7 @@ def load_input_stac_items(input_path, aws_base_command):
 
 def baseline_framework_ingress(input_path,
                                outdir,
+                               catalog_fpath=None,
                                aws_profile=None,
                                dryrun=False,
                                show_progress=False,
@@ -262,10 +273,11 @@ def baseline_framework_ingress(input_path,
     else:
         catalog_type = pystac.CatalogType.ABSOLUTE_PUBLISHED
 
-    catalog_outpath = os.path.join(outdir, 'catalog.json')
+    if catalog_fpath is None:
+        catalog_fpath = os.path.join(outdir, 'catalog.json')
     catalog = pystac.Catalog('Baseline Framework ingress catalog',
                              'STAC catalog of SMART search results',
-                             href=catalog_outpath, catalog_type=catalog_type)
+                             href=catalog_fpath, catalog_type=catalog_type)
 
     catalog.set_root(catalog)
 
@@ -308,7 +320,7 @@ def baseline_framework_ingress(input_path,
             catalog.add_item(mapped_item)
 
     catalog.save(catalog_type=catalog_type)
-    print('wrote catalog_outpath = {!r}'.format(catalog_outpath))
+    print('wrote catalog_fpath = {!r}'.format(catalog_fpath))
     return catalog
 
 

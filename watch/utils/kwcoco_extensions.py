@@ -147,7 +147,9 @@ def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
     """
     # Load your KW-COCO dataset (conform populates information like image size)
     if conform:
-        coco_dset.conform(pycocotools_info=False)
+        # Note: we will handle imgsize in a later part
+        coco_dset.conform(pycocotools_info=False, workers=workers,
+                          ensure_imgsize=False)
 
     if vidids is None:
         vidids = list(coco_dset.index.videos.keys())
@@ -332,6 +334,49 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
 
 
 def _populate_valid_region(coco_img):
+    """
+    Ignore:
+        >>> # Make a dummy image with nodata to test that this works
+        >>> from watch.utils.kwcoco_extensions import *  # NOQA
+        >>> from watch.utils.kwcoco_extensions import _populate_valid_region
+        >>> import kwcoco
+        >>> H, W = 1024, 1024
+        >>> nodata = 0  #
+        >>> dpath = ub.Path.appdir('watch/test/valid_region').ensuredir()
+        >>> imdata = ((np.random.rand(H, W) * 240) + 3).astype(np.uint8)
+        >>> # Fill in nodata values
+        >>> imdata[:, 0:20] = nodata
+        >>> imdata[:, -20:] = nodata
+        >>> poly1 = kwimage.Polygon.random(rng=432).scale((W, H))
+        >>> poly1.data['exterior'] = poly1.data['exterior'].round()
+        >>> poly1.fill(imdata, nodata)
+        >>> poly2 = kwimage.Polygon.circle((0, 0), W / 2)
+        >>> poly2.fill(imdata, nodata)
+        >>> # Write image to disk with nodata info
+        >>> img_fpath = dpath / 'test_img.tif'
+        >>> kwimage.imwrite(img_fpath, imdata, backend='gdal', nodata=0, overviews=3)
+        >>> # # Register the image with a kwcoco dataset
+        >>> dset = kwcoco.CocoDataset()
+        >>> dset.fpath = dpath / 'data.kwcooc.json'
+        >>> gid = dset.add_image(file_name=img_fpath, channels='gray')
+        >>> dset.conform()
+        >>> #
+        >>> coco_img = dset.coco_image(gid)
+        >>> _populate_valid_region(coco_img)
+        >>> valid_region = kwimage.MultiPolygon.coerce(coco_img.img['valid_region'])
+        >>> print('valid_region.data = {!r}'.format(valid_region.data))
+        >>> #
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> canvas = imdata.copy()
+        >>> canvas = valid_region.draw_on(canvas, fill=0, border=True)
+        >>> kwplot.imshow(canvas)
+
+        from rasterio import features
+        shapes = [(valid_region.to_geojson(), 255)]
+        canvasR = features.rasterize(shapes, out=canvas[:, :, 0].copy())
+        kwplot.imshow(canvasR, doclf=1)
+    """
     import watch
     # _ = ub.cmd('gdalinfo -stats {}'.format(fpath), check=True)
     bundle_dpath = coco_img.bundle_dpath
@@ -339,17 +384,19 @@ def _populate_valid_region(coco_img):
     primary_obj = coco_img.primary_asset()
     primary_fname = primary_obj.get('file_name', None)
 
-    # if '20200109T070235Z_N24.794658E054.975771_N24.943015E055.139412' in primary_fname:
-    #     import xdev
-    #     xdev.embed()
-
     primary_fpath = join(bundle_dpath, primary_fname)
 
+    # NOTE: THIS POLYGON IS COMPUTED VIA RASTERIO, NOT SURE HOW WELL THIS AGREES
+    # WITH OTHER POLYGONS WE DRAW (USUALLY VIA CV2)
     sh_poly = util_raster.mask(
-        primary_fpath, tolerance=10,
+        primary_fpath,
+        tolerance=4,
+        # tolerance=None,
         default_nodata=primary_obj.get('default_nodata', None),
         # max_polys=100,
-        convex_hull=True)
+        use_overview=2,
+        convex_hull=True,
+    )
     kw_poly = kwimage.MultiPolygon.from_shapely(sh_poly)
     # print('kw_poly = {!r}'.format(kw_poly.data[0]))
     info = primary_obj.get('geotiff_metadata', None)
@@ -671,10 +718,13 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
         >>> from watch.utils.util_data import find_smart_dvc_dpath
         >>> import kwcoco
         >>> dvc_dpath = find_smart_dvc_dpath()
-        >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/combo_data.kwcoco.json'
+        >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
+        >>> vidid = 2
+
+        >>> coco_fpath = dvc_dpath / 'Aligned-Drop2-TA1-2022-03-07/data.kwcoco.json'
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
         >>> target_gsd = 10.0
-        >>> vidid = 2
+        >>> vidid = 1
         >>> # We can check transforms before we apply this function
         >>> coco_dset.images(vidid=vidid).lookup('warp_img_to_vid', None)
         >>> # Apply the function
@@ -695,6 +745,48 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
         vidid = 1
 
         target_gsd = 2.8
+
+
+        # Check drawing the valid region on the image
+        frac = 1
+
+        valid_regions = coco_dset.images().lookup('valid_region')
+        cands = []
+        for idx, valid_region in enumerate(valid_regions):
+            valid_region_img = kwimage.MultiPolygon.coerce(valid_region)
+            frac = valid_region_img.to_shapely().area / valid_region_img.bounding_box().area
+            if frac < 0.6:
+                cands.append(idx)
+        gid = coco_dset.images().take(cands).lookup('id')[0]
+
+        coco_img = coco_dset.coco_image(gid)
+        imdata = coco_img.delay('blue').finalize(nodata='auto')
+        valid_region_img = kwimage.MultiPolygon.coerce(coco_img.img['valid_region'])
+        frac = valid_region_img.to_shapely().area / valid_region_img.bounding_box().area
+        print('frac = {!r}'.format(frac))
+
+        canvas_imgspace = kwimage.normalize_intensity(imdata)
+        kwplot.autompl()
+        kwplot.imshow(canvas_imgspace, doclf=1)
+
+        valid_region_img = kwimage.MultiPolygon.coerce(coco_img.img['valid_region'])
+        canvas_imgspace = valid_region_img.draw_on(canvas_imgspace, fill=0, color='green')
+        kwplot.imshow(canvas_imgspace)
+
+
+        # Check the nodata polygon returned raw pixel methods
+        primary_data = kwimage.imread(primary_fpath, nodata='float')
+        valid_mask = ~np.isnan(primary_data)
+        kw_poly = kwimage.Mask(valid_mask.astype(np.uint8), 'c_mask').to_multi_polygon()
+        print('kwimage kw_poly.data = {!r}'.format(kw_poly.data))
+
+        # CHeck the one returned by util_raster
+        primary_fpath = coco_img.primary_image_filepath()
+        sh_poly = util_raster.mask(
+            primary_fpath, tolerance=None,
+            convex_hull=0)
+        kw_poly = kwimage.MultiPolygon.from_shapely(sh_poly)
+        print('rasterio kw_poly.data = {!r}'.format(kw_poly.data))
     """
     # Compute an image-to-video transform that aligns all frames to some
     # common resolution.

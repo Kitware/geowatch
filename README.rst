@@ -1,6 +1,11 @@
 WATCH - Wide Area Terrestrial Change Hypercube
 ==============================================
 
+.. The large version wont work because github strips rst image rescaling. 
+.. image:: https://ipfs.io/ipfs/QmYftzG6enTebF2f143KeHiPiJGs66LJf3jT1fNYAiqQvq
+   :height: 100px
+   :align: left
+
 |master-pipeline| |master-coverage|
 
 
@@ -12,16 +17,17 @@ anthropogenic events and characterize their extent and progression in time and
 space.
 
 
-
 The following table provides links to relevant resources for the SMART WATCH project:
 
-+-------------------------------+----------------------------------------------------------------+
-| The SMART WATCH Python Module | https://gitlab.kitware.com/smart/watch/                        |
-+-------------------------------+----------------------------------------------------------------+
-| The SMART WATCH DVC Repo      | https://gitlab.kitware.com/smart/smart_watch_dvc/              |
-+-------------------------------+----------------------------------------------------------------+
-| The SMART WATCH Collection    | https://data.kitware.com/#collection/602457272fa25629b95d1718  |
-+-------------------------------+----------------------------------------------------------------+
++------------------------------------+----------------------------------------------------------------+
+| The SMART WATCH Python Module      | https://gitlab.kitware.com/smart/watch/                        |
++------------------------------------+----------------------------------------------------------------+
+| The SMART WATCH DVC Repo           | https://gitlab.kitware.com/smart/smart_watch_dvc/              |
++------------------------------------+----------------------------------------------------------------+
+| The SMART WATCH Infastructure Docs | https://gitlab.kitware.com/smart/watch-infrastructure          |
++------------------------------------+----------------------------------------------------------------+
+| The SMART WATCH Girder Collection  | https://data.kitware.com/#collection/602457272fa25629b95d1718  |
++------------------------------------+----------------------------------------------------------------+
 
 Getting Started
 ---------------

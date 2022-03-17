@@ -160,6 +160,9 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     """
     Package and copy checkpoints into the DVC folder for evaluation.
 
+    Args:
+        mode (str): can be list, repackage, copy, dvc-commit, or commit
+
     Ignore:
         from watch.tasks.fusion.repackage import *  # NOQA
         import xdev
@@ -177,7 +180,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
         python -m watch.tasks.fusion.repackage gather_checkpoints \
             --dvc_dpath=$DVC_DPATH \
-            --storage_dpath=$DVC_DPATH/models/fusion/SC-20201117 \
+            --storage_dpath=$DVC_DPATH/models/fusion/eval3_candidates/packages \
             --train_dpath=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1-20201117 \
             --commit=True
     """
