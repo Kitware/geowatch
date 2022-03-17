@@ -228,14 +228,35 @@ def ingress_item(feature,
 def load_input_stac_items(input_path, aws_base_command):
     def _load_input(path):
         try:
-            with open(path) as f:
+            with open(path, 'r') as f:
                 input_json = json.load(f)
-            return input_json['stac'].get('features', [])
+            items = input_json['stac'].get('features', [])
         # Excepting KeyError here in case of a single line STAC item input
         except (json.decoder.JSONDecodeError, KeyError):
-            # Support for simple newline separated STAC items
-            with open(path) as f:
-                return [json.loads(line) for line in f]
+            try:
+                # Support for simple newline separated STAC items
+                with open(path, 'r') as f:
+                    items = [json.loads(line) for line in f]
+            except json.decoder.JSONDecodeError:
+                # Support for whitespace separated data
+                with open(path, 'r') as f:
+                    text = f.read()
+                items = []
+                stack = [line for line in text.split('\n')[::-1] if line]
+                while stack:
+                    line = stack.pop()
+                    try:
+                        item = json.loads(line)
+                    except json.decoder.JSONDecodeError as e:
+                        # Hack for the case where a new line is missing
+                        if line[e.pos] == '{':
+                            stack.append(line[e.pos:].strip())
+                            stack.append(line[:e.pos])
+                        else:
+                            raise
+                    else:
+                        items.append(item)
+        return items
 
     if input_path.startswith('s3'):
         with tempfile.NamedTemporaryFile() as temporary_file:
