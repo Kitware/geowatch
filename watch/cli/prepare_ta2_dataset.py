@@ -235,10 +235,10 @@ def main(cmdline=False, **kwargs):
             {cache_prefix}{job_environ_str}python -m watch.cli.coco_add_watch_fields \
                 --src "{uncropped_kwcoco_fpath}" \
                 --dst "{uncropped_fielded_kwcoco_fpath}" \
-                --workers="{config['fields_workers']}" \
                 --enable_video_stats=False \
                 --overwrite=warp \
-                --target_gsd=10
+                --target_gsd=10 \
+                --workers="{config['fields_workers']}"
             '''), depends=convert_job)
 
         uncropped_coco_paths.append(uncropped_fielded_kwcoco_fpath)
@@ -303,13 +303,13 @@ def main(cmdline=False, **kwargs):
             --src "{uncropped_final_kwcoco_fpath}" \
             --dst "{aligned_imgonly_kwcoco_fpath}" \
             --regions "{region_dpath / '*.geojson'}" \
-            --workers={config['align_workers']} \
             --context_factor=1 \
             --geo_preprop=auto \
             --keep={align_keep} \
             --visualize={align_visualize} \
             --debug_valid_regions={debug_valid_regions} \
-            --rpc_align_method affine_warp
+            --rpc_align_method affine_warp \
+            --workers={config['align_workers']} \
         '''), depends=uncropped_final_jobs)
 
     # TODO:
