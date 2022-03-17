@@ -249,6 +249,14 @@ class TMUXMultiQueue(PathIdentifiable):
         >>>     self.run()
         >>>     self.monitor()
         >>>     self.kill()
+
+    Ignore:
+        >>> from watch.utils.tmux_queue import *  # NOQA
+        >>> self = TMUXMultiQueue(2, 'foo', gres=[0, 1])
+        >>> job1 = self.submit('echo hello && sleep 0.5')
+        >>> job2 = self.submit('echo hello && sleep 0.5')
+        >>> self.rprint()
+
     """
     def __init__(self, size=1, name=None, dpath=None, rootid=None, environ=None,
                  gres=None):
