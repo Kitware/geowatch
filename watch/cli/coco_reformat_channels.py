@@ -1,22 +1,3 @@
-"""
-Ignore:
-    DVC_DPATH=$(python -m watch.cli.find_dvc)
-
-    python -m watch.cli.coco_reformat_channels \
-        --src=$DVC_DPATH/models/fusion/eval3_candidates/pred/BASELINE_EXPERIMENT_V001/pred_BASELINE_EXPERIMENT_V001_epoch=11-step=62759-v2/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json \
-        --quantize="not_salient|salient,Site Preparation|Active Construction|Post Construction|No Activity" \
-        --remove="not_salient,negative,ignore,negative,positive,background|Unknown" \
-        --workers=0
-
-    /media/joncrall/flash1/smart_watch_dvc/
-
-    DVC_DPATH=$(python -m watch.cli.find_dvc)
-    python -m watch.cli.coco_reformat_channels \
-        --src=$DVC_DPATH/models/fusion/eval3_candidates/pred/BASELINE_EXPERIMENT_V001/pred_BASELINE_EXPERIMENT_V001_epoch=11-step=62759-v3/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json \
-        --quantize="not_salient|salient,Site Preparation|Active Construction|Post Construction|No Activity" \
-        --remove="not_salient,negative,ignore,negative,positive,background|Unknown" \
-        --workers=2
-"""
 import kwcoco
 import ubelt as ub
 import scriptconfig as scfg
@@ -30,9 +11,6 @@ class CocoReformatChannels(scfg.Config):
     """
     Helper to remove channels from a coco file and reformat predictions from
     float32 to int16.
-
-    TODO:
-        - [ ] This might go in kwcoco proper? This could be folded into "union"
     """
     default = {
         'src': scfg.Value(None, help='path to coco dataset to read and rewrite'),
@@ -42,26 +20,56 @@ class CocoReformatChannels(scfg.Config):
         'remove': scfg.Value(None, type=str, help='channels to remove'),
 
         'workers': scfg.Value(0, help='number of background workers'),
+
+        'nodata': scfg.Value(-9999, help='nodata value to use'),
     }
 
 
 def main(cmdline=False, **kwargs):
     """
-    Ignore:
-        from watch.cli.coco_reformat_channels import *  # NOQA
-        kwargs = {
-            'src': '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/BASELINE_EXPERIMENT_V001/pred_BASELINE_EXPERIMENT_V001_epoch=20-step=109829-v1/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json',
-            'quantize': 'not_salient|salient,Site Preparation|Active Construction|Post Construction|No Activity',
-            'remove': 'not_salient,negative,ignore,negative,positive,background|Unknown',
-        }
-        cmdline = False
+    Example:
+        >>> from watch.cli.coco_reformat_channels import *  # NOQA
+        >>> import kwcoco
+        >>> # Make a dataset we can modify inplace
+        >>> orig_dset = kwcoco.CocoDataset.demo('vidshapes1-msi')
+        >>> orig_dset.reroot(absolute=False)
+        >>> orig_bundle = ub.Path(orig_dset.bundle_dpath)
+        >>> new_bundle = ub.Path.appdir('kwcoco/tests/test_reformat_channels')
+        >>> new_bundle.delete().ensuredir()
+        >>> import shutil
+        >>> shutil.copytree(orig_bundle, new_bundle, dirs_exist_ok=True)
+        >>> new_fpath = new_bundle / 'data.kwcoco.json'
+        >>> orig_dset.dump(new_fpath)
+        >>> new_dset = kwcoco.CocoDataset(new_fpath)
+        >>> gid = 1
+        >>> coco_img = new_dset.coco_image(gid)
+        >>> rng = kwarray.ensure_rng(432)
+        >>> imdata = rng.rand(128, 128)
+        >>> coco_img.add_auxiliary_item('test_prediction.tif', channels='salient', imdata=imdata, imwrite=True)
+        >>> new_dset.dump(new_dset.fpath)
+        >>> # now reformat this new dataset
+        >>> orig_pred = coco_img.delay('salient').finalize()
+        >>> kwargs = {
+        >>>     'src': new_dset.fpath,
+        >>>     'quantize': 'salient',
+        >>>     #'remove': 'B11',
+        >>> }
+        >>> cmdline = False
+        >>> main(cmdline=False, **kwargs)
+        >>> reformatted_dset = kwcoco.CocoDataset(new_fpath)
+        >>> assert 'quantization' in reformatted_dset.imgs[1]['auxiliary'][-1]
+        >>> new_coco_img = reformatted_dset.coco_image(gid)
+        >>> new_pred1 = new_coco_img.delay('salient').finalize()
+        >>> new_pred2 = new_coco_img.delay('salient').finalize(dequantize=False)
+        >>> assert np.allclose(new_pred1, new_pred1)
+        >>> assert new_pred2.dtype.kind == 'i'
     """
     config = CocoReformatChannels(default=kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
     dset = kwcoco.CocoDataset.coerce(config['src'])
 
-    to_quantize = None if config['quantize'] is None else kwcoco.ChannelSpec.coerce(config['quantize']).fuse()
-    to_remove = None if config['remove'] is None else kwcoco.ChannelSpec.coerce(config['remove']).fuse()
+    to_quantize = kwcoco.ChannelSpec.coerce('' if config['quantize'] is None else config['quantize']).fuse()
+    to_remove = kwcoco.ChannelSpec.coerce('' if config['remove'] is None else config['remove']).fuse()
 
     tasks = []
     for coco_img in dset.images().coco_images:
@@ -69,11 +77,11 @@ def main(cmdline=False, **kwargs):
             task = {}
             has_quantize = stream & to_quantize
             has_remove = stream & to_remove
-            obj = cocoimg_find_asset_obj(coco_img, stream)
+            obj = coco_img.find_asset_obj(stream)
             old_quantization = obj.get('quantization', None)
             if has_remove.numel():
                 has_quantize = has_quantize - has_remove
-            if has_remove.numel():
+            if has_remove is not None and has_remove.numel():
                 task['has_remove'] = has_remove
             if old_quantization is None:
                 # Dont redo quantization
@@ -92,6 +100,7 @@ def main(cmdline=False, **kwargs):
     if len(tasks) == 0:
         print('No modifications need to be made')
     else:
+        print('Found {} tasks'.format(len(tasks)))
         errors = [t['error'] for t in tasks if t.get('error', None)]
         if errors:
             for msg in errors:
@@ -109,7 +118,7 @@ def main(cmdline=False, **kwargs):
                 stream = task['stream']
                 has_remove = task.get('has_remove', None)
                 has_quantize = task.get('has_quantize', None)
-                obj = cocoimg_find_asset_obj(coco_img, stream)
+                obj = coco_img.find_asset_obj(stream)
 
                 job = jobs.submit(reformat_obj, obj, bundle_dpath, has_remove,
                                   has_quantize)
@@ -143,8 +152,6 @@ def reformat_obj(obj, bundle_dpath, has_remove, has_quantize):
     quantize_min = 0
     quantize_nan = -9999
 
-    # TODO: can load data in auxiliary space when
-    # kwcoco 0.2.25 is released
     fname = ub.Path(obj['file_name'])
     fpath = bundle_dpath / fname
 
@@ -168,16 +175,16 @@ def reformat_obj(obj, bundle_dpath, has_remove, has_quantize):
             coords['c'] = obj_channels.as_list()
         xr_imdata = xr.DataArray(imdata, dims=('y', 'x', 'c'), coords=coords)
         xr_mask = xr.DataArray(mask, dims=('y', 'x', 'c'), coords=coords)
-        keep_imdata = xr_imdata.loc[:, :, keep_channels].data
-        keep_mask = xr_mask.loc[:, :, keep_channels].data
+        imdata_ = xr_imdata.loc[:, :, keep_channels].data
+        mask_ = xr_mask.loc[:, :, keep_channels].data
         new_obj.update({
             'channels': keep_channels.concise().spec,
             'num_bands': keep_channels.numel(),
         })
     else:
         keep_channels = obj_channels
-        keep_imdata = imdata
-        keep_mask = mask
+        imdata_ = imdata
+        mask_ = mask
 
     prev_quant = obj.get('quantization', None)
     if prev_quant is None and has_quantize is not None and has_quantize.numel():
@@ -204,36 +211,22 @@ def reformat_obj(obj, bundle_dpath, has_remove, has_quantize):
             'quant_max': quantize_max,
             'nodata': quantize_nan,
         }
-        new_imdata = (keep_imdata - old_min) * quant_factor + quantize_min
+        new_imdata = (imdata_ - old_min) * quant_factor + quantize_min
         new_imdata = new_imdata.astype(quantize_dtype)
-        new_imdata[keep_mask] = quantize_nan
+        new_imdata[mask_] = quantize_nan
 
         # Denote that this channel is quantized
         new_obj.update({
             'quantization': quantization,
         })
     else:
-        new_imdata = keep_imdata
+        new_imdata = imdata_
 
     kwimage.imwrite(new_fpath, new_imdata, backend='gdal',
                     compress='DEFLATE', blocksize=128,
                     nodata=quantize_nan)
 
     return fpath, new_fpath, new_obj
-
-
-def cocoimg_find_asset_obj(self, channels):
-    """
-    Find the asset dictionary with the specified channels
-    """
-    channels = FusedChannelSpec.coerce(channels)
-    found = None
-    for obj in self.iter_asset_objs():
-        obj_channels = FusedChannelSpec.coerce(obj['channels'])
-        if obj_channels & channels:
-            found = obj
-            break
-    return found
 
 
 def schedule_quantization():
@@ -247,7 +240,7 @@ def schedule_quantization():
     import glob
     pred_fpaths = glob.glob(str(pred_globpat))
     from watch.utils import tmux_queue
-    queue = tmux_queue.TMUXMultiQueue(name='quantize-jobs')
+    queue = tmux_queue.TMUXMultiQueue(name='quantize-jobs', size=8)
     for pred_fpath in pred_fpaths:
         queue.submit(ub.codeblock(
             rf'''
@@ -257,6 +250,9 @@ def schedule_quantization():
                 --remove="not_salient,negative,ignore,negative,positive,background|Unknown" \
                 --workers=0
             '''))
+    queue.rprint()
+    queue.run()
+    queue.monitor()
 
 if __name__ == '__main__':
     """

@@ -58,8 +58,13 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument('--with_class', type=smartcast, default='auto')
     parser.add_argument('--with_saliency', type=smartcast, default='auto')
 
-    parser.add_argument('--compress', type=str, default='RAW', help='type of compression for prob images')
+    parser.add_argument('--compress', type=str, default='DEFLATE', help='type of compression for prob images')
     parser.add_argument('--track_emissions', type=smartcast, default=True, help='set to false to disable emission tracking')
+
+    parser.add_argument('--quantize', type=smartcast, default=True, help='quantize outputs')
+
+    # TODO
+    # parser.add_argument('--test_time_augmentation', default=False, help='')
 
     parser.add_argument(
         '--write_preds', default=True, type=smartcast, help=ub.paragraph(
@@ -177,6 +182,12 @@ def predict(cmdline=False, **kwargs):
         >>>     import warnings
         >>>     if sum(d['change'] for d in frame_to_cathist.values()) == 0:
         >>>         warnings.warn('should have some change predictions elsewhere')
+        >>> coco_img = dset.images().coco_images[1]
+        >>> # Test that new quantization does not existing APIs
+        >>> pred1 = coco_img.delay('salient').finalize(nodata='float')
+        >>> pred2 = coco_img.delay('salient').finalize(nodata='float', dequantize=False)
+        >>> assert pred1.max() <= 1
+        >>> assert pred2.max() > 1
     """
     args = make_predict_config(cmdline=cmdline, **kwargs)
     print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=2)))
@@ -381,63 +392,86 @@ def predict(cmdline=False, **kwargs):
     # could be torch on-device stitching
     stitch_device = 'numpy'
 
+    ignore_classes = {
+        'not_salient', 'ignore', 'background', 'Unknown'}
+    # hack, not general
+    ignore_classes.update({'negative', 'positive'})
+
+    stitcher_common_kw = dict(
+        stiching_space='video',
+        device=stitch_device,
+        thresh=args.thresh,
+        write_probs=args.write_probs,
+        write_preds=args.write_preds,
+        prob_compress=args.compress,
+        quantize=args.quantize,
+    )
+
+    # If we only care about some predictions from the model, then keep track of
+    # the class indices we need to take.
+    task_keep_indices = {}
     if args.with_change:
-        stitch_managers['change'] = CocoStitchingManager(
+        task_name = 'change'
+        head_classes = ['change']
+        head_keep_idxs = [
+            idx for idx, catname in enumerate(head_classes)
+            if catname not in ignore_classes]
+        head_keep_classes = list(ub.take(head_classes, head_keep_idxs))
+        chan_code = '|'.join(head_keep_classes)
+        task_keep_indices[task_name] = head_keep_idxs
+        stitch_managers[task_name] = CocoStitchingManager(
             result_dataset,
-            stiching_space='video',
-            device=stitch_device,
-            chan_code='change',
-            short_code='pred_change',
-            thresh=args.thresh,
-            write_probs=args.write_probs,
-            write_preds=args.write_preds,
-            prob_compress=args.compress,
-            num_bands=1,
+            chan_code=chan_code,
+            short_code='pred_' + task_name,
+            num_bands=len(head_keep_classes),
+            **stitcher_common_kw,
         )
         result_dataset.ensure_category('change')
 
     if args.with_class:
+        task_name = 'class'
         if hasattr(method, 'foreground_classes'):
             foreground_classes = method.foreground_classes
         else:
             from watch import heuristics
-            not_foreground = (heuristics.BACKGROUND_CLASSES | heuristics.IGNORE_CLASSNAMES)
+            not_foreground = (heuristics.BACKGROUND_CLASSES |
+                              heuristics.IGNORE_CLASSNAMES |
+                              heuristics.NEGATIVE_CLASSES)
             foreground_classes = ub.oset(method.classes) - not_foreground
-            # hueristics.B
-            # raise NotImplementedError('old model, need to hack in fg classes')
+        head_classes = method.classes
+        head_keep_idxs = [
+            idx for idx, catname in enumerate(head_classes)
+            if catname not in ignore_classes]
+        head_keep_classes = list(ub.take(head_classes, head_keep_idxs))
+        task_keep_indices[task_name] = head_keep_idxs
 
-        class_chan_code = '|'.join(list(method.classes))
-        stitch_managers['class'] = CocoStitchingManager(
+        chan_code = '|'.join(list(head_keep_classes))
+        stitch_managers[task_name] = CocoStitchingManager(
             result_dataset,
-            stiching_space='video',
-            device=stitch_device,
-            chan_code=class_chan_code,
-            short_code='pred_class',
-            thresh=args.thresh,
-            write_probs=args.write_probs,
-            write_preds=args.write_preds,
+            chan_code=chan_code,
+            short_code='pred_' + task_name,
             polygon_categories=foreground_classes,
-            prob_compress=args.compress,
-            num_bands=len(method.classes),
+            num_bands=len(head_keep_classes),
+            **stitcher_common_kw,
         )
 
     if args.with_saliency:
-        stitch_managers['saliency'] = CocoStitchingManager(
+        # hack: the model should tell us what the shape of its head is
+        task_name = 'saliency'
+        head_classes = ['not_salient', 'salient']
+        head_keep_idxs = [
+            idx for idx, catname in enumerate(head_classes)
+            if catname not in ignore_classes]
+        head_keep_classes = list(ub.take(head_classes, head_keep_idxs))
+        task_keep_indices[task_name] = head_keep_idxs
+        chan_code = '|'.join(head_keep_classes)
+        stitch_managers[task_name] = CocoStitchingManager(
             result_dataset,
-            stiching_space='video',
-            device=stitch_device,
-            chan_code='not_salient|salient',
-            short_code='pred_saliency',
-            thresh=args.thresh,
-            write_probs=args.write_probs,
-            write_preds=args.write_preds,
+            chan_code=chan_code,
+            short_code='pred_' + task_name,
             polygon_categories=['salient'],
-            prob_compress=args.compress,
-            num_bands=2,
+            num_bands=len(head_keep_classes),
         )
-
-    # result_infos = []
-    # total_info = {'n_anns': 0, 'n_imgs': 0, 'total_prob': 0}
 
     expected_outputs = set(stitch_managers.keys())
     got_outputs = None
@@ -450,8 +484,6 @@ def predict(cmdline=False, **kwargs):
         'class_probs': 'class',
         'change_probs': 'change',
     }
-
-    # running_stats = kwarray.RunningStats()  # check if probs are non-zero
 
     # Start background procs before we make threads
     batch_iter = iter(test_dataloader)
@@ -515,8 +547,6 @@ def predict(cmdline=False, **kwargs):
                 item['frames'] = filtered_frames
 
             # Predict on the batch
-            # import xdev
-            # with xdev.embed_on_exception_context:
             outputs = method.forward_step(batch, with_loss=False)
             outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
 
@@ -531,6 +561,7 @@ def predict(cmdline=False, **kwargs):
             for head_key in writable_outputs:
                 head_stitcher = stitch_managers[head_key]
                 head_probs = outputs[head_key]
+                chan_keep_idxs = task_keep_indices[head_key]
 
                 # HACK: FIXME: WE ARE HARD CODING THAT CHANGE IS GIVEN TO
                 # ALL FRAMES EXECPT THE FIRST IN MULTIPLE PLACES.
@@ -543,7 +574,11 @@ def predict(cmdline=False, **kwargs):
                     # TODO: if the predictions are downsampled wrt to the input
                     # images, we need to determine what that transform is so we can
                     # correctly warp the predictions back into image space.
-                    bin_probs = head_probs[bx].detach().cpu().numpy()
+
+                    item_head_probs = head_probs[bx]
+                    # Keep only the channels we want to write to disk
+                    item_head_relevant_probs = item_head_probs[..., chan_keep_idxs]
+                    bin_probs = item_head_relevant_probs.detach().cpu().numpy()
 
                     # Get the spatio-temporal subregion this prediction belongs to
                     out_gids = region_info['in_gids'][predicted_frame_slice]
@@ -551,12 +586,10 @@ def predict(cmdline=False, **kwargs):
 
                     # Update the stitcher with this windowed prediction
                     for gid, probs in zip(out_gids, bin_probs):
-                        # running_stats.update(probs.mean())
                         head_stitcher.accumulate_image(gid, space_slice, probs)
 
                 # Free up space for any images that have been completed
                 for gid in head_stitcher.ready_image_ids():
-                    # finalize_ready(head_stitcher, gid)
                     head_stitcher._ready_gids.difference_update({gid})  # avoid race condition
                     writer_queue.submit(head_stitcher.finalize_image, gid)
 
@@ -565,7 +598,6 @@ def predict(cmdline=False, **kwargs):
         # Prediction is completed, finalize all remaining images.
         for _head_key, head_stitcher in stitch_managers.items():
             for gid in head_stitcher.managed_image_ids():
-                # finalize_ready(head_stitcher, gid)
                 writer_queue.submit(head_stitcher.finalize_image, gid)
         writer_queue.wait_until_finished()
 
@@ -610,32 +642,12 @@ def predict(cmdline=False, **kwargs):
         }
     })
 
-    # prog.set_extra('found {}'.format(nanns))
-    # print('Predicted total nanns = {!r}'.format(nanns))
-
     # validate and save results
     print(result_dataset.validate())
     print('dump result_dataset.fpath = {!r}'.format(result_dataset.fpath))
     result_dataset.dump(result_dataset.fpath)
     print('return result_dataset.fpath = {!r}'.format(result_dataset.fpath))
     return result_dataset
-
-
-# def finalize_ready(head_stitcher, gid, running_stats, total_info):
-#     info = head_stitcher.finalize_image(gid)
-#     stats = running_stats.summarize(axis=None, keepdims=False)
-#     total_info['n_anns'] += info['n_anns']
-#     total_info['total_prob'] += info['total_prob']
-#     total_info['n_imgs'] += 1
-
-#     report_info = ub.dict_union(
-#         ub.dict_isect(stats, {'mean', 'max', 'min', 'std'}),
-#         ub.dict_isect(total_info, {'n_imgs', 'n_anns', 'total_prob'}),
-#     )
-#     report_info_str = ub.repr2(report_info, precision=4, compact=True)
-#     prog.set_extra(' {} - '.format(report_info_str))
-#     prog.ensure_newline()
-#     result_infos.append(info)
 
 
 class CocoStitchingManager(object):
@@ -675,6 +687,9 @@ class CocoStitchingManager(object):
             These are the list of channels that should be transformed into
             polygons. If not set, all are used.
 
+        quantize (bool):
+            if True quantize heatmaps before writing them to disk
+
     TODO:
         - [ ] Handle the case where the input space is related to the output
               space by an affine transform.
@@ -695,8 +710,8 @@ class CocoStitchingManager(object):
 
     def __init__(self, result_dataset, short_code=None, chan_code=None, stiching_space='video',
                  device='numpy', thresh=0.5, write_probs=True,
-                 write_preds=True, num_bands='auto', prob_compress='RAW',
-                 polygon_categories=None):
+                 write_preds=True, num_bands='auto', prob_compress='DEFLATE',
+                 polygon_categories=None, quantize=True):
         self.short_code = short_code
         self.result_dataset = result_dataset
         self.device = device
@@ -705,6 +720,7 @@ class CocoStitchingManager(object):
         self.num_bands = num_bands
         self.prob_compress = prob_compress
         self.polygon_categories = polygon_categories
+        self.quantize = quantize
 
         self.suffix_code = (
             self.chan_code if '|' not in self.chan_code else
@@ -796,17 +812,30 @@ class CocoStitchingManager(object):
             # By embedding the space slice in the stitcher dimensions we can get a
             # slice corresponding to the valid region in the stitcher, and the extra
             # padding encode the valid region of the data we are trying to stitch into.
-            stitcher_slice, padding = kwarray.embed_slice(space_slice[0:2], stitcher.shape)
+            subslice, padding = kwarray.embed_slice(space_slice[0:2], stitcher.shape)
             output_slice = (
                 slice(padding[0][0], data.shape[0] - padding[0][1]),
                 slice(padding[1][0], data.shape[1] - padding[1][1]),
             )
             subdata = data[output_slice]
             subweights = weights[output_slice]
-            stitcher.add(stitcher_slice, subdata, weight=subweights)
+
+            stitch_slice = subslice
+            stitch_data = subdata
+            stitch_weights = subweights
         else:
             # Normal case
-            stitcher.add(space_slice, data, weight=weights)
+            stitch_slice = subslice
+            stitch_data = subdata
+            stitch_weights = subweights
+
+        # Handle stitching nan values
+        invalid_output_mask = np.isnan(stitch_data)
+        if np.any(invalid_output_mask):
+            spatial_valid_mask = (1 - invalid_output_mask.any(axis=2, keepdims=True))
+            stitch_weights = stitch_weights * spatial_valid_mask
+            stitch_data[invalid_output_mask] = 0
+        stitcher.add(stitch_slice, stitch_data, weight=stitch_weights)
 
     def managed_image_ids(self):
         """
@@ -894,21 +923,34 @@ class CocoStitchingManager(object):
             new_fname = img.get('name', str(img['id'])) + f'_{self.suffix_code}.tif'  # FIXME
             new_fpath = join(self.prob_dpath, new_fname)
             assert final_probs.shape[2] == (self.chan_code.count('|') + 1)
-            img.get('auxiliary', []).append({
+            aux = {
                 'file_name': relpath(new_fpath, bundle_dpath),
                 'channels': self.chan_code,
                 'height': final_probs.shape[0],
                 'width': final_probs.shape[1],
                 'num_bands': final_probs.shape[2],
                 'warp_aux_to_img': img_from_vid.concise(),
-            })
+            }
+            img.get('auxiliary', []).append(aux)
 
             # Save the prediction to disk
-            total_prob += final_probs.sum()
-            kwimage.imwrite(
-                str(new_fpath), final_probs, space=None, backend='gdal',
-                compress=self.prob_compress, blocksize=64,
-            )
+            total_prob += np.nansum(final_probs)
+
+            if self.quantize:
+                # Quantize
+                quant_probs, quantization = quantize_float01(final_probs)
+                aux['quantization'] = quantization
+
+                kwimage.imwrite(
+                    str(new_fpath), quant_probs, space=None, backend='gdal',
+                    compress=self.prob_compress, blocksize=128,
+                    nodata=quantization['nodata']
+                )
+            else:
+                kwimage.imwrite(
+                    str(new_fpath), final_probs, space=None, backend='gdal',
+                    compress=self.prob_compress, blocksize=128,
+                )
 
         if self.write_preds:
             # This is the final step where we convert soft-probabilities to
@@ -942,6 +984,33 @@ class CocoStitchingManager(object):
             'total_prob': total_prob,
         }
         return info
+
+
+def quantize_float01(imdata):
+    mask = np.isnan(imdata)
+    old_min = 0
+    old_max = 1
+    quantize_dtype = np.int16
+    quantize_max = np.iinfo(quantize_dtype).max
+    quantize_min = 0
+    quantize_nan = -9999
+    quantization = {
+        'orig_min': old_min,
+        'orig_max': old_max,
+        'quant_min': quantize_min,
+        'quant_max': quantize_max,
+        'nodata': quantize_nan,
+    }
+
+    old_extent = (old_max - old_min)
+    new_extent = (quantize_max - quantize_min)
+    quant_factor = new_extent / old_extent
+
+    new_imdata = (imdata - old_min) * quant_factor + quantize_min
+    new_imdata = new_imdata.astype(quantize_dtype)
+    new_imdata[mask] = quantize_nan
+
+    return new_imdata, quantization
 
 
 def main(cmdline=True, **kwargs):
