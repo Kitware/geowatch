@@ -169,7 +169,7 @@ def main(cmdline=False, **kwargs):
         job_environ_str += ' '
 
     uncropped_coco_paths = []
-    convert_jobs = []
+    union_depends_jobs = []
     for s3_fpath, collated in zip(s3_fpath_list, collated_list):
         s3_name = ub.Path(s3_fpath).name
         uncropped_query_fpath = uncropped_query_dpath / ub.Path(s3_fpath).name
@@ -225,12 +225,28 @@ def main(cmdline=False, **kwargs):
                 --jobs "{config['convert_workers']}"
             '''), depends=[ingress_job])
 
-        uncropped_coco_paths.append(uncropped_kwcoco_fpath)
-        convert_jobs.append(convert_job)
+        uncropped_fielded_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}_fielded.kwcoco.json'
+        uncropped_fielded_kwcoco_fpath = uncropped_fielded_kwcoco_fpath.shrinkuser(home='$HOME')
+
+        cache_prefix = '[[ -f {uncropped_prep_kwcoco_fpath} ]] || ' if config['cache'] else ''
+        add_fields_job = queue.submit(ub.codeblock(
+            rf'''
+            # PREPARE Uncropped datasets (usually for debugging)
+            {cache_prefix}{job_environ_str}python -m watch.cli.coco_add_watch_fields \
+                --src "{uncropped_kwcoco_fpath}" \
+                --dst "{uncropped_fielded_kwcoco_fpath}" \
+                --workers="{config['fields_workers']}" \
+                --enable_video_stats=False \
+                --overwrite=warp \
+                --target_gsd=10
+            '''), depends=convert_job)
+
+        uncropped_coco_paths.append(uncropped_fielded_kwcoco_fpath)
+        union_depends_jobs.append(convert_job)
 
     if len(uncropped_coco_paths) == 1:
         uncropped_final_kwcoco_fpath = uncropped_coco_paths[0]
-        uncropped_final_jobs = convert_jobs
+        uncropped_final_jobs = union_depends_jobs
     else:
         union_suffix = ub.hash_data([p.name for p in uncropped_coco_paths])[0:8]
         uncropped_final_kwcoco_fpath = uncropped_dpath / f'data_{union_suffix}.kwcoco.json'
@@ -243,46 +259,32 @@ def main(cmdline=False, **kwargs):
             {cache_prefix}{job_environ_str}python -m kwcoco union \
                 --src {uncropped_multi_src_part} \
                 --dst "{uncropped_final_kwcoco_fpath}"
-            '''), depends=convert_jobs)
+            '''), depends=union_depends_jobs)
         uncropped_final_jobs = [union_job]
 
     uncropped_prep_kwcoco_fpath = uncropped_dpath / 'data_prepped.kwcoco.json'
     uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.shrinkuser(home='$HOME')
 
-    select_images_query = config['select_images']
-
-    if select_images_query:
-        suffix = '_' + ub.hash_data(select_images_query)[0:8]
-        # Debugging
-        small_uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.augment(suffix=suffix)
-        subset_job = queue.submit(ub.codeblock(
-            rf'''
-            # SUBSET Uncropped datasets (usually for debugging)
-            python -m kwcoco subset \
-                --src="{uncropped_final_kwcoco_fpath}" \
-                --dst="{small_uncropped_kwcoco_fpath}" \
-                --select_images='{select_images_query}'
-            '''), jobs=uncropped_final_jobs)
-        # --populate-watch-fields \
-        add_fields_depends = [subset_job]
-        uncropped_final_kwcoco_fpath = small_uncropped_kwcoco_fpath
-        uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.augment(suffix=suffix)
-        aligned_imgonly_kwcoco_fpath = aligned_imgonly_kwcoco_fpath.augment(suffix=suffix)
-    else:
-        add_fields_depends = uncropped_final_jobs
-
-    cache_prefix = '[[ -f {uncropped_prep_kwcoco_fpath} ]] || ' if config['cache'] else ''
-    add_fields_job = queue.submit(ub.codeblock(
-        rf'''
-        # PREPARE Uncropped datasets (usually for debugging)
-        {cache_prefix}{job_environ_str}python -m watch.cli.coco_add_watch_fields \
-            --src "{uncropped_final_kwcoco_fpath}" \
-            --dst "{uncropped_prep_kwcoco_fpath}" \
-            --workers="{config['fields_workers']}" \
-            --enable_video_stats=False \
-            --overwrite=warp \
-            --target_gsd=10
-        '''), depends=add_fields_depends)
+    # select_images_query = config['select_images']
+    # if select_images_query:
+    #     suffix = '_' + ub.hash_data(select_images_query)[0:8]
+    #     # Debugging
+    #     small_uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.augment(suffix=suffix)
+    #     subset_job = queue.submit(ub.codeblock(
+    #         rf'''
+    #         # SUBSET Uncropped datasets (usually for debugging)
+    #         python -m kwcoco subset \
+    #             --src="{uncropped_final_kwcoco_fpath}" \
+    #             --dst="{small_uncropped_kwcoco_fpath}" \
+    #             --select_images='{select_images_query}'
+    #         '''), jobs=uncropped_final_jobs)
+    #     # --populate-watch-fields \
+    #     add_fields_depends = [subset_job]
+    #     uncropped_final_kwcoco_fpath = small_uncropped_kwcoco_fpath
+    #     uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.augment(suffix=suffix)
+    #     aligned_imgonly_kwcoco_fpath = aligned_imgonly_kwcoco_fpath.augment(suffix=suffix)
+    # else:
+    # add_fields_depends = uncropped_final_jobs
 
     # region_model_str = ' '.join([shlex.quote(str(p)) for p in region_models])
 
@@ -309,7 +311,7 @@ def main(cmdline=False, **kwargs):
             --visualize={align_visualize} \
             --debug_valid_regions={debug_valid_regions} \
             --rpc_align_method affine_warp
-        '''), depends=[add_fields_job])
+        '''), depends=uncropped_final_jobs)
 
     # TODO:
     # Project annotation from latest annotations subdir
