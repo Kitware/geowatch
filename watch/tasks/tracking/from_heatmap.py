@@ -466,6 +466,9 @@ def time_aggregated_polys(coco_dset,
 
     print('time aggregation: number of polygons: ', len(tracks_polys))
 
+    # make tracks with start and end gids
+    # tracks = Track()
+    
     # SmallPolygonFilter and ResponsePolygonFilter should operate on each
     # vidpoly separately, so have to bookkeep both vidpolys and tracks
     # in a list track_polys

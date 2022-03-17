@@ -12,7 +12,7 @@ from watch.utils.kwcoco_extensions import TrackidGenerator
 from watch.gis.geotiff import geotiff_crs_info
 from watch.tasks.tracking.utils import TrackFunction
 from watch.heuristics import SITE_SUMMARY_CNAME
-
+from watch.tasks.tracking.utils import check_only_bg
 try:
     from xdev import profile
 except Exception:
@@ -443,7 +443,8 @@ def normalize_phases(coco_dset,
 
     cnames_to_remove = set(
         # negative examples, no longer needed
-        CNAMES_DCT['negative']['scored'] + CNAMES_DCT['negative']['unscored'] +
+        #CNAMES_DCT['negative']['scored'] + CNAMES_DCT['negative']['unscored'] +
+        CNAMES_DCT['negative']['unscored'] +
         # should have been consumed by track_fn, TODO more robust check
         [SITE_SUMMARY_CNAME])
     coco_dset.remove_categories(cnames_to_remove, keep_annots=False)
@@ -455,7 +456,7 @@ def normalize_phases(coco_dset,
         baseline_keys)
 
     # metrics-and-test-framework/evaluation.py:1684
-    cnames_to_score = set(CNAMES_DCT['positive']['scored'])
+    cnames_to_score = set(CNAMES_DCT['positive']['scored']) | set(CNAMES_DCT['negative']['scored'])
 
     allowed_cnames = cnames_to_replace | cnames_to_score
     have_cnames = set(coco_dset.name_to_cat)
@@ -533,22 +534,28 @@ def normalize_phases(coco_dset,
 
             if use_viterbi:
 
+                #with xdev.embed_on_exception_context():
                 smoothed_cnames = phase.class_label_smoothing(
                     annots.cnames, t_probs, e_probs)
-                annots.set('category_id', [
-                    coco_dset.name_to_cat[name]['id']
-                    for name in smoothed_cnames
-                ])
+                if check_only_bg(smoothed_cnames):
+                    print('removing track ', trackid, ': only found No Activity')
+                else:
+                    annots.set('category_id', [
+                        coco_dset.name_to_cat[name]['id']
+                        for name in smoothed_cnames
+                    ])
+
             # after viterbi, the sequence of phases is in the correct order
 
             # If the track ends before the end of the video, and the last frame
             # is not post construction, add another frame of post construction
-            coco_dset = phase.dedupe_background_anns(coco_dset, trackid)
+            # coco_dset = phase.dedupe_background_anns(coco_dset, trackid)
             coco_dset = phase.ensure_post(coco_dset, trackid)
 
     #
     # Fixup phase prediction
     #
+    import xdev; xdev.embed()
 
     # TODO do something with transition preds for phases which were altered
     FIXUP_TRANSITION_PRED = 0
