@@ -310,7 +310,7 @@ def mask(raster: Union[rasterio.DatasetReader, str],
                 warnings.filterwarnings(
                     'ignore', 'Input image is entirely zero',
                     category=UserWarning)
-            mask_img = convex_hull_image(mask_img).astype(np.uint8)
+                mask_img = convex_hull_image(mask_img).astype(np.uint8)
 
         if not as_poly:
             return mask_img
