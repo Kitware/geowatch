@@ -30,7 +30,7 @@ from lxml import etree
 from tempfile import NamedTemporaryFile
 
 
-GDAL_VIRTUAL_FILESYSTEM_PREFIX = 'vsi'
+GDAL_VIRTUAL_FILESYSTEM_PREFIX = '/vsi'
 
 # https://gdal.org/user/virtual_file_systems.
 # GDAL_VIRTUAL_FILESYSTEMS = [
@@ -394,6 +394,9 @@ def GdalOpen(path, mode='r', **kwargs):
     """
     A simple context manager for friendlier gdal use.
 
+    Returns:
+        GdalDataset
+
     Example:
         >>> # xdoctest: +REQUIRES(--network)
         >>> from watch.utils.util_gdal import *
@@ -438,7 +441,7 @@ class GdalDataset(ub.NiceRepr):
 
         virtual_retries (int):
             If the path is a reference to a virtual file system
-            (i.e. starts with vis) then we try to open it this many times
+            (i.e. starts with vsi) then we try to open it this many times
             before we finally fail.
 
     Example:
@@ -467,6 +470,15 @@ class GdalDataset(ub.NiceRepr):
         >>>     assert not ref.closed
         >>> print(f'{ref=!s}')
         >>> assert ref.closed
+
+    Example:
+        >>> # Test virtual filesystem
+        >>> # xdoctest: +REQUIRES(--network)
+        >>> from watch.utils.util_gdal import *  # NOQA
+        >>> path = '/vsicurl/https://i.imgur.com/KXhKM72.png'
+        >>> ref = GdalDataset.open(path)
+        >>> data = ref.GetRasterBand(1).ReadAsArray()
+        >>> assert data.sum() == 37109758
     """
 
     def __init__(self, __ref, _path='?', _str_mode='?'):
@@ -482,6 +494,8 @@ class GdalDataset(ub.NiceRepr):
         """
         Create a new dataset
         """
+        _path = os.fspath(path)
+
         if isinstance(mode, str):
             # https://mkyong.com/python/python-difference-between-r-w-and-a-in-open/
             if mode in {'readonly', 'r'}:
@@ -491,14 +505,11 @@ class GdalDataset(ub.NiceRepr):
             else:
                 raise KeyError(mode)
         if mode == gdal.GA_ReadOnly:
-            str_mode = 'r'
+            _str_mode = 'r'
         elif mode == gdal.GA_Update:
-            str_mode = 'w+'
+            _str_mode = 'w+'
         else:
             raise ValueError(mode)
-        __ref = None  # This is a private variable
-        _path = _path = os.fspath(path)
-        _str_mode = str_mode
 
         # Exceute gdal open with retries if it is a virtual system
         __ref = None
@@ -511,7 +522,7 @@ class GdalDataset(ub.NiceRepr):
                 raise RuntimeError(msg)
         except Exception:
             import time
-            if virtual_retries and _path.startswith('/vsi'):
+            if _path.startswith(GDAL_VIRTUAL_FILESYSTEM_PREFIX):
                 for _ in range(virtual_retries):
                     try:
                         __ref = gdal.Open(_path, mode)
@@ -528,7 +539,7 @@ class GdalDataset(ub.NiceRepr):
         return self
 
     @classmethod
-    def coerce(cls, data, mode=None):
+    def coerce(cls, data, mode=None, **kwargs):
         """
         Ensures the underlying object is a gdal dataset.
         """
@@ -537,9 +548,9 @@ class GdalDataset(ub.NiceRepr):
         if mode is None:
             mode = gdal.GA_ReadOnly
         if isinstance(data, str):
-            ref = cls.open(data, mode)
+            ref = cls.open(data, mode, **kwargs)
         elif isinstance(data, pathlib.Path):
-            ref = cls.open(data, mode)
+            ref = cls.open(data, mode, **kwargs)
         elif isinstance(data, gdal.Dataset):
             ref = cls(data)
         elif isinstance(data, GdalDataset):

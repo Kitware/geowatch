@@ -55,7 +55,7 @@ def geotiff_metadata(gpath, elevation='gtop30', strict=False):
     """
     from watch.utils import util_gdal
     infos = {}
-    ref = util_gdal.GdalOpen(gpath, 'r')
+    ref = util_gdal.GdalDataset.open(gpath, 'r', virtual_retries=3)
 
     infos['fname'] = geotiff_filepath_info(gpath)
     try:
@@ -75,11 +75,6 @@ def geotiff_metadata(gpath, elevation='gtop30', strict=False):
     return info
 
 
-def _coerce_gdal_dataset(data):
-    from watch.utils import util_gdal
-    return util_gdal.GdalDataset.coerce(data)
-
-
 def geotiff_header_info(gpath_or_ref):
     """
     Extract relevant metadata information from a geotiff header.
@@ -95,7 +90,8 @@ def geotiff_header_info(gpath_or_ref):
         >>> info = geotiff_header_info(gpath)
         >>> print('info = {}'.format(ub.repr2(info, nl=1)))
     """
-    ref = _coerce_gdal_dataset(gpath_or_ref)
+    from watch.utils import util_gdal
+    ref = util_gdal.GdalDataset.coerce(gpath_or_ref)
     keys_of_interest = [
         'NITF_CSEXRA_MAX_GSD',
         'NITF_PIAIMC_MEANGSD',
@@ -189,13 +185,14 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
 
         tf = info['wgs84_to_wld']
     """
+    from watch.utils import util_gdal
     from osgeo import gdal
     from osgeo import osr
     import affine
     import kwimage
 
     info = {}
-    ref = _coerce_gdal_dataset(gpath_or_ref)
+    ref = util_gdal.GdalDataset.coerce(gpath_or_ref)
 
     # tags = ref.GetMetadataDomainList()  # 7.5% of the execution time
     rpc_info = ref.GetMetadata(domain='RPC')  # 5% of execution time
@@ -1006,7 +1003,6 @@ def parse_landsat_product_id(product_id):
 
     Example:
         >>> from watch.gis.geotiff import *  # NOQA
-        >>> from watch.gis.geotiff import _coerce_gdal_dataset
         >>> product_id = 'LC08_L1TP_037029_20130602_20170310_01_T1'
         >>> ls_meta = parse_landsat_product_id(product_id)
 
