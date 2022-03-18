@@ -410,6 +410,11 @@ class GdalOpen(ub.NiceRepr):
             a string that can be: 'readonly' or 'update' or the equivalent
             standard mode codes: 'r' and 'w+'.
 
+        virtual_retries (int):
+            If the path is a reference to a virtual file system
+            (i.e. starts with vis) then we try to open it this many times
+            before we finally fail.
+
     Example:
         >>> # xdoctest: +REQUIRES(--network)
         >>> from watch.utils.util_gdal import *
@@ -457,7 +462,7 @@ class GdalOpen(ub.NiceRepr):
         >>> assert ref.closed
     """
 
-    def __init__(self, path, mode='r'):
+    def __init__(self, path, mode='r', virtual_retries=3):
         if isinstance(mode, str):
             # https://mkyong.com/python/python-difference-between-r-w-and-a-in-open/
             if mode in {'readonly', 'r'}:
@@ -473,9 +478,33 @@ class GdalOpen(ub.NiceRepr):
         else:
             raise ValueError(mode)
         self.__ref = None  # This is a private variable
-        self._path = os.fspath(path)
+        self._path = _path = os.fspath(path)
         self._str_mode = str_mode
-        self.__ref = gdal.Open(self._path, mode)
+
+        # Exceute gdal open with retries if it is a virtual system
+        __ref = None
+        try:
+            __ref = gdal.Open(_path, mode)
+            if __ref is None:
+                msg = gdal.GetLastErrorMsg()
+                raise RuntimeError(msg)
+        except Exception:
+            import time
+            if virtual_retries and _path.startswith('/vsi'):
+                for _ in range(virtual_retries):
+                    try:
+                        __ref = gdal.Open(_path, mode)
+                        if __ref is None:
+                            msg = gdal.GetLastErrorMsg()
+                            raise RuntimeError(msg)
+                    except Exception:
+                        time.sleep(0.01)
+                    else:
+                        break
+            if __ref is None:
+                raise
+
+        self.__ref = __ref
 
     @property
     def closed(self):
@@ -713,7 +742,7 @@ def make_vrt(in_paths, out_path, mode, relative_to_path=None, **kwargs):
         >>> make_vrt(['./bands1.vrt', './bands2.vrt'], 'full_scene.vrt', mode='mosaicked', relative_to_path=os.getcwd())
         >>> with GdalOpen('full_scene.vrt') as f:
         >>>     print(f.GetDescription())
-        >>>
+        >>> #
         >>> # clean up
         >>> os.remove('bands1.vrt')
         >>> os.remove('bands2.vrt')

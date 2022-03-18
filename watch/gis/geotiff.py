@@ -11,6 +11,7 @@ import os
 import parse
 from os.path import basename, isfile
 from dateutil.parser import isoparse
+from watch.utils import util_gdal
 
 try:
     from xdev import profile
@@ -23,42 +24,6 @@ class MetadataNotFound(Exception):
     Thrown when metadata does not exist
     """
     pass
-
-
-GDAL_VIRTUAL_FILESYSTEM_PREFIX = 'vsi'
-
-# https://gdal.org/user/virtual_file_systems.
-# GDAL_VIRTUAL_FILESYSTEMS = [
-#     {'prefix': 'vsizip', 'type': 'zip'},
-#     {'prefix': 'vsigzip', 'type': None},
-#     {'prefix': 'vsitar', 'type': None},
-#     {'prefix': 'vsitar', 'type': None},
-
-#     # Networks
-#     {'prefix': 'vsicurl', 'type': 'curl'},
-#     {'prefix': 'vsicurl_streaming', 'type': None},
-#     {'prefix': 'vsis3', 'type': None},
-#     {'prefix': 'vsis3_streaming', 'type': None},
-#     {'prefix': 'vsigs', 'type': None},
-#     {'prefix': 'vsigs_streaming', 'type': None},
-#     {'prefix': 'vsiaz', 'type': None},
-#     {'prefix': 'vsiaz_streaming', 'type': None},
-#     {'prefix': 'vsiadls', 'type': None},
-#     {'prefix': 'vsioss', 'type': None},
-#     {'prefix': 'vsioss_streaming', 'type': None},
-#     {'prefix': 'vsiswift', 'type': None},
-#     {'prefix': 'vsiswift_streaming', 'type': None},
-#     {'prefix': 'vsihdfs', 'type': None},
-#     {'prefix': 'vsiwebhdfs', 'type': None},
-
-#     #
-#     {'prefix': 'vsistdin', 'type': None},
-#     {'prefix': 'vsistdout', 'type': None},
-#     {'prefix': 'vsimem', 'type': None},
-#     {'prefix': 'vsisubfile', 'type': None},
-#     {'prefix': 'vsisparse', 'type': None},
-#     {'prefix': 'vsicrypt', 'type': None},
-# ]
 
 
 @profile
@@ -91,7 +56,7 @@ def geotiff_metadata(gpath, elevation='gtop30', strict=False):
     """
     from osgeo import gdal
     infos = {}
-    ref = gdal.Open(gpath, gdal.GA_ReadOnly)
+    ref = util_gdal.GdalOpen(gpath, gdal.GA_ReadOnly)
     if ref is None:
         msg = gdal.GetLastErrorMsg()
 
