@@ -24,7 +24,6 @@ def repackage(checkpoint_fpath, force=False, dry=False):
         ...     '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/checkpoint_DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera_epoch=2-step=2147.ckpt')
 
     checkpoint_fpath = '/home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=53-step=28457.ckpt'
-
     """
     import os
     # For now there is only one model, but in the future we will need
@@ -89,70 +88,6 @@ def repackage(checkpoint_fpath, force=False, dry=False):
                 method.save_package(str(package_fpath))
         package_fpaths.append(str(package_fpath))
     return package_fpaths
-
-
-class ChDir:
-    """
-    Context manager that changes the current working directory and then
-    returns you to where you were.
-    """
-    def __init__(self, dpath):
-        self.context_dpath = dpath
-        self.orig_dpath = None
-
-    def __enter__(self):
-        self.orig_dpath = os.getcwd()
-        os.chdir(self.context_dpath)
-        return self
-
-    def __exit__(self, a, b, c):
-        os.chdir(self.orig_dpath)
-
-
-class SimpleDVC():
-    """
-    A Simple DVC API
-    """
-
-    @staticmethod
-    def find_root(path):
-        max_parts = len(path.parts)
-        curr = path
-        found = None
-        for _ in range(max_parts):
-            cand = curr / '.dvc'
-            if cand.exists():
-                found = curr
-                break
-            curr = curr.parent
-        return found
-
-    @staticmethod
-    def add(paths):
-        # from os.path import commonprefix
-        # common = ub.Path(*commonprefix([p.parts for p in paths]))
-        import dvc.main
-        dvc_root = SimpleDVC.find_root(paths[0])
-        rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
-        with ChDir(dvc_root):
-            dvc_command = ['add'] + rel_paths
-            dvc.main.main(dvc_command)
-
-        # with ChDir(dvc_root):
-        #     out = dvc.main.main(['config', 'core.autostage'])
-        # ub.cmd(, cwd=dvc_root, verbose=3, check=True)
-        has_autostage = ub.cmd('dvc config core.autostage', cwd=dvc_root, check=True)['out'].strip() == 'true'
-        if not has_autostage:
-            raise NotImplementedError('Need autostage to complete the git commit')
-
-    @staticmethod
-    def push(path, remote='aws'):
-        import dvc.main
-        # from dvc import main
-        dvc_root = SimpleDVC.find_root(path)
-        with ChDir(dvc_root):
-            dvc_command = ['push', '-r', remote, '--recursive', str(path.relative_to(dvc_root))]
-            dvc.main.main(dvc_command)
 
 
 def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
@@ -287,8 +222,10 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     if mode == 'copy':
         return
 
-    SimpleDVC.add(staged_expt_dpaths)
-    SimpleDVC.push(storage_dpath, remote=dvc_remote)
+    from watch.utils.simple_dvc import SimpleDVC
+    dvc_api = SimpleDVC(dvc_dpath)
+    dvc_api.add(staged_expt_dpaths)
+    dvc_api.push(storage_dpath, remote=dvc_remote)
 
     if mode == 'dvc-commit':
         return
