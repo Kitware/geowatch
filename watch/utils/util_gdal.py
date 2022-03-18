@@ -394,10 +394,26 @@ def GdalOpen(path, mode='r', **kwargs):
     """
     A simple context manager for friendlier gdal use.
 
-    Returns:
-        GdalDataset
+    Example:
+        >>> # xdoctest: +REQUIRES(--network)
+        >>> from watch.utils.util_gdal import *
+        >>> from watch.demo.landsat_demodata import grab_landsat_product
+        >>> path = grab_landsat_product()['bands'][0]
+        >>> #
+        >>> # standard use:
+        >>> dataset = gdal.Open(path)
+        >>> print(dataset.GetDescription())  # do stuff
+        >>> del dataset  # or 'dataset = None'
+        >>> #
+        >>> # equivalent:
+        >>> with GdalOpen(path) as dataset:
+        >>>     print(dataset.GetDescription())  # do stuff
+        >>> #
+        >>> # open for writing:
+        >>> with GdalOpen(path, gdal.GA_Update) as dataset:
+        >>>     print(dataset.GetDescription())  # do stuff
     """
-    return GdalDataset(path, mode=mode, **kwargs)
+    return GdalDataset.open(path, mode=mode, **kwargs)
 
 
 class GdalDataset(ub.NiceRepr):
@@ -426,25 +442,6 @@ class GdalDataset(ub.NiceRepr):
             before we finally fail.
 
     Example:
-        >>> # xdoctest: +REQUIRES(--network)
-        >>> from watch.utils.util_gdal import *
-        >>> from watch.demo.landsat_demodata import grab_landsat_product
-        >>> path = grab_landsat_product()['bands'][0]
-        >>> #
-        >>> # standard use:
-        >>> dataset = gdal.Open(path)
-        >>> print(dataset.GetDescription())  # do stuff
-        >>> del dataset  # or 'dataset = None'
-        >>> #
-        >>> # equivalent:
-        >>> with GdalDataset(path) as dataset:
-        >>>     print(dataset.GetDescription())  # do stuff
-        >>> #
-        >>> # open for writing:
-        >>> with GdalDataset(path, gdal.GA_Update) as dataset:
-        >>>     print(dataset.GetDescription())  # do stuff
-
-    Example:
         >>> # Demonstrate use cases of this object
         >>> from watch.utils.util_gdal import *
         >>> import kwimage
@@ -453,7 +450,7 @@ class GdalDataset(ub.NiceRepr):
         >>> #
         >>> #
         >>> # Method1: Use GDalOpen exactly the same as gdal.Open
-        >>> ref = GdalDataset(path)
+        >>> ref = GdalDataset.open(path)
         >>> print(f'{ref=!s}')
         >>> assert not ref.closed
         >>> ref.GetDescription()  # use GDAL API exactly as-is
@@ -464,7 +461,7 @@ class GdalDataset(ub.NiceRepr):
         >>> #
         >>> #
         >>> # Method2: Use GDalOpen exactly the same as gdal.GdalDataset
-        >>> with GdalDataset(path, mode='r') as ref:
+        >>> with GdalDataset.open(path, mode='r') as ref:
         >>>     ref.GetDescription()  # do stuff
         >>>     print(f'{ref=!s}')
         >>>     assert not ref.closed
@@ -472,7 +469,19 @@ class GdalDataset(ub.NiceRepr):
         >>> assert ref.closed
     """
 
-    def __init__(self, path, mode='r', virtual_retries=3):
+    def __init__(self, __ref, _path, _str_mode):
+        """
+        Do not call this method directly. Use `GdalDataset.open`
+        """
+        self.__ref = __ref  # This is a private variable
+        self._path = _path
+        self._str_mode = _str_mode
+
+    @classmethod
+    def open(cls, path, mode='r', virtual_retries=3):
+        """
+        Create a new dataset
+        """
         if isinstance(mode, str):
             # https://mkyong.com/python/python-difference-between-r-w-and-a-in-open/
             if mode in {'readonly', 'r'}:
@@ -487,9 +496,9 @@ class GdalDataset(ub.NiceRepr):
             str_mode = 'w+'
         else:
             raise ValueError(mode)
-        self.__ref = None  # This is a private variable
-        self._path = _path = os.fspath(path)
-        self._str_mode = str_mode
+        __ref = None  # This is a private variable
+        _path = _path = os.fspath(path)
+        _str_mode = str_mode
 
         # Exceute gdal open with retries if it is a virtual system
         __ref = None
@@ -515,8 +524,33 @@ class GdalDataset(ub.NiceRepr):
                         break
             if __ref is None:
                 raise
+        self = cls(__ref, _path, _str_mode)
+        return self
 
-        self.__ref = __ref
+    @classmethod
+    def coerce(cls, data, mode=None):
+        """
+        Ensures the underlying object is a gdal dataset.
+
+        For now, real gdal objects are returned as-is.
+        """
+        from osgeo import gdal
+        import pathlib
+        if mode is None:
+            mode = gdal.GA_ReadOnly
+        if isinstance(data, str):
+            ref = cls.open(data, mode)
+        elif isinstance(data, pathlib.Path):
+            ref = cls.open(data, mode)
+        elif isinstance(data, gdal.Dataset):
+            ref = data
+        elif isinstance(data, GdalDataset):
+            ref = data
+        else:
+            raise TypeError(type(data))
+        if ref is None:
+            raise Exception('data={} is not a gdal dataset'.format(data))
+        return ref
 
     @property
     def closed(self):

@@ -76,22 +76,8 @@ def geotiff_metadata(gpath, elevation='gtop30', strict=False):
 
 
 def _coerce_gdal_dataset(data):
-    from osgeo import gdal
     from watch.utils import util_gdal
-    if isinstance(data, str):
-        ref = gdal.Open(data, gdal.GA_ReadOnly)
-    elif isinstance(data, pathlib.Path):
-        ref = gdal.Open(os.fspath(data), gdal.GA_ReadOnly)
-    elif isinstance(data, gdal.Dataset):
-        ref = data
-    elif isinstance(data, util_gdal.GdalOpen):
-        ref = data
-    else:
-        raise TypeError(type(data))
-
-    if ref is None:
-        raise Exception('data={} is not a gdal dataset'.format(data))
-    return ref
+    return util_gdal.GdalDataset.coerce(data)
 
 
 def geotiff_header_info(gpath_or_ref):
