@@ -36,6 +36,9 @@ class ScheduleEvaluationConfig(scfg.Config):
 
         'enable_eval': scfg.Value(True, help='if False, then evaluation is not run'),
         'enable_pred': scfg.Value(True, help='if False, then prediction is not run'),
+
+        'partition': scfg.Value(None, help='specify slurm partition (slurm backend only)'),
+        'mem': scfg.Value(None, help='specify slurm memory per task (slurm backend only)'),
     }
 
 
@@ -195,6 +198,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     with_pred = config['enable_pred']  # TODO: allow caching
     with_eval = config['enable_eval']
+
     workers_per_queue = 4
     recompute = False
 
@@ -374,7 +378,10 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     # FIXME: slurm cpu arg seems to be cut in half
                     # int(ceil(workers_per_queue / 2))
                     pred_cpus = workers_per_queue
-                    pred_job = queue.submit(pred_command, gpus=1, name=name, cpus=pred_cpus)
+                    pred_job = queue.submit(pred_command, gpus=1, name=name,
+                                            cpus=pred_cpus,
+                                            partition=config['partition'],
+                                            mem=config['mem'])
 
         if with_eval:
             if not with_pred:
@@ -402,7 +409,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 )
             if recompute_eval or not (skip_existing and has_eval):
                 name = 'eval' + name_suffix
-                queue.submit(eval_command, depends=pred_job, name=name, cpus=2)
+                queue.submit(eval_command, depends=pred_job, name=name, cpus=2,
+                             partition=config['partition'], mem=config['mem'])
             # TODO: memory
 
     print('queue = {!r}'.format(queue))

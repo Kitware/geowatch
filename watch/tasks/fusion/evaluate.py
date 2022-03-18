@@ -849,7 +849,11 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
 
     num_jobs = sum(map(len, job_chunks))
 
-    RICH_PROG = 0
+    RICH_PROG = 'auto'
+    if RICH_PROG == 'auto':
+        # Use rich outside of slurm
+        RICH_PROG = not os.environ.get('SLURM_JOBID', '')
+
     if RICH_PROG:
         import rich
         import rich.progress

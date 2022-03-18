@@ -24,9 +24,8 @@ def repackage(checkpoint_fpath, force=False, dry=False):
         ...     '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/checkpoint_DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera_epoch=2-step=2147.ckpt')
 
     checkpoint_fpath = '/home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=53-step=28457.ckpt'
-
     """
-    import os
+    # import os
     # For now there is only one model, but in the future we will need
     # some sort of modal switch to package the correct metadata
     from watch.tasks.fusion import methods
@@ -49,12 +48,19 @@ def repackage(checkpoint_fpath, force=False, dry=False):
                 train_dpath_hint = path_.parent.parent
 
         if train_dpath_hint is not None:
+            # Look at the training config file to get info about this
+            # experiment
             candidates = list(train_dpath_hint.glob('fit_config.yaml'))
             if len(candidates) == 1:
                 meta_fpath = candidates[0]
                 data = load_meta(meta_fpath)
-                # Hack to put experiment name in package name
-                expt_name = ub.Path(data['default_root_dir']).name
+                if 'name' in data:
+                    # Use the metadata package name if it exists
+                    expt_name = data['name']
+                else:
+                    # otherwise, hack to put experiment name in package name
+                    # based on an assumed directory structure
+                    expt_name = ub.Path(data['default_root_dir']).name
                 if expt_name not in package_name:
                     package_name = expt_name + '_' + package_name
 
@@ -91,70 +97,6 @@ def repackage(checkpoint_fpath, force=False, dry=False):
     return package_fpaths
 
 
-class ChDir:
-    """
-    Context manager that changes the current working directory and then
-    returns you to where you were.
-    """
-    def __init__(self, dpath):
-        self.context_dpath = dpath
-        self.orig_dpath = None
-
-    def __enter__(self):
-        self.orig_dpath = os.getcwd()
-        os.chdir(self.context_dpath)
-        return self
-
-    def __exit__(self, a, b, c):
-        os.chdir(self.orig_dpath)
-
-
-class SimpleDVC():
-    """
-    A Simple DVC API
-    """
-
-    @staticmethod
-    def find_root(path):
-        max_parts = len(path.parts)
-        curr = path
-        found = None
-        for _ in range(max_parts):
-            cand = curr / '.dvc'
-            if cand.exists():
-                found = curr
-                break
-            curr = curr.parent
-        return found
-
-    @staticmethod
-    def add(paths):
-        # from os.path import commonprefix
-        # common = ub.Path(*commonprefix([p.parts for p in paths]))
-        import dvc.main
-        dvc_root = SimpleDVC.find_root(paths[0])
-        rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
-        with ChDir(dvc_root):
-            dvc_command = ['add'] + rel_paths
-            dvc.main.main(dvc_command)
-
-        # with ChDir(dvc_root):
-        #     out = dvc.main.main(['config', 'core.autostage'])
-        # ub.cmd(, cwd=dvc_root, verbose=3, check=True)
-        has_autostage = ub.cmd('dvc config core.autostage', cwd=dvc_root, check=True)['out'].strip() == 'true'
-        if not has_autostage:
-            raise NotImplementedError('Need autostage to complete the git commit')
-
-    @staticmethod
-    def push(path, remote='aws'):
-        import dvc.main
-        # from dvc import main
-        dvc_root = SimpleDVC.find_root(path)
-        with ChDir(dvc_root):
-            dvc_command = ['push', '-r', remote, '--recursive', str(path.relative_to(dvc_root))]
-            dvc.main.main(dvc_command)
-
-
 def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
                        mode='list', dvc_remote='aws'):
     """
@@ -174,15 +116,15 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         python -m watch.tasks.fusion.repackage gather_checkpoints \
             --dvc_dpath=$DVC_DPATH \
             --storage_dpath=$DVC_DPATH/models/fusion/SC-20201117 \
-            --train_dpath=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1-20201117 \
-            --commit=True
+            --train_dpath=$DVC_DPATH/training/$HOSTNAME/$USER/Drop2-Aligned-TA1-2022-02-15/runs/* \
+            --mode=copy
 
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
         python -m watch.tasks.fusion.repackage gather_checkpoints \
             --dvc_dpath=$DVC_DPATH \
             --storage_dpath=$DVC_DPATH/models/fusion/eval3_candidates/packages \
-            --train_dpath=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1-20201117 \
-            --commit=True
+            --train_dpath="$DVC_DPATH/training/$HOSTNAME/$USER/Drop2-Aligned-TA1-2022-02-15/runs/*" \
+            --mode=list
     """
     from watch.utils import util_data
     from watch.utils import util_path
@@ -204,18 +146,38 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     #         dvc_dpath / 'training/*/*/Drop1-20201117'
     #     ]
 
-    dset_dpaths = util_path.coerce_patterned_paths(train_dpath)
-    dset_dpaths = [ub.Path(p) for p in dset_dpaths]
+    # dset_dpaths = util_path.coerce_patterned_paths(train_dpath)
+    # dset_dpaths = [ub.Path(p) for p in dset_dpaths]
+    # # all_checkpoint_paths = [p / 'runs/*/lightning_logs/' for p in dset_dpaths]
+    # all_checkpoint_paths = dset_dpaths
 
-    all_checkpoint_paths = [p / 'runs/*/lightning_logs/' for p in dset_dpaths]
-    lightning_log_dpaths = util_path.coerce_patterned_paths(all_checkpoint_paths)
+    lightning_log_dpaths = util_path.coerce_patterned_paths(train_dpath)
     lightning_log_dpaths = [ub.Path(p) for p in lightning_log_dpaths]
+    print('lightning_log_dpaths = {}'.format(ub.repr2(lightning_log_dpaths, nl=1)))
+
+    # for p in lightning_log_dpaths:
+    #     pass
 
     # Collect checkpoints from the training path
     gathered = []
-    for ll_dpath in lightning_log_dpaths:
-        checkpoint_fpaths = util_path.coerce_patterned_paths(
-            ll_dpath / '*/checkpoints/*.ckpt')
+    for dpath in lightning_log_dpaths:
+        # Hack to allow the user to specify the regular training path or the
+        # lightning logs dirs themselves
+        if dpath.stem == 'lightning_logs':
+            checkpoint_fpaths = util_path.coerce_patterned_paths(
+                dpath / '*/checkpoints/*.ckpt')
+        elif dpath.parent.stem == 'lightning_logs':
+            checkpoint_fpaths = util_path.coerce_patterned_paths(
+                dpath / 'checkpoints/*.ckpt')
+        else:
+            ll_dpath = dpath / 'lightning_logs'
+            if ll_dpath.exists():
+                checkpoint_fpaths = util_path.coerce_patterned_paths(
+                    dpath / 'lightning_logs/*/checkpoints/*.ckpt')
+            else:
+                checkpoint_fpaths = util_path.coerce_patterned_paths(
+                    dpath / '*.ckpt')
+
         for checkpoint_fpath in checkpoint_fpaths:
             checkpoint_fpath = ub.Path(checkpoint_fpath)
             parts = checkpoint_fpath.name.split('-')
@@ -228,7 +190,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
                     'checkpoint_fpath': checkpoint_fpath
                 })
 
-    for row in ub.ProgIter(gathered):
+    for row in ub.ProgIter(gathered, desc='Gather checkpoint info'):
         p = row['checkpoint_fpath']
         package_fpath = repackage(str(p), dry=True)[0]
         package_fpath = ub.Path(package_fpath)
@@ -254,8 +216,8 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         print(df.groupby('name')['needs_copy', 'needs_repackage'].sum())
 
     if mode == 'list':
-        import xdev
-        xdev.embed()
+        # import xdev
+        # xdev.embed()
         return
 
     to_repackage = [r for r in gathered if r['needs_repackage']]
@@ -287,8 +249,10 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     if mode == 'copy':
         return
 
-    SimpleDVC.add(staged_expt_dpaths)
-    SimpleDVC.push(storage_dpath, remote=dvc_remote)
+    from watch.utils.simple_dvc import SimpleDVC
+    dvc_api = SimpleDVC(dvc_dpath)
+    dvc_api.add(staged_expt_dpaths)
+    dvc_api.push(storage_dpath, remote=dvc_remote)
 
     if mode == 'dvc-commit':
         return
