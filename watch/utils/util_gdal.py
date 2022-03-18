@@ -469,7 +469,7 @@ class GdalDataset(ub.NiceRepr):
         >>> assert ref.closed
     """
 
-    def __init__(self, __ref, _path, _str_mode):
+    def __init__(self, __ref, _path='?', _str_mode='?'):
         """
         Do not call this method directly. Use `GdalDataset.open`
         """
@@ -531,8 +531,6 @@ class GdalDataset(ub.NiceRepr):
     def coerce(cls, data, mode=None):
         """
         Ensures the underlying object is a gdal dataset.
-
-        For now, real gdal objects are returned as-is.
         """
         from osgeo import gdal
         import pathlib
@@ -543,7 +541,7 @@ class GdalDataset(ub.NiceRepr):
         elif isinstance(data, pathlib.Path):
             ref = cls.open(data, mode)
         elif isinstance(data, gdal.Dataset):
-            ref = data
+            ref = cls(data)
         elif isinstance(data, GdalDataset):
             ref = data
         else:
