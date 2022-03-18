@@ -185,17 +185,20 @@ class gridded_dataset(torch.utils.data.Dataset):
 
         image_dict = {}
         for k, image in enumerate(images):
-            if image.std() != 0.:
-                image = (image - image.mean()) / image.std()
+            imstd = np.nanstd(image)
+            if imstd != 0.:
+                image = (image - np.nanmean(image)) / imstd
             else:
                 image = np.zeros_like(image)
             image_dict[1 + k] = image
-        if offset_image.std() != 0:
-            offset_image = (offset_image - offset_image.mean()) / offset_image.std()
+        offset_imstd = np.nanstd(offset_image)
+        if offset_imstd != 0:
+            offset_image = (offset_image - np.nanmean(offset_image)) / offset_imstd
         else:
             offset_image = np.zeros_like(offset_image)
-        if augmented_image.std() != 0:
-            augmented_image = (augmented_image - augmented_image.mean()) / augmented_image.std()
+        augmented_imgstd = augmented_image.std()
+        if augmented_imgstd != 0:
+            augmented_image = (augmented_image - np.nanmean(augmented_image)) / augmented_imgstd
         else:
             augmented_image = np.zeros_like(augmented_image)
 
@@ -384,36 +387,37 @@ class kwcoco_dataset(Dataset):
             img3 = transformed2['image']
             img4 = self.transforms3(image=img1.copy() / img1.max())['image'] * img1.max()
             # convert to tensors
-            img1 = torch.tensor(img1).permute(2, 0, 1)
-            img2 = torch.tensor(img2).permute(2, 0, 1)
-            img3 = torch.tensor(img3).permute(2, 0, 1)
-            img4 = torch.tensor(img4).permute(2, 0, 1)
 
-            img1std = img1.nanstd()
+            img1std = np.nanstd(img1)
             if img1std != 0.:
-                img1 = (img1 - img1.nanmean()) / img1std
+                img1 = (img1 - np.nanmean(img1)) / img1std
             else:
-                img1 = torch.zeros_like(img1)
-            img2std = img2.nanstd()
+                img1 = np.zeros_like(img1)
+            img2std = np.nanstd(img2)
             if img2std != 0.:
-                img2 = (img2 - img2.nanmean()) / img2std
+                img2 = (img2 - np.nanmean(img2)) / img2std
             else:
-                img2 = torch.zeros_like(img2)
-            img3std = img3.nanstd()
+                img2 = np.zeros_like(img2)
+            img3std = np.nanstd(img3)
             if img3std != 0.:
-                img3 = (img3 - img3.nanmean()) / img3std
+                img3 = (img3 - np.nanmean(img3)) / img3std
             else:
-                img3 = torch.zeros_like(img3)
-            img4std = img4.std()
+                img3 = np.zeros_like(img3)
+            img4std = np.nanstd(img4)
             if img4std != 0.:
-                img4 = (img4 - img4.nanmean()) / img4std
+                img4 = (img4 - np.nanmean(img4)) / img4std
             else:
-                img4 = torch.zeros_like(img4)
+                img4 = np.zeros_like(img4)
 
             img1 = np.nan_to_num(img1)
             img2 = np.nan_to_num(img2)
             img3 = np.nan_to_num(img3)
             img4 = np.nan_to_num(img4)
+
+            img1 = torch.tensor(img1).permute(2, 0, 1)
+            img2 = torch.tensor(img2).permute(2, 0, 1)
+            img3 = torch.tensor(img3).permute(2, 0, 1)
+            img4 = torch.tensor(img4).permute(2, 0, 1)
 
             return {
                 'image1': img1.float(),

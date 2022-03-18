@@ -73,6 +73,7 @@ class pretext(pl.LightningModule):
                                         pos_encode=hparams.positional_encoding,
                                         attention_layers=hparams.attention_layers,
                                         mode=hparams.positional_encoding_mode)
+        
 
         # task specific necks
         self.necks = [
@@ -92,18 +93,18 @@ class pretext(pl.LightningModule):
         # task specific criterion
         self.criteria = [
             # BinaryFocalLoss(gamma=self.hparams.focal_gamma),  # sort task
-            nn.NLLLoss(ignore_index=99), #sort task
+            nn.NLLLoss(), #sort task
             nn.TripletMarginLoss(),  # augment task
             nn.TripletMarginLoss(),  # overlap task
         ]
         self.criteria = [ self.criteria[i] for i in self.task_indices ]
 
         # task specific metrics
-        self.sort_accuracy = Accuracy(ignore_index=99)
+        self.sort_accuracy = Accuracy()
 
     def forward(self, image_stack, positional_encoding=None):
         # pass through shared model body
-        return self.backbone(image_stack, positional_encoding)
+        return torch.tanh(self.backbone(image_stack, positional_encoding))
 
     def shared_step(self, batch):
         # get features of each image from shared model body
@@ -117,9 +118,9 @@ class pretext(pl.LightningModule):
         # get time sort labels
         time_labels = batch['time_sort_label']
 
-        time_labels = time_labels.unsqueeze(1).unsqueeze(1).repeat(1, image_stack.shape[-2], image_stack.shape[-1]).to(self.device)
-        time_sort_labels = 99 * torch.ones_like(time_labels)
-        time_sort_labels[:, self.hparams.ignore_boundary:-self.hparams.ignore_boundary, self.hparams.ignore_boundary:-self.hparams.ignore_boundary] = time_labels[:, self.hparams.ignore_boundary:-self.hparams.ignore_boundary, self.hparams.ignore_boundary:-self.hparams.ignore_boundary]
+        time_sort_labels = time_labels.unsqueeze(1).unsqueeze(1).repeat(1, image_stack.shape[-2], image_stack.shape[-1]).to(self.device)
+        # time_sort_labels = 99 * torch.ones_like(time_labels)
+        # time_sort_labels[:, self.hparams.ignore_boundary:-self.hparams.ignore_boundary, self.hparams.ignore_boundary:-self.hparams.ignore_boundary] = time_labels[:, self.hparams.ignore_boundary:-self.hparams.ignore_boundary, self.hparams.ignore_boundary:-self.hparams.ignore_boundary]
 
         losses = []
         output = {}

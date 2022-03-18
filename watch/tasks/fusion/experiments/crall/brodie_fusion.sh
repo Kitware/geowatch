@@ -1,6 +1,9 @@
 #!/bin/bash
 __doc__="
 
+SeeAlso:
+    https://docs.google.com/document/d/1blsL71Zabs5IKjq6U3V8wc7fePmmt3MhEfWra2SqkEY/edit
+
 Requirements:
 
     * The SMART WATCH Python repo must be installed in the current python virtualenv
@@ -13,17 +16,20 @@ Requirements:
 #export CUDA_VISIBLE_DEVICES="1"
 
 DVC_DPATH=/localdisk0/SCRATCH/watch/ben/smart_watch_dvc
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+# DVC_DPATH=$(python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 
 # Point to latest dataset version
-DATASET_CODE=uky_invariants/features_22_03_14
+DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 
 ### TODO: CHANGE TO KWCOCO FILES THAT CONTAIN TEAM FEATURES
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+
+echo $TRAIN_FPATH
+return
 
 ### TODO: CHANGE INPUT CHANNELS TO NETWORK.
 CHANNELS="blue|green|red|nir|swir16|swir22,invariants.0:7"
@@ -116,12 +122,22 @@ gather_checkpoint_notes(){
 
     # To ensure the results of our experiments are maintained, we copy them to
     # the DVC directory.
-    BASE_SAVE_DPATH=$DVC_DPATH/models/fusion/baseline
+    BASE_SAVE_DPATH=$DVC_DPATH/models/fusion/$DATASET_CODE
     EXPT_SAVE_DPATH=$BASE_SAVE_DPATH/$EXPERIMENT_NAME
     mkdir -p "$BASE_SAVE_DPATH"
     mkdir -p "$EXPT_SAVE_DPATH"
 
     cp "$DEFAULT_ROOT_DIR"/lightning_logs/version_*/checkpoints/*.pt "$EXPT_SAVE_DPATH"
+
+
+    ### OR
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    python -m watch.tasks.fusion.repackage gather_checkpoints \
+        --dvc_dpath="$DVC_DPATH" \
+        --storage_dpath="$DVC_DPATH/models/fusion/$DATASET_CODE" \
+        --train_dpath="$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE" \
+        --mode=copy
+    
 }
 
 
@@ -163,13 +179,13 @@ aggregate_multiple_evaluations(){
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
     DVC_DPATH=$(python -m watch.cli.find_dvc)
 
-    EXPT_NAME_PAT="EARLY_FUSION_V001"
+    EXPT_NAME_PAT="BASELINE_EXPERIMENT_V001"
     MODEL_EPOCH_PAT="*"
     PRED_DSET_PAT="*"
-    MEASURE_GLOBSTR=$DVC_DPATH/models/fusion/baseline/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/eval/curves/measures2.json
+    MEASURE_GLOBSTR=$DVC_DPATH/models/fusion/$DATASET_CODE/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/eval/curves/measures2.json
     python -m watch.tasks.fusion.gather_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
-        --out_dpath="$DVC_DPATH/agg_results/baseline" \
+        --out_dpath="$DVC_DPATH/agg_results/$DATASET_CODE" \
         --dset_group_key="Drop2-Aligned-TA1-2022-02-15_data_vali.kwcoco"
 
 }
