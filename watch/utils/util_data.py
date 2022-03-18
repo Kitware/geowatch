@@ -2,7 +2,7 @@ import ubelt as ub
 import os
 
 
-def find_smart_dvc_dpath(on_error='raise'):
+def find_smart_dvc_dpath(on_error="raise"):
     """
     Return the location of the SMART WATCH DVC Data path if it exists and is in
     a "standard" location.
@@ -12,17 +12,18 @@ def find_smart_dvc_dpath(on_error='raise'):
     SeeAlso:
         WATCH_DATA_DPATH=$(python -m watch.cli.find_dvc)
 
-        python ~/code/watch/watch/cli/find_dvc.py
+        python -m watch.cli.find_dvc
     """
-    environ_dvc_dpath = os.environ.get('DVC_DPATH', '')
+    environ_dvc_dpath = os.environ.get("DVC_DPATH", "")
     if environ_dvc_dpath:
         dvc_dpath = ub.Path(environ_dvc_dpath)
     else:
         # Fallback to candidate DVC paths
         candidate_dpaths = [
-            ub.Path('/media/native/data/data/smart_watch_dvc'),  # Rutgers
-            ub.Path('/localdisk0/SCRATCH/watch/ben/smart_watch_dvc'),  # UKY
-            ub.Path('$HOME/data/dvc-repos/smart_watch_dvc').expand(),
+            ub.Path("/media/native/data/data/smart_watch_dvc"),  # Rutgers
+            ub.Path("/localdisk0/SCRATCH/watch/ben/smart_watch_dvc"),  # UKY
+            ub.Path("$HOME/data/dvc-repos/smart_watch_dvc").expand(),
+            ub.Path("/data4/datasets/smart_watch_dvc/"),
         ]
         for cand_dpath in candidate_dpaths:
             if cand_dpath.exists():
@@ -30,7 +31,7 @@ def find_smart_dvc_dpath(on_error='raise'):
                 break
 
     if not dvc_dpath.exists():
-        if on_error == 'raise':
+        if on_error == "raise":
             raise Exception
         else:
             return None
