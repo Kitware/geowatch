@@ -4,6 +4,10 @@ A simplified Python DVC API
 import ubelt as ub
 import os
 
+"""
+Python API to make DVC easier to work with
+"""
+
 
 class ChDir:
     """
