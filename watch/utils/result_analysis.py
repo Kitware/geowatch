@@ -235,12 +235,12 @@ class ResultAnalysis:
             self.metrics = sorted(avail_metrics - set(self.ignore_metrics))
 
         # Analyze the impact of each parameter
-        self.statistics = statistics = []
-        for param_group in held_constant_groups:
-            for metric_key in self.metrics:
-                # group_values = ub.dict_isect(varied, param_group)
-                for param_value, group in table.groupby(param_group):
-                    metric_group = group[['name', metric_key] + param_group]
+        # self.statistics = statistics = []
+        # for param_group in held_constant_groups:
+        #     for metric_key in self.metrics:
+        #         # group_values = ub.dict_isect(varied, param_group)
+        #         for param_value, group in table.groupby(param_group):
+        #             metric_group = group[['name', metric_key] + param_group]
 
         # Analyze the impact of each parameter
         self.statistics = statistics = []
@@ -266,6 +266,7 @@ class ResultAnalysis:
                 value_to_metric_group = {}
                 value_to_metric_stats = {}
                 value_to_metric = {}
+
                 for param_value, group in table.groupby(param_group):
                     metric_group = group[['name', metric_key] + param_group]
                     metric_vals = metric_group[metric_key]

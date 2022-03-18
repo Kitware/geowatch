@@ -64,6 +64,35 @@ repackage_checkpoints_and_evaluate(){
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
             --test_dataset="$VALI_FPATH" \
             --run=0 --skip_existing=0 --backend=slurm --enable_pred=False
+
+    # As metrics are reported add them to dvc via the following
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    ls "$DVC_DPATH"/models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
+
+
+
+
+    ##
+    ##
+    # How to package metrics
+    #
+    # After eval, adding the measures2.json file to DVC will prevent other
+    # machines from needing to rerun prediction to compare against past results
+
+    # paths of interest
+    __doc__="
+    ls models/fusion/eval3_candidates/packages/*
+    ls models/fusion/eval3_candidates/pred/*/*/*/*/pred.kwcoco.json
+    ls models/fusion/eval3_candidates/pred/*/*/*/*/_assets
+    models/fusion/eval3_candidates/pred/*/*/*/*/eval
+
+    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval
+    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/*.png
+    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/heatmaps
+    "
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    (cd "$DVC_DPATH" && dvc add models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json)
     
 }
 
@@ -87,7 +116,8 @@ aggregate_multiple_evaluations(){
     python -m watch.tasks.fusion.gather_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
-        --dset_group_key="*" --show=True
+        --dset_group_key="*" --show=True \
+        --classes_of_interest "Site Preparation" "Active Construction"
 }
 
 
@@ -4033,4 +4063,104 @@ python -m watch.tasks.fusion.fit \
     --draw_interval=100m \
     --dist_weight=True \
     --modulate_class_weights="positive*0,negative*0,background*0.001,No Activity*0.0,Post Construction*0.0001" \
+    --init="$INITIAL_STATE" 
+
+
+# ------------------------------------- toothbrush 2022-03-14
+
+
+#TODO:
+
+# CHANNELS="(S2,L8,WV):blue|green|red,(S2,L8):nir|swir16|swir22,(WV):depth|pan,(WV):depth|red|green|blue,(S2,L8):matseg_0|matseg_1|matseg_2|matseg_3"
+
+
+export CUDA_VISIBLE_DEVICES=0
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
+CHANNELS="blue|green|red,nir|swir16|swir22,depth,matseg_0|matseg_1|matseg_2|matseg_3"
+INITIAL_STATE="noop"
+EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V155
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config "$WORKDIR/configs/common_20220303.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --use_centered_positives=True \
+    --channels="$CHANNELS" \
+    --accumulate_grad_batches=24 \
+    --chip_size=224 \
+    --decoder=segmenter \
+    --tokenizer=dwcnn \
+    --time_steps=5 \
+    --global_class_weight=1.0 \
+    --global_saliency_weight=1.00 \
+    --num_workers=8 \
+    --gpus "1" \
+    --learning_rate=3e-4 \
+    --attention_impl=exact \
+    --chip_overlap=0.0 \
+    --optimizer=RAdam \
+    --max_epoch_length=None \
+    --time_sampling=hardish \
+    --arch_name=smt_it_sm_p2 \
+    --num_draw=8 \
+    --draw_interval=100m \
+    --dist_weight=True \
+    --stream_channels=64 \
+    --modulate_class_weights="positive*0,negative*0,background*0.1,No Activity*0.0,Post Construction*0.0,Site Preparation*2.0" \
+    --init="$INITIAL_STATE" 
+
+
+export CUDA_VISIBLE_DEVICES=1
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22,depth,matseg_0|matseg_1|matseg_2|matseg_3"
+INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/FUSION_EXPERIMENT_ML_V146/FUSION_EXPERIMENT_ML_V146_epoch=67-step=17407.pt
+EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V156
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config "$WORKDIR/configs/common_20220303.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --use_centered_positives=True \
+    --channels="$CHANNELS" \
+    --neg_to_pos_ratio=0.5 \
+    --accumulate_grad_batches=16 \
+    --chip_size=224 \
+    --decoder=segmenter \
+    --tokenizer=dwcnn \
+    --time_steps=7 \
+    --global_class_weight=1.0 \
+    --global_saliency_weight=1.00 \
+    --num_workers=8 \
+    --gpus "1" \
+    --learning_rate=3e-4 \
+    --attention_impl=exact \
+    --chip_overlap=0.0 \
+    --optimizer=RAdam \
+    --max_epoch_length=None \
+    --time_sampling=hardish \
+    --arch_name=smt_it_sm_m24 \
+    --max_epoch_length=4096 \
+    --num_draw=8 \
+    --draw_interval=100m \
+    --dist_weight=True \
+    --stream_channels=64 \
+    --modulate_class_weights="positive*0,negative*0,background*0.1,No Activity*0.0,Post Construction*0.0,Site Preparation*2.0" \
     --init="$INITIAL_STATE" 
