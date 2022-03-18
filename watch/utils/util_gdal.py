@@ -390,9 +390,19 @@ def list_gdal_drivers():
     return result
 
 
-class GdalOpen(ub.NiceRepr):
+def GdalOpen(path, mode='r', **kwargs):
     """
-    A wrapper around `gdal.GDalOpen` and the underlying dataset it returns.
+    A simple context manager for friendlier gdal use.
+
+    Returns:
+        GdalDataset
+    """
+    return GdalDataset(path, mode=mode, **kwargs)
+
+
+class GdalDataset(ub.NiceRepr):
+    """
+    A wrapper around `gdal.Open` and the underlying dataset it returns.
 
     This object is completely transparent and offers the same API as the
     :class:`osgeo.gdal.Dataset` returned by :func`:`osgeo.gdal.GDalOpen``.
@@ -427,11 +437,11 @@ class GdalOpen(ub.NiceRepr):
         >>> del dataset  # or 'dataset = None'
         >>> #
         >>> # equivalent:
-        >>> with GdalOpen(path) as dataset:
+        >>> with GdalDataset(path) as dataset:
         >>>     print(dataset.GetDescription())  # do stuff
         >>> #
         >>> # open for writing:
-        >>> with GdalOpen(path, gdal.GA_Update) as dataset:
+        >>> with GdalDataset(path, gdal.GA_Update) as dataset:
         >>>     print(dataset.GetDescription())  # do stuff
 
     Example:
@@ -442,8 +452,8 @@ class GdalOpen(ub.NiceRepr):
         >>> path = kwimage.grab_test_image_fpath()
         >>> #
         >>> #
-        >>> # Method1: Use GDalOpen exactly the same as gdal.GdalOpen
-        >>> ref = GdalOpen(path)
+        >>> # Method1: Use GDalOpen exactly the same as gdal.Open
+        >>> ref = GdalDataset(path)
         >>> print(f'{ref=!s}')
         >>> assert not ref.closed
         >>> ref.GetDescription()  # use GDAL API exactly as-is
@@ -453,8 +463,8 @@ class GdalOpen(ub.NiceRepr):
         >>> assert ref.closed
         >>> #
         >>> #
-        >>> # Method2: Use GDalOpen exactly the same as gdal.GdalOpen
-        >>> with GdalOpen(path, mode='r') as ref:
+        >>> # Method2: Use GDalOpen exactly the same as gdal.GdalDataset
+        >>> with GdalDataset(path, mode='r') as ref:
         >>>     ref.GetDescription()  # do stuff
         >>>     print(f'{ref=!s}')
         >>>     assert not ref.closed
@@ -486,6 +496,8 @@ class GdalOpen(ub.NiceRepr):
         try:
             __ref = gdal.Open(_path, mode)
             if __ref is None:
+                # gdal.GetLastErrorType()
+                # gdal.GetLastErrorNo()
                 msg = gdal.GetLastErrorMsg()
                 raise RuntimeError(msg)
         except Exception:

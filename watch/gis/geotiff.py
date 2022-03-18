@@ -11,7 +11,6 @@ import os
 import parse
 from os.path import basename, isfile
 from dateutil.parser import isoparse
-from watch.utils import util_gdal
 
 try:
     from xdev import profile
@@ -54,27 +53,9 @@ def geotiff_metadata(gpath, elevation='gtop30', strict=False):
         >>> info = geotiff_metadata(gpath)
         >>> print('info = {}'.format(ub.repr2(info, nl=1)))
     """
-    from osgeo import gdal
+    from watch.utils import util_gdal
     infos = {}
-    ref = util_gdal.GdalOpen(gpath, gdal.GA_ReadOnly)
-    if ref is None:
-        msg = gdal.GetLastErrorMsg()
-
-        # If gdal errors and we are using a virtual filesystem it may be due to
-        # a network error, so we optionally retry
-        gpath_str = os.fspath(gpath)
-        if gpath_str.startswith('/vsi'):
-            ALLOW_RETRY = 3
-            for _ in range(ALLOW_RETRY):
-                # try:
-                #     ref = gdal.Open(gpath, gdal.GA_ReadOnly)
-                # except
-                if ref is None:
-                    pass
-
-        # gdal.GetLastErrorType()
-        # gdal.GetLastErrorNo()
-        raise Exception(msg)
+    ref = util_gdal.GdalOpen(gpath, 'r')
 
     infos['fname'] = geotiff_filepath_info(gpath)
     try:
@@ -96,11 +77,14 @@ def geotiff_metadata(gpath, elevation='gtop30', strict=False):
 
 def _coerce_gdal_dataset(data):
     from osgeo import gdal
+    from watch.utils import util_gdal
     if isinstance(data, str):
         ref = gdal.Open(data, gdal.GA_ReadOnly)
     elif isinstance(data, pathlib.Path):
         ref = gdal.Open(os.fspath(data), gdal.GA_ReadOnly)
     elif isinstance(data, gdal.Dataset):
+        ref = data
+    elif isinstance(data, util_gdal.GdalOpen):
         ref = data
     else:
         raise TypeError(type(data))
