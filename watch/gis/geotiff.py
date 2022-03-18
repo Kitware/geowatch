@@ -25,6 +25,42 @@ class MetadataNotFound(Exception):
     pass
 
 
+GDAL_VIRTUAL_FILESYSTEM_PREFIX = 'vsi'
+
+# https://gdal.org/user/virtual_file_systems.
+# GDAL_VIRTUAL_FILESYSTEMS = [
+#     {'prefix': 'vsizip', 'type': 'zip'},
+#     {'prefix': 'vsigzip', 'type': None},
+#     {'prefix': 'vsitar', 'type': None},
+#     {'prefix': 'vsitar', 'type': None},
+
+#     # Networks
+#     {'prefix': 'vsicurl', 'type': 'curl'},
+#     {'prefix': 'vsicurl_streaming', 'type': None},
+#     {'prefix': 'vsis3', 'type': None},
+#     {'prefix': 'vsis3_streaming', 'type': None},
+#     {'prefix': 'vsigs', 'type': None},
+#     {'prefix': 'vsigs_streaming', 'type': None},
+#     {'prefix': 'vsiaz', 'type': None},
+#     {'prefix': 'vsiaz_streaming', 'type': None},
+#     {'prefix': 'vsiadls', 'type': None},
+#     {'prefix': 'vsioss', 'type': None},
+#     {'prefix': 'vsioss_streaming', 'type': None},
+#     {'prefix': 'vsiswift', 'type': None},
+#     {'prefix': 'vsiswift_streaming', 'type': None},
+#     {'prefix': 'vsihdfs', 'type': None},
+#     {'prefix': 'vsiwebhdfs', 'type': None},
+
+#     #
+#     {'prefix': 'vsistdin', 'type': None},
+#     {'prefix': 'vsistdout', 'type': None},
+#     {'prefix': 'vsimem', 'type': None},
+#     {'prefix': 'vsisubfile', 'type': None},
+#     {'prefix': 'vsisparse', 'type': None},
+#     {'prefix': 'vsicrypt', 'type': None},
+# ]
+
+
 @profile
 def geotiff_metadata(gpath, elevation='gtop30', strict=False):
     """
@@ -58,6 +94,19 @@ def geotiff_metadata(gpath, elevation='gtop30', strict=False):
     ref = gdal.Open(gpath, gdal.GA_ReadOnly)
     if ref is None:
         msg = gdal.GetLastErrorMsg()
+
+        # If gdal errors and we are using a virtual filesystem it may be due to
+        # a network error, so we optionally retry
+        gpath_str = os.fspath(gpath)
+        if gpath_str.startswith('/vsi'):
+            ALLOW_RETRY = 3
+            for _ in range(ALLOW_RETRY):
+                # try:
+                #     ref = gdal.Open(gpath, gdal.GA_ReadOnly)
+                # except
+                if ref is None:
+                    pass
+
         # gdal.GetLastErrorType()
         # gdal.GetLastErrorNo()
         raise Exception(msg)

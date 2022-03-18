@@ -788,7 +788,6 @@ class SimpleDataCube(object):
         import geopandas as gpd
         import pandas as pd  # NOQA
         from shapely import geometry
-        # from watch.utils import util_raster
         from watch.utils import util_gis
         from shapely.ops import unary_union
         import shapely

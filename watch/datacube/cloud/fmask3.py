@@ -2,7 +2,7 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 import os
 import shlex
 
-from watch.utils import util_raster
+from watch.utils import util_gdal
 
 
 def _save_cloudmask(scenedir, out_fpath, driver, sensor, args):
@@ -98,7 +98,7 @@ def cloudmask(in_dpath,
         >>> import os
         >>> import numpy as np
         >>> from watch.datacube.cloud.fmask3 import *
-        >>> from watch.utils.util_raster import GdalOpen
+        >>> from watch.utils.util_gdal import GdalOpen
         >>> from watch.demo.landsat_demodata import grab_landsat_product
         >>>
         >>> root = os.path.commonpath(grab_landsat_product()['bands'])
@@ -120,7 +120,7 @@ def cloudmask(in_dpath,
 
     if driver is None:
         ext = ('' if out_fpath is None else os.path.splitext(out_fpath)[1])
-        for d, _, exts in util_raster.list_gdal_drivers():
+        for d, _, exts in util_gdal.list_gdal_drivers():
             if ext in exts:
                 driver = d
                 break
@@ -131,7 +131,7 @@ def cloudmask(in_dpath,
     if out_fpath is None:
         with NamedTemporaryFile(mode='r+') as f:
             _save_cloudmask(in_dpath, f.name, driver, sensor, args)
-            with util_raster.GdalOpen(f.name) as result:
+            with util_gdal.GdalOpen(f.name) as result:
                 return result.ReadAsArray()
 
     else:
