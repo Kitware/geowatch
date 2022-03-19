@@ -6,8 +6,6 @@ import ubelt as ub
 from watch.gis import spatial_reference as watch_crs
 # from watch.utils.util_bands import LANDSAT7
 from watch.utils.util_bands import SENTINEL2, LANDSAT8
-import pathlib
-import os
 import parse
 from os.path import basename, isfile
 from dateutil.parser import isoparse
