@@ -249,8 +249,8 @@ def main(cmdline=True):
     parser.add_argument(
         "--sensor",
         type=str,
-        default="all",
-        choices=["all", "S2", "L8", "WV"],
+        default=None,
+        choices=[None, "all", "S2", "L8", "WV"],
         help="Only merge channels from this type of sensor.",
     )
     parser.add_argument(
