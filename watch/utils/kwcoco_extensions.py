@@ -16,6 +16,7 @@ import numbers
 from os.path import join
 from watch.utils import util_raster
 from kwcoco.coco_image import CocoImage
+from watch import exceptions
 
 try:
     from xdev import profile
@@ -530,7 +531,7 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                     })
 
                 approx_meter_gsd = info['approx_meter_gsd']
-            except watch.gis.geotiff.MetadataNotFound as ex:
+            except exceptions.GeoMetadataNotFound as ex:
                 if default_gsd is not None:
                     obj['approx_meter_gsd'] = default_gsd
                     obj['warp_to_wld'] = kwimage.Affine.eye().__json__()

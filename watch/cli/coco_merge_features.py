@@ -8,6 +8,7 @@ import numpy as np
 from tqdm import tqdm
 
 from watch.utils.kwcoco_extensions import transfer_geo_metadata
+from watch import exceptions
 
 
 def check_kwcoco_file(kwcoco_path, channel_name, sensor_name=None):
@@ -169,7 +170,11 @@ def merge_kwcoco_channels(
         kwimage.imwrite(average_fpath, average_imdata, backend="gdal")
 
         # Update all channels with projection info.
-        transfer_geo_metadata(merge_kwcoco, image_id)
+        try:
+            transfer_geo_metadata(merge_kwcoco, image_id)
+        except exceptions.GeoMetadataNotFound as ex:
+            print('warning ex = {!r}'.format(ex))
+            pass
 
     # Save kwcoco file.
     merge_kwcoco.validate()
