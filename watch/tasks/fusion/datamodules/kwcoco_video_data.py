@@ -1699,7 +1699,7 @@ class KWCocoVideoDataset(data.Dataset):
                     nodata_total = 0
                     for mask in mode_invalid_masks.values():
                         if mask is None:
-                            nodata_total += 1
+                            nodata_total += 0
                         else:
                             if len(mask.shape) == 3:
                                 nodata_total += (mask.sum(axis=2) / mask.shape[2])
