@@ -48,7 +48,7 @@ repackage_checkpoints_and_evaluate(){
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
             --test_dataset="$VALI_FPATH" \
-            --run=1 --skip_existing=True --backend=slurm 
+            --run=0 --skip_existing=True --backend=slurm 
 
     #####
     # Alternative invocations : only schedule prediction, then evaluate independently
@@ -63,7 +63,7 @@ repackage_checkpoints_and_evaluate(){
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
             --test_dataset="$VALI_FPATH" \
-            --run=0 --skip_existing=0 --backend=slurm --enable_pred=False
+            --run=1 --skip_existing=0 --backend=slurm --enable_pred=False
 
     # As metrics are reported add them to dvc via the following
     DVC_DPATH=$(python -m watch.cli.find_dvc)

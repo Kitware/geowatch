@@ -1320,6 +1320,10 @@ class KWCocoVideoDataset(data.Dataset):
                 # dont ask for annotations multiple times
                 invalid_mask = np.isnan(sample['im'])
                 if not np.all(invalid_mask):
+                    if np.any(invalid_mask):
+                        sample['invalid_mask'] = invalid_mask
+                    else:
+                        sample['invalid_mask'] = None
                     sample_streams[stream.spec] = sample
                     if 'annots' in sample:
                         first_with_annot = False
@@ -1336,14 +1340,8 @@ class KWCocoVideoDataset(data.Dataset):
             gid_to_isbad[gid] = len(sample_streams) == 0
             gid_to_sample[gid] = sample_streams
 
-        # import xdev
-        # xdev.embed()
         for gid in tr_['gids']:
             sample_one_frame(gid)
-            # for sample in gid_to_sample[gid].values():
-            #     if np.any(np.isnan(sample['im'])) and not np.all(np.isnan(sample['im'])):
-            #         import xdev
-            #         xdev.embed()
 
         if 'video_id' not in tr_:
             arbitrary_sample = ub.peek(ub.peek(gid_to_sample.values()).values())
@@ -1516,14 +1514,23 @@ class KWCocoVideoDataset(data.Dataset):
             stream_sample = gid_to_sample[gid]
             assert len(stream_sample) > 0
 
-            modes = {}
+            mode_imdata = {}
+            mode_invalid_masks = {}
             for mode_key, sample in stream_sample.items():
                 # TODO: get nodata value here
                 # FIXME: nodata value needs to be handled in the kwcoco delay
                 frame_chans = sample['tr']['channels'].fuse().as_list()
-                frame_imdata = sample['im'][0]
                 mode_key = '|'.join(frame_chans)
 
+                frame_invalid_mask = sample.get('invalid_mask', None)
+                if frame_invalid_mask is not None:
+                    invalid_mask = kwimage.imresize(frame_invalid_mask[0].astype(np.uint8),
+                                                    dsize=input_dsize,
+                                                    interpolation='nearest')
+                else:
+                    invalid_mask = None
+
+                frame_imdata = sample['im'][0]
                 frame, info = kwimage.imresize(frame_imdata, dsize=input_dsize,
                                                interpolation='linear',
                                                antialias=True,
@@ -1537,7 +1544,8 @@ class KWCocoVideoDataset(data.Dataset):
                 frame_hwc[np.isnan(frame_hwc)] = -1.
                 # rearrange image axes for pytorch
                 input_chw = einops.rearrange(frame_hwc, 'h w c -> c h w')
-                modes[mode_key] = input_chw
+                mode_imdata[mode_key] = input_chw
+                mode_invalid_masks[mode_key] = invalid_mask
 
             if not self.inference_only:
                 frame_dets = gid_to_dets[gid]
@@ -1560,7 +1568,7 @@ class KWCocoVideoDataset(data.Dataset):
                 'timestamp': timestamp,
                 'time_index': time_idx,
                 'sensor': sensor,
-                'modes': modes,
+                'modes': mode_imdata,
                 'change': None,
                 'class_idxs': None,
                 'saliency': None,
@@ -1682,6 +1690,17 @@ class KWCocoVideoDataset(data.Dataset):
                     frame_weights = space_weights * time_weights[time_idx] * frame_poly_weights
                 else:
                     frame_weights = frame_poly_weights
+
+                # Note: ensure this is resampled into target output space
+                # Module the pixelwise weights by the 1 - the fraction of modes
+                # that have nodata.
+                DOWNWEIGHT_NAN_REGIONS = 1
+                if DOWNWEIGHT_NAN_REGIONS:
+                    nodata_total = np.add.reduce([0 if mask is None else mask.sum(axis=2) / mask.shape[2] for mask in mode_invalid_masks.values()])
+                    total_bands = len(mode_invalid_masks)
+                    nodata_frac = nodata_total / total_bands
+                    nodata_weight = 1 - nodata_frac
+                    frame_weights = frame_weights * nodata_weight
 
                 # Dilate ignore masks (dont care about the surrounding area
                 # either)
