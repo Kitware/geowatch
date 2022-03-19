@@ -141,4 +141,42 @@ def ensure_timezone(dt, default='utc'):
 
 
 def coerce_timedelta(delta):
-    raise NotImplementedError('see temporal sampling for draft')
+    """
+    TODO:
+        move to a util
+    Example:
+        coerce_timedelta('1y')
+        coerce_timedelta('1m')
+        coerce_timedelta('1d')
+        coerce_timedelta('1H')
+        coerce_timedelta('1M')
+        coerce_timedelta('1S')
+        coerce_timedelta(10.3)
+
+    References:
+        https://docs.python.org/3.4/library/datetime.html#strftime-strptime-behavior
+    """
+    if isinstance(delta, (int, float)):
+        delta = datetime.timedelta(seconds=delta)
+    elif isinstance(delta, str):
+        # TODO: better coercion function
+        if delta.endswith('y'):
+            delta = datetime.timedelta(days=365 * float(delta[:-1]))
+        elif delta.endswith('d'):
+            delta = datetime.timedelta(days=1 * float(delta[:-1]))
+        elif delta.endswith('m'):
+            delta = datetime.timedelta(days=30.437 * float(delta[:-1]))
+        elif delta.endswith('H'):
+            delta = datetime.timedelta(hours=float(delta[:-1]))
+        elif delta.endswith('M'):
+            delta = datetime.timedelta(minutes=float(delta[:-1]))
+        elif delta.endswith('S'):
+            delta = datetime.timedelta(seconds=float(delta[:-1]))
+        else:
+            import pytimeparse  #
+            pytimeparse.parse(delta)
+    elif isinstance(delta, datetime.timedelta):
+        pass
+    else:
+        raise TypeError(type(delta))
+    return delta

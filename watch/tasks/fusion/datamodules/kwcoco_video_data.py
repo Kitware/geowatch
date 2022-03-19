@@ -3191,9 +3191,14 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                 # Reselect the keyframes if we overlap an invalid region
                 # (as denoted in the metadata, further filtering may happen later)
                 # todo: refactor to be cleaner
-                main_idx_to_gids2, resampled = _refine_time_sample(
-                    dset, main_idx_to_gids, kw_space_box, time_sampler,
-                    get_image_valid_region_in_vidspace)
+                try:
+                    main_idx_to_gids2, resampled = _refine_time_sample(
+                        dset, main_idx_to_gids, kw_space_box, time_sampler,
+                        get_image_valid_region_in_vidspace)
+                except tsm.TimeSampleError:
+                    # Hack, just skip the region
+                    # We might be able to sample less and still be ok
+                    continue
             else:
                 main_idx_to_gids2 = main_idx_to_gids
                 resampled = False
@@ -3308,6 +3313,7 @@ def _refine_time_sample(dset, main_idx_to_gids, kw_space_box, time_sampler, get_
     """
     Refine the time sample based on spatial information
     """
+    from watch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
     video_gids = time_sampler.video_gids
 
     iooa_thresh = 0.2  # parametarize?
@@ -3326,27 +3332,30 @@ def _refine_time_sample(dset, main_idx_to_gids, kw_space_box, time_sampler, get_
 
     all_bad_gids = [gid for gid, flag in gid_to_isbad.items() if flag]
 
-    resampled = 0
-    refined_sample = {}
-    for main_idx, gids in main_idx_to_gids.items():
-        main_gid = video_gids[main_idx]
-        # Skip the sample when the "main" frame is bad.
-        if not gid_to_isbad[main_gid]:
-            good_gids = [gid for gid in gids if not gid_to_isbad[gid]]
-            if good_gids != gids:
-                include_idxs = np.where(kwarray.isect_flags(video_gids, good_gids))[0]
-                exclude_idxs = np.where(kwarray.isect_flags(video_gids, all_bad_gids))[0]
-                chosen = time_sampler.sample(include=include_idxs, exclude=exclude_idxs, error_level=1, return_info=False)
-                new_gids = list(ub.take(video_gids, chosen))
-                # Are we allowed to return less than the initial expected
-                # number of frames? For transformers yes, but we should be
-                # careful to ask the user if they expect this.
-                new_are_bad = [g for g in new_gids if gid_to_isbad[g]]
-                if not new_are_bad:
-                    resampled += 1
-                    refined_sample[main_idx] = new_gids
-            else:
-                refined_sample[main_idx] = gids
+    try:
+        resampled = 0
+        refined_sample = {}
+        for main_idx, gids in main_idx_to_gids.items():
+            main_gid = video_gids[main_idx]
+            # Skip the sample when the "main" frame is bad.
+            if not gid_to_isbad[main_gid]:
+                good_gids = [gid for gid in gids if not gid_to_isbad[gid]]
+                if good_gids != gids:
+                    include_idxs = np.where(kwarray.isect_flags(video_gids, good_gids))[0]
+                    exclude_idxs = np.where(kwarray.isect_flags(video_gids, all_bad_gids))[0]
+                    chosen = time_sampler.sample(include=include_idxs, exclude=exclude_idxs, error_level=1, return_info=False)
+                    new_gids = list(ub.take(video_gids, chosen))
+                    # Are we allowed to return less than the initial expected
+                    # number of frames? For transformers yes, but we should be
+                    # careful to ask the user if they expect this.
+                    new_are_bad = [g for g in new_gids if gid_to_isbad[g]]
+                    if not new_are_bad:
+                        resampled += 1
+                        refined_sample[main_idx] = new_gids
+                else:
+                    refined_sample[main_idx] = gids
+    except tsm.TimeSampleError:
+        raise
 
     return refined_sample, resampled
 
