@@ -1271,7 +1271,7 @@ class KWCocoVideoDataset(data.Dataset):
 
         NEW_TRUE_MULTIMODAL = self.true_multimodal
         ALLOW_RESAMPLE = self.resample_invalid_frames
-        ALLOW_FEWER_FRAMES = 0
+        ALLOW_FEWER_FRAMES = 1
 
         if not NEW_TRUE_MULTIMODAL:
             raise NotImplementedError('old mode is gone')
