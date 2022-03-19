@@ -6,8 +6,6 @@ import ubelt as ub
 from watch.gis import spatial_reference as watch_crs
 # from watch.utils.util_bands import LANDSAT7
 from watch.utils.util_bands import SENTINEL2, LANDSAT8
-import pathlib
-import os
 import parse
 from os.path import basename, isfile
 from dateutil.parser import isoparse
@@ -53,14 +51,9 @@ def geotiff_metadata(gpath, elevation='gtop30', strict=False):
         >>> info = geotiff_metadata(gpath)
         >>> print('info = {}'.format(ub.repr2(info, nl=1)))
     """
-    from osgeo import gdal
+    from watch.utils import util_gdal
     infos = {}
-    ref = gdal.Open(gpath, gdal.GA_ReadOnly)
-    if ref is None:
-        msg = gdal.GetLastErrorMsg()
-        # gdal.GetLastErrorType()
-        # gdal.GetLastErrorNo()
-        raise Exception(msg)
+    ref = util_gdal.GdalDataset.open(gpath, 'r', virtual_retries=3)
 
     infos['fname'] = geotiff_filepath_info(gpath)
     try:
@@ -80,22 +73,6 @@ def geotiff_metadata(gpath, elevation='gtop30', strict=False):
     return info
 
 
-def _coerce_gdal_dataset(data):
-    from osgeo import gdal
-    if isinstance(data, str):
-        ref = gdal.Open(data, gdal.GA_ReadOnly)
-    elif isinstance(data, pathlib.Path):
-        ref = gdal.Open(os.fspath(data), gdal.GA_ReadOnly)
-    elif isinstance(data, gdal.Dataset):
-        ref = data
-    else:
-        raise TypeError(type(data))
-
-    if ref is None:
-        raise Exception('data={} is not a gdal dataset'.format(data))
-    return ref
-
-
 def geotiff_header_info(gpath_or_ref):
     """
     Extract relevant metadata information from a geotiff header.
@@ -111,7 +88,8 @@ def geotiff_header_info(gpath_or_ref):
         >>> info = geotiff_header_info(gpath)
         >>> print('info = {}'.format(ub.repr2(info, nl=1)))
     """
-    ref = _coerce_gdal_dataset(gpath_or_ref)
+    from watch.utils import util_gdal
+    ref = util_gdal.GdalDataset.coerce(gpath_or_ref)
     keys_of_interest = [
         'NITF_CSEXRA_MAX_GSD',
         'NITF_PIAIMC_MEANGSD',
@@ -205,13 +183,14 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
 
         tf = info['wgs84_to_wld']
     """
+    from watch.utils import util_gdal
     from osgeo import gdal
     from osgeo import osr
     import affine
     import kwimage
 
     info = {}
-    ref = _coerce_gdal_dataset(gpath_or_ref)
+    ref = util_gdal.GdalDataset.coerce(gpath_or_ref)
 
     # tags = ref.GetMetadataDomainList()  # 7.5% of the execution time
     rpc_info = ref.GetMetadata(domain='RPC')  # 5% of execution time
@@ -1022,7 +1001,6 @@ def parse_landsat_product_id(product_id):
 
     Example:
         >>> from watch.gis.geotiff import *  # NOQA
-        >>> from watch.gis.geotiff import _coerce_gdal_dataset
         >>> product_id = 'LC08_L1TP_037029_20130602_20170310_01_T1'
         >>> ls_meta = parse_landsat_product_id(product_id)
 

@@ -23,7 +23,8 @@ import shapely as shp
 import shapely.ops
 import shapely.geometry
 
-from watch.utils import util_raster, util_norm, util_rgdc
+from watch.utils import util_gdal
+from watch.utils import util_norm, util_rgdc
 
 from rgd_client import Rgdc
 
@@ -149,13 +150,13 @@ def main():
     vrt_root = os.path.join(out_path, 'vrt')
 
     paths = [
-        util_raster.scenes_to_vrt([_bands(s, sat) for s in scenes], vrt_root, os.getcwd())
+        util_gdal.scenes_to_vrt([_bands(s, sat) for s in scenes], vrt_root, os.getcwd())
         for scenes, sat in zip(paths, sat_codes)
     ]
 
     # orthorectification would happen here, before cropping away the margins
 
-    paths = [util_raster.reproject_crop(p, s2_min_bbox) for p in paths]
+    paths = [util_gdal.reproject_crop(p, s2_min_bbox) for p in paths]
 
     # output GIF of thumbnails
 

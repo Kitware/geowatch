@@ -48,7 +48,7 @@ repackage_checkpoints_and_evaluate(){
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
             --test_dataset="$VALI_FPATH" \
-            --run=1 --skip_existing=True --backend=slurm 
+            --run=0 --skip_existing=True --backend=slurm 
 
     #####
     # Alternative invocations : only schedule prediction, then evaluate independently
@@ -63,7 +63,7 @@ repackage_checkpoints_and_evaluate(){
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
             --test_dataset="$VALI_FPATH" \
-            --run=0 --skip_existing=0 --backend=slurm --enable_pred=False
+            --run=1 --skip_existing=0 --backend=slurm --enable_pred=False
 
     # As metrics are reported add them to dvc via the following
     DVC_DPATH=$(python -m watch.cli.find_dvc)
@@ -4164,3 +4164,80 @@ python -m watch.tasks.fusion.fit \
     --stream_channels=64 \
     --modulate_class_weights="positive*0,negative*0,background*0.1,No Activity*0.0,Post Construction*0.0,Site Preparation*2.0" \
     --init="$INITIAL_STATE" 
+
+
+
+#### hack
+
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_onlywv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_onlywv_vali.kwcoco.json
+
+export CUDA_VISIBLE_DEVICES=0
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TEST_FPATH=$VALI_FPATH
+CHANNELS="blue|green|red"
+INITIAL_STATE="noop"
+EXPERIMENT_NAME=FUSION_EXPERIMENT_WV_ONLY_TEST1
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+
+__doit__(){
+    IN_TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_train.kwcoco.json
+    IN_VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
+    python -m kwcoco subset \
+        --src "$IN_TRAIN_FPATH" \
+        --dst "$TRAIN_FPATH" \
+        --select_images '.sensor_coarse == "WV"'
+
+    python -m kwcoco subset \
+        --src "$IN_VALI_FPATH" \
+        --dst "$VALI_FPATH" \
+        --select_images '.sensor_coarse == "WV"'
+}
+
+
+python -m watch.tasks.fusion.fit \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --channels="$CHANNELS" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=1.00 \
+    --neg_to_pos_ratio=0.25 \
+    --saliency_loss='dicefocal' \
+    --class_loss='dicefocal' \
+    --num_workers=8 \
+    --gpus "1" \
+    --batch_size=1 \
+    --accumulate_grad_batches=1 \
+    --learning_rate=1e-4 \
+    --weight_decay=1e-5 \
+    --dropout=0.1 \
+    --attention_impl=exact \
+    --chip_size=380 \
+    --time_steps=5 \
+    --chip_overlap=0.0 \
+    --time_sampling=soft+distribute \
+    --time_span=7m \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --method="MultimodalTransformer" \
+    --arch_name=smt_it_stm_p8 \
+    --normalize_inputs=1024 \
+    --max_epochs=40 \
+    --patience=40 \
+    --max_epoch_length=none \
+    --draw_interval=5000m \
+    --num_draw=1 \
+    --amp_backend=apex \
+    --init="$INITIAL_STATE"
+

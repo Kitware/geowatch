@@ -6,6 +6,11 @@ import math
 import datetime
 from dateutil import parser
 from watch.utils import util_kwarray
+from watch.utils.util_time import  coerce_timedelta
+
+
+class TimeSampleError(IndexError):
+    pass
 
 
 class MultiTimeWindowSampler:
@@ -780,7 +785,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         # punting and setting everything to uniform.
         if total_weight == 0:
             if error_level == 3:
-                raise IndexError('all probability is exhausted')
+                raise TimeSampleError('all probability is exhausted')
             current_weights = affinity[chosen[0]].copy()
             current_weights[chosen] = 0
             current_weights[exclude_indices] = 0
@@ -790,7 +795,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
             if total_weight == 0:
                 # Should really never get here in day-to-day, but just in case
                 if error_level == 2:
-                    raise IndexError('all included probability is exhausted')
+                    raise TimeSampleError('all included probability is exhausted')
                 current_weights[:] = rng.rand(len(current_weights))
                 current_weights[chosen] = 0
                 total_weight = current_weights.sum()
@@ -798,7 +803,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
                     errors.append('all indices were chosen, excluded')
                 if total_weight == 0:
                     if error_level == 1:
-                        raise IndexError('all chosen probability is exhausted')
+                        raise TimeSampleError('all chosen probability is exhausted')
                     current_weights[:] = rng.rand(len(current_weights))
                     if return_info:
                         errors.append('all indices were chosen, punting')
@@ -845,46 +850,6 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         return chosen, info
     else:
         return chosen
-
-
-def coerce_timedelta(delta):
-    """
-    Example:
-        coerce_timedelta('1y')
-        coerce_timedelta('1m')
-        coerce_timedelta('1d')
-        coerce_timedelta('1H')
-        coerce_timedelta('1M')
-        coerce_timedelta('1S')
-        coerce_timedelta(10.3)
-
-    References:
-        https://docs.python.org/3.4/library/datetime.html#strftime-strptime-behavior
-    """
-    if isinstance(delta, (int, float)):
-        delta = datetime.timedelta(seconds=delta)
-    elif isinstance(delta, str):
-        # TODO: better coercion function
-        if delta.endswith('y'):
-            delta = datetime.timedelta(days=365 * float(delta[:-1]))
-        elif delta.endswith('d'):
-            delta = datetime.timedelta(days=1 * float(delta[:-1]))
-        elif delta.endswith('m'):
-            delta = datetime.timedelta(days=30.437 * float(delta[:-1]))
-        elif delta.endswith('H'):
-            delta = datetime.timedelta(hours=float(delta[:-1]))
-        elif delta.endswith('M'):
-            delta = datetime.timedelta(minutes=float(delta[:-1]))
-        elif delta.endswith('S'):
-            delta = datetime.timedelta(seconds=float(delta[:-1]))
-        else:
-            import pytimeparse  #
-            pytimeparse.parse(delta)
-    elif isinstance(delta, datetime.timedelta):
-        pass
-    else:
-        raise TypeError(type(delta))
-    return delta
 
 
 def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
