@@ -198,43 +198,74 @@ def _image_pred_filename(torch_dataset, output_data_dir, img_info):
     return pred_filename
 
 
-def run_inference(image, model):
+def run_inference(image, model, device=0):
+    """
+    Example:
+        >>> def fake_model(batch2, tta=True):
+        >>>     np_data = batch2['image'][0].permute(1, 2, 0).numpy()
+        >>>     x = kwimage.gaussian_blur(np_data, sigma=7)
+        >>>     depth = torch.from_numpy(x.mean(axis=2))[None, None]
+        >>>     pred2 = dict(depth=depth, seg=depth)
+        >>>     return pred2, batch2
+        >>> from watch.tasks.depth.predict import *  # NOQA
+        >>> import kwimage
+        >>> import kwarray
+        >>> src = kwimage.ensure_float01(kwimage.grab_test_image(dsize=(512, 512)))
+        >>> src = kwimage.Polygon.random(rng=None).scale(src.shape[0]).fill(src.copy(), np.nan)
+        >>> model = fake_model
+        >>> image = src * 255
+        >>> device = 'cpu'
+        >>> result = run_inference(image, model, device=device)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(src, pnum=(1, 2, 1), doclf=True)
+        >>> kwplot.imshow(result, pnum=(1, 2, 2))
+    """
     with torch.no_grad():
         nodata_mask = np.isnan(image)
-        if np.all(nodata_mask):
+        if not np.all(nodata_mask):
+            # Replace nans with zeros before going into the network
+            image_float = image / 255.0  # not sure why we want to do this...
+
+            # image_float = image.copy()
+            image_float[nodata_mask] = 0
+            image_tensor = torch.from_numpy(image_float.transpose((2, 0, 1))).contiguous()
+
+            mean = np.nanmean(image.reshape(-1, image.shape[-1]), axis=0)
+            std = np.nanstd(image.reshape(-1, image.shape[-1]), axis=0)
+
+            batch2 = {
+                "image": image_tensor[None, ...].to(device),
+                "image_mean": torch.from_numpy(mean)[None, ...].to(device),
+                "image_std": torch.from_numpy(std)[None, ...].to(device),
+            }
+
+            pred2, batch2 = model(batch2, tta=True)
+
+            output_depth = pred2['depth'][0, 0, :, :].cpu().data.numpy()
+            output_label = pred2['seg'][0, 0, :, :].cpu().data.numpy()
+            # output_depth[nodata_mask.all(axis=2)] = np.nan
+
+            # print(batch2['image'][0].shape)
+            # print(batch2['image'][0].permute(1, 2, 0).shape)
+
+            weighted_depth = dfactor * output_depth
+
+            alpha = 0.9
+            weighted_seg = alpha * output_label + (1.0 - alpha) * np.minimum(0.99, weighted_depth / 70.0)
+
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                # tmp2 = 255 * anisotropic_diffusion(weighted_seg, niter=1, kappa=100, gamma=0.8)
+                tmp2 = anisotropic_diffusion(weighted_seg, niter=1, kappa=100, gamma=0.8)
+
+            # weighted_final = ndimage.median_filter(tmp2.astype(np.uint8), size=7)
+            weighted_final = ndimage.median_filter(tmp2, size=7)
+            weighted_final[nodata_mask.all(axis=2)] = np.nan
+            # weighted_final = ndimage.median_filter(tmp2.astype(np.uint8), size=7)
+        else:
             return np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
-
-        # Replace nans with zeros before going into the network
-        image_float = image / 255.0  # not sure why we want to do this...
-        # image_float = image.copy()
-        image_float[nodata_mask] = 0
-        image_tensor = torch.from_numpy(image_float.transpose((2, 0, 1))).contiguous()
-
-        mean = np.nanmean(image.reshape(-1, image.shape[-1]), axis=0)
-        std = np.nanstd(image.reshape(-1, image.shape[-1]), axis=0)
-
-        device = 0
-
-        batch2 = {
-            "image": image_tensor[None, ...].to(device),
-            "image_mean": torch.from_numpy(mean)[None, ...].to(device),
-            "image_std": torch.from_numpy(std)[None, ...].to(device),
-        }
-
-        pred2, batch2 = model(batch2, tta=True)
-
-        output_depth = pred2['depth'][0, 0, :, :].cpu().data.numpy()
-        output_label = pred2['seg'][0, 0, :, :].cpu().data.numpy()
-
-        weighted_depth = dfactor * output_depth
-
-        alpha = 0.9
-        weighted_seg = alpha * output_label + (1.0 - alpha) * np.minimum(0.99, weighted_depth / 70.0)
-
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            tmp2 = 255 * anisotropic_diffusion(weighted_seg, niter=1, kappa=100, gamma=0.8)
-        weighted_final = ndimage.median_filter(tmp2.astype(np.uint8), size=7)
 
     return weighted_final
 
