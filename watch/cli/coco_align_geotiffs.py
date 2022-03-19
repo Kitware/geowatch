@@ -423,7 +423,7 @@ def main(cmdline=True, **kw):
     new_dset.dataset['info'] = [
         process_info,
     ]
-    to_extract = cube.query_image_overlaps2(region_df)
+    to_extract = cube.query_image_overlaps(region_df)
 
     for image_overlaps in ub.ProgIter(to_extract, desc='extract ROI videos', verbose=3):
         # tracker.print_diff()
@@ -595,7 +595,7 @@ class SimpleDataCube(object):
         return cube
 
     @profile
-    def query_image_overlaps2(cube, region_df):
+    def query_image_overlaps(cube, region_df):
         """
         Find the images that overlap with a each space-time region
 
@@ -615,7 +615,7 @@ class SimpleDataCube(object):
         Example:
             >>> from watch.cli.coco_align_geotiffs import *  # NOQA
             >>> cube, region_df = SimpleDataCube.demo(with_region=True)
-            >>> to_extract = cube.query_image_overlaps2(region_df)
+            >>> to_extract = cube.query_image_overlaps(region_df)
         """
         from kwcoco.util.util_json import ensure_json_serializable
         import geopandas as gpd
@@ -722,7 +722,7 @@ class SimpleDataCube(object):
 
         Args:
             image_overlaps (dict): Information about images in an ROI and their
-                temporal order computed from :func:``query_image_overlaps2``.
+                temporal order computed from :func:``query_image_overlaps``.
 
             extract_dpath (str):
                 where to dump the data extracted from this ROI.
@@ -760,7 +760,7 @@ class SimpleDataCube(object):
             >>> write_subsets = True
             >>> visualize = True
             >>> max_workers = 32
-            >>> to_extract = cube.query_image_overlaps2(region_df)
+            >>> to_extract = cube.query_image_overlaps(region_df)
             >>> image_overlaps = to_extract[0]
             >>> cube.extract_overlaps(image_overlaps, extract_dpath,
             >>>                       new_dset=new_dset, visualize=visualize,
@@ -775,7 +775,7 @@ class SimpleDataCube(object):
             >>> write_subsets = True
             >>> visualize = True
             >>> max_workers = 0
-            >>> to_extract = cube.query_image_overlaps2(region_df)
+            >>> to_extract = cube.query_image_overlaps(region_df)
             >>> new_dset = kwcoco.CocoDataset()
             >>> image_overlaps = to_extract[1]
             >>> cube.extract_overlaps(image_overlaps, extract_dpath,
@@ -849,10 +849,7 @@ class SimpleDataCube(object):
         sh_space_region_crs84 = space_region.to_shapely()
         space_region_crs84 = gpd.GeoDataFrame(
             {'geometry': [sh_space_region_crs84]}, crs=util_gis._get_crs84())
-        # @ub.memoize
-        # def space_region_in_crs(crs):
-        #     return space_region_crs84.to_crs(crs)
-        # space_region_local = space_region_in_crs(local_epsg)
+
         space_region_local = space_region_crs84.to_crs(local_epsg)
         sh_space_region_local = space_region_local.geometry.iloc[0]
 
@@ -974,7 +971,6 @@ class SimpleDataCube(object):
 
                             group_crs84_df = group_local_df.to_crs('crs84')
                             total_bounds_crs84 = total_bounds_local.to_crs('crs84')
-                            # space_region_crs84 = space_region_local.to_crs('crs84')
                             ax = kwplot.figure(doclf=True, fnum=3).gca()
                             ax.set_title(f'CRS84:\n{iso_time} sensor={sensor_coarse} n={len(rows)} source_gids={final_gids}')
                             wld_map_crs84_gdf.plot(ax=ax)
@@ -1335,6 +1331,8 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
     kwcoco_extensions._populate_valid_region(new_coco_img)
 
     # HANDLE ANNOTATIONS
+    # Note: this is more generally handled by the project annotation script.
+    # We can add an option to ignore annotations here.
     """
     It would probably be better to warp pixel coordinates using the
     same transform found by gdalwarp, but I'm not sure how to do
