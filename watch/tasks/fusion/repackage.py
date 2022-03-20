@@ -178,12 +178,19 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
                 checkpoint_fpaths = util_path.coerce_patterned_paths(
                     dpath / '*.ckpt')
 
+        if not checkpoint_fpaths:
+            checkpoint_fpaths = util_path.coerce_patterned_paths(dpath)
+        print('checkpoint_fpaths = {!r}'.format(checkpoint_fpaths))
+
         for checkpoint_fpath in checkpoint_fpaths:
             checkpoint_fpath = ub.Path(checkpoint_fpath)
+            print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
             parts = checkpoint_fpath.name.split('-')
             epoch = int(parts[0].split('epoch=')[1])
+            print('parts = {!r}'.format(parts))
+            print('epoch = {!r}'.format(epoch))
             # Dont add the -v2 versions
-            if epoch >= 0 and parts[-1].startswith('step='):
+            if epoch >= 0:  # and parts[-1].startswith('step='):
                 # print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
                 gathered.append({
                     'epoch': epoch,
@@ -207,9 +214,11 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         # print('package_fpath = {!r}'.format(package_fpath))
         # print('name_fpath = {!r}'.format(name_fpath))
 
+    import rich
     if 1:
         import pandas as pd
         df = pd.DataFrame(gathered)
+        rich.print('[blue] Gathered Data')
         if len(df) == 0:
             print(df)
             raise Exception('No data gathered')
@@ -230,7 +239,8 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     if 1:
         import pandas as pd
         df = pd.DataFrame(gathered)
-        print(df.groupby('name')['failed_repackage'].sum())
+        rich.print('[blue] Repackaged')
+        print(df.groupby('name')[['failed_repackage']].sum())
 
     if mode == 'repackage':
         return
@@ -238,10 +248,12 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     storage_dpath.ensuredir()
     to_copy = [r for r in gathered if r['needs_copy']]
 
+    staged_expt_fpaths = [r['name_fpath'] for r in gathered]
+
     # Find the unique directories we stage to DVC
-    staged_expt_dpaths = sorted({r['name_fpath'].parent for r in to_copy})
-    for dpath in staged_expt_dpaths:
-        dpath.ensuredir()
+    # staged_expt_dpaths = sorted({r['name_fpath'].parent for r in to_copy})
+    # for dpath in staged_expt_dpaths:
+    #     dpath.ensuredir()
 
     for row in ub.ProgIter(to_copy, desc='Copy packages to DVC dir'):
         shutil.copy(row['package_fpath'], row['name_fpath'])
@@ -251,7 +263,8 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
 
     from watch.utils.simple_dvc import SimpleDVC
     dvc_api = SimpleDVC(dvc_dpath)
-    dvc_api.add(staged_expt_dpaths)
+    # dvc_api.add(staged_expt_dpaths)
+    dvc_api.add(staged_expt_fpaths)
     dvc_api.push(storage_dpath, remote=dvc_remote)
 
     if mode == 'dvc-commit':

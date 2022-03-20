@@ -100,11 +100,15 @@ class SimpleDVC():
 
     def push(self, path, remote=None):
         import dvc.main
-        dvc_root = SimpleDVC.find_root(path)
+        if not ub.iterable(path):
+            paths = [path]
+        else:
+            paths = path
+        dvc_root = self.find_root(paths[0])
         extra_args = []
         if remote:
             extra_args += ['-r', remote]
 
         with ChDir(dvc_root):
-            dvc_command = ['push', '--recursive', str(path.relative_to(dvc_root))] + extra_args
+            dvc_command = ['push', '--recursive'] + [str(p.relative_to(dvc_root)) for p in paths] + extra_args
             dvc.main.main(dvc_command)
