@@ -344,10 +344,15 @@ def main(cmdline=False, **kwargs):
                 --region_models="{region_model_dpath}/*.geojson" {viz_part}
             '''), depends=[align_job])
 
+    # TODO:
+    # queue.synchronize -
+    # force all submissions to finish before starting new ones.
+
     # Do Basic Splits
     if 1:
         from watch.cli import prepare_splits
-        prepare_splits._submit_split_jobs(aligned_imganns_kwcoco_fpath, queue)
+        prepare_splits._submit_split_jobs(
+            aligned_imganns_kwcoco_fpath, queue, depends=[project_anns_job])
 
     # TODO: Can start the DVC add of the region subdirectories here
     ub.codeblock(
