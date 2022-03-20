@@ -558,6 +558,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         return self.torch_datasets.get('vali', None)
 
     def _make_dataloader(self, stage, shuffle=False):
+        # import nonechucks
+        # nonechucks.SafeDataset
         return data.DataLoader(
             self.torch_datasets[stage],
             batch_size=self.batch_size,
@@ -1277,8 +1279,8 @@ class KWCocoVideoDataset(data.Dataset):
             raise NotImplementedError('old mode is gone')
 
         # New true-multimodal data items
-        gid_to_sample = {}
-        gid_to_isbad = {}
+        gid_to_sample: Dict[str, Dict] = {}
+        gid_to_isbad: Dict[str, bool] = {}
 
         # NOTES ON CLOUDMASK
         # https://github.com/GERSL/Fmask#46-version
@@ -1299,6 +1301,7 @@ class KWCocoVideoDataset(data.Dataset):
             tr_frame['gids'] = [gid]
             sample_streams = {}
             first_with_annot = with_annots
+            force_bad = False
 
             for stream in sensor_channels.streams():
                 tr_frame['channels'] = stream
@@ -1314,16 +1317,37 @@ class KWCocoVideoDataset(data.Dataset):
                     # Should be fixed in drop3
                     if coco_img.img.get('sensor_coarse') == 'WV':
                         if set(stream).issubset({'blue', 'green', 'red'}):
-                            mask = (sample['im'] == 0)
-                            sample['im'][mask] = np.nan
+                            # Check to see if the nodata value is known in the
+                            # image metadata
+                            band_metas = coco_img.find_asset_obj('red').get('band_metas', [{}])
+                            nodata_vals = [m.get('nodata', None) for m in band_metas]
+                            # TODO: could be more careful about what band metas
+                            # we are looking at. Assuming they are all the same
+                            # here. The idea is only do this hack if the nodata
+                            # value is not set (like in L1 data, but dont do it
+                            # when the) values are set (like in TA1 data)
+                            if any(v is None for v in nodata_vals):
+                                mask = (sample['im'] == 0)
+                                sample['im'][mask] = np.nan
 
                 # dont ask for annotations multiple times
                 invalid_mask = np.isnan(sample['im'])
-                if not np.all(invalid_mask):
-                    if np.any(invalid_mask):
-                        sample['invalid_mask'] = invalid_mask
-                    else:
-                        sample['invalid_mask'] = None
+
+                any_invalid = np.any(invalid_mask)
+                none_invalid = not any_invalid
+                if none_invalid:
+                    all_invalid = False
+                    # some_invalid = False
+                else:
+                    all_invalid = np.all(invalid_mask)
+                    # some_invalid = not all_invalid and any_invalid
+
+                if any_invalid:
+                    sample['invalid_mask'] = invalid_mask
+                else:
+                    sample['invalid_mask'] = None
+
+                if not all_invalid:
                     sample_streams[stream.spec] = sample
                     if 'annots' in sample:
                         first_with_annot = False
@@ -1334,10 +1358,9 @@ class KWCocoVideoDataset(data.Dataset):
                     # keep track of an image wide observation mask and use that
                     # instead of using red as a proxy for it.
                     if 'red' in set(stream):
-                        sample_streams = []
-                        break
+                        force_bad = True
 
-            gid_to_isbad[gid] = len(sample_streams) == 0
+            gid_to_isbad[gid] = force_bad or len(sample_streams) == 0
             gid_to_sample[gid] = sample_streams
 
         for gid in tr_['gids']:
@@ -1461,10 +1484,15 @@ class KWCocoVideoDataset(data.Dataset):
             # tid_to_catnames = ub.ddict(list)
             for gid in final_gids:
                 stream_sample = gid_to_sample[gid]
+                frame_dets = None
                 for sample in stream_sample.values():
                     if 'annots' in sample:
                         frame_dets: kwimage.Detections = sample['annots']['frame_dets'][0]
                         break
+                if frame_dets is None:
+                    import xdev
+                    xdev.embed()
+                    raise AssertionError('Did not sample correctly')
                 gid_to_dets[gid] = frame_dets
 
             for gid, frame_dets in gid_to_dets.items():
