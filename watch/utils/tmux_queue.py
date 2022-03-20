@@ -90,6 +90,14 @@ class LinearBashQueue(PathIdentifiable):
     """
     A linear job queue written to a single bash file
 
+    TODO:
+        Change this name to just be a Command Script.
+
+        This should be the analog of ub.cmd.
+
+        Using ub.cmd is for one command.
+        Using ub.Script is for multiple commands
+
     Example:
         >>> self = LinearBashQueue('foo', 'foo')
         >>> self.rprint()
