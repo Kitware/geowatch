@@ -43,12 +43,14 @@ import os
 import json
 import uuid
 
+from watch.utils import cmd_queue  # NOQA
+
 
 class BashJob(ub.NiceRepr):
     """
     A job meant to run inside of a larger bash file. Analog of SlurmJob
     """
-    def __init__(self, command, name=None, depends=None, gpus=None, cpus=None):
+    def __init__(self, command, name=None, depends=None, gpus=None, cpus=None, begin=None):
         if depends is not None and not ub.iterable(depends):
             depends = [depends]
 
