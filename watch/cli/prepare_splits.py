@@ -22,7 +22,7 @@ class PrepareSplitsConfig(scfg.Config):
     }
 
 
-def _submit_split_jobs(base_fpath, queue):
+def _submit_split_jobs(base_fpath, queue, depends=[]):
     """
     Populates a Serial, Slurm, or Tmux Queue with jobs
     """
@@ -49,7 +49,7 @@ def _submit_split_jobs(base_fpath, queue):
             --dst {splits['train']} \
             --select_videos '.name | startswith("KR_") | not'
         ''')
-    split_jobs['train'] = queue.submit(command, begin=10)
+    split_jobs['train'] = queue.submit(command, begin=10, depends=depends)
 
     command = ub.codeblock(
         fr'''
@@ -77,7 +77,7 @@ def _submit_split_jobs(base_fpath, queue):
             --dst {splits['vali']} \
             --select_videos '.name | startswith("KR_")'
         ''')
-    split_jobs['vali'] = queue.submit(command)
+    split_jobs['vali'] = queue.submit(command, depends=depends)
 
     command = ub.codeblock(
         fr'''
@@ -105,7 +105,7 @@ def _submit_split_jobs(base_fpath, queue):
             --dst {splits['nowv']} \
             --select_images '.sensor_coarse != "WV"'
         ''')
-    queue.submit(command)
+    queue.submit(command, depends=depends)
     return queue
 
 
