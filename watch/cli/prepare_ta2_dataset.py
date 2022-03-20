@@ -344,6 +344,11 @@ def main(cmdline=False, **kwargs):
                 --region_models="{region_model_dpath}/*.geojson" {viz_part}
             '''), depends=[align_job])
 
+    # Do Basic Splits
+    if 1:
+        from watch.cli import prepare_splits
+        prepare_splits._submit_split_jobs(aligned_imganns_kwcoco_fpath, queue)
+
     # TODO: Can start the DVC add of the region subdirectories here
     ub.codeblock(
         '''
@@ -368,11 +373,6 @@ def main(cmdline=False, **kwargs):
                 --channels="red|green|blue" \
                 --animate=True --workers=auto
             '''), depends=[project_anns_job])
-
-    # Do Basic Splits
-    if 1:
-        from watch.cli import prepare_splits
-        prepare_splits._submit_split_jobs(aligned_imganns_kwcoco_fpath, queue)
 
     # queue.submit(ub.codeblock(
     #     '''
