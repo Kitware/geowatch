@@ -167,6 +167,7 @@ class CocoAlignGeotiffConfig(scfg.Config):
             "none": overwrite all, including existing images
             "img": only add new images
             "roi": only add new ROIs
+            "roi-img": only add new ROIs and only new images within those ROIs (good for rerunning failed jobs)
             '''
         )),
 
@@ -815,7 +816,7 @@ class SimpleDataCube(object):
         sub_bundle_dpath = ub.ensuredir((extract_dpath, video_name))
 
         if exists(join(sub_bundle_dpath,
-                       'subdata.kwcoco.json')) and keep == 'roi':
+                       'subdata.kwcoco.json')) and keep in {'roi-img', 'roi'}:
             print('ROI found on disk; adding')
             sub_dset = kwcoco.CocoDataset(
                 join(sub_bundle_dpath, 'subdata.kwcoco.json'))
@@ -1490,7 +1491,7 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
         dst['num_bands'] = first_obj['num_bands']
 
     already_exists = exists(dst_gpath)
-    needs_recompute = not (already_exists and keep == 'img')
+    needs_recompute = not (already_exists and keep in {'img', 'roi-img'})
     if not needs_recompute:
         return dst
 
