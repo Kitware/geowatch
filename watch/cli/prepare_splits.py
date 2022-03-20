@@ -105,9 +105,6 @@ def _submit_split_jobs(base_fpath, queue):
             --dst {splits['nowv']} \
             --select_images '.sensor_coarse != "WV"'
         ''')
-
-    # Do an only WV?
-
     queue.submit(command)
     return queue
 
