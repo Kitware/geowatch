@@ -63,9 +63,10 @@ def filter_image_ids(coco_dset, gids=None, include_sensors=None,
         try:
             query_text = ".images[] | select({}) | .id".format(select_images)
             query = jq.compile(query_text)
-            valid_gids &= query.input(coco_dset.dataset).all()
-        except Exception:
-            print('JQ Query Failed: {}'.format(query_text))
+            image_selected_gids = set(query.input(coco_dset.dataset).all())
+            valid_gids &= image_selected_gids
+        except Exception as ex:
+            print('JQ Query Failed: {}, ex={}'.format(query_text, ex))
             raise
 
     if select_videos is not None:

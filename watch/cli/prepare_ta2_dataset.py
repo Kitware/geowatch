@@ -364,6 +364,17 @@ def main(cmdline=False, **kwargs):
         ls */*.json
 
         dvc add */WV */L8 */S2 */*.json
+        dvc add data_*nowv*.kwcoco.json
+
+        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        echo "DVC_DPATH='$DVC_DPATH'"
+
+        cd $DVC_DPATH/
+        git pull  # ensure you are up to date with master on DVC
+        cd $DVC_DPATH/Aligned-Drop3-TA1-2022-03-10
+        dvc pull */L8.dvc */S2.dvc
+        dvc pull
+        */*.json
 
         ''')
 

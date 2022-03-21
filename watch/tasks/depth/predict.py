@@ -40,8 +40,12 @@ log = logging.getLogger(__name__)
 @click.option('--window_size', required=False, type=int, default=1024, help='sliding window size')
 @click.option('--dump_shards', required=False, default=False, help='if True, output partial kwcoco files as they are completed')
 @click.option('--data_workers', required=False, default=0, help='background data loaders')
+@click.option('--select_images', required=False, default=None, help='if specified, a jq operation to filter images')
+@click.option('--select_videos', required=False, default=None, help='if specified, a jq operation to filter videos')
 @click.option('--cache', required=False, default=0, help='if True, enable caching of results')
-def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data_workers=0, cache=False):
+def predict(dataset, deployed, output, window_size=2048, dump_shards=False,
+            data_workers=0, select_images=None, select_videos=None,
+            cache=False):
     weights_filename = ub.Path(deployed)
 
     output_dset_filename = ub.Path(get_output_file(output))
@@ -56,6 +60,11 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data
 
     input_dset = kwcoco.CocoDataset.coerce(dataset)
     input_bundle_dpath = ub.Path(input_dset.bundle_dpath)
+
+    from watch.utils import kwcoco_extensions
+    filtered_gids = kwcoco_extensions.filter_image_ids(
+        input_dset, select_images, select_videos)
+    input_dset = input_dset.subset(filtered_gids)
 
     output_dset = input_dset.copy()
     if input_bundle_dpath != output_bundle_dpath:
@@ -318,6 +327,16 @@ if __name__ == '__main__':
     # window_size=1152: 21.007 GB
 
     DVC_DPATH=$(python -m watch.cli.find_dvc)
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
+    python -m watch.tasks.depth.predict \
+        --dataset="$KWCOCO_BUNDLE_DPATH/data.kwcoco.json" \
+        --output="$KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json" \
+        --deployed="$DVC_DPATH/models/depth/weights_v2_gray.pt" \
+        --data_workers=0 \
+        --window_size=512
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc --hdd)
+    echo "DVC_DPATH = $DVC_DPATH"
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
     python -m watch.tasks.depth.predict \
         --dataset="$KWCOCO_BUNDLE_DPATH/data.kwcoco.json" \

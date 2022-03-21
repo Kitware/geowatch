@@ -15,10 +15,7 @@ class _CocoTorchDataset(torch.utils.data.Dataset):
     """
 
     def __init__(self, dset):
-        if isinstance(dset, kwcoco.CocoDataset):
-            self.dset = dset
-        else:
-            self.dset = kwcoco.CocoDataset(dset)
+        self.dset = kwcoco.CocoDataset.coerce(dset)
 
         self.gids = sorted(list(filter(self._include, self.dset.imgs.keys())))
 

@@ -5,14 +5,16 @@ class FindDVCConfig(scfg.Config):
     """
     Command line helper to find the path to the watch DVC repo
     """
-
-    default = {}
+    default = {
+        'hardware': scfg.Value(None, help='can specify hdd or sdd if those are registered'),
+    }
 
     @staticmethod
     def main(cmdline=True, **kwargs):
         import watch
         config = FindDVCConfig(default=kwargs, cmdline=cmdline)  # NOQA
-        dpath = watch.find_smart_dvc_dpath()
+        dpath = watch.find_smart_dvc_dpath(hardware=config['hardware'],
+                                           on_error='raise')
         print(dpath)
         return 1
 

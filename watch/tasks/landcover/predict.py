@@ -24,7 +24,9 @@ log = logging.getLogger(__name__)
 @click.option('--output', required=False, type=click.Path(), help='output kwcoco dataset')
 @click.option('--num_workers', default=0, required=False, type=str, help='number of dataloading workers. Can be "auto"')
 @click.option('--device', default='auto', required=False, type=str, help='auto, cpu, or integer of the device to use')
-def predict(dataset, deployed, output, num_workers=0, device='auto'):
+@click.option('--select_images', required=False, default=None, help='if specified, a jq operation to filter images')
+@click.option('--select_videos', required=False, default=None, help='if specified, a jq operation to filter videos')
+def predict(dataset, deployed, output, num_workers=0, device='auto', select_images=None, select_videos=None):
     coco_dset_filename = dataset
     weights_filename = Path(deployed)
     output_dset_filename = get_output_file(output)
@@ -46,13 +48,21 @@ def predict(dataset, deployed, output, num_workers=0, device='auto'):
 
     num_workers = util_globals.coerce_num_workers(num_workers)
 
+    input_dset = kwcoco.CocoDataset.coerce(coco_dset_filename)
+    from watch.utils import kwcoco_extensions
+    filtered_gids = kwcoco_extensions.filter_image_ids(
+        input_dset, include_sensors=None, exclude_sensors=None,
+        select_images=select_images, select_videos=select_videos)
+    input_dset = input_dset.subset(filtered_gids)
+    log.info('Selected input_dset = {!r}'.format(input_dset))
+
     model_info = lookup_model_info(weights_filename)
-    ptdataset = model_info.create_dataset(coco_dset_filename)
+    ptdataset = model_info.create_dataset(input_dset)
     model = model_info.load_model(weights_filename, device)
 
     log.info('Using {}'.format(type(model_info).__name__))
 
-    output_dset = kwcoco.CocoDataset(coco_dset_filename)
+    output_dset = input_dset.copy()
 
     dataloader = DataLoader(ptdataset, num_workers=num_workers,
                             batch_size=None, collate_fn=lambda x: x)
@@ -161,6 +171,27 @@ if __name__ == '__main__':
         python -m watch stats $KWCOCO_BUNDLE_DPATH/data_dzyne_landcover.kwcoco.json
 
         python -m watch visualize $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json \
+            --animate=True --channels="built_up|forest|water" --skip_missing=True \
+            --workers=4 --draw_anns=False
+
+
+        # Drop3 Test
+        # ==========
+        export CUDA_VISIBLE_DEVICES="1"
+        DVC_DPATH_SSH=$(python -m watch.cli.find_dvc --hardware=ssd)
+        DVC_DPATH_HDD=$(python -m watch.cli.find_dvc --hardware=hdd)
+        KWCOCO_BUNDLE_DPATH=$DVC_DPATH_SSH/Aligned-Drop3-TA1-2022-03-10
+        DZYNE_LANDCOVER_MODEL_FPATH="$DVC_DPATH_HDD/models/landcover/visnav_remap_s2_subset.pt"
+        python -m watch.tasks.landcover.predict \
+            --dataset=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json \
+            --deployed=$DZYNE_LANDCOVER_MODEL_FPATH  \
+            --device=0 \
+            --num_workers="avail" \
+            --select_images '.sensor_coarse == "S2" and .frame_index < 100' \
+            --select_videos '.name == "KR_R001"' \
+            --output=$KWCOCO_BUNDLE_DPATH/test_data_dzyne_landcover.kwcoco.json
+
+        python -m watch visualize $KWCOCO_BUNDLE_DPATH/test_data_dzyne_landcover.kwcoco.json \
             --animate=True --channels="built_up|forest|water" --skip_missing=True \
             --workers=4 --draw_anns=False
     """
