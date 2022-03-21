@@ -1117,9 +1117,9 @@ if __name__ == '__main__':
         --batch_size=8
 
     python -m watch.tasks.fusion.evaluate \
-        --true_dataset=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json \
-        --pred_dataset=/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/training/raven/brodie/Drop2-Aligned-TA1-2022-02-15/runs/BASELINE_EXPERIMENT_V001/pred.kwcoco.json \
-          --eval_dpath=/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/training/raven/brodie/Drop2-Aligned-TA1-2022-02-15/runs/eval \
+        --true_dataset=$DVC_DPATH/Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json \
+        --pred_dataset=$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/pred_BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819/combo_vali_nowv.kwcoco/pred.kwcoco.json \
+          --eval_dpath=$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/pred_BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819/combo_vali_nowv.kwcoco/eval \
           --score_space=video \
           --draw_curves=1 \
           --draw_heatmaps=1
