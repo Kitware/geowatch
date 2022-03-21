@@ -75,13 +75,13 @@ def predict(dataset, deployed, output, num_workers=0, device='auto', select_imag
 
     for img_info in tqdm(dataloader_iter, miniters=1):
         try:
-            pred_filename, pred = _predict_single(
+            pred_filename, pred, nodata = _predict_single(
                 img_info, model=model, model_outputs=model_info.model_outputs,
                 output_dset=output_dset,
                 output_dir=output_dset_filename.parent)
 
             if pred is not None:
-                writer.submit(_write_worker, pred_filename, pred)
+                writer.submit(_write_worker, pred_filename, pred, nodata)
 
         except KeyboardInterrupt:
             log.info('interrupted')
@@ -118,27 +118,34 @@ def _predict_single(img_info, model, model_outputs,
 
     pred_filename = output_dir.joinpath('_assets', dir, name + '_landcover.tif')
 
+    # Use the WATCH standards to transform float values with nans into
+    # uint16 with nodata.
+    from watch.tasks.fusion.predict import quantize_float01
+    quant_pred, quantization = quantize_float01(pred)
+    nodata = quantization['nodata']
+
     info = {
         'file_name': str(pred_filename.relative_to(output_dir)),
         'channels': "|".join(model_outputs),
         'height': pred.shape[0],
         'width': pred.shape[1],
         'num_bands': pred.shape[2],
+        'quantization': quantization,
         'warp_aux_to_img': {'scale': [img_info['width'] / pred.shape[1],
                                       img_info['height'] / pred.shape[0]],
                             'type': 'affine'}
     }
 
     output_dset.imgs[gid]['auxiliary'].append(info)
-    return (pred_filename, pred)
+    return (pred_filename, quant_pred, nodata)
 
 
-def _write_worker(pred_filename, pred):
+def _write_worker(pred_filename, pred, nodata=None):
     pred_filename.parent.mkdir(parents=True, exist_ok=True)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', UserWarning)
         kwimage.imwrite(str(pred_filename), pred, backend='gdal',
-                        compress='RAW', blocksize=64)
+                        compress='DEFLATE', blocksize=128, nodata=nodata)
 
 
 def get_output_file(output):

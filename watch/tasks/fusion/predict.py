@@ -1006,10 +1006,10 @@ class CocoStitchingManager(object):
         return info
 
 
-def quantize_float01(imdata):
+def quantize_float01(imdata, old_min=0, old_max=1):
     mask = np.isnan(imdata)
-    old_min = 0
-    old_max = 1
+    # old_min = 0
+    # old_max = 1
     quantize_dtype = np.int16
     quantize_max = np.iinfo(quantize_dtype).max
     quantize_min = 0
