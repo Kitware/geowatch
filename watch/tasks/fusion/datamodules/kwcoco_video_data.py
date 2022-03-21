@@ -910,7 +910,6 @@ class KWCocoVideoDataset(data.Dataset):
             )
             self.length = len(new_sample_grid['targets'])
         else:
-            # TODO Cache this step
             negative_classes = (self.ignore_classes | self.background_classes)
             new_sample_grid = sample_video_spacetime_targets(
                 sampler.dset, window_dims=sample_shape,

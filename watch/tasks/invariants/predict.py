@@ -134,8 +134,15 @@ class predict(object):
                 save_feat = []
                 save_feat2 = []
                 if 'pretext' in args.tasks:
+
+                    # TODO: get image1 invalid_mask here
+                    # TODO: get image2 invalid_mask here
+                    # batch['image1']
+
                     image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
                     image_stack = image_stack.to(device)
+
+                    # TODO: handle nans here
 
                     #select features corresponding to first image
                     features = self.pretext_model(image_stack)[:, 0, :, :, :]
