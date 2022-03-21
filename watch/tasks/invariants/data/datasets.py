@@ -363,10 +363,12 @@ class kwcoco_dataset(Dataset):
 
         if not self.change_labels:
             # transformations
-            transformed = self.transforms(image=img1, image2=img2)
-            transformed2 = self.transforms2(image=img1)
-            img1 = transformed['image']
-            img2 = transformed['image2']
+            max1 = img1.max()
+            max2 = img2.max()
+            transformed = self.transforms(image=img1.copy() / max1, image2=img2.copy() / max2)
+            transformed2 = self.transforms2(image=img1.copy() / max1)
+            img1 = transformed['image'] * max1
+            img2 = transformed['image2'] * max2
 
             if self.display:
                 if self.num_channels == 3:
@@ -384,7 +386,7 @@ class kwcoco_dataset(Dataset):
                 display_image1 = torch.tensor([])
                 display_image2 = torch.tensor([])
 
-            img3 = transformed2['image']
+            img3 = transformed2['image'] * max1
             img4 = self.transforms3(image=img1.copy() / img1.max())['image'] * img1.max()
             # convert to tensors
 
