@@ -3126,6 +3126,8 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     if not update_rule:
         update_rule = 'distribute'
 
+    dset_hashid = dset._cached_hashid()
+
     @ub.memoize
     def get_image_valid_region_in_vidspace(gid):
         coco_poly = dset.index.imgs[gid].get('valid_region', None)
@@ -3166,184 +3168,218 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         time_sampler.video_gids = np.array(video_gids)
         time_sampler.determenistic = True
 
-        # For each frame, determenistically compute an initial list of which
-        # supporting frames we will look at when making a prediction for the
-        # "main" frame. Initially this is only based on temporal metadata.  We
-        # may modify this later depending on spatial properties.
-        main_idx_to_gids = {
-            main_idx: list(ub.take(video_gids, time_sampler.sample(main_idx)))
-            for main_idx in time_sampler.main_indexes
-        }
+        depends = [
+            dset_hashid,
+            negative_classes,
+            affinity_type,
+            update_rule,
+            video_info['name'],
+            window_dims, window_overlap,
+            negative_classes, keepbound,
+            exclude_sensors,
+            time_sampling,
+            time_span, use_annot_info,
+            use_grid_positives,
+            use_centered_positives
+        ]
+        cacher = ub.Cacher('sliding-window-cache', appname='watch',
+                           depends=depends)
+        _cached = cacher.tryload()
+        if _cached is None:
 
-        if use_annot_info:
-            # Build a distribution of where annotations exist in this dataset
-            qtree = pyqtree.Index((0, 0, video_info['width'], video_info['height']))
-            qtree.aid_to_tlbr = {}
-            # qtree.idx_to_tlbr = {}
-            tid_to_infos = ub.ddict(list)
-            video_aids = dset.images(video_gids).annots.lookup('id')
-            annot_vid_tlbr = []
-            aids_to_track = []
-            for aids, gid in zip(video_aids, video_gids):
-                warp_vid_from_img = kwimage.Affine.coerce(
-                    dset.index.imgs[gid]['warp_img_to_vid'])
-                img_info = dset.index.imgs[gid]
-                frame_index = img_info['frame_index']
-                tids = dset.annots(aids).lookup('track_id', None)
-                cids = dset.annots(aids).lookup('category_id', None)
-                cnames = dset.categories(cids).name
+            video_targets = []
+            video_positive_idxs = []
+            video_negative_idxs = []
+            # For each frame, determenistically compute an initial list of which
+            # supporting frames we will look at when making a prediction for the
+            # "main" frame. Initially this is only based on temporal metadata.  We
+            # may modify this later depending on spatial properties.
+            main_idx_to_gids = {
+                main_idx: list(ub.take(video_gids, time_sampler.sample(main_idx)))
+                for main_idx in time_sampler.main_indexes
+            }
 
-                for tid, aid, cid, cname in zip(tids, aids, cids, cnames):
-                    if cname not in negative_classes:
-                        aids_to_track.append(aid)
-                        imgspace_box = kwimage.Boxes([dset.index.anns[aid]['bbox']], 'xywh')
-                        vidspace_box = imgspace_box.warp(warp_vid_from_img)
-                        tlbr_box = vidspace_box.to_tlbr().data[0]
-                        annot_vid_tlbr.append(tlbr_box)
-                        if tid is not None:
-                            tid_to_infos[tid].append({
-                                'gid': gid,
-                                'cid': cid,
-                                'frame_index': frame_index,
-                                'vidspace_box': tlbr_box,
-                                'cname': dset._resolve_to_cat(cid)['name'],
-                                'aid': aid,
-                            })
-                        qtree.insert(aid, tlbr_box)
-                        qtree.aid_to_tlbr[aid] = tlbr_box
-                        # qtree.idx_to_tlbr[aid] = tlbr_box
-
-            # if len(annot_vid_tlbr):
-            #     unique_tlbr = util_kwarray.unique_rows(np.array(annot_vid_tlbr))
-            # else:
-            #     unique_tlbr = []
-            # for idx, tlbr_box in enumerate(unique_tlbr):
-            #     qtree.insert(idx, tlbr_box)
-            #    qtree.idx_to_tlbr[idx] = tlbr_box
-
-            # tid_to_dframe = ub.map_vals(kwarray.DataFrameLight.from_dict, tid_to_infos)
-            # for track_dframe in tid_to_dframe.values():
-            #     track_dframe['gid'] = np.array(track_dframe['gid'])
-            #     track_dframe['frame_index'] = np.array(track_dframe['frame_index'])
-            #     # Precompute for speed
-            #     track_boxes = kwimage.Boxes(np.array(track_dframe['vidspace_box']), 'ltrb')
-            #     track_dframe['track_pairwise_ious'] = track_boxes.ious(track_boxes)
-            #     track_dframe['track_boxes'] = track_boxes
-
-        RESPECT_VALID_REGIONS = True
-        for space_region in ub.ProgIter(list(slider), desc='Sliding window'):
-            y_sl, x_sl = space_region
-
-            kw_space_box = kwimage.Boxes.from_slice(space_region).to_tlbr()
-
-            # Find all annotations that pass through this spatial region
             if use_annot_info:
-                query = kw_space_box.data[0]
-                isect_aids = list(qtree.intersect(query))
-                # isect_aids = set(isect_aids)
-                isect_gids = set(dset.annots(isect_aids).lookup('image_id'))
+                # Build a distribution of where annotations exist in this dataset
+                qtree = pyqtree.Index((0, 0, video_info['width'], video_info['height']))
+                qtree.aid_to_tlbr = {}
+                # qtree.idx_to_tlbr = {}
+                tid_to_infos = ub.ddict(list)
+                video_aids = dset.images(video_gids).annots.lookup('id')
+                annot_vid_tlbr = []
+                aids_to_track = []
+                for aids, gid in zip(video_aids, video_gids):
+                    warp_vid_from_img = kwimage.Affine.coerce(
+                        dset.index.imgs[gid]['warp_img_to_vid'])
+                    img_info = dset.index.imgs[gid]
+                    frame_index = img_info['frame_index']
+                    tids = dset.annots(aids).lookup('track_id', None)
+                    cids = dset.annots(aids).lookup('category_id', None)
+                    cnames = dset.categories(cids).name
 
-            if RESPECT_VALID_REGIONS:
-                # Reselect the keyframes if we overlap an invalid region
-                # (as denoted in the metadata, further filtering may happen later)
-                # todo: refactor to be cleaner
-                try:
-                    main_idx_to_gids2, resampled = _refine_time_sample(
-                        dset, main_idx_to_gids, kw_space_box, time_sampler,
-                        get_image_valid_region_in_vidspace)
-                except tsm.TimeSampleError:
-                    # Hack, just skip the region
-                    # We might be able to sample less and still be ok
-                    continue
-            else:
-                main_idx_to_gids2 = main_idx_to_gids
-                resampled = False
+                    for tid, aid, cid, cname in zip(tids, aids, cids, cnames):
+                        if cname not in negative_classes:
+                            aids_to_track.append(aid)
+                            imgspace_box = kwimage.Boxes([dset.index.anns[aid]['bbox']], 'xywh')
+                            vidspace_box = imgspace_box.warp(warp_vid_from_img)
+                            tlbr_box = vidspace_box.to_tlbr().data[0]
+                            annot_vid_tlbr.append(tlbr_box)
+                            if tid is not None:
+                                tid_to_infos[tid].append({
+                                    'gid': gid,
+                                    'cid': cid,
+                                    'frame_index': frame_index,
+                                    'vidspace_box': tlbr_box,
+                                    'cname': dset._resolve_to_cat(cid)['name'],
+                                    'aid': aid,
+                                })
+                            qtree.insert(aid, tlbr_box)
+                            qtree.aid_to_tlbr[aid] = tlbr_box
+                            # qtree.idx_to_tlbr[aid] = tlbr_box
 
-            for main_idx, gids in main_idx_to_gids2.items():
-                main_gid = time_sampler.video_gids[main_idx]
-                label = 'unknown'
+                # if len(annot_vid_tlbr):
+                #     unique_tlbr = util_kwarray.unique_rows(np.array(annot_vid_tlbr))
+                # else:
+                #     unique_tlbr = []
+                # for idx, tlbr_box in enumerate(unique_tlbr):
+                #     qtree.insert(idx, tlbr_box)
+                #    qtree.idx_to_tlbr[idx] = tlbr_box
 
+                # tid_to_dframe = ub.map_vals(kwarray.DataFrameLight.from_dict, tid_to_infos)
+                # for track_dframe in tid_to_dframe.values():
+                #     track_dframe['gid'] = np.array(track_dframe['gid'])
+                #     track_dframe['frame_index'] = np.array(track_dframe['frame_index'])
+                #     # Precompute for speed
+                #     track_boxes = kwimage.Boxes(np.array(track_dframe['vidspace_box']), 'ltrb')
+                #     track_dframe['track_pairwise_ious'] = track_boxes.ious(track_boxes)
+                #     track_dframe['track_boxes'] = track_boxes
+
+            RESPECT_VALID_REGIONS = True
+            for space_region in ub.ProgIter(list(slider), desc='Sliding window'):
+                y_sl, x_sl = space_region
+
+                kw_space_box = kwimage.Boxes.from_slice(space_region).to_tlbr()
+
+                # Find all annotations that pass through this spatial region
                 if use_annot_info:
-                    if isect_aids:
-                        has_annot = bool(isect_gids & set(gids))
-                    else:
-                        has_annot = False
-                    if has_annot:
-                        label = 'positive_grid'
-                    else:
-                        # Hack: exclude all annotated regions from negative sampling
-                        label = 'negative_grid'
+                    query = kw_space_box.data[0]
+                    isect_aids = list(qtree.intersect(query))
+                    # isect_aids = set(isect_aids)
+                    isect_gids = set(dset.annots(isect_aids).lookup('image_id'))
 
-                # Or do that on the fly?
-                if False:
-                    for gid in gids:
-                        coco_img = dset.coco_image(gid)
-                        coco_img.channels
-                        part = coco_img.delay(space='video')
-                        cropped = part.crop(space_region)
-                        arr = cropped.finalize(as_xarray=True)
-                        if np.all(arr == 0):
-                            print('BLACK REGION')
-
-                if label == 'positive_grid':
-                    if not use_grid_positives:
-                        continue
-                    positive_idxs.append(len(targets))
-                elif label == 'negative_grid':
-                    negative_idxs.append(len(targets))
-
-                targets.append({
-                    'main_idx': main_idx,
-                    'video_id': video_id,
-                    'gids': gids,
-                    'main_gid': main_gid,
-                    'space_slice': space_region,
-                    'resampled': resampled,
-                    'label': label,
-                })
-
-        INSERT_CENTERED_ANNOT_WINDOWS = use_centered_positives
-        if INSERT_CENTERED_ANNOT_WINDOWS and use_annot_info:
-            # FIXME: This code is too slow
-            # in addition to the sliding window sample, add positive samples
-            # centered around each annotation.
-            for tid, infos in ub.ProgIter(list(tid_to_infos.items()), desc='Centered annots'):
-                # existing_gids = [info['gid'] for info in infos]
-                for info in infos:
-                    main_gid = info['gid']
-                    ann_box = kwimage.Boxes([info['vidspace_box']], 'tlbr').to_cxywh()
-                    ann_box.data[:, 2] = window_space_dims[1]
-                    ann_box.data[:, 3] = window_space_dims[0]
-                    kw_space_region = ann_box.to_tlbr().quantize()
-                    space_region = kw_space_region.to_slices()[0]
-                    #  FIXME, this code is ugly
-                    # TODO: we could make frames where the phase transitions
-                    # more likely here.
-                    _hack_main_idx = np.where(time_sampler.video_gids == main_gid)[0][0]
-                    sample_gids = list(ub.take(video_gids, time_sampler.sample(_hack_main_idx)))
-                    _hack = {_hack_main_idx: sample_gids}
-                    if 0:
-                        # Too slow to handle here, will have to handle
-                        # in getitem or be more efficient
-                        # 86% of the time is spent here
-                        _hack2, _ = _refine_time_sample(
-                            dset, _hack, kw_space_box, time_sampler,
+                if RESPECT_VALID_REGIONS:
+                    # Reselect the keyframes if we overlap an invalid region
+                    # (as denoted in the metadata, further filtering may happen later)
+                    # todo: refactor to be cleaner
+                    try:
+                        main_idx_to_gids2, resampled = _refine_time_sample(
+                            dset, main_idx_to_gids, kw_space_box, time_sampler,
                             get_image_valid_region_in_vidspace)
-                    else:
-                        _hack2 = _hack
-                    if _hack2:
-                        gids = _hack2[_hack_main_idx]
-                        label = 'positive_center'
-                        positive_idxs.append(len(targets))
-                        targets.append({
-                            'main_idx': _hack_main_idx,
-                            'video_id': video_id,
-                            'gids': gids,
-                            'main_gid': main_gid,
-                            'space_slice': space_region,
-                            'label': label,
-                            'resampled': -1,
-                        })
+                    except tsm.TimeSampleError:
+                        # Hack, just skip the region
+                        # We might be able to sample less and still be ok
+                        continue
+                else:
+                    main_idx_to_gids2 = main_idx_to_gids
+                    resampled = False
+
+                for main_idx, gids in main_idx_to_gids2.items():
+                    main_gid = time_sampler.video_gids[main_idx]
+                    label = 'unknown'
+
+                    if use_annot_info:
+                        if isect_aids:
+                            has_annot = bool(isect_gids & set(gids))
+                        else:
+                            has_annot = False
+                        if has_annot:
+                            label = 'positive_grid'
+                        else:
+                            # Hack: exclude all annotated regions from negative sampling
+                            label = 'negative_grid'
+
+                    # Or do that on the fly?
+                    if False:
+                        for gid in gids:
+                            coco_img = dset.coco_image(gid)
+                            coco_img.channels
+                            part = coco_img.delay(space='video')
+                            cropped = part.crop(space_region)
+                            arr = cropped.finalize(as_xarray=True)
+                            if np.all(arr == 0):
+                                print('BLACK REGION')
+
+                    if label == 'positive_grid':
+                        if not use_grid_positives:
+                            continue
+                        video_positive_idxs.append(len(video_targets))
+                    elif label == 'negative_grid':
+                        video_negative_idxs.append(len(video_targets))
+
+                    video_targets.append({
+                        'main_idx': main_idx,
+                        'video_id': video_id,
+                        'gids': gids,
+                        'main_gid': main_gid,
+                        'space_slice': space_region,
+                        'resampled': resampled,
+                        'label': label,
+                    })
+
+            INSERT_CENTERED_ANNOT_WINDOWS = use_centered_positives
+            if INSERT_CENTERED_ANNOT_WINDOWS and use_annot_info:
+                # FIXME: This code is too slow
+                # in addition to the sliding window sample, add positive samples
+                # centered around each annotation.
+                for tid, infos in ub.ProgIter(list(tid_to_infos.items()), desc='Centered annots'):
+                    # existing_gids = [info['gid'] for info in infos]
+                    for info in infos:
+                        main_gid = info['gid']
+                        ann_box = kwimage.Boxes([info['vidspace_box']], 'tlbr').to_cxywh()
+                        ann_box.data[:, 2] = window_space_dims[1]
+                        ann_box.data[:, 3] = window_space_dims[0]
+                        kw_space_region = ann_box.to_tlbr().quantize()
+                        space_region = kw_space_region.to_slices()[0]
+                        #  FIXME, this code is ugly
+                        # TODO: we could make frames where the phase transitions
+                        # more likely here.
+                        _hack_main_idx = np.where(time_sampler.video_gids == main_gid)[0][0]
+                        sample_gids = list(ub.take(video_gids, time_sampler.sample(_hack_main_idx)))
+                        _hack = {_hack_main_idx: sample_gids}
+                        if 0:
+                            # Too slow to handle here, will have to handle
+                            # in getitem or be more efficient
+                            # 86% of the time is spent here
+                            _hack2, _ = _refine_time_sample(
+                                dset, _hack, kw_space_box, time_sampler,
+                                get_image_valid_region_in_vidspace)
+                        else:
+                            _hack2 = _hack
+                        if _hack2:
+                            gids = _hack2[_hack_main_idx]
+                            label = 'positive_center'
+                            video_positive_idxs.append(len(video_targets))
+                            video_targets.append({
+                                'main_idx': _hack_main_idx,
+                                'video_id': video_id,
+                                'gids': gids,
+                                'main_gid': main_gid,
+                                'space_slice': space_region,
+                                'label': label,
+                                'resampled': -1,
+                            })
+
+            _cached = {
+                'video_targets': video_targets,
+                'video_positive_idxs': video_positive_idxs,
+                'video_negative_idxs': video_negative_idxs,
+            }
+            cacher.save(_cached)
+
+        offset = len(targets)
+        targets.extend(_cached['video_targets'])
+        positive_idxs.extend([idx + offset for idx in _cached['video_positive_idxs']])
+        negative_idxs.extend([idx + offset for idx in _cached['video_negative_idxs']])
 
         # Disable determenism
         time_sampler.determenistic = False

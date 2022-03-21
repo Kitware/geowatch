@@ -1007,7 +1007,33 @@ class CocoStitchingManager(object):
 
 
 def quantize_float01(imdata, old_min=0, old_max=1):
-    mask = np.isnan(imdata)
+    """
+    Note:
+        Setting old_min / old_max indicates the possible extend of the input
+        data (and it will be clipped to it). It does not mean that the input
+        data has to have those min and max values, but it should be between
+        them.
+
+    Ignore:
+        import sys, ubelt
+        from kwcoco.util.util_delayed_poc import dequantize
+        from watch.tasks.fusion.predict import *  # NOQA
+        imdata = (np.random.randn(512, 512, 3) - 1.) * 2.5
+
+        quant1, quantization1 = quantize_float01(imdata, old_min=0, old_max=1)
+        recon1 = dequantize(quant1, quantization1)
+        error1 = np.abs((recon1 - imdata)).sum()
+        print('error1 = {!r}'.format(error1))
+
+        for i in range(1, 20):
+            print('i = {!r}'.format(i))
+            quant2, quantization2 = quantize_float01(imdata, old_min=-i, old_max=i)
+            recon2 = dequantize(quant2, quantization2)
+            error2 = np.abs((recon2 - imdata)).sum()
+            print('error2 = {!r}'.format(error2))
+
+    """
+    invalid_mask = np.isnan(imdata)
     # old_min = 0
     # old_max = 1
     quantize_dtype = np.int16
@@ -1026,10 +1052,9 @@ def quantize_float01(imdata, old_min=0, old_max=1):
     new_extent = (quantize_max - quantize_min)
     quant_factor = new_extent / old_extent
 
-    new_imdata = (imdata - old_min) * quant_factor + quantize_min
+    new_imdata = (imdata.clip(old_min, old_max) - old_min) * quant_factor + quantize_min
     new_imdata = new_imdata.astype(quantize_dtype)
-    new_imdata[mask] = quantize_nan
-
+    new_imdata[invalid_mask] = quantize_nan
     return new_imdata, quantization
 
 

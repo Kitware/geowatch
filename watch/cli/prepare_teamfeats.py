@@ -108,10 +108,17 @@ def main(cmdline=True, **kwargs):
         # 'rutgers_materials': dvc_dpath / 'models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth',
         'dzyne_landcover': dvc_dpath / 'models/landcover/visnav_remap_s2_subset.pt',
 
-        'uky_pretext': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pretext_package.pt',
-        'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt',
+        # 2022-02-11
+        # 'uky_pretext': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pretext_package.pt',
+        # 'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt',
+        # 'uky_pca': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pca_projection_matrix.pt',
+
+        # 2022-03-11
+        'uky_pretext': dvc_dpath / 'models/uky/uky_invariants_2022_03_11/TA1_pretext_model//pretext_package.pt',
+        'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt',  # uses old segmentation model
         'uky_pca': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pca_projection_matrix.pt',
 
+        # TODO: use v1 on RGB and v2 on PAN
         'dzyne_depth': dvc_dpath / 'models/depth/weights_v1.pt',
         # 'dzyne_depth': dvc_dpath / 'models/depth/weights_v2_gray.pt',
     }
@@ -146,6 +153,7 @@ def main(cmdline=True, **kwargs):
                 --deployed="{model_fpaths['dzyne_landcover']}" \
                 --output="{task['output_fpath']}" \
                 --num_workers="{data_workers}" \
+                --select_images='.sensor_coarse == "S2"' \
                 --device=0
             ''')
         combo_code_parts.append(codes[key])

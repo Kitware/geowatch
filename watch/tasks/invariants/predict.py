@@ -75,7 +75,7 @@ class predict(object):
         self.imwrite_kw = {
             'compress': 'DEFLATE',
             'backend': 'gdal',
-            'blocksize': 64,
+            'blocksize': 128,
         }
 
     def finalize_image(self, gid):
@@ -124,12 +124,6 @@ class predict(object):
 
         # bundle_dpath = ub.Path(self.output_dset.bundle_dpath)
         # save_dpath = (bundle_dpath / 'uky_invariants').ensuredir()
-
-        self.imwrite_kw = {
-            'compress': 'DEFLATE',
-            'backend': 'gdal',
-            'blocksize': 64,
-        }
 
         print('Evaluating and saving features')
 

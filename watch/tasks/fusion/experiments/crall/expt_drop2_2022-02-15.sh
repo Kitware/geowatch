@@ -5,7 +5,8 @@ https://docs.google.com/spreadsheets/d/1kYseTFyLb-_7BzILtSOWuimRVyLuefaninfNwkg4
 
 prep_teamfeat_drop2(){
     # Team Features on Drop2
-    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    DVC_DPATH=$(python -m watch.cli.find_dvc --hardware=ssd)
+    DVC_DPATH=$(python -m watch.cli.find_dvc --hardware=hdd)
     WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
     DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
     python -m watch.cli.prepare_teamfeats \

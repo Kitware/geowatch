@@ -116,7 +116,7 @@ def _predict_single(img_info, model, model_outputs,
     else:
         dir = Path(img_info['auxiliary'][0]['file_name']).parent
 
-    pred_filename = output_dir.joinpath('_assets', dir, name + '_landcover.tif')
+    pred_filename = output_dir.joinpath('_assets/landcover', dir, name + '_landcover.tif')
 
     # Use the WATCH standards to transform float values with nans into
     # uint16 with nodata.
