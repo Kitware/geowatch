@@ -26,14 +26,54 @@ class gridded_dataset(torch.utils.data.Dataset):
         >>> self = gridded_dataset(coco_dset)
         >>> idx = 0
         >>> out = self[idx]
+        >>> rgb1 = out['image1'][0:3].permute(1, 2, 0).numpy()[..., ::-1]
+        >>> rgb2 = out['image2'][0:3].permute(1, 2, 0).numpy()[..., ::-1]
+        >>> rgb3 = out['offset_image1'][0:3].permute(1, 2, 0).numpy()[..., ::-1]
+        >>> rgb4 = out['augmented_image1'][0:3].permute(1, 2, 0).numpy()[..., ::-1]
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
-        >>> rgb1 = out['image1'][1:4].permute(1, 2, 0).numpy()[..., ::-1]
-        >>> rgb2 = out['image2'][1:4].permute(1, 2, 0).numpy()[..., ::-1]
-        >>> kwplot.imshow(kwimage.normalize_intensity(rgb1), pnum=(1, 2, 1))
-        >>> kwplot.imshow(kwimage.normalize_intensity(rgb2), pnum=(1, 2, 2))
+        >>> kwplot.imshow(kwimage.normalize(rgb1), pnum=(1, 4, 1), title='image1')
+        >>> kwplot.imshow(kwimage.normalize(rgb2), pnum=(1, 4, 2), title='image2')
+        >>> kwplot.imshow(kwimage.normalize(rgb3), pnum=(1, 4, 3), title='offset_image1')
+        >>> kwplot.imshow(kwimage.normalize(rgb4), pnum=(1, 4, 4), title='augmented_image1')
+        >>> kwplot.show_if_requested()
 
+    Example:
+        >>> # xdoctest: +SKIP
+        >>> from watch.tasks.invariants.data.datasets import *  # NOQA
+        >>> import watch
+        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json'
+        >>> import kwcoco
+        >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+        >>> self = gridded_dataset(coco_dset)
+        >>> dsize = (224, 224)
+        >>> # Draw multiple batch items
+        >>> rows = []
+        >>> max_idx = len(self) // 4 - 2
+        >>> indexes = np.linspace(0, max_idx, 10).round().astype(int)
+        >>> for idx in indexes:
+        >>>     out = self[idx]
+        >>>     rgb1 = out['image1'][0:3].permute(1, 2, 0).numpy()
+        >>>     rgb2 = out['image2'][0:3].permute(1, 2, 0).numpy()
+        >>>     rgb3 = out['offset_image1'][0:3].permute(1, 2, 0).numpy()
+        >>>     rgb4 = out['augmented_image1'][0:3].permute(1, 2, 0).numpy()
+        >>>     canvas1 = np.nan_to_num(kwimage.imresize(kwimage.normalize(rgb1), dsize=dsize)).clip(0, 1)
+        >>>     canvas2 = np.nan_to_num(kwimage.imresize(kwimage.normalize(rgb2), dsize=dsize)).clip(0, 1)
+        >>>     canvas3 = np.nan_to_num(kwimage.imresize(kwimage.normalize(rgb3), dsize=dsize)).clip(0, 1)
+        >>>     canvas4 = np.nan_to_num(kwimage.imresize(kwimage.normalize(rgb4), dsize=dsize)).clip(0, 1)
+        >>>     canvas1 = kwimage.draw_text_on_image(canvas1, 'image1', org=(1, 1), valign='top', color='white', border=2)
+        >>>     canvas2 = kwimage.draw_text_on_image(canvas2, 'image2', org=(1, 1), valign='top', color='white', border=2)
+        >>>     canvas3 = kwimage.draw_text_on_image(canvas3, 'offset_image1', org=(1, 1), valign='top', color='white', border=2)
+        >>>     canvas4 = kwimage.draw_text_on_image(canvas4, 'augmented_image1', org=(1, 1), valign='top', color='white', border=2)
+        >>>     row_canvas = kwimage.stack_images([canvas1, canvas2, canvas3, canvas4], axis=1, pad=3)
+        >>>     rows.append(row_canvas)
+        >>> canvas = kwimage.stack_images(rows, axis=0, pad=10)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas)
     """
     S2_l2a_channel_names = [
         'B02.tif', 'B01.tif', 'B03.tif', 'B04.tif', 'B05.tif', 'B06.tif', 'B07.tif', 'B08.tif', 'B09.tif', 'B11.tif', 'B12.tif', 'B8A.tif'
@@ -50,25 +90,44 @@ class gridded_dataset(torch.utils.data.Dataset):
         super().__init__()
 
         # initialize dataset
+        self.coco_dset: kwcoco.CocoDataset = kwcoco.CocoDataset.coerce(coco_dset)
 
-        self.coco_dset = kwcoco.CocoDataset.coerce(coco_dset)
-        wv_image_ids = []
-        for x in self.coco_dset.index.imgs:
-            if self.coco_dset.index.imgs[x]['sensor_coarse'] == 'WV':
-                wv_image_ids.append(x)
-        self.coco_dset.remove_images(wv_image_ids)
-        self.images = self.coco_dset.images()
+        # Filter out worldview images (better to use subset than remove)
+        images: kwcoco.coco_objects1d.Images = self.coco_dset.images()
+        flags = [s != 'WV' for s in images.lookup('sensor_coarse')]
+        valid_image_ids : list[int] = list(images.compress(flags))
+        self.coco_dset = self.coco_dset.subset(valid_image_ids)
+
+        self.images : kwcoco.coco_objects1d.Images = self.coco_dset.images()
         self.sampler = ndsampler.CocoSampler(self.coco_dset)
-        grid = self.sampler.new_sample_grid(**{
-            'task': 'video_detection',
-            'window_dims': [num_images, patch_size, patch_size],
-            'window_overlap': patch_overlap,
-        }
-        )
-        if segmentation:
-            samples = grid['positives']
+
+        window_dims = [num_images, patch_size, patch_size]
+
+        NEW_GRID = 1
+        if NEW_GRID:
+            from watch.tasks.fusion.datamodules.kwcoco_video_data import sample_video_spacetime_targets
+            sample_grid = sample_video_spacetime_targets(
+                self.coco_dset, window_dims=window_dims,
+                window_overlap=patch_overlap,
+                time_sampling='hardish3', time_span='1y',
+                use_annot_info=False,
+                keepbound=True,
+                exclude_sensors=['WV'],
+                use_centered_positives=False,
+            )
+            samples = sample_grid['targets']
+            for tr in samples:
+                tr['vidid'] = tr['video_id']  # hack
         else:
-            samples = grid['positives'] + grid['negatives']
+            grid = self.sampler.new_sample_grid(**{
+                'task': 'video_detection',
+                'window_dims': [num_images, patch_size, patch_size],
+                'window_overlap': patch_overlap,
+            })
+            if segmentation:
+                samples = grid['positives']
+            else:
+                samples = grid['positives'] + grid['negatives']
         grouped = ub.group_items(
                 samples,
                 lambda x: tuple(
@@ -76,7 +135,7 @@ class gridded_dataset(torch.utils.data.Dataset):
                 )
                 )
         grouped = ub.sorted_keys(grouped)
-        self.patches = list(ub.flatten(grouped.values()))
+        self.patches : list[dict] = list(ub.flatten(grouped.values()))
 
         all_bands = [aux.get('channels', None) for aux in self.coco_dset.index.imgs[self.images._ids[0]].get('auxiliary', [])]
 
@@ -141,17 +200,17 @@ class gridded_dataset(torch.utils.data.Dataset):
         return len(self.patches)
 
     def __getitem__(self, idx):
-        tr = self.patches[idx]
+        tr : dict = self.patches[idx]
         tr['channels'] = self.bands
         # vidid = tr['vidid']
-        gids = tr['gids']
+        gids : list[int] = tr['gids']
 
         im1_id = gids[0]
         offset_idx = idx
         offset_im_id = None
 
         while (im1_id != offset_im_id) or (offset_idx == idx):
-            offset_idx = random.randint(0, len(self) - 2)
+            offset_idx = random.randint(0, len(self.patches) - 2)
             offset_tr = self.patches[offset_idx]
             offset_im_id = offset_tr['gids'][0]
         offset_tr['channels'] = self.bands
@@ -179,7 +238,7 @@ class gridded_dataset(torch.utils.data.Dataset):
             sample = self.sampler.load_sample(tr, nodata='float')
         offset_sample = self.sampler.load_sample(offset_tr, nodata='float')
 
-        images = sample['im']
+        images : np.ndarray = sample['im']
         offset_image = offset_sample['im'][0]
         augmented_image = self.transforms(image=images[0].copy() / images[0].max())['image'] * images[0].max()
 

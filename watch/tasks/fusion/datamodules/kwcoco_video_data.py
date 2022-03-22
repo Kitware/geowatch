@@ -3268,7 +3268,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     vidid_to_valid_gids = {}
 
     parts = set(time_sampling.split('+'))
-    affinity_type_parts = parts & {'hard', 'hardish', 'contiguous', 'soft2', 'soft'}
+    affinity_type_parts = parts & {'hard', 'hardish', 'contiguous', 'soft2', 'soft', 'hardish2', 'hardish3'}
     update_rule_parts = parts & {'distribute', 'pairwise'}
     unknown = (parts - affinity_type_parts) - update_rule_parts
     if unknown:
