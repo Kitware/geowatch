@@ -1064,7 +1064,27 @@ class KWCocoVideoDataset(data.Dataset):
     def _augment_spacetime_target(self, tr_):
         """
         Given a target dictionary, shift around the space and time slice
+
+        Ignore:
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+            >>> import ndsampler
+            >>> import kwcoco
+            >>> import watch
+            >>> coco_dset = watch.demo.coerce_kwcoco('watch')
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> sample_shape = (2, 128, 128)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape)
+            >>> index = 0
+            >>> tr = self.new_sample_grid['targets'][index]
+            >>> tr_ = tr.copy()
+            >>> tr_ = self._augment_spacetime_target(tr_)
+            >>> print('tr  = {!r}'.format(tr))
+            >>> print('tr_ = {!r}'.format(tr_))
         """
+
+        temporal_augment_rate = 0.8
+        spatial_augment_rate = 0.9
+
         do_shift = False
         if not self.disable_augmenter and self.mode == 'fit':
             # do_shift = np.random.rand() > 0.5
@@ -1072,26 +1092,34 @@ class KWCocoVideoDataset(data.Dataset):
         if do_shift:
             # Spatial augmentation
             rng = kwarray.ensure_rng(None)
-            space_box = kwimage.Boxes.from_slice(tr_['space_slice'])
-            w = space_box.width.ravel()[0]
-            h = space_box.height.ravel()[0]
 
-            # hack: this prevents us from assuming there is a target in the
-            # window, but it lets us get the benefit of chip_overlap=0.5 while
-            # still having it at 0 for faster epochs.
-            # TODO: dont shift off the edge.
-            aff = kwimage.Affine.coerce(offset=(
-                rng.randint(-w // 2.7, w // 2.7),
-                rng.randint(-h // 2.7, h // 2.7)))
+            vidid = tr_['video_id']
+            video = self.sampler.dset.index.videos[vidid]
+            vid_width = video['width']
+            vid_height = video['height']
 
-            space_box = space_box.warp(aff).quantize()
-            # aff = kwimage.Affine.coerce(offset=rng.randint(-8, 8, size=2))
-            space_box = kwimage.Boxes.from_slice(tr_['space_slice']).warp(aff).quantize()
-            tr_['space_slice'] = space_box.astype(int).to_slices()[0]
+            # Spatial augmentation:
+            if rng.rand() < spatial_augment_rate:
+                space_box = kwimage.Boxes.from_slice(tr_['space_slice'])
+                w = space_box.width.ravel()[0]
+                h = space_box.height.ravel()[0]
+                # hack: this prevents us from assuming there is a target in the
+                # window, but it lets us get the benefit of chip_overlap=0.5 while
+                # still having it at 0 for faster epochs.
+                aff = kwimage.Affine.coerce(offset=(
+                    rng.randint(-w // 2.7, w // 2.7),
+                    rng.randint(-h // 2.7, h // 2.7)))
+                space_box = space_box.warp(aff).quantize()
+                space_box = kwimage.Boxes.from_slice(tr_['space_slice']).warp(aff).quantize()
+
+                # prevent shifting the target off the edge of the video
+                snap_target = kwimage.Boxes([[0, 0, vid_width, vid_height]], 'ltrb')
+                _boxes_snap_to_edges(space_box, snap_target)
+
+                tr_['space_slice'] = space_box.astype(int).to_slices()[0]
 
             # Temporal augmentation
-            vidid = tr_['video_id']
-            if rng.rand() > 0.2:
+            if rng.rand() < temporal_augment_rate:
                 time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
                 valid_gids = self.new_sample_grid['vidid_to_valid_gids'][vidid]
                 tr_['gids'] = list(ub.take(valid_gids, time_sampler.sample(tr_['main_idx'])))
@@ -1265,7 +1293,6 @@ class KWCocoVideoDataset(data.Dataset):
 
         if 0:
             tr_ = self._augment_spacetime_target(tr_)
-        print('tr_ = {}'.format(ub.repr2(tr_, nl=1)))
 
         if self.channels:
             tr_['channels'] = self.sample_channels
@@ -2907,9 +2934,70 @@ class BatchVisualizationBuilder:
         return frame_canvas
 
 
-def visualize_sample_grid(dset, sample_grid):
+def visualize_sample_grid(dset, sample_grid, max_vids=2):
     """
     Debug visualization for sampling grid
+
+    Draws multiple frames.
+
+    Draws a yellow polygon over invalid spatial regions.
+
+    Places a red dot where there is a negative sample (at the center of the negative window)
+
+    Places a blue dot where there is a positive sample
+
+    Notes:
+        * Dots are more intense when there are more temporal coverage of that dot.
+
+        * Dots are placed on the center of the window.
+          They do not indicate its extent.
+
+        * Dots are blue if they overlap any annotation in their temporal region
+          so they may visually be near an annotation.
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_multisensor
+        >>> dset = coco_dset = demo_kwcoco_multisensor(dates=True, geodata=True, heatmap=True)
+        >>> window_overlap = 0.0
+        >>> window_dims = (3, 32, 32)
+        >>> keepbound = False
+        >>> time_sampling = 'soft2+distribute'
+        >>> use_centered_positives = True
+        >>> use_grid_positives = 0
+        >>> sample_grid = sample_video_spacetime_targets(
+        >>>     dset, window_dims, window_overlap, time_sampling=time_sampling,
+        >>>     use_grid_positives=use_grid_positives, use_centered_positives=use_centered_positives)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> canvas = visualize_sample_grid(dset, sample_grid)
+        >>> kwplot.imshow(canvas, doclf=1)
+        >>> kwplot.show_if_requested()
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> import watch
+        >>> # dset = coco_dset = demo_kwcoco_multisensor(dates=True, geodata=True, heatmap=True)
+        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
+        >>> big_dset = kwcoco.CocoDataset(coco_fpath)
+        >>> dset = big_dset.subset(dset.videos(names=['KR_R002']).images.lookup('id')[0])
+        >>> window_overlap = 0.0
+        >>> window_dims = (3, 32, 32)
+        >>> keepbound = False
+        >>> time_sampling = 'soft2+distribute'
+        >>> use_centered_positives = True
+        >>> use_grid_positives = 0
+        >>> sample_grid = sample_video_spacetime_targets(
+        >>>     dset, window_dims, window_overlap, time_sampling=time_sampling,
+        >>>     use_grid_positives=True, use_centered_positives=use_centered_positives)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> canvas = visualize_sample_grid(dset, sample_grid, max_vids=1)
+        >>> kwplot.imshow(canvas, doclf=1)
+        >>> kwplot.show_if_requested()
     """
     # Visualize the sample grid
     import pandas as pd
@@ -2918,7 +3006,7 @@ def visualize_sample_grid(dset, sample_grid):
     dataset_canvases = []
 
     max_vids = 2
-    max_frames = 8
+    max_frames = 6
 
     vidid_to_videodf = dict(list(targets.groupby('video_id')))
 
@@ -3082,26 +3170,6 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         ub.peek(sample_grid1['vidid_to_time_sampler'].values()).show_summary(fnum=1)
         ub.peek(sample_grid2['vidid_to_time_sampler'].values()).show_summary(fnum=2)
         _ = xdev.profile_now(sample_video_spacetime_targets)(dset, window_dims, window_overlap)
-
-    Example:
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-        >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_multisensor
-        >>> dset = coco_dset = demo_kwcoco_multisensor(dates=True, geodata=True, heatmap=True)
-        >>> window_overlap = 0.0
-        >>> window_dims = (3, 32, 32)
-        >>> keepbound = False
-        >>> time_sampling = 'soft2+distribute'
-        >>> use_centered_positives = True
-        >>> use_grid_positives = 0
-        >>> sample_grid = sample_video_spacetime_targets(
-        >>>     dset, window_dims, window_overlap, time_sampling=time_sampling,
-        >>>     use_grid_positives=use_grid_positives, use_centered_positives=use_centered_positives)
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> kwplot.autompl()
-        >>> canvas = visualize_sample_grid(dset, sample_grid)
-        >>> kwplot.imshow(canvas, doclf=1)
-        >>> kwplot.show_if_requested()
 
         import xdev
         globals().update(xdev.get_func_kwargs(sample_video_spacetime_targets))
@@ -3576,3 +3644,31 @@ def make_track_based_spatial_samples(coco_dset):
             negative_boxes.draw(setlim=1, color='red', fill=True)
             positives.draw(color='limegreen')
             positives_samples.draw(color='green')
+
+
+def _boxes_snap_to_edges(given_box, snap_target):
+    """
+    Ignore:
+        >>> snap_target = kwimage.Boxes([[0, 0, 10, 10]], 'ltrb')
+        >>> given_box = kwimage.Boxes([[-3, 5, 3, 13]], 'ltrb')
+        >>> adjusted_box = _boxes_snap_to_edges(given_box, snap_target)
+        >>> print('adjusted_box = {!r}'.format(adjusted_box))
+
+        _boxes_snap_to_edges(kwimage.Boxes([[-3, 3, 20, 13]], 'ltrb'), snap_target)
+        _boxes_snap_to_edges(kwimage.Boxes([[-3, -3, 3, 3]], 'ltrb'), snap_target)
+        _boxes_snap_to_edges(kwimage.Boxes([[7, 7, 15, 15]], 'ltrb'), snap_target)
+    """
+    s_x1, s_y1, s_x2, s_y2 = snap_target.components
+    g_x1, g_y1, g_x2, g_y2 = given_box.components
+
+    xoffset1 = -min((g_x1 - s_x1), 0)
+    yoffset1 = -min((g_y1 - s_y1), 0)
+
+    xoffset2 = min((s_x2 - g_x2), 0)
+    yoffset2 = min((s_y2 - g_y2), 0)
+
+    xoffset = (xoffset1 + xoffset2).ravel()[0]
+    yoffset = (yoffset1 + yoffset2).ravel()[0]
+
+    adjusted_box = given_box.translate((xoffset, yoffset))
+    return adjusted_box

@@ -4293,7 +4293,7 @@ python -m watch.tasks.fusion.fit \
 
 
 
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$(python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
@@ -4302,7 +4302,8 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
 CHANNELS="blue|green|red,nir|swir16|swir22,blue|green|red,depth,panchromatic,matseg_0|matseg_1|matseg_2|matseg_3"
-INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/FUSION_EXPERIMENT_ML_V155/FUSION_EXPERIMENT_ML_V155_epoch=18-step=41628.pt \
+#INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/FUSION_EXPERIMENT_ML_V155/FUSION_EXPERIMENT_ML_V155_epoch=18-step=41628.pt 
+INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V157
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion.fit \
