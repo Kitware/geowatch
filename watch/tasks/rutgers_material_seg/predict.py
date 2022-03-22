@@ -423,6 +423,8 @@ def make_predict_config(cmdline=False, **kwargs):
 
     parser.add_argument("--compress", default='DEFLATE', type=str, help="type of gdal compression to use")
     parser.add_argument("--blocksize", default=128, type=str, help="gdal COG blocksize")
+
+    parser.add_argument("--cache", default=False, type=bool, help="if True enables caching of predictions in case of a crash")
     # parser.add_argument("--thresh", type=float, default=0.01)
 
     parser.set_defaults(**kwargs)
