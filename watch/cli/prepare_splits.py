@@ -27,6 +27,8 @@ def _submit_split_jobs(base_fpath, queue, depends=[]):
     Populates a Serial, Slurm, or Tmux Queue with jobs
     """
 
+    base_fpath = ub.Path(base_fpath)
+
     splits = {
         'nowv': base_fpath.augment(suffix='_nowv', multidot=True),
 
@@ -39,7 +41,6 @@ def _submit_split_jobs(base_fpath, queue, depends=[]):
         'wv_vali': base_fpath.augment(suffix='_wv_vali', multidot=True),
     }
 
-    print('splits = {!r}'.format(splits))
     split_jobs = {}
     # Perform train/validation splits with and without worldview
     command = ub.codeblock(

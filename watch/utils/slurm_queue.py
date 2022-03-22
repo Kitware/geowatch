@@ -29,6 +29,8 @@ Example:
 """
 import ubelt as ub
 
+from watch.utils import cmd_queue  # NOQA
+
 
 def _coerce_mem(mem):
     """
@@ -54,7 +56,7 @@ def _coerce_mem(mem):
     return mem
 
 
-class SlurmJob(ub.NiceRepr):
+class SlurmJob(cmd_queue.Job):
     """
     Represents a slurm job that hasn't been submitted yet
 
@@ -69,7 +71,8 @@ class SlurmJob(ub.NiceRepr):
 
     """
     def __init__(self, command, name=None, output_fpath=None, depends=None,
-                 partition=None, cpus=None, gpus=None, mem=None, begin=None):
+                 partition=None, cpus=None, gpus=None, mem=None, begin=None,
+                 shell=None):
         if name is None:
             import uuid
             name = 'job-' + str(uuid.uuid4())
@@ -83,6 +86,9 @@ class SlurmJob(ub.NiceRepr):
         self.gpus = gpus
         self.mem = mem
         self.begin = begin
+        self.shell = shell
+        # if shell not in {None, 'bash'}:
+        #     raise NotImplementedError(shell)
 
         self.jobid = None  # only set once this is run (maybe)
         # --partition=community --cpus-per-task=5 --mem=30602 --gres=gpu:1
@@ -122,6 +128,10 @@ class SlurmJob(ub.NiceRepr):
 
         import shlex
         wrp_command = shlex.quote(self.command)
+
+        if self.shell:
+            wrp_command = shlex.quote(self.shell + ' -c ' + wrp_command)
+
         sbatch_args.append(f'--wrap {wrp_command}')
 
         if self.depends:
@@ -167,7 +177,7 @@ class SlurmJob(ub.NiceRepr):
         return sbatch_args
 
 
-class SlurmQueue:
+class SlurmQueue(cmd_queue.Queue):
     """
     CommandLine:
        xdoctest -m watch.utils.slurm_queue SlurmQueue
@@ -189,8 +199,22 @@ class SlurmQueue:
         >>> self.run()
         >>> #if ub.find_exe('slurm'):
         >>> #    self.run()
+
+    Example:
+        >>> from watch.utils.slurm_queue import *  # NOQA
+        >>> self = SlurmQueue(shell='/bin/bash')
+        >>> self.add_header_command('export FOO=bar')
+        >>> job0 = self.submit('echo "$FOO"')
+        >>> job1 = self.submit('echo "$FOO"', depends=job0)
+        >>> job2 = self.submit('echo "$FOO"')
+        >>> job3 = self.submit('echo "$FOO"', depends=job2)
+        >>> self.sync()
+        >>> job4 = self.submit('echo "$FOO"')
+        >>> self.sync()
+        >>> job5 = self.submit('echo "$FOO"')
+        >>> self.rprint()
     """
-    def __init__(self, name=None):
+    def __init__(self, name=None, shell=None):
         import uuid
         import time
         self.jobs = []
@@ -201,6 +225,9 @@ class SlurmQueue:
         self.dpath = ub.Path.appdir('slurm_queue') / self.queue_id
         self.log_dpath = self.dpath / 'logs'
         self.fpath = self.dpath / (self.queue_id + '.sh')
+        self.shell = shell
+        self.header_commands = []
+        self.all_depends = None
 
     def write(self):
         import os
@@ -221,23 +248,38 @@ class SlurmQueue:
             # + '-job-{}'.format(len(self.jobs))
         if 'output_fpath' not in kwargs:
             kwargs['output_fpath'] = self.log_dpath / (name + '.sh')
+        if self.shell is not None:
+            kwargs['shell'] = kwargs.get('shell', self.shell)
+        if self.all_depends:
+            depends = kwargs.get('depends', None)
+            if depends is None:
+                depends = self.all_depends
+            else:
+                if not ub.iterable(depends):
+                    depends = [depends]
+                depends = self.all_depends + depends
+            kwargs['depends'] = depends
+
         job = SlurmJob(command, **kwargs)
         self.jobs.append(job)
         return job
 
     def add_header_command(self, command):
-        raise NotImplementedError
         self.header_commands.append(command)
+
+    def sync(self):
+        """
+        Mark that all future jobs will depend on the current sink jobs
+        """
+        graph = self._dependency_graph()
+        # Find the jobs that nobody depends on
+        sink_jobs = [graph.nodes[n]['job'] for n, d in graph.out_degree if d == 0]
+        # All new jobs must depend on these jobs
+        self.all_depends = sink_jobs
 
     def order_jobs(self):
         import networkx as nx
-        graph = nx.DiGraph()
-        # TODO: crawl dependencies too?
-        for job in self.jobs:
-            graph.add_node(job.name, job=job)
-            if job.depends:
-                for dep in job.depends:
-                    graph.add_edge(dep.name, job.name)
+        graph = self._dependency_graph()
         if 0:
             print(nx.forest_str(nx.minimum_spanning_arborescence(graph)))
         new_order = []
@@ -255,6 +297,8 @@ class SlurmQueue:
         for job in new_order:
             args = job._build_sbatch_args(jobname_to_varname)
             command = ' '.join(args)
+            if self.header_commands:
+                command = ' && '.join(self.header_commands + [command])
             if 1:
                 varname = 'JOB_{:03d}'.format(len(jobname_to_varname))
                 command = f'{varname}=$({command} --parsable)'
