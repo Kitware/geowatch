@@ -45,7 +45,7 @@ class TeamFeaturePipelineConfig(scfg.Config):
 
         'do_splits': scfg.Value(True, help='if True also make splits'),
 
-        'follow': scfg.Value(False),
+        'follow': scfg.Value(True),
 
         'serial': scfg.Value(False, help='if True use serial mode'),
 
@@ -273,9 +273,9 @@ def main(cmdline=True, **kwargs):
         if config['cache']:
             if not task['output_fpath'].exists():
                 command = f"[[ -f '{task['output_fpath']}' ]] || " + task['command']
-                queue.submit(command, gpus=task['gpus'])
+                queue.submit(command, gpus=task['gpus'], shell='/bin/bash')
         else:
-            queue.submit(task['command'])
+            queue.submit(task['command'], shell='/bin/bash')
 
     # if workers > 0:
     #     # Launch this TQ if there are parallel workers, otherwise just make a
