@@ -13,12 +13,12 @@ prep_teamfeat_drop2(){
         --base_fpath="$DVC_DPATH/$DATASET_CODE/data.kwcoco.json" \
         --gres="0,1" \
         --with_landcover=1 \
-        --with_depth=1 \
+        --with_depth=0 \
         --with_materials=1 \
-        --with_invariants=1 \
+        --with_invariants=0 \
         --do_splits=1 \
         --depth_workers=0 \
-        --cache=1 --run=1 --serial=1
+        --cache=0 --run=1 --serial=1
     #python -m watch.cli.prepare_splits --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L.kwcoco.json --run=False
 
 }

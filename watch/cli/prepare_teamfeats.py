@@ -47,7 +47,9 @@ class TeamFeaturePipelineConfig(scfg.Config):
 
         'follow': scfg.Value(False),
 
-        'serial': scfg.Value(False, help='if True use serial mode')
+        'serial': scfg.Value(False, help='if True use serial mode'),
+
+        'backend': scfg.Value('tmux', help=None),
     }
 
 
@@ -146,6 +148,7 @@ def main(cmdline=True, **kwargs):
         # Landcover is fairly fast to run, do it first
         task = {}
         task['output_fpath'] = outputs['dzyne_landcover']
+        task['gpus'] = 1
         task['command'] = ub.codeblock(
             fr'''
             python -m watch.tasks.landcover.predict \
@@ -184,6 +187,7 @@ def main(cmdline=True, **kwargs):
         # depth_data_workers = min(2, data_workers)
         depth_window_size = 512  # takes 18GB
         task['output_fpath'] = outputs['dzyne_depth']
+        task['gpus'] = 1
         task['command'] = ub.codeblock(
             fr'''
             python -m watch.tasks.depth.predict \
@@ -202,6 +206,7 @@ def main(cmdline=True, **kwargs):
     if config[key]:
         task = {}
         task['output_fpath'] = outputs['rutgers_materials']
+        task['gpus'] = 1
         task['command'] = ub.codeblock(
             fr'''
             python -m watch.tasks.rutgers_material_seg.predict \
@@ -223,6 +228,7 @@ def main(cmdline=True, **kwargs):
         task = {}
         # all_tasks = 'before_after segmentation pretext'
         task['output_fpath'] = outputs['uky_invariants']
+        task['gpus'] = 1
         task['command'] = ub.codeblock(
             fr'''
             python -m watch.tasks.invariants.predict \
@@ -248,7 +254,18 @@ def main(cmdline=True, **kwargs):
     else:
         size = min(len(tasks), len(gres))
 
-    queue = tmux_queue.TMUXMultiQueue(name='teamfeat', size=size, gres=gres)
+    # queue = tmux_queue.TMUXMultiQueue(name='teamfeat', size=size, gres=gres)
+
+    if config['backend'] == 'slurm':
+        from watch.utils import slurm_queue
+        queue = slurm_queue.SlurmQueue(name='watch-teamfeat')
+    elif config['backend'] == 'tmux':
+        from watch.utils import tmux_queue
+        queue = tmux_queue.TMUXMultiQueue(
+            name='watch-teamfeat', size=size, gres=gres)
+    else:
+        raise KeyError(config['backend'])
+
     if config['virtualenv_cmd']:
         queue.add_header_command(config['virtualenv_cmd'])
 
@@ -256,7 +273,7 @@ def main(cmdline=True, **kwargs):
         if config['cache']:
             if not task['output_fpath'].exists():
                 command = f"[[ -f '{task['output_fpath']}' ]] || " + task['command']
-                queue.submit(command)
+                queue.submit(command, gpus=task['gpus'])
         else:
             queue.submit(task['command'])
 
