@@ -309,7 +309,7 @@ def main(cmdline=False, **kwargs):
             --visualize={align_visualize} \
             --debug_valid_regions={debug_valid_regions} \
             --rpc_align_method affine_warp \
-            --workers={config['align_workers']} \
+            --workers={config['align_workers']}
         '''), depends=uncropped_final_jobs)
 
     # TODO:
@@ -343,6 +343,40 @@ def main(cmdline=False, **kwargs):
                 --site_models="{site_model_dpath}/*.geojson" \
                 --region_models="{region_model_dpath}/*.geojson" {viz_part}
             '''), depends=[align_job])
+
+    # TODO:
+    # queue.synchronize -
+    # force all submissions to finish before starting new ones.
+
+    # Do Basic Splits
+    if 1:
+        from watch.cli import prepare_splits
+        prepare_splits._submit_split_jobs(
+            aligned_imganns_kwcoco_fpath, queue, depends=[project_anns_job])
+
+    # TODO: Can start the DVC add of the region subdirectories here
+    ub.codeblock(
+        '''
+        cd /home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc-hdd/Aligned-Drop3-TA1-2022-03-10
+        ls */WV
+        ls */L8
+        ls */S2
+        ls */*.json
+
+        dvc add */WV */L8 */S2 */*.json
+        dvc add data_*nowv*.kwcoco.json
+
+        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        echo "DVC_DPATH='$DVC_DPATH'"
+
+        cd $DVC_DPATH/
+        git pull  # ensure you are up to date with master on DVC
+        cd $DVC_DPATH/Aligned-Drop3-TA1-2022-03-10
+        dvc pull */L8.dvc */S2.dvc
+        dvc pull
+        */*.json
+
+        ''')
 
     if config['visualize']:
         queue.submit(ub.codeblock(

@@ -5,19 +5,20 @@ https://docs.google.com/spreadsheets/d/1kYseTFyLb-_7BzILtSOWuimRVyLuefaninfNwkg4
 
 prep_teamfeat_drop2(){
     # Team Features on Drop2
-    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    DVC_DPATH=$(python -m watch.cli.find_dvc --hardware=ssd)
+    DVC_DPATH=$(python -m watch.cli.find_dvc --hardware=hdd)
     WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
     DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
     python -m watch.cli.prepare_teamfeats \
         --base_fpath="$DVC_DPATH/$DATASET_CODE/data.kwcoco.json" \
         --gres="0,1" \
         --with_landcover=1 \
-        --with_depth=1 \
+        --with_depth=0 \
         --with_materials=1 \
-        --with_invariants=1 \
+        --with_invariants=0 \
         --do_splits=1 \
         --depth_workers=0 \
-        --cache=1 --run=1 --serial=1
+        --cache=0 --run=1 --serial=1
     #python -m watch.cli.prepare_splits --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L.kwcoco.json --run=False
 
 }
@@ -4176,6 +4177,74 @@ python -m watch.tasks.fusion.fit \
 # CHANNELS="(S2,L8,WV):blue|green|red,(S2,L8):nir|swir16|swir22,(WV):depth|pan,(WV):depth|red|green|blue,(S2,L8):matseg_0|matseg_1|matseg_2|matseg_3"
 
 
+#export CUDA_VISIBLE_DEVICES=1
+#DVC_DPATH=$(python -m watch.cli.find_dvc)
+#WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+#DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+#KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+#TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_train.kwcoco.json
+#VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
+#TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
+#CHANNELS="blue|green|red|nir|swir16|swir22,depth,matseg_0|matseg_1|matseg_2|matseg_3"
+#INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/FUSION_EXPERIMENT_ML_V156/FUSION_EXPERIMENT_ML_V156_epoch=39-step=10239.pt \
+#EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V156-cont1
+#DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+#python -m watch.tasks.fusion.fit \
+#    --config "$WORKDIR/configs/common_20220303.yaml" \
+#    --default_root_dir="$DEFAULT_ROOT_DIR" \
+#    --name=$EXPERIMENT_NAME \
+#    --train_dataset="$TRAIN_FPATH" \
+#    --vali_dataset="$VALI_FPATH" \
+#    --test_dataset="$TEST_FPATH" \
+#    --use_centered_positives=True \
+#    --channels="$CHANNELS" \
+#    --neg_to_pos_ratio=0.5 \
+#    --accumulate_grad_batches=16 \
+#    --chip_size=224 \
+#    --decoder=segmenter \
+#    --tokenizer=dwcnn \
+#    --time_steps=7 \
+#    --global_class_weight=1.0 \
+#    --global_saliency_weight=1.00 \
+#    --num_workers=8 \
+#    --gpus "1" \
+#    --learning_rate=1e-3 \
+#    --attention_impl=exact \
+#    --chip_overlap=0.0 \
+#    --optimizer=AdamW \
+#    --time_sampling=hardish \
+#    --arch_name=smt_it_sm_m24 \
+#    --max_epoch_length=4096 \
+#    --num_draw=8 \
+#    --draw_interval=100m \
+#    --dist_weight=True \
+#    --stream_channels=64 \
+#    --modulate_class_weights="positive*0,negative*0,background*0.2,No Activity*0.0,Post Construction*0.0,Site Preparation*2.0" \
+#    --init="$INITIAL_STATE" 
+
+#DVC_DPATH=$(python -m watch.cli.find_dvc)
+#DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+#EXPT_GROUP_CODE=eval3_candidates
+#KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+#python -m watch.tasks.fusion.repackage gather_checkpoints \
+#    --dvc_dpath="$DVC_DPATH" \
+#    --storage_dpath="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages" \
+#    --train_dpath="$DVC_DPATH/training/*/*/*/runs/FUSION_EXPERIMENT_ML_V156-cont1/lightning_logs/version_2/checkpoints/epoch=3-step=1023-v2.ckpt" \
+#    --mode=copy
+
+
+#DVC_DPATH=$(python -m watch.cli.find_dvc)
+#DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+#EXPT_GROUP_CODE=eval3_candidates
+#KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+#ls $DVC_DPATH/training/*/*/*/runs/FUSION_EXPERIMENT_ML_V155-cont1/lightning_logs/*/checkpoints
+#python -m watch.tasks.fusion.repackage gather_checkpoints \
+#    --dvc_dpath="$DVC_DPATH" \
+#    --storage_dpath="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages" \
+#    --train_dpath="$DVC_DPATH/training/*/*/*/runs/FUSION_EXPERIMENT_ML_V155-cont1/lightning_logs/version_2/checkpoints/epoch=3-step=1023-v2.ckpt" \
+#    --mode=copy
+
+
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$(python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
@@ -4200,28 +4269,31 @@ python -m watch.tasks.fusion.fit \
     --accumulate_grad_batches=24 \
     --chip_size=224 \
     --decoder=segmenter \
-    --tokenizer=dwcnn \
-    --time_steps=5 \
+    --tokenizer=linconv \
+    --time_steps=7 \
     --global_class_weight=1.0 \
     --global_saliency_weight=1.00 \
     --num_workers=8 \
     --gpus "1" \
-    --learning_rate=1e-3 \
+    --learning_rate=1e-2 \
     --attention_impl=exact \
     --chip_overlap=0.0 \
-    --optimizer=RAdam \
+    --optimizer=AdamW \
     --max_epoch_length=None \
     --time_sampling=hardish \
-    --arch_name=smt_it_sm_p2 \
+    --arch_name=smt_it_sm_p2w \
     --num_draw=8 \
-    --draw_interval=100m \
+    --draw_interval=1m \
+    --max_epoch_length=16384 \
     --dist_weight=True \
     --stream_channels=64 \
+    --temporal_dropout=0.22 \
     --modulate_class_weights="positive*0,negative*0,background*0.2,No Activity*0.0,Post Construction*0.0,Site Preparation*2.0" \
     --init="$INITIAL_STATE" 
 
 
-export CUDA_VISIBLE_DEVICES=1
+
+export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$(python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
@@ -4229,9 +4301,10 @@ KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
-CHANNELS="blue|green|red|nir|swir16|swir22,depth,matseg_0|matseg_1|matseg_2|matseg_3"
-INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/FUSION_EXPERIMENT_ML_V156/FUSION_EXPERIMENT_ML_V156_epoch=39-step=10239.pt \
-EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V156-cont1
+CHANNELS="blue|green|red,nir|swir16|swir22,blue|green|red,depth,panchromatic,matseg_0|matseg_1|matseg_2|matseg_3"
+#INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/FUSION_EXPERIMENT_ML_V155/FUSION_EXPERIMENT_ML_V155_epoch=18-step=41628.pt 
+INITIAL_STATE="noop"
+EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V157
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
@@ -4242,26 +4315,27 @@ python -m watch.tasks.fusion.fit \
     --test_dataset="$TEST_FPATH" \
     --use_centered_positives=True \
     --channels="$CHANNELS" \
-    --neg_to_pos_ratio=0.5 \
+    --neg_to_pos_ratio=0.3 \
     --accumulate_grad_batches=16 \
-    --chip_size=224 \
+    --chip_size=196 \
     --decoder=segmenter \
-    --tokenizer=dwcnn \
+    --tokenizer=linconv \
     --time_steps=7 \
     --global_class_weight=1.0 \
     --global_saliency_weight=1.00 \
-    --num_workers=8 \
+    --num_workers=0 \
     --gpus "1" \
     --learning_rate=1e-3 \
     --attention_impl=exact \
     --chip_overlap=0.0 \
     --optimizer=AdamW \
     --time_sampling=hardish \
-    --arch_name=smt_it_sm_m24 \
+    --arch_name=smt_it_sm_p1 \
     --max_epoch_length=4096 \
     --num_draw=8 \
-    --draw_interval=100m \
+    --draw_interval=1m \
     --dist_weight=True \
-    --stream_channels=64 \
+    --stream_channels=4 \
+    --temporal_dropout=0.5 \
     --modulate_class_weights="positive*0,negative*0,background*0.2,No Activity*0.0,Post Construction*0.0,Site Preparation*2.0" \
     --init="$INITIAL_STATE" 

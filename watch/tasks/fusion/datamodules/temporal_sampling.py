@@ -296,6 +296,18 @@ class TimeWindowSampler:
                                                 time_window=self.time_window,
                                                 blur=True,
                                                 time_span=self.time_span)
+        elif self.affinity_type == 'hardish2':
+            # Hardish affinity
+            self.affinity = hard_frame_affinity(self.unixtimes, self.sensors,
+                                                time_window=self.time_window,
+                                                blur=3.0,
+                                                time_span=self.time_span)
+        elif self.affinity_type == 'hardish3':
+            # Hardish affinity
+            self.affinity = hard_frame_affinity(self.unixtimes, self.sensors,
+                                                time_window=self.time_window,
+                                                blur=6.0,
+                                                time_span=self.time_span)
         elif self.affinity_type == 'contiguous':
             # Recovers the original method that we used to sample time.
             time_window = self.time_window
@@ -359,10 +371,11 @@ class TimeWindowSampler:
         Example:
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
             >>> import os
+            >>> import kwcoco
             >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
             >>> from watch.utils.util_data import find_smart_dvc_dpath
             >>> dvc_dpath = find_smart_dvc_dpath()
-            >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
+            >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
             >>> dset = kwcoco.CocoDataset(coco_fpath)
             >>> vidid = dset.dataset['videos'][0]['id']
             >>> self = TimeWindowSampler.from_coco_video(
@@ -404,7 +417,7 @@ class TimeWindowSampler:
         )
         return ret
 
-    def show_summary(self, samples_per_frame=1, fnum=1):
+    def show_summary(self, samples_per_frame=1, fnum=1, with_temporal=True):
         """
         Visualize the affinity matrix and two views of a selected sample.
 
@@ -428,23 +441,27 @@ class TimeWindowSampler:
             >>> import os
             >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
             >>> from watch.utils.util_data import find_smart_dvc_dpath
+            >>> import kwcoco
+            >>> # xdoctest: +REQUIRES(--show)
             >>> dvc_dpath = find_smart_dvc_dpath()
-            >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
+            >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
             >>> dset = kwcoco.CocoDataset(coco_fpath)
             >>> video_ids = list(ub.sorted_vals(dset.index.vidid_to_gids, key=len).keys())
             >>> vidid = video_ids[2]
             >>> # Demo behavior over a grid of parameters
             >>> grid = list(ub.named_product({
-            >>>     'affinity_type': ['hard', 'soft2'],
+            >>>     'affinity_type': ['hard', 'soft2', 'hardish3', 'hardish2'],
             >>>     'update_rule': ['distribute', 'pairwise+distribute'],
             >>>     #'determenistic': [False, True],
             >>>     'determenistic': [False],
             >>>     'time_window': [2],
             >>> }))
+            >>> import kwplot
+            >>> kwplot.autompl()
             >>> for idx, kwargs in enumerate(grid):
             >>>     print('kwargs = {!r}'.format(kwargs))
             >>>     self = TimeWindowSampler.from_coco_video(dset, vidid, **kwargs)
-            >>>     self.show_summary(samples_per_frame=30, fnum=idx)
+            >>>     self.show_summary(samples_per_frame=30, fnum=idx, with_temporal=False)
         """
         import kwplot
         kwplot.autompl()
@@ -467,13 +484,18 @@ class TimeWindowSampler:
             update_rule={self.update_rule} gamma={self.gamma}
             ''')
 
-        pnum_ = kwplot.PlotNums(nCols=3)
+        with_dense = True
+        with_mat = True
+
+        num_subplots = (with_mat + with_dense + with_temporal)
+
+        pnum_ = kwplot.PlotNums(nCols=num_subplots)
 
         fig = kwplot.figure(fnum=fnum, doclf=True)
 
         fig = kwplot.figure(fnum=fnum, pnum=pnum_())
         ax = fig.gca()
-        kwplot.imshow(self.affinity, ax=ax)
+        kwplot.imshow(self.affinity, ax=ax, cmap='viridis')
         ax.set_title('frame affinity')
 
         fig = kwplot.figure(fnum=fnum, pnum=pnum_())
@@ -483,8 +505,9 @@ class TimeWindowSampler:
         else:
             ax = plot_dense_sample_indices(sample_idxs, self.unixtimes, linewidths=0.001)
 
-        kwplot.figure(fnum=fnum, pnum=pnum_())
-        plot_temporal_sample_indices(sample_idxs, self.unixtimes)
+        if with_temporal:
+            kwplot.figure(fnum=fnum, pnum=pnum_())
+            plot_temporal_sample_indices(sample_idxs, self.unixtimes)
         fig.suptitle(title_info)
 
     def show_affinity(self, fnum=3):
@@ -498,7 +521,7 @@ class TimeWindowSampler:
         kwplot.imshow(self.affinity, ax=ax)
         ax.set_title('frame affinity')
 
-    def show_procedure(self, idx=None, exclude=None, fnum=2):
+    def show_procedure(self, idx=None, exclude=None, fnum=2, rng=None):
         """
         Draw a figure that shows the process of performing on call to
         :func:`TimeWindowSampler.sample`. Each row illustrates an iteration of
@@ -557,15 +580,17 @@ class TimeWindowSampler:
             >>> self.show_summary(samples_per_frame=3, fnum=10)
 
         """
-        if idx is None:
-            idx = self.num_frames // 2
+        rng = kwarray.ensure_rng(rng)
+        # if idx is None:
+        #     idx = self.num_frames // 2
         title_info = ub.codeblock(
             f'''
             name={self.name}
             affinity_type={self.affinity_type} determenistic={self.determenistic}
             update_rule={self.update_rule} gamma={self.gamma}
             ''')
-        chosen, info = self.sample(idx, return_info=True, exclude=exclude)
+        chosen, info = self.sample(idx, return_info=True, exclude=exclude,
+                                   rng=rng)
         info['title_suffix'] = title_info
         show_affinity_sample_process(chosen, info, fnum=fnum)
         return chosen, info
@@ -768,6 +793,8 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
             'initial_weights': initial_weights.copy(),
             'initial_update_weights': update_weights.copy(),
             'initial_probs': initial_probs,
+
+            'initial_chosen': chosen.copy(),
 
             'include_indices': include_indices,
             'affinity': affinity,
@@ -1248,7 +1275,11 @@ def hard_frame_affinity(unixtimes, sensors, time_window, time_span='2y', blur=Fa
         sample_idxs, len(unixtimes), dim=1).sum(axis=2)
     affinity[np.eye(len(affinity), dtype=bool)] = 0
     if blur:
-        affinity = kwimage.gaussian_blur(affinity, kernel=(5, 1))
+        if blur is True:
+            affinity = kwimage.gaussian_blur(affinity, kernel=(5, 1))
+        else:
+            affinity = kwimage.gaussian_blur(affinity, sigma=blur)
+
     affinity[np.eye(len(affinity), dtype=bool)] = 0
     # affinity = affinity * 0.99 + 0.01
     affinity = affinity / affinity.max()
@@ -1311,19 +1342,24 @@ def show_affinity_sample_process(chosen, info, fnum=1):
     ax = fig.gca()
 
     # initial_weights = info['initial_weights']
-    initial_indexes = info['include_indices']
+    # initial_indexes = info['include_indices']
+    initial_indexes = info['initial_chosen']
 
+    # if len(initial_indexes):
     idx = initial_indexes[0]
+    # else:
+    #     idx = None
     probs = info['initial_weights']
     ymax = probs.max()
     xmax = len(probs)
-    x, y = idx, probs[idx]
     for x_ in initial_indexes:
         ax.plot([x_, x_], [0, ymax], color='gray')
     ax.plot(np.arange(xmax), probs)
-    xpos = x + xmax * 0.0 if x < (xmax / 2) else x - xmax * 0.0
-    ypos = y + ymax * 0.3 if y < (ymax / 2) else y - ymax * 0.3
-    ax.plot([x, x], [0, ymax], color='gray')
+    if idx is not None:
+        x, y = idx, probs[idx]
+        xpos = x + xmax * 0.0 if x < (xmax / 2) else x - xmax * 0.0
+        ypos = y + ymax * 0.3 if y < (ymax / 2) else y - ymax * 0.3
+        ax.plot([x, x], [0, ymax], color='gray')
     ax.set_title('Initialize included indices')
 
     fig = kwplot.figure(pnum=pnum_())

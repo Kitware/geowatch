@@ -531,27 +531,12 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     align_method = img.get('align_method', 'unknown')
     name = img.get('name', 'unknown')
 
-    vidname = coco_dset.index.videos[img['video_id']]['name']
-    date_captured = img.get('date_captured', '')
-    frame_index = img.get('frame_index', None)
-    gid = img.get('id', None)
-    image_name = img.get('name', '')
-
-    image_id_parts = []
-    image_id_parts.append(f'gid={gid}')
-    image_id_parts.append(f'frame_index={frame_index}')
-    image_id_part = ', '.join(image_id_parts)
-
-    header_line_infos = []
-    header_line_infos.append([vidname, image_id_part, _header_extra])
-    header_line_infos.append([dset_idstr])
-    header_line_infos.append([image_name])
-    header_line_infos.append([sensor_coarse, date_captured])
-    header_lines = []
-    for line_info in header_line_infos:
-        header_line = ' '.join([p for p in line_info if p])
-        if header_line:
-            header_lines.append(header_line)
+    from watch import heuristics
+    header_lines = heuristics.build_image_header_text(
+        img=img,
+        name=None,
+        _header_extra=None,
+    )
 
     delayed = coco_dset.delayed_load(img['id'], space=space)
 
@@ -591,6 +576,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
         initial_groups = channels.streams()
         chan_groups = []
+        group : kwcoco.FusedChannelSpec
         for group in initial_groups:
             if group.numel() > 3:
                 # For large group, just take the first 3 channels
@@ -610,13 +596,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                     'chan': group,
                 })
 
-    # sanatize channel paths (todo: kwcoco helper for this)
-    # new in 0.2.21 ChannelSpec.path_sanitize
-    def sanatize_chan_pnams(cs):
-        return cs.replace('|', '_').replace(':', '-')
-
     for row in chan_groups:
-        row['pname'] = sanatize_chan_pnams(row['chan'].spec)
+        row['pname'] = row['chan'].path_sanitize()
 
     if any3:
         if any3 == 'only':
@@ -911,6 +892,12 @@ if __name__ == '__main__':
     python -m watch visualize $KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
         --animate=True --channels="red|green|blue" --skip_missing=True \
         --select_images '.sensor_coarse == "S2"' --workers=4 --draw_anns=False
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/
+    python -m watch visualize $KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
+        --animate=True --channels="red|green|blue" --skip_missing=True \
+        --select_videos '.name == "BR_R002"' --workers=4 --draw_anns=True
 
     CommandLine:
         python ~/code/watch/watch/cli/coco_visualize_videos.py

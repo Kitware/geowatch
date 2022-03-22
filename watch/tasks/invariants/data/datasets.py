@@ -14,6 +14,27 @@ from ..utils.read_sentinel_images import read_sentinel_img_trio
 
 
 class gridded_dataset(torch.utils.data.Dataset):
+    """
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> from watch.tasks.invariants.data.datasets import *  # NOQA
+        >>> import watch
+        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json'
+        >>> import kwcoco
+        >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+        >>> self = gridded_dataset(coco_dset)
+        >>> out = self[0]
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+
+        >>> rgb1 = out['image1'][1:4].permute(1, 2, 0).numpy()[..., ::-1]
+        >>> rgb2 = out['image2'][1:4].permute(1, 2, 0).numpy()[..., ::-1]
+        >>> kwplot.imshow(rgb1, pnum=(1, 2, 1))
+        >>> kwplot.imshow(rgb2, pnum=(1, 2, 2))
+
+    """
     S2_l2a_channel_names = [
         'B02.tif', 'B01.tif', 'B03.tif', 'B04.tif', 'B05.tif', 'B06.tif', 'B07.tif', 'B08.tif', 'B09.tif', 'B11.tif', 'B12.tif', 'B8A.tif'
     ]
@@ -136,7 +157,7 @@ class gridded_dataset(torch.utils.data.Dataset):
         offset_tr['channels'] = self.bands
 
         if self.segmentation:
-            sample = self.sampler.load_sample(tr, with_annots='segmentation')
+            sample = self.sampler.load_sample(tr, with_annots='segmentation', nodata='float')
             det_list = sample['annots']['frame_dets']
             segmentation_masks = []
             for det in det_list:
@@ -155,8 +176,8 @@ class gridded_dataset(torch.utils.data.Dataset):
                         poly.fill(frame_mask, value=-1)
                 segmentation_masks.append(frame_mask)
         else:
-            sample = self.sampler.load_sample(tr)
-        offset_sample = self.sampler.load_sample(offset_tr)
+            sample = self.sampler.load_sample(tr, nodata='float')
+        offset_sample = self.sampler.load_sample(offset_tr, nodata='float')
 
         images = sample['im']
         offset_image = offset_sample['im'][0]

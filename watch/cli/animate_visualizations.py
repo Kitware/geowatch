@@ -114,9 +114,8 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
                     if channels is None:
                         channel_dpaths = [p for p in type_dpath.glob('*') if p.is_dir()]
                     else:
-                        def sanatize_chan_pnams(cs):
-                            return cs.replace('|', '_').replace(':', '-')
-                        channel_dpaths = [type_dpath / sanatize_chan_pnams(c.spec) for c in channels.streams()]
+                        channel_dpaths = [type_dpath / c.path_sanitize()
+                                          for c in channels.streams()]
 
                     for chan_dpath in channel_dpaths:
                         frame_fpaths = sorted(chan_dpath.glob('*'))
@@ -132,10 +131,8 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
                 if channels is None:
                     channel_dpaths = [p for p in type_dpath.glob('*') if p.is_dir()]
                 else:
-                    # channel_dpaths = [type_dpath / c.spec for c in channels.streams()]
-                    def sanatize_chan_pnams(cs):
-                        return cs.replace('|', '_').replace(':', '-')
-                    channel_dpaths = [type_dpath / sanatize_chan_pnams(c.spec) for c in channels.streams()]
+                    channel_dpaths = [type_dpath / c.path_sanitize()
+                                      for c in channels.streams()]
                 for chan_dpath in channel_dpaths:
                     frame_fpaths = sorted(chan_dpath.glob('*'))
                     gif_fname = '{}{}_{}.gif'.format(video_name, type_, chan_dpath.name)

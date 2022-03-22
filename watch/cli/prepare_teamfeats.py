@@ -45,9 +45,11 @@ class TeamFeaturePipelineConfig(scfg.Config):
 
         'do_splits': scfg.Value(True, help='if True also make splits'),
 
-        'follow': scfg.Value(False),
+        'follow': scfg.Value(True),
 
-        'serial': scfg.Value(False, help='if True use serial mode')
+        'serial': scfg.Value(False, help='if True use serial mode'),
+
+        'backend': scfg.Value('tmux', help=None),
     }
 
 
@@ -60,7 +62,6 @@ def main(cmdline=True, **kwargs):
     TODO:
         - [ ] Option to just dump the serial bash script that does everything.
     """
-    from watch.utils import tmux_queue
     from watch.utils.lightning_ext import util_globals
     from scriptconfig.smartcast import smartcast
 
@@ -108,10 +109,17 @@ def main(cmdline=True, **kwargs):
         # 'rutgers_materials': dvc_dpath / 'models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth',
         'dzyne_landcover': dvc_dpath / 'models/landcover/visnav_remap_s2_subset.pt',
 
-        'uky_pretext': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pretext_package.pt',
-        'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt',
+        # 2022-02-11
+        # 'uky_pretext': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pretext_package.pt',
+        # 'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt',
+        # 'uky_pca': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pca_projection_matrix.pt',
+
+        # 2022-03-11
+        'uky_pretext': dvc_dpath / 'models/uky/uky_invariants_2022_03_11/TA1_pretext_model//pretext_package.pt',
+        'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt',  # uses old segmentation model
         'uky_pca': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pca_projection_matrix.pt',
 
+        # TODO: use v1 on RGB and v2 on PAN
         'dzyne_depth': dvc_dpath / 'models/depth/weights_v1.pt',
         # 'dzyne_depth': dvc_dpath / 'models/depth/weights_v2_gray.pt',
     }
@@ -139,6 +147,7 @@ def main(cmdline=True, **kwargs):
         # Landcover is fairly fast to run, do it first
         task = {}
         task['output_fpath'] = outputs['dzyne_landcover']
+        task['gpus'] = 1
         task['command'] = ub.codeblock(
             fr'''
             python -m watch.tasks.landcover.predict \
@@ -146,6 +155,7 @@ def main(cmdline=True, **kwargs):
                 --deployed="{model_fpaths['dzyne_landcover']}" \
                 --output="{task['output_fpath']}" \
                 --num_workers="{data_workers}" \
+                --select_images='.sensor_coarse == "S2"' \
                 --device=0
             ''')
         combo_code_parts.append(codes[key])
@@ -176,6 +186,7 @@ def main(cmdline=True, **kwargs):
         # depth_data_workers = min(2, data_workers)
         depth_window_size = 512  # takes 18GB
         task['output_fpath'] = outputs['dzyne_depth']
+        task['gpus'] = 1
         task['command'] = ub.codeblock(
             fr'''
             python -m watch.tasks.depth.predict \
@@ -194,6 +205,7 @@ def main(cmdline=True, **kwargs):
     if config[key]:
         task = {}
         task['output_fpath'] = outputs['rutgers_materials']
+        task['gpus'] = 1
         task['command'] = ub.codeblock(
             fr'''
             python -m watch.tasks.rutgers_material_seg.predict \
@@ -215,6 +227,7 @@ def main(cmdline=True, **kwargs):
         task = {}
         # all_tasks = 'before_after segmentation pretext'
         task['output_fpath'] = outputs['uky_invariants']
+        task['gpus'] = 1
         task['command'] = ub.codeblock(
             fr'''
             python -m watch.tasks.invariants.predict \
@@ -240,45 +253,57 @@ def main(cmdline=True, **kwargs):
     else:
         size = min(len(tasks), len(gres))
 
-    tq = tmux_queue.TMUXMultiQueue(name='teamfeat', size=size, gres=gres)
+    # queue = tmux_queue.TMUXMultiQueue(name='teamfeat', size=size, gres=gres)
+
+    if config['backend'] == 'slurm':
+        from watch.utils import slurm_queue
+        queue = slurm_queue.SlurmQueue(name='watch-teamfeat')
+    elif config['backend'] == 'tmux':
+        from watch.utils import tmux_queue
+        queue = tmux_queue.TMUXMultiQueue(
+            name='watch-teamfeat', size=size, gres=gres)
+    else:
+        raise KeyError(config['backend'])
+
     if config['virtualenv_cmd']:
-        tq.add_header_command(config['virtualenv_cmd'])
+        queue.add_header_command(config['virtualenv_cmd'])
 
     for task in tasks:
         if config['cache']:
             if not task['output_fpath'].exists():
-                command = f"[[ -f '{task['output_fpath']}' ]] || " + task['command']
-                tq.submit(command)
+                # command = f"[[ -f '{task['output_fpath']}' ]] || " + task['command']
+                command = f"test -f '{task['output_fpath']}' || " + task['command']
+                queue.submit(command, gpus=task['gpus'])
         else:
-            tq.submit(task['command'])
+            queue.submit(task['command'])
 
-    if workers > 0:
-        # Launch this TQ if there are parallel workers, otherwise just make a
-        # longer serial script
-        tq.rprint()
-        tq.write()
+    # if workers > 0:
+    #     # Launch this TQ if there are parallel workers, otherwise just make a
+    #     # longer serial script
+    #     queue.rprint()
+    #     queue.write()
 
-        # TODO: make the monitor spawn in a new tmux session. The monitor could
-        # actually be the scheduler process.
-        if config['run']:
-            import subprocess
-            try:
-                if config['serial']:
-                    tq.serial_run()
-                else:
-                    tq.run()
-                agg_state = tq.monitor()
-            except subprocess.CalledProcessError as ex:
-                print('ex.stdout = {!r}'.format(ex.stdout))
-                print('ex.stderr = {!r}'.format(ex.stderr))
-                print('ex.returncode = {!r}'.format(ex.returncode))
-                raise
-            else:
-                if not config['keep_sessions']:
-                    if not agg_state['errored']:
-                        tq.kill()
+    #     # TODO: make the monitor spawn in a new tmux session. The monitor could
+    #     # actually be the scheduler process.
+    #     if config['run']:
+    #         import subprocess
+    #         try:
+    #             if config['serial']:
+    #                 queue.serial_run()
+    #             else:
+    #                 queue.run()
+    #             agg_state = queue.monitor()
+    #         except subprocess.CalledProcessError as ex:
+    #             print('ex.stdout = {!r}'.format(ex.stdout))
+    #             print('ex.stderr = {!r}'.format(ex.stderr))
+    #             print('ex.returncode = {!r}'.format(ex.returncode))
+    #             raise
+    #         else:
+    #             if not config['keep_sessions']:
+    #                 if not agg_state['errored']:
+    #                     queue.kill()
 
-        tq = tmux_queue.TMUXMultiQueue(name='combine-feats', size=2)
+    #     # queue = tmux_queue.TMUXMultiQueue(name='combine-feats', size=2)
 
     # Finalize features by combining them all into combo.kwcoco.json
     tocombine = [str(base_fpath)] + [str(task['output_fpath']) for task in tasks]
@@ -287,12 +312,13 @@ def main(cmdline=True, **kwargs):
     base_combo_fpath = aligned_bundle_dpath / f'combo_{combo_code}.kwcoco.json'
 
     if config['virtualenv_cmd']:
-        tq.add_header_command(config['virtualenv_cmd'])
+        queue.add_header_command(config['virtualenv_cmd'])
 
     # TODO: enable forcing if needbe
     # if not base_combo_fpath.exists() or not config['cache']:
     if True:
         #  Indent of this the codeblock matters for this line
+        queue.sync()
         src_lines = ' \\\n                          '.join(tocombine)
         command = ub.codeblock(
             fr'''
@@ -300,34 +326,38 @@ def main(cmdline=True, **kwargs):
                 --src {src_lines} \
                 --dst {base_combo_fpath}
             ''')
-        tq.submit(command)
-    tq.rprint()
-
-    if config['run']:
-        agg_state = None
-        follow = config['follow']
-        if follow and workers == 0 and len(tq.workers) == 1:
-            queue = tq.workers[0]
-            fpath = queue.write()
-            ub.cmd(f'bash {fpath}', verbose=3, check=True)
-        else:
-            if config['serial']:
-                tq.serial_run()
-            else:
-                tq.run()
-            if config['follow']:
-                agg_state = tq.monitor()
-        if not config['keep_sessions']:
-            if agg_state is not None and not agg_state['errored']:
-                tq.kill()
+        queue.submit(command)
 
     if config['do_splits']:
         # Also call the prepare-splits script
         from watch.cli import prepare_splits
-        split_config = ub.dict_isect(
-            config, prepare_splits.PrepareSplitsConfig.default)
-        split_config['base_fpath'] = str(base_combo_fpath)
-        prepare_splits.main(**split_config)
+        base_fpath = str(base_combo_fpath)
+        queue.sync()
+        prepare_splits._submit_split_jobs(base_fpath, queue)
+        # split_config = ub.dict_isect(
+        #     config, prepare_splits.PrepareSplitsConfig.default)
+        # split_config['base_fpath'] = str(base_combo_fpath)
+        # prepare_splits.main(**split_config)
+
+    queue.rprint()
+
+    if config['run']:
+        agg_state = None
+        # follow = config['follow']
+        # if follow and workers == 0 and len(queue.workers) == 1:
+        #     queue = queue.workers[0]
+        #     fpath = queue.write()
+        #     ub.cmd(f'bash {fpath}', verbose=3, check=True)
+        # else:
+        if config['serial']:
+            queue.serial_run()
+        else:
+            queue.run()
+        if config['follow']:
+            agg_state = queue.monitor()
+        if not config['keep_sessions']:
+            if agg_state is not None and not agg_state['errored']:
+                queue.kill()
 
     """
     Ignore:
@@ -367,7 +397,7 @@ if __name__ == '__main__':
         python -m watch.cli.prepare_teamfeats \
             --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
             --gres=0,1 --with_depth=0 --with_materials=False  --with_invariants=False \
-            --run=1 --do_splits=True
+            --run=0 --do_splits=True
 
 
 
@@ -380,13 +410,13 @@ if __name__ == '__main__':
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
         python -m watch.cli.prepare_teamfeats \
             --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
-            --gres=0, \
+            --gres=0,1 \
             --with_depth=1 \
             --with_landcover=1 \
             --with_invariants=1 \
             --with_materials=1 \
             --depth_workers=auto \
-            --do_splits=1  --cache=1 --run=1
+            --do_splits=1  --cache=0 --run=0
 
     """
     main(cmdline=True)

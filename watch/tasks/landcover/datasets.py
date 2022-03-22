@@ -15,10 +15,7 @@ class _CocoTorchDataset(torch.utils.data.Dataset):
     """
 
     def __init__(self, dset):
-        if isinstance(dset, kwcoco.CocoDataset):
-            self.dset = dset
-        else:
-            self.dset = kwcoco.CocoDataset(dset)
+        self.dset = kwcoco.CocoDataset.coerce(dset)
 
         self.gids = sorted(list(filter(self._include, self.dset.imgs.keys())))
 
@@ -73,7 +70,11 @@ class _CocoTorchDataset(torch.utils.data.Dataset):
             raise Exception('Unable to load any channels {} from image {}: {}'.format(channels, gid, str(ex))) from ex
         else:
             try:
-                return self.dset.load_image(gid, channels)
+                # return self.dset.load_image(gid, channels)
+                # imdata = self.dset.load_image(gid, channels)
+                coco_img = self.dset.coco_image(gid)
+                imdata = coco_img.delay(channels, space='image').finalize(nodata='float')
+                return imdata
             except Exception as ex:
                 img = self.dset.imgs[gid]
                 actual_channels = img.get('channels', [aux.get('channels') for aux in img.get('auxiliary', [])])

@@ -135,6 +135,11 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
 
     # How do we distinguish that
 
+    # TODO:
+    # Use the "valid_polygon" to zero out evaluations in invalid regions
+    # Also use nan values in the predictions to do the same.
+    # Combine these two measures.
+
     # Create a truth "panoptic segmentation" style mask for each task
     if has_saliency:
         # Truth for saliency-task
@@ -436,22 +441,27 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
             frame_nums.append(frame_index)
         true_gids.append(true_gid)
 
-        image_header_text = f'{frame_index} - gid = {true_gid}'
+        # image_header_text = f'{frame_index} - gid = {true_gid}'
 
-        date_captured = true_img.get('date_captured', '')
-        frame_index = true_img.get('frame_index', None)
-        gid = true_img.get('id', None)
-        sensor_coarse = true_img.get('sensor_coarse', 'unknown')
-        _header_extra = None
-        header_line_infos = [
-            [f'gid={gid}, frame={frame_index}', _header_extra],
-            [sensor_coarse, date_captured],
-        ]
-        header_lines = []
-        for line_info in header_line_infos:
-            header_line = ' '.join([p for p in line_info if p])
-            if header_line:
-                header_lines.append(header_line)
+        header_lines = heuristics.build_image_header_text(
+            img=true_img,
+            name=None,
+            _header_extra=None,
+        )
+        # date_captured = true_img.get('date_captured', '')
+        # frame_index = true_img.get('frame_index', None)
+        # gid = true_img.get('id', None)
+        # sensor_coarse = true_img.get('sensor_coarse', 'unknown')
+        # _header_extra = None
+        # header_line_infos = [
+        #     [f'gid={gid}, frame={frame_index}', _header_extra],
+        #     [sensor_coarse, date_captured],
+        # ]
+        # header_lines = []
+        # for line_info in header_line_infos:
+        #     header_line = ' '.join([p for p in line_info if p])
+        #     if header_line:
+        #         header_lines.append(header_line)
         image_header_text = '\n'.join(header_lines)
 
         imgw = info['shape'][1]
@@ -515,7 +525,9 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
             confusion_image = color_lut[confusion_idxs]
             confusion_image = kwimage.ensure_uint255(confusion_image)
             confusion_image = kwimage.draw_text_on_image(
-                confusion_image, f'confusion saliency: thresh={saliency_thresh:0.3f}', org=(1, 1), valign='top',
+                confusion_image,
+                f'confusion saliency: thresh={saliency_thresh:0.3f}',
+                org=(1, 1), valign='top',
                 color='white', border=1)
             vert_parts.append(
                 confusion_image

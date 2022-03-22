@@ -22,25 +22,12 @@ class PrepareSplitsConfig(scfg.Config):
     }
 
 
-def main(cmdline=False, **kwargs):
+def _submit_split_jobs(base_fpath, queue, depends=[]):
     """
-    The idea is that we should have a lightweight scheduler.  I think something
-    fairly minimal can be implemented with tmux, but it would be nice to have a
-    more robust slurm extension.
-
-    TODO:
-        - [ ] Option to just dump the serial bash script that does everything.
+    Populates a Serial, Slurm, or Tmux Queue with jobs
     """
-    config = PrepareSplitsConfig(cmdline=cmdline)
-    config.update(kwargs)
 
-    if config['base_fpath'] == 'auto':
-        # Auto hack.
-        import watch
-        dvc_dpath = watch.find_smart_dvc_dpath()
-        base_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
-    else:
-        base_fpath = ub.Path(config['base_fpath'])
+    base_fpath = ub.Path(base_fpath)
 
     splits = {
         'nowv': base_fpath.augment(suffix='_nowv', multidot=True),
@@ -53,20 +40,6 @@ def main(cmdline=False, **kwargs):
         'nowv_vali': base_fpath.augment(suffix='_nowv_vali', multidot=True),
         'wv_vali': base_fpath.augment(suffix='_wv_vali', multidot=True),
     }
-    print('splits = {!r}'.format(splits))
-
-    # queue = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
-    if config['backend'] == 'slurm':
-        from watch.utils import slurm_queue
-        queue = slurm_queue.SlurmQueue(name='watch-splits')
-    elif config['backend'] == 'tmux':
-        from watch.utils import tmux_queue
-        queue = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
-    else:
-        raise KeyError(config['backend'])
-
-    if config['virtualenv_cmd']:
-        queue.add_header_command(config['virtualenv_cmd'])
 
     split_jobs = {}
     # Perform train/validation splits with and without worldview
@@ -77,7 +50,7 @@ def main(cmdline=False, **kwargs):
             --dst {splits['train']} \
             --select_videos '.name | startswith("KR_") | not'
         ''')
-    split_jobs['train'] = queue.submit(command, begin=10)
+    split_jobs['train'] = queue.submit(command, begin=10, depends=depends)
 
     command = ub.codeblock(
         fr'''
@@ -105,7 +78,7 @@ def main(cmdline=False, **kwargs):
             --dst {splits['vali']} \
             --select_videos '.name | startswith("KR_")'
         ''')
-    split_jobs['vali'] = queue.submit(command)
+    split_jobs['vali'] = queue.submit(command, depends=depends)
 
     command = ub.codeblock(
         fr'''
@@ -133,8 +106,45 @@ def main(cmdline=False, **kwargs):
             --dst {splits['nowv']} \
             --select_images '.sensor_coarse != "WV"'
         ''')
-    queue.submit(command)
+    queue.submit(command, depends=depends)
+    return queue
 
+
+def main(cmdline=False, **kwargs):
+    """
+    The idea is that we should have a lightweight scheduler.  I think something
+    fairly minimal can be implemented with tmux, but it would be nice to have a
+    more robust slurm extension.
+
+    TODO:
+        - [ ] Option to just dump the serial bash script that does everything.
+    """
+    config = PrepareSplitsConfig(cmdline=cmdline)
+    config.update(kwargs)
+
+    if config['base_fpath'] == 'auto':
+        # Auto hack.
+        import watch
+        dvc_dpath = watch.find_smart_dvc_dpath()
+        # base_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
+        base_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json'
+    else:
+        base_fpath = ub.Path(config['base_fpath'])
+
+    # queue = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
+    if config['backend'] == 'slurm':
+        from watch.utils import slurm_queue
+        queue = slurm_queue.SlurmQueue(name='watch-splits')
+    elif config['backend'] == 'tmux':
+        from watch.utils import tmux_queue
+        queue = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
+    else:
+        raise KeyError(config['backend'])
+
+    if config['virtualenv_cmd']:
+        queue.add_header_command(config['virtualenv_cmd'])
+
+    _submit_split_jobs(base_fpath, queue)
     queue.rprint()
 
     if config['run']:

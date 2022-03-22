@@ -155,9 +155,9 @@ def custom_lint(dpath : str = '.', mode : str = 'lint', index=None, interact=Non
 
     context_ignore = {
         # 'whitespace': 0,
-        'whitespace': 1,
-        'indentation': 1,
-        'style': 1,
+        'whitespace': 0,
+        'indentation': 0,
+        'style': 0,
 
     }
 

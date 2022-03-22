@@ -16,7 +16,7 @@ It should be possible to add more functionality, such as:
           a central scheduling process can run in the background, check
           the status of existing jobs, and spawn new jobs
 
-    - [ ] Dependencies between jobs - given a central scheduler, it can
+    - [X] Dependencies between jobs - given a central scheduler, it can
           only spawn a new job if a its dependencies have been met.
 
     - [ ] GPU resource requirements - if a job indicates how much of a
@@ -35,20 +35,24 @@ It should be possible to add more functionality, such as:
           doing, but that doesn't matter in debugged automated workflows, and
           this does seem like a nice simple utility. Doesnt seem to exist
           elsewhere either, but my search terms might be wrong.
+
+    - [ ] Handle the case where some jobs need the GPU and others do not
 """
 import ubelt as ub
-import itertools as it
+# import itertools as it
 import stat
 import os
 import json
 import uuid
 
+from watch.utils import cmd_queue  # NOQA
 
-class BashJob(ub.NiceRepr):
+
+class BashJob(cmd_queue.Job):
     """
     A job meant to run inside of a larger bash file. Analog of SlurmJob
     """
-    def __init__(self, command, name=None, depends=None, gpus=None, cpus=None):
+    def __init__(self, command, name=None, depends=None, gpus=None, cpus=None, begin=None):
         if depends is not None and not ub.iterable(depends):
             depends = [depends]
 
@@ -56,15 +60,14 @@ class BashJob(ub.NiceRepr):
         self.command = command
         self.depends = depends
 
-    def __nice__(self):
-        return self.name
-
 
 class PathIdentifiable(ub.NiceRepr):
     """
     An object that has an name, unique-rootid (to indicate the parent object),
     and directory where it can write things to. Probably could clean this logic
     up.
+
+    DEPRECATE
     """
     def __init__(self, name='', rootid=None, dpath=None):
         if rootid is None:
@@ -87,6 +90,14 @@ class PathIdentifiable(ub.NiceRepr):
 class LinearBashQueue(PathIdentifiable):
     """
     A linear job queue written to a single bash file
+
+    TODO:
+        Change this name to just be a Command Script.
+
+        This should be the analog of ub.cmd.
+
+        Using ub.cmd is for one command.
+        Using ub.Script is for multiple commands
 
     Example:
         >>> self = LinearBashQueue('foo', 'foo')
@@ -222,7 +233,7 @@ class LinearBashQueue(PathIdentifiable):
             print(ub.highlight_code(code, 'bash'))
 
 
-class TMUXMultiQueue(PathIdentifiable):
+class TMUXMultiQueue(cmd_queue.Queue):
     """
     Create multiple sets of jobs to start in detatched tmux sessions
 
@@ -257,10 +268,35 @@ class TMUXMultiQueue(PathIdentifiable):
         >>> job2 = self.submit('echo hello && sleep 0.5')
         >>> self.rprint()
 
+        >>> from watch.utils.tmux_queue import *  # NOQA
+        >>> self = TMUXMultiQueue(2, 'foo')
+        >>> job1 = self.submit('echo hello && sleep 0.5')
+        >>> self.sync()
+        >>> job2 = self.submit('echo hello && sleep 0.5')
+        >>> self.sync()
+        >>> job3 = self.submit('echo hello && sleep 0.5')
+        >>> self.sync()
+        >>> self.rprint()
+
+        >>> from watch.utils.tmux_queue import *  # NOQA
+        >>> self = TMUXMultiQueue(2, 'foo')
+        >>> job1 = self.submit('echo hello && sleep 0.5')
+        >>> job2 = self.submit('echo hello && sleep 0.5')
+        >>> job3 = self.submit('echo hello && sleep 0.5')
+        >>> self.rprint()
+
     """
     def __init__(self, size=1, name=None, dpath=None, rootid=None, environ=None,
                  gres=None):
-        super().__init__(name=name, rootid=rootid, dpath=dpath)
+
+        if rootid is None:
+            rootid = str(ub.timestamp()) + '_' + ub.hash_data(uuid.uuid4())[0:8]
+        self.name = name
+        self.rootid = rootid
+        self.pathid = '{}_{}'.format(self.name, self.rootid)
+        if dpath is None:
+            dpath = ub.ensure_app_cache_dir('tmux_queue', self.pathid)
+        self.dpath = ub.Path(dpath)
 
         if environ is None:
             environ = {}
@@ -268,12 +304,13 @@ class TMUXMultiQueue(PathIdentifiable):
         self.environ = environ
         self.fpath = self.dpath / f'run_queues_{self.name}.sh'
         self.gres = gres
+        self.all_depends = None
 
         self.jobs = []
 
-        self._init_workers()
+        self._new_workers()
 
-    def _init_workers(self):
+    def _new_workers(self, start=0):
         per_worker_environs = [self.environ] * self.size
         if self.gres:
             # TODO: more sophisticated GPU policy?
@@ -290,15 +327,11 @@ class TMUXMultiQueue(PathIdentifiable):
                 dpath=self.dpath,
                 environ=e
             )
-            for worker_idx, e in enumerate(per_worker_environs)
+            for worker_idx, e in enumerate(per_worker_environs, start=start)
         ]
-        self._worker_cycle = it.cycle(self.workers)
 
     def __nice__(self):
         return ub.repr2(self.workers)
-
-    def __iter__(self):
-        yield from self._worker_cycle
 
     def submit(self, command, **kwargs):
         """
@@ -308,42 +341,54 @@ class TMUXMultiQueue(PathIdentifiable):
         name = kwargs.get('name', None)
         if name is None:
             name = kwargs['name'] = self.name + '-job-{}'.format(len(self.jobs))
+        if self.all_depends:
+            depends = kwargs.get('depends', None)
+            if depends is None:
+                depends = self.all_depends
+            else:
+                if not ub.iterable(depends):
+                    depends = [depends]
+                depends = self.all_depends + depends
+            kwargs['depends'] = depends
         job = BashJob(command, **kwargs)
         self.jobs.append(job)
         return job
-        # if index is None:
-        #     worker = next(self._worker_cycle)
-        # else:
-        #     worker = self.workers[index]
-        # return worker.submit(command)
 
-    def _dependency_graph(self):
+    def sync(self):
         """
-        Example:
-            >>> from watch.utils.tmux_queue import *  # NOQA
-            >>> self = TMUXMultiQueue(5, 'foo')
-            >>> job1a = self.submit('echo hello && sleep 0.5')
-            >>> job1b = self.submit('echo hello && sleep 0.5')
-            >>> job2a = self.submit('echo hello && sleep 0.5', depends=[job1a])
-            >>> job2b = self.submit('echo hello && sleep 0.5', depends=[job1b])
-            >>> job3 = self.submit('echo hello && sleep 0.5', depends=[job2a, job2b])
-            >>> jobX = self.submit('echo hello && sleep 0.5', depends=[])
-            >>> jobY = self.submit('echo hello && sleep 0.5', depends=[jobX])
-            >>> jobZ = self.submit('echo hello && sleep 0.5', depends=[jobY])
-            >>> graph = self._dependency_graph()
+        Mark that all future jobs will depend on the current sink jobs
+        """
+        graph = self._dependency_graph()
+        # Find the jobs that nobody depends on
+        sink_jobs = [graph.nodes[n]['job'] for n, d in graph.out_degree if d == 0]
+        # All new jobs must depend on these jobs
+        self.all_depends = sink_jobs
 
-            print(graph_str(graph))
-            #for wcc in list(nx.weakly_connected_components(graph)):
-        """
-        import networkx as nx
-        graph = nx.DiGraph()
-        for index, job in enumerate(self.jobs):
-            graph.add_node(job.name, job=job, index=index)
-        for index, job in enumerate(self.jobs):
-            if job.depends:
-                for dep in job.depends:
-                    graph.add_edge(dep.name, job.name)
-        return graph
+    def _semaphore_wait_command(self, flag_fpaths):
+        # TODO: use inotifywait
+        conditions = ['[ ! -f {} ]'.format(p) for p in flag_fpaths]
+        condition = ' || '.join(conditions)
+        # TODO: count number of files that exist
+        command = ub.codeblock(
+            f'''
+            set +x
+            printf "waiting "
+            while {condition}
+            do
+               printf "."
+               sleep 1;
+            done
+            printf "finished waiting "
+            ''')
+        return command
+
+    def _semaphore_signal_command(self, flag_fpath):
+        return ub.codeblock(
+            f'''
+            # Signal this worker is complete
+            mkdir -p {flag_fpath.parent} && touch {flag_fpath}
+            '''
+        )
 
     def order_jobs(self):
         """
@@ -356,55 +401,199 @@ class TMUXMultiQueue(PathIdentifiable):
             >>> job2b = self.submit('echo hello && sleep 0.5', depends=[job1b])
             >>> job3 = self.submit('echo hello && sleep 0.5', depends=[job2a, job2b])
             >>> self.rprint()
+
+            self.run(block=True)
+
+        Example:
+            >>> from watch.utils.tmux_queue import *  # NOQA
+            >>> self = TMUXMultiQueue(5, 'foo')
+            >>> job0 = self.submit('true')
+            >>> job1 = self.submit('true')
+            >>> job2 = self.submit('true', depends=[job0])
+            >>> job3 = self.submit('true', depends=[job1])
+            >>> #job2c = self.submit('true', depends=[job1a, job1b])
+            >>> #self.sync()
+            >>> job4 = self.submit('true', depends=[job2, job3, job1])
+            >>> job5 = self.submit('true', depends=[job4])
+            >>> job6 = self.submit('true', depends=[job4])
+            >>> job7 = self.submit('true', depends=[job4])
+            >>> job8 = self.submit('true', depends=[job5])
+            >>> job9 = self.submit('true', depends=[job6])
+            >>> job10 = self.submit('true', depends=[job6])
+            >>> job11 = self.submit('true', depends=[job7])
+            >>> job12 = self.submit('true', depends=[job10, job11])
+            >>> job13 = self.submit('true', depends=[job4])
+            >>> job14 = self.submit('true', depends=[job13])
+            >>> job15 = self.submit('true', depends=[job4])
+            >>> job16 = self.submit('true', depends=[job15, job13])
+            >>> job17 = self.submit('true', depends=[job4])
+            >>> job18 = self.submit('true', depends=[job17])
+            >>> job19 = self.submit('true', depends=[job14, job16, job17])
+            >>> self.rprint()
+            >>> # self.run(block=True)
         """
         import networkx as nx
         graph = self._dependency_graph()
 
+        # Get rid of implicit dependencies
+        reduced_graph = nx.transitive_reduction(graph)
+
+        # cmd_queue.graph_str(graph, write=print)
+
+        in_cut_nodes = set()
+        out_cut_nodes = set()
+        cut_edges = []
+        for n in reduced_graph.nodes:
+            # TODO: need to also check that the paths to a source node are
+            # not unique, otherwise we dont need to cut the node, but extra
+            # cuts wont matter, just make it less effiicent
+            in_d = reduced_graph.in_degree[n]
+            out_d = reduced_graph.out_degree[n]
+            if in_d > 1:
+                cut_edges.extend(list(reduced_graph.in_edges(n)))
+                in_cut_nodes.add(n)
+            if out_d > 1:
+                cut_edges.extend(list(reduced_graph.out_edges(n)))
+                out_cut_nodes.add(n)
+
+        list(nx.dfs_labeled_edges(reduced_graph))
+
+        # cut_nodes = out_cut_nodes | in_cut_nodes
+
+        cut_notes = in_cut_nodes.copy()
+        cut_notes.update([v for u, v in cut_edges])
+
+        cut_graph = reduced_graph.copy()
+        cut_graph.remove_edges_from(cut_edges)
+
+        # Get all the node groups disconnected by the cuts
+        condensed = nx.condensation(reduced_graph, nx.weakly_connected_components(cut_graph))
+
         if 0:
-            # TODO: for diamond shaped diagrams see if we can place locks on
-            # certain processes in certain queues from continuing while they
-            # wait for dependencies but also let other jobs run in parallel
-            sources = [n for n, d in graph.in_degree if d == 0]
-            sinks = [n for n, d in graph.out_degree if d == 0]
+            from graphid.util import util_graphviz
+            import kwplot
+            kwplot.autompl()
+            util_graphviz.show_nx(graph, fnum=1)
+            util_graphviz.show_nx(reduced_graph, fnum=3)
+            util_graphviz.show_nx(condensed, fnum=2)
 
-            st_paths = {}
-            for s in sources:
-                for t in sinks:
-                    path = list(nx.all_simple_paths(graph, s, t))
-                    st_paths[(s, t)] = path
+        # Rank each condensed group, which defines
+        # what order it is allowed to be executed in
+        rankings = ub.ddict(set)
+        condensed_order = list(nx.topological_sort(condensed))
+        for c_node in condensed_order:
+            members = set(condensed.nodes[c_node]['members'])
+            ancestors = set(ub.flatten([nx.ancestors(reduced_graph, m) for m in members]))
+            cut_in_ancestors = ancestors & in_cut_nodes
+            cut_out_ancestors = ancestors & out_cut_nodes
+            cut_in_members = members & in_cut_nodes
+            rank = len(cut_in_members) + len(cut_out_ancestors) + len(cut_in_ancestors)
+            for m in members:
+                rankings[rank].update(members)
 
-        # Determine what jobs need to be grouped together
-        wcc_groups = []
-        for wcc in list(nx.weakly_connected_components(graph)):
-            sub = graph.subgraph(wcc)
-            if 0:
-                print(nx.forest_str(nx.minimum_spanning_arborescence(sub)))
-            wcc_order = list(nx.topological_sort(sub))
-            wcc_groups.append(wcc_order)
+        # cmd_queue.graph_str(condensed, write=print)
 
-        # Solve a bin packing problem to partition these into self.size groups
-        from watch.utils.util_kwarray import balanced_number_partitioning
-        group_weights = list(map(len, wcc_groups))
-        groupxs = balanced_number_partitioning(group_weights, num_parts=self.size)
-        node_groups = [list(ub.take(wcc_groups, gxs)) for gxs in groupxs]
+        # Each rank defines a group that must itself be ordered
+        # Ranks will execute sequentially, members within the
+        # rank *might* be run in parallel
+        ranked_job_groups = []
+        for rank, group in sorted(rankings.items()):
+            subgraph = graph.subgraph(group)
+            # Only things that can run in parapellel are disconnected components
+            parallel_groups = []
+            for wcc in list(nx.weakly_connected_components(subgraph)):
+                sub_subgraph = subgraph.subgraph(wcc)
+                wcc_order = list(nx.topological_sort(sub_subgraph))
+                parallel_groups.append(wcc_order)
+            # Ranked bins
+            # Solve a bin packing problem to partition these into self.size groups
+            from watch.utils.util_kwarray import balanced_number_partitioning
+            group_weights = list(map(len, parallel_groups))
+            groupxs = balanced_number_partitioning(group_weights, num_parts=self.size)
+            rank_groups = [list(ub.take(parallel_groups, gxs)) for gxs in groupxs]
+            rank_groups = [g for g in rank_groups if len(g)]
 
-        # Reorder each group to better agree with submission order
-        final_orders = []
-        for group in node_groups:
-            priorities = []
-            for nodes in group:
-                nodes_index = min(graph.nodes[n]['index'] for n in nodes)
-                priorities.append(nodes_index)
+            # Reorder each group to better agree with submission order
+            rank_jobs = []
+            for group in rank_groups:
+                priorities = []
+                for nodes in group:
+                    nodes_index = min(graph.nodes[n]['index'] for n in nodes)
+                    priorities.append(nodes_index)
+                final_queue_order = list(ub.flatten(ub.take(group, ub.argsort(priorities))))
+                final_queue_jobs = [graph.nodes[n]['job'] for n in final_queue_order]
+                rank_jobs.append(final_queue_jobs)
+            ranked_job_groups.append(rank_jobs)
 
-            final_queue_order = list(ub.flatten(ub.take(group, ub.argsort(priorities))))
-            final_queue_jobs = [graph.nodes[n]['job'] for n in final_queue_order]
-            final_orders.append(final_queue_jobs)
+        queue_workers = []
+        flag_dpath = (self.dpath / 'semaphores')
+        prev_rank_flag_fpaths = None
+        for rank, rank_jobs in enumerate(ranked_job_groups):
+            # Hack, abuse init workers each time to construct workers
+            self._new_workers(start=len(queue_workers))
+            workers = self.workers
+            rank_workers = []
+            for worker, jobs in zip(workers, rank_jobs):
+                # Add a dummy job to wait for dependencies of this linear
+                # queue
 
-        # Submit each job to the linear queue in the correct order
-        for worker, jobs in zip(self.workers, final_orders):
-            worker.commands.clear()
-            for job in jobs:
-                worker.submit(job.command)
+                if prev_rank_flag_fpaths:
+                    command = self._semaphore_wait_command(prev_rank_flag_fpaths)
+                    worker.submit(command)
+
+                for job in jobs:
+                    worker.submit(job.command)
+
+                rank_workers.append(worker)
+
+            queue_workers.extend(rank_workers)
+
+            # Add a dummy job at the end of each worker to signal finished
+            rank_flag_fpaths = []
+            num_rank_workers = len(rank_workers)
+            for worker_idx, worker in enumerate(rank_workers):
+                rank_flag_fpath = flag_dpath / f'rank_flag_{rank}_{worker_idx}_{num_rank_workers}.done'
+                command = self._semaphore_signal_command(rank_flag_fpath)
+                worker.submit(command)
+                rank_flag_fpaths.append(rank_flag_fpath)
+            prev_rank_flag_fpaths = rank_flag_fpaths
+
+        # Overwrite workers with our new dependency aware workers
+        self.workers = queue_workers
+
+        # Old logic
+        # else:
+        #     # Determine what jobs need to be grouped together
+        #     wcc_groups = []
+        #     for wcc in list(nx.weakly_connected_components(graph)):
+        #         sub = graph.subgraph(wcc)
+        #         if 0:
+        #             print(nx.forest_str(nx.minimum_spanning_arborescence(sub)))
+        #         wcc_order = list(nx.topological_sort(sub))
+        #         wcc_groups.append(wcc_order)
+
+        #     # Solve a bin packing problem to partition these into self.size groups
+        #     from watch.utils.util_kwarray import balanced_number_partitioning
+        #     group_weights = list(map(len, wcc_groups))
+        #     groupxs = balanced_number_partitioning(group_weights, num_parts=self.size)
+        #     node_groups = [list(ub.take(wcc_groups, gxs)) for gxs in groupxs]
+
+        #     # Reorder each group to better agree with submission order
+        #     final_orders = []
+        #     for group in node_groups:
+        #         priorities = []
+        #         for nodes in group:
+        #             nodes_index = min(graph.nodes[n]['index'] for n in nodes)
+        #             priorities.append(nodes_index)
+        #         final_queue_order = list(ub.flatten(ub.take(group, ub.argsort(priorities))))
+        #         final_queue_jobs = [graph.nodes[n]['job'] for n in final_queue_order]
+        #         final_orders.append(final_queue_jobs)
+
+        #     # Submit each job to the linear queue in the correct order
+        #     for worker, jobs in zip(self.workers, final_orders):
+        #         worker.commands.clear()
+        #         for job in jobs:
+        #             worker.submit(job.command)
 
     def add_header_command(self, command):
         """
@@ -604,6 +793,8 @@ class SerialQueue:
     """
     Serial drop-in replacement for the tmux queue.
 
+    DEPRECATED. See cmd_queue
+
     TODO:
         - [ ] Move to a different file
         - [ ] Parallel non-tmux version
@@ -656,203 +847,3 @@ if 0:
 
 
     """
-
-
-def graph_str(graph, with_labels=True, sources=None, write=None, ascii_only=False):
-    """
-    Attempt extension of forest_str
-
-    Example:
-        >>> from watch.utils.tmux_queue import *  # NOQA
-
-        >>> import networkx as nx
-        >>> graph = nx.DiGraph()
-        >>> graph.add_nodes_from(['a', 'b', 'c', 'd', 'e'])
-        >>> graph.add_edges_from([
-        >>>     ('a', 'd'),
-        >>>     ('b', 'd'),
-        >>>     ('c', 'd'),
-        >>>     ('d', 'e'),
-        >>>     ('f1', 'g'),
-        >>>     ('f2', 'g'),
-        >>> ])
-        >>> graph_str(graph, write=print)
-        >>> graph = nx.balanced_tree(r=2, h=3, create_using=nx.DiGraph)
-        >>> print('\nForest Str')
-        >>> print(nx.forest_str(graph))
-        >>> print('\nGraph Str (should be identical)')
-        >>> print(graph_str(graph))
-        >>> print('modified')
-        >>> graph.add_edges_from([
-        >>>     (7, 1)
-        >>> ])
-        >>> graph_str(graph, write=print)
-
-        >>> print('\n\n next')
-        >>> graph = nx.balanced_tree(r=2, h=3, create_using=nx.DiGraph)
-        >>> graph.add_edges_from([
-        >>>     (7, 1),
-        >>>     (2, 4),
-        >>> ])
-        >>> graph_str(graph, write=print)
-
-        >>> print('\n\n next')
-        >>> graph = nx.erdos_renyi_graph(5, 1.0)
-        >>> graph_str(graph, write=print)
-    """
-    import networkx as nx
-
-    printbuf = []
-    if write is None:
-        _write = printbuf.append
-    else:
-        _write = write
-
-    # Define glphys
-    # Notes on available box and arrow characters
-    # https://en.wikipedia.org/wiki/Box-drawing_character
-    # https://stackoverflow.com/questions/2701192/triangle-arrow
-    if ascii_only:
-        glyph_empty = "+"
-        glyph_newtree_last = "+-- "
-        glyph_newtree_mid = "+-- "
-        glyph_endof_forest = "    "
-        glyph_within_forest = ":   "
-        glyph_within_tree = "|   "
-
-        glyph_directed_last = "L-> "
-        glyph_directed_mid = "|-> "
-
-        glyph_undirected_last = "L-- "
-        glyph_undirected_mid = "|-- "
-    else:
-        glyph_empty = "╙"
-        glyph_newtree_last = "╙── "
-        glyph_newtree_mid = "╟── "
-        glyph_endof_forest = "    "
-        glyph_within_forest = "╎   "
-        glyph_within_tree = "│   "
-
-        glyph_directed_last = "└─╼ "
-        glyph_directed_mid = "├─╼ "
-        glyph_directed_backedge = '╾'
-
-        glyph_undirected_last = "└── "
-        glyph_undirected_mid = "├── "
-        glyph_undirected_backedge = '─'
-
-    print('graph = {!r}'.format(graph))
-    if len(graph.nodes) == 0:
-        _write(glyph_empty)
-    else:
-        is_directed = graph.is_directed()
-        print('is_directed = {!r}'.format(is_directed))
-
-        if is_directed:
-            glyph_last = glyph_directed_last
-            glyph_mid = glyph_directed_mid
-            glyph_backedge = glyph_directed_backedge
-            succ = graph.succ
-            pred = graph.pred
-        else:
-            glyph_last = glyph_undirected_last
-            glyph_mid = glyph_undirected_mid
-            glyph_backedge = glyph_undirected_backedge
-            succ = graph.adj
-            pred = graph.adj
-
-        if sources is None:
-            if is_directed:
-                # use real source nodes for directed trees
-                sources = [n for n in graph.nodes if graph.in_degree[n] == 0]
-            else:
-                # use arbitrary sources for undirected trees
-                sources = []
-
-            if len(sources) == 0:
-                # no clear source, choose something
-                sources = [
-                    min(cc, key=lambda n: graph.degree[n])
-                    for cc in nx.connected_components(graph)
-                ]
-
-        print('sources = {!r}'.format(sources))
-        # Populate the stack with each source node, empty indentation, and mark
-        # the final node. Reverse the stack so sources are popped in the
-        # correct order.
-        last_idx = len(sources) - 1
-        stack = [(None, node, "", (idx == last_idx))
-                 for idx, node in enumerate(sources)][::-1]
-
-        seen_nodes = set()
-        seen_edges = set()
-        implicit_seen = set()
-        while stack:
-            parent, node, indent, this_islast = stack.pop()
-            edge = (parent, node)
-
-            if node is not Ellipsis:
-                if node in seen_nodes:
-                    continue
-                seen_nodes.add(node)
-                seen_edges.add(edge)
-
-            if not indent:
-                # Top level items (i.e. trees in the forest) get different
-                # glyphs to indicate they are not actually connected
-                if this_islast:
-                    this_prefix = indent + glyph_newtree_last
-                    next_prefix = indent + glyph_endof_forest
-                else:
-                    this_prefix = indent + glyph_newtree_mid
-                    next_prefix = indent + glyph_within_forest
-
-            else:
-                # For individual tree edges distinguish between directed and
-                # undirected cases
-                if this_islast:
-                    this_prefix = indent + glyph_last
-                    next_prefix = indent + glyph_endof_forest
-                else:
-                    this_prefix = indent + glyph_mid
-                    next_prefix = indent + glyph_within_tree
-
-            if node is Ellipsis:
-                label = ' ...'
-                children = []
-            else:
-                if with_labels:
-                    label = graph.nodes[node].get("label", node)
-                else:
-                    label = node
-                children = [child for child in succ[node] if child not in seen_nodes]
-                neighbors = set(pred[node])
-                others = (neighbors - set(children)) - {parent}
-                implicit_seen.update(others)
-                in_edges = [(node, other) for other in others]
-                if in_edges:
-                    in_nodes = ', '.join([str(uv[1]) for uv in in_edges])
-                    suffix = ' '.join(['', glyph_backedge, in_nodes])
-                else:
-                    suffix = ''
-
-            _write(this_prefix + str(label) + suffix)
-
-            # Push children on the stack in reverse order so they are popped in
-            # the original order.
-            idx = 1
-            for idx, child in enumerate(children[::-1], start=1):
-                next_islast = idx <= 1
-                try_frame = (node, child, next_prefix, next_islast)
-                stack.append(try_frame)
-
-            if node in implicit_seen:
-                # if have used this node in any previous implicit edges, then
-                # write an outgoing "implicit" connection.
-                next_islast = idx <= 1
-                try_frame = (node, Ellipsis, next_prefix, next_islast)
-                stack.append(try_frame)
-
-    if write is None:
-        # Only return a string if the custom write function was not specified
-        return "\n".join(printbuf)

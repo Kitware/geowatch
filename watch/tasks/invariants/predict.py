@@ -75,7 +75,7 @@ class predict(object):
         self.imwrite_kw = {
             'compress': 'DEFLATE',
             'backend': 'gdal',
-            'blocksize': 64,
+            'blocksize': 128,
         }
 
     def finalize_image(self, gid):
@@ -125,12 +125,6 @@ class predict(object):
         # bundle_dpath = ub.Path(self.output_dset.bundle_dpath)
         # save_dpath = (bundle_dpath / 'uky_invariants').ensuredir()
 
-        self.imwrite_kw = {
-            'compress': 'DEFLATE',
-            'backend': 'gdal',
-            'blocksize': 64,
-        }
-
         print('Evaluating and saving features')
 
         with torch.set_grad_enabled(False):
@@ -140,8 +134,15 @@ class predict(object):
                 save_feat = []
                 save_feat2 = []
                 if 'pretext' in args.tasks:
+
+                    # TODO: get image1 invalid_mask here
+                    # TODO: get image2 invalid_mask here
+                    # batch['image1']
+
                     image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
                     image_stack = image_stack.to(device)
+
+                    # TODO: handle nans here
 
                     #select features corresponding to first image
                     features = self.pretext_model(image_stack)[:, 0, :, :, :]

@@ -102,13 +102,21 @@ class Evaluator(object):
         recon = stitcher.finalize()
         self.stitcher_dict.pop(gid)
 
+        from watch.tasks.fusion.predict import quantize_float01
+        # Note using -11 and +11 as a tradeoff range because we cannot
+        # guarentee the bounds of this data. Usually it is mean zero with
+        # a std < 3, so this should be a decent range to work within.
+        quant_recon, quantization = quantize_float01(
+            recon, old_min=-11, old_max=11)
+        nodata = quantization['nodata']
+
         save_path = self.output_feat_dpath / f'{img_name}_{self.concise_chan_path_code}.tif'
 
         save_path = os.fspath(save_path)
-        kwimage.imwrite(save_path, recon, backend='gdal', space=None,
-                        **self.imwrite_kw)
+        kwimage.imwrite(save_path, quant_recon, backend='gdal', space=None,
+                        nodata=nodata, **self.imwrite_kw)
 
-        aux_height, aux_width = recon.shape[0:2]
+        aux_height, aux_width = quant_recon.shape[0:2]
         warp_aux_to_img = kwimage.Affine.scale(
             (img['width'] / aux_width,
              img['height'] / aux_height))
@@ -415,6 +423,8 @@ def make_predict_config(cmdline=False, **kwargs):
 
     parser.add_argument("--compress", default='DEFLATE', type=str, help="type of gdal compression to use")
     parser.add_argument("--blocksize", default=128, type=str, help="gdal COG blocksize")
+
+    parser.add_argument("--cache", default=False, type=bool, help="if True enables caching of predictions in case of a crash")
     # parser.add_argument("--thresh", type=float, default=0.01)
 
     parser.set_defaults(**kwargs)

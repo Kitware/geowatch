@@ -12,6 +12,9 @@ def draw_header_text(image, text, fit=False, color='red', halign='center',
     """
     Places a black bar on top of an image and writes text in it
 
+    TODO:
+        This can likely be derecated in favor of the kwimage version
+
     Args:
 
         image (ndarray | dict | None):
