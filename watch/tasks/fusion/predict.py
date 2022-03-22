@@ -1062,10 +1062,7 @@ def quantize_float01(imdata, old_min=0, old_max=1, quantize_dtype=np.int16):
         quantize_min = 0
         quantize_nan = max(-9999, quantize_iinfo.min)
 
-    orig_dtype = None if imdata is None else str(imdata.dtype)
-
     quantization = {
-        'orig_dtype': orig_dtype,
         'orig_min': old_min,
         'orig_max': old_max,
         'quant_min': quantize_min,
