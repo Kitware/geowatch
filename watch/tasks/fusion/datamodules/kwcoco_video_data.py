@@ -1523,7 +1523,15 @@ class KWCocoVideoDataset(data.Dataset):
                 if frame_dets is None:
                     import xdev
                     xdev.embed()
-                    raise AssertionError('Did not sample correctly')
+                    raise AssertionError(ub.paragraph(
+                        f'''
+                        Did not sample correctly. Please send this info to Jon:
+                        {dset=!r}
+                        {gid=!r}
+                        {tr=!r}
+                        {tr_=!r}
+                        '''
+                    ))
                 gid_to_dets[gid] = frame_dets
 
             for gid, frame_dets in gid_to_dets.items():
@@ -2934,7 +2942,7 @@ class BatchVisualizationBuilder:
         return frame_canvas
 
 
-def visualize_sample_grid(dset, sample_grid, max_vids=2):
+def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
     """
     Debug visualization for sampling grid
 
@@ -2971,7 +2979,8 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2):
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
-        >>> canvas = visualize_sample_grid(dset, sample_grid)
+        >>> canvas = visualize_sample_grid(dset, sample_grid, max_vids=1,
+        >>>                                max_frames=6)
         >>> kwplot.imshow(canvas, doclf=1)
         >>> kwplot.show_if_requested()
 
@@ -2980,9 +2989,10 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2):
         >>> import watch
         >>> # dset = coco_dset = demo_kwcoco_multisensor(dates=True, geodata=True, heatmap=True)
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
-        >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/combo_DILM_train.kwcoco.json'
+        >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/combo_DILM_train.kwcoco.json'
+        >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json'
         >>> big_dset = kwcoco.CocoDataset(coco_fpath)
-        >>> dset = big_dset.subset(dset.videos(names=['BR_R002']).images.lookup('id')[0])
+        >>> dset = big_dset.subset(big_dset.videos(names=['BR_R002']).images.lookup('id')[0])
         >>> window_overlap = 0.0
         >>> window_dims = (3, 32, 32)
         >>> keepbound = False
@@ -2995,7 +3005,7 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2):
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
-        >>> canvas = visualize_sample_grid(dset, sample_grid, max_vids=1)
+        >>> canvas = visualize_sample_grid(dset, sample_grid, max_vids=1, max_frames=30)
         >>> kwplot.imshow(canvas, doclf=1)
         >>> kwplot.show_if_requested()
     """
@@ -3005,14 +3015,16 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2):
 
     dataset_canvases = []
 
-    max_vids = 2
-    max_frames = 6
+    # max_vids = 2
+    # max_frames = 6
 
     vidid_to_videodf = dict(list(targets.groupby('video_id')))
 
     orientation = 0
 
     for vidid, video_df in vidid_to_videodf.items():
+        video = dset.index.videos[vidid]
+        vidname = video['name']
         gid_to_infos = ub.ddict(list)
         for _, row in video_df.iterrows():
             for gid in row['gids']:
@@ -3024,6 +3036,23 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2):
 
         video_canvases = []
         common = ub.oset(dset.images(vidid=vidid)) & (gid_to_infos)
+
+        if True:
+            # HACK: Use a temporal sampler once to get a nice overview of the
+            # dataset in time.
+            from dateutil import parser
+            from watch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
+            images = dset.images(common)
+            datetimes = [None if date is None else parser.parse(date) for date in images.lookup('date_captured', None)]
+            unixtimes = np.array([np.nan if dt is None else dt.timestamp() for dt in datetimes])
+            sensors = images.lookup('sensor_coarse', None)
+            time_sampler = tsm.TimeWindowSampler(
+                unixtimes=unixtimes, sensors=sensors, time_window=max_frames,
+                time_span='1y', affinity_type='hardish3',
+                update_rule='distribute+pairwise')
+            sample = time_sampler.sample()
+            common = list(ub.take(common, sample))
+
         for gid in common:
             infos = gid_to_infos[gid]
             label_to_items = ub.group_items(infos, key=lambda x: x['label'])
@@ -3094,13 +3123,23 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2):
             if kw_invalid_poly is not None:
                 final_canvas = kw_invalid_poly.draw_on(final_canvas, color='yellow', alpha=0.5)
 
-            final_canvas = kwimage.draw_header_text(final_canvas, f'{gid=}')
+            # from watch import heuristics
+            img = dset.index.imgs[gid]
+            header_lines = heuristics.build_image_header_text(
+                img=img, vidname=vidname)
+            header_text = '\n'.join(header_lines)
+
+            final_canvas = kwimage.draw_header_text(final_canvas, header_text)
             video_canvases.append(final_canvas)
 
             if len(video_canvases) >= max_frames:
                 break
 
-        video_canvas = kwimage.stack_images(video_canvases, axis=1 - orientation, pad=10)
+        if max_vids == 1:
+            video_canvas = kwimage.stack_images_grid(
+                video_canvases, axis=orientation, pad=10)
+        else:
+            video_canvas = kwimage.stack_images(video_canvases, axis=1 - orientation, pad=10)
         dataset_canvases.append(video_canvas)
         if len(dataset_canvases) >= max_vids:
             break

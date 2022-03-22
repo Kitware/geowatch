@@ -521,7 +521,7 @@ class TimeWindowSampler:
         kwplot.imshow(self.affinity, ax=ax)
         ax.set_title('frame affinity')
 
-    def show_procedure(self, idx=None, exclude=None, fnum=2):
+    def show_procedure(self, idx=None, exclude=None, fnum=2, rng=None):
         """
         Draw a figure that shows the process of performing on call to
         :func:`TimeWindowSampler.sample`. Each row illustrates an iteration of
@@ -580,15 +580,17 @@ class TimeWindowSampler:
             >>> self.show_summary(samples_per_frame=3, fnum=10)
 
         """
-        if idx is None:
-            idx = self.num_frames // 2
+        rng = kwarray.ensure_rng(rng)
+        # if idx is None:
+        #     idx = self.num_frames // 2
         title_info = ub.codeblock(
             f'''
             name={self.name}
             affinity_type={self.affinity_type} determenistic={self.determenistic}
             update_rule={self.update_rule} gamma={self.gamma}
             ''')
-        chosen, info = self.sample(idx, return_info=True, exclude=exclude)
+        chosen, info = self.sample(idx, return_info=True, exclude=exclude,
+                                   rng=rng)
         info['title_suffix'] = title_info
         show_affinity_sample_process(chosen, info, fnum=fnum)
         return chosen, info
@@ -791,6 +793,8 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
             'initial_weights': initial_weights.copy(),
             'initial_update_weights': update_weights.copy(),
             'initial_probs': initial_probs,
+
+            'initial_chosen': chosen.copy(),
 
             'include_indices': include_indices,
             'affinity': affinity,
@@ -1338,19 +1342,24 @@ def show_affinity_sample_process(chosen, info, fnum=1):
     ax = fig.gca()
 
     # initial_weights = info['initial_weights']
-    initial_indexes = info['include_indices']
+    # initial_indexes = info['include_indices']
+    initial_indexes = info['initial_chosen']
 
+    # if len(initial_indexes):
     idx = initial_indexes[0]
+    # else:
+    #     idx = None
     probs = info['initial_weights']
     ymax = probs.max()
     xmax = len(probs)
-    x, y = idx, probs[idx]
     for x_ in initial_indexes:
         ax.plot([x_, x_], [0, ymax], color='gray')
     ax.plot(np.arange(xmax), probs)
-    xpos = x + xmax * 0.0 if x < (xmax / 2) else x - xmax * 0.0
-    ypos = y + ymax * 0.3 if y < (ymax / 2) else y - ymax * 0.3
-    ax.plot([x, x], [0, ymax], color='gray')
+    if idx is not None:
+        x, y = idx, probs[idx]
+        xpos = x + xmax * 0.0 if x < (xmax / 2) else x - xmax * 0.0
+        ypos = y + ymax * 0.3 if y < (ymax / 2) else y - ymax * 0.3
+        ax.plot([x, x], [0, ymax], color='gray')
     ax.set_title('Initialize included indices')
 
     fig = kwplot.figure(pnum=pnum_())

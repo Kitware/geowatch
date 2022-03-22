@@ -428,10 +428,17 @@ def build_image_header_text(**kwargs):
     image.
 
     Kwargs:
-        gid, frame_index, dset_idstr, image_name, vidname, sensor_coarse,
-        date_captured, _header_extra):
-
         img
+        coco_dset
+        vidname,
+        _header_extra
+
+        gid,
+        frame_index,
+        dset_idstr,
+        name,
+        sensor_coarse,
+        date_captured
 
     Example:
         >>> from watch.heuristics import *  # NOQA
@@ -444,7 +451,6 @@ def build_image_header_text(**kwargs):
         >>> }
         >>> kwargs = {
         >>>     'img': img,
-        >>>     'vidname': vidname,
         >>>     'dset_idstr': '',
         >>>     'name': '',
         >>>     '_header_extra': None,
@@ -455,7 +461,6 @@ def build_image_header_text(**kwargs):
     img = kwargs.get('img', {})
     _header_extra = kwargs.get('_header_extra', None)
     dset_idstr = kwargs.get('dset_idstr', '')
-    coco_dset = kwargs.get('coco_dset', None)
 
     def _multi_get(key, default=ub.NoParam, *dicts):
         # try to lookup from multiple dictionaries
@@ -476,10 +481,12 @@ def build_image_header_text(**kwargs):
     gid = _multi_get('id', None, kwargs, img)
     image_name = _multi_get('name', '', kwargs, img)
 
+    vidname = None
     if 'vidname' in kwargs:
         vidname = kwargs['vidname']
     else:
-        if coco_dset is None:
+        coco_dset = kwargs.get('coco_dset', None)
+        if coco_dset is not None:
             vidname = coco_dset.index.videos[img['video_id']]['name']
 
     image_id_parts = []
