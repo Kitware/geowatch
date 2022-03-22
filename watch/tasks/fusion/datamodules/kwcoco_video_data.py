@@ -2985,6 +2985,7 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
         >>> kwplot.show_if_requested()
 
     Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> import watch
         >>> # dset = coco_dset = demo_kwcoco_multisensor(dates=True, geodata=True, heatmap=True)
