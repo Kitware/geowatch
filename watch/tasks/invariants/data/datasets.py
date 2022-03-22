@@ -24,15 +24,15 @@ class gridded_dataset(torch.utils.data.Dataset):
         >>> import kwcoco
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
         >>> self = gridded_dataset(coco_dset)
-        >>> out = self[0]
+        >>> idx = 0
+        >>> out = self[idx]
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
-
         >>> rgb1 = out['image1'][1:4].permute(1, 2, 0).numpy()[..., ::-1]
         >>> rgb2 = out['image2'][1:4].permute(1, 2, 0).numpy()[..., ::-1]
-        >>> kwplot.imshow(rgb1, pnum=(1, 2, 1))
-        >>> kwplot.imshow(rgb2, pnum=(1, 2, 2))
+        >>> kwplot.imshow(kwimage.normalize_intensity(rgb1), pnum=(1, 2, 1))
+        >>> kwplot.imshow(kwimage.normalize_intensity(rgb2), pnum=(1, 2, 2))
 
     """
     S2_l2a_channel_names = [
@@ -151,7 +151,7 @@ class gridded_dataset(torch.utils.data.Dataset):
         offset_im_id = None
 
         while (im1_id != offset_im_id) or (offset_idx == idx):
-            offset_idx = random.randint(0, self.__len__() - 2)
+            offset_idx = random.randint(0, len(self) - 2)
             offset_tr = self.patches[offset_idx]
             offset_im_id = offset_tr['gids'][0]
         offset_tr['channels'] = self.bands
@@ -342,7 +342,8 @@ class kwcoco_dataset(Dataset):
         else:
             img1_info = torch.tensor([])
 
-        video = [y for y in self.videos if img1_id in self.dset.index.vidid_to_gids[y]][0]
+        img_obj1 : dict = self.dset.index.imgs[img1_id]
+        video : int = img_obj1['video_id']
 
         # randomly select image2 id from the same video (could be before or after image1)
         # make sure image2 is not image1 and image2 is in the set of filtered images by desired sensor
@@ -350,12 +351,14 @@ class kwcoco_dataset(Dataset):
         while img2_id == img1_id or img2_id not in self.dset_ids:
             img2_id = random.choice(self.dset.index.vidid_to_gids[video])
 
+        img_obj2 : dict = self.dset.index.imgs[img2_id]
+
         # get frame indices for each image (used to determine which image was captured first)
-        frame_index1 = self.dset.index.imgs[img1_id]['frame_index']
-        frame_index2 = self.dset.index.imgs[img2_id]['frame_index']
+        frame_index1 = img_obj1['frame_index']
+        frame_index2 = img_obj2['frame_index']
         # get sensors
-        im1_sensor = self.dset.index.imgs[img1_id]['sensor_coarse']
-        im2_sensor = self.dset.index.imgs[img2_id]['sensor_coarse']
+        im1_sensor = img_obj1['sensor_coarse']
+        im2_sensor = img_obj2['sensor_coarse']
 
         # load images
         img1 = self.dset.delayed_load(img1_id, channels=self.channels, space='video').finalize(no_data='float').astype(np.float32)
@@ -441,6 +444,7 @@ class kwcoco_dataset(Dataset):
             if frame_index1 > frame_index2:
                 img1, img2 = img2, img1
                 img1_id, img2_id = img2_id, img1_id
+                img_obj1, img_obj2 = img_obj2, img_obj1
 
             aids1 = self.dset.index.gid_to_aids[img1_id]
             aids2 = self.dset.index.gid_to_aids[img2_id]
@@ -449,8 +453,8 @@ class kwcoco_dataset(Dataset):
             dets2 = kwimage.Detections.from_coco_annots(
                 self.dset.annots(aids2).objs, dset=self.dset)
 
-            vid_from_img1 = kwimage.Affine.coerce(self.dset.index.imgs[img1_id]['warp_img_to_vid'])
-            vid_from_img2 = kwimage.Affine.coerce(self.dset.index.imgs[img2_id]['warp_img_to_vid'])
+            vid_from_img1 = kwimage.Affine.coerce(img_obj1['warp_img_to_vid'])
+            vid_from_img2 = kwimage.Affine.coerce(img_obj2['warp_img_to_vid'])
 
             dets1 = dets1.warp(vid_from_img1)
             dets2 = dets2.warp(vid_from_img2)
