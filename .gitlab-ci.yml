@@ -369,3 +369,7 @@ build_docker_and_upload_strict:
 
             python -c "from osgeo import gdal; from pyproj import CRS; print(CRS.from_user_input('epsg:4236'))"
             python -c "from pyproj import CRS; from osgeo import gdal; print(CRS.from_user_input('epsg:4236'))"
+
+
+            docker build --build-arg BUILD_STRICT=1 -t foo .
+            docker run -it foo /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch && python run_tests.py watch tests scripts"

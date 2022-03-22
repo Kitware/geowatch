@@ -3160,6 +3160,18 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                                    use_grid_positives=True,
                                    use_centered_positives=True):
     """
+    This is the main driver that builds the sample grid.
+
+    The basic idea is that you will slide a spacetime window over the dataset
+    and mark where positive andnegative "windows" are. We also put windows
+    directly on positive annotations if desired.
+
+    See the above :func:`visualize_sample_grid` for a visualization of what the
+    sample grid looks like.
+
+    Ask jon about what the params mean if you need this.
+    This code badly needs a refactor.
+
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> import os
