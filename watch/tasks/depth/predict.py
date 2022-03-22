@@ -117,7 +117,7 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False,
     S = window_size
     chip_size = (S, S, 3)
     overlap = (128, 128, 0)
-    output_dtype = np.uint8
+    output_dtype = np.float32  # Will be quantized as a final step
 
     process_func = partial(run_inference, model=model)
 
@@ -170,19 +170,15 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False,
                 log.exception('Unable to load id:{} - {}'.format(img_info['id'], img_info['name']))
 
     if cache and hit_gids:
+        from watch.utils import util_gdal
         # add metadata for cache items
         for gid in hit_gids:
             img_info = torch_dataset.dset.imgs[gid]
             pred_filename = _image_pred_filename(torch_dataset,
                                                  output_data_dir, img_info)
-
-            gdal_img = gdal.Open(str(pred_filename), gdal.GA_ReadOnly)
-            if gdal_img is None:
-                raise Exception(gdal.GetLastErrorMsg())
-            pred_shape = (gdal_img.RasterYSize, gdal_img.RasterXSize,
-                          gdal_img.RasterCount)
-            gdal_img = None
-
+            with util_gdal.GdalDataset(pred_filename, 'r') as gdal_img:
+                pred_shape = (gdal_img.RasterYSize, gdal_img.RasterXSize,
+                              gdal_img.RasterCount)
             # pred_shape = kwimage.load_image_shape(pred_filename)
             info = _build_aux_info(img_info, pred_shape, pred_filename, output_bundle_dpath)
             aux = output_dset.imgs[gid].get('auxiliary', [])
@@ -207,15 +203,43 @@ def _image_pred_filename(torch_dataset, output_data_dir, img_info):
     return pred_filename
 
 
+def fake_model(batch2, tta=True):
+    # For testing
+    np_data = batch2['image'][0].permute(1, 2, 0).numpy()
+    x = kwimage.gaussian_blur(np_data, sigma=7)
+    depth = torch.from_numpy(x.mean(axis=2))[None, None]
+    pred2 = dict(depth=depth, seg=depth)
+    return pred2, batch2
+
+
+def _test():
+    import kwimage
+    src = kwimage.ensure_float01(kwimage.grab_test_image(dsize=(2048, 2048)))
+    nan_poly = kwimage.Polygon.random(rng=None).scale(src.shape[0])
+    image = nan_poly.fill(src.copy() * 255, np.nan)
+    output_dtype = np.uint8
+    overlap = (16, 16, 0)
+    chip_size = (512, 512, 3)
+    model = fake_model
+    process_func = partial(run_inference, model=model, device='cpu')
+    pred = process_image_chunked(image, process_func,
+                                 chip_size=chip_size,
+                                 overlap=overlap,
+                                 output_dtype=output_dtype)
+
+    from watch.tasks.fusion.predict import quantize_float01
+
+    quantize_float01()
+
+    import kwplot
+    kwplot.autompl()
+    kwplot.imshow(image, pnum=(1, 2, 1), doclf=True)
+    kwplot.imshow(pred, pnum=(1, 2, 2))
+
+
 def run_inference(image, model, device=0):
     """
     Example:
-        >>> def fake_model(batch2, tta=True):
-        >>>     np_data = batch2['image'][0].permute(1, 2, 0).numpy()
-        >>>     x = kwimage.gaussian_blur(np_data, sigma=7)
-        >>>     depth = torch.from_numpy(x.mean(axis=2))[None, None]
-        >>>     pred2 = dict(depth=depth, seg=depth)
-        >>>     return pred2, batch2
         >>> from watch.tasks.depth.predict import *  # NOQA
         >>> import kwimage
         >>> import kwarray
@@ -301,8 +325,7 @@ def _write_output(img_info, pred, pred_filename, output_bundle_dpath):
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', UserWarning)
         kwimage.imwrite(str(pred_filename),
-                        pred,
-                        backend='gdal',
+                        pred, backend='gdal', blocksize=256,
                         compress='DEFLATE')
     return info
 

@@ -22,9 +22,8 @@ def process_image_chunked(image,
         >>> import kwimage
         >>> import kwarray
         >>> image = kwimage.ensure_float01(kwimage.grab_test_image(dsize=(512, 512)))
-        >>> rng = kwarray.ensure_rng(32432)
-        >>> rng = kwarray.ensure_rng(None)
-        >>> image = kwimage.Polygon.random(rng=rng).scale(image.shape[0]).fill(image.copy(), np.nan)
+        >>> nan_poly = kwimage.Polygon.random(rng=None).scale(image.shape[0])
+        >>> image = nan_poly.fill(image.copy(), np.nan)
         >>> process_func = lambda x: kwimage.gaussian_blur(x, sigma=7).mean(axis=2)
         >>> non_chunked = process_func(image)
         >>> chip_size = (128, 128, 3)

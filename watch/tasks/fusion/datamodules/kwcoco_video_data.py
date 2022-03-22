@@ -52,6 +52,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>>     train_dataset=coco_dset,
         >>>     test_dataset=None,
         >>>     batch_size=batch_size,
+        >>>     normalize_inputs=8,
         >>>     channels=channels,
         >>>     num_workers=0,
         >>>     time_steps=time_steps,
@@ -62,6 +63,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>> dl = self.train_dataloader()
         >>> dataset = dl.dataset
         >>> batch = next(iter(dl))
+        >>> batch = [dl.dataset[0]]
         >>> # Visualize
         >>> canvas = self.draw_batch(batch)
         >>> # xdoctest: +REQUIRES(--show)
@@ -1089,9 +1091,10 @@ class KWCocoVideoDataset(data.Dataset):
 
             # Temporal augmentation
             vidid = tr_['video_id']
-            time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
-            valid_gids = self.new_sample_grid['vidid_to_valid_gids'][vidid]
-            tr_['gids'] = list(ub.take(valid_gids, time_sampler.sample(tr_['main_idx'])))
+            if rng.rand() > 0.2:
+                time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
+                valid_gids = self.new_sample_grid['vidid_to_valid_gids'][vidid]
+                tr_['gids'] = list(ub.take(valid_gids, time_sampler.sample(tr_['main_idx'])))
 
             temporal_dropout_rate = self.temporal_dropout
             do_temporal_dropout = rng.rand() < temporal_dropout_rate
@@ -1260,7 +1263,9 @@ class KWCocoVideoDataset(data.Dataset):
         tr_['as_xarray'] = False
         tr_['use_experimental_loader'] = 1
 
-        tr_ = self._augment_spacetime_target(tr_)
+        if 0:
+            tr_ = self._augment_spacetime_target(tr_)
+        print('tr_ = {}'.format(ub.repr2(tr_, nl=1)))
 
         if self.channels:
             tr_['channels'] = self.sample_channels
@@ -1791,15 +1796,44 @@ class KWCocoVideoDataset(data.Dataset):
                     frame2['change'] = frame_change
                     frame2['change_weights'] = change_weights.clip(0, 1)
 
-        # Convert data to torch
-        for frame_item in frame_items:
-            truth_keys = ['change', 'class_idxs', 'saliency', 'class_weights', 'saliency_weights', 'change_weights']
-            for key in truth_keys:
-                data = frame_item.get(key, None)
+        truth_keys = [
+            'change', 'class_idxs',
+            'saliency', 'class_weights',
+            'saliency_weights', 'change_weights'
+        ]
+
+        FLIP_AUGMENTATION = (not self.disable_augmenter and self.mode == 'fit')
+        if FLIP_AUGMENTATION:
+            # TODO: make a nice "augmenter" pipeline
+            rng = kwarray.ensure_rng(None)
+            do_hflip = rng.rand() > 0.5
+            do_vflip = rng.rand() > 0.5
+            flip_axis = []
+            # Space dims are last at this point in the pipeline
+            if do_vflip:
+                flip_axis += [-2]
+            if do_hflip:
+                flip_axis += [-1]
+            flip_axis = tuple(flip_axis)
+
+            for frame_item in frame_items:
                 frame_modes = frame_item['modes']
                 for mode_key in list(frame_modes.keys()):
                     mode_data = frame_modes[mode_key]
-                    frame_modes[mode_key] = kwarray.ArrayAPI.tensor(mode_data)
+                    frame_modes[mode_key] = np.flip(mode_data, axis=flip_axis)
+                for key in truth_keys:
+                    data = frame_item.get(key, None)
+                    if data is not None:
+                        frame_item[key] = np.flip(data, axis=flip_axis)
+
+        # Convert data to torch
+        for frame_item in frame_items:
+            frame_modes = frame_item['modes']
+            for mode_key in list(frame_modes.keys()):
+                mode_data = frame_modes[mode_key]
+                frame_modes[mode_key] = kwarray.ArrayAPI.tensor(mode_data)
+            for key in truth_keys:
+                data = frame_item.get(key, None)
                 if data is not None:
                     frame_item[key] = kwarray.ArrayAPI.tensor(data)
 

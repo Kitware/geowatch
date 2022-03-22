@@ -371,10 +371,11 @@ class TimeWindowSampler:
         Example:
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
             >>> import os
+            >>> import kwcoco
             >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
             >>> from watch.utils.util_data import find_smart_dvc_dpath
             >>> dvc_dpath = find_smart_dvc_dpath()
-            >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
+            >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
             >>> dset = kwcoco.CocoDataset(coco_fpath)
             >>> vidid = dset.dataset['videos'][0]['id']
             >>> self = TimeWindowSampler.from_coco_video(

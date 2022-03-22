@@ -288,6 +288,7 @@ def predict(cmdline=False, **kwargs):
     datamodule = datamodule_class(
         **datamodule_vars
     )
+    # TODO: if TTA=True, disable determenistic time sampling
     datamodule.setup('test')
 
     if ub.argflag('--debug-timesample'):
@@ -1006,7 +1007,7 @@ class CocoStitchingManager(object):
         return info
 
 
-def quantize_float01(imdata, old_min=0, old_max=1):
+def quantize_float01(imdata, old_min=0, old_max=1, quantize_dtype=np.int16):
     """
     Note:
         Setting old_min / old_max indicates the possible extend of the input
@@ -1014,33 +1015,57 @@ def quantize_float01(imdata, old_min=0, old_max=1):
         data has to have those min and max values, but it should be between
         them.
 
-    Ignore:
-        import sys, ubelt
-        from kwcoco.util.util_delayed_poc import dequantize
-        from watch.tasks.fusion.predict import *  # NOQA
-        imdata = (np.random.randn(512, 512, 3) - 1.) * 2.5
+    Example:
+        >>> from watch.tasks.fusion.predict import *  # NOQA
+        >>> # Test error when input is not nicely between 0 and 1
+        >>> imdata = (np.random.randn(32, 32, 3) - 1.) * 2.5
+        >>> quant1, quantization1 = quantize_float01(imdata, old_min=0, old_max=1)
+        >>> recon1 = dequantize(quant1, quantization1)
+        >>> error1 = np.abs((recon1 - imdata)).sum()
+        >>> print('error1 = {!r}'.format(error1))
+        >>> #
+        >>> for i in range(1, 20):
+        >>>     print('i = {!r}'.format(i))
+        >>>     quant2, quantization2 = quantize_float01(imdata, old_min=-i, old_max=i)
+        >>>     recon2 = dequantize(quant2, quantization2)
+        >>>     error2 = np.abs((recon2 - imdata)).sum()
+        >>>     print('error2 = {!r}'.format(error2))
 
-        quant1, quantization1 = quantize_float01(imdata, old_min=0, old_max=1)
-        recon1 = dequantize(quant1, quantization1)
-        error1 = np.abs((recon1 - imdata)).sum()
-        print('error1 = {!r}'.format(error1))
+    Example:
+        >>> # Test dequantize with uint8
+        >>> from watch.tasks.fusion.predict import *  # NOQA
+        >>> imdata = np.random.randn(32, 32, 3)
+        >>> quant1, quantization1 = quantize_float01(imdata, old_min=0, old_max=1, np.uint8)
+        >>> recon1 = dequantize(quant1, quantization1)
+        >>> error1 = np.abs((recon1 - imdata)).sum()
+        >>> print('error1 = {!r}'.format(error1))
 
-        for i in range(1, 20):
-            print('i = {!r}'.format(i))
-            quant2, quantization2 = quantize_float01(imdata, old_min=-i, old_max=i)
-            recon2 = dequantize(quant2, quantization2)
-            error2 = np.abs((recon2 - imdata)).sum()
-            print('error2 = {!r}'.format(error2))
+    Example:
+        >>> # Test quantization with different signed / unsigned combos
+        >>> from watch.tasks.fusion.predict import *  # NOQA
+        >>> print(quantize_float01(None, 0, 1, np.int16))
+        >>> print(quantize_float01(None, 0, 1, np.int8))
+        >>> print(quantize_float01(None, 0, 1, np.uint8))
+        >>> print(quantize_float01(None, 0, 1, np.uint16))
 
     """
-    invalid_mask = np.isnan(imdata)
     # old_min = 0
     # old_max = 1
-    quantize_dtype = np.int16
-    quantize_max = np.iinfo(quantize_dtype).max
-    quantize_min = 0
-    quantize_nan = -9999
+    quantize_iinfo = np.iinfo(quantize_dtype)
+    quantize_max = quantize_iinfo.max
+    if quantize_iinfo.kind == 'u':
+        # Unsigned quantize
+        quantize_nan = 0
+        quantize_min = 1
+    elif quantize_iinfo.kind == 'i':
+        # Signed quantize
+        quantize_min = 0
+        quantize_nan = max(-9999, quantize_iinfo.min)
+
+    orig_dtype = None if imdata is None else str(imdata.dtype)
+
     quantization = {
+        'orig_dtype': orig_dtype,
         'orig_min': old_min,
         'orig_max': old_max,
         'quant_min': quantize_min,
@@ -1052,9 +1077,14 @@ def quantize_float01(imdata, old_min=0, old_max=1):
     new_extent = (quantize_max - quantize_min)
     quant_factor = new_extent / old_extent
 
-    new_imdata = (imdata.clip(old_min, old_max) - old_min) * quant_factor + quantize_min
-    new_imdata = new_imdata.astype(quantize_dtype)
-    new_imdata[invalid_mask] = quantize_nan
+    if imdata is not None:
+        invalid_mask = np.isnan(imdata)
+        new_imdata = (imdata.clip(old_min, old_max) - old_min) * quant_factor + quantize_min
+        new_imdata = new_imdata.astype(quantize_dtype)
+        new_imdata[invalid_mask] = quantize_nan
+    else:
+        new_imdata = None
+
     return new_imdata, quantization
 
 
