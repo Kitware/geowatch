@@ -23,6 +23,7 @@ import shapely as shp
 import shapely.ops
 import shapely.geometry
 from osgeo import gdal
+from osgeo import osr
 import shapely
 from copy import deepcopy
 from lxml import etree
