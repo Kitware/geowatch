@@ -14,10 +14,11 @@ prep_teamfeat_drop2(){
         --with_depth=0 \
         --with_materials=1 \
         --with_invariants=0 \
-        --do_splits=1 \
+        --do_splits=0 \
         --depth_workers=0 \
-        --cache=1 --run=1 --backend=slurm
-            --backend=slurm
+        --cache=1 --run=1 --backend=tmux
+
+        #--backend=slurm
     #python -m watch.cli.prepare_splits --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L.kwcoco.json --run=False
 
 }
