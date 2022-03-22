@@ -394,6 +394,7 @@ def GdalOpen(path, mode='r', **kwargs):
     Example:
         >>> # xdoctest: +REQUIRES(--network)
         >>> from watch.utils.util_gdal import *
+        >>> from osgeo import gdal
         >>> from watch.demo.landsat_demodata import grab_landsat_product
         >>> path = grab_landsat_product()['bands'][0]
         >>> #

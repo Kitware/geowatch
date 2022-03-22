@@ -3005,7 +3005,7 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
-        >>> canvas = visualize_sample_grid(dset, sample_grid, max_vids=1, max_frames=30)
+        >>> canvas = visualize_sample_grid(dset, sample_grid, max_vids=1, max_frames=12)
         >>> kwplot.imshow(canvas, doclf=1)
         >>> kwplot.show_if_requested()
     """
