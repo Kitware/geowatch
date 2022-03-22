@@ -1227,7 +1227,7 @@ def transfer_geo_metadata(coco_dset, gid):
                 assets_with_geo_info[-1] = (obj, info)
                 warp_vid_from_geoimg = kwimage.Affine.coerce(other_coco_img.img['warp_img_to_vid'])
             else:
-                raise ValueError(ub.paragraph(
+                raise exceptions.GeoMetadataNotFound(ub.paragraph(
                     '''
                     There are images without geo data, but no other data within
                     this image has transferable geo-data

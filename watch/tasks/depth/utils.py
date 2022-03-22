@@ -49,9 +49,9 @@ def process_image_chunked(image,
         try:
             res = process_func(img)
             # Quantize res?
-
         finally:
             pbar.update()
+        return res
 
     gh, gw = image.shape[0:2]
     ch, cw = chip_size[0:2]
