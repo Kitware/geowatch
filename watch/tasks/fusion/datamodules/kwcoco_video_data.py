@@ -2980,9 +2980,9 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2):
         >>> import watch
         >>> # dset = coco_dset = demo_kwcoco_multisensor(dates=True, geodata=True, heatmap=True)
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
-        >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
+        >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/combo_DILM_train.kwcoco.json'
         >>> big_dset = kwcoco.CocoDataset(coco_fpath)
-        >>> dset = big_dset.subset(dset.videos(names=['KR_R002']).images.lookup('id')[0])
+        >>> dset = big_dset.subset(dset.videos(names=['BR_R002']).images.lookup('id')[0])
         >>> window_overlap = 0.0
         >>> window_dims = (3, 32, 32)
         >>> keepbound = False

@@ -4323,19 +4323,19 @@ python -m watch.tasks.fusion.fit \
     --time_steps=7 \
     --global_class_weight=1.0 \
     --global_saliency_weight=1.00 \
-    --num_workers=8 \
+    --num_workers=0 \
     --gpus "1" \
     --learning_rate=1e-3 \
     --attention_impl=exact \
     --chip_overlap=0.0 \
     --optimizer=AdamW \
     --time_sampling=hardish \
-    --arch_name=smt_it_sm_s12 \
+    --arch_name=smt_it_sm_p1 \
     --max_epoch_length=4096 \
     --num_draw=8 \
     --draw_interval=1m \
     --dist_weight=True \
-    --stream_channels=64 \
+    --stream_channels=4 \
     --temporal_dropout=0.5 \
     --modulate_class_weights="positive*0,negative*0,background*0.2,No Activity*0.0,Post Construction*0.0,Site Preparation*2.0" \
     --init="$INITIAL_STATE" 
