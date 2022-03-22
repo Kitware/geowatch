@@ -62,7 +62,6 @@ def main(cmdline=True, **kwargs):
     TODO:
         - [ ] Option to just dump the serial bash script that does everything.
     """
-    from watch.utils import tmux_queue
     from watch.utils.lightning_ext import util_globals
     from scriptconfig.smartcast import smartcast
 
@@ -272,10 +271,11 @@ def main(cmdline=True, **kwargs):
     for task in tasks:
         if config['cache']:
             if not task['output_fpath'].exists():
-                command = f"[[ -f '{task['output_fpath']}' ]] || " + task['command']
-                queue.submit(command, gpus=task['gpus'], shell='/bin/bash')
+                # command = f"[[ -f '{task['output_fpath']}' ]] || " + task['command']
+                command = f"test -f '{task['output_fpath']}' || " + task['command']
+                queue.submit(command, gpus=task['gpus'])
         else:
-            queue.submit(task['command'], shell='/bin/bash')
+            queue.submit(task['command'])
 
     # if workers > 0:
     #     # Launch this TQ if there are parallel workers, otherwise just make a
