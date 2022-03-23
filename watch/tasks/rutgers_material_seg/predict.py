@@ -264,7 +264,7 @@ class Evaluator(object):
         seen = set()
 
         with torch.no_grad():
-            from functools import partial
+            # from functools import partial
             # Prog = partial(ub.ProgIter, verbose=3)
             Prog = tqdm
             pbar = Prog(enumerate(dataloader_iter), total=len(eval_dataloader), desc='predict rutgers')
