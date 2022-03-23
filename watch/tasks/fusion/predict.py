@@ -1101,9 +1101,9 @@ if __name__ == '__main__':
         --with_class=auto \
         --with_saliency=auto \
         --with_change=False \
-        --package_fpath=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v39/SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=52-step=2269088.pt.dvc \
-        --pred_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v39/pred_SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=52-step=2269088.pt/Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco/pred.kwcoco.json \
-        --test_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-L1-2022-01/combo_DILM_nowv_vali.kwcoco.json \
+        --package_fpath=/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/training/raven/brodie/uky_invariants/features_22_03_14/runs/BASELINE_EXPERIMENT_V001/package.pt \
+        --pred_dataset=/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/training/raven/brodie/uky_invariants/features_22_03_14/runs/BASELINE_EXPERIMENT_V001/pred.kwcoco.json \
+        --test_dataset=/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json \
         --num_workers=5 \
         --compress=DEFLATE \
         --gpus=0, \

@@ -6,6 +6,7 @@ import albumentations as A
 from torchvision import transforms
 import kwcoco
 import kwimage
+import kwarray
 import random
 from pandas import read_csv
 import ndsampler
@@ -24,16 +25,61 @@ class gridded_dataset(torch.utils.data.Dataset):
         >>> import kwcoco
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
         >>> self = gridded_dataset(coco_dset)
-        >>> out = self[0]
+        >>> idx = 0
+        >>> out = self[idx]
+        >>> rgb1 = out['image1'][0:3].permute(1, 2, 0).numpy()[..., ::-1]
+        >>> rgb2 = out['image2'][0:3].permute(1, 2, 0).numpy()[..., ::-1]
+        >>> rgb3 = out['offset_image1'][0:3].permute(1, 2, 0).numpy()[..., ::-1]
+        >>> rgb4 = out['augmented_image1'][0:3].permute(1, 2, 0).numpy()[..., ::-1]
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
+        >>> kwplot.imshow(kwimage.normalize(rgb1), pnum=(1, 4, 1), title='image1')
+        >>> kwplot.imshow(kwimage.normalize(rgb2), pnum=(1, 4, 2), title='image2')
+        >>> kwplot.imshow(kwimage.normalize(rgb3), pnum=(1, 4, 3), title='offset_image1')
+        >>> kwplot.imshow(kwimage.normalize(rgb4), pnum=(1, 4, 4), title='augmented_image1')
+        >>> kwplot.show_if_requested()
 
-        >>> rgb1 = out['image1'][1:4].permute(1, 2, 0).numpy()[..., ::-1]
-        >>> rgb2 = out['image2'][1:4].permute(1, 2, 0).numpy()[..., ::-1]
-        >>> kwplot.imshow(rgb1, pnum=(1, 2, 1))
-        >>> kwplot.imshow(rgb2, pnum=(1, 2, 2))
+        loader = torch.utils.data.DataLoader(
+            self, num_workers=0, batch_size=1, shuffle=False)
+        dliter = iter(loader)
+        batch = next(dliter)
 
+    Example:
+        >>> # xdoctest: +SKIP
+        >>> from watch.tasks.invariants.data.datasets import *  # NOQA
+        >>> import watch
+        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json'
+        >>> import kwcoco
+        >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+        >>> self = gridded_dataset(coco_dset)
+        >>> dsize = (224, 224)
+        >>> # Draw multiple batch items
+        >>> rows = []
+        >>> max_idx = len(self) // 4 - 2
+        >>> indexes = np.linspace(0, max_idx, 10).round().astype(int)
+        >>> for idx in indexes:
+        >>>     out = self[idx]
+        >>>     rgb1 = out['image1'][0:3].permute(1, 2, 0).numpy()
+        >>>     rgb2 = out['image2'][0:3].permute(1, 2, 0).numpy()
+        >>>     rgb3 = out['offset_image1'][0:3].permute(1, 2, 0).numpy()
+        >>>     rgb4 = out['augmented_image1'][0:3].permute(1, 2, 0).numpy()
+        >>>     canvas1 = np.nan_to_num(kwimage.imresize(kwimage.normalize(rgb1), dsize=dsize)).clip(0, 1)
+        >>>     canvas2 = np.nan_to_num(kwimage.imresize(kwimage.normalize(rgb2), dsize=dsize)).clip(0, 1)
+        >>>     canvas3 = np.nan_to_num(kwimage.imresize(kwimage.normalize(rgb3), dsize=dsize)).clip(0, 1)
+        >>>     canvas4 = np.nan_to_num(kwimage.imresize(kwimage.normalize(rgb4), dsize=dsize)).clip(0, 1)
+        >>>     canvas1 = kwimage.draw_text_on_image(canvas1, 'image1', org=(1, 1), valign='top', color='white', border=2)
+        >>>     canvas2 = kwimage.draw_text_on_image(canvas2, 'image2', org=(1, 1), valign='top', color='white', border=2)
+        >>>     canvas3 = kwimage.draw_text_on_image(canvas3, 'offset_image1', org=(1, 1), valign='top', color='white', border=2)
+        >>>     canvas4 = kwimage.draw_text_on_image(canvas4, 'augmented_image1', org=(1, 1), valign='top', color='white', border=2)
+        >>>     row_canvas = kwimage.stack_images([canvas1, canvas2, canvas3, canvas4], axis=1, pad=3)
+        >>>     rows.append(row_canvas)
+        >>> canvas = kwimage.stack_images(rows, axis=0, pad=10)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas)
     """
     S2_l2a_channel_names = [
         'B02.tif', 'B01.tif', 'B03.tif', 'B04.tif', 'B05.tif', 'B06.tif', 'B07.tif', 'B08.tif', 'B09.tif', 'B11.tif', 'B12.tif', 'B8A.tif'
@@ -50,25 +96,47 @@ class gridded_dataset(torch.utils.data.Dataset):
         super().__init__()
 
         # initialize dataset
+        self.coco_dset: kwcoco.CocoDataset = kwcoco.CocoDataset.coerce(coco_dset)
 
-        self.coco_dset = kwcoco.CocoDataset.coerce(coco_dset)
-        wv_image_ids = []
-        for x in self.coco_dset.index.imgs:
-            if self.coco_dset.index.imgs[x]['sensor_coarse'] == 'WV':
-                wv_image_ids.append(x)
-        self.coco_dset.remove_images(wv_image_ids)
-        self.images = self.coco_dset.images()
+        # Filter out worldview images (better to use subset than remove)
+        images: kwcoco.coco_objects1d.Images = self.coco_dset.images()
+        flags = [s != 'WV' for s in images.lookup('sensor_coarse')]
+        valid_image_ids : list[int] = list(images.compress(flags))
+        self.coco_dset = self.coco_dset.subset(valid_image_ids)
+
+        self.images : kwcoco.coco_objects1d.Images = self.coco_dset.images()
         self.sampler = ndsampler.CocoSampler(self.coco_dset)
-        grid = self.sampler.new_sample_grid(**{
-            'task': 'video_detection',
-            'window_dims': [num_images, patch_size, patch_size],
-            'window_overlap': patch_overlap,
-        }
-        )
-        if segmentation:
-            samples = grid['positives']
+
+        window_dims = [num_images, patch_size, patch_size]
+
+        NEW_GRID = 1
+        if NEW_GRID:
+            from watch.tasks.fusion.datamodules.kwcoco_video_data import sample_video_spacetime_targets
+            sample_grid = sample_video_spacetime_targets(
+                self.coco_dset, window_dims=window_dims,
+                window_overlap=patch_overlap,
+                time_sampling='hardish3', time_span='1y',
+                use_annot_info=False,
+                keepbound=True,
+                exclude_sensors=['WV'],
+                use_centered_positives=False,
+            )
+            samples = sample_grid['targets']
+            for tr in samples:
+                tr['vidid'] = tr['video_id']  # hack
         else:
-            samples = grid['positives'] + grid['negatives']
+            grid = self.sampler.new_sample_grid(**{
+                'task': 'video_detection',
+                'window_dims': [num_images, patch_size, patch_size],
+                'window_overlap': patch_overlap,
+            })
+            if segmentation:
+                samples = grid['positives']
+            else:
+                samples = grid['positives'] + grid['negatives']
+
+        # vidid_to_patches = ub.group_items(samples, key=lambda x: x['vidid'])
+        # self.vidid_to_patches = vidid_to_patches
         grouped = ub.group_items(
                 samples,
                 lambda x: tuple(
@@ -76,7 +144,7 @@ class gridded_dataset(torch.utils.data.Dataset):
                 )
                 )
         grouped = ub.sorted_keys(grouped)
-        self.patches = list(ub.flatten(grouped.values()))
+        self.patches : list[dict] = list(ub.flatten(grouped.values()))
 
         all_bands = [aux.get('channels', None) for aux in self.coco_dset.index.imgs[self.images._ids[0]].get('auxiliary', [])]
 
@@ -141,90 +209,148 @@ class gridded_dataset(torch.utils.data.Dataset):
         return len(self.patches)
 
     def __getitem__(self, idx):
-        tr = self.patches[idx]
+        tr : dict = self.patches[idx]
         tr['channels'] = self.bands
         # vidid = tr['vidid']
-        gids = tr['gids']
+        gids : list[int] = tr['gids']
 
         im1_id = gids[0]
-        offset_idx = idx
-        offset_im_id = None
+        img_obj1 : dict = self.coco_dset.index.imgs[im1_id]
+        video_obj = self.coco_dset.index.videos[img_obj1['video_id']]
 
-        while (im1_id != offset_im_id) or (offset_idx == idx):
-            offset_idx = random.randint(0, self.__len__() - 2)
-            offset_tr = self.patches[offset_idx]
-            offset_im_id = offset_tr['gids'][0]
+        vid_width = video_obj['width']
+        vid_height = video_obj['height']
+
+        # Choose an offset "target" such that it is
+        # (1) in the same image as the main image
+        # (2) has a different spatial location
+        # (3) is in a valid region of the image
+        space_box = kwimage.Boxes.from_slice(tr['space_slice'])
+        sh_space_box = space_box.to_shapely()[0]
+        img_width = space_box.width.ravel()[0]
+        img_height = space_box.height.ravel()[0]
+
+        # Get the valid polygon for this coco image in video space
+        # TODO: add API for this in CocoImage
+        # CocoImage.valid_region(space='video') will be in kwcoco 0.2.26
+        valid_coco_poly = img_obj1.get('valid_region', None)
+        if valid_coco_poly is None:
+            sh_valid_poly = None
+        else:
+            warp_vid_from_img = kwimage.Affine.coerce(img_obj1['warp_img_to_vid'])
+            kw_poly_img = kwimage.MultiPolygon.coerce(valid_coco_poly)
+            sh_valid_poly = kw_poly_img.warp(warp_vid_from_img).to_shapely()  # shapely.geometry.Polygon
+
+        # Sample valid offset boxes until the conditions are met
+        rng = kwarray.ensure_rng(None)
+        offset_box = None
+        attempts = 0
+        while offset_box is None:
+            attempts += 1
+            offset_box = kwimage.Boxes([[0, 0, img_width, img_height]], 'ltrb')
+            offset_x = rng.randint(0, max(vid_width - img_width, 1))
+            offset_y = rng.randint(0, max(vid_height - img_height, 1))
+            offset_box = offset_box.translate((offset_x, offset_y))
+            if attempts > 10:
+                # Give up
+                break
+            sh_box = offset_box.to_shapely()[0]
+            orig_overlap = sh_space_box.intersection(sh_box).area / sh_space_box.area
+            if orig_overlap > 0.001:
+                offset_box = None
+            if sh_valid_poly is None:
+                valid_frac = sh_valid_poly.intersection(sh_box).area / sh_box.area
+                if valid_frac < 0.5:
+                    offset_box = None
+
+        # Create a new target for the offset region
+        offset_tr = tr.copy()
         offset_tr['channels'] = self.bands
+        offset_tr['space_slice'] = offset_box.astype(int).to_slices()[0]
 
-        if self.segmentation:
-            sample = self.sampler.load_sample(tr, with_annots='segmentation', nodata='float')
-            det_list = sample['annots']['frame_dets']
-            segmentation_masks = []
-            for det in det_list:
-                frame_mask = np.full([self.patch_size, self.patch_size], dtype=np.int32, fill_value=0)
-                ann_polys = det.data['segmentations'].to_polygon_list()
-                ann_aids = det.data['aids']
-                ann_cids = det.data['cids']
-                for poly, aid, cid in zip(ann_polys, ann_aids, ann_cids):
-                    if cid in self.positive_indices:
-                        if self.bas:
-                            poly.fill(frame_mask, value=1)
-                        else:
-                            cidx = self.sampler.classes.id_to_idx[cid]
-                            poly.fill(frame_mask, value=cidx)
-                    elif cid in self.ignore_indices:
-                        poly.fill(frame_mask, value=-1)
-                segmentation_masks.append(frame_mask)
-        else:
-            sample = self.sampler.load_sample(tr, nodata='float')
-        offset_sample = self.sampler.load_sample(offset_tr, nodata='float')
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', 'empty slice')
+            warnings.filterwarnings('ignore', category=RuntimeWarning)
 
-        images = sample['im']
-        offset_image = offset_sample['im'][0]
-        augmented_image = self.transforms(image=images[0].copy() / images[0].max())['image'] * images[0].max()
-
-        image_dict = {}
-        for k, image in enumerate(images):
-            if image.std() != 0.:
-                image = (image - image.mean()) / image.std()
+            if self.segmentation:
+                sample = self.sampler.load_sample(tr, with_annots='segmentation', nodata='float')
+                det_list = sample['annots']['frame_dets']
+                segmentation_masks = []
+                for det in det_list:
+                    frame_mask = np.full([self.patch_size, self.patch_size], dtype=np.int32, fill_value=0)
+                    ann_polys = det.data['segmentations'].to_polygon_list()
+                    ann_aids = det.data['aids']
+                    ann_cids = det.data['cids']
+                    for poly, aid, cid in zip(ann_polys, ann_aids, ann_cids):
+                        if cid in self.positive_indices:
+                            if self.bas:
+                                poly.fill(frame_mask, value=1)
+                            else:
+                                cidx = self.sampler.classes.id_to_idx[cid]
+                                poly.fill(frame_mask, value=cidx)
+                        elif cid in self.ignore_indices:
+                            poly.fill(frame_mask, value=-1)
+                    segmentation_masks.append(frame_mask)
             else:
-                image = np.zeros_like(image)
-            image_dict[1 + k] = image
-        if offset_image.std() != 0:
-            offset_image = (offset_image - offset_image.mean()) / offset_image.std()
-        else:
-            offset_image = np.zeros_like(offset_image)
-        if augmented_image.std() != 0:
-            augmented_image = (augmented_image - augmented_image.mean()) / augmented_image.std()
-        else:
-            augmented_image = np.zeros_like(augmented_image)
+                sample = self.sampler.load_sample(tr, nodata='float')
+            offset_sample = self.sampler.load_sample(offset_tr, nodata='float')
 
-        for key in image_dict:
-            image_dict[key] = torch.tensor(image_dict[key]).permute(2, 0, 1)
-        offset_image = torch.tensor(offset_image).permute(2, 0, 1)
-        augmented_image = torch.tensor(augmented_image).permute(2, 0, 1)
+            images : np.ndarray = sample['im']
+            offset_image = offset_sample['im'][0]
 
-        date_list = []
-        for gid in gids:
-            date = self.coco_dset.index.imgs[gid]['date_captured']
-            date_list.append((int(date[:4]), int(date[5:7])))
-        normalized_date = torch.tensor([date_[0] - 2018 + date_[1] / 12 for date_ in date_list])
-        out = dict()
+            invalid_mask = np.isnan(images[0])
+            if np.all(invalid_mask):
+                max_val = 1
+            else:
+                max_val = np.nanmax(images[0])
+            augmented_image = self.transforms(image=images[0].copy() / max_val)['image'] * max_val
 
-        for m in range(self.num_images):
-            out['image{}'.format(1 + m)] = image_dict[1 + m].float()
+            image_dict = {}
+            for k, image in enumerate(images):
+                imstd = np.nanstd(image)
+                if imstd != 0.:
+                    image = (image - np.nanmean(image)) / imstd
+                else:
+                    image = np.zeros_like(image)
+                image_dict[1 + k] = image
+            offset_imstd = np.nanstd(offset_image)
+            if offset_imstd != 0:
+                offset_image = (offset_image - np.nanmean(offset_image)) / offset_imstd
+            else:
+                offset_image = np.zeros_like(offset_image)
+            augmented_imgstd = augmented_image.std()
+            if augmented_imgstd != 0:
+                augmented_image = (augmented_image - np.nanmean(augmented_image)) / augmented_imgstd
+            else:
+                augmented_image = np.zeros_like(augmented_image)
 
-        out['offset_image1'] = offset_image.float()
-        out['augmented_image1'] = augmented_image.float()
-        out['normalized_date'] = normalized_date.float()
-        out['time_sort_label'] = float(normalized_date[0] < normalized_date[1])
-        out['img1_id'] = gids[0]
-        # img1_info = self.coco_dset.index.imgs[gids[0]]
-        # out['img1_info'] = img1_info
-        # out['tr'] = ItemContainer(tr, stack=False)
-        if self.segmentation:
-            for k in range(self.num_images):
-                out['segmentation{}'.format(1 + k)] = torch.tensor(segmentation_masks[k])
+            for key in image_dict:
+                image_dict[key] = torch.tensor(image_dict[key]).permute(2, 0, 1)
+            offset_image = torch.tensor(offset_image).permute(2, 0, 1)
+            augmented_image = torch.tensor(augmented_image).permute(2, 0, 1)
+
+            date_list = []
+            for gid in gids:
+                date = self.coco_dset.index.imgs[gid]['date_captured']
+                date_list.append((int(date[:4]), int(date[5:7])))
+            normalized_date = torch.tensor([date_[0] - 2018 + date_[1] / 12 for date_ in date_list])
+            out = dict()
+
+            for m in range(self.num_images):
+                out['image{}'.format(1 + m)] = image_dict[1 + m].float()
+
+            out['offset_image1'] = offset_image.float()
+            out['augmented_image1'] = augmented_image.float()
+            out['normalized_date'] = normalized_date.float()
+            out['time_sort_label'] = float(normalized_date[0] < normalized_date[1])
+            out['img1_id'] = gids[0]
+            # img1_info = self.coco_dset.index.imgs[gids[0]]
+            # out['img1_info'] = img1_info
+            # out['tr'] = ItemContainer(tr, stack=False)
+            if self.segmentation:
+                for k in range(self.num_images):
+                    out['segmentation{}'.format(1 + k)] = torch.tensor(segmentation_masks[k])
         return out
 
 
@@ -339,7 +465,8 @@ class kwcoco_dataset(Dataset):
         else:
             img1_info = torch.tensor([])
 
-        video = [y for y in self.videos if img1_id in self.dset.index.vidid_to_gids[y]][0]
+        img_obj1 : dict = self.dset.index.imgs[img1_id]
+        video : int = img_obj1['video_id']
 
         # randomly select image2 id from the same video (could be before or after image1)
         # make sure image2 is not image1 and image2 is in the set of filtered images by desired sensor
@@ -347,12 +474,14 @@ class kwcoco_dataset(Dataset):
         while img2_id == img1_id or img2_id not in self.dset_ids:
             img2_id = random.choice(self.dset.index.vidid_to_gids[video])
 
+        img_obj2 : dict = self.dset.index.imgs[img2_id]
+
         # get frame indices for each image (used to determine which image was captured first)
-        frame_index1 = self.dset.index.imgs[img1_id]['frame_index']
-        frame_index2 = self.dset.index.imgs[img2_id]['frame_index']
+        frame_index1 = img_obj1['frame_index']
+        frame_index2 = img_obj2['frame_index']
         # get sensors
-        im1_sensor = self.dset.index.imgs[img1_id]['sensor_coarse']
-        im2_sensor = self.dset.index.imgs[img2_id]['sensor_coarse']
+        im1_sensor = img_obj1['sensor_coarse']
+        im2_sensor = img_obj2['sensor_coarse']
 
         # load images
         img1 = self.dset.delayed_load(img1_id, channels=self.channels, space='video').finalize(no_data='float').astype(np.float32)
@@ -360,10 +489,12 @@ class kwcoco_dataset(Dataset):
 
         if not self.change_labels:
             # transformations
-            transformed = self.transforms(image=img1, image2=img2)
-            transformed2 = self.transforms2(image=img1)
-            img1 = transformed['image']
-            img2 = transformed['image2']
+            max1 = img1.max()
+            max2 = img2.max()
+            transformed = self.transforms(image=img1.copy() / max1, image2=img2.copy() / max2)
+            transformed2 = self.transforms2(image=img1.copy() / max1)
+            img1 = transformed['image'] * max1
+            img2 = transformed['image2'] * max2
 
             if self.display:
                 if self.num_channels == 3:
@@ -381,39 +512,40 @@ class kwcoco_dataset(Dataset):
                 display_image1 = torch.tensor([])
                 display_image2 = torch.tensor([])
 
-            img3 = transformed2['image']
+            img3 = transformed2['image'] * max1
             img4 = self.transforms3(image=img1.copy() / img1.max())['image'] * img1.max()
             # convert to tensors
-            img1 = torch.tensor(img1).permute(2, 0, 1)
-            img2 = torch.tensor(img2).permute(2, 0, 1)
-            img3 = torch.tensor(img3).permute(2, 0, 1)
-            img4 = torch.tensor(img4).permute(2, 0, 1)
 
-            img1std = img1.nanstd()
+            img1std = np.nanstd(img1)
             if img1std != 0.:
-                img1 = (img1 - img1.nanmean()) / img1std
+                img1 = (img1 - np.nanmean(img1)) / img1std
             else:
-                img1 = torch.zeros_like(img1)
-            img2std = img2.nanstd()
+                img1 = np.zeros_like(img1)
+            img2std = np.nanstd(img2)
             if img2std != 0.:
-                img2 = (img2 - img2.nanmean()) / img2std
+                img2 = (img2 - np.nanmean(img2)) / img2std
             else:
-                img2 = torch.zeros_like(img2)
-            img3std = img3.nanstd()
+                img2 = np.zeros_like(img2)
+            img3std = np.nanstd(img3)
             if img3std != 0.:
-                img3 = (img3 - img3.nanmean()) / img3std
+                img3 = (img3 - np.nanmean(img3)) / img3std
             else:
-                img3 = torch.zeros_like(img3)
-            img4std = img4.std()
+                img3 = np.zeros_like(img3)
+            img4std = np.nanstd(img4)
             if img4std != 0.:
-                img4 = (img4 - img4.nanmean()) / img4std
+                img4 = (img4 - np.nanmean(img4)) / img4std
             else:
-                img4 = torch.zeros_like(img4)
+                img4 = np.zeros_like(img4)
 
             img1 = np.nan_to_num(img1)
             img2 = np.nan_to_num(img2)
             img3 = np.nan_to_num(img3)
             img4 = np.nan_to_num(img4)
+
+            img1 = torch.tensor(img1).permute(2, 0, 1)
+            img2 = torch.tensor(img2).permute(2, 0, 1)
+            img3 = torch.tensor(img3).permute(2, 0, 1)
+            img4 = torch.tensor(img4).permute(2, 0, 1)
 
             return {
                 'image1': img1.float(),
@@ -435,6 +567,7 @@ class kwcoco_dataset(Dataset):
             if frame_index1 > frame_index2:
                 img1, img2 = img2, img1
                 img1_id, img2_id = img2_id, img1_id
+                img_obj1, img_obj2 = img_obj2, img_obj1
 
             aids1 = self.dset.index.gid_to_aids[img1_id]
             aids2 = self.dset.index.gid_to_aids[img2_id]
@@ -443,8 +576,8 @@ class kwcoco_dataset(Dataset):
             dets2 = kwimage.Detections.from_coco_annots(
                 self.dset.annots(aids2).objs, dset=self.dset)
 
-            vid_from_img1 = kwimage.Affine.coerce(self.dset.index.imgs[img1_id]['warp_img_to_vid'])
-            vid_from_img2 = kwimage.Affine.coerce(self.dset.index.imgs[img2_id]['warp_img_to_vid'])
+            vid_from_img1 = kwimage.Affine.coerce(img_obj1['warp_img_to_vid'])
+            vid_from_img2 = kwimage.Affine.coerce(img_obj2['warp_img_to_vid'])
 
             dets1 = dets1.warp(vid_from_img1)
             dets2 = dets2.warp(vid_from_img2)
