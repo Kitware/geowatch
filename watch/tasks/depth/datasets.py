@@ -46,28 +46,14 @@ class WVRgbDataset(_CocoTorchDataset):
             'std': np.array([0.229, 0.224, 0.225])[None, None, :],
         }
 
-        # This makes unnecessary copies, we dont need it
-        # self.transform = transforms.Compose([
-        #     ToTensor(),
-        #     Normalize(__imagenet_stats['mean'],
-        #               __imagenet_stats['std']),
-        #     ToNumpy()
-        # ])
-
     def _include(self, gid):
         """
         Used on init to filter to only relevant images
         """
-        img = self.dset.imgs[gid]
-        if img['sensor_coarse'] == 'WV':
-            if img.get('channels') == WV_CHANNELS:
-                return True
-
-            for aux in img.get('auxiliary', []):
-                if aux.get('channels') == WV_CHANNELS:
-                    return True
-
-        return False
+        coco_img = self.dset.coco_image(gid)
+        is_wv = coco_img.img['sensor_coarse'] == 'WV'
+        has_rgb = (coco_img.channels & 'red|green|blue').numel() == 3
+        return is_wv and has_rgb
 
     def _load(self, gid):
         coco_img = self.dset.coco_image(gid)
