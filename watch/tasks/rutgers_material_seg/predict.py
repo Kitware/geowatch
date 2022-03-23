@@ -50,27 +50,73 @@ except Exception:
 
 
 class Evaluator(object):
+    """
+    CommandLine:
+        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        DVC_DPATH=$DVC_DPATH xdoctest -m watch.tasks.rutgers_material_seg.predict Evaluator
+
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> from watch.tasks.rutgers_material_seg.predict import *  # NOQA
+        >>> import watch
+        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> checkpoint_fpath = dvc_dpath / 'models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth'
+        >>> #checkpoint_fpath = dvc_dpath / 'models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth'
+        >>> #  Write out smaller version of the dataset
+        >>> import kwcoco
+        >>> dset = kwcoco.CocoDataset(dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json')
+        >>> images = dset.videos(names=['KR_R001']).images[0]
+        >>> sub_images = images.compress([s != 'WV' for s in images.lookup('sensor_coarse')])[::5]
+        >>> sub_dset = dset.subset(sub_images)
+        >>> sub_dset.fpath = (dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/small_test_data_nowv_vali.kwcoco.json')
+        >>> sub_dset.dump(sub_dset.fpath)
+        >>> input_kwcoco = sub_dset.fpath
+        >>> #
+        >>> src_coco_fpath = sub_dset.fpath
+        >>> dst_coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/mat_test.kwcoco.json'
+        >>> kwargs = dict(
+        >>>     default_config_key='iarpa',
+        >>>     checkpoint_fpath=checkpoint_fpath,
+        >>>     test_dataset=src_coco_fpath,
+        >>>     pred_dataset=dst_coco_fpath,
+        >>>     feat_dpath=dst_coco_fpath.parent / '_assets/test_rutgers_material_seg',
+        >>>     gpus='auto:1',
+        >>>     num_workers='avail',
+        >>>     cache=0,
+        >>>     #num_workers=0,
+        >>>     #gpu=None,
+        >>> )
+        >>> cmdline = False
+        >>> evaler = build_evaler(cmdline=cmdline, **kwargs)
+        >>> self = evaler
+        >>> evaler.forward()
+    """
+
     def __init__(self,
                  model: object,
-                 eval_loader: torch.utils.data.DataLoader,
+                 input_coco_dset: SequenceDataset,
                  output_coco_dataset: kwcoco.CocoDataset,
                  write_probs : bool = True,
                  device=None,
                  config : dict = None,
                  output_feat_dpath : pathlib.Path = None,
+                 batch_size=1,
+                 num_workers=0,
                  imwrite_kw={},
-                 num_workers=0):
-        """Evaluator class
+                 cache: bool = False):
+        """
+        Evaluator class
 
         Args:
             model (object): trained or untrained model
-            eval_loader (torch.utils.data.DataLader): loader with evaluation data
+            eval_loader (SequenceDataset): dataset with evaluation data
             optimizer (object): optimizer to train with
             scheduler (object): scheduler to train with
+            cache (bool): if True, will only predict on images that do
+                not have a feature computed for them yet.
         """
 
         self.model = model
-        self.eval_loader = eval_loader
         self.num_workers = num_workers
         self.output_coco_dataset = output_coco_dataset
         self.write_probs = write_probs
@@ -81,8 +127,10 @@ class Evaluator(object):
         self.stitcher_dict = {}
         self.finalized_gids = set()
         self.imwrite_kw = imwrite_kw
+        self.cache = cache
+        self.batch_size = batch_size
 
-        self.coco_dset = self.eval_loader.dataset.sampler.dset
+        self.input_coco_dset = input_coco_dset
 
         # Hack together a channel code
         self.chan_code = '|'.join(['matseg_{}'.format(i) for i in range(self.num_classes)])
@@ -91,16 +139,37 @@ class Evaluator(object):
         self.concise_chan_code = self.output_channels.spec
         self.concise_chan_path_code = self.output_channels.path_sanitize()
 
-    @profile
-    def finalize_image(self, gid):
-
+    def _output_path_for_image(self, gid):
         img = self.output_coco_dataset.index.imgs[gid]
         img_name = img.get('name', f'gid{gid:08d}')
+        save_path = self.output_feat_dpath / f'{img_name}_{self.concise_chan_path_code}.tif'
+        return save_path
+
+    @profile
+    def finalize_image(self, gid, cached=False):
+        """
+        Finializes the probabilities accumulated in the stitcher for a
+        particular image, saves it to disk, and updates the kwcoco file in
+        memory.
+
+        Args:
+            gid (int): image id to finalize
+            cached (bool): if True, only updates the kwcoco file, assumes
+                the file exists on disk.
+        """
+        img = self.output_coco_dataset.index.imgs[gid]
 
         self.finalized_gids.add(gid)
-        stitcher = self.stitcher_dict[gid]
-        recon = stitcher.finalize()
-        self.stitcher_dict.pop(gid)
+
+        if not cached:
+            stitcher = self.stitcher_dict[gid]
+            import warnings
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', 'invalid value encountered in true_divide', category=RuntimeWarning)
+                recon = stitcher.finalize()
+            self.stitcher_dict.pop(gid)
+        else:
+            recon = None
 
         from watch.tasks.fusion.predict import quantize_float01
         # Note using -11 and +11 as a tradeoff range because we cannot
@@ -110,13 +179,16 @@ class Evaluator(object):
             recon, old_min=-11, old_max=11)
         nodata = quantization['nodata']
 
-        save_path = self.output_feat_dpath / f'{img_name}_{self.concise_chan_path_code}.tif'
-
+        save_path = self._output_path_for_image(gid)
         save_path = os.fspath(save_path)
-        kwimage.imwrite(save_path, quant_recon, backend='gdal', space=None,
-                        nodata=nodata, **self.imwrite_kw)
 
-        aux_height, aux_width = quant_recon.shape[0:2]
+        if cached:
+            aux_height, aux_width = kwimage.load_image_shape(save_path)[0:2]
+        else:
+            kwimage.imwrite(save_path, quant_recon, backend='gdal', space=None,
+                            nodata=nodata, **self.imwrite_kw)
+            aux_height, aux_width = quant_recon.shape[0:2]
+
         warp_aux_to_img = kwimage.Affine.scale(
             (img['width'] / aux_width,
              img['height'] / aux_height))
@@ -127,26 +199,65 @@ class Evaluator(object):
             'width': aux_width,
             'channels': self.concise_chan_code,
             'warp_aux_to_img': warp_aux_to_img.concise(),
+            'quantization': quantization,
         }
         auxiliary = img.setdefault('auxiliary', [])
         auxiliary.append(aux)
 
     @profile
     def eval(self) -> tuple:
-        """evaluate a single epoch
+        """
+        Execute predictions on the evaluator kwcoco file.
 
-        Args:
-
-        Returns:
-            None
+        Dumps images and the final kwcoco file to disk.
         """
         from watch.utils import util_kwimage
         current_gids = []
         previous_gids = []
 
+        self.model = self.model.to(self.device)
         self.model.eval()
 
-        dataloader_iter = iter(self.eval_loader)
+        config = self.config
+        window_dims = (config['data']['time_steps'], config['data']['image_size'], config['data']['image_size'])  # [t,h,w]
+        input_dims = (config['data']['image_size'], config['data']['image_size'])
+        channels = config['data']['channels']
+
+        if self.cache:
+            # Detect if we already wrote predictions for some images.
+            miss_gids = []
+            hit_gids = []
+            all_gids = list(self.input_coco_dset.index.imgs.keys())
+            for gid in all_gids:
+                fpath = self._output_path_for_image(gid)
+                if fpath.exists():
+                    hit_gids.append(gid)
+                else:
+                    miss_gids.append(gid)
+            # NOTE: WE ARE ASSUMING ONLY 1 TIME STEP IS USED
+            # THIS HAS TO CHANGE IF MULTIPLE TIMESTEPS ARE USED
+            subset_input_coco = self.input_coco_dset.subset(miss_gids)
+            print(f'Found {len(hit_gids)} / {len(all_gids)} cached features')
+        else:
+            subset_input_coco = self.input_coco_dset
+
+        # Build the torch datasets / loaders
+        sampler = ndsampler.CocoSampler(subset_input_coco)
+        eval_dataset = SequenceDataset(
+            sampler, window_dims, input_dims, channels, training=False,
+            window_overlap=0.3, inference_only=True)
+        print(len(eval_dataset))
+
+        if len(eval_dataset) == 0:
+            # hack for case where everything is already cached
+            eval_dataloader = []
+        else:
+            eval_dataloader = eval_dataset.make_loader(
+                batch_size=self.batch_size,
+                num_workers=self.num_workers,
+            )
+
+        dataloader_iter = iter(eval_dataloader)
         writer = util_parallel.BlockingJobQueue(max_workers=self.num_workers)
 
         seen = set()
@@ -154,7 +265,7 @@ class Evaluator(object):
         with torch.no_grad():
             # Prog = ub.ProgIter
             Prog = tqdm
-            pbar = Prog(enumerate(dataloader_iter), total=len(self.eval_loader), desc='predict rutgers')
+            pbar = Prog(enumerate(dataloader_iter), total=len(eval_dataloader), desc='predict rutgers')
             for batch_index, batch in pbar:
                 outputs = batch
 
@@ -168,14 +279,7 @@ class Evaluator(object):
                 image1 = images[:, :, 0, :, :]
                 image1 = image1.to(self.device)
 
-                if 0:
-                    image1[0:2, 0:2, 0:2, 0:2] = np.nan
-
                 input_mask = image1.isnan()
-                # image1 = utils.stad_image(image1)
-
-                # NOTE: needs to be modified to handle NaNs
-                # image1 = F.normalize(image1, dim=1, p=2)
 
                 # Cannot input nan values to the model, so keep them as their
                 # imputed value
@@ -250,6 +354,11 @@ class Evaluator(object):
                 # self.finalize_image(gid)
                 writer.submit(self.finalize_image, gid)
                 pbar.set_postfix_str('finalized {}'.format(len(self.finalized_gids)))
+
+        if self.cache:
+            # Still need to update the kwcoco file for all of the hit gids
+            for gid in Prog(hit_gids, desc='update coco file for cached images'):
+                self.finalize_image(gid, cached=True)
 
         writer.wait_until_finished()
 
@@ -455,32 +564,6 @@ def hardcoded_default_configs(default_config_key):
 
 def build_evaler(cmdline=False, **kwargs):
     """
-    CommandLine:
-        DVC_DPATH=$(python -m watch.cli.find_dvc) xdoctest -m watch.tasks.rutgers_material_seg.predict build_evaler
-
-    Example:
-        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.tasks.rutgers_material_seg.predict import *  # NOQA
-        >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
-        >>> checkpoint_fpath = dvc_dpath / 'models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth'
-        >>> #checkpoint_fpath = dvc_dpath / 'models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth'
-        >>> src_coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
-        >>> dst_coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/mat_test.kwcoco.json'
-        >>> cmdline = False
-        >>> kwargs = dict(
-        >>>     default_config_key='iarpa',
-        >>>     checkpoint_fpath=checkpoint_fpath,
-        >>>     test_dataset=src_coco_fpath,
-        >>>     pred_dataset=dst_coco_fpath,
-        >>>     gpus='auto:1',
-        >>>     num_workers='avail',
-        >>>     #num_workers=0,
-        >>>     #gpu=None,
-        >>> )
-        >>> evaler = build_evaler(cmdline=cmdline, **kwargs)
-        >>> self = evaler
-        >>> evaler.forward()
     """
     args = make_predict_config(cmdline=cmdline, **kwargs)
     print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
@@ -490,7 +573,7 @@ def build_evaler(cmdline=False, **kwargs):
 
     # Hacks to modify the config
     config['training']['pretrained'] = False
-    print(config)
+    print('config = {}'.format(ub.repr2(config, nl=2)))
     if 0:
         torch.manual_seed(config['seed'])
         torch.cuda.manual_seed(config['seed'])
@@ -522,23 +605,9 @@ def build_evaler(cmdline=False, **kwargs):
     valid_images = orig_images.compress(flags)
     input_coco_dset = input_coco_dset.subset(valid_images)
 
-    sampler = ndsampler.CocoSampler(input_coco_dset)
-
-    window_dims = (config['data']['time_steps'], config['data']['image_size'], config['data']['image_size'])  # [t,h,w]
-    input_dims = (config['data']['image_size'], config['data']['image_size'])
-
     channels = config['data']['channels']
     num_channels = len(channels.split('|'))
     config['training']['num_channels'] = num_channels
-    dataset = SequenceDataset(sampler, window_dims, input_dims, channels,
-                              training=False, window_overlap=0.3,
-                              inference_only=True)
-    print(dataset.__len__())
-
-    eval_dataloader = dataset.make_loader(
-        batch_size=args.batch_size,
-        num_workers=num_workers,
-    )
 
     # HACK!!!!
     # THIS IS WHY WE SAVE METADATA WITH THE MODEL!
@@ -579,10 +648,8 @@ def build_evaler(cmdline=False, **kwargs):
     model = mounted_model_cls(model)
 
     model.load_state_dict(checkpoint_state['model'])
-    # print(f"loadded model succeffuly from: {pretrain_config_path}")
+    print(f"loadded model weights from: {args.checkpoint_fpath}")
     # print(f"Missing keys from loaded model: {missing_keys}, unexpected keys: {unexpexted_keys}")
-
-    model.to(device)
 
     output_coco_fpath = pathlib.Path(args.pred_dataset)
 
@@ -609,13 +676,15 @@ def build_evaler(cmdline=False, **kwargs):
 
     evaler = Evaluator(
         model,
-        eval_dataloader,
+        input_coco_dset=input_coco_dset,
         output_coco_dataset=output_coco_dataset,
         config=config,
         device=device,
         num_workers=num_workers,
         output_feat_dpath=output_feat_dpath,
         imwrite_kw=imwrite_kw,
+        batch_size=args.batch_size,
+        cache=args.cache,
     )
     return evaler
 

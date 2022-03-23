@@ -4293,7 +4293,7 @@ python -m watch.tasks.fusion.fit \
 
 
 
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$(python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
@@ -4323,7 +4323,7 @@ python -m watch.tasks.fusion.fit \
     --time_steps=7 \
     --global_class_weight=1.0 \
     --global_saliency_weight=1.00 \
-    --num_workers=0 \
+    --num_workers=8 \
     --gpus "1" \
     --learning_rate=2e-3 \
     --attention_impl=exact \
@@ -4352,10 +4352,56 @@ KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
-CHANNELS="blue|green|red,nir|swir16|swir22,blue|green|red,depth,panchromatic,matseg_0|matseg_1|matseg_2|matseg_3"
-INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/FUSION_EXPERIMENT_ML_V155/FUSION_EXPERIMENT_ML_V155_epoch=18-step=41628.pt 
-#INITIAL_STATE="noop"
+CHANNELS="blue|green|red|nir|swir16|swir22|matseg_0|matseg_1|matseg_2|matseg_3,depth"
+INITIAL_STATE="noop"
 EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V158
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config "$WORKDIR/configs/common_20220303.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --use_centered_positives=True \
+    --channels="$CHANNELS" \
+    --neg_to_pos_ratio=0.3 \
+    --accumulate_grad_batches=16 \
+    --chip_size=224 \
+    --decoder=segmenter \
+    --tokenizer=rearrange \
+    --time_steps=7 \
+    --global_class_weight=1.0 \
+    --global_saliency_weight=1.00 \
+    --num_workers=8 \
+    --gpus "1" \
+    --learning_rate=2e-3 \
+    --attention_impl=exact \
+    --chip_overlap=0.0 \
+    --optimizer=AdamW \
+    --time_sampling=hardish3 \
+    --arch_name=smt_it_sm_p8 \
+    --max_epoch_length=4096 \
+    --num_draw=8 \
+    --draw_interval=20m \
+    --dist_weight=True \
+    --stream_channels=64 \
+    --temporal_dropout=0.5 \
+    --modulate_class_weights="positive*0,negative*0,background*1.0,No Activity*0.0,Post Construction*0.0,Site Preparation*1.0" \
+    --init="$INITIAL_STATE" 
+
+
+export CUDA_VISIBLE_DEVICES=1
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
+CHANNELS="blue|green|red,nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,depth"
+INITIAL_STATE="noop"
+EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V159
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
@@ -4374,7 +4420,7 @@ python -m watch.tasks.fusion.fit \
     --time_steps=7 \
     --global_class_weight=1.0 \
     --global_saliency_weight=1.00 \
-    --num_workers=0 \
+    --num_workers=8 \
     --gpus "1" \
     --learning_rate=2e-3 \
     --attention_impl=exact \
@@ -4386,7 +4432,150 @@ python -m watch.tasks.fusion.fit \
     --num_draw=8 \
     --draw_interval=20m \
     --dist_weight=True \
-    --stream_channels=4 \
+    --stream_channels=64 \
     --temporal_dropout=0.5 \
-    --modulate_class_weights="positive*0,negative*0,background*0.5,No Activity*0.0,Post Construction*0.0,Site Preparation*2.0" \
+    --modulate_class_weights="positive*0,negative*0,background*1.0,No Activity*0.0,Post Construction*0.0,Site Preparation*1.0" \
+    --init="$INITIAL_STATE" 
+
+
+export CUDA_VISIBLE_DEVICES=2
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22|matseg_0|matseg_1|matseg_2|matseg_3,depth"
+INITIAL_STATE="noop"
+EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V160
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config "$WORKDIR/configs/common_20220303.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --use_centered_positives=True \
+    --channels="$CHANNELS" \
+    --neg_to_pos_ratio=0.3 \
+    --accumulate_grad_batches=16 \
+    --chip_size=224 \
+    --decoder=segmenter \
+    --tokenizer=rearrange \
+    --time_steps=7 \
+    --global_class_weight=1.0 \
+    --global_saliency_weight=1.00 \
+    --num_workers=8 \
+    --gpus "1" \
+    --learning_rate=2e-3 \
+    --attention_impl=exact \
+    --chip_overlap=0.0 \
+    --optimizer=SGD \
+    --time_sampling=hardish3 \
+    --arch_name=smt_it_sm_p8 \
+    --max_epoch_length=4096 \
+    --num_draw=8 \
+    --draw_interval=20m \
+    --dist_weight=True \
+    --stream_channels=64 \
+    --temporal_dropout=0.5 \
+    --modulate_class_weights="positive*0,negative*0,background*1.0,No Activity*0.0,Post Construction*0.0,Site Preparation*1.0" \
+    --init="$INITIAL_STATE" 
+
+
+export CUDA_VISIBLE_DEVICES=3
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
+CHANNELS="blue|green|red,nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,depth"
+INITIAL_STATE="noop"
+EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V161
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config "$WORKDIR/configs/common_20220303.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --use_centered_positives=True \
+    --channels="$CHANNELS" \
+    --neg_to_pos_ratio=0.3 \
+    --accumulate_grad_batches=16 \
+    --chip_size=224 \
+    --decoder=segmenter \
+    --tokenizer=linconv \
+    --time_steps=7 \
+    --global_class_weight=1.0 \
+    --global_saliency_weight=1.00 \
+    --num_workers=8 \
+    --gpus "1" \
+    --learning_rate=2e-3 \
+    --attention_impl=exact \
+    --chip_overlap=0.0 \
+    --optimizer=SGD \
+    --time_sampling=hardish3 \
+    --arch_name=smt_it_sm_p8 \
+    --max_epoch_length=4096 \
+    --num_draw=8 \
+    --draw_interval=20m \
+    --dist_weight=True \
+    --stream_channels=64 \
+    --temporal_dropout=0.5 \
+    --modulate_class_weights="positive*0,negative*0,background*1.0,No Activity*0.0,Post Construction*0.0,Site Preparation*1.0" \
+    --init="$INITIAL_STATE" 
+
+
+# Hack: to test if segmenter is the issue
+
+export CUDA_VISIBLE_DEVICES=2
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22|matseg_0|matseg_1|matseg_2|matseg_3,depth"
+INITIAL_STATE="noop"
+EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V158
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config "$WORKDIR/configs/common_20220303.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --use_centered_positives=True \
+    --channels="$CHANNELS" \
+    --neg_to_pos_ratio=0.3 \
+    --accumulate_grad_batches=16 \
+    --chip_size=224 \
+    --decoder=mlp \
+    --tokenizer=rearrange \
+    --time_steps=7 \
+    --global_class_weight=1.0 \
+    --global_saliency_weight=1.00 \
+    --num_workers=8 \
+    --gpus "1" \
+    --learning_rate=2e-3 \
+    --attention_impl=exact \
+    --chip_overlap=0.0 \
+    --optimizer=AdamW \
+    --time_sampling=hardish3 \
+    --arch_name=smt_it_sm_p8 \
+    --max_epoch_length=4096 \
+    --num_draw=8 \
+    --draw_interval=20m \
+    --dist_weight=True \
+    --stream_channels=64 \
+    --temporal_dropout=0.5 \
+    --modulate_class_weights="positive*0,negative*0,background*1.0,No Activity*0.0,Post Construction*0.0,Site Preparation*1.0" \
     --init="$INITIAL_STATE" 
