@@ -16,12 +16,19 @@ from watch.utils import util_kwimage
 
 class predict(object):
     """
+    CommandLine:
+        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        DVC_DPATH=$DVC_DPATH xdoctest -m watch.tasks.invariants.predict predict
+
+        python -m watch visualize $DVC_DPATH/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/test_uky.kwcoco.json \
+            --channels='invariants.0:3' --animate=True --with_anns=False
+
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.tasks.invariants.predict import *  # NOQA
+        >>> import kwcoco
         >>> import watch
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
-        >>> import kwcoco
         >>> #  Write out smaller version of the dataset
         >>> dset = kwcoco.CocoDataset(dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json')
         >>> images = dset.images()
@@ -114,7 +121,12 @@ class predict(object):
     def finalize_image(self, gid):
         self.finalized_gids.add(gid)
         stitcher = self.stitcher_dict[gid]
-        recon = stitcher.finalize()
+
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', category=RuntimeWarning)
+            recon = stitcher.finalize()
+
         self.stitcher_dict.pop(gid)
 
         from watch.tasks.fusion.predict import quantize_float01

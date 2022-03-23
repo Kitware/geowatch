@@ -6,6 +6,7 @@ import albumentations as A
 from torchvision import transforms
 import kwcoco
 import kwimage
+import kwarray
 import random
 from pandas import read_csv
 import ndsampler
@@ -134,9 +135,8 @@ class gridded_dataset(torch.utils.data.Dataset):
             else:
                 samples = grid['positives'] + grid['negatives']
 
-        vidid_to_patches = ub.group_items(samples, key=lambda x: x['vidid'])
-        self.vidid_to_patches = vidid_to_patches
-
+        # vidid_to_patches = ub.group_items(samples, key=lambda x: x['vidid'])
+        # self.vidid_to_patches = vidid_to_patches
         grouped = ub.group_items(
                 samples,
                 lambda x: tuple(
@@ -215,14 +215,58 @@ class gridded_dataset(torch.utils.data.Dataset):
         gids : list[int] = tr['gids']
 
         im1_id = gids[0]
-        offset_idx = idx
-        offset_im_id = None
+        img_obj1 : dict = self.coco_dset.index.imgs[im1_id]
+        video_obj = self.coco_dset.index.videos[img_obj1['video_id']]
 
-        while (im1_id != offset_im_id) or (offset_idx == idx):
-            offset_idx = random.randint(0, len(self.patches) - 2)
-            offset_tr = self.patches[offset_idx]
-            offset_im_id = offset_tr['gids'][0]
+        vid_width = video_obj['width']
+        vid_height = video_obj['height']
+
+        # Choose an offset "target" such that it is
+        # (1) in the same image as the main image
+        # (2) has a different spatial location
+        # (3) is in a valid region of the image
+        space_box = kwimage.Boxes.from_slice(tr['space_slice'])
+        sh_space_box = space_box.to_shapely()[0]
+        img_width = space_box.width.ravel()[0]
+        img_height = space_box.height.ravel()[0]
+
+        # Get the valid polygon for this coco image in video space
+        # TODO: add API for this in CocoImage
+        # CocoImage.valid_region(space='video') will be in kwcoco 0.2.26
+        valid_coco_poly = img_obj1.get('valid_region', None)
+        if valid_coco_poly is None:
+            sh_valid_poly = None
+        else:
+            warp_vid_from_img = kwimage.Affine.coerce(img_obj1['warp_img_to_vid'])
+            kw_poly_img = kwimage.MultiPolygon.coerce(valid_coco_poly)
+            sh_valid_poly = kw_poly_img.warp(warp_vid_from_img).to_shapely()  # shapely.geometry.Polygon
+
+        # Sample valid offset boxes until the conditions are met
+        rng = kwarray.ensure_rng(None)
+        offset_box = None
+        attempts = 0
+        while offset_box is None:
+            attempts += 1
+            offset_box = kwimage.Boxes([[0, 0, img_width, img_height]], 'ltrb')
+            offset_x = rng.randint(0, max(vid_width - img_width, 1))
+            offset_y = rng.randint(0, max(vid_height - img_height, 1))
+            offset_box = offset_box.translate((offset_x, offset_y))
+            if attempts > 10:
+                # Give up
+                break
+            sh_box = offset_box.to_shapely()[0]
+            orig_overlap = sh_space_box.intersection(sh_box).area / sh_space_box.area
+            if orig_overlap > 0.001:
+                offset_box = None
+            if sh_valid_poly is None:
+                valid_frac = sh_valid_poly.intersection(sh_box).area / sh_box.area
+                if valid_frac < 0.5:
+                    offset_box = None
+
+        # Create a new target for the offset region
+        offset_tr = tr.copy()
         offset_tr['channels'] = self.bands
+        offset_tr['space_slice'] = offset_box.astype(int).to_slices()[0]
 
         import warnings
         with warnings.catch_warnings():
