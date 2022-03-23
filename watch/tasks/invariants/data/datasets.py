@@ -239,7 +239,11 @@ class gridded_dataset(torch.utils.data.Dataset):
         else:
             warp_vid_from_img = kwimage.Affine.coerce(img_obj1['warp_img_to_vid'])
             kw_poly_img = kwimage.MultiPolygon.coerce(valid_coco_poly)
-            sh_valid_poly = kw_poly_img.warp(warp_vid_from_img).to_shapely()  # shapely.geometry.Polygon
+            if kw_poly_img is None:
+                sh_valid_poly = None
+            else:
+                valid_coco_poly = None
+                sh_valid_poly = kw_poly_img.warp(warp_vid_from_img).to_shapely()  # shapely.geometry.Polygon
 
         # Sample valid offset boxes until the conditions are met
         rng = kwarray.ensure_rng(None)
@@ -258,7 +262,7 @@ class gridded_dataset(torch.utils.data.Dataset):
             orig_overlap = sh_space_box.intersection(sh_box).area / sh_space_box.area
             if orig_overlap > 0.001:
                 offset_box = None
-            if sh_valid_poly is None:
+            if sh_valid_poly is not None:
                 valid_frac = sh_valid_poly.intersection(sh_box).area / sh_box.area
                 if valid_frac < 0.5:
                     offset_box = None
