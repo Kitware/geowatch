@@ -215,7 +215,7 @@ def main(cmdline=True, **kwargs):
                 --default_config_key=iarpa \
                 --num_workers="{data_workers}" \
                 --batch_size=32 --gpus "0" \
-                --compress=DEFLATE --blocksize=128
+                --compress=DEFLATE --blocksize=128 --cache=True
             ''')
         combo_code_parts.append(codes[key])
         tasks.append(task)

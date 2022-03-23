@@ -28,6 +28,30 @@ python -m watch.cli.prepare_ta2_dataset \
     --serial=True --run=0
 
 
+
+# Second-to-last iMERIT drop
+# s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220314/iMERIT_COMBINED_20220314_part3.unique.input
+
+DATASET_SUFFIX=Drop3-TA1-2022-03-10 
+python -m watch.cli.prepare_ta2_dataset \
+    --dataset_suffix=$DATASET_SUFFIX \
+    --s3_fpath \
+        s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220314/iMERIT_COMBINED_20220314_part3.unique.input \
+        s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220314/iMERIT_COMBINED_20220314_part2.unique.input \
+        s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220120/iMERIT_COMBINED.unique.input \
+        s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220314/iMERIT_COMBINED_20220314_part1.unique.input \
+        s3://kitware-smart-watch-data/processed/ta1/ALL_ANNOTATED_REGIONS_TA-1_PROCESSED_20220222.unique.input \
+        s3://kitware-smart-watch-data/processed/ta1/TA-1_PROCESSED_TA-2_SUPERREGIONS_WV_ONLY.unique.input \
+    --collated False False False True True \
+    --dvc_dpath="$DVC_DPATH" \
+    --aws_profile=iarpa \
+    --fields_workers=8 \
+    --convert_workers=8 \
+    --align_workers=26 \
+    --cache=0 \
+    --serial=True --run=0
+
+
 DVC_DPATH=$(python -m watch.cli.find_dvc)
 DATASET_SUFFIX=Drop3-TA1-2022-03-10 
 python -m watch.cli.prepare_ta2_dataset \
