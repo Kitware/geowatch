@@ -31,7 +31,7 @@ class predict(object):
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
         >>> #  Write out smaller version of the dataset
         >>> dset = kwcoco.CocoDataset(dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json')
-        >>> images = dset.images()
+        >>> images = dset.videos(names=['KR_R001']).images[0]
         >>> sub_images = images.compress([s != 'WV' for s in images.lookup('sensor_coarse')])[::5]
         >>> sub_dset = dset.subset(sub_images)
         >>> sub_dset.fpath = (dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/small_test_data_nowv_vali.kwcoco.json')
