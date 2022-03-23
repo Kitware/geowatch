@@ -81,7 +81,12 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False,
 
     from watch.utils import kwcoco_extensions
     filtered_gids = kwcoco_extensions.filter_image_ids(
-        input_dset, select_images=select_images, select_videos=select_videos)
+        input_dset,
+        include_sensors=['WV'],
+        select_images=select_images,
+        select_videos=select_videos
+    )
+    log.info('Valid Images:          {}'.format(len(filtered_gids)))
     input_dset = input_dset.subset(filtered_gids)
 
     output_dset = input_dset.copy()
