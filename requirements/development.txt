@@ -23,3 +23,7 @@ fels >= 1.4.0
 
 # Note sure if this should be a requirement yet
 # dvc>=2.9.3
+
+
+# For writing to excel spreadsheets
+openpyxl>=3.0.9

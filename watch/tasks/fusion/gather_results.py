@@ -207,8 +207,10 @@ def prepare_results(all_infos, coi_pattern):
         class_measures = info['ovr_measures']
 
         expt_class_rows = []
+        coi_catnames = []
         for catname, bin_measure in class_measures.items():
             if coi_pattern.match(catname):
+                coi_catnames.append(catname)
                 coi_aps.append(bin_measure['ap'])
                 coi_aucs.append(bin_measure['auc'])
             class_aps.append(bin_measure['ap'])
@@ -323,10 +325,22 @@ def prepare_results(all_infos, coi_pattern):
             predict_args  # add predict window overlap
             # row['train_remote'] = cand_remote
 
+            result_meta = {
+                'title': title,
+                'epoch': epoch,
+                'step': step,
+                'expt_name': expt_name,
+                'pred_fpath': pred_fpath,
+                'model_fpath': model_fpath,
+                'package_name': package_name,
+                'coi_catnames': ','.join(sorted(coi_catnames)),
+            }
+
             result2 = result_analysis.Result(
                  name=result.meta['title'],
                  params=fit_config,
                  metrics=metrics,
+                 meta=result_meta
             )
             results_list2.append(result2)
     return class_rows, mean_rows, all_results, results_list2
@@ -507,6 +521,7 @@ def gather_measures(cmdline=False, **kwargs):
 
         suffix = 'models/fusion/*/eval/*/*/*/*/eval/curves/measures2.json'
         kwargs['measure_globstr'] = dvc_dpath / suffix
+        kwargs['out_dpath'] = dvc_dpath / '_agg_results2'
 
         if 0:
             remote = 'namek'
@@ -608,6 +623,124 @@ def gather_measures(cmdline=False, **kwargs):
     print(f'Failed Jobs {len(failed_jobs)=}/{len(jobs)}')
 
     class_rows, mean_rows, all_results, results_list2 = prepare_results(all_infos, coi_pattern)
+
+    if 1:
+        spreadsheet_rows = [ub.dict_union(
+            {'name': result.name},
+            result.metrics,
+            result.params,
+            result.meta or {},
+        )
+            for result in results_list2]
+
+        metrics_keys = set(ub.flatten(result.metrics.keys() for result in results_list2))
+
+        ignore_spreadsheet = {
+            'default_root_dir', 'enable_progress_bar'
+            'prepare_data_per_node', 'enable_model_summary', 'checkpoint_callback',
+            'detect_anomaly', 'gpus', 'terminate_on_nan',
+            'workdir', 'config', 'num_workers', 'amp_backend',
+            'enable_progress_bar', 'flush_logs_every_n_steps',
+            'enable_checkpointing', 'prepare_data_per_node', 'amp_level',
+            'package_fpath', 'num_draw',
+            'track_grad_norm',
+            'val_check_interval',
+            'weights_summary',
+            'process_position',
+            'overfit_batches',
+            'num_sanity_val_steps',
+            'num_processes',
+            'num_nodes',
+            'move_metrics_to_cpu',
+            'limit_val_batches',
+            'limit_train_batches',
+            'limit_predict_batches',
+            'fast_dev_run',
+            'eval_after_fit',
+            'deterministic',
+            'reload_dataloaders_every_epoch',
+            'reload_dataloaders_every_n_epochs',
+            'replace_sampler_ddp',
+        }
+
+        # https://pbpython.com/improve-pandas-excel-output.html
+        # https://www.ojdo.de/wp/2019/10/pandas-to-excel-with-openpyxl/
+        spreadsheet = pd.DataFrame(spreadsheet_rows)
+        spreadsheet = spreadsheet.drop(set(spreadsheet.columns) & ignore_spreadsheet, axis=1)
+        from openpyxl.formatting.rule import ColorScaleRule  # NOQA
+        from openpyxl.styles import Alignment, Font, NamedStyle  # NOQA
+        from openpyxl.utils import get_column_letter  # NOQA
+
+        excel_fpath = out_dpath / 'experiment_results.xlsx'
+        excel_fpath.delete()
+        writer = pd.ExcelWriter(excel_fpath, engine='openpyxl', mode='w')
+        with writer:
+            spreadsheet.to_excel(writer, sheet_name='report', index=False)
+            # workbook = writer.book
+            ws = writer.sheets['report']
+
+            ap_percentile_rule = ColorScaleRule(
+                start_type='percentile',
+                start_value=0,
+                start_color='ffaaaa',  # red-ish
+                mid_type='num',
+                mid_value=0.3,
+                mid_color='ffffff',  # white
+                end_type='percentile',
+                end_value=1,
+                end_color='aaffaa')  # green-ish
+
+            auc_percentile_rule = ColorScaleRule(
+                start_type='percentile',
+                start_value=0.4,
+                start_color='ffaaaa',  # red-ish
+                mid_type='num',
+                mid_value=0.7,
+                mid_color='ffffff',  # white
+                end_type='percentile',
+                end_value=1,
+                end_color='aaffaa')  # green-ish
+
+            metric_col_idxs = []
+
+            for col_idx in range(1, ws.max_column):
+                colname = spreadsheet.columns[col_idx - 1]
+                col = get_column_letter(col_idx)
+                if colname in metrics_keys:
+                    metric_col_idxs.append(col_idx)
+                max_col_len = max(map(len, spreadsheet.iloc[:, (col_idx - 1)].to_string(index=False).split('\n')))
+                # print('max_col_len = {!r}'.format(max_col_len))
+                if max_col_len < 8:
+                    ws.column_dimensions[col].width = min(max(max_col_len, len(colname)), 26)
+                else:
+                    ws.column_dimensions[col].width = 26
+
+            # from matplotlib.colors import cmap
+            import matplotlib
+            # cmap = matplotlib.cm.get_cmap('bwr')
+            cmap = matplotlib.cm.get_cmap('spectral')
+            # metric_format = workbook.add_format({'num_format': '0.4f', 'bold': False})
+            ws.column_dimensions['A'].width = 40
+            for col_idx in metric_col_idxs:
+                colname = spreadsheet.columns[col_idx - 1]
+                col = get_column_letter(col_idx)
+                value_cells = '{col}2:{col}{row}'.format(col=col, row=ws.max_row)
+                ws.column_dimensions[col].width = 20
+                if 'AUC' in colname:
+                    ws.conditional_formatting.add(value_cells, auc_percentile_rule)
+                else:
+                    ws.conditional_formatting.add(value_cells, ap_percentile_rule)
+                for row in ws[value_cells]:
+                    for cell in row:
+                        import kwimage
+                        try:
+                            cell.fill.bgColor.rgb = kwimage.Color(cmap(cell.value)).ashex()[1:7]
+                        except Exception:
+                            pass
+
+                        # cell.fill.bgColor
+                        # cell.number_format = '0.0000'
+
     if 0:
         best_candidates(class_rows, mean_rows)
 

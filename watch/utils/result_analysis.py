@@ -78,6 +78,8 @@ class Result(ub.NiceRepr):
         name (str): name of the experiment
         params (Dict[str, object]): configuration of the experiment
         metrics (Dict[str, float]): quantitative results of the experiment
+        metrics (Dict | None): any other metadata about this result.
+            This is unused in the analysis.
 
     Example:
         >>> from watch.utils.result_analysis import *  # NOQA
@@ -85,10 +87,11 @@ class Result(ub.NiceRepr):
         >>> print('self = {}'.format(self))
         self = <Result(name=53f57161,f1=0.33,acc=0.75,param1=1,param2=6.67,param3=a)>
     """
-    def __init__(self, name, params, metrics):
+    def __init__(self, name, params, metrics, meta=None):
         self.name = name
         self.params = params
         self.metrics = metrics
+        self.meta = meta
 
     def to_dict(self):
         row = ub.dict_union({'name': self.name}, self.metrics, self.params)
