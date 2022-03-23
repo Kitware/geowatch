@@ -110,7 +110,7 @@ class predict(object):
         self.save_channels = f'invariants:{self.num_out_channels}'
         self.output_kwcoco_path = ub.Path(args.output_kwcoco)
         out_folder = self.output_kwcoco_path.parent
-        self.output_feat_dpath = (out_folder / 'uky_invariants').ensuredir()
+        self.output_feat_dpath = (out_folder / '_assets/uky_invariants').ensuredir()
 
         self.imwrite_kw = {
             'compress': 'DEFLATE',
