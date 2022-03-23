@@ -39,6 +39,11 @@ class gridded_dataset(torch.utils.data.Dataset):
         >>> kwplot.imshow(kwimage.normalize(rgb4), pnum=(1, 4, 4), title='augmented_image1')
         >>> kwplot.show_if_requested()
 
+        loader = torch.utils.data.DataLoader(
+            self, num_workers=0, batch_size=1, shuffle=False)
+        dliter = iter(loader)
+        batch = next(dliter)
+
     Example:
         >>> # xdoctest: +SKIP
         >>> from watch.tasks.invariants.data.datasets import *  # NOQA
@@ -128,6 +133,10 @@ class gridded_dataset(torch.utils.data.Dataset):
                 samples = grid['positives']
             else:
                 samples = grid['positives'] + grid['negatives']
+
+        vidid_to_patches = ub.group_items(samples, key=lambda x: x['vidid'])
+        self.vidid_to_patches = vidid_to_patches
+
         grouped = ub.group_items(
                 samples,
                 lambda x: tuple(
@@ -215,78 +224,89 @@ class gridded_dataset(torch.utils.data.Dataset):
             offset_im_id = offset_tr['gids'][0]
         offset_tr['channels'] = self.bands
 
-        if self.segmentation:
-            sample = self.sampler.load_sample(tr, with_annots='segmentation', nodata='float')
-            det_list = sample['annots']['frame_dets']
-            segmentation_masks = []
-            for det in det_list:
-                frame_mask = np.full([self.patch_size, self.patch_size], dtype=np.int32, fill_value=0)
-                ann_polys = det.data['segmentations'].to_polygon_list()
-                ann_aids = det.data['aids']
-                ann_cids = det.data['cids']
-                for poly, aid, cid in zip(ann_polys, ann_aids, ann_cids):
-                    if cid in self.positive_indices:
-                        if self.bas:
-                            poly.fill(frame_mask, value=1)
-                        else:
-                            cidx = self.sampler.classes.id_to_idx[cid]
-                            poly.fill(frame_mask, value=cidx)
-                    elif cid in self.ignore_indices:
-                        poly.fill(frame_mask, value=-1)
-                segmentation_masks.append(frame_mask)
-        else:
-            sample = self.sampler.load_sample(tr, nodata='float')
-        offset_sample = self.sampler.load_sample(offset_tr, nodata='float')
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', 'empty slice')
+            warnings.filterwarnings('ignore', category=RuntimeWarning)
 
-        images : np.ndarray = sample['im']
-        offset_image = offset_sample['im'][0]
-        augmented_image = self.transforms(image=images[0].copy() / images[0].max())['image'] * images[0].max()
-
-        image_dict = {}
-        for k, image in enumerate(images):
-            imstd = np.nanstd(image)
-            if imstd != 0.:
-                image = (image - np.nanmean(image)) / imstd
+            if self.segmentation:
+                sample = self.sampler.load_sample(tr, with_annots='segmentation', nodata='float')
+                det_list = sample['annots']['frame_dets']
+                segmentation_masks = []
+                for det in det_list:
+                    frame_mask = np.full([self.patch_size, self.patch_size], dtype=np.int32, fill_value=0)
+                    ann_polys = det.data['segmentations'].to_polygon_list()
+                    ann_aids = det.data['aids']
+                    ann_cids = det.data['cids']
+                    for poly, aid, cid in zip(ann_polys, ann_aids, ann_cids):
+                        if cid in self.positive_indices:
+                            if self.bas:
+                                poly.fill(frame_mask, value=1)
+                            else:
+                                cidx = self.sampler.classes.id_to_idx[cid]
+                                poly.fill(frame_mask, value=cidx)
+                        elif cid in self.ignore_indices:
+                            poly.fill(frame_mask, value=-1)
+                    segmentation_masks.append(frame_mask)
             else:
-                image = np.zeros_like(image)
-            image_dict[1 + k] = image
-        offset_imstd = np.nanstd(offset_image)
-        if offset_imstd != 0:
-            offset_image = (offset_image - np.nanmean(offset_image)) / offset_imstd
-        else:
-            offset_image = np.zeros_like(offset_image)
-        augmented_imgstd = augmented_image.std()
-        if augmented_imgstd != 0:
-            augmented_image = (augmented_image - np.nanmean(augmented_image)) / augmented_imgstd
-        else:
-            augmented_image = np.zeros_like(augmented_image)
+                sample = self.sampler.load_sample(tr, nodata='float')
+            offset_sample = self.sampler.load_sample(offset_tr, nodata='float')
 
-        for key in image_dict:
-            image_dict[key] = torch.tensor(image_dict[key]).permute(2, 0, 1)
-        offset_image = torch.tensor(offset_image).permute(2, 0, 1)
-        augmented_image = torch.tensor(augmented_image).permute(2, 0, 1)
+            images : np.ndarray = sample['im']
+            offset_image = offset_sample['im'][0]
 
-        date_list = []
-        for gid in gids:
-            date = self.coco_dset.index.imgs[gid]['date_captured']
-            date_list.append((int(date[:4]), int(date[5:7])))
-        normalized_date = torch.tensor([date_[0] - 2018 + date_[1] / 12 for date_ in date_list])
-        out = dict()
+            invalid_mask = np.isnan(images[0])
+            if np.all(invalid_mask):
+                max_val = 1
+            else:
+                max_val = np.nanmax(images[0])
+            augmented_image = self.transforms(image=images[0].copy() / max_val)['image'] * max_val
 
-        for m in range(self.num_images):
-            out['image{}'.format(1 + m)] = image_dict[1 + m].float()
+            image_dict = {}
+            for k, image in enumerate(images):
+                imstd = np.nanstd(image)
+                if imstd != 0.:
+                    image = (image - np.nanmean(image)) / imstd
+                else:
+                    image = np.zeros_like(image)
+                image_dict[1 + k] = image
+            offset_imstd = np.nanstd(offset_image)
+            if offset_imstd != 0:
+                offset_image = (offset_image - np.nanmean(offset_image)) / offset_imstd
+            else:
+                offset_image = np.zeros_like(offset_image)
+            augmented_imgstd = augmented_image.std()
+            if augmented_imgstd != 0:
+                augmented_image = (augmented_image - np.nanmean(augmented_image)) / augmented_imgstd
+            else:
+                augmented_image = np.zeros_like(augmented_image)
 
-        out['offset_image1'] = offset_image.float()
-        out['augmented_image1'] = augmented_image.float()
-        out['normalized_date'] = normalized_date.float()
-        out['time_sort_label'] = float(normalized_date[0] < normalized_date[1])
-        out['img1_id'] = gids[0]
-        # img1_info = self.coco_dset.index.imgs[gids[0]]
-        # out['img1_info'] = img1_info
-        # out['tr'] = ItemContainer(tr, stack=False)
-        if self.segmentation:
-            for k in range(self.num_images):
-                out['segmentation{}'.format(1 + k)] = torch.tensor(segmentation_masks[k])
+            for key in image_dict:
+                image_dict[key] = torch.tensor(image_dict[key]).permute(2, 0, 1)
+            offset_image = torch.tensor(offset_image).permute(2, 0, 1)
+            augmented_image = torch.tensor(augmented_image).permute(2, 0, 1)
+
+            date_list = []
+            for gid in gids:
+                date = self.coco_dset.index.imgs[gid]['date_captured']
+                date_list.append((int(date[:4]), int(date[5:7])))
+            normalized_date = torch.tensor([date_[0] - 2018 + date_[1] / 12 for date_ in date_list])
+            out = dict()
+
+            for m in range(self.num_images):
+                out['image{}'.format(1 + m)] = image_dict[1 + m].float()
+
+            out['offset_image1'] = offset_image.float()
+            out['augmented_image1'] = augmented_image.float()
+            out['normalized_date'] = normalized_date.float()
+            out['time_sort_label'] = float(normalized_date[0] < normalized_date[1])
+            out['img1_id'] = gids[0]
+            # img1_info = self.coco_dset.index.imgs[gids[0]]
+            # out['img1_info'] = img1_info
+            # out['tr'] = ItemContainer(tr, stack=False)
+            if self.segmentation:
+                for k in range(self.num_images):
+                    out['segmentation{}'.format(1 + k)] = torch.tensor(segmentation_masks[k])
         return out
 
 

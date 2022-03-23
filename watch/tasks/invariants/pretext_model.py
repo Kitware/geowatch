@@ -74,7 +74,6 @@ class pretext(pl.LightningModule):
                                         pos_encode=hparams.positional_encoding,
                                         attention_layers=hparams.attention_layers,
                                         mode=hparams.positional_encoding_mode)
-        
 
         # task specific necks
         self.necks = [
@@ -94,7 +93,7 @@ class pretext(pl.LightningModule):
         # task specific criterion
         self.criteria = [
             # BinaryFocalLoss(gamma=self.hparams.focal_gamma),  # sort task
-            nn.NLLLoss(), #sort task
+            nn.NLLLoss(),  # sort task
             nn.TripletMarginLoss(),  # augment task
             nn.TripletMarginLoss(),  # overlap task
         ]

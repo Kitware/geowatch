@@ -15,6 +15,39 @@ from watch.utils import util_kwimage
 
 
 class predict(object):
+    """
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> from watch.tasks.invariants.predict import *  # NOQA
+        >>> import watch
+        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> import kwcoco
+        >>> #  Write out smaller version of the dataset
+        >>> dset = kwcoco.CocoDataset(dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json')
+        >>> images = dset.images()
+        >>> sub_images = images.compress([s != 'WV' for s in images.lookup('sensor_coarse')])[::100]
+        >>> sub_dset = dset.subset(sub_images)
+        >>> sub_dset.fpath = (dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/small_test_data_nowv_vali.kwcoco.json')
+        >>> sub_dset.dump(sub_dset.fpath)
+        >>> input_kwcoco = sub_dset.fpath
+        >>> output_kwcoco = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/test_uky.kwcoco.json'
+        >>> pretext_package_path = dvc_dpath / 'models/uky/uky_invariants_2022_03_11/TA1_pretext_model/pretext_package.pt'
+        >>> pca_projection_path = dvc_dpath / 'models/uky/uky_invariants_2022_03_11/TA1_pretext_model/pca_projection_matrix.pt'
+        >>> segmentation_package_path = dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt'
+        >>> argv = []
+        >>> argv += ['--input_kwcoco', f'{sub_dset.fpath}']
+        >>> argv += ['--output_kwcoco', f'{output_kwcoco}']
+        >>> argv += ['--pca_projection_path', f'{pca_projection_path}']
+        >>> argv += ['--pretext_package_path', f'{pretext_package_path}']
+        >>> argv += ['--segmentation_package_path', f'{segmentation_package_path}']
+        >>> argv += ['--patch_overlap', '0']
+        >>> argv += ['--num_workers', '2']
+        >>> argv += ['--tasks', 'all']
+        >>> argv += ['--do_pca', '1']
+        >>> args = parse_args(argv)
+        >>> self = predict(args)
+        >>> self.forward(args)
+    """
     def __init__(self, args):
         ###
         self.dataset = gridded_dataset(args.input_kwcoco, args.bands,
@@ -84,10 +117,13 @@ class predict(object):
         recon = stitcher.finalize()
         self.stitcher_dict.pop(gid)
 
+        from watch.tasks.fusion.predict import quantize_float01
+        quant_recon, quantization = quantize_float01(recon)
+
         save_path = self.output_feat_dpath / f'invariants_{gid}.tif'
         save_path = os.fspath(save_path)
-        kwimage.imwrite(save_path, recon,  space=None,
-                        **self.imwrite_kw)
+        kwimage.imwrite(save_path, quant_recon,  space=None,
+                        nodata=quantization['nodata'], **self.imwrite_kw)
 
         aux_height, aux_width = recon.shape[0:2]
         img = self.output_dset.index.imgs[gid]
@@ -101,6 +137,7 @@ class predict(object):
             'width': aux_width,
             'channels': self.save_channels,
             'warp_aux_to_img': warp_aux_to_img.concise(),
+            'quantization': quantization,
         }
         auxiliary = img.setdefault('auxiliary', [])
         auxiliary.append(aux)
@@ -133,16 +170,28 @@ class predict(object):
             for idx, batch in tqdm(enumerate(loader), total=num_batches, desc='Compute features'):
                 save_feat = []
                 save_feat2 = []
-                if 'pretext' in args.tasks:
 
-                    # TODO: get image1 invalid_mask here
-                    # TODO: get image2 invalid_mask here
-                    # batch['image1']
+                # Handle input nans
+                img1 = batch['image1']
+                img2 = batch['image2']
+                offset_image1 = batch['offset_image1']
+                augmented_image1 = batch['augmented_image1']
+
+                invalid_mask1 = torch.isnan(img1)[0].any(dim=0)
+                invalid_mask2 = torch.isnan(img2)[0].any(dim=0)
+
+                batch['image1'] = torch.nan_to_num(img1).to(device)
+                batch['image2'] = torch.nan_to_num(img2).to(device)
+                batch['offset_image1'] = torch.nan_to_num(offset_image1).to(device)
+                batch['augmented_image1'] = torch.nan_to_num(augmented_image1).to(device)
+
+                if 'pretext' in args.tasks:
 
                     image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
                     image_stack = image_stack.to(device)
 
-                    # TODO: handle nans here
+                    # Remove nans before going into the network
+                    image_stack = torch.nan_to_num(image_stack)
 
                     #select features corresponding to first image
                     features = self.pretext_model(image_stack)[:, 0, :, :, :]
@@ -154,6 +203,10 @@ class predict(object):
 
                     features = features.squeeze().permute(1, 2, 0).cpu()
                     features2 = features2.squeeze().permute(1, 2, 0).cpu()
+
+                    features[invalid_mask1] = float('nan')
+                    features2[invalid_mask2] = float('nan')
+
                     save_feat.append(features)
                     save_feat2.append(features2)
 
@@ -161,15 +214,24 @@ class predict(object):
                     ### TO DO: Set to output of separate model.
                     before_after_heatmap = self.pretext_model.shared_step(batch)['before_after_heatmap'][0].permute(1, 2, 0)
                     before_after_heatmap = torch.sigmoid(torch.exp(before_after_heatmap[:, :, 1]) - torch.exp(before_after_heatmap[:, :, 0])).unsqueeze(-1).cpu()
+
+                    before_after_heatmap[invalid_mask1] = float('nan')
+                    before_after_heatmap[invalid_mask2] = float('nan')
+
                     save_feat.append(before_after_heatmap)
                     save_feat2.append(before_after_heatmap)
 
                 if 'segmentation' in args.tasks:
-                    image_stack = [batch[key] for key in batch if key[:5] == 'image']
+                    image_stack = [batch[key] for key in batch if key.startswith('image')]
                     image_stack = torch.stack(image_stack, dim=1).to(args.device)
                     predictions = torch.exp(self.segmentation_model(image_stack)['predictions'])
+
                     segmentation_heatmap = torch.sigmoid(predictions[0, 0, 1, :, :] - predictions[0, 0, 0, :, :]).unsqueeze(0).permute(1, 2, 0).cpu()
                     segmentation_heatmap2 = torch.sigmoid(predictions[0, 1, 1, :, :] - predictions[0, 1, 0, :, :]).unsqueeze(0).permute(1, 2, 0).cpu()
+
+                    segmentation_heatmap[invalid_mask1] = float('nan')
+                    segmentation_heatmap2[invalid_mask2] = float('nan')
+
                     save_feat.append(segmentation_heatmap)
                     save_feat2.append(segmentation_heatmap2)
 
@@ -214,8 +276,25 @@ class predict(object):
                         tr['space_dims'] + (self.num_out_channels,), device='numpy')
                 slice_ = tr['space_slice']
                 weights = util_kwimage.upweight_center_mask(save_feat.shape[0:2])[..., None]
-                self.stitcher_dict[gid1].add(slice_, save_feat, weight=weights)
-                self.stitcher_dict[gid2].add(slice_, save_feat2, weight=weights)
+
+                weights1 = weights.copy()
+                weights2 = weights.copy()
+
+                invalid_mask1_np = invalid_mask1.numpy()
+                invalid_mask2_np = invalid_mask2.numpy()
+
+                if invalid_mask1_np.any():
+                    spatial_valid_mask1 = (1 - invalid_mask1_np)[..., None]
+                    weights1 = weights1 * spatial_valid_mask1
+                    save_feat[invalid_mask1_np] = 0
+
+                if invalid_mask2_np.any():
+                    spatial_valid_mask2 = (1 - invalid_mask2_np)[..., None]
+                    weights2 = weights2 * spatial_valid_mask2
+                    save_feat[invalid_mask2_np] = 0
+
+                self.stitcher_dict[gid1].add(slice_, save_feat, weight=weights1)
+                self.stitcher_dict[gid2].add(slice_, save_feat2, weight=weights2)
 
             writer.wait_until_finished()
 
@@ -229,7 +308,31 @@ class predict(object):
         print('Done')
 
 
-def main():
+def parse_args(argv=None):
+    """
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> from watch.tasks.invariants.predict import *  # NOQA
+        >>> import watch
+        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> pretext_package_path = dvc_dpath / 'models/uky/uky_invariants_2022_03_11/TA1_pretext_model/pretext_package.pt'
+        >>> pca_projection_path = dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pca_projection_matrix.pt'
+        >>> segmentation_package_path = dvc_dpath / 'models/uky/uky_invariants_2022_03_11/TA1_segmentation_model/segmentation_package.pt'
+        >>> input_kwcoco = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
+        >>> output_kwcoco = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/test_uky.kwcoco.json'
+        >>> argv = []
+        >>> argv += ['--input_kwcoco', f'{input_kwcoco}']
+        >>> argv += ['--output_kwcoco', f'{output_kwcoco}']
+        >>> argv += ['--pca_projection_path', f'{pca_projection_path}']
+        >>> argv += ['--pretext_package_path', f'{pretext_package_path}']
+        >>> argv += ['--segmentation_package_path', f'{segmentation_package_path}']
+        >>> argv += ['--patch_overlap', '0']
+        >>> argv += ['--num_workers', '2']
+        >>> argv += ['--tasks', 'all']
+        >>> argv += ['--do_pca', '1']
+        >>> args = parse_args(argv)
+    """
+
     parser = ArgumentParser(description='', formatter_class=RawTextHelpFormatter)
     from scriptconfig.smartcast import smartcast
     parser.add_argument('--device', type=str, default='cuda')
@@ -259,11 +362,16 @@ def main():
         terminate_on_nan=True
         )
 
-    args = parser.parse_args()
+    args = parser.parse_args(args=argv)
 
     if 'all' in args.tasks:
         args.tasks = ['segmentation', 'before_after', 'pretext']
 
+    return args
+
+
+def main():
+    args = parse_args()
     predict(args).forward(args)
 
 
