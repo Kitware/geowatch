@@ -66,7 +66,7 @@ class Evaluator(object):
         >>> import kwcoco
         >>> dset = kwcoco.CocoDataset(dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json')
         >>> images = dset.videos(names=['KR_R001']).images[0]
-        >>> sub_images = images.compress([s != 'WV' for s in images.lookup('sensor_coarse')])[::5]
+        >>> sub_images = images.compress([s != 'WV' for s in images.lookup('sensor_coarse')])[::100]
         >>> sub_dset = dset.subset(sub_images)
         >>> sub_dset.fpath = (dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/small_test_data_nowv_vali.kwcoco.json')
         >>> sub_dset.dump(sub_dset.fpath)
@@ -243,10 +243,11 @@ class Evaluator(object):
 
         # Build the torch datasets / loaders
         sampler = ndsampler.CocoSampler(subset_input_coco)
+        window_overlap = 0.3  # TODO parametarize
         eval_dataset = SequenceDataset(
             sampler, window_dims, input_dims, channels, training=False,
-            window_overlap=0.3, inference_only=True)
-        print(len(eval_dataset))
+            window_overlap=window_overlap, inference_only=True)
+        print(f'{len(eval_dataset)=}')
 
         if len(eval_dataset) == 0:
             # hack for case where everything is already cached
@@ -263,7 +264,8 @@ class Evaluator(object):
         seen = set()
 
         with torch.no_grad():
-            # Prog = ub.ProgIter
+            from functools import partial
+            # Prog = partial(ub.ProgIter, verbose=3)
             Prog = tqdm
             pbar = Prog(enumerate(dataloader_iter), total=len(eval_dataloader), desc='predict rutgers')
             for batch_index, batch in pbar:
@@ -348,6 +350,8 @@ class Evaluator(object):
                                 output[invalid_output_mask] = 0
                             self.stitcher_dict[gid].add(slice_, output, weight=weights)
 
+        writer.wait_until_finished()  # prevents a race condition
+
         if self.write_probs:
             # Finalize any remaining images
             for gid in Prog(list(self.stitcher_dict.keys()), desc='finish finalization'):
@@ -355,12 +359,12 @@ class Evaluator(object):
                 writer.submit(self.finalize_image, gid)
                 pbar.set_postfix_str('finalized {}'.format(len(self.finalized_gids)))
 
+        writer.wait_until_finished()
+
         if self.cache:
             # Still need to update the kwcoco file for all of the hit gids
             for gid in Prog(hit_gids, desc='update coco file for cached images'):
                 self.finalize_image(gid, cached=True)
-
-        writer.wait_until_finished()
 
         # export predictions to a new kwcoco file
         self.output_coco_dataset._invalidate_hashid()
