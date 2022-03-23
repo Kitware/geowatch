@@ -180,10 +180,17 @@ default_transition_probs = np.array([[0.7, 0.1, 0.10, 0.10],
                                      [0.0, 0.0, 0.00, 1.00]])
 
 # emission probability matrix
-default_emission_probs = np.array([[0.75, 0.10, 0.10, 0.10],
-                                   [0.10, 0.75, 0.10, 0.10],
-                                   [0.10, 0.10, 0.75, 0.10],
-                                   [0.25, 0.25, 0.25, 0.75]])
+# based on model predictions including "no activity"
+#default_emission_probs = np.array([[0.233, 0.133, 0.633, 0.000],
+#                                   [0.000, 0.133, 0.867, 0.000],
+#                                   [0.020, 0.013, 0.966, 0.000],
+#                                   [0.000, 0.000, 1.000, 0.000]])
+
+# based on model predictions without "no activity"
+default_emission_probs = np.array([[0.250, 0.250, 0.250, 0.250],
+                                   [0.000, 0.133, 0.867, 0.000],
+                                   [0.000, 0.014, 0.986, 0.000],
+                                   [0.000, 0.000, 1.000, 0.000]])
 
 
 def _load_probs(arr_or_file, default=None):

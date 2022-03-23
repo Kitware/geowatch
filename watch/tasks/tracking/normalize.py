@@ -530,6 +530,7 @@ def normalize_phases(coco_dset,
 
     for trackid, n_anns in ub.map_vals(
             len, coco_dset.index.trackid_to_aids).items():
+        annots = coco_dset.annots(trackid=trackid)
         if n_anns > 1:
 
             if use_viterbi:
@@ -555,7 +556,7 @@ def normalize_phases(coco_dset,
     #
     # Fixup phase prediction
     #
-    import xdev; xdev.embed()
+    # import xdev; xdev.embed()
 
     # TODO do something with transition preds for phases which were altered
     FIXUP_TRANSITION_PRED = 0
