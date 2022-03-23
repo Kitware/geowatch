@@ -20,7 +20,7 @@ class predict(object):
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         DVC_DPATH=$DVC_DPATH xdoctest -m watch.tasks.invariants.predict predict
 
-        python -m watch visualize $DVC_DPATH/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/test_uky.kwcoco.json \
+        python -m watch visualize $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/test_uky.kwcoco.json \
             --channels='invariants.0:3' --animate=True --with_anns=False
 
     Example:
@@ -32,7 +32,7 @@ class predict(object):
         >>> #  Write out smaller version of the dataset
         >>> dset = kwcoco.CocoDataset(dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json')
         >>> images = dset.images()
-        >>> sub_images = images.compress([s != 'WV' for s in images.lookup('sensor_coarse')])[::100]
+        >>> sub_images = images.compress([s != 'WV' for s in images.lookup('sensor_coarse')])[::5]
         >>> sub_dset = dset.subset(sub_images)
         >>> sub_dset.fpath = (dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/small_test_data_nowv_vali.kwcoco.json')
         >>> sub_dset.dump(sub_dset.fpath)
@@ -47,7 +47,7 @@ class predict(object):
         >>> argv += ['--pca_projection_path', f'{pca_projection_path}']
         >>> argv += ['--pretext_package_path', f'{pretext_package_path}']
         >>> argv += ['--segmentation_package_path', f'{segmentation_package_path}']
-        >>> argv += ['--patch_overlap', '0']
+        >>> argv += ['--patch_overlap', '0.25']
         >>> argv += ['--num_workers', '2']
         >>> argv += ['--tasks', 'all']
         >>> argv += ['--do_pca', '1']
