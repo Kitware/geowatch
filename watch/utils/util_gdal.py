@@ -249,7 +249,7 @@ def gdal_single_warp(in_fpath,
 
     if as_vrt:
         template_parts.append('''
-            -of VRT'
+            -of VRT
             ''')
     else:
         if compress == 'RAW':

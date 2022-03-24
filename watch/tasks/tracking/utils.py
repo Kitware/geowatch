@@ -263,6 +263,14 @@ class NewTrackFunction(TrackFunction):
         raise NotImplementedError('must be implemented by subclasses')
 
 
+def check_only_bg(category_sequence, bg_name=['No Activity']):
+    # import xdev; xdev.embed()
+    if len( set(category_sequence) - set(bg_name) ) == 0:
+        return True
+    else:
+        return False
+
+
 def pop_tracks(
         coco_dset: kwcoco.CocoDataset,
         cnames: Iterable[str],

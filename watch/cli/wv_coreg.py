@@ -51,13 +51,12 @@ def main():
 
 
 def _sanitize_catalog(stac_catalog):
-    if isinstance(stac_catalog, str):
-        catalog = pystac.read_file(href=stac_catalog).full_copy()
+    if isinstance(stac_catalog, pystac.Catalog):
+        return stac_catalog.full_copy()
     elif isinstance(stac_catalog, dict):
-        catalog = pystac.Catalog.from_dict(stac_catalog).full_copy()
+        return pystac.Catalog.from_dict(stac_catalog).full_copy()
     else:
-        catalog = stac_catalog.full_copy()
-    return catalog
+        return pystac.read_file(href=stac_catalog).full_copy()
 
 
 def wv_coreg(wv_catalog, outdir, jobs=1, drop_empty=False, s2_catalog=None):
