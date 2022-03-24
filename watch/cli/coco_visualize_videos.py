@@ -538,6 +538,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         img=img,
         name=None,
         _header_extra=None,
+        coco_dset=coco_dset,
     )
 
     delayed = coco_dset.delayed_load(img['id'], space=space)
