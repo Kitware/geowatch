@@ -144,14 +144,16 @@ def coerce_timedelta(delta):
     """
     TODO:
         move to a util
+
     Example:
-        coerce_timedelta('1y')
-        coerce_timedelta('1m')
-        coerce_timedelta('1d')
-        coerce_timedelta('1H')
-        coerce_timedelta('1M')
-        coerce_timedelta('1S')
-        coerce_timedelta(10.3)
+        >>> from watch.utils.util_time import *  # NOQA
+        >>> coerce_timedelta('1y')
+        >>> coerce_timedelta('1m')
+        >>> coerce_timedelta('1d')
+        >>> coerce_timedelta('1H')
+        >>> coerce_timedelta('1M')
+        >>> coerce_timedelta('1S')
+        >>> coerce_timedelta(10.3)
 
     References:
         https://docs.python.org/3.4/library/datetime.html#strftime-strptime-behavior
