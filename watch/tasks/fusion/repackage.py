@@ -240,7 +240,8 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         import pandas as pd
         df = pd.DataFrame(gathered)
         rich.print('[blue] Repackaged')
-        print(df.groupby('name')[['failed_repackage']].sum())
+        if len(df):
+            print(df.groupby('name')[['failed_repackage']].sum())
 
     if mode == 'repackage':
         return
@@ -256,6 +257,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     #     dpath.ensuredir()
 
     for row in ub.ProgIter(to_copy, desc='Copy packages to DVC dir'):
+        row['name_fpath'].parent.ensuredir()
         shutil.copy(row['package_fpath'], row['name_fpath'])
 
     if mode == 'copy':
