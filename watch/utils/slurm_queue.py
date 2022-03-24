@@ -230,7 +230,7 @@ class SlurmQueue(cmd_queue.Queue):
         self.all_depends = None
 
     def __nice__(self):
-        return self.name
+        return self.queue_id
 
     def write(self):
         import os
