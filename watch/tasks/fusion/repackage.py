@@ -184,11 +184,11 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
 
         for checkpoint_fpath in checkpoint_fpaths:
             checkpoint_fpath = ub.Path(checkpoint_fpath)
-            print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
             parts = checkpoint_fpath.name.split('-')
             epoch = int(parts[0].split('epoch=')[1])
-            print('parts = {!r}'.format(parts))
-            print('epoch = {!r}'.format(epoch))
+            # print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
+            # print('parts = {!r}'.format(parts))
+            # print('epoch = {!r}'.format(epoch))
             # Dont add the -v2 versions
             if epoch >= 0:  # and parts[-1].startswith('step='):
                 # print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
