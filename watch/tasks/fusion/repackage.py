@@ -180,7 +180,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
 
         if not checkpoint_fpaths:
             checkpoint_fpaths = util_path.coerce_patterned_paths(dpath)
-        print('checkpoint_fpaths = {!r}'.format(checkpoint_fpaths))
+        print('checkpoint_fpaths = {}'.format(ub.repr2(checkpoint_fpaths, nl=1)))
 
         for checkpoint_fpath in checkpoint_fpaths:
             checkpoint_fpath = ub.Path(checkpoint_fpath)
