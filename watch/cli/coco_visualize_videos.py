@@ -392,7 +392,8 @@ def main(cmdline=True, **kwargs):
                             verbose=config['verbose'],
                             fixed_normalization_scheme=config.get(
                                 'fixed_normalization_scheme'),
-                            any3=config['any3'], dset_idstr=dset_idstr)
+                            any3=config['any3'], dset_idstr=dset_idstr,
+                            skip_missing=config['skip_missing'])
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
             job.result()
@@ -517,6 +518,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                chan_to_normalizer=None,
                                fixed_normalization_scheme=None,
                                any3=True, dset_idstr='',
+                               skip_missing=False,
                                cmap='viridis', verbose=0):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
@@ -717,6 +719,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             chan_stats = kwarray.stats_dict(raw_canvas, axis=2, nan=True)
             print('chan_list = {!r}'.format(chan_list))
             print('chan_stats = {}'.format(ub.repr2(chan_stats, nl=1)))
+
+        if skip_missing and np.all(np.isnan(raw_canvas)):
+            continue
 
         # FLAG = np.any(np.isnan(canvas)) and not np.all(np.isnan(canvas))
         # if FLAG:

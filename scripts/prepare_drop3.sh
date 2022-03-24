@@ -192,7 +192,16 @@ hack_fix_empty_imges(){
         --run=1 --backend=tmux 
 
     7z a splits_v2.zip data*.kwcoco.json
+
+    git pull
+    dvc pull splits_v2.zip.dvc -r aws
+    7z x splits_v2.zip
         
+
+    smartwatch visualize combo_LM_nowv.kwcoco.json \
+        --channels="red|green|blue,matseg_0|matseg_1|matseg_2,bare_ground|forest|water" \
+        --select_images'.sensor_coarse != "WV"' \
+        --animate=True --workers=4
 
 
 }
