@@ -743,7 +743,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         required_marked = any(pred_coco.images().lookup('has_predictions', False))
 
     matches  = kwcoco_extensions.associate_images(
-        true_coco, pred_coco)
+        true_coco, pred_coco, key_fallback='id')
+
     video_matches = matches['video']
     image_matches = matches['image']
 
