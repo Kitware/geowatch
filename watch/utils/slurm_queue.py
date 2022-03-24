@@ -229,6 +229,9 @@ class SlurmQueue(cmd_queue.Queue):
         self.header_commands = []
         self.all_depends = None
 
+    def __nice__(self):
+        return self.name
+
     def write(self):
         import os
         import stat
