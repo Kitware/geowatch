@@ -336,11 +336,11 @@ def schedule_evaluation(cmdline=False, **kwargs):
             'workers_per_queue': workers_per_queue,
         }
 
-        print('pred_dataset_fpath = {!r}'.format(pred_dataset_fpath))
+        # print('pred_dataset_fpath = {!r}'.format(pred_dataset_fpath))
         has_eval = eval_metrics_dvc_fpath.exists() or eval_metrics_fpath.exists()
         has_pred = pred_dataset_fpath.exists()
-        print('has_eval = {!r}'.format(has_eval))
-        print('has_pred = {!r}'.format(has_pred))
+        # print('has_eval = {!r}'.format(has_eval))
+        # print('has_pred = {!r}'.format(has_pred))
 
         # import ubelt as ub
         # ub.util_hash._HASHABLE_EXTENSIONS.register(pathlib.Path)( lambda x: (b'PATH', str))
