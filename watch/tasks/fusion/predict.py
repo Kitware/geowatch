@@ -952,7 +952,9 @@ class CocoStitchingManager(object):
                 'num_bands': final_probs.shape[2],
                 'warp_aux_to_img': img_from_vid.concise(),
             }
-            img.get('auxiliary', []).append(aux)
+            auxiliary = img.get('auxiliary', [])
+            auxiliary.append(aux)
+            img['auxiliary'] = img
 
             # Save the prediction to disk
             total_prob += np.nansum(final_probs)
