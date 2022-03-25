@@ -229,6 +229,11 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         # xdev.embed()
         return
 
+    if mode == 'interact':
+        ans = input('do you want to repackage? (y for yes)')
+        if ans != 'y':
+            return
+
     to_repackage = [r for r in gathered if r['needs_repackage']]
     for row in ub.ProgIter(to_repackage, desc='repackage'):
         try:
@@ -244,6 +249,11 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
 
     if mode == 'repackage':
         return
+
+    if mode == 'interact':
+        ans = input('do you want to copy? (y for yes)')
+        if ans != 'y':
+            return
 
     storage_dpath.ensuredir()
     to_copy = [r for r in gathered if r['needs_copy']]
@@ -261,6 +271,11 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     if mode == 'copy':
         return
 
+    if mode == 'interact':
+        ans = input('do you want to dvc-commit? (y for yes)')
+        if ans != 'y':
+            return
+
     from watch.utils.simple_dvc import SimpleDVC
     dvc_api = SimpleDVC(dvc_dpath)
     # dvc_api.add(staged_expt_dpaths)
@@ -269,6 +284,11 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
 
     if mode == 'dvc-commit':
         return
+
+    if mode == 'interact':
+        ans = input('do you want to git commit? (y for yes)')
+        if ans != 'y':
+            return
 
     git_info3 = ub.cmd('git commit -am "new models"', verbose=3, check=True, cwd=dvc_dpath)  # dangerous?
     assert git_info3['ret'] == 0
@@ -290,6 +310,9 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
 
         python -m tasks.fusion.schedule_inference schedule_evaluation --gpus=auto --run=True
         """))
+
+    if mode == 'interact':
+        print('TODO: finish me')
 
     # if 0:
     #     dvc_to_add = []

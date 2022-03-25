@@ -197,11 +197,26 @@ hack_fix_empty_imges(){
     dvc pull splits_v2.zip.dvc -r aws
     7z x splits_v2.zip
         
+    smartwatch visualize combo_LM_nowv.kwcoco.json \
+        --channels="matseg_0|matseg_1|matseg_2" \
+        --select_images'.sensor_coarse != "WV"' \
+        --animate=True --workers=4 \
+        --skip_missing=True \
+        --select_videos='.name | startswith("AE_C003")'
 
     smartwatch visualize combo_LM_nowv.kwcoco.json \
-        --channels="red|green|blue,matseg_0|matseg_1|matseg_2,bare_ground|forest|water" \
+        --channels="bare_ground|forest|water" \
         --select_images'.sensor_coarse != "WV"' \
-        --animate=True --workers=4
+        --animate=True --workers=4 \
+        --skip_missing=True \
+        --select_videos='.name | startswith("AE_C003")'
+
+    smartwatch visualize combo_LM_nowv.kwcoco.json \
+        --channels="red|green|blue" \
+        --select_images'.sensor_coarse != "WV"' \
+        --animate=True --workers=4 \
+        --skip_missing=True \
+        --select_videos='.name | startswith("AE_C003")'
 
 
 }

@@ -25,10 +25,20 @@ prep_teamfeat_drop2(){
         --do_splits=1 \
         --depth_workers=0 \
         --cache=0 --run=0 --backend=tmux
-
         #--backend=slurm
-    #python -m watch.cli.prepare_splits --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L.kwcoco.json --run=False
+        #python -m watch.cli.prepare_splits --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L.kwcoco.json --run=False
+}
 
+gather-checkpoints-repackage(){
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+    EXPT_GROUP_CODE=eval3_candidates
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+    python -m watch.tasks.fusion.repackage gather_checkpoints \
+        --dvc_dpath="$DVC_DPATH" \
+        --storage_dpath="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages" \
+        --train_dpath="$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/runs/*/lightning_logs" \
+        --mode=interactive
 }
 
 
@@ -354,3 +364,87 @@ python -m watch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --decoder=segmenter 
+
+export CUDA_VISIBLE_DEVICES=0
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
+EXPERIMENT_NAME=Drop3_bells_raw_mlp_V307-a
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/bells_and_whistles.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --decoder=mlp 
+
+export CUDA_VISIBLE_DEVICES=1
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+EXPERIMENT_NAME=Drop3_bells_raw_seg_V308-a
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/bells_and_whistles.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --decoder=segmenter 
+
+# horologic abalate1 - v2
+# -----------------------
+
+
+export CUDA_VISIBLE_DEVICES=0
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+EXPERIMENT_NAME=Drop3_BASELINE_SC_V304-a
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.00 \
+    --global_saliency_weight=1.00 
+
+export CUDA_VISIBLE_DEVICES=1
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+EXPERIMENT_NAME=Drop3_BASELINE_SC_V304-b
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.00 \
+    --global_saliency_weight=1.00 
+
+export CUDA_VISIBLE_DEVICES=2
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+EXPERIMENT_NAME=Drop3_BASELINE_SC_V304-c
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.00 \
+    --global_saliency_weight=1.00 
+
+export CUDA_VISIBLE_DEVICES=3
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+EXPERIMENT_NAME=Drop3_BASELINE_SC_V304-d
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.00 \
+    --global_saliency_weight=1.00 
