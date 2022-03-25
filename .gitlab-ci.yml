@@ -239,7 +239,7 @@ build_docker_strict:
     *common_template_docker
   rules:
     - <<: *if-merged-into-default
-    - <<: *if-merge-request
+    #- <<: *if-merge-request
   stage:
     docker
   script:

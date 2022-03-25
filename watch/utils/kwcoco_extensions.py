@@ -1952,7 +1952,7 @@ def associate_images(dset1, dset2, key_fallback=None):
         >>>     'n_fn': (0, 10),
         >>> }
         >>> dset2 = perterb_coco(dset1, **kwargs)
-        >>> matches = associate_images(dset1, dset2)
+        >>> matches = associate_images(dset1, dset2, key_fallback='file_name')
         >>> assert len(matches['image']['match_gids1'])
         >>> assert len(matches['image']['match_gids2'])
         >>> assert not len(matches['video'])
@@ -1968,7 +1968,7 @@ def associate_images(dset1, dset2, key_fallback=None):
         >>>     'n_fn': (0, 10),
         >>> }
         >>> dset2 = perterb_coco(dset1, **kwargs)
-        >>> matches = associate_images(dset1, dset2)
+        >>> matches = associate_images(dset1, dset2, key_fallback='file_name')
         >>> assert not len(matches['image']['match_gids1'])
         >>> assert not len(matches['image']['match_gids2'])
         >>> assert len(matches['video'])
