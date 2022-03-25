@@ -183,19 +183,20 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         print('checkpoint_fpaths = {}'.format(ub.repr2(checkpoint_fpaths, nl=1)))
 
         for checkpoint_fpath in checkpoint_fpaths:
-            checkpoint_fpath = ub.Path(checkpoint_fpath)
-            parts = checkpoint_fpath.name.split('-')
-            epoch = int(parts[0].split('epoch=')[1])
-            # print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
-            # print('parts = {!r}'.format(parts))
-            # print('epoch = {!r}'.format(epoch))
-            # Dont add the -v2 versions
-            if epoch >= 0:  # and parts[-1].startswith('step='):
+            if checkpoint_fpath.endswith('.ckpt'):
+                checkpoint_fpath = ub.Path(checkpoint_fpath)
+                parts = checkpoint_fpath.name.split('-')
+                epoch = int(parts[0].split('epoch=')[1])
                 # print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
-                gathered.append({
-                    'epoch': epoch,
-                    'checkpoint_fpath': checkpoint_fpath
-                })
+                # print('parts = {!r}'.format(parts))
+                # print('epoch = {!r}'.format(epoch))
+                # Dont add the -v2 versions
+                if epoch >= 0:  # and parts[-1].startswith('step='):
+                    # print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
+                    gathered.append({
+                        'epoch': epoch,
+                        'checkpoint_fpath': checkpoint_fpath
+                    })
 
     for row in ub.ProgIter(gathered, desc='Gather checkpoint info'):
         p = row['checkpoint_fpath']
