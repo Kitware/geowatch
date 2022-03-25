@@ -31,14 +31,34 @@ prep_teamfeat_drop2(){
 
 gather-checkpoints-repackage(){
     DVC_DPATH=$(python -m watch.cli.find_dvc)
-    DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+    DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
     EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
     python -m watch.tasks.fusion.repackage gather_checkpoints \
         --dvc_dpath="$DVC_DPATH" \
         --storage_dpath="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages" \
         --train_dpath="$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/runs/*/lightning_logs" \
-        --mode=interactive
+        --mode=interact
+}
+
+
+schedule-prediction-and-evlauation(){
+    # Note: change backend to tmux if slurm is not installed
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+    EXPT_GROUP_CODE=eval3_candidates
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_vali.kwcoco.json
+
+    # TODO: 
+    # - [ ] Argument for test time augmentation.
+    # - [ ] Argument general predict parameter grid
+    # - [ ] Can a task request that slurm only schedule it on a specific GPU?
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="2,3" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
+            --test_dataset="$VALI_FPATH" \
+            --run=1 --skip_existing=True --backend=tmux 
 }
 
 
