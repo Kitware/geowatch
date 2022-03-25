@@ -167,7 +167,7 @@ def wv_coreg(wv_catalog, outdir, jobs=1, drop_empty=False, s2_catalog=None):
 
     output_catalog = parallel_map_items(
         wv_catalog,
-        _coreg_map,
+        coreg_map,
         max_workers=jobs,
         mode='process' if jobs > 1 else 'serial',
         extra_kwargs=dict(outdir=outdir,
@@ -182,8 +182,8 @@ def wv_coreg(wv_catalog, outdir, jobs=1, drop_empty=False, s2_catalog=None):
 
 
 @maps(history_entry='coregistration')
-def _coreg_map(stac_item, outdir, baseline_s2_items, item_pairs_dct,
-               drop_empty):
+def coreg_map(stac_item, outdir, baseline_s2_items, item_pairs_dct,
+              drop_empty):
 
     print("* Coregistering WV item: '{}'".format(stac_item.id))
 
@@ -291,6 +291,11 @@ def band_path(s2_item):
     Get href to S2 band 4 from STAC item
     '''
     def _is_b04(asset):
+        # Ignore "overview" (TCI) asset
+        if('overview' in asset.roles or
+           asset.title == 'True color image'):
+            return False
+
         eo_bands = asset.extra_fields.get('eo:bands', [])
         if any(i.get('name') in {'B4', 'B04'} for i in eo_bands):
             return True
