@@ -743,9 +743,18 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         required_marked = any(pred_coco.images().lookup('has_predictions', False))
 
     matches  = kwcoco_extensions.associate_images(
-        true_coco, pred_coco)
+        true_coco, pred_coco, key_fallback='id')
+
     video_matches = matches['video']
     image_matches = matches['image']
+
+    n_vid_matches = len(video_matches)
+    n_img_per_vid_matches = [len(d['match_gids1']) for d in video_matches]
+    n_img_matches = image_matches['match_gids1']
+    print('n_img_per_vid_matches = {}'.format(ub.repr2(n_img_per_vid_matches, nl=1)))
+    print('n_vid_matches = {}'.format(ub.repr2(n_vid_matches, nl=1)))
+    print('n_img_matches = {!r}'.format(n_img_matches))
+
     rows = []
     chunk_size = 5
     # thresh_bins = 256 * 256
@@ -1091,6 +1100,7 @@ def main(cmdline=True, **kwargs):
     from scriptconfig.smartcast import smartcast
     draw_heatmaps = smartcast(args.draw_heatmaps)
     draw_curves = smartcast(args.draw_curves)
+    print('args.__dict__ = {!r}'.format(args.__dict__))
     evaluate_segmentations(true_coco, pred_coco, args.eval_dpath,
                            draw_curves=draw_curves,
                            draw_heatmaps=draw_heatmaps,

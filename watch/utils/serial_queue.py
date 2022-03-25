@@ -11,7 +11,7 @@ class BashJob(cmd_queue.Job):
     """
     A job meant to run inside of a larger bash file. Analog of SlurmJob
     """
-    def __init__(self, command, name=None, depends=None, gpus=None, cpus=None, begin=None):
+    def __init__(self, command, name=None, depends=None, gpus=None, cpus=None, begin=None, partition=None, mem=None):
         if depends is not None and not ub.iterable(depends):
             depends = [depends]
 

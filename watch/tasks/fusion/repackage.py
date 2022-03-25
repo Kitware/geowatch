@@ -180,15 +180,15 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
 
         if not checkpoint_fpaths:
             checkpoint_fpaths = util_path.coerce_patterned_paths(dpath)
-        print('checkpoint_fpaths = {!r}'.format(checkpoint_fpaths))
+        print('checkpoint_fpaths = {}'.format(ub.repr2(checkpoint_fpaths, nl=1)))
 
         for checkpoint_fpath in checkpoint_fpaths:
             checkpoint_fpath = ub.Path(checkpoint_fpath)
-            print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
             parts = checkpoint_fpath.name.split('-')
             epoch = int(parts[0].split('epoch=')[1])
-            print('parts = {!r}'.format(parts))
-            print('epoch = {!r}'.format(epoch))
+            # print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
+            # print('parts = {!r}'.format(parts))
+            # print('epoch = {!r}'.format(epoch))
             # Dont add the -v2 versions
             if epoch >= 0:  # and parts[-1].startswith('step='):
                 # print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
@@ -245,7 +245,8 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         import pandas as pd
         df = pd.DataFrame(gathered)
         rich.print('[blue] Repackaged')
-        print(df.groupby('name')[['failed_repackage']].sum())
+        if len(df):
+            print(df.groupby('name')[['failed_repackage']].sum())
 
     if mode == 'repackage':
         return
@@ -266,6 +267,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     #     dpath.ensuredir()
 
     for row in ub.ProgIter(to_copy, desc='Copy packages to DVC dir'):
+        row['name_fpath'].parent.ensuredir()
         shutil.copy(row['package_fpath'], row['name_fpath'])
 
     if mode == 'copy':
