@@ -718,7 +718,7 @@ def gather_measures(cmdline=False, **kwargs):
             # from matplotlib.colors import cmap
             import matplotlib
             # cmap = matplotlib.cm.get_cmap('bwr')
-            cmap = matplotlib.cm.get_cmap('spectral')
+            # cmap = matplotlib.cm.get_cmap('spectral')
             # metric_format = workbook.add_format({'num_format': '0.4f', 'bold': False})
             ws.column_dimensions['A'].width = 40
             for col_idx in metric_col_idxs:
@@ -730,16 +730,18 @@ def gather_measures(cmdline=False, **kwargs):
                     ws.conditional_formatting.add(value_cells, auc_percentile_rule)
                 else:
                     ws.conditional_formatting.add(value_cells, ap_percentile_rule)
-                for row in ws[value_cells]:
-                    for cell in row:
-                        import kwimage
-                        try:
-                            cell.fill.bgColor.rgb = kwimage.Color(cmap(cell.value)).ashex()[1:7]
-                        except Exception:
-                            pass
 
-                        # cell.fill.bgColor
-                        # cell.number_format = '0.0000'
+                # Not working in google slides?
+                # if 0:
+                #     for row in ws[value_cells]:
+                #         for cell in row:
+                #             import kwimage
+                #             try:
+                #                 cell.fill.bgColor.rgb = #kwimage.Color(cmap(cell.value)).ashex()[1:7]
+                #             except Exception:
+                #                 pass
+                #       # cell.fill.bgColor
+                #       # cell.number_format = '0.0000'
 
     if 0:
         best_candidates(class_rows, mean_rows)

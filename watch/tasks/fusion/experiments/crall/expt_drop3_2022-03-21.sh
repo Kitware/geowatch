@@ -59,8 +59,28 @@ schedule-prediction-and-evlauation(){
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
             --test_dataset="$VALI_FPATH" \
             --run=1 --skip_existing=True --backend=tmux 
+
+    # Be sure to DVC add the eval results after!
 }
 
+
+aggregate-results(){
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    EXPT_GROUP_CODE=eval3_candidates
+    EXPT_NAME_PAT="*"
+    #EXPT_NAME_PAT="BOTH_TA1_COMBO_TINY_p2w_raw*"
+    MODEL_EPOCH_PAT="*"
+    PRED_DSET_PAT="*"
+    PRED_CFG_PAT="*"
+    MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json
+
+    python -m watch.tasks.fusion.gather_results \
+        --measure_globstr="$MEASURE_GLOBSTR" \
+        --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
+        --dset_group_key="*" --show=True \
+        --classes_of_interest "Site Preparation" "Active Construction"
+}
 
 
 
