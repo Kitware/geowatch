@@ -385,8 +385,8 @@ class ResultAnalysis:
             print('')
             print(f'ANOVA hypothesis (roughly): the param {param_name!r} has no effect on the metric')
             print('    Reject this hypothesis if the p value is less than a threshold')
-            print(ub.color_text(f'  Rank-ANOVA: p={anova_rank_p:0.4f}', 'green' if anova_rank_p < p_threshold else None))
-            print(ub.color_text(f'  Mean-ANOVA: p={anova_mean_p:0.4f}', 'green' if anova_mean_p < p_threshold else None))
+            print(ub.color_text(f'  Rank-ANOVA: p={anova_rank_p:0.8f}', 'green' if anova_rank_p < p_threshold else None))
+            print(ub.color_text(f'  Mean-ANOVA: p={anova_mean_p:0.8f}', 'green' if anova_mean_p < p_threshold else None))
             print('')
             print('Pairwise T-Tests')
             for pairstat in stats_row['pairwise']:
@@ -396,9 +396,9 @@ class ResultAnalysis:
                 print(f'  Is {param_name}={value1} about as good as {param_name}={value2}?')
                 if 'ttest_ind' in pairstat:
                     ttest_ind_result = pairstat['ttest_ind']
-                    print(ub.color_text(f'    ttest_ind:  p={ttest_ind_result.pvalue:0.4f}', 'green' if ttest_ind_result.pvalue < p_threshold else None))
+                    print(ub.color_text(f'    ttest_ind:  p={ttest_ind_result.pvalue:0.8f}', 'green' if ttest_ind_result.pvalue < p_threshold else None))
                 if 'ttest_rel' in pairstat:
                     ttest_rel_result = pairstat['ttest_ind']
-                    print(ub.color_text(f'    ttest_rel:  p={ttest_rel_result.pvalue:0.4f}', 'green' if ttest_rel_result.pvalue < p_threshold else None))
+                    print(ub.color_text(f'    ttest_rel:  p={ttest_rel_result.pvalue:0.8f}', 'green' if ttest_rel_result.pvalue < p_threshold else None))
 
         print(self.stats_table)

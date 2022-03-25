@@ -68,7 +68,9 @@ aggregate-results(){
 
     DVC_DPATH=$(python -m watch.cli.find_dvc)
     EXPT_GROUP_CODE=eval3_candidates
+    #EXPT_NAME_PAT="*"
     EXPT_NAME_PAT="*"
+    #EXPT_NAME_PAT="*Drop3*"
     #EXPT_NAME_PAT="BOTH_TA1_COMBO_TINY_p2w_raw*"
     MODEL_EPOCH_PAT="*"
     PRED_DSET_PAT="*"
