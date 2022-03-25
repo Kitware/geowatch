@@ -154,6 +154,7 @@ def convert_l1_input_to_l2(path=(
                 f.write(line)
                 f.write('\n')
     print(f'{n_missing_items=}')
+<<<<<<< HEAD
 
 
 def process_qfabric(
@@ -244,6 +245,17 @@ def process_qfabric(
       'qfabric_geography_type': 'River,Barren Land;River,Barren Land,Sparse Forest,Grass Land;River,Grass Land;Barren Land,Sparse Forest;Sparse Forest,Farms',
       'qfabric_change_type': 'Industrial;Mega Projects',
 
+    Sites with full s2l8 coverage:
+        ns_all, ns_notall = (0,0)
+        s2l8_sites = []
+        for site in sites2:
+            if any(f['properties']['source'] is None for f in site['features'][1:]):
+                ns_notall += 1
+            else:
+                ns_all += 1
+                s2l8_sites.append(site)
+        ns_all, ns_notall == (6, 2018)
+        s2l8_rids = {s['features'][0]['properties']['region_id'] for s in s2l8_sites}
     '''
 
     root = ub.Path(root)
