@@ -395,7 +395,7 @@ class ResultAnalysis:
                 value2 = pairstat['value2']
                 # n1 = pairstat['n1']
                 # print(f'  Is {param_name}={value1} about as good as {param_name}={value2}?')
-                print(f'  Is p is low, {param_name}={value1} might be better than {param_name}={value2}?')
+                print(f'  Is p is low, {param_name}={value1} may outperform {param_name}={value2}?')
                 if 'ttest_ind' in pairstat:
                     ttest_ind_result = pairstat['ttest_ind']
                     print(ub.color_text(f'    ttest_ind:  p={ttest_ind_result.pvalue:0.8f}', 'green' if ttest_ind_result.pvalue < p_threshold else None))
