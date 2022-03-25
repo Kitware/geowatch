@@ -180,22 +180,23 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
 
         if not checkpoint_fpaths:
             checkpoint_fpaths = util_path.coerce_patterned_paths(dpath)
-        print('checkpoint_fpaths = {!r}'.format(checkpoint_fpaths))
+        print('checkpoint_fpaths = {}'.format(ub.repr2(checkpoint_fpaths, nl=1)))
 
         for checkpoint_fpath in checkpoint_fpaths:
-            checkpoint_fpath = ub.Path(checkpoint_fpath)
-            print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
-            parts = checkpoint_fpath.name.split('-')
-            epoch = int(parts[0].split('epoch=')[1])
-            print('parts = {!r}'.format(parts))
-            print('epoch = {!r}'.format(epoch))
-            # Dont add the -v2 versions
-            if epoch >= 0:  # and parts[-1].startswith('step='):
+            if checkpoint_fpath.name.endswith('.ckpt'):
+                checkpoint_fpath = ub.Path(checkpoint_fpath)
+                parts = checkpoint_fpath.name.split('-')
+                epoch = int(parts[0].split('epoch=')[1])
                 # print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
-                gathered.append({
-                    'epoch': epoch,
-                    'checkpoint_fpath': checkpoint_fpath
-                })
+                # print('parts = {!r}'.format(parts))
+                # print('epoch = {!r}'.format(epoch))
+                # Dont add the -v2 versions
+                if epoch >= 0:  # and parts[-1].startswith('step='):
+                    # print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
+                    gathered.append({
+                        'epoch': epoch,
+                        'checkpoint_fpath': checkpoint_fpath
+                    })
 
     for row in ub.ProgIter(gathered, desc='Gather checkpoint info'):
         p = row['checkpoint_fpath']
@@ -229,6 +230,11 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         # xdev.embed()
         return
 
+    if mode == 'interact':
+        ans = input('do you want to repackage? (y for yes)')
+        if ans != 'y':
+            return
+
     to_repackage = [r for r in gathered if r['needs_repackage']]
     for row in ub.ProgIter(to_repackage, desc='repackage'):
         try:
@@ -240,10 +246,16 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         import pandas as pd
         df = pd.DataFrame(gathered)
         rich.print('[blue] Repackaged')
-        print(df.groupby('name')[['failed_repackage']].sum())
+        if len(df):
+            print(df.groupby('name')[['failed_repackage']].sum())
 
     if mode == 'repackage':
         return
+
+    if mode == 'interact':
+        ans = input('do you want to copy? (y for yes)')
+        if ans != 'y':
+            return
 
     storage_dpath.ensuredir()
     to_copy = [r for r in gathered if r['needs_copy']]
@@ -256,10 +268,16 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     #     dpath.ensuredir()
 
     for row in ub.ProgIter(to_copy, desc='Copy packages to DVC dir'):
+        row['name_fpath'].parent.ensuredir()
         shutil.copy(row['package_fpath'], row['name_fpath'])
 
     if mode == 'copy':
         return
+
+    if mode == 'interact':
+        ans = input('do you want to dvc-commit? (y for yes)')
+        if ans != 'y':
+            return
 
     from watch.utils.simple_dvc import SimpleDVC
     dvc_api = SimpleDVC(dvc_dpath)
@@ -269,6 +287,11 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
 
     if mode == 'dvc-commit':
         return
+
+    if mode == 'interact':
+        ans = input('do you want to git commit? (y for yes)')
+        if ans != 'y':
+            return
 
     git_info3 = ub.cmd('git commit -am "new models"', verbose=3, check=True, cwd=dvc_dpath)  # dangerous?
     assert git_info3['ret'] == 0
@@ -290,6 +313,9 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
 
         python -m tasks.fusion.schedule_inference schedule_evaluation --gpus=auto --run=True
         """))
+
+    if mode == 'interact':
+        print('TODO: finish me')
 
     # if 0:
     #     dvc_to_add = []

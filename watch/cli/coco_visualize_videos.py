@@ -392,7 +392,8 @@ def main(cmdline=True, **kwargs):
                             verbose=config['verbose'],
                             fixed_normalization_scheme=config.get(
                                 'fixed_normalization_scheme'),
-                            any3=config['any3'], dset_idstr=dset_idstr)
+                            any3=config['any3'], dset_idstr=dset_idstr,
+                            skip_missing=config['skip_missing'])
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
             job.result()
@@ -517,6 +518,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                chan_to_normalizer=None,
                                fixed_normalization_scheme=None,
                                any3=True, dset_idstr='',
+                               skip_missing=False,
                                cmap='viridis', verbose=0):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
@@ -536,6 +538,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         img=img,
         name=None,
         _header_extra=None,
+        coco_dset=coco_dset,
     )
 
     delayed = coco_dset.delayed_load(img['id'], space=space)
@@ -718,6 +721,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             print('chan_list = {!r}'.format(chan_list))
             print('chan_stats = {}'.format(ub.repr2(chan_stats, nl=1)))
 
+        if skip_missing and np.all(np.isnan(raw_canvas)):
+            continue
+
         # FLAG = np.any(np.isnan(canvas)) and not np.all(np.isnan(canvas))
         # if FLAG:
         #     print('input nans', np.nansum(raw_canvas))
@@ -727,106 +733,113 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         # import kwarray
         # kwarray.atleast_nd(canvas, 3)
 
-        if chan_to_normalizer is None:
-            dmax = np.nanmax(raw_canvas)
-            # dmin = canvas.min()
-            needs_norm = dmax > 1.0
-            # if canvas.max() <= 0 or canvas.min() >= 255:
-            # Hack to only do noramlization on "non-standard" data ranges
-            with ub.Timer('normalize1', verbose=verbose):
-                if needs_norm:
-                    mask = ~np.isnan(raw_canvas)
-                    # from watch.utils import util_norm
-                    norm_canvas = kwimage.normalize_intensity(raw_canvas, mask=mask, params={
-                        'high': 0.90,
-                        'mid': 0.5,
-                        'low': 0.01,
-                        'mode': 'linear',
-                    })
-                    # if FLAG:
-                    #     print('norm nans', np.isnan(norm_canvas).sum())
-                    #     print('norm canvas', np.nansum(norm_canvas))
-                    canvas = norm_canvas
-                canvas = np.clip(canvas, 0, None)
-        else:
-            # from watch.utils import util_kwarray
-            with ub.Timer('normalize2', verbose=verbose):
-                new_parts = []
-                for cx, c in enumerate(chan_list):
-                    normalizer = chan_to_normalizer.get(c, None)
-                    data = canvas[..., cx]
-                    mask = ~np.isnan(data)
-                    if normalizer is None:
-                        p = kwimage.normalize_intensity(data, params={
+        import xdev
+        with xdev.embed_on_exception_context:
+            if chan_to_normalizer is None:
+                dmax = np.nanmax(raw_canvas)
+                # dmin = canvas.min()
+                needs_norm = dmax > 1.0
+                # if canvas.max() <= 0 or canvas.min() >= 255:
+                # Hack to only do noramlization on "non-standard" data ranges
+                with ub.Timer('normalize1', verbose=verbose):
+                    if needs_norm:
+                        mask = ~np.isnan(raw_canvas)
+                        # from watch.utils import util_norm
+                        norm_canvas = kwimage.normalize_intensity(raw_canvas, mask=mask, params={
                             'high': 0.90,
                             'mid': 0.5,
                             'low': 0.01,
                             'mode': 'linear',
                         })
-                    else:
-                        p = kwarray.apply_normalizer(data, normalizer, mask=mask,
-                                                     set_value_at_mask=0.)
-                    new_parts.append(p)
-                canvas = np.stack(new_parts, axis=2)
+                        # if FLAG:
+                        #     print('norm nans', np.isnan(norm_canvas).sum())
+                        #     print('norm canvas', np.nansum(norm_canvas))
+                        canvas = norm_canvas
+                    canvas = np.clip(canvas, 0, None)
+            else:
+                # from watch.utils import util_kwarray
+                with ub.Timer('normalize2', verbose=verbose):
+                    new_parts = []
+                    for cx, c in enumerate(chan_list):
+                        normalizer = chan_to_normalizer.get(c, None)
+                        data = canvas[..., cx]
+                        mask = ~np.isnan(data)
+                        if normalizer is None:
+                            p = kwimage.normalize_intensity(data, params={
+                                'high': 0.90,
+                                'mid': 0.5,
+                                'low': 0.01,
+                                'mode': 'linear',
+                            })
+                        else:
+                            p = kwarray.apply_normalizer(data, normalizer, mask=mask,
+                                                         set_value_at_mask=0.)
+                        new_parts.append(p)
+                    canvas = np.stack(new_parts, axis=2)
 
-        if cmap is not None:
-            if kwimage.num_channels(canvas) == 1:
-                import matplotlib as mpl
-                import matplotlib.cm  # NOQA
-                cmap_ = mpl.cm.get_cmap(cmap)
-                canvas = np.nan_to_num(canvas)
-                if len(canvas.shape) == 3:
-                    canvas = canvas[..., 0]
-                    canvas = cmap_(canvas)[..., 0:3].astype(np.float32)
+            # invalid_mask = np.isnan(canvas)
+            canvas = fill_nans_with_checkers(canvas)
 
-        with ub.Timer('false color', verbose=verbose):
-            canvas = util_kwimage.ensure_false_color(canvas)
+            if cmap is not None:
+                if kwimage.num_channels(canvas) == 1:
+                    import matplotlib as mpl
+                    import matplotlib.cm  # NOQA
+                    cmap_ = mpl.cm.get_cmap(cmap)
+                    canvas = np.nan_to_num(canvas)
+                    if len(canvas.shape) == 3:
+                        canvas = canvas[..., 0]
+                        canvas = cmap_(canvas)[..., 0:3].astype(np.float32)
 
-        if len(canvas.shape) > 2 and canvas.shape[2] > 4:
-            # hack for wv
-            canvas = canvas[..., 0]
+            with ub.Timer('false color', verbose=verbose):
+                canvas = util_kwimage.ensure_false_color(canvas)
 
-        chan_header_lines = header_lines.copy()
-        chan_header_lines.append(chan_group)
-        header_text = '\n'.join(chan_header_lines)
+            if len(canvas.shape) > 2 and canvas.shape[2] > 4:
+                # hack for wv
+                canvas = canvas[..., 0]
 
-        valid_region = img.get('valid_region', None)
-        if valid_region:
-            with ub.Timer('valid region', verbose=verbose):
-                valid_poly: kwimage.MultiPolygon = kwimage.MultiPolygon.coerce(valid_region)
-                if space == 'video':
-                    vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
-                    valid_poly = valid_poly.warp(vid_from_img)
-                canvas = valid_poly.draw_on(canvas, color='green', fill=False,
-                                            border=True)
+            chan_header_lines = header_lines.copy()
+            chan_header_lines.append(chan_group)
+            header_text = '\n'.join(chan_header_lines)
 
-        if draw_imgs:
-            with ub.Timer('prep img_canvas', verbose=verbose):
-                img_canvas = kwimage.ensure_uint255(canvas)
-                img_canvas = util_kwimage.draw_header_text(image=img_canvas,
+            valid_region = img.get('valid_region', None)
+            if valid_region:
+                with ub.Timer('valid region', verbose=verbose):
+                    valid_poly: kwimage.MultiPolygon = kwimage.MultiPolygon.coerce(valid_region)
+                    if space == 'video':
+                        vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
+                        valid_poly = valid_poly.warp(vid_from_img)
+
+                    if any([p.data['exterior'].data.size for p in valid_poly.data]):
+                        canvas = valid_poly.draw_on(canvas, color='green', fill=False,
+                                                    border=True)
+
+            if draw_imgs:
+                with ub.Timer('prep img_canvas', verbose=verbose):
+                    img_canvas = kwimage.ensure_uint255(canvas)
+                    img_canvas = util_kwimage.draw_header_text(image=img_canvas,
+                                                               text=header_text,
+                                                               stack=True,
+                                                               fit='shrink')
+                with ub.Timer('write img_canvas', verbose=verbose):
+                    kwimage.imwrite(view_img_fpath, img_canvas)
+
+            if draw_anns:
+                canvas = kwimage.ensure_float01(canvas)
+                try:
+                    with ub.Timer('dets.draw_on 1', verbose=verbose):
+                        # ann_canvas = dets.draw_on(canvas, color='classes')
+                        ann_canvas = dets.boxes.draw_on(canvas, color='blue')
+                except Exception:
+                    with ub.Timer('dets.draw_on 2', verbose=verbose):
+                        ann_canvas = dets.draw_on(canvas)
+                ann_canvas = kwimage.ensure_uint255(ann_canvas)
+
+                ann_canvas = util_kwimage.draw_header_text(image=ann_canvas,
                                                            text=header_text,
                                                            stack=True,
                                                            fit='shrink')
-            with ub.Timer('write img_canvas', verbose=verbose):
-                kwimage.imwrite(view_img_fpath, img_canvas)
-
-        if draw_anns:
-            canvas = kwimage.ensure_float01(canvas)
-            try:
-                with ub.Timer('dets.draw_on 1', verbose=verbose):
-                    # ann_canvas = dets.draw_on(canvas, color='classes')
-                    ann_canvas = dets.boxes.draw_on(canvas, color='blue')
-            except Exception:
-                with ub.Timer('dets.draw_on 2', verbose=verbose):
-                    ann_canvas = dets.draw_on(canvas)
-            ann_canvas = kwimage.ensure_uint255(ann_canvas)
-
-            ann_canvas = util_kwimage.draw_header_text(image=ann_canvas,
-                                                       text=header_text,
-                                                       stack=True,
-                                                       fit='shrink')
-            with ub.Timer('write ann_canvas', verbose=verbose):
-                kwimage.imwrite(view_ann_fpath, ann_canvas)
+                with ub.Timer('write ann_canvas', verbose=verbose):
+                    kwimage.imwrite(view_ann_fpath, ann_canvas)
 
 
 def _hack_cached_hashid(self):
@@ -882,6 +895,117 @@ def _hack_dataset_id(self):
     coco_fpath = ub.Path(self.fpath)
     dset_id = '_'.join([coco_fpath.parent.stem, coco_fpath.stem, hashid[0:8]])
     return dset_id
+
+
+def fill_nans_with_checkers(canvas):
+    """
+    TODO: move to kwimage
+
+    Example:
+        >>> import kwplot
+        >>> import kwimage
+        >>> orig_img = kwimage.ensure_float01(kwimage.grab_test_image())
+        >>> poly1 = kwimage.Polygon.random().scale(orig_img.shape[0] // 2)
+        >>> poly2 = kwimage.Polygon.random().scale(orig_img.shape[0])
+        >>> img = orig_img.copy()
+        >>> img = poly1.fill(img, np.nan)
+        >>> img[:, :, 0] = poly2.fill(np.ascontiguousarray(img[:, :, 0]), np.nan)
+        >>> canvas = img.copy()
+        >>> canvas = fill_nans_with_checkers(canvas)
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(img, pnum=(1, 2, 1))
+        >>> kwplot.imshow(canvas, pnum=(1, 2, 2))
+    """
+    import kwarray
+    canvas = kwarray.atleast_nd(canvas, 3)
+    invalid_mask = np.isnan(canvas)
+    allchan_invalid_mask = invalid_mask.all(axis=2, keepdims=1)
+    anychan_invalid_mask = invalid_mask.any(axis=2, keepdims=1)
+
+    some_invalid_mask = (~allchan_invalid_mask) * anychan_invalid_mask
+
+    invalid_mask.all(axis=2)
+    # canvas[invalid_mask] = 0
+    dsize = canvas.shape[0:2][::-1]
+
+    checkers2d = None
+
+    if np.any(allchan_invalid_mask):
+        if checkers2d is None:
+            checkers2d = checkerboard(square_shape=8, dsize=dsize)
+        # canvas = kwimage.ensure_alpha_channel(canvas, (1 - invalid_mask))
+        # checkers = kwimage.ensure_alpha_channel(checkers, 1)
+        locs = np.where(allchan_invalid_mask)
+        canvas[locs[0:2]] = checkers2d[..., None][locs[0:2]]
+
+    if np.any(some_invalid_mask):
+        if checkers2d is None:
+            checkers2d = checkerboard(square_shape=8, dsize=dsize)
+
+        locs = np.where(some_invalid_mask)
+        canvas[locs] = checkers2d[locs[0:2]]
+
+    return canvas
+
+
+def checkerboard(num_squares='auto', square_shape='auto', dsize=(512, 512)):
+    """
+    Remove when kwimage 0.8.3 lands
+    """
+    import numpy as np
+    if num_squares == 'auto' and square_shape == 'auto':
+        num_squares = 8
+
+    want_w, want_h = dsize
+
+    if square_shape != 'auto':
+        if not ub.iterable(square_shape):
+            square_shape = [square_shape, square_shape]
+        h, w = square_shape
+        gen_h, gen_w = _next_multiple_of(want_h, h * 2), _next_multiple_of(want_w, w * 2)
+    else:
+        gen_h, gen_w = _next_multiple_of(want_h, 4), _next_multiple_of(want_w, 4)
+
+    if num_squares == 'auto':
+        assert square_shape != 'auto'
+        if not ub.iterable(square_shape):
+            square_shape = [square_shape, square_shape]
+        h, w = square_shape
+        num_w = gen_w // w
+        num_h = gen_h // h
+        num_squares = num_h, num_w
+    elif square_shape == 'auto':
+        assert num_squares != 'auto'
+        if not ub.iterable(num_squares):
+            num_squares = [num_squares, num_squares]
+        num_h, num_w = num_squares
+        w = gen_w // num_w
+        h = gen_h // num_h
+        square_shape = (h, w)
+    else:
+        if not ub.iterable(num_squares):
+            num_squares = [num_squares, num_squares]
+        if not ub.iterable(square_shape):
+            square_shape = [square_shape, square_shape]
+
+    num_h, num_w = num_squares
+
+    num_pairs_w = int(num_w // 2)
+    num_pairs_h = int(num_h // 2)
+    # img_size = 512
+    base = np.array([[1, 0] * num_pairs_w, [0, 1] * num_pairs_w] * num_pairs_h)
+    expansion = np.ones((h, w))
+    img = np.kron(base, expansion)[0:want_h, 0:want_w]
+    return img
+
+
+def _next_multiple_of(x, m):
+    """
+    References:
+        https://stackoverflow.com/questions/14267555/find-the-smallest-power-of-2-greater-than-or-equal-to-n-in-python
+    """
+    return (x // m) * m + m
+    # + (x % 2)
 
 
 if __name__ == '__main__':

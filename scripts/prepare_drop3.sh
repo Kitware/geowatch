@@ -132,3 +132,93 @@ hack_prep(){
          ~/data/dvc-repos/smart_watch_dvc/Aligned-Drop3-TA1-2022-03-10
 
 }
+
+
+hack_fix_empty_imges(){
+
+    cd /home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc-hdd/Aligned-Drop3-TA1-2022-03-10
+    ls -- */WV
+    ls -- */L8
+    ls -- */S2
+    ls -- */*.json
+
+    dvc add -- */WV */L8 */S2 */*.json
+    #dvc add data_*nowv*.kwcoco.json
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    echo "DVC_DPATH='$DVC_DPATH'"
+
+    cd "$DVC_DPATH/"
+    git pull  # ensure you are up to date with master on DVC
+    cd "$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10"
+    dvc pull -- */L8.dvc */S2.dvc
+    dvc pull
+    #*/*.json
+
+    7z 
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    python -m watch.cli.prepare_splits \
+        --base_fpath="$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json" \
+        --run=1 --serial=True
+
+    ls data*.kwcoco.json
+
+    st iMERIT drop
+
+    # s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220314/iMERIT_COMBINED_20220314_part3.unique.input
+
+    DATASET_SUFFIX=Drop3-TA1-2022-03-10 
+    python -m watch.cli.prepare_ta2_dataset \
+        --dataset_suffix=$DATASET_SUFFIX \
+        --s3_fpath \
+            s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220314/iMERIT_COMBINED_20220314_part3.unique.input \
+            s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220314/iMERIT_COMBINED_20220314_part2.unique.input \
+            s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220120/iMERIT_COMBINED.unique.input \
+            s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220314/iMERIT_COMBINED_20220314_part1.unique.input \
+            s3://ki
+    
+
+    python -m watch.cli.coco_combine_features \
+        --src /home/joncrall/data/dvc-repos/smart_watch_dvc/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json \
+                  /home/joncrall/data/dvc-repos/smart_watch_dvc/Aligned-Drop3-TA1-2022-03-10/dzyne_landcover.kwcoco.json \
+                  /home/joncrall/data/dvc-repos/smart_watch_dvc/Aligned-Drop3-TA1-2022-03-10/rutgers_material_seg_v3.kwcoco.json \
+        --dst /home/joncrall/data/dvc-repos/smart_watch_dvc/Aligned-Drop3-TA1-2022-03-10/combo_LM.kwcoco.json
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="ssd")
+    DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+    python -m watch.cli.prepare_splits \
+        --base_fpath="$DVC_DPATH/$DATASET_CODE/data.kwcoco.json" \
+        --run=1 --backend=tmux 
+
+    7z a splits_v2.zip data*.kwcoco.json
+
+    git pull
+    dvc pull splits_v2.zip.dvc -r aws
+    7z x splits_v2.zip
+        
+    smartwatch visualize combo_LM_nowv.kwcoco.json \
+        --channels="matseg_0|matseg_1|matseg_2" \
+        --select_images'.sensor_coarse != "WV"' \
+        --animate=True --workers=4 \
+        --skip_missing=True \
+        --select_videos='.name | startswith("AE_C003")'
+
+    smartwatch visualize combo_LM_nowv.kwcoco.json \
+        --channels="bare_ground|forest|water" \
+        --select_images'.sensor_coarse != "WV"' \
+        --animate=True --workers=4 \
+        --skip_missing=True \
+        --select_videos='.name | startswith("AE_C003")'
+
+    smartwatch visualize combo_LM_nowv.kwcoco.json \
+        --channels="red|green|blue" \
+        --select_images'.sensor_coarse != "WV"' \
+        --animate=True --workers=4 \
+        --skip_missing=True \
+        --select_videos='.name | startswith("AE_C003")'
+
+
+}
+
+

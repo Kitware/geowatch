@@ -6,6 +6,7 @@ SeeAlso:
     ../cli/find_dvc.py
 """
 import ubelt as ub
+import warnings
 import os
 
 
@@ -50,6 +51,8 @@ def _dvc_registry_remove(name):
     shelf = _open_dvc_registry_shelf()
     try:
         shelf.pop(name)
+    except Exception as ex:
+        warnings.warn('Unable to access shelf: {}'.format(ex))
     finally:
         shelf.close()
 
@@ -75,6 +78,8 @@ def _dvc_registry_list():
     shelf = _open_dvc_registry_shelf()
     try:
         candidate_dpaths += list(_open_dvc_registry_shelf().values())
+    except Exception as ex:
+        warnings.warn('Unable to access shelf: {}'.format(ex))
     finally:
         shelf.close()
 

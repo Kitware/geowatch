@@ -1920,7 +1920,7 @@ def category_category_colors(coco_dset):
 
 
 @profile
-def associate_images(dset1, dset2):
+def associate_images(dset1, dset2, key_fallback=None):
     """
     Builds an association between image-ids in two datasets.
 
@@ -1930,7 +1930,12 @@ def associate_images(dset1, dset2):
 
     Args:
         dset1 (kwcoco.CocoDataset): a kwcoco datset.
+
         dset2 (kwcoco.CocoDataset): another kwcoco dataset
+
+        key_fallback (str):
+            The fallback key to use if the image "name" is not specified.
+            This can either be "file_name" or "id" or None.
 
     TODO:
         - [ ] port to kwcoco proper
@@ -1947,7 +1952,7 @@ def associate_images(dset1, dset2):
         >>>     'n_fn': (0, 10),
         >>> }
         >>> dset2 = perterb_coco(dset1, **kwargs)
-        >>> matches = associate_images(dset1, dset2)
+        >>> matches = associate_images(dset1, dset2, key_fallback='file_name')
         >>> assert len(matches['image']['match_gids1'])
         >>> assert len(matches['image']['match_gids2'])
         >>> assert not len(matches['video'])
@@ -1963,7 +1968,7 @@ def associate_images(dset1, dset2):
         >>>     'n_fn': (0, 10),
         >>> }
         >>> dset2 = perterb_coco(dset1, **kwargs)
-        >>> matches = associate_images(dset1, dset2)
+        >>> matches = associate_images(dset1, dset2, key_fallback='file_name')
         >>> assert not len(matches['image']['match_gids1'])
         >>> assert not len(matches['image']['match_gids2'])
         >>> assert len(matches['video'])
@@ -1975,10 +1980,17 @@ def associate_images(dset1, dset2):
         # Generate image "keys" that should be compatible between datasets
         for gid in gids:
             img = dset.imgs[gid]
-            if img.get('file_name', None) is None:
+            if img.get('name', None) is not None:
                 yield img['name']
             else:
-                yield img['file_name']
+                if key_fallback is None:
+                    raise Exception('images require names to associate')
+                elif key_fallback == 'id':
+                    yield img['id']
+                elif key_fallback == 'file_name':
+                    yield img['file_name']
+                else:
+                    raise KeyError(key_fallback)
 
     all_gids1 = list(dset1.imgs.keys())
     all_gids2 = list(dset2.imgs.keys())

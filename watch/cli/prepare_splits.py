@@ -166,8 +166,8 @@ if __name__ == '__main__':
     CommandLine:
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         python -m watch.cli.prepare_splits \
-            --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
-            --run=0 --serial=True
+            --base_fpath=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json \
+            --run=1 --serial=True
 
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         python -m watch.cli.prepare_splits \
