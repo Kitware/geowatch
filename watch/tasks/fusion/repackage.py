@@ -183,7 +183,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         print('checkpoint_fpaths = {}'.format(ub.repr2(checkpoint_fpaths, nl=1)))
 
         for checkpoint_fpath in checkpoint_fpaths:
-            if checkpoint_fpath.endswith('.ckpt'):
+            if checkpoint_fpath.name.endswith('.ckpt'):
                 checkpoint_fpath = ub.Path(checkpoint_fpath)
                 parts = checkpoint_fpath.name.split('-')
                 epoch = int(parts[0].split('epoch=')[1])
