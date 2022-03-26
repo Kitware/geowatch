@@ -32,6 +32,23 @@ class Queue(ub.NiceRepr):
         """
         pass
 
+    @classmethod
+    def create(cls, type='serial', **kwargs):
+        from watch.utils import tmux_queue
+        from watch.utils import serial_queue
+        from watch.utils import slurm_queue
+        if type == 'serial':
+            kwargs.pop('size', None)
+            self = serial_queue.SerialQueue(**kwargs)
+        elif type == 'tmux':
+            self = tmux_queue.TMUXMultiQueue(**kwargs)
+        elif type == 'slurm':
+            kwargs.pop('size', None)
+            self = slurm_queue.SlurmQueue(**kwargs)
+        else:
+            raise KeyError
+        return self
+
     def _dependency_graph(self):
         """
         Builds a networkx dependency graph for the current jobs

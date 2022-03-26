@@ -98,7 +98,7 @@ def repackage(checkpoint_fpath, force=False, dry=False):
 
 
 def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
-                       mode='list', dvc_remote='aws'):
+                       mode='list', dvc_remote='aws', push_jobs=None):
     """
     Package and copy checkpoints into the DVC folder for evaluation.
 
@@ -283,7 +283,8 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     dvc_api = SimpleDVC(dvc_dpath)
     # dvc_api.add(staged_expt_dpaths)
     dvc_api.add(staged_expt_fpaths)
-    dvc_api.push(storage_dpath, remote=dvc_remote)
+    dvc_api.push(storage_dpath, remote=dvc_remote, jobs=push_jobs,
+                 recursive=True)
 
     if mode == 'dvc-commit':
         return

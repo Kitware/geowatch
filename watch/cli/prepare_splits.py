@@ -132,14 +132,11 @@ def main(cmdline=False, **kwargs):
         base_fpath = ub.Path(config['base_fpath'])
 
     # queue = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
-    if config['backend'] == 'slurm':
-        from watch.utils import slurm_queue
-        queue = slurm_queue.SlurmQueue(name='watch-splits')
-    elif config['backend'] == 'tmux':
-        from watch.utils import tmux_queue
-        queue = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
-    else:
-        raise KeyError(config['backend'])
+    from watch.utils import cmd_queue
+    queue = cmd_queue.Queue.create(
+        type=config['backend'],
+        name='watch-splits', size=2
+    )
 
     if config['virtualenv_cmd']:
         queue.add_header_command(config['virtualenv_cmd'])
@@ -167,7 +164,11 @@ if __name__ == '__main__':
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         python -m watch.cli.prepare_splits \
             --base_fpath=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json \
-            --run=1 --serial=True
+            --run=0 --backend=serial
+
+        python -m watch.cli.prepare_splits \
+            --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
+            --run=0 --backend=serial
 
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         python -m watch.cli.prepare_splits \

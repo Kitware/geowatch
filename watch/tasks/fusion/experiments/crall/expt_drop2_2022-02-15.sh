@@ -37,7 +37,8 @@ repackage_checkpoints_and_evaluate(){
         --dvc_dpath="$DVC_DPATH" \
         --storage_dpath="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages" \
         --train_dpath="$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/runs/*/lightning_logs" \
-        --mode=copy
+        --push_jobs=4 \
+        --mode=interact
 
         #--mode=commit
 
@@ -95,7 +96,10 @@ repackage_checkpoints_and_evaluate(){
     "
 
     DVC_DPATH=$(python -m watch.cli.find_dvc)
+    cd "$DVC_DPATH" 
+    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
     (cd "$DVC_DPATH" && dvc add models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json)
+    (cd "$DVC_DPATH" && dvc push -r aws -R models/fusion/eval3_candidates)
     
 }
 

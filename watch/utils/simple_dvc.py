@@ -98,7 +98,7 @@ class SimpleDVC():
         if not has_autostage:
             raise NotImplementedError('Need autostage to complete the git commit')
 
-    def push(self, path, remote=None):
+    def push(self, path, remote=None, recursive=False, jobs=None):
         import dvc.main
         if not ub.iterable(path):
             paths = [path]
@@ -108,7 +108,11 @@ class SimpleDVC():
         extra_args = []
         if remote:
             extra_args += ['-r', remote]
+        if jobs is not None:
+            extra_args += ['--jobs', str(jobs)]
+        if recursive:
+            extra_args += ['--recursive']
 
         with ChDir(dvc_root):
-            dvc_command = ['push', '--recursive'] + [str(p.relative_to(dvc_root)) for p in paths] + extra_args
+            dvc_command = ['push'] + extra_args + [str(p.relative_to(dvc_root)) for p in paths]
             dvc.main.main(dvc_command)

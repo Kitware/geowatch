@@ -13,18 +13,19 @@ data_splits(){
 
 prep_teamfeat_drop2(){
     # Team Features on drop2
-    DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="ssd")
+    #DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="ssd")
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
     python -m watch.cli.prepare_teamfeats \
         --base_fpath="$DVC_DPATH/$DATASET_CODE/data.kwcoco.json" \
-        --gres=",0" \
+        --gres="0,1" \
         --with_landcover=1 \
         --with_depth=0 \
         --with_materials=1 \
         --with_invariants=0 \
         --do_splits=1 \
         --depth_workers=0 \
-        --cache=0 --run=0 --backend=tmux
+        --cache=0 --run=1 --backend=slurm
         #--backend=slurm
         #python -m watch.cli.prepare_splits --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L.kwcoco.json --run=False
 }
@@ -48,19 +49,31 @@ schedule-prediction-and-evlauation(){
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
     EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_vali.kwcoco.json
+    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
 
     # TODO: 
     # - [ ] Argument for test time augmentation.
     # - [ ] Argument general predict parameter grid
     # - [ ] Can a task request that slurm only schedule it on a specific GPU?
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="2,3" \
-            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
+            --gpus="0,1" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/Drop3*/*.pt" \
             --test_dataset="$VALI_FPATH" \
             --run=1 --skip_existing=True --backend=tmux 
 
     # Be sure to DVC add the eval results after!
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    cd "$DVC_DPATH" 
+    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
+    (cd "$DVC_DPATH" && dvc add models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json)
+    (cd "$DVC_DPATH" && dvc push -r aws -R models/fusion/eval3_candidates/eval)
+
+
+
+    # On other machines
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    cd "$DVC_DPATH" 
+    dvc pull -r aws models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
 }
 
 
