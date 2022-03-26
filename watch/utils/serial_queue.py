@@ -71,11 +71,11 @@ class BashJob(cmd_queue.Job):
                 script.append('RETURN_CODE=$?')
 
         if with_status:
-            import shlex
+            # import shlex
             json_fmt_parts = [
                 ('ret', '%s', '$RETURN_CODE'),
                 ('name', '"%s"', self.name),
-                ('command', '"%s"', shlex.quote(self.command)),
+                # ('command', '"%s"', shlex.quote(self.command)),
             ]
             dump_status = _bash_json_dump(json_fmt_parts, self.stat_fpath)
             script.append(f'mkdir -p {self.stat_fpath.parent}')
@@ -374,5 +374,3 @@ def _bash_json_dump(json_fmt_parts, fpath):
     printf_part = 'printf ' +  printf_body + '\\\n    ' + printf_args
     dump_code = printf_part + ' \\\n    ' + redirect_part
     return dump_code
-
-
