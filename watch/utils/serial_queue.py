@@ -12,6 +12,30 @@ import uuid
 from watch.utils import cmd_queue  # NOQA
 
 
+def indent(text, prefix='    '):
+    """
+    Indents a block of text
+
+    Args:
+        text (str): text to indent
+        prefix (str, default = '    '): prefix to add to each line
+
+    Returns:
+        str: indented text
+
+        >>> from watch.utils.serial_queue import *  # NOQA
+        >>> text = ['aaaa', 'bb', 'cc\n   dddd\n    ef\n']
+        >>> text = indent(text)
+        >>> print(text)
+        >>> text = indent(text)
+        >>> print(text)
+    """
+    if isinstance(text, (list, tuple)):
+        return indent('\n'.join(text), prefix)
+    else:
+        return prefix + text.replace('\n', '\n' + prefix)
+
+
 class BashJob(cmd_queue.Job):
     """
     A job meant to run inside of a larger bash file. Analog of SlurmJob
@@ -19,26 +43,30 @@ class BashJob(cmd_queue.Job):
     Example:
         >>> from watch.utils.serial_queue import *  # NOQA
         >>> self = BashJob('echo hi', 'myjob')
+        >>> self.rprint(0, 1)
         >>> self.rprint(1, 1)
     """
     def __init__(self, command, name=None, depends=None, gpus=None, cpus=None,
-                 mem=None, quiet=0, info_dpath=None, **kwargs):
+                 mem=None, bookkeeper=0, info_dpath=None, **kwargs):
         if depends is not None and not ub.iterable(depends):
             depends = [depends]
         self.name = name
+        self.pathid = self.name + '_' + ub.hash_data(uuid.uuid4())[0:8]
         self.kwargs = kwargs  # unused kwargs
         self.command = command
         self.depends = depends
-        self.quiet = quiet
+        self.bookkeeper = bookkeeper
         if info_dpath is None:
-            info_dpath = ub.Path.appdir('cmd_queue/rando_jobs/') / self.name
+            info_dpath = ub.Path.appdir('cmd_queue/jobinfos/') / self.pathid
         self.info_dpath = info_dpath
-        self.pass_fpath = self.info_dpath / f'passed/{self.name}.pass'
-        self.fail_fpath = self.info_dpath / f'failed/{self.name}.fail'
-        self.stat_fpath = self.info_dpath / f'status/{self.name}.stat'
+        self.pass_fpath = self.info_dpath / f'passed/{self.pathid}.pass'
+        self.fail_fpath = self.info_dpath / f'failed/{self.pathid}.fail'
+        self.stat_fpath = self.info_dpath / f'status/{self.pathid}.stat'
 
-    def finalize_text(self, with_status=True, with_gaurds=True):
+    def finalize_text(self, with_status=True, with_gaurds=True, conditionals=None):
         script = []
+        prefix_script = []
+        suffix_script = []
 
         if with_status:
             if self.depends:
@@ -47,12 +75,11 @@ class BashJob(cmd_queue.Job):
                 for dep in self.depends:
                     conditions.append(f'[ -f {dep.pass_fpath} ]')
                 condition = ' || '.join(conditions)
-                script.append(f'if {condition}; then')
+                prefix_script.append(f'if {condition}; then')
 
-        if with_gaurds and not self.quiet:
-            script.append('set +e')  # allow the command to fail
-            # Tells bash to print the command before it executes it
-            script.append('set -x')
+        if with_gaurds and not self.bookkeeper:
+            # -x Tells bash to print the command before it executes it
+            script.append('set +e -x')  # and +e allow the command to fail
 
         script.append(self.command)
 
@@ -60,15 +87,18 @@ class BashJob(cmd_queue.Job):
             # Tells bash to stop printing commands, but
             # is clever in that it cpatures the last return code
             # and doesnt print this command.
-            script.append('{ RETURN_CODE=$? ; set +x; } 2>/dev/null')
-            # Dont let our boilerplate fail
-            script.append('set -e')
-            # Old methods:
-            # script.append('set +x')
-            # script.append('{ set +x; } 2>/dev/null')
+            # Also set -e so our boilerplate is not allowed to fail
+            script.append('{ RETURN_CODE=$? ; set +x -e; } 2>/dev/null')
         else:
             if with_status:
                 script.append('RETURN_CODE=$?')
+
+        if with_status:
+            if self.depends:
+                suffix_script.append('else')
+                suffix_script.append('    RETURN_CODE=126')
+                suffix_script.append('fi')
+                script = prefix_script + [indent(script)] + suffix_script
 
         if with_status:
             # import shlex
@@ -78,25 +108,42 @@ class BashJob(cmd_queue.Job):
                 # ('command', '"%s"', shlex.quote(self.command)),
             ]
             dump_status = _bash_json_dump(json_fmt_parts, self.stat_fpath)
+
+            _job_conditionals = {
+                'on_pass': [
+                    f'mkdir -p {self.pass_fpath.parent}',
+                    f'printf "pass" > {self.pass_fpath}',
+                ],
+                'on_fail': [
+                    f'mkdir -p {self.fail_fpath.parent}',
+                    f'printf "fail" > {self.fail_fpath}',
+                ]
+            }
+
+            if conditionals:
+                for k, v in _job_conditionals.items():
+                    if k in conditionals:
+                        v2 = conditionals.get(k)
+                        if not ub.iterable(v2):
+                            v2 = [v2]
+                        v.extend(v2)
+
+            on_pass_part = indent(_job_conditionals['on_pass'])
+            on_fail_part = indent(_job_conditionals['on_fail'])
+            conditional_body = '\n'.join([
+                'if [[ "$RETURN_CODE" == "0" ]]; then',
+                on_pass_part,
+                'else',
+                on_fail_part,
+                'fi'
+            ])
+            script.append('# <bookkeeping> ')
             script.append(f'mkdir -p {self.stat_fpath.parent}')
             script.append(dump_status)
-            script.append(ub.codeblock(
-                f'''
-                if [[ "$RETURN_CODE" == "0" ]]; then
-                    mkdir -p {self.pass_fpath.parent}
-                    printf "pass" > {self.pass_fpath}
-                else
-                    mkdir -p {self.fail_fpath.parent}
-                    printf "fail" > {self.fail_fpath}
-                fi
-                '''))
+            script.append(conditional_body)
+            script.append('# </bookkeeping> ')
 
-        if with_status:
-            if self.depends:
-                script.append('else')
-                script.append('RETURN_CODE=126')
-                script.append('fi')
-
+        assert isinstance(script, list)
         text = '\n'.join(script)
         return text
 
@@ -124,7 +171,7 @@ class BashJob(cmd_queue.Job):
             print(ub.highlight_code(code, 'bash'))
 
 
-class SerialQueue(ub.NiceRepr):
+class SerialQueue(cmd_queue.Queue):
     r"""
     A linear job queue written to a single bash file
 
@@ -146,26 +193,27 @@ class SerialQueue(ub.NiceRepr):
         >>> self.run()
         >>> self.read_state()
     """
-    def __init__(self, name='', dpath=None, rootid=None, environ=None, cwd=None):
+    def __init__(self, name='', dpath=None, rootid=None, environ=None, cwd=None, **kwargs):
+        super().__init__()
         if rootid is None:
-            rootid = str(ub.timestamp()) + '_' + ub.hash_data(uuid.uuid4())[0:8]
+            rootid = str(ub.timestamp().split('T')[0]) + '_' + ub.hash_data(uuid.uuid4())[0:8]
         self.name = name
         self.rootid = rootid
         if dpath is None:
             dpath = ub.ensure_app_cache_dir('cmd_queue', self.pathid)
         self.dpath = ub.Path(dpath)
 
+        self.unused_kwargs = kwargs
+
         self.fpath = self.dpath / (self.pathid + '.sh')
-        self.state_fpath = self.dpath / 'serial_queue_state_{}.txt'.format(self.pathid)
+        self.state_fpath = self.dpath / 'serial_queue_{}.txt'.format(self.pathid)
         self.environ = environ
         self.header = '#!/bin/bash'
         self.header_commands = []
         self.jobs = []
+
         self.cwd = cwd
         self.job_info_dpath = self.dpath / 'job_info'
-
-    def __len__(self):
-        return len(self.jobs)
 
     @property
     def pathid(self):
@@ -173,40 +221,46 @@ class SerialQueue(ub.NiceRepr):
         return '{}_{}'.format(self.name, self.rootid)
 
     def __nice__(self):
-        return f'{self.pathid} - {len(self.jobs)}'
+        return f'{self.pathid} - {self.num_real_jobs}'
 
     def finalize_text(self, with_status=True, with_gaurds=True):
         script = [self.header]
 
-        total = len(self.jobs)
+        total = self.num_real_jobs
 
         if with_gaurds:
-            script.append('set +e')
+            script.append('set -e')
 
         if with_status:
             script.append(ub.codeblock(
                 f'''
                 # Init state to keep track of job progress
-                (( "_QUEUE_NUM_ERRORED=0" ))
-                (( "_QUEUE_NUM_FINISHED=0" ))
-                _QUEUE_TOTAL={total}
-                _QUEUE_STATUS=""
+                (( "_CMD_QUEUE_NUM_ERRORED=0" ))
+                (( "_CMD_QUEUE_NUM_FINISHED=0" ))
+                _CMD_QUEUE_TOTAL={total}
+                _CMD_QUEUE_STATUS=""
                 '''))
 
+        old_status = None
+
         def _mark_status(status):
+            nonlocal old_status
             # be careful with json formatting here
             if with_status:
-                script.append(ub.codeblock(
-                    '''
-                    _QUEUE_STATUS="{}"
-                    ''').format(status))
+                if old_status != status:
+                    script.append(ub.codeblock(
+                        '''
+                        _CMD_QUEUE_STATUS="{}"
+                        ''').format(status))
+
+                old_status = status
 
                 # Name, format-string, and value for json status
                 json_fmt_parts = [
-                    ('status', '"%s"', '$_QUEUE_STATUS'),
-                    ('finished', '%d', '$_QUEUE_NUM_FINISHED'),
-                    ('errored', '%d', '$_QUEUE_NUM_ERRORED'),
-                    ('total', '%d', '$_QUEUE_TOTAL'),
+                    ('status', '"%s"', '$_CMD_QUEUE_STATUS'),
+                    ('finished', '%d', '$_CMD_QUEUE_NUM_FINISHED'),
+                    ('errored', '%d', '$_CMD_QUEUE_NUM_ERRORED'),
+                    ('total', '%d', '$_CMD_QUEUE_TOTAL'),
                     ('name', '"%s"', self.name),
                     ('rootid', '"%s"', self.rootid),
                 ]
@@ -217,19 +271,19 @@ class SerialQueue(ub.NiceRepr):
         def _command_enter():
             if with_gaurds:
                 # Tells bash to print the command before it executes it
-                script.append('set -e')
                 script.append('set -x')
 
         def _command_exit():
             if with_gaurds:
-                script.append('{ RETURN_CODE=$? ; set +x; } 2>/dev/null')
-                script.append('set +e')
+                script.append('{ set +x; } 2>/dev/null')
             else:
                 if with_status:
                     script.append('RETURN_CODE=$?')
 
         _mark_status('init')
         if self.environ:
+            script.append('#')
+            script.append('# Environment')
             _mark_status('set_environ')
             if with_gaurds:
                 _command_enter()
@@ -239,34 +293,50 @@ class SerialQueue(ub.NiceRepr):
                 _command_exit()
 
         if self.cwd:
+            script.append('#')
+            script.append('# Working Directory')
             script.append(f'cd {self.cwd}')
 
-        for command in self.header_commands:
-            _command_enter()
-            script.append(command)
-            _command_exit()
+        if self.header_commands:
+            script.append('#')
+            script.append('# Header commands')
+            for command in self.header_commands:
+                _command_enter()
+                script.append(command)
+                _command_exit()
 
-        for num, job in enumerate(self.jobs):
-            _mark_status('run')
-            script.append(ub.codeblock(
-                '''
-                #
-                # Command {} / {} - {}
-                ''').format(num + 1, total, job.name))
-            script.append(job.finalize_text(with_status, with_gaurds))
+        if self.jobs:
+            script.append('#')
+            script.append('# Jobs')
 
-            if with_status:
-                # Check command status and update the bash state
-                script.append(ub.codeblock(
-                    '''
-                    if [[ "$RETURN_CODE" == "0" ]]; then
-                        (( "_QUEUE_NUM_FINISHED=_QUEUE_NUM_FINISHED+1" ))
-                    else
-                        (( "_QUEUE_NUM_ERRORED=_QUEUE_NUM_ERRORED+1" ))
-                    fi
-                    '''))
+            num = 0
+            for job in self.jobs:
+                if job.bookkeeper:
+                    if with_status:
+                        script.append(job.finalize_text(with_status, with_gaurds))
+                else:
+                    if with_status:
+                        script.append('# <command>')
+
+                    _mark_status('run')
+
+                    script.append(ub.codeblock(
+                        '''
+                        #
+                        ### Command {} / {} - {}
+                        ''').format(num + 1, total, job.name))
+
+                    conditionals = {
+                        'on_pass': '(( "_CMD_QUEUE_NUM_FINISHED=_CMD_QUEUE_NUM_FINISHED+1" ))',
+                        'on_fail': '(( "_CMD_QUEUE_NUM_ERRORED=_CMD_QUEUE_NUM_ERRORED+1" ))',
+                    }
+                    script.append(job.finalize_text(with_status, with_gaurds, conditionals))
+                    if with_status:
+                        script.append('# </command>')
+                    num += 1
+
         if with_gaurds:
-            script.append('set -e')
+            script.append('set +e')
 
         _mark_status('done')
         text = '\n'.join(script)
@@ -275,21 +345,27 @@ class SerialQueue(ub.NiceRepr):
     def add_header_command(self, command):
         self.header_commands.append(command)
 
-    def submit(self, command, **kwargs):
-        # TODO: we could accept additional args here that modify how we handle
-        # the command in the bash script we build (i.e. if the script is
-        # allowed to fail or not)
-        # self.commands.append(command)
-        if isinstance(command, str):
-            name = kwargs.get('name', None)
-            if name is None:
-                name = kwargs['name'] = self.name + '-job-{}'.format(len(self.jobs))
-            job = BashJob(command, **kwargs)
-        else:
-            # Assume job is already a bash job
-            job = command
-        self.jobs.append(job)
-        return job
+    # def sync(self):
+    #     pass
+
+    # def submit(self, command, **kwargs):
+    #     # TODO: we could accept additional args here that modify how we handle
+    #     # the command in the bash script we build (i.e. if the script is
+    #     # allowed to fail or not)
+    #     # self.commands.append(command)
+    #     if isinstance(command, str):
+    #         name = kwargs.get('name', None)
+    #         if name is None:
+    #             name = kwargs['name'] = self.name + '-job-{}'.format(self.num_real_jobs)
+    #         job = BashJob(command, **kwargs)
+    #     else:
+    #         # Assume job is already a bash job
+    #         job = command
+    #     self.jobs.append(job)
+
+    #     if not job.bookkeeper:
+    #         self.num_real_jobs += 1
+    #     return job
 
     def write(self):
         text = self.finalize_text()
@@ -345,7 +421,7 @@ class SerialQueue(ub.NiceRepr):
                 state = {
                     'name': self.name,
                     'status': 'unknown',
-                    'total': len(self.jobs),
+                    'total': self.num_real_jobs,
                     'finished': None,
                     'errored': None,
                 }
@@ -368,9 +444,9 @@ def _bash_json_dump(json_fmt_parts, fpath):
     printf_arg_parts = [
         '"{}"'.format(v) for k, f, v in json_fmt_parts
     ]
-    printf_body = '\'{' + ', '.join(printf_body_parts) + '}\\n\''
+    printf_body = r"'{" + ", ".join(printf_body_parts) + r"}\n'"
     printf_args = ' '.join(printf_arg_parts)
     redirect_part = '> ' + str(fpath)
-    printf_part = 'printf ' +  printf_body + '\\\n    ' + printf_args
+    printf_part = 'printf ' +  printf_body + ' \\\n    ' + printf_args
     dump_code = printf_part + ' \\\n    ' + redirect_part
     return dump_code

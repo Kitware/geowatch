@@ -1,3 +1,24 @@
+"""
+CommandLine:
+    xdoctest -m watch.cli.prepare_splits __doc__
+
+Example:
+    >>> from watch.cli.prepare_splits import *  # NOQA
+    >>> base_fpath = 'data.kwcoco.json'
+    >>> config1 = {
+    >>>     'base_fpath': './bundle/data.kwcoco.json',
+    >>>     'virtualenv_cmd': 'conda activate watch',
+    >>>     'run': 0,
+    >>>     'cache': False,
+    >>>     'backend': 'serial',
+    >>> }
+    >>> queue = prep_splits(cmdline=False, **config1)
+    >>> print('queue = {!r}'.format(queue))
+    >>> queue.rprint(0, 1)
+    >>> queue.rprint(1, 1)
+
+"""
+
 import scriptconfig as scfg
 import ubelt as ub
 
@@ -110,7 +131,7 @@ def _submit_split_jobs(base_fpath, queue, depends=[]):
     return queue
 
 
-def main(cmdline=False, **kwargs):
+def prep_splits(cmdline=False, **kwargs):
     """
     The idea is that we should have a lightweight scheduler.  I think something
     fairly minimal can be implemented with tmux, but it would be nice to have a
@@ -134,7 +155,7 @@ def main(cmdline=False, **kwargs):
     # queue = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
     from watch.utils import cmd_queue
     queue = cmd_queue.Queue.create(
-        type=config['backend'],
+        backend=config['backend'],
         name='watch-splits', size=2
     )
 
@@ -157,6 +178,9 @@ def main(cmdline=False, **kwargs):
         except Exception:
             pass
 
+    return queue
+
+main = prep_splits
 
 if __name__ == '__main__':
     """
