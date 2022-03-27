@@ -117,9 +117,10 @@ class TMUXMultiQueue(cmd_queue.Queue):
     """
     def __init__(self, size=1, name=None, dpath=None, rootid=None, environ=None,
                  gres=None):
+        super().__init__()
 
         if rootid is None:
-            rootid = str(ub.timestamp()) + '_' + ub.hash_data(uuid.uuid4())[0:8]
+            rootid = str(ub.timestamp().split('T')[0]) + '_' + ub.hash_data(uuid.uuid4())[0:8]
         self.name = name
         self.rootid = rootid
         self.pathid = '{}_{}'.format(self.name, self.rootid)
@@ -133,7 +134,6 @@ class TMUXMultiQueue(cmd_queue.Queue):
         self.environ = environ
         self.fpath = self.dpath / f'run_queues_{self.name}.sh'
         self.gres = gres
-        self.all_depends = None
 
         self.jobs = []
         self.header_commands = []
@@ -164,38 +164,7 @@ class TMUXMultiQueue(cmd_queue.Queue):
     def __nice__(self):
         return ub.repr2(self.workers)
 
-    def submit(self, command, **kwargs):
-        """
-        Args:
-            index (int): if True, forces this job into a particular queue
-        """
-        name = kwargs.get('name', None)
-        if name is None:
-            name = kwargs['name'] = self.name + '-job-{}'.format(len(self.jobs))
-        if self.all_depends:
-            depends = kwargs.get('depends', None)
-            if depends is None:
-                depends = self.all_depends
-            else:
-                if not ub.iterable(depends):
-                    depends = [depends]
-                depends = self.all_depends + depends
-            kwargs['depends'] = depends
-        job = serial_queue.BashJob(command, **kwargs)
-        self.jobs.append(job)
-        return job
-
-    def sync(self):
-        """
-        Mark that all future jobs will depend on the current sink jobs
-        """
-        graph = self._dependency_graph()
-        # Find the jobs that nobody depends on
-        sink_jobs = [graph.nodes[n]['job'] for n, d in graph.out_degree if d == 0]
-        # All new jobs must depend on these jobs
-        self.all_depends = sink_jobs
-
-    def _semaphore_wait_command(self, flag_fpaths):
+    def _semaphore_wait_command(self, flag_fpaths, msg):
         r"""
         TODO: use flock?
 
@@ -223,14 +192,12 @@ class TMUXMultiQueue(cmd_queue.Queue):
         # TODO: count number of files that exist
         command = ub.codeblock(
             f'''
-            set +x
-            printf "waiting "
-            while {condition}
+            printf "{msg} "
+            while {condition};
             do
-               printf "."
                sleep 1;
             done
-            printf "finished waiting "
+            printf "finished {msg} "
             ''')
         return command
 
@@ -389,9 +356,9 @@ class TMUXMultiQueue(cmd_queue.Queue):
                 # queue
 
                 if prev_rank_flag_fpaths:
-                    command = self._semaphore_wait_command(prev_rank_flag_fpaths)
+                    command = self._semaphore_wait_command(prev_rank_flag_fpaths, msg=f"wait for previous rank {rank - 1}")
                     # Note: this should not be a real job
-                    worker.submit(command, quiet=1)
+                    worker.submit(command, bookkeeper=1)
 
                 for job in jobs:
                     worker.submit(job.command)
@@ -407,14 +374,14 @@ class TMUXMultiQueue(cmd_queue.Queue):
                 rank_flag_fpath = flag_dpath / f'rank_flag_{rank}_{worker_idx}_{num_rank_workers}.done'
                 command = self._semaphore_signal_command(rank_flag_fpath)
                 # Note: this should not be a real job
-                worker.submit(command, quiet=1)
+                worker.submit(command, bookkeeper=1)
                 rank_flag_fpaths.append(rank_flag_fpath)
             prev_rank_flag_fpaths = rank_flag_fpaths
 
         # Overwrite workers with our new dependency aware workers
         for worker in queue_workers:
             for header_command in self.header_commands:
-                worker.add_head_command(header_command)
+                worker.add_header_command(header_command)
         self.workers = queue_workers
 
     def add_header_command(self, command):
@@ -422,10 +389,6 @@ class TMUXMultiQueue(cmd_queue.Queue):
         Adds a header command run at the start of each queue
         """
         self.header_commands.append(command)
-
-    @property
-    def total_jobs(self):
-        return len(self.jobs)
 
     def finalize_text(self):
         self.order_jobs()
@@ -435,14 +398,16 @@ class TMUXMultiQueue(cmd_queue.Queue):
             #!/bin/bash
             # Driver script to start the tmux-queue
             echo "submitting {} jobs"
-            ''').format(self.total_jobs)]
+            ''').format(self.num_real_jobs)]
         for queue in self.workers:
             # run_command_in_tmux_queue(command, name)
             part = ub.codeblock(
                 f'''
                 ### Run Queue: {queue.pathid} with {len(queue)} jobs
                 tmux new-session -d -s {queue.pathid} "bash"
-                tmux send -t {queue.pathid} "source {queue.fpath}" Enter
+                tmux send -t {queue.pathid} \\
+                    "source {queue.fpath}" \\
+                    Enter
                 ''').format()
             driver_lines.append(part)
         driver_lines += ['echo "jobs submitted"']
@@ -473,6 +438,8 @@ class TMUXMultiQueue(cmd_queue.Queue):
         """
         Hack to run everything without tmux. This really should be a different
         "queue" backend.
+
+        See Serial Queue instead
         """
         self.order_jobs()
         queue_fpaths = []

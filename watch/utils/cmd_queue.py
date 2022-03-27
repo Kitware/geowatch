@@ -22,27 +22,65 @@ class Queue(ub.NiceRepr):
     Base class for a queue
     """
 
-    def submit(self, command, depends=None, **kwargs) -> Job:
-        job = Job(...)
-        return job
+    def __init__(self):
+        self.num_real_jobs = 0
+        self.all_depends = None
+
+    def __len__(self):
+        return self.num_real_jobs
 
     def sync(self):
         """
-        Force all subsequent commands
+        Mark that all future jobs will depend on the current sink jobs
         """
-        pass
+        graph = self._dependency_graph()
+        # Find the jobs that nobody depends on
+        sink_jobs = [graph.nodes[n]['job'] for n, d in graph.out_degree if d == 0]
+        # All new jobs must depend on these jobs
+        self.all_depends = sink_jobs
+
+    def submit(self, command, **kwargs):
+        # TODO: we could accept additional args here that modify how we handle
+        # the command in the bash script we build (i.e. if the script is
+        # allowed to fail or not)
+        # self.commands.append(command)
+        # hack
+        from watch.utils import serial_queue
+
+        if isinstance(command, str):
+            name = kwargs.get('name', None)
+            if name is None:
+                name = kwargs['name'] = self.name + '-job-{}'.format(self.num_real_jobs)
+            if self.all_depends:
+                depends = kwargs.get('depends', None)
+                if depends is None:
+                    depends = self.all_depends
+                else:
+                    if not ub.iterable(depends):
+                        depends = [depends]
+                    depends = self.all_depends + depends
+                kwargs['depends'] = depends
+            job = serial_queue.BashJob(command, **kwargs)
+        else:
+            # Assume job is already a bash job
+            job = command
+        self.jobs.append(job)
+
+        if not job.bookkeeper:
+            self.num_real_jobs += 1
+        return job
 
     @classmethod
-    def create(cls, type='serial', **kwargs):
+    def create(cls, backend='serial', **kwargs):
         from watch.utils import tmux_queue
         from watch.utils import serial_queue
         from watch.utils import slurm_queue
-        if type == 'serial':
+        if backend == 'serial':
             kwargs.pop('size', None)
             self = serial_queue.SerialQueue(**kwargs)
-        elif type == 'tmux':
+        elif backend == 'tmux':
             self = tmux_queue.TMUXMultiQueue(**kwargs)
-        elif type == 'slurm':
+        elif backend == 'slurm':
             kwargs.pop('size', None)
             self = slurm_queue.SlurmQueue(**kwargs)
         else:
