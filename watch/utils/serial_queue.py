@@ -13,7 +13,7 @@ from watch.utils import cmd_queue  # NOQA
 
 
 def indent(text, prefix='    '):
-    """
+    r"""
     Indents a block of text
 
     Args:
@@ -37,7 +37,7 @@ def indent(text, prefix='    '):
 
 
 class BashJob(cmd_queue.Job):
-    """
+    r"""
     A job meant to run inside of a larger bash file. Analog of SlurmJob
 
     Example:
@@ -148,7 +148,7 @@ class BashJob(cmd_queue.Job):
         return text
 
     def rprint(self, with_status=False, with_gaurds=False, with_rich=0):
-        """
+        r"""
         Print info about the commands, optionally with rich
 
         Example:
@@ -189,7 +189,7 @@ class SerialQueue(cmd_queue.Queue):
         >>> job1 = self.submit('echo hi 1 && false')
         >>> job2 = self.submit('echo hi 2 && true')
         >>> job3 = self.submit('echo hi 3 && true', depends=job1)
-        >>> self.rprint()
+        >>> self.rprint(1, 1)
         >>> self.run()
         >>> self.read_state()
     """
@@ -235,8 +235,8 @@ class SerialQueue(cmd_queue.Queue):
             script.append(ub.codeblock(
                 f'''
                 # Init state to keep track of job progress
-                (( "_CMD_QUEUE_NUM_ERRORED=0" ))
-                (( "_CMD_QUEUE_NUM_FINISHED=0" ))
+                (( "_CMD_QUEUE_NUM_ERRORED=0" )) || true
+                (( "_CMD_QUEUE_NUM_FINISHED=0" )) || true
                 _CMD_QUEUE_TOTAL={total}
                 _CMD_QUEUE_STATUS=""
                 '''))
@@ -327,8 +327,8 @@ class SerialQueue(cmd_queue.Queue):
                         ''').format(num + 1, total, job.name))
 
                     conditionals = {
-                        'on_pass': '(( "_CMD_QUEUE_NUM_FINISHED=_CMD_QUEUE_NUM_FINISHED+1" ))',
-                        'on_fail': '(( "_CMD_QUEUE_NUM_ERRORED=_CMD_QUEUE_NUM_ERRORED+1" ))',
+                        'on_pass': '(( "_CMD_QUEUE_NUM_FINISHED=_CMD_QUEUE_NUM_FINISHED+1" )) || true',
+                        'on_fail': '(( "_CMD_QUEUE_NUM_ERRORED=_CMD_QUEUE_NUM_ERRORED+1" )) || true',
                     }
                     script.append(job.finalize_text(with_status, with_gaurds, conditionals))
                     if with_status:
@@ -377,7 +377,7 @@ class SerialQueue(cmd_queue.Queue):
         return self.fpath
 
     def rprint(self, with_status=False, with_gaurds=False, with_rich=0):
-        """
+        r"""
         Print info about the commands, optionally with rich
 
         Example:
