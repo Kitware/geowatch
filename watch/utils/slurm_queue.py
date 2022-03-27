@@ -68,7 +68,6 @@ class SlurmJob(cmd_queue.Job):
         >>> self = SlurmJob('python -c print("hello world")', 'hi', cpus=5, gpus=1, mem='10GB', depends=[self])
         >>> command = self._build_command()
         >>> print(command)
-
     """
     def __init__(self, command, name=None, output_fpath=None, depends=None,
                  partition=None, cpus=None, gpus=None, mem=None, begin=None,
