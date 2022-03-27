@@ -5,17 +5,24 @@ CommandLine:
 Example:
     >>> from watch.cli.prepare_splits import *  # NOQA
     >>> base_fpath = 'data.kwcoco.json'
-    >>> config1 = {
+    >>> config = {
     >>>     'base_fpath': './bundle/data.kwcoco.json',
     >>>     'virtualenv_cmd': 'conda activate watch',
     >>>     'run': 0,
     >>>     'cache': False,
     >>>     'backend': 'serial',
+    >>>     'verbose': 0,
     >>> }
-    >>> queue = prep_splits(cmdline=False, **config1)
-    >>> print('queue = {!r}'.format(queue))
-    >>> queue.rprint(0, 1)
-    >>> queue.rprint(1, 1)
+    >>> queue = prep_splits(cmdline=False, **config)
+    >>> config['backend'] = 'slurm'
+    >>> queue = prep_feats(cmdline=False, **config)
+    >>> queue.rprint(0, 0)
+    >>> config['backend'] = 'tmux'
+    >>> queue = prep_feats(cmdline=False, **config)
+    >>> queue.rprint(0, 0)
+    >>> config['backend'] = 'serial'
+    >>> queue = prep_feats(cmdline=False, **config)
+    >>> queue.rprint(0, 0)
 
 """
 
@@ -40,6 +47,7 @@ class PrepareSplitsConfig(scfg.Config):
         'cache': scfg.Value(True, help='if True skip completed results'),
         'serial': scfg.Value(False, help='if True use serial mode'),
         'backend': scfg.Value('tmux', help=None),
+        'verbose': scfg.Value(1, help=''),
     }
 
 
@@ -163,7 +171,9 @@ def prep_splits(cmdline=False, **kwargs):
         queue.add_header_command(config['virtualenv_cmd'])
 
     _submit_split_jobs(base_fpath, queue)
-    queue.rprint()
+
+    if config['verbose']:
+        queue.rprint()
 
     if config['run']:
         if config['serial']:

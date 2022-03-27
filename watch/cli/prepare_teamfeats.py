@@ -8,7 +8,7 @@ Example:
     >>> from watch.cli.prepare_teamfeats import *  # NOQA
     >>> dvc_dpath = ub.Path('.')
     >>> base_fpath = dvc_dpath / 'bundle/data.kwcoco.json'
-    >>> config1 = {
+    >>> config = {
     >>>     'base_fpath': './bundle/data.kwcoco.json',
     >>>     'gres': [0, 1],
     >>>     'dvc_dpath': './',
@@ -23,10 +23,18 @@ Example:
     >>>     'run': 0,
     >>>     #'check': False,
     >>>     'cache': False,
+    >>>     'backend': 'serial',
+    >>>     'verbose': 0,
     >>> }
-    >>> queue = prep_feats(cmdline=False, **config1)
-    >>> print('queue = {!r}'.format(queue))
-    >>> queue.rprint(1, 1)
+    >>> config['backend'] = 'slurm'
+    >>> queue = prep_feats(cmdline=False, **config)
+    >>> queue.rprint(0, 0)
+    >>> config['backend'] = 'tmux'
+    >>> queue = prep_feats(cmdline=False, **config)
+    >>> queue.rprint(0, 0)
+    >>> config['backend'] = 'serial'
+    >>> queue = prep_feats(cmdline=False, **config)
+    >>> queue.rprint(0, 0)
 """
 
 
@@ -84,6 +92,7 @@ class TeamFeaturePipelineConfig(scfg.Config):
         'backend': scfg.Value('tmux', help=None),
 
         'check': scfg.Value(True, help='if True check files exist where we can'),
+        'verbose': scfg.Value(1, help=''),
     }
 
 
@@ -160,7 +169,8 @@ def prep_feats(cmdline=True, **kwargs):
     _populate_teamfeat_queue(queue, base_fpath, dvc_dpath,
                              aligned_bundle_dpath, config)
 
-    queue.rprint()
+    if config['verbose']:
+        queue.rprint()
 
     if config['run']:
         agg_state = None
