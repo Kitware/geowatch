@@ -1,5 +1,10 @@
 #!/bin/bash
 __notes__="
+
+SeeAlso:
+    ../../../../../scripts/prepare_drop3.sh
+
+
 "
 
 data_splits(){
@@ -25,10 +30,11 @@ prep_teamfeat_drop2(){
         --with_invariants=0 \
         --do_splits=1 \
         --depth_workers=0 \
-        --cache=0 --run=1 --backend=slurm
+        --cache=0 --run=0 --backend=tmux
         #--backend=slurm
         #python -m watch.cli.prepare_splits --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L.kwcoco.json --run=False
 }
+
 
 gather-checkpoints-repackage(){
     DVC_DPATH=$(python -m watch.cli.find_dvc)
@@ -57,17 +63,17 @@ schedule-prediction-and-evlauation(){
     # - [ ] Can a task request that slurm only schedule it on a specific GPU?
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1" \
-            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/Drop3*/*.pt" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*EXPERIMENT*/*.pt" \
             --test_dataset="$VALI_FPATH" \
-            --run=1 --skip_existing=True --backend=tmux 
+            --run=1 --skip_existing=True --backend=slurm 
 
     # Be sure to DVC add the eval results after!
     DVC_DPATH=$(python -m watch.cli.find_dvc)
     cd "$DVC_DPATH" 
     ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
+    du -shL models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json | sort -h
     (cd "$DVC_DPATH" && dvc add models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json)
     (cd "$DVC_DPATH" && dvc push -r aws -R models/fusion/eval3_candidates/eval)
-
 
 
     # On other machines
@@ -93,7 +99,7 @@ aggregate-results(){
     python -m watch.tasks.fusion.gather_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
-        --dset_group_key="*" --show=True \
+        --dset_group_key="*Drop3*" --show=True \
         --classes_of_interest "Site Preparation" "Active Construction"
 }
 
@@ -105,9 +111,9 @@ DVC_DPATH=$(python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
-VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
-TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
 CHANNELS="blue|green|red|nir|swir16|swir22"
 INITIAL_STATE="noop"
 EXPERIMENT_NAME=Drop3_BASELINE_Template
@@ -452,7 +458,7 @@ export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$(python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
-EXPERIMENT_NAME=Drop3_BASELINE_SC_V304-a
+EXPERIMENT_NAME=Drop3_BASELINE_BAS_V304-a
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
@@ -466,7 +472,7 @@ export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$(python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
-EXPERIMENT_NAME=Drop3_BASELINE_SC_V304-b
+EXPERIMENT_NAME=Drop3_BASELINE_BAS_V304-b
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
@@ -480,7 +486,7 @@ export CUDA_VISIBLE_DEVICES=2
 DVC_DPATH=$(python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
-EXPERIMENT_NAME=Drop3_BASELINE_SC_V304-c
+EXPERIMENT_NAME=Drop3_BASELINE_BAS_V304-c
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
@@ -494,7 +500,7 @@ export CUDA_VISIBLE_DEVICES=3
 DVC_DPATH=$(python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
-EXPERIMENT_NAME=Drop3_BASELINE_SC_V304-d
+EXPERIMENT_NAME=Drop3_BASELINE_BAS_V304-d
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
@@ -503,3 +509,76 @@ python -m watch.tasks.fusion.fit \
     --global_change_weight=0.00 \
     --global_class_weight=0.00 \
     --global_saliency_weight=1.00 
+
+
+# namek 
+# -----------------------
+
+export CUDA_VISIBLE_DEVICES=1
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22"
+EXPERIMENT_NAME=Drop3_BASELINE_BAS_V309
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.00 \
+    --global_saliency_weight=1.00 \
+    --max_epochs=120 \
+    --patience=120 
+
+
+
+# yardrat 
+# -------
+
+export CUDA_VISIBLE_DEVICES=0
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22"
+EXPERIMENT_NAME=Drop3_SEARCH_BAS_V310
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.00 \
+    --global_saliency_weight=1.00 \
+    --max_epochs=80 \
+    --patience=80 \
+    --dist_weight=True \
+    --time_steps=5 \
+    --time_sampling=soft2 \
+    --time_span=7m \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=200m \
+    --num_draw=0 \
+    --max_epoch_length=10000 \
+    --normalize_inputs=10000 \
+    --stream_channels=8 \
+    --temporal_dropout=0.5 
