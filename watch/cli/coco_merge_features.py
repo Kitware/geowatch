@@ -9,6 +9,7 @@ import ubelt as ub
 from tqdm import tqdm
 
 from watch import exceptions
+from watch.cli.coco_combine_features import associate_images
 from watch.utils.kwcoco_extensions import transfer_geo_metadata
 
 
@@ -20,6 +21,9 @@ def check_kwcoco_file(kwcoco_path, channel_name, sensor_name=None, flexible_merg
         channel_name (str): Name of channel thats required to be in kwcoco file.
         sensor_name (str, optional): Only check images of from this type of sensor. Defaults to None.
         flexible_merge (bool, optional): Skip images that do not contain channel_name. Defaults to False.
+
+    Returns:
+        missing_image_names (list): A list of names corresponding to images without the channel name.
     """
 
     # Check if kwcoco file exists.
@@ -39,18 +43,18 @@ def check_kwcoco_file(kwcoco_path, channel_name, sensor_name=None, flexible_merg
         images = images.compress(flags)
         print(f"INFO: Number of {sensor_name} images: [{n_all_images - len(images)}/{n_all_images}]")
 
-    missing_image_ids = []
+    missing_image_names = []
     for coco_img in images.coco_images:
         if channel_name not in list(coco_img.channels.keys()):
-            missing_image_ids.append(coco_img.img["id"])
+            missing_image_names.append(kwcoco_file.index.imgs[coco_img.img["id"]]["name"])
             if flexible_merge is False:
                 raise AssertionError(
                     f"Channel '{channel_name}' not found in image {coco_img.img['id']} of kwcoco file {kwcoco_path}. Only channels found: {coco_img.channels}"
                 )
     if flexible_merge:
         print(kwcoco_path)
-        print(f"INFO: Number of images without channel from [{len(missing_image_ids)}/{len(images.coco_images)}]")
-    return missing_image_ids
+        print(f"INFO: Number of images without channel from [{len(missing_image_names)}/{len(images.coco_images)}]")
+    return missing_image_names
 
 
 def merge_kwcoco_channels(
@@ -60,7 +64,7 @@ def merge_kwcoco_channels(
     weights,
     merged_channel_name,
     sensor_name=None,
-    missing_image_ids=[],
+    missing_image_names=[],
 ):
     """
     Compute a weighted mean of channels from separate kwcoco file and save into
@@ -85,8 +89,8 @@ def merge_kwcoco_channels(
         sensor_name (str, optional):
             Only merge images belonging to this sensor. Defaults to None.
 
-        missing_image_ids (list, optional):
-            Skip combining these image IDs. Defaults to False.
+        missing_image_names (list, optional):
+            Skip combining these image names. Defaults to False.
 
 
     Example:
@@ -146,7 +150,8 @@ def merge_kwcoco_channels(
 
     pbar = tqdm(merge_kwcoco.index.imgs.items(), desc="Merging images", colour="green")
     for image_id, image_info in pbar:
-        if image_id in missing_image_ids:
+        image_name = merge_kwcoco.index.imgs[image_id]["name"]
+        if image_name in missing_image_names:
             continue
 
         # If sensor name spacified, only merge channels for images from this sensor.
@@ -223,9 +228,9 @@ def average_auxiliary_datas(input_objs, input_dpaths, weights):
     for obj, dpath, weight in zip(input_objs, input_dpaths, weights):
         # Assuming auxiliary data is perfectly alignable
         fpath = os.path.join(dpath, obj["file_name"])
-        imdata = kwimage.imread(fpath, nodata="float32")
+        imdata = kwimage.imread(fpath, nodata="float")
         mask = np.isnan(imdata)
-        imweights = np.full(imdata.shape, fill_value=weight, dtype="float32")
+        imweights = np.full(imdata.shape, fill_value=weight, dtype="float")
         imweights[mask] = 0
         imdata[mask] = 0
         weighted_imdata = imdata * imweights
@@ -283,8 +288,7 @@ def main(cmdline=True):
     parser.add_argument(
         "--weights",
         nargs="+",
-        type=float,
-        default=1,
+        default=None,
         help="Combination weight value for each prediction from kwcoco file. Default: All predictions are equally weighted.",
     )
     parser.add_argument(
@@ -337,17 +341,16 @@ def main(cmdline=True):
         print(f"INFO: No output channel name given, using channel name: {args.channel_name[0]}")
 
     ## Check kwcoco files to see that they exist and contain the required channels.
-    all_missing_image_ids = []
+    all_missing_image_names = []
     for kwcoco_file_path, channel_name in zip(args.kwcoco_file_paths, args.channel_name):
-        missing_image_ids = check_kwcoco_file(
+        missing_image_names = check_kwcoco_file(
             kwcoco_file_path, channel_name, sensor_name=args.sensor, flexible_merge=args.flexible_merge
         )
-        all_missing_image_ids.append(sorted(missing_image_ids))
-    if args.flexible_merge:
-        try:
-            all_missing_image_ids = list(itertools.chain.from_iterable(all_missing_image_ids))
-        except ValueError:
-            raise ValueError("Unequal number of missing image ids in each kwcoco file.")
+        all_missing_image_names.append(set(missing_image_names))
+
+    # Find common image names
+    if len(all_missing_image_names) != 0:
+        common_missing_image_names = list(set.union(*all_missing_image_names))
     print("INFO: Verified that kwcoco files contain correct channel name(s).")
 
     # Merge kwcoco files along certain channels.
@@ -358,7 +361,7 @@ def main(cmdline=True):
         args.weights,
         args.merge_channel_name,
         sensor_name=args.sensor,
-        missing_image_ids=all_missing_image_ids,
+        missing_image_names=common_missing_image_names,
     )
 
 
