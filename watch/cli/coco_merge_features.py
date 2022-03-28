@@ -227,6 +227,9 @@ def average_auxiliary_datas(input_objs, input_dpaths, weights):
     accum_weights = None
     for obj, dpath, weight in zip(input_objs, input_dpaths, weights):
         # Assuming auxiliary data is perfectly alignable
+        # TODO: Need a better way to handle case that auxiliary channels could have different
+        # sizes between datasets. Right now the first dataset has to contain the largest
+        # image which we can't rely on using the correct order.
         fpath = os.path.join(dpath, obj["file_name"])
         imdata = kwimage.imread(fpath, nodata="float")
         mask = np.isnan(imdata)
