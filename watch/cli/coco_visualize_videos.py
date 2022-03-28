@@ -98,6 +98,9 @@ class CocoVisualizeConfig(scfg.Config):
 
         'extra_header': scfg.Value(None, help='extra text to include in the header'),
 
+        'include_sensors': scfg.Value(None, help='if specified can be comma separated valid sensors'),
+        'exclude_sensors': scfg.Value(None, help='if specified can be comma separated invalid sensors'),
+
         'select_images': scfg.Value(
             None, type=str, help=ub.paragraph(
                 '''
@@ -220,43 +223,16 @@ def main(cmdline=True, **kwargs):
     start_frame = smartcast(config['start_frame'])
     end_frame = None if num_frames is None else start_frame + num_frames
 
+    from watch.utils import kwcoco_extensions
     selected_gids = None
-    if config['select_images'] is not None:
-        try:
-            import jq
-        except Exception:
-            print('The jq library is required to run a generic image query')
-            raise
-
-        try:
-            query_text = ".images[] | select({select_images}) | .id".format(**config)
-            query = jq.compile(query_text)
-            selected_gids = query.input(coco_dset.dataset).all()
-            selected_gids = set(selected_gids)
-        except Exception:
-            print('JQ Query Failed: {}'.format(query_text))
-            raise
-
-    if config['select_videos'] is not None:
-        try:
-            import jq
-        except Exception:
-            print('The jq library is required to run a generic image query')
-            raise
-
-        try:
-            query_text = ".videos[] | select({select_videos}) | .id".format(**config)
-            query = jq.compile(query_text)
-            selected_vidids = query.input(coco_dset.dataset).all()
-            vid_selected_gids = set(ub.flatten(coco_dset.index.vidid_to_gids[vidid]
-                                               for vidid in selected_vidids))
-            if selected_gids is None:
-                selected_gids = vid_selected_gids
-            else:
-                selected_gids &= vid_selected_gids
-        except Exception:
-            print('JQ Query Failed: {}'.format(query_text))
-            raise
+    selected_gids = kwcoco_extensions.filter_image_ids(
+        coco_dset,
+        gids=selected_gids,
+        include_sensors=config['include_sensors'],
+        exclude_sensors=config['exclude_sensors'],
+        select_images=config['select_images'],
+        select_videos=config['select_videos'],
+    )
 
     if config['skip_missing'] and channels is not None:
         requested_channels = kwcoco.ChannelSpec.coerce(channels).fuse().as_set()
