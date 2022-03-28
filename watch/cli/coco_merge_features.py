@@ -223,9 +223,9 @@ def average_auxiliary_datas(input_objs, input_dpaths, weights):
     for obj, dpath, weight in zip(input_objs, input_dpaths, weights):
         # Assuming auxiliary data is perfectly alignable
         fpath = os.path.join(dpath, obj["file_name"])
-        imdata = kwimage.imread(fpath, nodata="float")
+        imdata = kwimage.imread(fpath, nodata="float32")
         mask = np.isnan(imdata)
-        imweights = np.full(imdata.shape, fill_value=weight, dtype="float")
+        imweights = np.full(imdata.shape, fill_value=weight, dtype="float32")
         imweights[mask] = 0
         imdata[mask] = 0
         weighted_imdata = imdata * imweights
