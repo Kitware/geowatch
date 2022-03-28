@@ -129,7 +129,7 @@ def _default_s2_item_selector(stac_item):
     return stac_item.properties.get('platform') in SUPPORTED_S2_PLATFORMS
 
 
-def _ensure_map_at_res(map_file, xres, yres):
+def ensure_map_at_res(map_file, xres, yres):
     base, ext = os.path.splitext(map_file)
 
     outpath = "{}_{}x{}{}".format(base, xres, yres, ext)
@@ -186,9 +186,9 @@ def apply_harmonization_item_map(stac_item,
              '--outfile={}'.format(band_outpath),
              '-A', band_href,
              '--A_band=1',
-             '-S', _ensure_map_at_res(slope_map, xres, yres),
+             '-S', ensure_map_at_res(slope_map, xres, yres),
              '--S_band={}'.format(i + 1),
-             '-I', _ensure_map_at_res(intercept_map, xres, yres),
+             '-I', ensure_map_at_res(intercept_map, xres, yres),
              '--I_band={}'.format(i + 1),
              '--type', 'Int16',
              '--NoDataValue', '-9999'])
@@ -353,10 +353,10 @@ def run_mtra(stac_catalog,
         # Precompute different GSD slope & intercept map files to avoid
         # having difference processes try to do it at the same time.
         # TODO: Use a lock instead
-        _ensure_map_at_res(slope_map, 10.0, 10.0)
-        _ensure_map_at_res(intercept_map, 20.0, 20.0)
-        _ensure_map_at_res(slope_map, 10.0, 10.0)
-        _ensure_map_at_res(intercept_map, 20.0, 20.0)
+        ensure_map_at_res(slope_map, 10.0, 10.0)
+        ensure_map_at_res(intercept_map, 20.0, 20.0)
+        ensure_map_at_res(slope_map, 10.0, 10.0)
+        ensure_map_at_res(intercept_map, 20.0, 20.0)
 
         print("* Applying harmonization model to select items")
         harmonized_items = apply_harmonization(
