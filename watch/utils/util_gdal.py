@@ -216,8 +216,10 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
         -co COMPRESS={compress}
         ''')
 
+    tmp_fpath = out_fpath.augment(suffix='.tmp')
+
     template_parts.append(f'-srcwin {xoff} {yoff} {xsize} {ysize}')
-    template_parts.append(f'{in_fpath} {out_fpath}')
+    template_parts.append(f'{in_fpath} {tmp_fpath}')
     template = ' '.join(template_parts)
 
     command = template.format(template)
@@ -227,6 +229,8 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
         print(cmd_info['out'])
         print(cmd_info['err'])
         raise Exception(cmd_info['err'])
+
+    os.rename(tmp_fpath, out_fpath)
 
 
 def gdal_single_warp(in_fpath,
