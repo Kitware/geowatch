@@ -68,11 +68,15 @@ BANDS_TO_HARMONIZE = ['B02', 'B03', 'B04', 'B8A', 'B11', 'B12']
 
 def _asset_selector(asset_name, asset):
     # WV items only have a single "data" asset containing all bands
-    return (asset_name in BANDS_TO_HARMONIZE)
+    return ((asset_name in BANDS_TO_HARMONIZE) or
+            (asset_name.replace("image-", "") in BANDS_TO_HARMONIZE))
 
 
 def _item_selector(stac_item):
-    return stac_item['properties'].get('platform') in SELECTED_PLATFORMS
+    if isinstance(stac_item, dict):
+        return stac_item['properties'].get('platform') in SELECTED_PLATFORMS
+    else:
+        return stac_item.properties.get('platform') in SELECTED_PLATFORMS
 
 
 def apply_harmonization_item_map_wrapper(stac_item,
@@ -81,7 +85,9 @@ def apply_harmonization_item_map_wrapper(stac_item,
                                          bands_to_harmonize,
                                          slope_maps_by_mgrs,
                                          intercept_maps_by_mgrs):
-    mgrs_tile = ''.join((stac_item.properties.get('mgrs:utm_zone', '??'),
+    # MTRA map MGRS string contains 'T' prefix (e.g. 'T32RLU')
+    mgrs_tile = ''.join(('T',
+                         stac_item.properties.get('mgrs:utm_zone', '??'),
                          stac_item.properties.get('mgrs:latitude_band', '?'),
                          stac_item.properties.get('mgrs:grid_square', '??')))
 
