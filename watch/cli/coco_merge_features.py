@@ -204,7 +204,6 @@ def merge_kwcoco_channels(
             pass
 
     # Save kwcoco file.
-    merge_kwcoco.reroot(absolute=True)
     merge_kwcoco.validate()
     merge_kwcoco.dump(output_kwcoco_path)
     print(f"Saved merged kwcoco file to: {output_kwcoco_path}")
