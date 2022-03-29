@@ -152,7 +152,7 @@ def main(cmdline=False, **kwargs):
     aligned_imganns_kwcoco_fpath = aligned_imganns_kwcoco_fpath.shrinkuser(home='$HOME')
 
     from watch.utils import cmd_queue
-    queue = cmd_queue.Queue.coerce(
+    queue = cmd_queue.Queue.create(
         backend=config['backend'], name='teamfeat', size=1, gres=None)
 
     s3_fpath_list = config['s3_fpath']
