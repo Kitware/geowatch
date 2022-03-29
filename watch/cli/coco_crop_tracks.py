@@ -3,7 +3,7 @@ CommandLine:
 
     DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
     echo $DVC_DPATH
-    XDEV_PROFILE=1 python -m watch.cli.coco_crop_tracks \
+    python -m watch.cli.coco_crop_tracks \
         --src="$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json" \
         --dst="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json" \
         --mode=process --workers=8
@@ -20,8 +20,7 @@ import scriptconfig as scfg
 import kwcoco
 import kwimage
 import ubelt as ub
-
-import xdev
+# import xdev
 
 
 class CocoCropTrackConfig(scfg.Config):
@@ -126,7 +125,7 @@ def main(cmdline=0, **kwargs):
         results.append(result)
 
 
-@xdev.profile
+# @xdev.profile
 def generate_crop_jobs(coco_dset, dst_bundle_dpath):
     """
 
