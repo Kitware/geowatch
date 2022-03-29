@@ -196,8 +196,8 @@ def _remap_quality_mask(quality_mask_path, outdir):
                     '--overwrite',
                     '--quiet',
                     '--calc',
-                    '1*(A==1)+64*(A==1)+128*(A==5)+16*(A==3)+32*(A==4)+8*(A==2)+255*(A==255)',  # noqa
-                    '--NoDataValue', '255'], check=True)
+                    '1*(A==1)+64*(A==1)+128*(A==5)+16*(A==3)+32*(A==4)+8*(A==2)+0*(A==255)',  # noqa
+                    '--NoDataValue', '0'], check=True)
 
     return output_path
 
