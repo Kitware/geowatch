@@ -236,35 +236,36 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath):
             track_img_dname = track_dname / sensor_coarse
 
             warp_img_from_vid = coco_img.warp_img_from_vid
+
             for obj in coco_img.iter_asset_objs():
                 warp_img_from_aux = kwimage.Affine.coerce(obj['warp_aux_to_img'])
                 warp_aux_from_img = warp_img_from_aux.inv()
                 warp_aux_from_vid = warp_aux_from_img @ warp_img_from_vid
                 aux_track_poly = vid_track_poly.warp(warp_aux_from_vid)
-                chan_code = obj['channels']
+                crop_box_asset_space = list(aux_track_poly.bounding_box().quantize().to_xywh().to_coco())[0]
 
+                chan_code = obj['channels']
                 if 1:
-                    chan_pname = kwcoco.FusedChannelSpec.coerce(chan_code).path_sanitize()
-                    if len(chan_pname) > 10:
-                        # Hack to prevent long names for docker (limit is 242 chars)
-                        num_bands = kwcoco.FusedChannelSpec.coerce(chan_code).numel()
-                        chan_pname = '{}_{}'.format(ub.hash_data(chan_pname, base='abc')[0:8], num_bands)
-                    else:
-                        num_bands = obj['num_bands']
+                    chan_pname = kwcoco.FusedChannelSpec.coerce(chan_code).path_sanitize(maxlen=10)
+                    # if len(chan_pname) > 10:
+                    #     # Hack to prevent long names for docker (limit is 242 chars)
+                    #     num_bands = kwcoco.FusedChannelSpec.coerce(chan_code).numel()
+                    #     chan_pname = '{}_{}'.format(ub.hash_data(chan_pname, base='abc')[0:8], num_bands)
+                    # else:
+                    #     num_bands = obj['num_bands']
 
                 # Construct a name for the subregion to extract.
                 num = 0
                 name = 'crop_{}_{}_{}_{}'.format(iso_time, space_str, sensor_coarse, num)
                 dst_fname = track_img_dname / name / f'{name}_{chan_pname}.tif'
 
-                crop_pixel_box = list(aux_track_poly.bounding_box().quantize().to_xywh().to_coco())[0]
                 crop_asset_task = {**crop_img_task}
                 crop_asset_task['parent_file_name'] = obj['file_name']
                 crop_asset_task['file_name'] = dst_fname
                 crop_asset_task['region'] = region
                 crop_asset_task['src'] = bundle_dpath / obj['file_name']
                 crop_asset_task['dst'] = dst_bundle_dpath / dst_fname
-                crop_asset_task['crop_pixel_box'] = crop_pixel_box
+                crop_asset_task['crop_box_asset_space'] = crop_box_asset_space
                 crop_asset_task['channels'] = chan_code
                 crop_asset_task['num_bands'] = num_bands
                 yield crop_asset_task
@@ -275,13 +276,13 @@ def run_crop_asset_task(crop_asset_task, keep):
     _crop_task = crop_asset_task.copy()
     src = _crop_task.pop('src')
     dst = _crop_task.pop('dst')
-    crop_pixel_box = _crop_task.pop('crop_pixel_box')
+    crop_box_asset_space = _crop_task.pop('crop_box_asset_space')
     cache_hit = keep in {'img'} and dst.exists()
     if not cache_hit:
-        pixel_box = kwimage.Boxes([crop_pixel_box], 'xywh')
+        pixel_box = kwimage.Boxes([crop_box_asset_space], 'xywh')
         # print('src = {!r}'.format(src))
         # print('dst = {!r}'.format(dst))
-        # print('crop_pixel_box = {!r}'.format(crop_pixel_box))
+        # print('crop_box_asset_space = {!r}'.format(crop_box_asset_space))
         dst.parent.ensuredir()
         util_gdal.gdal_single_translate(src, dst, pixel_box)
     return _crop_task

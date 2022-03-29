@@ -263,9 +263,9 @@ prepare_l1_version_of_drop3(){
         --collated=True \
         --requester_pays=True \
         --ignore_duplicates=True \
-        --fields_workers=0 \
+        --fields_workers=8 \
         --align_workers=8 \
-        --convert_workers=0 \
+        --convert_workers=8 \
         --debug=False \
         --serial=True --cache=False --run=1
 
