@@ -6,6 +6,14 @@ CommandLine:
     XDEV_PROFILE=1 python -m watch.cli.coco_crop_tracks \
         --src="$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json" \
         --dst="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json" \
+        --mode=process --workers=8
+
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
+    echo $DVC_DPATH
+    XDEV_PROFILE=1 python -m watch.cli.coco_crop_tracks \
+        --src="$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json" \
+        --dst="$DVC_DPATH/Cropped-Drop2-TA1-2022-03-10/data.kwcoco.json" \
         --mode=process --workers=0
 """
 import scriptconfig as scfg
@@ -52,6 +60,16 @@ def main(cmdline=0, **kwargs):
         base_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json'
         src = base_fpath
         dst = dvc_dpath / 'Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json'
+        cmdline = 0
+        kwargs = dict(src=src, dst=dst)
+
+    Ignore:
+        from watch.cli.coco_crop_tracks import *  # NOQA
+        import watch
+        dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
+        base_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
+        src = base_fpath
+        dst = dvc_dpath / 'Cropped-Drop2-TA1-2022-02-15/data.kwcoco.json'
         cmdline = 0
         kwargs = dict(src=src, dst=dst)
     """
@@ -110,8 +128,37 @@ def main(cmdline=0, **kwargs):
 
 @xdev.profile
 def generate_crop_jobs(coco_dset, dst_bundle_dpath):
+    """
+
+    Benchmark:
+        # Test kwimage versus shapley warp
+
+        kw_poly = kwimage.Polygon.random()
+        kw_poly = kwimage.Boxes.random(1).to_polygons()[0]
+
+        sh_poly = kw_poly.to_shapely()
+        transform = kwimage.Affine.random()
+
+        import timerit
+        ti = timerit.Timerit(100, bestof=10, verbose=2)
+        for timer in ti.reset('shapely'):
+            with timer:
+                # This is faster than fancy indexing
+                a, b, x, d, e, y = transform.matrix.ravel()[0:6]
+                sh_transform = (a, b, d, e, x, y)
+                sh_warp_poly = affine_transform(sh_poly, sh_transform)
+
+        for timer in ti.reset('kwimage'):
+            with timer:
+                kw_warp_poly = kw_poly.warp(transform)
+
+        kw_warp_poly2 = kwimage.Polygon.from_shapely(sh_warp_poly)
+        print(kw_warp_poly2)
+        print(kw_warp_poly)
+    """
     import shapely
     from watch.utils import util_time
+    from shapely.affinity import affine_transform
 
     # Build to_extract-like objects so this script can eventually be combined
     # with coco-align-geotiffs to make something that's ultimately better.
@@ -206,8 +253,18 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath):
             track_polys.append(vid_sseg.to_shapely())
         # Might need to pad out this region
         vid_track_poly_sh = shapely.ops.unary_union(track_polys).convex_hull
-        vid_track_poly = kwimage.MultiPolygon.from_shapely(vid_track_poly_sh).data[0]
-        vid_track_poly = vid_track_poly.scale(1.1, about='center')
+
+        SQUARE_BOUNDS = 1
+        SHAPELY_TRANFORM = 1
+        if SQUARE_BOUNDS:
+            vid_track_poly = kwimage.MultiPolygon.from_shapely(vid_track_poly_sh).data[0]
+            cx, cy, w, h = vid_track_poly.to_boxes().to_cxywh().data[0]
+            w = h = max(w, h)
+            vid_track_square = kwimage.Boxes([[cx, cy, w, h]], 'cxywh')
+            vid_track_square = vid_track_square.scale(1.2, about='center')
+            vid_track_poly_sh = vid_track_square.to_shapely()[0]
+
+        # vid_track_poly = vid_track_poly.scale(1.1, about='center')
 
         # Given the segmentation region, generate track tasks
         track_name = tid if isinstance(tid, str) else 'track_{}'.format(tid)
@@ -226,9 +283,14 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath):
             coco_img = _lut_coco_image(gid)
 
             # Skip this image if it corresponds to an invalid region
-            valid_region = coco_img.valid_region(space='video').to_shapely()
-            if not valid_region.intersects(vid_track_poly_sh):
-                continue
+            try:
+                valid_region = coco_img.valid_region(space='video')
+                if valid_region is not None:
+                    valid_region_sh = valid_region.to_shapely()
+                    if not valid_region_sh.intersects(vid_track_poly_sh):
+                        continue
+            except AttributeError as ex:
+                print('warning (might need kwcoco > 0.2.27) ex = {!r}'.format(ex))
 
             sensor_coarse = coco_img.get('sensor_coarse', 'unknown')
             datetime_ = util_time.coerce_datetime(coco_img['date_captured'])
@@ -249,8 +311,15 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath):
                 warp_img_from_aux = kwimage.Affine.coerce(obj['warp_aux_to_img'])
                 warp_aux_from_img = warp_img_from_aux.inv()
                 warp_aux_from_vid = warp_aux_from_img @ warp_img_from_vid
-                aux_track_poly = vid_track_poly.warp(warp_aux_from_vid)
-                crop_box_asset_space = list(aux_track_poly.bounding_box().quantize().to_xywh().to_coco())[0]
+
+                if SHAPELY_TRANFORM:
+                    a, b, x, d, e, y = warp_aux_from_vid.matrix.ravel()[0:6]
+                    sh_transform = (a, b, d, e, x, y)
+                    aux_track_poly_sh = affine_transform(vid_track_poly_sh, sh_transform)
+                    aux_track_poly = kwimage.Polygon.from_shapely(aux_track_poly_sh)
+                # else:
+                #     aux_track_poly = vid_track_poly.warp(warp_aux_from_vid)
+                crop_box_asset_space = aux_track_poly.bounding_box().quantize().to_xywh().data[0]
 
                 chan_code = obj['channels']
                 # to prevent long names for docker (limit is 242 chars)
