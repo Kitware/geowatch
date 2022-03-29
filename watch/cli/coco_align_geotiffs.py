@@ -1567,7 +1567,9 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     # all in a final step.
     out_fpath = tmp_dst_gpath
     if DEBUG:
-        print('start gdal warp dst_gpath = {!r}'.format(dst_gpath))
+        print(
+            'start gdal warp in_fpaths = {}'.format(ub.repr2(input_gpaths, nl=1)) +
+            '\n* dst_gpath = {!r}'.format(dst_gpath))
     if len(input_gpaths) > 1:
         in_fpaths = input_gpaths
         util_gdal.gdal_multi_warp(in_fpaths, out_fpath, space_box=space_box,
