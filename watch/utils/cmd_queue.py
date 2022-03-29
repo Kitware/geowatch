@@ -114,6 +114,9 @@ class Queue(ub.NiceRepr):
                     graph.add_edge(dep.name, job.name)
         return graph
 
+    def monitor(self):
+        print('monitor not implemented')
+
 
 def graph_str(graph, with_labels=True, sources=None, write=None, ascii_only=False):
     """
