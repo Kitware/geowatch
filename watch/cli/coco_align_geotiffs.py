@@ -1557,11 +1557,13 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     out_fpath = tmp_dst_gpath
     if len(input_gpaths) > 1:
         in_fpaths = input_gpaths
-        util_gdal.gdal_multi_warp(in_fpaths, out_fpath, space_box, local_epsg,
-                                  rpcs=rpcs, nodata=nodata)
+        util_gdal.gdal_multi_warp(in_fpaths, out_fpath, space_box=space_box,
+                                  local_epsg=local_epsg, rpcs=rpcs,
+                                  nodata=nodata)
     else:
         in_fpath = input_gpaths[0]
-        util_gdal.gdal_single_warp(in_fpath, out_fpath, space_box, local_epsg,
+        util_gdal.gdal_single_warp(in_fpath, out_fpath,
+                                   space_box=space_box, local_epsg=local_epsg,
                                    rpcs=rpcs, nodata=nodata)
 
     os.rename(tmp_dst_gpath, dst_gpath)

@@ -88,41 +88,17 @@ def _demo_geoimg_with_nodata():
     # compute dummy values for a geotransform to CRS84
     img_h, img_w = imdata.shape[0:2]
     img_box = kwimage.Boxes([[0, 0, img_w, img_h]], 'xywh')
+    img_corners = img_box.corners()
 
+    # wld_box = kwimage.Boxes([[lon_x, lat_y, 0.0001, 0.0001]], 'xywh')
+    # wld_corners = wld_box.corners()
     lat_y = 40.060759
     lon_x = 116.613095
-
-    # def box_corners2(self):
-    #     """
-    #     Return the corners of the boxes
-
-    #     This function is unintuitive and may be deprecated
-
-    #     Returns:
-    #         np.ndarray : stacked corners in an array with shape [4*N, 2]
-    #     """
-    #     corners = []
-    #     x1, y1, x2, y2 = [a.ravel() for a in self.to_ltrb().components]
-    #     stacked = np.array([
-    #         [x1, y1],
-    #         [x1, y2],
-    #         [x2, y2],
-    #         [x2, y1],
-    #     ])
-    #     corners = stacked.transpose(2, 0, 1).reshape(-1, 2)
-    #     corners = np.ascontiguousarray(corners)
-    #     return corners
-
     # lat_y_off = 0.0001
     # lat_x_off = 0.0001
-
     # Pretend this is a big spatial region
     lat_y_off = 0.1
     lat_x_off = 0.1
-
-    # wld_box = kwimage.Boxes([[lon_x, lat_y, 0.0001, 0.0001]], 'xywh')
-    img_corners = img_box.corners()
-
     # hard code so north is up
     wld_corners = np.array([
         [lon_x - lat_x_off, lat_y + lat_y_off],
@@ -130,7 +106,6 @@ def _demo_geoimg_with_nodata():
         [lon_x + lat_x_off, lat_y - lat_y_off],
         [lon_x + lat_x_off, lat_y + lat_y_off],
     ])
-    # wld_corners = wld_box.corners()
     transform = kwimage.Affine.fit(img_corners, wld_corners)
 
     nodata = -9999
@@ -246,6 +221,35 @@ def gdal_single_warp(in_fpath,
                      use_te_geoidgrid=False,
                      dem_fpath=None):
     r"""
+    Wrapper around gdalwarp
+
+    Args:
+        in_fpath (PathLike): input geotiff path
+
+        out_fpath (PathLike): output geotiff path
+
+        space_box (kwimage.Boxes):
+            Should be traditional crs84 ltrb (or lbrt?) -- i.e.
+            (lonmin, latmin, lonmax, latmax) - when crop_crs is epsg:4326
+
+        local_epsg (int):
+            EPSG code for the CRS the final geotiff will be projected into.
+            This should be the UTM zone for the region if known. Otherwise
+            It can be 4326 to project into WGS84 or CRS84 (not sure which
+            axis ordering it will use by default).
+
+        nodata (int | None):
+            only specify if in_fpath does not already have a nodata value
+
+        rpcs (dict): the "rpc_transform" from
+            ``watch.gis.geotiff.geotiff_crs_info``, if that information
+            is available and orthorectification is desired.
+
+        use_perf_opts (bool): undocumented
+        as_vrt (bool): undocumented
+        use_te_geoidgrid (bool): undocumented
+        dem_fpath (bool): undocumented
+
     TODO:
         - [ ] This should be a kwgeo function?
 
@@ -357,8 +361,8 @@ def gdal_single_warp(in_fpath,
 
         # Coordinate Reference System of the "te" crop coordinates
         # te_srs = spatial reference of query points
-        # crop_coordinate_srs = 'epsg:4326'
-        crop_coordinate_srs = target_srs
+        # This means space_box currently MUST be in CRS84
+        crop_coordinate_srs = 'epsg:4326'
 
         template_parts.append('''
             -te {xmin} {ymin} {xmax} {ymax}
