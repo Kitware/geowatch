@@ -244,3 +244,26 @@ transfer_features(){
 
     rsync -p "$SRC_BUNDLE_DPATH/combo_LM.rel.kwcoco.json" "$DST_BUNDLE_DPATH/combo_LM.kwcoco.json"
 }
+
+
+
+prepare_l1_version_of_drop3(){
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    echo "DVC_DPATH = $DVC_DPATH"
+    S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/ALL_ANNOTATED_REGIONS_TA-1_PROCESSED_20220222.unique.input.l1.mini
+    DATASET_SUFFIX=L1-MINI
+    python -m watch.cli.prepare_ta2_dataset \
+        --dataset_suffix="$DATASET_SUFFIX" \
+        --s3_fpath="$S3_FPATH" \
+        --dvc_dpath="$DVC_DPATH" \
+        --collated=True \
+        --requester_pays=True \
+        --ignore_duplicates=True \
+        --fields_workers=0 \
+        --align_workers=0 \
+        --convert_workers=0 \
+        --debug=False \
+        --serial=True --run=0 --cache=False
+
+}

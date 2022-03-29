@@ -75,7 +75,9 @@ class PrepareTA2Config(scfg.Config):
         'dvc_dpath': scfg.Value('auto', help=''),
         'run': scfg.Value('0', help=''),
         'collated': scfg.Value([True], nargs='+', help='set to false if the input data is not collated'),
-        'serial': scfg.Value(True, help='if True use serial mode'),
+
+        'backend': scfg.Value('serial', help='can be serial, tmux, or slurm'),
+
         'aws_profile': scfg.Value('iarpa', help='AWS profile to use for remote data access'),
 
         'convert_workers': scfg.Value('min(avail,8)', help='workers for stac-to-kwcoco script'),
@@ -112,7 +114,6 @@ def main(cmdline=False, **kwargs):
         }
 
     """
-    from watch.utils import tmux_queue
     # import shlex
     config = PrepareTA2Config(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
@@ -150,8 +151,9 @@ def main(cmdline=False, **kwargs):
     aligned_imgonly_kwcoco_fpath = aligned_imgonly_kwcoco_fpath.shrinkuser(home='$HOME')
     aligned_imganns_kwcoco_fpath = aligned_imganns_kwcoco_fpath.shrinkuser(home='$HOME')
 
-    # queue = tmux_queue.SerialQueue()
-    queue = tmux_queue.TMUXMultiQueue(name='teamfeat', size=1, gres=None)
+    from watch.utils import cmd_queue
+    queue = cmd_queue.Queue.coerce(
+        backend=config['backend'], name='teamfeat', size=1, gres=None)
 
     s3_fpath_list = config['s3_fpath']
     collated_list = config['collated']
@@ -402,10 +404,10 @@ def main(cmdline=False, **kwargs):
 
     if config['run']:
         agg_state = None
-        if config['serial']:
-            queue.serial_run()
-        else:
-            queue.run()
+        # if config['serial']:
+        #     queue.serial_run()
+        # else:
+        queue.run()
         # if config['follow']:
         agg_state = queue.monitor()
         # if not config['keep_sessions']:
