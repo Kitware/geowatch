@@ -1491,6 +1491,8 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     first_obj = obj_group[0]
     chan_code = obj_group[0].get('channels', '')
 
+    if DEBUG:
+
     # Ensure chan codes dont break thing
     # def sanatize_chan_pnams(cs):
     #     return cs.replace('|', '_').replace(':', '-')
@@ -1569,6 +1571,7 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     if DEBUG:
         print(
             'start gdal warp in_fpaths = {}'.format(ub.repr2(input_gpaths, nl=1)) +
+            'chan_code = {!r}\n'.format(chan_code) +
             '\n* dst_gpath = {!r}'.format(dst_gpath))
     if len(input_gpaths) > 1:
         in_fpaths = input_gpaths
