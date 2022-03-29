@@ -130,6 +130,7 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
 
     Example:
         >>> from watch.utils.util_gdal import *  # NOQA
+        >>> from watch.utils.util_gdal import _demo_geoimg_with_nodata
         >>> from watch.gis import geotiff
         >>> in_fpath = ub.Path(_demo_geoimg_with_nodata())
         >>> info = geotiff.geotiff_crs_info(in_fpath)
@@ -147,7 +148,7 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
         >>> utm_epsg = int(info['utm_crs_info']['auth'][1])
         >>> utm_space_box = utm_poly.scale(0.5, about='center').to_boxes()
         >>> utm_out_fpath = in_fpath.augment(suffix='_utmcrop')
-        >>> gdal_single_warp(in_fpath, utm_out_fpath, local_epsg=utm_epsg, space_box=utm_space_box)
+        >>> gdal_single_warp(in_fpath, utm_out_fpath, local_epsg=utm_epsg, space_box=utm_space_box, box_epsg=utm_epsg)
 
         >>> # Test Pixel cropping
         >>> pxl_poly = kwimage.Polygon(exterior=info['pxl_corners'])
@@ -198,6 +199,9 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
     template = ' '.join(template_parts)
 
     command = template.format(template)
+    command = ub.paragraph(command)
+    if 0:
+        print(ub.paragraph(command))
     cmd_info = ub.cmd(command, verbose=0)  # NOQA
     if cmd_info['ret'] != 0:
         print('\n\nCOMMAND FAILED: {!r}'.format(command))
@@ -212,6 +216,7 @@ def gdal_single_warp(in_fpath,
                      out_fpath,
                      space_box=None,
                      local_epsg=4326,
+                     box_epsg=4326,
                      nodata=None,
                      rpcs=None,
                      blocksize=256,
@@ -230,13 +235,16 @@ def gdal_single_warp(in_fpath,
 
         space_box (kwimage.Boxes):
             Should be traditional crs84 ltrb (or lbrt?) -- i.e.
-            (lonmin, latmin, lonmax, latmax) - when crop_crs is epsg:4326
+            (lonmin, latmin, lonmax, latmax) - when box_epsg is 4326
 
         local_epsg (int):
             EPSG code for the CRS the final geotiff will be projected into.
             This should be the UTM zone for the region if known. Otherwise
             It can be 4326 to project into WGS84 or CRS84 (not sure which
             axis ordering it will use by default).
+
+        box_epsg (int):
+            this is the EPSG of the bounding box. Should usually be 4326.
 
         nodata (int | None):
             only specify if in_fpath does not already have a nodata value
@@ -362,7 +370,8 @@ def gdal_single_warp(in_fpath,
         # Coordinate Reference System of the "te" crop coordinates
         # te_srs = spatial reference of query points
         # This means space_box currently MUST be in CRS84
-        crop_coordinate_srs = 'epsg:4326'
+        # crop_coordinate_srs = 'epsg:4326'
+        crop_coordinate_srs = 'epsg:{}'.format(box_epsg)
 
         template_parts.append('''
             -te {xmin} {ymin} {xmax} {ymax}
@@ -433,6 +442,9 @@ def gdal_single_warp(in_fpath,
     template = ' '.join(template_parts)
 
     command = template.format(**template_kw)
+    command = ub.paragraph(command)
+    if 1:
+        print(ub.paragraph(command))
     cmd_info = ub.cmd(command, verbose=0)  # NOQA
     if cmd_info['ret'] != 0:
         print('\n\nCOMMAND FAILED: {!r}'.format(command))
