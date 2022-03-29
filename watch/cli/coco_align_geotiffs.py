@@ -1280,6 +1280,11 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
         dst = job.result()
         dst_list.append(dst)
 
+    new_gid = start_gid
+
+    if DEBUG:
+        print(f'Finish channel crop jobs: {new_gid}')
+
     if align_method != 'pixel_crop':
         # If we are a pixel crop, we can transform directly
         for dst in dst_list:
@@ -1295,8 +1300,8 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
             # crop would invalidate, otherwise we will propogate bad info.
             kwcoco_extensions._populate_canvas_obj(
                 bundle_dpath, dst, overwrite={'warp'}, with_wgs=True)
-
-    new_gid = start_gid
+        if DEBUG:
+            print(f'Finish repopulate canvas jobs: {new_gid}')
 
     assert len(dst_list) == len(obj_groups)
     # Hack because heurstics break when fnames change
@@ -1322,6 +1327,8 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
         aux_dst = dst_list
 
     if len(aux_dst):
+        if DEBUG:
+            print(f'Recompute auxiliary transforms: {new_gid}')
         new_img['auxiliary'] = aux_dst
         kwcoco_extensions._recompute_auxiliary_transforms(new_img)
 
@@ -1424,6 +1431,8 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
         new_aid = new_aid + 1
         new_anns.append(ann)
 
+    if DEBUG:
+        print(f'Finished extract img job: {new_gid}')
     return new_img, new_anns
 
 
