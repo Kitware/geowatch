@@ -13,6 +13,8 @@ import kwcoco
 import kwimage
 import ubelt as ub
 
+import xdev
+
 
 class CocoCropTrackConfig(scfg.Config):
     """
@@ -46,7 +48,7 @@ def main(cmdline=0, **kwargs):
         from watch.cli.coco_crop_tracks import *  # NOQA
         import watch
         dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
-        dvc_dpath = watch.find_smart_dvc_dpath(hardware='ssd')
+        # dvc_dpath = watch.find_smart_dvc_dpath(hardware='ssd')
         base_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json'
         src = base_fpath
         dst = dvc_dpath / 'Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json'
@@ -105,6 +107,7 @@ def main(cmdline=0, **kwargs):
         results.append(result)
 
 
+@xdev.profile
 def generate_crop_jobs(coco_dset, dst_bundle_dpath):
     import shapely
     from watch.utils import util_time
