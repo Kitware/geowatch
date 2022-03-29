@@ -433,7 +433,6 @@ def gdal_single_warp(in_fpath,
     template = ' '.join(template_parts)
 
     command = template.format(**template_kw)
-    print(command)
     cmd_info = ub.cmd(command, verbose=0)  # NOQA
     if cmd_info['ret'] != 0:
         print('\n\nCOMMAND FAILED: {!r}'.format(command))
