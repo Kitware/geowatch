@@ -15,6 +15,8 @@ import watch
 from watch.utils import util_bands
 from watch.utils import kwcoco_extensions
 
+from os.path import basename, dirname, join
+
 try:
     from xdev import profile
 except Exception:
@@ -155,7 +157,7 @@ def _determine_wv_channels(asset_name, asset_dict):
 
 
 @profile
-def make_coco_img_from_stac_asset(asset_name,
+def make_coco_aux_from_stac_asset(asset_name,
                                   asset_dict,
                                   platform,
                                   name=None,
@@ -163,6 +165,10 @@ def make_coco_img_from_stac_asset(asset_name,
                                   assume_relative=False,
                                   from_collated=False,
                                   populate_watch_fields=True):
+    """
+    Converts a single STAC asset into an "auxiliary" item / asset that will
+    belong to a kwcoco image.
+    """
     img = {}
     if name is not None:
         img['name'] = name
@@ -188,13 +194,17 @@ def make_coco_img_from_stac_asset(asset_name,
             "Unsupported platform '{}'".format(platform))
 
     if channels is None:
+        HACK_AWAY_SOME_WARNINGS = 1
+        if HACK_AWAY_SOME_WARNINGS:
+            IGNORE_SUFFIXES = ('_SAA.TIF', '_VZA.TIF')
+            if asset_href.endswith(IGNORE_SUFFIXES):
+                return
         print("* Warning * Couldn't determine channels for asset "
               "at: '{}'".format(asset_href))
         return None
 
     if assume_relative:
-        file_name = os.path.join(os.path.basename(os.path.dirname(asset_href)),
-                                 os.path.basename(asset_href))
+        file_name = join(basename(dirname(asset_href)), basename(asset_href))
     else:
         file_name = asset_href
 
@@ -269,7 +279,7 @@ def _stac_item_to_kwcoco_image(stac_item,
     auxiliary = []
 
     for asset_name, asset in stac_item_dict.get('assets', {}).items():
-        aux = make_coco_img_from_stac_asset(
+        aux = make_coco_aux_from_stac_asset(
             asset_name,
             asset,
             platform,
@@ -335,7 +345,7 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
     else:
         catalog = input_stac_catalog.full_copy()
 
-    outdir = os.path.dirname(outpath)
+    outdir = dirname(outpath)
     os.makedirs(outdir, exist_ok=True)
 
     executor = ub.JobPool(mode='process' if jobs > 1 else 'serial',
@@ -366,6 +376,9 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
     for job in executor.as_completed(desc='collect jobs'):
         kwcoco_img = job.result()
         if kwcoco_img is not None:
+            # Ignore iamges with 0 auxiliary items
+            if len(kwcoco_img.get('auxiliary', [])) == 0:
+                continue
             try:
                 output_dset.add_image(**kwcoco_img)
             except ValueError:
@@ -396,3 +409,20 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
 
 if __name__ == "__main__":
     sys.exit(main())
+
+"""
+Test:
+    import pandas as pd
+
+    freq = ub.ddict(list)
+    for img in dset.dataset['images']:
+        sensor = img['sensor_coarse']
+        freq[sensor].append(len(img['auxiliary']))
+
+    for sensor, auxfreq in freq.items():
+        print('sensor = {!r}'.format(sensor))
+        print(ub.dict_hist(auxfreq))
+        pass
+
+
+"""
