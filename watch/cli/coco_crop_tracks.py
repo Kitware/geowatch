@@ -44,6 +44,8 @@ class CocoCropTrackConfig(scfg.Config):
         'mode': scfg.Value('process', type=str, help='process, thread, or serial'),
 
         'sqlmode': scfg.Value(0, type=str, help='if True use sqlmode'),
+
+        'keep': scfg.Value('img', help='set to None to recompute'),
     }
 
 
@@ -90,14 +92,15 @@ def main(cmdline=0, **kwargs):
     crop_job_gen = generate_crop_jobs(coco_dset, dst_bundle_dpath)
     crop_job_iter = iter(crop_job_gen)
 
-    # keep = 'img'
-    keep = None
+    keep = config['keep']
+    # keep = None
     # crop_asset_task = next(crop_job_iter)
     # run_crop_asset_task(crop_asset_task, keep)
     from watch.utils.lightning_ext import util_globals
     workers = util_globals.coerce_num_workers(config['workers'])
     jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
     # prog = ub.ProgIter(desc='submit crop jobs', freq=1000)
+
     prog = ub.ProgIter(desc='submit crop jobs')
     last_key = None
     with prog:

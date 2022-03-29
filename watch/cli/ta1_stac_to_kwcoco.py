@@ -179,6 +179,10 @@ def make_coco_aux_from_stac_asset(asset_name,
     if re.search(r'\.(txt|csv|json|xml|vrt|jpe?g)$', asset_href, re.I):
         return None
 
+    # HACK Skip TCI:
+    if re.search(r'TCI\.jp2$', asset_href, re.I):
+        return None
+
     if from_collated and platform in (SUPPORTED_S2_PLATFORMS |
                                       SUPPORTED_LS_PLATFORMS |
                                       SUPPORTED_WV_PLATFORMS):
@@ -390,7 +394,7 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
                 continue
             try:
                 output_dset.add_image(**kwcoco_img)
-            except ValueError:
+            except kwcoco.exceptions.DuplicateAddError:
                 if not ignore_duplicates:
                     raise
 
