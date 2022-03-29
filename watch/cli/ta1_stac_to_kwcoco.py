@@ -196,9 +196,12 @@ def make_coco_aux_from_stac_asset(asset_name,
     if channels is None:
         HACK_AWAY_SOME_WARNINGS = 1
         if HACK_AWAY_SOME_WARNINGS:
-            IGNORE_SUFFIXES = ('_SAA.TIF', '_VZA.TIF')
+            # FIXME: parametarize or make robust
+            IGNORE_SUFFIXES = (
+                '_SAA.TIF', '_VZA.TIF', '_VAA.TIF', '_SZA.TIF'
+            )
             if asset_href.endswith(IGNORE_SUFFIXES):
-                return
+                return None
         print("* Warning * Couldn't determine channels for asset "
               "at: '{}'".format(asset_href))
         return None
@@ -358,10 +361,10 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
             dup_items.append(key)
             for item in dups:
                 item_dict = item.to_dict()
-                print('item_dict = {}'.format(ub.repr2(item_dict, nl=1)))
+                # print('item_dict = {}'.format(ub.repr2(item_dict, nl=1)))
             for item in dups:
                 item_dict = item.to_dict()
-                print(ub.hash_data(item_dict))
+                # print(ub.hash_data(item_dict))
 
     for stac_item in all_items:
         executor.submit(_stac_item_to_kwcoco_image, stac_item,
