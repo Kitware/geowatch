@@ -317,6 +317,9 @@ def _stac_item_to_kwcoco_image(stac_item,
         img['width'] = base['width']
         img['height'] = base['height']
 
+    if len(auxiliary) == 0:
+        img['failed'] = stac_item
+
     img['auxiliary'] = auxiliary
 
     date = stac_item_dict['properties']['datetime']
@@ -355,16 +358,18 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
                           max_workers=jobs)
 
     all_items = [stac_item for stac_item in catalog.get_all_items()]
-    dup_items = []
-    for key, dups in ub.group_items(all_items, key=lambda x: x.id).items():
-        if len(dups) > 1:
-            dup_items.append(key)
-            for item in dups:
-                item_dict = item.to_dict()
-                # print('item_dict = {}'.format(ub.repr2(item_dict, nl=1)))
-            for item in dups:
-                item_dict = item.to_dict()
-                # print(ub.hash_data(item_dict))
+
+    # if 0:
+    #     dup_items = []
+    #     for key, dups in ub.group_items(all_items, key=lambda x: x.id).items():
+    #         if len(dups) > 1:
+    #             dup_items.append(key)
+    #             for item in dups:
+    #                 item_dict = item.to_dict()
+    #                 # print('item_dict = {}'.format(ub.repr2(item_dict, nl=1)))
+    #             for item in dups:
+    #                 item_dict = item.to_dict()
+    #                 # print(ub.hash_data(item_dict))
 
     for stac_item in all_items:
         executor.submit(_stac_item_to_kwcoco_image, stac_item,
@@ -381,6 +386,7 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
         if kwcoco_img is not None:
             # Ignore iamges with 0 auxiliary items
             if len(kwcoco_img.get('auxiliary', [])) == 0:
+                print('Failed kwcoco_img = {}'.format(ub.repr2(kwcoco_img, nl=1)))
                 continue
             try:
                 output_dset.add_image(**kwcoco_img)
