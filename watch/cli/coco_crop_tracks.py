@@ -245,14 +245,8 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath):
                 crop_box_asset_space = list(aux_track_poly.bounding_box().quantize().to_xywh().to_coco())[0]
 
                 chan_code = obj['channels']
-                if 1:
-                    chan_pname = kwcoco.FusedChannelSpec.coerce(chan_code).path_sanitize(maxlen=10)
-                    # if len(chan_pname) > 10:
-                    #     # Hack to prevent long names for docker (limit is 242 chars)
-                    #     num_bands = kwcoco.FusedChannelSpec.coerce(chan_code).numel()
-                    #     chan_pname = '{}_{}'.format(ub.hash_data(chan_pname, base='abc')[0:8], num_bands)
-                    # else:
-                    #     num_bands = obj['num_bands']
+                # to prevent long names for docker (limit is 242 chars)
+                chan_pname = kwcoco.FusedChannelSpec.coerce(chan_code).path_sanitize(maxlen=10)
 
                 # Construct a name for the subregion to extract.
                 num = 0
@@ -267,7 +261,7 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath):
                 crop_asset_task['dst'] = dst_bundle_dpath / dst_fname
                 crop_asset_task['crop_box_asset_space'] = crop_box_asset_space
                 crop_asset_task['channels'] = chan_code
-                crop_asset_task['num_bands'] = num_bands
+                crop_asset_task['num_bands'] = obj['num_bands']
                 yield crop_asset_task
 
 

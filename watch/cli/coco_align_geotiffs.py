@@ -1491,19 +1491,12 @@ def _fix_geojson_poly(geo):
 def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
                space_box, align_method, is_multi_image, keep, local_epsg=None):
     import watch
-    # # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
+    # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
     first_obj = obj_group[0]
     chan_code = obj_group[0].get('channels', '')
 
-    # Ensure chan codes dont break thing
-    # def sanatize_chan_pnams(cs):
-    #     return cs.replace('|', '_').replace(':', '-')
-    # chan_pname = sanatize_chan_pnams(chan_code)
-    chan_pname = kwcoco.FusedChannelSpec.coerce(chan_code).path_sanitize()
-    if len(chan_pname) > 10:
-        # Hack to prevent long names for docker (limit is 242 chars)
-        num_bands = kwcoco.FusedChannelSpec.coerce(chan_code).numel()
-        chan_pname = '{}_{}'.format(ub.hash_data(chan_pname, base='abc')[0:8], num_bands)
+    # Prevent long names for docker (limit is 242 chars)
+    chan_pname = kwcoco.FusedChannelSpec.coerce(chan_code).path_sanitize(maxlen=10)
 
     if is_multi_image:
         multi_dpath = ub.ensuredir((dst_dpath, name))
