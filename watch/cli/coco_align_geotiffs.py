@@ -1266,7 +1266,7 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
     # Turn off internal threading because we refactored this to thread over all
     # images instead
     executor = ub.Executor(mode='thread', max_workers=aux_workers)
-    for obj_group in ub.ProgIter(obj_groups, desc='submit warp auxiliaries', verbose=0):
+    for obj_group in ub.ProgIter(obj_groups, desc='submit warp auxiliaries', verbose=3 * DEBUG):
         job = executor.submit(
             _aligncrop, obj_group, bundle_dpath, name, sensor_coarse,
             dst_dpath, space_region, space_box, align_method,
@@ -1276,7 +1276,7 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
     dst_list = []
     for job in ub.ProgIter(job_list, total=len(job_list),
                            desc='collect warp auxiliaries {}'.format(name),
-                           enabled=0):
+                           enabled=DEBUG, verbose=3):
         dst = job.result()
         dst_list.append(dst)
 
