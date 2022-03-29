@@ -413,6 +413,8 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
     with open(outpath, 'w') as f:
         json.dump(output_dset.dataset, f, indent=2)
 
+    print('Wrote: {}'.format(outpath))
+
     return output_dset
 
 
