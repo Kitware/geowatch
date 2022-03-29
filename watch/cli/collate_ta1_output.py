@@ -48,7 +48,7 @@ S2_ASSET_NAME_MAP = {'image-B01': 'B01',
                      'image-B10': 'B10',
                      'image-B11': 'B11',
                      'image-B12': 'B12',
-                     'image-B8A': 'B8A',
+                     'image-B8A': 'B08A',
                      'image-cloudmask': 'QA'}
 
 # Maps Sentinel 2 STAC item asset names to the suffixes they should
