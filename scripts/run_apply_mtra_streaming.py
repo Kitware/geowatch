@@ -196,17 +196,15 @@ def run_apply_mtra_coefficients(input_path,
             continue
         else:
             if isinstance(stac_item, dict):
-                stac_item = pystac.Item.from_dict(stac_item)
                 output_stac_items.append(stac_item)
             elif isinstance(stac_item, pystac.Item):
-                output_stac_items.append(stac_item)
+                output_stac_items.append(stac_item.to_dict())
             else:
                 for si in stac_item:
                     if isinstance(si, dict):
-                        si = pystac.Item.from_dict(si)
                         output_stac_items.append(si)
                     elif isinstance(si, pystac.Item):
-                        output_stac_items.append(si)
+                        output_stac_items.append(si.to_dict())
 
     te_output = upload_output_stac_items(
         output_stac_items, output_path, aws_base_command, newline=True)
