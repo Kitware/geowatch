@@ -253,6 +253,9 @@ prepare_l1_version_of_drop3(){
     echo "DVC_DPATH = $DVC_DPATH"
     S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/ALL_ANNOTATED_REGIONS_TA-1_PROCESSED_20220222.unique.input.l1.mini
     DATASET_SUFFIX=Drop3-L1-MINI
+
+    S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/ALL_ANNOTATED_REGIONS_TA-1_PROCESSED_20220222.unique.input.l1
+    DATASET_SUFFIX=Drop3-L1
     python -m watch.cli.prepare_ta2_dataset \
         --dataset_suffix="$DATASET_SUFFIX" \
         --s3_fpath="$S3_FPATH" \
