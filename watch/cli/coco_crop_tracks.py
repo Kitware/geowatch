@@ -3,10 +3,10 @@ CommandLine:
 
     DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
     echo $DVC_DPATH
-    python -m watch.cli.coco_crop_tracks \
+    XDEV_PROFILE=1 python -m watch.cli.coco_crop_tracks \
         --src="$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json" \
         --dst="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json" \
-        --mode=process --workers=8
+        --mode=process --workers=0
 """
 import scriptconfig as scfg
 import kwcoco
@@ -80,13 +80,14 @@ def main(cmdline=0, **kwargs):
     from watch.utils.lightning_ext import util_globals
     workers = util_globals.coerce_num_workers(config['workers'])
     jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
-    prog = ub.ProgIter(desc='submit crop jobs', freq=1000)
+    # prog = ub.ProgIter(desc='submit crop jobs', freq=1000)
+    prog = ub.ProgIter(desc='submit crop jobs')
     last_key = None
     with prog:
         try:
             while True:
                 crop_asset_task = next(crop_job_iter)
-                # prog.ensure_newline()
+                prog.ensure_newline()
                 jobs.submit(run_crop_asset_task, crop_asset_task, keep)
                 key = (crop_asset_task['region'], crop_asset_task['tid'])
                 if last_key != key:
@@ -114,8 +115,12 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath):
 
     # Build to_extract-like objects so this script can eventually be combined
     # with coco-align-geotiffs to make something that's ultimately better.
+
+    # HACK: only take tracks with specific categories (todo: glob-parameterize)
     valid_categories = {
-        'No Activity', 'Site Preparation', 'Active Construction',
+        'No Activity',
+        'Site Preparation',
+        'Active Construction',
         'Post Construction',
     }
     print('\n\n')
