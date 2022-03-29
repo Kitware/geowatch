@@ -308,6 +308,10 @@ def collate_item(stac_item,
         original_stac_item_uri = ''
 
     output_stac_item.id = output_item_id
+    # Ensure that 'mgrs:utm_zone' is an int (not string); this is
+    # required by the SMART standards
+    output_stac_item.properties['mgrs:utm_zone'] =\
+        int(output_stac_item.properties['mgrs:utm_zone'])
     output_stac_item.properties['smart:performer'] = performer_code
     output_stac_item.properties['smart:evaluation'] = eval_num
     output_stac_item.properties['smart:source'] = original_stac_item_uri
