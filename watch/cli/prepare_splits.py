@@ -1,3 +1,31 @@
+"""
+CommandLine:
+    xdoctest -m watch.cli.prepare_splits __doc__
+
+Example:
+    >>> from watch.cli.prepare_splits import *  # NOQA
+    >>> base_fpath = 'data.kwcoco.json'
+    >>> config = {
+    >>>     'base_fpath': './bundle/data.kwcoco.json',
+    >>>     'virtualenv_cmd': 'conda activate watch',
+    >>>     'run': 0,
+    >>>     'cache': False,
+    >>>     'backend': 'serial',
+    >>>     'verbose': 0,
+    >>> }
+    >>> queue = prep_splits(cmdline=False, **config)
+    >>> config['backend'] = 'slurm'
+    >>> queue = prep_splits(cmdline=False, **config)
+    >>> queue.rprint(0, 0)
+    >>> config['backend'] = 'tmux'
+    >>> queue = prep_splits(cmdline=False, **config)
+    >>> queue.rprint(0, 0)
+    >>> config['backend'] = 'serial'
+    >>> queue = prep_splits(cmdline=False, **config)
+    >>> queue.rprint(0, 0)
+
+"""
+
 import scriptconfig as scfg
 import ubelt as ub
 
@@ -19,6 +47,7 @@ class PrepareSplitsConfig(scfg.Config):
         'cache': scfg.Value(True, help='if True skip completed results'),
         'serial': scfg.Value(False, help='if True use serial mode'),
         'backend': scfg.Value('tmux', help=None),
+        'verbose': scfg.Value(1, help=''),
     }
 
 
@@ -110,7 +139,7 @@ def _submit_split_jobs(base_fpath, queue, depends=[]):
     return queue
 
 
-def main(cmdline=False, **kwargs):
+def prep_splits(cmdline=False, **kwargs):
     """
     The idea is that we should have a lightweight scheduler.  I think something
     fairly minimal can be implemented with tmux, but it would be nice to have a
@@ -132,20 +161,19 @@ def main(cmdline=False, **kwargs):
         base_fpath = ub.Path(config['base_fpath'])
 
     # queue = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
-    if config['backend'] == 'slurm':
-        from watch.utils import slurm_queue
-        queue = slurm_queue.SlurmQueue(name='watch-splits')
-    elif config['backend'] == 'tmux':
-        from watch.utils import tmux_queue
-        queue = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
-    else:
-        raise KeyError(config['backend'])
+    from watch.utils import cmd_queue
+    queue = cmd_queue.Queue.create(
+        backend=config['backend'],
+        name='watch-splits', size=2
+    )
 
     if config['virtualenv_cmd']:
         queue.add_header_command(config['virtualenv_cmd'])
 
     _submit_split_jobs(base_fpath, queue)
-    queue.rprint()
+
+    if config['verbose']:
+        queue.rprint()
 
     if config['run']:
         if config['serial']:
@@ -160,6 +188,9 @@ def main(cmdline=False, **kwargs):
         except Exception:
             pass
 
+    return queue
+
+main = prep_splits
 
 if __name__ == '__main__':
     """
@@ -167,7 +198,11 @@ if __name__ == '__main__':
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         python -m watch.cli.prepare_splits \
             --base_fpath=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json \
-            --run=1 --serial=True
+            --run=0 --backend=serial
+
+        python -m watch.cli.prepare_splits \
+            --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/foo.kwcoco.json \
+            --run=1 --backend=slurm
 
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         python -m watch.cli.prepare_splits \

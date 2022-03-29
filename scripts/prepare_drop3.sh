@@ -222,3 +222,25 @@ hack_fix_empty_imges(){
 }
 
 
+
+
+transfer_features(){
+    SSD_DVC_DPATH=$(python -m watch.cli.find_dvc --hardware=ssd)
+    HDD_DVC_DPATH=$(python -m watch.cli.find_dvc --hardware=hdd)
+    echo "SSD_DVC_DPATH = $SSD_DVC_DPATH"
+    echo "HDD_DVC_DPATH = $HDD_DVC_DPATH"
+
+    DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
+    SRC_BUNDLE_DPATH=$SSD_DVC_DPATH/$DATASET_CODE
+    DST_BUNDLE_DPATH=$HDD_DVC_DPATH/$DATASET_CODE
+    #du -sh "$SRC_BUNDLE_DPATH"/./_assets
+    rsync -avprPR "$SRC_BUNDLE_DPATH"/./_assets "$DST_BUNDLE_DPATH"
+
+    # Ensure everything has relative paths
+    jq .images[0] combo_LM.kwcoco.json
+
+    kwcoco reroot combo_LM.kwcoco.json \
+        combo_LM.rel.kwcoco.json --absolute=False --check=False
+
+    rsync -p "$SRC_BUNDLE_DPATH/combo_LM.rel.kwcoco.json" "$DST_BUNDLE_DPATH/combo_LM.kwcoco.json"
+}

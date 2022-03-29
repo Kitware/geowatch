@@ -68,16 +68,17 @@ class SlurmJob(cmd_queue.Job):
         >>> self = SlurmJob('python -c print("hello world")', 'hi', cpus=5, gpus=1, mem='10GB', depends=[self])
         >>> command = self._build_command()
         >>> print(command)
-
     """
     def __init__(self, command, name=None, output_fpath=None, depends=None,
                  partition=None, cpus=None, gpus=None, mem=None, begin=None,
-                 shell=None):
+                 shell=None, **kwargs):
+        super().__init__()
         if name is None:
             import uuid
             name = 'job-' + str(uuid.uuid4())
         if depends is not None and not ub.iterable(depends):
             depends = [depends]
+        self.unused_kwargs = kwargs
         self.command = command
         self.name = name
         self.output_fpath = output_fpath
@@ -214,13 +215,15 @@ class SlurmQueue(cmd_queue.Queue):
         >>> job5 = self.submit('echo "$FOO"')
         >>> self.rprint()
     """
-    def __init__(self, name=None, shell=None):
+    def __init__(self, name=None, shell=None, **kwargs):
+        super().__init__()
         import uuid
         import time
         self.jobs = []
         if name is None:
             name = 'SQ'
         stamp = time.strftime('%Y%m%dT%H%M%S')
+        self.unused_kwargs = kwargs
         self.queue_id = name + '-' + stamp + '-' + ub.hash_data(uuid.uuid4())[0:8]
         self.dpath = ub.Path.appdir('slurm_queue') / self.queue_id
         self.log_dpath = self.dpath / 'logs'
@@ -265,20 +268,11 @@ class SlurmQueue(cmd_queue.Queue):
 
         job = SlurmJob(command, **kwargs)
         self.jobs.append(job)
+        self.num_real_jobs += 1
         return job
 
     def add_header_command(self, command):
         self.header_commands.append(command)
-
-    def sync(self):
-        """
-        Mark that all future jobs will depend on the current sink jobs
-        """
-        graph = self._dependency_graph()
-        # Find the jobs that nobody depends on
-        sink_jobs = [graph.nodes[n]['job'] for n, d in graph.out_degree if d == 0]
-        # All new jobs must depend on these jobs
-        self.all_depends = sink_jobs
 
     def order_jobs(self):
         import networkx as nx
