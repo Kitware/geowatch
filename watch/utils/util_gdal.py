@@ -68,6 +68,372 @@ gdalwarp_performance_opts = ub.paragraph('''
         ''')
 
 
+def _demo_geoimg_with_nodata():
+    """
+    Example:
+        fpath = _demo_geoimg_with_nodata()
+        self = LazyGDalFrameFile.demo()
+
+    """
+    import kwimage
+    import numpy as np
+    from osgeo import osr
+    # gdal.UseExceptions()
+
+    # Make a dummy geotiff
+    imdata = kwimage.grab_test_image('airport')
+    dpath = ub.Path.appdir('watch/test/geotiff').ensuredir()
+    geo_fpath = dpath / 'dummy_geotiff.tif'
+
+    # compute dummy values for a geotransform to CRS84
+    img_h, img_w = imdata.shape[0:2]
+    img_box = kwimage.Boxes([[0, 0, img_w, img_h]], 'xywh')
+
+    lat_y = 40.060759
+    lon_x = 116.613095
+
+    # def box_corners2(self):
+    #     """
+    #     Return the corners of the boxes
+
+    #     This function is unintuitive and may be deprecated
+
+    #     Returns:
+    #         np.ndarray : stacked corners in an array with shape [4*N, 2]
+    #     """
+    #     corners = []
+    #     x1, y1, x2, y2 = [a.ravel() for a in self.to_ltrb().components]
+    #     stacked = np.array([
+    #         [x1, y1],
+    #         [x1, y2],
+    #         [x2, y2],
+    #         [x2, y1],
+    #     ])
+    #     corners = stacked.transpose(2, 0, 1).reshape(-1, 2)
+    #     corners = np.ascontiguousarray(corners)
+    #     return corners
+
+    # lat_y_off = 0.0001
+    # lat_x_off = 0.0001
+
+    # Pretend this is a big spatial region
+    lat_y_off = 0.1
+    lat_x_off = 0.1
+
+    # wld_box = kwimage.Boxes([[lon_x, lat_y, 0.0001, 0.0001]], 'xywh')
+    img_corners = img_box.corners()
+
+    # hard code so north is up
+    wld_corners = np.array([
+        [lon_x - lat_x_off, lat_y + lat_y_off],
+        [lon_x - lat_x_off, lat_y - lat_y_off],
+        [lon_x + lat_x_off, lat_y - lat_y_off],
+        [lon_x + lat_x_off, lat_y + lat_y_off],
+    ])
+    # wld_corners = wld_box.corners()
+    transform = kwimage.Affine.fit(img_corners, wld_corners)
+
+    nodata = -9999
+
+    srs = osr.SpatialReference()
+    srs.ImportFromEPSG(4326)
+    crs = srs.ExportToWkt()
+
+    # Set a region to be nodata
+    imdata = imdata.astype(np.int16)
+    imdata[-100:] = nodata
+    imdata[0:200:, -200:-180] = nodata
+
+    kwimage.imwrite(geo_fpath, imdata, backend='gdal', nodata=-9999, crs=crs, transform=transform)
+    return geo_fpath
+
+
+def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
+                          compress='DEFLATE'):
+    """
+    Crops using pixels
+
+    Example:
+        >>> from watch.utils.util_gdal import *  # NOQA
+        >>> from watch.gis import geotiff
+        >>> in_fpath = ub.Path(_demo_geoimg_with_nodata())
+        >>> info = geotiff.geotiff_crs_info(in_fpath)
+
+        >>> # Test CRS84 cropping
+        >>> wgs84_poly = kwimage.Polygon(exterior=info['wgs84_corners'])
+        >>> assert info['wgs84_crs_info']['axis_mapping'] == 'OAMS_AUTHORITY_COMPLIANT'
+        >>> crs84_epsg = int(info['wgs84_crs_info']['auth'][1])
+        >>> crs84_space_box = wgs84_poly.scale(0.5, about='center').to_boxes().transpose()
+        >>> crs84_out_fpath = in_fpath.augment(suffix='_crs84_crop')
+        >>> gdal_single_warp(in_fpath, crs84_out_fpath, local_epsg=crs84_epsg, space_box=crs84_space_box)
+
+        >>> # Test UTM cropping
+        >>> utm_poly = kwimage.Polygon(exterior=info['utm_corners'])
+        >>> utm_epsg = int(info['utm_crs_info']['auth'][1])
+        >>> utm_space_box = utm_poly.scale(0.5, about='center').to_boxes()
+        >>> utm_out_fpath = in_fpath.augment(suffix='_utmcrop')
+        >>> gdal_single_warp(in_fpath, utm_out_fpath, local_epsg=utm_epsg, space_box=utm_space_box)
+
+        >>> # Test Pixel cropping
+        >>> pxl_poly = kwimage.Polygon(exterior=info['pxl_corners'])
+        >>> pixel_box = pxl_poly.scale(0.5, about='center').to_boxes()
+        >>> pxl_out_fpath = in_fpath.augment(suffix='_pxlcrop')
+        >>> gdal_single_translate(in_fpath, pxl_out_fpath, pixel_box=pixel_box)
+
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> imdata0 = kwimage.normalize(kwimage.imread(in_fpath, nodata='float'))
+        >>> imdata1 = kwimage.normalize(kwimage.imread(crs84_out_fpath, nodata='float'))
+        >>> imdata2 = kwimage.normalize(kwimage.imread(utm_out_fpath, nodata='float'))
+        >>> imdata3 = kwimage.normalize(kwimage.imread(pxl_out_fpath, nodata='float'))
+        >>> kwplot.imshow(imdata0, pnum=(1, 4, 1), title='orig')
+        >>> kwplot.imshow(imdata1, pnum=(1, 4, 2), title='crs84-crop')
+        >>> kwplot.imshow(imdata2, pnum=(1, 4, 3), title='utm-crop')
+        >>> kwplot.imshow(imdata3, pnum=(1, 4, 4), title='pxl-crop')
+
+        print(ub.cmd('gdalinfo ' + str(in_fpath))['out'])
+        print(ub.cmd('gdalinfo ' + str(crs84_out_fpath))['out'])
+        print(ub.cmd('gdalinfo ' + str(utm_out_fpath))['out'])
+        print(ub.cmd('gdalinfo ' + str(pxl_out_fpath))['out'])
+    """
+    xoff, yoff, xsize, ysize = pixel_box.to_xywh().data[0]
+    template_parts = [
+        '''
+        gdal_translate
+        --debug off
+        '''
+    ]
+
+    if compress == 'RAW':
+        compress = 'NONE'
+
+    # Use the new COG output driver
+    template_parts.append(f'''
+        -of COG
+        -co OVERVIEWS=AUTO
+        -co BLOCKSIZE={blocksize}
+        -co COMPRESS={compress}
+        ''')
+
+    template_parts.append(f'-srcwin {xoff} {yoff} {xsize} {ysize}')
+    template_parts.append(f'{in_fpath} {out_fpath}')
+    template = ' '.join(template_parts)
+
+    command = template.format(template)
+    cmd_info = ub.cmd(command, verbose=0)  # NOQA
+    if cmd_info['ret'] != 0:
+        print('\n\nCOMMAND FAILED: {!r}'.format(command))
+        print(cmd_info['out'])
+        print(cmd_info['err'])
+        raise Exception(cmd_info['err'])
+
+
+def gdal_single_warp(in_fpath,
+                     out_fpath,
+                     space_box=None,
+                     local_epsg=4326,
+                     nodata=None,
+                     rpcs=None,
+                     blocksize=256,
+                     compress='DEFLATE',
+                     use_perf_opts=False,
+                     as_vrt=False,
+                     use_te_geoidgrid=False,
+                     dem_fpath=None):
+    r"""
+    TODO:
+        - [ ] This should be a kwgeo function?
+
+    Ignore:
+        in_fpath =
+        s3://landsat-pds/L8/001/002/LC80010022016230LGN00/LC80010022016230LGN00_B1.TIF?useAnon=true&awsRegion=US_WEST_2
+
+        gdalwarp 's3://landsat-pds/L8/001/002/LC80010022016230LGN00/LC80010022016230LGN00_B1.TIF?useAnon=true&awsRegion=US_WEST_2' foo.tif
+
+    aws s3 --profile iarpa cp s3://kitware-smart-watch-data/processed/ta1/drop1/mtra/f9e7e52029bb4dfaadfe306e92641481/S2A_MSI_L2A_T23KPQ_20190509_20211103_SR_B05.tif foo.tif
+
+    gdalwarp 's3://kitware-smart-watch-data/processed/ta1/drop1/mtra/f9e7e52029bb4dfaadfe306e92641481/S2A_MSI_L2A_T23KPQ_20190509_20211103_SR_B05.tif' bar.tif
+
+    Note:
+        Proof of concept for warp from S3:
+
+        aws s3 --profile iarpa ls s3://kitware-smart-watch-data/processed/ta1/drop1/mtra/0bff43f318c14a97b19b682a36f28d26/
+
+        gdalinfo \
+            --config AWS_DEFAULT_PROFILE "iarpa" \
+            "/vsis3/kitware-smart-watch-data/processed/ta1/drop1/mtra/0bff43f318c14a97b19b682a36f28d26/LC08_L2SP_017039_20190404_20211102_02_T1_T17RMP_B7_BRDFed.tif"
+
+        gdalwarp \
+            --config AWS_DEFAULT_PROFILE "iarpa" \
+            -te_srs epsg:4326 \
+            -te -81.51 29.99 -81.49 30.01 \
+            -t_srs epsg:32617 \
+            -overwrite \
+            -of COG \
+            -co OVERVIEWS=AUTO \
+            "/vsis3/kitware-smart-watch-data/processed/ta1/drop1/mtra/0bff43f318c14a97b19b682a36f28d26/LC08_L2SP_017039_20190404_20211102_02_T1_T17RMP_B7_BRDFed.tif" \
+            partial_crop2.tif
+        gdalinfo partial_crop2.tif
+        kwplot partial_crop2.tif
+
+        gdalinfo \
+            --config AWS_DEFAULT_PROFILE "iarpa" \
+            --config AWS_CONFIG_FILE "$HOME/.aws/config" \
+            --config CPL_AWS_CREDENTIALS_FILE "$HOME/.aws/credentials" \
+            "/vsis3/kitware-smart-watch-data/processed/ta1/drop1/mtra/f9e7e52029bb4dfaadfe306e92641481/S2A_MSI_L2A_T23KPQ_20190509_20211103_SR_B05.tif"
+
+        gdalwarp \
+            --config AWS_DEFAULT_PROFILE "iarpa" \
+            --config AWS_CONFIG_FILE "$HOME/.aws/config" \
+            --config CPL_AWS_CREDENTIALS_FILE "$HOME/.aws/credentials" \
+            -te_srs epsg:4326 \
+            -te -43.51 -23.01 -43.49 -22.99 \
+            -t_srs epsg:32723 \
+            -overwrite \
+            -of COG \
+            "/vsis3/kitware-smart-watch-data/processed/ta1/drop1/mtra/f9e7e52029bb4dfaadfe306e92641481/S2A_MSI_L2A_T23KPQ_20190509_20211103_SR_B05.tif" \
+            partial_crop.tif
+        kwplot partial_crop.tif
+
+    Notes:
+        In gdalwarp:
+            -s_srs - Set source spatial reference
+            -t_srs - Set target spatial reference
+
+            -te_srs - Specifies the SRS in which to interpret the coordinates given with -te.
+            -te - Set georeferenced extents of output file to be created
+    """
+
+    # Coordinate Reference System of the "target" destination image
+    # t_srs = target spatial reference for output image
+    if local_epsg is None:
+        target_srs = 'epsg:4326'
+    else:
+        target_srs = 'epsg:{}'.format(local_epsg)
+
+    template_parts = [
+        '''
+        gdalwarp
+        --debug off
+        -t_srs {target_srs}
+        -overwrite
+        '''
+    ]
+
+    template_kw = {
+        'target_srs': target_srs,
+        'SRC': in_fpath,
+        'DST': out_fpath,
+    }
+
+    if as_vrt:
+        template_parts.append('''
+            -of VRT
+            ''')
+    else:
+        if compress == 'RAW':
+            compress = 'NONE'
+
+        # Use the new COG output driver
+        template_parts.append('''
+            -of COG
+            -co OVERVIEWS=AUTO
+            -co BLOCKSIZE={blocksize}
+            -co COMPRESS={compress}
+            ''')
+        template_kw.update(**{
+            'blocksize': blocksize,
+            'compress': compress,
+        })
+
+    if space_box is not None:
+        # Data is from geo-pandas so this should be traditional order
+        lonmin, latmin, lonmax, latmax = space_box.data[0]
+
+        # Coordinate Reference System of the "te" crop coordinates
+        # te_srs = spatial reference of query points
+        # crop_coordinate_srs = 'epsg:4326'
+        crop_coordinate_srs = target_srs
+
+        template_parts.append('''
+            -te {xmin} {ymin} {xmax} {ymax}
+            -te_srs {crop_coordinate_srs}
+            ''')
+        template_kw.update(
+            **{
+                'crop_coordinate_srs': crop_coordinate_srs,
+                'ymin': latmin,
+                'xmin': lonmin,
+                'ymax': latmax,
+                'xmax': lonmax,
+            })
+
+    if nodata is not None:
+        # TODO: Use cloudmask?
+        template_parts.append('''
+            -srcnodata {NODATA_VALUE} -dstnodata {NODATA_VALUE}
+            ''')
+        template_kw['NODATA_VALUE'] = nodata
+
+    # HACK TO FIND an appropriate DEM file
+    if rpcs is not None:
+        if dem_fpath is not None:
+            template_parts.append(
+                ub.paragraph('''
+                -rpc -et 0
+                -to RPC_DEM={dem_fpath}
+                '''))
+            template_kw['dem_fpath'] = dem_fpath
+        else:
+            dems = rpcs.elevation
+            if hasattr(dems, 'find_reference_fpath'):
+                # TODO: get a better DEM path for this image if possible
+                dem_fpath, dem_info = dems.find_reference_fpath(latmin, lonmin)
+                template_parts.append(
+                    ub.paragraph('''
+                    -rpc -et 0
+                    -to RPC_DEM={dem_fpath}
+                    '''))
+                template_kw['dem_fpath'] = dem_fpath
+            else:
+                dem_fpath = None
+                template_parts.append('-rpc -et 0')
+
+    if use_te_geoidgrid:
+        # assumes source CRS is WGS84
+        # https://smartgitlab.com/TE/annotations/-/wikis/WorldView-Annotations#notes-on-the-egm96-geoidgrid-file
+        from watch.rc import geoidgrid_path
+        template_parts.append('''
+            -s_srs "+proj=longlat +datum=WGS84 +no_defs +geoidgrids={geoidgrid_path}"
+            ''')
+        template_kw['geoidgrid_path'] = geoidgrid_path()
+
+    if use_perf_opts:
+        template_parts.append(gdalwarp_performance_opts)
+    else:
+        # use existing options
+        template_parts.append(
+            ub.paragraph('''
+            -multi
+            --config GDAL_CACHEMAX 500
+            -wm 500
+            -co NUM_THREADS=2
+            '''))
+
+    template_parts.append('{SRC} {DST}')
+    template = ' '.join(template_parts)
+
+    command = template.format(**template_kw)
+    print(command)
+    cmd_info = ub.cmd(command, verbose=0)  # NOQA
+    if cmd_info['ret'] != 0:
+        print('\n\nCOMMAND FAILED: {!r}'.format(command))
+        print(cmd_info['out'])
+        print(cmd_info['err'])
+        raise Exception(cmd_info['err'])
+
+
 def gdal_multi_warp(in_fpaths, out_fpath, *args, nodata=None, **kwargs):
     """
     See gdal_single_warp() for args
@@ -155,201 +521,6 @@ def gdal_multi_warp(in_fpaths, out_fpath, *args, nodata=None, **kwargs):
             d = kwimage.normalize_intensity(d, nodata=0)
             datas2.append(d)
         kwplot.imshow(kwimage.stack_images(datas2, axis=1), fnum=2)
-
-
-def gdal_single_warp(in_fpath,
-                     out_fpath,
-                     space_box=None,
-                     local_epsg=4326,
-                     nodata=None,
-                     rpcs=None,
-                     blocksize=256,
-                     compress='DEFLATE',
-                     use_perf_opts=False,
-                     as_vrt=False,
-                     use_te_geoidgrid=False,
-                     dem_fpath=None):
-    r"""
-    TODO:
-        - [ ] This should be a kwgeo function?
-
-    Ignore:
-        in_fpath =
-        s3://landsat-pds/L8/001/002/LC80010022016230LGN00/LC80010022016230LGN00_B1.TIF?useAnon=true&awsRegion=US_WEST_2
-
-        gdalwarp 's3://landsat-pds/L8/001/002/LC80010022016230LGN00/LC80010022016230LGN00_B1.TIF?useAnon=true&awsRegion=US_WEST_2' foo.tif
-
-    aws s3 --profile iarpa cp s3://kitware-smart-watch-data/processed/ta1/drop1/mtra/f9e7e52029bb4dfaadfe306e92641481/S2A_MSI_L2A_T23KPQ_20190509_20211103_SR_B05.tif foo.tif
-
-    gdalwarp 's3://kitware-smart-watch-data/processed/ta1/drop1/mtra/f9e7e52029bb4dfaadfe306e92641481/S2A_MSI_L2A_T23KPQ_20190509_20211103_SR_B05.tif' bar.tif
-
-    Note:
-        Proof of concept for warp from S3:
-
-        aws s3 --profile iarpa ls s3://kitware-smart-watch-data/processed/ta1/drop1/mtra/0bff43f318c14a97b19b682a36f28d26/
-
-        gdalinfo \
-            --config AWS_DEFAULT_PROFILE "iarpa" \
-            "/vsis3/kitware-smart-watch-data/processed/ta1/drop1/mtra/0bff43f318c14a97b19b682a36f28d26/LC08_L2SP_017039_20190404_20211102_02_T1_T17RMP_B7_BRDFed.tif"
-
-        gdalwarp \
-            --config AWS_DEFAULT_PROFILE "iarpa" \
-            -te_srs epsg:4326 \
-            -te -81.51 29.99 -81.49 30.01 \
-            -t_srs epsg:32617 \
-            -overwrite \
-            -of COG \
-            -co OVERVIEWS=AUTO \
-            "/vsis3/kitware-smart-watch-data/processed/ta1/drop1/mtra/0bff43f318c14a97b19b682a36f28d26/LC08_L2SP_017039_20190404_20211102_02_T1_T17RMP_B7_BRDFed.tif" \
-            partial_crop2.tif
-        gdalinfo partial_crop2.tif
-        kwplot partial_crop2.tif
-
-        gdalinfo \
-            --config AWS_DEFAULT_PROFILE "iarpa" \
-            --config AWS_CONFIG_FILE "$HOME/.aws/config" \
-            --config CPL_AWS_CREDENTIALS_FILE "$HOME/.aws/credentials" \
-            "/vsis3/kitware-smart-watch-data/processed/ta1/drop1/mtra/f9e7e52029bb4dfaadfe306e92641481/S2A_MSI_L2A_T23KPQ_20190509_20211103_SR_B05.tif"
-
-        gdalwarp \
-            --config AWS_DEFAULT_PROFILE "iarpa" \
-            --config AWS_CONFIG_FILE "$HOME/.aws/config" \
-            --config CPL_AWS_CREDENTIALS_FILE "$HOME/.aws/credentials" \
-            -te_srs epsg:4326 \
-            -te -43.51 -23.01 -43.49 -22.99 \
-            -t_srs epsg:32723 \
-            -overwrite \
-            -of COG \
-            "/vsis3/kitware-smart-watch-data/processed/ta1/drop1/mtra/f9e7e52029bb4dfaadfe306e92641481/S2A_MSI_L2A_T23KPQ_20190509_20211103_SR_B05.tif" \
-            partial_crop.tif
-        kwplot partial_crop.tif
-    """
-
-    # Coordinate Reference System of the "target" destination image
-    # t_srs = target spatial reference for output image
-    if local_epsg is None:
-        target_srs = 'epsg:4326'
-    else:
-        target_srs = 'epsg:{}'.format(local_epsg)
-
-    template_parts = [
-        '''
-        gdalwarp
-        --debug off
-        -t_srs {target_srs}
-        -overwrite
-        '''
-    ]
-
-    template_kw = {
-        'target_srs': target_srs,
-        'SRC': in_fpath,
-        'DST': out_fpath,
-    }
-
-    if as_vrt:
-        template_parts.append('''
-            -of VRT
-            ''')
-    else:
-        if compress == 'RAW':
-            compress = 'NONE'
-
-        # Use the new COG output driver
-        template_parts.append('''
-            -of COG
-            -co OVERVIEWS=AUTO
-            -co BLOCKSIZE={blocksize}
-            -co COMPRESS={compress}
-            ''')
-        template_kw.update(**{
-            'blocksize': blocksize,
-            'compress': compress,
-        })
-
-    if space_box is not None:
-        # Data is from geo-pandas so this should be traditional order
-        lonmin, latmin, lonmax, latmax = space_box.data[0]
-
-        # Coordinate Reference System of the "te" crop coordinates
-        # te_srs = spatial reference of query points
-        crop_coordinate_srs = 'epsg:4326'
-
-        template_parts.append('''
-            -te {xmin} {ymin} {xmax} {ymax}
-            -te_srs {crop_coordinate_srs}
-            ''')
-        template_kw.update(
-            **{
-                'crop_coordinate_srs': crop_coordinate_srs,
-                'ymin': latmin,
-                'xmin': lonmin,
-                'ymax': latmax,
-                'xmax': lonmax,
-            })
-
-    if nodata is not None:
-        # TODO: Use cloudmask?
-        template_parts.append('''
-            -srcnodata {NODATA_VALUE} -dstnodata {NODATA_VALUE}
-            ''')
-        template_kw['NODATA_VALUE'] = nodata
-
-    # HACK TO FIND an appropriate DEM file
-    if rpcs is not None:
-        if dem_fpath is not None:
-            template_parts.append(
-                ub.paragraph('''
-                -rpc -et 0
-                -to RPC_DEM={dem_fpath}
-                '''))
-            template_kw['dem_fpath'] = dem_fpath
-        else:
-            dems = rpcs.elevation
-            if hasattr(dems, 'find_reference_fpath'):
-                # TODO: get a better DEM path for this image if possible
-                dem_fpath, dem_info = dems.find_reference_fpath(latmin, lonmin)
-                template_parts.append(
-                    ub.paragraph('''
-                    -rpc -et 0
-                    -to RPC_DEM={dem_fpath}
-                    '''))
-                template_kw['dem_fpath'] = dem_fpath
-            else:
-                dem_fpath = None
-                template_parts.append('-rpc -et 0')
-
-    if use_te_geoidgrid:
-        # assumes source CRS is WGS84
-        # https://smartgitlab.com/TE/annotations/-/wikis/WorldView-Annotations#notes-on-the-egm96-geoidgrid-file
-        from watch.rc import geoidgrid_path
-        template_parts.append('''
-            -s_srs "+proj=longlat +datum=WGS84 +no_defs +geoidgrids={geoidgrid_path}"
-            ''')
-        template_kw['geoidgrid_path'] = geoidgrid_path()
-
-    if use_perf_opts:
-        template_parts.append(gdalwarp_performance_opts)
-    else:
-        # use existing options
-        template_parts.append(
-            ub.paragraph('''
-            -multi
-            --config GDAL_CACHEMAX 500
-            -wm 500
-            -co NUM_THREADS=2
-            '''))
-
-    template_parts.append('{SRC} {DST}')
-    template = ' '.join(template_parts)
-
-    command = template.format(**template_kw)
-    cmd_info = ub.cmd(command, verbose=0)  # NOQA
-    if cmd_info['ret'] != 0:
-        print('\n\nCOMMAND FAILED: {!r}'.format(command))
-        print(cmd_info['out'])
-        print(cmd_info['err'])
-        raise Exception(cmd_info['err'])
 
 
 def list_gdal_drivers():

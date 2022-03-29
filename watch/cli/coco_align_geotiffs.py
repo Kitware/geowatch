@@ -208,6 +208,22 @@ def main(cmdline=True, **kw):
             'exclude_sensors': ['WV'],
         }
 
+    Ignore:
+        from watch.cli.coco_align_geotiffs import *  # NOQA
+        import watch
+        dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
+        base_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json'
+        src = base_fpath
+        dst = dvc_dpath / 'Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json'
+        sites = dvc_dpath / 'annotations/site_models/*.geojson'
+        cmdline = 0
+        kw = {
+            'src': src,
+            'dst': dst,
+            'regions': sites,
+            'keep': 'none',
+        }
+
     Example:
         >>> from watch.cli.coco_align_geotiffs import *  # NOQA
         >>> from watch.demo.landsat_demodata import grab_landsat_product
@@ -362,7 +378,10 @@ def main(cmdline=True, **kw):
         parts = []
         for fpath in paths:
             df = util_gis.read_geojson(fpath)
-            df = df[df['type'] == 'region']
+            if df.iloc[0]['type'] == 'site':
+                df = df[df['type'] == 'site']
+            else:
+                df = df[df['type'] == 'region']
             parts.append(df)
         region_df = pd.concat(parts)
 
@@ -1464,9 +1483,10 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     chan_code = obj_group[0].get('channels', '')
 
     # Ensure chan codes dont break thing
-    def sanatize_chan_pnams(cs):
-        return cs.replace('|', '_').replace(':', '-')
-    chan_pname = sanatize_chan_pnams(chan_code)
+    # def sanatize_chan_pnams(cs):
+    #     return cs.replace('|', '_').replace(':', '-')
+    # chan_pname = sanatize_chan_pnams(chan_code)
+    chan_pname = kwcoco.FusedChannelSpec.coerce(chan_code).path_sanitize()
     if len(chan_pname) > 10:
         # Hack to prevent long names for docker (limit is 242 chars)
         num_bands = kwcoco.FusedChannelSpec.coerce(chan_code).numel()
