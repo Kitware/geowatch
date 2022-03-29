@@ -82,10 +82,9 @@ from watch.cli.coco_visualize_videos import _write_ann_visualizations2
 from watch.utils import util_gis
 from watch.utils import util_time
 from watch.utils import util_gdal
-from watch.utils import kwcoco_extensions  # NOQA
+from watch.utils import kwcoco_extensions
 
-from tempenv import TemporaryEnvironment  # NOQA
-
+DEBUG = 1
 
 try:
     import xdev
@@ -1195,6 +1194,7 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
     """
     Threaded worker function for :func:`SimpleDataCube.extract_overlaps`.
     """
+    # from tempenv import TemporaryEnvironment  # NOQA
     # Does this resolve import issues?
     # with TemporaryEnvironment({'PROJ_LIB': None, 'PROJ_DEBUG': '3'}):
 
@@ -1513,6 +1513,8 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     already_exists = exists(dst_gpath)
     needs_recompute = not (already_exists and keep in {'img', 'roi-img'})
     if not needs_recompute:
+        if DEBUG:
+            print('cache hit dst = {!r}'.format(dst))
         return dst
 
     if align_method == 'pixel_crop':
@@ -1555,6 +1557,8 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     # method will call gdalwarp on each image individually and then merge them
     # all in a final step.
     out_fpath = tmp_dst_gpath
+    if DEBUG:
+        print('start gdal warp dst_gpath = {!r}'.format(dst_gpath))
     if len(input_gpaths) > 1:
         in_fpaths = input_gpaths
         util_gdal.gdal_multi_warp(in_fpaths, out_fpath, space_box=space_box,
@@ -1567,6 +1571,8 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
                                    rpcs=rpcs, nodata=nodata)
 
     os.rename(tmp_dst_gpath, dst_gpath)
+    if DEBUG:
+        print('finish gdal warp dst_gpath = {!r}'.format(dst_gpath))
     return dst
 
 

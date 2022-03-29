@@ -38,6 +38,8 @@ def utm_epsg_from_latlon(lat, lon):
         >>> epsg_code = utm_epsg_from_latlon(0, 0)
         >>> print('epsg_code = {!r}'.format(epsg_code))
         epsg_code = 32631
+
+
     """
     import utm
     # easting, northing, zone_num, zone_code = utm.from_latlon(min_lat, min_lon)
@@ -50,6 +52,71 @@ def utm_epsg_from_latlon(lat, lon):
     if south is True:
         epsg_code += 100
     return epsg_code
+
+
+def _demo_convert_latlon_to_utm():
+    # Pretend we have these lon/lat (CRS84 corners)
+    lat_y = 40.060759
+    lon_x = 116.613095
+    lat_y_off = 0.0001
+    lat_x_off = 0.0001
+    # hard code so north is up
+    wld_corners = np.array([
+        [lon_x - lat_x_off, lat_y + lat_y_off],
+        [lon_x - lat_x_off, lat_y - lat_y_off],
+        [lon_x + lat_x_off, lat_y - lat_y_off],
+        [lon_x + lat_x_off, lat_y + lat_y_off],
+    ])
+    import kwimage
+    wld_poly = kwimage.Polygon(exterior=wld_corners)
+    wld_poly_sh = wld_poly.to_shapely()
+
+    lon = wld_poly_sh.centroid.x
+    lat = wld_poly_sh.centroid.y
+    utm_code = utm_epsg_from_latlon(lat, lon)
+
+    import geopandas as gpd
+    gdf_crs84 = gpd.GeoDataFrame({'geometry': [wld_poly_sh]}, crs='crs84')
+    gdf_utm = gdf_crs84.to_crs(utm_code)
+    utm_poly_sh = gdf_utm.iloc[0]['geometry']
+
+    utm_poly = kwimage.Polygon.from_shapely(utm_poly_sh)
+    utm_corners = utm_poly.data['exterior'].data
+
+    min_x = utm_corners.T[0].min()
+    max_x = utm_corners.T[0].max()
+    min_y = utm_corners.T[1].min()
+    max_y = utm_corners.T[1].max()
+
+    # Note: UTM bottom should be the min value, so be careful here
+
+    def _torch_meshgrid(*basis_dims):
+        """
+        References:
+            https://zhaoyu.li/post/how-to-implement-meshgrid-in-pytorch/
+        """
+        basis_lens = list(map(len, basis_dims))
+        new_dims = []
+        for i, basis in enumerate(basis_dims):
+            # Probably a more efficent way to do this, but its right
+            newshape = [1] * len(basis_dims)
+            reps = list(basis_lens)
+            newshape[i] = -1
+            reps[i] = 1
+            dd = basis.view(*newshape).repeat(*reps)
+            new_dims.append(dd)
+        return new_dims
+
+    import torch
+    image_width = 256
+    image_height = 256
+
+    utm_x_basis = torch.linspace(min_x, max_x, image_width)
+    utm_y_basis = torch.linspace(max_y, min_y, image_height)
+
+    xgrid, ygrid = _torch_meshgrid(utm_x_basis, utm_y_basis)
+
+
 
 
 def find_local_meter_epsg_crs(geom_crs84):
