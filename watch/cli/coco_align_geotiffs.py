@@ -1288,29 +1288,31 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
     if align_method != 'pixel_crop':
         # If we are a pixel crop, we can transform directly
         for dst in dst_list:
-            # TODO: We should not populate this for computed features!
-            # hack this in for heuristics
-            if 'sensor_coarse' in img:
-                dst['sensor_coarse'] = img['sensor_coarse']
-            # We need to overwrite because we changed the bounds
-            # Note: if band info is not popluated above, this
-            # might write bad data based on hueristics
-            # TODO:
-            # We need to remove all spatial metadata from the base image that a
-            # crop would invalidate, otherwise we will propogate bad info.
-            kwcoco_extensions._populate_canvas_obj(
-                bundle_dpath, dst, overwrite={'warp'}, with_wgs=True)
+            if dst is not None:
+                # TODO: We should not populate this for computed features!
+                # hack this in for heuristics
+                if 'sensor_coarse' in img:
+                    dst['sensor_coarse'] = img['sensor_coarse']
+                # We need to overwrite because we changed the bounds
+                # Note: if band info is not popluated above, this
+                # might write bad data based on hueristics
+                # TODO:
+                # We need to remove all spatial metadata from the base image that a
+                # crop would invalidate, otherwise we will propogate bad info.
+                kwcoco_extensions._populate_canvas_obj(
+                    bundle_dpath, dst, overwrite={'warp'}, with_wgs=True)
         if DEBUG:
             print(f'Finish repopulate canvas jobs: {new_gid}')
 
     assert len(dst_list) == len(obj_groups)
     # Hack because heurstics break when fnames change
     for old_aux_group, new_aux in zip(obj_groups, dst_list):
-        # new_aux['channels'] = old_aux['channels']
-        if len(old_aux_group) > 1:
-            new_aux['parent_file_name'] = [g['file_name'] for g in old_aux_group]
-        else:
-            new_aux['parent_file_name'] = old_aux_group[0]['file_name']
+        if new_aux is not None:
+            # new_aux['channels'] = old_aux['channels']
+            if len(old_aux_group) > 1:
+                new_aux['parent_file_name'] = [g['file_name'] for g in old_aux_group]
+            else:
+                new_aux['parent_file_name'] = old_aux_group[0]['file_name']
 
     new_img = {
         'id': new_gid,
@@ -1325,6 +1327,8 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
         # dst_list[1:]
     else:
         aux_dst = dst_list
+
+    aux_dst = [aux for aux in aux_dst if aux is not None]
 
     if len(aux_dst):
         if DEBUG:
@@ -1510,6 +1514,11 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     input_gnames = [obj.get('file_name', None) for obj in obj_group]
     assert all(n is not None for n in input_gnames)
     input_gpaths = [join(bundle_dpath, n) for n in input_gnames]
+
+    PHASE1_DEADLINE_HACK = 1
+    if PHASE1_DEADLINE_HACK:
+        if len(input_gpaths) == 1 and input_gpaths[0].endswith('TCI.jp2'):
+            return None
 
     dst = {
         'file_name': dst_gpath,
