@@ -11,10 +11,10 @@ CommandLine:
 
     DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
     echo $DVC_DPATH
-    XDEV_PROFILE=1 python -m watch.cli.coco_crop_tracks \
+    python -m watch.cli.coco_crop_tracks \
         --src="$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json" \
         --dst="$DVC_DPATH/Cropped-Drop2-TA1-2022-03-10/data.kwcoco.json" \
-        --mode=process --workers=0
+        --mode=process --workers=8
 """
 import scriptconfig as scfg
 import kwcoco
@@ -104,7 +104,7 @@ def main(cmdline=0, **kwargs):
         try:
             while True:
                 crop_asset_task = next(crop_job_iter)
-                prog.ensure_newline()
+                # prog.ensure_newline()
                 jobs.submit(run_crop_asset_task, crop_asset_task, keep)
                 key = (crop_asset_task['region'], crop_asset_task['tid'])
                 if last_key != key:
@@ -120,9 +120,10 @@ def main(cmdline=0, **kwargs):
         try:
             result = job.result()
         except Exception as ex:
-            print('ex = {!r}'.format(ex))
+            print('Failed crop asset task ex = {!r}'.format(ex))
             failed.append(job)
-        results.append(result)
+        else:
+            results.append(result)
 
 
 # @xdev.profile
@@ -193,28 +194,27 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath):
     #     # track_group_dname = dst_bundle_dpath /
 
     print(f'{len(tid_to_aids)=}')
-    if 0:
-        tids = tid_to_aids.keys()
-    else:
-        tids = []
-        vidids = []
-        for tid, aids in ub.ProgIter(tid_to_aids.items(), total=len(tid_to_aids), desc='one loop over tracks'):
-            aid0 = ub.peek(aids)
-            ann0 = coco_dset.index.anns[aid0]
-            cid = ann0['category_id']
-            category = coco_dset.index.cats[cid]
-            catname = category['name']
-            flag = catname in valid_categories
-            if flag:
-                img0 = coco_dset.index.imgs[ann0['image_id']]
-                vidid = img0['video_id']
-                tids.append(tid)
-                vidids.append(vidid)
+    # if 0:
+    #     tids = tid_to_aids.keys()
+    # else:
+    vidid_and_tid_list = []
+    for tid, aids in ub.ProgIter(tid_to_aids.items(), total=len(tid_to_aids), desc='one loop over tracks'):
+        aid0 = ub.peek(aids)
+        ann0 = coco_dset.index.anns[aid0]
+        cid = ann0['category_id']
+        category = coco_dset.index.cats[cid]
+        catname = category['name']
+        flag = catname in valid_categories
+        if flag:
+            img0 = coco_dset.index.imgs[ann0['image_id']]
+            vidid = img0['video_id']
+            vidid_and_tid_list.append((vidid, tid))
+    vidid_and_tid_list = sorted(vidid_and_tid_list)
 
-    print(f'{len(tids)=}')
-    for tid, vidid in zip(tids, vidids):
+    # print(f'{len(tids)=}')
+    for vidid, tid in vidid_and_tid_list:
         aids = tid_to_aids[tid]
-        print(f'{len(aids)=}')
+        # print(f'{len(aids)=}')
 
         video = coco_dset.index.videos[vidid]
         region = video['name']
@@ -244,7 +244,7 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath):
         anns = annots.objs
         if len(anns) == 0:
             continue
-        print(f'{len(anns)=}')
+        # print(f'{len(anns)=}')
         for ann in anns:
             gid = ann['image_id']
             coco_img = _lut_coco_image(gid)
@@ -354,7 +354,8 @@ def run_crop_asset_task(crop_asset_task, keep):
         # print('dst = {!r}'.format(dst))
         # print('crop_box_asset_space = {!r}'.format(crop_box_asset_space))
         dst.parent.ensuredir()
-        util_gdal.gdal_single_translate(src, dst, pixel_box)
+        import retry
+        retry.api.retry_call(util_gdal.gdal_single_translate, (src, dst, pixel_box), tries=10, delay=1)
     return _crop_task
 
 

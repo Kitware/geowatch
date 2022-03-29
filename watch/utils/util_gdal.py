@@ -202,12 +202,12 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
     command = ub.paragraph(command)
     if 0:
         print(ub.paragraph(command))
-    cmd_info = ub.cmd(command, verbose=0)  # NOQA
-    if cmd_info['ret'] != 0:
-        print('\n\nCOMMAND FAILED: {!r}'.format(command))
-        print(cmd_info['out'])
-        print(cmd_info['err'])
-        raise Exception(cmd_info['err'])
+    cmd_info = ub.cmd(command, verbose=0, check=True)  # NOQA
+    # if cmd_info['ret'] != 0:
+    #     # print('\n\nCOMMAND FAILED: {!r}'.format(command))
+    #     # print(cmd_info['out'])
+    #     # print(cmd_info['err'])
+    #     raise Exception(cmd_info['err'])
 
     os.rename(tmp_fpath, out_fpath)
 
@@ -445,12 +445,13 @@ def gdal_single_warp(in_fpath,
     command = ub.paragraph(command)
     # if verbose:
     #     print(ub.paragraph(command))
-    cmd_info = ub.cmd(command, verbose=verbose)  # NOQA
-    if cmd_info['ret'] != 0:
-        print('\n\nCOMMAND FAILED: {!r}'.format(command))
-        print(cmd_info['out'])
-        print(cmd_info['err'])
-        raise Exception(cmd_info['err'])
+    cmd_info = ub.cmd(command, verbose=verbose, check=True)  # NOQA
+    # if cmd_info['ret'] != 0:
+    #     import subprocess
+    #     print('\n\nCOMMAND FAILED: {!r}'.format(command))
+    #     print(cmd_info['out'])
+    #     print(cmd_info['err'])
+    #     raise Exception(cmd_info['err'])
 
 
 def gdal_multi_warp(in_fpaths, out_fpath, *args, nodata=None, **kwargs):

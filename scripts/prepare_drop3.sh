@@ -260,13 +260,13 @@ prepare_l1_version_of_drop3(){
         --dataset_suffix="$DATASET_SUFFIX" \
         --s3_fpath="$S3_FPATH" \
         --dvc_dpath="$DVC_DPATH" \
-        --collated=True \
+        --collated=False \
         --requester_pays=True \
         --ignore_duplicates=True \
         --fields_workers=8 \
         --align_workers=8 \
         --convert_workers=8 \
         --debug=False \
-        --serial=True --cache=False --run=1
+        --serial=True --cache=False --run=0
 
 }
