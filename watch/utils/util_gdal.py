@@ -224,7 +224,7 @@ def gdal_single_warp(in_fpath,
                      use_perf_opts=False,
                      as_vrt=False,
                      use_te_geoidgrid=False,
-                     dem_fpath=None):
+                     dem_fpath=None, verbose=0):
     r"""
     Wrapper around gdalwarp
 
@@ -443,9 +443,9 @@ def gdal_single_warp(in_fpath,
 
     command = template.format(**template_kw)
     command = ub.paragraph(command)
-    if 1:
-        print(ub.paragraph(command))
-    cmd_info = ub.cmd(command, verbose=0)  # NOQA
+    # if verbose:
+    #     print(ub.paragraph(command))
+    cmd_info = ub.cmd(command, verbose=verbose)  # NOQA
     if cmd_info['ret'] != 0:
         print('\n\nCOMMAND FAILED: {!r}'.format(command))
         print(cmd_info['out'])
@@ -511,7 +511,8 @@ def gdal_multi_warp(in_fpaths, out_fpath, *args, nodata=None, **kwargs):
     merge_cmd_parts.extend(['-o', tmp_out_fpath])
     merge_cmd_parts.extend(warped_gpaths)
     merge_cmd = ' '.join(merge_cmd_parts)
-    cmd_info = ub.cmd(merge_cmd_parts, check=True)
+    verbose = kwargs.get('verbose', 0)
+    cmd_info = ub.cmd(merge_cmd_parts, check=True, verbose=verbose)
     if cmd_info['ret'] != 0:
         print('\n\nCOMMAND FAILED: {!r}'.format(merge_cmd))
         print(cmd_info['out'])
