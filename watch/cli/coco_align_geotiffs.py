@@ -84,7 +84,7 @@ from watch.utils import util_time
 from watch.utils import util_gdal
 from watch.utils import kwcoco_extensions
 
-DEBUG = 1
+DEBUG = 0
 
 try:
     import xdev
