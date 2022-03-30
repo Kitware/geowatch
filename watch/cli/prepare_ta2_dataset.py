@@ -89,6 +89,8 @@ class PrepareTA2Config(scfg.Config):
 
         'visualize': scfg.Value(0, help='if True runs visualize'),
 
+        'verbose': scfg.Value(0, help='help control verbosity (just align for now)'),
+
         # '--requester_pays'
         'requester_pays': scfg.Value(0, help='if True, turn on requester_pays in ingress. Needed for official L1/L2 catalogs.'),
 
@@ -317,6 +319,7 @@ def main(cmdline=False, **kwargs):
             --debug_valid_regions={debug_valid_regions} \
             --rpc_align_method affine_warp \
             --aux_workers={config['aux_workers']} \
+            --verbose={config['verbose']} \
             --workers={config['align_workers']}
         '''), depends=uncropped_final_jobs)
 
