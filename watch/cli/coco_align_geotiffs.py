@@ -182,6 +182,8 @@ class CocoAlignGeotiffConfig(scfg.Config):
             False, help='if True MODIFIES THE UNDERLYING IMAGES to ensure geodata is propogated'),
 
         'max_frames': scfg.Value(None),
+
+        'channels': scfg.Value(None, help='If specified only align the given channels'),
     }
 
 
@@ -458,7 +460,9 @@ def main(cmdline=True, **kw):
             write_subsets=write_subsets, max_workers=max_workers,
             aux_workers=aux_workers, keep=keep, target_gsd=target_gsd,
             max_frames=max_frames,
-            debug_valid_regions=config['debug_valid_regions'])
+            debug_valid_regions=config['debug_valid_regions'],
+            channels=config['channels'],
+        )
 
     new_dset.fpath = dst_fpath
     print('Dumping new_dset.fpath = {!r}'.format(new_dset.fpath))
@@ -734,7 +738,8 @@ class SimpleDataCube(object):
                          rpc_align_method='orthorectify', new_dset=None,
                          write_subsets=True, visualize=True, max_workers=0,
                          aux_workers=0, keep='none', target_gsd=10,
-                         max_frames=None, debug_valid_regions=True):
+                         max_frames=None, debug_valid_regions=True,
+                         channels=None):
         """
         Given a region of interest, extract an aligned temporal sequence
         of data to a specified directory.
@@ -766,6 +771,9 @@ class SimpleDataCube(object):
                 "none": overwrite all, including existing images
                 "img": only add new images
                 "roi": only add new ROIs
+
+            channels (FusedChannelSpec):
+                if specified, only use these channels.
 
         Returns:
             kwcoco.CocoDataset: the given or new dataset that was modified
@@ -1075,7 +1083,8 @@ class SimpleDataCube(object):
                     num, frame_index, new_vidid, rpc_align_method,
                     sub_bundle_dpath, space_str, space_region, space_box,
                     start_gid, start_aid, aux_workers, keep,
-                    local_epsg=local_epsg, other_imgs=other_imgs)
+                    local_epsg=local_epsg, other_imgs=other_imgs,
+                    channels=channels)
                 start_gid = start_gid + 1
                 start_aid = start_aid + len(anns)
                 frame_index = frame_index + 1
@@ -1163,12 +1172,12 @@ class SimpleDataCube(object):
                     'nir|swir16|swir22',
                 ]
                 if isinstance(visualize, str):
-                    channels = visualize
+                    channels_ = visualize
                 else:
-                    channels = None
+                    channels_ = None
                 _write_ann_visualizations2(
                     coco_dset=new_dset, img=new_img, anns=new_anns,
-                    channels=channels,
+                    channels=channels_,
                     sub_dpath=viz_dpath, space='video',
                     request_grouped_bands=request_grouped_bands)
 
@@ -1190,7 +1199,7 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
                       datetime_, num, frame_index, new_vidid, rpc_align_method,
                       sub_bundle_dpath, space_str, space_region, space_box,
                       start_gid, start_aid, aux_workers=0, keep=False,
-                      local_epsg=None, other_imgs=None):
+                      local_epsg=None, other_imgs=None, channels=None):
     """
     Threaded worker function for :func:`SimpleDataCube.extract_overlaps`.
     """
@@ -1232,7 +1241,8 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
 
     for other_img in other_imgs:
         coco_other_img = CocoImage(other_img)
-        other_objs = [ub.dict_diff(obj, {'auxiliary'}) for obj in coco_other_img.iter_asset_objs()]
+        other_objs = [ub.dict_diff(obj, {'auxiliary'})
+                      for obj in coco_other_img.iter_asset_objs()]
         for other_obj in other_objs:
             key = other_obj['channels']
             channels_to_objs[key].append(other_obj)
@@ -1270,7 +1280,8 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
         job = executor.submit(
             _aligncrop, obj_group, bundle_dpath, name, sensor_coarse,
             dst_dpath, space_region, space_box, align_method,
-            is_multi_image, keep, local_epsg=local_epsg)
+            is_multi_image, keep, local_epsg=local_epsg,
+            channels=channels)
         job_list.append(job)
 
     dst_list = []
@@ -1489,14 +1500,22 @@ def _fix_geojson_poly(geo):
 
 @profile
 def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
-               space_box, align_method, is_multi_image, keep, local_epsg=None):
+               space_box, align_method, is_multi_image, keep, local_epsg=None,
+               channels=None):
     import watch
     # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
     first_obj = obj_group[0]
     chan_code = obj_group[0].get('channels', '')
 
     # Prevent long names for docker (limit is 242 chars)
-    chan_pname = kwcoco.FusedChannelSpec.coerce(chan_code).path_sanitize(maxlen=10)
+    channels_ = kwcoco.FusedChannelSpec.coerce(chan_code)
+    chan_pname = channels_.path_sanitize(maxlen=10)
+
+    if channels is not None:
+        # Filter out bands we are not interested in
+        channels = kwcoco.FusedChannelSpec.coerce(channels)
+        if not channels.intersection(channels_).numel():
+            return None
 
     if is_multi_image:
         multi_dpath = ub.ensuredir((dst_dpath, name))

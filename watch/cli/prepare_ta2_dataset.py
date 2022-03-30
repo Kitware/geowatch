@@ -95,6 +95,8 @@ class PrepareTA2Config(scfg.Config):
         'select_images': scfg.Value(False, help='if enabled only uses select images'),
 
         'cache': scfg.Value(1, help='if enabled check cache'),
+
+        'channels': scfg.Value(None, help='specific channels to use in align crop'),
     }
 
 
@@ -297,6 +299,7 @@ def main(cmdline=False, **kwargs):
 
     debug_valid_regions = config['debug']
     align_visualize = config['debug']
+    channels = config['channels']
     align_job = queue.submit(ub.codeblock(
         rf'''
         # MAIN WORKHORSE CROP IMAGES
@@ -308,6 +311,7 @@ def main(cmdline=False, **kwargs):
             --context_factor=1 \
             --geo_preprop=auto \
             --keep={align_keep} \
+            --channels="{channels}" \
             --visualize={align_visualize} \
             --debug_valid_regions={debug_valid_regions} \
             --rpc_align_method affine_warp \
