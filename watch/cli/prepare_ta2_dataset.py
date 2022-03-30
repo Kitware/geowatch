@@ -297,6 +297,7 @@ def main(cmdline=False, **kwargs):
     cache_crops = 1
     if cache_crops:
         align_keep = 'img'
+        align_keep = 'roi-img'
     else:
         align_keep = 'none'
 

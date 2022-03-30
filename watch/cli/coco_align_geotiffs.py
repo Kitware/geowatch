@@ -184,6 +184,8 @@ class CocoAlignGeotiffConfig(scfg.Config):
         'max_frames': scfg.Value(None),
 
         'channels': scfg.Value(None, help='If specified only align the given channels'),
+
+        'verbose': scfg.Value(0, help='Note: no silent mode, 0 is just least verbose.'),
     }
 
 
@@ -462,6 +464,7 @@ def main(cmdline=True, **kw):
             max_frames=max_frames,
             debug_valid_regions=config['debug_valid_regions'],
             channels=config['channels'],
+            verbose=config['verbose'],
         )
 
     new_dset.fpath = dst_fpath
@@ -739,7 +742,7 @@ class SimpleDataCube(object):
                          write_subsets=True, visualize=True, max_workers=0,
                          aux_workers=0, keep='none', target_gsd=10,
                          max_frames=None, debug_valid_regions=True,
-                         channels=None):
+                         channels=None, verbose=0):
         """
         Given a region of interest, extract an aligned temporal sequence
         of data to a specified directory.
@@ -774,6 +777,9 @@ class SimpleDataCube(object):
 
             channels (FusedChannelSpec):
                 if specified, only use these channels.
+
+            verbose (int):
+                note, there is no silent mode, 0 is just the least verbose.
 
         Returns:
             kwcoco.CocoDataset: the given or new dataset that was modified
@@ -1084,7 +1090,7 @@ class SimpleDataCube(object):
                     sub_bundle_dpath, space_str, space_region, space_box,
                     start_gid, start_aid, aux_workers, keep,
                     local_epsg=local_epsg, other_imgs=other_imgs,
-                    channels=channels)
+                    channels=channels, verbose=verbose)
                 start_gid = start_gid + 1
                 start_aid = start_aid + len(anns)
                 frame_index = frame_index + 1
