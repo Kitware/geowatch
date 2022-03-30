@@ -1362,6 +1362,8 @@ class KWCocoVideoDataset(data.Dataset):
                                 mask = (sample['im'] == 0)
                                 sample['im'][mask] = np.nan
 
+                # TODO: mark frame as invalid when a red band is all 0
+
                 # dont ask for annotations multiple times
                 invalid_mask = np.isnan(sample['im'])
 

@@ -80,7 +80,7 @@ def main(cmdline=0, **kwargs):
         src = base_fpath
         dst = dvc_dpath / 'Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json'
         cmdline = 0
-        include_sensors = ['WV']
+        include_sensors = []
         kwargs = dict(src=src, dst=dst, include_sensors=include_sensors)
 
     Ignore:
@@ -234,7 +234,7 @@ def main(cmdline=0, **kwargs):
             obj.pop('utm_crs_info', None)
         new_img.update(ensure_json_serializable(new_img))
 
-    target_gsd = 3
+    target_gsd = 1
     for vidid in ub.ProgIter(new_dset.videos(), desc='populate videos'):
         kwcoco_extensions.coco_populate_geo_video_stats(
             new_dset, target_gsd=target_gsd, vidid=vidid
@@ -249,7 +249,19 @@ def main(cmdline=0, **kwargs):
         --animate=True \
         --workers=8
 
+    DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
+    echo $DVC_DPATH
+    cp $DVC_DPATH/Cropped-Drop2-TA1-2022-02-15/data.kwcoco.json \
+       $DVC_DPATH/Cropped-Drop2-TA1-2022-02-15/imgonly.kwcoco.json
 
+
+    python -m watch project_annotations \
+        --src "$DVC_DPATH/Cropped-Drop2-TA1-2022-02-15/imgonly.kwcoco.json" \
+        --dst "$DVC_DPATH/Cropped-Drop2-TA1-2022-02-15/projected.kwcoco.json" \
+        --site_models="$DVC_DPATH/annotations/site_models/*.geojson" \
+        --region_models="$DVC_DPATH/annotations/region_models/*.geojson"
+
+    # {viz_part}
 
     """
 

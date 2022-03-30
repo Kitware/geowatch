@@ -849,7 +849,7 @@ class SimpleDataCube(object):
 
         if exists(join(sub_bundle_dpath,
                        'subdata.kwcoco.json')) and keep in {'roi-img', 'roi'}:
-            print('ROI found on disk; adding')
+            print('ROI cache hit')
             sub_dset = kwcoco.CocoDataset(
                 join(sub_bundle_dpath, 'subdata.kwcoco.json'))
             return new_dset.union(sub_dset)
