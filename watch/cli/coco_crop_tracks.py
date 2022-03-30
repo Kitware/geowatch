@@ -80,7 +80,7 @@ def main(cmdline=0, **kwargs):
         src = base_fpath
         dst = dvc_dpath / 'Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json'
         cmdline = 0
-        include_sensors = []
+        include_sensors = None
         kwargs = dict(src=src, dst=dst, include_sensors=include_sensors)
 
     Ignore:
@@ -159,11 +159,11 @@ def main(cmdline=0, **kwargs):
         else:
             results.append(result)
 
-    # TODO: make the new kwcoco file
-    tid_to_assets = ub.group_items(results, lambda x: x['tid'])
-    # ub.map_vals(len, tid_to_assets)
-
+    # Make the new kwcoco file where 1 track is mostly 1 video
+    # TODO: we could crop the kwcoco annotations here too, but
+    # we can punt on that for now and just reproject them.
     new_dset = kwcoco.CocoDataset()
+    tid_to_assets = ub.group_items(results, lambda x: x['tid'])
     new_dset.fpath = dst
     for tid, track_assets in tid_to_assets.items():
 

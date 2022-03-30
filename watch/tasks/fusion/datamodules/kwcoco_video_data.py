@@ -1292,8 +1292,7 @@ class KWCocoVideoDataset(data.Dataset):
         tr_['as_xarray'] = False
         tr_['use_experimental_loader'] = 1
 
-        if 0:
-            tr_ = self._augment_spacetime_target(tr_)
+        tr_ = self._augment_spacetime_target(tr_)
 
         if self.channels:
             tr_['channels'] = self.sample_channels
