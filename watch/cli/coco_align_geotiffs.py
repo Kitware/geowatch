@@ -1276,7 +1276,7 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
     dst_list = []
     for job in ub.ProgIter(job_list, total=len(job_list),
                            desc='collect warp auxiliaries {}'.format(name),
-                           enabled=DEBUG, verbose=3):
+                           enabled=DEBUG, verbose=3 * DEBUG):
         dst = job.result()
         dst_list.append(dst)
 

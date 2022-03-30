@@ -254,6 +254,7 @@ prepare_l1_version_of_drop3(){
     S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/ALL_ANNOTATED_REGIONS_TA-1_PROCESSED_20220222.unique.input.l1.mini
     DATASET_SUFFIX=Drop3-L1-MINI
 
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
     S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/ALL_ANNOTATED_REGIONS_TA-1_PROCESSED_20220222.unique.input.l1
     DATASET_SUFFIX=Drop3-L1
     python -m watch.cli.prepare_ta2_dataset \
@@ -267,6 +268,6 @@ prepare_l1_version_of_drop3(){
         --align_workers=8 \
         --convert_workers=8 \
         --debug=False \
-        --serial=True --cache=False --run=0
+        --cache=False --run=1
 
 }

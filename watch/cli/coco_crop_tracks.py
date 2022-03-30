@@ -73,6 +73,7 @@ def main(cmdline=0, **kwargs):
         dst = dvc_dpath / 'Cropped-Drop2-TA1-2022-02-15/data.kwcoco.json'
         cmdline = 0
         kwargs = dict(src=src, dst=dst)
+        kwargs['workers'] = 8
     """
     config = CocoCropTrackConfig(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
