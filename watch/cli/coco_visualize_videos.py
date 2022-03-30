@@ -75,7 +75,7 @@ class CocoVisualizeConfig(scfg.Config):
         'any3': scfg.Value(False, help='if True, ensure the "any3" channels are drawn. If set to "only", then other per-channel visualizations are supressed. TODO: better name?'),
 
         'draw_imgs': scfg.Value(True),
-        'draw_anns': scfg.Value(True),
+        'draw_anns': scfg.Value('auto', help='auto means only draw anns if they exist'),
 
         'cmap': scfg.Value('viridis', help='colormap for single channel data'),
 
@@ -203,6 +203,9 @@ def main(cmdline=True, **kwargs):
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
     print('coco_dset.fpath = {!r}'.format(coco_dset.fpath))
     print('coco_dset = {!r}'.format(coco_dset))
+
+    if config['draw_anns'] == 'auto':
+        config['draw_anns'] = coco_dset.n_annots > 0
 
     bundle_dpath = ub.Path(coco_dset.bundle_dpath)
     dset_idstr = _dataset_id(coco_dset)

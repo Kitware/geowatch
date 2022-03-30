@@ -80,7 +80,8 @@ def main(cmdline=0, **kwargs):
         src = base_fpath
         dst = dvc_dpath / 'Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json'
         cmdline = 0
-        kwargs = dict(src=src, dst=dst)
+        include_sensors = ['WV']
+        kwargs = dict(src=src, dst=dst, include_sensors=include_sensors)
 
     Ignore:
         from watch.cli.coco_crop_tracks import *  # NOQA
@@ -116,6 +117,7 @@ def main(cmdline=0, **kwargs):
         select_images=config['select_images'],
         select_videos=config['select_videos'],
     )
+    coco_dset = coco_dset.subset(valid_gids)
 
     print('Generate jobs')
     crop_job_gen = generate_crop_jobs(coco_dset, dst_bundle_dpath)
@@ -159,7 +161,97 @@ def main(cmdline=0, **kwargs):
 
     # TODO: make the new kwcoco file
     tid_to_assets = ub.group_items(results, lambda x: x['tid'])
-    ub.map_vals(len, tid_to_assets)
+    # ub.map_vals(len, tid_to_assets)
+
+    new_dset = kwcoco.CocoDataset()
+    new_dset.fpath = dst
+    for tid, track_assets in tid_to_assets.items():
+
+        new_video = {
+            'name': tid,
+        }
+        new_vidid = new_dset.add_video(**new_video)
+        gid_to_assets = ub.group_items(track_assets, lambda x: x['gid'])
+
+        new_images = []
+        for gid, img_assets in gid_to_assets.items():
+            auxiliary = []
+            region = None
+            datetime_ = None
+            sensor_coarse = None
+            for aux in img_assets:
+                fname = aux['file_name']
+                aux = aux.copy()
+                aux.pop('gid', None)
+                aux.pop('tid', None)
+                region = aux.pop('region', None)
+                sensor_coarse = aux['sensor_coarse']
+                datetime_ = aux.pop('datetime')
+                aux['file_name'] = str(fname)
+                auxiliary.append(aux)
+            new_img = {
+                'name': fname.parent.name,
+                'file_name': None,
+                'auxiliary': auxiliary,
+                'date_captured': datetime_.isoformat(),
+                'sensor_coarse': sensor_coarse,
+                'parent_region': region,
+                'timestamp': datetime_.timestamp(),
+            }
+            new_images.append(new_img)
+            # new_gid = new_dset.add_image(**new_img)
+        new_images = sorted(new_images, key=lambda x: x['date_captured'])
+        for idx, new_img in enumerate(new_images):
+            new_img['frame_index'] = idx
+            new_img['video_id'] = new_vidid
+            new_dset.add_image(**new_img)
+
+    for new_img in ub.ProgIter(new_dset.dataset['images'], desc='populate auxiliary'):
+        for obj in new_img['auxiliary']:
+            kwcoco_extensions._populate_canvas_obj(
+                dst_bundle_dpath, obj, overwrite={'warp'}, with_wgs=True)
+
+    for new_img in new_dset.dataset['images']:
+        kwcoco_extensions._recompute_auxiliary_transforms(new_img)
+
+    for new_img in new_dset.dataset['images']:
+        new_coco_img = kwcoco.CocoImage(new_img)
+        new_coco_img._bundle_dpath = dst_bundle_dpath
+        new_coco_img._video = {}
+        kwcoco_extensions._populate_valid_region(new_coco_img)
+
+    from kwcoco.util.util_json import ensure_json_serializable
+    for new_img in ub.ProgIter(new_dset.dataset['images'], desc='cleanup imgs'):
+        for obj in ub.flatten([[new_img], new_img['auxiliary']]):
+            if 'warp_to_wld' in obj:
+                obj['warp_to_wld'] = kwimage.Affine.coerce(obj['warp_to_wld']).concise()
+            if 'wld_to_pxl' in obj:
+                obj['wld_to_pxl'] = kwimage.Affine.coerce(obj['wld_to_pxl']).concise()
+            obj.pop('wgs84_to_wld', None)
+            obj.pop('valid_region_utm', None)
+            obj.pop('utm_corners', None)
+            obj.pop('wgs84_corners', None)
+            obj.pop('utm_crs_info', None)
+        new_img.update(ensure_json_serializable(new_img))
+
+    target_gsd = 3
+    for vidid in ub.ProgIter(new_dset.videos(), desc='populate videos'):
+        kwcoco_extensions.coco_populate_geo_video_stats(
+            new_dset, target_gsd=target_gsd, vidid=vidid
+        )
+
+    new_dset.dump(new_dset.fpath, newlines=True, indent='    ')
+
+    r"""
+    smartwatch visualize \
+        /home/joncrall/data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop2-TA1-2022-02-15/data.kwcoco.json \
+        --channels="red|green|blue" \
+        --animate=True \
+        --workers=8
+
+
+
+    """
 
 
 # @xdev.profile

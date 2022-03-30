@@ -224,7 +224,9 @@ def gdal_single_warp(in_fpath,
                      use_perf_opts=False,
                      as_vrt=False,
                      use_te_geoidgrid=False,
-                     dem_fpath=None, verbose=0):
+                     dem_fpath=None,
+                     tries=0,
+                     verbose=0):
     r"""
     Wrapper around gdalwarp
 
@@ -257,6 +259,8 @@ def gdal_single_warp(in_fpath,
         as_vrt (bool): undocumented
         use_te_geoidgrid (bool): undocumented
         dem_fpath (bool): undocumented
+
+        tries (int): gdal can be flakey, set to force some number of retries
 
     TODO:
         - [ ] This should be a kwgeo function?
@@ -445,7 +449,21 @@ def gdal_single_warp(in_fpath,
     command = ub.paragraph(command)
     # if verbose:
     #     print(ub.paragraph(command))
-    cmd_info = ub.cmd(command, verbose=verbose, check=True)  # NOQA
+    # cmd_info = ub.cmd(command, verbose=verbose, check=True)  # NOQA
+    import subprocess
+    try:
+        if 1:
+            import retry
+            retry.api.retry_call(
+                ub.cmd, (command,), dict(check=True, verbose=verbose),
+                tries=tries, delay=1, exceptions=subprocess.CalledProcessError)
+        else:
+            ub.cmd(command, check=True, verbose=verbose)
+    except subprocess.CalledProcessError as ex:
+        print('\n\nCOMMAND FAILED: {!r}'.format(ex.cmd))
+        print(ex.stdout)
+        print(ex.stderr)
+        raise
     # if cmd_info['ret'] != 0:
     #     import subprocess
     #     print('\n\nCOMMAND FAILED: {!r}'.format(command))
@@ -454,7 +472,7 @@ def gdal_single_warp(in_fpath,
     #     raise Exception(cmd_info['err'])
 
 
-def gdal_multi_warp(in_fpaths, out_fpath, *args, nodata=None, **kwargs):
+def gdal_multi_warp(in_fpaths, out_fpath, *args, nodata=None, tries=0, **kwargs):
     """
     See gdal_single_warp() for args
 
@@ -485,7 +503,8 @@ def gdal_multi_warp(in_fpaths, out_fpath, *args, nodata=None, **kwargs):
         tmpfile = tempfile.NamedTemporaryFile(suffix='.tif')
         tempfiles.append(tmpfile)
         tmp_out = tmpfile.name
-        gdal_single_warp(in_fpath, tmp_out, *args, nodata=nodata, **kwargs)
+        gdal_single_warp(in_fpath, tmp_out, *args, nodata=nodata, tries=tries,
+                         **kwargs)
         warped_gpaths.append(tmp_out)
 
     if nodata is not None:
@@ -513,12 +532,21 @@ def gdal_multi_warp(in_fpaths, out_fpath, *args, nodata=None, **kwargs):
     merge_cmd_parts.extend(warped_gpaths)
     merge_cmd = ' '.join(merge_cmd_parts)
     verbose = kwargs.get('verbose', 0)
-    cmd_info = ub.cmd(merge_cmd_parts, check=True, verbose=verbose)
-    if cmd_info['ret'] != 0:
-        print('\n\nCOMMAND FAILED: {!r}'.format(merge_cmd))
-        print(cmd_info['out'])
-        print(cmd_info['err'])
-        raise Exception(cmd_info['err'])
+
+    import subprocess
+    try:
+        if 1:
+            import retry
+            retry.api.retry_call(
+                ub.cmd, (merge_cmd,), dict(check=True, verbose=verbose),
+                tries=tries, delay=1)
+        else:
+            ub.cmd(merge_cmd, check=True, verbose=verbose)
+    except subprocess.CalledProcessError as ex:
+        print('\n\nCOMMAND FAILED: {!r}'.format(ex.cmd))
+        print(ex.stdout)
+        print(ex.stderr)
+        raise
     os.rename(tmp_out_fpath, out_fpath)
 
     if 0:

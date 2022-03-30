@@ -1510,6 +1510,10 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
                space_box, align_method, is_multi_image, keep, local_epsg=None,
                channels=None, verbose=0):
     import watch
+
+    # TODO: parameterize
+    tries = 10
+
     # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
     first_obj = obj_group[0]
     chan_code = obj_group[0].get('channels', '')
@@ -1605,13 +1609,14 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
         in_fpaths = input_gpaths
         util_gdal.gdal_multi_warp(in_fpaths, out_fpath, space_box=space_box,
                                   local_epsg=local_epsg, rpcs=rpcs,
-                                  nodata=nodata,
+                                  nodata=nodata, tries=tries,
                                   verbose=0 if verbose < 2 else verbose)
     else:
         in_fpath = input_gpaths[0]
         util_gdal.gdal_single_warp(in_fpath, out_fpath,
                                    space_box=space_box, local_epsg=local_epsg,
                                    rpcs=rpcs, nodata=nodata,
+                                   tries=tries,
                                    verbose=0 if verbose < 2 else verbose)
 
     os.rename(tmp_dst_gpath, dst_gpath)
