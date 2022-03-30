@@ -100,6 +100,8 @@ class PrepareTA2Config(scfg.Config):
         'cache': scfg.Value(1, help='if enabled check cache'),
 
         'channels': scfg.Value(None, help='specific channels to use in align crop'),
+
+        'region_globstr': scfg.Value('annotations/region_models', help='a region globstr (relative to the dvc path, unless prefixed by "./") channels to use in align crop'),
     }
 
 
@@ -134,9 +136,6 @@ def main(cmdline=False, **kwargs):
     aligned_bundle_name = f'Aligned-{config["dataset_suffix"]}'
     uncropped_bundle_name = f'Uncropped-{config["dataset_suffix"]}'
 
-    region_dpath = dvc_dpath / 'annotations/region_models'
-    # region_models = list(region_dpath.glob('*.geojson'))
-
     uncropped_dpath = dvc_dpath / uncropped_bundle_name
     uncropped_query_dpath = uncropped_dpath / '_query/items'
 
@@ -146,7 +145,6 @@ def main(cmdline=False, **kwargs):
     aligned_imgonly_kwcoco_fpath = aligned_kwcoco_bundle / 'imgonly.kwcoco.json'
     aligned_imganns_kwcoco_fpath = aligned_kwcoco_bundle / 'data.kwcoco.json'
 
-    region_dpath = region_dpath.shrinkuser(home='$HOME')
     uncropped_dpath = uncropped_dpath.shrinkuser(home='$HOME')
     uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
     uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
@@ -304,6 +302,16 @@ def main(cmdline=False, **kwargs):
     debug_valid_regions = config['debug']
     align_visualize = config['debug']
     channels = config['channels']
+
+    # region_models = list(region_dpath.glob('*.geojson'))
+    region_globstr = ub.Path(config['region_globstr'])
+    if region_globstr.startswith('./'):
+        final_region_globstr = region_globstr
+    else:
+        final_region_globstr = dvc_dpath / region_globstr
+    # region_dpath = dvc_dpath / 'annotations/region_models'
+    final_region_globstr = final_region_globstr.shrinkuser(home='$HOME')
+
     align_job = queue.submit(ub.codeblock(
         rf'''
         # MAIN WORKHORSE CROP IMAGES
@@ -311,7 +319,7 @@ def main(cmdline=False, **kwargs):
         {job_environ_str}python -m watch.cli.coco_align_geotiffs \
             --src "{uncropped_final_kwcoco_fpath}" \
             --dst "{aligned_imgonly_kwcoco_fpath}" \
-            --regions "{region_dpath / '*.geojson'}" \
+            --regions "{final_region_globstr}" \
             --context_factor=1 \
             --geo_preprop=auto \
             --keep={align_keep} \
