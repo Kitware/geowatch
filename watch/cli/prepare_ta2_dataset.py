@@ -318,8 +318,8 @@ def main(cmdline=False, **kwargs):
             --visualize={align_visualize} \
             --debug_valid_regions={debug_valid_regions} \
             --rpc_align_method affine_warp \
-            --aux_workers={config['aux_workers']} \
             --verbose={config['verbose']} \
+            --aux_workers={config['align_aux_workers']} \
             --workers={config['align_workers']}
         '''), depends=uncropped_final_jobs)
 
