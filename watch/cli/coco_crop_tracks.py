@@ -129,6 +129,10 @@ def main(cmdline=0, **kwargs):
         else:
             results.append(result)
 
+    # TODO: make the new kwcoco file
+    tid_to_assets = ub.group_items(results, lambda x: x['tid'])
+    ub.map_vals(len, tid_to_assets)
+
 
 # @xdev.profile
 def generate_crop_jobs(coco_dset, dst_bundle_dpath):

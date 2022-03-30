@@ -57,6 +57,10 @@ schedule-prediction-and-evlauation(){
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
 
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    cd "$DVC_DPATH" 
+    dvc pull -r aws -R models/fusion/eval3_candidates/packages
+
     # TODO: 
     # - [ ] Argument for test time augmentation.
     # - [ ] Argument general predict parameter grid

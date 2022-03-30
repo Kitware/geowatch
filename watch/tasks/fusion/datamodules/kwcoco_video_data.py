@@ -1082,6 +1082,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> print('tr_ = {!r}'.format(tr_))
         """
 
+        # TODO: parameteraize
         temporal_augment_rate = 0.8
         spatial_augment_rate = 0.9
 
