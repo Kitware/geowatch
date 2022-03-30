@@ -1332,6 +1332,9 @@ class KWCocoVideoDataset(data.Dataset):
             tr_frame['gids'] = [gid]
             sample_streams = {}
             first_with_annot = with_annots
+
+            # Flag will be set to true if any heuristic on any channel stream
+            # forces us to mark this image as bad.
             force_bad = False
 
             for stream in sensor_channels.streams():
@@ -1343,6 +1346,7 @@ class KWCocoVideoDataset(data.Dataset):
                     padkw={'constant_values': np.nan},
                     dtype=np.float32
                 )
+
                 WV_NODATA_HACK = 1
                 if WV_NODATA_HACK:
                     # Should be fixed in drop3
@@ -1362,6 +1366,9 @@ class KWCocoVideoDataset(data.Dataset):
                                 sample['im'][mask] = np.nan
 
                 # TODO: mark frame as invalid when a red band is all 0
+                RGB_NODATA_HACK = 1
+                if set(stream).issubset({'blue', 'green', 'red'}):
+                    pass
 
                 # dont ask for annotations multiple times
                 invalid_mask = np.isnan(sample['im'])
@@ -1397,6 +1404,7 @@ class KWCocoVideoDataset(data.Dataset):
             gid_to_sample[gid] = sample_streams
 
         for gid in tr_['gids']:
+            pass
             sample_one_frame(gid)
 
         if 'video_id' not in tr_:

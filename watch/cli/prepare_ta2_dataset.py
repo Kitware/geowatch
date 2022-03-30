@@ -305,7 +305,7 @@ def main(cmdline=False, **kwargs):
 
     # region_models = list(region_dpath.glob('*.geojson'))
     region_globstr = ub.Path(config['region_globstr'])
-    if region_globstr.startswith('./'):
+    if str(region_globstr).startswith('./'):
         final_region_globstr = region_globstr
     else:
         final_region_globstr = dvc_dpath / region_globstr
