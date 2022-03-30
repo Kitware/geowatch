@@ -46,6 +46,24 @@ class CocoCropTrackConfig(scfg.Config):
         'sqlmode': scfg.Value(0, type=str, help='if True use sqlmode'),
 
         'keep': scfg.Value('img', help='set to None to recompute'),
+
+
+        'select_images': scfg.Value(
+            None, type=str, help=ub.paragraph(
+                '''
+                A jq query to specify images. See kwcoco subset --help for more details.
+                ''')),
+
+        'select_videos': scfg.Value(
+            None, help=ub.paragraph(
+                '''
+                A jq query to specify videos. See kwcoco subset --help for more details.
+                ''')),
+
+        'include_sensors': scfg.Value(None, help='if specified can be comma separated valid sensors'),
+
+        'exclude_sensors': scfg.Value(None, help='if specified can be comma separated invalid sensors'),
+
     }
 
 
@@ -72,7 +90,8 @@ def main(cmdline=0, **kwargs):
         src = base_fpath
         dst = dvc_dpath / 'Cropped-Drop2-TA1-2022-02-15/data.kwcoco.json'
         cmdline = 0
-        kwargs = dict(src=src, dst=dst)
+        include_sensors = ['WV']
+        kwargs = dict(src=src, dst=dst, include_sensors=include_sensors)
         kwargs['workers'] = 8
     """
     config = CocoCropTrackConfig(cmdline=cmdline, data=kwargs)
@@ -88,6 +107,15 @@ def main(cmdline=0, **kwargs):
         coco_dset = kwcoco.CocoDataset.coerce(src)
     # sql_coco_dset = coco_dset.view_sql()
     # coco_dset = sql_coco_dset
+
+    from watch.utils import kwcoco_extensions
+    valid_gids = kwcoco_extensions.filter_image_ids(
+        coco_dset,
+        include_sensors=config['include_sensors'],
+        exclude_sensors=config['exclude_sensors'],
+        select_images=config['select_images'],
+        select_videos=config['select_videos'],
+    )
 
     print('Generate jobs')
     crop_job_gen = generate_crop_jobs(coco_dset, dst_bundle_dpath)
