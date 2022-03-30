@@ -1093,7 +1093,7 @@ class SimpleDataCube(object):
 
         sub_new_gids = []
         sub_new_aids = []
-        for job in jobs.as_completed(desc='collect extract jobs', freq=1):
+        for job in jobs.as_completed(desc='collect extract jobs', progkw=dict(freq=1)):
             new_img, new_anns = job.result()
 
             # Hack, the next ids dont update when new images are added
