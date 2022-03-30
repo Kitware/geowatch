@@ -1093,7 +1093,7 @@ class SimpleDataCube(object):
 
         sub_new_gids = []
         sub_new_aids = []
-        for job in jobs.as_completed(desc='collect extract jobs'):
+        for job in jobs.as_completed(desc='collect extract jobs', freq=1):
             new_img, new_anns = job.result()
 
             # Hack, the next ids dont update when new images are added
@@ -1199,7 +1199,8 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
                       datetime_, num, frame_index, new_vidid, rpc_align_method,
                       sub_bundle_dpath, space_str, space_region, space_box,
                       start_gid, start_aid, aux_workers=0, keep=False,
-                      local_epsg=None, other_imgs=None, channels=None):
+                      local_epsg=None, other_imgs=None, channels=None,
+                      verbose=0):
     """
     Threaded worker function for :func:`SimpleDataCube.extract_overlaps`.
     """
@@ -1276,24 +1277,24 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
     # Turn off internal threading because we refactored this to thread over all
     # images instead
     executor = ub.Executor(mode='thread', max_workers=aux_workers)
-    for obj_group in ub.ProgIter(obj_groups, desc='submit warp auxiliaries', verbose=3 * DEBUG):
+    for obj_group in ub.ProgIter(obj_groups, desc='submit warp auxiliaries', verbose=verbose):
         job = executor.submit(
             _aligncrop, obj_group, bundle_dpath, name, sensor_coarse,
             dst_dpath, space_region, space_box, align_method,
             is_multi_image, keep, local_epsg=local_epsg,
-            channels=channels)
+            channels=channels, verbose=verbose)
         job_list.append(job)
 
     dst_list = []
     for job in ub.ProgIter(job_list, total=len(job_list),
                            desc='collect warp auxiliaries {}'.format(name),
-                           enabled=DEBUG, verbose=3 * DEBUG):
+                           enabled=DEBUG, verbose=verbose):
         dst = job.result()
         dst_list.append(dst)
 
     new_gid = start_gid
 
-    if DEBUG:
+    if verbose > 2:
         print(f'Finish channel crop jobs: {new_gid}')
 
     if align_method != 'pixel_crop':
@@ -1501,7 +1502,7 @@ def _fix_geojson_poly(geo):
 @profile
 def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
                space_box, align_method, is_multi_image, keep, local_epsg=None,
-               channels=None):
+               channels=None, verbose=0):
     import watch
     # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
     first_obj = obj_group[0]
@@ -1515,6 +1516,8 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
         # Filter out bands we are not interested in
         channels = kwcoco.FusedChannelSpec.coerce(channels)
         if not channels.intersection(channels_).numel():
+            if verbose > 2:
+                print('Skip {}'.format(channels_))
             return None
 
     if is_multi_image:
@@ -1587,7 +1590,7 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     # method will call gdalwarp on each image individually and then merge them
     # all in a final step.
     out_fpath = tmp_dst_gpath
-    if DEBUG:
+    if verbose > 2:
         print(
             'start gdal warp in_fpaths = {}'.format(ub.repr2(input_gpaths, nl=1)) +
             'chan_code = {!r}\n'.format(chan_code) +
@@ -1596,15 +1599,17 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
         in_fpaths = input_gpaths
         util_gdal.gdal_multi_warp(in_fpaths, out_fpath, space_box=space_box,
                                   local_epsg=local_epsg, rpcs=rpcs,
-                                  nodata=nodata, verbose=3 * DEBUG)
+                                  nodata=nodata,
+                                  verbose=0 if verbose < 2 else verbose)
     else:
         in_fpath = input_gpaths[0]
         util_gdal.gdal_single_warp(in_fpath, out_fpath,
                                    space_box=space_box, local_epsg=local_epsg,
-                                   rpcs=rpcs, nodata=nodata, verbose=3 * DEBUG)
+                                   rpcs=rpcs, nodata=nodata,
+                                   verbose=0 if verbose < 2 else verbose)
 
     os.rename(tmp_dst_gpath, dst_gpath)
-    if DEBUG:
+    if verbose > 2:
         print('finish gdal warp dst_gpath = {!r}'.format(dst_gpath))
     return dst
 

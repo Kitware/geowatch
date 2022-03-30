@@ -268,7 +268,10 @@ prepare_l1_version_of_drop3(){
         --fields_workers=8 \
         --align_workers=8 \
         --convert_workers=8 \
+        --align_aux_workers=0 \
+        --verbose=3 \
         --debug=False \
+        --channels="blue|green|red|nir|swir16|swir22" \
         --cache=False --run=0
 
 }

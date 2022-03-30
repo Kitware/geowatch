@@ -83,6 +83,7 @@ class PrepareTA2Config(scfg.Config):
         'convert_workers': scfg.Value('min(avail,8)', help='workers for stac-to-kwcoco script'),
         'fields_workers': scfg.Value('min(avail,max(all/2,8))', help='workers for add-watch-fields script'),
         'align_workers': scfg.Value(0, help='workers for align script'),
+        'align_aux_workers': scfg.Value(0, help='threads per align process (typically set this to 0)'),
 
         'ignore_duplicates': scfg.Value(0, help='workers for align script'),
 
@@ -315,6 +316,7 @@ def main(cmdline=False, **kwargs):
             --visualize={align_visualize} \
             --debug_valid_regions={debug_valid_regions} \
             --rpc_align_method affine_warp \
+            --aux_workers={config['aux_workers']} \
             --workers={config['align_workers']}
         '''), depends=uncropped_final_jobs)
 
