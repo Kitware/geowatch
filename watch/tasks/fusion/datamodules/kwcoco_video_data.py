@@ -1365,11 +1365,6 @@ class KWCocoVideoDataset(data.Dataset):
                                 mask = (sample['im'] == 0)
                                 sample['im'][mask] = np.nan
 
-                # TODO: mark frame as invalid when a red band is all 0
-                RGB_NODATA_HACK = 1
-                if set(stream).issubset({'blue', 'green', 'red'}):
-                    pass
-
                 # dont ask for annotations multiple times
                 invalid_mask = np.isnan(sample['im'])
 
@@ -1399,6 +1394,28 @@ class KWCocoVideoDataset(data.Dataset):
                     # instead of using red as a proxy for it.
                     if 'red' in set(stream):
                         force_bad = True
+
+                # TODO: mark frame as invalid when a red band is all 0
+                # We are going to try to generalize this with a concept of an
+                # "iffy" mask with will flag pixels that are minimum, zero, or
+                # nan.
+                RGB_IFFY_HACK = 1
+                if RGB_IFFY_HACK and set(stream).issubset({'blue', 'green', 'red'}):
+                    import warnings
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings('ignore', 'empty slice')
+                        if any_invalid:
+                            chan_mins = np.nanmin(sample['im'], axis=(0, 1, 2), keepdims=1)
+                            invalid_mask
+                            is_min_mask = (sample['im'] == chan_mins)
+                            is_zero_mask = sample['im'] == 0
+                            is_iffy_mask = (invalid_mask | is_min_mask | is_zero_mask)
+                            chan_num_iffy = is_iffy_mask.sum(axis=(0, 1, 2))
+                            chan_num_pxls = np.prod(is_iffy_mask.shape[0:3])
+                            chan_frac_iffy = chan_num_iffy / chan_num_pxls
+                            chan_is_bad = chan_frac_iffy > 0.95
+                            if np.any(chan_is_bad):
+                                force_bad = True
 
             gid_to_isbad[gid] = force_bad or len(sample_streams) == 0
             gid_to_sample[gid] = sample_streams
