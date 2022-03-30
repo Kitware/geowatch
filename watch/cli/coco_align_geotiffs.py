@@ -1552,7 +1552,7 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     already_exists = exists(dst_gpath)
     needs_recompute = not (already_exists and keep in {'img', 'roi-img'})
     if not needs_recompute:
-        if DEBUG:
+        if verbose:
             print('cache hit dst = {!r}'.format(dst))
         return dst
 
