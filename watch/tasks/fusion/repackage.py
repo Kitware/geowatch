@@ -129,6 +129,8 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     from watch.utils import util_data
     from watch.utils import util_path
     import shutil
+    import rich
+    from rich.prompt import Confirm
 
     if dvc_dpath is None:
         dvc_dpath = util_data.find_smart_dvc_dpath()
@@ -208,14 +210,16 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         row['package_fpath'] = package_fpath
         row['name'] = name
         row['name_fpath'] = name_fpath
-        row['needs_repackage'] = not package_fpath.exists()
-        row['needs_copy'] = not name_fpath.exists()
-        row['failed_repackage'] = 0
+        row['was_packaged'] = package_fpath.exists()
+        row['was_copied'] = name_fpath.exists()
+        row['needs_repackage'] = not row['was_packaged']
+        row['needs_copy'] = not row['was_copied']
+        row['repackage_failed'] = 0
+        row['repackage_passed'] = 0
         # name_dpath.ensuredir()
         # print('package_fpath = {!r}'.format(package_fpath))
         # print('name_fpath = {!r}'.format(name_fpath))
 
-    import rich
     if 1:
         import pandas as pd
         df = pd.DataFrame(gathered)
@@ -223,7 +227,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         if len(df) == 0:
             print(df)
             raise Exception('No data gathered')
-        print(df.groupby('name')['needs_copy', 'needs_repackage'].sum())
+        print(df.groupby('name')[['was_packaged', 'needs_repackage', 'was_copied',  'needs_copy']].sum())
 
     if mode == 'list':
         # import xdev
@@ -231,8 +235,8 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         return
 
     if mode == 'interact':
-        ans = input('do you want to repackage? (y for yes)')
-        if ans != 'y':
+        flag = Confirm.ask('Do you want to repackage?')
+        if not flag:
             return
 
     to_repackage = [r for r in gathered if r['needs_repackage']]
@@ -240,21 +244,23 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         try:
             repackage(row['checkpoint_fpath'])[0]
         except Exception:
-            row['failed_repackage'] = True
+            row['repackage_failed'] = True
+        else:
+            row['repackage_passed'] = True
 
     if 1:
         import pandas as pd
         df = pd.DataFrame(gathered)
         rich.print('[blue] Repackaged')
         if len(df):
-            print(df.groupby('name')[['failed_repackage']].sum())
+            print(df.groupby('name')[['was_packaged', 'needs_repackage', 'repackage_failed', 'repackage_passed', 'was_copied',  'needs_copy']].sum())
 
     if mode == 'repackage':
         return
 
     if mode == 'interact':
-        ans = input('do you want to copy? (y for yes)')
-        if ans != 'y':
+        flag = Confirm.ask('do you want to copy?')
+        if not flag:
             return
 
     storage_dpath.ensuredir()
@@ -275,8 +281,8 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         return
 
     if mode == 'interact':
-        ans = input('do you want to dvc-commit? (y for yes)')
-        if ans != 'y':
+        flag = Confirm.ask('do you want to dvc-commit?')
+        if not flag:
             return
 
     from watch.utils.simple_dvc import SimpleDVC
@@ -290,8 +296,8 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         return
 
     if mode == 'interact':
-        ans = input('do you want to git commit? (y for yes)')
-        if ans != 'y':
+        flag = Confirm.ask('do you want to git commit?')
+        if not flag:
             return
 
     git_info3 = ub.cmd('git commit -am "new models"', verbose=3, check=True, cwd=dvc_dpath)  # dangerous?
