@@ -712,7 +712,8 @@ python -m watch.tasks.fusion.fit \
     --draw_interval=1m \
     --num_draw=8 \
     --stream_channels=8 \
-    --temporal_dropout=0.5 
+    --temporal_dropout=0.5 \
+    --normalize_inputs=2048
 
 
 export CUDA_VISIBLE_DEVICES=0
@@ -784,7 +785,8 @@ python -m watch.tasks.fusion.fit \
     --name=$EXPERIMENT_NAME \
     --global_change_weight=0.00 \
     --global_class_weight=1.00 \
-    --global_saliency_weight=1.00 
+    --global_saliency_weight=1.00 \
+    --normalize_inputs=2000 
 
 
 export CUDA_VISIBLE_DEVICES=2
@@ -799,7 +801,8 @@ python -m watch.tasks.fusion.fit \
     --name=$EXPERIMENT_NAME \
     --global_change_weight=0.00 \
     --global_class_weight=0.00 \
-    --global_saliency_weight=1.00 
+    --global_saliency_weight=1.00 \
+    --normalize_inputs=2048
 
 
 export CUDA_VISIBLE_DEVICES=3
@@ -814,4 +817,5 @@ python -m watch.tasks.fusion.fit \
     --name=$EXPERIMENT_NAME \
     --global_change_weight=0.00 \
     --global_class_weight=0.00 \
-    --global_saliency_weight=1.00 
+    --global_saliency_weight=1.00 \
+    --normalize_inputs=4096

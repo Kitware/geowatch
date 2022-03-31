@@ -9,7 +9,7 @@ import ndsampler
 import numpy as np
 import pathlib
 import pytorch_lightning as pl
-import random
+# import random  # NOQA
 import torch
 import ubelt as ub
 from kwcoco import channel_spec
@@ -982,8 +982,8 @@ class KWCocoVideoDataset(data.Dataset):
                 max_per_vid = int(np.median(freqs))
                 all_chunks = []
                 for vidname, vid_pool in vidname_to_pool.items():
-                    print(len(vid_pool[0]))
-                    print(len(vid_pool[-1]))
+                    # print(len(vid_pool[0]))
+                    # print(len(vid_pool[-1]))
                     rechunked_video_pool = list(util_iter.chunks(vid_pool, nchunks=max_per_vid))
                     all_chunks.extend(rechunked_video_pool)
 
@@ -1039,13 +1039,13 @@ class KWCocoVideoDataset(data.Dataset):
             # We have too many negatives, so we are going to "group" negatives
             # and when we select one we will really just randomly select from
             # within the pool
-            if max_neg > 0:
-                negative_pool = list(util_iter.chunks(new_sample_grid['negatives_indexes'], nchunks=max_neg))
-                self.negative_pool = negative_pool
-                neg_pool_chunksizes = set(map(len, self.negative_pool))
-                print('neg_pool_chunksizes = {!r}'.format(neg_pool_chunksizes))
-            else:
-                self.negative_pool = []
+            # if max_neg > 0:
+            #     negative_pool = list(util_iter.chunks(new_sample_grid['negatives_indexes'], nchunks=max_neg))
+            #     self.negative_pool = negative_pool
+            #     # neg_pool_chunksizes = set(map(len, self.negative_pool))
+            #     # print('neg_pool_chunksizes = {!r}'.format(neg_pool_chunksizes))
+            # else:
+            #     self.negative_pool = []
 
             # This is in a per-iteration basis
             # self.n_pos = n_pos
