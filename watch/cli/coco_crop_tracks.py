@@ -207,7 +207,7 @@ def main(cmdline=0, **kwargs):
 
 
 def make_track_kwcoco_manifest(dst, dst_bundle_dpath, tid_to_assets,
-                               target_gds=1):
+                               target_gsd=1):
     from watch.utils import kwcoco_extensions
     # Make the new kwcoco file where 1 track is mostly 1 video
     # TODO: we could crop the kwcoco annotations here too, but

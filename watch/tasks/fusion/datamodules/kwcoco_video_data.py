@@ -886,6 +886,7 @@ class KWCocoVideoDataset(data.Dataset):
                 graph.nodes[name].update(**_catinfo)
 
         self.background_classes = set(heuristics.BACKGROUND_CLASSES) & set(graph.nodes)
+        self.negative_classes = set(heuristics.NEGATIVE_CLASSES) & set(graph.nodes)
         self.ignore_classes = set(heuristics.IGNORE_CLASSNAMES) & set(graph.nodes)
         self.undistinguished_classes = set(heuristics.UNDISTINGUISHED_CLASSES) & set(graph.nodes)
         self.classes = kwcoco.CategoryTree(graph)
@@ -918,7 +919,8 @@ class KWCocoVideoDataset(data.Dataset):
             )
             self.length = len(new_sample_grid['targets'])
         else:
-            negative_classes = (self.ignore_classes | self.background_classes)
+            negative_classes = (
+                self.ignore_classes | self.background_classes | self.negative_classes)
             new_sample_grid = sample_video_spacetime_targets(
                 sampler.dset, window_dims=sample_shape,
                 window_overlap=window_overlap,
@@ -939,6 +941,101 @@ class KWCocoVideoDataset(data.Dataset):
             if n_neg > max_neg:
                 print('restrict to max_neg = {!r}'.format(max_neg))
 
+            target_vidids = [v['video_id'] for v in new_sample_grid['targets']]
+            target_posbit = kwarray.boolmask(new_sample_grid['positives_indexes'], len(new_sample_grid['targets']))
+
+            # import kwarray
+            # rng = kwarray.ensure_rng(None)
+
+            if 1:
+                import pandas as pd
+                df = pd.DataFrame({
+                    'vidid': target_vidids,
+                    'vidname': self.sampler.dset.videos(target_vidids).lookup('name'),
+                    'is_positive': target_posbit,
+                }).reset_index(drop=False)
+
+                key_to_group = dict(list(df.groupby(['vidname', 'is_positive'])))
+                vidname_to_pool = {}
+                for key, group in key_to_group.items():
+                    vidname, flag = key
+                    if flag:
+                        pos_vid_idxs = group['index']
+                        other_key = (vidname, False)
+                        if other_key in key_to_group:
+                            other = key_to_group[other_key]
+                            neg_vid_idxs = other['index']
+                        else:
+                            neg_vid_idxs = []
+                            other = []
+                        n_pos = len(group)
+                        n_neg = len(other)
+                        max_neg = min(int(max(0, (neg_to_pos_ratio * n_pos))), n_neg)
+                        print(f'restrict to {max_neg=} in {vidname=} with {n_pos=}')
+                        # neg_vid_idxs = posneg_groups[False]['index'].values
+                        neg_vid_pool_ = list(util_iter.chunks(neg_vid_idxs, nchunks=max_neg))
+                        pos_vid_pool_ = list(util_iter.chunks(pos_vid_idxs, nchunks=n_pos))
+                        vid_pool = pos_vid_pool_ + neg_vid_pool_
+                        vidname_to_pool[vidname] = vid_pool
+
+                freqs = list(map(len, vidname_to_pool.values()))
+                max_per_vid = int(np.median(freqs))
+                all_chunks = []
+                for vidname, vid_pool in vidname_to_pool.items():
+                    print(len(vid_pool[0]))
+                    print(len(vid_pool[-1]))
+                    rechunked_video_pool = list(util_iter.chunks(vid_pool, nchunks=max_per_vid))
+                    all_chunks.extend(rechunked_video_pool)
+
+                self.nested_pool = NestedPool(all_chunks)
+
+                # for key, group in df.groupby(['vidname', 'is_positive']):
+                #     print('key = {!r}'.format(key))
+                #     print(len(group))
+
+                # for is_positive, group in df.groupby('is_positive'):
+                #     print('is_positive = {!r}'.format(is_positive))
+                #     print(ub.dict_hist(group.vidid))
+                #     neg_vid_pool_1 = list(ub.chunks(neg_vid_idxs, nchunks=max_neg))
+                #     pos_vid_pool_ = list(ub.chunks(pos_vid_idxs, chunksize=1))
+
+                # for vidid, group in df.groupby('vidid'):
+                #     print(ub.dict_hist(group.vidid))
+
+                #     total = len(group)
+                #     n_pos = group['is_positive'].sum()
+                #     n_neg = total - n_pos
+                #     # print('vidid = {!r}'.format(vidid))
+                #     # print('total = {!r}'.format(total))
+                #     # print('n_pos = {!r}'.format(n_pos))
+                #     posneg_groups = dict(list(group.groupby('is_positive')))
+
+                #     max_neg = min(int(max(0, (neg_to_pos_ratio * n_pos))), n_neg)
+                #     if False in posneg_groups:
+                #         neg_vid_idxs = posneg_groups[False]['index'].values
+                #     else:
+                #         neg_vid_idxs = None
+                #     pos_vid_idxs = posneg_groups[True]['index'].values
+                #     if n_neg > max_neg:
+                #         print(f'restrict to {max_neg=} in {vidid=}')
+                #     neg_vid_pool_ = list(util_iter.chunks(neg_vid_idxs, nchunks=max_neg))
+                #     pos_vid_pool_ = list(util_iter.chunks(pos_vid_idxs, nchunks=n_pos))
+
+                #     video_pool = pos_vid_pool_ + neg_vid_pool_
+                #     grouped_video_pools.append(video_pool)
+
+            if 0:
+                import netharn as nh
+                nh.data.collate._debug_inbatch_shapes(all_chunks)
+
+            # Rebalance over target videos
+            # vidid_to_freq = ub.dict_hist([v['video_id'] for v in self.new_sample_grid['targets']])
+            # vidids = np.array(list(vidid_to_freq.keys()))
+            # freqs = np.array(list(vidid_to_freq.values()))
+            # self.sampler.dset.videos(vidids).lookup('name')
+            # target_video_poolsize = int(np.median(freqs))
+            # np.mean(freqs)
+
             # We have too many negatives, so we are going to "group" negatives
             # and when we select one we will really just randomly select from
             # within the pool
@@ -951,17 +1048,13 @@ class KWCocoVideoDataset(data.Dataset):
                 self.negative_pool = []
 
             # This is in a per-iteration basis
-            self.n_pos = n_pos
-            self.n_neg = len(self.negative_pool)
-            self.length = self.n_pos + self.n_neg
+            # self.n_pos = n_pos
+            # self.n_neg = len(self.negative_pool)
+            self.length = len(self.nested_pool)
 
             if max_epoch_length is not None:
                 self.length = min(self.length, max_epoch_length)
 
-            # print('len(neg_pool) ' + str(len(self.negative_pool)))
-            # print('self.n_pos = {!r}'.format(self.n_pos))
-            # print('self.n_neg = {!r}'.format(self.n_neg))
-            # print('self.length = {!r}'.format(self.length))
         self.new_sample_grid = new_sample_grid
 
         self.window_overlap = window_overlap
@@ -1223,7 +1316,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> channels = 'B10|B8|B1'
             >>> sample_shape = (4, 96, 96)
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, neg_to_pos_ratio=0.1, true_multimodal=True)
-            >>> item = self[self.n_pos + 1]
+            >>> item = self[-1]
             >>> canvas = self.draw_item(item)
             >>> # xdoctest: +REQUIRES(--show)
             >>> import kwplot
@@ -1299,11 +1392,16 @@ class KWCocoVideoDataset(data.Dataset):
                 # TODO: we can generalize this into generic pools
                 # that happend to correspond to positive / negative or any
                 # other distribution of examples we want
-                if index < self.n_pos:
-                    tr_idx = self.new_sample_grid['positives_indexes'][index]
-                else:
-                    neg_chunk = self.negative_pool[self.n_pos - index]
-                    tr_idx = random.choice(neg_chunk)
+                # if index < self.n_pos:
+                tr_idx = self.nested_pool.sample()
+
+                if 0:
+                    tr_idx = self.nested_pool.sample()
+                    tr = self.new_sample_grid['targets'][tr_idx]
+                # tr_idx = self.new_sample_grid['positives_indexes'][index]
+                # else:
+                #     neg_chunk = self.negative_pool[self.n_pos - index]
+                # tr_idx = random.choice(neg_chunk)
                 tr = self.new_sample_grid['targets'][tr_idx]
 
         tr_ = tr.copy()
@@ -3794,6 +3892,19 @@ def make_track_based_spatial_samples(coco_dset):
             negative_boxes.draw(setlim=1, color='red', fill=True)
             positives.draw(color='limegreen')
             positives_samples.draw(color='green')
+
+
+class NestedPool(list):
+    def __init__(nested, pools, rng=None):
+        super().__init__(pools)
+        nested.rng = rng = kwarray.ensure_rng(rng)
+        nested.pools = pools
+
+    def sample(nested):
+        chosen = nested
+        while ub.iterable(chosen):
+            chosen = nested.rng.randint(0, len(chosen))
+        return chosen
 
 
 def _boxes_snap_to_edges(given_box, snap_target):
