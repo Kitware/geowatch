@@ -1977,15 +1977,15 @@ class KWCocoVideoDataset(data.Dataset):
                 # that have nodata.
                 DOWNWEIGHT_NAN_REGIONS = 1
                 if DOWNWEIGHT_NAN_REGIONS:
-                    nodata_total = 0
+                    nodata_total = 0.0
                     for mask in mode_invalid_masks.values():
                         if mask is None:
                             nodata_total += 0
                         else:
                             if len(mask.shape) == 3:
-                                nodata_total += (mask.sum(axis=2) / mask.shape[2])
+                                nodata_total += ((mask.sum(axis=2) / mask.shape[2])).astype(float)
                             else:
-                                nodata_total += mask
+                                nodata_total += mask.astype(float)
                     # nodata_total = np.add.reduce([0 if mask is None else mask.sum(axis=2) / mask.shape[2] for mask in mode_invalid_masks.values()])
                     total_bands = len(mode_invalid_masks)
                     nodata_frac = nodata_total / total_bands

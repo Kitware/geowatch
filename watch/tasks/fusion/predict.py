@@ -298,10 +298,11 @@ def predict(cmdline=False, **kwargs):
                 for code in tokenizers.keys():
                     unique_channel_streams.add(code)
             hack_model_spec = kwcoco.ChannelSpec.coerce(','.join(unique_channel_streams))
-            if hack_model_spec != datamodule_channel_spec:
-                print('Warning: reported model channels may be incorrect due to bad train hyperparams')
-                hack_common = hack_model_spec.intersection(datamodule_channel_spec)
-                datamodule_vars['channels'] = hack_common
+            if datamodule_channel_spec is not None:
+                if hack_model_spec != datamodule_channel_spec:
+                    print('Warning: reported model channels may be incorrect due to bad train hyperparams')
+                    hack_common = hack_model_spec.intersection(datamodule_channel_spec)
+                    datamodule_vars['channels'] = hack_common
 
     datamodule = datamodule_class(
         **datamodule_vars

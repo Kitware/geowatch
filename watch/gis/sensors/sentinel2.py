@@ -63,11 +63,14 @@ def sentinel2_grid():
         >>> area_stats = kwarray.stats_dict(all_utm_areas)
         >>> print('area_stats = {}'.format(ub.repr2(
         >>>     area_stats, nl=1, precision=0, align=':')))
+
+        ...
         area_stats = {
             'mean' : 8463072768,
             'std'  : 3774869504,
             'min'  : 65260336,
             'max'  : 12056040448,
+            ...
             'shape': (100,),
         }
     """
