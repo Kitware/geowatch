@@ -1120,21 +1120,15 @@ class KWCocoVideoDataset(data.Dataset):
                 tr_['space_slice'] = space_box.astype(int).to_slices()[0]
 
             # Temporal augmentation
-            print('temporal_augment_rate = {!r}'.format(temporal_augment_rate))
             if rng.rand() < temporal_augment_rate:
                 old_gids = tr_['gids']
                 time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
                 valid_gids = self.new_sample_grid['vidid_to_valid_gids'][vidid]
                 new_gids = list(ub.take(valid_gids, time_sampler.sample(tr_['main_idx'])))
-                if 1:
-                    print('Temporal resample')
-                    print('old_gids = {!r}'.format(old_gids))
-                    print('new_gids = {!r}'.format(new_gids))
                 tr_['gids'] = new_gids
 
             temporal_dropout_rate = self.temporal_dropout
             do_temporal_dropout = rng.rand() < temporal_dropout_rate
-            print('do_temporal_dropout = {!r}'.format(do_temporal_dropout))
             if do_temporal_dropout:
                 # Temporal dropout
                 gids = tr_['gids']
@@ -1190,7 +1184,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> channels = 'B10|B8a|B1|B8'
             >>> sample_shape = (5, 530, 610)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, diff_inputs=0, dist_weights=1)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, diff_inputs=0, dist_weights=1, temporal_dropout=0.5)
             >>> item = self[0]
             >>> canvas = self.draw_item(item)
             >>> # xdoctest: +REQUIRES(--show)
