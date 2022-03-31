@@ -117,8 +117,6 @@ def _demo_convert_latlon_to_utm():
     xgrid, ygrid = _torch_meshgrid(utm_x_basis, utm_y_basis)
 
 
-
-
 def find_local_meter_epsg_crs(geom_crs84):
     """
     Find the "best" meter based CRS for a smallish geographic region.
