@@ -304,6 +304,12 @@ def predict(cmdline=False, **kwargs):
                     hack_common = hack_model_spec.intersection(datamodule_channel_spec)
                     datamodule_vars['channels'] = hack_common
 
+    DZYNE_MODEL_HACK = 1
+    if DZYNE_MODEL_HACK:
+        if args.package_fpath.stem == 'lc_rgb_fusion_model_package':
+            # This model has an issue with the L8 features it was trained on
+            datamodule_vars['exclude_sensors'] = ['L8']
+
     datamodule = datamodule_class(
         **datamodule_vars
     )
@@ -592,7 +598,9 @@ def predict(cmdline=False, **kwargs):
             # xdev.embed()
 
             # Predict on the batch
-            outputs = method.forward_step(batch, with_loss=False)
+            import xdev
+            with xdev.embed_on_exception_context:
+                outputs = method.forward_step(batch, with_loss=False)
             outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
 
             if got_outputs is None:
