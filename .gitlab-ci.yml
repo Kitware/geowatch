@@ -27,7 +27,7 @@
             - [ ] Optimize caching and creation of the conda environments
 
             - [X] Allow some network tests to run (and ensure we cache the
-                  $HOME/.cache/smart_watch) directory to prevent large
+                  $HOME/.cache/watch) directory to prevent large
                   downloads.
 
             - [ ] Create a minimal no-network test suite
