@@ -2535,6 +2535,16 @@ class KWCocoVideoDataset(data.Dataset):
             import xdev
             globals().update(xdev.get_func_kwargs(KWCocoVideoDataset.draw_item))
         """
+        if item is None:
+            # BIG RED X
+            # h, w = vertical_stack[-1].shape[0:2]
+            h = w = (max_dim or 224)
+            bad_canvas = kwimage.draw_text_on_image(
+                {'width': w, 'height': h}, 'X', org=(w // 2, h // 2),
+                valign='center', halign='center', fontScale=10,
+                color='red')
+            return bad_canvas
+
         builder = BatchVisualizationBuilder(
             item=item, item_output=item_output,
             default_combinable_channels=self.default_combinable_channels,
