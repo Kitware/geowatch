@@ -1496,7 +1496,7 @@ class KWCocoVideoDataset(data.Dataset):
                     is_cloud_iffy = np.logical_or.reduce([cloud_im == b for b in cloud_bits])
                     cloud_frac = is_cloud_iffy.mean()
                     if cloud_frac > 0.5:
-                        print('cloud_frac = {!r}'.format(cloud_frac))
+                        # print('cloud_frac = {!r}'.format(cloud_frac))
                         force_bad = True
                         # valid_cloud_vals = cloud_im[np.isnan(cloud_im)]
 
@@ -1645,10 +1645,14 @@ class KWCocoVideoDataset(data.Dataset):
 
         good_gids = [gid for gid, flag in gid_to_isbad.items() if not flag]
         if len(good_gids) == 0:
-            # Force at least a few to be "good"
-            for gid in tr['gids']:
-                gid_to_isbad[gid] = False
-            good_gids = [gid for gid, flag in gid_to_isbad.items() if not flag]
+            # Cannot force any good sample, try and return None
+            return None
+            if 0:
+                # We cant always do this
+                # Force at least a few to be "good"
+                for gid in tr['gids']:
+                    gid_to_isbad[gid] = False
+                good_gids = [gid for gid, flag in gid_to_isbad.items() if not flag]
 
         final_gids = ub.oset(video_gids) & good_gids
         # requested_channel_order = self.input_channels.spec.split('|')
@@ -1719,6 +1723,20 @@ class KWCocoVideoDataset(data.Dataset):
                         frame_dets: kwimage.Detections = sample['annots']['frame_dets'][0]
                         break
                 if frame_dets is None:
+                    # AssertionError: Did not sample correctly. Please send this info to Jon:
+                    """
+                    dset=<CocoDataset(tag=data_nowv_train.kwcoco.json, n_anns=510788, n_imgs=6018, n_videos=24, n_cats=9) at 0x7f552fa4ab50>
+                    gid=5247
+                    index = tr = {
+                        'main_idx': 4, 'video_id': 11, 'gids': [5247, 5284, 5324, 5332, 5357, 5391],
+                        'main_gid': 5247,
+                        'space_slice': (slice(2965, 3346, None), slice(267, 648, None)),
+                        'label': 'positive_center', 'resampled': -1
+                    }
+                    tr_={'main_idx': 4, 'video_id': 11, 'gids': OrderedSet([5247, 5284, 5324, 5332, 5357, 5391]), 'main_gid': 5247, 'space_slice': (slice(3081, 3462, None), slice(173, 554, None)), 'label': 'positive_center', 'resampled': -1, 'as_xarray': False, 'use_experimental_loader': 1, 'channels': <ChannelSpec(blue|green|red|nir|swir16|swir22) at 0x7f549fa3e280>}
+
+                    """
+
                     raise AssertionError(ub.paragraph(
                         f'''
                         Did not sample correctly. Please send this info to Jon:
@@ -2231,7 +2249,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> sample_shape = (3, 96, 96)
+            >>> sample_shape = (6, 256, 256)
             >>> channels = 'blue|green|red|nir|swir16'
             >>> #channels = 'rice_field|cropland|water|inland_water|river_or_stream|sebkha|snow_or_ice_field|bare_ground|sand_dune|built_up|grassland|brush|forest|wetland|road'
             >>> #channels = 'matseg_0|matseg_1|matseg_2|matseg_3|matseg_4'
