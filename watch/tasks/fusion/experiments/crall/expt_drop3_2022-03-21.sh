@@ -45,17 +45,12 @@ gather-checkpoints-repackage(){
         --dvc_dpath="$DVC_DPATH" \
         --storage_dpath="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages" \
         --train_dpath="$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/runs/*/lightning_logs" \
+        --push_jobs=8 \
         --mode=interact
 }
 
 
 schedule-prediction-and-evlauation(){
-    # Note: change backend to tmux if slurm is not installed
-    DVC_DPATH=$(python -m watch.cli.find_dvc)
-    DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
-    EXPT_GROUP_CODE=eval3_candidates
-    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
 
     DVC_DPATH=$(python -m watch.cli.find_dvc)
     cd "$DVC_DPATH" 
@@ -65,11 +60,17 @@ schedule-prediction-and-evlauation(){
     # - [ ] Argument for test time augmentation.
     # - [ ] Argument general predict parameter grid
     # - [ ] Can a task request that slurm only schedule it on a specific GPU?
+    # Note: change backend to tmux if slurm is not installed
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+    EXPT_GROUP_CODE=eval3_candidates
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1" \
-            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*EXPERIMENT*/*.pt" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
             --test_dataset="$VALI_FPATH" \
-            --run=1 --skip_existing=True --backend=slurm 
+            --run=1 --skip_existing=True --backend=slurm
 
     # Be sure to DVC add the eval results after!
     DVC_DPATH=$(python -m watch.cli.find_dvc)
@@ -84,6 +85,20 @@ schedule-prediction-and-evlauation(){
     DVC_DPATH=$(python -m watch.cli.find_dvc)
     cd "$DVC_DPATH" 
     dvc pull -r aws models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
+}
+
+
+schedule-prediction-and-evaluate-team-models(){
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+    EXPT_GROUP_CODE=eval3_candidates
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="0,1" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/DZYNE*/*.pt" \
+            --test_dataset="$VALI_FPATH" \
+            --run=0 --skip_existing=True --backend=serial
 }
 
 

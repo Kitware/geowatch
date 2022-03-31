@@ -300,7 +300,10 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         if not flag:
             return
 
-    git_info3 = ub.cmd('git commit -am "new models"', verbose=3, check=True, cwd=dvc_dpath)  # dangerous?
+    import platform
+    hostname = platform.node()
+
+    git_info3 = ub.cmd(f'git commit -am "new models from {hostname}"', verbose=3, check=True, cwd=dvc_dpath)  # dangerous?
     assert git_info3['ret'] == 0
     git_info2 = ub.cmd('git push', verbose=3, check=True, cwd=dvc_dpath)
     assert git_info2['ret'] == 0

@@ -214,10 +214,28 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     def package_metadata(package_fpath):
         # Hack for choosing one model from this "type"
-        import xdev
-        with xdev.embed_on_exception_context:
+        try:
             epoch_num = int(package_fpath.name.split('epoch=')[1].split('-')[0])
-        expt_name = package_fpath.name.split('_epoch')[0]
+            expt_name = package_fpath.name.split('_epoch')[0]
+        except Exception:
+            # Try to read package metadata
+            pkg_zip = ub.zopen(package_fpath, ext='.pt')
+            found = None
+            for member in pkg_zip.namelist():
+                # if member.endswith('model.pkl'):
+                if member.endswith('fit_config.yaml'):
+                    found = member
+                    break
+            if not found:
+                raise Exception(f'{package_fpath=} does not conform to name spec and does not seem to be a torch package with a package_header.json file')
+            else:
+                import yaml
+                config_file = ub.zopen(package_fpath / found, mode='r', ext='.pt')
+                config = yaml.safe_load(config_file)
+                expt_name = config['name']
+                # No way to introspect this (yet), so hack it
+                epoch_num = -1
+
         info = {
             'name': expt_name,
             'epoch': epoch_num,
@@ -260,8 +278,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
     #         packages_to_eval.append(info)
     #         # break
 
-    tmux_schedule_dpath = dvc_dpath / '_tmp_tmux_schedule'
-    tmux_schedule_dpath.mkdir(exist_ok=True)
+    queue_dpath = dvc_dpath / '_cmd_queue_schedule'
+    queue_dpath.mkdir(exist_ok=True)
 
     gpus = config['gpus']
     print('gpus = {!r}'.format(gpus))
@@ -286,19 +304,13 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     # queue = tmux_queue.TMUXMultiQueue(
     #     size=len(GPUS), environ=environ, gres=GPUS,
-    #     dpath=tmux_schedule_dpath)
+    #     dpath=queue_dpath)
 
     # queue = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
-    if config['backend'] == 'slurm':
-        from watch.utils import slurm_queue
-        queue = slurm_queue.SlurmQueue(name='schedule-eval')
-    elif config['backend'] == 'tmux':
-        from watch.utils import tmux_queue
-        queue = tmux_queue.TMUXMultiQueue(
-            name='schedule-eval', size=len(GPUS), environ=environ,
-            dpath=tmux_schedule_dpath, gres=GPUS)
-    else:
-        raise KeyError(config['backend'])
+    from watch.utils import cmd_queue
+    queue = cmd_queue.Queue.create(config['backend'], name='schedule-eval',
+                                   size=len(GPUS), environ=environ,
+                                   dpath=queue_dpath, gres=GPUS)
 
     virtualenv_cmd = config['virtualenv_cmd']
     if virtualenv_cmd:

@@ -1553,26 +1553,16 @@ class MultimodalTransformer(pl.LightningModule):
 
                 # Attempt to standardize some form of package metadata that can
                 # allow for model importing with fewer hard-coding requirements
+
+                # TODO:
+                # Add information about how this was trained, and what epoch it
+                # was saved at.
                 package_header = {
                     'version': '0.1.0',
                     'arch_name': arch_name,
                     'module_name': module_name,
                 }
 
-                if 0:
-                    # old encoding (keep for a while)
-                    exp.save_pickle(
-                        'kitware_package_header', 'kitware_package_header.pkl',
-                        package_header
-                    )
-
-                    # new encoding
-                    exp.save_text(
-                        'kitware_package_header', 'kitware_package_header.json',
-                        json.dumps(package_header)
-                    )
-
-                # move to this?
                 exp.save_text(
                     'package_header', 'package_header.json',
                     json.dumps(package_header)

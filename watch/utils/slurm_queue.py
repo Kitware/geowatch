@@ -380,7 +380,7 @@ class SlurmQueue(cmd_queue.Queue):
         # console.print(Panel(Syntax(code, 'bash'), title=str(self.fpath)))
 
 
-SLURM_NOTES = """
+SLURM_NOTES = r"""
 This shows a few things you can do with slurm
 
 # Queue a job in the background
@@ -457,6 +457,16 @@ sudo scontrol update nodename=namek state=idle
     afterok:jobid[:jobid...]	job can begin after the specified jobs have run to completion with an exit code of zero (see the user guide for caveats).
     singleton	jobs can begin execution after all previously launched jobs with the same name and user have ended. This is useful to collate results of a swarm or to send a notification at the end of a swarm.
 
+
+
+
+sbatch \
+    --job-name="tester1" \
+    --output="test-job-%j-%x.out" \
+    --cpus-per-task=1 --mem=1000 --gres="gpu:1" \
+    --gpu-bind "map_gpu:2,3" \
+    --wrap="python -c \"import torch, os; print(os.getenv('CUDA_VISIBLE_DEVICES', 'x')) and torch.rand(1000).to(0)\""
+squeue
 
 
 """
