@@ -10,7 +10,7 @@ PER_PROCESS_THREAD_LOCKS = {}
 
 
 def grabdata_girder(api_url, resource_id, name=None, dpath=None, hash_prefix=None,
-                    appname='smart_watch', api_key=None,
+                    appname='watch', api_key=None,
                     verbose=1):
     """
     Downloads and caches a file or folder from girder.
@@ -31,7 +31,7 @@ def grabdata_girder(api_url, resource_id, name=None, dpath=None, hash_prefix=Non
             hash provided by girder matches this prefix. If the item is a
             folder, then this is not used.
 
-        appname (str, default='smart_watch'):
+        appname (str, default='watch'):
             if ``dpath`` is not given, then the ubelt app_cache_dir for this
             application name is used.
 

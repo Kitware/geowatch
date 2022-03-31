@@ -221,7 +221,7 @@ def grab_nitf_fpath(key=None, safe=True):
     sha512 = info['sha512']
     url = base + url_fname
     # try:
-    fpath = ub.grabdata(url, appname='smart_watch/demodata/nitf',
+    fpath = ub.grabdata(url, appname='watch/demodata/nitf',
                         fname=fname, hash_prefix=sha512)
     # except Exception:
     #     if safe:
@@ -233,7 +233,7 @@ def grab_nitf_fpath(key=None, safe=True):
     #         _orig_context = ssl._create_default_https_context
     #         try:
     #             ssl._create_default_https_context = ssl._create_unverified_context
-    #             fpath = ub.grabdata(url, appname='smart_watch/demodata/nitf',
+    #             fpath = ub.grabdata(url, appname='watch/demodata/nitf',
     #                                 hash_prefix=sha512)
     #         finally:
     #             # Restore ssl context if we hacked it
@@ -294,7 +294,7 @@ def _build_test_image_table():
         # fpath = grab_nitf_fpath(fname, safe=True)
         base = 'https://gwg.nga.mil/ntb/baseline/software/testfile/Nitfv2_1/'
         url = base + fname
-        fpath = ub.grabdata(url, appname='smart_watch/demodata/nitf')
+        fpath = ub.grabdata(url, appname='watch/demodata/nitf')
         sha512 = ub.hash_file(fpath)[0:32]
         os.stat(fpath)
         new_row = ub.dict_union({
