@@ -18,7 +18,7 @@ class AutoResumer(pl.callbacks.Callback):
         >>> default_root_dir = ub.get_app_cache_dir('lightning_ext/test/auto_resume')
         >>> ub.delete(default_root_dir)
         >>> # Test starting a model without any existing checkpoints
-        >>> trainer = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=5)
+        >>> trainer = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=2)
         >>> model = LightningToyNet2d()
         >>> trainer.fit(model)
         >>> assert len(list((util_path.coercepath(trainer.logger.log_dir) / 'checkpoints').glob('*'))) > 0
@@ -26,7 +26,7 @@ class AutoResumer(pl.callbacks.Callback):
         >>> print(ub.repr2(list(util_path.tree(default_root_dir)), sort=0))
         >>> #
         >>> # Make a new trainer that should auto-resume
-        >>> trainer = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=5)
+        >>> trainer = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=2)
         >>> model = LightningToyNet2d()
         >>> trainer.fit(model)
         >>> print(ub.repr2(list(util_path.tree(default_root_dir)), sort=0))
@@ -34,7 +34,7 @@ class AutoResumer(pl.callbacks.Callback):
         >>> assert len(list((util_path.coercepath(trainer.logger.log_dir) / 'checkpoints').glob('*'))) == 0
         >>> #
         >>> # Increasing max epochs will let it train for longer
-        >>> trainer = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=6)
+        >>> trainer = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=3)
         >>> model = LightningToyNet2d()
         >>> trainer.fit(model)
         >>> print(ub.repr2(list(util_path.tree(util_path.coercepath(default_root_dir))), sort=0))
@@ -76,9 +76,16 @@ class AutoResumer(pl.callbacks.Callback):
             # called, but it wont use it, so it is currently safe to overwrite
             # it with a new one that has the "correct" resume_from_checkpoint
             # argument.
-            CheckpointConnector = trainer.checkpoint_connector.__class__
-            trainer.checkpoint_connector = CheckpointConnector(
-                trainer, resume_from_checkpoint)
+
+            attrname = '_checkpoint_connector'
+            if not hasattr(trainer, attrname):
+                # lightning < 1.6
+                attrname = 'checkpoint_connector'
+            checkpoint_connector = getattr(trainer, attrname)
+
+            CheckpointConnector = checkpoint_connector.__class__
+            setattr(trainer, attrname, CheckpointConnector(
+                trainer, resume_from_checkpoint))
 
     def recent_checkpoints(self, train_dpath):
         """
