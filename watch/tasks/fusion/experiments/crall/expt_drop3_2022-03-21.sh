@@ -701,7 +701,7 @@ python -m watch.tasks.fusion.fit \
     --max_epochs=80 \
     --patience=80 \
     --dist_weight=True \
-    --time_steps=6 \
+    --time_steps=7 \
     --time_sampling=hardish3 \
     --time_span=7m \
     --tokenizer=linconv \

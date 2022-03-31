@@ -282,13 +282,12 @@ prepare_wv_crop_from_sites(){
     DVC_DPATH=$(python -m watch.cli.find_dvc)-hdd
     cd "$DVC_DPATH"
 
-    DATASET_SUFFIX=Drop3-TA1-SiteCrops-2022-03-30 
+    DATASET_SUFFIX=Drop3-TA1-SiteCropsWV-2022-03-30 
     python -m watch.cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --s3_fpath \
-            s3://kitware-smart-watch-data/processed/ta1/ALL_ANNOTATED_REGIONS_TA-1_PROCESSED_20220222.unique.input \
             s3://kitware-smart-watch-data/processed/ta1/TA-1_PROCESSED_TA-2_SUPERREGIONS_WV_ONLY.unique.input \
-        --collated True True \
+        --collated True \
         --dvc_dpath="$DVC_DPATH" \
         --aws_profile=iarpa \
         --fields_workers=8 \

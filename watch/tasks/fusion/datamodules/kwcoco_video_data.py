@@ -212,6 +212,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         ignore_dilate=11,
         min_spacetime_weight=0.5,
         dist_weights=False,
+        use_cloudmask=True,
     ):
         """
         Args:
@@ -279,6 +280,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             ignore_dilate=ignore_dilate,
             min_spacetime_weight=min_spacetime_weight,
             dist_weights=dist_weights,
+            use_cloudmask=use_cloudmask,
         )
         for _k, _v in self.common_dataset_kwargs.items():
             setattr(self, _k, _v)
@@ -432,6 +434,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
         parser.add_argument(
             '--dist_weights', default=0, type=smartcast, help=ub.paragraph('To use distance-transform based weights on annotations or not'))
+
+        parser.add_argument(
+            '--use_cloudmask', default=1, type=int, help=ub.paragraph('Allow the dataloader to use the cloud mask to skip frames'))
 
         return parent_parser
 
@@ -840,9 +845,10 @@ class KWCocoVideoDataset(data.Dataset):
         use_conditional_classes=True,
         ignore_dilate=11,
         min_spacetime_weight=0.5,
-        dist_weights=False
+        dist_weights=False,
+        use_cloudmask=1,
     ):
-
+        self.use_cloudmask = use_cloudmask
         self.dist_weights = dist_weights
         self.match_histograms = match_histograms
         self.normalize_perframe = normalize_perframe
@@ -1121,7 +1127,7 @@ class KWCocoVideoDataset(data.Dataset):
 
             # Temporal augmentation
             if rng.rand() < temporal_augment_rate:
-                old_gids = tr_['gids']
+                # old_gids = tr_['gids']
                 time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
                 valid_gids = self.new_sample_grid['vidid_to_valid_gids'][vidid]
                 new_gids = list(ub.take(valid_gids, time_sampler.sample(tr_['main_idx'])))
@@ -1156,16 +1162,20 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import ndsampler
             >>> import kwcoco
             >>> dvc_dpath = watch.find_smart_dvc_dpath()
-            >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
+            >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
+            >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data_nowv_train.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+            >>> rng = kwarray.ensure_rng(0)
+            >>> vidid = rng.choice(coco_dset.videos())
+            >>> coco_dset = coco_dset.subset(coco_dset.images(vidid=vidid))
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> self = KWCocoVideoDataset(
             >>>     sampler,
-            >>>     sample_shape=(3, 224, 224),
+            >>>     sample_shape=(5, 224, 224),
             >>>     window_overlap=0,
             >>>     #channels="ASI|MF_Norm|AF|EVI|red|green|blue|swir16|swir22|nir",
             >>>     channels="red|green|blue|nir",
-            >>>     neg_to_pos_ratio=0, time_sampling='auto', diff_inputs=0,
+            >>>     neg_to_pos_ratio=0, time_sampling='auto', diff_inputs=0, temporal_dropout=0.5,
             >>> )
             >>> self.requested_tasks['change'] = False
             >>> item = self[5]
@@ -1175,6 +1185,17 @@ class KWCocoVideoDataset(data.Dataset):
             >>> kwplot.autompl()
             >>> kwplot.imshow(canvas)
             >>> kwplot.show_if_requested()
+
+        Ignore:
+            import kwplot
+            kwplot.autompl()
+            import xdev
+            sample_indices = list(range(len(self)))
+            for index in xdev.InteractiveIter(sample_indices):
+                item = self[index]
+                canvas = self.draw_item(item)
+                kwplot.imshow(canvas)
+                xdev.InteractiveIter.draw()
 
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
@@ -1325,7 +1346,22 @@ class KWCocoVideoDataset(data.Dataset):
         # 4 => cloud
         # 255 => no observation
 
+        # However, in my data I seem to see:
+        # Unique values   8,  16,  65, 128
+
+        # These are specs
+        # https://smartgitlab.com/TE/standards/-/wikis/Data-Output-Specifications#quality-band
+
         # TODO: this could be a specially handled frame like ASI.
+        # Bits
+        # 0 T&E binary mask
+        # 1 Dilated Cloud
+        # 2 Cirrus
+        # 3 Cloud
+        # 4 Cloud Shadow
+        # 5 Snow
+        # 6 Clear
+        # 7 Water
 
         def sample_one_frame(gid):
             coco_img = coco_dset.coco_image(gid)
@@ -1335,11 +1371,46 @@ class KWCocoVideoDataset(data.Dataset):
             sample_streams = {}
             first_with_annot = with_annots
 
+            # TODO: Use the cloudmask here
+
             # Flag will be set to true if any heuristic on any channel stream
             # forces us to mark this image as bad.
             force_bad = False
 
+            # TODO: separate ndsampler annotation loading function
+            USE_CLOUDMASK = self.use_cloudmask
+            if USE_CLOUDMASK:
+                if 'cloudmask' in coco_img.channels:
+                    tr_cloud = tr_frame.copy()
+                    tr_cloud['channels'] = 'cloudmask'
+                    # tr_cloud['channels'] = 'red|green|blue'
+                    tr_cloud['antialias'] = False
+                    tr_cloud['interpolation'] = 'nearest'
+                    tr_cloud['nodata'] = None
+                    cloud_sample = sampler.load_sample(
+                        tr_cloud, with_annots=None,
+                        padkw={'constant_values': 255},
+                        dtype=np.float32
+                    )
+                    cloud_im = cloud_sample['im']
+
+                    cloud_bits = 1 << np.array([1, 2, 3])
+                    is_cloud_iffy = np.logical_or.reduce([cloud_im == b for b in cloud_bits])
+                    cloud_frac = is_cloud_iffy.mean()
+                    if cloud_frac > 0.5:
+                        print('cloud_frac = {!r}'.format(cloud_frac))
+                        force_bad = True
+                        # valid_cloud_vals = cloud_im[np.isnan(cloud_im)]
+
+                    # if 0:
+                    #     obj = coco_img.find_asset_obj('cloudmask')
+                    #     fpath = ub.Path(coco_img.bundle_dpath) / obj['file_name']
+
+                    # Skip if more then 50% cloudy
+
             for stream in sensor_channels.streams():
+                if force_bad:
+                    break
                 tr_frame['channels'] = stream
                 # TODO: FIXME: Use the correct nodata value here!
                 sample = sampler.load_sample(
@@ -1415,7 +1486,7 @@ class KWCocoVideoDataset(data.Dataset):
                             chan_num_iffy = is_iffy_mask.sum(axis=(0, 1, 2))
                             chan_num_pxls = np.prod(is_iffy_mask.shape[0:3])
                             chan_frac_iffy = chan_num_iffy / chan_num_pxls
-                            chan_is_bad = chan_frac_iffy > 0.95
+                            chan_is_bad = chan_frac_iffy > 0.4
                             if np.any(chan_is_bad):
                                 force_bad = True
 
@@ -1550,8 +1621,6 @@ class KWCocoVideoDataset(data.Dataset):
                         frame_dets: kwimage.Detections = sample['annots']['frame_dets'][0]
                         break
                 if frame_dets is None:
-                    import xdev
-                    xdev.embed()
                     raise AssertionError(ub.paragraph(
                         f'''
                         Did not sample correctly. Please send this info to Jon:
@@ -3020,7 +3089,7 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
         >>> # dset = coco_dset = demo_kwcoco_multisensor(dates=True, geodata=True, heatmap=True)
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
         >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/combo_DILM_train.kwcoco.json'
-        >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json'
+        >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data_nowv_vali.kwcoco.json'
         >>> big_dset = kwcoco.CocoDataset(coco_fpath)
         >>> dset = big_dset.subset(big_dset.videos(names=['BR_R002']).images.lookup('id')[0])
         >>> window_overlap = 0.0
