@@ -818,7 +818,20 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                     # ann_canvas = dets.draw_on(ann_canvas, color='classes')
                     ann_canvas = dets.boxes.draw_on(ann_canvas, color='blue')
             else:
+                # THERE IS A IN DRAW POLY WITH LARGE POLYS. THIS IS FINE FOR
+                # REAL DATA BUT A TEST FAILS HARD. HACKING THIS OFF FOR NOW
                 with ub.Timer('dets.draw_on 2', verbose=verbose):
+                    if 1:
+                        print('dets.data = {!r}'.format(dets.data))
+                        print('dets.boxes = {!r}'.format(dets.boxes))
+                        print('ann_canvas.shape = {!r}'.format(ann_canvas.shape))
+                    # import xdev
+                    # xdev.embed()
+                    ann_canvas = dets.draw_on(ann_canvas, color='classes')
+                    # if 0:
+                    #     dets.data['segmentations'].draw_on(ann_canvas)
+                    #     poly = dets.data['segmentations'].data[0].data[0]
+                    #     dets.data['segmentations'].data[0].data[0].draw_on(ann_canvas)
                     ann_canvas = dets.draw_on(ann_canvas, color='classes')
                     # ann_canvas = dets.draw_on(ann_canvas)
             ann_canvas = kwimage.ensure_uint255(ann_canvas)
