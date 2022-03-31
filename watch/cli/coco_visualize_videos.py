@@ -696,7 +696,10 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
         if verbose > 1:
             import kwarray
-            chan_stats = kwarray.stats_dict(raw_canvas, axis=2, nan=True)
+            print('raw_canvas.shape = {!r}'.format(raw_canvas.shape))
+            import xdev
+            with xdev.embed_on_exception_context:
+                chan_stats = kwarray.stats_dict(raw_canvas, axis=2, nan=True)
             print('chan_list = {!r}'.format(chan_list))
             print('chan_stats = {}'.format(ub.repr2(chan_stats, nl=1)))
 
@@ -809,7 +812,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             dets = dets.scale(info['scale'])
             dets = dets.translate(info['offset'])
             # info['scale']
-            ONLY_BOXES = 0
+            ONLY_BOXES = 1
             if ONLY_BOXES:
                 with ub.Timer('dets.draw_on 1', verbose=verbose):
                     # ann_canvas = dets.draw_on(ann_canvas, color='classes')

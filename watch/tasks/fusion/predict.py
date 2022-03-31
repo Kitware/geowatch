@@ -22,8 +22,7 @@ from watch.utils import util_parallel
 from watch.utils import util_kwimage
 
 try:
-    import xdev
-    profile = xdev.profile
+    from xdev import profile
 except Exception:
     profile = ub.identity
 
@@ -592,9 +591,7 @@ def predict(cmdline=False, **kwargs):
             # xdev.embed()
 
             # Predict on the batch
-            import xdev
-            with xdev.embed_on_exception_context:
-                outputs = method.forward_step(batch, with_loss=False)
+            outputs = method.forward_step(batch, with_loss=False)
             outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
 
             if got_outputs is None:

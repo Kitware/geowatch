@@ -741,7 +741,7 @@ class SimpleDataCube(object):
                          rpc_align_method='orthorectify', new_dset=None,
                          write_subsets=True, visualize=True, max_workers=0,
                          aux_workers=0, keep='none', target_gsd=10,
-                         max_frames=None, debug_valid_regions=True,
+                         max_frames=None, debug_valid_regions=False,
                          channels=None, verbose=0):
         """
         Given a region of interest, extract an aligned temporal sequence
@@ -1185,7 +1185,9 @@ class SimpleDataCube(object):
                     coco_dset=new_dset, img=new_img, anns=new_anns,
                     channels=channels_,
                     sub_dpath=viz_dpath, space='video',
-                    request_grouped_bands=request_grouped_bands)
+                    request_grouped_bands=request_grouped_bands,
+                    # verbose=3
+                )
 
         if write_subsets:
             print('Writing data subset')
