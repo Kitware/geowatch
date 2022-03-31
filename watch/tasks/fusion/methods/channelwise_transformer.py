@@ -1031,8 +1031,13 @@ class MultimodalTransformer(pl.LightningModule):
         # Initialize truth and probs for each head / item that will be stacked
         batch_head_truths = {k: [] for k in self.heads.keys()}
         batch_head_probs = {k: [] for k in self.heads.keys()}
-
+        skip_flags = []
         for item in batch:
+            # Skip
+            if item is None:
+                skip_flags.append(True)
+                continue
+            skip_flags.append(False)
             probs, item_loss_parts, item_truths = self.forward_item(item, with_loss=with_loss)
             # with xdev.embed_on_exception_context:
             if with_loss:
@@ -1042,6 +1047,9 @@ class MultimodalTransformer(pl.LightningModule):
             # Append the item result to the batch outputs
             for k, v in probs.items():
                 batch_head_probs[k].append(v)
+
+        if all(skip_flags):
+            return None
 
         if 'change' in batch_head_probs:
             outputs['change_probs'] = batch_head_probs['change']
@@ -1096,6 +1104,7 @@ class MultimodalTransformer(pl.LightningModule):
 
             outputs['loss'] = total_loss
             outputs['item_losses'] = item_losses
+
         return outputs
 
     def forward_item(self, item, with_loss=False):

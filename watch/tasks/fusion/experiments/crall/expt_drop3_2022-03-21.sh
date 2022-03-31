@@ -57,6 +57,10 @@ schedule-prediction-and-evlauation(){
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
 
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    cd "$DVC_DPATH" 
+    dvc pull -r aws -R models/fusion/eval3_candidates/packages
+
     # TODO: 
     # - [ ] Argument for test time augmentation.
     # - [ ] Argument general predict parameter grid
@@ -89,7 +93,8 @@ aggregate-results(){
     EXPT_GROUP_CODE=eval3_candidates
     #EXPT_NAME_PAT="*"
     EXPT_NAME_PAT="*"
-    EXPT_NAME_PAT="*Drop3*"
+    #EXPT_NAME_PAT="*Drop3*"
+    EXPT_NAME_PAT="*"
     #EXPT_NAME_PAT="BOTH_TA1_COMBO_TINY_p2w_raw*"
     MODEL_EPOCH_PAT="*"
     PRED_DSET_PAT="*"
@@ -625,3 +630,192 @@ python -m watch.tasks.fusion.fit \
     --normalize_inputs=10000 \
     --stream_channels=8 \
     --temporal_dropout=0.5 
+
+# yardrat 
+# -------
+
+export CUDA_VISIBLE_DEVICES=0
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22"
+EXPERIMENT_NAME=Drop3_SEARCH_BAS_V312
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.00 \
+    --global_saliency_weight=1.00 \
+    --max_epochs=80 \
+    --patience=80 \
+    --dist_weight=True \
+    --time_steps=5 \
+    --time_sampling=soft2 \
+    --time_span=7m \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=200m \
+    --num_draw=0 \
+    --max_epoch_length=10000 \
+    --normalize_inputs=10000 \
+    --stream_channels=8 \
+    --temporal_dropout=0.5 
+
+
+# tooshbrush spotcheck
+# --------------------
+export CUDA_VISIBLE_DEVICES=1
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22"
+EXPERIMENT_NAME=Drop3_SpotCheck_V313
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.00 \
+    --global_saliency_weight=1.00 \
+    --max_epochs=80 \
+    --patience=80 \
+    --num_workers=4 \
+    --dist_weight=True \
+    --time_steps=7 \
+    --time_sampling=hardish3 \
+    --time_span=7m \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=1m \
+    --num_draw=8 \
+    --stream_channels=8 \
+    --temporal_dropout=0.5 \
+    --normalize_inputs=2048
+
+
+export CUDA_VISIBLE_DEVICES=0
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22"
+EXPERIMENT_NAME=Drop3_SpotCheck_V314
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.00 \
+    --global_saliency_weight=1.00 \
+    --num_workers=4 \
+    --max_epochs=80 \
+    --patience=80 \
+    --dist_weight=True \
+    --time_steps=7 \
+    --time_sampling=hardish3 \
+    --time_span=7m \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=1m \
+    --num_draw=8 \
+    --stream_channels=8 \
+    --temporal_dropout=0.5 
+
+
+
+# horologic abalate2
+# ------------------
+export CUDA_VISIBLE_DEVICES=0
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+EXPERIMENT_NAME=Drop3_BASELINE_BOTH_V315
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=1.00 
+
+
+export CUDA_VISIBLE_DEVICES=1
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+EXPERIMENT_NAME=Drop3_BASELINE_BOTH_V316
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=1.00 \
+    --normalize_inputs=2000 
+
+
+export CUDA_VISIBLE_DEVICES=2
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+EXPERIMENT_NAME=Drop3_BASELINE_BAS_V317
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.00 \
+    --global_saliency_weight=1.00 \
+    --normalize_inputs=2048
+
+
+export CUDA_VISIBLE_DEVICES=3
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+EXPERIMENT_NAME=Drop3_BASELINE_SC_V318
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.00 \
+    --global_saliency_weight=1.00 \
+    --normalize_inputs=4096

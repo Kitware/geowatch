@@ -22,8 +22,7 @@ from watch.utils import util_parallel
 from watch.utils import util_kwimage
 
 try:
-    import xdev
-    profile = xdev.profile
+    from xdev import profile
 except Exception:
     profile = ub.identity
 
@@ -284,6 +283,26 @@ def predict(cmdline=False, **kwargs):
         ub.dict_isect(datamodule_vars, traintime_params),
     ], min_variations=1)
     print('deviation from fit->predict settings = {}'.format(ub.repr2(deviation, nl=1)))
+
+    HACK_FIX_MODELS_WITH_BAD_CHANNEL_SPEC = True
+    if HACK_FIX_MODELS_WITH_BAD_CHANNEL_SPEC:
+        # There was an issue where we trained models and specified
+        # r|g|b|mat:0.3 but we only passed data with r|g|b. At train time
+        # current logic (whch we need to fix) will happilly just take a subset
+        # of those channels, which means the recorded channels disagree with
+        # what the model was actually trained with.
+        if hasattr(method, 'sensor_channel_tokenizers'):
+            datamodule_channel_spec = datamodule_vars['channels']
+            unique_channel_streams = ub.oset()
+            for sensor, tokenizers in method.sensor_channel_tokenizers.items():
+                for code in tokenizers.keys():
+                    unique_channel_streams.add(code)
+            hack_model_spec = kwcoco.ChannelSpec.coerce(','.join(unique_channel_streams))
+            if datamodule_channel_spec is not None:
+                if hack_model_spec != datamodule_channel_spec:
+                    print('Warning: reported model channels may be incorrect due to bad train hyperparams')
+                    hack_common = hack_model_spec.intersection(datamodule_channel_spec)
+                    datamodule_vars['channels'] = hack_common
 
     datamodule = datamodule_class(
         **datamodule_vars
@@ -560,6 +579,11 @@ def predict(cmdline=False, **kwargs):
                     frame['modes'] = filtered_modes
                     filtered_frames.append(frame)
                 item['frames'] = filtered_frames
+
+            if 0:
+                import netharn as nh
+                print(nh.data.collate._debug_inbatch_shapes(batch))
+                pass
 
             # self = method
             # with_loss = 0

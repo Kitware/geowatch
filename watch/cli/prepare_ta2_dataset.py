@@ -75,16 +75,21 @@ class PrepareTA2Config(scfg.Config):
         'dvc_dpath': scfg.Value('auto', help=''),
         'run': scfg.Value('0', help=''),
         'collated': scfg.Value([True], nargs='+', help='set to false if the input data is not collated'),
-        'serial': scfg.Value(True, help='if True use serial mode'),
+
+        'backend': scfg.Value('serial', help='can be serial, tmux, or slurm'),
+
         'aws_profile': scfg.Value('iarpa', help='AWS profile to use for remote data access'),
 
         'convert_workers': scfg.Value('min(avail,8)', help='workers for stac-to-kwcoco script'),
         'fields_workers': scfg.Value('min(avail,max(all/2,8))', help='workers for add-watch-fields script'),
         'align_workers': scfg.Value(0, help='workers for align script'),
+        'align_aux_workers': scfg.Value(0, help='threads per align process (typically set this to 0)'),
 
         'ignore_duplicates': scfg.Value(0, help='workers for align script'),
 
         'visualize': scfg.Value(0, help='if True runs visualize'),
+
+        'verbose': scfg.Value(0, help='help control verbosity (just align for now)'),
 
         # '--requester_pays'
         'requester_pays': scfg.Value(0, help='if True, turn on requester_pays in ingress. Needed for official L1/L2 catalogs.'),
@@ -93,6 +98,10 @@ class PrepareTA2Config(scfg.Config):
         'select_images': scfg.Value(False, help='if enabled only uses select images'),
 
         'cache': scfg.Value(1, help='if enabled check cache'),
+
+        'channels': scfg.Value(None, help='specific channels to use in align crop'),
+
+        'region_globstr': scfg.Value('annotations/region_models', help='a region globstr (relative to the dvc path, unless prefixed by "./") channels to use in align crop'),
     }
 
 
@@ -112,7 +121,6 @@ def main(cmdline=False, **kwargs):
         }
 
     """
-    from watch.utils import tmux_queue
     # import shlex
     config = PrepareTA2Config(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
@@ -128,9 +136,6 @@ def main(cmdline=False, **kwargs):
     aligned_bundle_name = f'Aligned-{config["dataset_suffix"]}'
     uncropped_bundle_name = f'Uncropped-{config["dataset_suffix"]}'
 
-    region_dpath = dvc_dpath / 'annotations/region_models'
-    # region_models = list(region_dpath.glob('*.geojson'))
-
     uncropped_dpath = dvc_dpath / uncropped_bundle_name
     uncropped_query_dpath = uncropped_dpath / '_query/items'
 
@@ -140,7 +145,6 @@ def main(cmdline=False, **kwargs):
     aligned_imgonly_kwcoco_fpath = aligned_kwcoco_bundle / 'imgonly.kwcoco.json'
     aligned_imganns_kwcoco_fpath = aligned_kwcoco_bundle / 'data.kwcoco.json'
 
-    region_dpath = region_dpath.shrinkuser(home='$HOME')
     uncropped_dpath = uncropped_dpath.shrinkuser(home='$HOME')
     uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
     uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
@@ -150,8 +154,9 @@ def main(cmdline=False, **kwargs):
     aligned_imgonly_kwcoco_fpath = aligned_imgonly_kwcoco_fpath.shrinkuser(home='$HOME')
     aligned_imganns_kwcoco_fpath = aligned_imganns_kwcoco_fpath.shrinkuser(home='$HOME')
 
-    # queue = tmux_queue.SerialQueue()
-    queue = tmux_queue.TMUXMultiQueue(name='teamfeat', size=1, gres=None)
+    from watch.utils import cmd_queue
+    queue = cmd_queue.Queue.create(
+        backend=config['backend'], name='teamfeat', size=1, gres=None)
 
     s3_fpath_list = config['s3_fpath']
     collated_list = config['collated']
@@ -290,11 +295,23 @@ def main(cmdline=False, **kwargs):
     cache_crops = 1
     if cache_crops:
         align_keep = 'img'
+        align_keep = 'roi-img'
     else:
         align_keep = 'none'
 
     debug_valid_regions = config['debug']
     align_visualize = config['debug']
+    channels = config['channels']
+
+    # region_models = list(region_dpath.glob('*.geojson'))
+    region_globstr = ub.Path(config['region_globstr'])
+    if str(region_globstr).startswith('./'):
+        final_region_globstr = region_globstr
+    else:
+        final_region_globstr = dvc_dpath / region_globstr
+    # region_dpath = dvc_dpath / 'annotations/region_models'
+    final_region_globstr = final_region_globstr.shrinkuser(home='$HOME')
+
     align_job = queue.submit(ub.codeblock(
         rf'''
         # MAIN WORKHORSE CROP IMAGES
@@ -302,13 +319,16 @@ def main(cmdline=False, **kwargs):
         {job_environ_str}python -m watch.cli.coco_align_geotiffs \
             --src "{uncropped_final_kwcoco_fpath}" \
             --dst "{aligned_imgonly_kwcoco_fpath}" \
-            --regions "{region_dpath / '*.geojson'}" \
+            --regions "{final_region_globstr}" \
             --context_factor=1 \
             --geo_preprop=auto \
             --keep={align_keep} \
+            --channels="{channels}" \
             --visualize={align_visualize} \
             --debug_valid_regions={debug_valid_regions} \
             --rpc_align_method affine_warp \
+            --verbose={config['verbose']} \
+            --aux_workers={config['align_aux_workers']} \
             --workers={config['align_workers']}
         '''), depends=uncropped_final_jobs)
 
@@ -357,14 +377,14 @@ def main(cmdline=False, **kwargs):
     # TODO: Can start the DVC add of the region subdirectories here
     ub.codeblock(
         '''
-        cd /home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc-hdd/Aligned-Drop3-TA1-2022-03-10
+        7z a splits.zip data*.kwcoco.json
+
         ls */WV
         ls */L8
         ls */S2
         ls */*.json
-
-        dvc add */WV */L8 */S2 */*.json
-        dvc add data_*nowv*.kwcoco.json
+        dvc add *.zip
+        dvc add */WV */L8 */S2 */*.json *.zip
 
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         echo "DVC_DPATH='$DVC_DPATH'"
@@ -402,10 +422,10 @@ def main(cmdline=False, **kwargs):
 
     if config['run']:
         agg_state = None
-        if config['serial']:
-            queue.serial_run()
-        else:
-            queue.run()
+        # if config['serial']:
+        #     queue.serial_run()
+        # else:
+        queue.run()
         # if config['follow']:
         agg_state = queue.monitor()
         # if not config['keep_sessions']:

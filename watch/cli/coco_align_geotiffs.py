@@ -82,10 +82,9 @@ from watch.cli.coco_visualize_videos import _write_ann_visualizations2
 from watch.utils import util_gis
 from watch.utils import util_time
 from watch.utils import util_gdal
-from watch.utils import kwcoco_extensions  # NOQA
+from watch.utils import kwcoco_extensions
 
-from tempenv import TemporaryEnvironment  # NOQA
-
+DEBUG = 0
 
 try:
     import xdev
@@ -183,6 +182,10 @@ class CocoAlignGeotiffConfig(scfg.Config):
             False, help='if True MODIFIES THE UNDERLYING IMAGES to ensure geodata is propogated'),
 
         'max_frames': scfg.Value(None),
+
+        'channels': scfg.Value(None, help='If specified only align the given channels'),
+
+        'verbose': scfg.Value(0, help='Note: no silent mode, 0 is just least verbose.'),
     }
 
 
@@ -206,6 +209,22 @@ def main(cmdline=True, **kw):
             'regions': regions,
             'keep': 'none',
             'exclude_sensors': ['WV'],
+        }
+
+    Ignore:
+        from watch.cli.coco_align_geotiffs import *  # NOQA
+        import watch
+        dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
+        base_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json'
+        src = base_fpath
+        dst = dvc_dpath / 'Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json'
+        sites = dvc_dpath / 'annotations/site_models/*.geojson'
+        cmdline = 0
+        kw = {
+            'src': src,
+            'dst': dst,
+            'regions': sites,
+            'keep': 'none',
         }
 
     Example:
@@ -362,7 +381,10 @@ def main(cmdline=True, **kw):
         parts = []
         for fpath in paths:
             df = util_gis.read_geojson(fpath)
-            df = df[df['type'] == 'region']
+            if df.iloc[0]['type'] == 'site':
+                df = df[df['type'] == 'site']
+            else:
+                df = df[df['type'] == 'region']
             parts.append(df)
         region_df = pd.concat(parts)
 
@@ -440,7 +462,10 @@ def main(cmdline=True, **kw):
             write_subsets=write_subsets, max_workers=max_workers,
             aux_workers=aux_workers, keep=keep, target_gsd=target_gsd,
             max_frames=max_frames,
-            debug_valid_regions=config['debug_valid_regions'])
+            debug_valid_regions=config['debug_valid_regions'],
+            channels=config['channels'],
+            verbose=config['verbose'],
+        )
 
     new_dset.fpath = dst_fpath
     print('Dumping new_dset.fpath = {!r}'.format(new_dset.fpath))
@@ -716,7 +741,8 @@ class SimpleDataCube(object):
                          rpc_align_method='orthorectify', new_dset=None,
                          write_subsets=True, visualize=True, max_workers=0,
                          aux_workers=0, keep='none', target_gsd=10,
-                         max_frames=None, debug_valid_regions=True):
+                         max_frames=None, debug_valid_regions=False,
+                         channels=None, verbose=0):
         """
         Given a region of interest, extract an aligned temporal sequence
         of data to a specified directory.
@@ -748,6 +774,12 @@ class SimpleDataCube(object):
                 "none": overwrite all, including existing images
                 "img": only add new images
                 "roi": only add new ROIs
+
+            channels (FusedChannelSpec):
+                if specified, only use these channels.
+
+            verbose (int):
+                note, there is no silent mode, 0 is just the least verbose.
 
         Returns:
             kwcoco.CocoDataset: the given or new dataset that was modified
@@ -817,7 +849,7 @@ class SimpleDataCube(object):
 
         if exists(join(sub_bundle_dpath,
                        'subdata.kwcoco.json')) and keep in {'roi-img', 'roi'}:
-            print('ROI found on disk; adding')
+            print('ROI cache hit')
             sub_dset = kwcoco.CocoDataset(
                 join(sub_bundle_dpath, 'subdata.kwcoco.json'))
             return new_dset.union(sub_dset)
@@ -1057,7 +1089,8 @@ class SimpleDataCube(object):
                     num, frame_index, new_vidid, rpc_align_method,
                     sub_bundle_dpath, space_str, space_region, space_box,
                     start_gid, start_aid, aux_workers, keep,
-                    local_epsg=local_epsg, other_imgs=other_imgs)
+                    local_epsg=local_epsg, other_imgs=other_imgs,
+                    channels=channels, verbose=verbose)
                 start_gid = start_gid + 1
                 start_aid = start_aid + len(anns)
                 frame_index = frame_index + 1
@@ -1066,7 +1099,7 @@ class SimpleDataCube(object):
 
         sub_new_gids = []
         sub_new_aids = []
-        for job in jobs.as_completed(desc='collect extract jobs'):
+        for job in jobs.as_completed(desc='collect extract jobs', progkw=dict(freq=1)):
             new_img, new_anns = job.result()
 
             # Hack, the next ids dont update when new images are added
@@ -1145,14 +1178,16 @@ class SimpleDataCube(object):
                     'nir|swir16|swir22',
                 ]
                 if isinstance(visualize, str):
-                    channels = visualize
+                    channels_ = visualize
                 else:
-                    channels = None
+                    channels_ = None
                 _write_ann_visualizations2(
                     coco_dset=new_dset, img=new_img, anns=new_anns,
-                    channels=channels,
+                    channels=channels_,
                     sub_dpath=viz_dpath, space='video',
-                    request_grouped_bands=request_grouped_bands)
+                    request_grouped_bands=request_grouped_bands,
+                    # verbose=3
+                )
 
         if write_subsets:
             print('Writing data subset')
@@ -1172,10 +1207,12 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
                       datetime_, num, frame_index, new_vidid, rpc_align_method,
                       sub_bundle_dpath, space_str, space_region, space_box,
                       start_gid, start_aid, aux_workers=0, keep=False,
-                      local_epsg=None, other_imgs=None):
+                      local_epsg=None, other_imgs=None, channels=None,
+                      verbose=0):
     """
     Threaded worker function for :func:`SimpleDataCube.extract_overlaps`.
     """
+    # from tempenv import TemporaryEnvironment  # NOQA
     # Does this resolve import issues?
     # with TemporaryEnvironment({'PROJ_LIB': None, 'PROJ_DEBUG': '3'}):
 
@@ -1213,7 +1250,8 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
 
     for other_img in other_imgs:
         coco_other_img = CocoImage(other_img)
-        other_objs = [ub.dict_diff(obj, {'auxiliary'}) for obj in coco_other_img.iter_asset_objs()]
+        other_objs = [ub.dict_diff(obj, {'auxiliary'})
+                      for obj in coco_other_img.iter_asset_objs()]
         for other_obj in other_objs:
             key = other_obj['channels']
             channels_to_objs[key].append(other_obj)
@@ -1247,46 +1285,54 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
     # Turn off internal threading because we refactored this to thread over all
     # images instead
     executor = ub.Executor(mode='thread', max_workers=aux_workers)
-    for obj_group in ub.ProgIter(obj_groups, desc='submit warp auxiliaries', verbose=0):
+    for obj_group in ub.ProgIter(obj_groups, desc='submit warp auxiliaries', verbose=verbose):
         job = executor.submit(
             _aligncrop, obj_group, bundle_dpath, name, sensor_coarse,
             dst_dpath, space_region, space_box, align_method,
-            is_multi_image, keep, local_epsg=local_epsg)
+            is_multi_image, keep, local_epsg=local_epsg,
+            channels=channels, verbose=verbose)
         job_list.append(job)
 
     dst_list = []
     for job in ub.ProgIter(job_list, total=len(job_list),
                            desc='collect warp auxiliaries {}'.format(name),
-                           enabled=0):
+                           enabled=DEBUG, verbose=verbose):
         dst = job.result()
         dst_list.append(dst)
+
+    new_gid = start_gid
+
+    if verbose > 2:
+        print(f'Finish channel crop jobs: {new_gid}')
 
     if align_method != 'pixel_crop':
         # If we are a pixel crop, we can transform directly
         for dst in dst_list:
-            # TODO: We should not populate this for computed features!
-            # hack this in for heuristics
-            if 'sensor_coarse' in img:
-                dst['sensor_coarse'] = img['sensor_coarse']
-            # We need to overwrite because we changed the bounds
-            # Note: if band info is not popluated above, this
-            # might write bad data based on hueristics
-            # TODO:
-            # We need to remove all spatial metadata from the base image that a
-            # crop would invalidate, otherwise we will propogate bad info.
-            kwcoco_extensions._populate_canvas_obj(
-                bundle_dpath, dst, overwrite={'warp'}, with_wgs=True)
-
-    new_gid = start_gid
+            if dst is not None:
+                # TODO: We should not populate this for computed features!
+                # hack this in for heuristics
+                if 'sensor_coarse' in img:
+                    dst['sensor_coarse'] = img['sensor_coarse']
+                # We need to overwrite because we changed the bounds
+                # Note: if band info is not popluated above, this
+                # might write bad data based on hueristics
+                # TODO:
+                # We need to remove all spatial metadata from the base image that a
+                # crop would invalidate, otherwise we will propogate bad info.
+                kwcoco_extensions._populate_canvas_obj(
+                    bundle_dpath, dst, overwrite={'warp'}, with_wgs=True)
+        if DEBUG:
+            print(f'Finish repopulate canvas jobs: {new_gid}')
 
     assert len(dst_list) == len(obj_groups)
     # Hack because heurstics break when fnames change
     for old_aux_group, new_aux in zip(obj_groups, dst_list):
-        # new_aux['channels'] = old_aux['channels']
-        if len(old_aux_group) > 1:
-            new_aux['parent_file_name'] = [g['file_name'] for g in old_aux_group]
-        else:
-            new_aux['parent_file_name'] = old_aux_group[0]['file_name']
+        if new_aux is not None:
+            # new_aux['channels'] = old_aux['channels']
+            if len(old_aux_group) > 1:
+                new_aux['parent_file_name'] = [g['file_name'] for g in old_aux_group]
+            else:
+                new_aux['parent_file_name'] = old_aux_group[0]['file_name']
 
     new_img = {
         'id': new_gid,
@@ -1302,7 +1348,11 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
     else:
         aux_dst = dst_list
 
+    aux_dst = [aux for aux in aux_dst if aux is not None]
+
     if len(aux_dst):
+        if DEBUG:
+            print(f'Recompute auxiliary transforms: {new_gid}')
         new_img['auxiliary'] = aux_dst
         kwcoco_extensions._recompute_auxiliary_transforms(new_img)
 
@@ -1405,6 +1455,8 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
         new_aid = new_aid + 1
         new_anns.append(ann)
 
+    if DEBUG:
+        print(f'Finished extract img job: {new_gid}')
     return new_img, new_anns
 
 
@@ -1457,20 +1509,28 @@ def _fix_geojson_poly(geo):
 
 @profile
 def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
-               space_box, align_method, is_multi_image, keep, local_epsg=None):
+               space_box, align_method, is_multi_image, keep, local_epsg=None,
+               channels=None, verbose=0):
     import watch
-    # # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
+
+    # TODO: parameterize
+    tries = 10
+
+    # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
     first_obj = obj_group[0]
     chan_code = obj_group[0].get('channels', '')
 
-    # Ensure chan codes dont break thing
-    def sanatize_chan_pnams(cs):
-        return cs.replace('|', '_').replace(':', '-')
-    chan_pname = sanatize_chan_pnams(chan_code)
-    if len(chan_pname) > 10:
-        # Hack to prevent long names for docker (limit is 242 chars)
-        num_bands = kwcoco.FusedChannelSpec.coerce(chan_code).numel()
-        chan_pname = '{}_{}'.format(ub.hash_data(chan_pname, base='abc')[0:8], num_bands)
+    # Prevent long names for docker (limit is 242 chars)
+    channels_ = kwcoco.FusedChannelSpec.coerce(chan_code)
+    chan_pname = channels_.path_sanitize(maxlen=10)
+
+    if channels is not None:
+        # Filter out bands we are not interested in
+        channels = kwcoco.FusedChannelSpec.coerce(channels)
+        if not channels.intersection(channels_).numel():
+            if verbose > 2:
+                print('Skip {}'.format(channels_))
+            return None
 
     if is_multi_image:
         multi_dpath = ub.ensuredir((dst_dpath, name))
@@ -1481,6 +1541,11 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     input_gnames = [obj.get('file_name', None) for obj in obj_group]
     assert all(n is not None for n in input_gnames)
     input_gpaths = [join(bundle_dpath, n) for n in input_gnames]
+
+    PHASE1_DEADLINE_HACK = 1
+    if PHASE1_DEADLINE_HACK:
+        if len(input_gpaths) == 1 and input_gpaths[0].endswith('TCI.jp2'):
+            return None
 
     dst = {
         'file_name': dst_gpath,
@@ -1493,6 +1558,8 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     already_exists = exists(dst_gpath)
     needs_recompute = not (already_exists and keep in {'img', 'roi-img'})
     if not needs_recompute:
+        if verbose:
+            print('cache hit dst = {!r}'.format(dst))
         return dst
 
     if align_method == 'pixel_crop':
@@ -1535,16 +1602,28 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     # method will call gdalwarp on each image individually and then merge them
     # all in a final step.
     out_fpath = tmp_dst_gpath
+    if verbose > 2:
+        print(
+            'start gdal warp in_fpaths = {}'.format(ub.repr2(input_gpaths, nl=1)) +
+            'chan_code = {!r}\n'.format(chan_code) +
+            '\n* dst_gpath = {!r}'.format(dst_gpath))
     if len(input_gpaths) > 1:
         in_fpaths = input_gpaths
-        util_gdal.gdal_multi_warp(in_fpaths, out_fpath, space_box, local_epsg,
-                                  rpcs=rpcs, nodata=nodata)
+        util_gdal.gdal_multi_warp(in_fpaths, out_fpath, space_box=space_box,
+                                  local_epsg=local_epsg, rpcs=rpcs,
+                                  nodata=nodata, tries=tries,
+                                  verbose=0 if verbose < 2 else verbose)
     else:
         in_fpath = input_gpaths[0]
-        util_gdal.gdal_single_warp(in_fpath, out_fpath, space_box, local_epsg,
-                                   rpcs=rpcs, nodata=nodata)
+        util_gdal.gdal_single_warp(in_fpath, out_fpath,
+                                   space_box=space_box, local_epsg=local_epsg,
+                                   rpcs=rpcs, nodata=nodata,
+                                   tries=tries,
+                                   verbose=0 if verbose < 2 else verbose)
 
     os.rename(tmp_dst_gpath, dst_gpath)
+    if verbose > 2:
+        print('finish gdal warp dst_gpath = {!r}'.format(dst_gpath))
     return dst
 
 

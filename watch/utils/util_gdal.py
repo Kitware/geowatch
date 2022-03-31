@@ -21,6 +21,8 @@ TODO:
 import kwimage
 import os
 import ubelt as ub
+import subprocess
+import retry
 
 
 GDAL_VIRTUAL_FILESYSTEM_PREFIX = '/vsi'
@@ -68,99 +70,203 @@ gdalwarp_performance_opts = ub.paragraph('''
         ''')
 
 
-def gdal_multi_warp(in_fpaths, out_fpath, *args, nodata=None, **kwargs):
+def _demo_geoimg_with_nodata():
     """
-    See gdal_single_warp() for args
+    Example:
+        fpath = _demo_geoimg_with_nodata()
+        self = LazyGDalFrameFile.demo()
+
+    """
+    import kwimage
+    import numpy as np
+    from osgeo import osr
+    # gdal.UseExceptions()
+
+    # Make a dummy geotiff
+    imdata = kwimage.grab_test_image('airport')
+    dpath = ub.Path.appdir('watch/test/geotiff').ensuredir()
+    geo_fpath = dpath / 'dummy_geotiff.tif'
+
+    # compute dummy values for a geotransform to CRS84
+    img_h, img_w = imdata.shape[0:2]
+    img_box = kwimage.Boxes([[0, 0, img_w, img_h]], 'xywh')
+    img_corners = img_box.corners()
+
+    # wld_box = kwimage.Boxes([[lon_x, lat_y, 0.0001, 0.0001]], 'xywh')
+    # wld_corners = wld_box.corners()
+    lat_y = 40.060759
+    lon_x = 116.613095
+    # lat_y_off = 0.0001
+    # lat_x_off = 0.0001
+    # Pretend this is a big spatial region
+    lat_y_off = 0.1
+    lat_x_off = 0.1
+    # hard code so north is up
+    wld_corners = np.array([
+        [lon_x - lat_x_off, lat_y + lat_y_off],
+        [lon_x - lat_x_off, lat_y - lat_y_off],
+        [lon_x + lat_x_off, lat_y - lat_y_off],
+        [lon_x + lat_x_off, lat_y + lat_y_off],
+    ])
+    transform = kwimage.Affine.fit(img_corners, wld_corners)
+
+    nodata = -9999
+
+    srs = osr.SpatialReference()
+    srs.ImportFromEPSG(4326)
+    crs = srs.ExportToWkt()
+
+    # Set a region to be nodata
+    imdata = imdata.astype(np.int16)
+    imdata[-100:] = nodata
+    imdata[0:200:, -200:-180] = nodata
+
+    kwimage.imwrite(geo_fpath, imdata, backend='gdal', nodata=-9999, crs=crs, transform=transform)
+    return geo_fpath
+
+
+# TODO: simplified API for gdalwarp and gdal_translate
+# def gdal_single_crop(in_fpath, out_fpath, space_box=None, local_epsg=4326,
+#                      box_epsg=4326, nodata=None, rpcs=None, blocksize=256,
+#                      compress='DEFLATE', use_perf_opts=False, as_vrt=False,
+#                      use_te_geoidgrid=False, dem_fpath=None, tries=0,
+#                      verbose=0):
+#     """
+#     Wrapper around gdal_single_translate and gdal_single_warp
+
+#     Args:
+#         in_fpath (PathLike): geotiff to translate
+
+#         out_fpath (PathLike): output geotiff
+
+#         pixel_box (kwimage.Boxes): box to crop to in pixel space.
+
+#         blocksize (int): COG tile size
+
+#         compress (str): gdal compression
+
+#         verbose (int): verbosity level
+
+#     Ignore:
+#         print(ub.cmd('gdalinfo ' + str(in_fpath))['out'])
+#         print(ub.cmd('gdalinfo ' + str(crs84_out_fpath))['out'])
+#         print(ub.cmd('gdalinfo ' + str(utm_out_fpath))['out'])
+#         print(ub.cmd('gdalinfo ' + str(pxl_out_fpath))['out'])
+#     """
+
+#     if box_epsg == 'pixel':
+#         return gdal_single_translate()
+#     else:
+#         return gdal_single_warp()
+
+
+def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
+                          compress='DEFLATE', verbose=0):
+    """
+    Crops geotiffs using pixels
+
+    Args:
+        in_fpath (PathLike): geotiff to translate
+
+        out_fpath (PathLike): output geotiff
+
+        pixel_box (kwimage.Boxes): box to crop to in pixel space.
+
+        blocksize (int): COG tile size
+
+        compress (str): gdal compression
+
+        verbose (int): verbosity level
+
+    Example:
+        >>> from watch.utils.util_gdal import *  # NOQA
+        >>> from watch.utils.util_gdal import _demo_geoimg_with_nodata
+        >>> from watch.gis import geotiff
+        >>> in_fpath = ub.Path(_demo_geoimg_with_nodata())
+        >>> info = geotiff.geotiff_crs_info(in_fpath)
+
+        >>> # Test CRS84 cropping
+        >>> wgs84_poly = kwimage.Polygon(exterior=info['wgs84_corners'])
+        >>> assert info['wgs84_crs_info']['axis_mapping'] == 'OAMS_AUTHORITY_COMPLIANT'
+        >>> crs84_epsg = int(info['wgs84_crs_info']['auth'][1])
+        >>> crs84_space_box = wgs84_poly.scale(0.5, about='center').to_boxes().transpose()
+        >>> crs84_out_fpath = in_fpath.augment(suffix='_crs84_crop')
+        >>> gdal_single_warp(in_fpath, crs84_out_fpath, local_epsg=crs84_epsg, space_box=crs84_space_box)
+
+        >>> # Test UTM cropping
+        >>> utm_poly = kwimage.Polygon(exterior=info['utm_corners'])
+        >>> utm_epsg = int(info['utm_crs_info']['auth'][1])
+        >>> utm_space_box = utm_poly.scale(0.5, about='center').to_boxes()
+        >>> utm_out_fpath = in_fpath.augment(suffix='_utmcrop')
+        >>> gdal_single_warp(in_fpath, utm_out_fpath, local_epsg=utm_epsg, space_box=utm_space_box, box_epsg=utm_epsg)
+
+        >>> # Test Pixel cropping
+        >>> pxl_poly = kwimage.Polygon(exterior=info['pxl_corners'])
+        >>> pixel_box = pxl_poly.scale(0.5, about='center').to_boxes()
+        >>> pxl_out_fpath = in_fpath.augment(suffix='_pxlcrop')
+        >>> gdal_single_translate(in_fpath, pxl_out_fpath, pixel_box=pixel_box)
+
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> imdata0 = kwimage.normalize(kwimage.imread(in_fpath, nodata='float'))
+        >>> imdata1 = kwimage.normalize(kwimage.imread(crs84_out_fpath, nodata='float'))
+        >>> imdata2 = kwimage.normalize(kwimage.imread(utm_out_fpath, nodata='float'))
+        >>> imdata3 = kwimage.normalize(kwimage.imread(pxl_out_fpath, nodata='float'))
+        >>> kwplot.imshow(imdata0, pnum=(1, 4, 1), title='orig')
+        >>> kwplot.imshow(imdata1, pnum=(1, 4, 2), title='crs84-crop')
+        >>> kwplot.imshow(imdata2, pnum=(1, 4, 3), title='utm-crop')
+        >>> kwplot.imshow(imdata3, pnum=(1, 4, 4), title='pxl-crop')
 
     Ignore:
-        # Uses data from the data cube with extra=1
-        from watch.cli.coco_align_geotiffs import *  # NOQA
-        cube, region_df = SimpleDataCube.demo(with_region=True, extra=True)
-        local_epsg = 32635
-        space_box = kwimage.Polygon.from_shapely(region_df.geometry.iloc[1]).bounding_box().to_ltrb()
-        dpath = ub.ensure_app_cache_dir('smart_watch/test/gdal_multi_warp')
-        out_fpath = join(dpath, 'test_multi_warp.tif')
-        in_fpath1 = cube.coco_dset.get_image_fpath(2)
-        in_fpath2 = cube.coco_dset.get_image_fpath(3)
-        in_fpaths = [in_fpath1, in_fpath2]
-        rpcs = None
-        gdal_multi_warp(in_fpaths, out_fpath, space_box, local_epsg, rpcs)
+        print(ub.cmd('gdalinfo ' + str(in_fpath))['out'])
+        print(ub.cmd('gdalinfo ' + str(crs84_out_fpath))['out'])
+        print(ub.cmd('gdalinfo ' + str(utm_out_fpath))['out'])
+        print(ub.cmd('gdalinfo ' + str(pxl_out_fpath))['out'])
     """
-    # Warp then merge
-    import tempfile
+    xoff, yoff, xsize, ysize = pixel_box.to_xywh().data[0]
+    template_parts = [
+        '''
+        gdal_translate
+        --debug off
+        '''
+    ]
 
-    # Write to a temporary file and then rename the file to the final
-    # Destination so ctrl+c doesn't break everything
-    tmp_out_fpath = ub.augpath(out_fpath, prefix='.tmp.')
+    if compress == 'RAW':
+        compress = 'NONE'
 
-    tempfiles = []  # hold references
-    warped_gpaths = []
-    for in_fpath in in_fpaths:
-        tmpfile = tempfile.NamedTemporaryFile(suffix='.tif')
-        tempfiles.append(tmpfile)
-        tmp_out = tmpfile.name
-        gdal_single_warp(in_fpath, tmp_out, *args, nodata=nodata, **kwargs)
-        warped_gpaths.append(tmp_out)
+    # Use the new COG output driver
+    template_parts.append(f'''
+        -of COG
+        -co OVERVIEWS=AUTO
+        -co BLOCKSIZE={blocksize}
+        -co COMPRESS={compress}
+        ''')
 
-    if nodata is not None:
-        from watch.utils import util_raster
-        valid_polygons = []
-        for tmp_out in warped_gpaths:
-            sh_poly = util_raster.mask(tmp_out,
-                                       tolerance=10,
-                                       default_nodata=nodata)
-            valid_polygons.append(sh_poly)
-        valid_areas = [p.area for p in valid_polygons]
-        # Determine order by valid data
-        warped_gpaths = list(
-            ub.sorted_vals(ub.dzip(warped_gpaths, valid_areas)).keys())
-        warped_gpaths = warped_gpaths[::-1]
-    else:
-        # Last image is copied over earlier ones, but we expect first image to
-        # be the primary one, so reverse order
-        warped_gpaths = warped_gpaths[::-1]
+    tmp_fpath = out_fpath.augment(suffix='.tmp')
 
-    merge_cmd_parts = ['gdal_merge.py']
-    if nodata is not None:
-        merge_cmd_parts.extend(['-n', str(nodata)])
-    merge_cmd_parts.extend(['-o', tmp_out_fpath])
-    merge_cmd_parts.extend(warped_gpaths)
-    merge_cmd = ' '.join(merge_cmd_parts)
-    cmd_info = ub.cmd(merge_cmd_parts, check=True)
-    if cmd_info['ret'] != 0:
-        print('\n\nCOMMAND FAILED: {!r}'.format(merge_cmd))
-        print(cmd_info['out'])
-        print(cmd_info['err'])
-        raise Exception(cmd_info['err'])
-    os.rename(tmp_out_fpath, out_fpath)
+    template_parts.append(f'-srcwin {xoff} {yoff} {xsize} {ysize}')
+    template_parts.append(f'{in_fpath} {tmp_fpath}')
+    template = ' '.join(template_parts)
 
-    if 0:
-        # Debugging
-        datas = []
-        for p in warped_gpaths:
-            d = kwimage.imread(p)
-            d = kwimage.normalize_intensity(d, nodata=0)
-            datas.append(d)
-
-        import kwplot
-        kwplot.autompl()
-        combo = kwimage.imread(out_fpath)
-        combo = kwimage.normalize_intensity(combo, nodata=0)
-        datas.append(combo)
-        kwplot.imshow(kwimage.stack_images(datas, axis=1))
-
-        datas2 = []
-        for p in in_fpaths:
-            d = kwimage.imread(p)
-            d = kwimage.normalize_intensity(d, nodata=0)
-            datas2.append(d)
-        kwplot.imshow(kwimage.stack_images(datas2, axis=1), fnum=2)
+    command = template.format(template)
+    command = ub.paragraph(command)
+    try:
+        cmd_info = ub.cmd(command, verbose=verbose, check=True)  # NOQA
+    except subprocess.CalledProcessError as ex:
+        if verbose:
+            print('\n\nCOMMAND FAILED: {!r}'.format(ex.cmd))
+            print(ex.stdout)
+            print(ex.stderr)
+        raise
+    os.rename(tmp_fpath, out_fpath)
 
 
 def gdal_single_warp(in_fpath,
                      out_fpath,
                      space_box=None,
                      local_epsg=4326,
+                     box_epsg=4326,
                      nodata=None,
                      rpcs=None,
                      blocksize=256,
@@ -168,61 +274,54 @@ def gdal_single_warp(in_fpath,
                      use_perf_opts=False,
                      as_vrt=False,
                      use_te_geoidgrid=False,
-                     dem_fpath=None):
+                     dem_fpath=None,
+                     tries=0,
+                     verbose=0):
     r"""
-    TODO:
-        - [ ] This should be a kwgeo function?
+    Wrapper around gdalwarp
 
-    Ignore:
-        in_fpath =
-        s3://landsat-pds/L8/001/002/LC80010022016230LGN00/LC80010022016230LGN00_B1.TIF?useAnon=true&awsRegion=US_WEST_2
+    Args:
+        in_fpath (PathLike): input geotiff path
 
-        gdalwarp 's3://landsat-pds/L8/001/002/LC80010022016230LGN00/LC80010022016230LGN00_B1.TIF?useAnon=true&awsRegion=US_WEST_2' foo.tif
+        out_fpath (PathLike): output geotiff path
 
-    aws s3 --profile iarpa cp s3://kitware-smart-watch-data/processed/ta1/drop1/mtra/f9e7e52029bb4dfaadfe306e92641481/S2A_MSI_L2A_T23KPQ_20190509_20211103_SR_B05.tif foo.tif
+        space_box (kwimage.Boxes):
+            Should be traditional crs84 ltrb (or lbrt?) -- i.e.
+            (lonmin, latmin, lonmax, latmax) - when box_epsg is 4326
 
-    gdalwarp 's3://kitware-smart-watch-data/processed/ta1/drop1/mtra/f9e7e52029bb4dfaadfe306e92641481/S2A_MSI_L2A_T23KPQ_20190509_20211103_SR_B05.tif' bar.tif
+        local_epsg (int):
+            EPSG code for the CRS the final geotiff will be projected into.
+            This should be the UTM zone for the region if known. Otherwise
+            It can be 4326 to project into WGS84 or CRS84 (not sure which
+            axis ordering it will use by default).
 
-    Note:
-        Proof of concept for warp from S3:
+        box_epsg (int):
+            this is the EPSG of the bounding box. Should usually be 4326.
 
-        aws s3 --profile iarpa ls s3://kitware-smart-watch-data/processed/ta1/drop1/mtra/0bff43f318c14a97b19b682a36f28d26/
+        nodata (int | None):
+            only specify if in_fpath does not already have a nodata value
 
-        gdalinfo \
-            --config AWS_DEFAULT_PROFILE "iarpa" \
-            "/vsis3/kitware-smart-watch-data/processed/ta1/drop1/mtra/0bff43f318c14a97b19b682a36f28d26/LC08_L2SP_017039_20190404_20211102_02_T1_T17RMP_B7_BRDFed.tif"
+        rpcs (dict): the "rpc_transform" from
+            ``watch.gis.geotiff.geotiff_crs_info``, if that information
+            is available and orthorectification is desired.
 
-        gdalwarp \
-            --config AWS_DEFAULT_PROFILE "iarpa" \
-            -te_srs epsg:4326 \
-            -te -81.51 29.99 -81.49 30.01 \
-            -t_srs epsg:32617 \
-            -overwrite \
-            -of COG \
-            -co OVERVIEWS=AUTO \
-            "/vsis3/kitware-smart-watch-data/processed/ta1/drop1/mtra/0bff43f318c14a97b19b682a36f28d26/LC08_L2SP_017039_20190404_20211102_02_T1_T17RMP_B7_BRDFed.tif" \
-            partial_crop2.tif
-        gdalinfo partial_crop2.tif
-        kwplot partial_crop2.tif
+        use_perf_opts (bool): undocumented
 
-        gdalinfo \
-            --config AWS_DEFAULT_PROFILE "iarpa" \
-            --config AWS_CONFIG_FILE "$HOME/.aws/config" \
-            --config CPL_AWS_CREDENTIALS_FILE "$HOME/.aws/credentials" \
-            "/vsis3/kitware-smart-watch-data/processed/ta1/drop1/mtra/f9e7e52029bb4dfaadfe306e92641481/S2A_MSI_L2A_T23KPQ_20190509_20211103_SR_B05.tif"
+        as_vrt (bool): undocumented
 
-        gdalwarp \
-            --config AWS_DEFAULT_PROFILE "iarpa" \
-            --config AWS_CONFIG_FILE "$HOME/.aws/config" \
-            --config CPL_AWS_CREDENTIALS_FILE "$HOME/.aws/credentials" \
-            -te_srs epsg:4326 \
-            -te -43.51 -23.01 -43.49 -22.99 \
-            -t_srs epsg:32723 \
-            -overwrite \
-            -of COG \
-            "/vsis3/kitware-smart-watch-data/processed/ta1/drop1/mtra/f9e7e52029bb4dfaadfe306e92641481/S2A_MSI_L2A_T23KPQ_20190509_20211103_SR_B05.tif" \
-            partial_crop.tif
-        kwplot partial_crop.tif
+        use_te_geoidgrid (bool): undocumented
+
+        dem_fpath (bool): undocumented
+
+        tries (int): gdal can be flakey, set to force some number of retries
+
+    Notes:
+        In gdalwarp:
+            -s_srs - Set source spatial reference
+            -t_srs - Set target spatial reference
+
+            -te_srs - Specifies the SRS in which to interpret the coordinates given with -te.
+            -te - Set georeferenced extents of output file to be created
     """
 
     # Coordinate Reference System of the "target" destination image
@@ -273,7 +372,9 @@ def gdal_single_warp(in_fpath,
 
         # Coordinate Reference System of the "te" crop coordinates
         # te_srs = spatial reference of query points
-        crop_coordinate_srs = 'epsg:4326'
+        # This means space_box currently MUST be in CRS84
+        # crop_coordinate_srs = 'epsg:4326'
+        crop_coordinate_srs = 'epsg:{}'.format(box_epsg)
 
         template_parts.append('''
             -te {xmin} {ymin} {xmax} {ymax}
@@ -344,12 +445,118 @@ def gdal_single_warp(in_fpath,
     template = ' '.join(template_parts)
 
     command = template.format(**template_kw)
-    cmd_info = ub.cmd(command, verbose=0)  # NOQA
-    if cmd_info['ret'] != 0:
-        print('\n\nCOMMAND FAILED: {!r}'.format(command))
-        print(cmd_info['out'])
-        print(cmd_info['err'])
-        raise Exception(cmd_info['err'])
+    command = ub.paragraph(command)
+
+    try:
+        retry.api.retry_call(
+            ub.cmd, (command,), dict(check=True, verbose=verbose),
+            tries=tries, delay=1, exceptions=subprocess.CalledProcessError)
+    except subprocess.CalledProcessError as ex:
+        if verbose:
+            print('\n\nCOMMAND FAILED: {!r}'.format(ex.cmd))
+            print(ex.stdout)
+            print(ex.stderr)
+        raise
+
+
+def gdal_multi_warp(in_fpaths, out_fpath, *args, nodata=None, tries=0, **kwargs):
+    """
+    See gdal_single_warp() for args
+
+    Ignore:
+        # Uses data from the data cube with extra=1
+        from watch.cli.coco_align_geotiffs import *  # NOQA
+        cube, region_df = SimpleDataCube.demo(with_region=True, extra=True)
+        local_epsg = 32635
+        space_box = kwimage.Polygon.from_shapely(region_df.geometry.iloc[1]).bounding_box().to_ltrb()
+        dpath = ub.ensure_app_cache_dir('smart_watch/test/gdal_multi_warp')
+        out_fpath = join(dpath, 'test_multi_warp.tif')
+        in_fpath1 = cube.coco_dset.get_image_fpath(2)
+        in_fpath2 = cube.coco_dset.get_image_fpath(3)
+        in_fpaths = [in_fpath1, in_fpath2]
+        rpcs = None
+        gdal_multi_warp(in_fpaths, out_fpath, space_box, local_epsg, rpcs)
+    """
+    # Warp then merge
+    import tempfile
+
+    # Write to a temporary file and then rename the file to the final
+    # Destination so ctrl+c doesn't break everything
+    tmp_out_fpath = ub.augpath(out_fpath, prefix='.tmp.')
+
+    tempfiles = []  # hold references
+    warped_gpaths = []
+    for in_fpath in in_fpaths:
+        tmpfile = tempfile.NamedTemporaryFile(suffix='.tif')
+        tempfiles.append(tmpfile)
+        tmp_out = tmpfile.name
+        gdal_single_warp(in_fpath, tmp_out, *args, nodata=nodata, tries=tries,
+                         **kwargs)
+        warped_gpaths.append(tmp_out)
+
+    if nodata is not None:
+        from watch.utils import util_raster
+        valid_polygons = []
+        for tmp_out in warped_gpaths:
+            sh_poly = util_raster.mask(tmp_out,
+                                       tolerance=10,
+                                       default_nodata=nodata)
+            valid_polygons.append(sh_poly)
+        valid_areas = [p.area for p in valid_polygons]
+        # Determine order by valid data
+        warped_gpaths = list(
+            ub.sorted_vals(ub.dzip(warped_gpaths, valid_areas)).keys())
+        warped_gpaths = warped_gpaths[::-1]
+    else:
+        # Last image is copied over earlier ones, but we expect first image to
+        # be the primary one, so reverse order
+        warped_gpaths = warped_gpaths[::-1]
+
+    merge_cmd_parts = ['gdal_merge.py']
+    if nodata is not None:
+        merge_cmd_parts.extend(['-n', str(nodata)])
+    merge_cmd_parts.extend(['-o', tmp_out_fpath])
+    merge_cmd_parts.extend(warped_gpaths)
+    merge_cmd = ' '.join(merge_cmd_parts)
+    verbose = kwargs.get('verbose', 0)
+
+    import subprocess
+    try:
+        if 1:
+            import retry
+            retry.api.retry_call(
+                ub.cmd, (merge_cmd,), dict(check=True, verbose=verbose),
+                tries=tries, delay=1)
+        else:
+            ub.cmd(merge_cmd, check=True, verbose=verbose)
+    except subprocess.CalledProcessError as ex:
+        print('\n\nCOMMAND FAILED: {!r}'.format(ex.cmd))
+        print(ex.stdout)
+        print(ex.stderr)
+        raise
+    os.rename(tmp_out_fpath, out_fpath)
+
+    if 0:
+        # Debugging
+        datas = []
+        for p in warped_gpaths:
+            d = kwimage.imread(p)
+            d = kwimage.normalize_intensity(d, nodata=0)
+            datas.append(d)
+
+        import kwplot
+        kwplot.autompl()
+        combo = kwimage.imread(out_fpath)
+        combo = kwimage.normalize_intensity(combo, nodata=0)
+        datas.append(combo)
+        kwplot.imshow(kwimage.stack_images(datas, axis=1))
+
+        datas2 = []
+        for p in in_fpaths:
+            d = kwimage.imread(p)
+            d = kwimage.normalize_intensity(d, nodata=0)
+            datas2.append(d)
+        kwplot.imshow(kwimage.stack_images(datas2, axis=1), fnum=2)
 
 
 def list_gdal_drivers():

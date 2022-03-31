@@ -244,3 +244,59 @@ transfer_features(){
 
     rsync -p "$SRC_BUNDLE_DPATH/combo_LM.rel.kwcoco.json" "$DST_BUNDLE_DPATH/combo_LM.kwcoco.json"
 }
+
+
+
+prepare_l1_version_of_drop3(){
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    echo "DVC_DPATH = $DVC_DPATH"
+    S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/ALL_ANNOTATED_REGIONS_TA-1_PROCESSED_20220222.unique.input.l1.mini
+    DATASET_SUFFIX=Drop3-L1-MINI
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    echo "DVC_DPATH = $DVC_DPATH"
+    S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/ALL_ANNOTATED_REGIONS_TA-1_PROCESSED_20220222.unique.input.l1
+    DATASET_SUFFIX=Drop3-L1
+    python -m watch.cli.prepare_ta2_dataset \
+        --dataset_suffix="$DATASET_SUFFIX" \
+        --s3_fpath="$S3_FPATH" \
+        --dvc_dpath="$DVC_DPATH" \
+        --collated=False \
+        --requester_pays=True \
+        --ignore_duplicates=True \
+        --fields_workers=8 \
+        --align_workers=8 \
+        --convert_workers=8 \
+        --align_aux_workers=0 \
+        --verbose=3 \
+        --debug=False \
+        --channels="blue|green|red|nir|swir16|swir22" \
+        --cache=False --run=0
+
+}
+
+
+prepare_wv_crop_from_sites(){
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc)-hdd
+    cd "$DVC_DPATH"
+
+    DATASET_SUFFIX=Drop3-TA1-SiteCropsWV-2022-03-30 
+    python -m watch.cli.prepare_ta2_dataset \
+        --dataset_suffix=$DATASET_SUFFIX \
+        --s3_fpath \
+            s3://kitware-smart-watch-data/processed/ta1/TA-1_PROCESSED_TA-2_SUPERREGIONS_WV_ONLY.unique.input \
+        --collated True \
+        --dvc_dpath="$DVC_DPATH" \
+        --aws_profile=iarpa \
+        --fields_workers=8 \
+        --convert_workers=8 \
+        --align_aux_workers=13 \
+        --align_workers=26 \
+        --channels="blue|green|red|nir|swir16|swir22" \
+        --region_globstr="$DVC_DPATH/annotations/site_models/*.geojson" \
+        --cache=0 \
+        --serial=True --run=0
+
+}

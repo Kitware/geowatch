@@ -6,7 +6,7 @@ xdoctest >= 0.15.8
 pytest_cov >= 2.8.1
 coverage >= 5.4
 jsonschema >= 3.2.0
-xdev >= 0.2.3
+xdev >= 0.3.1
 
 
 # Machine learning
