@@ -2329,6 +2329,8 @@ class KWCocoVideoDataset(data.Dataset):
         prog = ub.ProgIter(loader, desc='estimate dataset stats')
         for batch_items in prog:
             for item in batch_items:
+                if item is None:
+                    continue
                 for frame_item in item['frames']:
                     if with_class:
                         class_idxs = frame_item['class_idxs']
