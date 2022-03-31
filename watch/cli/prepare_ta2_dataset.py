@@ -377,14 +377,14 @@ def main(cmdline=False, **kwargs):
     # TODO: Can start the DVC add of the region subdirectories here
     ub.codeblock(
         '''
-        cd /home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc-hdd/Aligned-Drop3-TA1-2022-03-10
+        7z a splits.zip data*.kwcoco.json
+
         ls */WV
         ls */L8
         ls */S2
         ls */*.json
-
-        dvc add */WV */L8 */S2 */*.json
-        dvc add data_*nowv*.kwcoco.json
+        dvc add *.zip
+        dvc add */WV */L8 */S2 */*.json *.zip
 
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         echo "DVC_DPATH='$DVC_DPATH'"

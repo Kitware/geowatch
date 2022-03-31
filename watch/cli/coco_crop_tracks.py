@@ -47,6 +47,7 @@ class CocoCropTrackConfig(scfg.Config):
 
         'keep': scfg.Value('img', help='set to None to recompute'),
 
+        'target_gsd': scfg.Value(1, help='GSD of new kwcoco videospace'),
 
         'select_images': scfg.Value(
             None, type=str, help=ub.paragraph(
@@ -81,7 +82,9 @@ def main(cmdline=0, **kwargs):
         dst = dvc_dpath / 'Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json'
         cmdline = 0
         include_sensors = None
-        kwargs = dict(src=src, dst=dst, include_sensors=include_sensors)
+        kwargs = dict(
+            workers=21,
+            src=src, dst=dst, include_sensors=include_sensors)
 
     Ignore:
         from watch.cli.coco_crop_tracks import *  # NOQA
@@ -117,20 +120,17 @@ def main(cmdline=0, **kwargs):
         select_images=config['select_images'],
         select_videos=config['select_videos'],
     )
-    coco_dset = coco_dset.subset(valid_gids)
+    if len(valid_gids) != coco_dset.n_images:
+        coco_dset = coco_dset.subset(valid_gids)
 
     print('Generate jobs')
     crop_job_gen = generate_crop_jobs(coco_dset, dst_bundle_dpath)
     crop_job_iter = iter(crop_job_gen)
 
     keep = config['keep']
-    # keep = None
-    # crop_asset_task = next(crop_job_iter)
-    # run_crop_asset_task(crop_asset_task, keep)
     from watch.utils.lightning_ext import util_globals
     workers = util_globals.coerce_num_workers(config['workers'])
     jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
-    # prog = ub.ProgIter(desc='submit crop jobs', freq=1000)
 
     prog = ub.ProgIter(desc='submit crop jobs')
     last_key = None
@@ -159,11 +159,61 @@ def main(cmdline=0, **kwargs):
         else:
             results.append(result)
 
+    # Group assets by the track they belong to
+    tid_to_assets = ub.group_items(results, lambda x: x['tid'])
+    tid_to_size = ub.map_vals(len, tid_to_assets)
+    import kwarray
+    import numpy as np
+    print(f'{len(tid_to_size)=}')
+    arr = np.array(list(tid_to_size.values()))
+    stats = kwarray.stats_dict(arr)
+    quantile = [0.25, 0.50, 0.75]
+    quant_values = np.quantile(arr, quantile, axis=None, extreme=True, n_extreme=True)
+    quant_keys = ['q_{:0.2f}'.format(q) for q in quantile]
+    for k, v in zip(quant_keys, quant_values):
+        stats[k] = v
+    print(f'tracn length stats {ub.repr2(stats, nl=1)!s}')
+
+    # Rebuild the manifest
+    target_gsd = config['target_gsd']
+    new_dset = make_track_kwcoco_manifest(dst, dst_bundle_dpath, tid_to_assets,
+                                          target_gsd=target_gsd)
+    import safer
+    with safer.open(dst, 'w', temp_file=True) as file:
+        new_dset.dump(file, newlines=True, indent='    ')
+
+    r"""
+    smartwatch visualize \
+        /home/joncrall/data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop2-TA1-2022-02-15/data.kwcoco.json \
+        --channels="red|green|blue" \
+        --animate=True \
+        --workers=8
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
+    echo $DVC_DPATH
+    cp $DVC_DPATH/Cropped-Drop2-TA1-2022-02-15/data.kwcoco.json \
+       $DVC_DPATH/Cropped-Drop2-TA1-2022-02-15/imgonly.kwcoco.json
+
+
+    python -m watch project_annotations \
+        --src "$DVC_DPATH/Cropped-Drop2-TA1-2022-02-15/imgonly.kwcoco.json" \
+        --dst "$DVC_DPATH/Cropped-Drop2-TA1-2022-02-15/projected.kwcoco.json" \
+        --site_models="$DVC_DPATH/annotations/site_models/*.geojson" \
+        --region_models="$DVC_DPATH/annotations/region_models/*.geojson"
+
+    # {viz_part}
+
+    """
+
+
+def make_track_kwcoco_manifest(dst, dst_bundle_dpath, tid_to_assets,
+                               target_gds=1):
+    from watch.utils import kwcoco_extensions
     # Make the new kwcoco file where 1 track is mostly 1 video
     # TODO: we could crop the kwcoco annotations here too, but
     # we can punt on that for now and just reproject them.
     new_dset = kwcoco.CocoDataset()
-    tid_to_assets = ub.group_items(results, lambda x: x['tid'])
+
     new_dset.fpath = dst
     for tid, track_assets in tid_to_assets.items():
 
@@ -234,36 +284,12 @@ def main(cmdline=0, **kwargs):
             obj.pop('utm_crs_info', None)
         new_img.update(ensure_json_serializable(new_img))
 
-    target_gsd = 1
     for vidid in ub.ProgIter(new_dset.videos(), desc='populate videos'):
         kwcoco_extensions.coco_populate_geo_video_stats(
             new_dset, target_gsd=target_gsd, vidid=vidid
         )
 
-    new_dset.dump(new_dset.fpath, newlines=True, indent='    ')
-
-    r"""
-    smartwatch visualize \
-        /home/joncrall/data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop2-TA1-2022-02-15/data.kwcoco.json \
-        --channels="red|green|blue" \
-        --animate=True \
-        --workers=8
-
-    DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
-    echo $DVC_DPATH
-    cp $DVC_DPATH/Cropped-Drop2-TA1-2022-02-15/data.kwcoco.json \
-       $DVC_DPATH/Cropped-Drop2-TA1-2022-02-15/imgonly.kwcoco.json
-
-
-    python -m watch project_annotations \
-        --src "$DVC_DPATH/Cropped-Drop2-TA1-2022-02-15/imgonly.kwcoco.json" \
-        --dst "$DVC_DPATH/Cropped-Drop2-TA1-2022-02-15/projected.kwcoco.json" \
-        --site_models="$DVC_DPATH/annotations/site_models/*.geojson" \
-        --region_models="$DVC_DPATH/annotations/region_models/*.geojson"
-
-    # {viz_part}
-
-    """
+    return new_dset
 
 
 # @xdev.profile
@@ -490,12 +516,8 @@ def run_crop_asset_task(crop_asset_task, keep):
     cache_hit = keep in {'img'} and dst.exists()
     if not cache_hit:
         pixel_box = kwimage.Boxes([crop_box_asset_space], 'xywh')
-        # print('src = {!r}'.format(src))
-        # print('dst = {!r}'.format(dst))
-        # print('crop_box_asset_space = {!r}'.format(crop_box_asset_space))
         dst.parent.ensuredir()
-        import retry
-        retry.api.retry_call(util_gdal.gdal_single_translate, (src, dst, pixel_box), tries=10, delay=1)
+        util_gdal.gdal_single_translate(src, dst, pixel_box, tries=10, delay=1)
     return _crop_task
 
 

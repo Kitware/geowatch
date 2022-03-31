@@ -1652,6 +1652,7 @@ def __WIP_add_auxiliary(coco_dset, gid, fname, channels, data, warp_aux_to_img=N
     coco_dset._invalidate_hashid()
 
 
+@profile
 def _recompute_auxiliary_transforms(img):
     """
     Uses geotiff info to repopulate metadata

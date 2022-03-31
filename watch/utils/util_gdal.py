@@ -21,6 +21,8 @@ TODO:
 import kwimage
 import os
 import ubelt as ub
+import subprocess
+import retry
 
 
 GDAL_VIRTUAL_FILESYSTEM_PREFIX = '/vsi'
@@ -123,10 +125,58 @@ def _demo_geoimg_with_nodata():
     return geo_fpath
 
 
+# TODO: simplified API for gdalwarp and gdal_translate
+# def gdal_single_crop(in_fpath, out_fpath, space_box=None, local_epsg=4326,
+#                      box_epsg=4326, nodata=None, rpcs=None, blocksize=256,
+#                      compress='DEFLATE', use_perf_opts=False, as_vrt=False,
+#                      use_te_geoidgrid=False, dem_fpath=None, tries=0,
+#                      verbose=0):
+#     """
+#     Wrapper around gdal_single_translate and gdal_single_warp
+
+#     Args:
+#         in_fpath (PathLike): geotiff to translate
+
+#         out_fpath (PathLike): output geotiff
+
+#         pixel_box (kwimage.Boxes): box to crop to in pixel space.
+
+#         blocksize (int): COG tile size
+
+#         compress (str): gdal compression
+
+#         verbose (int): verbosity level
+
+#     Ignore:
+#         print(ub.cmd('gdalinfo ' + str(in_fpath))['out'])
+#         print(ub.cmd('gdalinfo ' + str(crs84_out_fpath))['out'])
+#         print(ub.cmd('gdalinfo ' + str(utm_out_fpath))['out'])
+#         print(ub.cmd('gdalinfo ' + str(pxl_out_fpath))['out'])
+#     """
+
+#     if box_epsg == 'pixel':
+#         return gdal_single_translate()
+#     else:
+#         return gdal_single_warp()
+
+
 def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
-                          compress='DEFLATE'):
+                          compress='DEFLATE', verbose=0):
     """
-    Crops using pixels
+    Crops geotiffs using pixels
+
+    Args:
+        in_fpath (PathLike): geotiff to translate
+
+        out_fpath (PathLike): output geotiff
+
+        pixel_box (kwimage.Boxes): box to crop to in pixel space.
+
+        blocksize (int): COG tile size
+
+        compress (str): gdal compression
+
+        verbose (int): verbosity level
 
     Example:
         >>> from watch.utils.util_gdal import *  # NOQA
@@ -168,6 +218,7 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
         >>> kwplot.imshow(imdata2, pnum=(1, 4, 3), title='utm-crop')
         >>> kwplot.imshow(imdata3, pnum=(1, 4, 4), title='pxl-crop')
 
+    Ignore:
         print(ub.cmd('gdalinfo ' + str(in_fpath))['out'])
         print(ub.cmd('gdalinfo ' + str(crs84_out_fpath))['out'])
         print(ub.cmd('gdalinfo ' + str(utm_out_fpath))['out'])
@@ -200,15 +251,14 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
 
     command = template.format(template)
     command = ub.paragraph(command)
-    if 0:
-        print(ub.paragraph(command))
-    cmd_info = ub.cmd(command, verbose=0, check=True)  # NOQA
-    # if cmd_info['ret'] != 0:
-    #     # print('\n\nCOMMAND FAILED: {!r}'.format(command))
-    #     # print(cmd_info['out'])
-    #     # print(cmd_info['err'])
-    #     raise Exception(cmd_info['err'])
-
+    try:
+        cmd_info = ub.cmd(command, verbose=verbose, check=True)  # NOQA
+    except subprocess.CalledProcessError as ex:
+        if verbose:
+            print('\n\nCOMMAND FAILED: {!r}'.format(ex.cmd))
+            print(ex.stdout)
+            print(ex.stderr)
+        raise
     os.rename(tmp_fpath, out_fpath)
 
 
@@ -256,65 +306,14 @@ def gdal_single_warp(in_fpath,
             is available and orthorectification is desired.
 
         use_perf_opts (bool): undocumented
+
         as_vrt (bool): undocumented
+
         use_te_geoidgrid (bool): undocumented
+
         dem_fpath (bool): undocumented
 
         tries (int): gdal can be flakey, set to force some number of retries
-
-    TODO:
-        - [ ] This should be a kwgeo function?
-
-    Ignore:
-        in_fpath =
-        s3://landsat-pds/L8/001/002/LC80010022016230LGN00/LC80010022016230LGN00_B1.TIF?useAnon=true&awsRegion=US_WEST_2
-
-        gdalwarp 's3://landsat-pds/L8/001/002/LC80010022016230LGN00/LC80010022016230LGN00_B1.TIF?useAnon=true&awsRegion=US_WEST_2' foo.tif
-
-    aws s3 --profile iarpa cp s3://kitware-smart-watch-data/processed/ta1/drop1/mtra/f9e7e52029bb4dfaadfe306e92641481/S2A_MSI_L2A_T23KPQ_20190509_20211103_SR_B05.tif foo.tif
-
-    gdalwarp 's3://kitware-smart-watch-data/processed/ta1/drop1/mtra/f9e7e52029bb4dfaadfe306e92641481/S2A_MSI_L2A_T23KPQ_20190509_20211103_SR_B05.tif' bar.tif
-
-    Note:
-        Proof of concept for warp from S3:
-
-        aws s3 --profile iarpa ls s3://kitware-smart-watch-data/processed/ta1/drop1/mtra/0bff43f318c14a97b19b682a36f28d26/
-
-        gdalinfo \
-            --config AWS_DEFAULT_PROFILE "iarpa" \
-            "/vsis3/kitware-smart-watch-data/processed/ta1/drop1/mtra/0bff43f318c14a97b19b682a36f28d26/LC08_L2SP_017039_20190404_20211102_02_T1_T17RMP_B7_BRDFed.tif"
-
-        gdalwarp \
-            --config AWS_DEFAULT_PROFILE "iarpa" \
-            -te_srs epsg:4326 \
-            -te -81.51 29.99 -81.49 30.01 \
-            -t_srs epsg:32617 \
-            -overwrite \
-            -of COG \
-            -co OVERVIEWS=AUTO \
-            "/vsis3/kitware-smart-watch-data/processed/ta1/drop1/mtra/0bff43f318c14a97b19b682a36f28d26/LC08_L2SP_017039_20190404_20211102_02_T1_T17RMP_B7_BRDFed.tif" \
-            partial_crop2.tif
-        gdalinfo partial_crop2.tif
-        kwplot partial_crop2.tif
-
-        gdalinfo \
-            --config AWS_DEFAULT_PROFILE "iarpa" \
-            --config AWS_CONFIG_FILE "$HOME/.aws/config" \
-            --config CPL_AWS_CREDENTIALS_FILE "$HOME/.aws/credentials" \
-            "/vsis3/kitware-smart-watch-data/processed/ta1/drop1/mtra/f9e7e52029bb4dfaadfe306e92641481/S2A_MSI_L2A_T23KPQ_20190509_20211103_SR_B05.tif"
-
-        gdalwarp \
-            --config AWS_DEFAULT_PROFILE "iarpa" \
-            --config AWS_CONFIG_FILE "$HOME/.aws/config" \
-            --config CPL_AWS_CREDENTIALS_FILE "$HOME/.aws/credentials" \
-            -te_srs epsg:4326 \
-            -te -43.51 -23.01 -43.49 -22.99 \
-            -t_srs epsg:32723 \
-            -overwrite \
-            -of COG \
-            "/vsis3/kitware-smart-watch-data/processed/ta1/drop1/mtra/f9e7e52029bb4dfaadfe306e92641481/S2A_MSI_L2A_T23KPQ_20190509_20211103_SR_B05.tif" \
-            partial_crop.tif
-        kwplot partial_crop.tif
 
     Notes:
         In gdalwarp:
@@ -447,29 +446,17 @@ def gdal_single_warp(in_fpath,
 
     command = template.format(**template_kw)
     command = ub.paragraph(command)
-    # if verbose:
-    #     print(ub.paragraph(command))
-    # cmd_info = ub.cmd(command, verbose=verbose, check=True)  # NOQA
-    import subprocess
+
     try:
-        if 1:
-            import retry
-            retry.api.retry_call(
-                ub.cmd, (command,), dict(check=True, verbose=verbose),
-                tries=tries, delay=1, exceptions=subprocess.CalledProcessError)
-        else:
-            ub.cmd(command, check=True, verbose=verbose)
+        retry.api.retry_call(
+            ub.cmd, (command,), dict(check=True, verbose=verbose),
+            tries=tries, delay=1, exceptions=subprocess.CalledProcessError)
     except subprocess.CalledProcessError as ex:
-        print('\n\nCOMMAND FAILED: {!r}'.format(ex.cmd))
-        print(ex.stdout)
-        print(ex.stderr)
+        if verbose:
+            print('\n\nCOMMAND FAILED: {!r}'.format(ex.cmd))
+            print(ex.stdout)
+            print(ex.stderr)
         raise
-    # if cmd_info['ret'] != 0:
-    #     import subprocess
-    #     print('\n\nCOMMAND FAILED: {!r}'.format(command))
-    #     print(cmd_info['out'])
-    #     print(cmd_info['err'])
-    #     raise Exception(cmd_info['err'])
 
 
 def gdal_multi_warp(in_fpaths, out_fpath, *args, nodata=None, tries=0, **kwargs):

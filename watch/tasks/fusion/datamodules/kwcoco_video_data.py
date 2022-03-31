@@ -712,7 +712,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> channels = 'B10|B8a|B1|B8'
         >>> sample_shape = (3, 256, 256)
-        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, time_sampling='soft2+distribute', diff_inputs=0, match_histograms=0)
+        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, time_sampling='soft2+distribute', diff_inputs=0, match_histograms=0, temporal_dropout=0.5)
         >>> index = len(self) // 4
         >>> item = self[index]
         >>> canvas = self.draw_item(item, overlay_on_image=1)
@@ -1120,13 +1120,21 @@ class KWCocoVideoDataset(data.Dataset):
                 tr_['space_slice'] = space_box.astype(int).to_slices()[0]
 
             # Temporal augmentation
+            print('temporal_augment_rate = {!r}'.format(temporal_augment_rate))
             if rng.rand() < temporal_augment_rate:
+                old_gids = tr_['gids']
                 time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
                 valid_gids = self.new_sample_grid['vidid_to_valid_gids'][vidid]
-                tr_['gids'] = list(ub.take(valid_gids, time_sampler.sample(tr_['main_idx'])))
+                new_gids = list(ub.take(valid_gids, time_sampler.sample(tr_['main_idx'])))
+                if 1:
+                    print('Temporal resample')
+                    print('old_gids = {!r}'.format(old_gids))
+                    print('new_gids = {!r}'.format(new_gids))
+                tr_['gids'] = new_gids
 
             temporal_dropout_rate = self.temporal_dropout
             do_temporal_dropout = rng.rand() < temporal_dropout_rate
+            print('do_temporal_dropout = {!r}'.format(do_temporal_dropout))
             if do_temporal_dropout:
                 # Temporal dropout
                 gids = tr_['gids']
@@ -3728,6 +3736,11 @@ def make_track_based_spatial_samples(coco_dset):
 def _boxes_snap_to_edges(given_box, snap_target):
     """
     Ignore:
+        given_box = space_box
+        , snap_target
+
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import _boxes_snap_to_edges
         >>> snap_target = kwimage.Boxes([[0, 0, 10, 10]], 'ltrb')
         >>> given_box = kwimage.Boxes([[-3, 5, 3, 13]], 'ltrb')
         >>> adjusted_box = _boxes_snap_to_edges(given_box, snap_target)
@@ -3740,11 +3753,11 @@ def _boxes_snap_to_edges(given_box, snap_target):
     s_x1, s_y1, s_x2, s_y2 = snap_target.components
     g_x1, g_y1, g_x2, g_y2 = given_box.components
 
-    xoffset1 = -min((g_x1 - s_x1), 0)
-    yoffset1 = -min((g_y1 - s_y1), 0)
+    xoffset1 = -np.minimum((g_x1 - s_x1), 0)
+    yoffset1 = -np.minimum((g_y1 - s_y1), 0)
 
-    xoffset2 = min((s_x2 - g_x2), 0)
-    yoffset2 = min((s_y2 - g_y2), 0)
+    xoffset2 = np.minimum((s_x2 - g_x2), 0)
+    yoffset2 = np.minimum((s_y2 - g_y2), 0)
 
     xoffset = (xoffset1 + xoffset2).ravel()[0]
     yoffset = (yoffset1 + yoffset2).ravel()[0]
