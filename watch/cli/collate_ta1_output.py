@@ -55,7 +55,8 @@ S2_ASSET_NAME_MAP = {'image-B01': 'B01',
 # use in the collated output for SSH scoring.  Note that this also
 # serves as a filter as any asset name not found here will be excluded
 # from the output
-S2_SSH_ASSET_NAME_MAP = {'image-B02': '10m_B02',
+S2_SSH_ASSET_NAME_MAP = {'image-B01': '60m_B01',
+                         'image-B02': '10m_B02',
                          'image-B03': '10m_B03',
                          'image-B04': '10m_B04',
                          'image-B8A': 'B05',
@@ -83,7 +84,8 @@ L8_ASSET_NAME_MAP = {'image-B1': 'B01',
 # in the collated output for SSH scoring.  Note that this also serves
 # as a filter as any asset name not found here will be excluded from
 # the output
-L8_SSH_ASSET_NAME_MAP = {'image-B2': 'B02',
+L8_SSH_ASSET_NAME_MAP = {'image-B1': 'B01',
+                         'image-B2': 'B02',
                          'image-B3': 'B03',
                          'image-B4': 'B04',
                          'image-B5': 'B05',
@@ -282,7 +284,7 @@ def collate_item(stac_item,
                                         S2_ASSET_NAME_MAP,
                                         S2_SSH_ASSET_NAME_MAP,
                                         util_bands.SENTINEL2,
-                                        additional_ssh_qa_resolutions=[10])
+                                        additional_ssh_qa_resolutions=[10, 60])
     elif platform in SUPPORTED_WV_PLATFORMS:
         platform_collation_fn = collate_wv_item
 
