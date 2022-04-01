@@ -76,6 +76,10 @@ def main():
                         action='store_true',
                         default=False,
                         help='Only upload output for SSH scoring')
+    parser.add_argument('--skip-ssh',
+                        action='store_true',
+                        default=False,
+                        help='Skip SSH formatting / uploads')
     parser.add_argument("-j", "--jobs",
                         type=int,
                         default=1,
@@ -128,6 +132,7 @@ def run_ta1_collation_streaming(input_path,
                                 performer_code='kit',
                                 eval_num='1',
                                 ssh_only=False,
+                                skip_ssh=False,
                                 jobs=1):
     if aws_profile is not None:
         aws_base_command =\
@@ -180,7 +185,8 @@ def run_ta1_collation_streaming(input_path,
                                       destination_outbucket,
                                       performer_code,
                                       eval_num,
-                                      ssh_only=ssh_only)
+                                      ssh_only=ssh_only,
+                                      skip_ssh=skip_ssh)
                       for stac_item in input_stac_items]
 
     output_stac_items_by_collection = {}
