@@ -1574,7 +1574,8 @@ class KWCocoVideoDataset(data.Dataset):
                 if RGB_IFFY_HACK and set(stream).issubset({'blue', 'green', 'red'}):
                     import warnings
                     with warnings.catch_warnings():
-                        warnings.filterwarnings('ignore', 'empty slice')
+                        warnings.filterwarnings('ignore', 'empty slice', RuntimeWarning)
+                        warnings.filterwarnings('ignore', 'All-NaN', RuntimeWarning)
                         if any_invalid:
                             chan_mins = np.nanmin(sample['im'], axis=(0, 1, 2), keepdims=1)
                             invalid_mask
@@ -2326,6 +2327,24 @@ class KWCocoVideoDataset(data.Dataset):
         # what is registered in the dataset. Need to find a good way to account
         # for this.
 
+        # Make a list of all unique modes in the dataset.
+        unique_sensor_modes = set(sensor_mode_hist.keys())
+        if True:
+            print('Looking for unique modes')
+            # This looks at the entire dataset, might want to
+            # make a better way of getting this info.
+            # self.sampler.dset.videos().images
+            coco_images = self.sampler.dset.images().coco_images
+            hacked = set()
+            for c in coco_images:
+                sspec = c.img.get('sensor_coarse', '')
+                # Ensure channels are returned in requested order
+                cspec = (self.input_channels & c.channels.fuse().normalize()).fuse().normalize().spec
+                if cspec:
+                    hacked.add((sspec, cspec))
+            unique_sensor_modes.update(hacked)
+            print(f'{unique_sensor_modes=}')
+
         prog = ub.ProgIter(loader, desc='estimate dataset stats')
         for batch_items in prog:
             for item in batch_items:
@@ -2373,23 +2392,6 @@ class KWCocoVideoDataset(data.Dataset):
                 timer.first = 0
                 timer.tic()
         self.disable_augmenter = False
-
-        # Make a list of all unique modes in the dataset.
-        unique_sensor_modes = set(sensor_mode_hist.keys())
-
-        if True:
-            # This looks at the entire dataset, might want to
-            # make a better way of getting this info.
-            # self.sampler.dset.videos().images
-            coco_images = self.sampler.dset.images().coco_images
-            hacked = set()
-            for c in coco_images:
-                sspec = c.img.get('sensor_coarse', '')
-                # Ensure channels are returned in requested order
-                cspec = (self.input_channels & c.channels.fuse().normalize()).fuse().normalize().spec
-                if cspec:
-                    hacked.add((sspec, cspec))
-            unique_sensor_modes.update(hacked)
 
         channel_stats = channel_stats.to_dict()
 

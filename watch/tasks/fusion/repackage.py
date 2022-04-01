@@ -182,6 +182,14 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
 
         if not checkpoint_fpaths:
             checkpoint_fpaths = util_path.coerce_patterned_paths(dpath)
+
+        import re
+        # Discard the -v2, -v3, etc... paths if a different one exists
+        def remove_v_suffix(x):
+            return re.sub(r'-v[0-9]+$', '', x.stem, flags=re.MULTILINE)
+        checkpoint_fpaths = list(ub.unique(
+            sorted(checkpoint_fpaths), key=remove_v_suffix))
+
         print('checkpoint_fpaths = {}'.format(ub.repr2(checkpoint_fpaths, nl=1)))
 
         for checkpoint_fpath in checkpoint_fpaths:
@@ -189,6 +197,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
                 checkpoint_fpath = ub.Path(checkpoint_fpath)
                 parts = checkpoint_fpath.name.split('-')
                 epoch = int(parts[0].split('epoch=')[1])
+
                 # print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
                 # print('parts = {!r}'.format(parts))
                 # print('epoch = {!r}'.format(epoch))
@@ -383,6 +392,38 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
 
     #         python ~/code/watch/watch/tasks/fusion/schedule_inference.py schedule_evaluation --gpus=auto --run=True
     #         """))
+
+
+def _cleanup_extra_versions_in_dvc():
+    import re
+    dpath = ub.Path('$HOME/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/packages').expand()
+
+    package_fpaths = list(dpath.glob('*/*.pt.dvc'))
+    # Discard the -v2, -v3, etc... paths if a different one exists
+    def remove_v_suffix(x):
+        return re.sub(r'-v[0-9]+$', '', x.stem, flags=re.MULTILINE)
+    unique_package_fpaths = list(ub.unique(
+        sorted(package_fpaths), key=remove_v_suffix))
+    dup_packages = set(package_fpaths) - set(unique_package_fpaths)
+
+    dvc_package_fpaths = list(dpath.glob('*/*.pt.dvc'))
+    def remove_v_dvc_suffix(x):
+        return re.sub(r'-v[0-9]+$', '', x.stem.replace('.pt', ''), flags=re.MULTILINE)
+    unique_dvc_package_fpaths = list(ub.unique(
+        sorted(dvc_package_fpaths), key=remove_v_dvc_suffix))
+    dup_dvc_packages = set(dvc_package_fpaths) - set(unique_dvc_package_fpaths)
+
+    tracked_to_remove = []
+    for dup_dvc_pkg in dup_dvc_packages:
+        pkg_path = dup_dvc_pkg.augment(ext='')
+        if pkg_path.exists():
+            tracked_to_remove.append(pkg_path)
+
+    for p in tracked_to_remove:
+        p.delete()
+
+    for p in dup_dvc_packages:
+        p.delete()
 
 
 if __name__ == '__main__':

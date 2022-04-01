@@ -402,7 +402,8 @@ class SerialQueue(cmd_queue.Queue):
             print(ub.highlight_code(f'# --- {str(self.fpath)}', 'bash'))
             print(ub.highlight_code(code, 'bash'))
 
-    def run(self):
+    def run(self, block=None):
+        # block is always true here
         self.write()
         # os.system(f'bash {self.fpath}')
         # verbose=3, check=True)

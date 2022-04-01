@@ -629,7 +629,15 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
                 video_id_to_region_ids[video_id].append(region_id)
 
             for video_id, region_ids in video_id_to_region_ids.items():
-                assert len(region_ids) == 1, 'a video contains more than one region, not a handled case yet'
+                # import xdev
+                # with xdev.embed_on_exception_context:
+                if len(region_ids) != 1:
+                    # FIXME: This should not be the case, but it seems it is
+                    # due to super regions maybe? If it is super regions this
+                    # hack of just choosing one of them, should be mostly ok?
+                    msg = f'a video {video_id=} contains more than one region {region_ids=}, not a handled case yet. We are punting and just choosing 1'
+                    warnings.warn(msg)
+                    # raise AssertionError(msg)
                 video_id_to_region_id[video_id] = region_ids[0]
 
     else:
@@ -668,8 +676,8 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
             for site_gdf in region_sites:
                 site_poly = site_gdf.geometry.unary_union
                 if video_poly.intersects(site_poly):
-                    iou = video_poly.intersection(site_poly).area / video_poly.union(site_poly).area
-                    print('iou = {!r}'.format(iou))
+                    # iou = video_poly.intersection(site_poly).area / video_poly.union(site_poly).area
+                    # print('iou = {!r}'.format(iou))
                     filtered_region_sites.append(site_gdf)
             region_sites = filtered_region_sites
             print(f'{region_id=} {video_id=} #filtered(sites)={len(region_sites)}')

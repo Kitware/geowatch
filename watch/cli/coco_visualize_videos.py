@@ -85,7 +85,7 @@ class CocoVisualizeConfig(scfg.Config):
         'num_frames': scfg.Value(None, type=str, help='show the first N frames from each video, if None, all are shown'),
         'start_frame': scfg.Value(0, type=str, help='If specified each video will start on this frame'),
 
-        'skip_missing': scfg.Value(False, type=str, help='If true, skip any image that does not have the requested channels'),
+        'skip_missing': scfg.Value(True, type=str, help='If true, skip any image that does not have the requested channels. Otherwise a nan image will be shown'),
 
         # TODO: better support for this
         # TODO: use the kwcoco_video_data, has good logic for this

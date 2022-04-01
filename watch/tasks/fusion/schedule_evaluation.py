@@ -434,10 +434,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # RUN
     if config['run']:
         # ub.cmd('bash ' + str(driver_fpath), verbose=3, check=True)
-        queue.run()
-        agg_state = queue.monitor()
-        if not agg_state['errored']:
-            queue.kill()
+        queue.run(block=True)
     else:
         driver_fpath = queue.write()
         print('Wrote script: to run execute:\n{}'.format(driver_fpath))

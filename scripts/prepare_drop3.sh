@@ -298,5 +298,34 @@ prepare_wv_crop_from_sites(){
         --region_globstr="$DVC_DPATH/annotations/site_models/*.geojson" \
         --cache=0 \
         --serial=True --run=0
+}
+
+
+prepare_cropped_from_tracks(){
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
+    echo "$DVC_DPATH"
+    python -m watch.cli.coco_crop_tracks \
+        --src="$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json" \
+        --dst="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/imgonly_S2_L8_WV.kwcoco.json" \
+        --mode=process --workers=8
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
+    IMGONLY_FPATH="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/imgonly_S2_L8_WV.kwcoco.json"
+    echo "IMGONLY_FPATH = $IMGONLY_FPATH"
+    python -m watch.cli.coco_remove_empty_images \
+        --src="$IMGONLY_FPATH.tmp" \
+        --dst="$IMGONLY_FPATH.tmp" \
+        --workers=8 \
+        --channels=red|blue \
+        --interactive=True \
+        --overview=0 
+
+    BASE_DPATH="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json"
+    python -m watch project_annotations \
+        --src "$IMGONLY_FPATH.tmp" \
+        --dst "$BASE_DPATH" \
+        --site_models="$DVC_DPATH/annotations/site_models/*.geojson" \
+        --region_models="$DVC_DPATH/annotations/region_models/*.geojson"
 
 }
