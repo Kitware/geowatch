@@ -139,6 +139,10 @@ def main():
                         action='store_true',
                         default=False,
                         help='Only upload output for SSH scoring')
+    parser.add_argument('--skip-ssh',
+                        action='store_true',
+                        default=False,
+                        help='Skip SSH formatting / uploads')
     parser.add_argument("-j", "--jobs",
                         type=int,
                         default=1,
@@ -210,7 +214,8 @@ def collate_item(stac_item,
                  output_bucket,
                  performer_code,
                  eval_num,
-                 ssh_only=False):
+                 ssh_only=False,
+                 skip_ssh=False):
     # TODO: Make use of `working_dir` argument here; not currently
     # used but expected by streaming decorators (in util_framework)
     if isinstance(stac_item, dict):
@@ -293,7 +298,8 @@ def collate_item(stac_item,
                                              output_item_id,
                                              item_s3_outdir,
                                              ssh_outdir,
-                                             ssh_only=ssh_only)
+                                             ssh_only=ssh_only,
+                                             skip_ssh=skip_ssh)
 
     # Completely discard item if platform collation fails
     if output_stac_item is None:
@@ -435,7 +441,8 @@ def generic_collate_item(asset_name_map,
                          item_outdir,
                          ssh_outdir,
                          additional_ssh_qa_resolutions=[],
-                         ssh_only=False):
+                         ssh_only=False,
+                         skip_ssh=False):
     item_outdir_base = os.path.basename(item_outdir)
     output_assets = {}
     for asset_name, asset in stac_item.assets.items():
@@ -481,32 +488,34 @@ def generic_collate_item(asset_name_map,
 
                 asset_href = _remap_quality_mask(asset_href, tmpdirname)
 
-                for qa_res in additional_ssh_qa_resolutions:
-                    local_resized_qa_outpath = os.path.join(
-                        tmpdirname, 'qa_{}.tif'.format(qa_res))
+                if not skip_ssh:
+                    for qa_res in additional_ssh_qa_resolutions:
+                        local_resized_qa_outpath = os.path.join(
+                            tmpdirname, 'qa_{}.tif'.format(qa_res))
 
-                    if not os.path.isfile(local_resized_qa_outpath):
-                        subprocess.run(['gdalwarp',
-                                        '-overwrite',
-                                        '-of', 'GTiff',
-                                        '-r', 'near',
-                                        '-q',
-                                        '-tr', str(qa_res), str(qa_res),
-                                        asset_href,
-                                        local_resized_qa_outpath], check=True)
+                        if not os.path.isfile(local_resized_qa_outpath):
+                            subprocess.run(['gdalwarp',
+                                            '-overwrite',
+                                            '-of', 'GTiff',
+                                            '-r', 'near',
+                                            '-q',
+                                            '-tr', str(qa_res), str(qa_res),
+                                            asset_href,
+                                            local_resized_qa_outpath],
+                                           check=True)
 
-                    local_resized_qa_outpath = convert_to_cog(
-                        local_resized_qa_outpath,
-                        resampling='NEAREST')
+                        local_resized_qa_outpath = convert_to_cog(
+                            local_resized_qa_outpath,
+                            resampling='NEAREST')
 
-                    resized_qa_ssh_outpath = '/'.join(
-                        (ssh_outdir, "{}_SSH_{}m_{}.tif".format(
-                            output_item_id,
-                            int(qa_res),
-                            ssh_asset_suffix)))
-                    subprocess.run([*aws_base_command,
-                                    local_resized_qa_outpath,
-                                    resized_qa_ssh_outpath], check=True)
+                        resized_qa_ssh_outpath = '/'.join(
+                            (ssh_outdir, "{}_SSH_{}m_{}.tif".format(
+                                output_item_id,
+                                int(qa_res),
+                                ssh_asset_suffix)))
+                        subprocess.run([*aws_base_command,
+                                        local_resized_qa_outpath,
+                                        resized_qa_ssh_outpath], check=True)
 
                 asset_href = convert_to_cog(asset_href, resampling='NEAREST')
             else:
@@ -516,7 +525,7 @@ def generic_collate_item(asset_name_map,
                 subprocess.run([*aws_base_command,
                                 asset_href, stac_asset_outpath], check=True)
 
-            if ssh_asset_suffix is not None:
+            if ssh_asset_suffix is not None and not skip_ssh:
                 ssh_asset_outpath = '/'.join(
                     (ssh_outdir, "{}_SSH_{}.tif".format(
                         output_item_id, ssh_asset_suffix)))
@@ -524,25 +533,27 @@ def generic_collate_item(asset_name_map,
                 subprocess.run([*aws_base_command,
                                 asset_href, ssh_asset_outpath], check=True)
 
-    with tempfile.NamedTemporaryFile() as temporary_file:
-        datetime = stac_item.properties['datetime']
+    if not skip_ssh:
+        with tempfile.NamedTemporaryFile() as temporary_file:
+            datetime = stac_item.properties['datetime']
 
-        with open(temporary_file.name, 'w') as f:
-            print(datetime, file=f)
+            with open(temporary_file.name, 'w') as f:
+                print(datetime, file=f)
 
-        datetime_outpath = '/'.join(
-                    (ssh_outdir, "{}_SSH_datetime.txt".format(output_item_id)))
-        subprocess.run([*aws_base_command,
-                        temporary_file.name, datetime_outpath], check=True)
-
-        for qa_res in additional_ssh_qa_resolutions:
-            qa_res_datetime_outpath = '/'.join(
-                (ssh_outdir, "{}_SSH_{}m_datetime.txt".format(
-                    output_item_id, qa_res)))
-
+            datetime_outpath = '/'.join(
+                        (ssh_outdir, "{}_SSH_datetime.txt".format(
+                            output_item_id)))
             subprocess.run([*aws_base_command,
-                            temporary_file.name, qa_res_datetime_outpath],
-                           check=True)
+                            temporary_file.name, datetime_outpath], check=True)
+
+            for qa_res in additional_ssh_qa_resolutions:
+                qa_res_datetime_outpath = '/'.join(
+                    (ssh_outdir, "{}_SSH_{}m_datetime.txt".format(
+                        output_item_id, qa_res)))
+
+                subprocess.run([*aws_base_command,
+                                temporary_file.name, qa_res_datetime_outpath],
+                               check=True)
 
     stac_item.assets = output_assets
 
@@ -554,7 +565,8 @@ def collate_wv_item(stac_item,
                     output_item_id,
                     item_outdir,
                     ssh_outdir,
-                    ssh_only=False):
+                    ssh_only=False,
+                    skip_ssh=False):
     # WV items only have a single "data" asset containing all bands
     data_asset = stac_item.assets.get('data')
     if data_asset is None:
@@ -692,7 +704,8 @@ def collate_ta1_output(stac_catalog,
                        jobs=1,
                        upload_collections=False,
                        show_progress=False,
-                       ssh_only=False):
+                       ssh_only=False,
+                       skip_ssh=False):
     if isinstance(stac_catalog, str):
         catalog = pystac.read_file(href=stac_catalog).full_copy()
     else:
@@ -724,7 +737,8 @@ def collate_ta1_output(stac_catalog,
                                       output_bucket,
                                       performer_code,
                                       eval_num,
-                                      ssh_only)
+                                      ssh_only,
+                                      skip_ssh)
                       for stac_item_dict in input_stac_items]
 
     output_stac_items_by_collection = {}
