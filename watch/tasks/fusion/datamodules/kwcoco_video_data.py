@@ -1200,7 +1200,7 @@ class KWCocoVideoDataset(data.Dataset):
 
             # Spatial augmentation:
             if rng.rand() < spatial_augment_rate:
-                # space_box = kwimage.Boxes.from_slice(tr_['space_slice'])
+                # space_box = kwimage.Boxes.from_slice(tr_['space_slice'], endpoint=False)
                 y_sl, x_sl = tr_['space_slice']
                 space_box = kwimage.Boxes([
                     [x_sl.start, y_sl.start, x_sl.stop - 1, y_sl.stop - 1],

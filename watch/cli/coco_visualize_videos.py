@@ -498,6 +498,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                fixed_normalization_scheme=None,
                                any3=True, dset_idstr='',
                                skip_missing=False,
+                               only_boxes=1,
                                cmap='viridis', verbose=0):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
@@ -816,7 +817,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             dets = dets.scale(info['scale'])
             dets = dets.translate(info['offset'])
             # info['scale']
-            ONLY_BOXES = 0
+            ONLY_BOXES = only_boxes
             if ONLY_BOXES:
                 with ub.Timer('dets.draw_on 1', verbose=verbose):
                     # ann_canvas = dets.draw_on(ann_canvas, color='classes')

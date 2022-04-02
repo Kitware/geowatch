@@ -5,7 +5,6 @@ import pytorch_lightning as pl
 import ubelt as ub
 import copy
 from os.path import join
-from typing import Dict, Any
 
 
 class Packager(pl.callbacks.Callback):
