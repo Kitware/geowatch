@@ -86,8 +86,7 @@ class SimpleDVC():
 
     def add(self, paths):
         import dvc.main
-        if not ub.iterable(paths):
-            paths = [paths]
+        paths = _ensure_iterable(paths)
         dvc_root = self.find_root(paths[0])
         rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
         with ChDir(dvc_root):
@@ -100,10 +99,7 @@ class SimpleDVC():
 
     def push(self, path, remote=None, recursive=False, jobs=None):
         import dvc.main
-        if not ub.iterable(path):
-            paths = [path]
-        else:
-            paths = path
+        paths = _ensure_iterable(path)
         dvc_root = self.find_root(paths[0])
         extra_args = []
         if remote:
@@ -116,3 +112,16 @@ class SimpleDVC():
         with ChDir(dvc_root):
             dvc_command = ['push'] + extra_args + [str(p.relative_to(dvc_root)) for p in paths]
             dvc.main.main(dvc_command)
+
+    def unprotect(self, path):
+        import dvc.main
+        paths = _ensure_iterable(path)
+        dvc_root = self.find_root(paths[0])
+        rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
+        with ChDir(dvc_root):
+            dvc_command = ['unprotect'] + rel_paths
+            dvc.main.main(dvc_command)
+
+
+def _ensure_iterable(inputs):
+    return inputs if ub.iterable(inputs) else [inputs]

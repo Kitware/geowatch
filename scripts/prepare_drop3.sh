@@ -337,6 +337,7 @@ prepare_cropped_from_tracks(){
     7z a splits.zip data*.kwcoco.json
     dvc add -- *.zip
     git commit -am "Add splits"
+    git push 
     dvc push -r aws splits.zip
 
 }

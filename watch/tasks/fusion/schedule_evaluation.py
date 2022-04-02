@@ -15,6 +15,20 @@ python -m watch.tasks.fusion.schedule_evaluation \
         --test_dataset="$VALI_FPATH" \
         --run=0 --skip_existing=True
 
+# Note: change backend to tmux if slurm is not installed
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+EXPT_GROUP_CODE=eval3_candidates
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+        --gpus="0,1,2,3" \
+        --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
+        --test_dataset="$VALI_FPATH" \
+        --run=1 --skip_existing=True --backend=slurm \
+        --enable_pred=False \
+        --enable_eval=redo \
+        --draw_heatmaps=False
 
 """
 import ubelt as ub
@@ -36,6 +50,9 @@ class ScheduleEvaluationConfig(scfg.Config):
 
         'enable_eval': scfg.Value(True, help='if False, then evaluation is not run'),
         'enable_pred': scfg.Value(True, help='if False, then prediction is not run'),
+
+        'draw_heatmaps': scfg.Value(True, help='if true draw heatmaps on eval'),
+        'draw_curves': scfg.Value(True, help='if true draw curves on eval'),
 
         'partition': scfg.Value(None, help='specify slurm partition (slurm backend only)'),
         'mem': scfg.Value(None, help='specify slurm memory per task (slurm backend only)'),
@@ -157,6 +174,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
     config = ScheduleEvaluationConfig(cmdline=cmdline, data=kwargs)
     model_globstr = config['model_globstr']
     test_dataset = config['test_dataset']
+    draw_curves = config['draw_curves']
+    draw_heatmaps = config['draw_heatmaps']
 
     if model_globstr is None and test_dataset is None:
         raise ValueError('model_globstr and test_dataset are required')
@@ -317,13 +336,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
         queue.add_header_command(virtualenv_cmd)
 
     recompute_pred = recompute
-    recompute_eval = recompute or 0
+    recompute_eval = recompute or (with_eval == 'redo')
 
     pred_cfg = {}
-
-    skip_existing = config['skip_existing']
-    import xdev
-    xdev.embed()
 
     for info in packages_to_eval:
         package_fpath = info['fpath']
@@ -333,7 +348,30 @@ def schedule_evaluation(cmdline=False, **kwargs):
             sidecar2=True, as_json=False,
             pred_cfg=pred_cfg,
         )
+        info['suggestions'] = suggestions
 
+    skip_existing = config['skip_existing']
+
+    if with_eval == 'redo':
+        # Need to dvc unprotect
+        needs_unprotect = []
+        for info in packages_to_eval:
+            suggestions = info['suggestions']
+            pred_dataset_fpath = ub.Path(suggestions['pred_dataset'])  # NOQA
+            eval_metrics_fpath = ub.Path(suggestions['eval_dpath']) / 'curves/measures2.json'
+            eval_metrics_dvc_fpath = ub.Path(suggestions['eval_dpath']) / 'curves/measures2.json.dvc'
+
+            if eval_metrics_dvc_fpath.exists():
+                needs_unprotect.append(eval_metrics_fpath)
+
+        if needs_unprotect:
+            from watch.utils.simple_dvc import SimpleDVC
+            simple_dvc = SimpleDVC(dvc_dpath)
+            simple_dvc.unprotect(needs_unprotect)
+
+    for info in packages_to_eval:
+        package_fpath = info['fpath']
+        suggestions = info['suggestions']
         pred_dataset_fpath = ub.Path(suggestions['pred_dataset'])  # NOQA
         eval_metrics_fpath = ub.Path(suggestions['eval_dpath']) / 'curves/measures2.json'
         eval_metrics_dvc_fpath = ub.Path(suggestions['eval_dpath']) / 'curves/measures2.json.dvc'
@@ -410,10 +448,11 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     --pred_dataset={pred_dataset} \
                       --eval_dpath={eval_dpath} \
                       --score_space=video \
-                      --draw_curves=1 \
-                      --draw_heatmaps=1 \
+                      --draw_curves={draw_curves} \
+                      --draw_heatmaps={draw_heatmaps} \
                       --workers=2
-                ''').format(**suggestions)
+                ''').format(**suggestions, draw_curves=draw_curves,
+                            draw_heatmaps=draw_heatmaps)
             if not recompute_eval:
                 # TODO: use a real stamp file
                 # Only run the command if its expected output does not exist
