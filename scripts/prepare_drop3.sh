@@ -314,18 +314,29 @@ prepare_cropped_from_tracks(){
     IMGONLY_FPATH="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/imgonly_S2_L8_WV.kwcoco.json"
     echo "IMGONLY_FPATH = $IMGONLY_FPATH"
     python -m watch.cli.coco_remove_empty_images \
-        --src="$IMGONLY_FPATH.tmp" \
+        --src="$IMGONLY_FPATH" \
         --dst="$IMGONLY_FPATH.tmp" \
         --workers=8 \
         --channels=red|blue \
         --interactive=True \
         --overview=0 
 
+    mv "$IMGONLY_FPATH.tmp" "$IMGONLY_FPATH"
+
     BASE_DPATH="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json"
     python -m watch project_annotations \
-        --src "$IMGONLY_FPATH.tmp" \
+        --src "$IMGONLY_FPATH" \
         --dst "$BASE_DPATH" \
         --site_models="$DVC_DPATH/annotations/site_models/*.geojson" \
         --region_models="$DVC_DPATH/annotations/region_models/*.geojson"
+
+    python -m watch.cli.prepare_splits \
+        --base_fpath="$BASE_DPATH" \
+        --run=1 --backend=tmux
+
+    7z a splits.zip data*.kwcoco.json
+    dvc add -- *.zip
+    git commit -am "Add splits"
+    dvc push -r aws splits.zip
 
 }

@@ -79,7 +79,7 @@ def _submit_split_jobs(base_fpath, queue, depends=[]):
             --dst {splits['train']} \
             --select_videos '.name | startswith("KR_") | not'
         ''')
-    split_jobs['train'] = queue.submit(command, begin=10, depends=depends)
+    split_jobs['train'] = queue.submit(command, begin=1, depends=depends)
 
     command = ub.codeblock(
         fr'''

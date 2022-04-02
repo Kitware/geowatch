@@ -68,9 +68,9 @@ schedule-prediction-and-evlauation(){
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1" \
-            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*V3*/*.pt" \
             --test_dataset="$VALI_FPATH" \
-            --run=0 --skip_existing=True --backend=slurm
+            --run=1 --skip_existing=True --backend=slurm
 
     # Be sure to DVC add the eval results after!
     DVC_DPATH=$(python -m watch.cli.find_dvc)
@@ -891,7 +891,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
 CHANNELS="blue|green|red,nir|swir16|swir22"
-EXPERIMENT_NAME=Drop3_SpotCheck_V320
+EXPERIMENT_NAME=Drop3_SpotCheck_V321
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
@@ -915,7 +915,7 @@ python -m watch.tasks.fusion.fit \
     --tokenizer=linconv \
     --optimizer=AdamW \
     --arch_name=smt_it_stm_n12 \
-    --decoder=segmenter \
+    --decoder=mlp \
     --draw_interval=5m \
     --use_centered_positives=True \
     --num_draw=8 \
