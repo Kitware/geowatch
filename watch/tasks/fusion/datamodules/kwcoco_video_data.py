@@ -1200,7 +1200,11 @@ class KWCocoVideoDataset(data.Dataset):
 
             # Spatial augmentation:
             if rng.rand() < spatial_augment_rate:
-                space_box = kwimage.Boxes.from_slice(tr_['space_slice'])
+                # space_box = kwimage.Boxes.from_slice(tr_['space_slice'])
+                y_sl, x_sl = tr_['space_slice']
+                space_box = kwimage.Boxes([
+                    [x_sl.start, y_sl.start, x_sl.stop - 1, y_sl.stop - 1],
+                ], 'ltrb')
                 w = space_box.width.ravel()[0]
                 h = space_box.height.ravel()[0]
                 # hack: this prevents us from assuming there is a target in the
@@ -1210,11 +1214,10 @@ class KWCocoVideoDataset(data.Dataset):
                     rng.randint(-w // 2.7, w // 2.7),
                     rng.randint(-h // 2.7, h // 2.7)))
                 space_box = space_box.warp(aff).quantize()
-                space_box = kwimage.Boxes.from_slice(tr_['space_slice']).warp(aff).quantize()
 
                 # prevent shifting the target off the edge of the video
                 snap_target = kwimage.Boxes([[0, 0, vid_width, vid_height]], 'ltrb')
-                _boxes_snap_to_edges(space_box, snap_target)
+                space_box = _boxes_snap_to_edges(space_box, snap_target)
 
                 tr_['space_slice'] = space_box.astype(int).to_slices()[0]
 
@@ -1413,7 +1416,9 @@ class KWCocoVideoDataset(data.Dataset):
         tr_['as_xarray'] = False
         tr_['use_experimental_loader'] = 1
 
-        tr_ = self._augment_spacetime_target(tr_)
+        import xdev
+        with xdev.embed_on_exception_context:
+            tr_ = self._augment_spacetime_target(tr_)
 
         if self.channels:
             tr_['channels'] = self.sample_channels
@@ -1506,17 +1511,26 @@ class KWCocoVideoDataset(data.Dataset):
 
                     # Skip if more then 50% cloudy
 
+            if sensor_channels.numel() == 0:
+                force_bad = True
+
             for stream in sensor_channels.streams():
                 if force_bad:
                     break
                 tr_frame['channels'] = stream
                 # TODO: FIXME: Use the correct nodata value here!
-                sample = sampler.load_sample(
-                    tr_frame, with_annots=first_with_annot,
-                    nodata='float',
-                    padkw={'constant_values': np.nan},
-                    dtype=np.float32
-                )
+                with xdev.embed_on_exception_context:
+
+                    if 0:
+                        coco_img = sampler.coco_dset.coco_img(tr_frame['gids'][0])
+                        print(ub.repr2(coco_img.img, nl=-3))
+
+                    sample = sampler.load_sample(
+                        tr_frame, with_annots=first_with_annot,
+                        nodata='float',
+                        padkw={'constant_values': np.nan},
+                        dtype=np.float32
+                    )
 
                 WV_NODATA_HACK = 1
                 if WV_NODATA_HACK:
@@ -1525,7 +1539,8 @@ class KWCocoVideoDataset(data.Dataset):
                         if set(stream).issubset({'blue', 'green', 'red'}):
                             # Check to see if the nodata value is known in the
                             # image metadata
-                            band_metas = coco_img.find_asset_obj('red').get('band_metas', [{}])
+                            obj = coco_img.find_asset_obj('red')
+                            band_metas = obj.get('band_metas', [{}])
                             nodata_vals = [m.get('nodata', None) for m in band_metas]
                             # TODO: could be more careful about what band metas
                             # we are looking at. Assuming they are all the same

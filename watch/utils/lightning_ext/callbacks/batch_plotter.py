@@ -30,7 +30,7 @@ class BatchPlotter(pl.callbacks.Callback):
         draw_interval (datetime.timedelta | str | numbers.Number):
             This is the amount of time to wait before drawing the next batch
             item within an epoch. Can be given as a timedelta, a string
-            parsable by `pytimeparse` (e.g.  '1m') or a numeric number of
+            parsable by `coerce_timedelta` (e.g.  '1M') or a numeric number of
             seconds.
 
     TODO:
@@ -66,19 +66,23 @@ class BatchPlotter(pl.callbacks.Callback):
         https://pytorch-lightning.readthedocs.io/en/latest/extensions/callbacks.html
     """
 
-    def __init__(self, num_draw=4, draw_interval='1m'):
+    def __init__(self, num_draw=4, draw_interval='1minute'):
         super().__init__()
         self.num_draw = num_draw
 
-        if isinstance(draw_interval, datetime.timedelta):
-            delta = draw_interval
-            num_seconds = delta.total_seconds()
-        elif isinstance(draw_interval, numbers.Number):
-            num_seconds = draw_interval
-        else:
-            num_seconds = pytimeparse.parse(draw_interval)
-            if num_seconds is None:
-                raise ValueError(f'{draw_interval} is not a parsable delta')
+        from watch.utils import util_time
+        delta = util_time.coerce_datetime(draw_interval)
+        num_seconds = delta.total_seconds()
+
+        # if isinstance(draw_interval, datetime.timedelta):
+        #     delta = draw_interval
+        #     num_seconds = delta.total_seconds()
+        # elif isinstance(draw_interval, numbers.Number):
+        #     num_seconds = draw_interval
+        # else:
+        #     num_seconds = pytimeparse.parse(draw_interval)
+        #     if num_seconds is None:
+        #         raise ValueError(f'{draw_interval} is not a parsable delta')
 
         self.draw_interval_seconds = num_seconds
         self.draw_timer = None

@@ -4,6 +4,9 @@ import ubelt as ub
 from typing import Dict, Any, Optional
 import logging
 
+from packaging.version import Version
+PL_VERSION = Version(pl.__version__)
+
 
 class TextLogger(pl.callbacks.Callback):
     """
@@ -57,11 +60,18 @@ class TextLogger(pl.callbacks.Callback):
     def on_fit_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log.info('on_fit_end')
 
-    def on_load_checkpoint(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', callback_state: Dict[str, Any]) -> None:
-        self._log.info('on_load_checkpoint - callback_state = {}'.format(ub.repr2(callback_state.keys(), nl=1)))
+    if PL_VERSION < Version('1.6'):
+        def on_load_checkpoint(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', callback_state: Dict[str, Any]) -> None:
+            self._log.info('on_load_checkpoint - callback_state = {}'.format(ub.repr2(callback_state.keys(), nl=1)))
 
-    def on_save_checkpoint(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', checkpoint: Dict[str, Any]) -> dict:
-        self._log.debug('on_save_checkpoint - checkpoint = {}'.format(ub.repr2(checkpoint.keys(), nl=1)))
+        def on_save_checkpoint(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', checkpoint: Dict[str, Any]) -> dict:
+            self._log.debug('on_save_checkpoint - checkpoint = {}'.format(ub.repr2(checkpoint.keys(), nl=1)))
+    else:
+        def state_dict(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', callback_state: Dict[str, Any]) -> None:
+            self._log.info('call pl state_dict')
+
+        def load_state_dict(self, checkpoint):
+            self._log.info('call pl load_state_dict')
 
     def on_train_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log.debug('on_train_start')

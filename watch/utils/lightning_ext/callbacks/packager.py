@@ -130,13 +130,15 @@ class Packager(pl.callbacks.Callback):
         ub.symlink(package_fpath, final_package_fpath, overwrite=True, verbose=3)
         print('final_package_fpath = {!r}'.format(final_package_fpath))
 
-    def on_save_checkpoint(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', checkpoint: Dict[str, Any]) -> dict:
-        """
-        TODO:
-            - [ ] Do we create a package for every checkpoint?
-        """
-        # package_fpath = self._make_package_fpath(trainer)
-        # self._save_package(pl_module, package_fpath)
+    # def state_dict(self):
+    # pass
+    # def on_save_checkpoint(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', checkpoint: Dict[str, Any]) -> dict:
+    #     """
+    #     TODO:
+    #         - [ ] Do we create a package for every checkpoint?
+    #     """
+    #     # package_fpath = self._make_package_fpath(trainer)
+    #     # self._save_package(pl_module, package_fpath)
 
     def on_exception(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', *args, **kw) -> None:
         """
