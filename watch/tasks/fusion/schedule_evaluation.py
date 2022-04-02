@@ -322,6 +322,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
     pred_cfg = {}
 
     skip_existing = config['skip_existing']
+    import xdev
+    xdev.embed()
 
     for info in packages_to_eval:
         package_fpath = info['fpath']
