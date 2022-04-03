@@ -925,7 +925,7 @@ python -m watch.tasks.fusion.fit \
     --modulate_class_weights="positive*0,negative*0,background*1.0,No Activity*0.0,Post Construction*0.1,Site Preparation*2.0" 
 
 
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 DVC_DPATH=$(python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
@@ -944,18 +944,21 @@ python -m watch.tasks.fusion.fit \
     --train_dataset="$TRAIN_FPATH" \
     --vali_dataset="$VALI_FPATH" \
     --test_dataset="$TEST_FPATH" \
+    --class_loss='focal' \
+    --saliency_loss='focal' \
     --global_change_weight=0.00 \
     --global_class_weight=0.00 \
     --global_saliency_weight=1.00 \
     --learning_rate=1e-4 \
-    --accumulate_grad_batches=3 \
+    --weight_decay=1e-5 \
+    --accumulate_grad_batches=4 \
     --max_epochs=160 \
     --patience=160 \
     --num_workers=4 \
     --dist_weights=True \
     --time_steps=11 \
     --channels="$CHANNELS" \
-    --time_sampling=hardish3 \
+    --time_sampling=soft2+distribute \
     --time_span=6m \
     --tokenizer=linconv \
     --optimizer=AdamW \
@@ -967,4 +970,4 @@ python -m watch.tasks.fusion.fit \
     --normalize_inputs=2048 \
     --stream_channels=16 \
     --temporal_dropout=0.5 \
-    --init=/home/joncrall/data/dvc-repos/smart_watch_dvc/training/toothbrush/joncrall/Aligned-Drop3-TA1-2022-03-10/runs/Drop3_SpotCheck_V322/lightning_logs/version_0/checkpoints/epoch=49-step=34149.ckpt
+    --init="$HOME"/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/packages/BASELINE_EXPERIMENT_V001/BASELINE_EXPERIMENT_V001_epoch=20-step=109829-v1.pt

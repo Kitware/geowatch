@@ -67,11 +67,13 @@ class TextLogger(pl.callbacks.Callback):
         def on_save_checkpoint(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', checkpoint: Dict[str, Any]) -> dict:
             self._log.debug('on_save_checkpoint - checkpoint = {}'.format(ub.repr2(checkpoint.keys(), nl=1)))
     else:
-        def state_dict(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', callback_state: Dict[str, Any]) -> None:
+        def state_dict(self):
             self._log.info('call pl state_dict')
+            return super().state_dict()
 
         def load_state_dict(self, checkpoint):
             self._log.info('call pl load_state_dict')
+            return super().load_state_dict(checkpoint)
 
     def on_train_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log.debug('on_train_start')
