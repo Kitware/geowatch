@@ -176,7 +176,7 @@ python -m watch.tasks.fusion.fit \
     --draw_interval=5m \
     --num_draw=1 \
     --amp_backend=apex \
-    --dist_weight=False \
+    --dist_weights=False \
     --use_centered_positives=True \
     --stream_channels=8 \
     --temporal_dropout=0 \
@@ -317,7 +317,7 @@ python -m watch.tasks.fusion.fit \
     --accumulate_grad_batches=4 \
     --chip_size=380 \
     --time_steps=6 \
-    --dist_weight=True \
+    --dist_weights=True \
     --time_sampling=hardish3 \
     --time_span=7m \
     --tokenizer=linconv \
@@ -401,7 +401,7 @@ python -m watch.tasks.fusion.fit \
     --accumulate_grad_batches=4 \
     --chip_size=256 \
     --time_steps=5 \
-    --dist_weight=True \
+    --dist_weights=True \
     --time_sampling=hardish3 \
     --time_span=7m \
     --tokenizer=linconv \
@@ -588,7 +588,7 @@ python -m watch.tasks.fusion.fit \
     --global_saliency_weight=1.00 \
     --max_epochs=80 \
     --patience=80 \
-    --dist_weight=True \
+    --dist_weights=True \
     --time_steps=5 \
     --time_sampling=soft2 \
     --time_span=7m \
@@ -631,7 +631,7 @@ python -m watch.tasks.fusion.fit \
     --global_saliency_weight=1.00 \
     --max_epochs=80 \
     --patience=80 \
-    --dist_weight=True \
+    --dist_weights=True \
     --time_steps=5 \
     --time_sampling=hardish3 \
     --time_span=7m \
@@ -673,7 +673,7 @@ python -m watch.tasks.fusion.fit \
     --global_saliency_weight=1.00 \
     --max_epochs=80 \
     --patience=80 \
-    --dist_weight=True \
+    --dist_weights=True \
     --time_steps=5 \
     --time_sampling=soft2 \
     --time_span=7m \
@@ -716,7 +716,7 @@ python -m watch.tasks.fusion.fit \
     --max_epochs=80 \
     --patience=80 \
     --num_workers=4 \
-    --dist_weight=True \
+    --dist_weights=True \
     --time_steps=7 \
     --time_sampling=hardish3 \
     --time_span=7m \
@@ -756,7 +756,7 @@ python -m watch.tasks.fusion.fit \
     --num_workers=4 \
     --max_epochs=80 \
     --patience=80 \
-    --dist_weight=True \
+    --dist_weights=True \
     --time_steps=7 \
     --time_sampling=hardish3 \
     --time_span=7m \
@@ -863,7 +863,7 @@ python -m watch.tasks.fusion.fit \
     --max_epochs=160 \
     --patience=160 \
     --num_workers=4 \
-    --dist_weight=True \
+    --dist_weights=True \
     --time_steps=6 \
     --channels="$CHANNELS" \
     --time_sampling=hardish3 \
@@ -907,7 +907,7 @@ python -m watch.tasks.fusion.fit \
     --num_workers=4 \
     --max_epochs=160 \
     --patience=160 \
-    --dist_weight=True \
+    --dist_weights=True \
     --time_steps=6 \
     --time_sampling=hardish3 \
     --channels="$CHANNELS" \
@@ -952,7 +952,7 @@ python -m watch.tasks.fusion.fit \
     --max_epochs=160 \
     --patience=160 \
     --num_workers=4 \
-    --dist_weight=True \
+    --dist_weights=True \
     --time_steps=11 \
     --channels="$CHANNELS" \
     --time_sampling=hardish3 \

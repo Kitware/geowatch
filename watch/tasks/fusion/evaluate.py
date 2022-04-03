@@ -986,7 +986,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         num_draw_finished = 1
         progress = score_prog  # Hack
 
-    DEBUG = 1
+    DEBUG = 0
     if DEBUG:
         orig_infos = []
 
