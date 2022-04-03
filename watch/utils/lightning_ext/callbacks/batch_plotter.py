@@ -71,7 +71,7 @@ class BatchPlotter(pl.callbacks.Callback):
         self.num_draw = num_draw
 
         from watch.utils import util_time
-        delta = util_time.coerce_datetime(draw_interval)
+        delta = util_time.coerce_timedelta(draw_interval)
         num_seconds = delta.total_seconds()
 
         # if isinstance(draw_interval, datetime.timedelta):
