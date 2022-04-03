@@ -3620,20 +3620,21 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                             aids_to_track.append(aid)
                             imgspace_box = kwimage.Boxes([dset.index.anns[aid]['bbox']], 'xywh')
                             vidspace_box = imgspace_box.warp(warp_vid_from_img)
-                            tlbr_box = vidspace_box.to_tlbr().data[0]
-                            annot_vid_tlbr.append(tlbr_box)
-                            if tid is not None:
-                                tid_to_infos[tid].append({
-                                    'gid': gid,
-                                    'cid': cid,
-                                    'frame_index': frame_index,
-                                    'vidspace_box': tlbr_box,
-                                    'cname': dset._resolve_to_cat(cid)['name'],
-                                    'aid': aid,
-                                })
-                            qtree.insert(aid, tlbr_box)
-                            qtree.aid_to_tlbr[aid] = tlbr_box
-                            # qtree.idx_to_tlbr[aid] = tlbr_box
+                            vidspace_box = vidspace_box.clip(0, 0, video_info['width'], video_info['height'])
+                            if vidspace_box.area.ravel()[0] > 0:
+                                tlbr_box = vidspace_box.to_tlbr().data[0]
+                                annot_vid_tlbr.append(tlbr_box)
+                                if tid is not None:
+                                    tid_to_infos[tid].append({
+                                        'gid': gid,
+                                        'cid': cid,
+                                        'frame_index': frame_index,
+                                        'vidspace_box': tlbr_box,
+                                        'cname': dset._resolve_to_cat(cid)['name'],
+                                        'aid': aid,
+                                    })
+                                qtree.insert(aid, tlbr_box)
+                                qtree.aid_to_tlbr[aid] = tlbr_box
 
                 # if len(annot_vid_tlbr):
                 #     unique_tlbr = util_kwarray.unique_rows(np.array(annot_vid_tlbr))
