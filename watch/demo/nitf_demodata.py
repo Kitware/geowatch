@@ -199,8 +199,7 @@ def grab_nitf_fpath(key=None, safe=True):
         >>> kwplot.imshow(data)
         >>> kwplot.show_if_requested()
     """
-    base = 'https://gwg.nga.mil/ntb/baseline/software/testfile/Nitfv2_1/'
-
+    # base = 'https://gwg.nga.mil/ntb/baseline/software/testfile/Nitfv2_1/'
     if key is None:
         key = DEFAULT_KEY
 
@@ -211,18 +210,35 @@ def grab_nitf_fpath(key=None, safe=True):
 
     if 'CID' in info:
         # Use IPFS instead
-        base = 'https://ipfs.io/ipfs/'
+        # https://ipfs.github.io/public-gateway-checker/
+        ipfs_gateways = [
+            'https://ipfs.io/ipfs',
+            'https://dweb.link/ipfs',
+            'https://gateway.pinata.cloud/ipfs',
+        ]
         url_fname = info['CID']
+        fname = info['key']
+        sha512 = info['sha512']
+        import urllib
+        fpath = None
+        # try different gateways if the first one times out
+        for try_idx, gateway in enumerate(ipfs_gateways):
+            url = gateway + '/' + url_fname
+            try:
+                fpath = ub.grabdata(url, appname='watch/demodata/nitf',
+                                    fname=fname, hash_prefix=sha512)
+            except urllib.error.HTTPError as ex:
+                print('caught error ex = {!r}'.format(ex))
+                if try_idx == len(ipfs_gateways) - 1:
+                    raise
+                else:
+                    print('Try again...')
+        if fpath is None:
+            raise AssertionError('should not happen')
     else:
         url_fname = info['key']
         raise Exception('Requires update to IPFS support. Old URLs are dead')
 
-    fname = info['key']
-    sha512 = info['sha512']
-    url = base + url_fname
-    # try:
-    fpath = ub.grabdata(url, appname='watch/demodata/nitf',
-                        fname=fname, hash_prefix=sha512)
     # except Exception:
     #     if safe:
     #         raise

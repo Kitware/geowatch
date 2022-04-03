@@ -83,6 +83,7 @@ class MultiheadSelfAttention(ub.NiceRepr, torch.nn.MultiheadAttention):
             as (batch, seq, feature). Default: ``False`` (seq, batch, feature).
 
     Example:
+        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> self = MultiheadSelfAttention(4, 1).eval()
         >>> x  = (torch.rand(7, 3, 4) * 10).round()
         >>> # Results should be independent of the batch dim
