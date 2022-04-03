@@ -3582,8 +3582,6 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                            depends=depends)
         _cached = cacher.tryload()
         if _cached is None:
-            import xdev
-            xdev.embed()
 
             video_targets = []
             video_positive_idxs = []
