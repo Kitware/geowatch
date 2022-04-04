@@ -1,4 +1,5 @@
 import ubelt as ub
+import numpy as np
 
 
 def geopandas_pairwise_overlaps(gdf1, gdf2, predicate='intersects'):
@@ -279,6 +280,25 @@ def shapely_flip_xy(geom):
     return ops.transform(_flip, geom)
 
 
+def project_gdf_to_local_utm(gdf):
+    """
+    Find the local UTM zone for a geo data frame and project to it.
+
+    Assumes geometry is in CRS-84.
+
+    All geometry in the GDF must be in the same UTM zone.
+    """
+    assert gdf.crs.name == 'WGS 84 (CRS84)'
+    epsg_zones = []
+    for geom_crs84 in gdf.geometry:
+        epsg_zone = find_local_meter_epsg_crs(geom_crs84)
+        epsg_zones.append(epsg_zone)
+
+    assert ub.allsame(epsg_zones)
+    epsg_zone = epsg_zones[0]
+    gdf.to_crs(epsg_zone)
+
+
 def utm_epsg_from_latlon(lat, lon):
     """
     Find a reasonable UTM CRS for a given lat / lon
@@ -299,12 +319,10 @@ def utm_epsg_from_latlon(lat, lon):
         https://gis.stackexchange.com/questions/365584/convert-utm-zone-into-epsg-code
 
     Example:
-        >>> from watch.gis.spatial_reference import *  # NOQA
+        >>> from watch.utils.util_gis import *  # NOQA
         >>> epsg_code = utm_epsg_from_latlon(0, 0)
         >>> print('epsg_code = {!r}'.format(epsg_code))
         epsg_code = 32631
-
-
     """
     import utm
     # easting, northing, zone_num, zone_code = utm.from_latlon(min_lat, min_lon)
@@ -400,9 +418,7 @@ def find_local_meter_epsg_crs(geom_crs84):
         [2] http://projfinder.com/
 
     Example:
-        >>> import sys, ubelt
-        >>> sys.path.append(ubelt.expandpath('~/code/watch'))
-        >>> from watch.gis.spatial_reference import *  # NOQA
+        >>> from watch.utils.util_gis import *  # NOQA
         >>> import kwimage
         >>> geom_crs84 = kwimage.Polygon.random().translate(-0.5).scale((180, 90)).to_shapely()
         >>> epsg_zone = find_local_meter_epsg_crs(geom_crs84)
@@ -438,7 +454,7 @@ def check_latlons(lat, lon):
     Latitude (y) is always between -90 and 90 (degrees north)
 
     Example:
-        >>> from watch.gis.spatial_reference import *  # NOQA
+        >>> from watch.utils.util_gis import *  # NOQA
         >>> import pytest
         >>> assert not check_latlons(1000, 1000)
         >>> assert check_latlons(0, 0)
