@@ -99,15 +99,6 @@ class MultiheadSelfAttention(torch.nn.MultiheadAttention):
     def __init__(self, embed_dim, num_heads, *args, **kwargs):
         super().__init__(embed_dim, num_heads, *args, **kwargs)
 
-    def __nice__(self):
-        return (
-            f'embed_dim={self.embed_dim} '
-            f'num_heads={self.num_heads} '
-        )
-
-    def __repr__(self):
-        return super().__str__()
-
     def forward(self, x):
         """
         Args:
