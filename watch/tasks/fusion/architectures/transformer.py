@@ -65,7 +65,7 @@ class ResidualSequential(nn.Sequential):
         return x + super().forward(x)
 
 
-class MultiheadSelfAttention(ub.NiceRepr, torch.nn.MultiheadAttention):
+class MultiheadSelfAttention(torch.nn.MultiheadAttention):
     """
     Inherits from :class:`torch.nn.MultiheadAttention`
 
@@ -118,7 +118,8 @@ class MultiheadSelfAttention(ub.NiceRepr, torch.nn.MultiheadAttention):
         """
         # attention returns a tuple of output and weights, so just take the
         # output
-        attn_out, attn_weights = super().forward(x, x, x)
+        outs = super().forward(x, x, x)
+        attn_out, attn_weights = outs
         return attn_out
 
 
