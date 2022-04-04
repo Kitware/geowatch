@@ -88,9 +88,9 @@ class MultiheadSelfAttention(torch.nn.MultiheadAttention):
         >>> x  = (torch.rand(7, 3, 4) * 10).round()
         >>> # Results should be independent of the batch dim
         >>> y  = self.forward(x)
-        >>> y0 = self.forward(x[:, 0, :])
-        >>> y1 = self.forward(x[:, 1, :])
-        >>> y2 = self.forward(x[:, 2, :])
+        >>> y0 = self.forward(x[:, 0:1, :])
+        >>> y1 = self.forward(x[:, 1:2, :])
+        >>> y2 = self.forward(x[:, 2:3, :])
         >>> assert (y[:, 0, :] == y0).all()
         >>> assert (y[:, 1, :] == y1).all()
         >>> assert (y[:, 2, :] == y2).all()
