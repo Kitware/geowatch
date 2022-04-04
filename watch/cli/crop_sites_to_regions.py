@@ -141,7 +141,7 @@ def crop_sites_to_region(region_gdf_crs84, sites):
         >>> assert len(cropped_sites) == len(sites)
         >>> assert len(cropped_sites[0]) == len(sites[0])
         >>> assert len(cropped_sites[1]) == len(sites[1])
-        >>> assert len(cropped_sites[3]) == 0
+        >>> assert len(cropped_sites[2]) == 0
     """
     from watch.utils import util_gis
     output_crs = region_gdf_crs84.crs
