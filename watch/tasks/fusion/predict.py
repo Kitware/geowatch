@@ -553,10 +553,13 @@ def predict(cmdline=False, **kwargs):
         EMERGENCY_INPUT_AGREEMENT_HACK = True
 
         # prog.set_extra(' <will populate stats after first video>')
-        for batch in prog:
+        for orig_batch in prog:
             batch_regions = []
             # Move data onto the prediction device, grab spacetime region info
-            for item in batch:
+            fixed_batch = []
+            for item in orig_batch:
+                if item is None:
+                    continue
                 batch_regions.append({
                     'space_slice': tuple(item['tr']['space_slice']),
                     'in_gids': [frame['gid'] for frame in item['frames']],
@@ -585,6 +588,12 @@ def predict(cmdline=False, **kwargs):
                     frame['modes'] = filtered_modes
                     filtered_frames.append(frame)
                 item['frames'] = filtered_frames
+                fixed_batch.append(item)
+
+            if len(fixed_batch) == 0:
+                continue
+
+            batch = fixed_batch
 
             if 0:
                 import netharn as nh
