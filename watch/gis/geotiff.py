@@ -5,6 +5,7 @@ import numpy as np
 import ubelt as ub
 from watch.gis import spatial_reference as watch_crs
 # from watch.utils.util_bands import LANDSAT7
+from watch.utils import util_gis
 from watch.utils.util_bands import SENTINEL2, LANDSAT8
 import parse
 from os.path import basename, isfile
@@ -350,14 +351,14 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
     # min_lon, max_lon = sorted([lon1, lon2])
     # min_lat, max_lat = sorted([lat1, lat2])
 
-    assert watch_crs.check_latlons(
+    assert util_gis.check_latlons(
         wgs84_corners.data[:, 0], wgs84_corners.data[:, 1]), (
             'bad WGS84 coordinates'
         )
 
     WITH_UTM_INFO = True
     if WITH_UTM_INFO:
-        epsg_int = watch_crs.utm_epsg_from_latlon(min_lat, min_lon)
+        epsg_int = util_gis.utm_epsg_from_latlon(min_lat, min_lon)
         utm_crs = osr.SpatialReference()
         utm_crs.ImportFromEPSG(epsg_int)
         utm_axis_mapping_int = utm_crs.GetAxisMappingStrategy()

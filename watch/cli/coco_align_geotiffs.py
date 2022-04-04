@@ -645,7 +645,6 @@ class SimpleDataCube(object):
         """
         from kwcoco.util.util_json import ensure_json_serializable
         import geopandas as gpd
-        import watch
 
         # Quickly find overlaps using a spatial index
         ridx_to_gidsx = util_gis.geopandas_pairwise_overlaps(region_df, cube.img_geos_df)
@@ -662,7 +661,7 @@ class SimpleDataCube(object):
             crs = gpd.GeoDataFrame([region_row], crs=region_df.crs).estimate_utm_crs()
             utm_epsg_zone_v1 = crs.to_epsg()
             geom_crs84 = region_row.geometry
-            utm_epsg_zone_v2 = watch.gis.spatial_reference.find_local_meter_epsg_crs(geom_crs84)
+            utm_epsg_zone_v2 = util_gis.find_local_meter_epsg_crs(geom_crs84)
             assert utm_epsg_zone_v2 == utm_epsg_zone_v1, 'consistency'
             local_epsg = utm_epsg_zone_v2
 
