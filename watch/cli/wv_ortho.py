@@ -296,7 +296,7 @@ def orthorectify(in_fpath, out_fpath, geometry: shapely.geometry.Polygon,
     # https://gis.stackexchange.com/questions/193094/can-gdalwarp-reproject-from-espg4326-wgs84-to-utm
     # -t_srs '+proj=utm +zone=12 +datum=WGS84 +units=m +no_defs'
     if as_utm:
-        epsg = watch.gis.spatial_reference.utm_epsg_from_latlon(lat, lon)
+        epsg = watch.utils.utils_gis.utm_epsg_from_latlon(lat, lon)
     else:
         epsg = 4326
 

@@ -970,7 +970,7 @@ class KWCocoVideoDataset(data.Dataset):
                             other = []
                         n_pos = len(group)
                         n_neg = len(other)
-                        max_neg = min(int(max(0, (neg_to_pos_ratio * n_pos))), n_neg)
+                        max_neg = min(int(max(1, (neg_to_pos_ratio * n_pos))), n_neg)
                         print(f'restrict to {max_neg=} in {vidname=} with {n_pos=}')
                         # neg_vid_idxs = posneg_groups[False]['index'].values
                         neg_vid_pool_ = list(util_iter.chunks(neg_vid_idxs, nchunks=max_neg))
@@ -979,7 +979,12 @@ class KWCocoVideoDataset(data.Dataset):
                         vidname_to_pool[vidname] = vid_pool
 
                 freqs = list(map(len, vidname_to_pool.values()))
-                max_per_vid = int(np.median(freqs))
+                if len(freqs) == 0:
+                    max_per_vid = 100
+                    import warnings
+                    warnings.warn('Warning: no video pool')
+                else:
+                    max_per_vid = int(np.median(freqs))
                 all_chunks = []
                 for vidname, vid_pool in vidname_to_pool.items():
                     # print(len(vid_pool[0]))

@@ -127,6 +127,8 @@ class CocoAlignGeotiffConfig(scfg.Config):
             to use pre-defined regions.
             ''')),
 
+        'site_summary': scfg.Value(False, help='Crop to site summaries instead'),
+
         # TODO: change this name to just align-method or something
         'rpc_align_method': scfg.Value('orthorectify', help=ub.paragraph(
             '''
@@ -381,10 +383,13 @@ def main(cmdline=True, **kw):
         parts = []
         for fpath in paths:
             df = util_gis.read_geojson(fpath)
-            if df.iloc[0]['type'] == 'site':
-                df = df[df['type'] == 'site']
+            if config['site_summary']:
+                df = df[df['type'] == 'site_summary']
             else:
-                df = df[df['type'] == 'region']
+                if df.iloc[0]['type'] == 'site':
+                    df = df[df['type'] == 'site']
+                else:
+                    df = df[df['type'] == 'region']
             parts.append(df)
         region_df = pd.concat(parts)
 
@@ -1544,10 +1549,10 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     assert all(n is not None for n in input_gnames)
     input_gpaths = [join(bundle_dpath, n) for n in input_gnames]
 
-    PHASE1_DEADLINE_HACK = 1
-    if PHASE1_DEADLINE_HACK:
-        if len(input_gpaths) == 1 and input_gpaths[0].endswith('TCI.jp2'):
-            return None
+    # PHASE1_DEADLINE_HACK = 1
+    # if PHASE1_DEADLINE_HACK:
+    #     if len(input_gpaths) == 1 and input_gpaths[0].endswith('TCI.jp2'):
+    #         return None
 
     dst = {
         'file_name': dst_gpath,
