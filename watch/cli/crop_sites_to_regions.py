@@ -108,10 +108,10 @@ def crop_sites_to_region(region_gdf_crs84, sites):
         >>> region_poly = kwimage.Polygon.random(rng=0).translate((42, 72))
         >>> site_poly0 = region_poly
         >>> site_poly1 = region_poly.translate((0.0001, 0.0001))
-        >>> site_poly3 = region_poly.translate((3.0, 3.0))
-        >>> site_poly4 = kwimage.Polygon.random().translate((42, 72))
-        >>> site_poly5 = kwimage.Polygon.random().translate((43, 73))
-        >>> site_poly6 = kwimage.Polygon.random().translate((42.1, 72.1))
+        >>> site_poly2 = region_poly.translate((3.0, 3.0))
+        >>> site_poly3 = kwimage.Polygon.random().translate((42, 72))
+        >>> site_poly4 = kwimage.Polygon.random().translate((43, 73))
+        >>> site_poly5 = kwimage.Polygon.random().translate((42.1, 72.1))
         >>> region_gdf_crs84 = gpd.GeoDataFrame([
         >>>     {
         >>>         'type': 'region',
