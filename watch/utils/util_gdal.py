@@ -232,7 +232,7 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
 
     # template_parts.append('--debug off')
 
-    if 0:
+    if 1:
         # Perf options
         template_parts += [
             '--config GDAL_CACHEMAX 15%',
@@ -265,6 +265,8 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
             print(*args)
     logger = dummylogger()
     try:
+        # Calling gdal via cmd with shell=True seems more stable
+        # when running multiple translate/warp workers in the background
         got = retry.api.retry_call(
             ub.cmd, (command,), dict(check=True, shell=True, verbose=verbose),
             tries=tries, delay=1, exceptions=subprocess.CalledProcessError,
