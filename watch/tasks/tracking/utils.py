@@ -12,6 +12,7 @@ import itertools
 import collections
 from abc import abstractmethod
 from typing import Union, Iterable, Optional, Any, Tuple, List, Dict
+import warnings
 
 Poly = Union[kwimage.Polygon, kwimage.MultiPolygon]
 
@@ -366,7 +367,7 @@ def score(poly, probs, mode='score', threshold=0, use_rasterio=True):
         ymax, xmax = probs.shape[:2]
         box = box.clip(0, 0, xmax, ymax).to_xywh()
         if box.area[0][0] == 0:
-            print('warning: scoring a polygon against an img with no overlap!')
+            warnings.warn('warning: scoring a polygon against an img with no overlap!')
             return 0
         x, y, w, h = box.data[0]
         if use_rasterio:  # rasterio inverse

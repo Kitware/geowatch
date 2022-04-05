@@ -1147,26 +1147,28 @@ class KWCocoVideoDataset(data.Dataset):
         assert not sample_grid['negatives_indexes'], 'unhandled'
         targets = sample_grid['targets']
         unique_fliprots = [
-            {'k': 0, 'axis': None},
-            {'k': 0, 'axis': (0,)},
-            {'k': 1, 'axis': None},
-            {'k': 1, 'axis': (0,)},
-            {'k': 2, 'axis': None},
-            {'k': 2, 'axis': (0,)},
-            {'k': 3, 'axis': None},
-            {'k': 3, 'axis': (0,)},
+            {'rot_k': 0, 'flip_axis': None},
+            {'rot_k': 0, 'flip_axis': (0,)},
+            {'rot_k': 1, 'flip_axis': None},
+            {'rot_k': 1, 'flip_axis': (0,)},
+            {'rot_k': 2, 'flip_axis': None},
+            {'rot_k': 2, 'flip_axis': (0,)},
+            {'rot_k': 3, 'flip_axis': None},
+            {'rot_k': 3, 'flip_axis': (0,)},
         ]
         for tr in targets:
             # Add the original sample
             expanded_targets.append(tr)
             # Add the expanded samples
-            assert n_fliprot <= 8
-            for idx in range(n_fliprot):
+            assert n_fliprot <= 7
+            for idx in range(1, n_fliprot + 1):
                 tr_ = tr.copy()
                 tr_['fliprot_params'] = unique_fliprots[idx]
                 expanded_targets.append(tr_)
+
         print(f'Fliprot augmentation expanded {len(targets)=} '
               f'to {len(expanded_targets)=}')
+
         sample_grid['targets'] = expanded_targets
         self.length = len(expanded_targets)
 
@@ -1265,14 +1267,14 @@ class KWCocoVideoDataset(data.Dataset):
 
         # force_flip = tr_.get('flip_axis', None)
         unique_fliprots = [
-            {'k': 0, 'axis': None},
-            {'k': 1, 'axis': None},
-            {'k': 2, 'axis': None},
-            {'k': 3, 'axis': None},
-            {'k': 0, 'axis': (0,)},
-            {'k': 1, 'axis': (0,)},
-            {'k': 2, 'axis': (0,)},
-            {'k': 3, 'axis': (0,)},
+            {'rot_k': 0, 'flip_axis': None},
+            {'rot_k': 1, 'flip_axis': None},
+            {'rot_k': 2, 'flip_axis': None},
+            {'rot_k': 3, 'flip_axis': None},
+            {'rot_k': 0, 'flip_axis': (0,)},
+            {'rot_k': 1, 'flip_axis': (0,)},
+            {'rot_k': 2, 'flip_axis': (0,)},
+            {'rot_k': 3, 'flip_axis': (0,)},
         ]
 
         # Force an augmentation
@@ -1455,9 +1457,7 @@ class KWCocoVideoDataset(data.Dataset):
         tr_['as_xarray'] = False
         tr_['use_experimental_loader'] = 1
 
-        import xdev
-        with xdev.embed_on_exception_context:
-            tr_ = self._augment_spacetime_target(tr_)
+        tr_ = self._augment_spacetime_target(tr_)
 
         if self.channels:
             tr_['channels'] = self.sample_channels
@@ -1557,19 +1557,15 @@ class KWCocoVideoDataset(data.Dataset):
                 if force_bad:
                     break
                 tr_frame['channels'] = stream
-                # TODO: FIXME: Use the correct nodata value here!
-                with xdev.embed_on_exception_context:
-
-                    if 0:
-                        coco_img = sampler.coco_dset.coco_img(tr_frame['gids'][0])
-                        print(ub.repr2(coco_img.img, nl=-3))
-
-                    sample = sampler.load_sample(
-                        tr_frame, with_annots=first_with_annot,
-                        nodata='float',
-                        padkw={'constant_values': np.nan},
-                        dtype=np.float32
-                    )
+                if 0:
+                    coco_img = sampler.coco_dset.coco_img(tr_frame['gids'][0])
+                    print(ub.repr2(coco_img.img, nl=-3))
+                sample = sampler.load_sample(
+                    tr_frame, with_annots=first_with_annot,
+                    nodata='float',
+                    padkw={'constant_values': np.nan},
+                    dtype=np.float32
+                )
 
                 WV_NODATA_HACK = 1
                 if WV_NODATA_HACK:
@@ -2109,25 +2105,15 @@ class KWCocoVideoDataset(data.Dataset):
         # If we are augmenting
         fliprot_params = tr_.get('fliprot_params', None)
         if fliprot_params is not None:
-            rot_k = fliprot_params['k']
-            flip_axis = fliprot_params['axis']
-
             for frame_item in frame_items:
                 frame_modes = frame_item['modes']
                 for mode_key in list(frame_modes.keys()):
                     mode_data = frame_modes[mode_key]
-                    if rot_k != 0:
-                        mode_data = np.rot(mode_data, k=rot_k)
-                    if flip_axis is not None:
-                        mode_data = np.flip(mode_data, axis=flip_axis)
-                    frame_modes[mode_key] = mode_data
+                    frame_modes[mode_key] = fliprot(mode_data, **fliprot_params)
                 for key in truth_keys:
                     data = frame_item.get(key, None)
                     if data is not None:
-                        if rot_k != 0:
-                            mode_data = np.rot(mode_data, k=rot_k)
-                        if flip_axis is not None:
-                            mode_data = np.flip(mode_data, axis=flip_axis)
+                        frame_item[key] = fliprot(data, **fliprot_params)
 
         # Convert data to torch
         for frame_item in frame_items:
@@ -2215,7 +2201,7 @@ class KWCocoVideoDataset(data.Dataset):
         #     'gids', 'space_slice', 'vidid',
         # })
         tr_subset = ub.dict_isect(tr_, {
-            'gids', 'space_slice', 'vidid',
+            'gids', 'space_slice', 'vidid', 'fliprot_params',
         })
         item = {
             # TODO: breakup modes into different items
@@ -4015,3 +4001,47 @@ def _boxes_snap_to_edges(given_box, snap_target):
 
     adjusted_box = given_box.translate((xoffset, yoffset))
     return adjusted_box
+
+
+def fliprot(img, rot_k=0, flip_axis=None):
+    """
+    Args:
+        img (ndarray): H, W, C
+        rot_k (int): number of ccw rotations
+
+    Example:
+        >>> img = np.arange(16).reshape(4, 4)
+        >>> unique_fliprots = [
+        >>>     {'rot_k': 0, 'flip_axis': None},
+        >>>     {'rot_k': 0, 'flip_axis': (0,)},
+        >>>     {'rot_k': 1, 'flip_axis': None},
+        >>>     {'rot_k': 1, 'flip_axis': (0,)},
+        >>>     {'rot_k': 2, 'flip_axis': None},
+        >>>     {'rot_k': 2, 'flip_axis': (0,)},
+        >>>     {'rot_k': 3, 'flip_axis': None},
+        >>>     {'rot_k': 3, 'flip_axis': (0,)},
+        >>> ]
+        >>> for params in unique_fliprots:
+        >>>     img_fw = fliprot(img, **params)
+        >>>     img_inv = inv_fliprot(img_fw, **params)
+        >>>     assert np.all(img == img_inv)
+    """
+    if rot_k != 0:
+        img = np.rot90(img, k=rot_k)
+    if flip_axis is not None:
+        img = np.flip(img, axis=flip_axis)
+    return img
+
+
+def inv_fliprot(img, rot_k=0, flip_axis=None):
+    """
+    Undo a fliprot
+
+    Args:
+        img (ndarray): H, W, C
+    """
+    if flip_axis is not None:
+        img = np.flip(img, axis=flip_axis)
+    if rot_k != 0:
+        img = np.rot90(img, k=-rot_k)
+    return img

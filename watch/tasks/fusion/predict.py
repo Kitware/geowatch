@@ -20,6 +20,7 @@ from watch.tasks.tracking.utils import mask_to_polygons
 from watch.utils import util_path
 from watch.utils import util_parallel
 from watch.utils import util_kwimage
+from watch.tasks.fusion.datamodules.kwcoco_video_data import inv_fliprot
 
 try:
     from xdev import profile
@@ -62,8 +63,7 @@ def make_predict_config(cmdline=False, **kwargs):
 
     parser.add_argument('--quantize', type=smartcast, default=True, help='quantize outputs')
 
-    parser.add_argument('--tta_fliprot', type=smartcast, default=0, help='number of times to flip/rotate the frame, can be in [0, 8]')
-
+    parser.add_argument('--tta_fliprot', type=smartcast, default=0, help='number of times to flip/rotate the frame, can be in [0,7]')
     parser.add_argument('--tta_time', type=smartcast, default=0, help='number of times to expand the temporal sample for a frame'),
 
     # TODO
@@ -355,7 +355,7 @@ def predict(cmdline=False, **kwargs):
     T, H, W = test_torch_dataset.sample_shape
 
     # Create the results dataset as a copy of the test CocoDataset
-    result_dataset = test_coco_dataset.copy()
+    result_dataset: kwcoco.CocoDataset = test_coco_dataset.copy()
     # Remove all annotations in the results copy
     result_dataset.clear_annotations()
     # Change all paths to be absolute paths
@@ -530,6 +530,7 @@ def predict(cmdline=False, **kwargs):
             short_code='pred_' + task_name,
             polygon_categories=['salient'],
             num_bands=len(head_keep_classes),
+            **stitcher_common_kw,
         )
 
     expected_outputs = set(stitch_managers.keys())
@@ -668,13 +669,11 @@ def predict(cmdline=False, **kwargs):
                     space_slice = region_info['space_slice']
 
                     fliprot_params = region_info['fliprot_params']
-                    # Undo flip augmentations
-
                     # Update the stitcher with this windowed prediction
                     for gid, probs in zip(out_gids, bin_probs):
                         if fliprot_params is not None:
-                            pass
-                        pass
+                            # Undo fliprot TTA
+                            probs = inv_fliprot(probs, **fliprot_params)
                         head_stitcher.accumulate_image(gid, space_slice, probs)
 
                 # Free up space for any images that have been completed
@@ -1177,5 +1176,38 @@ if __name__ == '__main__':
         --compress=DEFLATE \
         --gpus=0, \
         --batch_size=1
+
+    Develop TTA:
+
+    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    (cd $DVC_DPATH && dvc pull -r aws $DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=19-step=13659-v1.pt.dvc)
+
+    # Small datset for testing
+    kwcoco subset \
+        --src $DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali.kwcoco.json \
+        --dst $DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1_small.kwcoco.json \
+        --select_images '.frame_index < 100' \
+        --select_videos '.name == "KR_R001"'
+
+    TMP_PRED_FPATH=$DVC_DPATH/_tmp/_tmp_pred/pred.kwcoco.json
+    TEST_FPATH=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1_small.kwcoco.json
+
+    python -m watch.tasks.fusion.predict \
+        --write_probs=True \
+        --write_preds=False \
+        --with_class=auto \
+        --with_saliency=auto \
+        --with_change=False \
+        --package_fpath=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=19-step=13659-v1.pt \
+        --pred_dataset=$TMP_PRED_FPATH \
+        --test_dataset=$TEST_FPATH \
+        --num_workers=4 \
+        --compress=DEFLATE \
+        --gpus=0, \
+        --batch_size=1 \
+        --chip_overlap=0 \
+        --exclude_sensors=L8 \
+        --tta_fliprot=1 \
+        --tta_time=2
     """
     main()
