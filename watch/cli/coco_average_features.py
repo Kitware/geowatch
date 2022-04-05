@@ -92,10 +92,10 @@ def merge_kwcoco_channels(
 
 
     Example:
-        >>> from watch.cli.coco_merge_features import *  # NOQA
+        >>> from watch.cli.coco_average_features import *  # NOQA
         >>> import watch
         >>> from kwcoco.demo.perterb import perterb_coco
-        >>> dpath = ub.Path.appdir('watch/test/coco_merge_features')
+        >>> dpath = ub.Path.appdir('watch/test/coco_average_features')
         >>> base_dset = watch.demo.coerce_kwcoco('watch-msi')
         >>> # Construct two copies of the same data with slightly different heatmaps
         >>> dset1 = perterb_coco(base_dset.copy(), box_noise=0.5, cls_noise=0.5, n_fp=10, n_fn=10, rng=32)
@@ -261,7 +261,7 @@ def average_auxiliary_datas(input_objs, input_dpaths, weights):
 def main(cmdline=True):
     """
     Example call:
-    python watch/cli/coco_merge_features.py --kwcoco_file_paths \
+    python watch/cli/coco_average_features.py --kwcoco_file_paths \
          /data4/datasets/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/output_iarpa_drop2v2_total_bin_change_early_fusion_0014.kwcoco.json \
          /data4/datasets/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/output_iarpa_drop2v2_total_bin_change_early_fusion_0013.kwcoco.json  \
          --output_kwcoco_path /data4/datasets/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/test_comb.kwcoco.json \
