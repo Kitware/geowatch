@@ -88,7 +88,7 @@ def suggest_paths(test_dataset=None, package_fpath=None, workdir=None,
             else:
                 workdir = ub.Path(workdir)
 
-            pred_dpath = workdir / pred_dname / test_dset_name
+            pred_dpath = workdir / pred_dname / test_dset_name / pred_cfg_dname
             eval_dpath = pred_dpath / 'eval'
 
         pred_dataset = pred_dpath / 'pred.kwcoco.json'
