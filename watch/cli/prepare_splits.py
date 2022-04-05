@@ -64,10 +64,12 @@ def _submit_split_jobs(base_fpath, queue, depends=[]):
         'train': base_fpath.augment(suffix='_train', multidot=True),
         'nowv_train': base_fpath.augment(suffix='_nowv_train', multidot=True),
         'wv_train': base_fpath.augment(suffix='_wv_train', multidot=True),
+        's2_wv_train': base_fpath.augment(suffix='_s2_wv_vali', multidot=True),
 
         'vali': base_fpath.augment(suffix='_vali', multidot=True),
         'nowv_vali': base_fpath.augment(suffix='_nowv_vali', multidot=True),
         'wv_vali': base_fpath.augment(suffix='_wv_vali', multidot=True),
+        's2_wv_vali': base_fpath.augment(suffix='_s2_wv_vali', multidot=True),
     }
 
     split_jobs = {}
@@ -99,6 +101,15 @@ def _submit_split_jobs(base_fpath, queue, depends=[]):
         ''')
     queue.submit(command, depends=[split_jobs['train']])
 
+    command = ub.codeblock(
+        fr'''
+        python -m kwcoco subset \
+            --src {splits['train']} \
+            --dst {splits['s2_wv_train']} \
+            --select_images '.sensor_coarse == "WV" or sensor_coarse == "S2"'
+        ''')
+    queue.submit(command, depends=[split_jobs['train']])
+
     # Perform vali/validation splits with and without worldview
     command = ub.codeblock(
         fr'''
@@ -115,6 +126,15 @@ def _submit_split_jobs(base_fpath, queue, depends=[]):
             --src {splits['vali']} \
             --dst {splits['nowv_vali']} \
             --select_images '.sensor_coarse != "WV"'
+        ''')
+    queue.submit(command, depends=[split_jobs['vali']])
+
+    command = ub.codeblock(
+        fr'''
+        python -m kwcoco subset \
+            --src {splits['vali']} \
+            --dst {splits['s2_wv_vali']} \
+            --select_images '.sensor_coarse == "WV" or sensor_coarse == "S2"'
         ''')
     queue.submit(command, depends=[split_jobs['vali']])
 

@@ -337,20 +337,21 @@ prepare_cropped_from_tracks(){
 
 cropped_with_more_context(){
 
-    DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
+    HDD_DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
+    SSD_DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
     echo "$DVC_DPATH"
 
-    INPUT_FPATH=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json
-    smartwatch stats "$INPUT_FPATH"
+    INPUT_FPATH=$HDD_DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json
+    #smartwatch stats "$INPUT_FPATH"
 
     CHANNELS="blue|green|red|nir|swir16|swir22|cloudmask|near-ir1|panchromatic"
 
     python -m watch.cli.coco_crop_tracks \
         --src="$INPUT_FPATH" \
-        --dst="$DVC_DPATH/Cropped-Drop3-TA1-2022-04-04/imgonly_S2_WV.kwcoco.json" \
+        --dst="$SSD_DVC_DPATH/Cropped-Drop3-TA1-Context/imgonly_S2_WV.kwcoco.json" \
         --exclude_sensors=L8 \
         --channels= \
-        --mode=process --workers=8 \
+        --mode=process --workers=24 \
         --channels="$CHANNELS" \
         --context_factor=1.8
 }
