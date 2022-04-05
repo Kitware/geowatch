@@ -6,7 +6,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     # Repackage and commit new models
     #################################
 
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc --hardware="hdd")
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
     DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_sc_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -21,7 +21,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     # Pull new models on eval machine
     #################################
 
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc --hardware="hdd")
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
     cd "$DVC_DPATH" 
     git pull
     dvc pull -r aws -R models/fusion/eval3_sc_candidates/packages
@@ -30,7 +30,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     # Run Prediction & Evaluation
     #################################
 
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc --hardware="hdd")
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
     DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_sc_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -45,7 +45,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     #################################
     # Commit Evaluation Results
     #################################
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc --hardware="hdd")
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
     ls "$DVC_DPATH"/models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
     (cd "$DVC_DPATH" && dvc add models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json)
     (cd "$DVC_DPATH" && dvc push -r aws -R models/fusion/eval3_candidates/eval)
@@ -55,7 +55,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     #################################
 
     #####
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc --hardware="hdd")
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
     EXPT_GROUP_CODE=eval3_sc_candidates
     #EXPT_NAME_PAT="*"
     EXPT_NAME_PAT="*"
@@ -308,7 +308,7 @@ python -m watch.tasks.fusion.fit \
 # namek
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE

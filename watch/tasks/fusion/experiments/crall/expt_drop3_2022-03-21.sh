@@ -8,7 +8,7 @@ SeeAlso:
 "
 
 data_splits(){
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
     python -m watch.cli.prepare_splits \
         --base_fpath="$DVC_DPATH/$DATASET_CODE/combo_LM.kwcoco.json" \
@@ -19,7 +19,7 @@ data_splits(){
 prep_teamfeat_drop2(){
     # Team Features on drop2
     #DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="ssd")
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
     python -m watch.cli.prepare_teamfeats \
         --base_fpath="$DVC_DPATH/$DATASET_CODE/data.kwcoco.json" \
@@ -39,7 +39,7 @@ prep_teamfeat_drop2(){
 gather-checkpoints-repackage(){
 
     # For Uncropped
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -54,7 +54,7 @@ gather-checkpoints-repackage(){
 
 schedule-prediction-and-evlauation(){
 
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
     cd "$DVC_DPATH" 
     dvc pull -r aws -R models/fusion/eval3_candidates/packages
 
@@ -63,7 +63,7 @@ schedule-prediction-and-evlauation(){
     # - [ ] Argument general predict parameter grid
     # - [ ] Can a task request that slurm only schedule it on a specific GPU?
     # Note: change backend to tmux if slurm is not installed
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -75,7 +75,7 @@ schedule-prediction-and-evlauation(){
             --run=0 --skip_existing=True --backend=serial
 
     # Be sure to DVC add the eval results after!
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
     cd "$DVC_DPATH" 
     ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
     du -shL models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json | sort -h
@@ -84,7 +84,7 @@ schedule-prediction-and-evlauation(){
 
 
     # On other machines
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
     cd "$DVC_DPATH" 
     dvc pull -r aws models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
 }
@@ -93,7 +93,7 @@ schedule-prediction-and-evlauation(){
 schedule-prediction-and-evaluate-team-models(){
 
     # For Uncropped
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
     EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -108,7 +108,7 @@ schedule-prediction-and-evaluate-team-models(){
 
 aggregate-results(){
 
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
     EXPT_GROUP_CODE=eval3_candidates
     #EXPT_NAME_PAT="*"
     EXPT_NAME_PAT="*"

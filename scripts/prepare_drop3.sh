@@ -337,8 +337,8 @@ prepare_cropped_from_tracks(){
 
 cropped_with_more_context(){
 
-    BASE_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc --hardware="hdd")
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc --hardware="hdd")
+    BASE_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
     echo "$DVC_DPATH"
 
     INPUT_FPATH=$BASE_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json

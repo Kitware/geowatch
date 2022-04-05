@@ -1184,7 +1184,7 @@ if __name__ == '__main__':
 
     Develop TTA:
 
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
     (cd $DVC_DPATH && dvc pull -r aws $DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=19-step=13659-v1.pt.dvc)
 
     # Small datset for testing
@@ -1200,7 +1200,7 @@ if __name__ == '__main__':
         --dst $DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1.kwcoco.json \
         --select_videos '.name == "KR_R001"'
 
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
     TEST_DATASET=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1_small.kwcoco.json
     python -m watch.tasks.fusion.predict \
         --write_probs=True \
@@ -1218,7 +1218,7 @@ if __name__ == '__main__':
         --tta_fliprot=0 \
         --tta_time=0 --dump=$DVC_DPATH/_tmp/test_pred_config.yaml
 
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
     TEST_DATASET=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1_small.kwcoco.json
 
     PRED_DATASET_00=$DVC_DPATH/_tmp/_tmp_pred_00/pred.kwcoco.json
