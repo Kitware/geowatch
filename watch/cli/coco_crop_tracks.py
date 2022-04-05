@@ -9,12 +9,14 @@ CommandLine:
         --mode=process --workers=8
 
 
+    # Small test of KR only
     DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
     echo $DVC_DPATH
     python -m watch.cli.coco_crop_tracks \
         --src="$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json" \
-        --dst="$DVC_DPATH/Cropped-Drop2-TA1-2022-03-10/data.kwcoco.json" \
-        --mode=process --workers=8
+        --dst="$DVC_DPATH/Cropped-Drop2-TA1-test/data.kwcoco.json" \
+        --mode=process --workers=8 --channels="red|green|blue" \
+        --include_sensors=S2 --select_videos '.name | startswith("KR_R001")'
 """
 import scriptconfig as scfg
 import kwcoco
@@ -178,12 +180,13 @@ def main(cmdline=0, **kwargs):
     print(f'{len(tid_to_size)=}')
     arr = np.array(list(tid_to_size.values()))
     stats = kwarray.stats_dict(arr)
-    quantile = [0.25, 0.50, 0.75]
-    quant_values = np.quantile(arr, quantile)
-    quant_keys = ['q_{:0.2f}'.format(q) for q in quantile]
-    for k, v in zip(quant_keys, quant_values):
-        stats[k] = v
-    print(f'tracn length stats {ub.repr2(stats, nl=1)!s}')
+    if len(arr):
+        quantile = [0.25, 0.50, 0.75]
+        quant_values = np.quantile(arr, quantile)
+        quant_keys = ['q_{:0.2f}'.format(q) for q in quantile]
+        for k, v in zip(quant_keys, quant_values):
+            stats[k] = v
+    print(f'track length stats {ub.repr2(stats, nl=1)!s}')
 
     # Rebuild the manifest
     target_gsd = config['target_gsd']
@@ -311,6 +314,7 @@ def make_track_kwcoco_manifest(dst, dst_bundle_dpath, tid_to_assets,
 # @xdev.profile
 def generate_crop_jobs(coco_dset, dst_bundle_dpath, channels=None, context_factor=1.0):
     """
+    Generator that yields parameters to be used to call gdal_translate
 
     Benchmark:
         # Test kwimage versus shapley warp
@@ -452,8 +456,7 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath, channels=None, context_facto
         track_name = tid if isinstance(tid, str) else 'track_{}'.format(tid)
         track_dname = ub.Path(region) / track_name
         # String representing the spatial crop
-        # space_str = ub.hash_data(vid_track_poly.to_geojson(), base='abc')[0:8]
-        space_str = track_name
+        space_str = ub.hash_data(vid_track_poly_sh.wkt, base='abc')[0:8]
 
         crop_track_task = {
             'tid': tid,
@@ -514,7 +517,7 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath, channels=None, context_facto
                 num = 0
                 # to prevent long names for docker (limit is 242 chars)
                 chan_pname = obj_channels.path_sanitize(maxlen=10)
-                name = 'crop_{}_{}_{}_{}'.format(iso_time, space_str, sensor_coarse, num)
+                name = 'crop_{}_{}_{}_{}_{}'.format(iso_time, track_name, space_str, sensor_coarse, num)
                 dst_fname = track_img_dname / name / f'{name}_{chan_pname}.tif'
 
                 crop_asset_task = {**crop_img_task}
@@ -539,7 +542,7 @@ def run_crop_asset_task(crop_asset_task, keep):
     if not cache_hit:
         pixel_box = kwimage.Boxes([crop_box_asset_space], 'xywh')
         dst.parent.ensuredir()
-        util_gdal.gdal_single_translate(src, dst, pixel_box, tries=10, delay=1)
+        util_gdal.gdal_single_translate(src, dst, pixel_box, tries=10)
     return _crop_task
 
 
