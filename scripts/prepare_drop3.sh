@@ -350,7 +350,7 @@ cropped_with_more_context(){
         --src="$INPUT_FPATH" \
         --dst="$SSD_DVC_DPATH/Cropped-Drop3-TA1-Context/imgonly_S2_WV.kwcoco.json" \
         --exclude_sensors=L8 \
-        --channels= \
+        --channels=$CHANNELS \
         --mode=process --workers=24 \
         --channels="$CHANNELS" \
         --context_factor=1.8

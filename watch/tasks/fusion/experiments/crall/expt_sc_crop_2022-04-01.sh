@@ -1,7 +1,11 @@
+#!/bin/bash
 
 CROPPED_PRE_EVAL_AND_AGG(){
 
-    # For Cropped
+    #################################
+    # Repackage and commit new models
+    #################################
+
     DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc --hardware="hdd")
     DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_sc_candidates
@@ -10,11 +14,21 @@ CROPPED_PRE_EVAL_AND_AGG(){
         --dvc_dpath="$DVC_DPATH" \
         --storage_dpath="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages" \
         --train_dpath="$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/runs/*/lightning_logs" \
-        --push_jobs=8 \
-        --mode=interact
+        --push_jobs=8 --dvc_remote=aws \
+        --mode=commit
 
+    #################################
+    # Pull new models on eval machine
+    #################################
 
-    # For Cropped
+    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc --hardware="hdd")
+    cd "$DVC_DPATH" 
+    dvc pull -r aws -R models/fusion/eval3_sc_candidates/packages
+
+    #################################
+    # Run Prediction & Evaluation
+    #################################
+
     DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc --hardware="hdd")
     DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_sc_candidates
@@ -27,6 +41,18 @@ CROPPED_PRE_EVAL_AND_AGG(){
             --test_dataset="$VALI_FPATH" \
             --run=0 --skip_existing=True --backend=serial
 
+
+    #################################
+    # Commit Evaluation Results
+    #################################
+    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc --hardware="hdd")
+    ls "$DVC_DPATH"/models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
+    (cd "$DVC_DPATH" && dvc add models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json)
+    (cd "$DVC_DPATH" && dvc push -r aws -R models/fusion/eval3_candidates/eval)
+
+    #################################
+    # Aggregate Results
+    #################################
 
     #####
     DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc --hardware="hdd")
