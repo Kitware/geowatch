@@ -62,6 +62,10 @@ def make_predict_config(cmdline=False, **kwargs):
 
     parser.add_argument('--quantize', type=smartcast, default=True, help='quantize outputs')
 
+    parser.add_argument('--tta_fliprot', type=smartcast, default=0, help='number of times to flip/rotate the frame, can be in [0, 8]')
+
+    parser.add_argument('--tta_time', type=smartcast, default=0, help='number of times to expand the temporal sample for a frame'),
+
     # TODO
     # parser.add_argument('--test_time_augmentation', default=False, help='')
 
@@ -132,8 +136,8 @@ def predict(cmdline=False, **kwargs):
         >>> ub.ensuredir(results_path)
         >>> package_fpath = join(test_dpath, 'my_test_package.pt')
         >>> import kwcoco
-        >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=3, gsize=(128, 128))
-        >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=3, gsize=(128, 128))
+        >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=5, gsize=(128, 128))
+        >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=5, gsize=(128, 128))
         >>> fit_kwargs = kwargs = {
         ...     'train_dataset': test_dset.fpath,
         ...     'datamodule': 'KWCocoVideoDataModule',
@@ -142,6 +146,7 @@ def predict(cmdline=False, **kwargs):
         ...     'max_epochs': 1,
         ...     'time_steps': 2,
         ...     'chip_size': 64,
+        ...     'time_sampling': 'hardish3',
         ...     'global_change_weight': 1.0,
         ...     'global_class_weight': 1.0,
         ...     'global_saliency_weight': 1.0,
@@ -189,7 +194,8 @@ def predict(cmdline=False, **kwargs):
         >>> assert pred2.max() > 1
     """
     args = make_predict_config(cmdline=cmdline, **kwargs)
-    print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=2)))
+    config = args.__dict__
+    print('config = {}'.format(ub.repr2(config, nl=2)))
 
     try:
         # Ideally we have a package, everything is defined there
@@ -300,7 +306,8 @@ def predict(cmdline=False, **kwargs):
             hack_model_spec = kwcoco.ChannelSpec.coerce(','.join(unique_channel_streams))
             if datamodule_channel_spec is not None:
                 if hack_model_spec != datamodule_channel_spec:
-                    print('Warning: reported model channels may be incorrect due to bad train hyperparams')
+                    print('Warning: reported model channels may be incorrect '
+                          'due to bad train hyperparams')
                     hack_common = hack_model_spec.intersection(datamodule_channel_spec)
                     datamodule_vars['channels'] = hack_common
 
@@ -315,6 +322,17 @@ def predict(cmdline=False, **kwargs):
     )
     # TODO: if TTA=True, disable determenistic time sampling
     datamodule.setup('test')
+
+    if config['tta_time']:
+        # Expand targets to include time augmented samples
+        n_time_expands = config['tta_time']
+        test_torch_dset = datamodule.torch_datasets['test']
+        test_torch_dset._expand_targets_time(n_time_expands)
+
+    if config['tta_fliprot']:
+        n_fliprot = config['tta_fliprot']
+        test_torch_dset = datamodule.torch_datasets['test']
+        test_torch_dset._expand_targets_fliprot(n_fliprot)
 
     if ub.argflag('--debug-timesample'):
         import kwplot
@@ -367,7 +385,8 @@ def predict(cmdline=False, **kwargs):
             if fixed_fpath is not None:
                 walker[problem['loc']] = fixed_fpath
             else:
-                walker[problem['loc']] = '<IN_MEMORY_DATASET: {}>'.format(bad_data._build_hashid())
+                walker[problem['loc']] = '<IN_MEMORY_DATASET: {}>'.format(
+                    bad_data._build_hashid())
 
     start_timestamp = ub.timestamp()
 
@@ -553,7 +572,8 @@ def predict(cmdline=False, **kwargs):
         EMERGENCY_INPUT_AGREEMENT_HACK = True
 
         # prog.set_extra(' <will populate stats after first video>')
-        for orig_batch in prog:
+        _batch_iter = iter(prog)
+        for orig_batch in _batch_iter:
             batch_regions = []
             # Move data onto the prediction device, grab spacetime region info
             fixed_batch = []
@@ -563,6 +583,7 @@ def predict(cmdline=False, **kwargs):
                 batch_regions.append({
                     'space_slice': tuple(item['tr']['space_slice']),
                     'in_gids': [frame['gid'] for frame in item['frames']],
+                    'fliprot_params': item['tr'].get('fliprot_params', None)
                 })
                 position_tensors = item.get('positional_tensors', None)
                 if position_tensors is not None:
@@ -607,9 +628,9 @@ def predict(cmdline=False, **kwargs):
             # xdev.embed()
 
             # Predict on the batch
-            import xdev
-            with xdev.embed_on_exception_context:
-                outputs = method.forward_step(batch, with_loss=False)
+            # import xdev
+            # with xdev.embed_on_exception_context:
+            outputs = method.forward_step(batch, with_loss=False)
             outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
 
             if got_outputs is None:
@@ -646,8 +667,14 @@ def predict(cmdline=False, **kwargs):
                     out_gids = region_info['in_gids'][predicted_frame_slice]
                     space_slice = region_info['space_slice']
 
+                    fliprot_params = region_info['fliprot_params']
+                    # Undo flip augmentations
+
                     # Update the stitcher with this windowed prediction
                     for gid, probs in zip(out_gids, bin_probs):
+                        if fliprot_params is not None:
+                            pass
+                        pass
                         head_stitcher.accumulate_image(gid, space_slice, probs)
 
                 # Free up space for any images that have been completed

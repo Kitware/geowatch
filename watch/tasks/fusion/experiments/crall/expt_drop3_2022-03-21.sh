@@ -72,7 +72,7 @@ schedule-prediction-and-evlauation(){
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*V3*/*.pt" \
             --test_dataset="$VALI_FPATH" \
-            --run=1 --skip_existing=True --backend=slurm
+            --run=1 --skip_existing=True --backend=serial
 
     # Be sure to DVC add the eval results after!
     DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)

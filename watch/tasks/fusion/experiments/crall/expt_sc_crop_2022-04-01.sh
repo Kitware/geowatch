@@ -23,6 +23,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
 
     DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc --hardware="hdd")
     cd "$DVC_DPATH" 
+    git pull
     dvc pull -r aws -R models/fusion/eval3_sc_candidates/packages
 
     #################################

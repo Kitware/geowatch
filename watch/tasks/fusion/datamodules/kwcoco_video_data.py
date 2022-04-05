@@ -942,7 +942,9 @@ class KWCocoVideoDataset(data.Dataset):
                 print('restrict to max_neg = {!r}'.format(max_neg))
 
             target_vidids = [v['video_id'] for v in new_sample_grid['targets']]
-            target_posbit = kwarray.boolmask(new_sample_grid['positives_indexes'], len(new_sample_grid['targets']))
+            target_posbit = kwarray.boolmask(
+                new_sample_grid['positives_indexes'],
+                len(new_sample_grid['targets']))
 
             # import kwarray
             # rng = kwarray.ensure_rng(None)
@@ -994,67 +996,10 @@ class KWCocoVideoDataset(data.Dataset):
 
                 self.nested_pool = NestedPool(all_chunks)
 
-                # for key, group in df.groupby(['vidname', 'is_positive']):
-                #     print('key = {!r}'.format(key))
-                #     print(len(group))
-
-                # for is_positive, group in df.groupby('is_positive'):
-                #     print('is_positive = {!r}'.format(is_positive))
-                #     print(ub.dict_hist(group.vidid))
-                #     neg_vid_pool_1 = list(ub.chunks(neg_vid_idxs, nchunks=max_neg))
-                #     pos_vid_pool_ = list(ub.chunks(pos_vid_idxs, chunksize=1))
-
-                # for vidid, group in df.groupby('vidid'):
-                #     print(ub.dict_hist(group.vidid))
-
-                #     total = len(group)
-                #     n_pos = group['is_positive'].sum()
-                #     n_neg = total - n_pos
-                #     # print('vidid = {!r}'.format(vidid))
-                #     # print('total = {!r}'.format(total))
-                #     # print('n_pos = {!r}'.format(n_pos))
-                #     posneg_groups = dict(list(group.groupby('is_positive')))
-
-                #     max_neg = min(int(max(0, (neg_to_pos_ratio * n_pos))), n_neg)
-                #     if False in posneg_groups:
-                #         neg_vid_idxs = posneg_groups[False]['index'].values
-                #     else:
-                #         neg_vid_idxs = None
-                #     pos_vid_idxs = posneg_groups[True]['index'].values
-                #     if n_neg > max_neg:
-                #         print(f'restrict to {max_neg=} in {vidid=}')
-                #     neg_vid_pool_ = list(util_iter.chunks(neg_vid_idxs, nchunks=max_neg))
-                #     pos_vid_pool_ = list(util_iter.chunks(pos_vid_idxs, nchunks=n_pos))
-
-                #     video_pool = pos_vid_pool_ + neg_vid_pool_
-                #     grouped_video_pools.append(video_pool)
-
             if 0:
                 import netharn as nh
                 nh.data.collate._debug_inbatch_shapes(all_chunks)
 
-            # Rebalance over target videos
-            # vidid_to_freq = ub.dict_hist([v['video_id'] for v in self.new_sample_grid['targets']])
-            # vidids = np.array(list(vidid_to_freq.keys()))
-            # freqs = np.array(list(vidid_to_freq.values()))
-            # self.sampler.dset.videos(vidids).lookup('name')
-            # target_video_poolsize = int(np.median(freqs))
-            # np.mean(freqs)
-
-            # We have too many negatives, so we are going to "group" negatives
-            # and when we select one we will really just randomly select from
-            # within the pool
-            # if max_neg > 0:
-            #     negative_pool = list(util_iter.chunks(new_sample_grid['negatives_indexes'], nchunks=max_neg))
-            #     self.negative_pool = negative_pool
-            #     # neg_pool_chunksizes = set(map(len, self.negative_pool))
-            #     # print('neg_pool_chunksizes = {!r}'.format(neg_pool_chunksizes))
-            # else:
-            #     self.negative_pool = []
-
-            # This is in a per-iteration basis
-            # self.n_pos = n_pos
-            # self.n_neg = len(self.negative_pool)
             self.length = len(self.nested_pool)
 
             if max_epoch_length is not None:
@@ -1165,6 +1110,78 @@ class KWCocoVideoDataset(data.Dataset):
     #     transform(image=np.random.rand(10, 10), keypoints=[[2, 2]])
     #     transform( keypoints=[[2, 2]])
 
+    def _expand_targets_time(self, n_time_expands):
+        """
+        Increase the number of test-time targets by expanding them in time.
+        """
+        sample_grid = self.new_sample_grid
+        expanded_targets = []
+        assert not sample_grid['positives_indexes'], 'unhandled'
+        assert not sample_grid['negatives_indexes'], 'unhandled'
+        targets = sample_grid['targets']
+        for tr in targets:
+            seen_ = set()
+            # Add the original sample
+            expanded_targets.append(tr)
+            seen_.add(tuple(tr['gids']))
+            # Add the expanded samples
+            for _ in range(n_time_expands):
+                tr_ = tr.copy()
+                tr_ = self._augment_target_time(tr_)
+                new_gids = tuple(tr_['gids'])
+                if new_gids not in seen_:
+                    expanded_targets.append(tr_)
+                    seen_.add(tuple(tr_['gids']))
+        print(f'Temporal augmentation expanded {len(targets)=} '
+              f'to {len(expanded_targets)=}')
+        sample_grid['targets'] = expanded_targets
+        self.length = len(expanded_targets)
+
+    def _expand_targets_fliprot(self, n_fliprot):
+        """
+        Increase the number of test-time targets via flips
+        """
+        sample_grid = self.new_sample_grid
+        expanded_targets = []
+        assert not sample_grid['positives_indexes'], 'unhandled'
+        assert not sample_grid['negatives_indexes'], 'unhandled'
+        targets = sample_grid['targets']
+        unique_fliprots = [
+            {'k': 0, 'axis': None},
+            {'k': 0, 'axis': (0,)},
+            {'k': 1, 'axis': None},
+            {'k': 1, 'axis': (0,)},
+            {'k': 2, 'axis': None},
+            {'k': 2, 'axis': (0,)},
+            {'k': 3, 'axis': None},
+            {'k': 3, 'axis': (0,)},
+        ]
+        for tr in targets:
+            # Add the original sample
+            expanded_targets.append(tr)
+            # Add the expanded samples
+            assert n_fliprot <= 8
+            for idx in range(n_fliprot):
+                tr_ = tr.copy()
+                tr_['fliprot_params'] = unique_fliprots[idx]
+                expanded_targets.append(tr_)
+        print(f'Fliprot augmentation expanded {len(targets)=} '
+              f'to {len(expanded_targets)=}')
+        sample_grid['targets'] = expanded_targets
+        self.length = len(expanded_targets)
+
+    def _augment_target_time(self, tr_):
+        """
+        Jitters the time sample in a target
+        """
+        vidid = tr_['video_id']
+        time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
+        valid_gids = self.new_sample_grid['vidid_to_valid_gids'][vidid]
+        new_idxs = time_sampler.sample(tr_['main_idx'])
+        new_gids = list(ub.take(valid_gids, new_idxs))
+        tr_['gids'] = new_gids
+        return tr_
+
     def _augment_spacetime_target(self, tr_):
         """
         Given a target dictionary, shift around the space and time slice
@@ -1186,6 +1203,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> print('tr_ = {!r}'.format(tr_))
         """
 
+        # TODO: make a nice "augmenter" pipeline
         # TODO: parameteraize
         temporal_augment_rate = 0.8
         spatial_augment_rate = 0.9
@@ -1228,11 +1246,7 @@ class KWCocoVideoDataset(data.Dataset):
 
             # Temporal augmentation
             if rng.rand() < temporal_augment_rate:
-                # old_gids = tr_['gids']
-                time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
-                valid_gids = self.new_sample_grid['vidid_to_valid_gids'][vidid]
-                new_gids = list(ub.take(valid_gids, time_sampler.sample(tr_['main_idx'])))
-                tr_['gids'] = new_gids
+                self._augment_target_time(tr_)
 
             temporal_dropout_rate = self.temporal_dropout
             do_temporal_dropout = rng.rand() < temporal_dropout_rate
@@ -1248,6 +1262,26 @@ class KWCocoVideoDataset(data.Dataset):
                 gids = list(ub.compress(gids, flags))
                 # tr_['main_idx'] = gids.index(main_gid)
                 tr_['gids'] = gids
+
+        # force_flip = tr_.get('flip_axis', None)
+        unique_fliprots = [
+            {'k': 0, 'axis': None},
+            {'k': 1, 'axis': None},
+            {'k': 2, 'axis': None},
+            {'k': 3, 'axis': None},
+            {'k': 0, 'axis': (0,)},
+            {'k': 1, 'axis': (0,)},
+            {'k': 2, 'axis': (0,)},
+            {'k': 3, 'axis': (0,)},
+        ]
+
+        # Force an augmentation
+        FLIP_AUGMENTATION = (not self.disable_augmenter and self.mode == 'fit')
+        if FLIP_AUGMENTATION:
+            # Choose a unique flip/rot
+            fliprot_idx = rng.randint(0, len(unique_fliprots))
+            fliprot_params = unique_fliprots[fliprot_idx]
+            tr_['fliprot_params'] = fliprot_params
 
         return tr_
 
@@ -2072,29 +2106,28 @@ class KWCocoVideoDataset(data.Dataset):
             'saliency_weights', 'change_weights'
         ]
 
-        FLIP_AUGMENTATION = (not self.disable_augmenter and self.mode == 'fit')
-        if FLIP_AUGMENTATION:
-            # TODO: make a nice "augmenter" pipeline
-            rng = kwarray.ensure_rng(None)
-            do_hflip = rng.rand() > 0.5
-            do_vflip = rng.rand() > 0.5
-            flip_axis = []
-            # Space dims are last at this point in the pipeline
-            if do_vflip:
-                flip_axis += [-2]
-            if do_hflip:
-                flip_axis += [-1]
-            flip_axis = tuple(flip_axis)
+        # If we are augmenting
+        fliprot_params = tr_.get('fliprot_params', None)
+        if fliprot_params is not None:
+            rot_k = fliprot_params['k']
+            flip_axis = fliprot_params['axis']
 
             for frame_item in frame_items:
                 frame_modes = frame_item['modes']
                 for mode_key in list(frame_modes.keys()):
                     mode_data = frame_modes[mode_key]
-                    frame_modes[mode_key] = np.flip(mode_data, axis=flip_axis)
+                    if rot_k != 0:
+                        mode_data = np.rot(mode_data, k=rot_k)
+                    if flip_axis is not None:
+                        mode_data = np.flip(mode_data, axis=flip_axis)
+                    frame_modes[mode_key] = mode_data
                 for key in truth_keys:
                     data = frame_item.get(key, None)
                     if data is not None:
-                        frame_item[key] = np.flip(data, axis=flip_axis)
+                        if rot_k != 0:
+                            mode_data = np.rot(mode_data, k=rot_k)
+                        if flip_axis is not None:
+                            mode_data = np.flip(mode_data, axis=flip_axis)
 
         # Convert data to torch
         for frame_item in frame_items:
@@ -3464,8 +3497,12 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> window_dims = (3, 32, 32)
         >>> keepbound = False
         >>> time_sampling = 'soft2+distribute'
-        >>> sample_grid1 = sample_video_spacetime_targets(dset, window_dims, window_overlap, time_sampling='soft2+distribute')
-        >>> sample_grid2 = sample_video_spacetime_targets(dset, window_dims, window_overlap, time_sampling='contiguous+pairwise')
+        >>> sample_grid1 = sample_video_spacetime_targets(
+        >>>     dset, window_dims, window_overlap,
+        >>>     time_sampling='soft2+distribute')
+        >>> sample_grid2 = sample_video_spacetime_targets(
+        >>>     dset, window_dims, window_overlap,
+        >>>     time_sampling='contiguous+pairwise')
 
         ub.peek(sample_grid1['vidid_to_time_sampler'].values()).show_summary(fnum=1)
         ub.peek(sample_grid2['vidid_to_time_sampler'].values()).show_summary(fnum=2)
@@ -3516,7 +3553,9 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     vidid_to_valid_gids = {}
 
     parts = set(time_sampling.split('+'))
-    affinity_type_parts = parts & {'hard', 'hardish', 'contiguous', 'soft2', 'soft', 'hardish2', 'hardish3'}
+    affinity_type_parts = parts & {
+        'hard', 'hardish', 'contiguous', 'soft2', 'soft', 'hardish2',
+        'hardish3'}
     update_rule_parts = parts & {'distribute', 'pairwise'}
     unknown = (parts - affinity_type_parts) - update_rule_parts
     if unknown:
@@ -3621,9 +3660,11 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                     for tid, aid, cid, cname in zip(tids, aids, cids, cnames):
                         if cname not in negative_classes:
                             aids_to_track.append(aid)
-                            imgspace_box = kwimage.Boxes([dset.index.anns[aid]['bbox']], 'xywh')
+                            imgspace_box = kwimage.Boxes([
+                                dset.index.anns[aid]['bbox']], 'xywh')
                             vidspace_box = imgspace_box.warp(warp_vid_from_img)
-                            vidspace_box = vidspace_box.clip(0, 0, video_info['width'], video_info['height'])
+                            vidspace_box = vidspace_box.clip(
+                                0, 0, video_info['width'], video_info['height'])
                             if vidspace_box.area.ravel()[0] > 0:
                                 tlbr_box = vidspace_box.to_tlbr().data[0]
                                 annot_vid_tlbr.append(tlbr_box)
@@ -3638,23 +3679,6 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                                     })
                                 qtree.insert(aid, tlbr_box)
                                 qtree.aid_to_tlbr[aid] = tlbr_box
-
-                # if len(annot_vid_tlbr):
-                #     unique_tlbr = util_kwarray.unique_rows(np.array(annot_vid_tlbr))
-                # else:
-                #     unique_tlbr = []
-                # for idx, tlbr_box in enumerate(unique_tlbr):
-                #     qtree.insert(idx, tlbr_box)
-                #    qtree.idx_to_tlbr[idx] = tlbr_box
-
-                # tid_to_dframe = ub.map_vals(kwarray.DataFrameLight.from_dict, tid_to_infos)
-                # for track_dframe in tid_to_dframe.values():
-                #     track_dframe['gid'] = np.array(track_dframe['gid'])
-                #     track_dframe['frame_index'] = np.array(track_dframe['frame_index'])
-                #     # Precompute for speed
-                #     track_boxes = kwimage.Boxes(np.array(track_dframe['vidspace_box']), 'ltrb')
-                #     track_dframe['track_pairwise_ious'] = track_boxes.ious(track_boxes)
-                #     track_dframe['track_boxes'] = track_boxes
 
             RESPECT_VALID_REGIONS = True
             for space_region in ub.ProgIter(list(slider), desc='Sliding window'):
