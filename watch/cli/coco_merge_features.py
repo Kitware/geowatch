@@ -7,7 +7,7 @@ import ubelt as ub
 from tqdm import tqdm
 
 from watch import exceptions
-from watch.cli.coco_combine_features import associate_images
+# from watch.cli.coco_combine_features import associate_images
 from watch.utils.kwcoco_extensions import transfer_geo_metadata
 
 
