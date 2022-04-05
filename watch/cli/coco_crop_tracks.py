@@ -16,7 +16,12 @@ CommandLine:
         --src="$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json" \
         --dst="$DVC_DPATH/Cropped-Drop2-TA1-test/data.kwcoco.json" \
         --mode=process --workers=8 --channels="red|green|blue" \
-        --include_sensors=S2 --select_videos '.name | startswith("KR_R002")'
+        --include_sensors="WV,S2,L8" --select_videos '.name | startswith("KR_R001")' \
+        --target_gsd=3
+
+
+    TODO:
+        - [ ] option to merge overlapping regions?
 """
 import scriptconfig as scfg
 import kwcoco
