@@ -167,6 +167,13 @@ def main(cmdline=0, **kwargs):
         try:
             result = job.result()
         except Exception as ex:
+            # import traceback
+            # stack = traceback.extract_stack()
+            # stack_lines = traceback.format_list(stack)
+            # tbtext = ''.join(stack_lines)
+            # print(ub.highlight_code(tbtext, 'pytb'))
+            raise
+            print('ex = {}'.format(ub.repr2(ex, nl=1)))
             print('Failed crop asset task ex = {!r}'.format(ex))
             failed.append(job)
         else:
@@ -253,6 +260,9 @@ def make_track_kwcoco_manifest(dst, dst_bundle_dpath, tid_to_assets,
                 datetime_ = aux.pop('datetime')
                 aux['file_name'] = str(fname)
                 auxiliary.append(aux)
+
+            auxiliary = sorted(auxiliary, key=lambda obj: obj['channels'])
+
             new_img = {
                 'name': fname.parent.name,
                 'file_name': None,
