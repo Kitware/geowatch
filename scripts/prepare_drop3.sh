@@ -361,6 +361,7 @@ cropped_with_more_context(){
         --site_models="$DVC_DPATH/annotations/site_models/*.geojson" \
         --region_models="$DVC_DPATH/annotations/region_models/*.geojson"
 
+    export CUDA_VISIBLE_DEVICES=3
     python -m watch.cli.prepare_teamfeats \
         --base_fpath="$NEW_KWCOCO_BUNDLE_DPATH/imgonly_S2_WV.kwcoco.json" \
         --dvc_dpath="$DVC_DPATH" \
@@ -371,6 +372,6 @@ cropped_with_more_context(){
         --with_invariants=0 \
         --do_splits=0 \
         --depth_workers=0 \
-        --cache=1 --run=0 --backend=serial
+        --cache=1 --run=1 --backend=serial
 
 }

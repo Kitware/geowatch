@@ -534,7 +534,7 @@ def validate_site_dataframe(site_df):
     # Check datetime errors in observations
     try:
         obs_dates = [None if x is None else parse(x) for x in rest['observation_date']]
-        obs_isvalid = [x is None for x in obs_dates]
+        obs_isvalid = [x is not None for x in obs_dates]
         valid_obs_dates = list(ub.compress(obs_dates, obs_isvalid))
         if not all(valid_obs_dates):
             # null_obs_sites.append(first[['site_id', 'status']].to_dict())
