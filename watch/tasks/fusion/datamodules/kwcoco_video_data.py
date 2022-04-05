@@ -970,7 +970,7 @@ class KWCocoVideoDataset(data.Dataset):
                             other = []
                         n_pos = len(group)
                         n_neg = len(other)
-                        max_neg = min(int(max(0, (neg_to_pos_ratio * n_pos))), n_neg)
+                        max_neg = min(int(max(1, (neg_to_pos_ratio * n_pos))), n_neg)
                         print(f'restrict to {max_neg=} in {vidname=} with {n_pos=}')
                         # neg_vid_idxs = posneg_groups[False]['index'].values
                         neg_vid_pool_ = list(util_iter.chunks(neg_vid_idxs, nchunks=max_neg))
@@ -979,7 +979,12 @@ class KWCocoVideoDataset(data.Dataset):
                         vidname_to_pool[vidname] = vid_pool
 
                 freqs = list(map(len, vidname_to_pool.values()))
-                max_per_vid = int(np.median(freqs))
+                if len(freqs) == 0:
+                    max_per_vid = 100
+                    import warnings
+                    warnings.warn('Warning: no video pool')
+                else:
+                    max_per_vid = int(np.median(freqs))
                 all_chunks = []
                 for vidname, vid_pool in vidname_to_pool.items():
                     # print(len(vid_pool[0]))
@@ -1200,7 +1205,11 @@ class KWCocoVideoDataset(data.Dataset):
 
             # Spatial augmentation:
             if rng.rand() < spatial_augment_rate:
-                space_box = kwimage.Boxes.from_slice(tr_['space_slice'])
+                # space_box = kwimage.Boxes.from_slice(tr_['space_slice'], endpoint=False)
+                y_sl, x_sl = tr_['space_slice']
+                space_box = kwimage.Boxes([
+                    [x_sl.start, y_sl.start, x_sl.stop - 1, y_sl.stop - 1],
+                ], 'ltrb')
                 w = space_box.width.ravel()[0]
                 h = space_box.height.ravel()[0]
                 # hack: this prevents us from assuming there is a target in the
@@ -1210,11 +1219,10 @@ class KWCocoVideoDataset(data.Dataset):
                     rng.randint(-w // 2.7, w // 2.7),
                     rng.randint(-h // 2.7, h // 2.7)))
                 space_box = space_box.warp(aff).quantize()
-                space_box = kwimage.Boxes.from_slice(tr_['space_slice']).warp(aff).quantize()
 
                 # prevent shifting the target off the edge of the video
                 snap_target = kwimage.Boxes([[0, 0, vid_width, vid_height]], 'ltrb')
-                _boxes_snap_to_edges(space_box, snap_target)
+                space_box = _boxes_snap_to_edges(space_box, snap_target)
 
                 tr_['space_slice'] = space_box.astype(int).to_slices()[0]
 
@@ -1413,7 +1421,9 @@ class KWCocoVideoDataset(data.Dataset):
         tr_['as_xarray'] = False
         tr_['use_experimental_loader'] = 1
 
-        tr_ = self._augment_spacetime_target(tr_)
+        import xdev
+        with xdev.embed_on_exception_context:
+            tr_ = self._augment_spacetime_target(tr_)
 
         if self.channels:
             tr_['channels'] = self.sample_channels
@@ -1506,17 +1516,26 @@ class KWCocoVideoDataset(data.Dataset):
 
                     # Skip if more then 50% cloudy
 
+            if sensor_channels.numel() == 0:
+                force_bad = True
+
             for stream in sensor_channels.streams():
                 if force_bad:
                     break
                 tr_frame['channels'] = stream
                 # TODO: FIXME: Use the correct nodata value here!
-                sample = sampler.load_sample(
-                    tr_frame, with_annots=first_with_annot,
-                    nodata='float',
-                    padkw={'constant_values': np.nan},
-                    dtype=np.float32
-                )
+                with xdev.embed_on_exception_context:
+
+                    if 0:
+                        coco_img = sampler.coco_dset.coco_img(tr_frame['gids'][0])
+                        print(ub.repr2(coco_img.img, nl=-3))
+
+                    sample = sampler.load_sample(
+                        tr_frame, with_annots=first_with_annot,
+                        nodata='float',
+                        padkw={'constant_values': np.nan},
+                        dtype=np.float32
+                    )
 
                 WV_NODATA_HACK = 1
                 if WV_NODATA_HACK:
@@ -1525,7 +1544,8 @@ class KWCocoVideoDataset(data.Dataset):
                         if set(stream).issubset({'blue', 'green', 'red'}):
                             # Check to see if the nodata value is known in the
                             # image metadata
-                            band_metas = coco_img.find_asset_obj('red').get('band_metas', [{}])
+                            obj = coco_img.find_asset_obj('red')
+                            band_metas = obj.get('band_metas', [{}])
                             nodata_vals = [m.get('nodata', None) for m in band_metas]
                             # TODO: could be more careful about what band metas
                             # we are looking at. Assuming they are all the same
@@ -1574,7 +1594,8 @@ class KWCocoVideoDataset(data.Dataset):
                 if RGB_IFFY_HACK and set(stream).issubset({'blue', 'green', 'red'}):
                     import warnings
                     with warnings.catch_warnings():
-                        warnings.filterwarnings('ignore', 'empty slice')
+                        warnings.filterwarnings('ignore', 'empty slice', RuntimeWarning)
+                        warnings.filterwarnings('ignore', 'All-NaN', RuntimeWarning)
                         if any_invalid:
                             chan_mins = np.nanmin(sample['im'], axis=(0, 1, 2), keepdims=1)
                             invalid_mask
@@ -2326,6 +2347,24 @@ class KWCocoVideoDataset(data.Dataset):
         # what is registered in the dataset. Need to find a good way to account
         # for this.
 
+        # Make a list of all unique modes in the dataset.
+        unique_sensor_modes = set(sensor_mode_hist.keys())
+        if True:
+            print('Looking for unique modes')
+            # This looks at the entire dataset, might want to
+            # make a better way of getting this info.
+            # self.sampler.dset.videos().images
+            coco_images = self.sampler.dset.images().coco_images
+            hacked = set()
+            for c in coco_images:
+                sspec = c.img.get('sensor_coarse', '')
+                # Ensure channels are returned in requested order
+                cspec = (self.input_channels & c.channels.fuse().normalize()).fuse().normalize().spec
+                if cspec:
+                    hacked.add((sspec, cspec))
+            unique_sensor_modes.update(hacked)
+            print(f'{unique_sensor_modes=}')
+
         prog = ub.ProgIter(loader, desc='estimate dataset stats')
         for batch_items in prog:
             for item in batch_items:
@@ -2373,23 +2412,6 @@ class KWCocoVideoDataset(data.Dataset):
                 timer.first = 0
                 timer.tic()
         self.disable_augmenter = False
-
-        # Make a list of all unique modes in the dataset.
-        unique_sensor_modes = set(sensor_mode_hist.keys())
-
-        if True:
-            # This looks at the entire dataset, might want to
-            # make a better way of getting this info.
-            # self.sampler.dset.videos().images
-            coco_images = self.sampler.dset.images().coco_images
-            hacked = set()
-            for c in coco_images:
-                sspec = c.img.get('sensor_coarse', '')
-                # Ensure channels are returned in requested order
-                cspec = (self.input_channels & c.channels.fuse().normalize()).fuse().normalize().spec
-                if cspec:
-                    hacked.add((sspec, cspec))
-            unique_sensor_modes.update(hacked)
 
         channel_stats = channel_stats.to_dict()
 
@@ -3601,20 +3623,21 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                             aids_to_track.append(aid)
                             imgspace_box = kwimage.Boxes([dset.index.anns[aid]['bbox']], 'xywh')
                             vidspace_box = imgspace_box.warp(warp_vid_from_img)
-                            tlbr_box = vidspace_box.to_tlbr().data[0]
-                            annot_vid_tlbr.append(tlbr_box)
-                            if tid is not None:
-                                tid_to_infos[tid].append({
-                                    'gid': gid,
-                                    'cid': cid,
-                                    'frame_index': frame_index,
-                                    'vidspace_box': tlbr_box,
-                                    'cname': dset._resolve_to_cat(cid)['name'],
-                                    'aid': aid,
-                                })
-                            qtree.insert(aid, tlbr_box)
-                            qtree.aid_to_tlbr[aid] = tlbr_box
-                            # qtree.idx_to_tlbr[aid] = tlbr_box
+                            vidspace_box = vidspace_box.clip(0, 0, video_info['width'], video_info['height'])
+                            if vidspace_box.area.ravel()[0] > 0:
+                                tlbr_box = vidspace_box.to_tlbr().data[0]
+                                annot_vid_tlbr.append(tlbr_box)
+                                if tid is not None:
+                                    tid_to_infos[tid].append({
+                                        'gid': gid,
+                                        'cid': cid,
+                                        'frame_index': frame_index,
+                                        'vidspace_box': tlbr_box,
+                                        'cname': dset._resolve_to_cat(cid)['name'],
+                                        'aid': aid,
+                                    })
+                                qtree.insert(aid, tlbr_box)
+                                qtree.aid_to_tlbr[aid] = tlbr_box
 
                 # if len(annot_vid_tlbr):
                 #     unique_tlbr = util_kwarray.unique_rows(np.array(annot_vid_tlbr))

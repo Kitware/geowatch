@@ -31,7 +31,7 @@ def demo_smart_raw_kwcoco():
     """
     cache_dpath = ub.ensure_app_cache_dir('watch/demo/kwcoco')
     raw_coco_fpath = join(cache_dpath, 'demo_smart_raw.kwcoco.json')
-    stamp = ub.CacheStamp('raw_stamp', dpath=cache_dpath, depends=['v2'],
+    stamp = ub.CacheStamp('raw_stamp', dpath=cache_dpath, depends=['v4'],
                           product=raw_coco_fpath)
     if stamp.expired():
         s2_demo_paths1 = sentinel2_demodata.grab_sentinel2_product(index=0)
@@ -54,12 +54,12 @@ def demo_smart_raw_kwcoco():
 
         rng = kwarray.ensure_rng(542370, api='python')
 
-        # Add only the TCI for the first S2 image
+        # Add only the B01 for the first S2 image
         cands = [fname for fname in s2_demo_paths1.images
-                 if fname.name.endswith('TCI.jp2')]
+                 if fname.name.endswith('B01.jp2')]
         if len(cands) != 1:
             raise AssertionError(ub.paragraph(
-                '''
+                f'''
                 Should only have 1 candidate. Got {len(cands)}.
                 cands={cands}.
                 '''))
@@ -106,6 +106,7 @@ def demo_smart_raw_kwcoco():
                 segmentation_geos=dummy_sseg_geos.to_geojson())
 
         raw_coco_dset.fpath = raw_coco_fpath
+        raw_coco_dset.validate()
         raw_coco_dset.dump(raw_coco_dset.fpath, newlines=True)
         stamp.renew()
 
@@ -338,7 +339,7 @@ def _random_utm_box(rng=None):
     import numpy as np
     from kwarray.distributions import Uniform
     import kwarray
-    from watch.gis import spatial_reference as watch_crs
+    from watch.utils import util_gis
     from osgeo import osr
     import watch
     # stay away from edges and poles
@@ -350,7 +351,7 @@ def _random_utm_box(rng=None):
 
     lon = lon_distri.sample()
     lat = lat_distri.sample()
-    utm_epsg_int = watch_crs.utm_epsg_from_latlon(lat, lon)
+    utm_epsg_int = util_gis.utm_epsg_from_latlon(lat, lon)
 
     wgs84_crs = osr.SpatialReference()
     wgs84_crs.ImportFromEPSG(4326)

@@ -432,7 +432,10 @@ class TMUXMultiQueue(cmd_queue.Queue):
         self.write()
         ub.cmd(f'bash {self.fpath}', verbose=3, check=True)
         if block:
-            return self.monitor()
+            agg_state = self.monitor()
+            if not agg_state['errored']:
+                self.kill()
+            return agg_state
 
     def serial_run(self):
         """

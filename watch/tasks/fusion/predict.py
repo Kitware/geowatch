@@ -304,6 +304,12 @@ def predict(cmdline=False, **kwargs):
                     hack_common = hack_model_spec.intersection(datamodule_channel_spec)
                     datamodule_vars['channels'] = hack_common
 
+    DZYNE_MODEL_HACK = 1
+    if DZYNE_MODEL_HACK:
+        if args.package_fpath.stem == 'lc_rgb_fusion_model_package':
+            # This model has an issue with the L8 features it was trained on
+            datamodule_vars['exclude_sensors'] = ['L8']
+
     datamodule = datamodule_class(
         **datamodule_vars
     )
@@ -547,10 +553,13 @@ def predict(cmdline=False, **kwargs):
         EMERGENCY_INPUT_AGREEMENT_HACK = True
 
         # prog.set_extra(' <will populate stats after first video>')
-        for batch in prog:
+        for orig_batch in prog:
             batch_regions = []
             # Move data onto the prediction device, grab spacetime region info
-            for item in batch:
+            fixed_batch = []
+            for item in orig_batch:
+                if item is None:
+                    continue
                 batch_regions.append({
                     'space_slice': tuple(item['tr']['space_slice']),
                     'in_gids': [frame['gid'] for frame in item['frames']],
@@ -579,6 +588,12 @@ def predict(cmdline=False, **kwargs):
                     frame['modes'] = filtered_modes
                     filtered_frames.append(frame)
                 item['frames'] = filtered_frames
+                fixed_batch.append(item)
+
+            if len(fixed_batch) == 0:
+                continue
+
+            batch = fixed_batch
 
             if 0:
                 import netharn as nh
@@ -592,7 +607,9 @@ def predict(cmdline=False, **kwargs):
             # xdev.embed()
 
             # Predict on the batch
-            outputs = method.forward_step(batch, with_loss=False)
+            import xdev
+            with xdev.embed_on_exception_context:
+                outputs = method.forward_step(batch, with_loss=False)
             outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
 
             if got_outputs is None:

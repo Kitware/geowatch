@@ -30,6 +30,7 @@ WATCH_AUTOHACK_IMPORT_VARIANTS = {
     'variant1': ['geopandas', 'pyproj', 'gdal'],  # align-crs on horologic
     'variant2': ['pyproj', 'gdal'],   # CI machine
     'variant3': ['geopandas', 'pyproj'],   # delay gdal import
+    'none': [],   # no pre-imports
 }
 
 if ub.argflag('--warntb'):

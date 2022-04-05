@@ -284,6 +284,11 @@ def make_track_kwcoco_manifest(dst, dst_bundle_dpath, tid_to_assets,
             obj.pop('utm_crs_info', None)
         new_img.update(ensure_json_serializable(new_img))
 
+    # Make the asset order consistent by channel
+    for img in new_dset.dataset['images']:
+        if 'auxiliary' in img:
+            img['auxiliary'] = sorted(img['auxiliary'], key=lambda aux: aux['channels'])
+
     for vidid in ub.ProgIter(new_dset.videos(), desc='populate videos'):
         kwcoco_extensions.coco_populate_geo_video_stats(
             new_dset, target_gsd=target_gsd, vidid=vidid

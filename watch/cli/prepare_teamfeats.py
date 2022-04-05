@@ -69,6 +69,9 @@ class TeamFeaturePipelineConfig(scfg.Config):
         'with_invariants': scfg.Value(True, help='Include UKY invariant features'),
         'with_depth': scfg.Value(True, help='Include DZYNE WorldView depth features'),
 
+        'invariant_segmentation': scfg.Value(False, help='Enable/Disable segmentation part of invariants'),
+        'invariant_pca': scfg.Value(0, help='Enable/Disable invariant PCA'),
+
         'virtualenv_cmd': scfg.Value(None, type=str, help=ub.paragraph(
             '''
             Command to start the appropriate virtual environment if your bashrc
@@ -213,9 +216,14 @@ def _populate_teamfeat_queue(queue, base_fpath, dvc_dpath, aligned_bundle_dpath,
         # 'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt',
 
         # 2022-03-11
-        'uky_pretext': dvc_dpath / 'models/uky/uky_invariants_2022_03_11/TA1_pretext_model/pretext_package.pt',
-        'uky_pca': dvc_dpath / 'models/uky/uky_invariants_2022_03_11/TA1_pretext_model/pca_projection_matrix.pt',
-        'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt',  # uses old segmentation model
+        # 'uky_pretext': dvc_dpath / 'models/uky/uky_invariants_2022_03_11/TA1_pretext_model/pretext_package.pt',
+        # 'uky_pca': dvc_dpath / 'models/uky/uky_invariants_2022_03_11/TA1_pretext_model/pca_projection_matrix.pt',
+        # 'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt',  # uses old segmentation model
+
+        # 2022-03-21
+        'uky_pretext': dvc_dpath / 'models/uky/uky_invariants_2022_03_21/pretext_model/pretext_package.pt',
+        'uky_pca': dvc_dpath / 'models/uky/uky_invariants_2022_03_21/pretext_model/pretext_pca_104.pt',
+        # 'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_02_21/TA1_segmentation_model/segmentation_package.pt',  # uses old segmentation model
 
         # TODO: use v1 on RGB and v2 on PAN
         'dzyne_depth': dvc_dpath / 'models/depth/weights_v1.pt',
@@ -228,6 +236,10 @@ def _populate_teamfeat_queue(queue, base_fpath, dvc_dpath, aligned_bundle_dpath,
         'dzyne_depth': aligned_bundle_dpath / 'dzyne_depth.kwcoco.json',
         'uky_invariants': aligned_bundle_dpath / 'uky_invariants.kwcoco.json',
     }
+
+    print('Exist check: ')
+    print(ub.repr2(ub.map_vals(lambda x: x.exists(), model_fpaths)))
+    print(ub.repr2(ub.map_vals(lambda x: x.exists(), outputs)))
 
     # TODO: different versions of features need different codes.
     codes = {
@@ -324,6 +336,18 @@ def _populate_teamfeat_queue(queue, base_fpath, dvc_dpath, aligned_bundle_dpath,
     key = 'with_invariants'
     if config[key]:
         task = {}
+
+        if config['invariant_segmentation']:
+            # segmentation_parts = [
+            #     rf'''
+            #     --segmentation_package_path "{model_fpaths['uky_segmentation']}"
+            #     '''
+            # ]
+            raise NotImplementedError()
+
+        if not model_fpaths['uky_pretext'].exists():
+            print('Warning: UKY pretext model does not exist')
+
         # all_tasks = 'before_after segmentation pretext'
         task['output_fpath'] = outputs['uky_invariants']
         task['gpus'] = 1
@@ -333,13 +357,12 @@ def _populate_teamfeat_queue(queue, base_fpath, dvc_dpath, aligned_bundle_dpath,
                 --input_kwcoco "{base_fpath}" \
                 --output_kwcoco "{task['output_fpath']}" \
                 --pretext_package_path "{model_fpaths['uky_pretext']}" \
-                --segmentation_package_path "{model_fpaths['uky_segmentation']}" \
                 --pca_projection_path  "{model_fpaths['uky_pca']}" \
-                --do_pca 1 \
+                --do_pca {config['invariant_pca']} \
                 --patch_overlap=0.5 \
                 --num_workers="{data_workers}" \
                 --write_workers 2 \
-                --tasks all
+                --tasks before_after pretext
             ''')
         combo_code_parts.append(codes[key])
         tasks.append(task)
@@ -419,10 +442,6 @@ if __name__ == '__main__':
             --gres=0,1 --with_depth=0 --with_materials=False  --with_invariants=False \
             --run=0 --do_splits=True
 
-
-
-
-
         ###
         DATASET_CODE=Aligned-Drop2-TA1-2022-02-24
         DVC_DPATH=$(python -m watch.cli.find_dvc)
@@ -437,6 +456,22 @@ if __name__ == '__main__':
             --with_materials=1 \
             --depth_workers=auto \
             --do_splits=1  --cache=0 --run=0
+
+        ###
+        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
+        KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+        python -m watch.cli.prepare_teamfeats \
+            --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
+            --gres=0,1 \
+            --with_depth=0 \
+            --with_landcover=1 \
+            --with_invariants=1 \
+            --with_materials=1 \
+            --depth_workers=auto \
+            --invariant_pca=0 \
+            --invariant_segmentation=0 \
+            --do_splits=0  --cache=1 --run=0
 
     """
     main(cmdline=True)

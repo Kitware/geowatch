@@ -66,7 +66,7 @@ def dem_path(cache_dir=None, overwrite=False):
         orig_pth = ub.Path(p)
 
     if cache_dir is None:
-        cache_dir = ub.Path.appdir('smart_watch/dem')
+        cache_dir = ub.Path.appdir('watch/dem')
     cache_dir = ub.Path(cache_dir).ensuredir()
 
     cached_pth = ub.Path(cache_dir) / orig_pth.name

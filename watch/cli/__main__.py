@@ -58,6 +58,7 @@ def main(cmdline=True, **kw):
     subparsers = parser.add_subparsers(help='specify a command to run')
 
     cmd_alias = {
+        'torch_model_stats': ['model_info'],
         'watch_coco_stats': ['stats'],
         'coco_visualize_videos': ['visualize'],
         'coco_align_geotiffs': ['align'],

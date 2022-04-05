@@ -138,8 +138,8 @@ def grab_landsat_product(product_id=None, demo_index=0):
 
     item_suffixes = sat_code_to_suffixes[sat_code]
 
-    # By default cache to the $XDG_CACHE_HOME/smart_watch
-    # dset_dpath = ub.ensure_app_cache_dir('smart_watch')
+    # By default cache to the $XDG_CACHE_HOME/watch
+    # dset_dpath = ub.ensure_app_cache_dir('watch')
     dset_dpath = ub.ensure_app_cache_dir('watch/demo/landsat')
 
     # Cache the scene using the same path used by google cloud storage

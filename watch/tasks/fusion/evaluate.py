@@ -20,11 +20,105 @@ from kwcoco.metrics.confusion_measures import MeasureCombiner
 # from kwcoco.metrics.confusion_measures import PerClass_Measures
 from kwcoco.metrics.confusion_measures import Measures
 from typing import Dict
+import scriptconfig as scfg  # NOQA
 
 try:
     from xdev import profile
 except Exception:
     profile = ub.identity
+
+
+class SegmentationEvalConfig(scfg.Config):
+    """
+    Evaluation script for change/segmentation task
+    """
+    default = {
+         'true_dataset': scfg.Value(None, help='path to the groundtruth dataset'),
+         'pred_dataset': scfg.Value(None, help='path to the predicted dataset'),
+         'eval_dpath': scfg.Value(None, help='path to dump results'),
+         'draw_curves': scfg.Value('auto', help='flag to draw curves or not'),
+         'draw_heatmaps': scfg.Value('auto', help='flag to draw heatmaps or not'),
+         'score_space': scfg.Value('video', help='can score in image or video space'),
+         'workers': scfg.Value('auto', help='number of parallel scoring workers'),
+         'draw_workers': scfg.Value('auto', help='number of parallel drawing workers'),
+    }
+
+
+# def make_evaluate_config(cmdline=False, **kwargs):
+#     from watch.utils.configargparse_ext import ArgumentParser
+#     parser = ArgumentParser(
+#         add_config_file_help=False,
+#         description='Evaluation script for change/segmentation task',
+#         auto_env_var_prefix='WATCH_FUSION_EVAL_',
+#         add_env_var_help=True,
+#         formatter_class='defaults',
+#         config_file_parser_class='yaml',
+#         args_for_setting_config_path=['--config'],
+#         args_for_writing_out_config_file=['--dump'],
+#     )
+#     parser.add_argument('--true_dataset', '--test_dataset', help='path to the groundtruth dataset')
+#     parser.add_argument('--pred_dataset', help='path to the predicted dataset')
+#     parser.add_argument('--eval_dpath', help='path to dump results')
+#     parser.add_argument('--draw_curves', default='auto', help='flag to draw curves or not')
+#     parser.add_argument('--draw_heatmaps', default='auto', help='flag to draw heatmaps or not')
+#     parser.add_argument('--score_space', default='video', help='can score in image or video space')
+#     parser.add_argument('--workers', default='auto', help='number of parallel scoring workers')
+#     parser.add_argument('--draw_workers', default='auto', help='number of parallel drawing workers')
+#     parser.set_defaults(**kwargs)
+#     default_args = None if cmdline else []
+#     args, _ = parser.parse_known_args(default_args)
+#     return args
+
+
+def main(cmdline=True, **kwargs):
+    """
+    Ignore:
+        from watch.tasks.fusion.evaluate import *  # NOQA
+        from watch.tasks.fusion.evaluate import _memo_legend, _redraw_measures
+        kwargs = {
+            'config': './debug-eval.yaml',
+            'draw_heatmaps': 0,
+            'draw_curves': 0,
+            'workers': 2,
+            'score_space': 'video',
+        }
+        cmdline = False
+    """
+
+    # args = make_evaluate_config(cmdline=cmdline, **kwargs)
+    # config = args.__dict__
+
+    cfgpath = kwargs.pop('config', None)
+    config = SegmentationEvalConfig(cmdline=cmdline, data=kwargs)
+    if cfgpath is not None:
+        # Hack, scriptconfig should have a nicer API than this
+        config = config.load(cfgpath)
+    config.update(kwargs)
+
+    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+    true_coco = kwcoco.CocoDataset.coerce(config['true_dataset'])
+    pred_fpath = config['pred_dataset']
+
+    try:
+        pred_coco = kwcoco.CocoDataset.coerce(pred_fpath)
+    except Exception:
+        # Hack around issue in coerce
+        pred_coco = kwcoco.CocoDataset()
+        pred_coco.fpath = pred_fpath
+
+    workers = config['workers']
+    score_space = config['score_space']
+    draw_workers = config['workers']
+    eval_dpath = config['eval_dpath']
+
+    from scriptconfig.smartcast import smartcast
+    draw_heatmaps = smartcast(config['draw_heatmaps'])
+    draw_curves = smartcast(config['draw_curves'])
+    evaluate_segmentations(true_coco, pred_coco, eval_dpath,
+                           draw_curves=draw_curves,
+                           draw_heatmaps=draw_heatmaps,
+                           score_space=score_space, workers=workers,
+                           draw_workers=draw_workers)
 
 
 @profile
@@ -758,8 +852,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     rows = []
     chunk_size = 5
     # thresh_bins = 256 * 256
-    thresh_bins = 64 * 64
-    # thresh_bins = np.linspace(0, 1, 64 * 64)
+    # thresh_bins = 64 * 64
+    thresh_bins = np.linspace(0, 1, 128 * 128)  # this is more stable using an ndarray
 
     if draw_curves == 'auto':
         draw_curves = bool(eval_dpath is not None)
@@ -799,6 +893,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     # Prepare job pools
     print('workers = {!r}'.format(workers))
     print('draw_workers = {!r}'.format(draw_workers))
+    workers = 10
     metrics_executor = ub.Executor(mode='process', max_workers=workers)
     draw_executor = ub.Executor(mode='process', max_workers=draw_workers)
 
@@ -891,6 +986,10 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         num_draw_finished = 1
         progress = score_prog  # Hack
 
+    DEBUG = 0
+    if DEBUG:
+        orig_infos = []
+
     with progress:
         if RICH_PROG:
             score_task = progress.add_task("[cyan] Scoring...", total=num_jobs)
@@ -901,6 +1000,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             chunk_info = []
             for job in job_chunk:
                 info = job.result()
+                if DEBUG:
+                    orig_infos.append(info)
 
                 if RICH_PROG:
                     progress.update(score_task, advance=1)
@@ -970,6 +1071,11 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                     score_prog.set_extra(f'Drawing : {num_draw_finished}')
             draw_executor.shutdown()
 
+    df = pd.DataFrame(rows)
+    print('Per Image Pixel Measures')
+    print(df)
+    print(df.describe().T)
+
     # Finalize all of the aggregated measures
     print('Finalize salient measures')
     # Note: this will return False if there are no salient measures
@@ -977,6 +1083,41 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     if salient_combo_measures is False or salient_combo_measures is None:
         # Use nan measures from empty binary confusion vectors
         salient_combo_measures = BinaryConfusionVectors(None).measures()
+    # print('salient_combo_measures = {!r}'.format(salient_combo_measures))
+
+    if DEBUG:
+        # Redo salient combine
+        tocombine = []
+
+        for p in tocombine:
+            z = ub.dict_isect(p, {'fp_count', 'tp_count', 'fn_count', 'tn_count', 'thresholds', 'nsupport'})
+            print(ub.repr2(ub.map_vals(list, z), nl=0))
+
+        salient_measure_combiner = MeasureCombiner(thresh_bins=thresh_bins)
+        print('salient_combo_measures.__dict__ = {!r}'.format(salient_combo_measures.__dict__))
+        # precision = None
+        # growth = None
+        from kwcoco.metrics.confusion_measures import Measures
+        for info in orig_infos:
+            class_measures = info.get('class_measures', None)
+            salient_measures = info.get('salient_measures', None)
+            if salient_measures is not None:
+                tocombine.append(salient_measures)
+                salient_measure_combiner.submit(salient_measures)
+
+        combo = Measures.combine(tocombine, thresh_bins=thresh_bins).reconstruct()
+        print('combo = {!r}'.format(combo))
+
+        combo = Measures.combine(tocombine, precision=2)
+        combo.reconstruct()
+        print('combo = {!r}'.format(combo))
+
+        combo = Measures.combine(tocombine, growth='max')
+        combo.reconstruct()
+        print('combo = {!r}'.format(combo))
+
+        salient_combo_measures = salient_measure_combiner.finalize()
+        print('salient_combo_measures = {!r}'.format(salient_combo_measures))
 
     print('Finalize class measures')
     class_combo_measure_dict = class_measure_combiner.finalize()
@@ -1014,9 +1155,6 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
 
                     print('Dump class figures')
                     result.dump_figures(curve_dpath, expt_title=title)
-
-    df = pd.DataFrame(rows)
-    print(df)
 
     summary = {}
     if class_combo_measure_dict is not None:
@@ -1058,54 +1196,6 @@ def _redraw_measures(eval_dpath):
             salient_combo_measures.summary_plot(fnum=1, title=title)
             fig = kwplot.autoplt().gcf()
             fig.savefig(str(curve_dpath / 'summary_redo.png'))
-
-
-def make_evaluate_config(cmdline=False, **kwargs):
-    from watch.utils.configargparse_ext import ArgumentParser
-    parser = ArgumentParser(
-        add_config_file_help=False,
-        description='Evaluation script for change/segmentation task',
-        auto_env_var_prefix='WATCH_FUSION_EVAL_',
-        add_env_var_help=True,
-        formatter_class='defaults',
-        config_file_parser_class='yaml',
-        args_for_setting_config_path=['--config'],
-        args_for_writing_out_config_file=['--dump'],
-    )
-    parser.add_argument('--true_dataset', '--test_dataset', help='path to the groundtruth dataset')
-    parser.add_argument('--pred_dataset', help='path to the predicted dataset')
-    parser.add_argument('--eval_dpath', help='path to dump results')
-    parser.add_argument('--draw_curves', default='auto', help='flag to draw curves or not')
-    parser.add_argument('--draw_heatmaps', default='auto', help='flag to draw heatmaps or not')
-    parser.add_argument('--score_space', default='video', help='can score in image or video space')
-    parser.add_argument('--workers', default='auto', help='number of parallel scoring workers')
-    parser.add_argument('--draw_workers', default='auto', help='number of parallel drawing workers')
-    parser.set_defaults(**kwargs)
-    default_args = None if cmdline else []
-    args, _ = parser.parse_known_args(default_args)
-    return args
-
-
-def main(cmdline=True, **kwargs):
-    args = make_evaluate_config(cmdline=cmdline, **kwargs)
-    true_coco = kwcoco.CocoDataset.coerce(args.true_dataset)
-
-    try:
-        pred_coco = kwcoco.CocoDataset.coerce(args.pred_dataset)
-    except Exception:
-        # Hack around issue in coerce
-        pred_coco = kwcoco.CocoDataset()
-        pred_coco.fpath = args.pred_dataset
-
-    from scriptconfig.smartcast import smartcast
-    draw_heatmaps = smartcast(args.draw_heatmaps)
-    draw_curves = smartcast(args.draw_curves)
-    print('args.__dict__ = {!r}'.format(args.__dict__))
-    evaluate_segmentations(true_coco, pred_coco, args.eval_dpath,
-                           draw_curves=draw_curves,
-                           draw_heatmaps=draw_heatmaps,
-                           score_space=args.score_space, workers=args.workers,
-                           draw_workers=args.draw_workers)
 
 
 if __name__ == '__main__':
@@ -1156,6 +1246,25 @@ if __name__ == '__main__':
           --score_space=video \
           --draw_curves=1 \
           --draw_heatmaps=1 --workers=2
+
+
+    PRED_DATASET=$HOME/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/Drop3_BASELINE_BAS_V303/pred_Drop3_BASELINE_BAS_V303_epoch=5-step=12287/Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json
+    TEST_DATASET=$HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop3-TA1-2022-03-10/combo_LM_nowv_vali.kwcoco.json
+    python -m watch.tasks.fusion.evaluate \
+        --true_dataset=$TEST_DATASET \
+        --pred_dataset=$PRED_DATASET \
+        --eval_dpath=tmp/eval-tmp \
+        --score_space=video \
+        --draw_curves=1 \
+        --draw_heatmaps=1 --workers=2 --dump=./debug-eval.yaml
+
+    Ignore:
+        kwargs = {
+            'config': './debug-eval.yaml',
+        }
+        cmdline = False
+
+    V303_epoch=5-step=12287
 
 
     """

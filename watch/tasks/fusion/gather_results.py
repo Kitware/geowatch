@@ -199,9 +199,20 @@ def prepare_results(all_infos, coi_pattern):
             package_name = meta['package_name']
 
         # Hack to get the epoch/step/expt_name
-        epoch = int(package_name.split('epoch=')[1].split('-')[0])
-        step = int(package_name.split('step=')[1].split('-')[0])
-        expt_name = package_name.split('epoch=')[0]
+        try:
+            epoch = int(package_name.split('epoch=')[1].split('-')[0])
+        except Exception:
+            epoch = -1
+
+        try:
+            step = int(package_name.split('step=')[1].split('-')[0])
+        except Exception:
+            step = -1
+
+        try:
+            expt_name = package_name.split('epoch=')[0]
+        except Exception:
+            expt_name = predict_meta['properties']['args'][expt_name]
 
         salient_measures = info['nocls_measures']
         class_measures = info['ovr_measures']

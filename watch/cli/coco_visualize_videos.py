@@ -85,7 +85,7 @@ class CocoVisualizeConfig(scfg.Config):
         'num_frames': scfg.Value(None, type=str, help='show the first N frames from each video, if None, all are shown'),
         'start_frame': scfg.Value(0, type=str, help='If specified each video will start on this frame'),
 
-        'skip_missing': scfg.Value(False, type=str, help='If true, skip any image that does not have the requested channels'),
+        'skip_missing': scfg.Value(True, type=str, help='If true, skip any image that does not have the requested channels. Otherwise a nan image will be shown'),
 
         # TODO: better support for this
         # TODO: use the kwcoco_video_data, has good logic for this
@@ -498,6 +498,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                fixed_normalization_scheme=None,
                                any3=True, dset_idstr='',
                                skip_missing=False,
+                               only_boxes=1,
                                cmap='viridis', verbose=0):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
@@ -612,13 +613,15 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     img_view_dpath = sub_dpath / '_imgs'
     ann_view_dpath = sub_dpath / '_anns'
 
-    try:
-        with ub.Timer('build dets', verbose=verbose):
-            dets = kwimage.Detections.from_coco_annots(anns, dset=coco_dset)
-    except Exception:
-        # hack
-        anns = [ub.dict_diff(ann, ['keypoints']) for ann in anns]
-        dets = kwimage.Detections.from_coco_annots(anns, dset=coco_dset)
+    # try:
+    #     with ub.Timer('build dets', verbose=verbose):
+    #         dets = kwimage.Detections.from_coco_annots(anns, dset=coco_dset)
+    # except Exception:
+    #     # hack
+    with ub.Timer('build dets', verbose=verbose):
+        # Ignore keypoints
+        anns_ = [ub.dict_diff(ann, ['keypoints']) for ann in anns]
+        dets = kwimage.Detections.from_coco_annots(anns_, dset=coco_dset)
 
     if space == 'video':
         vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
@@ -697,11 +700,13 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         if verbose > 1:
             import kwarray
             print('raw_canvas.shape = {!r}'.format(raw_canvas.shape))
-            import xdev
-            with xdev.embed_on_exception_context:
-                chan_stats = kwarray.stats_dict(raw_canvas, axis=2, nan=True)
             print('chan_list = {!r}'.format(chan_list))
-            print('chan_stats = {}'.format(ub.repr2(chan_stats, nl=1)))
+            try:
+                chan_stats = kwarray.stats_dict(raw_canvas, axis=2, nan=True)
+                print('chan_stats = {}'.format(ub.repr2(chan_stats, nl=1)))
+            except Exception:
+                import warnings
+                warnings.warn('Error printing chan stats, probably need kwarray >= 0.6.1')
 
         if skip_missing and np.all(np.isnan(raw_canvas)):
             continue
@@ -812,7 +817,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             dets = dets.scale(info['scale'])
             dets = dets.translate(info['offset'])
             # info['scale']
-            ONLY_BOXES = 1
+            ONLY_BOXES = only_boxes
             if ONLY_BOXES:
                 with ub.Timer('dets.draw_on 1', verbose=verbose):
                     # ann_canvas = dets.draw_on(ann_canvas, color='classes')
@@ -821,19 +826,12 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                 # THERE IS A IN DRAW POLY WITH LARGE POLYS. THIS IS FINE FOR
                 # REAL DATA BUT A TEST FAILS HARD. HACKING THIS OFF FOR NOW
                 with ub.Timer('dets.draw_on 2', verbose=verbose):
-                    if 1:
-                        print('dets.data = {!r}'.format(dets.data))
-                        print('dets.boxes = {!r}'.format(dets.boxes))
-                        print('ann_canvas.shape = {!r}'.format(ann_canvas.shape))
-                    # import xdev
-                    # xdev.embed()
-                    ann_canvas = dets.draw_on(ann_canvas, color='classes')
-                    # if 0:
-                    #     dets.data['segmentations'].draw_on(ann_canvas)
-                    #     poly = dets.data['segmentations'].data[0].data[0]
-                    #     dets.data['segmentations'].data[0].data[0].draw_on(ann_canvas)
-                    ann_canvas = dets.draw_on(ann_canvas, color='classes')
-                    # ann_canvas = dets.draw_on(ann_canvas)
+                    try:
+                        # kwimage 0.8.4 fixes this error
+                        ann_canvas = dets.draw_on(ann_canvas, color='classes')
+                    except Exception:
+                        ann_canvas = dets.draw_on(ann_canvas)
+
             ann_canvas = kwimage.ensure_uint255(ann_canvas)
             ann_canvas = util_kwimage.draw_header_text(image=ann_canvas,
                                                        text=header_text,

@@ -451,12 +451,12 @@ def s2_coregister_all_tiles(input_folder_or_safedirs,
         >>> # xdoctest: +REQUIRES(--slow)
         >>> from watch.datacube.registration.s2_coreg_l1c import *
         >>> from watch.demo.sentinel2_demodata import grab_sentinel2_product
-        >>>
+        >>> #
         >>> safedirs = [str(grab_sentinel2_product(i).path) for i in range(3)]
         >>> output_folder = './coregistered'
         >>> scenes, baseline_scenes = s2_coregister_all_tiles(safedirs, output_folder)
         >>> assert len(scenes['52SDG']) == 3
-        >>>
+        >>> #
         >>> # clean up
         >>> for d in safedirs:
         >>>     os.system(f'rm -r {d}')

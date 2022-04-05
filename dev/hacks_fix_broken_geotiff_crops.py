@@ -117,11 +117,11 @@ def _hack_fix_align_warp(bundle_dpath, img, chan_group):
 
     import watch
     candidate_utm_codes = [
-        watch.gis.spatial_reference.utm_epsg_from_latlon(latmin, lonmin),
-        watch.gis.spatial_reference.utm_epsg_from_latlon(latmax, lonmax),
-        watch.gis.spatial_reference.utm_epsg_from_latlon(latmax, lonmin),
-        watch.gis.spatial_reference.utm_epsg_from_latlon(latmin, lonmax),
-        watch.gis.spatial_reference.utm_epsg_from_latlon(
+        watch.utils.util_gis.utm_epsg_from_latlon(latmin, lonmin),
+        watch.utils.util_gis.utm_epsg_from_latlon(latmax, lonmax),
+        watch.utils.util_gis.utm_epsg_from_latlon(latmax, lonmin),
+        watch.utils.util_gis.utm_epsg_from_latlon(latmin, lonmax),
+        watch.utils.util_gis.utm_epsg_from_latlon(
             ((latmin + latmax) / 2), ((lonmin + lonmax) / 2)),
     ]
     utm_epsg_zone = ub.argmax(ub.dict_hist(candidate_utm_codes))

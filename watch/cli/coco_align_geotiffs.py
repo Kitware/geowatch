@@ -127,6 +127,8 @@ class CocoAlignGeotiffConfig(scfg.Config):
             to use pre-defined regions.
             ''')),
 
+        'site_summary': scfg.Value(False, help='Crop to site summaries instead'),
+
         # TODO: change this name to just align-method or something
         'rpc_align_method': scfg.Value('orthorectify', help=ub.paragraph(
             '''
@@ -252,7 +254,7 @@ def main(cmdline=True, **kw):
         >>>     image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
         >>> #
         >>> # Create arguments to the script
-        >>> dpath = ub.ensure_app_cache_dir('smart_watch/test/coco_align_geotiff')
+        >>> dpath = ub.ensure_app_cache_dir('watch/test/coco_align_geotiff')
         >>> dst = ub.ensuredir((dpath, 'align_bundle1'))
         >>> ub.delete(dst)
         >>> dst = ub.ensuredir(dst)
@@ -271,7 +273,7 @@ def main(cmdline=True, **kw):
         >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
         >>> coco_dset = demo_kwcoco_with_heatmaps(num_videos=2, num_frames=2)
         >>> # Create arguments to the script
-        >>> dpath = ub.ensure_app_cache_dir('smart_watch/test/coco_align_geotiff2')
+        >>> dpath = ub.ensure_app_cache_dir('watch/test/coco_align_geotiff2')
         >>> dst = ub.ensuredir((dpath, 'align_bundle2'))
         >>> ub.delete(dst)
         >>> kw = {
@@ -381,10 +383,13 @@ def main(cmdline=True, **kw):
         parts = []
         for fpath in paths:
             df = util_gis.read_geojson(fpath)
-            if df.iloc[0]['type'] == 'site':
-                df = df[df['type'] == 'site']
+            if config['site_summary']:
+                df = df[df['type'] == 'site_summary']
             else:
-                df = df[df['type'] == 'region']
+                if df.iloc[0]['type'] == 'site':
+                    df = df[df['type'] == 'site']
+                else:
+                    df = df[df['type'] == 'region']
             parts.append(df)
         region_df = pd.concat(parts)
 
@@ -645,7 +650,6 @@ class SimpleDataCube(object):
         """
         from kwcoco.util.util_json import ensure_json_serializable
         import geopandas as gpd
-        import watch
 
         # Quickly find overlaps using a spatial index
         ridx_to_gidsx = util_gis.geopandas_pairwise_overlaps(region_df, cube.img_geos_df)
@@ -662,7 +666,7 @@ class SimpleDataCube(object):
             crs = gpd.GeoDataFrame([region_row], crs=region_df.crs).estimate_utm_crs()
             utm_epsg_zone_v1 = crs.to_epsg()
             geom_crs84 = region_row.geometry
-            utm_epsg_zone_v2 = watch.gis.spatial_reference.find_local_meter_epsg_crs(geom_crs84)
+            utm_epsg_zone_v2 = util_gis.find_local_meter_epsg_crs(geom_crs84)
             assert utm_epsg_zone_v2 == utm_epsg_zone_v1, 'consistency'
             local_epsg = utm_epsg_zone_v2
 
@@ -787,7 +791,7 @@ class SimpleDataCube(object):
         Example:
             >>> from watch.cli.coco_align_geotiffs import *  # NOQA
             >>> cube, region_df = SimpleDataCube.demo(with_region=True)
-            >>> extract_dpath = ub.ensure_app_cache_dir('smart_watch/test/coco_align_geotiff/demo_extract_overlaps')
+            >>> extract_dpath = ub.ensure_app_cache_dir('watch/test/coco_align_geotiff/demo_extract_overlaps')
             >>> rpc_align_method = 'orthorectify'
             >>> new_dset = kwcoco.CocoDataset()
             >>> write_subsets = True
@@ -803,7 +807,7 @@ class SimpleDataCube(object):
             >>> # xdoctest: +REQUIRES(--slow)
             >>> from watch.cli.coco_align_geotiffs import *  # NOQA
             >>> cube, region_df = SimpleDataCube.demo(with_region=True, extra=True)
-            >>> extract_dpath = ub.ensure_app_cache_dir('smart_watch/test/coco_align_geotiff/demo_extract_overlaps2')
+            >>> extract_dpath = ub.ensure_app_cache_dir('watch/test/coco_align_geotiff/demo_extract_overlaps2')
             >>> rpc_align_method = 'orthorectify'
             >>> write_subsets = True
             >>> visualize = True
@@ -1211,6 +1215,9 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
                       verbose=0):
     """
     Threaded worker function for :func:`SimpleDataCube.extract_overlaps`.
+
+    Returns:
+        Tuple[Dict, Dict] : new_img, new_anns
     """
     # from tempenv import TemporaryEnvironment  # NOQA
     # Does this resolve import issues?
@@ -1542,10 +1549,10 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     assert all(n is not None for n in input_gnames)
     input_gpaths = [join(bundle_dpath, n) for n in input_gnames]
 
-    PHASE1_DEADLINE_HACK = 1
-    if PHASE1_DEADLINE_HACK:
-        if len(input_gpaths) == 1 and input_gpaths[0].endswith('TCI.jp2'):
-            return None
+    # PHASE1_DEADLINE_HACK = 1
+    # if PHASE1_DEADLINE_HACK:
+    #     if len(input_gpaths) == 1 and input_gpaths[0].endswith('TCI.jp2'):
+    #         return None
 
     dst = {
         'file_name': dst_gpath,
