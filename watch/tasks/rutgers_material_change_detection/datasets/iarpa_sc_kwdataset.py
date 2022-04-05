@@ -1,12 +1,13 @@
 import os
-from datetime import datetime
-from collections import namedtuple
+import ubelt as ub
 
 import cv2
 import torch
 import kwcoco
 import kwimage
 import numpy as np
+from datetime import datetime
+from collections import namedtuple
 from matplotlib.colors import to_rgba
 
 from watch.tasks.rutgers_material_change_detection.utils.util_misc import get_crop_slices
@@ -16,7 +17,7 @@ from watch.tasks.rutgers_material_change_detection.datasets.base_dataset import 
 class IARPA_SC_EVAL_DATASET(BaseDataset):
     def __init__(
         self,
-        root_dir,
+        kwcoco_path,
         split,
         video_slice,
         task_mode,
@@ -41,8 +42,10 @@ class IARPA_SC_EVAL_DATASET(BaseDataset):
             sensor_type (str, optional):
                 The name of sensor to return image data from. Defaults to 'S2'.
         """
+
+        kwcoco_path = ub.Path(kwcoco_path)
         super().__init__(
-            root_dir,
+            os.fspath(kwcoco_path.parent),
             split,
             video_slice,
             task_mode,
@@ -54,7 +57,7 @@ class IARPA_SC_EVAL_DATASET(BaseDataset):
         )
 
         if split != "valid":
-            raise NotImplementedError(f"Dataset designed for split other than valid.")
+            raise NotImplementedError("Dataset designed for split other than valid.")
 
         # Figure out how many channels to load.
         Channel_Info = namedtuple("channel_info", ["band_name", "wl_name", "wavelength", "scale_factor"])
@@ -86,10 +89,10 @@ class IARPA_SC_EVAL_DATASET(BaseDataset):
             raise NotImplementedError(f'Channels equal to "{channels}" not implmented.')
         self.n_channels = len(self.channel_info.keys())
 
-        if ("Drop2-Aligned-TA1-2022-02-15" in self.dset_dir) or ("Aligned-Drop3-TA1-2022-03-10" in self.dset_dir):
-            kwcoco_path = os.path.join(root_dir, "data_vali.kwcoco.json")
-        else:
-            kwcoco_path = os.path.join(root_dir, "vali_data.kwcoco.json")
+        # if ("Drop2-Aligned-TA1-2022-02-15" in self.dset_dir) or ("Aligned-Drop3-TA1-2022-03-10" in self.dset_dir):
+        #     kwcoco_path = os.path.join(root_dir, "data_vali.kwcoco.json")
+        # else:
+        #     kwcoco_path = os.path.join(root_dir, "vali_data.kwcoco.json")
 
         # Load kwcoco dataset
         self.coco_dset = kwcoco.CocoDataset(kwcoco_path)

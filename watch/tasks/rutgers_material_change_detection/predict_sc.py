@@ -1,5 +1,6 @@
 import os
 import argparse
+import ubelt as ub
 
 import torch
 import kwimage
@@ -17,12 +18,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("model_path", type=str, help="Path to the .pth.tar file ")
     parser.add_argument(
-        "input_kwcoco_dir",
+        "input_kwcoco",
         type=str,
         help="Path to a directory that contains a vali.kwcoco.json file to get input data from.",
     )
     parser.add_argument(
-        "save_name", type=str, help="Model prediction will be saved to same directory as the input_kwcoco_dir."
+        "output_kwcoco", type=str, help="Model prediction will be saved to same directory as the input_kwcoco_dir."
     )
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--n_workers", type=int)
@@ -52,13 +53,16 @@ def main():
     if args.n_workers is None:
         args.n_workers = cfg.n_workers
 
+    config = args.__dict__
+    print('config = {}'.format(ub.repr2(config, nl=1)))
+
     # Build dataset (manually).
     n_frames = get_n_frames(cfg.dataset.n_frames, cfg.task_mode)
     video_slice = generate_video_slice_object(
         height=cfg.height, width=cfg.width, n_frames=n_frames, scale=cfg.scale, stride=cfg.stride
     )
     eval_dataset = IARPA_SC_EVAL_DATASET(
-        args.input_kwcoco_dir,
+        args.input_kwcoco,
         "valid",
         video_slice,
         cfg.task_mode,
@@ -77,13 +81,12 @@ def main():
     model.eval()
 
     # Create save directories.
-    pred_save_path = os.path.join(args.input_kwcoco_dir, args.save_name + ".kwcoco.json")
-    asset_dir = os.path.join(args.input_kwcoco_dir, args.save_name + "_assets")
-    os.makedirs(asset_dir, exist_ok=True)
+    pred_save_path = ub.Path(args.output_kwcoco)
+    asset_dir = (pred_save_path.parent / '_assets').ensuredir()
 
     # Create a random subset of examples from dataloader to choose from.
     region_images, region_image_ids, overlap_masks = {}, {}, {}
-    for examples in tqdm(eval_loader):
+    for examples in tqdm(eval_loader, desc='predicting'):
         # Load videos onto GPU memory.
         examples["video"] = examples["video"].to(device, non_blocking=True)
 
@@ -152,13 +155,19 @@ def main():
                 img_save_path = os.path.join(region_dir, channel_name.replace(" ", "_") + "_" + str(image_id) + ".tif")
 
                 data = conf_image[:, :, channel_index, image_id_index]
+                nodata = None
+                tosave = data
+                quantization = None
 
-                from watch.tasks.fusion.predict import quantize_float01
-                quant_recon, quantization = quantize_float01(
-                    data, old_min=0, old_max=1)
-                nodata = quantization['nodata']
+                if 0:
+                    # Do quantization or not
+                    from watch.tasks.fusion.predict import quantize_float01
+                    quant_recon, quantization = quantize_float01(
+                        data, old_min=0, old_max=1)
+                    nodata = quantization['nodata']
+                    tosave = quant_recon
 
-                kwimage.imwrite(img_save_path, quant_recon, backend="gdal",
+                kwimage.imwrite(img_save_path, tosave, backend="gdal",
                                 nodata=nodata)
 
                 img = kwcoco_dataset.index.imgs[image_id]
@@ -167,17 +176,21 @@ def main():
                 img_from_vid = vid_from_img.inv()
 
                 # For T&E metrics.
-                img.get("auxiliary", []).append(
-                    {
-                        "file_name": img_save_path,
-                        "channels": channel_name,
-                        "height": conf_image.shape[0],
-                        "width": conf_image.shape[1],
-                        "num_bands": 1,
-                        "warp_aux_to_img": img_from_vid.concise(),
-                        'quantization': quantization,
-                    }
-                )
+                new_aux = {
+                    "file_name": img_save_path,
+                    "channels": channel_name,
+                    "height": conf_image.shape[0],
+                    "width": conf_image.shape[1],
+                    "num_bands": 1,
+                    "warp_aux_to_img": img_from_vid.concise(),
+                    'quantization': quantization,
+                }
+                if quantization is not None:
+                    new_aux['quantization'] = quantization
+
+                auxiliary = img.get("auxiliary", [])
+                auxiliary.append(new_aux)
+                img['auxiliary'] = auxiliary
                 kwcoco_dataset.index.imgs[image_id] = img
 
     # Get save path.
@@ -188,9 +201,28 @@ def main():
 if __name__ == "__main__":
     """
     Example call:
-    python watch/tasks/rutgers_material_change_detection/predict_sc.py \
-        /data4/peri/smart_watch_models/0025/best_model.pth.tar \
-        /data4/datasets/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/ \
-        material_pred_test
+
+    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    MODEL_FPATH=$DVC_DPATH/models/rutgers/rutgers_sc_model_v4.pth.tar
+
+    kwcoco subset \
+        --src=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali.kwcoco.json \
+        --dst=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_s2kr_vali.kwcoco.json \
+        --select_images='.sensor_coarse == "S2"' \
+        --select_videos='.name == "KR_R001"'
+
+    python -m watch.tasks.rutgers_material_change_detection.predict_sc \
+        $MODEL_FPATH \
+        $DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_s2kr_vali.kwcoco.json \
+        $DVC_DPATH/tmp/my_pred/pred.kwcoco.json \
+        --n_workers 16 --batch_size 16
+
+    python -m watch.tasks.fusion.evaluate \
+        --true_dataset=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_s2kr_vali.kwcoco.json \
+        --pred_dataset=$DVC_DPATH/tmp/my_pred/pred.kwcoco.json \
+        --eval_dpath=$DVC_DPATH/tmp/my_eval \
+        --score_space=video \
+        --draw_curves=1 \
+        --draw_heatmaps=0 --workers=8
     """
     main()
