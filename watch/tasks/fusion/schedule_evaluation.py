@@ -56,6 +56,16 @@ class ScheduleEvaluationConfig(scfg.Config):
 
         'partition': scfg.Value(None, help='specify slurm partition (slurm backend only)'),
         'mem': scfg.Value(None, help='specify slurm memory per task (slurm backend only)'),
+
+        'tta_fliprot': scfg.Value(None, help='grid of flip test-time-augmentation to test'),
+        'tta_time': scfg.Value(None, help='grid of temporal test-time-augmentation to test'),
+        'chip_overlap': scfg.Value(0.3, help='grid of chip overlaps test'),
+
+        'workdir': scfg.Value(None, help='if specified, dumps predictions/results here, otherwise uses our DVC sidecar pattern'),
+
+        'sidecar2': scfg.Value(True, help='if True uses parallel sidecar pattern, otherwise nested'),
+
+        'shuffle_jobs': scfg.Value(True, help='if True, shuffles the jobs so they are submitted in a random order'),
     }
 
 
@@ -279,23 +289,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             package_info = package_metadata(ub.Path(package_fpath))
             packages_to_eval.append(package_info)
 
-    shuffle_jobs = True
-    if shuffle_jobs:
-        import kwarray
-        packages_to_eval = kwarray.shuffle(packages_to_eval)
-
     print(f'{len(packages_to_eval)=}')
-
-    # # for subfolder in model_dpath.glob('*'):
-    #     # package_fpaths = list(subfolder.glob('*.pt'))
-    #     subfolder_infos = [package_metadata(package_fpath)
-    #                        for package_fpath in package_fpaths]
-    #     subfolder_infos = sorted(subfolder_infos, key=lambda x: x['epoch'], reverse=True)
-    #     for info in subfolder_infos:
-    #         if 'rutgers_v5' in info['name']:
-    #             break
-    #         packages_to_eval.append(info)
-    #         # break
 
     queue_dpath = dvc_dpath / '_cmd_queue_schedule'
     queue_dpath.mkdir(exist_ok=True)
@@ -315,17 +309,10 @@ def schedule_evaluation(cmdline=False, **kwargs):
         GPUS = gpus
 
     print('GPUS = {!r}'.format(GPUS))
-    # GPUS = [0, 1, 2, 3]
-    # GPUS = [0]
     environ = {
         'DVC_DPATH': dvc_dpath,
     }
 
-    # queue = tmux_queue.TMUXMultiQueue(
-    #     size=len(GPUS), environ=environ, gres=GPUS,
-    #     dpath=queue_dpath)
-
-    # queue = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
     from watch.utils import cmd_queue
     queue = cmd_queue.Queue.create(config['backend'], name='schedule-eval',
                                    size=len(GPUS), environ=environ,
@@ -338,24 +325,48 @@ def schedule_evaluation(cmdline=False, **kwargs):
     recompute_pred = recompute
     recompute_eval = recompute or (with_eval == 'redo')
 
-    pred_cfg = {}
+    def ensure_iterable(x):
+        return x if ub.iterable(x) else [x]
 
-    for info in packages_to_eval:
-        package_fpath = info['fpath']
-        suggestions = organize.suggest_paths(
-            package_fpath=package_fpath,
-            test_dataset=test_dataset_fpath,
-            sidecar2=True, as_json=False,
-            pred_cfg=pred_cfg,
-        )
-        info['suggestions'] = suggestions
+    pred_cfg_basis = {}
+    pred_cfg_basis['tta_time'] = ensure_iterable(config['tta_time'])
+    pred_cfg_basis['tta_fliprot'] = ensure_iterable(config['tta_fliprot'])
+    pred_cfg_basis['chip_overlap'] = ensure_iterable(config['chip_overlap'])
+
+    expanded_packages_to_eval = []
+    for raw_info in packages_to_eval:
+        for pred_cfg in ub.named_product(pred_cfg_basis):
+            info = raw_info.copy()
+            package_fpath = info['fpath']
+
+            # Hack for defaults so they keep the same hash
+            # Can remove this once current phase is done
+            if 1:
+                pred_cfg_hack = pred_cfg.copy()
+                if pred_cfg['tta_fliprot'] is None:
+                    pred_cfg_hack.pop('tta_fliprot')
+                if pred_cfg['tta_time'] is None:
+                    pred_cfg_hack.pop('tta_time')
+                if pred_cfg['chip_overlap'] == 0.3:
+                    pred_cfg_hack.pop('chip_overlap')
+
+            suggestions = organize.suggest_paths(
+                package_fpath=package_fpath,
+                test_dataset=test_dataset_fpath,
+                sidecar2=config['sidecar2'], as_json=False,
+                workdir=config['workdir'],
+                pred_cfg=pred_cfg_hack,
+            )
+            info['suggestions'] = suggestions
+            info['pred_cfg'] = pred_cfg
+            expanded_packages_to_eval.append(info)
 
     skip_existing = config['skip_existing']
 
     if with_eval == 'redo':
         # Need to dvc unprotect
         needs_unprotect = []
-        for info in packages_to_eval:
+        for info in expanded_packages_to_eval:
             suggestions = info['suggestions']
             pred_dataset_fpath = ub.Path(suggestions['pred_dataset'])  # NOQA
             eval_metrics_fpath = ub.Path(suggestions['eval_dpath']) / 'curves/measures2.json'
@@ -369,9 +380,15 @@ def schedule_evaluation(cmdline=False, **kwargs):
             simple_dvc = SimpleDVC(dvc_dpath)
             simple_dvc.unprotect(needs_unprotect)
 
-    for info in packages_to_eval:
+    if config['shuffle_jobs']:
+        import kwarray
+        expanded_packages_to_eval = kwarray.shuffle(expanded_packages_to_eval)
+
+    for info in expanded_packages_to_eval:
         package_fpath = info['fpath']
         suggestions = info['suggestions']
+        pred_cfg = info['pred_cfg']
+        print(id(pred_cfg))
         pred_dataset_fpath = ub.Path(suggestions['pred_dataset'])  # NOQA
         eval_metrics_fpath = ub.Path(suggestions['eval_dpath']) / 'curves/measures2.json'
         eval_metrics_dvc_fpath = ub.Path(suggestions['eval_dpath']) / 'curves/measures2.json.dvc'
@@ -386,6 +403,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
         #     str(dvc_dpath), '$DVC_DPATH'), suggestions)
         predictkw = {
             'workers_per_queue': workers_per_queue,
+            **pred_cfg,
         }
 
         # print('pred_dataset_fpath = {!r}'.format(pred_dataset_fpath))
@@ -397,7 +415,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
         # import ubelt as ub
         # ub.util_hash._HASHABLE_EXTENSIONS.register(pathlib.Path)( lambda x: (b'PATH', str))
         # import os
-        name_suffix = '_' + ub.hash_data(str(package_fpath))[0:8]
+        print('pred_cfg = {!r}'.format(pred_cfg))
+        name_suffix = '_' + ub.hash_data(str(package_fpath))[0:8] + '_' + ub.hash_data(pred_cfg)[0:8]
 
         pred_job = None
         if with_pred:
@@ -413,7 +432,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     --pred_dataset={pred_dataset} \
                     --test_dataset={test_dataset} \
                     --num_workers={workers_per_queue} \
-                    --compress=DEFLATE \
+                    --chip_overlap={chip_overlap} \
+                    --tta_time={tta_time} \
+                    --tta_fliprot={tta_fliprot} \
                     --gpus=0, \
                     --batch_size=1
                 ''').format(**suggestions, **predictkw)

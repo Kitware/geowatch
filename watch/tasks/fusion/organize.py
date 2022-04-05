@@ -9,7 +9,7 @@ import json
 import os
 
 
-def suggest_paths(test_dataset=None, package_fpath=None, pred_root=None,
+def suggest_paths(test_dataset=None, package_fpath=None, workdir=None,
                   sidecar2=False, as_json=True, pred_cfg=None):
     """
     Suggest an organized set of paths for where data should be written.
@@ -25,16 +25,19 @@ def suggest_paths(test_dataset=None, package_fpath=None, pred_root=None,
         package_fpath (str):
             the path to the model checkpoint / package.
 
-        pred_root (str | None):
-            if specified forces use of this root directory for predictions,
-            otherwise the predictions are written next to the package that is
-            doing the predictions.
+        workdir (str | None):
+            if specified forces use of this root directory for predictions and
+            evaluations, otherwise the predictions are written next to the
+            package that is doing the predictions.
 
     Example:
         >>> from watch.tasks.fusion.organize import *  # NOQA
         >>> test_dataset = 'vali.kwcoco.json'
         >>> package_fpath = '/models/fusion/eval1_cand/packages/expt1/package_abc.pt'
         >>> suggestions = suggest_paths(test_dataset, package_fpath, sidecar2=1, as_json=False)
+        >>> print('suggestions = {}'.format(ub.repr2(suggestions, nl=1, align=':', sort=0)))
+
+        >>> suggestions = suggest_paths(test_dataset, package_fpath, sidecar2=1, as_json=False, workdir='/my_tmp_eval')
         >>> print('suggestions = {}'.format(ub.repr2(suggestions, nl=1, align=':', sort=0)))
     """
 
@@ -69,18 +72,23 @@ def suggest_paths(test_dataset=None, package_fpath=None, pred_root=None,
             if pkg_dpath.name != 'packages':
                 print('Warning: might not have the right dir structure')
 
-            pred_root = candidate_dpath / 'pred' / expt_name
+            if workdir is None:
+                workdir = candidate_dpath
+            else:
+                workdir = ub.Path(workdir)
+
+            pred_root = workdir / 'pred' / expt_name
             pred_dpath = pred_root / pred_dname / test_dset_name / pred_cfg_dname
 
-            eval_root = candidate_dpath / 'eval' / expt_name
+            eval_root = workdir / 'eval' / expt_name
             eval_dpath = eval_root / pred_dname / test_dset_name / pred_cfg_dname / 'eval'
         else:
-            if pred_root is None:
-                pred_root = package_fpath.parent
+            if workdir is None:
+                workdir = package_fpath.parent
             else:
-                pred_root = ub.Path(pred_root)
+                workdir = ub.Path(workdir)
 
-            pred_dpath = pred_root / pred_dname / test_dset_name
+            pred_dpath = workdir / pred_dname / test_dset_name
             eval_dpath = pred_dpath / 'eval'
 
         pred_dataset = pred_dpath / 'pred.kwcoco.json'

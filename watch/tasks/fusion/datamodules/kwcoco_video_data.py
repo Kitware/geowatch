@@ -261,6 +261,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         # self.use_grid_positives = use_grid_positives
         # self.temporal_dropout = temporal_dropout
 
+        if isinstance(exclude_sensors, str):
+            exclude_sensors = [s.strip() for s in exclude_sensors.split(',')]
+
         # TODO: reduce redundency between this, the argparse args piece
         self.common_dataset_kwargs = dict(
             channels=channels,
@@ -326,12 +329,12 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             >>> args, _ = parent_parser.parse_known_args(['--diff_inputs=False'])
             >>> assert not args.diff_inputs
             >>> args, _ = parent_parser.parse_known_args(['--exclude_sensors=l8,f3'])
-            >>> assert args.exclude_sensors == ['l8', 'f3']
+            >>> assert args.exclude_sensors == 'l8,f3'
             >>> args, _ = parent_parser.parse_known_args(['--exclude_sensors=l8'])
-            >>> assert args.exclude_sensors == ['l8']
+            >>> assert args.exclude_sensors == 'l8'
         """
         from scriptconfig.smartcast import smartcast
-        from functools import partial
+        # from functools import partial
         parser = parent_parser.add_argument_group('kwcoco_video_data')
         parser.add_argument('--train_dataset', default=None, help='path to the train kwcoco file')
         parser.add_argument('--vali_dataset', default=None, help='path to the validation kwcoco file')
@@ -346,7 +349,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             Strategy for expanding the time window across non-contiguous frames.
             Can be auto, contiguous, hard+distribute, or dilate_affinity
             '''))
-        parser.add_argument('--exclude_sensors', type=partial(smartcast, astype=list), help='comma delimited list of sensors to avoid, such as S2 or L8')
+        parser.add_argument('--exclude_sensors', type=str, help='comma delimited list of sensors to avoid, such as S2 or L8')
         parser.add_argument('--channels', default=None, type=str, help='channels to use should be ChannelSpec coercable')
         parser.add_argument('--batch_size', default=4, type=int)
         parser.add_argument('--time_span', default='2y', type=str, help='how long a time window should roughly span by default')

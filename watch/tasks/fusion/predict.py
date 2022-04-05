@@ -48,9 +48,9 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument('--datamodule', default='KWCocoVideoDataModule')
     parser.add_argument('--pred_dataset', default=None, dest='pred_dataset')
 
-    parser.add_argument('--pred_dpath', dest='pred_dpath', type=pathlib.Path, help='path to dump results')
+    # parser.add_argument('--pred_dpath', dest='pred_dpath', type=pathlib.Path, help='path to dump results. Deprecated, do not use.')
 
-    parser.add_argument('--package_fpath', type=pathlib.Path)
+    parser.add_argument('--package_fpath', type=str)
     parser.add_argument('--gpus', default=None, help='todo: hook up to lightning')
     parser.add_argument('--thresh', type=smartcast, default=0.01)
 
@@ -159,7 +159,7 @@ def predict(cmdline=False, **kwargs):
         >>> # Predict via that model
         >>> predict_kwargs = kwargs = {
         >>>     'package_fpath': package_fpath,
-        >>>     'pred_dpath': results_path,
+        >>>     'pred_dataset': results_path / 'pred.kwcoco.json',
         >>>     'test_dataset': test_dset.fpath,
         >>>     'datamodule': 'KWCocoVideoDataModule',
         >>>     'batch_size': 1,
@@ -197,9 +197,11 @@ def predict(cmdline=False, **kwargs):
     config = args.__dict__
     print('config = {}'.format(ub.repr2(config, nl=2)))
 
+    package_fpath = ub.Path(args.package_fpath)
+
     try:
         # Ideally we have a package, everything is defined there
-        method = utils.load_model_from_package(args.package_fpath)
+        method = utils.load_model_from_package(package_fpath)
         # fix einops bug
         for _name, mod in method.named_modules():
             if 'Rearrange' in mod.__class__.__name__:
@@ -214,12 +216,12 @@ def predict(cmdline=False, **kwargs):
         method.head_metrics = None
     except Exception as ex:
         print('ex = {!r}'.format(ex))
-        print(f'Failed to read {args.package_fpath=!r} attempting workaround')
+        print(f'Failed to read {package_fpath=!r} attempting workaround')
         # If we have a checkpoint path we can load it if we make assumptions
         # init method from checkpoint.
         raise
 
-        checkpoint = torch.load(args.package_fpath)
+        checkpoint = torch.load(package_fpath)
         print(list(checkpoint.keys()))
         from watch.tasks.fusion import methods
         hparams = checkpoint['hyper_parameters']
@@ -313,7 +315,7 @@ def predict(cmdline=False, **kwargs):
 
     DZYNE_MODEL_HACK = 1
     if DZYNE_MODEL_HACK:
-        if args.package_fpath.stem == 'lc_rgb_fusion_model_package':
+        if package_fpath.stem == 'lc_rgb_fusion_model_package':
             # This model has an issue with the L8 features it was trained on
             datamodule_vars['exclude_sensors'] = ['L8']
 
@@ -362,11 +364,15 @@ def predict(cmdline=False, **kwargs):
     result_dataset.reroot(absolute=True)
     # Set the filepath for the prediction coco file
     # (modifies the bundle_dpath)
-    if args.pred_dataset is None:
-        pred_dpath = util_path.coercepath(args.pred_dpath)
-        result_dataset.fpath = str(pred_dpath / 'pred.kwcoco.json')
-    else:
-        result_dataset.fpath = str(args.pred_dataset)
+    # if args.pred_dataset is None:
+    #     pred_dpath = util_path.coercepath(args.pred_dpath)
+    #     result_dataset.fpath = str(pred_dpath / 'pred.kwcoco.json')
+    # else:
+    if not args.pred_dataset:
+        raise ValueError(
+            f'Must specify path to the output (predicted) kwcoco file. '
+            f'Got {args.pred_dataset=}')
+    result_dataset.fpath = str(args.pred_dataset)
     result_fpath = util_path.coercepath(result_dataset.fpath)
 
     # add hyperparam info to "info" section
@@ -1173,7 +1179,6 @@ if __name__ == '__main__':
         --pred_dataset=/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/training/raven/brodie/uky_invariants/features_22_03_14/runs/BASELINE_EXPERIMENT_V001/pred.kwcoco.json \
         --test_dataset=/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json \
         --num_workers=5 \
-        --compress=DEFLATE \
         --gpus=0, \
         --batch_size=1
 
@@ -1189,9 +1194,14 @@ if __name__ == '__main__':
         --select_images '.frame_index < 100' \
         --select_videos '.name == "KR_R001"'
 
-    TMP_PRED_FPATH=$DVC_DPATH/_tmp/_tmp_pred/pred.kwcoco.json
-    TEST_FPATH=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1_small.kwcoco.json
+    # Small datset for testing
+    kwcoco subset \
+        --src $DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali.kwcoco.json \
+        --dst $DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1.kwcoco.json \
+        --select_videos '.name == "KR_R001"'
 
+    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    TEST_DATASET=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1_small.kwcoco.json
     python -m watch.tasks.fusion.predict \
         --write_probs=True \
         --write_preds=False \
@@ -1199,15 +1209,103 @@ if __name__ == '__main__':
         --with_saliency=auto \
         --with_change=False \
         --package_fpath=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=19-step=13659-v1.pt \
-        --pred_dataset=$TMP_PRED_FPATH \
-        --test_dataset=$TEST_FPATH \
-        --num_workers=4 \
-        --compress=DEFLATE \
+        --num_workers=5 \
         --gpus=0, \
         --batch_size=1 \
-        --chip_overlap=0 \
         --exclude_sensors=L8 \
+        --pred_dataset=$PRED_DATASET \
+        --test_dataset=$TEST_DATASET \
+        --tta_fliprot=0 \
+        --tta_time=0 --dump=$DVC_DPATH/_tmp/test_pred_config.yaml
+
+    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    TEST_DATASET=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1_small.kwcoco.json
+
+    PRED_DATASET_00=$DVC_DPATH/_tmp/_tmp_pred_00/pred.kwcoco.json
+    PRED_DATASET_10=$DVC_DPATH/_tmp/_tmp_pred_10/pred.kwcoco.json
+    PRED_DATASET_01=$DVC_DPATH/_tmp/_tmp_pred_01/pred.kwcoco.json
+    PRED_DATASET_11=$DVC_DPATH/_tmp/_tmp_pred_11/pred.kwcoco.json
+
+    export CUDA_VISIBLE_DEVICES=0
+    python -m watch.tasks.fusion.predict \
+        --config=$DVC_DPATH/_tmp/test_pred_config.yaml \
+        --pred_dataset=$PRED_DATASET_00 \
+        --test_dataset=$TEST_DATASET \
+        --tta_fliprot=0 \
+        --tta_time=0
+
+    export CUDA_VISIBLE_DEVICES=1
+    python -m watch.tasks.fusion.predict \
+        --config=$DVC_DPATH/_tmp/test_pred_config.yaml \
+        --pred_dataset=$PRED_DATASET_10 \
+        --test_dataset=$TEST_DATASET \
         --tta_fliprot=1 \
-        --tta_time=2
+        --tta_time=0
+
+    export CUDA_VISIBLE_DEVICES=0
+    python -m watch.tasks.fusion.predict \
+        --config=$DVC_DPATH/_tmp/test_pred_config.yaml \
+        --pred_dataset=$PRED_DATASET_01 \
+        --test_dataset=$TEST_DATASET \
+        --tta_fliprot=0 \
+        --tta_time=1
+
+    export CUDA_VISIBLE_DEVICES=1
+    python -m watch.tasks.fusion.predict \
+        --config=$DVC_DPATH/_tmp/test_pred_config.yaml \
+        --pred_dataset=$PRED_DATASET_11 \
+        --test_dataset=$TEST_DATASET \
+        --tta_fliprot=1 \
+        --tta_time=1
+
+    #####
+
+    python -m watch.tasks.fusion.evaluate \
+        --true_dataset=$TEST_DATASET \
+        --pred_dataset=$PRED_DATASET_11 \
+        --eval_dpath=$DVC_DPATH/_tmp/_tmp_pred_11/eval
+        --score_space=video \
+        --draw_curves=1 \
+        --draw_heatmaps=1 --workers=2
+
+    python -m watch.tasks.fusion.evaluate \
+        --true_dataset=$TEST_DATASET \
+        --pred_dataset=$PRED_DATASET_00 \
+        --eval_dpath=$DVC_DPATH/_tmp/_tmp_pred_00/eval
+        --score_space=video \
+        --draw_curves=1 \
+        --draw_heatmaps=1 --workers=2
+
+    python -m watch.tasks.fusion.evaluate \
+        --true_dataset=$TEST_DATASET \
+        --pred_dataset=$PRED_DATASET_01 \
+        --eval_dpath=$DVC_DPATH/_tmp/_tmp_pred_01/eval
+        --score_space=video \
+        --draw_curves=1 \
+        --draw_heatmaps=1 --workers=2
+
+    python -m watch.tasks.fusion.evaluate \
+        --true_dataset=$TEST_DATASET \
+        --pred_dataset=$PRED_DATASET_10 \
+        --eval_dpath=$DVC_DPATH/_tmp/_tmp_pred_10/eval
+        --score_space=video \
+        --draw_curves=1 \
+        --draw_heatmaps=1 --workers=2
+
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    TEST_DATASET=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1.kwcoco.json
+    EXPT_PATTERN="*"
+    python -m watch.tasks.fusion.schedule_evaluation \
+            --gpus="0,1" \
+            --model_globstr="$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=19-step=13659-v1.pt" \
+            --test_dataset="$TEST_DATASET" \
+            --workdir="$DVC_DPATH/_tmp/smalltest" \
+            --sidecar2=False \
+            --tta_fliprot=0,1 \
+            --tta_time=0,1 \
+            --chip_overlap=0,0.3 \
+            --run=1 --backend=slurm
+
     """
     main()

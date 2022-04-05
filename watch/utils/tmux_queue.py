@@ -162,7 +162,7 @@ class TMUXMultiQueue(cmd_queue.Queue):
         return workers
 
     def __nice__(self):
-        return ub.repr2(self.workers)
+        return ub.repr2(self.jobs)
 
     def _semaphore_wait_command(self, flag_fpaths, msg):
         r"""
