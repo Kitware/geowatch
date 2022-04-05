@@ -304,13 +304,6 @@ prepare_wv_crop_from_sites(){
 prepare_cropped_from_tracks(){
 
     DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
-    echo "$DVC_DPATH"
-    python -m watch.cli.coco_crop_tracks \
-        --src="$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json" \
-        --dst="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/imgonly_S2_L8_WV.kwcoco.json" \
-        --mode=process --workers=8
-
-    DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
     IMGONLY_FPATH="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/imgonly_S2_L8_WV.kwcoco.json"
     echo "IMGONLY_FPATH = $IMGONLY_FPATH"
     python -m watch.cli.coco_remove_empty_images \
@@ -339,5 +332,17 @@ prepare_cropped_from_tracks(){
     git commit -am "Add splits"
     git push 
     dvc push -r aws splits.zip
+
+}
+
+cropped_with_more_context(){
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
+    echo "$DVC_DPATH"
+    python -m watch.cli.coco_crop_tracks \
+        --src="$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json" \
+        --dst="$DVC_DPATH/Cropped-Drop3-TA1-2022-04-04/imgonly_S2_WV.kwcoco.json" \
+        --exclude_sensors=L8 \
+        --mode=process --workers=8
 
 }

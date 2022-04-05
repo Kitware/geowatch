@@ -43,6 +43,8 @@ class CocoCropTrackConfig(scfg.Config):
 
         'mode': scfg.Value('process', type=str, help='process, thread, or serial'),
 
+        'context_factor': scfg.Value(1.8, help=ub.paragraph('scale factor')),
+
         'sqlmode': scfg.Value(0, type=str, help='if True use sqlmode'),
 
         'keep': scfg.Value('img', help='set to None to recompute'),
@@ -123,8 +125,11 @@ def main(cmdline=0, **kwargs):
     if len(valid_gids) != coco_dset.n_images:
         coco_dset = coco_dset.subset(valid_gids)
 
+    context_factor = config['context_factor']
+
     print('Generate jobs')
-    crop_job_gen = generate_crop_jobs(coco_dset, dst_bundle_dpath)
+    crop_job_gen = generate_crop_jobs(coco_dset, dst_bundle_dpath,
+                                      context_factor=context_factor)
     crop_job_iter = iter(crop_job_gen)
 
     keep = config['keep']
@@ -298,7 +303,7 @@ def make_track_kwcoco_manifest(dst, dst_bundle_dpath, tid_to_assets,
 
 
 # @xdev.profile
-def generate_crop_jobs(coco_dset, dst_bundle_dpath):
+def generate_crop_jobs(coco_dset, dst_bundle_dpath, context_factor=1.0):
     """
 
     Benchmark:
@@ -340,6 +345,7 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath):
         'Site Preparation',
         'Active Construction',
         'Post Construction',
+        'negative',
     }
     print('\n\n')
 
@@ -431,7 +437,7 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath):
             cx, cy, w, h = vid_track_poly.to_boxes().to_cxywh().data[0]
             w = h = max(w, h)
             vid_track_square = kwimage.Boxes([[cx, cy, w, h]], 'cxywh')
-            vid_track_square = vid_track_square.scale(1.2, about='center')
+            vid_track_square = vid_track_square.scale(context_factor, about='center')
             vid_track_poly_sh = vid_track_square.to_shapely()[0]
 
         # vid_track_poly = vid_track_poly.scale(1.1, about='center')
