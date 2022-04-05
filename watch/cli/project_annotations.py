@@ -500,7 +500,9 @@ def expand_site_models_with_site_summaries(sites, regions):
     if __debug__:
         for region_id, region_sites in ub.ProgIter(region_id_to_sites.items(), desc='validate sites'):
             for site_df in region_sites:
-                validate_site_dataframe(site_df)
+                import xdev
+                with xdev.embed_on_exception_context:
+                    validate_site_dataframe(site_df)
 
     return region_id_to_sites
 

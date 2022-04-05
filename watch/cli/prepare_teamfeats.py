@@ -239,8 +239,8 @@ def _populate_teamfeat_queue(queue, base_fpath, dvc_dpath, aligned_bundle_dpath,
     }
 
     print('Exist check: ')
-    print(ub.repr2(ub.map_vals(lambda x: x.exists(), model_fpaths)))
-    print(ub.repr2(ub.map_vals(lambda x: x.exists(), outputs)))
+    print('model_packages: ' + ub.repr2(ub.map_vals(lambda x: x.exists(), model_fpaths)))
+    print('feature outputs: ' + ub.repr2(ub.map_vals(lambda x: x.exists(), outputs)))
 
     # TODO: different versions of features need different codes.
     codes = {

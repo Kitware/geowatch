@@ -339,7 +339,6 @@ cropped_with_more_context(){
 
     DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
     echo "$DVC_DPATH"
-
     INPUT_FPATH=$BASE_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json
     NEW_KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Cropped-Drop3-TA1-Context
     #smartwatch stats "$INPUT_FPATH"
