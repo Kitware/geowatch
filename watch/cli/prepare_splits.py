@@ -106,7 +106,7 @@ def _submit_split_jobs(base_fpath, queue, depends=[]):
         python -m kwcoco subset \
             --src {splits['train']} \
             --dst {splits['s2_wv_train']} \
-            --select_images '.sensor_coarse == "WV" or sensor_coarse == "S2"'
+            --select_images '.sensor_coarse == "WV" or .sensor_coarse == "S2"'
         ''')
     queue.submit(command, depends=[split_jobs['train']])
 
@@ -134,7 +134,7 @@ def _submit_split_jobs(base_fpath, queue, depends=[]):
         python -m kwcoco subset \
             --src {splits['vali']} \
             --dst {splits['s2_wv_vali']} \
-            --select_images '.sensor_coarse == "WV" or sensor_coarse == "S2"'
+            --select_images '.sensor_coarse == "WV" or .sensor_coarse == "S2"'
         ''')
     queue.submit(command, depends=[split_jobs['vali']])
 
