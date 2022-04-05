@@ -151,7 +151,15 @@ def main():
 
                 img_save_path = os.path.join(region_dir, channel_name.replace(" ", "_") + "_" + str(image_id) + ".tif")
 
-                kwimage.imwrite(img_save_path, conf_image[:, :, channel_index, image_id_index], backend="gdal")
+                data = conf_image[:, :, channel_index, image_id_index]
+
+                from watch.tasks.fusion.predict import quantize_float01
+                quant_recon, quantization = quantize_float01(
+                    data, old_min=0, old_max=1)
+                nodata = quantization['nodata']
+
+                kwimage.imwrite(img_save_path, quant_recon, backend="gdal",
+                                nodata=nodata)
 
                 img = kwcoco_dataset.index.imgs[image_id]
 
@@ -167,6 +175,7 @@ def main():
                         "width": conf_image.shape[1],
                         "num_bands": 1,
                         "warp_aux_to_img": img_from_vid.concise(),
+                        'quantization': quantization,
                     }
                 )
                 kwcoco_dataset.index.imgs[image_id] = img
