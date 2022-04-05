@@ -9,12 +9,19 @@ CommandLine:
         --mode=process --workers=8
 
 
+    # Small test of KR only
     DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
     echo $DVC_DPATH
     python -m watch.cli.coco_crop_tracks \
         --src="$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json" \
-        --dst="$DVC_DPATH/Cropped-Drop2-TA1-2022-03-10/data.kwcoco.json" \
-        --mode=process --workers=8
+        --dst="$DVC_DPATH/Cropped-Drop2-TA1-test/data.kwcoco.json" \
+        --mode=process --workers=8 --channels="red|green|blue" \
+        --include_sensors="WV,S2,L8" --select_videos '.name | startswith("KR_R001")' \
+        --target_gsd=3
+
+
+    TODO:
+        - [ ] option to merge overlapping regions?
 """
 import scriptconfig as scfg
 import kwcoco
@@ -43,11 +50,15 @@ class CocoCropTrackConfig(scfg.Config):
 
         'mode': scfg.Value('process', type=str, help='process, thread, or serial'),
 
+        'context_factor': scfg.Value(1.8, help=ub.paragraph('scale factor')),
+
         'sqlmode': scfg.Value(0, type=str, help='if True use sqlmode'),
 
         'keep': scfg.Value('img', help='set to None to recompute'),
 
         'target_gsd': scfg.Value(1, help='GSD of new kwcoco videospace'),
+
+        'channels': scfg.Value(None, help='only crop these channels if specified'),
 
         'select_images': scfg.Value(
             None, type=str, help=ub.paragraph(
@@ -123,8 +134,15 @@ def main(cmdline=0, **kwargs):
     if len(valid_gids) != coco_dset.n_images:
         coco_dset = coco_dset.subset(valid_gids)
 
+    context_factor = config['context_factor']
+    channels = config['channels']
+    if channels is not None:
+        channels = kwcoco.FusedChannelSpec.coerce(channels)
+
     print('Generate jobs')
-    crop_job_gen = generate_crop_jobs(coco_dset, dst_bundle_dpath)
+    crop_job_gen = generate_crop_jobs(coco_dset, dst_bundle_dpath,
+                                      context_factor=context_factor,
+                                      channels=channels)
     crop_job_iter = iter(crop_job_gen)
 
     keep = config['keep']
@@ -154,7 +172,14 @@ def main(cmdline=0, **kwargs):
         try:
             result = job.result()
         except Exception as ex:
+            # import traceback
+            # stack = traceback.extract_stack()
+            # stack_lines = traceback.format_list(stack)
+            # tbtext = ''.join(stack_lines)
+            # print(ub.highlight_code(tbtext, 'pytb'))
+            print('ex = {}'.format(ub.repr2(ex, nl=1)))
             print('Failed crop asset task ex = {!r}'.format(ex))
+            raise
             failed.append(job)
         else:
             results.append(result)
@@ -167,12 +192,13 @@ def main(cmdline=0, **kwargs):
     print(f'{len(tid_to_size)=}')
     arr = np.array(list(tid_to_size.values()))
     stats = kwarray.stats_dict(arr)
-    quantile = [0.25, 0.50, 0.75]
-    quant_values = np.quantile(arr, quantile, axis=None, extreme=True, n_extreme=True)
-    quant_keys = ['q_{:0.2f}'.format(q) for q in quantile]
-    for k, v in zip(quant_keys, quant_values):
-        stats[k] = v
-    print(f'tracn length stats {ub.repr2(stats, nl=1)!s}')
+    if len(arr):
+        quantile = [0.25, 0.50, 0.75]
+        quant_values = np.quantile(arr, quantile)
+        quant_keys = ['q_{:0.2f}'.format(q) for q in quantile]
+        for k, v in zip(quant_keys, quant_values):
+            stats[k] = v
+    print(f'track length stats {ub.repr2(stats, nl=1)!s}')
 
     # Rebuild the manifest
     target_gsd = config['target_gsd']
@@ -208,6 +234,12 @@ def main(cmdline=0, **kwargs):
 
 def make_track_kwcoco_manifest(dst, dst_bundle_dpath, tid_to_assets,
                                target_gsd=1):
+    """
+    Rebundle in a a new kwcoco file
+
+    TODO:
+        - [ ] populate auxiliary is taking a long time, speed it up.
+    """
     from watch.utils import kwcoco_extensions
     # Make the new kwcoco file where 1 track is mostly 1 video
     # TODO: we could crop the kwcoco annotations here too, but
@@ -239,6 +271,9 @@ def make_track_kwcoco_manifest(dst, dst_bundle_dpath, tid_to_assets,
                 datetime_ = aux.pop('datetime')
                 aux['file_name'] = str(fname)
                 auxiliary.append(aux)
+
+            auxiliary = sorted(auxiliary, key=lambda obj: obj['channels'])
+
             new_img = {
                 'name': fname.parent.name,
                 'file_name': None,
@@ -298,8 +333,9 @@ def make_track_kwcoco_manifest(dst, dst_bundle_dpath, tid_to_assets,
 
 
 # @xdev.profile
-def generate_crop_jobs(coco_dset, dst_bundle_dpath):
+def generate_crop_jobs(coco_dset, dst_bundle_dpath, channels=None, context_factor=1.0):
     """
+    Generator that yields parameters to be used to call gdal_translate
 
     Benchmark:
         # Test kwimage versus shapley warp
@@ -340,6 +376,7 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath):
         'Site Preparation',
         'Active Construction',
         'Post Construction',
+        'negative',
     }
     print('\n\n')
 
@@ -431,8 +468,13 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath):
             cx, cy, w, h = vid_track_poly.to_boxes().to_cxywh().data[0]
             w = h = max(w, h)
             vid_track_square = kwimage.Boxes([[cx, cy, w, h]], 'cxywh')
-            vid_track_square = vid_track_square.scale(1.2, about='center')
+            vid_track_square = vid_track_square.scale(context_factor, about='center')
             vid_track_poly_sh = vid_track_square.to_shapely()[0]
+            # Ensure we dont crop past the edges
+            video_bounds_sh = kwimage.Boxes([
+                [0, 0, video['width'], video['height']]
+            ], 'xywh').to_shapley()[0]
+            vid_track_poly_sh = vid_track_poly_sh.intersection(video_bounds_sh)
 
         # vid_track_poly = vid_track_poly.scale(1.1, about='center')
 
@@ -440,8 +482,7 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath):
         track_name = tid if isinstance(tid, str) else 'track_{}'.format(tid)
         track_dname = ub.Path(region) / track_name
         # String representing the spatial crop
-        # space_str = ub.hash_data(vid_track_poly.to_geojson(), base='abc')[0:8]
-        space_str = track_name
+        space_str = ub.hash_data(vid_track_poly_sh.wkt, base='abc')[0:8]
 
         crop_track_task = {
             'tid': tid,
@@ -478,6 +519,13 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath):
             warp_img_from_vid = coco_img.warp_img_from_vid
 
             for obj in coco_img.iter_asset_objs():
+                chan_code = obj['channels']
+                obj_channels = kwcoco.FusedChannelSpec.coerce(chan_code)
+                if channels is not None:
+                    if obj_channels.intersection(channels).numel() == 0:
+                        # Skip this channel
+                        continue
+
                 warp_img_from_aux = kwimage.Affine.coerce(obj['warp_aux_to_img'])
                 warp_aux_from_img = warp_img_from_aux.inv()
                 warp_aux_from_vid = warp_aux_from_img @ warp_img_from_vid
@@ -491,13 +539,11 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath):
                 #     aux_track_poly = vid_track_poly.warp(warp_aux_from_vid)
                 crop_box_asset_space = aux_track_poly.bounding_box().quantize().to_xywh().data[0]
 
-                chan_code = obj['channels']
-                # to prevent long names for docker (limit is 242 chars)
-                chan_pname = kwcoco.FusedChannelSpec.coerce(chan_code).path_sanitize(maxlen=10)
-
                 # Construct a name for the subregion to extract.
                 num = 0
-                name = 'crop_{}_{}_{}_{}'.format(iso_time, space_str, sensor_coarse, num)
+                # to prevent long names for docker (limit is 242 chars)
+                chan_pname = obj_channels.path_sanitize(maxlen=10)
+                name = 'crop_{}_{}_{}_{}_{}'.format(iso_time, track_name, space_str, sensor_coarse, num)
                 dst_fname = track_img_dname / name / f'{name}_{chan_pname}.tif'
 
                 crop_asset_task = {**crop_img_task}
@@ -513,6 +559,8 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath):
 
 
 def run_crop_asset_task(crop_asset_task, keep):
+    from osgeo import osr
+    osr.GetPROJSearchPaths()
     from watch.utils import util_gdal
     _crop_task = crop_asset_task.copy()
     src = _crop_task.pop('src')
@@ -522,7 +570,7 @@ def run_crop_asset_task(crop_asset_task, keep):
     if not cache_hit:
         pixel_box = kwimage.Boxes([crop_box_asset_space], 'xywh')
         dst.parent.ensuredir()
-        util_gdal.gdal_single_translate(src, dst, pixel_box, tries=10, delay=1)
+        util_gdal.gdal_single_translate(src, dst, pixel_box, tries=10)
     return _crop_task
 
 
