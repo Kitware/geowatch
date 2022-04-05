@@ -1,12 +1,10 @@
 import os
 import argparse
-from glob import glob
 
 import torch
 import kwimage
 import numpy as np
 from tqdm import tqdm
-from osgeo import gdal
 
 
 from watch.tasks.rutgers_material_change_detection.models import build_model
