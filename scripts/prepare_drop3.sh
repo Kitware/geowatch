@@ -337,11 +337,11 @@ prepare_cropped_from_tracks(){
 
 cropped_with_more_context(){
 
-    BASE_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
     DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
     echo "$DVC_DPATH"
 
     INPUT_FPATH=$BASE_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json
+    NEW_KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Cropped-Drop3-TA1-Context
     #smartwatch stats "$INPUT_FPATH"
 
     CHANNELS="blue|green|red|nir|swir16|swir22|cloudmask|near-ir1|panchromatic"
@@ -349,7 +349,7 @@ cropped_with_more_context(){
     # This takes forever and a half (i.e. 7-12 hours)
     python -m watch.cli.coco_crop_tracks \
         --src="$INPUT_FPATH" \
-        --dst="$DVC_DPATH/Cropped-Drop3-TA1-Context/imgonly_S2_WV.kwcoco.json" \
+        --dst="$NEW_KWCOCO_BUNDLE_DPATH/imgonly_S2_WV.kwcoco.json" \
         --exclude_sensors=L8 \
         --channels=$CHANNELS \
         --mode=process --workers=24 \
@@ -357,9 +357,21 @@ cropped_with_more_context(){
         --context_factor=1.8
 
     python -m watch project_annotations \
-        --src "$DVC_DPATH/Cropped-Drop3-TA1-Context/imgonly_S2_WV.kwcoco.json" \
-        --dst "$DVC_DPATH/Cropped-Drop3-TA1-Context/data.kwcoco.json" \
+        --src "$NEW_KWCOCO_BUNDLE_DPATH/imgonly_S2_WV.kwcoco.json" \
+        --dst "$NEW_KWCOCO_BUNDLE_DPATH/data.kwcoco.json" \
         --site_models="$DVC_DPATH/annotations/site_models/*.geojson" \
         --region_models="$DVC_DPATH/annotations/region_models/*.geojson"
+
+    python -m watch.cli.prepare_teamfeats \
+        --base_fpath="$NEW_KWCOCO_BUNDLE_DPATH/imgonly_S2_WV.kwcoco.json" \
+        --dvc_dpath="$DVC_DPATH" \
+        --gres="0,1" \
+        --with_landcover=0 \
+        --with_depth=1 \
+        --with_materials=0 \
+        --with_invariants=0 \
+        --do_splits=0 \
+        --depth_workers=0 \
+        --cache=1 --run=0 --backend=serial
 
 }

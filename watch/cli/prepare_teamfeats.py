@@ -111,6 +111,7 @@ def prep_feats(cmdline=True, **kwargs):
     from scriptconfig.smartcast import smartcast
 
     config = TeamFeaturePipelineConfig(cmdline=cmdline, data=kwargs)
+    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
     gres = config['gres']
     # check = config['check']
