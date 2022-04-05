@@ -37,7 +37,9 @@ if ub.argflag('--warntb'):
     import xdev
     xdev.make_warnings_print_tracebacks()
 
-WATCH_HACK_IMPORT_ORDER = os.environ.get('WATCH_HACK_IMPORT_ORDER', 'auto')
+# Shorter alias because we are using it now
+__WATCH_PREIMPORT = os.environ.get('WATCH_PREIMPORT', 'auto')
+WATCH_HACK_IMPORT_ORDER = os.environ.get('WATCH_HACK_IMPORT_ORDER', __WATCH_PREIMPORT)
 
 
 def _imoprt_hack(modname):

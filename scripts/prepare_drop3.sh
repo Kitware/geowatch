@@ -337,21 +337,29 @@ prepare_cropped_from_tracks(){
 
 cropped_with_more_context(){
 
-    HDD_DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
-    SSD_DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
+    BASE_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc --hardware="hdd")
+    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc --hardware="hdd")
     echo "$DVC_DPATH"
 
-    INPUT_FPATH=$HDD_DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json
+    INPUT_FPATH=$BASE_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json
     #smartwatch stats "$INPUT_FPATH"
 
     CHANNELS="blue|green|red|nir|swir16|swir22|cloudmask|near-ir1|panchromatic"
 
+    # This takes forever and a half (i.e. 7-12 hours)
     python -m watch.cli.coco_crop_tracks \
         --src="$INPUT_FPATH" \
-        --dst="$SSD_DVC_DPATH/Cropped-Drop3-TA1-Context/imgonly_S2_WV.kwcoco.json" \
+        --dst="$DVC_DPATH/Cropped-Drop3-TA1-Context/imgonly_S2_WV.kwcoco.json" \
         --exclude_sensors=L8 \
         --channels=$CHANNELS \
         --mode=process --workers=24 \
         --channels="$CHANNELS" \
         --context_factor=1.8
+
+    python -m watch project_annotations \
+        --src "$DVC_DPATH/Cropped-Drop3-TA1-Context/imgonly_S2_WV.kwcoco.json" \
+        --dst "$DVC_DPATH/Cropped-Drop3-TA1-Context/data.kwcoco.json" \
+        --site_models="$DVC_DPATH/annotations/site_models/*.geojson" \
+        --region_models="$DVC_DPATH/annotations/region_models/*.geojson"
+
 }
