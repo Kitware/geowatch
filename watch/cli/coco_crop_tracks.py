@@ -16,7 +16,7 @@ CommandLine:
         --src="$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json" \
         --dst="$DVC_DPATH/Cropped-Drop2-TA1-test/data.kwcoco.json" \
         --mode=process --workers=8 --channels="red|green|blue" \
-        --include_sensors=S2 --select_videos '.name | startswith("KR_R001")'
+        --include_sensors=S2 --select_videos '.name | startswith("KR_R002")'
 """
 import scriptconfig as scfg
 import kwcoco
@@ -459,6 +459,11 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath, channels=None, context_facto
             vid_track_square = kwimage.Boxes([[cx, cy, w, h]], 'cxywh')
             vid_track_square = vid_track_square.scale(context_factor, about='center')
             vid_track_poly_sh = vid_track_square.to_shapely()[0]
+            # Ensure we dont crop past the edges
+            video_bounds_sh = kwimage.Boxes([
+                [0, 0, video['width'], video['height']]
+            ], 'xywh').to_shapley()[0]
+            vid_track_poly_sh = vid_track_poly_sh.intersection(video_bounds_sh)
 
         # vid_track_poly = vid_track_poly.scale(1.1, about='center')
 

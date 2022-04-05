@@ -238,7 +238,7 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
     command_parts = ['gdal_translate']
     # command_parts.append('--debug off')
 
-    if 0:
+    if 1:
         # Perf options
         command_parts.extend([
             '--config', 'GDAL_CACHEMAX', '15%',
