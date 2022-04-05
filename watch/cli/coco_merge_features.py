@@ -1,7 +1,5 @@
 import os
 import argparse
-import itertools
-
 import kwcoco
 import kwimage
 import numpy as np
