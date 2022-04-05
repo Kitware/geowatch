@@ -339,10 +339,18 @@ cropped_with_more_context(){
 
     DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
     echo "$DVC_DPATH"
+
+    INPUT_FPATH=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json
+    smartwatch stats "$INPUT_FPATH"
+
+    CHANNELS="blue|green|red|nir|swir16|swir22|cloudmask|near-ir1|panchromatic"
+
     python -m watch.cli.coco_crop_tracks \
-        --src="$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json" \
+        --src="$INPUT_FPATH" \
         --dst="$DVC_DPATH/Cropped-Drop3-TA1-2022-04-04/imgonly_S2_WV.kwcoco.json" \
         --exclude_sensors=L8 \
-        --mode=process --workers=8
-
+        --channels= \
+        --mode=process --workers=8 \
+        --channels="$CHANNELS" \
+        --context_factor=1.8
 }

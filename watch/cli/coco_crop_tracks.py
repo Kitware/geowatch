@@ -51,6 +51,8 @@ class CocoCropTrackConfig(scfg.Config):
 
         'target_gsd': scfg.Value(1, help='GSD of new kwcoco videospace'),
 
+        'channels': scfg.Value(None, help='only crop these channels if specified'),
+
         'select_images': scfg.Value(
             None, type=str, help=ub.paragraph(
                 '''
@@ -126,10 +128,14 @@ def main(cmdline=0, **kwargs):
         coco_dset = coco_dset.subset(valid_gids)
 
     context_factor = config['context_factor']
+    channels = config['channels']
+    if channels is not None:
+        channels = kwcoco.FusedChannelSpec.coerce(channels)
 
     print('Generate jobs')
     crop_job_gen = generate_crop_jobs(coco_dset, dst_bundle_dpath,
-                                      context_factor=context_factor)
+                                      context_factor=context_factor,
+                                      channels=channels)
     crop_job_iter = iter(crop_job_gen)
 
     keep = config['keep']
@@ -303,7 +309,7 @@ def make_track_kwcoco_manifest(dst, dst_bundle_dpath, tid_to_assets,
 
 
 # @xdev.profile
-def generate_crop_jobs(coco_dset, dst_bundle_dpath, context_factor=1.0):
+def generate_crop_jobs(coco_dset, dst_bundle_dpath, channels=None, context_factor=1.0):
     """
 
     Benchmark:
@@ -484,6 +490,13 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath, context_factor=1.0):
             warp_img_from_vid = coco_img.warp_img_from_vid
 
             for obj in coco_img.iter_asset_objs():
+                chan_code = obj['channels']
+                obj_channels = kwcoco.FusedChannelSpec.coerce(chan_code)
+                if channels is not None:
+                    if obj_channels.intersection(channels).numel() == 0:
+                        # Skip this channel
+                        continue
+
                 warp_img_from_aux = kwimage.Affine.coerce(obj['warp_aux_to_img'])
                 warp_aux_from_img = warp_img_from_aux.inv()
                 warp_aux_from_vid = warp_aux_from_img @ warp_img_from_vid
@@ -497,12 +510,10 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath, context_factor=1.0):
                 #     aux_track_poly = vid_track_poly.warp(warp_aux_from_vid)
                 crop_box_asset_space = aux_track_poly.bounding_box().quantize().to_xywh().data[0]
 
-                chan_code = obj['channels']
-                # to prevent long names for docker (limit is 242 chars)
-                chan_pname = kwcoco.FusedChannelSpec.coerce(chan_code).path_sanitize(maxlen=10)
-
                 # Construct a name for the subregion to extract.
                 num = 0
+                # to prevent long names for docker (limit is 242 chars)
+                chan_pname = obj_channels.path_sanitize(maxlen=10)
                 name = 'crop_{}_{}_{}_{}'.format(iso_time, space_str, sensor_coarse, num)
                 dst_fname = track_img_dname / name / f'{name}_{chan_pname}.tif'
 
