@@ -1282,7 +1282,7 @@ def transfer_geo_metadata(coco_dset, gid):
 
             dst_ds = gdal.Open(fpath, gdal.GA_Update)
             if dst_ds is None:
-                raise Exception('error handling gdal')
+                raise exceptions.GeoMetadataNotFound('error handling gdal')
             ret = dst_ds.SetGeoTransform(aff_geo_transform)
             assert ret == 0
             ret = dst_ds.SetSpatialRef(georef_crs)

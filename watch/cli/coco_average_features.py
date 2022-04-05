@@ -1,23 +1,27 @@
 import os
 import argparse
-import ubelt as ub
-
 import kwcoco
 import kwimage
 import numpy as np
+import ubelt as ub
 from tqdm import tqdm
 
-from watch.utils.kwcoco_extensions import transfer_geo_metadata
 from watch import exceptions
+# from watch.cli.coco_combine_features import associate_images
+from watch.utils.kwcoco_extensions import transfer_geo_metadata
 
 
-def check_kwcoco_file(kwcoco_path, channel_name, sensor_name=None):
+def check_kwcoco_file(kwcoco_path, channel_name, sensor_name=None, flexible_merge=False):
     """Make sure that kwcoco files exist and contain required channel name.
 
     Args:
         kwcoco_path (str): Path to local kwcoco file.
         channel_name (str): Name of channel thats required to be in kwcoco file.
         sensor_name (str, optional): Only check images of from this type of sensor. Defaults to None.
+        flexible_merge (bool, optional): Skip images that do not contain channel_name. Defaults to False.
+
+    Returns:
+        missing_image_names (list): A list of names corresponding to images without the channel name.
     """
 
     # Check if kwcoco file exists.
@@ -30,21 +34,35 @@ def check_kwcoco_file(kwcoco_path, channel_name, sensor_name=None):
     # Get all images in kwcoco file.
     images: kwcoco.coco_dataset.Videos = kwcoco_file.images()
 
+    n_all_images = len(images)
     if sensor_name is not None:
         # Filter to only images with a chosen sensor
         flags = [s == sensor_name for s in images.lookup("sensor_coarse", None)]
         images = images.compress(flags)
+        print(f"INFO: Number of {sensor_name} images: [{n_all_images - len(images)}/{n_all_images}]")
 
+    missing_image_names = []
     for coco_img in images.coco_images:
         if channel_name not in list(coco_img.channels.keys()):
-            raise AssertionError(
-                f"Channel '{channel_name}' not found in image {coco_img.img['id']} of kwcoco file {kwcoco_path}. Only channels found: {coco_img.channels}"
-            )
+            missing_image_names.append(kwcoco_file.index.imgs[coco_img.img["id"]]["name"])
+            if flexible_merge is False:
+                raise AssertionError(
+                    f"Channel '{channel_name}' not found in image {coco_img.img['id']} of kwcoco file {kwcoco_path}. Only channels found: {coco_img.channels}"
+                )
+    if flexible_merge:
+        print(kwcoco_path)
+        print(f"INFO: Number of images without channel from [{len(missing_image_names)}/{len(images.coco_images)}]")
+    return missing_image_names
 
 
 def merge_kwcoco_channels(
-    kwcoco_file_paths, output_kwcoco_path, channel_names, weights,
-    merged_channel_name, sensor_name=None
+    kwcoco_file_paths,
+    output_kwcoco_path,
+    channel_names,
+    weights,
+    merged_channel_name,
+    sensor_name=None,
+    missing_image_names=[],
 ):
     """
     Compute a weighted mean of channels from separate kwcoco file and save into
@@ -69,11 +87,15 @@ def merge_kwcoco_channels(
         sensor_name (str, optional):
             Only merge images belonging to this sensor. Defaults to None.
 
+        missing_image_names (list, optional):
+            Skip combining these image names. Defaults to False.
+
+
     Example:
-        >>> from watch.cli.coco_merge_features import *  # NOQA
+        >>> from watch.cli.coco_average_features import *  # NOQA
         >>> import watch
         >>> from kwcoco.demo.perterb import perterb_coco
-        >>> dpath = ub.Path.appdir('watch/test/coco_merge_features')
+        >>> dpath = ub.Path.appdir('watch/test/coco_average_features')
         >>> base_dset = watch.demo.coerce_kwcoco('watch-msi')
         >>> # Construct two copies of the same data with slightly different heatmaps
         >>> dset1 = perterb_coco(base_dset.copy(), box_noise=0.5, cls_noise=0.5, n_fp=10, n_fn=10, rng=32)
@@ -117,15 +139,19 @@ def merge_kwcoco_channels(
 
     ## Load channel images from each viable image_id.
     output_kwcoco_path = ub.Path(output_kwcoco_path)
-    save_assest_dir = (output_kwcoco_path.parent / '_assets').ensuredir()
+    save_assest_dir = (output_kwcoco_path.parent / "_assets").ensuredir()
 
     input_channel_objs = [kwcoco.FusedChannelSpec.coerce(c) for c in channel_names]
     output_channels = kwcoco.FusedChannelSpec.coerce(merged_channel_name)
-    assert ub.allsame(input_channel_objs), 'expecting same channels for now'
-    assert output_channels == input_channel_objs[0], 'expecting same channels for now'
+    assert ub.allsame(input_channel_objs), "expecting same channels for now"
+    assert output_channels == input_channel_objs[0], "expecting same channels for now"
 
     pbar = tqdm(merge_kwcoco.index.imgs.items(), desc="Merging images", colour="green")
     for image_id, image_info in pbar:
+        image_name = merge_kwcoco.index.imgs[image_id]["name"]
+        if image_name in missing_image_names:
+            continue
+
         # If sensor name spacified, only merge channels for images from this sensor.
         if sensor_name is not None:
             if image_info["sensor_coarse"] != sensor_name:
@@ -135,11 +161,11 @@ def merge_kwcoco_channels(
         merge_coco_img = merge_kwcoco.coco_image(image_id)
         output_obj = None
         for cand_obj in merge_coco_img.iter_asset_objs():
-            cand_channels = kwcoco.FusedChannelSpec.coerce(cand_obj['channels'])
+            cand_channels = kwcoco.FusedChannelSpec.coerce(cand_obj["channels"])
             if output_channels == cand_channels:
                 output_obj = cand_obj
                 break
-        assert output_obj is not None, 'missing, todo: make more flexible'
+        assert output_obj is not None, "missing, todo: make more flexible"
 
         # Find which assets will be inputs
         input_objs = []
@@ -148,24 +174,23 @@ def merge_kwcoco_channels(
             coco_img = kwcoco_file.coco_image(image_id)
             input_obj = None
             for cand_obj in coco_img.iter_asset_objs():
-                cand_channels = kwcoco.FusedChannelSpec.coerce(cand_obj['channels'])
+                cand_channels = kwcoco.FusedChannelSpec.coerce(cand_obj["channels"])
                 if output_channels == cand_channels:
                     input_obj = cand_obj
-            assert input_obj is not None, 'missing, todo: be flexible'
+            assert output_obj is not None, "missing, todo: make more flexible"
             input_dpaths.append(kwcoco_file.bundle_dpath)
             input_objs.append(input_obj)
 
-        average_imdata = average_auxiliary_datas(
-            input_objs, input_dpaths, weights)
+        average_imdata = average_auxiliary_datas(input_objs, input_dpaths, weights)
 
         # TODO: better backend name
         path_chan = output_channels.path_sanitize()
-        img_name = merge_coco_img.img.get('name', '')
-        average_fname = f'merged_{img_name}_{path_chan}.tif'
+        img_name = merge_coco_img.img.get("name", "")
+        average_fname = f"merged_{img_name}_{path_chan}.tif"
         average_fpath = save_assest_dir / average_fname
 
         # Overwrite the data in the output auxiliary item
-        output_obj['file_name'] = os.fspath(average_fpath)
+        output_obj["file_name"] = os.fspath(average_fpath)
 
         kwimage.imwrite(average_fpath, average_imdata, backend="gdal")
 
@@ -173,7 +198,7 @@ def merge_kwcoco_channels(
         try:
             transfer_geo_metadata(merge_kwcoco, image_id)
         except exceptions.GeoMetadataNotFound as ex:
-            print('warning ex = {!r}'.format(ex))
+            print("warning ex = {!r}".format(ex))
             pass
 
     # Save kwcoco file.
@@ -183,6 +208,7 @@ def merge_kwcoco_channels(
 
 
 # output_obj, output_dpath, weights, save_assest_dir):
+
 
 def average_auxiliary_datas(input_objs, input_dpaths, weights):
     """
@@ -198,10 +224,13 @@ def average_auxiliary_datas(input_objs, input_dpaths, weights):
     accum_weights = None
     for obj, dpath, weight in zip(input_objs, input_dpaths, weights):
         # Assuming auxiliary data is perfectly alignable
-        fpath = os.path.join(dpath, obj['file_name'])
-        imdata = kwimage.imread(fpath, nodata='float')
+        # TODO: Need a better way to handle case that auxiliary channels could have different
+        # sizes between datasets. Right now the first dataset has to contain the largest
+        # image which we can't rely on using the correct order.
+        fpath = os.path.join(dpath, obj["file_name"])
+        imdata = kwimage.imread(fpath, nodata="float")
         mask = np.isnan(imdata)
-        imweights = np.full(imdata.shape, fill_value=weight)
+        imweights = np.full(imdata.shape, fill_value=weight, dtype="float")
         imweights[mask] = 0
         imdata[mask] = 0
         weighted_imdata = imdata * imweights
@@ -209,11 +238,21 @@ def average_auxiliary_datas(input_objs, input_dpaths, weights):
             accum_imdata = weighted_imdata
             accum_weights = imweights
         else:
-            accum_imdata += weighted_imdata
-            accum_weights += imweights
+            try:
+                accum_imdata += weighted_imdata
+            except ValueError:
+                h, w = weighted_imdata.shape
+                accum_imdata[:h, :w] += weighted_imdata
+
+            try:
+                accum_weights += imweights
+            except ValueError:
+                h, w = imweights.shape
+                accum_weights[:h, :w] += imweights
     import warnings
+
     with warnings.catch_warnings():
-        warnings.filterwarnings('ignore', 'invalid value')
+        warnings.filterwarnings("ignore", "invalid value")
         average_imdata = accum_imdata / accum_weights
 
     return average_imdata
@@ -222,7 +261,7 @@ def average_auxiliary_datas(input_objs, input_dpaths, weights):
 def main(cmdline=True):
     """
     Example call:
-    python watch/cli/coco_merge_features.py --kwcoco_file_paths \
+    python watch/cli/coco_average_features.py --kwcoco_file_paths \
          /data4/datasets/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/output_iarpa_drop2v2_total_bin_change_early_fusion_0014.kwcoco.json \
          /data4/datasets/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/output_iarpa_drop2v2_total_bin_change_early_fusion_0013.kwcoco.json  \
          --output_kwcoco_path /data4/datasets/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/test_comb.kwcoco.json \
@@ -248,7 +287,8 @@ def main(cmdline=True):
     )
     parser.add_argument(
         "--weights",
-        type=float,
+        nargs="+",
+        default=None,
         help="Combination weight value for each prediction from kwcoco file. Default: All predictions are equally weighted.",
     )
     parser.add_argument(
@@ -262,6 +302,12 @@ def main(cmdline=True):
         "--merge_channel_name",
         type=str,
         help="Name of channel with merged features. By default using the first input argument channel_name.",
+    )
+    parser.add_argument(
+        "--flexible_merge",
+        default=False,
+        action="store_true",
+        help="If active, skip images that dont contain band when merging.",
     )
     args = parser.parse_args()
 
@@ -295,8 +341,16 @@ def main(cmdline=True):
         print(f"INFO: No output channel name given, using channel name: {args.channel_name[0]}")
 
     ## Check kwcoco files to see that they exist and contain the required channels.
+    all_missing_image_names = []
     for kwcoco_file_path, channel_name in zip(args.kwcoco_file_paths, args.channel_name):
-        check_kwcoco_file(kwcoco_file_path, channel_name, sensor_name=args.sensor)
+        missing_image_names = check_kwcoco_file(
+            kwcoco_file_path, channel_name, sensor_name=args.sensor, flexible_merge=args.flexible_merge
+        )
+        all_missing_image_names.append(set(missing_image_names))
+
+    # Find common image names
+    if len(all_missing_image_names) != 0:
+        common_missing_image_names = list(set.union(*all_missing_image_names))
     print("INFO: Verified that kwcoco files contain correct channel name(s).")
 
     # Merge kwcoco files along certain channels.
@@ -307,6 +361,7 @@ def main(cmdline=True):
         args.weights,
         args.merge_channel_name,
         sensor_name=args.sensor,
+        missing_image_names=common_missing_image_names,
     )
 
 
