@@ -232,7 +232,7 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
 
     # template_parts.append('--debug off')
 
-    if 1:
+    if 0:
         # Perf options
         template_parts += [
             '--config GDAL_CACHEMAX 15%',
