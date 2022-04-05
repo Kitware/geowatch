@@ -179,7 +179,7 @@ def main(cmdline=0, **kwargs):
     arr = np.array(list(tid_to_size.values()))
     stats = kwarray.stats_dict(arr)
     quantile = [0.25, 0.50, 0.75]
-    quant_values = np.quantile(arr, quantile, axis=None, extreme=True, n_extreme=True)
+    quant_values = np.quantile(arr, quantile)
     quant_keys = ['q_{:0.2f}'.format(q) for q in quantile]
     for k, v in zip(quant_keys, quant_values):
         stats[k] = v

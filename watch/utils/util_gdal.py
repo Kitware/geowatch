@@ -161,7 +161,7 @@ def _demo_geoimg_with_nodata():
 
 
 def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
-                          compress='DEFLATE', verbose=0):
+                          compress='DEFLATE', tries=0, verbose=0):
     """
     Crops geotiffs using pixels
 
@@ -252,7 +252,9 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
     command = template.format(template)
     command = ub.paragraph(command)
     try:
-        cmd_info = ub.cmd(command, verbose=verbose, check=True)  # NOQA
+        retry.api.retry_call(
+            ub.cmd, (command,), dict(check=True, verbose=verbose),
+            tries=tries, delay=1, exceptions=subprocess.CalledProcessError)
     except subprocess.CalledProcessError as ex:
         if verbose:
             print('\n\nCOMMAND FAILED: {!r}'.format(ex.cmd))
