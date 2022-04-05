@@ -70,6 +70,11 @@ gdalwarp_performance_opts = ub.paragraph('''
         ''')
 
 
+class DummyLogger:
+    def warning(self, msg, *args):
+        print(msg % args)
+
+
 def _demo_geoimg_with_nodata():
     """
     Example:
@@ -228,48 +233,56 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
         print(ub.cmd('gdalinfo ' + str(pxl_out_fpath))['out'])
     """
     xoff, yoff, xsize, ysize = pixel_box.to_xywh().data[0]
-    template_parts = ['gdal_translate']
+    tmp_fpath = out_fpath.augment(suffix='.tmp')
 
-    # template_parts.append('--debug off')
+    command_parts = ['gdal_translate']
+    # command_parts.append('--debug off')
 
     if 0:
         # Perf options
-        template_parts += [
-            '--config GDAL_CACHEMAX 15%',
-            '-co NUM_THREADS=ALL_CPUS',
-        ]
+        command_parts.extend([
+            '--config', 'GDAL_CACHEMAX', '15%',
+            '-co', 'NUM_THREADS=ALL_CPUS',
+        ])
 
     if compress == 'RAW':
         compress = 'NONE'
 
     # Use the new COG output driver
-    template_parts.append(f'''
-        -of COG
-        -co OVERVIEWS=AUTO
-        -co BLOCKSIZE={blocksize}
-        -co COMPRESS={compress}
-        ''')
+    command_parts.extend([
+        '-of', 'COG',
+        '-co', 'OVERVIEWS=AUTO',
+        '-co', f'BLOCKSIZE={blocksize}',
+        '-co', f'COMPRESS={compress}',
+    ])
 
-    tmp_fpath = out_fpath.augment(suffix='.tmp')
-
-    template_parts.append(f'-srcwin {xoff} {yoff} {xsize} {ysize}')
-    template_parts.append(f'{in_fpath} {tmp_fpath}')
-    template = ' '.join(template_parts)
+    command_parts.extend([
+        '-srcwin', f'{xoff}', f'{yoff}', f'{xsize}', f'{ysize}'
+    ])
+    command_parts.append(f'{in_fpath}')
+    command_parts.append(f'{tmp_fpath}')
+    template = ' '.join(command_parts)
 
     command = template.format(template)
-    command = ub.paragraph(command)
-    got = NotImplemented
 
-    class dummylogger():
-        def warning(self, *args):
-            print(*args)
-    logger = dummylogger()
+    shell = False
+
+    got = -1
+    def _execute_translate():
+        cmd_info = ub.cmd(command_parts, check=True, shell=shell, verbose=verbose)
+        if not tmp_fpath.exists():
+            raise FileNotFoundError(f'Error: gdal did not write {tmp_fpath}')
+        os.rename(tmp_fpath, out_fpath)
+        return cmd_info
+
     try:
         # Calling gdal via cmd with shell=True seems more stable
         # when running multiple translate/warp workers in the background
+        logger = DummyLogger()
         got = retry.api.retry_call(
-            ub.cmd, (command,), dict(check=True, shell=True, verbose=verbose),
-            tries=tries, delay=1, exceptions=subprocess.CalledProcessError,
+            _execute_translate,
+            tries=tries, delay=1, exceptions=(
+                subprocess.CalledProcessError, FileNotFoundError),
             logger=logger)
     except subprocess.CalledProcessError as ex:
         if verbose:
@@ -277,11 +290,14 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
             print(ex.stdout)
             print(ex.stderr)
         raise
-    if not tmp_fpath.exists():
-        print('got = {}'.format(ub.repr2(got, nl=1)))
-        print(command)
-        raise FileNotFoundError(f'Error: gdal did not write {tmp_fpath}')
-    os.rename(tmp_fpath, out_fpath)
+    except FileNotFoundError:
+        if verbose:
+            print(
+                'Error: gdal seems to have returned with a valid exist code, '
+                'but the target file was not written')
+            print('got = {}'.format(ub.repr2(got, nl=1)))
+            print(command)
+        raise
 
 
 def gdal_single_warp(in_fpath,
@@ -469,15 +485,34 @@ def gdal_single_warp(in_fpath,
     command = template.format(**template_kw)
     command = ub.paragraph(command)
 
+    shell = False
+
+    def _execute_warp():
+        cmd_info = ub.cmd(command, check=True, verbose=verbose, shell=shell)
+        if not ub.Path(out_fpath).exists():
+            raise FileNotFoundError(f'Error: gdal did not write {out_fpath}')
+        return cmd_info
+    got = -1
     try:
-        retry.api.retry_call(
-            ub.cmd, (command,), dict(check=True, verbose=verbose, shell=True),
-            tries=tries, delay=1, exceptions=subprocess.CalledProcessError)
+        logger = DummyLogger()
+        got = retry.api.retry_call(
+            _execute_warp,
+            tries=tries, delay=1, exceptions=(
+                subprocess.CalledProcessError, FileNotFoundError),
+            logger=logger)
     except subprocess.CalledProcessError as ex:
         if verbose:
             print('\n\nCOMMAND FAILED: {!r}'.format(ex.cmd))
             print(ex.stdout)
             print(ex.stderr)
+        raise
+    except FileNotFoundError:
+        if verbose:
+            print(
+                'Error: gdal seems to have returned with a valid exist code, '
+                'but the target file was not written')
+            print('got = {}'.format(ub.repr2(got, nl=1)))
+            print(command)
         raise
 
 
@@ -542,22 +577,38 @@ def gdal_multi_warp(in_fpaths, out_fpath, *args, nodata=None, tries=1, **kwargs)
     merge_cmd = ' '.join(merge_cmd_parts)
     verbose = kwargs.get('verbose', 0)
 
+    shell = False
+
+    def _exec_merge():
+        cmd_info = ub.cmd(merge_cmd, check=True, verbose=verbose, shell=shell)
+        if not ub.Path(tmp_out_fpath).exists():
+            raise FileNotFoundError(f'Error: gdal did not write {tmp_out_fpath}')
+        os.rename(tmp_out_fpath, out_fpath)
+        return cmd_info
+
     import subprocess
+    got = -1
     try:
-        if 1:
-            import retry
-            retry.api.retry_call(
-                ub.cmd, (merge_cmd,), dict(
-                    check=True, verbose=verbose, shell=True),
-                tries=tries, delay=1)
-        else:
-            ub.cmd(merge_cmd, check=True, verbose=verbose)
+        import retry
+        logger = DummyLogger()
+        got = retry.api.retry_call(
+            _exec_merge,
+            tries=tries, delay=1, exceptions=(
+                subprocess.CalledProcessError, FileNotFoundError),
+            logger=logger)
     except subprocess.CalledProcessError as ex:
         print('\n\nCOMMAND FAILED: {!r}'.format(ex.cmd))
         print(ex.stdout)
         print(ex.stderr)
         raise
-    os.rename(tmp_out_fpath, out_fpath)
+    except FileNotFoundError:
+        if verbose:
+            print(
+                'Error: gdal seems to have returned with a valid exist code, '
+                'but the target file was not written')
+            print('got = {}'.format(ub.repr2(got, nl=1)))
+            print(merge_cmd)
+        raise
 
     if 0:
         # Debugging
