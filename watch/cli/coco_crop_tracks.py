@@ -172,9 +172,9 @@ def main(cmdline=0, **kwargs):
             # stack_lines = traceback.format_list(stack)
             # tbtext = ''.join(stack_lines)
             # print(ub.highlight_code(tbtext, 'pytb'))
-            raise
             print('ex = {}'.format(ub.repr2(ex, nl=1)))
             print('Failed crop asset task ex = {!r}'.format(ex))
+            raise
             failed.append(job)
         else:
             results.append(result)
@@ -543,6 +543,8 @@ def generate_crop_jobs(coco_dset, dst_bundle_dpath, channels=None, context_facto
 
 
 def run_crop_asset_task(crop_asset_task, keep):
+    from osgeo import osr
+    osr.GetPROJSearchPaths()
     from watch.utils import util_gdal
     _crop_task = crop_asset_task.copy()
     src = _crop_task.pop('src')

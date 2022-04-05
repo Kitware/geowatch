@@ -129,7 +129,7 @@ def _demo_geoimg_with_nodata():
 # def gdal_single_crop(in_fpath, out_fpath, space_box=None, local_epsg=4326,
 #                      box_epsg=4326, nodata=None, rpcs=None, blocksize=256,
 #                      compress='DEFLATE', use_perf_opts=False, as_vrt=False,
-#                      use_te_geoidgrid=False, dem_fpath=None, tries=0,
+#                      use_te_geoidgrid=False, dem_fpath=None, tries=1,
 #                      verbose=0):
 #     """
 #     Wrapper around gdal_single_translate and gdal_single_warp
@@ -161,7 +161,7 @@ def _demo_geoimg_with_nodata():
 
 
 def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
-                          compress='DEFLATE', tries=0, verbose=0):
+                          compress='DEFLATE', tries=1, verbose=0):
     """
     Crops geotiffs using pixels
 
@@ -177,6 +177,9 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
         compress (str): gdal compression
 
         verbose (int): verbosity level
+
+    CommandLine:
+        xdoctest -m watch.utils.util_gdal gdal_single_translate
 
     Example:
         >>> from watch.utils.util_gdal import *  # NOQA
@@ -225,12 +228,16 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
         print(ub.cmd('gdalinfo ' + str(pxl_out_fpath))['out'])
     """
     xoff, yoff, xsize, ysize = pixel_box.to_xywh().data[0]
-    template_parts = [
-        '''
-        gdal_translate
-        --debug off
-        '''
-    ]
+    template_parts = ['gdal_translate']
+
+    # template_parts.append('--debug off')
+
+    if 0:
+        # Perf options
+        template_parts += [
+            '--config GDAL_CACHEMAX 15%',
+            '-co NUM_THREADS=ALL_CPUS',
+        ]
 
     if compress == 'RAW':
         compress = 'NONE'
@@ -251,16 +258,27 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box, blocksize=256,
 
     command = template.format(template)
     command = ub.paragraph(command)
+    got = NotImplemented
+
+    class dummylogger():
+        def warning(self, *args):
+            print(*args)
+    logger = dummylogger()
     try:
-        retry.api.retry_call(
-            ub.cmd, (command,), dict(check=True, verbose=verbose),
-            tries=tries, delay=1, exceptions=subprocess.CalledProcessError)
+        got = retry.api.retry_call(
+            ub.cmd, (command,), dict(check=True, shell=True, verbose=verbose),
+            tries=tries, delay=1, exceptions=subprocess.CalledProcessError,
+            logger=logger)
     except subprocess.CalledProcessError as ex:
         if verbose:
             print('\n\nCOMMAND FAILED: {!r}'.format(ex.cmd))
             print(ex.stdout)
             print(ex.stderr)
         raise
+    if not tmp_fpath.exists():
+        print('got = {}'.format(ub.repr2(got, nl=1)))
+        print(command)
+        raise FileNotFoundError(f'Error: gdal did not write {tmp_fpath}')
     os.rename(tmp_fpath, out_fpath)
 
 
@@ -277,7 +295,7 @@ def gdal_single_warp(in_fpath,
                      as_vrt=False,
                      use_te_geoidgrid=False,
                      dem_fpath=None,
-                     tries=0,
+                     tries=1,
                      verbose=0):
     r"""
     Wrapper around gdalwarp
@@ -451,7 +469,7 @@ def gdal_single_warp(in_fpath,
 
     try:
         retry.api.retry_call(
-            ub.cmd, (command,), dict(check=True, verbose=verbose),
+            ub.cmd, (command,), dict(check=True, verbose=verbose, shell=True),
             tries=tries, delay=1, exceptions=subprocess.CalledProcessError)
     except subprocess.CalledProcessError as ex:
         if verbose:
@@ -461,7 +479,7 @@ def gdal_single_warp(in_fpath,
         raise
 
 
-def gdal_multi_warp(in_fpaths, out_fpath, *args, nodata=None, tries=0, **kwargs):
+def gdal_multi_warp(in_fpaths, out_fpath, *args, nodata=None, tries=1, **kwargs):
     """
     See gdal_single_warp() for args
 
@@ -527,7 +545,8 @@ def gdal_multi_warp(in_fpaths, out_fpath, *args, nodata=None, tries=0, **kwargs)
         if 1:
             import retry
             retry.api.retry_call(
-                ub.cmd, (merge_cmd,), dict(check=True, verbose=verbose),
+                ub.cmd, (merge_cmd,), dict(
+                    check=True, verbose=verbose, shell=True),
                 tries=tries, delay=1)
         else:
             ub.cmd(merge_cmd, check=True, verbose=verbose)
