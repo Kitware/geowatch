@@ -2112,11 +2112,11 @@ class KWCocoVideoDataset(data.Dataset):
                 frame_modes = frame_item['modes']
                 for mode_key in list(frame_modes.keys()):
                     mode_data = frame_modes[mode_key]
-                    frame_modes[mode_key] = fliprot(mode_data, **fliprot_params)
+                    frame_modes[mode_key] = fliprot(mode_data, **fliprot_params, axes=[1, 2])
                 for key in truth_keys:
                     data = frame_item.get(key, None)
                     if data is not None:
-                        frame_item[key] = fliprot(data, **fliprot_params)
+                        frame_item[key] = fliprot(data, **fliprot_params, axes=[1, 2])
 
         # Convert data to torch
         for frame_item in frame_items:
@@ -4006,11 +4006,18 @@ def _boxes_snap_to_edges(given_box, snap_target):
     return adjusted_box
 
 
-def fliprot(img, rot_k=0, flip_axis=None):
+def fliprot(img, rot_k=0, flip_axis=None, axes=(0, 1)):
     """
     Args:
         img (ndarray): H, W, C
+
         rot_k (int): number of ccw rotations
+
+        flip_axis(Tuple[int, ...]):
+            either [], [0], [1], or [0, 1].
+            0 is the y axis and 1 is the x axis.
+
+        axes (Typle[int, int]): the location of the y and x axes
 
     Example:
         >>> img = np.arange(16).reshape(4, 4)
@@ -4030,13 +4037,14 @@ def fliprot(img, rot_k=0, flip_axis=None):
         >>>     assert np.all(img == img_inv)
     """
     if rot_k != 0:
-        img = np.rot90(img, k=rot_k)
+        img = np.rot90(img, k=rot_k, axes=axes)
     if flip_axis is not None:
-        img = np.flip(img, axis=flip_axis)
+        _flip_axis = np.array(axes)[flip_axis]
+        img = np.flip(img, axis=_flip_axis)
     return img
 
 
-def inv_fliprot(img, rot_k=0, flip_axis=None):
+def inv_fliprot(img, rot_k=0, flip_axis=None, axes=(0, 1)):
     """
     Undo a fliprot
 
@@ -4044,7 +4052,8 @@ def inv_fliprot(img, rot_k=0, flip_axis=None):
         img (ndarray): H, W, C
     """
     if flip_axis is not None:
-        img = np.flip(img, axis=flip_axis)
+        _flip_axis = np.array(axes)[flip_axis]
+        img = np.flip(img, axis=_flip_axis)
     if rot_k != 0:
-        img = np.rot90(img, k=-rot_k)
+        img = np.rot90(img, k=-rot_k, axes=axes)
     return img
