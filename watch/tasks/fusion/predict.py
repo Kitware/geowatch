@@ -700,15 +700,32 @@ def predict(cmdline=False, **kwargs):
         writer_queue.wait_until_finished()
 
     try:
+        device_props = torch.cuda.get_device_properties(device)
+        capabilities = (device_props.multi_processor_count, device_props.minor)
         device_info = {
-            'total_vram': torch.cuda.get_device_properties(device).total_memory,
+            'total_vram': device_props.total_memory,
             'reserved_vram': torch.cuda.memory_reserved(device),
             'allocated_vram': torch.cuda.memory_allocated(device),
             'device_index': device.index,
             'device_type': device.type,
+            'device_name': device_props.name,
+            'device_capabilities': capabilities,
+            'device_multi_processor_count': device_props.multi_processor_count,
         }
     except Exception:
         device_info = None
+
+    try:
+        from watch.utils import util_hardware
+        system_info = util_hardware.get_cpu_mem_info()
+        try:
+            # Get information about disk used in this process
+            disk_info = util_hardware.disk_info_of_path(test_coco_dataset.fpath)
+            system_info['disk_info'] = disk_info
+        except Exception:
+            pass
+    except Exception:
+        system_info = None
 
     if emissions_tracker is not None:
         co2_kg = emissions_tracker.stop()
@@ -736,6 +753,7 @@ def predict(cmdline=False, **kwargs):
             'start_timestamp': start_timestamp,
             'end_timestamp': ub.timestamp(),
             'device_info': device_info,
+            'system_info': system_info,
             'emissions': emissions,
         }
     })
@@ -1316,7 +1334,7 @@ if __name__ == '__main__':
             --tta_time=0,1 \
             --chip_overlap=0,0.3 \
             --draw_heatmaps=1 \
-            --run=1 --backend=slurm \
+            --run=0 --backend=slurm \
             --enable_eval=redo
 
 

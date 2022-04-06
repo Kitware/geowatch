@@ -410,7 +410,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
             **pred_cfg,
         }
 
-        # print('pred_dataset_fpath = {!r}'.format(pred_dataset_fpath))
+        # We can skip evaluation if we already have a metrics dvc file
+        # (even if we haven't pulled those actual metrics to disk)
         has_eval = eval_metrics_dvc_fpath.exists() or eval_metrics_fpath.exists()
         has_pred = pred_dataset_fpath.exists()
         # print('has_eval = {!r}'.format(has_eval))
