@@ -325,8 +325,10 @@ def schedule_evaluation(cmdline=False, **kwargs):
     if virtualenv_cmd:
         queue.add_header_command(virtualenv_cmd)
 
-    recompute_pred = recompute
-    recompute_eval = recompute or (with_eval == 'redo')
+    recompute_pred = recompute or (with_pred == 'redo')
+    recompute_eval = recompute or (with_eval == 'redo') or (with_pred == 'redo')
+    print('with_pred = {!r}'.format(with_pred))
+    print('recompute_pred = {!r}'.format(recompute_pred))
 
     def ensure_iterable(x):
         return x if ub.iterable(x) else [x]
@@ -446,16 +448,16 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     pred_command
                 )
             if recompute_pred or not (skip_existing and (has_pred or has_eval)):
-                if not has_eval:
-                    name = 'pred' + name_suffix
-                    # from math import ceil
-                    # FIXME: slurm cpu arg seems to be cut in half
-                    # int(ceil(workers_per_queue / 2))
-                    pred_cpus = workers_per_queue
-                    pred_job = queue.submit(pred_command, gpus=1, name=name,
-                                            cpus=pred_cpus,
-                                            partition=config['partition'],
-                                            mem=config['mem'])
+                # if not has_eval:
+                name = 'pred' + name_suffix
+                # from math import ceil
+                # FIXME: slurm cpu arg seems to be cut in half
+                # int(ceil(workers_per_queue / 2))
+                pred_cpus = workers_per_queue
+                pred_job = queue.submit(pred_command, gpus=1, name=name,
+                                        cpus=pred_cpus,
+                                        partition=config['partition'],
+                                        mem=config['mem'])
 
         if with_eval:
             if not with_pred:

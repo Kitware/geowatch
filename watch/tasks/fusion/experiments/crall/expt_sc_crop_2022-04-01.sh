@@ -46,13 +46,20 @@ CROPPED_PRE_EVAL_AND_AGG(){
     # Commit Evaluation Results
     #################################
     DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
-    ls "$DVC_DPATH"/models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
-    (cd "$DVC_DPATH" && dvc add models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json)
-    (cd "$DVC_DPATH" && dvc push -r aws -R models/fusion/eval3_candidates/eval)
+    ls "$DVC_DPATH"/models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json
+    (cd "$DVC_DPATH" && dvc add models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json)
+    git commit -am "add measures from $HOSTNAME" && git push
+    (cd "$DVC_DPATH" && dvc push -r aws -R models/fusion/eval3_sc_candidates/eval)
 
+    
     #################################
     # Aggregate Results
     #################################
+    # Pull all results onto the machine you want to eval on
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
+    cd "$DVC_DPATH" 
+    git pull
+    dvc pull -r aws -R models/fusion/eval3_sc_candidates/eval
 
     #####
     DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")

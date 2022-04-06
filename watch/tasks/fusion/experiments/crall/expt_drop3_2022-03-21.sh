@@ -8,7 +8,7 @@ SeeAlso:
 "
 
 data_splits(){
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
     python -m watch.cli.prepare_splits \
         --base_fpath="$DVC_DPATH/$DATASET_CODE/combo_LM.kwcoco.json" \
@@ -19,7 +19,7 @@ data_splits(){
 prep_teamfeat_drop2(){
     # Team Features on drop2
     #DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="ssd")
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
     python -m watch.cli.prepare_teamfeats \
         --base_fpath="$DVC_DPATH/$DATASET_CODE/data.kwcoco.json" \
@@ -39,7 +39,7 @@ prep_teamfeat_drop2(){
 gather-checkpoints-repackage(){
 
     # For Uncropped
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -54,7 +54,7 @@ gather-checkpoints-repackage(){
 
 schedule-prediction-and-evlauation(){
 
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     cd "$DVC_DPATH" 
     git pull
     dvc pull -r aws -R models/fusion/eval3_candidates/packages
@@ -64,7 +64,7 @@ schedule-prediction-and-evlauation(){
     # - [ ] Argument general predict parameter grid
     # - [ ] Can a task request that slurm only schedule it on a specific GPU?
     # Note: change backend to tmux if slurm is not installed
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -73,10 +73,10 @@ schedule-prediction-and-evlauation(){
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*V3*.pt" \
             --test_dataset="$VALI_FPATH" \
-            --run=1 --skip_existing=True --backend=slurm
+            --run=0 --skip_existing=True --backend=slurm
 
     # Be sure to DVC add the eval results after!
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     cd "$DVC_DPATH" 
     ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
     du -shL models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json | sort -h
@@ -85,7 +85,7 @@ schedule-prediction-and-evlauation(){
 
 
     # On other machines
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     cd "$DVC_DPATH" 
     dvc pull -r aws models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
 }
@@ -94,7 +94,7 @@ schedule-prediction-and-evlauation(){
 schedule-prediction-and-evaluate-team-models(){
 
     # For Uncropped
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
     EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -109,7 +109,7 @@ schedule-prediction-and-evaluate-team-models(){
 
 aggregate-results(){
 
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     EXPT_GROUP_CODE=eval3_candidates
     #EXPT_NAME_PAT="*"
     EXPT_NAME_PAT="*"
@@ -987,7 +987,7 @@ INITIAL_STATE_BASELINE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/BASE
 INITIAL_STATE_V323="$DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
 
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1038,7 +1038,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1091,7 +1091,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=2
-DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1141,7 +1141,7 @@ python -m watch.tasks.fusion.fit \
     --init="$INITIAL_STATE_BASELINE" 
 
 export CUDA_VISIBLE_DEVICES=3
-DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1196,10 +1196,10 @@ python -m watch.tasks.fusion.fit \
 # --------------------
 
 
-DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1253,7 +1253,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
