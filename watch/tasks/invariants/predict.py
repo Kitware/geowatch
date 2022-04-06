@@ -56,13 +56,28 @@ class predict(object):
         >>> self.forward(args)
     """
     def __init__(self, args):
+
+        # TODO: Add a cache flag. If cache==1, Determine what images we have
+        # already predicted for and then take a kwcoco subset containing
+        # the cache misses. See dzyne and rutgers predictors for example
+        # implementations.
+
+        # initialize dataset
+        import kwcoco
+        print('load coco dataset')
+        self.coco_dset = kwcoco.CocoDataset = kwcoco.CocoDataset.coerce(args.input_kwcoco)
+
         ###
-        self.dataset = gridded_dataset(args.input_kwcoco, args.bands,
+        print('build grid dataset')
+        self.dataset = gridded_dataset(self.coco_dset, args.bands,
                                        patch_size=args.patch_size,
                                        patch_overlap=args.patch_overlap,
                                        mode='test')
 
+        print('copy dataset')
         self.output_dset = self.dataset.coco_dset.copy()
+
+        print('reroot')
         self.output_dset.reroot(absolute=True)  # Make all paths absolute
         self.output_dset.fpath = args.output_kwcoco  # Change output file path and bundle path
         self.output_dset.reroot(absolute=False)  # Reroot in the new bundle path
@@ -125,6 +140,10 @@ class predict(object):
             'blocksize': 128,
         }
 
+    def _build_img_fpath(self, gid):
+        save_path = self.output_feat_dpath / f'invariants_{gid}.tif'
+        return save_path
+
     def finalize_image(self, gid):
         self.finalized_gids.add(gid)
         stitcher = self.stitcher_dict[gid]
@@ -139,6 +158,7 @@ class predict(object):
         from watch.tasks.fusion.predict import quantize_float01
         quant_recon, quantization = quantize_float01(recon)
 
+        save_path = self._build_img_fpath(gid)
         save_path = self.output_feat_dpath / f'invariants_{gid}.tif'
         save_path = os.fspath(save_path)
         kwimage.imwrite(save_path, quant_recon,  space=None,
@@ -168,7 +188,7 @@ class predict(object):
         print('num_workers = {!r}'.format(num_workers))
 
         loader = torch.utils.data.DataLoader(
-            self.dataset, num_workers=num_workers, batch_size=1, shuffle=False)
+            self.dataset, num_workers=num_workers, batch_size=args.batch_size, shuffle=False)
         num_batches = len(loader)
 
         # Start background processes
@@ -276,14 +296,18 @@ class predict(object):
                     # output_img = output_dset.index.imgs[image_id]
 
                     tr = self.dataset.patches[idx]
-                    sample = self.dataset.sampler.load_sample(tr)
-                    tr = sample['tr']
+                    # sample = self.dataset.sampler.load_sample(tr)
+                    # tr = sample['tr']
 
                     if len(current_gids) == 0:
                         current_gids = tr['gids']
                     previous_gids = current_gids
                     current_gids = tr['gids']
 
+                    # If we start looking at a new image, that means the
+                    # previous image must be done (because we assume sorted
+                    # batches). Thus we can finalize the previous image and
+                    # free any memory used by its stitcher
                     mutually_exclusive = (set(previous_gids) - set(current_gids))
                     for gid in mutually_exclusive:
                         seen_images.add(gid)
@@ -291,32 +315,42 @@ class predict(object):
 
                     gid1, gid2 = current_gids
                     if gid1 not in self.stitcher_dict.keys():
+                        img1 = self.dataset.coco_dset.index.imgs[gid1]
+                        space_dims = (img1['height'], img1['width'])
                         self.stitcher_dict[gid1] = kwarray.Stitcher(
-                            tr['space_dims'] + (self.num_out_channels,), device='numpy')
+                            space_dims + (self.num_out_channels,), device='numpy')
                     if gid2 not in self.stitcher_dict.keys():
+                        img2 = self.dataset.coco_dset.index.imgs[gid2]
+                        space_dims = (img2['height'], img2['width'])
                         self.stitcher_dict[gid2] = kwarray.Stitcher(
-                            tr['space_dims'] + (self.num_out_channels,), device='numpy')
+                            space_dims + (self.num_out_channels,), device='numpy')
+
                     slice_ = tr['space_slice']
-                    weights = util_kwimage.upweight_center_mask(save_feat.shape[0:2])[..., None]
+                    # weights = util_kwimage.upweight_center_mask(save_feat.shape[0:2])[..., None]
+                    # weights1 = weights.copy()
+                    # weights2 = weights.copy()
+                    # invalid_mask1_np = invalid_mask1.numpy()
+                    # invalid_mask2_np = invalid_mask2.numpy()
+                    # if invalid_mask1_np.any():
+                    #     spatial_valid_mask1 = (1 - invalid_mask1_np)[..., None]
+                    #     weights1 = weights1 * spatial_valid_mask1
+                    #     save_feat[invalid_mask1_np] = 0
+                    # if invalid_mask2_np.any():
+                    #     spatial_valid_mask2 = (1 - invalid_mask2_np)[..., None]
+                    #     weights2 = weights2 * spatial_valid_mask2
+                    #     save_feat[invalid_mask2_np] = 0
 
-                    weights1 = weights.copy()
-                    weights2 = weights.copy()
+                    # TODO: refactor and make a good CocoStitchingManager
+                    from watch.tasks.fusion.predict import CocoStitchingManager
+                    stitcher1 = self.stitcher_dict[gid1]
+                    stitcher2 = self.stitcher_dict[gid2]
+                    CocoStitchingManager._stitcher_center_weighted_add(
+                        stitcher1, slice_, save_feat)
+                    CocoStitchingManager._stitcher_center_weighted_add(
+                        stitcher2, slice_, save_feat2)
 
-                    invalid_mask1_np = invalid_mask1.numpy()
-                    invalid_mask2_np = invalid_mask2.numpy()
-
-                    if invalid_mask1_np.any():
-                        spatial_valid_mask1 = (1 - invalid_mask1_np)[..., None]
-                        weights1 = weights1 * spatial_valid_mask1
-                        save_feat[invalid_mask1_np] = 0
-
-                    if invalid_mask2_np.any():
-                        spatial_valid_mask2 = (1 - invalid_mask2_np)[..., None]
-                        weights2 = weights2 * spatial_valid_mask2
-                        save_feat[invalid_mask2_np] = 0
-
-                    self.stitcher_dict[gid1].add(slice_, save_feat, weight=weights1)
-                    self.stitcher_dict[gid2].add(slice_, save_feat2, weight=weights2)
+                    # self.stitcher_dict[gid1].add(slice_, save_feat, weight=weights1)
+                    # self.stitcher_dict[gid2].add(slice_, save_feat2, weight=weights2)
 
             writer.wait_until_finished()
 
@@ -364,7 +398,7 @@ def parse_args(argv=None):
     parser.add_argument('--segmentation_ckpt_path', type=str, default=None)
     parser.add_argument('--pretext_package_path', type=str, default=None)
     parser.add_argument('--segmentation_package_path', type=str, default=None)
-    parser.add_argument('--batch_size', type=int, default=8)
+    parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--num_workers', default=4, help='number of background data loading workers')
     parser.add_argument('--write_workers', default=0, help='number of background data writing workers')
 
@@ -404,30 +438,34 @@ if __name__ == '__main__':
 
         # Team Features on Drop2
         DVC_DPATH=$(python -m watch.cli.find_dvc)
+        KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10
         python -m watch.cli.prepare_teamfeats \
-            --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
-            --with_depth=0 --with_materials=0  --with_invariants=1 \
-            --gres=0 --run=0 --do_splits=True
+            --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
+            --with_depth=0 \
+            --with_landcover=0 \
+            --with_materials=0  \
+            --with_invariants=1 \
+            --do_splits=0 \
+            --gres=0 --backend=serial --run=0
 
     CommandLine:
         python -m watch.tasks.template.predict --help
 
-        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
         PRETEXT_PATH=$DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pretext_package.pt
         SSEG_PATH=$DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt
         PCA_FPATH=$DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pca_projection_matrix.pt
-
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
-
         python -m watch.tasks.invariants.predict \
             --pretext_package_path "$PRETEXT_PATH" \
             --segmentation_package_path "$SSEG_PATH" \
             --pca_projection_path "$PCA_FPATH" \
             --input_kwcoco $KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
             --num_workers=avail \
-            --do_pca 1 \
-            --patch_overlap=0.5 \
-            --output_kwcoco $KWCOCO_BUNDLE_DPATH/uky_invariants.kwcoco.json
+            --do_pca 0 \
+            --patch_overlap=0.3 \
+            --output_kwcoco $KWCOCO_BUNDLE_DPATH/uky_invariants.kwcoco.json \
+            --tasks before_after pretext
 
         python -m watch stats $KWCOCO_BUNDLE_DPATH/uky_invariants.kwcoco.json
 

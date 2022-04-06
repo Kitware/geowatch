@@ -40,7 +40,8 @@ class Observation:
 @dataclass
 class Track:
     observations: Iterable[Observation]
-    dset: Optional[kwcoco.CocoDataset]
+    # dset: Optional[kwcoco.CocoDataset]
+    dset: Any  # omg, I can't believe type errors are breaking runtime now. I must have some weird IPython package installed that does that.
     vidid: Optional[int] = None
     track_id: Optional[int] = None
 

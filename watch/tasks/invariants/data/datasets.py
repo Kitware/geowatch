@@ -96,8 +96,10 @@ class gridded_dataset(torch.utils.data.Dataset):
         super().__init__()
 
         # initialize dataset
+        print('load dataset')
         self.coco_dset: kwcoco.CocoDataset = kwcoco.CocoDataset.coerce(coco_dset)
 
+        print('filter dataset')
         # Filter out worldview images (better to use subset than remove)
         images: kwcoco.coco_objects1d.Images = self.coco_dset.images()
         flags = [s != 'WV' for s in images.lookup('sensor_coarse')]
@@ -111,6 +113,7 @@ class gridded_dataset(torch.utils.data.Dataset):
 
         NEW_GRID = 1
         if NEW_GRID:
+            print('make grid')
             from watch.tasks.fusion.datamodules.kwcoco_video_data import sample_video_spacetime_targets
             sample_grid = sample_video_spacetime_targets(
                 self.coco_dset, window_dims=window_dims,
@@ -124,6 +127,7 @@ class gridded_dataset(torch.utils.data.Dataset):
             samples = sample_grid['targets']
             for tr in samples:
                 tr['vidid'] = tr['video_id']  # hack
+            print('made grid')
         else:
             grid = self.sampler.new_sample_grid(**{
                 'task': 'video_detection',
@@ -137,6 +141,7 @@ class gridded_dataset(torch.utils.data.Dataset):
 
         # vidid_to_patches = ub.group_items(samples, key=lambda x: x['vidid'])
         # self.vidid_to_patches = vidid_to_patches
+        print('build patches')
         grouped = ub.group_items(
                 samples,
                 lambda x: tuple(
@@ -170,6 +175,7 @@ class gridded_dataset(torch.utils.data.Dataset):
         self.bands = "|".join(self.bands)
 
         # define augmentations
+        print('build augs')
         additional_targets = dict()
         self.num_images = num_images
 
@@ -204,6 +210,7 @@ class gridded_dataset(torch.utils.data.Dataset):
         else:
             self.positive_indices = [0, 1, 2, 3]
             self.ignore_indices = [6]
+        print('finished dataset init')
 
     def __len__(self):
         return len(self.patches)
