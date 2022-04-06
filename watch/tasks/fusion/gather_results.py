@@ -960,7 +960,8 @@ def gather_measures(cmdline=False, **kwargs):
             _writefig(fig5, out_dpath, 'salient_ap_curve.png', figsize, verbose, tight=True)
         # print(best_per_expt.sort_values('mAP').to_string())
 
-    if True:
+    if 0:
+        # Make robust
         resource_rows = []
         # Resource scatter plots
         for r in results_list2:
@@ -975,7 +976,9 @@ def gather_measures(cmdline=False, **kwargs):
             fig.clf()
             ax = fig.gca()
             x = 'total_hours'
-            x = 'co2_kg'
+            # x = 'co2_kg'
+            # x = 'vram_gb'
+            x = 'iters_per_second'
             y = 'salient_AP'
             text_column = ['pred_tta_fliprot', 'pred_tta_time', 'pred_chip_overlap']
             ax = sns.scatterplot(data=resource_df, x=x, y=y, ax=ax)

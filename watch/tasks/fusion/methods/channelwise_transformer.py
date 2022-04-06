@@ -1099,31 +1099,33 @@ class MultimodalTransformer(pl.LightningModule):
         outputs = {}
 
         item_losses = []
+        import xdev
+        with xdev.embed_on_exception_context:
 
-        # Initialize truth and probs for each head / item that will be stacked
-        batch_head_truths = {k: [] for k in self.heads.keys()}
-        batch_head_probs = {k: [] for k in self.heads.keys()}
-        skip_flags = []
-        for item in batch:
-            # Skip
-            if item is None:
-                skip_flags.append(True)
-                continue
-            skip_flags.append(False)
-            probs, item_loss_parts, item_truths = self.forward_item(item, with_loss=with_loss)
-            # with xdev.embed_on_exception_context:
-            if with_loss:
-                item_losses.append(item_loss_parts)
-                if not self.decouple_resolution:
-                    # TODO: fixme decouple_res
-                    for k, v in batch_head_truths.items():
-                        v.append(item_truths[k])
-            # Append the item result to the batch outputs
-            for k, v in probs.items():
-                batch_head_probs[k].append(v)
+            # Initialize truth and probs for each head / item that will be stacked
+            batch_head_truths = {k: [] for k in self.heads.keys()}
+            batch_head_probs = {k: [] for k in self.heads.keys()}
+            skip_flags = []
+            for item in batch:
+                # Skip
+                if item is None:
+                    skip_flags.append(True)
+                    continue
+                skip_flags.append(False)
+                probs, item_loss_parts, item_truths = self.forward_item(item, with_loss=with_loss)
+                # with xdev.embed_on_exception_context:
+                if with_loss:
+                    item_losses.append(item_loss_parts)
+                    if not self.decouple_resolution:
+                        # TODO: fixme decouple_res
+                        for k, v in batch_head_truths.items():
+                            v.append(item_truths[k])
+                # Append the item result to the batch outputs
+                for k, v in probs.items():
+                    batch_head_probs[k].append(v)
 
-        if all(skip_flags):
-            return None
+            if all(skip_flags):
+                return None
 
         if 'change' in batch_head_probs:
             outputs['change_probs'] = batch_head_probs['change']
