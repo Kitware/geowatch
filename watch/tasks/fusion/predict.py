@@ -712,8 +712,9 @@ def predict(cmdline=False, **kwargs):
             'device_capabilities': capabilities,
             'device_multi_processor_count': device_props.multi_processor_count,
         }
-    except Exception:
-        device_info = None
+    except Exception as ex:
+        print('ex = {!r}'.format(ex))
+        device_info = str(ex)
 
     try:
         from watch.utils import util_hardware
@@ -722,10 +723,11 @@ def predict(cmdline=False, **kwargs):
             # Get information about disk used in this process
             disk_info = util_hardware.disk_info_of_path(test_coco_dataset.fpath)
             system_info['disk_info'] = disk_info
-        except Exception:
-            pass
-    except Exception:
-        system_info = None
+        except Exception as ex:
+            print('ex = {!r}'.format(ex))
+    except Exception as ex:
+        print('ex = {!r}'.format(ex))
+        system_info = str(ex)
 
     if emissions_tracker is not None:
         co2_kg = emissions_tracker.stop()

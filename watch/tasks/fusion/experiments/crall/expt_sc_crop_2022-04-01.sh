@@ -39,7 +39,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
             --test_dataset="$VALI_FPATH" \
-            --skip_existing=True --backend=slurm --run=0 
+            --skip_existing=True --backend=tmux --run=0 
 
 
     #################################
