@@ -960,7 +960,7 @@ def gather_measures(cmdline=False, **kwargs):
             _writefig(fig5, out_dpath, 'salient_ap_curve.png', figsize, verbose, tight=True)
         # print(best_per_expt.sort_values('mAP').to_string())
 
-    if 1:
+    if 0:
         # Make robust
         resource_rows = []
         # Resource scatter plots

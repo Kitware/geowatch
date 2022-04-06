@@ -11,7 +11,7 @@ from .data.datasets import gridded_dataset
 from watch.utils.lightning_ext import util_globals
 from watch.utils.lightning_ext import util_device
 from .segmentation_model import segmentation_model as seg_model
-from watch.utils import util_kwimage
+from watch.utils import util_kwimage  # NOQA
 
 
 class predict(object):
@@ -436,7 +436,7 @@ if __name__ == '__main__':
     SeeAlso:
         ../../cli/prepare_teamfeats.py
 
-        # Team Features on Drop2
+        # Team Features on Drop3
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10
         python -m watch.cli.prepare_teamfeats \
@@ -446,7 +446,7 @@ if __name__ == '__main__':
             --with_materials=0  \
             --with_invariants=1 \
             --do_splits=0 \
-            --gres=0 --backend=serial --run=0
+            --gres=0 --backend=serial --run=1
 
     CommandLine:
         python -m watch.tasks.template.predict --help

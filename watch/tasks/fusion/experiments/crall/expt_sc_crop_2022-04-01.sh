@@ -48,7 +48,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
     ls "$DVC_DPATH"/models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json
     (cd "$DVC_DPATH" && dvc add models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json)
-    git commit -am "add measures from $HOSTNAME" && git push
+    git commit -am "add measures from $HOSTNAME" && git pull && git push
     (cd "$DVC_DPATH" && dvc push -r aws -R models/fusion/eval3_sc_candidates/eval)
 
     

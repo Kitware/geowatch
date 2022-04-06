@@ -69,16 +69,20 @@ schedule-prediction-and-evlauation(){
     EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+    # The gpus flag does not work for the slurm backend. (Help wanted)
+    TMUX_GPUS="0,1"
+    TMUX_GPUS="0,"
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0,1" \
+            --gpus="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*V3*.pt" \
             --test_dataset="$VALI_FPATH" \
-            --run=0 --skip_existing=True --backend=slurm
+            --run=1 --skip_existing=True --backend=tmux
 
     # Be sure to DVC add the eval results after!
     DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     cd "$DVC_DPATH" 
     ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
+    ls -al models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json | grep -v ' \-> '
     du -shL models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json | sort -h
     (cd "$DVC_DPATH" && dvc add models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json)
     (cd "$DVC_DPATH" && dvc push -r aws -R models/fusion/eval3_candidates/eval)
