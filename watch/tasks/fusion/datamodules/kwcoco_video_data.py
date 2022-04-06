@@ -2108,17 +2108,15 @@ class KWCocoVideoDataset(data.Dataset):
         # If we are augmenting
         fliprot_params = tr_.get('fliprot_params', None)
         if fliprot_params is not None:
-            import xdev
-            with xdev.embed_on_exception_context:
-                for frame_item in frame_items:
-                    frame_modes = frame_item['modes']
-                    for mode_key in list(frame_modes.keys()):
-                        mode_data = frame_modes[mode_key]
-                        frame_modes[mode_key] = fliprot(mode_data, **fliprot_params, axes=[1, 2])
-                    for key in truth_keys:
-                        data = frame_item.get(key, None)
-                        if data is not None:
-                            frame_item[key] = fliprot(data, **fliprot_params, axes=[1, 2])
+            for frame_item in frame_items:
+                frame_modes = frame_item['modes']
+                for mode_key in list(frame_modes.keys()):
+                    mode_data = frame_modes[mode_key]
+                    frame_modes[mode_key] = fliprot(mode_data, **fliprot_params, axes=[1, 2])
+                for key in truth_keys:
+                    data = frame_item.get(key, None)
+                    if data is not None:
+                        frame_item[key] = fliprot(data, **fliprot_params, axes=[-2, -1])
 
         # Convert data to torch
         for frame_item in frame_items:
