@@ -700,18 +700,23 @@ def predict(cmdline=False, **kwargs):
         writer_queue.wait_until_finished()
 
     try:
-        device_props = torch.cuda.get_device_properties(device)
-        capabilities = (device_props.multi_processor_count, device_props.minor)
         device_info = {
-            'total_vram': device_props.total_memory,
-            'reserved_vram': torch.cuda.memory_reserved(device),
-            'allocated_vram': torch.cuda.memory_allocated(device),
             'device_index': device.index,
             'device_type': device.type,
-            'device_name': device_props.name,
-            'device_capabilities': capabilities,
-            'device_multi_processor_count': device_props.multi_processor_count,
         }
+        try:
+            device_props = torch.cuda.get_device_properties(device)
+            capabilities = (device_props.multi_processor_count, device_props.minor)
+            device_info.update({
+                'device_name': device_props.name,
+                'total_vram': device_props.total_memory,
+                'reserved_vram': torch.cuda.memory_reserved(device),
+                'allocated_vram': torch.cuda.memory_allocated(device),
+                'device_capabilities': capabilities,
+                'device_multi_processor_count': device_props.multi_processor_count,
+            })
+        except Exception:
+            pass
     except Exception as ex:
         print('ex = {!r}'.format(ex))
         device_info = str(ex)
