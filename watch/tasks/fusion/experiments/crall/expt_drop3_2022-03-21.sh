@@ -993,7 +993,7 @@ KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
-
+INITIAL_STATE_V323="$DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
 CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
 INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
 EXPERIMENT_NAME=Drop3_TeamFeats_LM_xfer323_V324
@@ -1018,6 +1018,7 @@ python -m watch.tasks.fusion.fit \
     --patience=160 \
     --num_workers=0 \
     --dist_weights=True \
+    --chip_size=256 \
     --time_steps=11 \
     --channels="$CHANNELS" \
     --time_sampling=soft2+distribute \
@@ -1047,6 +1048,7 @@ CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,f
 INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
 EXPERIMENT_NAME=Drop3_TeamFeats_LM_xfer323_V325
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+INITIAL_STATE_V323="$DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
 python -m watch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
@@ -1057,7 +1059,7 @@ python -m watch.tasks.fusion.fit \
     --channels="$CHANNELS" \
     --init="$INITIAL_STATE" \
     --class_loss='focal' \
-    --saliency_loss='focal' \
+    --saliency_loss='dicefocal' \
     --global_change_weight=0.00 \
     --global_class_weight=0.00 \
     --global_saliency_weight=1.00 \
@@ -1068,7 +1070,7 @@ python -m watch.tasks.fusion.fit \
     --patience=160 \
     --num_workers=4 \
     --dist_weights=0 \
-    --time_steps=11 \
+    --time_steps=9 \
     --channels="$CHANNELS" \
     --time_sampling=soft2+distribute \
     --time_span=6m \
@@ -1176,6 +1178,7 @@ python -m watch.tasks.fusion.fit \
     --neg_to_pos_ratio=0.2 \
     --max_epochs=160 \
     --patience=160 \
+    --chip_size=256 \
     --num_workers=4 \
     --dist_weights=True \
     --time_steps=11 \

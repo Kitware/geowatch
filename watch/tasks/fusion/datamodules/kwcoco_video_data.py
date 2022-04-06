@@ -2509,12 +2509,15 @@ class KWCocoVideoDataset(data.Dataset):
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels)
             >>> index = len(self) // 4
             >>> item = self[index]
+            >>> fliprot_params = item['tr'].get('fliprot_params', None)
             >>> # Calculate the probability of change for each frame
             >>> item_output = {}
             >>> change_prob_list = []
             >>> for _ in range(1, sample_shape[0]):
             >>>     change_prob = kwimage.Heatmap.random(
             >>>         dims=sample_shape[1:3], classes=1).data['class_probs'][0]
+            >>>     if fliprot_params:
+            >>>         change_prob = fliprot(change_prob, **fliprot_params)
             >>>     change_prob_list += [change_prob]
             >>> change_probs = np.stack(change_prob_list)
             >>> item_output['change_probs'] = change_probs  # first frame does not have change
@@ -2524,7 +2527,10 @@ class KWCocoVideoDataset(data.Dataset):
             >>> for _ in range(0, sample_shape[0]):
             >>>     class_prob = kwimage.Heatmap.random(
             >>>         dims=sample_shape[1:3], classes=list(sampler.classes)).data['class_probs']
-            >>>     class_prob_list += [einops.rearrange(class_prob, 'c h w -> h w c')]
+            >>>     class_prob_ = einops.rearrange(class_prob, 'c h w -> h w c')
+            >>>     if fliprot_params:
+            >>>         class_prob_ = fliprot(class_prob_, **fliprot_params)
+            >>>     class_prob_list += [class_prob_]
             >>> class_probs = np.stack(class_prob_list)
             >>> item_output['class_probs'] = class_probs  # first frame does not have change
             >>> #binprobs[0][:] = 0  # first change prob should be all zeros
@@ -2536,6 +2542,11 @@ class KWCocoVideoDataset(data.Dataset):
             >>> kwplot.imshow(canvas, fnum=1, pnum=(1, 2, 1))
             >>> kwplot.imshow(canvas2, fnum=1, pnum=(1, 2, 2))
             >>> kwplot.show_if_requested()
+
+        Ignore:
+            import netharn as nh
+            nh.data.collate._debug_inbatch_shapes(item)
+            nh.data.collate._debug_inbatch_shapes(item_output)
 
         Example:
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)

@@ -159,7 +159,7 @@ def predict(cmdline=False, **kwargs):
         >>> # Predict via that model
         >>> predict_kwargs = kwargs = {
         >>>     'package_fpath': package_fpath,
-        >>>     'pred_dataset': results_path / 'pred.kwcoco.json',
+        >>>     'pred_dataset': ub.Path(results_path) / 'pred.kwcoco.json',
         >>>     'test_dataset': test_dset.fpath,
         >>>     'datamodule': 'KWCocoVideoDataModule',
         >>>     'batch_size': 1,
