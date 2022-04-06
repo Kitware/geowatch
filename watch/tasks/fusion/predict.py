@@ -6,7 +6,7 @@ TODO:
     - [ ] Prediction caching?
 """
 import torch  # NOQA
-import pathlib
+# import pathlib
 import ubelt as ub
 import numpy as np
 from os.path import join
@@ -581,15 +581,15 @@ def predict(cmdline=False, **kwargs):
         # prog.set_extra(' <will populate stats after first video>')
         _batch_iter = iter(prog)
         for orig_batch in _batch_iter:
-            batch_regions = []
+            batch_trs = []
             # Move data onto the prediction device, grab spacetime region info
             fixed_batch = []
             for item in orig_batch:
                 if item is None:
                     continue
-                batch_regions.append({
+                batch_trs.append({
                     'space_slice': tuple(item['tr']['space_slice']),
-                    'in_gids': [frame['gid'] for frame in item['frames']],
+                    'gids': [frame['gid'] for frame in item['frames']],
                     'fliprot_params': item['tr'].get('fliprot_params', None)
                 })
                 position_tensors = item.get('positional_tensors', None)
@@ -660,21 +660,25 @@ def predict(cmdline=False, **kwargs):
                 else:
                     predicted_frame_slice = slice(None)
 
-                for bx, region_info in enumerate(batch_regions):
-                    # TODO: if the predictions are downsampled wrt to the input
-                    # images, we need to determine what that transform is so we can
-                    # correctly warp the predictions back into image space.
+                # TODO: if the predictions are downsampled wrt to the input
+                # images, we need to determine what that transform is so we can
+                # correctly (i.e with crops) warp the predictions back into
+                # image space.
 
-                    item_head_probs = head_probs[bx]
+                num_batches = len(batch_trs)
+
+                for bx in range(num_batches):
+                    tr: dict = batch_trs[bx]
+                    item_head_probs: torch.Tensor = head_probs[bx]
                     # Keep only the channels we want to write to disk
                     item_head_relevant_probs = item_head_probs[..., chan_keep_idxs]
                     bin_probs = item_head_relevant_probs.detach().cpu().numpy()
 
                     # Get the spatio-temporal subregion this prediction belongs to
-                    out_gids = region_info['in_gids'][predicted_frame_slice]
-                    space_slice = region_info['space_slice']
+                    out_gids: list[int] = tr['gids'][predicted_frame_slice]
+                    space_slice: tuple[slice, slice] = tr['space_slice']
 
-                    fliprot_params = region_info['fliprot_params']
+                    fliprot_params: dict = tr['fliprot_params']
                     # Update the stitcher with this windowed prediction
                     for gid, probs in zip(out_gids, bin_probs):
                         if fliprot_params is not None:
@@ -1187,6 +1191,12 @@ if __name__ == '__main__':
     DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
     (cd $DVC_DPATH && dvc pull -r aws $DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=19-step=13659-v1.pt.dvc)
 
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+    MODEL_FNAME=models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+    MODEL_FPATH=$DVC_DPATH/$MODEL_FNAME
+    smartwatch model_info $MODEL_FPATH
+    (cd $DVC_DPATH && dvc pull -r aws $MODEL_FNAME)
+
     # Small datset for testing
     kwcoco subset \
         --src $DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali.kwcoco.json \
@@ -1305,17 +1315,19 @@ if __name__ == '__main__':
             --tta_fliprot=0,1 \
             --tta_time=0,1 \
             --chip_overlap=0,0.3 \
-            --run=1 --backend=slurm
+            --draw_heatmaps=1 \
+            --run=1 --backend=slurm \
+            --enable_eval=redo
 
 
     DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
     MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json
 
     python -m watch.tasks.fusion.gather_results \
-        --measure_globstr="$DVC_DPATH/_tmp/smalltest" \
+        --measure_globstr="$DVC_DPATH/_tmp/smalltest/eval/*/*/*/*/eval/curves/measures2.json" \
         --out_dpath="$DVC_DPATH/_tmp/smalltest/_agg_results" \
         --dset_group_key="*" --show=True \
-        --classes_of_interest "Site Preparation" "Active Construction"
+        --classes_of_interest "Site Preparation" "Active Construction" \
 
     """
     main()

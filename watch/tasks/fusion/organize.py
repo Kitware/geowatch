@@ -55,9 +55,11 @@ def suggest_paths(test_dataset=None, package_fpath=None, workdir=None,
     if package_fpath is not None:
 
         if pred_cfg is None:
-            pred_cfg_dname = 'predcfg_unknown'
+            pred_cfgstr = 'unknown'
         else:
-            pred_cfg_dname = 'predcfg_' + ub.hash_data(pred_cfg)[0:8]
+            pred_cfgstr = ub.hash_data(pred_cfg)[0:8]
+
+        pred_cfg_dname = 'predcfg_' + pred_cfgstr
 
         package_fpath = ub.Path(package_fpath)
         pred_dname = 'pred_' + package_fpath.stem
@@ -100,6 +102,9 @@ def suggest_paths(test_dataset=None, package_fpath=None, workdir=None,
         suggestions['pred_dataset'] = os.fspath(pred_dataset)
 
         suggestions['eval_dpath'] = os.fspath(eval_dpath)
+
+        suggestions['package_cfgstr'] = package_fpath.stem
+        suggestions['pred_cfgstr'] = pred_cfgstr
 
     # TODO: make this return a dict, and handle jsonification
     # in the CLI main

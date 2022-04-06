@@ -66,6 +66,9 @@ class ScheduleEvaluationConfig(scfg.Config):
         'sidecar2': scfg.Value(True, help='if True uses parallel sidecar pattern, otherwise nested'),
 
         'shuffle_jobs': scfg.Value(True, help='if True, shuffles the jobs so they are submitted in a random order'),
+
+        'iarpa_eval': scfg.Value(False, help='if True, enable iapra evalaution'),
+        'annotations_dpath': scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval'),
     }
 
 
@@ -486,6 +489,33 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 queue.submit(eval_command, depends=pred_job, name=name, cpus=2,
                              partition=config['partition'], mem=config['mem'])
             # TODO: memory
+
+        if config['iarpa_eval']:
+            annotations_dpath = config['annotations_dpath']
+            if annotations_dpath is None:
+                annotations_dpath = dvc_dpath / 'annotations'
+
+            threshold_basis = [0.1, 0.2, 0.3]  # hack: todo parametarize
+            for thresh in threshold_basis:
+                from watch.tasks.fusion import schedule_iarpa_eval
+                track_cfg = {
+                    'thresh': thresh,
+                }
+                pred_fpath = suggestions['pred_dataset']
+                track_suggestions = schedule_iarpa_eval._suggest_track_paths(
+                    pred_fpath, track_cfg)
+                name = '-'.join(
+                    suggestions['package_cfgstr'],
+                    suggestions['pred_cfgstr'],
+                    track_suggestions['track_cfgstr'],
+                )
+                sites_dpath = track_suggestions['sites_dpath']
+                iarpa_eval_dpath = track_suggestions['iarpa_eval_dpath']
+                job, track_info = schedule_iarpa_eval._submit_bas_track_job(
+                    pred_fpath, sites_dpath, thresh)
+
+                job, iarpa_eval_info = schedule_iarpa_eval._submit_iarpa_eval_job(
+                    sites_dpath, iarpa_eval_dpath, annotations_dpath, name)
 
     print('queue = {!r}'.format(queue))
     # print(f'{len(queue)=}')

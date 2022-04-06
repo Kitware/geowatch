@@ -323,7 +323,7 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
     return activity_table, confusion_matrix
 
 
-def merge_metrics_results(region_dpaths, anns_root, out_dpath=None):
+def merge_metrics_results(region_dpaths, anns_root, merge_dpath):
     '''
     Merge metrics results from multiple regions.
 
@@ -333,21 +333,17 @@ def merge_metrics_results(region_dpaths, anns_root, out_dpath=None):
             phase_activity/ [optional]
             time_activity/ [TBD, not scored yet]
         anns_root: Path to GT annotations repo
-        out_dpath: Directory to save merged results. Existing contents will
-            be removed.
-            Default is {common root of region_dpaths}/merged/
+        merge_dpath: Directory to save merged results.
+            Existing contents will be removed.
 
     Returns:
         (bas_df, sc_df)
         Two pd.DataFrames that are saved as
             {out_dpath}/(bas|sc)_scoreboard_df.pkl
     '''
-
-    if out_dpath is None:
-        out_dpath = os.path.join(os.path.commonpath(region_dpaths), 'merged')
-    out_dpath = ub.Path(out_dpath)
-    assert out_dpath not in region_dpaths
-    out_dpath.delete().ensuredir()
+    merge_dpath = ub.Path(merge_dpath)
+    assert merge_dpath not in region_dpaths
+    merge_dpath.delete().ensuredir()
 
     results = [
         RegionResult.from_dpath_and_anns_root(pth, anns_root)
@@ -360,14 +356,14 @@ def merge_metrics_results(region_dpaths, anns_root, out_dpath=None):
 
     bas_results = [r for r in results if r.bas_dpath]
     bas_df, bas_concat_df = merge_bas_metrics_results(bas_results)
-    bas_df.to_pickle(os.path.join(out_dpath, 'bas_scoreboard_df.pkl'))
+    bas_df.to_pickle(os.path.join(merge_dpath, 'bas_scoreboard_df.pkl'))
     #
     # merge SC
     #
 
     sc_df, sc_cm = merge_sc_metrics_results([r for r in results if r.sc_dpath])
-    sc_df.to_pickle(os.path.join(out_dpath, 'sc_activity_df.pkl'))
-    sc_cm.to_pickle(os.path.join(out_dpath, 'sc_confusion_df.pkl'))
+    sc_df.to_pickle(os.path.join(merge_dpath, 'sc_activity_df.pkl'))
+    sc_cm.to_pickle(os.path.join(merge_dpath, 'sc_confusion_df.pkl'))
 
     #
     # write summary in readable form
@@ -395,7 +391,7 @@ def merge_metrics_results(region_dpaths, anns_root, out_dpath=None):
         'temporal FAR', 'images FAR'], axis=1)
     print(concise_best_bas_rows.to_string())
 
-    summary_path = os.path.join(out_dpath, 'summary.csv')
+    summary_path = os.path.join(merge_dpath, 'summary.csv')
     if os.path.isfile(summary_path):
         os.remove(summary_path)
     with open(summary_path, 'a+') as f:
@@ -410,7 +406,7 @@ def merge_metrics_results(region_dpaths, anns_root, out_dpath=None):
     json_data['sc_cm'] = json.loads(sc_cm.to_json(orient='table', indent=2))
     json_data['sc_df'] = json.loads(sc_df.to_json(orient='table', indent=2))
 
-    summary_path2 = out_dpath / 'summary2.json'
+    summary_path2 = merge_dpath / 'summary2.json'
     with open(summary_path2, 'w') as f:
         json.dump(json_data, f, indent=4)
 
@@ -516,6 +512,8 @@ def main(args):
         Path to a local copy of the metrics framework,
         https://smartgitlab.com/TE/metrics-and-test-framework.
         If None, use the environment variable METRICS_DPATH.
+        DEPRECATED. Simply ensure iarpa_smart_metrics is pip installed
+                    in your virutalenv.
         ''')
     # https://stackoverflow.com/a/49351471
     parser.add_argument(
@@ -545,6 +543,9 @@ def main(args):
         non-persistant directory
         ''')
 
+    parser.add_argument('--name', default='unknown', help=(
+        'Short name for the algorithm used to generate the model'))
+
     parser.add_argument(
         '--use_cache', default=False, action='store_true', help=ub.paragraph(
             '''
@@ -553,10 +554,12 @@ def main(args):
             '''))
 
     args, _ = parser.parse_known_args(args)
+    print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=2)))
 
     # load sites
     sites = []
     for site in args.sites:
+        print('site = {!r}'.format(site))
         try:
             if os.path.isfile(site):
                 site = json.load(open(site))
@@ -567,6 +570,8 @@ def main(args):
                                        e.doc[:100] + '...', e.pos)
         sites.append(site)
 
+    name = args.name
+
     # normalize paths
     if args.gt_dpath is not None:
         gt_dpath = ub.Path(args.gt_dpath).absolute()
@@ -576,12 +581,6 @@ def main(args):
         gt_dpath = dvc_dpath / 'annotations'
         print(f'gt_dpath unspecified, defaulting to {gt_dpath=}')
     assert gt_dpath.is_dir(), gt_dpath
-    if args.metrics_dpath is not None:
-        metrics_dpath = os.path.abspath(args.metrics_dpath)
-    else:
-        metrics_dpath = os.environ['METRICS_DPATH']
-        print(f'metrics_dpath unspecified, defaulting to {metrics_dpath=}')
-    assert os.path.isdir(metrics_dpath), metrics_dpath
     if args.out_dir is not None:
         os.makedirs(args.out_dir, exist_ok=True)
 
@@ -605,8 +604,17 @@ def main(args):
         import iarpa_smart_metrics
         METRICS_VERSION = version.Version(iarpa_smart_metrics.__version__)
     except Exception:
-        from packaging import version
-        METRICS_VERSION = version.Version('0.0.0')
+        raise AssertionError(
+            'The iarpa_smart_metrics package should be pip installed '
+            'in your virtualenv')
+        # from packaging import version
+        # METRICS_VERSION = version.Version('0.0.0')
+        # if args.metrics_dpath is not None:
+        #     metrics_dpath = os.path.abspath(args.metrics_dpath)
+        # else:
+        #     metrics_dpath = os.environ['METRICS_DPATH']
+        #     print(f'metrics_dpath unspecified, defaulting to {metrics_dpath=}')
+        # assert os.path.isdir(metrics_dpath), metrics_dpath
 
     for region_id, region_sites in grouped_sites.items():
 
@@ -645,40 +653,44 @@ def main(args):
                 cache_dpath = 'None'
 
             disable_viz_flags = [
+                # '--no-viz-region',  # we do want this enabled
                 '--no-viz-slices',
                 '--no-viz-detection-table',
                 '--no-viz-comparison-table',
-                '--no-viz-activity-metrics',
                 '--no-viz-associate-metrics',
+                '--no-viz-activity-metrics',
             ]
             disable_viz_flags_str = ' '.join(disable_viz_flags)
 
             # run metrics framework
+            import shlex
             cmd = ub.codeblock(fr'''
                 {virtualenv_cmd} &&
-                python {os.path.join(metrics_dpath, 'run_evaluation.py')} \
+                python -m iarpa_smart_metrics.run_evaluation \
                     --roi {region_id} \
-                    --gt_path {gt_dpath / 'site_models'} \
-                    --rm_path {gt_dpath / 'region_models'} \
-                    --sm_path {site_dpath} \
+                    --gt_dir {gt_dpath / 'site_models'} \
+                    --rm_dir {gt_dpath / 'region_models'} \
+                    --sm_dir {site_sub_dpath} \
                     --image_dir {image_dpath} \
                     --output_dir {out_dir} \
                     --cache_dir {cache_dpath} \
+                    --name {shlex.quote(name)} \
                     {disable_viz_flags_str}
                 ''')
         else:
+            raise AssertionError('Use new version of iarpa_smart_metrics')
             # run metrics framework
-            cmd = ub.codeblock(fr'''
-                {virtualenv_cmd} &&
-                python {os.path.join(metrics_dpath, 'run_evaluation.py')} \
-                    --roi {region_id} \
-                    --gt_path {gt_dpath / 'site_models'} \
-                    --rm_path {gt_dpath / 'region_models'} \
-                    --sm_path {site_dpath} \
-                    --image_dir {image_dpath} \
-                    --output_dir {out_dir} \
-                    --cache_dir {cache_dpath}
-                ''')
+            # cmd = ub.codeblock(fr'''
+            #     {virtualenv_cmd} &&
+            #     python {os.path.join(metrics_dpath, 'run_evaluation.py')} \
+            #         --roi {region_id} \
+            #         --gt_path {gt_dpath / 'site_models'} \
+            #         --rm_path {gt_dpath / 'region_models'} \
+            #         --sm_path {site_dpath} \
+            #         --image_dir {image_dpath} \
+            #         --output_dir {out_dir} \
+            #         --cache_dir {cache_dpath}
+            #     ''')
 
         (out_dir / 'invocation.sh').write_text(cmd)
 
@@ -689,8 +701,10 @@ def main(args):
             print('error in metrics framework, probably due to zero '
                   'TP site matches.')
 
+    main_out_dir = ub.Path(args.out_dir)
     if args.merge and out_dirs:
-        merge_metrics_results(out_dirs, gt_dpath)
+        merge_dpath = main_out_dir / 'merged'
+        merge_metrics_results(out_dirs, gt_dpath, merge_dpath)
     print('out_dirs = {}'.format(ub.repr2(out_dirs, nl=1)))
 
 

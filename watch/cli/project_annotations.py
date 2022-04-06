@@ -916,14 +916,16 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
             propogated_annotations.extend(site_anns)
             drawable_region_sites.append(drawable_summary)
 
-        drawable_region_sites = sorted(
-            drawable_region_sites,
-            key=lambda drawable_summary: (
-                min([r['site_row_datetime'] for r in drawable_summary])
-                if len(drawable_summary) else
-                float('inf')
+        import xdev
+        with xdev.embed_on_exception_context:
+            drawable_region_sites = sorted(
+                drawable_region_sites,
+                key=lambda drawable_summary: (
+                    min([r['site_row_datetime'] for r in drawable_summary])
+                    if len(drawable_summary) else
+                    float('inf')
+                )
             )
-        )
 
         all_drawable_infos.append({
             'drawable_region_sites': drawable_region_sites,
