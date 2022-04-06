@@ -391,7 +391,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
         package_fpath = info['fpath']
         suggestions = info['suggestions']
         pred_cfg = info['pred_cfg']
-        print(id(pred_cfg))
         pred_dataset_fpath = ub.Path(suggestions['pred_dataset'])  # NOQA
         eval_metrics_fpath = ub.Path(suggestions['eval_dpath']) / 'curves/measures2.json'
         eval_metrics_dvc_fpath = ub.Path(suggestions['eval_dpath']) / 'curves/measures2.json.dvc'
@@ -418,7 +417,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
         # import ubelt as ub
         # ub.util_hash._HASHABLE_EXTENSIONS.register(pathlib.Path)( lambda x: (b'PATH', str))
         # import os
-        print('pred_cfg = {!r}'.format(pred_cfg))
         name_suffix = '_' + ub.hash_data(str(package_fpath))[0:8] + '_' + ub.hash_data(pred_cfg)[0:8]
 
         pred_job = None
