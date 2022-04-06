@@ -1688,11 +1688,11 @@ def coco_channel_stats(coco_dset):
     Return information about what channels are available in the dataset
 
     Example:
-        >>> from watch.utils import kwcoco_extensions
         >>> import kwcoco
         >>> import ubelt as ub
         >>> import watch
         >>> coco_dset = watch.coerce_kwcoco('vidshapes-watch')
+        >>> from watch.utils import kwcoco_extensions
         >>> info = kwcoco_extensions.coco_channel_stats(coco_dset)
         >>> print(ub.repr2(info, nl=3))
     """

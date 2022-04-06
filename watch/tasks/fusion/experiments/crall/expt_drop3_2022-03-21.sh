@@ -48,7 +48,7 @@ gather-checkpoints-repackage(){
         --storage_dpath="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages" \
         --train_dpath="$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/runs/*/lightning_logs" \
         --push_jobs=8 \
-        --mode=interact
+        --mode=commit
 }
 
 
@@ -1067,6 +1067,7 @@ python -m watch.tasks.fusion.fit \
     --weight_decay=1e-5 \
     --accumulate_grad_batches=4 \
     --max_epochs=160 \
+    --chip_size=288 \
     --patience=160 \
     --num_workers=4 \
     --dist_weights=0 \
@@ -1096,9 +1097,10 @@ KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
-CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+CHANNELS="matseg_0|matseg_1|matseg_2|matseg_3,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
 INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
 EXPERIMENT_NAME=Drop3_TeamFeats_LM_scratch_V326
+INITIAL_STATE_BASELINE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/BASELINE_EXPERIMENT_V001/BASELINE_EXPERIMENT_V001_epoch=20-step=109829-v1.pt
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
@@ -1120,6 +1122,7 @@ python -m watch.tasks.fusion.fit \
     --patience=160 \
     --num_workers=4 \
     --dist_weights=True \
+    --chip_size=288 \
     --time_steps=11 \
     --channels="$CHANNELS" \
     --time_sampling=soft2+distribute \
@@ -1131,10 +1134,60 @@ python -m watch.tasks.fusion.fit \
     --draw_interval=5m \
     --num_draw=4 \
     --use_centered_positives=True \
-    --normalize_inputs=2048 \
+    --normalize_inputs=8 \
     --stream_channels=16 \
     --temporal_dropout=0.5 \
-    --init="noop" 
+    --init="$INITIAL_STATE_BASELINE" 
+
+export CUDA_VISIBLE_DEVICES=3
+DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+INITIAL_STATE_BASELINE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/BASELINE_EXPERIMENT_V001/BASELINE_EXPERIMENT_V001_epoch=20-step=109829-v1.pt
+CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+EXPERIMENT_NAME=Drop3_TeamFeats_LM_xfer1_v328
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --channels="$CHANNELS" \
+    --class_loss='focal' \
+    --saliency_loss='focal' \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.00 \
+    --global_saliency_weight=1.00 \
+    --learning_rate=1e-4 \
+    --weight_decay=1e-5 \
+    --accumulate_grad_batches=4 \
+    --max_epochs=160 \
+    --patience=160 \
+    --num_workers=0 \
+    --dist_weights=True \
+    --chip_size=224 \
+    --time_steps=15 \
+    --channels="$CHANNELS" \
+    --time_sampling=soft2+distribute \
+    --time_span=6m \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5m \
+    --num_draw=4 \
+    --use_centered_positives=False \
+    --normalize_inputs=2048 \
+    --stream_channels=64 \
+    --temporal_dropout=0.5 \
+    --init="$INITIAL_STATE_BASELINE" 
 
 
 
@@ -1143,8 +1196,6 @@ python -m watch.tasks.fusion.fit \
 
 
 DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
-INITIAL_STATE_BASELINE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/BASELINE_EXPERIMENT_V001/BASELINE_EXPERIMENT_V001_epoch=20-step=109829-v1.pt
-INITIAL_STATE_V323="$DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
 
 export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
@@ -1157,6 +1208,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
 CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
 INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
 EXPERIMENT_NAME=Drop3_TeamFeats_LM_xfer1_V327
+INITIAL_STATE_BASELINE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/BASELINE_EXPERIMENT_V001/BASELINE_EXPERIMENT_V001_epoch=20-step=109829-v1.pt
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
@@ -1199,7 +1251,7 @@ python -m watch.tasks.fusion.fit \
     --init="$INITIAL_STATE_BASELINE" 
 
 
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
@@ -1210,6 +1262,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
 CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
 INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
 EXPERIMENT_NAME=Drop3_TeamFeats_LM_xfer323_V327
+INITIAL_STATE_V323="$DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
@@ -1233,7 +1286,8 @@ python -m watch.tasks.fusion.fit \
     --patience=160 \
     --num_workers=4 \
     --dist_weights=True \
-    --time_steps=11 \
+    --chip_size=288 \
+    --time_steps=10 \
     --channels="$CHANNELS" \
     --time_sampling=soft2+distribute \
     --time_span=3m \
@@ -1250,3 +1304,5 @@ python -m watch.tasks.fusion.fit \
     --multimodal_reduce=mean \
     --temporal_dropout=0.2 \
     --init="$INITIAL_STATE_V323" 
+
+# next is 329
