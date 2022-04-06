@@ -487,7 +487,12 @@ class MultimodalTransformer(pl.LightningModule):
         MODAL_AGREEMENT_CHANS = self.stream_channels
         self.tokenizer = tokenizer
         self.sensor_channel_tokenizers = RobustModuleDict()
-        for s, c in self.unique_sensor_modes:
+
+        # Unique sensor modes obviously isn't very correct here.
+        # We should fix that, but let's hack it so it at least
+        # includes all sensor modes we probably will need.
+        sensor_modes = set(self.unique_sensor_modes.items()) | set(input_stats.items())
+        for s, c in sensor_modes:
             mode_code = kwcoco.FusedChannelSpec.coerce(c)
             # For each mode make a network that should learn to tokenize
             in_chan = mode_code.numel()
@@ -514,6 +519,9 @@ class MultimodalTransformer(pl.LightningModule):
 
             self.sensor_channel_tokenizers[s][c] = tokenize
             in_features_raw = tokenize.out_channels
+
+        # for (s, c), stats in input_stats.items():
+        #     self.sensor_channel_tokenizers[s][c] = tokenize
 
         in_features_pos = 6 * 8   # 6 positional features with 8 dims each (TODO: be robust)
         in_features = in_features_pos + in_features_raw
@@ -1099,33 +1107,31 @@ class MultimodalTransformer(pl.LightningModule):
         outputs = {}
 
         item_losses = []
-        import xdev
-        with xdev.embed_on_exception_context:
 
-            # Initialize truth and probs for each head / item that will be stacked
-            batch_head_truths = {k: [] for k in self.heads.keys()}
-            batch_head_probs = {k: [] for k in self.heads.keys()}
-            skip_flags = []
-            for item in batch:
-                # Skip
-                if item is None:
-                    skip_flags.append(True)
-                    continue
-                skip_flags.append(False)
-                probs, item_loss_parts, item_truths = self.forward_item(item, with_loss=with_loss)
-                # with xdev.embed_on_exception_context:
-                if with_loss:
-                    item_losses.append(item_loss_parts)
-                    if not self.decouple_resolution:
-                        # TODO: fixme decouple_res
-                        for k, v in batch_head_truths.items():
-                            v.append(item_truths[k])
-                # Append the item result to the batch outputs
-                for k, v in probs.items():
-                    batch_head_probs[k].append(v)
+        # Initialize truth and probs for each head / item that will be stacked
+        batch_head_truths = {k: [] for k in self.heads.keys()}
+        batch_head_probs = {k: [] for k in self.heads.keys()}
+        skip_flags = []
+        for item in batch:
+            # Skip
+            if item is None:
+                skip_flags.append(True)
+                continue
+            skip_flags.append(False)
+            probs, item_loss_parts, item_truths = self.forward_item(item, with_loss=with_loss)
+            # with xdev.embed_on_exception_context:
+            if with_loss:
+                item_losses.append(item_loss_parts)
+                if not self.decouple_resolution:
+                    # TODO: fixme decouple_res
+                    for k, v in batch_head_truths.items():
+                        v.append(item_truths[k])
+            # Append the item result to the batch outputs
+            for k, v in probs.items():
+                batch_head_probs[k].append(v)
 
-            if all(skip_flags):
-                return None
+        if all(skip_flags):
+            return None
 
         if 'change' in batch_head_probs:
             outputs['change_probs'] = batch_head_probs['change']

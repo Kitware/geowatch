@@ -1403,8 +1403,9 @@ class KWCocoVideoDataset(data.Dataset):
             >>> channels = '|'.join(sorted(set(ub.flatten([c.channels.fuse().as_list() for c in coco_dset.images().coco_images]))))
             >>> #channels = '|'.join(sorted(set(ub.flatten([kwcoco.ChannelSpec.coerce(c).fuse().as_list() for c in groups.keys()]))))
             >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 256, 256), channels=channels, normalize_perframe=False, true_multimodal=True)
-            >>> self.disable_augmenter = True
+            >>> self.disable_augmenter = False
             >>> index = 0
+            >>> index = self.new_sample_grid['targets'][0]
             >>> item = self[index]
             >>> canvas = self.draw_item(item)
             >>> # xdoctest: +REQUIRES(--show)
