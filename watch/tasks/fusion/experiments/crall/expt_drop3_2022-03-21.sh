@@ -56,6 +56,7 @@ schedule-prediction-and-evlauation(){
 
     DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
     cd "$DVC_DPATH" 
+    git pull
     dvc pull -r aws -R models/fusion/eval3_candidates/packages
 
     # TODO: 
@@ -70,9 +71,9 @@ schedule-prediction-and-evlauation(){
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1" \
-            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*V3*.pt" \
             --test_dataset="$VALI_FPATH" \
-            --run=0 --skip_existing=True --backend=serial
+            --run=1 --skip_existing=True --backend=slurm
 
     # Be sure to DVC add the eval results after!
     DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)

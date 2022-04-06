@@ -31,6 +31,7 @@ WATCH_AUTOHACK_IMPORT_VARIANTS = {
     'variant2': ['pyproj', 'gdal'],   # CI machine
     'variant3': ['geopandas', 'pyproj'],   # delay gdal import
     'none': [],   # no pre-imports
+    '0': [],   # no pre-imports
 }
 
 if ub.argflag('--warntb'):
