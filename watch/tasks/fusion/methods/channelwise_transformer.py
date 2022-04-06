@@ -491,7 +491,7 @@ class MultimodalTransformer(pl.LightningModule):
         # Unique sensor modes obviously isn't very correct here.
         # We should fix that, but let's hack it so it at least
         # includes all sensor modes we probably will need.
-        sensor_modes = set(self.unique_sensor_modes.items()) | set(input_stats.items())
+        sensor_modes = set(self.unique_sensor_modes) | set(input_stats.items())
         for s, c in sensor_modes:
             mode_code = kwcoco.FusedChannelSpec.coerce(c)
             # For each mode make a network that should learn to tokenize
