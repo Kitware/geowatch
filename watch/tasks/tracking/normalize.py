@@ -1,10 +1,9 @@
-import itertools
 import kwcoco
 import kwimage
 import shapely
 import shapely.ops
+import warnings
 from os.path import join
-from progiter import ProgIter
 import numpy as np
 import ubelt as ub
 
@@ -23,49 +22,23 @@ def dedupe_annots(coco_dset):
     '''
     Check for annotations with different aids that are the same geometry
     '''
-    @ub.memoize
-    def geom(ann):
-        return kwimage.Segmentation.coerce(
-            ann['segmentation']).data.to_shapely().buffer(0)
+    annots = coco_dset.annots()
 
-    if 0:
-        # TODO is there already some check like this in dset.add_annotation()?
-        def _eq(ann1, ann2):
-            eq_keys = ['image_id', 'category_id', 'track_id']
-            if any(ann1.get(k) != ann2.get(k) for k in eq_keys):
-                return False
-            if ann1['segmentation'] == ann2['segmentation']:
-                return True
-            return geom(ann1).almost_equals(geom(ann2))
-
-        # this task is finding an equivalence partition of anns using _eq,
-        # which is O(n^2).
-        # if there were a key function, it'd be O(n) using groupby, but
-        # almost_equals() makes this difficult
-        def equivalence_partition(aids):
-            groups = dict()
-            for aid in set(aids):
-                partitioned = False
-                for repr_aid in groups:
-                    if _eq(coco_dset.anns[aid], coco_dset.anns[repr_aid]):
-                        groups[repr_aid].add(aid)
-                        partitioned = True
-                        break
-                if not partitioned:
-                    groups[aid] = set()
-
-        aids_to_remove = itertools.chain.from_iterable(
-            equivalence_partition(coco_dset.anns))
-    else:
-        annots = coco_dset.annots()
-        eq_keys = ['image_id', 'category_id', 'track_id', 'segmentation']
-        groups_dict = ub.group_items(
-            annots.aids,
-            zip(*(map(str, annots.get(k, None)) for k in eq_keys)))
-        aids_to_remove = itertools.chain.from_iterable(
-            aids[1:] for aids in groups_dict.values())
-
-    coco_dset.remove_annotations(aids_to_remove)
+    # NOTE: Using segmentations to dedup with segmentation data is fragile
+    eq_keys = ['image_id', 'category_id', 'track_id', 'segmentation']
+    eq_vals = annots.lookup(eq_keys, None)
+    group_keys = [str(row_vals) for row_vals in zip(*eq_vals.values())]
+    duplicates = ub.find_duplicates(group_keys)
+    if duplicates:
+        dup_idxs = list(ub.flatten([idxs[1:] for idxs in duplicates.values()]))
+        warnings.warn(ub.paragraph(
+            f'''
+            There were {len(duplicates)} annotation groups
+            with {dup_idxs} duplicate annotations based on
+            group keys {eq_keys}
+            '''))
+        aids_to_remove = list(annots.take(dup_idxs))
+        coco_dset.remove_annotations(aids_to_remove, verbose=1)
 
     return coco_dset
 
@@ -89,42 +62,36 @@ def add_geos(coco_dset, overwrite, max_workers=16):
         if None not in coco_dset.annots().get('segmentation_geos', None):
             return coco_dset
 
-    def annotated_band(img):
-        # this field picks out the (probable; heuristic-based)
-        # band that the annotation was actually done on
-        if img['file_name'] is not None:
-            return img
-        aux_ix = img.get('aux_annotated_candidate', 0)
-        if aux_ix is None:
-            aux_ix = 0
-        return img['auxiliary'][aux_ix]
-
-    def fpath(img):
-        return join(coco_dset.bundle_dpath, annotated_band(img)['file_name'])
-
-    # parallelize grabbing img CRS info
-    executor = ub.Executor('thread', max_workers)
-    # optimization: filter to only images containing at least 1 annotation
-    images = coco_dset.images()
-
     def needs_geos(ann):
         return 'segmentation' in ann and (overwrite or
                                           ('segmentation_geos' not in ann))
 
-    annotated_imgs = images.compress(
-        np.array(
-            [any(map(needs_geos, annots.objs)) for annots in images.annots]))
-    infos = {
-        img['id']: executor.submit(geotiff_crs_info, fpath(img))
-        for img in annotated_imgs.objs
-    }
-    for gid, img in ProgIter(zip(annotated_imgs.gids, annotated_imgs.objs),
-                             desc='precomputing geo-segmentations'):
+    # find images containing at least 1 annotation that needs geo coords
+    annots = coco_dset.annots()
+    annots_to_fix = annots.compress(map(needs_geos, annots.objs))
+    gid_to_aids = ub.group_items(annots_to_fix, annots_to_fix.lookup('image_id'))
+    images_to_fix = coco_dset.images(list(gid_to_aids.keys()))
 
-        # vectorize over anns; this does some unnecessary computation
-        annots = coco_dset.annots(gid=gid)
-        assert len(annots) > 0, f'image {gid} should have annotations!'
-        info = infos[gid].result()
+    # parallelize grabbing img CRS info
+    executor = ub.JobPool('thread', max_workers)
+
+    for gid in ub.ProgIter(images_to_fix, desc='submit crs jobs'):
+        coco_img = coco_dset.coco_image(gid)
+        # Hack: find an asset likely to have geoinfo
+        aux = coco_img.find_asset_obj('red|green|blue|panchromatic|pan')
+        fpath = join(coco_img.bundle_dpath, aux['file_name'])
+        job = executor.submit(geotiff_crs_info, fpath)
+        job.gid = gid
+        job.aux = aux
+
+    for job in executor.as_completed(desc='precomputing geo-segmentations'):
+        info = job.result()
+        gid = job.gid
+        aux = job.aux
+        aids = gid_to_aids[gid]
+
+        anns = coco_dset.annots(aids=aids).objs
+        assert len(anns) > 0, f'image {gid} should have annotations!'
         '''
         # if this was encoded into the image dict ok, we can just use it there
         # unfortunately info is still needed because wld_to_wgs84 may
@@ -132,22 +99,24 @@ def add_geos(coco_dset, overwrite, max_workers=16):
         assert np.allclose(info['pxl_to_wld'], np.array(kwimage.Affine.coerce(
             annotated_band(img)['wld_to_pxl']).inv()))
         '''
-        img_anns = annots.detections.data['segmentations']
-        assert len(img_anns) == len(annots), 'TODO skip anns w/o segmentations'
+        img_anns = kwimage.SegmentationList([
+            kwimage.Segmentation.coerce(ann['segmentation'])
+            for ann in anns])
+
         warp_aux_to_img = kwimage.Affine.coerce(
-            annotated_band(img).get('warp_aux_to_img', None)).inv()
+            aux.get('warp_aux_to_img', None)).inv()
         aux_anns = img_anns.warp(warp_aux_to_img)
         wld_anns = aux_anns.warp(info['pxl_to_wld'])
         wgs_anns = wld_anns.warp(info['wld_to_wgs84'])
-        geojson_anns = [poly.swap_axes().to_geojson() for poly in wgs_anns]
+        # Flip into traditional CRS84 coordinates if we need to
+        if info['wgs84_crs_info']['axis_mapping'] == 'OAMS_AUTHORITY_COMPLIANT':
+            crs84_anns = [poly.swap_axes() for poly in wgs_anns]
+        else:
+            crs84_anns = wgs_anns
+        geojson_anns = [poly.to_geojson() for poly in crs84_anns]
 
-        for aid, geojson_ann in zip(annots.aids, geojson_anns):
-
-            ann = coco_dset.anns[aid]
-
-            if needs_geos(ann):
-
-                ann['segmentation_geos'] = geojson_ann
+        for ann, geojson_ann in zip(anns, geojson_anns):
+            ann['segmentation_geos'] = geojson_ann
 
     return coco_dset
 
@@ -504,9 +473,7 @@ def normalize_phases(coco_dset,
 
     # exclude untracked annots which might be unrelated
     annots = coco_dset.annots(
-        list(
-            itertools.chain.from_iterable(
-                coco_dset.index.trackid_to_aids.values())))
+        list(ub.flatten(coco_dset.index.trackid_to_aids.values())))
 
     has_prediction_heatmaps = all(
         kwcoco.FusedChannelSpec.coerce(prediction_key).as_set().issubset(
@@ -672,6 +639,8 @@ def normalize(
 
         return coco_dset
 
+    import xdev
+    xdev.embed()
     if len(coco_dset.anns) > 0:
         coco_dset = _normalize_annots(coco_dset, overwrite)
     coco_dset = ensure_videos(coco_dset)
