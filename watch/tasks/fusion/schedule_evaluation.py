@@ -524,7 +524,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     pred_fpath, sites_dpath, thresh)
                 stamp_fpath = track_info['stamp_fpath']
 
-                recompute_tracks = 0
+                recompute_tracks = 1
                 has_tracks = stamp_fpath.exists()
 
                 iarpa_eval_info = schedule_iarpa_eval._build_iarpa_eval_job(
@@ -532,7 +532,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
                 summary_fpath = iarpa_eval_info['summary_fpath']
 
-                recompute_iarpa_eval = 0
+                recompute_iarpa_eval = 1
                 has_iarpa_eval = summary_fpath.exists()
 
                 if recompute_tracks or not has_tracks:
@@ -541,7 +541,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     if recompute_tracks:
                         command = (
                             f'test -f "{stamp_fpath}" || ' +
-                            eval_command
+                            command
                         )
                     track_job = queue.submit(
                         command=command,
@@ -558,7 +558,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     if recompute_iarpa_eval:
                         command = (
                             f'test -f "{summary_fpath}" || ' +
-                            eval_command
+                            command
                         )
                     queue.submit(
                         command=command,

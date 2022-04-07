@@ -91,6 +91,34 @@ def load_measure(measure_fpath):
     """
     with open(measure_fpath, 'r') as file:
         info = json.load(file)
+
+    HACK_FOR_IARPA = True
+    if HACK_FOR_IARPA:
+        pred_parent = measure_fpath.parent.parent.parent
+        cand = ub.Path(*['pred' if p == 'eval' else p for p in pred_parent.parts])
+        iarpa_globs = cand / 'tracking/*/iarpa_eval/scores/merged/summary2.json'
+        import glob
+
+        iarpa_subresults = []
+        iarpa_summary_fpaths = list(glob.glob(str(iarpa_globs)))
+        for iarpa_fpath in iarpa_summary_fpaths:
+            iarpa_fpath = ub.Path(iarpa_fpath)
+            # HACK: need to persist the track params here
+            thresh = float(iarpa_fpath.parent.parent.parent.parent.name.split('_')[1].split('=')[1])
+            with open(iarpa_fpath, 'r') as file:
+                iarpa_info = json.load(file)
+                iarpa_info
+                import io
+                best_bas_rows = pd.read_json(io.StringIO(json.dumps(iarpa_info['best_bas_rows'])), orient='table')
+                bas_row = best_bas_rows.loc['merged']
+                # bas_f1 = bas_row['F1'].values.ravel()[0]
+                row = bas_row.reset_index().iloc[0].to_dict()
+                row['thresh'] = thresh
+                iarpa_subresults.append(row)
+                # sc_df = pd.read_json(io.StringIO(json.dumps(iarpa_info['sc_df'])), orient='table')
+                # sc_cm = pd.read_json(io.StringIO(json.dumps(iarpa_info['sc_cm'])), orient='table')
+        info['meta']['iarpa_measures'] = iarpa_subresults
+
     if True:
         # Hack to ensure fit config is properly serialized
         try:
@@ -298,6 +326,20 @@ def prepare_results(all_infos, coi_pattern):
         row['pred_fpath'] = pred_fpath
         row['model_fpath'] = str(model_fpath)
 
+        if 'iarpa_measures' in meta:
+            try:
+                iarpa_measures = pd.DataFrame(meta['iarpa_measures'])
+                best_row = iarpa_measures.iloc[iarpa_measures['F1'].argmax()]
+                BAS_metrics = {
+                    'BAS_F1': best_row.F1,
+                    'BAS_thresh': best_row.thresh,
+                    'BAS_rho': best_row.tau,
+                    'BAS_tau': best_row.rho,
+                }
+                row.update(BAS_metrics)
+            except Exception:
+                BAS_metrics = None
+
         mean_rows.append(row)
 
         if predict_meta is not None:
@@ -323,6 +365,9 @@ def prepare_results(all_infos, coi_pattern):
                 'salient_AUC': row['salient_AUC'],
                 'salient_APUC': row['salient_APUC'],
             }
+            if BAS_metrics is not None:
+                metrics['BAS_F1'] = BAS_metrics['BAS_F1'],
+
             for class_row in expt_class_rows:
                 metrics[class_row['catname'] + '_AP'] = class_row['AP']
                 metrics[class_row['catname'] + '_AUC'] = class_row['AUC']
@@ -637,7 +682,8 @@ def gather_measures(cmdline=False, **kwargs):
     print(len(measure_fpaths))
     # dataset_to_evals = ub.group_items(eval_dpaths, lambda x: x.parent.name)
 
-    jobs = ub.JobPool('thread', max_workers=10)
+    load_workers = 0
+    jobs = ub.JobPool('thread', max_workers=load_workers)
     all_infos = []
     for measure_fpath in ub.ProgIter(measure_fpaths):
         job = jobs.submit(load_measure, measure_fpath)
@@ -832,8 +878,8 @@ def gather_measures(cmdline=False, **kwargs):
     except Exception as ex:
         print('AnalysisError: ex = {!r}'.format(ex))
         print('Warning: Statistical analysis failed. Probably needs more data.')
-        import xdev
-        xdev.embed()
+        # import xdev
+        # xdev.embed()
     else:
         print('analysis.varied = {}'.format(ub.repr2(analysis.varied, nl=2)))
         if len(analysis.stats_table):
@@ -961,6 +1007,8 @@ def gather_measures(cmdline=False, **kwargs):
         # print(best_per_expt.sort_values('mAP').to_string())
 
     if 0:
+        # import xdev
+        # xdev.embed()
         # Make robust
         resource_rows = []
         # Resource scatter plots

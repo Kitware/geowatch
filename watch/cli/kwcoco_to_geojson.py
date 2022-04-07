@@ -933,4 +933,4 @@ def demo(coco_dset,
 
 
 if __name__ == '__main__':
-    sys.exit(main(sys.argv[1:]))
+    main(sys.argv[1:])

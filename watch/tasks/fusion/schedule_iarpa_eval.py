@@ -100,14 +100,6 @@ def _build_iarpa_eval_job(sites_dpath, iarpa_eval_dpath, annotations_dpath, name
     return iarpa_eval_info
 
 
-def _submit_bas_track_job(queue, pred_fpath, sites_dpath, thresh):
-    job_info = _build_bas_track_job(pred_fpath, sites_dpath, thresh)
-    pass
-
-
-def _submit_iarpa_eval_job():
-    pass
-
 """
 # Note: change backend to tmux if slurm is not installed
 DVC_DPATH=$(python -m watch.cli.find_dvc)
@@ -116,11 +108,12 @@ EXPT_GROUP_CODE=eval3_candidates
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
 python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-        --gpus="0,1" \
+        --gpus="0,1,2,3" \
         --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
         --test_dataset="$VALI_FPATH" \
-        --run=1 --skip_existing=True --backend=slurm \
+        --skip_existing=True \
         --enable_pred=0 \
         --enable_eval=0 \
-        --iarpa_eval=1
+        --iarpa_eval=1 \
+        --backend=tmux --run=1
 """

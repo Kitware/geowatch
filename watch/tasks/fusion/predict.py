@@ -1375,10 +1375,12 @@ if __name__ == '__main__':
             --sidecar2=1 \
             --tta_fliprot=0,1 \
             --tta_time=0,1 \
+            --iarpa_eval=1 \
             --chip_overlap=0,0.3 \
             --draw_heatmaps=1 \
-            --run=0 --backend=slurm \
-            --enable_eval=redo
+            --skip_existing=1 \
+            --run=0 --backend=tmux \
+            --enable_eval=1
 
 
     DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
