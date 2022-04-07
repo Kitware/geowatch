@@ -75,16 +75,21 @@ class PrepareTA2Config(scfg.Config):
         'dvc_dpath': scfg.Value('auto', help=''),
         'run': scfg.Value('0', help=''),
         'collated': scfg.Value([True], nargs='+', help='set to false if the input data is not collated'),
-        'serial': scfg.Value(True, help='if True use serial mode'),
+
+        'backend': scfg.Value('serial', help='can be serial, tmux, or slurm'),
+
         'aws_profile': scfg.Value('iarpa', help='AWS profile to use for remote data access'),
 
         'convert_workers': scfg.Value('min(avail,8)', help='workers for stac-to-kwcoco script'),
         'fields_workers': scfg.Value('min(avail,max(all/2,8))', help='workers for add-watch-fields script'),
         'align_workers': scfg.Value(0, help='workers for align script'),
+        'align_aux_workers': scfg.Value(0, help='threads per align process (typically set this to 0)'),
 
         'ignore_duplicates': scfg.Value(0, help='workers for align script'),
 
         'visualize': scfg.Value(0, help='if True runs visualize'),
+
+        'verbose': scfg.Value(0, help='help control verbosity (just align for now)'),
 
         # '--requester_pays'
         'requester_pays': scfg.Value(0, help='if True, turn on requester_pays in ingress. Needed for official L1/L2 catalogs.'),
@@ -93,6 +98,10 @@ class PrepareTA2Config(scfg.Config):
         'select_images': scfg.Value(False, help='if enabled only uses select images'),
 
         'cache': scfg.Value(1, help='if enabled check cache'),
+
+        'channels': scfg.Value(None, help='specific channels to use in align crop'),
+
+        'region_globstr': scfg.Value('annotations/region_models', help='a region globstr (relative to the dvc path, unless prefixed by "./") channels to use in align crop'),
     }
 
 
@@ -112,7 +121,6 @@ def main(cmdline=False, **kwargs):
         }
 
     """
-    from watch.utils import tmux_queue
     # import shlex
     config = PrepareTA2Config(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
@@ -128,9 +136,6 @@ def main(cmdline=False, **kwargs):
     aligned_bundle_name = f'Aligned-{config["dataset_suffix"]}'
     uncropped_bundle_name = f'Uncropped-{config["dataset_suffix"]}'
 
-    region_dpath = dvc_dpath / 'annotations/region_models'
-    # region_models = list(region_dpath.glob('*.geojson'))
-
     uncropped_dpath = dvc_dpath / uncropped_bundle_name
     uncropped_query_dpath = uncropped_dpath / '_query/items'
 
@@ -140,7 +145,6 @@ def main(cmdline=False, **kwargs):
     aligned_imgonly_kwcoco_fpath = aligned_kwcoco_bundle / 'imgonly.kwcoco.json'
     aligned_imganns_kwcoco_fpath = aligned_kwcoco_bundle / 'data.kwcoco.json'
 
-    region_dpath = region_dpath.shrinkuser(home='$HOME')
     uncropped_dpath = uncropped_dpath.shrinkuser(home='$HOME')
     uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
     uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
@@ -150,8 +154,9 @@ def main(cmdline=False, **kwargs):
     aligned_imgonly_kwcoco_fpath = aligned_imgonly_kwcoco_fpath.shrinkuser(home='$HOME')
     aligned_imganns_kwcoco_fpath = aligned_imganns_kwcoco_fpath.shrinkuser(home='$HOME')
 
-    # queue = tmux_queue.SerialQueue()
-    queue = tmux_queue.TMUXMultiQueue(name='teamfeat', size=1, gres=None)
+    from watch.utils import cmd_queue
+    queue = cmd_queue.Queue.create(
+        backend=config['backend'], name='teamfeat', size=1, gres=None)
 
     s3_fpath_list = config['s3_fpath']
     collated_list = config['collated']
@@ -169,7 +174,7 @@ def main(cmdline=False, **kwargs):
         job_environ_str += ' '
 
     uncropped_coco_paths = []
-    convert_jobs = []
+    union_depends_jobs = []
     for s3_fpath, collated in zip(s3_fpath_list, collated_list):
         s3_name = ub.Path(s3_fpath).name
         uncropped_query_fpath = uncropped_query_dpath / ub.Path(s3_fpath).name
@@ -225,12 +230,28 @@ def main(cmdline=False, **kwargs):
                 --jobs "{config['convert_workers']}"
             '''), depends=[ingress_job])
 
-        uncropped_coco_paths.append(uncropped_kwcoco_fpath)
-        convert_jobs.append(convert_job)
+        uncropped_fielded_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}_fielded.kwcoco.json'
+        uncropped_fielded_kwcoco_fpath = uncropped_fielded_kwcoco_fpath.shrinkuser(home='$HOME')
+
+        cache_prefix = '[[ -f {uncropped_fielded_kwcoco_fpath} ]] || ' if config['cache'] else ''
+        add_fields_job = queue.submit(ub.codeblock(
+            rf'''
+            # PREPARE Uncropped datasets (usually for debugging)
+            {cache_prefix}{job_environ_str}python -m watch.cli.coco_add_watch_fields \
+                --src "{uncropped_kwcoco_fpath}" \
+                --dst "{uncropped_fielded_kwcoco_fpath}" \
+                --enable_video_stats=False \
+                --overwrite=warp \
+                --target_gsd=10 \
+                --workers="{config['fields_workers']}"
+            '''), depends=convert_job)
+
+        uncropped_coco_paths.append(uncropped_fielded_kwcoco_fpath)
+        union_depends_jobs.append(add_fields_job)
 
     if len(uncropped_coco_paths) == 1:
         uncropped_final_kwcoco_fpath = uncropped_coco_paths[0]
-        uncropped_final_jobs = convert_jobs
+        uncropped_final_jobs = union_depends_jobs
     else:
         union_suffix = ub.hash_data([p.name for p in uncropped_coco_paths])[0:8]
         uncropped_final_kwcoco_fpath = uncropped_dpath / f'data_{union_suffix}.kwcoco.json'
@@ -243,73 +264,73 @@ def main(cmdline=False, **kwargs):
             {cache_prefix}{job_environ_str}python -m kwcoco union \
                 --src {uncropped_multi_src_part} \
                 --dst "{uncropped_final_kwcoco_fpath}"
-            '''), depends=convert_jobs)
+            '''), depends=union_depends_jobs)
         uncropped_final_jobs = [union_job]
 
-    uncropped_prep_kwcoco_fpath = uncropped_dpath / 'data_prepped.kwcoco.json'
-    uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.shrinkuser(home='$HOME')
-
-    select_images_query = config['select_images']
-
-    if select_images_query:
-        suffix = '_' + ub.hash_data(select_images_query)[0:8]
-        # Debugging
-        small_uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.augment(suffix=suffix)
-        subset_job = queue.submit(ub.codeblock(
-            rf'''
-            # SUBSET Uncropped datasets (usually for debugging)
-            python -m kwcoco subset \
-                --src="{uncropped_final_kwcoco_fpath}" \
-                --dst="{small_uncropped_kwcoco_fpath}" \
-                --select_images='{select_images_query}'
-            '''), jobs=uncropped_final_jobs)
-        # --populate-watch-fields \
-        add_fields_depends = [subset_job]
-        uncropped_final_kwcoco_fpath = small_uncropped_kwcoco_fpath
-        uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.augment(suffix=suffix)
-        aligned_imgonly_kwcoco_fpath = aligned_imgonly_kwcoco_fpath.augment(suffix=suffix)
-    else:
-        add_fields_depends = uncropped_final_jobs
-
-    cache_prefix = '[[ -f {uncropped_prep_kwcoco_fpath} ]] || ' if config['cache'] else ''
-    add_fields_job = queue.submit(ub.codeblock(
-        rf'''
-        # PREPARE Uncropped datasets (usually for debugging)
-        {cache_prefix}{job_environ_str}python -m watch.cli.coco_add_watch_fields \
-            --src "{uncropped_final_kwcoco_fpath}" \
-            --dst "{uncropped_prep_kwcoco_fpath}" \
-            --workers="{config['fields_workers']}" \
-            --enable_video_stats=False \
-            --overwrite=warp \
-            --target_gsd=10
-        '''), depends=add_fields_depends)
+    # uncropped_prep_kwcoco_fpath = uncropped_dpath / 'data_prepped.kwcoco.json'
+    # uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.shrinkuser(home='$HOME')
+    # select_images_query = config['select_images']
+    # if select_images_query:
+    #     suffix = '_' + ub.hash_data(select_images_query)[0:8]
+    #     # Debugging
+    #     small_uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.augment(suffix=suffix)
+    #     subset_job = queue.submit(ub.codeblock(
+    #         rf'''
+    #         # SUBSET Uncropped datasets (usually for debugging)
+    #         python -m kwcoco subset \
+    #             --src="{uncropped_final_kwcoco_fpath}" \
+    #             --dst="{small_uncropped_kwcoco_fpath}" \
+    #             --select_images='{select_images_query}'
+    #         '''), jobs=uncropped_final_jobs)
+    #     # --populate-watch-fields \
+    #     add_fields_depends = [subset_job]
+    #     uncropped_final_kwcoco_fpath = small_uncropped_kwcoco_fpath
+    #     uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.augment(suffix=suffix)
+    #     aligned_imgonly_kwcoco_fpath = aligned_imgonly_kwcoco_fpath.augment(suffix=suffix)
+    # else:
+    # add_fields_depends = uncropped_final_jobs
 
     # region_model_str = ' '.join([shlex.quote(str(p)) for p in region_models])
 
     cache_crops = 1
     if cache_crops:
         align_keep = 'img'
+        align_keep = 'roi-img'
     else:
         align_keep = 'none'
 
     debug_valid_regions = config['debug']
     align_visualize = config['debug']
+    channels = config['channels']
+
+    # region_models = list(region_dpath.glob('*.geojson'))
+    region_globstr = ub.Path(config['region_globstr'])
+    if str(region_globstr).startswith('./'):
+        final_region_globstr = region_globstr
+    else:
+        final_region_globstr = dvc_dpath / region_globstr
+    # region_dpath = dvc_dpath / 'annotations/region_models'
+    final_region_globstr = final_region_globstr.shrinkuser(home='$HOME')
+
     align_job = queue.submit(ub.codeblock(
         rf'''
         # MAIN WORKHORSE CROP IMAGES
         # Crop big images to the geojson regions
         {job_environ_str}python -m watch.cli.coco_align_geotiffs \
-            --src "{uncropped_prep_kwcoco_fpath}" \
+            --src "{uncropped_final_kwcoco_fpath}" \
             --dst "{aligned_imgonly_kwcoco_fpath}" \
-            --regions "{region_dpath / '*.geojson'}" \
-            --workers={config['align_workers']} \
+            --regions "{final_region_globstr}" \
             --context_factor=1 \
             --geo_preprop=auto \
             --keep={align_keep} \
+            --channels="{channels}" \
             --visualize={align_visualize} \
             --debug_valid_regions={debug_valid_regions} \
-            --rpc_align_method affine_warp
-        '''), depends=[add_fields_job])
+            --rpc_align_method affine_warp \
+            --verbose={config['verbose']} \
+            --aux_workers={config['align_aux_workers']} \
+            --workers={config['align_workers']}
+        '''), depends=uncropped_final_jobs)
 
     # TODO:
     # Project annotation from latest annotations subdir
@@ -343,6 +364,40 @@ def main(cmdline=False, **kwargs):
                 --region_models="{region_model_dpath}/*.geojson" {viz_part}
             '''), depends=[align_job])
 
+    # TODO:
+    # queue.synchronize -
+    # force all submissions to finish before starting new ones.
+
+    # Do Basic Splits
+    if 1:
+        from watch.cli import prepare_splits
+        prepare_splits._submit_split_jobs(
+            aligned_imganns_kwcoco_fpath, queue, depends=[project_anns_job])
+
+    # TODO: Can start the DVC add of the region subdirectories here
+    ub.codeblock(
+        '''
+        7z a splits.zip data*.kwcoco.json
+
+        ls */WV
+        ls */L8
+        ls */S2
+        ls */*.json
+        dvc add *.zip
+        dvc add */WV */L8 */S2 */*.json *.zip
+
+        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        echo "DVC_DPATH='$DVC_DPATH'"
+
+        cd $DVC_DPATH/
+        git pull  # ensure you are up to date with master on DVC
+        cd $DVC_DPATH/Aligned-Drop3-TA1-2022-03-10
+        dvc pull */L8.dvc */S2.dvc
+        dvc pull
+        */*.json
+
+        ''')
+
     if config['visualize']:
         queue.submit(ub.codeblock(
             rf'''
@@ -367,10 +422,10 @@ def main(cmdline=False, **kwargs):
 
     if config['run']:
         agg_state = None
-        if config['serial']:
-            queue.serial_run()
-        else:
-            queue.run()
+        # if config['serial']:
+        #     queue.serial_run()
+        # else:
+        queue.run()
         # if config['follow']:
         agg_state = queue.monitor()
         # if not config['keep_sessions']:

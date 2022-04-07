@@ -1,5 +1,6 @@
 import dateutil
 import datetime
+import ubelt as ub
 
 
 def isoformat(dt, sep='T', timespec='seconds', pathsafe=True):
@@ -140,5 +141,110 @@ def ensure_timezone(dt, default='utc'):
         return dt.replace(tzinfo=tzinfo)
 
 
+@ub.memoize
+def _time_unit_registery():
+    import pint
+    # Empty registry
+    ureg = pint.UnitRegistry(None)
+    ureg.define('second = []')
+    ureg.define('minute = 60 * second')
+    ureg.define('hour = 60 * minute')
+
+    ureg.define('day = 24 * hour')
+    ureg.define('month = 30.437 * day')
+    ureg.define('year = 365 * day')
+
+    ureg.define('min = minute')
+    ureg.define('mon = month')
+    ureg.define('sec = second')
+
+    ureg.define('S = second')
+    ureg.define('M = minute')
+    ureg.define('H = hour')
+
+    ureg.define('d = day')
+    ureg.define('m = month')
+    ureg.define('y = year')
+
+    ureg.define('s = second')
+    return ureg
+
+
 def coerce_timedelta(delta):
-    raise NotImplementedError('see temporal sampling for draft')
+    """
+    TODO:
+        move to a util
+
+    Example:
+        >>> from watch.utils.util_time import *  # NOQA
+        >>> variants = [
+        >>>     ['year', 'y'],
+        >>>     ['month', 'm', 'mon'],
+        >>>     ['day', 'd', 'days'],
+        >>>     ['hours', 'hour', 'h'],
+        >>>     ['minutes', 'min', 'M'],
+        >>>     ['second', 'S', 's', 'secs'],
+        >>> ]
+        >>> for vs in variants:
+        >>>     print('vs = {!r}'.format(vs))
+        >>>     ds = []
+        >>>     for v in vs:
+        >>>         d = coerce_timedelta(f'1{v}')
+        >>>         ds.append(d)
+        >>>         d = coerce_timedelta(f'1 {v}')
+        >>>         ds.append(d)
+        >>>     assert ub.allsame(ds)
+        >>>     print('ds = {!r}'.format(ds))
+        >>> print(coerce_timedelta(10.3))
+        >>> print(coerce_timedelta('1y'))
+        >>> print(coerce_timedelta('1m'))
+        >>> print(coerce_timedelta('1d'))
+        >>> print(coerce_timedelta('1H'))
+        >>> print(coerce_timedelta('1M'))
+        >>> print(coerce_timedelta('1S'))
+        >>> print(coerce_timedelta('1year'))
+        >>> print(coerce_timedelta('1month'))
+        >>> print(coerce_timedelta('1day'))
+        >>> print(coerce_timedelta('1hour'))
+        >>> print(coerce_timedelta('1min'))
+        >>> print(coerce_timedelta('1sec'))
+
+    References:
+        https://docs.python.org/3.4/library/datetime.html#strftime-strptime-behavior
+    """
+    if isinstance(delta, (int, float)):
+        delta = datetime.timedelta(seconds=delta)
+    elif isinstance(delta, str):
+
+        try:
+            ureg = _time_unit_registery()
+            seconds = ureg.parse_expression(delta).to('seconds').m
+            delta = datetime.timedelta(seconds=seconds)
+        except Exception:
+            # TODO: better coercion function
+            if delta.endswith('y'):
+                delta = datetime.timedelta(days=365 * float(delta[:-1]))
+            elif delta.endswith('d'):
+                delta = datetime.timedelta(days=1 * float(delta[:-1]))
+            elif delta.endswith('m'):
+                delta = datetime.timedelta(days=30.437 * float(delta[:-1]))
+            elif delta.endswith('H'):
+                delta = datetime.timedelta(hours=float(delta[:-1]))
+            elif delta.endswith('M'):
+                delta = datetime.timedelta(minutes=float(delta[:-1]))
+            elif delta.endswith('S'):
+                delta = datetime.timedelta(seconds=float(delta[:-1]))
+            else:
+                import pytimeparse  #
+                print('warning: pytimeparse fallback')
+                seconds = pytimeparse.parse(delta)
+                if seconds is None:
+                    raise Exception(delta)
+                delta = datetime.timedelta(seconds=seconds)
+                return delta
+
+    elif isinstance(delta, datetime.timedelta):
+        pass
+    else:
+        raise TypeError(type(delta))
+    return delta

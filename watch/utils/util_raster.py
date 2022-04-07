@@ -1,22 +1,22 @@
+"""
+Utilities for rasterio
+
+SeeAlso
+    util_gdal.py
+"""
 import kwimage
 import numpy as np
-import os
 import pygeos
 import shapely as shp
 import shapely.geometry
 import shapely.ops
 import ubelt as ub
 import warnings
-from skimage.morphology import convex_hull_image
 
 from contextlib import ExitStack
-from copy import deepcopy
 from dataclasses import dataclass
-from lxml import etree
 from tempenv import TemporaryEnvironment
-from tempfile import NamedTemporaryFile
 from typing import Union, List, Literal, Optional
-from osgeo import gdal, osr
 import pyproj
 
 import rasterio
@@ -24,8 +24,6 @@ import rasterio.features
 import rasterio.mask
 from rasterio import Affine, MemoryFile
 from rasterio.enums import Resampling
-
-from watch.gis.spatial_reference import utm_epsg_from_latlon
 
 try:
     from xdev import profile
@@ -52,7 +50,7 @@ def open_cropped(raster: Union[rasterio.DatasetReader, str],
                  poly: shp.geometry.Polygon,
                  rect=True,
                  out_fpath=None) -> np.ndarray:
-    '''
+    """
     Open and return the part of raster that falls within poly. Essentially the
     opposite of watch.util.util_raster.crop_to().
 
@@ -70,7 +68,7 @@ def open_cropped(raster: Union[rasterio.DatasetReader, str],
 
     Returns:
         data: the contents of the cropped raster.
-    '''
+    """
     poly_epsg = 4326  # only true after swapping from lon-lat to lat-lon!
     poly = _swapxy(poly)
 
@@ -306,11 +304,12 @@ def mask(raster: Union[rasterio.DatasetReader, str],
                 img.close()
 
         if convex_hull:
+            from skimage.morphology import convex_hull_image
             with warnings.catch_warnings():
                 warnings.filterwarnings(
                     'ignore', 'Input image is entirely zero',
                     category=UserWarning)
-            mask_img = convex_hull_image(mask_img).astype(np.uint8)
+                mask_img = convex_hull_image(mask_img).astype(np.uint8)
 
         if not as_poly:
             return mask_img
@@ -473,36 +472,6 @@ def crop_to(
     return result
 
 
-def list_gdal_drivers():
-    '''
-    List all drivers currently available to GDAL to create a raster
-
-    Returns:
-        list((driver_shortname, driver_longname, list(driver_file_extension)))
-
-    Example:
-        >>> from watch.utils.util_raster import *
-        >>> drivers = list_gdal_drivers()
-        >>> assert ('GTiff', 'GeoTIFF', ['tif', 'tiff']) in drivers
-    '''
-    result = []
-    for idx in range(gdal.GetDriverCount()):
-        driver = gdal.GetDriver(idx)
-        if driver:
-            metadata = driver.GetMetadata()
-            if metadata.get(gdal.DCAP_CREATE) == 'YES' and metadata.get(
-                    gdal.DCAP_RASTER) == 'YES':
-                name = driver.GetDescription()
-                longname = metadata.get("DMD_LONGNAME")
-                exts = metadata.get("DMD_EXTENSIONS")
-                if exts is None:
-                    exts = []
-                else:
-                    exts = exts.split(' ')
-                result.append((name, longname, exts))
-    return result
-
-
 @dataclass
 class ResampledRaster(ExitStack):
     """
@@ -609,347 +578,3 @@ class ResampledRaster(ExitStack):
 
     def __exit__(self, *exc):
         pass
-
-
-@dataclass
-class GdalOpen:
-    """
-    A simple context manager for friendlier gdal use.
-
-    Example:
-        >>> # xdoctest: +REQUIRES(--network)
-        >>> from watch.utils.util_raster import *
-        >>> from watch.demo.landsat_demodata import grab_landsat_product
-        >>> path = grab_landsat_product()['bands'][0]
-        >>> #
-        >>> # standard use:
-        >>> dataset = gdal.Open(path)
-        >>> print(dataset.GetDescription())  # do stuff
-        >>> del dataset  # or 'dataset = None'
-        >>> #
-        >>> # equivalent:
-        >>> with GdalOpen(path) as dataset:
-        >>>     print(dataset.GetDescription())  # do stuff
-        >>>
-        >>> # open for writing:
-        >>> with GdalOpen(path, gdal.GA_Update) as dataset:
-        >>>     print(dataset.GetDescription())  # do stuff
-
-    """
-    path: str
-    mode: int = gdal.GA_ReadOnly
-
-    def __enter__(self):
-        self.f = gdal.Open(self.path, self.mode)
-        return self.f
-
-    def __exit__(self, *exc):
-        # gdal.GDALClose(f)  # not implemented in this version of gdal?
-        del self.f  # this is ugly, but it works...
-        # gdal.Unlink(path)  # THIS DELETES THE FILE
-
-
-def reroot_vrt(old_path, new_path, keep_old=True):
-    """
-    Copy a VRT file, fixing relative paths to its component images
-
-    Example:
-        >>> # xdoctest: +REQUIRES(--network)
-        >>> import os
-        >>> from osgeo import gdal
-        >>> from watch.utils.util_raster import *
-        >>> from watch.demo.landsat_demodata import grab_landsat_product
-        >>> bands = grab_landsat_product()['bands']
-        >>> #
-        >>> # VRT must be created in the imgs' subtree
-        >>> tmp_path = os.path.join(os.path.dirname(bands[0]), 'all_bands.vrt')
-        >>> # (consider using the wrapper util_raster.make_vrt instead of this)
-        >>> gdal.BuildVRT(tmp_path, sorted(bands))
-        >>> # now move it somewhere more convenient
-        >>> reroot_vrt(tmp_path, './bands.vrt', keep_old=False)
-        >>> #
-        >>> # clean up
-        >>> os.remove('bands.vrt')
-    """
-    if os.path.abspath(old_path) == os.path.abspath(new_path):
-        return
-
-    path_diff = os.path.relpath(os.path.dirname(os.path.abspath(old_path)),
-                                start=os.path.dirname(
-                                    os.path.abspath(new_path)))
-
-    tree = deepcopy(etree.parse(old_path))
-    for elem in tree.iterfind('.//SourceFilename'):
-        if elem.get('relativeToVRT') == '1':
-            elem.text = os.path.join(path_diff, elem.text)
-        else:
-            if not os.path.isabs(elem.text):
-                raise ValueError(f'''VRT file:
-                    {old_path}
-                cannot be rerooted because it contains path:
-                    {elem.text}
-                relative to an unknown location [the original calling location].
-                To produce a rerootable VRT, call gdal.BuildVRT() with out_path relative to in_paths.'''
-                                 )
-            if not os.path.isfile(elem.text):
-                raise ValueError(f'''VRT file:
-                    {old_path}
-                references an nonexistent path:
-                    {elem.text}''')
-
-    with open(new_path, 'wb') as f:
-        tree.write(f, encoding='utf-8')
-
-    if not keep_old:
-        os.remove(old_path)
-
-
-def make_vrt(in_paths, out_path, mode, relative_to_path=None, **kwargs):
-    """
-    Stack multiple band files in the same directory into a single VRT
-
-    Args:
-        in_paths: list(path)
-        out_path: path to save to; standard is '*.vrt'. If None, a path will be
-            generated.
-        mode:
-            'stacked': Stack multiple band files covering the same area
-            'mosaicked': Mosaic/merge scenes with overlapping areas. Content
-                will be taken from the first in_path without nodata.
-        relative_to_path: if this function is being called from another
-            process, pass in the cwd of the calling process, to trick gdal into
-            creating a rerootable VRT
-        kwargs: passed to gdal.BuildVRTOptions [1,2]
-
-    Returns:
-        path to VRT
-
-    Example:
-        >>> # xdoctest: +REQUIRES(--network)
-        >>> import os
-        >>> from osgeo import gdal
-        >>> from watch.utils.util_raster import *
-        >>> from watch.demo.landsat_demodata import grab_landsat_product
-        >>> bands = grab_landsat_product()['bands']
-        >>> #
-        >>> # stack bands from a scene
-        >>> make_vrt(sorted(bands), './bands1.vrt', mode='stacked', relative_to_path=os.getcwd())
-        >>> # pretend this is a different scene
-        >>> make_vrt(sorted(bands), './bands2.vrt', mode='stacked', relative_to_path=os.getcwd())
-        >>> # now, if they overlap, mosaic/merge them
-        >>> make_vrt(['./bands1.vrt', './bands2.vrt'], 'full_scene.vrt', mode='mosaicked', relative_to_path=os.getcwd())
-        >>> with GdalOpen('full_scene.vrt') as f:
-        >>>     print(f.GetDescription())
-        >>>
-        >>> # clean up
-        >>> os.remove('bands1.vrt')
-        >>> os.remove('bands2.vrt')
-        >>> os.remove('full_scene.vrt')
-
-    References:
-        [1] https://gdal.org/programs/gdalbuildvrt.html
-        [2] https://gdal.org/python/osgeo.gdal-module.html#BuildVRTOptions
-    """
-
-    if mode == 'stacked':
-        kwargs['separate'] = True
-    elif mode == 'mosaicked':
-        kwargs['separate'] = False
-        kwargs['srcNodata'] = 0  # this ensures nodata doesn't overwrite data
-    else:
-        raise ValueError(f'mode: {mode} should be "stacked" or "mosaicked"')
-
-    # set sensible defaults
-    if 'resolution' not in kwargs:
-        kwargs['resolution'] = 'highest'
-    if 'resampleAlg' not in kwargs:
-        kwargs['resampleAlg'] = 'bilinear'
-
-    opts = gdal.BuildVRTOptions(**kwargs)
-
-    if len(in_paths) > 1:
-        common = os.path.commonpath(in_paths)
-    else:
-        common = os.path.dirname(in_paths[0])
-
-    if relative_to_path is None:
-        relative_to_path = os.path.dirname(os.path.abspath(__file__))
-
-    # validate out_path
-    if out_path is not None:
-        out_path = os.path.abspath(out_path)
-        if os.path.splitext(out_path)[1]:  # is a file
-            os.makedirs(os.path.dirname(out_path), exist_ok=True)
-        elif os.path.isdir(out_path):  # is a dir
-            raise ValueError(f'{out_path} is an existing directory.')
-
-    # generate an unused name
-    with NamedTemporaryFile(dir=common,
-                            suffix='.vrt',
-                            mode='r+',
-                            delete=(out_path is not None)) as f:
-
-        # First, create VRT in a place where it can definitely see the input
-        # files.  Use a relative instead of absolute path to ensure that
-        # <SourceFilename> refs are relative, and therefore the VRT is
-        # rerootable
-        vrt = gdal.BuildVRT(os.path.relpath(f.name, start=relative_to_path),
-                            in_paths,
-                            options=opts)
-        del vrt  # write to disk
-
-        # then, move it to the desired location
-        if out_path is None:
-            out_path = f.name
-        elif os.path.isfile(out_path):
-            print(f'warning: {out_path} already exists! Removing...')
-            os.remove(out_path)
-        reroot_vrt(f.name, out_path, keep_old=True)
-
-    return out_path
-
-
-def scenes_to_vrt(scenes, vrt_root, relative_to_path):
-    """
-    Search for band files from compatible scenes and stack them in a single
-    mosaicked VRT
-
-    A simple wrapper around watch.utils.util_raster.make_vrt that performs both
-    the 'stacked' and 'mosaicked' modes
-
-    Args:
-        scenes: list(scene), where scene := list(path) [of band files]
-        vrt_root: root dir to save VRT under
-
-    Returns:
-        path to the VRT
-
-    Example:
-        >>> # xdoctest: +REQUIRES(--network)
-        >>> import os
-        >>> from osgeo import gdal
-        >>> from watch.utils.util_raster import *
-        >>> from watch.demo.landsat_demodata import grab_landsat_product
-        >>> bands = grab_landsat_product()['bands']
-        >>> #
-        >>> # pretend there are more scenes here
-        >>> out_path = scenes_to_vrt([sorted(bands)] , vrt_root='.', relative_to_path=os.getcwd())
-        >>> with GdalOpen(out_path) as f:
-        >>>     print(f.GetDescription())
-        >>> #
-        >>> # clean up
-        >>> os.remove(out_path)
-    """
-    # first make VRTs for individual tiles
-    # TODO use https://rasterio.readthedocs.io/en/latest/topics/memory-files.html
-    # for these intermediate files?
-    tmp_vrts = [
-        make_vrt(scene,
-                 os.path.join(vrt_root, f'{hash(scene[0])}.vrt'),
-                 mode='stacked',
-                 relative_to_path=relative_to_path) for scene in scenes
-    ]
-
-    # then mosaic them
-    final_vrt = make_vrt(tmp_vrts,
-                         os.path.join(vrt_root,
-                                      f'{hash(scenes[0][0] + "final")}.vrt'),
-                         mode='mosaicked',
-                         relative_to_path=relative_to_path)
-
-    if 0:  # can't do this because final_vrt still references them
-        for t in tmp_vrts:
-            os.remove(t)
-
-    return final_vrt
-
-
-def reproject_crop(in_path, aoi, code=None, out_path=None, vrt_root=None):
-    """
-    Crop an image to an AOI and reproject to its UTM CRS (or another CRS)
-
-    Unfortunately, this cannot be done in a single step in scenes_to_vrt
-    because gdal.BuildVRT does not support warping between CRS.
-    Cropping alone could be done in scenes_to_vrt. Note gdal.BuildVRTOptions
-    has an outputBounds(=-te) kwarg for cropping, but not an equivalent of
-    -te_srs.
-
-    This means another intermediate file is necessary for each warp operation.
-
-    TODO check for this quantization error:
-        https://gis.stackexchange.com/q/139906
-
-    Args:
-        in_path: A georeferenced image. GTiff, VRT, etc.
-        aoi: A geojson Feature in epsg:4326 CRS to crop to.
-        code: EPSG code [1] of the CRS to convert to.
-            if None, use the UTM CRS containing aoi.
-        out_path: Name of output file to write to. If None, create a VRT file.
-        vrt_root: Root directory for VRT output. If None, same dir as input.
-
-    Returns:
-        Path to a new VRT or out_path
-
-    References:
-        [1] http://epsg.io/
-
-    Example:
-        >>> # xdoctest: +REQUIRES(--network)
-        >>> import os
-        >>> from osgeo import gdal
-        >>> from watch.utils.util_raster import *
-        >>> from watch.demo.landsat_demodata import grab_landsat_product
-        >>> band1 = grab_landsat_product()['bands'][0]
-        >>> #
-        >>> # pick the AOI from the drop0 KR site
-        >>> # (this doesn't actually intersect the demodata)
-        >>> top, left = (128.6643, 37.6601)
-        >>> bottom, right = (128.6749, 37.6639)
-        >>> geojson_bbox = {
-        >>>     "type":
-        >>>     "Polygon",
-        >>>     "coordinates": [[[top, left], [top, right], [bottom, right],
-        >>>                      [bottom, left], [top, left]]]
-        >>> }
-        >>> #
-        >>> out_path = reproject_crop(band1, geojson_bbox)
-        >>> #
-        >>> # clean up
-        >>> os.remove(out_path)
-    """
-    if out_path is None:
-        root, name = os.path.split(in_path)
-        if vrt_root is None:
-            vrt_root = root
-        os.makedirs(vrt_root, exist_ok=True)
-        out_path = os.path.join(vrt_root, f'{hash(name + "warp")}.vrt')
-        if os.path.isfile(out_path):
-            print(f'Warning: {out_path} already exists! Removing...')
-            os.remove(out_path)
-
-    if code is None:
-        # find the UTM zone(s) of the AOI
-        codes = [
-            utm_epsg_from_latlon(lat, lon)
-            for lon, lat in aoi['coordinates'][0]
-        ]
-        u, counts = np.unique(codes, return_counts=True)
-        if len(u) > 1:
-            print(
-                f'Warning: AOI crosses UTM zones {u}. Taking majority vote...')
-        code = int(u[np.argsort(-counts)][0])
-
-    dst_crs = osr.SpatialReference()
-    dst_crs.ImportFromEPSG(code)
-
-    bounds_crs = osr.SpatialReference()
-    bounds_crs.ImportFromEPSG(4326)
-
-    opts = gdal.WarpOptions(
-        outputBounds=shp.geometry.shape(aoi).buffer(0).bounds,
-        outputBoundsSRS=bounds_crs,
-        dstSRS=dst_crs)
-    vrt = gdal.Warp(out_path, in_path, options=opts)
-    del vrt
-
-    return out_path

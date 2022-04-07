@@ -64,6 +64,8 @@ class GatherResultsConfig(scfg.Config):
         'out_dpath': scfg.Value('./agg_results', help='A location where aggregate results can be written and compared'),
         'show': scfg.Value(False, help='if true, does a plt.show'),
         'dset_group_key': scfg.Value('*', help='if there is more than one dataset group, you will need to choose one'),
+
+        'classes_of_interest': scfg.Value('*', nargs='+', help='One or more glob patterns'),
     }
 
 
@@ -147,7 +149,7 @@ def load_measure(measure_fpath):
     return info
 
 
-def prepare_results(all_infos):
+def prepare_results(all_infos, coi_pattern):
     from kwcoco.coco_evaluator import CocoSingleResult
     from watch.utils import result_analysis
     class_rows = []
@@ -163,6 +165,9 @@ def prepare_results(all_infos):
 
         class_aps = []
         class_aucs = []
+
+        coi_aps = []
+        coi_aucs = []
 
         meta = info['meta']
 
@@ -194,15 +199,31 @@ def prepare_results(all_infos):
             package_name = meta['package_name']
 
         # Hack to get the epoch/step/expt_name
-        epoch = int(package_name.split('epoch=')[1].split('-')[0])
-        step = int(package_name.split('step=')[1].split('-')[0])
-        expt_name = package_name.split('epoch=')[0]
+        try:
+            epoch = int(package_name.split('epoch=')[1].split('-')[0])
+        except Exception:
+            epoch = -1
+
+        try:
+            step = int(package_name.split('step=')[1].split('-')[0])
+        except Exception:
+            step = -1
+
+        try:
+            expt_name = package_name.split('epoch=')[0]
+        except Exception:
+            expt_name = predict_meta['properties']['args'][expt_name]
 
         salient_measures = info['nocls_measures']
         class_measures = info['ovr_measures']
 
         expt_class_rows = []
+        coi_catnames = []
         for catname, bin_measure in class_measures.items():
+            if coi_pattern.match(catname):
+                coi_catnames.append(catname)
+                coi_aps.append(bin_measure['ap'])
+                coi_aucs.append(bin_measure['auc'])
             class_aps.append(bin_measure['ap'])
             class_aucs.append(bin_measure['auc'])
             class_row = {}
@@ -227,6 +248,10 @@ def prepare_results(all_infos):
             row['class_mAP'] = np.nanmean(class_aps) if len(class_aps) else np.nan
             row['class_mAUC'] = np.nanmean(class_aucs) if len(class_aucs) else np.nan
             row['class_mAPUC'] = np.nanmean([row['class_mAUC'], row['class_mAP']])
+
+            row['coi_mAP'] = np.nanmean(coi_aps) if len(coi_aps) else np.nan
+            row['coi_mAUC'] = np.nanmean(coi_aucs) if len(coi_aucs) else np.nan
+            row['coi_mAPUC'] = np.nanmean([row['coi_mAUC'], row['coi_mAP']])
 
             row['salient_AP'] = salient_measures['ap']
             row['salient_AUC'] = salient_measures['auc']
@@ -260,6 +285,9 @@ def prepare_results(all_infos):
                 'class_mAP': row['class_mAP'],
                 'class_mAUC': row['class_mAUC'],
                 'class_mAPUC': row['class_mAPUC'],
+                'coi_mAP': row['coi_mAP'],
+                'coi_mAUC': row['coi_mAUC'],
+                'coi_mAPUC': row['coi_mAPUC'],
                 'salient_AP': row['salient_AP'],
                 'salient_AUC': row['salient_AUC'],
                 'salient_APUC': row['salient_APUC'],
@@ -277,6 +305,7 @@ def prepare_results(all_infos):
             row['normalize_inputs'] = fit_config.get('normalize_inputs', False)
             row['train_remote'] = cand_remote
 
+            # Hacks to normalize specific params
             def hack_smartcast(x):
                 try:
                     return int(x)
@@ -289,7 +318,11 @@ def prepare_results(all_infos):
             fit_config2 = {}
             for k, v in fit_config.items():
                 if k not in {'channels', 'init'}:
-                    fit_config2[k] = smartcast.smartcast(v)
+                    v2 = smartcast.smartcast(v)
+                    if isinstance(v2, list):
+                        # Dont coerce into a list
+                        v2 = v
+                    fit_config2[k] = v2
                 else:
                     fit_config2[k] = v
 
@@ -303,10 +336,22 @@ def prepare_results(all_infos):
             predict_args  # add predict window overlap
             # row['train_remote'] = cand_remote
 
+            result_meta = {
+                'title': title,
+                'epoch': epoch,
+                'step': step,
+                'expt_name': expt_name,
+                'pred_fpath': pred_fpath,
+                'model_fpath': model_fpath,
+                'package_name': package_name,
+                'coi_catnames': ','.join(sorted(coi_catnames)),
+            }
+
             result2 = result_analysis.Result(
                  name=result.meta['title'],
                  params=fit_config,
                  metrics=metrics,
+                 meta=result_meta
             )
             results_list2.append(result2)
     return class_rows, mean_rows, all_results, results_list2
@@ -315,11 +360,14 @@ def prepare_results(all_infos):
 def best_candidates(class_rows, mean_rows):
     # TOP CANDIDATE MODELS - FIND TOP K MODELS FOR EVERY METRIC
     K = 7
-    max_per_metric_per_expt = 3
+    max_per_metric_per_expt = 2
     cand_expt_names = set()
 
-    mean_metrics = ['class_mAP', 'class_mAUC', 'salient_AP', 'salient_AUC', 'class_mAPUC', 'salient_APUC']
-    class_metrics = ['AP', 'AUC', 'APUC', 'catname']
+    mean_metrics = [
+        'coi_mAP', 'coi_mAUC', 'coi_mAPUC',
+        'salient_AP', 'salient_AUC', 'salient_APUC'
+    ]
+    class_metrics = ['AP', 'AUC', 'APUC']
 
     subsets = {}
     if len(class_rows):
@@ -358,10 +406,10 @@ def best_candidates(class_rows, mean_rows):
             mean_candidate_indexes.extend(top_group.index)
         top_mean_indexes = sorted(set(mean_candidate_indexes))
         mean_subset = mean_df.loc[top_mean_indexes]
-        subsets['mean'] = mean_subset = mean_subset.sort_values('class_mAPUC')
+        subsets['mean'] = mean_subset = mean_subset.sort_values('coi_mAPUC')
         cand_expt_names.update(set(mean_subset['model_fpath'].tolist()))
 
-        sc_mean_subset = mean_subset[~mean_subset['class_mAPUC'].isnull()].sort_values('class_mAPUC')
+        sc_mean_subset = mean_subset[~mean_subset['coi_mAPUC'].isnull()].sort_values('coi_mAPUC')
         bas_mean_subset = mean_subset[~mean_subset['salient_APUC'].isnull()].sort_values('salient_APUC')
     else:
         mean_subset = []
@@ -374,19 +422,19 @@ def best_candidates(class_rows, mean_rows):
 
     if len(class_subset):
         print('Best Subset Table (Per-Class):')
-        print(class_subset[class_metrics + ['package_name']].to_string())
+        print(class_subset[class_metrics + ['catname', 'package_name']].to_string())
         model_candidates['sc'].append(class_subset['model_fpath'].values.tolist())
         pred_candidates['sc'].append(class_subset['pred_fpath'].values.tolist())
 
     if len(bas_mean_subset):
         print('Best Subset Table (Mean-BAS):')
-        print(bas_mean_subset[mean_metrics + ['package_name']].to_string())
+        print(bas_mean_subset[mean_metrics + ['catname', 'package_name']].to_string())
         model_candidates['bas'].append(bas_mean_subset['model_fpath'].values.tolist())
         pred_candidates['bas'].append(bas_mean_subset['pred_fpath'].values.tolist())
 
     if len(sc_mean_subset):
         print('Best Subset Table (Mean-SC):')
-        print(sc_mean_subset[mean_metrics + ['package_name']].to_string())
+        print(sc_mean_subset[mean_metrics + ['catname', 'package_name']].to_string())
         model_candidates['sc'].append(sc_mean_subset['model_fpath'].values.tolist())
         pred_candidates['sc'].append(sc_mean_subset['pred_fpath'].values.tolist())
 
@@ -480,7 +528,11 @@ def gather_measures(cmdline=False, **kwargs):
         measure_globstr = 'models/fusion/SC-20201117/*/*/*/eval/curves/measures2.json'
         measure_globstr = 'models/fusion/SC-20201117/*_TA1*/*/*/eval/curves/measures2.json'
         cmdline = False
-        kwargs['measure_globstr'] = dvc_dpath / measure_globstr
+        kwargs = {}
+
+        suffix = 'models/fusion/*/eval/*/*/*/*/eval/curves/measures2.json'
+        kwargs['measure_globstr'] = dvc_dpath / suffix
+        kwargs['out_dpath'] = dvc_dpath / '_agg_results2'
 
         if 0:
             remote = 'namek'
@@ -503,6 +555,9 @@ def gather_measures(cmdline=False, **kwargs):
         raise ValueError('Must specify a coercable glob pattern to locate the measures2.json files')
     else:
         measure_fpaths = util_path.coerce_patterned_paths(measure_globstr)
+
+    coi_pattern = util_pattern.MultiPattern.coerce(
+        config['classes_of_interest'], hint='glob')
 
     measure_fpaths = [ub.Path(p) for p in measure_fpaths]
 
@@ -578,7 +633,127 @@ def gather_measures(cmdline=False, **kwargs):
 
     print(f'Failed Jobs {len(failed_jobs)=}/{len(jobs)}')
 
-    class_rows, mean_rows, all_results, results_list2 = prepare_results(all_infos)
+    class_rows, mean_rows, all_results, results_list2 = prepare_results(all_infos, coi_pattern)
+
+    if 1:
+        spreadsheet_rows = [ub.dict_union(
+            {'name': result.name},
+            result.metrics,
+            result.params,
+            result.meta or {},
+        )
+            for result in results_list2]
+
+        metrics_keys = set(ub.flatten(result.metrics.keys() for result in results_list2))
+
+        ignore_spreadsheet = {
+            'default_root_dir', 'enable_progress_bar'
+            'prepare_data_per_node', 'enable_model_summary', 'checkpoint_callback',
+            'detect_anomaly', 'gpus', 'terminate_on_nan',
+            'workdir', 'config', 'num_workers', 'amp_backend',
+            'enable_progress_bar', 'flush_logs_every_n_steps',
+            'enable_checkpointing', 'prepare_data_per_node', 'amp_level',
+            'package_fpath', 'num_draw',
+            'track_grad_norm',
+            'val_check_interval',
+            'weights_summary',
+            'process_position',
+            'overfit_batches',
+            'num_sanity_val_steps',
+            'num_processes',
+            'num_nodes',
+            'move_metrics_to_cpu',
+            'limit_val_batches',
+            'limit_train_batches',
+            'limit_predict_batches',
+            'fast_dev_run',
+            'eval_after_fit',
+            'deterministic',
+            'reload_dataloaders_every_epoch',
+            'reload_dataloaders_every_n_epochs',
+            'replace_sampler_ddp',
+        }
+
+        # https://pbpython.com/improve-pandas-excel-output.html
+        # https://www.ojdo.de/wp/2019/10/pandas-to-excel-with-openpyxl/
+        spreadsheet = pd.DataFrame(spreadsheet_rows)
+        spreadsheet = spreadsheet.drop(set(spreadsheet.columns) & ignore_spreadsheet, axis=1)
+        from openpyxl.formatting.rule import ColorScaleRule  # NOQA
+        from openpyxl.styles import Alignment, Font, NamedStyle  # NOQA
+        from openpyxl.utils import get_column_letter  # NOQA
+
+        excel_fpath = out_dpath / 'experiment_results.xlsx'
+        excel_fpath.delete()
+        writer = pd.ExcelWriter(excel_fpath, engine='openpyxl', mode='w')
+        with writer:
+            spreadsheet.to_excel(writer, sheet_name='report', index=False)
+            # workbook = writer.book
+            ws = writer.sheets['report']
+
+            ap_percentile_rule = ColorScaleRule(
+                start_type='percentile',
+                start_value=0,
+                start_color='ffaaaa',  # red-ish
+                mid_type='num',
+                mid_value=0.3,
+                mid_color='ffffff',  # white
+                end_type='percentile',
+                end_value=1,
+                end_color='aaffaa')  # green-ish
+
+            auc_percentile_rule = ColorScaleRule(
+                start_type='percentile',
+                start_value=0.4,
+                start_color='ffaaaa',  # red-ish
+                mid_type='num',
+                mid_value=0.7,
+                mid_color='ffffff',  # white
+                end_type='percentile',
+                end_value=1,
+                end_color='aaffaa')  # green-ish
+
+            metric_col_idxs = []
+
+            for col_idx in range(1, ws.max_column):
+                colname = spreadsheet.columns[col_idx - 1]
+                col = get_column_letter(col_idx)
+                if colname in metrics_keys:
+                    metric_col_idxs.append(col_idx)
+                max_col_len = max(map(len, spreadsheet.iloc[:, (col_idx - 1)].to_string(index=False).split('\n')))
+                # print('max_col_len = {!r}'.format(max_col_len))
+                if max_col_len < 8:
+                    ws.column_dimensions[col].width = min(max(max_col_len, len(colname)), 26)
+                else:
+                    ws.column_dimensions[col].width = 26
+
+            # from matplotlib.colors import cmap
+            import matplotlib
+            # cmap = matplotlib.cm.get_cmap('bwr')
+            # cmap = matplotlib.cm.get_cmap('spectral')
+            # metric_format = workbook.add_format({'num_format': '0.4f', 'bold': False})
+            ws.column_dimensions['A'].width = 40
+            for col_idx in metric_col_idxs:
+                colname = spreadsheet.columns[col_idx - 1]
+                col = get_column_letter(col_idx)
+                value_cells = '{col}2:{col}{row}'.format(col=col, row=ws.max_row)
+                ws.column_dimensions[col].width = 20
+                if 'AUC' in colname:
+                    ws.conditional_formatting.add(value_cells, auc_percentile_rule)
+                else:
+                    ws.conditional_formatting.add(value_cells, ap_percentile_rule)
+
+                # Not working in google slides?
+                # if 0:
+                #     for row in ws[value_cells]:
+                #         for cell in row:
+                #             import kwimage
+                #             try:
+                #                 cell.fill.bgColor.rgb = #kwimage.Color(cmap(cell.value)).ashex()[1:7]
+                #             except Exception:
+                #                 pass
+                #       # cell.fill.bgColor
+                #       # cell.number_format = '0.0000'
+
     if 0:
         best_candidates(class_rows, mean_rows)
 
@@ -604,19 +779,25 @@ def gather_measures(cmdline=False, **kwargs):
     abalation_orders = {1}
     analysis = result_analysis.ResultAnalysis(
         results_list2, ignore_params=ignore_params,
-        # metrics=['class_mAPUC', 'salient_APUC'],
-        metrics=['salient_AP'],
+        # metrics=['coi_mAPUC', 'coi_APUC'],
+        # metrics=['salient_AP'],
+        metrics=['coi_mAP', 'salient_AP'],
         metric_objectives={
             'salient_AP': 'max',
-            'class_mAP': 'max',
+            'coi_mAP': 'max',
         },
         ignore_metrics=ignore_metrics,
         abalation_orders=abalation_orders
     )
     try:
         analysis.run()
-    except Exception:
+    except TypeError:
+        raise
+    except Exception as ex:
+        print('AnalysisError: ex = {!r}'.format(ex))
         print('Warning: Statistical analysis failed. Probably needs more data.')
+        import xdev
+        xdev.embed()
     else:
         print('analysis.varied = {}'.format(ub.repr2(analysis.varied, nl=2)))
         if len(analysis.stats_table):
@@ -631,9 +812,9 @@ def gather_measures(cmdline=False, **kwargs):
     class_df = shrink_notations(class_df, drop=1)
     mean_df = shrink_notations(mean_df, drop=1)
 
-    if 'class_mAPUC' in mean_df.columns:
-        print('\nSort by class_mAPUC')
-        print(mean_df.sort_values('class_mAPUC').to_string())
+    if 'coi_mAPUC' in mean_df.columns:
+        print('\nSort by coi_mAPUC')
+        print(mean_df.sort_values('coi_mAPUC').to_string())
 
     if 'salient_APUC' in mean_df.columns:
         print('\nSort by salient_APUC')
@@ -643,9 +824,10 @@ def gather_measures(cmdline=False, **kwargs):
         print('\nClass: Sort by AP')
         print(class_df[~class_df['AP'].isnull()].sort_values('AP').to_string())
 
-    if 'AUC' in class_df.columns:
-        print('\nClass: Sort by AUC')
-        print(class_df[~class_df['AUC'].isnull()].sort_values('AUC').to_string())
+    if 0:
+        if 'AUC' in class_df.columns:
+            print('\nClass: Sort by AUC')
+            print(class_df[~class_df['AUC'].isnull()].sort_values('AUC').to_string())
 
     # mean_df['title'].apply(lambda x: int(x.split('epoch=')[1].split('-')[0]))
     def group_by_best(mean_df, metric_key, shrink=False):
@@ -665,9 +847,9 @@ def gather_measures(cmdline=False, **kwargs):
 
     print('\nBest Class Models')
     try:
-        best_per_expt = group_by_best(mean_df, 'class_mAP', shrink=True)
-        best_per_expt = best_per_expt[~best_per_expt['class_mAP'].isnull()]
-        print(best_per_expt.sort_values('class_mAP').to_string())
+        best_per_expt = group_by_best(mean_df, 'coi_mAP', shrink=True)
+        best_per_expt = best_per_expt[~best_per_expt['coi_mAP'].isnull()]
+        print(best_per_expt.sort_values('coi_mAP').to_string())
 
         if 0:
             import dataframe_image as dfi
@@ -685,9 +867,9 @@ def gather_measures(cmdline=False, **kwargs):
         pass
 
     # salient_metric = 'salient_APUC'
-    # class_metric = 'class_mAPUC'
+    # class_metric = 'coi_mAPUC'
     salient_metric = 'salient_AP'
-    class_metric = 'class_mAP'
+    class_metric = 'coi_mAP'
 
     try:
         print('\nBest Salient Models')
@@ -778,9 +960,12 @@ def plot_individual_class_curves(all_results, dataset_title_part, catname, fnum,
     from kwcoco.metrics import drawing
     import kwplot
     # max_num_curves = 16
-    max_num_curves = 32
+    # max_num_curves = 32
+    max_num_curves = 24
+    # max_num_curves = 16
     max_per_expt = None
-    max_per_expt = 10
+    # max_per_expt = 10
+    max_per_expt = 3
     fig = kwplot.figure(fnum=fnum, doclf=True)
 
     def lookup_metric(x):
@@ -836,10 +1021,12 @@ def plot_individual_class_curves(all_results, dataset_title_part, catname, fnum,
 def plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric='ap'):
     from kwcoco.metrics import drawing
     import kwplot
-    max_num_curves = 32
+    # max_num_curves = 32
+    max_num_curves = 24
     # max_num_curves = 16
     max_per_expt = None
-    max_per_expt = 10
+    # max_per_expt = 10
+    max_per_expt = 3
     fig = kwplot.figure(fnum=fnum, doclf=True)
     relevant_results = [r for r in all_results if r.nocls_measures and r.nocls_measures['nsupport'] > 0]
 

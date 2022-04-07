@@ -20,9 +20,9 @@ class AddWatchFieldsConfig(scfg.Config):
     target GSD.
     """
     default = {
-        'src': scfg.Value('in.geojson.json', help='input dataset to chip'),
+        'src': scfg.Value('data.kwcoco.json', help='input kwcoco filepath'),
 
-        'dst': scfg.Value(None, help='bundle directory for the output'),
+        'dst': scfg.Value(None, help='output kwcoco filepath'),
 
         'target_gsd': scfg.Value(10.0, help='compute transforms for a target gsd'),
 

@@ -22,8 +22,7 @@ from watch.utils import util_parallel
 from watch.utils import util_kwimage
 
 try:
-    import xdev
-    profile = xdev.profile
+    from xdev import profile
 except Exception:
     profile = ub.identity
 
@@ -285,9 +284,36 @@ def predict(cmdline=False, **kwargs):
     ], min_variations=1)
     print('deviation from fit->predict settings = {}'.format(ub.repr2(deviation, nl=1)))
 
+    HACK_FIX_MODELS_WITH_BAD_CHANNEL_SPEC = True
+    if HACK_FIX_MODELS_WITH_BAD_CHANNEL_SPEC:
+        # There was an issue where we trained models and specified
+        # r|g|b|mat:0.3 but we only passed data with r|g|b. At train time
+        # current logic (whch we need to fix) will happilly just take a subset
+        # of those channels, which means the recorded channels disagree with
+        # what the model was actually trained with.
+        if hasattr(method, 'sensor_channel_tokenizers'):
+            datamodule_channel_spec = datamodule_vars['channels']
+            unique_channel_streams = ub.oset()
+            for sensor, tokenizers in method.sensor_channel_tokenizers.items():
+                for code in tokenizers.keys():
+                    unique_channel_streams.add(code)
+            hack_model_spec = kwcoco.ChannelSpec.coerce(','.join(unique_channel_streams))
+            if datamodule_channel_spec is not None:
+                if hack_model_spec != datamodule_channel_spec:
+                    print('Warning: reported model channels may be incorrect due to bad train hyperparams')
+                    hack_common = hack_model_spec.intersection(datamodule_channel_spec)
+                    datamodule_vars['channels'] = hack_common
+
+    DZYNE_MODEL_HACK = 1
+    if DZYNE_MODEL_HACK:
+        if args.package_fpath.stem == 'lc_rgb_fusion_model_package':
+            # This model has an issue with the L8 features it was trained on
+            datamodule_vars['exclude_sensors'] = ['L8']
+
     datamodule = datamodule_class(
         **datamodule_vars
     )
+    # TODO: if TTA=True, disable determenistic time sampling
     datamodule.setup('test')
 
     if ub.argflag('--debug-timesample'):
@@ -527,10 +553,13 @@ def predict(cmdline=False, **kwargs):
         EMERGENCY_INPUT_AGREEMENT_HACK = True
 
         # prog.set_extra(' <will populate stats after first video>')
-        for batch in prog:
+        for orig_batch in prog:
             batch_regions = []
             # Move data onto the prediction device, grab spacetime region info
-            for item in batch:
+            fixed_batch = []
+            for item in orig_batch:
+                if item is None:
+                    continue
                 batch_regions.append({
                     'space_slice': tuple(item['tr']['space_slice']),
                     'in_gids': [frame['gid'] for frame in item['frames']],
@@ -559,6 +588,17 @@ def predict(cmdline=False, **kwargs):
                     frame['modes'] = filtered_modes
                     filtered_frames.append(frame)
                 item['frames'] = filtered_frames
+                fixed_batch.append(item)
+
+            if len(fixed_batch) == 0:
+                continue
+
+            batch = fixed_batch
+
+            if 0:
+                import netharn as nh
+                print(nh.data.collate._debug_inbatch_shapes(batch))
+                pass
 
             # self = method
             # with_loss = 0
@@ -567,7 +607,9 @@ def predict(cmdline=False, **kwargs):
             # xdev.embed()
 
             # Predict on the batch
-            outputs = method.forward_step(batch, with_loss=False)
+            import xdev
+            with xdev.embed_on_exception_context:
+                outputs = method.forward_step(batch, with_loss=False)
             outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
 
             if got_outputs is None:
@@ -951,7 +993,8 @@ class CocoStitchingManager(object):
                 'num_bands': final_probs.shape[2],
                 'warp_aux_to_img': img_from_vid.concise(),
             }
-            img.get('auxiliary', []).append(aux)
+            auxiliary = img.setdefault('auxiliary', [])
+            auxiliary.append(aux)
 
             # Save the prediction to disk
             total_prob += np.nansum(final_probs)
@@ -1006,14 +1049,63 @@ class CocoStitchingManager(object):
         return info
 
 
-def quantize_float01(imdata):
-    mask = np.isnan(imdata)
-    old_min = 0
-    old_max = 1
-    quantize_dtype = np.int16
-    quantize_max = np.iinfo(quantize_dtype).max
-    quantize_min = 0
-    quantize_nan = -9999
+def quantize_float01(imdata, old_min=0, old_max=1, quantize_dtype=np.int16):
+    """
+    Note:
+        Setting old_min / old_max indicates the possible extend of the input
+        data (and it will be clipped to it). It does not mean that the input
+        data has to have those min and max values, but it should be between
+        them.
+
+    Example:
+        >>> from watch.tasks.fusion.predict import *  # NOQA
+        >>> from kwcoco.util.util_delayed_poc import dequantize
+        >>> # Test error when input is not nicely between 0 and 1
+        >>> imdata = (np.random.randn(32, 32, 3) - 1.) * 2.5
+        >>> quant1, quantization1 = quantize_float01(imdata, old_min=0, old_max=1)
+        >>> recon1 = dequantize(quant1, quantization1)
+        >>> error1 = np.abs((recon1 - imdata)).sum()
+        >>> print('error1 = {!r}'.format(error1))
+        >>> #
+        >>> for i in range(1, 20):
+        >>>     print('i = {!r}'.format(i))
+        >>>     quant2, quantization2 = quantize_float01(imdata, old_min=-i, old_max=i)
+        >>>     recon2 = dequantize(quant2, quantization2)
+        >>>     error2 = np.abs((recon2 - imdata)).sum()
+        >>>     print('error2 = {!r}'.format(error2))
+
+    Example:
+        >>> # Test dequantize with uint8
+        >>> from watch.tasks.fusion.predict import *  # NOQA
+        >>> from kwcoco.util.util_delayed_poc import dequantize
+        >>> imdata = np.random.randn(32, 32, 3)
+        >>> quant1, quantization1 = quantize_float01(imdata, old_min=0, old_max=1, quantize_dtype=np.uint8)
+        >>> recon1 = dequantize(quant1, quantization1)
+        >>> error1 = np.abs((recon1 - imdata)).sum()
+        >>> print('error1 = {!r}'.format(error1))
+
+    Example:
+        >>> # Test quantization with different signed / unsigned combos
+        >>> from watch.tasks.fusion.predict import *  # NOQA
+        >>> print(quantize_float01(None, 0, 1, np.int16))
+        >>> print(quantize_float01(None, 0, 1, np.int8))
+        >>> print(quantize_float01(None, 0, 1, np.uint8))
+        >>> print(quantize_float01(None, 0, 1, np.uint16))
+
+    """
+    # old_min = 0
+    # old_max = 1
+    quantize_iinfo = np.iinfo(quantize_dtype)
+    quantize_max = quantize_iinfo.max
+    if quantize_iinfo.kind == 'u':
+        # Unsigned quantize
+        quantize_nan = 0
+        quantize_min = 1
+    elif quantize_iinfo.kind == 'i':
+        # Signed quantize
+        quantize_min = 0
+        quantize_nan = max(-9999, quantize_iinfo.min)
+
     quantization = {
         'orig_min': old_min,
         'orig_max': old_max,
@@ -1026,9 +1118,13 @@ def quantize_float01(imdata):
     new_extent = (quantize_max - quantize_min)
     quant_factor = new_extent / old_extent
 
-    new_imdata = (imdata - old_min) * quant_factor + quantize_min
-    new_imdata = new_imdata.astype(quantize_dtype)
-    new_imdata[mask] = quantize_nan
+    if imdata is not None:
+        invalid_mask = np.isnan(imdata)
+        new_imdata = (imdata.clip(old_min, old_max) - old_min) * quant_factor + quantize_min
+        new_imdata = new_imdata.astype(quantize_dtype)
+        new_imdata[invalid_mask] = quantize_nan
+    else:
+        new_imdata = None
 
     return new_imdata, quantization
 
@@ -1047,9 +1143,9 @@ if __name__ == '__main__':
         --with_class=auto \
         --with_saliency=auto \
         --with_change=False \
-        --package_fpath=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v39/SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=52-step=2269088.pt.dvc \
-        --pred_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v39/pred_SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=52-step=2269088.pt/Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco/pred.kwcoco.json \
-        --test_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-L1-2022-01/combo_DILM_nowv_vali.kwcoco.json \
+        --package_fpath=/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/training/raven/brodie/uky_invariants/features_22_03_14/runs/BASELINE_EXPERIMENT_V001/package.pt \
+        --pred_dataset=/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/training/raven/brodie/uky_invariants/features_22_03_14/runs/BASELINE_EXPERIMENT_V001/pred.kwcoco.json \
+        --test_dataset=/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json \
         --num_workers=5 \
         --compress=DEFLATE \
         --gpus=0, \

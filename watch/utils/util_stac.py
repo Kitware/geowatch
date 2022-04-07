@@ -197,13 +197,20 @@ def associate_msi_pan(stac_catalog):
     nonunique.
     '''
 
+    # Support proper stac catalog and otherwise assume the input here
+    # is some iterable of STAC items
+    if isinstance(stac_catalog, pystac.Catalog):
+        item_list = stac_catalog.get_all_items()
+    else:
+        item_list = stac_catalog
+
     # more efficient way to do this if collections are preserved during
     # intermediate steps:
     # search = catalog.search(collections=['worldview-nitf'])
     # items = list(search.get_items()
     items_dct = {
         i.id: i
-        for i in stac_catalog.get_all_items()
+        for i in item_list
         if i.properties.get('constellation') == 'worldview'
     }
 

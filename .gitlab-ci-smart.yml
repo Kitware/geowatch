@@ -82,7 +82,7 @@ stages:
         paths:
             
             #- .cache/conda/envs/loose-watch-env  # better with or without this?
-            - .cache/xdg_cache/smart_watch
+            - .cache/xdg_cache/watch
 
 .test_strict_template:
     &test_strict_template
@@ -118,7 +118,7 @@ stages:
         paths:
             
             #- .cache/conda/envs/strict-watch-env  # better with or without this?
-            - .cache/xdg_cache/smart_watch
+            - .cache/xdg_cache/watch
 
 #### JOBS ###
 
@@ -148,6 +148,8 @@ build_docker_and_upload_strict:
   stage:
     docker
   script:
+    # Note:
+    # CI_REGISTRY_IMAGE is set by gitlab CI
     - docker build --build-arg BUILD_STRICT=1 -t $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG .
     - docker run --rm $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch && python run_tests.py watch tests scripts"
     # Pushing container only if merging into default branch (i.e. "master")

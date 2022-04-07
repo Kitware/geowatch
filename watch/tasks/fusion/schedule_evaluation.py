@@ -15,6 +15,20 @@ python -m watch.tasks.fusion.schedule_evaluation \
         --test_dataset="$VALI_FPATH" \
         --run=0 --skip_existing=True
 
+# Note: change backend to tmux if slurm is not installed
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+EXPT_GROUP_CODE=eval3_candidates
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+        --gpus="0,1,2,3" \
+        --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
+        --test_dataset="$VALI_FPATH" \
+        --run=1 --skip_existing=True --backend=slurm \
+        --enable_pred=False \
+        --enable_eval=redo \
+        --draw_heatmaps=False
 
 """
 import ubelt as ub
@@ -36,6 +50,12 @@ class ScheduleEvaluationConfig(scfg.Config):
 
         'enable_eval': scfg.Value(True, help='if False, then evaluation is not run'),
         'enable_pred': scfg.Value(True, help='if False, then prediction is not run'),
+
+        'draw_heatmaps': scfg.Value(True, help='if true draw heatmaps on eval'),
+        'draw_curves': scfg.Value(True, help='if true draw curves on eval'),
+
+        'partition': scfg.Value(None, help='specify slurm partition (slurm backend only)'),
+        'mem': scfg.Value(None, help='specify slurm memory per task (slurm backend only)'),
     }
 
 
@@ -154,6 +174,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
     config = ScheduleEvaluationConfig(cmdline=cmdline, data=kwargs)
     model_globstr = config['model_globstr']
     test_dataset = config['test_dataset']
+    draw_curves = config['draw_curves']
+    draw_heatmaps = config['draw_heatmaps']
 
     if model_globstr is None and test_dataset is None:
         raise ValueError('model_globstr and test_dataset are required')
@@ -195,6 +217,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     with_pred = config['enable_pred']  # TODO: allow caching
     with_eval = config['enable_eval']
+
     workers_per_queue = 4
     recompute = False
 
@@ -210,10 +233,28 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     def package_metadata(package_fpath):
         # Hack for choosing one model from this "type"
-        import xdev
-        with xdev.embed_on_exception_context:
+        try:
             epoch_num = int(package_fpath.name.split('epoch=')[1].split('-')[0])
-        expt_name = package_fpath.name.split('_epoch')[0]
+            expt_name = package_fpath.name.split('_epoch')[0]
+        except Exception:
+            # Try to read package metadata
+            pkg_zip = ub.zopen(package_fpath, ext='.pt')
+            found = None
+            for member in pkg_zip.namelist():
+                # if member.endswith('model.pkl'):
+                if member.endswith('fit_config.yaml'):
+                    found = member
+                    break
+            if not found:
+                raise Exception(f'{package_fpath=} does not conform to name spec and does not seem to be a torch package with a package_header.json file')
+            else:
+                import yaml
+                config_file = ub.zopen(package_fpath / found, mode='r', ext='.pt')
+                config = yaml.safe_load(config_file)
+                expt_name = config['name']
+                # No way to introspect this (yet), so hack it
+                epoch_num = -1
+
         info = {
             'name': expt_name,
             'epoch': epoch_num,
@@ -256,8 +297,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
     #         packages_to_eval.append(info)
     #         # break
 
-    tmux_schedule_dpath = dvc_dpath / '_tmp_tmux_schedule'
-    tmux_schedule_dpath.mkdir(exist_ok=True)
+    queue_dpath = dvc_dpath / '_cmd_queue_schedule'
+    queue_dpath.mkdir(exist_ok=True)
 
     gpus = config['gpus']
     print('gpus = {!r}'.format(gpus))
@@ -282,30 +323,22 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     # queue = tmux_queue.TMUXMultiQueue(
     #     size=len(GPUS), environ=environ, gres=GPUS,
-    #     dpath=tmux_schedule_dpath)
+    #     dpath=queue_dpath)
 
     # queue = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
-    if config['backend'] == 'slurm':
-        from watch.utils import slurm_queue
-        queue = slurm_queue.SlurmQueue(name='schedule-eval')
-    elif config['backend'] == 'tmux':
-        from watch.utils import tmux_queue
-        queue = tmux_queue.TMUXMultiQueue(name='schedule-eval',
-                                          size=len(GPUS), environ=environ,
-                                          dpath=tmux_schedule_dpath)
-    else:
-        raise KeyError(config['backend'])
+    from watch.utils import cmd_queue
+    queue = cmd_queue.Queue.create(config['backend'], name='schedule-eval',
+                                   size=len(GPUS), environ=environ,
+                                   dpath=queue_dpath, gres=GPUS)
 
     virtualenv_cmd = config['virtualenv_cmd']
     if virtualenv_cmd:
         queue.add_header_command(virtualenv_cmd)
 
     recompute_pred = recompute
-    recompute_eval = recompute or 0
+    recompute_eval = recompute or (with_eval == 'redo')
 
     pred_cfg = {}
-
-    skip_existing = config['skip_existing']
 
     for info in packages_to_eval:
         package_fpath = info['fpath']
@@ -315,7 +348,30 @@ def schedule_evaluation(cmdline=False, **kwargs):
             sidecar2=True, as_json=False,
             pred_cfg=pred_cfg,
         )
+        info['suggestions'] = suggestions
 
+    skip_existing = config['skip_existing']
+
+    if with_eval == 'redo':
+        # Need to dvc unprotect
+        needs_unprotect = []
+        for info in packages_to_eval:
+            suggestions = info['suggestions']
+            pred_dataset_fpath = ub.Path(suggestions['pred_dataset'])  # NOQA
+            eval_metrics_fpath = ub.Path(suggestions['eval_dpath']) / 'curves/measures2.json'
+            eval_metrics_dvc_fpath = ub.Path(suggestions['eval_dpath']) / 'curves/measures2.json.dvc'
+
+            if eval_metrics_dvc_fpath.exists():
+                needs_unprotect.append(eval_metrics_fpath)
+
+        if needs_unprotect:
+            from watch.utils.simple_dvc import SimpleDVC
+            simple_dvc = SimpleDVC(dvc_dpath)
+            simple_dvc.unprotect(needs_unprotect)
+
+    for info in packages_to_eval:
+        package_fpath = info['fpath']
+        suggestions = info['suggestions']
         pred_dataset_fpath = ub.Path(suggestions['pred_dataset'])  # NOQA
         eval_metrics_fpath = ub.Path(suggestions['eval_dpath']) / 'curves/measures2.json'
         eval_metrics_dvc_fpath = ub.Path(suggestions['eval_dpath']) / 'curves/measures2.json.dvc'
@@ -332,11 +388,11 @@ def schedule_evaluation(cmdline=False, **kwargs):
             'workers_per_queue': workers_per_queue,
         }
 
-        print('pred_dataset_fpath = {!r}'.format(pred_dataset_fpath))
+        # print('pred_dataset_fpath = {!r}'.format(pred_dataset_fpath))
         has_eval = eval_metrics_dvc_fpath.exists() or eval_metrics_fpath.exists()
         has_pred = pred_dataset_fpath.exists()
-        print('has_eval = {!r}'.format(has_eval))
-        print('has_pred = {!r}'.format(has_pred))
+        # print('has_eval = {!r}'.format(has_eval))
+        # print('has_pred = {!r}'.format(has_pred))
 
         # import ubelt as ub
         # ub.util_hash._HASHABLE_EXTENSIONS.register(pathlib.Path)( lambda x: (b'PATH', str))
@@ -374,7 +430,10 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     # FIXME: slurm cpu arg seems to be cut in half
                     # int(ceil(workers_per_queue / 2))
                     pred_cpus = workers_per_queue
-                    pred_job = queue.submit(pred_command, gpus=1, name=name, cpus=pred_cpus)
+                    pred_job = queue.submit(pred_command, gpus=1, name=name,
+                                            cpus=pred_cpus,
+                                            partition=config['partition'],
+                                            mem=config['mem'])
 
         if with_eval:
             if not with_pred:
@@ -389,10 +448,11 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     --pred_dataset={pred_dataset} \
                       --eval_dpath={eval_dpath} \
                       --score_space=video \
-                      --draw_curves=1 \
-                      --draw_heatmaps=1 \
+                      --draw_curves={draw_curves} \
+                      --draw_heatmaps={draw_heatmaps} \
                       --workers=2
-                ''').format(**suggestions)
+                ''').format(**suggestions, draw_curves=draw_curves,
+                            draw_heatmaps=draw_heatmaps)
             if not recompute_eval:
                 # TODO: use a real stamp file
                 # Only run the command if its expected output does not exist
@@ -402,7 +462,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 )
             if recompute_eval or not (skip_existing and has_eval):
                 name = 'eval' + name_suffix
-                queue.submit(eval_command, depends=pred_job, name=name, cpus=2)
+                queue.submit(eval_command, depends=pred_job, name=name, cpus=2,
+                             partition=config['partition'], mem=config['mem'])
             # TODO: memory
 
     print('queue = {!r}'.format(queue))
@@ -414,10 +475,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # RUN
     if config['run']:
         # ub.cmd('bash ' + str(driver_fpath), verbose=3, check=True)
-        queue.run()
-        agg_state = queue.monitor()
-        if not agg_state['errored']:
-            queue.kill()
+        queue.run(block=True)
     else:
         driver_fpath = queue.write()
         print('Wrote script: to run execute:\n{}'.format(driver_fpath))

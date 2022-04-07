@@ -602,6 +602,7 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
     video_id_to_region_id = {}
     if geospace_lookup:
         # Association via geospace lookup
+        video_id_to_region_ids = ub.ddict(list)
         for region_id, region_sites in region_id_to_sites.items():
             video_ids = []
             for site_gdf in region_sites:
@@ -609,19 +610,36 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
                 video_overlaps = util_gis.geopandas_pairwise_overlaps(site_gdf, videos_gdf)
                 overlapping_video_indexes = set(np.hstack(list(video_overlaps.values())))
                 if len(overlapping_video_indexes) > 0:
-                    assert len(overlapping_video_indexes) == 1, 'should only belong to one video'
-                    overlapping_video_index = ub.peek(overlapping_video_indexes)
-                    video_id = videos_gdf.iloc[overlapping_video_index]['video_id']
+                    # assert len(overlapping_video_indexes) == 1, 'should only belong to one video'
+                    overlapping_video_indexes = list(overlapping_video_indexes)
+                    # overlapping_video_index = ub.peek(overlapping_video_indexes)
                     # video_name = coco_dset.index.videos[video_id]['name']
                     # assert site_gdf.iloc[0].region_id == video_name, 'sanity check'
                     # assert site_gdf.iloc[0].region_id == region_id, 'sanity check'
-                    video_ids.append(video_id)
-            assert ub.allsame(video_ids)
+                    video_ids.extend(videos_gdf.iloc[overlapping_video_indexes]['video_id'].tolist())
+            video_ids = sorted(set(video_ids))
+            if len(video_ids) > 1:
+                import warnings
+                warnings.warn('A site exists in more than one video')
+            # assert ub.allsame(video_ids)
             if len(video_ids) == 0:
                 print('No geo-space match for region_id={}'.format(region_id))
                 continue
-            video_id = video_ids[0]
-            video_id_to_region_id[video_id] = region_id
+            for video_id in video_ids:
+                video_id_to_region_ids[video_id].append(region_id)
+
+            for video_id, region_ids in video_id_to_region_ids.items():
+                # import xdev
+                # with xdev.embed_on_exception_context:
+                if len(region_ids) != 1:
+                    # FIXME: This should not be the case, but it seems it is
+                    # due to super regions maybe? If it is super regions this
+                    # hack of just choosing one of them, should be mostly ok?
+                    msg = f'a video {video_id=} contains more than one region {region_ids=}, not a handled case yet. We are punting and just choosing 1'
+                    warnings.warn(msg)
+                    # raise AssertionError(msg)
+                video_id_to_region_id[video_id] = region_ids[0]
+
     else:
         # Association via video name
         for region_id, region_sites in region_id_to_sites.items():
@@ -648,15 +666,33 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
         region_image_indexes = np.arange(len(region_image_dates))
         region_gids = subimg_df['image_id'].values
 
+        if geospace_lookup:
+            # Note: this was built for when videos really did correspond to
+            # regions in the case where videos correspond to tracks, this might
+            # not work as well. To mitigate, we can filter down to overlapping
+            # geospatial sites in this region here.
+            video_poly = subimg_df.geometry.unary_union
+            filtered_region_sites = []
+            for site_gdf in region_sites:
+                site_poly = site_gdf.geometry.unary_union
+                if video_poly.intersects(site_poly):
+                    # iou = video_poly.intersection(site_poly).area / video_poly.union(site_poly).area
+                    # print('iou = {!r}'.format(iou))
+                    filtered_region_sites.append(site_gdf)
+            region_sites = filtered_region_sites
+            print(f'{region_id=} {video_id=} #filtered(sites)={len(region_sites)}')
+
         drawable_region_sites = []
 
         # For each site in this region
         for site_gdf in region_sites:
-            if __debug__:
+            if __debug__ and 0:
                 # Sanity check, the sites should have spatial overlap with each image in the video
                 image_overlaps = util_gis.geopandas_pairwise_overlaps(site_gdf, subimg_df)
-                num_unique_overlap_frames = set(ub.map_vals(len, image_overlaps).values())
-                assert len(num_unique_overlap_frames) == 1
+                import xdev
+                with xdev.embed_on_exception_context:
+                    num_unique_overlap_frames = set(ub.map_vals(len, image_overlaps).values())
+                    assert len(num_unique_overlap_frames) == 1
 
             site_summary_row = site_gdf.iloc[0]
             site_rows = site_gdf.iloc[1:]
@@ -723,6 +759,8 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
             HEURISTIC_END_STATES = {
                 'Post Construction'
             }
+
+            BACKPROJECT_START_STATES = 0  # turn off back-projection
             HEURISTIC_START_STATES = {
                 'No Activity',
             }
@@ -790,9 +828,11 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
                     propogate_gids.extend(current_gids)
                     if PROJECT_ENDSTATE or catname not in HEURISTIC_END_STATES:
                         propogate_gids.extend(forward_gids)
-                    # Only need to backpropogate the first label (and maybe even not that?)
-                    if annot_idx == 0 and catname in HEURISTIC_START_STATES:
-                        propogate_gids.extend(backward_gids)
+
+                    if BACKPROJECT_START_STATES:
+                        # Only need to backpropogate the first label (and maybe even not that?)
+                        if annot_idx == 0 and catname in HEURISTIC_START_STATES:
+                            propogate_gids.extend(backward_gids)
 
                     for gid in propogate_gids:
                         img = coco_dset.imgs[gid]

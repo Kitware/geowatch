@@ -13,7 +13,23 @@ def exec_flake8(dpaths, select=None, ignore=None, max_line_length=79):
     if ignore is not None:
         args_list += ['--ignore=' + ','.join(ignore)]
     args_list += ['--statistics']
+
     info = ub.cmd(['flake8'] + args_list + dpaths, verbose=VERBOSE, check=False)
+
+    import re
+    unique_errors = []
+    summary_line = re.compile(r'(\d+)\s+(\w\d+) ([^ ].*)')
+    for line in info['out'].split('\n'):
+        match = summary_line.match(line)
+        if match:
+            freq, code, desc = match.groups()
+            unique_errors.append((freq, code, desc))
+
+    if unique_errors:
+        print('Unique errors:')
+        for freq, code, desc in unique_errors:
+            print(f'{code!r}: {desc!r},')
+
     if info['ret'] not in {0, 1}:
         raise Exception(ub.repr2(ub.dict_diff(info, ['out'])))
     return info['ret']
@@ -135,8 +151,61 @@ def custom_lint(dpath : str = '.', mode : str = 'lint', index=None, interact=Non
         'N814': 'camelcase imported as constant',
         'N817': 'camelcase imported as acronym',
         'N818': 'exception name be named with an Error suffix',
+    }
+
+    context_ignore = {
+        # 'whitespace': 0,
+        'whitespace': 0,
+        'indentation': 0,
+        'style': 0,
 
     }
+
+    if context_ignore['indentation']:
+        ignore.update({
+            'E101': 'indentation contains mixed spaces and tabs',
+            'E117': 'over-indented',
+            'E121': 'continuation line under-indented for hanging indent',
+            'E122': 'continuation line missing indentation or outdented',
+            'E124': 'closing bracket does not match visual indentation',
+            'E128': 'continuation line under-indented for visual indent',
+            'E129': 'visually indented line with same indent as next logical line',
+            'E131': 'continuation line unaligned for hanging indent',
+        })
+
+    if context_ignore['style']:
+        ignore.update({
+            'E401': 'multiple imports on one line',
+            'E402': 'module level import not at top of file',
+            'E701': 'multiple statements on one line (colon)',
+            'E703': 'statement ends with a semicolon',
+            # 'E712': "comparison to True should be 'if cond is True:' or 'if cond:'",
+            # 'E713': "test for membership should be 'not in'",
+            # 'E721': "do not compare types, use 'isinstance()'",
+            # 'E722': "do not use bare 'except'",
+            'E731': 'do not assign a lambda expression, use a def',
+            'E741': "ambiguous variable name 'l'",
+            'E742': "ambiguous class definition 'I'",
+        })
+    if context_ignore['whitespace']:
+        ignore.update({
+            'E252': 'missing whitespace around parameter equals',
+            'E302': 'expected 2 blank lines, found 1',
+            'E303': 'too many blank lines (3)',
+            'E211': "whitespace before '('",
+            'E225': 'missing whitespace around operator',
+            'E226': 'missing whitespace around arithmetic operator',
+            'E228': 'missing whitespace around modulo operator',
+            'E231': "missing whitespace after ','",
+            'E251': 'unexpected spaces around keyword / parameter equals',
+
+            'W291': 'trailing whitespace',
+            'W292': 'no newline at end of file',
+            'W293': 'blank line contains whitespace',
+            'W391': 'blank line at end of file',
+            'W605': r'invalid escape sequence "\w"',
+            'W191': 'indentation contains tabs',
+        })
 
     modifiers = {
         'whitespace': 1,

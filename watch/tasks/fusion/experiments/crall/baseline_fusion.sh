@@ -75,6 +75,7 @@ python -m watch.tasks.fusion.fit \
     --vali_dataset="$VALI_FPATH" \
     --test_dataset="$TEST_FPATH" \
     --channels="$CHANNELS" \
+    --global_change_weight=0.00 \
     --global_class_weight=1.00 \
     --global_saliency_weight=1.00 \
     --neg_to_pos_ratio=0.25 \

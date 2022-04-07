@@ -78,6 +78,8 @@ class Result(ub.NiceRepr):
         name (str): name of the experiment
         params (Dict[str, object]): configuration of the experiment
         metrics (Dict[str, float]): quantitative results of the experiment
+        metrics (Dict | None): any other metadata about this result.
+            This is unused in the analysis.
 
     Example:
         >>> from watch.utils.result_analysis import *  # NOQA
@@ -85,10 +87,11 @@ class Result(ub.NiceRepr):
         >>> print('self = {}'.format(self))
         self = <Result(name=53f57161,f1=0.33,acc=0.75,param1=1,param2=6.67,param3=a)>
     """
-    def __init__(self, name, params, metrics):
+    def __init__(self, name, params, metrics, meta=None):
         self.name = name
         self.params = params
         self.metrics = metrics
+        self.meta = meta
 
     def to_dict(self):
         row = ub.dict_union({'name': self.name}, self.metrics, self.params)
@@ -235,12 +238,12 @@ class ResultAnalysis:
             self.metrics = sorted(avail_metrics - set(self.ignore_metrics))
 
         # Analyze the impact of each parameter
-        self.statistics = statistics = []
-        for param_group in held_constant_groups:
-            for metric_key in self.metrics:
-                # group_values = ub.dict_isect(varied, param_group)
-                for param_value, group in table.groupby(param_group):
-                    metric_group = group[['name', metric_key] + param_group]
+        # self.statistics = statistics = []
+        # for param_group in held_constant_groups:
+        #     for metric_key in self.metrics:
+        #         # group_values = ub.dict_isect(varied, param_group)
+        #         for param_value, group in table.groupby(param_group):
+        #             metric_group = group[['name', metric_key] + param_group]
 
         # Analyze the impact of each parameter
         self.statistics = statistics = []
@@ -266,6 +269,7 @@ class ResultAnalysis:
                 value_to_metric_group = {}
                 value_to_metric_stats = {}
                 value_to_metric = {}
+
                 for param_value, group in table.groupby(param_group):
                     metric_group = group[['name', metric_key] + param_group]
                     metric_vals = metric_group[metric_key]
@@ -379,22 +383,24 @@ class ResultAnalysis:
             # Rougly speaking
             p_threshold = 0.05
             print('')
-            print(f'ANOVA hypothesis (roughly): the param {param_name!r} has no effect on the metric')
-            print('    Reject this hypothesis if the p value is less than a threshold')
-            print(ub.color_text(f'  Rank-ANOVA: p={anova_rank_p:0.4f}', 'green' if anova_rank_p < p_threshold else None))
-            print(ub.color_text(f'  Mean-ANOVA: p={anova_mean_p:0.4f}', 'green' if anova_mean_p < p_threshold else None))
+            # print(f'ANOVA hypothesis (roughly): the param {param_name!r} has no effect on the metric')
+            # print('    Reject this hypothesis if the p value is less than a threshold')
+            print(f'ANOVA: If p is low, the param {param_name!r} might have an effect')
+            print(ub.color_text(f'  Rank-ANOVA: p={anova_rank_p:0.8f}', 'green' if anova_rank_p < p_threshold else None))
+            print(ub.color_text(f'  Mean-ANOVA: p={anova_mean_p:0.8f}', 'green' if anova_mean_p < p_threshold else None))
             print('')
             print('Pairwise T-Tests')
             for pairstat in stats_row['pairwise']:
                 value1 = pairstat['value1']
                 value2 = pairstat['value2']
                 # n1 = pairstat['n1']
-                print(f'  Is {param_name}={value1} about as good as {param_name}={value2}?')
+                # print(f'  Is {param_name}={value1} about as good as {param_name}={value2}?')
+                print(f'  Is p is low, {param_name}={value1} may outperform {param_name}={value2}?')
                 if 'ttest_ind' in pairstat:
                     ttest_ind_result = pairstat['ttest_ind']
-                    print(ub.color_text(f'    ttest_ind:  p={ttest_ind_result.pvalue:0.4f}', 'green' if ttest_ind_result.pvalue < p_threshold else None))
+                    print(ub.color_text(f'    ttest_ind:  p={ttest_ind_result.pvalue:0.8f}', 'green' if ttest_ind_result.pvalue < p_threshold else None))
                 if 'ttest_rel' in pairstat:
                     ttest_rel_result = pairstat['ttest_ind']
-                    print(ub.color_text(f'    ttest_rel:  p={ttest_rel_result.pvalue:0.4f}', 'green' if ttest_rel_result.pvalue < p_threshold else None))
+                    print(ub.color_text(f'    ttest_rel:  p={ttest_rel_result.pvalue:0.8f}', 'green' if ttest_rel_result.pvalue < p_threshold else None))
 
         print(self.stats_table)

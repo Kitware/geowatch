@@ -89,7 +89,7 @@ class TemplateDataset(torch.utils.data.Dataset):
     Example:
         >>> # xdoctest: +SKIP
         >>> from watch.tasks.template.fit import *  # NOQA
-        >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
+        >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral')
         >>> input_dims = (128, 128)
         >>> window_dims = 'full'
         >>> self = TemplateDataset(coco_dset, input_dims, window_dims)
@@ -112,7 +112,8 @@ class TemplateDataset(torch.utils.data.Dataset):
             # window_dims=(128, 128),  # sub image
             window_overlap=0,
         )
-        self.grid = list(ub.flatten(self.task_grid.values()))
+        self.grid = self.task_grid['targets']
+        # .values()))
 
     def __len__(self):
         return len(self.grid)

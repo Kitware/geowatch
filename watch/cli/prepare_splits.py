@@ -1,3 +1,31 @@
+"""
+CommandLine:
+    xdoctest -m watch.cli.prepare_splits __doc__
+
+Example:
+    >>> from watch.cli.prepare_splits import *  # NOQA
+    >>> base_fpath = 'data.kwcoco.json'
+    >>> config = {
+    >>>     'base_fpath': './bundle/data.kwcoco.json',
+    >>>     'virtualenv_cmd': 'conda activate watch',
+    >>>     'run': 0,
+    >>>     'cache': False,
+    >>>     'backend': 'serial',
+    >>>     'verbose': 0,
+    >>> }
+    >>> queue = prep_splits(cmdline=False, **config)
+    >>> config['backend'] = 'slurm'
+    >>> queue = prep_splits(cmdline=False, **config)
+    >>> queue.rprint(0, 0)
+    >>> config['backend'] = 'tmux'
+    >>> queue = prep_splits(cmdline=False, **config)
+    >>> queue.rprint(0, 0)
+    >>> config['backend'] = 'serial'
+    >>> queue = prep_splits(cmdline=False, **config)
+    >>> queue.rprint(0, 0)
+
+"""
+
 import scriptconfig as scfg
 import ubelt as ub
 
@@ -19,28 +47,16 @@ class PrepareSplitsConfig(scfg.Config):
         'cache': scfg.Value(True, help='if True skip completed results'),
         'serial': scfg.Value(False, help='if True use serial mode'),
         'backend': scfg.Value('tmux', help=None),
+        'verbose': scfg.Value(1, help=''),
     }
 
 
-def main(cmdline=False, **kwargs):
+def _submit_split_jobs(base_fpath, queue, depends=[]):
     """
-    The idea is that we should have a lightweight scheduler.  I think something
-    fairly minimal can be implemented with tmux, but it would be nice to have a
-    more robust slurm extension.
-
-    TODO:
-        - [ ] Option to just dump the serial bash script that does everything.
+    Populates a Serial, Slurm, or Tmux Queue with jobs
     """
-    config = PrepareSplitsConfig(cmdline=cmdline)
-    config.update(kwargs)
 
-    if config['base_fpath'] == 'auto':
-        # Auto hack.
-        import watch
-        dvc_dpath = watch.find_smart_dvc_dpath()
-        base_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
-    else:
-        base_fpath = ub.Path(config['base_fpath'])
+    base_fpath = ub.Path(base_fpath)
 
     splits = {
         'nowv': base_fpath.augment(suffix='_nowv', multidot=True),
@@ -48,25 +64,13 @@ def main(cmdline=False, **kwargs):
         'train': base_fpath.augment(suffix='_train', multidot=True),
         'nowv_train': base_fpath.augment(suffix='_nowv_train', multidot=True),
         'wv_train': base_fpath.augment(suffix='_wv_train', multidot=True),
+        's2_wv_train': base_fpath.augment(suffix='_s2_wv_train', multidot=True),
 
         'vali': base_fpath.augment(suffix='_vali', multidot=True),
         'nowv_vali': base_fpath.augment(suffix='_nowv_vali', multidot=True),
         'wv_vali': base_fpath.augment(suffix='_wv_vali', multidot=True),
+        's2_wv_vali': base_fpath.augment(suffix='_s2_wv_vali', multidot=True),
     }
-    print('splits = {!r}'.format(splits))
-
-    # queue = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
-    if config['backend'] == 'slurm':
-        from watch.utils import slurm_queue
-        queue = slurm_queue.SlurmQueue(name='watch-splits')
-    elif config['backend'] == 'tmux':
-        from watch.utils import tmux_queue
-        queue = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
-    else:
-        raise KeyError(config['backend'])
-
-    if config['virtualenv_cmd']:
-        queue.add_header_command(config['virtualenv_cmd'])
 
     split_jobs = {}
     # Perform train/validation splits with and without worldview
@@ -77,7 +81,7 @@ def main(cmdline=False, **kwargs):
             --dst {splits['train']} \
             --select_videos '.name | startswith("KR_") | not'
         ''')
-    split_jobs['train'] = queue.submit(command, begin=10)
+    split_jobs['train'] = queue.submit(command, begin=1, depends=depends)
 
     command = ub.codeblock(
         fr'''
@@ -97,6 +101,15 @@ def main(cmdline=False, **kwargs):
         ''')
     queue.submit(command, depends=[split_jobs['train']])
 
+    command = ub.codeblock(
+        fr'''
+        python -m kwcoco subset \
+            --src {splits['train']} \
+            --dst {splits['s2_wv_train']} \
+            --select_images '.sensor_coarse == "WV" or .sensor_coarse == "S2"'
+        ''')
+    queue.submit(command, depends=[split_jobs['train']])
+
     # Perform vali/validation splits with and without worldview
     command = ub.codeblock(
         fr'''
@@ -105,7 +118,7 @@ def main(cmdline=False, **kwargs):
             --dst {splits['vali']} \
             --select_videos '.name | startswith("KR_")'
         ''')
-    split_jobs['vali'] = queue.submit(command)
+    split_jobs['vali'] = queue.submit(command, depends=depends)
 
     command = ub.codeblock(
         fr'''
@@ -113,6 +126,15 @@ def main(cmdline=False, **kwargs):
             --src {splits['vali']} \
             --dst {splits['nowv_vali']} \
             --select_images '.sensor_coarse != "WV"'
+        ''')
+    queue.submit(command, depends=[split_jobs['vali']])
+
+    command = ub.codeblock(
+        fr'''
+        python -m kwcoco subset \
+            --src {splits['vali']} \
+            --dst {splits['s2_wv_vali']} \
+            --select_images '.sensor_coarse == "WV" or .sensor_coarse == "S2"'
         ''')
     queue.submit(command, depends=[split_jobs['vali']])
 
@@ -133,9 +155,45 @@ def main(cmdline=False, **kwargs):
             --dst {splits['nowv']} \
             --select_images '.sensor_coarse != "WV"'
         ''')
-    queue.submit(command)
+    queue.submit(command, depends=depends)
+    return queue
 
-    queue.rprint()
+
+def prep_splits(cmdline=False, **kwargs):
+    """
+    The idea is that we should have a lightweight scheduler.  I think something
+    fairly minimal can be implemented with tmux, but it would be nice to have a
+    more robust slurm extension.
+
+    TODO:
+        - [ ] Option to just dump the serial bash script that does everything.
+    """
+    config = PrepareSplitsConfig(cmdline=cmdline)
+    config.update(kwargs)
+
+    if config['base_fpath'] == 'auto':
+        # Auto hack.
+        import watch
+        dvc_dpath = watch.find_smart_dvc_dpath()
+        # base_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
+        base_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json'
+    else:
+        base_fpath = ub.Path(config['base_fpath'])
+
+    # queue = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
+    from watch.utils import cmd_queue
+    queue = cmd_queue.Queue.create(
+        backend=config['backend'],
+        name='watch-splits', size=2
+    )
+
+    if config['virtualenv_cmd']:
+        queue.add_header_command(config['virtualenv_cmd'])
+
+    _submit_split_jobs(base_fpath, queue)
+
+    if config['verbose']:
+        queue.rprint()
 
     if config['run']:
         if config['serial']:
@@ -150,14 +208,21 @@ def main(cmdline=False, **kwargs):
         except Exception:
             pass
 
+    return queue
+
+main = prep_splits
 
 if __name__ == '__main__':
     """
     CommandLine:
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         python -m watch.cli.prepare_splits \
-            --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
-            --run=0 --serial=True
+            --base_fpath=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json \
+            --run=0 --backend=serial
+
+        python -m watch.cli.prepare_splits \
+            --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/foo.kwcoco.json \
+            --run=1 --backend=slurm
 
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         python -m watch.cli.prepare_splits \

@@ -28,6 +28,22 @@ class PatternBase:
         raise NotImplementedError
 
 
+# # TODO: wrapper for results of re and fnmatch
+# class Match(ub.NiceRepr):
+#     def __init__(self, string, pos, endpos):
+#         self.string = string
+#         self.pos = pos
+#         self.endpos = endpos
+#         self.lastgroup
+#         self.lastindex
+#     def span(self):
+#         return (self.pos, self.endpos)
+#     def __nice__(self):
+#         return self.string
+#     def __bool__(self):
+#         return True
+
+
 class Pattern(PatternBase, ub.NiceRepr):
     """
     Provides a common API to several common pattern matching syntaxes.
@@ -60,6 +76,9 @@ class Pattern(PatternBase, ub.NiceRepr):
         >>> assert not globpat.match('barfoo')
         >>> globpat = Pattern.coerce('[foo|bar]', 'glob')
         >>> globpat.match('foo')
+        >>> repat = Pattern.coerce('foo.*', 'regex')
+        >>> match = repat.search('baz-biz-foobar')
+        >>> match = repat.match('baz-biz-foobar')
     """
     def __init__(self, pattern, backend):
         if backend == 'regex':

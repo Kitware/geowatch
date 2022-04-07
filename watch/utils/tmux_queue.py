@@ -16,7 +16,7 @@ It should be possible to add more functionality, such as:
           a central scheduling process can run in the background, check
           the status of existing jobs, and spawn new jobs
 
-    - [ ] Dependencies between jobs - given a central scheduler, it can
+    - [X] Dependencies between jobs - given a central scheduler, it can
           only spawn a new job if a its dependencies have been met.
 
     - [ ] GPU resource requirements - if a job indicates how much of a
@@ -35,199 +35,38 @@ It should be possible to add more functionality, such as:
           doing, but that doesn't matter in debugged automated workflows, and
           this does seem like a nice simple utility. Doesnt seem to exist
           elsewhere either, but my search terms might be wrong.
+
+    - [ ] Handle the case where some jobs need the GPU and others do not
 """
 import ubelt as ub
-import itertools as it
+# import itertools as it
 import stat
 import os
-import json
 import uuid
 
-
-class BashJob(ub.NiceRepr):
-    """
-    A job meant to run inside of a larger bash file. Analog of SlurmJob
-    """
-    def __init__(self, command, name=None, depends=None, gpus=None, cpus=None):
-        if depends is not None and not ub.iterable(depends):
-            depends = [depends]
-
-        self.name = name
-        self.command = command
-        self.depends = depends
-
-    def __nice__(self):
-        return self.name
+from watch.utils import cmd_queue
+from watch.utils import serial_queue
 
 
-class PathIdentifiable(ub.NiceRepr):
-    """
-    An object that has an name, unique-rootid (to indicate the parent object),
-    and directory where it can write things to. Probably could clean this logic
-    up.
-    """
-    def __init__(self, name='', rootid=None, dpath=None):
-        if rootid is None:
-            rootid = str(ub.timestamp()) + '_' + ub.hash_data(uuid.uuid4())[0:8]
-        self.name = name
-        self.rootid = rootid
-        if dpath is None:
-            dpath = ub.ensure_app_cache_dir('tmux_queue', self.pathid)
-        self.dpath = ub.Path(dpath)
-
-    def __nice__(self):
-        return '{}'.format(self.pathid)
-
-    @property
-    def pathid(self):
-        """ A path-safe identifier for file names """
-        return '{}_{}'.format(self.name, self.rootid)
-
-
-class LinearBashQueue(PathIdentifiable):
-    """
-    A linear job queue written to a single bash file
-
-    Example:
-        >>> self = LinearBashQueue('foo', 'foo')
-        >>> self.rprint()
-    """
-    def __init__(self, name='', dpath=None, rootid=None, environ=None, cwd=None):
-        super().__init__(name=name, dpath=dpath, rootid=rootid)
-        self.fpath = self.dpath / (self.pathid + '.sh')
-        self.state_fpath = self.dpath / 'job_state_{}.txt'.format(self.pathid)
-        self.environ = environ
-        self.header = '#!/bin/bash'
-        self.header_commands = []
-        self.commands = []
-        self.cwd = cwd
-
-    def __nice__(self):
-        return f'{self.pathid} - {len(self.commands)}'
-
-    def finalize_text(self, with_status=True, with_gaurds=True):
-        script = [self.header]
-
-        total = len(self.commands)
-
-        if with_status:
-            script.append(ub.codeblock(
-                f'''
-                # Init state to keep track of job progress
-                let "_QUEUE_NUM_ERRORED=0"
-                let "_QUEUE_NUM_FINISHED=0"
-                _QUEUE_TOTAL={total}
-                _QUEUE_STATUS=""
-                '''))
-
-        def _mark_status(status):
-            # be careful with json formatting here
-            if with_status:
-                script.append(ub.codeblock(
-                    '''
-                    _QUEUE_STATUS="{}"
-                    ''').format(status))
-                json_parts = [
-                    '"{}": "{}"'.format('status', '\'$_QUEUE_STATUS\''),
-                    '"{}": {}'.format('finished', '\'$_QUEUE_NUM_FINISHED\''),
-                    '"{}": {}'.format('errored', '\'$_QUEUE_NUM_ERRORED\''),
-                    '"{}": {}'.format('total', '\'$_QUEUE_TOTAL\''),
-                    '"{}": "{}"'.format('name', self.name),
-                    '"{}": "{}"'.format('rootid', self.rootid),
-                ]
-                dump_code = 'printf \'{' + ', '.join(json_parts) + '}\\n\' > ' + str(self.state_fpath)
-                script.append(dump_code)
-                script.append('cat ' + str(self.state_fpath))
-
-        _mark_status('init')
-        if self.environ:
-            _mark_status('set_environ')
-            if with_gaurds:
-                script.append('set -x')
-            script.extend([
-                f'export {k}="{v}"' for k, v in self.environ.items()])
-            if with_gaurds:
-                script.append('set +x')
-
-        if self.cwd:
-            script.append(f'cd {self.cwd}')
-
-        for command in self.header_commands:
-            if with_gaurds:
-                script.append('set -x')
-            script.append(command)
-            if with_gaurds:
-                script.append('set +x')
-
-        for num, command in enumerate(self.commands):
-            _mark_status('run')
-            script.append(ub.codeblock(
-                '''
-                #
-                # Command {} / {}
-                ''').format(num + 1, total))
-            if with_gaurds:
-                script.append('set -x')
-            script.append(command)
-            # Check command status and update the bash state
-            if with_status:
-                script.append(ub.codeblock(
-                    '''
-                    if [[ "$?" == "0" ]]; then
-                        let "_QUEUE_NUM_FINISHED=_QUEUE_NUM_FINISHED+1"
-                    else
-                        let "_QUEUE_NUM_ERRORED=_QUEUE_NUM_ERRORED+1"
-                    fi
-                    '''))
-            if with_gaurds:
-                script.append('set +x')
-
-        _mark_status('done')
-        text = '\n'.join(script)
-        return text
-
-    def add_header_command(self, command):
-        self.header_commands.append(command)
-
-    def submit(self, command):
-        # TODO: we could accept additional args here that modify how we handle
-        # the command in the bash script we build (i.e. if the script is
-        # allowed to fail or not)
-        self.commands.append(command)
-
-    def write(self):
-        text = self.finalize_text()
-        with open(self.fpath, 'w') as file:
-            file.write(text)
-        os.chmod(self.fpath, (
-            stat.S_IXUSR | stat.S_IXGRP | stat.S_IRUSR |
-            stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP))
-        return self.fpath
-
-    def rprint(self, with_status=False, with_gaurds=False, with_rich=0):
-        """
-        Print info about the commands, optionally with rich
-        """
-        code = self.finalize_text(with_status=with_status,
-                                  with_gaurds=with_gaurds)
-        if with_rich:
-            from rich.panel import Panel
-            from rich.syntax import Syntax
-            from rich.console import Console
-            console = Console()
-            console.print(Panel(Syntax(code, 'bash'), title=str(self.fpath)))
-            # console.print(Syntax(code, 'bash'))
-        else:
-            print(ub.highlight_code(f'# --- {str(self.fpath)}', 'bash'))
-            print(ub.highlight_code(code, 'bash'))
-
-
-class TMUXMultiQueue(PathIdentifiable):
+class TMUXMultiQueue(cmd_queue.Queue):
     """
     Create multiple sets of jobs to start in detatched tmux sessions
 
     CommandLine:
         xdoctest -m watch.utils.tmux_queue TMUXMultiQueue
+
+    Example:
+        >>> from watch.utils.serial_queue import *  # NOQA
+        >>> self = TMUXMultiQueue(1, 'test-serial-queue')
+        >>> job1 = self.submit('echo hi 1 && false')
+        >>> job2 = self.submit('echo hi 2 && true')
+        >>> job3 = self.submit('echo hi 3 && true', depends=job1)
+        >>> self.rprint()
+        >>> if ub.find_exe('tmux'):
+        >>>     self.run()
+        >>>     self.monitor()
+        >>>     self.current_output()
+        >>>     self.kill()
 
     Example:
         >>> from watch.utils.tmux_queue import *  # NOQA
@@ -248,11 +87,46 @@ class TMUXMultiQueue(PathIdentifiable):
         >>> if ub.find_exe('tmux'):
         >>>     self.run()
         >>>     self.monitor()
+        >>>     self.current_output()
         >>>     self.kill()
+
+    Ignore:
+        >>> from watch.utils.tmux_queue import *  # NOQA
+        >>> self = TMUXMultiQueue(2, 'foo', gres=[0, 1])
+        >>> job1 = self.submit('echo hello && sleep 0.5')
+        >>> job2 = self.submit('echo hello && sleep 0.5')
+        >>> self.rprint()
+
+        >>> from watch.utils.tmux_queue import *  # NOQA
+        >>> self = TMUXMultiQueue(2, 'foo')
+        >>> job1 = self.submit('echo hello && sleep 0.5')
+        >>> self.sync()
+        >>> job2 = self.submit('echo hello && sleep 0.5')
+        >>> self.sync()
+        >>> job3 = self.submit('echo hello && sleep 0.5')
+        >>> self.sync()
+        >>> self.rprint()
+
+        >>> from watch.utils.tmux_queue import *  # NOQA
+        >>> self = TMUXMultiQueue(2, 'foo')
+        >>> job1 = self.submit('echo hello && sleep 0.5')
+        >>> job2 = self.submit('echo hello && sleep 0.5')
+        >>> job3 = self.submit('echo hello && sleep 0.5')
+        >>> self.rprint()
+
     """
     def __init__(self, size=1, name=None, dpath=None, rootid=None, environ=None,
                  gres=None):
-        super().__init__(name=name, rootid=rootid, dpath=dpath)
+        super().__init__()
+
+        if rootid is None:
+            rootid = str(ub.timestamp().split('T')[0]) + '_' + ub.hash_data(uuid.uuid4())[0:8]
+        self.name = name
+        self.rootid = rootid
+        self.pathid = '{}_{}'.format(self.name, self.rootid)
+        if dpath is None:
+            dpath = ub.ensure_app_cache_dir('cmd_queue', self.pathid)
+        self.dpath = ub.Path(dpath)
 
         if environ is None:
             environ = {}
@@ -262,10 +136,11 @@ class TMUXMultiQueue(PathIdentifiable):
         self.gres = gres
 
         self.jobs = []
+        self.header_commands = []
 
-        self._init_workers()
+        self._new_workers()
 
-    def _init_workers(self):
+    def _new_workers(self, start=0):
         per_worker_environs = [self.environ] * self.size
         if self.gres:
             # TODO: more sophisticated GPU policy?
@@ -275,94 +150,245 @@ class TMUXMultiQueue(PathIdentifiable):
                 })
                 for cvd, e in zip(self.gres, per_worker_environs)]
 
-        self.workers = [
-            LinearBashQueue(
+        workers = [
+            serial_queue.SerialQueue(
                 name='queue_{}_{}'.format(self.name, worker_idx),
                 rootid=self.rootid,
                 dpath=self.dpath,
                 environ=e
             )
-            for worker_idx, e in enumerate(per_worker_environs)
+            for worker_idx, e in enumerate(per_worker_environs, start=start)
         ]
-        self._worker_cycle = it.cycle(self.workers)
+        return workers
 
     def __nice__(self):
         return ub.repr2(self.workers)
 
-    def __iter__(self):
-        yield from self._worker_cycle
+    def _semaphore_wait_command(self, flag_fpaths, msg):
+        r"""
+        TODO: use flock?
 
-    def submit(self, command, **kwargs):
+        Ignore:
+
+            #  In queue 1
+            flock /var/lock/lock1.lock python -c 'while True: print(".", end="")'
+
+            #  In queue 2
+            flock /var/lock/lock2.lock python -c 'while True: print(".", end="")'
+
+            #  In queue 3
+            flock /var/lock/lock1.lock echo "first lock finished" && \
+                flock /var/lock/lock2.lock echo "second lock finished" && \
+                    python -c "print('this command depends on lock1 and lock2 procs completing')"
+
+
+            flock /var/lock/lock2.lock echo "second lock finished"
+
+            flock /var/lock/lock1.lock /var/lock/lock2.lock -c python -c 'while True: print("hi")'
         """
-        Args:
-            index (int): if True, forces this job into a particular queue
-        """
-        name = kwargs.get('name', None)
-        if name is None:
-            name = kwargs['name'] = self.name + '-job-{}'.format(len(self.jobs))
-        job = BashJob(command, **kwargs)
-        self.jobs.append(job)
-        return job
-        # if index is None:
-        #     worker = next(self._worker_cycle)
-        # else:
-        #     worker = self.workers[index]
-        # return worker.submit(command)
+        # TODO: use inotifywait
+        conditions = ['[ ! -f {} ]'.format(p) for p in flag_fpaths]
+        condition = ' || '.join(conditions)
+        # TODO: count number of files that exist
+        command = ub.codeblock(
+            f'''
+            printf "{msg} "
+            while {condition};
+            do
+               sleep 1;
+            done
+            printf "finished {msg} "
+            ''')
+        return command
+
+    def _semaphore_signal_command(self, flag_fpath):
+        return ub.codeblock(
+            f'''
+            # Signal this worker is complete
+            mkdir -p {flag_fpath.parent} && touch {flag_fpath}
+            '''
+        )
 
     def order_jobs(self):
+        """
+        Example:
+            >>> from watch.utils.tmux_queue import *  # NOQA
+            >>> self = TMUXMultiQueue(5, 'foo')
+            >>> job1a = self.submit('echo hello && sleep 0.5')
+            >>> job1b = self.submit('echo hello && sleep 0.5')
+            >>> job2a = self.submit('echo hello && sleep 0.5', depends=[job1a])
+            >>> job2b = self.submit('echo hello && sleep 0.5', depends=[job1b])
+            >>> job3 = self.submit('echo hello && sleep 0.5', depends=[job2a, job2b])
+            >>> self.rprint()
+
+            self.run(block=True)
+
+        Example:
+            >>> from watch.utils.tmux_queue import *  # NOQA
+            >>> self = TMUXMultiQueue(5, 'foo')
+            >>> job0 = self.submit('true')
+            >>> job1 = self.submit('true')
+            >>> job2 = self.submit('true', depends=[job0])
+            >>> job3 = self.submit('true', depends=[job1])
+            >>> #job2c = self.submit('true', depends=[job1a, job1b])
+            >>> #self.sync()
+            >>> job4 = self.submit('true', depends=[job2, job3, job1])
+            >>> job5 = self.submit('true', depends=[job4])
+            >>> job6 = self.submit('true', depends=[job4])
+            >>> job7 = self.submit('true', depends=[job4])
+            >>> job8 = self.submit('true', depends=[job5])
+            >>> job9 = self.submit('true', depends=[job6])
+            >>> job10 = self.submit('true', depends=[job6])
+            >>> job11 = self.submit('true', depends=[job7])
+            >>> job12 = self.submit('true', depends=[job10, job11])
+            >>> job13 = self.submit('true', depends=[job4])
+            >>> job14 = self.submit('true', depends=[job13])
+            >>> job15 = self.submit('true', depends=[job4])
+            >>> job16 = self.submit('true', depends=[job15, job13])
+            >>> job17 = self.submit('true', depends=[job4])
+            >>> job18 = self.submit('true', depends=[job17])
+            >>> job19 = self.submit('true', depends=[job14, job16, job17])
+            >>> self.rprint()
+            >>> # self.run(block=True)
+        """
         import networkx as nx
-        graph = nx.DiGraph()
-        for index, job in enumerate(self.jobs):
-            graph.add_node(job.name, job=job, index=index)
-        for index, job in enumerate(self.jobs):
-            if job.depends:
-                for dep in job.depends:
-                    graph.add_edge(dep.name, job.name)
+        graph = self._dependency_graph()
 
-        # Determine what jobs need to be grouped together
-        wcc_groups = []
-        for wcc in list(nx.weakly_connected_components(graph)):
-            sub = graph.subgraph(wcc)
-            if 0:
-                print(nx.forest_str(nx.minimum_spanning_arborescence(sub)))
-            wcc_order = list(nx.topological_sort(sub))
-            wcc_groups.append(wcc_order)
+        # Get rid of implicit dependencies
+        reduced_graph = nx.transitive_reduction(graph)
 
-        # Solve a bin packing problem to partition these into self.size groups
-        from watch.utils.util_kwarray import balanced_number_partitioning
-        group_weights = list(map(len, wcc_groups))
-        groupxs = balanced_number_partitioning(group_weights, num_parts=self.size)
-        node_groups = [list(ub.take(wcc_groups, gxs)) for gxs in groupxs]
+        # cmd_queue.graph_str(graph, write=print)
 
-        # Reorder each group to better agree with submission order
-        final_orders = []
-        for group in node_groups:
-            priorities = []
-            for nodes in group:
-                nodes_index = min(graph.nodes[n]['index'] for n in nodes)
-                priorities.append(nodes_index)
+        in_cut_nodes = set()
+        out_cut_nodes = set()
+        cut_edges = []
+        for n in reduced_graph.nodes:
+            # TODO: need to also check that the paths to a source node are
+            # not unique, otherwise we dont need to cut the node, but extra
+            # cuts wont matter, just make it less effiicent
+            in_d = reduced_graph.in_degree[n]
+            out_d = reduced_graph.out_degree[n]
+            if in_d > 1:
+                cut_edges.extend(list(reduced_graph.in_edges(n)))
+                in_cut_nodes.add(n)
+            if out_d > 1:
+                cut_edges.extend(list(reduced_graph.out_edges(n)))
+                out_cut_nodes.add(n)
 
-            final_queue_order = list(ub.flatten(ub.take(group, ub.argsort(priorities))))
-            final_queue_jobs = [graph.nodes[n]['job'] for n in final_queue_order]
-            final_orders.append(final_queue_jobs)
+        list(nx.dfs_labeled_edges(reduced_graph))
 
-        # Submit each job to the linear queue in the correct order
-        for worker, jobs in zip(self.workers, final_orders):
-            worker.commands.clear()
-            for job in jobs:
-                worker.submit(job.command)
+        # cut_nodes = out_cut_nodes | in_cut_nodes
+
+        cut_notes = in_cut_nodes.copy()
+        cut_notes.update([v for u, v in cut_edges])
+
+        cut_graph = reduced_graph.copy()
+        cut_graph.remove_edges_from(cut_edges)
+
+        # Get all the node groups disconnected by the cuts
+        condensed = nx.condensation(reduced_graph, nx.weakly_connected_components(cut_graph))
+
+        if 0:
+            from graphid.util import util_graphviz
+            import kwplot
+            kwplot.autompl()
+            util_graphviz.show_nx(graph, fnum=1)
+            util_graphviz.show_nx(reduced_graph, fnum=3)
+            util_graphviz.show_nx(condensed, fnum=2)
+
+        # Rank each condensed group, which defines
+        # what order it is allowed to be executed in
+        rankings = ub.ddict(set)
+        condensed_order = list(nx.topological_sort(condensed))
+        for c_node in condensed_order:
+            members = set(condensed.nodes[c_node]['members'])
+            ancestors = set(ub.flatten([nx.ancestors(reduced_graph, m) for m in members]))
+            cut_in_ancestors = ancestors & in_cut_nodes
+            cut_out_ancestors = ancestors & out_cut_nodes
+            cut_in_members = members & in_cut_nodes
+            rank = len(cut_in_members) + len(cut_out_ancestors) + len(cut_in_ancestors)
+            for m in members:
+                rankings[rank].update(members)
+
+        # cmd_queue.graph_str(condensed, write=print)
+
+        # Each rank defines a group that must itself be ordered
+        # Ranks will execute sequentially, members within the
+        # rank *might* be run in parallel
+        ranked_job_groups = []
+        for rank, group in sorted(rankings.items()):
+            subgraph = graph.subgraph(group)
+            # Only things that can run in parapellel are disconnected components
+            parallel_groups = []
+            for wcc in list(nx.weakly_connected_components(subgraph)):
+                sub_subgraph = subgraph.subgraph(wcc)
+                wcc_order = list(nx.topological_sort(sub_subgraph))
+                parallel_groups.append(wcc_order)
+            # Ranked bins
+            # Solve a bin packing problem to partition these into self.size groups
+            from watch.utils.util_kwarray import balanced_number_partitioning
+            group_weights = list(map(len, parallel_groups))
+            groupxs = balanced_number_partitioning(group_weights, num_parts=self.size)
+            rank_groups = [list(ub.take(parallel_groups, gxs)) for gxs in groupxs]
+            rank_groups = [g for g in rank_groups if len(g)]
+
+            # Reorder each group to better agree with submission order
+            rank_jobs = []
+            for group in rank_groups:
+                priorities = []
+                for nodes in group:
+                    nodes_index = min(graph.nodes[n]['index'] for n in nodes)
+                    priorities.append(nodes_index)
+                final_queue_order = list(ub.flatten(ub.take(group, ub.argsort(priorities))))
+                final_queue_jobs = [graph.nodes[n]['job'] for n in final_queue_order]
+                rank_jobs.append(final_queue_jobs)
+            ranked_job_groups.append(rank_jobs)
+
+        queue_workers = []
+        flag_dpath = (self.dpath / 'semaphores')
+        prev_rank_flag_fpaths = None
+        for rank, rank_jobs in enumerate(ranked_job_groups):
+            # Hack, abuse init workers each time to construct workers
+            workers = self._new_workers(start=len(queue_workers))
+            rank_workers = []
+            for worker, jobs in zip(workers, rank_jobs):
+                # Add a dummy job to wait for dependencies of this linear
+                # queue
+
+                if prev_rank_flag_fpaths:
+                    command = self._semaphore_wait_command(prev_rank_flag_fpaths, msg=f"wait for previous rank {rank - 1}")
+                    # Note: this should not be a real job
+                    worker.submit(command, bookkeeper=1)
+
+                for job in jobs:
+                    worker.submit(job.command)
+
+                rank_workers.append(worker)
+
+            queue_workers.extend(rank_workers)
+
+            # Add a dummy job at the end of each worker to signal finished
+            rank_flag_fpaths = []
+            num_rank_workers = len(rank_workers)
+            for worker_idx, worker in enumerate(rank_workers):
+                rank_flag_fpath = flag_dpath / f'rank_flag_{rank}_{worker_idx}_{num_rank_workers}.done'
+                command = self._semaphore_signal_command(rank_flag_fpath)
+                # Note: this should not be a real job
+                worker.submit(command, bookkeeper=1)
+                rank_flag_fpaths.append(rank_flag_fpath)
+            prev_rank_flag_fpaths = rank_flag_fpaths
+
+        # Overwrite workers with our new dependency aware workers
+        for worker in queue_workers:
+            for header_command in self.header_commands:
+                worker.add_header_command(header_command)
+        self.workers = queue_workers
 
     def add_header_command(self, command):
         """
         Adds a header command run at the start of each queue
         """
-        for worker in self.workers:
-            worker.add_header_command(command)
-
-    @property
-    def total_jobs(self):
-        return len(self.jobs)
-        # sum(len(worker.commands) for worker in self.workers)
+        self.header_commands.append(command)
 
     def finalize_text(self):
         self.order_jobs()
@@ -372,14 +398,16 @@ class TMUXMultiQueue(PathIdentifiable):
             #!/bin/bash
             # Driver script to start the tmux-queue
             echo "submitting {} jobs"
-            ''').format(self.total_jobs)]
+            ''').format(self.num_real_jobs)]
         for queue in self.workers:
             # run_command_in_tmux_queue(command, name)
             part = ub.codeblock(
                 f'''
-                ### Run Queue: {queue.pathid} with {len(queue.commands)} jobs
+                ### Run Queue: {queue.pathid} with {len(queue)} jobs
                 tmux new-session -d -s {queue.pathid} "bash"
-                tmux send -t {queue.pathid} "source {queue.fpath}" Enter
+                tmux send -t {queue.pathid} \\
+                    "source {queue.fpath}" \\
+                    Enter
                 ''').format()
             driver_lines.append(part)
         driver_lines += ['echo "jobs submitted"']
@@ -404,12 +432,17 @@ class TMUXMultiQueue(PathIdentifiable):
         self.write()
         ub.cmd(f'bash {self.fpath}', verbose=3, check=True)
         if block:
-            return self.monitor()
+            agg_state = self.monitor()
+            if not agg_state['errored']:
+                self.kill()
+            return agg_state
 
     def serial_run(self):
         """
         Hack to run everything without tmux. This really should be a different
         "queue" backend.
+
+        See Serial Queue instead
         """
         self.order_jobs()
         queue_fpaths = []
@@ -446,17 +479,9 @@ class TMUXMultiQueue(PathIdentifiable):
             for worker in self.workers:
                 fin_color = ''
                 err_color = ''
-                try:
-                    state = json.loads(worker.state_fpath.read_text())
-                except Exception:
+                state = worker.read_state()
+                if state['status'] == 'unknown':
                     finished = False
-                    state = {
-                        'name': worker.name,
-                        'status': 'unknown',
-                        'total': len(worker.commands),
-                        'finished': None,
-                        'errored': None,
-                    }
                     fin_color = '[yellow]'
                 else:
                     finished &= (state['status'] == 'done')
@@ -501,7 +526,7 @@ class TMUXMultiQueue(PathIdentifiable):
                 live.update(table)
         return agg_state
 
-    def rprint(self, with_status=False, with_rich=0):
+    def rprint(self, with_status=False, with_gaurds=False, with_rich=0):
         """
         Print info about the commands, optionally with rich
         """
@@ -511,25 +536,33 @@ class TMUXMultiQueue(PathIdentifiable):
         self.order_jobs()
         console = Console()
         for queue in self.workers:
-            code = queue.finalize_text(with_status=with_status)
-            if with_rich:
-                console.print(Panel(Syntax(code, 'bash'), title=str(queue.fpath)))
-                # console.print(Syntax(code, 'bash'))
-            else:
-                print(ub.highlight_code(f'# --- {str(queue.fpath)}', 'bash'))
-                print(ub.highlight_code(code, 'bash'))
+            queue.rprint(with_status=with_status, with_gaurds=with_gaurds,
+                         with_rich=with_rich)
+            # code = queue.finalize_text(with_status=with_status)
+            # if with_rich:
+            #     console.print(Panel(Syntax(code, 'bash'), title=str(queue.fpath)))
+            #     # console.print(Syntax(code, 'bash'))
+            # else:
+            #     print(ub.highlight_code(f'# --- {str(queue.fpath)}', 'bash'))
+            #     print(ub.highlight_code(code, 'bash'))
 
         code = self.finalize_text()
         console.print(Panel(Syntax(code, 'bash'), title=str(self.fpath)))
+
+    def current_output(self):
+        for queue in self.workers:
+            print('\n\nqueue = {!r}'.format(queue))
+            # First print out the contents for debug
+            ub.cmd(f'tmux capture-pane -p -t "{queue.pathid}:0.0"', verbose=3)
 
     def kill(self):
         # Kills all the tmux panes
         for queue in self.workers:
             print('\n\nqueue = {!r}'.format(queue))
             # First print out the contents for debug
-            ub.cmd(f'tmux capture-pane -p -t "{queue.pathid}:0.0"', verbose=2)
+            ub.cmd(f'tmux capture-pane -p -t "{queue.pathid}:0.0"', verbose=3)
             # Then kill it
-            ub.cmd(f'tmux kill-session -t {queue.pathid}', verbose=2)
+            ub.cmd(f'tmux kill-session -t {queue.pathid}', verbose=0)
 
     def _tmux_current_sessions(self):
         # Kills all the tmux panes
@@ -544,29 +577,6 @@ class TMUXMultiQueue(PathIdentifiable):
                     'rest': rest
                 })
         return sessions
-
-
-class SerialQueue:
-    """
-    Serial drop-in replacement for the tmux queue.
-
-    TODO:
-        - [ ] Move to a different file
-        - [ ] Parallel non-tmux version
-    """
-    def __init__(self):
-        self.commands = []
-
-    def submit(self, command):
-        self.commands.append(command)
-
-    def finalize_text(self):
-        text = '\n\n'.join(self.commands)
-        return text
-
-    def rprint(self):
-        text = self.finalize_text()
-        print(ub.highlight_code(text, 'bash'))
 
 
 if 0:

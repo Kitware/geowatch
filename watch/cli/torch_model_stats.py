@@ -18,6 +18,7 @@ class TorchModelStatsConfig(scfg.Config):
     """
     default = {
         'src': scfg.PathList(help='path to one or more torch models', position=1),
+        'stem_stats': scfg.Value(help='if True, print more verbose model mean/std', position=2),
     }
 
 
@@ -55,11 +56,12 @@ def main(cmdline=False, **kwargs):
 
         # TODO: generalize the load-package
         raw_module = utils.load_model_from_package(package_fpath)
-
         if hasattr(raw_module, 'module'):
             module = raw_module.module
         else:
             module = raw_module
+
+        # TODO: get the category freq
 
         model_stats = {}
         num_params = nh.util.number_of_parameters(module)
@@ -85,12 +87,16 @@ def main(cmdline=False, **kwargs):
                 channel = kwcoco.ChannelSpec.coerce(channel).concise().spec
                 sensor_modes_with_stats.add((sensor, channel))
                 unique_sensors.add(sensor)
-                known_input_stats.append({
+                sensor_stat = {
                     'sensor': sensor,
                     'channel': channel,
-                    # 'mean': stats['mean'].ravel().tolist(),
-                    # 'std': stats['std'].ravel().tolist(),
-                })
+                }
+                if config['stem_stats']:
+                    sensor_stat.update({
+                        'mean': stats['mean'].ravel().tolist(),
+                        'std': stats['std'].ravel().tolist(),
+                    })
+                known_input_stats.append(sensor_stat)
 
             unique_sensor_modes = list(module.dataset_stats['unique_sensor_modes'])
             for sensor, channel in unique_sensor_modes:
@@ -154,6 +160,9 @@ def main(cmdline=False, **kwargs):
             print('model_stats = {}'.format(ub.repr2(model_stats, nl=2, sort=0, precision=2)))
 
         print('package_rows = {}'.format(ub.repr2(package_rows, nl=2, sort=0)))
+
+
+_CLI = TorchModelStatsConfig
 
 if __name__ == '__main__':
     """

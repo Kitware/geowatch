@@ -153,7 +153,7 @@ def wv_ortho(stac_catalog,
     else:
         orthorectified_catalog = parallel_map_items(
             catalog,
-            _ortho_map,
+            ortho_map,
             max_workers=jobs,
             mode='process' if jobs > 1 else 'serial',
             extra_kwargs=dict(outdir=outdir,
@@ -184,7 +184,7 @@ def wv_ortho(stac_catalog,
 
 
 @maps(history_entry='wv_ortho')
-def _ortho_map(stac_item, outdir, drop_empty=False, *args, **kwargs):
+def ortho_map(stac_item, outdir, drop_empty=False, *args, **kwargs):
     def is_empty(fpath):
         '''
         Check for a failed gdalwarp resulting in an image of all zeros
@@ -226,7 +226,8 @@ def _ortho_map(stac_item, outdir, drop_empty=False, *args, **kwargs):
 
 
 def orthorectify(in_fpath, out_fpath, geometry: shapely.geometry.Polygon,
-                 te_dems: bool, as_vrt: bool, as_utm: bool):
+                 te_dems: bool, as_vrt: bool, as_utm: bool,
+                 te_dem_cache_dir: str = None):
     '''
     Orthorectify a WV image to a DEM using RPCs.
 
@@ -284,7 +285,7 @@ def orthorectify(in_fpath, out_fpath, geometry: shapely.geometry.Polygon,
         # the DEM to the image first. But see
         # watch.utils.util_raster.open_cropped() for those tests.
         from watch.rc import dem_path
-        dem_fpath = dem_path()
+        dem_fpath = dem_path(cache_dir=te_dem_cache_dir)
 
     else:
 
@@ -295,7 +296,7 @@ def orthorectify(in_fpath, out_fpath, geometry: shapely.geometry.Polygon,
     # https://gis.stackexchange.com/questions/193094/can-gdalwarp-reproject-from-espg4326-wgs84-to-utm
     # -t_srs '+proj=utm +zone=12 +datum=WGS84 +units=m +no_defs'
     if as_utm:
-        epsg = watch.gis.spatial_reference.utm_epsg_from_latlon(lat, lon)
+        epsg = watch.utils.utils_gis.utm_epsg_from_latlon(lat, lon)
     else:
         epsg = 4326
 

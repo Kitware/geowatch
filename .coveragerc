@@ -24,3 +24,5 @@ omit =
     */setup.py
     watch/tasks/fusion/experiments/*
     watch/tasks/rutgers_material_seg/experiments/*
+    watch/tasks/uky_temporal_prediction/spacenet
+    watch/tasks/depth/modules

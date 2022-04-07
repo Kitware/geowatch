@@ -1,3 +1,43 @@
+"""
+The following example simply produces the script under different variations.
+
+CommandLine:
+    xdoctest -m watch.cli.prepare_teamfeats __doc__
+
+Example:
+    >>> from watch.cli.prepare_teamfeats import *  # NOQA
+    >>> dvc_dpath = ub.Path('.')
+    >>> base_fpath = dvc_dpath / 'bundle/data.kwcoco.json'
+    >>> config = {
+    >>>     'base_fpath': './bundle/data.kwcoco.json',
+    >>>     'gres': [0, 1],
+    >>>     'dvc_dpath': './',
+    >>> #
+    >>>     'virtualenv_cmd': 'conda activate watch',
+    >>> #
+    >>>     'with_landcover': 1,
+    >>>     'with_materials': 1,
+    >>>     'with_invariants': 1,
+    >>>     'do_splits': 1,
+    >>> #
+    >>>     'run': 0,
+    >>>     #'check': False,
+    >>>     'cache': False,
+    >>>     'backend': 'serial',
+    >>>     'verbose': 0,
+    >>> }
+    >>> config['backend'] = 'slurm'
+    >>> queue = prep_feats(cmdline=False, **config)
+    >>> queue.rprint(0, 0)
+    >>> config['backend'] = 'tmux'
+    >>> queue = prep_feats(cmdline=False, **config)
+    >>> queue.rprint(0, 0)
+    >>> config['backend'] = 'serial'
+    >>> queue = prep_feats(cmdline=False, **config)
+    >>> queue.rprint(0, 0)
+"""
+
+
 import scriptconfig as scfg
 import ubelt as ub
 
@@ -29,6 +69,9 @@ class TeamFeaturePipelineConfig(scfg.Config):
         'with_invariants': scfg.Value(True, help='Include UKY invariant features'),
         'with_depth': scfg.Value(True, help='Include DZYNE WorldView depth features'),
 
+        'invariant_segmentation': scfg.Value(False, help='Enable/Disable segmentation part of invariants'),
+        'invariant_pca': scfg.Value(0, help='Enable/Disable invariant PCA'),
+
         'virtualenv_cmd': scfg.Value(None, type=str, help=ub.paragraph(
             '''
             Command to start the appropriate virtual environment if your bashrc
@@ -45,13 +88,18 @@ class TeamFeaturePipelineConfig(scfg.Config):
 
         'do_splits': scfg.Value(True, help='if True also make splits'),
 
-        'follow': scfg.Value(False),
+        'follow': scfg.Value(True),
 
-        'serial': scfg.Value(False, help='if True use serial mode')
+        'serial': scfg.Value(False, help='if True use serial mode'),
+
+        'backend': scfg.Value('tmux', help=None),
+
+        'check': scfg.Value(True, help='if True check files exist where we can'),
+        'verbose': scfg.Value(1, help=''),
     }
 
 
-def main(cmdline=True, **kwargs):
+def prep_feats(cmdline=True, **kwargs):
     """
     The idea is that we should have a lightweight scheduler.  I think something
     fairly minimal can be implemented with tmux, but it would be nice to have a
@@ -60,13 +108,12 @@ def main(cmdline=True, **kwargs):
     TODO:
         - [ ] Option to just dump the serial bash script that does everything.
     """
-    from watch.utils import tmux_queue
-    from watch.utils.lightning_ext import util_globals
     from scriptconfig.smartcast import smartcast
 
     config = TeamFeaturePipelineConfig(cmdline=cmdline, data=kwargs)
 
     gres = config['gres']
+    # check = config['check']
     gres = smartcast(gres)
     if gres is None:
         gres = 'auto'
@@ -86,7 +133,6 @@ def main(cmdline=True, **kwargs):
             workers = 0
         else:
             workers = len(gres)
-    data_workers = util_globals.coerce_num_workers(config['data_workers'])
 
     if config['dvc_dpath'] == 'auto':
         import watch
@@ -103,15 +149,83 @@ def main(cmdline=True, **kwargs):
 
     aligned_bundle_dpath = base_fpath.parent
 
+    if workers == 0:
+        gres = None
+
+    if gres is None:
+        size = max(1, workers)
+    else:
+        size = len(gres)
+
+    # queue = tmux_queue.TMUXMultiQueue(name='teamfeat', size=size, gres=gres)
+    from watch.utils import cmd_queue
+    queue = cmd_queue.Queue.create(
+        name='watch-teamfeat',
+        backend=config['backend'],
+        # Tmux only
+        size=size, gres=gres,
+    )
+
+    if config['virtualenv_cmd']:
+        queue.add_header_command(config['virtualenv_cmd'])
+
+    _populate_teamfeat_queue(queue, base_fpath, dvc_dpath,
+                             aligned_bundle_dpath, config)
+
+    if config['verbose']:
+        queue.rprint()
+
+    if config['run']:
+        agg_state = None
+        # follow = config['follow']
+        # if follow and workers == 0 and len(queue.workers) == 1:
+        #     queue = queue.workers[0]
+        #     fpath = queue.write()
+        #     ub.cmd(f'bash {fpath}', verbose=3, check=True)
+        # else:
+        if config['serial']:
+            queue.serial_run()
+        else:
+            queue.run()
+        if config['follow']:
+            agg_state = queue.monitor()
+        if not config['keep_sessions']:
+            if agg_state is not None and not agg_state['errored']:
+                queue.kill()
+
+    """
+    Ignore:
+        python -m kwcoco stats data.kwcoco.json uky_invariants.kwcoco.json dzyne_landcover.kwcoco.json
+        python -m watch stats uky_invariants.kwcoco.json dzyne_landcover.kwcoco.json
+    """
+    return queue
+
+
+def _populate_teamfeat_queue(queue, base_fpath, dvc_dpath, aligned_bundle_dpath, config):
+    from watch.utils.lightning_ext import util_globals
+    data_workers = util_globals.coerce_num_workers(config['data_workers'])
+
     model_fpaths = {
         'rutgers_materials': dvc_dpath / 'models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth',
         # 'rutgers_materials': dvc_dpath / 'models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth',
         'dzyne_landcover': dvc_dpath / 'models/landcover/visnav_remap_s2_subset.pt',
 
-        'uky_pretext': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pretext_package.pt',
-        'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt',
-        'uky_pca': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pca_projection_matrix.pt',
+        # 2022-02-11
+        # 'uky_pretext': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pretext_package.pt',
+        # 'uky_pca': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pca_projection_matrix.pt',
+        # 'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt',
 
+        # 2022-03-11
+        # 'uky_pretext': dvc_dpath / 'models/uky/uky_invariants_2022_03_11/TA1_pretext_model/pretext_package.pt',
+        # 'uky_pca': dvc_dpath / 'models/uky/uky_invariants_2022_03_11/TA1_pretext_model/pca_projection_matrix.pt',
+        # 'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt',  # uses old segmentation model
+
+        # 2022-03-21
+        'uky_pretext': dvc_dpath / 'models/uky/uky_invariants_2022_03_21/pretext_model/pretext_package.pt',
+        'uky_pca': dvc_dpath / 'models/uky/uky_invariants_2022_03_21/pretext_model/pretext_pca_104.pt',
+        # 'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_02_21/TA1_segmentation_model/segmentation_package.pt',  # uses old segmentation model
+
+        # TODO: use v1 on RGB and v2 on PAN
         'dzyne_depth': dvc_dpath / 'models/depth/weights_v1.pt',
         # 'dzyne_depth': dvc_dpath / 'models/depth/weights_v2_gray.pt',
     }
@@ -123,6 +237,11 @@ def main(cmdline=True, **kwargs):
         'uky_invariants': aligned_bundle_dpath / 'uky_invariants.kwcoco.json',
     }
 
+    print('Exist check: ')
+    print(ub.repr2(ub.map_vals(lambda x: x.exists(), model_fpaths)))
+    print(ub.repr2(ub.map_vals(lambda x: x.exists(), outputs)))
+
+    # TODO: different versions of features need different codes.
     codes = {
         'with_landcover': 'L',
         'with_depth': 'D',
@@ -139,6 +258,7 @@ def main(cmdline=True, **kwargs):
         # Landcover is fairly fast to run, do it first
         task = {}
         task['output_fpath'] = outputs['dzyne_landcover']
+        task['gpus'] = 1
         task['command'] = ub.codeblock(
             fr'''
             python -m watch.tasks.landcover.predict \
@@ -146,6 +266,7 @@ def main(cmdline=True, **kwargs):
                 --deployed="{model_fpaths['dzyne_landcover']}" \
                 --output="{task['output_fpath']}" \
                 --num_workers="{data_workers}" \
+                --select_images='.sensor_coarse == "S2"' \
                 --device=0
             ''')
         combo_code_parts.append(codes[key])
@@ -176,6 +297,7 @@ def main(cmdline=True, **kwargs):
         # depth_data_workers = min(2, data_workers)
         depth_window_size = 512  # takes 18GB
         task['output_fpath'] = outputs['dzyne_depth']
+        task['gpus'] = 1
         task['command'] = ub.codeblock(
             fr'''
             python -m watch.tasks.depth.predict \
@@ -194,6 +316,7 @@ def main(cmdline=True, **kwargs):
     if config[key]:
         task = {}
         task['output_fpath'] = outputs['rutgers_materials']
+        task['gpus'] = 1
         task['command'] = ub.codeblock(
             fr'''
             python -m watch.tasks.rutgers_material_seg.predict \
@@ -203,7 +326,7 @@ def main(cmdline=True, **kwargs):
                 --default_config_key=iarpa \
                 --num_workers="{data_workers}" \
                 --batch_size=32 --gpus "0" \
-                --compress=DEFLATE --blocksize=128
+                --compress=DEFLATE --blocksize=128 --cache=True
             ''')
         combo_code_parts.append(codes[key])
         tasks.append(task)
@@ -213,72 +336,44 @@ def main(cmdline=True, **kwargs):
     key = 'with_invariants'
     if config[key]:
         task = {}
+
+        if config['invariant_segmentation']:
+            # segmentation_parts = [
+            #     rf'''
+            #     --segmentation_package_path "{model_fpaths['uky_segmentation']}"
+            #     '''
+            # ]
+            raise NotImplementedError()
+
+        if not model_fpaths['uky_pretext'].exists():
+            print('Warning: UKY pretext model does not exist')
+
         # all_tasks = 'before_after segmentation pretext'
         task['output_fpath'] = outputs['uky_invariants']
+        task['gpus'] = 1
         task['command'] = ub.codeblock(
             fr'''
             python -m watch.tasks.invariants.predict \
                 --input_kwcoco "{base_fpath}" \
                 --output_kwcoco "{task['output_fpath']}" \
                 --pretext_package_path "{model_fpaths['uky_pretext']}" \
-                --segmentation_package_path "{model_fpaths['uky_segmentation']}" \
                 --pca_projection_path  "{model_fpaths['uky_pca']}" \
-                --do_pca 1 \
+                --do_pca {config['invariant_pca']} \
                 --patch_overlap=0.5 \
                 --num_workers="{data_workers}" \
                 --write_workers 2 \
-                --tasks all
+                --tasks before_after pretext
             ''')
         combo_code_parts.append(codes[key])
         tasks.append(task)
-
-    if workers == 0:
-        gres = None
-
-    if gres is None:
-        size = min(len(tasks), max(1, workers))
-    else:
-        size = min(len(tasks), len(gres))
-
-    tq = tmux_queue.TMUXMultiQueue(name='teamfeat', size=size, gres=gres)
-    if config['virtualenv_cmd']:
-        tq.add_header_command(config['virtualenv_cmd'])
-
     for task in tasks:
         if config['cache']:
             if not task['output_fpath'].exists():
-                command = f"[[ -f '{task['output_fpath']}' ]] || " + task['command']
-                tq.submit(command)
+                # command = f"[[ -f '{task['output_fpath']}' ]] || " + task['command']
+                command = f"test -f '{task['output_fpath']}' || " + task['command']
+                queue.submit(command, gpus=task['gpus'])
         else:
-            tq.submit(task['command'])
-
-    if workers > 0:
-        # Launch this TQ if there are parallel workers, otherwise just make a
-        # longer serial script
-        tq.rprint()
-        tq.write()
-
-        # TODO: make the monitor spawn in a new tmux session. The monitor could
-        # actually be the scheduler process.
-        if config['run']:
-            import subprocess
-            try:
-                if config['serial']:
-                    tq.serial_run()
-                else:
-                    tq.run()
-                agg_state = tq.monitor()
-            except subprocess.CalledProcessError as ex:
-                print('ex.stdout = {!r}'.format(ex.stdout))
-                print('ex.stderr = {!r}'.format(ex.stderr))
-                print('ex.returncode = {!r}'.format(ex.returncode))
-                raise
-            else:
-                if not config['keep_sessions']:
-                    if not agg_state['errored']:
-                        tq.kill()
-
-        tq = tmux_queue.TMUXMultiQueue(name='combine-feats', size=2)
+            queue.submit(task['command'])
 
     # Finalize features by combining them all into combo.kwcoco.json
     tocombine = [str(base_fpath)] + [str(task['output_fpath']) for task in tasks]
@@ -286,55 +381,33 @@ def main(cmdline=True, **kwargs):
 
     base_combo_fpath = aligned_bundle_dpath / f'combo_{combo_code}.kwcoco.json'
 
-    if config['virtualenv_cmd']:
-        tq.add_header_command(config['virtualenv_cmd'])
-
     # TODO: enable forcing if needbe
     # if not base_combo_fpath.exists() or not config['cache']:
     if True:
         #  Indent of this the codeblock matters for this line
-        src_lines = ' \\\n                          '.join(tocombine)
-        command = ub.codeblock(
-            fr'''
-            python -m watch.cli.coco_combine_features \
-                --src {src_lines} \
-                --dst {base_combo_fpath}
-            ''')
-        tq.submit(command)
-    tq.rprint()
-
-    if config['run']:
-        agg_state = None
-        follow = config['follow']
-        if follow and workers == 0 and len(tq.workers) == 1:
-            queue = tq.workers[0]
-            fpath = queue.write()
-            ub.cmd(f'bash {fpath}', verbose=3, check=True)
-        else:
-            if config['serial']:
-                tq.serial_run()
-            else:
-                tq.run()
-            if config['follow']:
-                agg_state = tq.monitor()
-        if not config['keep_sessions']:
-            if agg_state is not None and not agg_state['errored']:
-                tq.kill()
+        queue.sync()
+        src_lines = ' \\\n        '.join(tocombine)
+        command = '\n'.join([
+            'python -m watch.cli.coco_combine_features \\',
+            f'    --src {src_lines} \\',
+            f'    --dst {base_combo_fpath}'
+        ])
+        queue.submit(command)
 
     if config['do_splits']:
         # Also call the prepare-splits script
         from watch.cli import prepare_splits
-        split_config = ub.dict_isect(
-            config, prepare_splits.PrepareSplitsConfig.default)
-        split_config['base_fpath'] = str(base_combo_fpath)
-        prepare_splits.main(**split_config)
+        base_fpath = str(base_combo_fpath)
+        queue.sync()
+        prepare_splits._submit_split_jobs(base_fpath, queue)
+        # split_config = ub.dict_isect(
+        #     config, prepare_splits.PrepareSplitsConfig.default)
+        # split_config['base_fpath'] = str(base_combo_fpath)
+        # prepare_splits.prepare_teamfeats(**split_config)
 
-    """
-    Ignore:
-        python -m kwcoco stats data.kwcoco.json uky_invariants.kwcoco.json dzyne_landcover.kwcoco.json
-        python -m watch stats uky_invariants.kwcoco.json dzyne_landcover.kwcoco.json
-    """
+    return queue
 
+main = prep_feats
 
 if __name__ == '__main__':
     """
@@ -343,9 +416,9 @@ if __name__ == '__main__':
         python -m watch.cli.prepare_teamfeats \
             --base_fpath="$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json" \
             --gres=0 \
-            --with_depth=True \
-            --keep_sessions=False \
-            --run=False --cache=False --virtualenv_cmd "conda activate watch"
+            --with_depth=0 \
+            --run=False --cache=False --virtualenv_cmd "conda activate watch" \
+            --backend=serial
 
         python -m watch.cli.prepare_teamfeats --gres=0,2 --with_depth=True --keep_sessions=True
         python -m watch.cli.prepare_teamfeats --gres=2 --with_materials=False --keep_sessions=True
@@ -367,11 +440,7 @@ if __name__ == '__main__':
         python -m watch.cli.prepare_teamfeats \
             --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
             --gres=0,1 --with_depth=0 --with_materials=False  --with_invariants=False \
-            --run=1 --do_splits=True
-
-
-
-
+            --run=0 --do_splits=True
 
         ###
         DATASET_CODE=Aligned-Drop2-TA1-2022-02-24
@@ -380,13 +449,29 @@ if __name__ == '__main__':
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
         python -m watch.cli.prepare_teamfeats \
             --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
-            --gres=0, \
+            --gres=0,1 \
             --with_depth=1 \
             --with_landcover=1 \
             --with_invariants=1 \
             --with_materials=1 \
             --depth_workers=auto \
-            --do_splits=1  --cache=1 --run=1
+            --do_splits=1  --cache=0 --run=0
+
+        ###
+        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
+        KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+        python -m watch.cli.prepare_teamfeats \
+            --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
+            --gres=0,1 \
+            --with_depth=0 \
+            --with_landcover=1 \
+            --with_invariants=1 \
+            --with_materials=1 \
+            --depth_workers=auto \
+            --invariant_pca=0 \
+            --invariant_segmentation=0 \
+            --do_splits=0  --cache=1 --run=0
 
     """
     main(cmdline=True)

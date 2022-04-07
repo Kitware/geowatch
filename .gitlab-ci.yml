@@ -27,7 +27,7 @@
             - [ ] Optimize caching and creation of the conda environments
 
             - [X] Allow some network tests to run (and ensure we cache the
-                  $HOME/.cache/smart_watch) directory to prevent large
+                  $HOME/.cache/watch) directory to prevent large
                   downloads.
 
             - [ ] Create a minimal no-network test suite
@@ -196,7 +196,7 @@ run_linter:
         - pip install -r requirements/linting.txt 
 
     script:
-        - python dev/lint.py [atk,watch] --mode=lint
+        - python dev/lint.py [watch] --mode=lint
 
     # We should eventually enforce linting
     allow_failure: true
@@ -234,21 +234,23 @@ test_full_strict/conda-linux:
     needs: []
 
 
-build_docker_strict:
-  <<:
-    *common_template_docker
-  rules:
-    - <<: *if-merge-request
-  stage:
-    docker
-  script:
-    - docker build --build-arg BUILD_STRICT=1 -t $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG .
-    - docker run --rm $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch && python run_tests.py watch tests scripts"
-  image:
-    docker:19.03.12
-  variables:
-    IMAGE_TAG: latest
-  needs: []
+## We are going to completely disable this because build and upload effectively does it.
+#build_docker_strict:
+#  <<:
+#    *common_template_docker
+#  rules:
+#    - <<: *if-merged-into-default
+#    #- <<: *if-merge-request
+#  stage:
+#    docker
+#  script:
+#    - docker build --build-arg BUILD_STRICT=1 -t $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG .
+#    - docker run --rm $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch && python run_tests.py watch tests scripts"
+#  image:
+#    docker:19.03.12
+#  variables:
+#    IMAGE_TAG: latest
+#  needs: []
 
 
 build_docker_and_upload_strict:
@@ -369,3 +371,13 @@ build_docker_and_upload_strict:
 
             python -c "from osgeo import gdal; from pyproj import CRS; print(CRS.from_user_input('epsg:4236'))"
             python -c "from pyproj import CRS; from osgeo import gdal; print(CRS.from_user_input('epsg:4236'))"
+
+
+            docker build --build-arg BUILD_STRICT=1 -t foo .
+            docker run -it foo /bin/bash 
+
+
+            source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch 
+            
+            xdoctest watch/cli/coco_merge_features.py
+            python run_tests.py watch tests scripts

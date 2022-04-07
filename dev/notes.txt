@@ -160,3 +160,10 @@ reformat images   0/626... rate=0 Hz, eta=?, total=0:00:00Traceback (most recent
     raise NotImplementedError                
 NotImplementedError                          
 
+
+
+"""
+Temporal clustering matching for change detection of structures from saatllite imagery robinosn 2020
+"""
+
+https://github.com/microsoft/poultry-cafos

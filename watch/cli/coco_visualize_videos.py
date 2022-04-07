@@ -75,7 +75,7 @@ class CocoVisualizeConfig(scfg.Config):
         'any3': scfg.Value(False, help='if True, ensure the "any3" channels are drawn. If set to "only", then other per-channel visualizations are supressed. TODO: better name?'),
 
         'draw_imgs': scfg.Value(True),
-        'draw_anns': scfg.Value(True),
+        'draw_anns': scfg.Value('auto', help='auto means only draw anns if they exist'),
 
         'cmap': scfg.Value('viridis', help='colormap for single channel data'),
 
@@ -85,7 +85,7 @@ class CocoVisualizeConfig(scfg.Config):
         'num_frames': scfg.Value(None, type=str, help='show the first N frames from each video, if None, all are shown'),
         'start_frame': scfg.Value(0, type=str, help='If specified each video will start on this frame'),
 
-        'skip_missing': scfg.Value(False, type=str, help='If true, skip any image that does not have the requested channels'),
+        'skip_missing': scfg.Value(True, type=str, help='If true, skip any image that does not have the requested channels. Otherwise a nan image will be shown'),
 
         # TODO: better support for this
         # TODO: use the kwcoco_video_data, has good logic for this
@@ -97,6 +97,9 @@ class CocoVisualizeConfig(scfg.Config):
             None, type=str, help='Use a fixed normalization scheme for visualization; e.g. "scaled_25percentile"'),
 
         'extra_header': scfg.Value(None, help='extra text to include in the header'),
+
+        'include_sensors': scfg.Value(None, help='if specified can be comma separated valid sensors'),
+        'exclude_sensors': scfg.Value(None, help='if specified can be comma separated invalid sensors'),
 
         'select_images': scfg.Value(
             None, type=str, help=ub.paragraph(
@@ -201,6 +204,9 @@ def main(cmdline=True, **kwargs):
     print('coco_dset.fpath = {!r}'.format(coco_dset.fpath))
     print('coco_dset = {!r}'.format(coco_dset))
 
+    if config['draw_anns'] == 'auto':
+        config['draw_anns'] = coco_dset.n_annots > 0
+
     bundle_dpath = ub.Path(coco_dset.bundle_dpath)
     dset_idstr = _dataset_id(coco_dset)
     if config['viz_dpath'] is not None:
@@ -220,43 +226,16 @@ def main(cmdline=True, **kwargs):
     start_frame = smartcast(config['start_frame'])
     end_frame = None if num_frames is None else start_frame + num_frames
 
+    from watch.utils import kwcoco_extensions
     selected_gids = None
-    if config['select_images'] is not None:
-        try:
-            import jq
-        except Exception:
-            print('The jq library is required to run a generic image query')
-            raise
-
-        try:
-            query_text = ".images[] | select({select_images}) | .id".format(**config)
-            query = jq.compile(query_text)
-            selected_gids = query.input(coco_dset.dataset).all()
-            selected_gids = set(selected_gids)
-        except Exception:
-            print('JQ Query Failed: {}'.format(query_text))
-            raise
-
-    if config['select_videos'] is not None:
-        try:
-            import jq
-        except Exception:
-            print('The jq library is required to run a generic image query')
-            raise
-
-        try:
-            query_text = ".videos[] | select({select_videos}) | .id".format(**config)
-            query = jq.compile(query_text)
-            selected_vidids = query.input(coco_dset.dataset).all()
-            vid_selected_gids = set(ub.flatten(coco_dset.index.vidid_to_gids[vidid]
-                                               for vidid in selected_vidids))
-            if selected_gids is None:
-                selected_gids = vid_selected_gids
-            else:
-                selected_gids &= vid_selected_gids
-        except Exception:
-            print('JQ Query Failed: {}'.format(query_text))
-            raise
+    selected_gids = kwcoco_extensions.filter_image_ids(
+        coco_dset,
+        gids=selected_gids,
+        include_sensors=config['include_sensors'],
+        exclude_sensors=config['exclude_sensors'],
+        select_images=config['select_images'],
+        select_videos=config['select_videos'],
+    )
 
     if config['skip_missing'] and channels is not None:
         requested_channels = kwcoco.ChannelSpec.coerce(channels).fuse().as_set()
@@ -392,7 +371,8 @@ def main(cmdline=True, **kwargs):
                             verbose=config['verbose'],
                             fixed_normalization_scheme=config.get(
                                 'fixed_normalization_scheme'),
-                            any3=config['any3'], dset_idstr=dset_idstr)
+                            any3=config['any3'], dset_idstr=dset_idstr,
+                            skip_missing=config['skip_missing'])
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
             job.result()
@@ -517,6 +497,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                chan_to_normalizer=None,
                                fixed_normalization_scheme=None,
                                any3=True, dset_idstr='',
+                               skip_missing=False,
+                               only_boxes=1,
                                cmap='viridis', verbose=0):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
@@ -531,27 +513,13 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     align_method = img.get('align_method', 'unknown')
     name = img.get('name', 'unknown')
 
-    vidname = coco_dset.index.videos[img['video_id']]['name']
-    date_captured = img.get('date_captured', '')
-    frame_index = img.get('frame_index', None)
-    gid = img.get('id', None)
-    image_name = img.get('name', '')
-
-    image_id_parts = []
-    image_id_parts.append(f'gid={gid}')
-    image_id_parts.append(f'frame_index={frame_index}')
-    image_id_part = ', '.join(image_id_parts)
-
-    header_line_infos = []
-    header_line_infos.append([vidname, image_id_part, _header_extra])
-    header_line_infos.append([dset_idstr])
-    header_line_infos.append([image_name])
-    header_line_infos.append([sensor_coarse, date_captured])
-    header_lines = []
-    for line_info in header_line_infos:
-        header_line = ' '.join([p for p in line_info if p])
-        if header_line:
-            header_lines.append(header_line)
+    from watch import heuristics
+    header_lines = heuristics.build_image_header_text(
+        img=img,
+        name=None,
+        _header_extra=None,
+        coco_dset=coco_dset,
+    )
 
     delayed = coco_dset.delayed_load(img['id'], space=space)
 
@@ -591,6 +559,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
         initial_groups = channels.streams()
         chan_groups = []
+        group : kwcoco.FusedChannelSpec
         for group in initial_groups:
             if group.numel() > 3:
                 # For large group, just take the first 3 channels
@@ -610,13 +579,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                     'chan': group,
                 })
 
-    # sanatize channel paths (todo: kwcoco helper for this)
-    # new in 0.2.21 ChannelSpec.path_sanitize
-    def sanatize_chan_pnams(cs):
-        return cs.replace('|', '_').replace(':', '-')
-
     for row in chan_groups:
-        row['pname'] = sanatize_chan_pnams(row['chan'].spec)
+        row['pname'] = row['chan'].path_sanitize()
 
     if any3:
         if any3 == 'only':
@@ -649,13 +613,15 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     img_view_dpath = sub_dpath / '_imgs'
     ann_view_dpath = sub_dpath / '_anns'
 
-    try:
-        with ub.Timer('build dets', verbose=verbose):
-            dets = kwimage.Detections.from_coco_annots(anns, dset=coco_dset)
-    except Exception:
-        # hack
-        anns = [ub.dict_diff(ann, ['keypoints']) for ann in anns]
-        dets = kwimage.Detections.from_coco_annots(anns, dset=coco_dset)
+    # try:
+    #     with ub.Timer('build dets', verbose=verbose):
+    #         dets = kwimage.Detections.from_coco_annots(anns, dset=coco_dset)
+    # except Exception:
+    #     # hack
+    with ub.Timer('build dets', verbose=verbose):
+        # Ignore keypoints
+        anns_ = [ub.dict_diff(ann, ['keypoints']) for ann in anns]
+        dets = kwimage.Detections.from_coco_annots(anns_, dset=coco_dset)
 
     if space == 'video':
         vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
@@ -733,9 +699,17 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
         if verbose > 1:
             import kwarray
-            chan_stats = kwarray.stats_dict(raw_canvas, axis=2, nan=True)
+            print('raw_canvas.shape = {!r}'.format(raw_canvas.shape))
             print('chan_list = {!r}'.format(chan_list))
-            print('chan_stats = {}'.format(ub.repr2(chan_stats, nl=1)))
+            try:
+                chan_stats = kwarray.stats_dict(raw_canvas, axis=2, nan=True)
+                print('chan_stats = {}'.format(ub.repr2(chan_stats, nl=1)))
+            except Exception:
+                import warnings
+                warnings.warn('Error printing chan stats, probably need kwarray >= 0.6.1')
+
+        if skip_missing and np.all(np.isnan(raw_canvas)):
+            continue
 
         # FLAG = np.any(np.isnan(canvas)) and not np.all(np.isnan(canvas))
         # if FLAG:
@@ -788,6 +762,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                     new_parts.append(p)
                 canvas = np.stack(new_parts, axis=2)
 
+        # invalid_mask = np.isnan(canvas)
+        canvas = fill_nans_with_checkers(canvas)
+
         if cmap is not None:
             if kwimage.num_channels(canvas) == 1:
                 import matplotlib as mpl
@@ -816,12 +793,15 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                 if space == 'video':
                     vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
                     valid_poly = valid_poly.warp(vid_from_img)
-                canvas = valid_poly.draw_on(canvas, color='green', fill=False,
-                                            border=True)
+
+                if any([p.data['exterior'].data.size for p in valid_poly.data]):
+                    canvas = valid_poly.draw_on(canvas, color='green', fill=False,
+                                                border=True)
 
         if draw_imgs:
             with ub.Timer('prep img_canvas', verbose=verbose):
                 img_canvas = kwimage.ensure_uint255(canvas)
+                img_canvas = kwimage.imresize(img_canvas, min_dim=384)
                 img_canvas = util_kwimage.draw_header_text(image=img_canvas,
                                                            text=header_text,
                                                            stack=True,
@@ -831,15 +811,28 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
         if draw_anns:
             canvas = kwimage.ensure_float01(canvas)
-            try:
+            ann_canvas, info = kwimage.imresize(canvas, min_dim=384,
+                                                return_info=True)
+            ann_canvas = ann_canvas.clip(0, 1)
+            dets = dets.scale(info['scale'])
+            dets = dets.translate(info['offset'])
+            # info['scale']
+            ONLY_BOXES = only_boxes
+            if ONLY_BOXES:
                 with ub.Timer('dets.draw_on 1', verbose=verbose):
-                    # ann_canvas = dets.draw_on(canvas, color='classes')
-                    ann_canvas = dets.boxes.draw_on(canvas, color='blue')
-            except Exception:
+                    # ann_canvas = dets.draw_on(ann_canvas, color='classes')
+                    ann_canvas = dets.boxes.draw_on(ann_canvas, color='blue')
+            else:
+                # THERE IS A IN DRAW POLY WITH LARGE POLYS. THIS IS FINE FOR
+                # REAL DATA BUT A TEST FAILS HARD. HACKING THIS OFF FOR NOW
                 with ub.Timer('dets.draw_on 2', verbose=verbose):
-                    ann_canvas = dets.draw_on(canvas)
-            ann_canvas = kwimage.ensure_uint255(ann_canvas)
+                    try:
+                        # kwimage 0.8.4 fixes this error
+                        ann_canvas = dets.draw_on(ann_canvas, color='classes')
+                    except Exception:
+                        ann_canvas = dets.draw_on(ann_canvas)
 
+            ann_canvas = kwimage.ensure_uint255(ann_canvas)
             ann_canvas = util_kwimage.draw_header_text(image=ann_canvas,
                                                        text=header_text,
                                                        stack=True,
@@ -903,6 +896,117 @@ def _hack_dataset_id(self):
     return dset_id
 
 
+def fill_nans_with_checkers(canvas):
+    """
+    TODO: move to kwimage
+
+    Example:
+        >>> import kwplot
+        >>> import kwimage
+        >>> orig_img = kwimage.ensure_float01(kwimage.grab_test_image())
+        >>> poly1 = kwimage.Polygon.random().scale(orig_img.shape[0] // 2)
+        >>> poly2 = kwimage.Polygon.random().scale(orig_img.shape[0])
+        >>> img = orig_img.copy()
+        >>> img = poly1.fill(img, np.nan)
+        >>> img[:, :, 0] = poly2.fill(np.ascontiguousarray(img[:, :, 0]), np.nan)
+        >>> canvas = img.copy()
+        >>> canvas = fill_nans_with_checkers(canvas)
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(img, pnum=(1, 2, 1))
+        >>> kwplot.imshow(canvas, pnum=(1, 2, 2))
+    """
+    import kwarray
+    canvas = kwarray.atleast_nd(canvas, 3)
+    invalid_mask = np.isnan(canvas)
+    allchan_invalid_mask = invalid_mask.all(axis=2, keepdims=1)
+    anychan_invalid_mask = invalid_mask.any(axis=2, keepdims=1)
+
+    some_invalid_mask = (~allchan_invalid_mask) * anychan_invalid_mask
+
+    invalid_mask.all(axis=2)
+    # canvas[invalid_mask] = 0
+    dsize = canvas.shape[0:2][::-1]
+
+    checkers2d = None
+
+    if np.any(allchan_invalid_mask):
+        if checkers2d is None:
+            checkers2d = checkerboard(square_shape=8, dsize=dsize)
+        # canvas = kwimage.ensure_alpha_channel(canvas, (1 - invalid_mask))
+        # checkers = kwimage.ensure_alpha_channel(checkers, 1)
+        locs = np.where(allchan_invalid_mask)
+        canvas[locs[0:2]] = checkers2d[..., None][locs[0:2]]
+
+    if np.any(some_invalid_mask):
+        if checkers2d is None:
+            checkers2d = checkerboard(square_shape=8, dsize=dsize)
+
+        locs = np.where(some_invalid_mask)
+        canvas[locs] = checkers2d[locs[0:2]]
+
+    return canvas
+
+
+def checkerboard(num_squares='auto', square_shape='auto', dsize=(512, 512)):
+    """
+    Remove when kwimage 0.8.3 lands
+    """
+    import numpy as np
+    if num_squares == 'auto' and square_shape == 'auto':
+        num_squares = 8
+
+    want_w, want_h = dsize
+
+    if square_shape != 'auto':
+        if not ub.iterable(square_shape):
+            square_shape = [square_shape, square_shape]
+        h, w = square_shape
+        gen_h, gen_w = _next_multiple_of(want_h, h * 2), _next_multiple_of(want_w, w * 2)
+    else:
+        gen_h, gen_w = _next_multiple_of(want_h, 4), _next_multiple_of(want_w, 4)
+
+    if num_squares == 'auto':
+        assert square_shape != 'auto'
+        if not ub.iterable(square_shape):
+            square_shape = [square_shape, square_shape]
+        h, w = square_shape
+        num_w = gen_w // w
+        num_h = gen_h // h
+        num_squares = num_h, num_w
+    elif square_shape == 'auto':
+        assert num_squares != 'auto'
+        if not ub.iterable(num_squares):
+            num_squares = [num_squares, num_squares]
+        num_h, num_w = num_squares
+        w = gen_w // num_w
+        h = gen_h // num_h
+        square_shape = (h, w)
+    else:
+        if not ub.iterable(num_squares):
+            num_squares = [num_squares, num_squares]
+        if not ub.iterable(square_shape):
+            square_shape = [square_shape, square_shape]
+
+    num_h, num_w = num_squares
+
+    num_pairs_w = int(num_w // 2)
+    num_pairs_h = int(num_h // 2)
+    # img_size = 512
+    base = np.array([[1, 0] * num_pairs_w, [0, 1] * num_pairs_w] * num_pairs_h)
+    expansion = np.ones((h, w))
+    img = np.kron(base, expansion)[0:want_h, 0:want_w]
+    return img
+
+
+def _next_multiple_of(x, m):
+    """
+    References:
+        https://stackoverflow.com/questions/14267555/find-the-smallest-power-of-2-greater-than-or-equal-to-n-in-python
+    """
+    return (x // m) * m + m
+    # + (x % 2)
+
+
 if __name__ == '__main__':
     """
 
@@ -911,6 +1015,12 @@ if __name__ == '__main__':
     python -m watch visualize $KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
         --animate=True --channels="red|green|blue" --skip_missing=True \
         --select_images '.sensor_coarse == "S2"' --workers=4 --draw_anns=False
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/
+    python -m watch visualize $KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
+        --animate=True --channels="red|green|blue" --skip_missing=True \
+        --select_videos '.name == "BR_R002"' --workers=4 --draw_anns=True
 
     CommandLine:
         python ~/code/watch/watch/cli/coco_visualize_videos.py

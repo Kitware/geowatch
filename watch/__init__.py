@@ -6,6 +6,9 @@ import ubelt as ub
 import warnings
 
 
+__version__ = '0.2.2'
+
+
 __devnotes__ = """
 
 # Command to autogenerate lazy imports for this file
@@ -27,6 +30,7 @@ WATCH_AUTOHACK_IMPORT_VARIANTS = {
     'variant1': ['geopandas', 'pyproj', 'gdal'],  # align-crs on horologic
     'variant2': ['pyproj', 'gdal'],   # CI machine
     'variant3': ['geopandas', 'pyproj'],   # delay gdal import
+    'none': [],   # no pre-imports
 }
 
 if ub.argflag('--warntb'):
@@ -84,8 +88,6 @@ def _execute_import_order_hacks(WATCH_HACK_IMPORT_ORDER):
 if WATCH_HACK_IMPORT_ORDER:
     _execute_import_order_hacks(WATCH_HACK_IMPORT_ORDER)
 
-
-__version__ = '0.2.1'
 
 # Choose which submodules (and which submodule attributes) to expose
 __submodules__ = {

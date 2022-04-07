@@ -17,7 +17,7 @@ DVC_DPATH=$(python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 
 # Point to latest dataset version
-DATASET_CODE=uky_invariants/updated_22_03_07
+DATASET_CODE=uky_invariants/features_22_03_14
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 
 ### TODO: CHANGE TO KWCOCO FILES THAT CONTAIN TEAM FEATURES
@@ -26,7 +26,7 @@ VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 
 ### TODO: CHANGE INPUT CHANNELS TO NETWORK.
-CHANNELS="blue|green|red|nir|swir16|swir22|invariants.0:7"
+CHANNELS="blue|green|red|nir|swir16|swir22,invariants.0:7"
 ### e.g. "blue|green|red|nir|swir16|swir22,myfeat.0:8"
 
 # Set initial state to a noop to train from scratch, or set it to an existing
@@ -36,7 +36,7 @@ INITIAL_STATE="noop"
 #INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819.pt"
 
 ### TODO: CHANGE TO A UNIQUE NAME FOR EACH EXPERIMENT
-EXPERIMENT_NAME=BASELINE_EXPERIMENT_V001
+EXPERIMENT_NAME=features_late_fusion_V001
 
 debug_notes(){
     # Print stats about train and validation datasets

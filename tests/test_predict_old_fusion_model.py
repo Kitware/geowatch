@@ -55,6 +55,8 @@ def test_predict_old_fusion_model():
     vidid = dset.videos().peek()['id']
     gids = list(dset.images(vidid=vidid))[0:3]
     subset = dset.subset(gids)
+    if subset.missing_images(check_aux=True):
+        pytest.skip('data has not been pulled down')
 
     output_dpath = ub.Path(ub.ensure_app_cache_dir('watch/tests/pred/oldmodel'))
     # output_dpath.delete().ensuredir()

@@ -35,7 +35,7 @@ def sentinel2_grid():
         >>> #
         >>> # Demo how to convert each polygon into its UTM zone
         >>> import kwimage
-        >>> from watch.gis import spatial_reference
+        >>> from watch.utils import util_gis
         >>> import pyproj
         >>> utm_codes = []
         >>> # Only take some of the tiles for test speed
@@ -43,7 +43,7 @@ def sentinel2_grid():
         >>> for poly in ub.ProgIter(s2_tiles.geometry, desc='find utm'):
         >>>     lon = poly.centroid.x
         >>>     lat = poly.centroid.y
-        >>>     utm_epsg = spatial_reference.utm_epsg_from_latlon(lat, lon)
+        >>>     utm_epsg = util_gis.utm_epsg_from_latlon(lat, lon)
         >>>     utm_codes.append(utm_epsg)
         >>> s2_tiles['utm_epsg'] = utm_codes
         >>> # Group all tiles within the same zone together
@@ -63,11 +63,14 @@ def sentinel2_grid():
         >>> area_stats = kwarray.stats_dict(all_utm_areas)
         >>> print('area_stats = {}'.format(ub.repr2(
         >>>     area_stats, nl=1, precision=0, align=':')))
+
+        ...
         area_stats = {
             'mean' : 8463072768,
             'std'  : 3774869504,
             'min'  : 65260336,
             'max'  : 12056040448,
+            ...
             'shape': (100,),
         }
     """

@@ -5,24 +5,17 @@ import numpy as np
 import ubelt as ub
 from watch.gis import spatial_reference as watch_crs
 # from watch.utils.util_bands import LANDSAT7
+from watch.utils import util_gis
 from watch.utils.util_bands import SENTINEL2, LANDSAT8
-import pathlib
-import os
 import parse
 from os.path import basename, isfile
 from dateutil.parser import isoparse
+from watch import exceptions
 
 try:
     from xdev import profile
 except Exception:
     profile = ub.identity
-
-
-class MetadataNotFound(Exception):
-    """
-    Thrown when metadata does not exist
-    """
-    pass
 
 
 @profile
@@ -40,7 +33,7 @@ def geotiff_metadata(gpath, elevation='gtop30', strict=False):
         >>> url = ('http://storage.googleapis.com/gcp-public-data-landsat/'
         ...        'LC08/01/044/034/LC08_L1GT_044034_20130330_20170310_01_T2/'
         ...        'LC08_L1GT_044034_20130330_20170310_01_T2_B11.TIF')
-        >>> gpath = ub.grabdata(url, appname='smart_watch')
+        >>> gpath = ub.grabdata(url, appname='watch')
         >>> info = geotiff_metadata(gpath)
         >>> print('info = {}'.format(ub.repr2(info, nl=1)))
 
@@ -48,24 +41,19 @@ def geotiff_metadata(gpath, elevation='gtop30', strict=False):
         >>> url = ('http://storage.googleapis.com/gcp-public-data-landsat/'
         ...        'LC08/01/037/029/LC08_L1TP_037029_20130602_20170310_01_T1/'
         ...        'LC08_L1TP_037029_20130602_20170310_01_T1_B2.TIF')
-        >>> gpath = ub.grabdata(url, appname='smart_watch')
+        >>> gpath = ub.grabdata(url, appname='watch')
 
         >>> info = geotiff_metadata(gpath)
         >>> print('info = {}'.format(ub.repr2(info, nl=1)))
     """
-    from osgeo import gdal
+    from watch.utils import util_gdal
     infos = {}
-    ref = gdal.Open(gpath, gdal.GA_ReadOnly)
-    if ref is None:
-        msg = gdal.GetLastErrorMsg()
-        # gdal.GetLastErrorType()
-        # gdal.GetLastErrorNo()
-        raise Exception(msg)
+    ref = util_gdal.GdalDataset.open(gpath, 'r', virtual_retries=3)
 
     infos['fname'] = geotiff_filepath_info(gpath)
     try:
         infos['crs'] = geotiff_crs_info(ref, elevation=elevation)
-    except MetadataNotFound as ex:
+    except exceptions.GeoMetadataNotFound as ex:
         if strict:
             raise
         infos['crs'] = {'crs_error': str(ex)}
@@ -78,22 +66,6 @@ def geotiff_metadata(gpath, elevation='gtop30', strict=False):
     info = ub.dict_union(*infos.values())
     info['sensor_candidates'] = sensor_candidates
     return info
-
-
-def _coerce_gdal_dataset(data):
-    from osgeo import gdal
-    if isinstance(data, str):
-        ref = gdal.Open(data, gdal.GA_ReadOnly)
-    elif isinstance(data, pathlib.Path):
-        ref = gdal.Open(os.fspath(data), gdal.GA_ReadOnly)
-    elif isinstance(data, gdal.Dataset):
-        ref = data
-    else:
-        raise TypeError(type(data))
-
-    if ref is None:
-        raise Exception('data={} is not a gdal dataset'.format(data))
-    return ref
 
 
 def geotiff_header_info(gpath_or_ref):
@@ -111,7 +83,8 @@ def geotiff_header_info(gpath_or_ref):
         >>> info = geotiff_header_info(gpath)
         >>> print('info = {}'.format(ub.repr2(info, nl=1)))
     """
-    ref = _coerce_gdal_dataset(gpath_or_ref)
+    from watch.utils import util_gdal
+    ref = util_gdal.GdalDataset.coerce(gpath_or_ref)
     keys_of_interest = [
         'NITF_CSEXRA_MAX_GSD',
         'NITF_PIAIMC_MEANGSD',
@@ -190,7 +163,7 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         >>> # xdoctest: +REQUIRES(--network)
         >>> gpath_or_ref = gpath = ub.grabdata(
         >>>     'https://download.osgeo.org/geotiff/samples/gdal_eg/cea.tif',
-        >>>     appname='smart_watch/demodata', hash_prefix='10a2ebcdcd95582')
+        >>>     appname='watch/demodata', hash_prefix='10a2ebcdcd95582')
         >>> info = geotiff_crs_info(gpath)
         >>> print('info = {}'.format(ub.repr2(info, nl=1, sort=False)))
         >>> assert not info['is_rpc']
@@ -205,13 +178,14 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
 
         tf = info['wgs84_to_wld']
     """
+    from watch.utils import util_gdal
     from osgeo import gdal
     from osgeo import osr
     import affine
     import kwimage
 
     info = {}
-    ref = _coerce_gdal_dataset(gpath_or_ref)
+    ref = util_gdal.GdalDataset.coerce(gpath_or_ref)
 
     # tags = ref.GetMetadataDomainList()  # 7.5% of the execution time
     rpc_info = ref.GetMetadata(domain='RPC')  # 5% of execution time
@@ -262,10 +236,10 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
                 aff_wld_crs_type = 'assume-rpc-wgs84-reverse'
                 aff_geo_transform = (0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
                 if force_affine:
-                    raise MetadataNotFound(
+                    raise exceptions.GeoMetadataNotFound(
                         'cant force affine without dataset or gcp ref')
             else:
-                raise MetadataNotFound('no dataset or gcps refs or rpc')
+                raise exceptions.GeoMetadataNotFound('no dataset or gcps refs or rpc')
         else:
             # gcp_ids = [p.Id for p in gcps]
             aff_geo_transform = gdal.GCPsToGeoTransform(gcps)
@@ -377,14 +351,14 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
     # min_lon, max_lon = sorted([lon1, lon2])
     # min_lat, max_lat = sorted([lat1, lat2])
 
-    assert watch_crs.check_latlons(
+    assert util_gis.check_latlons(
         wgs84_corners.data[:, 0], wgs84_corners.data[:, 1]), (
             'bad WGS84 coordinates'
         )
 
     WITH_UTM_INFO = True
     if WITH_UTM_INFO:
-        epsg_int = watch_crs.utm_epsg_from_latlon(min_lat, min_lon)
+        epsg_int = util_gis.utm_epsg_from_latlon(min_lat, min_lon)
         utm_crs = osr.SpatialReference()
         utm_crs.ImportFromEPSG(epsg_int)
         utm_axis_mapping_int = utm_crs.GetAxisMappingStrategy()
@@ -1022,7 +996,6 @@ def parse_landsat_product_id(product_id):
 
     Example:
         >>> from watch.gis.geotiff import *  # NOQA
-        >>> from watch.gis.geotiff import _coerce_gdal_dataset
         >>> product_id = 'LC08_L1TP_037029_20130602_20170310_01_T1'
         >>> ls_meta = parse_landsat_product_id(product_id)
 

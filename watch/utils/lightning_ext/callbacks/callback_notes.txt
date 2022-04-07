@@ -51,6 +51,8 @@ on_predict_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> 
 
 on_exception(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
 
+# REMOVED in 1.6 in favor of state_dict and  load_state_dict
+# https://github.com/PyTorchLightning/pytorch-lightning/releases/tag/1.6.0
 on_save_checkpoint(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", checkpoint: Dict[str, Any]) -> dict:
 on_load_checkpoint(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", callback_state: Dict[str, Any]) -> None:
 

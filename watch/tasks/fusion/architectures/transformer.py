@@ -65,7 +65,7 @@ class ResidualSequential(nn.Sequential):
         return x + super().forward(x)
 
 
-class MultiheadSelfAttention(ub.NiceRepr, torch.nn.MultiheadAttention):
+class MultiheadSelfAttention(torch.nn.MultiheadAttention):
     """
     Inherits from :class:`torch.nn.MultiheadAttention`
 
@@ -81,19 +81,23 @@ class MultiheadSelfAttention(ub.NiceRepr, torch.nn.MultiheadAttention):
         vdim: total number of features in value. Default: None.
         batch_first: If ``True``, then the input and output tensors are provided
             as (batch, seq, feature). Default: ``False`` (seq, batch, feature).
+
+    Example:
+        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
+        >>> self = MultiheadSelfAttention(4, 1).eval()
+        >>> x  = (torch.rand(7, 3, 4) * 10).round()
+        >>> # Results should be independent of the batch dim
+        >>> y  = self.forward(x)
+        >>> y0 = self.forward(x[:, 0:1, :])
+        >>> y1 = self.forward(x[:, 1:2, :])
+        >>> y2 = self.forward(x[:, 2:3, :])
+        >>> assert (y[:, 0:1, :] == y0).all()
+        >>> assert (y[:, 1:2, :] == y1).all()
+        >>> assert (y[:, 2:3, :] == y2).all()
     """
 
     def __init__(self, embed_dim, num_heads, *args, **kwargs):
         super().__init__(embed_dim, num_heads, *args, **kwargs)
-
-    def __nice__(self):
-        return (
-            f'embed_dim={self.embed_dim} '
-            f'num_heads={self.num_heads} '
-        )
-
-    def __repr__(self):
-        return super().__str__()
 
     def forward(self, x):
         """
@@ -105,7 +109,8 @@ class MultiheadSelfAttention(ub.NiceRepr, torch.nn.MultiheadAttention):
         """
         # attention returns a tuple of output and weights, so just take the
         # output
-        attn_out, attn_weights = super().forward(x, x, x)
+        outs = super().forward(x, x, x)
+        attn_out, attn_weights = outs
         return attn_out
 
 
@@ -279,6 +284,9 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
         - [ ] Can we resitrict how far the spatial window looks, so it only
               sees neighboring spatial regions?
 
+        - [ ] Flatten tokens completely and have a mask that indicates
+              what tokens are allowed to see each other in each step
+
     Notes:
         * Currently 'mode' might indicate something like a sensor or special
           computation. Each 'mode' might have a differet number of 'features'.
@@ -389,12 +397,59 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
         self.mlp = new_mlp_layer(embedding_size, dropout)
 
     @profile
-    def forward(self, x):
-        """
+    def forward(self, inputs, flat_coordinates=None):
+        r"""
         Args:
             x (Tensor): of shape B, T, M, H, W, F
+
+        Ignore:
+            >>> # Test that coordinate aware implementation exactly reproduces aligned variant
+            >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
+            >>> F = embedding_size = 4
+            >>> B, T, M, H, W = 1, 3, 5, 7, 11
+            >>> aligned_inputs = aligned_x = (torch.rand(B, T, M, H, W, F) * 100).round() / 10
+            >>> flat_inputs = flat_x = aligned_inputs.view(-1, embedding_size)
+            >>> inputs = flat_inputs
+            >>> # Test that coordinate-aware flat attention works
+            >>> t_coords, m_coords, h_coords, w_coords = np.meshgrid(np.arange(T), np.arange(M), np.arange(H), np.arange(W), indexing='ij')
+            >>> flat_coordinates = {
+            >>>     'time':   t_coords.ravel(),
+            >>>     'mode':   m_coords.ravel(),
+            >>>     'height': h_coords.ravel(),
+            >>>     'width':  w_coords.ravel(),
+            >>> }
+            >>> flat_coordinates = ub.map_vals(torch.from_numpy, flat_coordinates)
+            >>> self = ChannelwiseTransformerEncoderLayer(
+            >>>     #axes=[('height', 'width'), ('time',)],
+            >>>     axes=[('time',)],
+            >>>     default_shape=['batch', 'time', 'mode', 'height', 'width', 'feature'],
+            >>>     feature_axis='feature',
+            >>>     batch_axis='batch',
+            >>>     embedding_size=embedding_size,
+            >>>     n_heads=1
+            >>> )
+            >>> self = self.eval()
+            >>> with torch.set_grad_enabled(False):
+            >>>     print('----')
+            >>>     flat_y = self.forward(flat_inputs, flat_coordinates)
+            >>>     print('----')
+            >>>     aligned_y = self.forward(aligned_inputs)
+            >>> print('----====-')
+            >>> recon_y1 = aligned_y.view(-1, embedding_size)
+            >>> print('flat_y=\n{!r}'.format(flat_y))
+            >>> print('recon_y1=\n{!r}'.format(recon_y1))
+            >>> abs_diff = (flat_y - recon_y1).abs().max()
+            >>> print('abs_diff = {!r}'.format(abs_diff))
+            >>> assert abs_diff < 1e-5
+            >>> #flags = torch.isclose(flat_y, recon_y1)
+            >>> #assert flags.all()
         """
-        shape_dict = dict(zip(self.default_shape, x.shape))
+        shape_dict = dict(zip(self.default_shape, inputs.shape))
+
+        if flat_coordinates:
+            flat_x = inputs
+        else:
+            x = inputs
 
         previous_axial_shape = self.default_shape_str
         for axis in self.axes:
@@ -402,31 +457,62 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
                 axis = [axis]
             sequence_axes = self.axsep.join(axis)
             attention_layer = self.attention_modules[sequence_axes]
-            batch_axes = self.axsep.join([
-                a for a in self.default_shape
-                if (a == self.batch_axis or a not in axis) and a != self.feature_axis
-            ])
 
-            # Reshape Input to Sequence-Batch-Feature wrt to the specified axis
-            # at this layer.
-            axial_shape = f"({sequence_axes}) ({batch_axes}) {self.feature_axis}"
+            if flat_coordinates is None:
+                # Fast axis aligned method
+                batch_axes = self.axsep.join([
+                    a for a in self.default_shape
+                    if (a == self.batch_axis or a not in axis) and a != self.feature_axis
+                ])
+
+                # Reshape Input to Sequence-Batch-Feature wrt to the specified axis
+                # at this layer.
+                axial_shape = f"({sequence_axes}) ({batch_axes}) {self.feature_axis}"
+                rearrange_op = f"{previous_axial_shape} -> {axial_shape}"
+                x = einops.rearrange(x, rearrange_op, **shape_dict)
+                y = attention_layer(x)
+                x = y
+                previous_axial_shape = axial_shape
+            else:
+                # Batch size must be 1 in this mode.
+                import numpy as np
+                # New generalized coordinate method
+                batch_coords = ub.dict_diff(flat_coordinates, axis)
+                # axial_coords = ub.dict_subset(flat_coordinates, axis)
+                groupids = torch.stack(list(batch_coords.values())).T.contiguous()
+                groupids_numpy = groupids.numpy()
+                arr = groupids_numpy
+                dtype_view = np.dtype((np.void, arr.dtype.itemsize * arr.shape[1]))
+                arr_view = arr.view(dtype_view)
+                groupids_bytes = [r.tobytes() for r in arr_view]
+                group_to_idxs = ub.group_items(range(len(groupids_bytes)), groupids_bytes)
+
+                # TODO: just build a mask and do masked attention
+                flat_y = torch.empty_like(flat_x)
+                for groupid, idxs in group_to_idxs.items():
+                    x_part = flat_x[idxs]
+                    x_attn = x_part[:, None, :]
+                    y_attn = attention_layer(x_attn)
+                    y_part = y_attn[:, 0, :]
+                    flat_y[idxs] = y_part
+                flat_x = flat_y
+
+        if flat_coordinates is None:
+            sequence_axes = self.axsep.join([
+                a for a in self.default_shape
+                if a not in (self.batch_axis, self.feature_axis)
+            ])
+            axial_shape = f"({sequence_axes}) {self.batch_axis} {self.feature_axis}"
             rearrange_op = f"{previous_axial_shape} -> {axial_shape}"
             x = einops.rearrange(x, rearrange_op, **shape_dict)
-            x = attention_layer(x)
-            previous_axial_shape = axial_shape
-
-        sequence_axes = self.axsep.join([
-            a for a in self.default_shape
-            if a not in (self.batch_axis, self.feature_axis)
-        ])
-        axial_shape = f"({sequence_axes}) {self.batch_axis} {self.feature_axis}"
-        rearrange_op = f"{previous_axial_shape} -> {axial_shape}"
-        x = einops.rearrange(x, rearrange_op, **shape_dict)
-        x = self.mlp(x)
-
-        rearrange_op = f"{axial_shape} -> {self.default_shape_str}"
-        x = einops.rearrange(x, rearrange_op, **shape_dict)
-        return x
+            x = self.mlp(x)
+            rearrange_op = f"{axial_shape} -> {self.default_shape_str}"
+            x = einops.rearrange(x, rearrange_op, **shape_dict)
+            outputs = x
+        else:
+            flat_x = self.mlp(flat_x)
+            outputs = flat_x
+        return outputs
 
 
 class TimmEncoder:
@@ -601,9 +687,11 @@ class FusionEncoder(nn.Module):
         self.first = first
         self.layers = nn.Sequential(*_layers)
 
-    def forward(self, x):
-        x = self.first(x)  # TODO: make this optionally convolutional
-        x = self.layers(x)
+    def forward(self, x, flat_coordinates=None):
+        x = self.first(x)
+        for layer in self.layers:
+            # Hack around sequential
+            x = layer(x, flat_coordinates=flat_coordinates)
         return x
 
 

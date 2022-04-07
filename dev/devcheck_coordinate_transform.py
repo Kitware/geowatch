@@ -10,7 +10,7 @@ from osgeo import osr
 def demo_temp_env_error(include_fix=False):
     gpath = ub.grabdata(
         'https://download.osgeo.org/geotiff/samples/gdal_eg/cea.tif',
-        appname='smart_watch/demodata', hash_prefix='10a2ebcdcd95582')
+        appname='watch/demodata', hash_prefix='10a2ebcdcd95582')
 
     if include_fix:
         osr.GetPROJSearchPaths()
@@ -36,13 +36,13 @@ def demo_thread_error(include_fix=False):
     gpaths = []
     gpath = ub.grabdata(
         'https://download.osgeo.org/geotiff/samples/gdal_eg/cea.tif',
-        appname='smart_watch/demodata', hash_prefix='10a2ebcdcd95582')
+        appname='watch/demodata', hash_prefix='10a2ebcdcd95582')
     gpaths.append(gpath)
 
     # url = ('http://storage.googleapis.com/gcp-public-data-landsat/'
     #         'LC08/01/044/034/LC08_L1GT_044034_20130330_20170310_01_T2/'
     #         'LC08_L1GT_044034_20130330_20170310_01_T2_B11.TIF')
-    # gpath = ub.grabdata(url, appname='smart_watch')
+    # gpath = ub.grabdata(url, appname='watch')
     # gpaths.append(gpath)
 
     jobs = ub.JobPool('thread', max_workers=3)

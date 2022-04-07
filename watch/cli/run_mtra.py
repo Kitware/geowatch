@@ -11,7 +11,7 @@ from concurrent.futures import as_completed
 import pystac
 import ubelt
 
-from watch.utils.util_raster import GdalOpen
+from watch.utils.util_gdal import GdalOpen
 from watch.cli.mtra_preprocess import stac_item_map
 
 

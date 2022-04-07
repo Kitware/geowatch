@@ -16,6 +16,7 @@ import numbers
 from os.path import join
 from watch.utils import util_raster
 from kwcoco.coco_image import CocoImage
+from watch import exceptions
 
 try:
     from xdev import profile
@@ -62,9 +63,10 @@ def filter_image_ids(coco_dset, gids=None, include_sensors=None,
         try:
             query_text = ".images[] | select({}) | .id".format(select_images)
             query = jq.compile(query_text)
-            valid_gids &= query.input(coco_dset.dataset).all()
-        except Exception:
-            print('JQ Query Failed: {}'.format(query_text))
+            image_selected_gids = set(query.input(coco_dset.dataset).all())
+            valid_gids &= image_selected_gids
+        except Exception as ex:
+            print('JQ Query Failed: {}, ex={}'.format(query_text, ex))
             raise
 
     if select_videos is not None:
@@ -530,7 +532,7 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                     })
 
                 approx_meter_gsd = info['approx_meter_gsd']
-            except watch.gis.geotiff.MetadataNotFound as ex:
+            except exceptions.GeoMetadataNotFound as ex:
                 if default_gsd is not None:
                     obj['approx_meter_gsd'] = default_gsd
                     obj['warp_to_wld'] = kwimage.Affine.eye().__json__()
@@ -1225,7 +1227,7 @@ def transfer_geo_metadata(coco_dset, gid):
                 assets_with_geo_info[-1] = (obj, info)
                 warp_vid_from_geoimg = kwimage.Affine.coerce(other_coco_img.img['warp_img_to_vid'])
             else:
-                raise ValueError(ub.paragraph(
+                raise exceptions.GeoMetadataNotFound(ub.paragraph(
                     '''
                     There are images without geo data, but no other data within
                     this image has transferable geo-data
@@ -1280,7 +1282,7 @@ def transfer_geo_metadata(coco_dset, gid):
 
             dst_ds = gdal.Open(fpath, gdal.GA_Update)
             if dst_ds is None:
-                raise Exception('error handling gdal')
+                raise exceptions.GeoMetadataNotFound('error handling gdal')
             ret = dst_ds.SetGeoTransform(aff_geo_transform)
             assert ret == 0
             ret = dst_ds.SetSpatialRef(georef_crs)
@@ -1301,6 +1303,167 @@ def transfer_geo_metadata(coco_dset, gid):
         dst_ds.SetProjection(proj)
         geo_ds, dst_ds = None, None
         """
+
+
+def _search_video_for_other_geo_assets(coco_img, coco_dset):
+    ### TODO: make use of me as a fallback in the transfer_geo_metadata2
+    class Found(Exception):
+        pass
+    import watch
+    asset_with_geo_info = None
+    gid = coco_img.img['id']
+    try:
+        # If an asset in our local image has no data, we can
+        # check to see if anyone in the vide has data.
+        # Check if anything in the video has geo-data
+        vidid = coco_img.img['video_id']
+        for other_gid in coco_dset.images(vidid=vidid):
+            if other_gid != gid:
+                other_coco_img = coco_dset._coco_image(other_gid)
+                for obj in other_coco_img.iter_asset_objs():
+                    fname = obj.get('file_name', None)
+                    if fname is not None:
+                        fpath = join(coco_img.dset.bundle_dpath, fname)
+                        try:
+                            # Try until we find an image with real CRS info
+                            info = watch.gis.geotiff.geotiff_metadata(fpath)
+                            if info.get('crs_error', None) is not None:
+                                raise Exception
+                        except Exception:
+                            continue
+                        else:
+                            raise Found
+    except Found:
+        warp_vid_from_geoimg = kwimage.Affine.coerce(other_coco_img.img['warp_img_to_vid'])
+        asset_with_geo_info = (obj, info, warp_vid_from_geoimg)
+    else:
+        raise exceptions.GeoMetadataNotFound(ub.paragraph(
+            '''
+            There are images without geo data, but no other data within
+            this image has transferable geo-data
+            '''))
+    return asset_with_geo_info
+
+
+def _find_geotiffs_without_metadata(coco_img):
+    pass
+
+
+@profile
+def transfer_geo_metadata2(coco_img, dry=0):
+    """
+    Second version of this function to work in process mode
+
+    Transfer geo-metadata from source geotiffs to predicted feature images
+
+    THIS FUNCITON MODIFIES THE IMAGE DATA ON DISK! BE CAREFUL!
+
+    ASSUMES THAT EVERYTHING IS ALREADY ALIGNED
+    """
+    import watch
+    # from osgeo import gdal
+    import affine
+    from os.path import exists
+
+    assets_with_geo_info = {}
+    assets_without_geo_info = {}
+
+    asset_objs = list(coco_img.iter_asset_objs())
+    for asset_idx, obj in enumerate(asset_objs):
+        fname = obj.get('file_name', None)
+        if fname is not None:
+            fpath = join(coco_img.bundle_dpath, fname)
+            if exists(fpath):
+                try:
+                    info = watch.gis.geotiff.geotiff_metadata(fpath)
+                    if info.get('crs_error', None) is not None:
+                        raise Exception
+                except Exception:
+                    assets_without_geo_info[asset_idx] = obj
+                else:
+                    assets_with_geo_info[asset_idx] = (obj, info)
+
+    warp_vid_from_geoimg = kwimage.Affine.eye()
+
+    assert dry == 0, 'cant work in dry mode yet'
+
+    actions = []
+    if assets_without_geo_info:
+        if not assets_with_geo_info:
+            raise exceptions.GeoMetadataNotFound('No other asset in this image has geo metadata')
+
+        # Choose an object to register to (not sure if it matters which one)
+        # choose arbitrary one for now.
+        geo_asset_idx, (geo_obj, geo_info) = ub.peek(assets_with_geo_info.items())
+
+        if geo_info['is_rpc']:
+            raise NotImplementedError(
+                'Not sure how to do this if the target has RPC information')
+
+        warp_geoimg_from_geoaux = kwimage.Affine.coerce(
+            geo_obj.get('warp_aux_to_img', None))
+        warp_wld_from_geoaux = kwimage.Affine.coerce(geo_info['pxl_to_wld'])
+
+        georef_crs_info = geo_info['wld_crs_info']
+        georef_crs = georef_crs_info['type']
+
+        img = coco_img.img
+        warp_vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
+
+        # In case our reference is from another frame in the video
+        warp_geoimg_from_vid = warp_vid_from_geoimg.inv()
+        warp_geoaux_from_geoimg = warp_geoimg_from_geoaux.inv()
+        warp_wld_from_img = (
+            warp_wld_from_geoaux @
+            warp_geoaux_from_geoimg @
+            warp_geoimg_from_vid @
+            warp_vid_from_img)
+
+        for _asset_idx, obj in assets_without_geo_info.items():
+            fname = obj.get('file_name', None)
+            fpath = join(coco_img.bundle_dpath, fname)
+
+            warp_img_from_aux = kwimage.Affine.coerce(
+                obj.get('warp_aux_to_img', None))
+
+            warp_wld_from_aux = (
+                warp_wld_from_img @ warp_img_from_aux)
+
+            # Convert to gdal-style
+            a, b, c, d, e, f = warp_wld_from_aux.matrix.ravel()[0:6]
+            aff = affine.Affine(a, b, c, d, e, f)
+            aff_geo_transform = aff.to_gdal()
+
+            task = {
+                'fpath': fpath,
+                'aff_geo_transform': aff_geo_transform,
+                # TODO: can't pickle the srs.
+                # need to figure out how to do this.
+                'georef_crs': georef_crs,
+            }
+            actions.append({
+                'fpath': fpath,
+            })
+            if not dry:
+                _execute_transfer_task(task)
+    # Just return what we did
+    return actions
+
+
+def _execute_transfer_task(task):
+    fpath = task['fpath']
+    aff_geo_transform = task['aff_geo_transform']
+    georef_crs = task['georef_crs']
+    from osgeo import gdal
+    dst_ds = gdal.Open(fpath, gdal.GA_Update)
+    if dst_ds is None:
+        raise Exception('error handling gdal')
+    ret = dst_ds.SetGeoTransform(aff_geo_transform)
+    assert ret == 0
+    ret = dst_ds.SetSpatialRef(georef_crs)
+    assert ret == 0
+    dst_ds.FlushCache()
+    dst_ds = None
 
 
 def _make_coco_img_from_geotiff(tiff_fpath, name=None):
@@ -1489,6 +1652,7 @@ def __WIP_add_auxiliary(coco_dset, gid, fname, channels, data, warp_aux_to_img=N
     coco_dset._invalidate_hashid()
 
 
+@profile
 def _recompute_auxiliary_transforms(img):
     """
     Uses geotiff info to repopulate metadata
@@ -1918,7 +2082,7 @@ def category_category_colors(coco_dset):
 
 
 @profile
-def associate_images(dset1, dset2):
+def associate_images(dset1, dset2, key_fallback=None):
     """
     Builds an association between image-ids in two datasets.
 
@@ -1928,7 +2092,12 @@ def associate_images(dset1, dset2):
 
     Args:
         dset1 (kwcoco.CocoDataset): a kwcoco datset.
+
         dset2 (kwcoco.CocoDataset): another kwcoco dataset
+
+        key_fallback (str):
+            The fallback key to use if the image "name" is not specified.
+            This can either be "file_name" or "id" or None.
 
     TODO:
         - [ ] port to kwcoco proper
@@ -1945,7 +2114,7 @@ def associate_images(dset1, dset2):
         >>>     'n_fn': (0, 10),
         >>> }
         >>> dset2 = perterb_coco(dset1, **kwargs)
-        >>> matches = associate_images(dset1, dset2)
+        >>> matches = associate_images(dset1, dset2, key_fallback='file_name')
         >>> assert len(matches['image']['match_gids1'])
         >>> assert len(matches['image']['match_gids2'])
         >>> assert not len(matches['video'])
@@ -1961,7 +2130,7 @@ def associate_images(dset1, dset2):
         >>>     'n_fn': (0, 10),
         >>> }
         >>> dset2 = perterb_coco(dset1, **kwargs)
-        >>> matches = associate_images(dset1, dset2)
+        >>> matches = associate_images(dset1, dset2, key_fallback='file_name')
         >>> assert not len(matches['image']['match_gids1'])
         >>> assert not len(matches['image']['match_gids2'])
         >>> assert len(matches['video'])
@@ -1973,10 +2142,17 @@ def associate_images(dset1, dset2):
         # Generate image "keys" that should be compatible between datasets
         for gid in gids:
             img = dset.imgs[gid]
-            if img.get('file_name', None) is None:
+            if img.get('name', None) is not None:
                 yield img['name']
             else:
-                yield img['file_name']
+                if key_fallback is None:
+                    raise Exception('images require names to associate')
+                elif key_fallback == 'id':
+                    yield img['id']
+                elif key_fallback == 'file_name':
+                    yield img['file_name']
+                else:
+                    raise KeyError(key_fallback)
 
     all_gids1 = list(dset1.imgs.keys())
     all_gids2 = list(dset2.imgs.keys())
