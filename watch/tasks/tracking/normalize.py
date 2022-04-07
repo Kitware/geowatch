@@ -210,7 +210,11 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
 
     empty_aids = []
     remove_reason = []
-    for gid in coco_dset.index.imgs.keys():
+
+    gid_iter = ub.ProgIter(
+        coco_dset.index.imgs.keys(), total=coco_dset.n_imgs,
+        desc='filter annotations')
+    for gid in gid_iter:
         coco_img = coco_dset.coco_image(gid)
         annots = coco_dset.annots(gid=gid)
         for aid in annots:
@@ -218,11 +222,26 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
 
             if min_area_px is not None:
                 pxl_sseg = coco_img._annot_segmentation(ann, space='video')
-                pxl_sseg_sh = pxl_sseg.to_multi_polygon().to_shapely().buffer(0)
+
+                try:
+                    pxl_sseg_sh = pxl_sseg.to_multi_polygon().to_shapely()
+                except ValueError:
+                    remove_reason.append('invalid_shapely_conversion')
+                    empty_aids.append(aid)
+                    continue
+
+                if not pxl_sseg_sh.is_valid:
+                    pxl_sseg_sh = pxl_sseg_sh.buffer(0)
 
                 if not pxl_sseg_sh.is_valid:
                     remove_reason.append('invalid_pixel_polygon')
                     empty_aids.append(aid)
+                    continue
+
+                try:
+                    pxl_sseg_sh.area
+                except Exception:
+                    pxl_sseg_sh = pxl_sseg_sh.buffer(0)
 
                 if pxl_sseg_sh.area <= min_area_px:
                     remove_reason.append('small pixel area {}'.format(round(pxl_sseg_sh.area, 1)))
@@ -265,23 +284,34 @@ def ensure_videos(coco_dset):
     if 'videos' not in coco_dset.dataset:
         coco_dset.dataset['videos'] = list(coco_dset.index.videos.values())
 
-    # TODO guess frame_index in a better way, like by date
-    vid_gids = set().union(*coco_dset.index.vidid_to_gids.values())
-    missing_gids = set(coco_dset.imgs) - vid_gids
-    if missing_gids:
+    coco_dset.index.vidid_to_gids
+    all_images = coco_dset.images()
+    loose_flags = [vidid is None for vidid in all_images.get('video_id', None)]
+    loose_imgs = all_images.compress(loose_flags)
+    if loose_imgs:
+        from watch.utils import util_time
+        print(f'Warning: there are {len(loose_imgs)=} images without a video')
+        # guess frame_index by date
+        dt_guess = [
+            (util_time.coerce_datetime(dc), gid)
+            for gid, dc in loose_imgs.lookup('date_captured', '1970-01-01', keepid=1).items()
+        ]
+        loose_imgs = loose_imgs.take(ub.argsort(dt_guess))
+
         vidid = coco_dset.add_video('DEFAULT')
-        for ix, gid in enumerate(missing_gids):
+        for ix, gid in enumerate(loose_imgs):
             coco_dset.imgs[gid]['video_id'] = vidid
             coco_dset.imgs[gid]['frame_index'] = ix
 
-        # HACK TODO bug etc
-        gids = coco_dset.index.vidid_to_gids[vidid]
-        coco_dset.index.vidid_to_gids[vidid] = gids.union(missing_gids)
+        # This change invalidates the index, need to rebuild it.
+        # TODO: add kwcoco logic to flag exactly what index needs to be rebuilt
+        coco_dset._build_index()
 
-    try:
-        coco_dset.images().lookup('frame_index')
-    except KeyError:
-        raise AssertionError('all images in dset need a frame_index')
+    if __debug__:
+        try:
+            coco_dset.images().lookup('frame_index')
+        except KeyError:
+            raise AssertionError('all images in dset need a frame_index')
 
     return coco_dset
 
@@ -619,11 +649,12 @@ def normalize(
 
         return coco_dset
 
-    import xdev
-    xdev.embed()
     if len(coco_dset.anns) > 0:
         coco_dset = _normalize_annots(coco_dset, overwrite)
     coco_dset = ensure_videos(coco_dset)
+
+    import xdev
+    xdev.embed()
     # apply tracks
     assert issubclass(track_fn, TrackFunction), 'must supply a valid track_fn!'
     coco_dset = track_fn(**track_kwargs).apply_per_video(coco_dset)
