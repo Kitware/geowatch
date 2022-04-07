@@ -70,7 +70,7 @@ class ScheduleEvaluationConfig(scfg.Config):
 
         'shuffle_jobs': scfg.Value(True, help='if True, shuffles the jobs so they are submitted in a random order'),
 
-        'iarpa_eval': scfg.Value(False, help='if True, enable iapra evalaution'),
+        'enable_iarpa_eval': scfg.Value(False, help='if True, enable iapra evalaution'),
         'annotations_dpath': scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval'),
     }
 
@@ -231,9 +231,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
     with_saliency = 'auto'
     with_class = 'auto'
 
-    with_pred = config['enable_pred']  # TODO: allow caching
-    with_eval = config['enable_eval']
-
     workers_per_queue = 4
     recompute = False
 
@@ -327,6 +324,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
     virtualenv_cmd = config['virtualenv_cmd']
     if virtualenv_cmd:
         queue.add_header_command(virtualenv_cmd)
+
+    with_pred = config['enable_pred']  # TODO: allow caching
+    with_eval = config['enable_eval']
 
     recompute_pred = recompute or (with_pred == 'redo')
     recompute_eval = recompute or (with_eval == 'redo') or (with_pred == 'redo')
@@ -494,7 +494,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                              partition=config['partition'], mem=config['mem'])
             # TODO: memory
 
-        if config['iarpa_eval'] and (has_pred or pred_job is not None):
+        if config['enable_iarpa_eval'] and (has_pred or pred_job is not None):
             # TODO: need a way of knowing if a package is BAS or SC.
             # Might need info on GSD as well.
 

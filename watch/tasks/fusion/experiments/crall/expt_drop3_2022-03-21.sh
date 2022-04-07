@@ -38,7 +38,9 @@ prep_teamfeat_drop2(){
 
 gather-checkpoints-repackage(){
 
-    # For Uncropped
+    #################################
+    # Repackage and commit new models
+    #################################
     DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_candidates
@@ -57,10 +59,20 @@ schedule-prediction-and-evlauation(){
     DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     cd "$DVC_DPATH" 
     git pull
+    #################################
+    # Pull new models on eval machine
+    #################################
+
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    cd "$DVC_DPATH" 
+    git pull
     dvc pull -r aws -R models/fusion/eval3_candidates/packages
 
+    #################################
+    # Run Prediction & Evaluation
+    #################################
     # TODO: 
-    # - [ ] Argument for test time augmentation.
+    # - [X] Argument for test time augmentation.
     # - [ ] Argument general predict parameter grid
     # - [ ] Can a task request that slurm only schedule it on a specific GPU?
     # Note: change backend to tmux if slurm is not installed
@@ -71,55 +83,61 @@ schedule-prediction-and-evlauation(){
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
     # The gpus flag does not work for the slurm backend. (Help wanted)
     TMUX_GPUS="0,1"
-    TMUX_GPUS="1,"
+    #TMUX_GPUS="1,"
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*V3*.pt" \
             --test_dataset="$VALI_FPATH" \
             --run=1 --skip_existing=True --backend=tmux
 
+
+    # Iarpa BAS metrics only on existing predictions
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="$TMUX_GPUS" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*V3*.pt" \
+            --test_dataset="$VALI_FPATH" \
+            --skip_existing=True \
+            --enable_pred=0 \
+            --enable_eval=0 \
+            --enable_iarpa_eval=0 \
+            --backend=tmux --run=1 
+
+    #################################
+    # Commit Evaluation Results
+    #################################
     # Be sure to DVC add the eval results after!
     DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     cd "$DVC_DPATH" 
+    # Check for 
     ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
+    # Check for uncommited evaluations
+    # shellcheck disable=SC2010
     ls -al models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json | grep -v ' \-> '
     du -shL models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json | sort -h
     (cd "$DVC_DPATH" && dvc add models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json)
+    git commit -am "add eval from $HOSTNAME"
     (cd "$DVC_DPATH" && dvc push -r aws -R models/fusion/eval3_candidates/eval)
 
-
-    # On other machines
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
-    cd "$DVC_DPATH" 
-    dvc pull -r aws models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
-}
-
-
-schedule-prediction-and-evaluate-team-models(){
-
-    # For Uncropped
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
-    DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
-    EXPT_GROUP_CODE=eval3_candidates
-    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
-    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0,1" \
-            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/DZYNE*/*.pt" \
-            --test_dataset="$VALI_FPATH" \
-            --run=0 --skip_existing=True --backend=serial
+    # For SSD drives
+    (cd "$DVC_DPATH" && dvc push -r local_store -R models/fusion/eval3_candidates/eval)
 }
 
 
 aggregate-results(){
+
+
     #################################
     # Aggregate Results
     #################################
-    # Pull all results onto the machine you want to eval on
+    # On other machines
     DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
     cd "$DVC_DPATH" 
     git pull
-    dvc pull -r aws -R models/fusion/eval3_candidates/eval
+    dvc checkout aws models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+    cd "$DVC_DPATH" 
+    git pull
+    dvc pull -r aws models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
 
     DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     EXPT_GROUP_CODE=eval3_candidates
@@ -139,6 +157,49 @@ aggregate-results(){
         --dset_group_key="*Drop3*" --show=True \
         --classes_of_interest "Site Preparation" "Active Construction"
 }
+
+
+schedule-prediction-and-evaluate-team-models(){
+    # For Uncropped
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+    EXPT_GROUP_CODE=eval3_candidates
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="0,1" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/DZYNE*/*.pt" \
+            --test_dataset="$VALI_FPATH" \
+            --run=0 --skip_existing=True --backend=serial
+}
+
+fix-bad-commit(){
+
+pyblock "
+
+import glob
+eval_fpaths = list(glob.glob('models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json'))
+fixme = []
+for eval_fpath in eval_fpaths:
+    eval_fpath = ub.Path(eval_fpath)
+    eval_dvc_fpath = eval_fpath.augment(tail='.dvc')
+    if eval_dvc_fpath.exists():
+        text = eval_dvc_fpath.read_text()
+        if '=====' in text:
+            fixme.append(eval_fpath)
+            print(text)
+
+from watch.utils.simple_dvc import SimpleDVC
+dvc = SimpleDVC('.')
+dvc.unprotect(fixme)
+
+for p in fixme:
+    p.augment(tail='.dvc').delete()
+
+"
+
+}
+
 
 
 

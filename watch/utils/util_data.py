@@ -71,8 +71,10 @@ def _dvc_registry_list():
         {'path': ub.Path("/media/native/data/data/smart_watch_dvc"),  'name': 'rutgers', 'hardware': None},
         {'path': ub.Path("/localdisk0/SCRATCH/watch/ben/smart_watch_dvc"), 'name': 'uky', 'hardware': None},
         {'path': ub.Path("/data4/datasets/smart_watch_dvc/").expand(), 'name': 'purri', 'hardware': None},
-        {'path': ub.Path("$HOME/data/dvc-repos/smart_watch_dvc").expand(), 'name': 'crall-ssd', 'hardware': 'ssd'},
+
+        {'path': ub.Path("$HOME/data/dvc-repos/smart_watch_dvc-ssd").expand(), 'name': 'crall-ssd', 'hardware': 'ssd'},
         {'path': ub.Path("$HOME/data/dvc-repos/smart_watch_dvc-hdd").expand(), 'name': 'crall-hdd', 'hardware': 'hdd'},
+        {'path': ub.Path("$HOME/data/dvc-repos/smart_watch_dvc").expand(), 'name': 'standard', 'hardware': None},
     ]
 
     candidate_dpaths = [row for row in hardcoded_paths if row['path'].exists()]

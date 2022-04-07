@@ -409,8 +409,6 @@ def predict(cmdline=False, **kwargs):
         }
     })
 
-    result_fpath.parent.mkdir(parents=True, exist_ok=True)
-
     from watch.utils.lightning_ext import util_device
     print('args.gpus = {!r}'.format(args.gpus))
     devices = util_device.coerce_devices(args.gpus)
@@ -559,6 +557,9 @@ def predict(cmdline=False, **kwargs):
         max_workers=datamodule.num_workers)
 
     prog = ub.ProgIter(batch_iter, desc='predicting', verbose=1)
+
+    result_fpath.parent.ensuredir()
+    print('result_fpath = {!r}'.format(result_fpath))
 
     try:
         if args.track_emissions:
@@ -1375,11 +1376,11 @@ if __name__ == '__main__':
             --sidecar2=1 \
             --tta_fliprot=0,1 \
             --tta_time=0,1 \
-            --iarpa_eval=1 \
             --chip_overlap=0,0.3 \
             --draw_heatmaps=1 \
             --skip_existing=1 \
             --run=0 --backend=tmux \
+            --enable_iarpa_eval=1 \
             --enable_eval=1
 
 
