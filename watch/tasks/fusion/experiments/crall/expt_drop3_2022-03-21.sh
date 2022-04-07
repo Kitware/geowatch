@@ -149,7 +149,7 @@ aggregate-results(){
     DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
     cd "$DVC_DPATH" 
     git pull
-    dvc pull -r aws models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
+    dvc pull -r horologic models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
 
     DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     EXPT_GROUP_CODE=eval3_candidates
@@ -166,7 +166,7 @@ aggregate-results(){
     python -m watch.tasks.fusion.aggregate_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
-        --dset_group_key="*Drop3*" --show=True \
+        --dset_group_key="*Drop3*combo_LM_nowv_vali*" --show=True \
         --classes_of_interest "Site Preparation" "Active Construction"
 }
 
@@ -214,6 +214,28 @@ for p in fixme:
 
 
 singleton_commands(){
+
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    MODEL_FPATH=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_bells_mlp_V305/Drop3_bells_mlp_V305_epoch=5-step=3071-v1.pt
+    DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+
+    #PRED_FPATH=$HOME/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/Drop3_bells_mlp_V305/pred_Drop3_bells_mlp_V305_epoch=5-step=3071-v1/Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json
+
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="$TMUX_GPUS" \
+            --model_globstr="$MODEL_FPATH" \
+            --test_dataset="$VALI_FPATH" \
+            --skip_existing=0 \
+            --enable_pred=0 \
+            --enable_eval=1 \
+            --enable_eval=1 \
+            --enable_track=redo \
+            --enable_iarpa_eval=redo \
+            --backend=serial --run=0
+
+
     # Find all models that have predictions
     DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     cd "$DVC_DPATH"

@@ -494,7 +494,7 @@ def main(args):
         description='Score IARPA site model GeoJSON files using IARPA\'s '
         'metrics-and-test-framework')
     parser.add_argument('sites',
-                        nargs='+',
+                        nargs='*',
                         help='''
         List of paths or serialized JSON strings containg v2 site models.
         All region_ids from these sites will be scored, and it will be assumed
@@ -547,6 +547,13 @@ def main(args):
         'Short name for the algorithm used to generate the model'))
 
     parser.add_argument(
+        '--inputs_are_paths', action='store_true', help=ub.paragraph(
+            '''
+            If given, the sites inputs will always be interpreted as paths
+            and not raw json text.
+            '''))
+
+    parser.add_argument(
         '--use_cache', default=False, action='store_true', help=ub.paragraph(
             '''
             IARPA metrics code currently contains a cache bug, do not enable
@@ -558,16 +565,30 @@ def main(args):
 
     # load sites
     sites = []
-    for site in args.sites:
-        print('site = {!r}'.format(site))
-        try:
-            if os.path.isfile(site):
-                site = json.load(open(site))
-            else:
-                site = json.loads(site)
-        except json.JSONDecodeError as e:  # TODO split out as decorator?
-            raise json.JSONDecodeError(e.msg + ' [cut for length]',
-                                       e.doc[:100] + '...', e.pos)
+    if len(args.sites) == 0:
+        raise Exception('No input sites were given')
+
+    for site_data in args.sites:
+        if args.inputs_are_paths:
+            site_fpath = ub.Path(site_data)
+            if not site_fpath.exists():
+                raise FileNotFoundError(str(site_fpath))
+            with open(site_fpath, 'r') as file:
+                site = json.load(file)
+        else:
+            # TODO:
+            # Deprecate passing raw json on the CLI, it has a limited length
+            # What would be best is a single file that points to all of the
+            # site jsons we care about, so we don't need to glob.
+            try:
+                if os.path.isfile(site_data):
+                    with open(site_data, 'r') as file:
+                        site = json.load(file)
+                else:
+                    site = json.loads(site_data)
+            except json.JSONDecodeError as e:  # TODO split out as decorator?
+                raise json.JSONDecodeError(e.msg + ' [cut for length]',
+                                           e.doc[:100] + '...', e.pos)
         sites.append(site)
 
     name = args.name

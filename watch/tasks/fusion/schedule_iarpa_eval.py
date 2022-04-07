@@ -13,11 +13,16 @@ def _suggest_track_paths(pred_fpath, track_cfg):
     track_cfg_dname = f'trackcfg_{track_cfgstr}'
     track_cfg_base = pred_bundle_dpath / 'tracking' / track_cfg_dname
     sites_dpath = track_cfg_base / 'tracked_sites'
+    track_stamp_fpath = sites_dpath / 'tracking_finished.stamp'
+
     iarpa_eval_dpath = track_cfg_base / 'iarpa_eval'
+    iarpa_summary_fpath = iarpa_eval_dpath / 'scores' / 'merged' / 'summary2.json'
     track_suggestions = {
         'sites_dpath': sites_dpath,
         'iarpa_eval_dpath': iarpa_eval_dpath,
         'track_cfgstr': track_cfgstr,
+        'track_stamp_fpath': track_stamp_fpath,
+        'iarpa_summary_fpath': iarpa_summary_fpath,
     }
     return track_suggestions
 
@@ -64,11 +69,11 @@ def _build_bas_track_job(pred_fpath, sites_dpath, thresh=0.2):
             --out_dir "{sites_dpath}"
         ''')
 
-    stamp_fpath = sites_dpath / 'tracking_finished.stamp'
+    track_stamp_fpath = sites_dpath / 'tracking_finished.stamp'
     track_info = {
         'command': command,
         'sites_dpath': sites_dpath,
-        'stamp_fpath': stamp_fpath,
+        'track_stamp_fpath': track_stamp_fpath,
     }
     return track_info
 
@@ -87,15 +92,16 @@ def _build_iarpa_eval_job(sites_dpath, iarpa_eval_dpath, annotations_dpath, name
             --tmp_dir "{tmp_dir}" \
             --out_dir "{out_dir}" \
             --name {shlex.quote(str(name))} \
+            --inputs_are_paths
             "{sites_dpath}"/*.geojson
         ''')
 
-    summary_fpath = merge_dpath / 'summary2.json'
+    iarpa_summary_fpath = merge_dpath / 'summary2.json'
 
     iarpa_eval_info = {
         'command': command,
         'out_dir': out_dir,
-        'summary_fpath': summary_fpath,
+        'iarpa_summary_fpath': iarpa_summary_fpath,
     }
     return iarpa_eval_info
 
