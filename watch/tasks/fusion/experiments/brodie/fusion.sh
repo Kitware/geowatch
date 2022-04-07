@@ -167,7 +167,7 @@ aggregate_multiple_evaluations(){
     MODEL_EPOCH_PAT="*"
     PRED_DSET_PAT="*"
     MEASURE_GLOBSTR=$DVC_DPATH/models/fusion/baseline/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/eval/curves/measures2.json
-    python -m watch.tasks.fusion.gather_results \
+    python -m watch.tasks.fusion.aggregate_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/baseline" \
         --dset_group_key="Drop2-Aligned-TA1-2022-02-15_data_vali.kwcoco"

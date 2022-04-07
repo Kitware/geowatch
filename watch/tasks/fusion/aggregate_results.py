@@ -5,6 +5,8 @@ TODO:
 
     AUTO-ABALATION
 
+    - [ ] Rename to aggregate results
+
     - [ ] Group experiments into "variance" groups where params are exactly the
           same in all members of the group.
 
@@ -16,7 +18,7 @@ TODO:
           same param between all members of the groups).
 
 
-The main function is :func:`gather_measures`.
+The main function is :func:`main`.
 
 CommandLine:
 
@@ -32,7 +34,7 @@ CommandLine:
     PRED_DSET_PAT="*"
     MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${DATASET_CODE}/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/eval/curves/measures2.json
 
-    python -m watch.tasks.fusion.gather_results \
+    python -m watch.tasks.fusion.aggregate_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/" \
         --dset_group_key="*_vali.kwcoco" --show=True
@@ -48,7 +50,7 @@ import scriptconfig as scfg
 import itertools as it
 
 
-class GatherResultsConfig(scfg.Config):
+class AggregateResultsConfig(scfg.Config):
     """
     TODO: write good docs for the gather command line tool.
 
@@ -601,10 +603,10 @@ def _oldhack():
     """
 
 
-def gather_measures(cmdline=False, **kwargs):
+def main(cmdline=False, **kwargs):
     """
     Ignore:
-        from watch.tasks.fusion.gather_results import *  # NOQA
+        from watch.tasks.fusion.aggregate_results import *  # NOQA
         import watch
         dvc_dpath = watch.find_smart_dvc_dpath()
         measure_globstr = 'models/fusion/SC-20201117/*/*/*/eval/curves/measures2.json'
@@ -625,7 +627,7 @@ def gather_measures(cmdline=False, **kwargs):
     from watch.utils import util_path
     from watch.utils import util_pattern
 
-    config = GatherResultsConfig(cmdline=cmdline, data=kwargs)
+    config = AggregateResultsConfig(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.repr2(config.asdict(), nl=1)))
 
     measure_globstr = config['measure_globstr']
@@ -1232,7 +1234,7 @@ if __name__ == '__main__':
         # DVC_DPATH=$(python -m watch.cli.find_dvc)
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
         MEASURE_GLOBSTR=$DVC_DPATH/models/fusion/SC-20201117/*_TA1*/*/*/eval/curves/measures2.json
-        python -m watch.tasks.fusion.gather_results \
+        python -m watch.tasks.fusion.aggregate_results \
             --measure_globstr="$MEASURE_GLOBSTR" \
             --out_dpath="$DVC_DPATH/agg_results"
             --dset_group_key="Drop2-Aligned-TA1-2022-01_*.kwcoco"
@@ -1240,9 +1242,9 @@ if __name__ == '__main__':
 
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
         cd $DVC_DPATH/models/fusion/SC-20201117
-        python -m watch.tasks.fusion.gather_results \
+        python -m watch.tasks.fusion.aggregate_results \
             --measure_globstr="*/*/*/eval/curves/measures2.json" \
             --out_dpath="$DVC_DPATH/agg_results" \
             --dset_group_key="*" --show=True
     """
-    gather_measures(cmdline=True)
+    main(cmdline=True)

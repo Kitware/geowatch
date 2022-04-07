@@ -75,7 +75,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     PRED_CFG_PAT="*"
     MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json
 
-    python -m watch.tasks.fusion.gather_results \
+    python -m watch.tasks.fusion.aggregate_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
         --dset_group_key="*Drop3*" --show=True \

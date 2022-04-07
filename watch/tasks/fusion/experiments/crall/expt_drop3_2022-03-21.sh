@@ -90,6 +90,18 @@ schedule-prediction-and-evlauation(){
             --test_dataset="$VALI_FPATH" \
             --run=1 --skip_existing=True --backend=tmux
 
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="$TMUX_GPUS" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*xfer*V3*.pt" \
+            --test_dataset="$VALI_FPATH" \
+            --run=1 --skip_existing=True --backend=slurm
+
+    TMUX_GPUS="0,1,2,3"
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="$TMUX_GPUS" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*scratch*V3*.pt" \
+            --test_dataset="$VALI_FPATH" \
+            --run=1 --skip_existing=True --backend=tmux
 
     # Iarpa BAS metrics only on existing predictions
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
@@ -151,7 +163,7 @@ aggregate-results(){
     PRED_CFG_PAT="*"
     MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json
 
-    python -m watch.tasks.fusion.gather_results \
+    python -m watch.tasks.fusion.aggregate_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
         --dset_group_key="*Drop3*" --show=True \
@@ -198,6 +210,14 @@ for p in fixme:
 
 "
 
+}
+
+
+singleton_commands(){
+    # Find all models that have predictions
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    cd "$DVC_DPATH"
+    ls models/fusion/eval3_candidates/pred/*/*/*/*/pred.kwcoco.json
 }
 
 

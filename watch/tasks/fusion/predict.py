@@ -1387,7 +1387,7 @@ if __name__ == '__main__':
     DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
     MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json
 
-    python -m watch.tasks.fusion.gather_results \
+    python -m watch.tasks.fusion.aggregate_results \
         --measure_globstr="$DVC_DPATH/_tmp/smalltest/eval/*/*/*/*/eval/curves/measures2.json" \
         --out_dpath="$DVC_DPATH/_tmp/smalltest/_agg_results" \
         --dset_group_key="*" --show=True \

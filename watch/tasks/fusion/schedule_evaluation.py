@@ -671,7 +671,6 @@ if __name__ == '__main__':
         python ~/code/watch/watch/tasks/fusion/organize.py make_nice_dirs
         python ~/code/watch/watch/tasks/fusion/organize.py make_eval_symlinks
         python ~/code/watch/watch/tasks/fusion/organize.py make_pred_symlinks
-
-        python ~/code/watch/watch/tasks/fusion/schedule_evaluation.py gather_measures
+        python ~/code/watch/watch/tasks/fusion/schedule_evaluation.py
     """
     schedule_evaluation(cmdline=True)
