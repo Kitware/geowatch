@@ -64,11 +64,13 @@ def _build_bas_track_job(pred_fpath, sites_dpath, thresh=0.2):
             --out_dir "{sites_dpath}"
         ''')
 
-    info = {
+    stamp_fpath = sites_dpath / 'tracking_finished.stamp'
+    track_info = {
         'command': command,
         'sites_dpath': sites_dpath,
+        'stamp_fpath': stamp_fpath,
     }
-    return info
+    return track_info
 
 
 def _build_iarpa_eval_job(sites_dpath, iarpa_eval_dpath, annotations_dpath, name=None):
@@ -90,17 +92,35 @@ def _build_iarpa_eval_job(sites_dpath, iarpa_eval_dpath, annotations_dpath, name
 
     summary_fpath = merge_dpath / 'summary2.json'
 
-    info = {
+    iarpa_eval_info = {
         'command': command,
         'out_dir': out_dir,
         'summary_fpath': summary_fpath,
     }
-    return info
+    return iarpa_eval_info
 
 
-def _submit_bas_track_job():
+def _submit_bas_track_job(queue, pred_fpath, sites_dpath, thresh):
+    job_info = _build_bas_track_job(pred_fpath, sites_dpath, thresh)
     pass
 
 
 def _submit_iarpa_eval_job():
     pass
+
+"""
+# Note: change backend to tmux if slurm is not installed
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+EXPT_GROUP_CODE=eval3_candidates
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+        --gpus="0,1" \
+        --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
+        --test_dataset="$VALI_FPATH" \
+        --run=1 --skip_existing=True --backend=slurm \
+        --enable_pred=0 \
+        --enable_eval=0 \
+        --iarpa_eval=1
+"""

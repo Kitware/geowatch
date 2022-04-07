@@ -255,9 +255,24 @@ class TMUXMultiQueue(cmd_queue.Queue):
         graph = self._dependency_graph()
 
         # Get rid of implicit dependencies
-        reduced_graph = nx.transitive_reduction(graph)
-
-        # cmd_queue.graph_str(graph, write=print)
+        try:
+            reduced_graph = nx.transitive_reduction(graph)
+        except Exception as ex:
+            print('ex = {!r}'.format(ex))
+            print('graph = {!r}'.format(graph))
+            print(len(graph.nodes))
+            print('graph.nodes = {}'.format(ub.repr2(graph.nodes, nl=1)))
+            print('graph.edges = {}'.format(ub.repr2(graph.edges, nl=1)))
+            print(len(graph.edges))
+            print(graph.is_directed())
+            print(nx.is_forest(graph))
+            print(nx.is_directed_acyclic_graph(graph))
+            simple_cycles = list(nx.cycles.simple_cycles(graph))
+            print('simple_cycles = {}'.format(ub.repr2(simple_cycles, nl=1)))
+            import xdev
+            xdev.embed()
+            print(cmd_queue.graph_str(graph))
+            raise
 
         in_cut_nodes = set()
         out_cut_nodes = set()

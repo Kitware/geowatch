@@ -71,7 +71,7 @@ schedule-prediction-and-evlauation(){
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
     # The gpus flag does not work for the slurm backend. (Help wanted)
     TMUX_GPUS="0,1"
-    TMUX_GPUS="0,"
+    TMUX_GPUS="1,"
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*V3*.pt" \
@@ -112,6 +112,14 @@ schedule-prediction-and-evaluate-team-models(){
 
 
 aggregate-results(){
+    #################################
+    # Aggregate Results
+    #################################
+    # Pull all results onto the machine you want to eval on
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
+    cd "$DVC_DPATH" 
+    git pull
+    dvc pull -r aws -R models/fusion/eval3_candidates/eval
 
     DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     EXPT_GROUP_CODE=eval3_candidates

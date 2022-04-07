@@ -859,6 +859,10 @@ def main(args):
         else:
             print('no sites to score!')
 
+    out_dir = ub.Path(out_dir)
+    stamp_fpath = out_dir / 'tracking-finished.stamp'
+    stamp_fpath.write_text(ub.timestamp())
+
 
 def demo(coco_dset,
          regions_dir,

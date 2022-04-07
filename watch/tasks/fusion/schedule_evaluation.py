@@ -1,4 +1,7 @@
 """
+TODO:
+    - [ ] Rename to schedule inference or evaluation? Or split up the jobs?
+
 Helper for scheduling a set of prediction + evaluation jobs
 
 python -m watch.tasks.fusion.schedule_evaluation
@@ -491,7 +494,10 @@ def schedule_evaluation(cmdline=False, **kwargs):
                              partition=config['partition'], mem=config['mem'])
             # TODO: memory
 
-        if config['iarpa_eval']:
+        if config['iarpa_eval'] and (has_pred or pred_job is not None):
+            # TODO: need a way of knowing if a package is BAS or SC.
+            # Might need info on GSD as well.
+
             annotations_dpath = config['annotations_dpath']
             if annotations_dpath is None:
                 annotations_dpath = dvc_dpath / 'annotations'
@@ -502,21 +508,66 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 track_cfg = {
                     'thresh': thresh,
                 }
-                pred_fpath = suggestions['pred_dataset']
+                pred_fpath = ub.Path(suggestions['pred_dataset'])
                 track_suggestions = schedule_iarpa_eval._suggest_track_paths(
                     pred_fpath, track_cfg)
-                name = '-'.join(
-                    suggestions['package_cfgstr'],
-                    suggestions['pred_cfgstr'],
-                    track_suggestions['track_cfgstr'],
-                )
+                name_suffix = '-'.join([
+                    'pkg', suggestions['package_cfgstr'],
+                    'prd', suggestions['pred_cfgstr'],
+                    'trk', track_suggestions['track_cfgstr'],
+                ])
                 sites_dpath = track_suggestions['sites_dpath']
                 iarpa_eval_dpath = track_suggestions['iarpa_eval_dpath']
-                job, track_info = schedule_iarpa_eval._submit_bas_track_job(
-                    pred_fpath, sites_dpath, thresh)
 
-                job, iarpa_eval_info = schedule_iarpa_eval._submit_iarpa_eval_job(
-                    sites_dpath, iarpa_eval_dpath, annotations_dpath, name)
+                # TODO: better cache logic
+                track_info = schedule_iarpa_eval._build_bas_track_job(
+                    pred_fpath, sites_dpath, thresh)
+                stamp_fpath = track_info['stamp_fpath']
+
+                recompute_tracks = 0
+                has_tracks = stamp_fpath.exists()
+
+                iarpa_eval_info = schedule_iarpa_eval._build_iarpa_eval_job(
+                    sites_dpath, iarpa_eval_dpath, annotations_dpath, name_suffix)
+
+                summary_fpath = iarpa_eval_info['summary_fpath']
+
+                recompute_iarpa_eval = 0
+                has_iarpa_eval = summary_fpath.exists()
+
+                if recompute_tracks or not has_tracks:
+                    name = 'track-' + name_suffix
+                    command = track_info['command']
+                    if recompute_tracks:
+                        command = (
+                            f'test -f "{stamp_fpath}" || ' +
+                            eval_command
+                        )
+                    track_job = queue.submit(
+                        command=command,
+                        depends=pred_job,
+                        name=name,
+                        cpus=2,
+                        partition=config['partition'],
+                        mem=config['mem'],
+                    )
+
+                if recompute_iarpa_eval or not has_iarpa_eval:
+                    name = 'iarpaeval-' + name_suffix
+                    command = iarpa_eval_info['command']
+                    if recompute_iarpa_eval:
+                        command = (
+                            f'test -f "{summary_fpath}" || ' +
+                            eval_command
+                        )
+                    queue.submit(
+                        command=command,
+                        depends=track_job,
+                        name=name,
+                        cpus=2,
+                        partition=config['partition'],
+                        mem=config['mem'],
+                    )
 
     print('queue = {!r}'.format(queue))
     # print(f'{len(queue)=}')
