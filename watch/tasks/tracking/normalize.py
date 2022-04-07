@@ -1,7 +1,5 @@
 import kwcoco
 import kwimage
-import shapely
-import shapely.ops
 import warnings
 from os.path import join
 import numpy as np
@@ -160,20 +158,20 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
         >>> from copy import deepcopy
         >>> from watch.tasks.tracking.normalize import remove_small_annots
         >>> from watch.demo import smart_kwcoco_demodata
-        >>> dset = smart_kwcoco_demodata.demo_kwcoco_with_heatmaps()
+        >>> coco_dset = smart_kwcoco_demodata.demo_kwcoco_with_heatmaps()
         >>> # This dset has 1 video with all images the same size
         >>> # For testing, resize one of the images so there is a meaningful
         >>> # difference between img space and vid space
         >>> scale_factor = 0.5
         >>> aff = kwimage.Affine.coerce({'scale': scale_factor})
-        >>> img = dset.imgs[1]
+        >>> img = coco_dset.imgs[1]
         >>> img['width'] *= scale_factor
         >>> img['height'] *= scale_factor
         >>> img['warp_img_to_vid']['scale'] = 1/scale_factor
         >>> for aux in img['auxiliary']:
         >>>     aux['warp_aux_to_img']['scale'] = aux['warp_aux_to_img'].get(
         >>>         'scale', 1) * scale_factor
-        >>> annots = dset.annots(gid=img['id'])
+        >>> annots = coco_dset.annots(gid=img['id'])
         >>> old_annots = deepcopy(annots)
         >>> dets = annots.detections.warp(aff)
         >>> # TODO this doesn't handle keypoints, and is rather brittle, is
@@ -188,101 +186,72 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
         >>>     old_annots.boxes.area)
         >>> # test that remove_small_annots no-ops with no threshold
         >>> # (ie there are no invalid annots here)
-        >>> assert dset.n_annots == remove_small_annots(deepcopy(dset),
+        >>> assert coco_dset.n_annots == remove_small_annots(deepcopy(coco_dset),
         >>>     min_area_px=0, min_geo_precision=None).n_annots
         >>> # test that annots can be removed
-        >>> assert remove_small_annots(deepcopy(dset), min_area_px=1e99,
+        >>> assert remove_small_annots(deepcopy(coco_dset), min_area_px=1e99,
         >>>     min_geo_precision=None).n_annots == 0
         >>> # test that annotations are filtered in video space
         >>> # pick a threshold above the img annot size and below the vid
         >>> # annot size; annot should not be removed
         >>> thresh = annots.boxes.area[0] + 1
-        >>> assert annots.aids[0] in remove_small_annots(deepcopy(dset),
+        >>> assert annots.aids[0] in remove_small_annots(deepcopy(coco_dset),
         >>>     min_area_px=thresh, min_geo_precision=None).annots(
         >>>         gid=img['id']).aids
+        >>> # test that some but not all annots can be removed
+        >>> filtered = remove_small_annots(
+        >>>     deepcopy(coco_dset), min_area_px=10000,
+        >>>     min_geo_precision=None)
+        >>> assert filtered.n_annots > 0 and filtered.n_annots < coco_dset.n_annots
         >>> # TODO test min_geo_precision
     '''
-    def remove_annotations(coco_dset, remove_fn):
-        # TODO merge into kwcoco?
-        annots = coco_dset.annots()
-        if len(annots) > 0:
-            empty_aids = annots.compress(remove_fn(annots)).aids
-            coco_dset.remove_annotations(empty_aids)
-            print(
-                f'Removing small aids: {empty_aids}. '
-                'After removing small, trackids: ',
-                set(coco_dset.annots().get('track_id', None)))
-        return coco_dset
-
-    def polys_in_video(annots, coco_dset):
-        # gets polygons in video space
-        # TODO are there vectorized versions of these functions?
-        # ideally, annots.detections.warp(list_of_affines)
-
-        # separate into lists
-        polys = annots.detections.data['segmentations'].to_polygon_list()
-        warps = [
-            kwimage.Affine.coerce(aff)
-            for aff in coco_dset.images(annots.gids).get(
-                'warp_img_to_vid', {'scale': 1})
-        ]
-
-        # apply warping
-        polys = [p.warp(w) for p, w in zip(polys, warps)]
-
-        # put them back together
-        polys = kwimage.PolygonList(polys)
-
-        return polys
-
-    #
-    # 1. and 2.
-    #
-
     if min_area_px is None:
         min_area_px = 0
 
-    def are_invalid_or_small(annots):
-        def _is_invalid_or_small(poly):
-            try:
-                # TODO split out polys with invalid subsets
-                # ex. https://gis.stackexchange.com/a/321804
-                shp_poly = poly.to_shapely().buffer(0)
-                return shp_poly.area <= min_area_px or not shp_poly.is_valid
-            except ValueError:
-                return True
+    empty_aids = []
+    remove_reason = []
+    for gid in coco_dset.index.imgs.keys():
+        coco_img = coco_dset.coco_image(gid)
+        annots = coco_dset.annots(gid=gid)
+        for aid in annots:
+            ann = coco_dset.index.anns[aid]
 
-        return list(
-            map(_is_invalid_or_small, polys_in_video(annots, coco_dset)))
+            if min_area_px is not None:
+                pxl_sseg = coco_img._annot_segmentation(ann, space='video')
+                pxl_sseg_sh = pxl_sseg.to_multi_polygon().to_shapely().buffer(0)
 
-    coco_dset = remove_annotations(coco_dset, are_invalid_or_small)
+                if not pxl_sseg_sh.is_valid:
+                    remove_reason.append('invalid_pixel_polygon')
+                    empty_aids.append(aid)
 
-    #
-    # 3.
-    #
+                if pxl_sseg_sh.area <= min_area_px:
+                    remove_reason.append('small pixel area {}'.format(round(pxl_sseg_sh.area, 1)))
+                    empty_aids.append(aid)
+                    continue
 
-    if min_geo_precision is not None:
+            if min_geo_precision is not None:
+                # TODO: could check this in UTM space instead of using rounding
+                wgs_sseg = kwimage.Segmentation.coerce(ann['segmentation_geos'])
+                wgs_sseg_sh = wgs_sseg.to_multi_polygon().to_shapely()
+                wgs_sseg_sh = shapely_round(wgs_sseg_sh, min_geo_precision).buffer(0)
 
-        # https://github.com/perrygeo/geojson-precision
-        def _set_precision(coords, precision):
-            result = []
-            try:
-                return round(coords, int(precision))
-            except TypeError:
-                for coord in coords:
-                    result.append(_set_precision(coord, precision))
-            return result
+                if wgs_sseg_sh.is_empty:
+                    remove_reason.append('empty geos area')
+                    empty_aids.append(aid)
+                    continue
 
-        def is_empty_rounded(geom):
-            geom['coordinates'] = _set_precision(geom['coordinates'],
-                                                 min_geo_precision)
-            return shapely.geometry.shape(geom).is_empty
-
-        def are_empty_rounded(annots):
-            return list(
-                map(is_empty_rounded, annots.lookup('segmentation_geos')))
-
-        coco_dset = remove_annotations(coco_dset, are_empty_rounded)
+    if not empty_aids:
+        print('Size filter: all annotations were valid')
+    else:
+        coco_dset.remove_annotations(empty_aids)
+        keep_annots = coco_dset.annots()
+        keep_tids = keep_annots.get('track_id', None)
+        keep_track_lengths = ub.dict_hist(keep_tids)
+        print(f'Size filter: removing {len(empty_aids)} annotations')
+        print('keep_track_lengths = {}'.format(ub.repr2(keep_track_lengths, nl=1)))
+        print(f'{len(keep_annots)=}')
+        removal_reasons = ub.dict_hist(remove_reason)
+        print('removal_reasons = {}'.format(ub.repr2(removal_reasons, nl=1)))
 
     return coco_dset
 
@@ -354,6 +323,17 @@ def add_track_index(coco_dset):
         annots.set('track_index', map(track_index_dict.get, annots.gids))
 
     return coco_dset
+
+
+def shapely_round(geom, precision):
+    """
+    References:
+        https://gis.stackexchange.com/questions/188622
+    """
+    import shapely
+    wkt = shapely.wkt.dumps(geom, rounding_precision=precision)
+    geom2 = shapely.wkt.loads(wkt).simplify(0)
+    return geom2
 
 
 @profile
