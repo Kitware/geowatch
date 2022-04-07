@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from watch.tasks.tracking.utils import (Track, PolygonFilter, NewTrackFunction,
                                         mask_to_polygons, heatmap, score, Poly,
                                         CocoDsetFilter, _validate_keys,
-                                        Observation, pop_tracks, heatmaps)
+                                        Observation, pop_tracks, build_heatmaps)
 
 try:
     from xdev import profile
@@ -197,18 +197,18 @@ class ResponsePolygonFilter(CocoDsetFilter):
 
 
 @profile
-def add_tracks_to_dset(coco_dset,
+def add_tracks_to_dset(sub_dset,
                        tracks,
                        thresh,
                        key,
                        bg_key=None,
                        coco_dset_sc=None):
     '''
-    Add tracks to coco_dset using the categories/heatmaps from coco_dset_sc.
+    Add tracks to sub_dset using the categories/heatmaps from coco_dset_sc.
     '''
     key, bg_key = _validate_keys(key, bg_key)
     if coco_dset_sc is None:
-        coco_dset_sc = coco_dset
+        coco_dset_sc = sub_dset
 
     @ub.memoize
     def _heatmap(gid, key, space):
@@ -242,7 +242,7 @@ def add_tracks_to_dset(coco_dset,
             cat_name = cand_keys[np.argmax(cand_scores)]
         else:
             cat_name = cand_keys[0]
-        cid = coco_dset.ensure_category(cat_name)
+        cid = sub_dset.ensure_category(cat_name)
 
         assert space in {'image', 'video'}
         if space == 'video':
@@ -261,7 +261,7 @@ def add_tracks_to_dset(coco_dset,
                        track_id=track_id)
         return new_ann
 
-    new_trackids = kwcoco_extensions.TrackidGenerator(coco_dset)
+    new_trackids = kwcoco_extensions.TrackidGenerator(sub_dset)
 
     for track in tracks:
         if track.track_id is not None:
@@ -277,15 +277,15 @@ def add_tracks_to_dset(coco_dset,
             new_anns.append(new_ann)
 
         for new_ann in new_anns:
-            coco_dset.add_annotation(**new_ann)
+            sub_dset.add_annotation(**new_ann)
         # TODO: Faster to add annotations in bulk, but we need to construct the
         # "ids" first
-        # coco_dset.add_annotations(new_anns)
+        # sub_dset.add_annotations(new_anns)
 
-    return coco_dset
+    return sub_dset
 
 
-def time_aggregated_polys(coco_dset,
+def time_aggregated_polys(sub_dset,
                           thresh,
                           morph_kernel=3,
                           key='salient',
@@ -303,6 +303,8 @@ def time_aggregated_polys(coco_dset,
     and add one track per polygon.
 
     Args:
+        sub_dset (kwcoco.CocoDataset): a kwcoco dataset with exactly 1 video
+
         key (String | List[String]): foreground key(s).
 
         bg_key (String | List[String] | None): background key(s).
@@ -326,13 +328,13 @@ def time_aggregated_polys(coco_dset,
         >>> # test interpolation
         >>> from watch.tasks.tracking.from_heatmap import time_aggregated_polys
         >>> from watch.demo import demo_kwcoco_with_heatmaps
-        >>> d = demo_kwcoco_with_heatmaps(num_frames=5, image_size=(480, 640))
-        >>> orig_track = time_aggregated_polys(d, thresh=0.15)[0].observations
+        >>> sub_dset = demo_kwcoco_with_heatmaps(num_frames=5, image_size=(480, 640))
+        >>> orig_track = time_aggregated_polys(sub_dset, thresh=0.15)[0].observations
         >>> skip_gids = [1,3]
         >>> for gid in skip_gids:
         >>>      # remove salient channel
-        >>>      d.imgs[gid]['auxiliary'].pop()
-        >>> inter_track = time_aggregated_polys(d, thresh=0.15)[0].observations
+        >>>      sub_dset.imgs[gid]['auxiliary'].pop()
+        >>> inter_track = time_aggregated_polys(sub_dset, thresh=0.15)[0].observations
         >>> assert inter_track[0].score == 0, inter_track[1].score > 0
     '''
 
@@ -343,126 +345,36 @@ def time_aggregated_polys(coco_dset,
     key, bg_key = _validate_keys(key, bg_key)
     _all_keys = set(key + bg_key)
     has_requested_chans_list = []
-    for gid in coco_dset.imgs:
-        coco_img = coco_dset.coco_image(gid)
+    for gid in sub_dset.imgs:
+        coco_img = sub_dset.coco_image(gid)
         chan_codes = coco_img.channels.normalize().fuse().as_set()
         flag = bool(_all_keys & chan_codes)
         has_requested_chans_list.append(flag)
 
     if not any(has_requested_chans_list):
-        raise KeyError(f'no imgs in dset {coco_dset.tag} '
+        raise KeyError(f'no imgs in dset {sub_dset.tag} '
                        f'have keys {key} or {bg_key}.')
     if not all(has_requested_chans_list):
         n_missing = (len(has_requested_chans_list) -
                      sum(has_requested_chans_list))
-        print(f'warning: {n_missing} imgs in dset {coco_dset.tag} '
+        print(f'warning: {n_missing} imgs in dset {sub_dset.tag} '
               f'have no keys {key} or {bg_key}. Interpolating...')
 
     if norm_ord in {'inf', None}:
         norm_ord = np.inf
 
     #
-    # --- utilities ---
-    #
-
-    def _heatmaps_to_polys(heatmaps, bounds):
-        '''
-        Use parameters: agg_fn, thresh, morph_kernel, thresh_hysteresis, norm_ord
-        '''
-        _agg_fn = eval(agg_fn)
-        return list(
-            mask_to_polygons(_agg_fn(heatmaps,
-                                     thresh=thresh,
-                                     morph_kernel=morph_kernel,
-                                     norm_ord=norm_ord),
-                             thresh,
-                             thresh_hysteresis=thresh_hysteresis,
-                             bounds=bounds))
-
-    def tracks_polys_bounds() -> Iterable[Tuple[Track, Poly]]:
-        import shapely.ops
-        boundary_tracks = list(pop_tracks(coco_dset, [SITE_SUMMARY_CNAME]))
-        assert len(boundary_tracks) > 0, 'need valid site boundaries!'
-        '''
-        # TODO these obnoxious fors will be removed with gpd support in Track
-        # unused
-        bounds = shapely.ops.unary_union(
-            list(
-                itertools.chain.from_iterable(
-                    [obs.poly for obs in track.observations]
-                    for track in boundary_tracks)))
-        '''
-        gids = list(
-            np.unique(
-                np.concatenate([[obs.gid for obs in track.observations]
-                                for track in boundary_tracks])))
-        _heatmaps = heatmaps(coco_dset,
-                             gids, {'fg': key},
-                             skipped='interpolate')['fg']
-
-        def fill_boundary_track(track) -> Optional[Tuple[Track, Poly]]:
-            # TODO when bounds are time-varying, this lets individual frames
-            # go outside them; only enforces the union. Problem?
-            # currently bounds come from site summaries, which are not
-            # time-varying.
-            track_bounds = shapely.ops.unary_union(
-                [obs.poly.to_shapely() for obs in track.observations])
-            _heatmaps_in_track = np.compress(np.in1d(
-                gids, [obs.gid for obs in track.observations]),
-                                             _heatmaps,
-                                             axis=0)
-
-            track_polys = _heatmaps_to_polys(_heatmaps_in_track,
-                                             bounds=track_bounds)
-
-            poly = shapely.ops.unary_union(
-                [p.to_shapely() for p in track_polys])
-            if poly.is_valid and not poly.is_empty:
-                poly = kwimage.MultiPolygon.from_shapely(poly)
-                out_track = Track(
-                    [
-                        Observation(
-                            poly=poly,
-                            gid=obs.gid,
-                            score=score(
-                                poly,
-                                # TODO optimize .index()
-                                _heatmaps[gids.index(obs.gid)]))
-                        for obs in track.observations
-                    ],
-                    dset=coco_dset,
-                    track_id=track.track_id)
-                return out_track, poly
-
-        print('generating polys in bounds: number of bounds: ',
-              len(boundary_tracks))
-        return list(filter(None, map(fill_boundary_track, boundary_tracks)))
-
-    def tracks_polys_nobounds() -> Iterable[Tuple[Track, Poly]]:
-        gids = list(coco_dset.imgs.keys())
-        _heatmaps = heatmaps(coco_dset,
-                             gids, {'fg': key},
-                             skipped='interpolate')['fg']
-
-        polys = _heatmaps_to_polys(_heatmaps, bounds=None)
-
-        # turn each polygon into a list of polygons (map them across gids)
-        tracks = [
-            Track.from_polys(itertools.repeat(poly),
-                             coco_dset,
-                             probs=_heatmaps) for poly in polys
-        ]
-
-        return list(zip(tracks, polys))
-
-    #
     # --- main logic ---
     #
 
     if use_boundaries:
-        tracks_polys = tracks_polys_bounds()
+        tracks_polys = tracks_polys_bounds(
+            sub_dset, key, agg_fn, thresh, morph_kernel, thresh_hysteresis,
+            norm_ord)
     else:
-        tracks_polys = tracks_polys_nobounds()
+        tracks_polys = tracks_polys_nobounds(
+            sub_dset, key, agg_fn, thresh, morph_kernel, thresh_hysteresis,
+            norm_ord)
 
     print('time aggregation: number of polygons: ', len(tracks_polys))
 
@@ -490,12 +402,119 @@ def time_aggregated_polys(coco_dset,
     if time_filtering:
         # TODO investigate different thresh here
         time_thresh = thresh
-        time_filter = TimePolygonFilter(coco_dset, tuple(key), time_thresh)
+        time_filter = TimePolygonFilter(sub_dset, tuple(key), time_thresh)
         tracks = list(
             filter(lambda track: len(list(track.observations)) > 0,
                    map(time_filter, tracks)))
 
     return tracks
+
+
+#
+# --- time_aggregated_polys utilities ---
+#
+
+
+def _heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
+                       thresh_hysteresis, norm_ord):
+    '''
+    Use parameters: agg_fn, thresh, morph_kernel, thresh_hysteresis, norm_ord
+    '''
+    #####!!!! Probably not safe!
+    _agg_fn = eval(agg_fn)
+    return list(
+        mask_to_polygons(_agg_fn(heatmaps,
+                                 thresh=thresh,
+                                 morph_kernel=morph_kernel,
+                                 norm_ord=norm_ord),
+                         thresh,
+                         thresh_hysteresis=thresh_hysteresis,
+                         bounds=bounds))
+
+
+def tracks_polys_bounds(sub_dset, key, agg_fn, thresh, morph_kernel, thresh_hysteresis, norm_ord) -> Iterable[Tuple[Track, Poly]]:
+    import shapely.ops
+    boundary_tracks = list(pop_tracks(sub_dset, [SITE_SUMMARY_CNAME]))
+    assert len(boundary_tracks) > 0, 'need valid site boundaries!'
+    '''
+    # TODO these obnoxious fors will be removed with gpd support in Track
+    # unused
+    bounds = shapely.ops.unary_union(
+        list(
+            itertools.chain.from_iterable(
+                [obs.poly for obs in track.observations]
+                for track in boundary_tracks)))
+    '''
+    gids = list(
+        np.unique(
+            np.concatenate([[obs.gid for obs in track.observations]
+                            for track in boundary_tracks])))
+    _heatmaps = build_heatmaps(
+        sub_dset,
+        gids, {'fg': key},
+        skipped='interpolate')['fg']
+
+    def fill_boundary_track(track) -> Optional[Tuple[Track, Poly]]:
+        # TODO when bounds are time-varying, this lets individual frames
+        # go outside them; only enforces the union. Problem?
+        # currently bounds come from site summaries, which are not
+        # time-varying.
+        track_bounds = shapely.ops.unary_union(
+            [obs.poly.to_shapely() for obs in track.observations])
+        _heatmaps_in_track = np.compress(np.in1d(
+            gids, [obs.gid for obs in track.observations]),
+                                         _heatmaps,
+                                         axis=0)
+
+        bounds = track_bounds
+        track_polys = _heatmaps_to_polys(_heatmaps_in_track, bounds, agg_fn,
+                                         thresh, morph_kernel,
+                                         thresh_hysteresis, norm_ord)
+
+        poly = shapely.ops.unary_union(
+            [p.to_shapely() for p in track_polys])
+        if poly.is_valid and not poly.is_empty:
+            poly = kwimage.MultiPolygon.from_shapely(poly)
+            out_track = Track(
+                [
+                    Observation(
+                        poly=poly,
+                        gid=obs.gid,
+                        score=score(
+                            poly,
+                            # TODO optimize .index()
+                            _heatmaps[gids.index(obs.gid)]))
+                    for obs in track.observations
+                ],
+                dset=sub_dset,
+                track_id=track.track_id)
+            return out_track, poly
+
+    print('generating polys in bounds: number of bounds: ',
+          len(boundary_tracks))
+    return list(filter(None, map(fill_boundary_track, boundary_tracks)))
+
+
+def tracks_polys_nobounds(sub_dset, key, agg_fn, thresh, morph_kernel,
+                          thresh_hysteresis, norm_ord) -> Iterable[Tuple[Track, Poly]]:
+    gids = list(sub_dset.imgs.keys())
+    _heatmaps = build_heatmaps(
+        sub_dset,
+        gids, {'fg': key},
+        skipped='interpolate')['fg']
+
+    bounds = None
+    polys = _heatmaps_to_polys(_heatmaps, bounds, agg_fn, thresh, morph_kernel,
+                               thresh_hysteresis, norm_ord)
+
+    # turn each polygon into a list of polygons (map them across gids)
+    tracks = [
+        Track.from_polys(itertools.repeat(poly),
+                         sub_dset,
+                         probs=_heatmaps) for poly in polys
+    ]
+
+    return list(zip(tracks, polys))
 
 
 #
@@ -517,9 +536,9 @@ class TimeAggregatedBAS(NewTrackFunction):
     agg_fn: str = 'probs'
     thresh_hysteresis: Optional[float] = None
 
-    def create_tracks(self, coco_dset):
+    def create_tracks(self, sub_dset):
         tracks = time_aggregated_polys(
-            coco_dset,
+            sub_dset,
             self.thresh,
             self.morph_kernel,
             key=self.key,
@@ -530,10 +549,10 @@ class TimeAggregatedBAS(NewTrackFunction):
             thresh_hysteresis=self.thresh_hysteresis)
         return tracks
 
-    def add_tracks_to_dset(self, coco_dset, tracks):
-        coco_dset = add_tracks_to_dset(coco_dset, tracks, self.thresh,
+    def add_tracks_to_dset(self, sub_dset, tracks):
+        sub_dset = add_tracks_to_dset(sub_dset, tracks, self.thresh,
                                        self.key)
-        return coco_dset
+        return sub_dset
 
 
 @dataclass
@@ -552,7 +571,7 @@ class TimeAggregatedSC(NewTrackFunction):
     agg_fn: str = 'probs'
     thresh_hysteresis: Optional[float] = None
 
-    def create_tracks(self, coco_dset):
+    def create_tracks(self, sub_dset):
         '''
         boundaries_as: use for Site Boundary annots in coco_dset
             'bounds': generated polys will lie inside the boundaries
@@ -561,7 +580,7 @@ class TimeAggregatedSC(NewTrackFunction):
         '''
         if self.boundaries_as == 'polys':
             tracks = pop_tracks(
-                coco_dset,
+                sub_dset,
                 cnames=[SITE_SUMMARY_CNAME],
                 # these are SC scores, not BAS, so this is not a
                 # true reproduction of hybrid.
@@ -577,7 +596,7 @@ class TimeAggregatedSC(NewTrackFunction):
                        tracks))
         else:
             tracks = time_aggregated_polys(
-                coco_dset,
+                sub_dset,
                 self.thresh,
                 self.morph_kernel,
                 key=self.key,
@@ -591,11 +610,11 @@ class TimeAggregatedSC(NewTrackFunction):
 
         return tracks
 
-    def add_tracks_to_dset(self, coco_dset, tracks, **kwargs):
-        coco_dset = add_tracks_to_dset(coco_dset, tracks, self.thresh,
-                                       self.key, self.bg_key, **kwargs)
+    def add_tracks_to_dset(self, sub_dset, tracks, **kwargs):
+        sub_dset = add_tracks_to_dset(sub_dset, tracks, self.thresh, self.key,
+                                      self.bg_key, **kwargs)
 
-        return coco_dset
+        return sub_dset
 
 
 @dataclass
@@ -615,13 +634,13 @@ class TimeAggregatedHybrid(NewTrackFunction):
         if isinstance(self.coco_dset_sc, str):
             self.coco_dset_sc = kwcoco.CocoDataset.coerce(self.coco_dset_sc)
 
-    def create_tracks(self, coco_dset):
-        return TimeAggregatedBAS(**self.bas_kwargs).create_tracks(coco_dset)
+    def create_tracks(self, sub_dset):
+        return TimeAggregatedBAS(**self.bas_kwargs).create_tracks(sub_dset)
 
-    def add_tracks_to_dset(self, coco_dset, tracks):
+    def add_tracks_to_dset(self, sub_dset, tracks):
         return TimeAggregatedSC(**self.sc_kwargs,
                                 boundaries_as='none').add_tracks_to_dset(
-                                    coco_dset,
+                                    sub_dset,
                                     tracks,
                                     coco_dset_sc=self.coco_dset_sc)
 

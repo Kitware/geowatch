@@ -7,7 +7,7 @@ import seaborn as sns
 import shapely.ops
 import pandas as pd
 from collections import defaultdict
-from watch.tasks.tracking.utils import pop_tracks, heatmaps
+from watch.tasks.tracking.utils import pop_tracks, build_heatmaps
 from watch.heuristics import CNAMES_DCT
 from watch.tasks.tracking.from_heatmap import mean_normalized  # NOQA
 
@@ -120,9 +120,8 @@ def visualize_videos(pred_dset,
         gids = pred_dset.index.vidid_to_gids[vidid]
 
         # save average heatmaps
-        _heatmaps = heatmaps(pred_dset,
-                             gids, {'fg': 'salient'},
-                             skipped='interpolate')['fg']
+        _heatmaps = build_heatmaps(
+            pred_dset, gids, {'fg': 'salient'}, skipped='interpolate')['fg']
 
         mean_heatmap = np.array(_heatmaps).mean(0)
         plt.figure()

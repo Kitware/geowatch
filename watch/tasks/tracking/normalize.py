@@ -212,7 +212,7 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
     remove_reason = []
 
     gid_iter = ub.ProgIter(
-        coco_dset.index.imgs.keys(), total=coco_dset.n_imgs,
+        coco_dset.index.imgs.keys(), total=coco_dset.n_images,
         desc='filter annotations')
     for gid in gid_iter:
         coco_img = coco_dset.coco_image(gid)
@@ -633,9 +633,6 @@ def normalize(
         >>> coco_dset = normalize_sensors(coco_dset)
         >>> assert (coco_dset.images().get('sensor_coarse') ==
         >>>     ['WorldView', 'Sentinel-2', 'Landsat 8'])
-
-
-
     '''
     viz_out_dir = ub.Path('_assets/tracking_visualization')
 
@@ -653,11 +650,10 @@ def normalize(
         coco_dset = _normalize_annots(coco_dset, overwrite)
     coco_dset = ensure_videos(coco_dset)
 
-    import xdev
-    xdev.embed()
     # apply tracks
     assert issubclass(track_fn, TrackFunction), 'must supply a valid track_fn!'
-    coco_dset = track_fn(**track_kwargs).apply_per_video(coco_dset)
+    tracker: TrackFunction = track_fn(**track_kwargs)
+    coco_dset = tracker.apply_per_video(coco_dset)
 
     # normalize and add geo segmentations
     coco_dset = _normalize_annots(coco_dset, overwrite=False)

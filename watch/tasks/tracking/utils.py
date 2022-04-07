@@ -156,7 +156,7 @@ class TrackFunction(collections.abc.Callable):
     Abstract class that all track functions should inherit from.
     '''
     @abstractmethod
-    def __call__(self, coco_dset) -> kwcoco.CocoDataset:
+    def __call__(self, sub_dset) -> kwcoco.CocoDataset:
         '''
         Ensure each annotation in coco_dset has a track_id.
         '''
@@ -166,43 +166,40 @@ class TrackFunction(collections.abc.Callable):
         '''
         Main entrypoint for this class.
         '''
+        # tracked_subdsets = []
         # TODO why are gids reordered in this index vs coco_dset.imgs?
         for gids in coco_dset.index.vidid_to_gids.values():
             coco_dset = self.safe_apply(coco_dset, gids, overwrite)
+            # tracked_subdsets.append(sub_dset)
+        # Is this safe to do? It would be more efficient
+        # coco_dset = kwcoco.CocoDataset.union(*tracked_subdsets, disjoint_tracks=True)
         return coco_dset
 
     def safe_apply(self, coco_dset, gids, overwrite):
 
-        sub_dset, coco_dset = self.safe_partition(coco_dset, gids, remove=True)
-
-        existing_aids = sub_dset.anns.copy().keys()
-
-        def tracks(annots):
-            return annots.get('track_id', None)
-
-        def are_trackless(annots):
-            return np.array(tracks(annots)) == None  # noqa
+        sub_dset, rest_dset = self.safe_partition(coco_dset, gids, remove=True)
 
         if overwrite:
-
             sub_dset = self(sub_dset)
-
         else:
-            # TODO more sophisticated way to check if we can skip self()
-            existing_tracks = tracks(sub_dset.annots())
-            _are_trackless = are_trackless(sub_dset.annots())
+            orig_annots = sub_dset.annots()
+            orig_tids = orig_annots.get('track_id', None)
+            orig_trackless_flags = np.array([tid is None for tid in orig_tids])
+            orig_aids = list(orig_annots)
 
+            # TODO more sophisticated way to check if we can skip self()
             sub_dset = self(sub_dset)
 
             # if new annots were not created, rollover the old tracks
-            annots = sub_dset.annots()
-            if annots.aids == existing_aids:
-                annots.set(
-                    'track_id',
-                    np.where(_are_trackless, tracks(annots), existing_tracks))
+            new_annots = sub_dset.annots()
+            if new_annots.aids == orig_aids:
+                new_tids = new_annots.get('track_id', None)
+                # Only overwrite track ids for annots that didn't have them
+                new_tids = np.where(orig_trackless_flags, new_tids, orig_tids)
+                new_annots.set('track_id', new_tids)
 
-        assert not any(are_trackless(sub_dset.annots()))
-        return self.safe_union(coco_dset, sub_dset)
+        assert not any(tid is None for tid in sub_dset.annots().lookup('track_id', None))
+        return self.safe_union(rest_dset, sub_dset)
 
     @staticmethod
     def safe_partition(coco_dset, gids, remove=True):
@@ -211,7 +208,9 @@ class TrackFunction(collections.abc.Callable):
         # (if they are, this is fixed in dedupe_tracks anyway)
         sub_dset.index.trackid_to_aids.update(coco_dset.index.trackid_to_aids)
         if remove:
-            return sub_dset, coco_dset.subset(coco_dset.imgs.keys() - gids)
+            rest_gids = list(set(coco_dset.imgs.keys()) - set(gids))
+            rest_dset = coco_dset.subset(rest_gids)
+            return sub_dset, rest_dset
         else:
             return sub_dset
 
@@ -219,30 +218,15 @@ class TrackFunction(collections.abc.Callable):
     def safe_union(coco_dset, new_dset, existing_aids=[]):
         coco_dset._build_index()
         new_dset._build_index()
-
-        if 0:
-            # coco_dset.union doesn't re-use image IDs
-            # so we can only use it when coco_dset and new_dset are disjoint
-            for cat in new_dset.cats.values():
-                cat.pop('id')
-                coco_dset.ensure_category(**cat)
-
-            coco_dset.remove_annotations(existing_aids)
-            anns_to_add = new_dset.anns.copy().values()
-            for ann in anns_to_add:
-                ann.pop('id')
-                coco_dset.add_annotation(**ann)
-            return coco_dset
-        else:
-            return coco_dset.union(new_dset, disjoint_tracks=True)
+        return coco_dset.union(new_dset, disjoint_tracks=True)
 
 
 class NoOpTrackFunction(TrackFunction):
     '''
     Use existing tracks.
     '''
-    def __call__(self, coco_dset):
-        return coco_dset
+    def __call__(self, sub_dset):
+        return sub_dset
 
 
 class NewTrackFunction(TrackFunction):
@@ -250,17 +234,17 @@ class NewTrackFunction(TrackFunction):
     Specialization of TrackFunction to create polygons that do not yet exist
     in coco_dset, and add them as new annotations
     '''
-    def __call__(self, coco_dset):
-        tracks = self.create_tracks(coco_dset)
-        coco_dset = self.add_tracks_to_dset(coco_dset, tracks)
-        return coco_dset
+    def __call__(self, sub_dset):
+        tracks = self.create_tracks(sub_dset)
+        sub_dset = self.add_tracks_to_dset(sub_dset, tracks)
+        return sub_dset
 
     @abstractmethod
-    def create_tracks(self, coco_dset) -> Iterable[Track]:
+    def create_tracks(self, sub_dset) -> Iterable[Track]:
         raise NotImplementedError('must be implemented by subclasses')
 
     @abstractmethod
-    def add_tracks_to_dset(self, coco_dset,
+    def add_tracks_to_dset(self, sub_dset,
                            tracks: Iterable[Track]) -> kwcoco.CocoDataset:
         raise NotImplementedError('must be implemented by subclasses')
 
@@ -315,9 +299,9 @@ def pop_tracks(
         heatmaps_by_gid = dict(
             zip(
                 gids,
-                heatmaps(coco_dset, gids,
-                         {score_chan.spec: list(score_chan.unique())
-                          })[score_chan.spec]))
+                build_heatmaps(coco_dset, gids, {
+                    score_chan.spec: list(score_chan.unique())
+                })[score_chan.spec]))
         scores = [
             score(poly, heatmaps_by_gid[gid])
             for poly, gid in zip(polys, annots.gids)
@@ -481,16 +465,10 @@ def mask_to_polygons(probs,
 
 def _validate_keys(key, bg_key):
     # for backwards compatibility
-    if isinstance(key, str):
-        key = [key]
-    elif isinstance(key, tuple):
-        key = list(key)
     if bg_key is None:
         bg_key = []
-    elif isinstance(bg_key, str):
-        bg_key = [bg_key]
-    elif isinstance(bg_key, tuple):
-        bg_key = list(bg_key)
+    key = list(key) if ub.iterable(key) else [key]
+    bg_key = list(bg_key) if ub.iterable(bg_key) else [bg_key]
 
     # error checking
     if len(key) < 1:
@@ -502,7 +480,7 @@ def _validate_keys(key, bg_key):
     return key, bg_key
 
 
-def heatmaps(coco_dset: kwcoco.CocoDataset,
+def build_heatmaps(coco_dset: kwcoco.CocoDataset,
              gids: List[int],
              keys: Union[List[str], Dict[str, List[str]]],
              missing='fill',
@@ -513,12 +491,12 @@ def heatmaps(coco_dset: kwcoco.CocoDataset,
     Can also sum keys using group names.
 
     Example:
-        heatmaps(dset, gids=[1,2], ['key1', 'key2', 'key3']) == {
+        build_heatmaps(dset, gids=[1,2], ['key1', 'key2', 'key3']) == {
             'key1': heats1,
             'key2': heats2,
             'key3': heats3
         }
-        heatmaps(dset, gids=[1,2], {'group1': ['key1', 'key2', 'key3']}) == {
+        build_heatmaps(dset, gids=[1,2], {'group1': ['key1', 'key2', 'key3']}) == {
             'key1': heats1,
             'key2': heats2,
             'key3': heats3,
