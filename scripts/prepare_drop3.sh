@@ -303,7 +303,7 @@ prepare_wv_crop_from_sites(){
 
 prepare_cropped_from_tracks(){
 
-    DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
+    DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="ssd")
     IMGONLY_FPATH="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/imgonly_S2_L8_WV.kwcoco.json"
     echo "IMGONLY_FPATH = $IMGONLY_FPATH"
     python -m watch.cli.coco_remove_empty_images \
@@ -316,6 +316,7 @@ prepare_cropped_from_tracks(){
 
     mv "$IMGONLY_FPATH.tmp" "$IMGONLY_FPATH"
 
+    DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="ssd")
     BASE_DPATH="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json"
     python -m watch project_annotations \
         --src "$IMGONLY_FPATH" \
@@ -325,7 +326,7 @@ prepare_cropped_from_tracks(){
 
     python -m watch.cli.prepare_splits \
         --base_fpath="$BASE_DPATH" \
-        --run=1 --backend=tmux
+        --run=0 --backend=serial
 
     7z a splits.zip data*.kwcoco.json
     dvc add -- *.zip
@@ -333,11 +334,28 @@ prepare_cropped_from_tracks(){
     git push 
     dvc push -r aws splits.zip
 
+    export CUDA_VISIBLE_DEVICES=1
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware="ssd")
+    echo "DVC_DPATH = $DVC_DPATH"
+    BASE_DPATH="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json"
+    python -m watch.cli.prepare_teamfeats \
+        --base_fpath="$BASE_DPATH" \
+        --dvc_dpath="$DVC_DPATH" \
+        --gres=",1" \
+        --with_landcover=0 \
+        --with_depth=1 \
+        --with_materials=0 \
+        --with_invariants=0 \
+        --do_splits=1 \
+        --depth_workers=0 \
+        --cache=1 --run=1 --backend=tmux
+
+
 }
 
 cropped_with_more_context(){
 
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware="hdd")
     echo "$DVC_DPATH"
     INPUT_FPATH=$BASE_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json
     NEW_KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Cropped-Drop3-TA1-Context
@@ -361,9 +379,9 @@ cropped_with_more_context(){
         --site_models="$DVC_DPATH/annotations/site_models/*.geojson" \
         --region_models="$DVC_DPATH/annotations/region_models/*.geojson"
 
-    export CUDA_VISIBLE_DEVICES=3
+    export CUDA_VISIBLE_DEVICES=1
     python -m watch.cli.prepare_teamfeats \
-        --base_fpath="$NEW_KWCOCO_BUNDLE_DPATH/imgonly_S2_WV.kwcoco.json" \
+        --base_fpath="$NEW_KWCOCO_BUNDLE_DPATH/.kwcoco.json" \
         --dvc_dpath="$DVC_DPATH" \
         --gres="0,1" \
         --with_landcover=0 \

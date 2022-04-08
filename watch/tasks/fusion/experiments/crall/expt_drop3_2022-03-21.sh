@@ -90,11 +90,12 @@ schedule-prediction-and-evlauation(){
             --test_dataset="$VALI_FPATH" \
             --run=1 --skip_existing=True --backend=tmux
 
+    TMUX_GPUS="0,1,2,3"
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*xfer*V3*.pt" \
             --test_dataset="$VALI_FPATH" \
-            --run=1 --skip_existing=True --backend=slurm
+            --run=1 --skip_existing=True --backend=tmux
 
     TMUX_GPUS="0,1,2,3"
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
@@ -125,7 +126,7 @@ schedule-prediction-and-evlauation(){
     # Check for uncommited evaluations
     # shellcheck disable=SC2010
     ls -al models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json | grep -v ' \-> '
-    du -shL models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json | sort -h
+    #du -shL models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json | sort -h
     (cd "$DVC_DPATH" && dvc add models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json)
     git commit -am "add eval from $HOSTNAME"
     (cd "$DVC_DPATH" && dvc push -r aws -R models/fusion/eval3_candidates/eval)
