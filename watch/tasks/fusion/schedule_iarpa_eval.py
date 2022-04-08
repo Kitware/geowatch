@@ -12,22 +12,20 @@ def _suggest_track_paths(pred_fpath, track_cfg):
     pred_bundle_dpath = pred_fpath.parent
     track_cfg_dname = f'trackcfg_{track_cfgstr}'
     track_cfg_base = pred_bundle_dpath / 'tracking' / track_cfg_dname
-    sites_dpath = track_cfg_base / 'tracked_sites'
-    track_stamp_fpath = sites_dpath / 'tracking_finished.stamp'
+    track_out_fpath = track_cfg_base / 'tracks.json'
 
     iarpa_eval_dpath = track_cfg_base / 'iarpa_eval'
     iarpa_summary_fpath = iarpa_eval_dpath / 'scores' / 'merged' / 'summary2.json'
     track_suggestions = {
-        'sites_dpath': sites_dpath,
         'iarpa_eval_dpath': iarpa_eval_dpath,
         'track_cfgstr': track_cfgstr,
-        'track_stamp_fpath': track_stamp_fpath,
+        'track_out_fpath': track_out_fpath,
         'iarpa_summary_fpath': iarpa_summary_fpath,
     }
     return track_suggestions
 
 
-def _build_bas_track_job(pred_fpath, sites_dpath, thresh=0.2):
+def _build_bas_track_job(pred_fpath, track_out_fpath, thresh=0.2):
     """
     Given a predicted kwcoco file submit tracking and iarpa eval jobs
 
@@ -61,24 +59,28 @@ def _build_bas_track_job(pred_fpath, sites_dpath, thresh=0.2):
     else:
         raise KeyError
 
+    # Because BAS is the first step we want ensure we clear annotations so
+    # everything that comes out is a track from BAS.
+
+    sites_dpath = track_out_fpath.parent / 'tracked_sites'
     command = ub.codeblock(
         fr'''
         python -m watch.cli.kwcoco_to_geojson \
             "{pred_fpath}" \
              {task_args} \
-            --out_dir "{sites_dpath}"
+            --clear_annots \
+            --out_dir "{sites_dpath}" \
+            --out_fpath "{track_out_fpath}"
         ''')
 
-    track_stamp_fpath = sites_dpath / 'tracking_finished.stamp'
     track_info = {
         'command': command,
-        'sites_dpath': sites_dpath,
-        'track_stamp_fpath': track_stamp_fpath,
+        'track_out_fpath': track_out_fpath,
     }
     return track_info
 
 
-def _build_iarpa_eval_job(sites_dpath, iarpa_eval_dpath, annotations_dpath, name=None):
+def _build_iarpa_eval_job(track_out_fpath, iarpa_eval_dpath, annotations_dpath, name=None):
     import shlex
     tmp_dir = iarpa_eval_dpath / 'tmp'
     out_dir = iarpa_eval_dpath / 'scores'
@@ -92,8 +94,8 @@ def _build_iarpa_eval_job(sites_dpath, iarpa_eval_dpath, annotations_dpath, name
             --tmp_dir "{tmp_dir}" \
             --out_dir "{out_dir}" \
             --name {shlex.quote(str(name))} \
-            --inputs_are_paths
-            "{sites_dpath}"/*.geojson
+            --inputs_are_paths \
+            {track_out_fpath}
         ''')
 
     iarpa_summary_fpath = merge_dpath / 'summary2.json'

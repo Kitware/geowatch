@@ -198,8 +198,7 @@ class TrackFunction(collections.abc.Callable):
                 new_tids = np.where(orig_trackless_flags, new_tids, orig_tids)
                 new_annots.set('track_id', new_tids)
 
-        import xdev
-        xdev.embed()
+        # TODO: why is this assert here?
         assert not any(tid is None for tid in sub_dset.annots().lookup('track_id', None))
         return self.safe_union(rest_dset, sub_dset)
 
@@ -252,7 +251,6 @@ class NewTrackFunction(TrackFunction):
 
 
 def check_only_bg(category_sequence, bg_name=['No Activity']):
-    # import xdev; xdev.embed()
     if len( set(category_sequence) - set(bg_name) ) == 0:
         return True
     else:

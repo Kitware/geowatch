@@ -565,15 +565,14 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 'prd', suggestions['pred_cfgstr'],
                 'trk', track_suggestions['track_cfgstr'],
             ])
-            sites_dpath = track_suggestions['sites_dpath']
             iarpa_eval_dpath = track_suggestions['iarpa_eval_dpath']
-            track_stamp_fpath = track_suggestions['track_stamp_fpath']
+            track_out_fpath = track_suggestions['track_out_fpath']
             iarpa_summary_fpath = track_suggestions['iarpa_summary_fpath']
 
             task_infos.update({
                 'track': {
                     'enabled': with_track or recompute_track,
-                    'output': track_stamp_fpath,
+                    'output': track_out_fpath,
                     'requires': ['pred'],
                     'recompute': recompute_track,
                 },
@@ -591,7 +590,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             if should_compute_task(task_info):
 
                 track_info = schedule_iarpa_eval._build_bas_track_job(
-                    pred_dataset_fpath, sites_dpath, **track_cfg)
+                    pred_dataset_fpath, track_out_fpath, **track_cfg)
                 command = track_info['command']
 
                 if not task_info['recompute']:
@@ -622,7 +621,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             task_info = task_infos[task]
             if should_compute_task(task_info):
                 iarpa_eval_info = schedule_iarpa_eval._build_iarpa_eval_job(
-                    sites_dpath, iarpa_eval_dpath, annotations_dpath, name_suffix)
+                    track_out_fpath, iarpa_eval_dpath, annotations_dpath, name_suffix)
 
                 command = iarpa_eval_info['command']
 

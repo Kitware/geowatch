@@ -323,7 +323,7 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
     return activity_table, confusion_matrix
 
 
-def merge_metrics_results(region_dpaths, anns_root, merge_dpath):
+def merge_metrics_results(region_dpaths, anns_root, merge_dpath, parent_info):
     '''
     Merge metrics results from multiple regions.
 
@@ -341,6 +341,7 @@ def merge_metrics_results(region_dpaths, anns_root, merge_dpath):
         Two pd.DataFrames that are saved as
             {out_dpath}/(bas|sc)_scoreboard_df.pkl
     '''
+    import safer
     merge_dpath = ub.Path(merge_dpath)
     assert merge_dpath not in region_dpaths
     merge_dpath.delete().ensuredir()
@@ -356,14 +357,14 @@ def merge_metrics_results(region_dpaths, anns_root, merge_dpath):
 
     bas_results = [r for r in results if r.bas_dpath]
     bas_df, bas_concat_df = merge_bas_metrics_results(bas_results)
-    bas_df.to_pickle(os.path.join(merge_dpath, 'bas_scoreboard_df.pkl'))
+    bas_df.to_pickle(merge_dpath / 'bas_scoreboard_df.pkl')
     #
     # merge SC
     #
 
     sc_df, sc_cm = merge_sc_metrics_results([r for r in results if r.sc_dpath])
-    sc_df.to_pickle(os.path.join(merge_dpath, 'sc_activity_df.pkl'))
-    sc_cm.to_pickle(os.path.join(merge_dpath, 'sc_confusion_df.pkl'))
+    sc_df.to_pickle(merge_dpath / 'sc_activity_df.pkl')
+    sc_cm.to_pickle(merge_dpath / 'sc_confusion_df.pkl')
 
     #
     # write summary in readable form
@@ -391,9 +392,9 @@ def merge_metrics_results(region_dpaths, anns_root, merge_dpath):
         'temporal FAR', 'images FAR'], axis=1)
     print(concise_best_bas_rows.to_string())
 
-    summary_path = os.path.join(merge_dpath, 'summary.csv')
-    if os.path.isfile(summary_path):
-        os.remove(summary_path)
+    summary_path = merge_dpath / 'summary.csv'
+    if summary_path.isfile():
+        summary_path.delete()
     with open(summary_path, 'a+') as f:
         best_bas_row.to_csv(f)
         f.write('\n')
@@ -405,12 +406,13 @@ def merge_metrics_results(region_dpaths, anns_root, merge_dpath):
     json_data['best_bas_rows'] = json.loads(best_bas_rows.to_json(orient='table', indent=2))
     json_data['sc_cm'] = json.loads(sc_cm.to_json(orient='table', indent=2))
     json_data['sc_df'] = json.loads(sc_df.to_json(orient='table', indent=2))
+    json_data['parent_info'] = parent_info
 
     summary_path2 = merge_dpath / 'summary2.json'
-    with open(summary_path2, 'w') as f:
+    with safer.open(summary_path2, 'w', temp_file=True) as f:
         json.dump(json_data, f, indent=4)
 
-    return bas_df, sc_df, sc_cm
+    return summary_path2, bas_df, sc_df, sc_cm
 
 
 def ensure_thumbnails(image_root, region_id, sites):
@@ -490,6 +492,7 @@ def ensure_thumbnails(image_root, region_id, sites):
 
 
 def main(args):
+    import safer
     parser = argparse.ArgumentParser(
         description='Score IARPA site model GeoJSON files using IARPA\'s '
         'metrics-and-test-framework')
@@ -568,13 +571,34 @@ def main(args):
     if len(args.sites) == 0:
         raise Exception('No input sites were given')
 
+    parent_info = []
+
     for site_data in args.sites:
         if args.inputs_are_paths:
-            site_fpath = ub.Path(site_data)
-            if not site_fpath.exists():
-                raise FileNotFoundError(str(site_fpath))
-            with open(site_fpath, 'r') as file:
-                site = json.load(file)
+            in_fpath = ub.Path(site_data)
+            if not in_fpath.exists():
+                raise FileNotFoundError(str(in_fpath))
+            with open(in_fpath, 'r') as file:
+                site_or_result = json.load(file)
+
+            is_track_result = (
+                isinstance(site_or_result, dict) and
+                site_or_result.get('type', None) == 'tracking_result'
+            )
+
+            if is_track_result:
+                track_result = site_or_result
+                # The input was a track result json which contains pointers to
+                # the actual sites
+                parent_info.extend(track_result.get('info', []))
+                for site_fpath in track_result['files']:
+                    with open(site_fpath, 'r') as file:
+                        site = json.load(file)
+                    sites.append(site)
+            else:
+                # It was just a site json file.
+                site = site_or_result
+                sites.append(site)
         else:
             # TODO:
             # Deprecate passing raw json on the CLI, it has a limited length
@@ -589,7 +613,7 @@ def main(args):
             except json.JSONDecodeError as e:  # TODO split out as decorator?
                 raise json.JSONDecodeError(e.msg + ' [cut for length]',
                                            e.doc[:100] + '...', e.pos)
-        sites.append(site)
+            sites.append(site)
 
     name = args.name
 
@@ -628,14 +652,7 @@ def main(args):
         raise AssertionError(
             'The iarpa_smart_metrics package should be pip installed '
             'in your virtualenv')
-        # from packaging import version
-        # METRICS_VERSION = version.Version('0.0.0')
-        # if args.metrics_dpath is not None:
-        #     metrics_dpath = os.path.abspath(args.metrics_dpath)
-        # else:
-        #     metrics_dpath = os.environ['METRICS_DPATH']
-        #     print(f'metrics_dpath unspecified, defaulting to {metrics_dpath=}')
-        # assert os.path.isdir(metrics_dpath), metrics_dpath
+    assert METRICS_VERSION >= version.Version('0.2.0')
 
     for region_id, region_sites in grouped_sites.items():
 
@@ -655,64 +672,47 @@ def main(args):
             out_dir = None
 
         # doctor site_dpath for expected structure
-        site_sub_dpath = os.path.join(site_dpath, 'latest', region_id)
-        os.makedirs(site_sub_dpath, exist_ok=True)
+        site_sub_dpath = site_dpath / 'latest' / region_id
+        site_sub_dpath.ensuredir()
 
         # copy site models to site_dpath
         for site in region_sites:
-            with open(
-                    os.path.join(
-                        site_sub_dpath,
-                        (site['features'][0]['properties']['site_id'] +
-                         '.geojson')), 'w') as f:
+            geojson_fpath = site_sub_dpath / (
+                site['features'][0]['properties']['site_id'] + '.geojson'
+            )
+            with safer.open(geojson_fpath, 'w', temp_file=True) as f:
                 json.dump(site, f)
 
         ensure_thumbnails(image_dpath, region_id, region_sites)
 
-        if METRICS_VERSION >= version.Version('0.2.0'):
-            if not args.use_cache:
-                cache_dpath = 'None'
+        if not args.use_cache:
+            cache_dpath = 'None'
 
-            disable_viz_flags = [
-                # '--no-viz-region',  # we do want this enabled
-                '--no-viz-slices',
-                '--no-viz-detection-table',
-                '--no-viz-comparison-table',
-                '--no-viz-associate-metrics',
-                '--no-viz-activity-metrics',
-            ]
-            disable_viz_flags_str = ' '.join(disable_viz_flags)
+        disable_viz_flags = [
+            # '--no-viz-region',  # we do want this enabled
+            '--no-viz-slices',
+            '--no-viz-detection-table',
+            '--no-viz-comparison-table',
+            '--no-viz-associate-metrics',
+            '--no-viz-activity-metrics',
+        ]
+        disable_viz_flags_str = ' '.join(disable_viz_flags)
 
-            # run metrics framework
-            import shlex
-            cmd = ub.codeblock(fr'''
-                {virtualenv_cmd} &&
-                python -m iarpa_smart_metrics.run_evaluation \
-                    --roi {region_id} \
-                    --gt_dir {gt_dpath / 'site_models'} \
-                    --rm_dir {gt_dpath / 'region_models'} \
-                    --sm_dir {site_sub_dpath} \
-                    --image_dir {image_dpath} \
-                    --output_dir {out_dir} \
-                    --cache_dir {cache_dpath} \
-                    --name {shlex.quote(name)} \
-                    {disable_viz_flags_str}
-                ''')
-        else:
-            raise AssertionError('Use new version of iarpa_smart_metrics')
-            # run metrics framework
-            # cmd = ub.codeblock(fr'''
-            #     {virtualenv_cmd} &&
-            #     python {os.path.join(metrics_dpath, 'run_evaluation.py')} \
-            #         --roi {region_id} \
-            #         --gt_path {gt_dpath / 'site_models'} \
-            #         --rm_path {gt_dpath / 'region_models'} \
-            #         --sm_path {site_dpath} \
-            #         --image_dir {image_dpath} \
-            #         --output_dir {out_dir} \
-            #         --cache_dir {cache_dpath}
-            #     ''')
-
+        # run metrics framework
+        import shlex
+        cmd = ub.codeblock(fr'''
+            {virtualenv_cmd} &&
+            python -m iarpa_smart_metrics.run_evaluation \
+                --roi {region_id} \
+                --gt_dir {gt_dpath / 'site_models'} \
+                --rm_dir {gt_dpath / 'region_models'} \
+                --sm_dir {site_sub_dpath} \
+                --image_dir {image_dpath} \
+                --output_dir {out_dir} \
+                --cache_dir {cache_dpath} \
+                --name {shlex.quote(name)} \
+                {disable_viz_flags_str}
+            ''')
         (out_dir / 'invocation.sh').write_text(cmd)
 
         try:
@@ -725,7 +725,9 @@ def main(args):
     main_out_dir = ub.Path(args.out_dir)
     if args.merge and out_dirs:
         merge_dpath = main_out_dir / 'merged'
-        merge_metrics_results(out_dirs, gt_dpath, merge_dpath)
+        summary_path2 = merge_metrics_results(out_dirs, gt_dpath, merge_dpath,
+                                              parent_info)[0]
+        print('wrote {!r}'.format(summary_path2))
     print('out_dirs = {}'.format(ub.repr2(out_dirs, nl=1)))
 
 
