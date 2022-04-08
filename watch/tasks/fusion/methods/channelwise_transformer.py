@@ -487,7 +487,15 @@ class MultimodalTransformer(pl.LightningModule):
         MODAL_AGREEMENT_CHANS = self.stream_channels
         self.tokenizer = tokenizer
         self.sensor_channel_tokenizers = RobustModuleDict()
-        for s, c in self.unique_sensor_modes:
+
+        # Unique sensor modes obviously isn't very correct here.
+        # We should fix that, but let's hack it so it at least
+        # includes all sensor modes we probably will need.
+        if input_stats is not None:
+            sensor_modes = set(self.unique_sensor_modes) | set(input_stats.keys())
+        else:
+            sensor_modes = set(self.unique_sensor_modes)
+        for s, c in sensor_modes:
             mode_code = kwcoco.FusedChannelSpec.coerce(c)
             # For each mode make a network that should learn to tokenize
             in_chan = mode_code.numel()
@@ -514,6 +522,9 @@ class MultimodalTransformer(pl.LightningModule):
 
             self.sensor_channel_tokenizers[s][c] = tokenize
             in_features_raw = tokenize.out_channels
+
+        # for (s, c), stats in input_stats.items():
+        #     self.sensor_channel_tokenizers[s][c] = tokenize
 
         in_features_pos = 6 * 8   # 6 positional features with 8 dims each (TODO: be robust)
         in_features = in_features_pos + in_features_raw

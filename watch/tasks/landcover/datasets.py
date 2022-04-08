@@ -1,6 +1,5 @@
 import logging
-from copy import deepcopy
-
+# from copy import deepcopy
 import kwcoco
 import kwimage
 import numpy as np
@@ -24,7 +23,8 @@ class _CocoTorchDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         gid = self.gids[idx]
-        img_info = deepcopy(self.dset.imgs[gid])
+        # should not need a deep copy here, shallow should be fine.
+        img_info = self.dset.imgs[gid].copy()
         try:
             img_info['imgdata'] = self._load(gid)
         except Exception as ex:

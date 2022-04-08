@@ -106,12 +106,18 @@ class Queue(ub.NiceRepr):
         """
         import networkx as nx
         graph = nx.DiGraph()
+        duplicate_names = ub.find_duplicates(self.jobs, key=lambda x: x.name)
+        if duplicate_names:
+            print('duplicate_names = {}'.format(ub.repr2(duplicate_names, nl=1)))
+            raise Exception('Job names must be unique')
+
         for index, job in enumerate(self.jobs):
             graph.add_node(job.name, job=job, index=index)
         for index, job in enumerate(self.jobs):
             if job.depends:
                 for dep in job.depends:
-                    graph.add_edge(dep.name, job.name)
+                    if dep is not None:
+                        graph.add_edge(dep.name, job.name)
         return graph
 
     def monitor(self):

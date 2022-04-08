@@ -6,7 +6,7 @@ TODO:
     - [ ] Prediction caching?
 """
 import torch  # NOQA
-import pathlib
+# import pathlib
 import ubelt as ub
 import numpy as np
 from os.path import join
@@ -20,6 +20,7 @@ from watch.tasks.tracking.utils import mask_to_polygons
 from watch.utils import util_path
 from watch.utils import util_parallel
 from watch.utils import util_kwimage
+from watch.tasks.fusion.datamodules.kwcoco_video_data import inv_fliprot
 
 try:
     from xdev import profile
@@ -47,9 +48,9 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument('--datamodule', default='KWCocoVideoDataModule')
     parser.add_argument('--pred_dataset', default=None, dest='pred_dataset')
 
-    parser.add_argument('--pred_dpath', dest='pred_dpath', type=pathlib.Path, help='path to dump results')
+    # parser.add_argument('--pred_dpath', dest='pred_dpath', type=pathlib.Path, help='path to dump results. Deprecated, do not use.')
 
-    parser.add_argument('--package_fpath', type=pathlib.Path)
+    parser.add_argument('--package_fpath', type=str)
     parser.add_argument('--gpus', default=None, help='todo: hook up to lightning')
     parser.add_argument('--thresh', type=smartcast, default=0.01)
 
@@ -61,6 +62,9 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument('--track_emissions', type=smartcast, default=True, help='set to false to disable emission tracking')
 
     parser.add_argument('--quantize', type=smartcast, default=True, help='quantize outputs')
+
+    parser.add_argument('--tta_fliprot', type=smartcast, default=0, help='number of times to flip/rotate the frame, can be in [0,7]')
+    parser.add_argument('--tta_time', type=smartcast, default=0, help='number of times to expand the temporal sample for a frame'),
 
     # TODO
     # parser.add_argument('--test_time_augmentation', default=False, help='')
@@ -132,8 +136,8 @@ def predict(cmdline=False, **kwargs):
         >>> ub.ensuredir(results_path)
         >>> package_fpath = join(test_dpath, 'my_test_package.pt')
         >>> import kwcoco
-        >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=3, gsize=(128, 128))
-        >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=3, gsize=(128, 128))
+        >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=5, gsize=(128, 128))
+        >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=5, gsize=(128, 128))
         >>> fit_kwargs = kwargs = {
         ...     'train_dataset': test_dset.fpath,
         ...     'datamodule': 'KWCocoVideoDataModule',
@@ -142,6 +146,7 @@ def predict(cmdline=False, **kwargs):
         ...     'max_epochs': 1,
         ...     'time_steps': 2,
         ...     'chip_size': 64,
+        ...     'time_sampling': 'hardish3',
         ...     'global_change_weight': 1.0,
         ...     'global_class_weight': 1.0,
         ...     'global_saliency_weight': 1.0,
@@ -154,7 +159,7 @@ def predict(cmdline=False, **kwargs):
         >>> # Predict via that model
         >>> predict_kwargs = kwargs = {
         >>>     'package_fpath': package_fpath,
-        >>>     'pred_dpath': results_path,
+        >>>     'pred_dataset': ub.Path(results_path) / 'pred.kwcoco.json',
         >>>     'test_dataset': test_dset.fpath,
         >>>     'datamodule': 'KWCocoVideoDataModule',
         >>>     'batch_size': 1,
@@ -189,11 +194,14 @@ def predict(cmdline=False, **kwargs):
         >>> assert pred2.max() > 1
     """
     args = make_predict_config(cmdline=cmdline, **kwargs)
-    print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=2)))
+    config = args.__dict__
+    print('config = {}'.format(ub.repr2(config, nl=2)))
+
+    package_fpath = ub.Path(args.package_fpath)
 
     try:
         # Ideally we have a package, everything is defined there
-        method = utils.load_model_from_package(args.package_fpath)
+        method = utils.load_model_from_package(package_fpath)
         # fix einops bug
         for _name, mod in method.named_modules():
             if 'Rearrange' in mod.__class__.__name__:
@@ -208,12 +216,12 @@ def predict(cmdline=False, **kwargs):
         method.head_metrics = None
     except Exception as ex:
         print('ex = {!r}'.format(ex))
-        print(f'Failed to read {args.package_fpath=!r} attempting workaround')
+        print(f'Failed to read {package_fpath=!r} attempting workaround')
         # If we have a checkpoint path we can load it if we make assumptions
         # init method from checkpoint.
         raise
 
-        checkpoint = torch.load(args.package_fpath)
+        checkpoint = torch.load(package_fpath)
         print(list(checkpoint.keys()))
         from watch.tasks.fusion import methods
         hparams = checkpoint['hyper_parameters']
@@ -300,13 +308,14 @@ def predict(cmdline=False, **kwargs):
             hack_model_spec = kwcoco.ChannelSpec.coerce(','.join(unique_channel_streams))
             if datamodule_channel_spec is not None:
                 if hack_model_spec != datamodule_channel_spec:
-                    print('Warning: reported model channels may be incorrect due to bad train hyperparams')
+                    print('Warning: reported model channels may be incorrect '
+                          'due to bad train hyperparams')
                     hack_common = hack_model_spec.intersection(datamodule_channel_spec)
                     datamodule_vars['channels'] = hack_common
 
     DZYNE_MODEL_HACK = 1
     if DZYNE_MODEL_HACK:
-        if args.package_fpath.stem == 'lc_rgb_fusion_model_package':
+        if package_fpath.stem == 'lc_rgb_fusion_model_package':
             # This model has an issue with the L8 features it was trained on
             datamodule_vars['exclude_sensors'] = ['L8']
 
@@ -315,6 +324,17 @@ def predict(cmdline=False, **kwargs):
     )
     # TODO: if TTA=True, disable determenistic time sampling
     datamodule.setup('test')
+
+    if config['tta_time']:
+        # Expand targets to include time augmented samples
+        n_time_expands = config['tta_time']
+        test_torch_dset = datamodule.torch_datasets['test']
+        test_torch_dset._expand_targets_time(n_time_expands)
+
+    if config['tta_fliprot']:
+        n_fliprot = config['tta_fliprot']
+        test_torch_dset = datamodule.torch_datasets['test']
+        test_torch_dset._expand_targets_fliprot(n_fliprot)
 
     if ub.argflag('--debug-timesample'):
         import kwplot
@@ -337,18 +357,22 @@ def predict(cmdline=False, **kwargs):
     T, H, W = test_torch_dataset.sample_shape
 
     # Create the results dataset as a copy of the test CocoDataset
-    result_dataset = test_coco_dataset.copy()
+    result_dataset: kwcoco.CocoDataset = test_coco_dataset.copy()
     # Remove all annotations in the results copy
     result_dataset.clear_annotations()
     # Change all paths to be absolute paths
     result_dataset.reroot(absolute=True)
     # Set the filepath for the prediction coco file
     # (modifies the bundle_dpath)
-    if args.pred_dataset is None:
-        pred_dpath = util_path.coercepath(args.pred_dpath)
-        result_dataset.fpath = str(pred_dpath / 'pred.kwcoco.json')
-    else:
-        result_dataset.fpath = str(args.pred_dataset)
+    # if args.pred_dataset is None:
+    #     pred_dpath = util_path.coercepath(args.pred_dpath)
+    #     result_dataset.fpath = str(pred_dpath / 'pred.kwcoco.json')
+    # else:
+    if not args.pred_dataset:
+        raise ValueError(
+            f'Must specify path to the output (predicted) kwcoco file. '
+            f'Got {args.pred_dataset=}')
+    result_dataset.fpath = str(args.pred_dataset)
     result_fpath = util_path.coercepath(result_dataset.fpath)
 
     # add hyperparam info to "info" section
@@ -367,7 +391,8 @@ def predict(cmdline=False, **kwargs):
             if fixed_fpath is not None:
                 walker[problem['loc']] = fixed_fpath
             else:
-                walker[problem['loc']] = '<IN_MEMORY_DATASET: {}>'.format(bad_data._build_hashid())
+                walker[problem['loc']] = '<IN_MEMORY_DATASET: {}>'.format(
+                    bad_data._build_hashid())
 
     start_timestamp = ub.timestamp()
 
@@ -383,8 +408,6 @@ def predict(cmdline=False, **kwargs):
             'fit_config': traintime_params,
         }
     })
-
-    result_fpath.parent.mkdir(parents=True, exist_ok=True)
 
     from watch.utils.lightning_ext import util_device
     print('args.gpus = {!r}'.format(args.gpus))
@@ -511,6 +534,7 @@ def predict(cmdline=False, **kwargs):
             short_code='pred_' + task_name,
             polygon_categories=['salient'],
             num_bands=len(head_keep_classes),
+            **stitcher_common_kw,
         )
 
     expected_outputs = set(stitch_managers.keys())
@@ -534,6 +558,9 @@ def predict(cmdline=False, **kwargs):
 
     prog = ub.ProgIter(batch_iter, desc='predicting', verbose=1)
 
+    result_fpath.parent.ensuredir()
+    print('result_fpath = {!r}'.format(result_fpath))
+
     try:
         if args.track_emissions:
             from codecarbon import EmissionsTracker
@@ -553,16 +580,18 @@ def predict(cmdline=False, **kwargs):
         EMERGENCY_INPUT_AGREEMENT_HACK = True
 
         # prog.set_extra(' <will populate stats after first video>')
-        for orig_batch in prog:
-            batch_regions = []
+        _batch_iter = iter(prog)
+        for orig_batch in _batch_iter:
+            batch_trs = []
             # Move data onto the prediction device, grab spacetime region info
             fixed_batch = []
             for item in orig_batch:
                 if item is None:
                     continue
-                batch_regions.append({
+                batch_trs.append({
                     'space_slice': tuple(item['tr']['space_slice']),
-                    'in_gids': [frame['gid'] for frame in item['frames']],
+                    'gids': [frame['gid'] for frame in item['frames']],
+                    'fliprot_params': item['tr'].get('fliprot_params', None)
                 })
                 position_tensors = item.get('positional_tensors', None)
                 if position_tensors is not None:
@@ -607,9 +636,9 @@ def predict(cmdline=False, **kwargs):
             # xdev.embed()
 
             # Predict on the batch
-            import xdev
-            with xdev.embed_on_exception_context:
-                outputs = method.forward_step(batch, with_loss=False)
+            # import xdev
+            # with xdev.embed_on_exception_context:
+            outputs = method.forward_step(batch, with_loss=False)
             outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
 
             if got_outputs is None:
@@ -632,22 +661,30 @@ def predict(cmdline=False, **kwargs):
                 else:
                     predicted_frame_slice = slice(None)
 
-                for bx, region_info in enumerate(batch_regions):
-                    # TODO: if the predictions are downsampled wrt to the input
-                    # images, we need to determine what that transform is so we can
-                    # correctly warp the predictions back into image space.
+                # TODO: if the predictions are downsampled wrt to the input
+                # images, we need to determine what that transform is so we can
+                # correctly (i.e with crops) warp the predictions back into
+                # image space.
 
-                    item_head_probs = head_probs[bx]
+                num_batches = len(batch_trs)
+
+                for bx in range(num_batches):
+                    tr: dict = batch_trs[bx]
+                    item_head_probs: torch.Tensor = head_probs[bx]
                     # Keep only the channels we want to write to disk
                     item_head_relevant_probs = item_head_probs[..., chan_keep_idxs]
                     bin_probs = item_head_relevant_probs.detach().cpu().numpy()
 
                     # Get the spatio-temporal subregion this prediction belongs to
-                    out_gids = region_info['in_gids'][predicted_frame_slice]
-                    space_slice = region_info['space_slice']
+                    out_gids: list[int] = tr['gids'][predicted_frame_slice]
+                    space_slice: tuple[slice, slice] = tr['space_slice']
 
+                    fliprot_params: dict = tr['fliprot_params']
                     # Update the stitcher with this windowed prediction
                     for gid, probs in zip(out_gids, bin_probs):
+                        if fliprot_params is not None:
+                            # Undo fliprot TTA
+                            probs = inv_fliprot(probs, **fliprot_params)
                         head_stitcher.accumulate_image(gid, space_slice, probs)
 
                 # Free up space for any images that have been completed
@@ -665,14 +702,38 @@ def predict(cmdline=False, **kwargs):
 
     try:
         device_info = {
-            'total_vram': torch.cuda.get_device_properties(device).total_memory,
-            'reserved_vram': torch.cuda.memory_reserved(device),
-            'allocated_vram': torch.cuda.memory_allocated(device),
             'device_index': device.index,
             'device_type': device.type,
         }
-    except Exception:
-        device_info = None
+        try:
+            device_props = torch.cuda.get_device_properties(device)
+            capabilities = (device_props.multi_processor_count, device_props.minor)
+            device_info.update({
+                'device_name': device_props.name,
+                'total_vram': device_props.total_memory,
+                'reserved_vram': torch.cuda.memory_reserved(device),
+                'allocated_vram': torch.cuda.memory_allocated(device),
+                'device_capabilities': capabilities,
+                'device_multi_processor_count': device_props.multi_processor_count,
+            })
+        except Exception:
+            pass
+    except Exception as ex:
+        print('ex = {!r}'.format(ex))
+        device_info = str(ex)
+
+    try:
+        from watch.utils import util_hardware
+        system_info = util_hardware.get_cpu_mem_info()
+        try:
+            # Get information about disk used in this process
+            disk_info = util_hardware.disk_info_of_path(test_coco_dataset.fpath)
+            system_info['disk_info'] = disk_info
+        except Exception as ex:
+            print('ex = {!r}'.format(ex))
+    except Exception as ex:
+        print('ex = {!r}'.format(ex))
+        system_info = str(ex)
 
     if emissions_tracker is not None:
         co2_kg = emissions_tracker.stop()
@@ -700,6 +761,7 @@ def predict(cmdline=False, **kwargs):
             'start_timestamp': start_timestamp,
             'end_timestamp': ub.timestamp(),
             'device_info': device_info,
+            'system_info': system_info,
             'emissions': emissions,
         }
     })
@@ -868,8 +930,44 @@ class CocoStitchingManager(object):
 
         stitcher: kwarray.Stitcher = self.image_stitchers[gid]
 
-        weights = util_kwimage.upweight_center_mask(data.shape[0:2])[..., None]
+        self._stitcher_center_weighted_add(stitcher, space_slice, data)
 
+        # weights = util_kwimage.upweight_center_mask(data.shape[0:2])[..., None]
+        # if stitcher.shape[0] < space_slice[0].stop or stitcher.shape[1] < space_slice[1].stop:
+        #     # By embedding the space slice in the stitcher dimensions we can get a
+        #     # slice corresponding to the valid region in the stitcher, and the extra
+        #     # padding encode the valid region of the data we are trying to stitch into.
+        #     subslice, padding = kwarray.embed_slice(space_slice[0:2], stitcher.shape)
+        #     output_slice = (
+        #         slice(padding[0][0], data.shape[0] - padding[0][1]),
+        #         slice(padding[1][0], data.shape[1] - padding[1][1]),
+        #     )
+        #     subdata = data[output_slice]
+        #     subweights = weights[output_slice]
+
+        #     stitch_slice = subslice
+        #     stitch_data = subdata
+        #     stitch_weights = subweights
+        # else:
+        #     # Normal case
+        #     stitch_slice = space_slice
+        #     stitch_data = data
+        #     stitch_weights = weights
+
+        # # Handle stitching nan values
+        # invalid_output_mask = np.isnan(stitch_data)
+        # if np.any(invalid_output_mask):
+        #     spatial_valid_mask = (1 - invalid_output_mask.any(axis=2, keepdims=True))
+        #     stitch_weights = stitch_weights * spatial_valid_mask
+        #     stitch_data[invalid_output_mask] = 0
+        # stitcher.add(stitch_slice, stitch_data, weight=stitch_weights)
+
+    @staticmethod
+    def _stitcher_center_weighted_add(stitcher, space_slice, data):
+        """
+        TODO: refactor
+        """
+        weights = util_kwimage.upweight_center_mask(data.shape[0:2])[..., None]
         if stitcher.shape[0] < space_slice[0].stop or stitcher.shape[1] < space_slice[1].stop:
             # By embedding the space slice in the stitcher dimensions we can get a
             # slice corresponding to the valid region in the stitcher, and the extra
@@ -1147,8 +1245,153 @@ if __name__ == '__main__':
         --pred_dataset=/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/training/raven/brodie/uky_invariants/features_22_03_14/runs/BASELINE_EXPERIMENT_V001/pred.kwcoco.json \
         --test_dataset=/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json \
         --num_workers=5 \
-        --compress=DEFLATE \
         --gpus=0, \
         --batch_size=1
+
+    Develop TTA:
+
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+    (cd $DVC_DPATH && dvc pull -r aws $DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=19-step=13659-v1.pt.dvc)
+
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+    MODEL_FNAME=models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+    MODEL_FPATH=$DVC_DPATH/$MODEL_FNAME
+    smartwatch model_info $MODEL_FPATH
+    (cd $DVC_DPATH && dvc pull -r aws $MODEL_FNAME)
+
+    # Small datset for testing
+    kwcoco subset \
+        --src $DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali.kwcoco.json \
+        --dst $DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1_small.kwcoco.json \
+        --select_images '.frame_index < 100' \
+        --select_videos '.name == "KR_R001"'
+
+    # Small datset for testing
+    kwcoco subset \
+        --src $DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali.kwcoco.json \
+        --dst $DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1.kwcoco.json \
+        --select_videos '.name == "KR_R001"'
+
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+    TEST_DATASET=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1_small.kwcoco.json
+    python -m watch.tasks.fusion.predict \
+        --write_probs=True \
+        --write_preds=False \
+        --with_class=auto \
+        --with_saliency=auto \
+        --with_change=False \
+        --package_fpath=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=19-step=13659-v1.pt \
+        --num_workers=5 \
+        --gpus=0, \
+        --batch_size=1 \
+        --exclude_sensors=L8 \
+        --pred_dataset=$PRED_DATASET \
+        --test_dataset=$TEST_DATASET \
+        --tta_fliprot=0 \
+        --tta_time=0 --dump=$DVC_DPATH/_tmp/test_pred_config.yaml
+
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+    TEST_DATASET=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1_small.kwcoco.json
+
+    PRED_DATASET_00=$DVC_DPATH/_tmp/_tmp_pred_00/pred.kwcoco.json
+    PRED_DATASET_10=$DVC_DPATH/_tmp/_tmp_pred_10/pred.kwcoco.json
+    PRED_DATASET_01=$DVC_DPATH/_tmp/_tmp_pred_01/pred.kwcoco.json
+    PRED_DATASET_11=$DVC_DPATH/_tmp/_tmp_pred_11/pred.kwcoco.json
+
+    export CUDA_VISIBLE_DEVICES=0
+    python -m watch.tasks.fusion.predict \
+        --config=$DVC_DPATH/_tmp/test_pred_config.yaml \
+        --pred_dataset=$PRED_DATASET_00 \
+        --test_dataset=$TEST_DATASET \
+        --tta_fliprot=0 \
+        --tta_time=0
+
+    export CUDA_VISIBLE_DEVICES=1
+    python -m watch.tasks.fusion.predict \
+        --config=$DVC_DPATH/_tmp/test_pred_config.yaml \
+        --pred_dataset=$PRED_DATASET_10 \
+        --test_dataset=$TEST_DATASET \
+        --tta_fliprot=1 \
+        --tta_time=0
+
+    export CUDA_VISIBLE_DEVICES=0
+    python -m watch.tasks.fusion.predict \
+        --config=$DVC_DPATH/_tmp/test_pred_config.yaml \
+        --pred_dataset=$PRED_DATASET_01 \
+        --test_dataset=$TEST_DATASET \
+        --tta_fliprot=0 \
+        --tta_time=1
+
+    export CUDA_VISIBLE_DEVICES=1
+    python -m watch.tasks.fusion.predict \
+        --config=$DVC_DPATH/_tmp/test_pred_config.yaml \
+        --pred_dataset=$PRED_DATASET_11 \
+        --test_dataset=$TEST_DATASET \
+        --tta_fliprot=1 \
+        --tta_time=1
+
+    #####
+
+    python -m watch.tasks.fusion.evaluate \
+        --true_dataset=$TEST_DATASET \
+        --pred_dataset=$PRED_DATASET_11 \
+        --eval_dpath=$DVC_DPATH/_tmp/_tmp_pred_11/eval
+        --score_space=video \
+        --draw_curves=1 \
+        --draw_heatmaps=1 --workers=2
+
+    python -m watch.tasks.fusion.evaluate \
+        --true_dataset=$TEST_DATASET \
+        --pred_dataset=$PRED_DATASET_00 \
+        --eval_dpath=$DVC_DPATH/_tmp/_tmp_pred_00/eval
+        --score_space=video \
+        --draw_curves=1 \
+        --draw_heatmaps=1 --workers=2
+
+    python -m watch.tasks.fusion.evaluate \
+        --true_dataset=$TEST_DATASET \
+        --pred_dataset=$PRED_DATASET_01 \
+        --eval_dpath=$DVC_DPATH/_tmp/_tmp_pred_01/eval
+        --score_space=video \
+        --draw_curves=1 \
+        --draw_heatmaps=1 --workers=2
+
+    python -m watch.tasks.fusion.evaluate \
+        --true_dataset=$TEST_DATASET \
+        --pred_dataset=$PRED_DATASET_10 \
+        --eval_dpath=$DVC_DPATH/_tmp/_tmp_pred_10/eval
+        --score_space=video \
+        --draw_curves=1 \
+        --draw_heatmaps=1 --workers=2
+
+
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    TEST_DATASET=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1.kwcoco.json
+    EXPT_PATTERN="*"
+    python -m watch.tasks.fusion.schedule_evaluation \
+            --gpus="0,1" \
+            --model_globstr="$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=19-step=13659-v1.pt" \
+            --test_dataset="$TEST_DATASET" \
+            --workdir="$DVC_DPATH/_tmp/smalltest" \
+            --sidecar2=1 \
+            --tta_fliprot=0,1 \
+            --tta_time=0,1 \
+            --chip_overlap=0,0.3 \
+            --draw_heatmaps=1 \
+            --skip_existing=1 \
+            --run=0 --backend=tmux \
+            --enable_iarpa_eval=1 \
+            --enable_eval=1
+
+
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+    MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json
+
+    python -m watch.tasks.fusion.aggregate_results \
+        --measure_globstr="$DVC_DPATH/_tmp/smalltest/eval/*/*/*/*/eval/curves/measures2.json" \
+        --out_dpath="$DVC_DPATH/_tmp/smalltest/_agg_results" \
+        --dset_group_key="*" --show=True \
+        --classes_of_interest "Site Preparation" "Active Construction"
+
     """
     main()

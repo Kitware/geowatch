@@ -811,6 +811,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
 
     predicted_info = pred_coco.dataset.get('info', [])
     for item in predicted_info:
+        if item.get('type', None) == 'measure':
+            info.append(item)
         if item.get('type', None) == 'process':
             proc_name = item.get('properties', {}).get('name', None)
             if proc_name == 'watch.tasks.fusion.predict':
@@ -819,6 +821,9 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                     item['title'] = ub.Path(package_fpath).stem
                 if 'package_name' not in item:
                     item['package_name'] = ub.Path(package_fpath).stem
+
+                # FIXME: title should also include pred-config info
+
                 meta['title'] = item['title']
                 meta['package_name'] = item['package_name']
                 info.append(item)

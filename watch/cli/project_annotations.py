@@ -500,7 +500,9 @@ def expand_site_models_with_site_summaries(sites, regions):
     if __debug__:
         for region_id, region_sites in ub.ProgIter(region_id_to_sites.items(), desc='validate sites'):
             for site_df in region_sites:
-                validate_site_dataframe(site_df)
+                import xdev
+                with xdev.embed_on_exception_context:
+                    validate_site_dataframe(site_df)
 
     return region_id_to_sites
 
@@ -532,7 +534,7 @@ def validate_site_dataframe(site_df):
     # Check datetime errors in observations
     try:
         obs_dates = [None if x is None else parse(x) for x in rest['observation_date']]
-        obs_isvalid = [x is None for x in obs_dates]
+        obs_isvalid = [x is not None for x in obs_dates]
         valid_obs_dates = list(ub.compress(obs_dates, obs_isvalid))
         if not all(valid_obs_dates):
             # null_obs_sites.append(first[['site_id', 'status']].to_dict())
@@ -914,9 +916,16 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
             propogated_annotations.extend(site_anns)
             drawable_region_sites.append(drawable_summary)
 
+        # import xdev
+        # with xdev.embed_on_exception_context:
         drawable_region_sites = sorted(
             drawable_region_sites,
-            key=lambda drawable_summary: min([r['site_row_datetime'] for r in drawable_summary]))
+            key=lambda drawable_summary: (
+                min([r['site_row_datetime'] for r in drawable_summary])
+                if len(drawable_summary) else
+                float('inf')
+            )
+        )
 
         all_drawable_infos.append({
             'drawable_region_sites': drawable_region_sites,

@@ -12,6 +12,7 @@ import itertools
 import collections
 from abc import abstractmethod
 from typing import Union, Iterable, Optional, Any, Tuple, List, Dict
+import warnings
 
 Poly = Union[kwimage.Polygon, kwimage.MultiPolygon]
 
@@ -39,7 +40,8 @@ class Observation:
 @dataclass
 class Track:
     observations: Iterable[Observation]
-    dset: Optional[kwcoco.CocoDataset]
+    # dset: Optional[kwcoco.CocoDataset]
+    dset: Any  # omg, I can't believe type errors are breaking runtime now. I must have some weird IPython package installed that does that.
     vidid: Optional[int] = None
     track_id: Optional[int] = None
 
@@ -52,7 +54,7 @@ class Track:
 
         if probs is not None:
             obs = [
-                Observation(poly, gid, score(poly, prob))
+                Observation(poly, gid, score_poly(poly, prob))
                 for poly, gid, prob in zip(polys, gids, probs)
             ]
         else:
@@ -142,11 +144,11 @@ class CocoDsetFilter(PolygonFilter):
 
     @ub.memoize_method
     def _heatmap(self, gid):
-        return heatmap(self.dset, gid, self.key)
+        return build_heatmap(self.dset, gid, self.key)
 
     @ub.memoize_method
     def score(self, poly, gid, mode, threshold=None):
-        return score(poly, self._heatmap(gid), mode=mode, threshold=threshold)
+        return score_poly(poly, self._heatmap(gid), mode=mode, threshold=threshold)
 
 
 class TrackFunction(collections.abc.Callable):
@@ -154,7 +156,7 @@ class TrackFunction(collections.abc.Callable):
     Abstract class that all track functions should inherit from.
     '''
     @abstractmethod
-    def __call__(self, coco_dset) -> kwcoco.CocoDataset:
+    def __call__(self, sub_dset) -> kwcoco.CocoDataset:
         '''
         Ensure each annotation in coco_dset has a track_id.
         '''
@@ -164,43 +166,41 @@ class TrackFunction(collections.abc.Callable):
         '''
         Main entrypoint for this class.
         '''
+        # tracked_subdsets = []
         # TODO why are gids reordered in this index vs coco_dset.imgs?
         for gids in coco_dset.index.vidid_to_gids.values():
             coco_dset = self.safe_apply(coco_dset, gids, overwrite)
+            # tracked_subdsets.append(sub_dset)
+        # Is this safe to do? It would be more efficient
+        # coco_dset = kwcoco.CocoDataset.union(*tracked_subdsets, disjoint_tracks=True)
         return coco_dset
 
     def safe_apply(self, coco_dset, gids, overwrite):
 
-        sub_dset, coco_dset = self.safe_partition(coco_dset, gids, remove=True)
-
-        existing_aids = sub_dset.anns.copy().keys()
-
-        def tracks(annots):
-            return annots.get('track_id', None)
-
-        def are_trackless(annots):
-            return np.array(tracks(annots)) == None  # noqa
+        sub_dset, rest_dset = self.safe_partition(coco_dset, gids, remove=True)
 
         if overwrite:
-
             sub_dset = self(sub_dset)
-
         else:
-            # TODO more sophisticated way to check if we can skip self()
-            existing_tracks = tracks(sub_dset.annots())
-            _are_trackless = are_trackless(sub_dset.annots())
+            orig_annots = sub_dset.annots()
+            orig_tids = orig_annots.get('track_id', None)
+            orig_trackless_flags = np.array([tid is None for tid in orig_tids])
+            orig_aids = list(orig_annots)
 
+            # TODO more sophisticated way to check if we can skip self()
             sub_dset = self(sub_dset)
 
             # if new annots were not created, rollover the old tracks
-            annots = sub_dset.annots()
-            if annots.aids == existing_aids:
-                annots.set(
-                    'track_id',
-                    np.where(_are_trackless, tracks(annots), existing_tracks))
+            new_annots = sub_dset.annots()
+            if new_annots.aids == orig_aids:
+                new_tids = new_annots.get('track_id', None)
+                # Only overwrite track ids for annots that didn't have them
+                new_tids = np.where(orig_trackless_flags, new_tids, orig_tids)
+                new_annots.set('track_id', new_tids)
 
-        assert not any(are_trackless(sub_dset.annots()))
-        return self.safe_union(coco_dset, sub_dset)
+        # TODO: why is this assert here?
+        assert not any(tid is None for tid in sub_dset.annots().lookup('track_id', None))
+        return self.safe_union(rest_dset, sub_dset)
 
     @staticmethod
     def safe_partition(coco_dset, gids, remove=True):
@@ -209,7 +209,9 @@ class TrackFunction(collections.abc.Callable):
         # (if they are, this is fixed in dedupe_tracks anyway)
         sub_dset.index.trackid_to_aids.update(coco_dset.index.trackid_to_aids)
         if remove:
-            return sub_dset, coco_dset.subset(coco_dset.imgs.keys() - gids)
+            rest_gids = list(set(coco_dset.imgs.keys()) - set(gids))
+            rest_dset = coco_dset.subset(rest_gids)
+            return sub_dset, rest_dset
         else:
             return sub_dset
 
@@ -217,30 +219,15 @@ class TrackFunction(collections.abc.Callable):
     def safe_union(coco_dset, new_dset, existing_aids=[]):
         coco_dset._build_index()
         new_dset._build_index()
-
-        if 0:
-            # coco_dset.union doesn't re-use image IDs
-            # so we can only use it when coco_dset and new_dset are disjoint
-            for cat in new_dset.cats.values():
-                cat.pop('id')
-                coco_dset.ensure_category(**cat)
-
-            coco_dset.remove_annotations(existing_aids)
-            anns_to_add = new_dset.anns.copy().values()
-            for ann in anns_to_add:
-                ann.pop('id')
-                coco_dset.add_annotation(**ann)
-            return coco_dset
-        else:
-            return coco_dset.union(new_dset, disjoint_tracks=True)
+        return coco_dset.union(new_dset, disjoint_tracks=True)
 
 
 class NoOpTrackFunction(TrackFunction):
     '''
     Use existing tracks.
     '''
-    def __call__(self, coco_dset):
-        return coco_dset
+    def __call__(self, sub_dset):
+        return sub_dset
 
 
 class NewTrackFunction(TrackFunction):
@@ -248,23 +235,22 @@ class NewTrackFunction(TrackFunction):
     Specialization of TrackFunction to create polygons that do not yet exist
     in coco_dset, and add them as new annotations
     '''
-    def __call__(self, coco_dset):
-        tracks = self.create_tracks(coco_dset)
-        coco_dset = self.add_tracks_to_dset(coco_dset, tracks)
-        return coco_dset
+    def __call__(self, sub_dset):
+        tracks = self.create_tracks(sub_dset)
+        sub_dset = self.add_tracks_to_dset(sub_dset, tracks)
+        return sub_dset
 
     @abstractmethod
-    def create_tracks(self, coco_dset) -> Iterable[Track]:
+    def create_tracks(self, sub_dset) -> Iterable[Track]:
         raise NotImplementedError('must be implemented by subclasses')
 
     @abstractmethod
-    def add_tracks_to_dset(self, coco_dset,
+    def add_tracks_to_dset(self, sub_dset,
                            tracks: Iterable[Track]) -> kwcoco.CocoDataset:
         raise NotImplementedError('must be implemented by subclasses')
 
 
 def check_only_bg(category_sequence, bg_name=['No Activity']):
-    # import xdev; xdev.embed()
     if len( set(category_sequence) - set(bg_name) ) == 0:
         return True
     else:
@@ -310,14 +296,11 @@ def pop_tracks(
         # hackish, pretend it's all one big track for efficient interpolation
         # TODO make this work for multiple videos
         gids = coco_dset.index._set_sorted_by_frame_index(annots.gids)
-        heatmaps_by_gid = dict(
-            zip(
-                gids,
-                heatmaps(coco_dset, gids,
-                         {score_chan.spec: list(score_chan.unique())
-                          })[score_chan.spec]))
+        keys = {score_chan.spec: list(score_chan.unique())}
+        heatmaps = build_heatmaps(coco_dset, gids, keys)[score_chan.spec]
+        heatmaps_by_gid = dict(zip(gids, heatmaps))
         scores = [
-            score(poly, heatmaps_by_gid[gid])
+            score_poly(poly, heatmaps_by_gid[gid])
             for poly, gid in zip(polys, annots.gids)
         ]
     else:
@@ -334,7 +317,7 @@ def pop_tracks(
                     track_id=track_id)
 
 
-def score(poly, probs, mode='score', threshold=0, use_rasterio=True):
+def score_poly(poly, probs, mode='score', threshold=0, use_rasterio=True):
     '''
     Args:
         poly: kwimage.Polygon or MultiPolygon in pixel coords
@@ -366,7 +349,7 @@ def score(poly, probs, mode='score', threshold=0, use_rasterio=True):
         ymax, xmax = probs.shape[:2]
         box = box.clip(0, 0, xmax, ymax).to_xywh()
         if box.area[0][0] == 0:
-            print('warning: scoring a polygon against an img with no overlap!')
+            warnings.warn('warning: scoring a polygon against an img with no overlap!')
             return 0
         x, y, w, h = box.data[0]
         if use_rasterio:  # rasterio inverse
@@ -472,23 +455,17 @@ def mask_to_polygons(probs,
 
     if scored:
         for poly in polygons:
-            yield score(poly, probs, use_rasterio=use_rasterio), poly
+            yield score_poly(poly, probs, use_rasterio=use_rasterio), poly
     else:
         yield from polygons
 
 
 def _validate_keys(key, bg_key):
     # for backwards compatibility
-    if isinstance(key, str):
-        key = [key]
-    elif isinstance(key, tuple):
-        key = list(key)
     if bg_key is None:
         bg_key = []
-    elif isinstance(bg_key, str):
-        bg_key = [bg_key]
-    elif isinstance(bg_key, tuple):
-        bg_key = list(bg_key)
+    key = list(key) if ub.iterable(key) else [key]
+    bg_key = list(bg_key) if ub.iterable(bg_key) else [bg_key]
 
     # error checking
     if len(key) < 1:
@@ -500,23 +477,24 @@ def _validate_keys(key, bg_key):
     return key, bg_key
 
 
-def heatmaps(coco_dset: kwcoco.CocoDataset,
-             gids: List[int],
-             keys: Union[List[str], Dict[str, List[str]]],
-             missing='fill',
-             skipped='interpolate') -> Dict[str, List[np.array]]:
+def build_heatmaps(sub_dset: kwcoco.CocoDataset,
+                   gids: List[int],
+                   keys: Union[List[str], Dict[str, List[str]]],
+                   missing='fill',
+                   skipped='interpolate',
+                   video_id=None) -> Dict[str, List[np.array]]:
     '''
-    Vectorized version of watch.tasks.tracking.utils.heatmap across gids.
+    Vectorized version of watch.tasks.tracking.utils.build_heatmap across gids.
 
     Can also sum keys using group names.
 
     Example:
-        heatmaps(dset, gids=[1,2], ['key1', 'key2', 'key3']) == {
+        build_heatmaps(dset, gids=[1,2], ['key1', 'key2', 'key3']) == {
             'key1': heats1,
             'key2': heats2,
             'key3': heats3
         }
-        heatmaps(dset, gids=[1,2], {'group1': ['key1', 'key2', 'key3']}) == {
+        build_heatmaps(dset, gids=[1,2], {'group1': ['key1', 'key2', 'key3']}) == {
             'key1': heats1,
             'key2': heats2,
             'key3': heats3,
@@ -529,7 +507,7 @@ def heatmaps(coco_dset: kwcoco.CocoDataset,
         - returns chan probs
 
     Args:
-        coco_dset: kwcoco.CocoDataset
+        sub_dset (kwcoco.CocoDataset): must have exactly 1 video
         gids: List[image id]
         key: List[str] list of channel names
         space: 'video' or 'image'
@@ -541,6 +519,8 @@ def heatmaps(coco_dset: kwcoco.CocoDataset,
             'interpolate': use heatmap from last gid
             'zeros': insert zeros
             # 'remove': do not return this gid  # TODO w/ different signature
+        video_id (int | None): if specified, get heatmaps for this video
+            otherwise assert that there is exactly one video
 
     Returns:
         {key: [heatmap for each gid]}
@@ -566,20 +546,21 @@ def heatmaps(coco_dset: kwcoco.CocoDataset,
 
     # record previous heatmaps in video space to propagate thru missing
     # frames
-    vid = coco_dset.index.videos[coco_dset.imgs[gids[0]]['video_id']]
+    if video_id is None:
+        assert len(sub_dset.index.videos) == 1
+        video_id = ub.peek(sub_dset.index.videos.values())['id']
+
+    vid = sub_dset.index.videos[video_id]
     vid_shape = (vid['height'], vid['width'])
     prev_heatmap_dct = collections.defaultdict(lambda: np.zeros(vid_shape))
 
     for gid in gids:
-
         for group, key in key_groups.items():
 
             # we are working only in vid space, so forget about warping
-            img_probs, chan_probs = heatmap(coco_dset,
-                                            gid,
-                                            key,
-                                            space='video',
-                                            return_chan_probs=True)
+            img_probs, chan_probs = build_heatmap(sub_dset, gid, key,
+                                                  space='video',
+                                                  return_chan_probs=True)
             # TODO make this more efficient using missing='skip'
             if any(np.flatnonzero(img_probs)):
                 heatmaps_dct[group].append(img_probs)
@@ -606,12 +587,8 @@ def heatmaps(coco_dset: kwcoco.CocoDataset,
     return heatmaps_dct
 
 
-def heatmap(dset,
-            gid,
-            key,
-            return_chan_probs=False,
-            space='video',
-            missing='fill'):
+def build_heatmap(dset, gid, key, return_chan_probs=False, space='video',
+                  missing='fill'):
     """
     Find the total heatmap of key within gid
 
@@ -620,7 +597,7 @@ def heatmap(dset,
         gid: image id
         key: List[str] list of channel names
         return_chan_probs:
-            if True, also return a dict {k:heatmap(k) for k in keys}
+            if True, also return a dict {k: build_heatmap(k) for k in keys}
         space: 'video' or 'image'
         missing: behavior for missing keys.
             'fill': return probs and chan_probs of zeros
@@ -629,16 +606,24 @@ def heatmap(dset,
     """
     key, _ = _validate_keys(key, None)
     coco_img = dset.coco_image(gid)
-    w, h = coco_img.delay(space=space).dsize
-    fg_img_probs = np.zeros((h, w))
-    common = kwcoco.FusedChannelSpec.coerce(
-        coco_img.channels.fuse()).intersection(
-            kwcoco.FusedChannelSpec.coerce(key))
+
+    channels_request = kwcoco.FusedChannelSpec.coerce(key)
+    channels_have = coco_img.channels.fuse().intersection(channels_request)
 
     if missing == 'raise':
-        assert len(key) == len(common), (dset, gid, key)
+        if channels_have.numel() != channels_request.numel():
+            raise ValueError(ub.paragraph(
+                f'''
+                Requeted {channels_request=} in the image {gid=} of {dset=}
+                but only {channels_have=} existed.
+                '''))
+
+    w, h = coco_img.delay(space=space).dsize
+
+    common = channels_have
 
     if len(common) == 0:  # for bg_key
+        fg_img_probs = np.zeros((h, w))
         if return_chan_probs:
             if missing == 'skip':
                 return fg_img_probs, {}
@@ -647,22 +632,28 @@ def heatmap(dset,
         else:
             return fg_img_probs
 
-    key_img_probs = coco_img.delay(common, space=space).finalize()
-    fg_img_probs += key_img_probs.sum(axis=-1)
+    if __debug__:
+        if common.numel() > 1:
+            print('WARNING: Im not sure about that sum axis=-1, '
+                  'I hope there is only ever one channel here')
+
+    key_img_probs = coco_img.delay(channels=common, space=space).finalize(nodata='float')
+    # Not sure about that sum axis=-1 here
+    fg_img_probs = key_img_probs.sum(axis=-1)
     if return_chan_probs:
         # some awkwardness here from non-invertible mapping from
         # ChannelSpec to FusedChannelSpec
         chan_probs = {}
         idxs = common.component_indices()
         for k in key:
-            codes = common.intersection(
-                kwcoco.FusedChannelSpec.coerce(k)).code_list()
+            codes = common.intersection([k]).as_list()
             probs = [key_img_probs[idxs[code]] for code in codes]
             if len(probs) == 0:
                 if missing == 'skip':
                     continue
                 else:
                     probs.append(np.zeros((h, w)))
+            # Again, I'm not sure about this sum here.
             chan_probs[k] = np.sum(probs, axis=0)
         return fg_img_probs, chan_probs
     else:

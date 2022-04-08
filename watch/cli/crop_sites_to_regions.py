@@ -8,8 +8,8 @@ class CropSitesToRegionsConfig(scfg.Config):
     Crops site models to the bounds of a region model
 
     Example:
-        DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
-        WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.crop_sites_to_regions \
+        DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+        WATCH_PREIMPORT=none python -m watch.cli.crop_sites_to_regions \
             --site_models "$DVC_DPATH/annotations/site_models/KR_R002_*.geojson" \
             --region_models "$DVC_DPATH/annotations/region_models/KR_R002.geojson" \
             --new_site_dpath ./cropped_sites

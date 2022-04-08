@@ -54,7 +54,7 @@ class BashJob(cmd_queue.Job):
         self.pathid = self.name + '_' + ub.hash_data(uuid.uuid4())[0:8]
         self.kwargs = kwargs  # unused kwargs
         self.command = command
-        self.depends = depends
+        self.depends: list[cmd_queue.Job] = depends
         self.bookkeeper = bookkeeper
         if info_dpath is None:
             info_dpath = ub.Path.appdir('cmd_queue/jobinfos/') / self.pathid
@@ -335,10 +335,11 @@ class SerialQueue(cmd_queue.Queue):
                         script.append('# </command>')
                     num += 1
 
+        _mark_status('done')
+
         if with_gaurds:
             script.append('set +e')
 
-        _mark_status('done')
         text = '\n'.join(script)
         return text
 
