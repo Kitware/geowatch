@@ -198,6 +198,8 @@ class TrackFunction(collections.abc.Callable):
                 new_tids = np.where(orig_trackless_flags, new_tids, orig_tids)
                 new_annots.set('track_id', new_tids)
 
+        import xdev
+        xdev.embed()
         assert not any(tid is None for tid in sub_dset.annots().lookup('track_id', None))
         return self.safe_union(rest_dset, sub_dset)
 
@@ -296,12 +298,9 @@ def pop_tracks(
         # hackish, pretend it's all one big track for efficient interpolation
         # TODO make this work for multiple videos
         gids = coco_dset.index._set_sorted_by_frame_index(annots.gids)
-        heatmaps_by_gid = dict(
-            zip(
-                gids,
-                build_heatmaps(coco_dset, gids, {
-                    score_chan.spec: list(score_chan.unique())
-                })[score_chan.spec]))
+        keys = {score_chan.spec: list(score_chan.unique())}
+        heatmaps = build_heatmaps(coco_dset, gids, keys)[score_chan.spec]
+        heatmaps_by_gid = dict(zip(gids, heatmaps))
         scores = [
             score_poly(poly, heatmaps_by_gid[gid])
             for poly, gid in zip(polys, annots.gids)
@@ -622,11 +621,11 @@ def build_heatmap(dset, gid, key, return_chan_probs=False, space='video',
                 '''))
 
     w, h = coco_img.delay(space=space).dsize
-    fg_img_probs = np.zeros((h, w))
 
     common = channels_have
 
     if len(common) == 0:  # for bg_key
+        fg_img_probs = np.zeros((h, w))
         if return_chan_probs:
             if missing == 'skip':
                 return fg_img_probs, {}
@@ -641,7 +640,8 @@ def build_heatmap(dset, gid, key, return_chan_probs=False, space='video',
                   'I hope there is only ever one channel here')
 
     key_img_probs = coco_img.delay(channels=common, space=space).finalize(nodata='float')
-    fg_img_probs += key_img_probs.sum(axis=-1)
+    # Not sure about that sum axis=-1 here
+    fg_img_probs = key_img_probs.sum(axis=-1)
     if return_chan_probs:
         # some awkwardness here from non-invertible mapping from
         # ChannelSpec to FusedChannelSpec

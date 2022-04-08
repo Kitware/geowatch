@@ -25,6 +25,7 @@ except Exception:
 
 
 def _norm(heatmaps, norm_ord):
+    heatmaps = np.array(heatmaps)
     probs = np.linalg.norm(heatmaps, norm_ord, axis=0)
     if 0 < norm_ord < np.inf:
         probs /= np.power(len(heatmaps), 1 / norm_ord)
@@ -225,9 +226,8 @@ def add_tracks_to_dset(sub_dset,
     @ub.memoize
     def _warp_img_from_vid(gid):
         # Memoize the conversion to a matrix
-        img = coco_dset_sc.imgs[gid]
-        vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
-        img_from_vid = vid_from_img.inv()
+        coco_img = coco_dset_sc.coco_image(gid)
+        img_from_vid = coco_img.warp_img_from_vid
         return img_from_vid
 
     def make_new_annotation(gid, poly, this_score, track_id, space='video'):
@@ -266,6 +266,7 @@ def add_tracks_to_dset(sub_dset,
 
     new_trackids = kwcoco_extensions.TrackidGenerator(sub_dset)
 
+    all_new_anns = []
     for track in tracks:
         if track.track_id is not None:
             track_id = track.track_id
@@ -273,17 +274,15 @@ def add_tracks_to_dset(sub_dset,
         else:
             track_id = next(new_trackids)
 
-        new_anns = []
         for obs in track.observations:
             new_ann = make_new_annotation(obs.gid, obs.poly, obs.score,
                                           track_id)
-            new_anns.append(new_ann)
+            all_new_anns.append(new_ann)
 
-        for new_ann in new_anns:
-            sub_dset.add_annotation(**new_ann)
-        # TODO: Faster to add annotations in bulk, but we need to construct the
-        # "ids" first
-        # sub_dset.add_annotations(new_anns)
+    # TODO: Faster to add annotations in bulk, but we need to construct the
+    # "ids" first
+    for new_ann in all_new_anns:
+        sub_dset.add_annotation(**new_ann)
 
     return sub_dset
 
@@ -340,7 +339,6 @@ def time_aggregated_polys(sub_dset,
         >>> inter_track = time_aggregated_polys(sub_dset, thresh=0.15)[0].observations
         >>> assert inter_track[0].score == 0, inter_track[1].score > 0
     '''
-
     #
     # --- input validation ---
     #
@@ -388,16 +386,18 @@ def time_aggregated_polys(sub_dset,
     # vidpoly separately, so have to bookkeep both vidpolys and tracks
     # in a list track_polys
 
-    tracks_polys = list(SmallPolygonFilter(min_area_px=80)(tracks_polys))
-    print('removed small: remaining polygons: ', len(tracks_polys))
+    min_area_px = 80  # TODO: parameterize
+    size_filter = SmallPolygonFilter(min_area_px=min_area_px)
+    n_orig = len(tracks_polys)
+    tracks_polys = list(size_filter(tracks_polys))
+    print(f'removed small: remaining polygons: {len(tracks_polys)} / {n_orig}')
 
     if response_filtering:
         response_thresh = 0.0002  # 0.0005
-        tracks_polys = list(
-            ResponsePolygonFilter([t for t, _ in tracks_polys], key,
-                                  response_thresh)(tracks_polys))
-        print('after filtering based on per-polygon response ',
-              len(tracks_polys))
+        rsp_filter = ResponsePolygonFilter(
+            [t for t, _ in tracks_polys], key, response_thresh)
+        tracks_polys = list(rsp_filter(tracks_polys))
+        print('after filtering based on per-polygon response {len(track_polys)} / {n_orig}')
 
     # TimePolygonFilter edits tracks instead of removing them, so we can
     # discard 'polys' and focus on 'tracks'
@@ -406,9 +406,8 @@ def time_aggregated_polys(sub_dset,
         # TODO investigate different thresh here
         time_thresh = thresh
         time_filter = TimePolygonFilter(sub_dset, tuple(key), time_thresh)
-        tracks = list(
-            filter(lambda track: len(list(track.observations)) > 0,
-                   map(time_filter, tracks)))
+        _filtered = list(map(time_filter, tracks))
+        tracks = [t for t in _filtered if len(list(t.observations)) > 0]
 
     return tracks
 
@@ -426,9 +425,11 @@ def _heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
     _agg_fn = AGG_FN_REGISTRY[agg_fn]
     aggregated = _agg_fn(heatmaps, thresh=thresh, morph_kernel=morph_kernel,
                          norm_ord=norm_ord)
-    return list(mask_to_polygons(aggregated, thresh,
-                                 thresh_hysteresis=thresh_hysteresis,
-                                 bounds=bounds))
+
+    polygons = list(mask_to_polygons(aggregated, thresh,
+                                     thresh_hysteresis=thresh_hysteresis,
+                                     bounds=bounds))
+    return  polygons
 
 
 def tracks_polys_bounds(sub_dset, key, agg_fn, thresh, morph_kernel, thresh_hysteresis, norm_ord) -> Iterable[Tuple[Track, Poly]]:
@@ -499,20 +500,18 @@ def tracks_polys_nobounds(sub_dset, key, agg_fn, thresh, morph_kernel,
     gids = list(sub_dset.imgs.keys())
     keys = {'fg': key}
     skipped = 'interpolate'
-    _heatmaps = build_heatmaps(sub_dset, gids, keys, skipped)['fg']
+    heatmaps = build_heatmaps(sub_dset, gids, keys, skipped)['fg']
 
     bounds = None
-    polys = _heatmaps_to_polys(_heatmaps, bounds, agg_fn, thresh, morph_kernel,
+    polys = _heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
                                thresh_hysteresis, norm_ord)
 
     # turn each polygon into a list of polygons (map them across gids)
-    tracks = [
-        Track.from_polys(itertools.repeat(poly),
-                         sub_dset,
-                         probs=_heatmaps) for poly in polys
-    ]
+    tracks = [Track.from_polys(itertools.repeat(poly), sub_dset, probs=heatmaps)
+              for poly in polys]
 
-    return list(zip(tracks, polys))
+    tracks_polys = list(zip(tracks, polys))
+    return tracks_polys
 
 
 #
