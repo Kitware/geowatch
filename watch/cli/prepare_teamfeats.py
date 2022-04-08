@@ -174,7 +174,7 @@ def prep_feats(cmdline=True, **kwargs):
                              aligned_bundle_dpath, config)
 
     if config['verbose']:
-        queue.rprint(1, 1)
+        queue.rprint()
 
     if config['run']:
         agg_state = None
