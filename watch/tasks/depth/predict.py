@@ -324,9 +324,20 @@ def run_inference(image, model, device=0):
         pred_shape = image.shape[0:2]
         return np.full(pred_shape, fill_value=np.nan, dtype=np.float32)
 
+    img_h, img_w = image.shape[0:2]
+    pad_h = pad_w = 0
+    min_w, min_h = 64, 64
+    if img_h < min_h or img_w < min_w:
+        pad_h = min_h - img_h
+        pad_w = min_w - img_w
+        pad_dims = ((0, pad_h), (0, pad_w), (0, 0))
+        image = np.pad(image, pad_dims, mode='constant',
+                       constant_values=np.nan)
+
     with torch.no_grad():
         nodata_mask = np.isnan(image)
         if not np.all(nodata_mask):
+
             # Replace nans with zeros before going into the network
             image_float = image / 255.0  # not sure why we want to do this...
 
@@ -363,6 +374,11 @@ def run_inference(image, model, device=0):
             weighted_final = ndimage.median_filter(tmp2, size=7)
             weighted_final[nodata_mask.all(axis=2)] = np.nan
             # weighted_final = ndimage.median_filter(tmp2.astype(np.uint8), size=7)
+
+            if pad_h or pad_w:
+                # Undo pad
+                weighted_final = weighted_final[:-pad_h, :-pad_w]
+
         else:
             pred_shape = image.shape[0:2]
             return np.full(pred_shape, fill_value=np.nan, dtype=np.float32)

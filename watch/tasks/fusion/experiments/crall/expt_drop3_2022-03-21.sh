@@ -129,6 +129,7 @@ schedule-prediction-and-evlauation(){
     #du -shL models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json | sort -h
     (cd "$DVC_DPATH" && dvc add models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json)
     git commit -am "add eval from $HOSTNAME"
+    git push
     (cd "$DVC_DPATH" && dvc push -r aws -R models/fusion/eval3_candidates/eval)
 
     # For SSD drives
