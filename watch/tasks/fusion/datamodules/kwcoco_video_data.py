@@ -2641,6 +2641,9 @@ class BatchVisualizationBuilder:
     Each column will be made of "cells" which could show either the truth, a
     prediction, loss weights, or raw input channels.
 
+    CommandLine:
+        xdoctest -m watch.tasks.fusion.datamodules.kwcoco_video_data BatchVisualizationBuilder
+
     Example:
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> import ndsampler
@@ -2657,9 +2660,12 @@ class BatchVisualizationBuilder:
         >>> # Calculate the probability of change for each frame
         >>> item_output = {}
         >>> change_prob_list = []
+        >>> fliprot_params = item['tr'].get('fliprot_params', None)
         >>> for _ in range(1, sample_shape[0]):
         >>>     change_prob = kwimage.Heatmap.random(
         >>>         dims=sample_shape[1:3], classes=1).data['class_probs'][0]
+        >>>     if fliprot_params:
+        >>>         change_prob = fliprot(change_prob, **fliprot_params)
         >>>     change_prob_list += [change_prob]
         >>> change_probs = np.stack(change_prob_list)
         >>> item_output['change_probs'] = change_probs  # first frame does not have change
@@ -2669,6 +2675,8 @@ class BatchVisualizationBuilder:
         >>> for _ in range(0, sample_shape[0]):
         >>>     class_prob = kwimage.Heatmap.random(
         >>>         dims=sample_shape[1:3], classes=list(sampler.classes)).data['class_probs']
+        >>>     if fliprot_params:
+        >>>         class_prob = fliprot(class_prob, **fliprot_params)
         >>>     class_prob_list += [einops.rearrange(class_prob, 'c h w -> h w c')]
         >>> class_probs = np.stack(class_prob_list)
         >>> item_output['class_probs'] = class_probs  # first frame does not have change

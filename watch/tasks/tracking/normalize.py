@@ -74,9 +74,11 @@ def add_geos(coco_dset, overwrite, max_workers=16):
     executor = ub.JobPool('thread', max_workers)
 
     for gid in ub.ProgIter(images_to_fix, desc='submit crs jobs'):
-        coco_img = coco_dset.coco_image(gid)
+        coco_img: kwcoco.CocoImage = coco_dset.coco_image(gid)
         # Hack: find an asset likely to have geoinfo
         aux = coco_img.find_asset_obj('red|green|blue|panchromatic|pan')
+        if aux is None:
+            aux = coco_img.primary_asset()
         fpath = join(coco_img.bundle_dpath, aux['file_name'])
         job = executor.submit(geotiff_crs_info, fpath)
         job.gid = gid
