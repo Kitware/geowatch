@@ -447,8 +447,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
         # We can skip evaluation if we already have a metrics dvc file
         # (even if we haven't pulled those actual metrics to disk)
-        has_eval = eval_metrics_dvc_fpath.exists() or eval_metrics_fpath.exists()
-        has_pred = pred_dataset_fpath.exists()
+        # has_eval = eval_metrics_dvc_fpath.exists() or eval_metrics_fpath.exists()
+        # has_pred = pred_dataset_fpath.exists()
 
         # Really should make this a class
         task_infos = {

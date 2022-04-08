@@ -386,23 +386,18 @@ def _populate_teamfeat_queue(queue, base_fpath, dvc_dpath, aligned_bundle_dpath,
 
     base_combo_fpath = aligned_bundle_dpath / f'combo_{combo_code}.kwcoco.json'
 
-    # TODO: enable forcing if needbe
-    # if not base_combo_fpath.exists() or not config['cache']:
-    if True:
-        #  Indent of this the codeblock matters for this line
+    # Note: sync tells the queue that everything after this
+    # depends on everything before this
+    queue.sync()
 
-        # Note: sync tells the queue that everything after this
-        # depends on everything before this
-        queue.sync()
-
-        src_lines = ' \\\n        '.join(tocombine)
-        command = '\n'.join([
-            'python -m watch.cli.coco_combine_features \\',
-            f'    --src {src_lines} \\',
-            f'    --dst {base_combo_fpath}'
-        ])
-        print('task_jobs = {!r}'.format(task_jobs))
-        combo_job = queue.submit(command)
+    src_lines = ' \\\n        '.join(tocombine)
+    command = '\n'.join([
+        'python -m watch.cli.coco_combine_features \\',
+        f'    --src {src_lines} \\',
+        f'    --dst {base_combo_fpath}'
+    ])
+    print('task_jobs = {!r}'.format(task_jobs))
+    queue.submit(command)
 
     if config['do_splits']:
         # Also call the prepare-splits script
@@ -410,10 +405,6 @@ def _populate_teamfeat_queue(queue, base_fpath, dvc_dpath, aligned_bundle_dpath,
         base_fpath = str(base_combo_fpath)
         queue.sync()
         prepare_splits._submit_split_jobs(base_fpath, queue)
-        # split_config = ub.dict_isect(
-        #     config, prepare_splits.PrepareSplitsConfig.default)
-        # split_config['base_fpath'] = str(base_combo_fpath)
-        # prepare_splits.prepare_teamfeats(**split_config)
 
     return queue
 
