@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import json
 from glob import glob
+import shutil
 
 from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
 from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress  # noqa: 501
@@ -234,8 +235,8 @@ def run_bas_fusion_for_baseline(
     # Copy input region model into region_models outdir to be updated
     # (rather than generated from tracking, which may not have the
     # same bounds as the original)
-    shutil.copy(local_region_path, os.path.join(region_models_outdir,
-                                                '{}.geojson'.format(region_id))
+    shutil.copy(local_region_path, os.path.join(
+        region_models_outdir, '{}.geojson'.format(region_id)))
 
     bas_track_kwargs = {'use_viterbi': False,
                         'thresh': bas_thresh,
