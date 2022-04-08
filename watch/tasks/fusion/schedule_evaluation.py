@@ -243,7 +243,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # model_dpath = dvc_dpath / 'models/fusion/SC-20201117'
     # test_dataset_fpath = dvc_dpath / 'Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json'
     test_dataset_fpath = ub.Path(test_dataset)
-    assert test_dataset_fpath.exists()
+    if not test_dataset_fpath.exists():
+        print('warning test dataset does not exist')
 
     annotations_dpath = config['annotations_dpath']
     if annotations_dpath is None:
@@ -256,22 +257,26 @@ def schedule_evaluation(cmdline=False, **kwargs):
             expt_name = package_fpath.name.split('_epoch')[0]
         except Exception:
             # Try to read package metadata
-            pkg_zip = ub.zopen(package_fpath, ext='.pt')
-            found = None
-            for member in pkg_zip.namelist():
-                # if member.endswith('model.pkl'):
-                if member.endswith('fit_config.yaml'):
-                    found = member
-                    break
-            if not found:
-                raise Exception(f'{package_fpath=} does not conform to name spec and does not seem to be a torch package with a package_header.json file')
+            if package_fpath.exists():
+                pkg_zip = ub.zopen(package_fpath, ext='.pt')
+                found = None
+                for member in pkg_zip.namelist():
+                    # if member.endswith('model.pkl'):
+                    if member.endswith('fit_config.yaml'):
+                        found = member
+                        break
+                if not found:
+                    raise Exception(f'{package_fpath=} does not conform to name spec and does not seem to be a torch package with a package_header.json file')
+                else:
+                    import yaml
+                    config_file = ub.zopen(package_fpath / found, mode='r', ext='.pt')
+                    config = yaml.safe_load(config_file)
+                    expt_name = config['name']
+                    # No way to introspect this (yet), so hack it
+                    epoch_num = -1
             else:
-                import yaml
-                config_file = ub.zopen(package_fpath / found, mode='r', ext='.pt')
-                config = yaml.safe_load(config_file)
-                expt_name = config['name']
-                # No way to introspect this (yet), so hack it
                 epoch_num = -1
+                expt_name = package_fpath.name
 
         info = {
             'name': expt_name,
@@ -293,9 +298,14 @@ def schedule_evaluation(cmdline=False, **kwargs):
             package_info = package_metadata(ub.Path(package_fpath))
             packages_to_eval.append(package_info)
     else:
+        print('model_globstr = {!r}'.format(model_globstr))
         for package_fpath in glob.glob(model_globstr, recursive=True):
             package_info = package_metadata(ub.Path(package_fpath))
             packages_to_eval.append(package_info)
+
+        if len(packages_to_eval) == 0:
+            if '*' not in str(model_globstr):
+                packages_to_eval.append(package_metadata(ub.Path(model_globstr)))
 
     print(f'{len(packages_to_eval)=}')
 
@@ -739,6 +749,20 @@ def updates_dvc_measures():
 if __name__ == '__main__':
     """
     CommandLine:
+
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --model_globstr="/path/to/model.pt" \
+            --test_dataset="/path/to/data.kwcoco.json" \
+            --enable_pred=1 \
+            --enable_eval=0 \
+            --enable_iarpa_eval=1 \
+            --enable_track=1 \
+            --skip_existing=0 \
+            --cache=0 \
+            --backend=serial \
+            --run=0
+
+
         python ~/code/watch/watch/tasks/fusion/schedule_evaluation.py schedule_evaluation
 
         python ~/code/watch/watch/tasks/fusion/organize.py make_nice_dirs

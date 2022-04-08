@@ -1138,20 +1138,20 @@ def main(cmdline=False, **kwargs):
     if 'coi_mAPUC' in mean_df.columns:
         print('\nSort by coi_mAPUC')
         _mean_by_metric = mean_df.sort_values('coi_mAPUC')
-        print(_mean_by_metric)
-        # print(_mean_by_metric.to_string())
+        # print(_mean_by_metric)
+        print(_mean_by_metric.to_string())
 
     if 'salient_APUC' in mean_df.columns:
         print('\nSort by salient_APUC')
         _salient_by_metric = mean_df.sort_values('salient_APUC')
-        print(_salient_by_metric)
-        # print(_salient_by_metric.to_string())
+        # print(_salient_by_metric)
+        print(_salient_by_metric.to_string())
 
     if 'AP' in class_df.columns:
         print('\nClass: Sort by AP')
         _class_by_metric = class_df[~class_df['AP'].isnull()].sort_values('AP')
-        print(_class_by_metric)
-        # print(_class_by_metric.to_string())
+        # print(_class_by_metric)
+        print(_class_by_metric.to_string())
 
     if 0:
         if 'AUC' in class_df.columns:

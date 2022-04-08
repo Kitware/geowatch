@@ -341,14 +341,14 @@ prepare_cropped_from_tracks(){
     python -m watch.cli.prepare_teamfeats \
         --base_fpath="$BASE_DPATH" \
         --dvc_dpath="$DVC_DPATH" \
-        --gres=",1" \
-        --with_landcover=0 \
+        --gres=",0" \
+        --with_landcover=1 \
         --with_depth=1 \
-        --with_materials=0 \
-        --with_invariants=0 \
+        --with_materials=1 \
+        --with_invariants=1 \
         --do_splits=1 \
         --depth_workers=0 \
-        --cache=1 --run=1 --backend=tmux
+        --cache=1 --backend=tmux --run=1
 
 
 }

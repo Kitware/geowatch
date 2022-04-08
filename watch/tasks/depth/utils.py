@@ -37,7 +37,6 @@ def process_image_chunked(image,
         >>> kwplot.imshow(image, pnum=(1, 2, 1), doclf=True)
         >>> kwplot.imshow(result, pnum=(1, 2, 2))
     """
-    log.info('processing image {}'.format(image.shape))
 
     def process_wrapper(img: np.ndarray, pbar, block_info=None):
         if block_info:
