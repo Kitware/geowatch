@@ -6,7 +6,7 @@ import numpy as np
 import kwcoco
 import kwimage
 
-from watch.tasks.tracking.utils import heatmaps, score
+from watch.tasks.tracking.utils import build_heatmaps, score_poly
 from watch.heuristics import CNAMES_DCT
 
 
@@ -487,10 +487,11 @@ def phase_prediction_heatmap(annots, coco_dset, key) -> List[float]:
     gids = list(set(annots.gids))
     heatmaps_dct = dict(
         zip(gids,
-            heatmaps(coco_dset, gids, [key], skipped='interpolate')[key]))
+            build_heatmaps(coco_dset, gids, [key], skipped='interpolate')[key]))
     # TODO generalize this as annots.detections.responses()?
     return [
-        score(poly, heatmaps_dct[gid]) for poly, gid in zip(
+        score_poly(poly, heatmaps_dct[gid])
+        for poly, gid in zip(
             annots.detections.data['segmentations'].to_polygon_list(),
             annots.gids)
     ]

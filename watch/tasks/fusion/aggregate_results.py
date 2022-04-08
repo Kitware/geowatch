@@ -5,6 +5,8 @@ TODO:
 
     AUTO-ABALATION
 
+    - [ ] Rename to aggregate results
+
     - [ ] Group experiments into "variance" groups where params are exactly the
           same in all members of the group.
 
@@ -16,13 +18,13 @@ TODO:
           same param between all members of the groups).
 
 
-The main function is :func:`gather_measures`.
+The main function is :func:`main`.
 
 CommandLine:
 
     # TODO: - [ ] watch command to "register" which DVC directory to use
     # Locate a registered DVC directory
-    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 
     # Replace with the name of the latest dataset
     DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
@@ -32,7 +34,7 @@ CommandLine:
     PRED_DSET_PAT="*"
     MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${DATASET_CODE}/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/eval/curves/measures2.json
 
-    python -m watch.tasks.fusion.gather_results \
+    python -m watch.tasks.fusion.aggregate_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/" \
         --dset_group_key="*_vali.kwcoco" --show=True
@@ -45,9 +47,10 @@ import yaml
 import shutil
 import kwarray
 import scriptconfig as scfg
+import itertools as it
 
 
-class GatherResultsConfig(scfg.Config):
+class AggregateResultsConfig(scfg.Config):
     """
     TODO: write good docs for the gather command line tool.
 
@@ -64,6 +67,8 @@ class GatherResultsConfig(scfg.Config):
         'out_dpath': scfg.Value('./agg_results', help='A location where aggregate results can be written and compared'),
         'show': scfg.Value(False, help='if true, does a plt.show'),
         'dset_group_key': scfg.Value('*', help='if there is more than one dataset group, you will need to choose one'),
+
+        'io_workers': scfg.Value(10, help='number of workers to read metrics summaries'),
 
         'classes_of_interest': scfg.Value('*', nargs='+', help='One or more glob patterns'),
     }
@@ -90,6 +95,34 @@ def load_measure(measure_fpath):
     """
     with open(measure_fpath, 'r') as file:
         info = json.load(file)
+
+    HACK_FOR_IARPA = True
+    if HACK_FOR_IARPA:
+        pred_parent = measure_fpath.parent.parent.parent
+        cand = ub.Path(*['pred' if p == 'eval' else p for p in pred_parent.parts])
+        iarpa_globs = cand / 'tracking/*/iarpa_eval/scores/merged/summary2.json'
+        import glob
+
+        iarpa_subresults = []
+        iarpa_summary_fpaths = list(glob.glob(str(iarpa_globs)))
+        for iarpa_fpath in iarpa_summary_fpaths:
+            iarpa_fpath = ub.Path(iarpa_fpath)
+            # HACK: need to persist the track params here
+            thresh = float(iarpa_fpath.parent.parent.parent.parent.name.split('_')[1].split('=')[1])
+            with open(iarpa_fpath, 'r') as file:
+                iarpa_info = json.load(file)
+                iarpa_info
+                import io
+                best_bas_rows = pd.read_json(io.StringIO(json.dumps(iarpa_info['best_bas_rows'])), orient='table')
+                bas_row = best_bas_rows.loc['merged']
+                # bas_f1 = bas_row['F1'].values.ravel()[0]
+                row = bas_row.reset_index().iloc[0].to_dict()
+                row['thresh'] = thresh
+                iarpa_subresults.append(row)
+                # sc_df = pd.read_json(io.StringIO(json.dumps(iarpa_info['sc_df'])), orient='table')
+                # sc_cm = pd.read_json(io.StringIO(json.dumps(iarpa_info['sc_cm'])), orient='table')
+        info['meta']['iarpa_measures'] = iarpa_subresults
+
     if True:
         # Hack to ensure fit config is properly serialized
         try:
@@ -112,6 +145,9 @@ def load_measure(measure_fpath):
             # configuration.
             print('Hacking in fit-config')
             package_fpath = predict_args['package_fpath']
+
+            # TODO: use this hack instead resolve_cross_machine_path
+
             # hack, dont have enough into to properly remove the user directory
             hack_home = ub.expandpath(f'$HOME/remote/{cand_remote}')
             cand_remote_home = ub.Path(hack_home)
@@ -149,14 +185,59 @@ def load_measure(measure_fpath):
     return info
 
 
+def resolve_cross_machine_path(path):
+    """
+    HACK
+
+    Attempt to determine what the local path to a file/directry would be
+    if it exists on this machine. This assumes the path is something
+    that was checked into DVC.
+    """
+    if not path.exists():
+
+        try:
+            idx = path.parts.index('smart_watch_dvc')
+        except ValueError:
+            pass
+        else:
+            import watch
+            dvc_dpath = watch.find_smart_dvc_dpath()
+            pname = ub.Path(*path.parts[idx + 1:])
+            pname_dvc = pname.augment(tail='.dvc')
+            cwd = ub.Path('.').resolve()
+            candidates = [
+                cwd / pname,
+                cwd / pname_dvc,
+                dvc_dpath / pname,
+                dvc_dpath / pname_dvc,
+            ]
+            found = None
+            try:
+                for cand_path in candidates:
+                    if cand_path.exists():
+                        found = cand_path
+                        if found.name.endswith('.dvc'):
+                            found = found.augment(ext='')
+                        raise Found
+            except Found:
+                pass
+            if found:
+                return found
+    return path
+
+
 def prepare_results(all_infos, coi_pattern):
     from kwcoco.coco_evaluator import CocoSingleResult
     from watch.utils import result_analysis
+    from watch.utils import util_time
+    import pint
+    ureg = pint.UnitRegistry()
+
     class_rows = []
     mean_rows = []
     all_results = []
     results_list2 = []
-    for info in ub.ProgIter(all_infos):
+    for info in ub.ProgIter(all_infos, desc='prepare results'):
         # Note: for now, the nocls part will refer to the saliency metrics and
         # the ovr part will be the class metrics. Should make per-head results
         # in the future.
@@ -171,22 +252,44 @@ def prepare_results(all_infos, coi_pattern):
 
         meta = info['meta']
 
-        try:
-            predict_meta = None
-            for meta_item in meta['info']:
-                if meta_item['type'] == 'process':
-                    if meta_item['properties']['name'] == 'watch.tasks.fusion.predict':
+        predict_meta = None
+        predict_props = None
+        predict_args = None
+        for meta_item in meta['info']:
+            if meta_item['type'] == 'process':
+                if meta_item['properties']['name'] == 'watch.tasks.fusion.predict':
+                    if predict_meta is None:
                         predict_meta = meta_item
-                        raise Found
-        except Found:
-            pass
-        else:
+                        predict_props = predict_meta['properties']
+                        predict_args = predict_props['args']
+                    # raise Found
+            resources = {}
+            if meta_item['type'] == 'measure':
+                predict_resources = meta_item['properties']
+                start_time = util_time.coerce_datetime(predict_resources.get('start_timestamp', None))
+                end_time = util_time.coerce_datetime(predict_resources.get('end_timestamp', None))
+                iters_per_second = predict_resources.get('iters_per_second', None)
+                total_hours = (end_time - start_time).total_seconds() / (60 * 60)
+                vram = predict_resources['device_info']['allocated_vram']
+                vram_gb = ureg.parse_expression(f'{vram} bytes').to('gigabytes').m
+                co2_kg = predict_resources['emissions']['co2_kg']
+                resources['co2_kg'] = co2_kg
+                resources['vram_gb'] = vram_gb
+                resources['total_hours'] = total_hours
+                resources['iters_per_second'] = iters_per_second
+
+        if predict_args is None:
             raise Exception('no prediction metadata')
 
-        pred_fpath = predict_meta['properties']['args']['pred_dataset']
+        pred_fpath = predict_args['pred_dataset']
+        package_fpath = ub.Path(predict_args['package_fpath'])
+        package_fpath = resolve_cross_machine_path(package_fpath)
 
-        _ = ub.Path(pred_fpath)
-        model_fpath = (_.parent.parent.parent / (_.parent.parent.name.split('pred_')[-1] + '.pt'))
+        # _ = ub.Path(pred_fpath)
+        # HACK
+        # import xdev
+        # xdev.embed()
+        # model_fpath = (_.parent.parent.parent / (_.parent.parent.name.split('pred_')[-1] + '.pt'))
 
         title = meta['title']
 
@@ -197,6 +300,16 @@ def prepare_results(all_infos, coi_pattern):
                 raise AssertionError
         else:
             package_name = meta['package_name']
+
+        if predict_args is not None:
+            # Relevant prediction parameters also count as params
+            pred_config = {}
+            pred_config['pred_tta_fliprot'] = predict_args.get('tta_fliprot', 0)
+            pred_config['pred_tta_time'] = predict_args.get('tta_time', 0)
+            pred_config['pred_chip_overlap'] = predict_args['chip_overlap']
+            pred_cfgstr = ub.hash_data(pred_config)[0:8]
+            title = title + pred_cfgstr
+            meta['prefix'] = package_name + pred_cfgstr
 
         # Hack to get the epoch/step/expt_name
         try:
@@ -212,7 +325,7 @@ def prepare_results(all_infos, coi_pattern):
         try:
             expt_name = package_name.split('epoch=')[0]
         except Exception:
-            expt_name = predict_meta['properties']['args'][expt_name]
+            expt_name = predict_args[expt_name]
 
         salient_measures = info['nocls_measures']
         class_measures = info['ovr_measures']
@@ -237,7 +350,7 @@ def prepare_results(all_infos, coi_pattern):
             class_row['epoch'] = epoch
             class_row['step'] = step
             class_row['pred_fpath'] = pred_fpath
-            class_row['model_fpath'] = str(model_fpath)
+            class_row['model_fpath'] = str(package_fpath)
             expt_class_rows.append(class_row)
         class_rows.extend(expt_class_rows)
 
@@ -264,17 +377,29 @@ def prepare_results(all_infos, coi_pattern):
         row['epoch'] = epoch
         row['step'] = step
         row['pred_fpath'] = pred_fpath
-        row['model_fpath'] = str(model_fpath)
+        row['model_fpath'] = str(package_fpath)
+
+        if 'iarpa_measures' in meta:
+            try:
+                iarpa_measures = pd.DataFrame(meta['iarpa_measures'])
+                best_row = iarpa_measures.iloc[iarpa_measures['F1'].argmax()]
+                BAS_metrics = {
+                    'BAS_F1': best_row.F1,
+                    'BAS_thresh': best_row.thresh,
+                    'BAS_rho': best_row.tau,
+                    'BAS_tau': best_row.rho,
+                }
+                row.update(BAS_metrics)
+            except Exception:
+                BAS_metrics = None
 
         mean_rows.append(row)
 
-        if predict_meta is not None:
-            process_props = predict_meta['properties']
-            predict_args = process_props['args']
-            cand_remote = process_props['hostname']
+        if predict_props is not None:
+            cand_remote = predict_props['hostname']
 
-            if 'fit_config' in process_props:
-                fit_config = process_props['fit_config']
+            if 'fit_config' in predict_props:
+                fit_config = predict_props['fit_config']
                 # Add in defaults for new params
                 fit_config.setdefault('normalize_perframe', False)
                 result.meta['fit_config'] = fit_config
@@ -292,6 +417,9 @@ def prepare_results(all_infos, coi_pattern):
                 'salient_AUC': row['salient_AUC'],
                 'salient_APUC': row['salient_APUC'],
             }
+            if BAS_metrics is not None:
+                metrics['BAS_F1'] = BAS_metrics['BAS_F1'],
+
             for class_row in expt_class_rows:
                 metrics[class_row['catname'] + '_AP'] = class_row['AP']
                 metrics[class_row['catname'] + '_AUC'] = class_row['AUC']
@@ -300,6 +428,11 @@ def prepare_results(all_infos, coi_pattern):
             row['channels'] = fit_config['channels']
             row['time_steps'] = fit_config['time_steps']
             row['chip_size'] = fit_config['chip_size']
+
+            row['pred_tta_time'] = pred_config['pred_tta_time']
+            row['pred_tta_fliprot'] = pred_config['pred_tta_fliprot']
+            row['pred_chip_overlap'] = pred_config['pred_chip_overlap']
+
             row['arch_name'] = fit_config['arch_name']
             row['normalize_perframe'] = fit_config.get('normalize_perframe', False)
             row['normalize_inputs'] = fit_config.get('normalize_inputs', False)
@@ -333,8 +466,8 @@ def prepare_results(all_infos, coi_pattern):
             fit_config = fit_config2
             # fit_config = ub.map_vals(smartcast.smartcast, fit_config)
 
-            predict_args  # add predict window overlap
-            # row['train_remote'] = cand_remote
+            params = fit_config.copy()
+            params.update(pred_config)
 
             result_meta = {
                 'title': title,
@@ -342,14 +475,15 @@ def prepare_results(all_infos, coi_pattern):
                 'step': step,
                 'expt_name': expt_name,
                 'pred_fpath': pred_fpath,
-                'model_fpath': model_fpath,
+                'model_fpath': package_fpath,
                 'package_name': package_name,
                 'coi_catnames': ','.join(sorted(coi_catnames)),
+                'resources': resources,
             }
 
             result2 = result_analysis.Result(
                  name=result.meta['title'],
-                 params=fit_config,
+                 params=params,
                  metrics=metrics,
                  meta=result_meta
             )
@@ -361,7 +495,7 @@ def best_candidates(class_rows, mean_rows):
     # TOP CANDIDATE MODELS - FIND TOP K MODELS FOR EVERY METRIC
     K = 7
     max_per_metric_per_expt = 2
-    cand_expt_names = set()
+    all_model_candidates = set()
 
     mean_metrics = [
         'coi_mAP', 'coi_mAUC', 'coi_mAPUC',
@@ -386,7 +520,7 @@ def best_candidates(class_rows, mean_rows):
         top_class_indexes = sorted(set(class_candidate_indexes))
         class_subset = class_df.loc[top_class_indexes]
         subsets['class'] = class_subset = class_subset.sort_values('AP')
-        cand_expt_names.update(set(class_subset['model_fpath'].tolist()))
+        all_model_candidates.update(set(class_subset['model_fpath'].tolist()))
 
     else:
         class_subset = []
@@ -407,7 +541,7 @@ def best_candidates(class_rows, mean_rows):
         top_mean_indexes = sorted(set(mean_candidate_indexes))
         mean_subset = mean_df.loc[top_mean_indexes]
         subsets['mean'] = mean_subset = mean_subset.sort_values('coi_mAPUC')
-        cand_expt_names.update(set(mean_subset['model_fpath'].tolist()))
+        all_model_candidates.update(set(mean_subset['model_fpath'].tolist()))
 
         sc_mean_subset = mean_subset[~mean_subset['coi_mAPUC'].isnull()].sort_values('coi_mAPUC')
         bas_mean_subset = mean_subset[~mean_subset['salient_APUC'].isnull()].sort_values('salient_APUC')
@@ -454,9 +588,28 @@ def best_candidates(class_rows, mean_rows):
     print('sc_pred_candidates = {}'.format(ub.repr2(sc_pred_candidates, nl=1)))
     print('bas_pred_candidates = {}'.format(ub.repr2(bas_pred_candidates, nl=1)))
 
-    cand_expt_names = sorted(cand_expt_names)
-    print('cand_expt_names = {}'.format(ub.repr2(cand_expt_names, nl=1)))
-    return cand_expt_names
+    all_model_candidates = sorted(all_model_candidates)
+    print('all_model_candidates = {}'.format(ub.repr2(all_model_candidates, nl=1)))
+
+    if 0:
+        # import xdev
+        # xdev.embed()
+        # HACK
+        # Check if models have predictions
+        from watch.tasks.fusion.organize import suggest_paths
+        for fpath in all_model_candidates:
+            fpath = ub.Path(fpath)
+            if fpath.exists():
+                print('fpath = {!r}'.format(fpath))
+                idx = fpath.parts.index('packages')
+                prefix = ub.Path(*fpath.parts[:idx])
+                prefix / 'pred'
+                import glob
+                suggestions = suggest_paths('*/*', package_fpath=fpath, as_json=0, pred_cfgstr='*', sidecar2=1)
+                has_preds = list(glob.glob(suggestions['pred_dataset']))
+                if has_preds:
+                    print('has_preds = {!r}'.format(has_preds))
+    return all_model_candidates
 
 
 def shrink_notations(df, drop=0):
@@ -519,10 +672,180 @@ def _oldhack():
     """
 
 
-def gather_measures(cmdline=False, **kwargs):
+def hash_color(data):
+    import distinctipy
+    key_hash = ub.hash_data(data, hasher='blake3')
+    key_tensor = np.frombuffer(memoryview(key_hash.encode()), dtype=np.int32)
+    rng = kwarray.ensure_rng(rng=key_tensor.sum(), api='python')
+    color = distinctipy.get_random_color(rng=rng)
+    return color
+
+
+def plot_summary_over_epochs(y, mean_df, dataset_title_part, fnum=1):
+    import seaborn as sns
+    import kwplot
+    data = mean_df[~mean_df[y].isnull()]
+    if len(data) == 0:
+        return None
+    kwplot.figure(fnum=fnum, doclf=True)
+    ax = sns.lineplot(data=data, x='epoch', y=y, hue='expt_name', marker='o', style='channels')
+    h, ell = ax.get_legend_handles_labels()
+    ax.legend(h, ell, loc='lower right')
+    ax.set_title(f'Pixelwise {y} metrics: {dataset_title_part}')  # todo: add train name
+    # ax.set_title('Pixelwise mAP AC metrics: KR_R001 + KR_R002')
+    fig = ax.figure
+    return fig
+
+
+def plot_individual_class_curves(all_results, dataset_title_part, catname, fnum, metric='ap'):
+    from kwcoco.metrics import drawing
+    import kwplot
+    # max_num_curves = 16
+    # max_num_curves = 32
+    max_num_curves = 24
+    # max_num_curves = 16
+    max_per_expt = None
+    # max_per_expt = 10
+    max_per_expt = 3
+
+    def lookup_metric(x):
+        return x.ovr_measures[catname][metric]
+
+    relevant_results = [r for r in all_results if catname in r.ovr_measures]
+    # ub.group_items(relevant_results)
+
+    if 1:
+        # Take best per experiment
+        groups = ub.group_items(relevant_results, key=lambda x: x.meta['fit_config']['name'])
+        ordered_groups = []
+        for name, group in groups.items():
+            # if not ('v53' in name or 'v54' in name):
+            #     continue
+            ordered_group = sorted(group, key=lookup_metric)[::-1][:max_per_expt]
+            ordered_groups.append(ordered_group)
+        ordered_groups = sorted(ordered_groups, key=lambda g: lookup_metric(g[0]))[::-1]
+        sorted_results = [x for x in ub.flatten(it.zip_longest(*ordered_groups)) if x is not None]
+    else:
+        sorted_results = sorted(relevant_results, key=lookup_metric)[::-1]
+
+    results_to_plot = sorted_results[0:max_num_curves]
+    results_to_plot = sorted(results_to_plot, key=lookup_metric)[::-1]
+    # sorted_results = sorted(relevant_results, key=lookup_metric)[::-1]
+    results_to_plot = sorted_results[0:max_num_curves]
+    if len(results_to_plot) == 0:
+        return None
+    colors = kwplot.Color.distinct(len(results_to_plot))
+    fig = kwplot.figure(fnum=fnum, doclf=True)
+    for idx, result in enumerate(results_to_plot):
+        color = colors[idx]
+        color = [kwplot.Color(color).as01()]
+        measure = result.ovr_measures[catname]
+        if 'prefix' in result.meta:
+            prefix = result.meta['prefix']
+        elif 'package_name' in result.meta:
+            prefix = result.meta['package_name']
+        elif 'title' in result.meta:
+            prefix = result.meta['title']
+        else:
+            prefix = '?label-unknown?'
+
+        color = hash_color(prefix)
+
+        kw = {'fnum': fnum}
+        if metric == 'ap':
+            drawing.draw_prcurve(measure, prefix=prefix, color=color, **kw)
+        elif metric == 'auc':
+            drawing.draw_roc(measure, prefix=prefix, color=color, **kw)
+        else:
+            raise KeyError
+    fig.gca().set_title(f'Comparison of runs {metric}: {catname} -\n{dataset_title_part}')
+    return fig
+
+
+def plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric='ap'):
+    from kwcoco.metrics import drawing
+    import kwplot
+    # max_num_curves = 32
+    max_num_curves = 24
+    # max_num_curves = 16
+    max_per_expt = None
+    # max_per_expt = 10
+    # max_per_expt = 3
+    fig = kwplot.figure(fnum=fnum, doclf=True)
+    relevant_results = [r for r in all_results if r.nocls_measures and r.nocls_measures['nsupport'] > 0]
+
+    for result in relevant_results:
+        if 'prefix' in result.meta:
+            prefix = result.meta['prefix']
+        elif 'package_name' in result.meta:
+            prefix = result.meta['package_name']
+        elif 'title' in result.meta:
+            prefix = result.meta['title']
+        else:
+            prefix = '?label-unknown?'
+        result.meta['prefix'] = prefix
+
+    def lookup_metric(x):
+        return x.nocls_measures[metric]
+
+    if 1:
+        # Take best per experiment
+        groups = ub.group_items(relevant_results, key=lambda x: x.meta['fit_config']['name'])
+
+        if 0:
+            # HACK!!!!
+            groups2 = {}
+            for name in groups.keys():
+                group = groups[name]
+                if not ('v53' in name or 'v54' in name):
+                    continue
+                group2 = []
+                for g in group:
+                    flag1 = 'v53_epoch=15' in g.meta['prefix']
+                    flag2 = 'v54_epoch=13' in g.meta['prefix']
+                    if flag2 or flag1:
+                        group2.append(g)
+                group = group2
+                if group:
+                    groups2[name] = group
+            groups = groups2
+        ordered_groups = []
+        for name, group in groups.items():
+            ordered_group = sorted(group, key=lookup_metric)[::-1][:max_per_expt]
+            ordered_groups.append(ordered_group)
+        ordered_groups = sorted(ordered_groups, key=lambda g: lookup_metric(g[0]))[::-1]
+        sorted_results = [x for x in ub.flatten(it.zip_longest(*ordered_groups)) if x is not None]
+    else:
+        sorted_results = sorted(relevant_results, key=lookup_metric)[::-1]
+
+    results_to_plot = sorted_results[0:max_num_curves]
+    results_to_plot = sorted(results_to_plot, key=lookup_metric)[::-1]
+
+    if len(results_to_plot) == 0:
+        return None
+
+    colors = kwplot.Color.distinct(len(results_to_plot))
+    for idx, result in enumerate(results_to_plot):
+        color = colors[idx]
+        color = [kwplot.Color(color).as01()]
+        measure = result.nocls_measures
+        prefix = result.meta['prefix']
+        color = hash_color(prefix)
+        kw = {'fnum': fnum}
+        if metric == 'ap':
+            drawing.draw_prcurve(measure, prefix=prefix, color=color, **kw)
+        elif metric == 'auc':
+            drawing.draw_roc(measure, prefix=prefix, color=color, **kw)
+        else:
+            raise KeyError
+    fig.gca().set_title(f'Comparison of runs {metric}: Salient -\n{dataset_title_part}')
+    return fig
+
+
+def main(cmdline=False, **kwargs):
     """
     Ignore:
-        from watch.tasks.fusion.gather_results import *  # NOQA
+        from watch.tasks.fusion.aggregate_results import *  # NOQA
         import watch
         dvc_dpath = watch.find_smart_dvc_dpath()
         measure_globstr = 'models/fusion/SC-20201117/*/*/*/eval/curves/measures2.json'
@@ -542,9 +865,8 @@ def gather_measures(cmdline=False, **kwargs):
     from watch.utils import result_analysis
     from watch.utils import util_path
     from watch.utils import util_pattern
-    import matplotlib as mpl
 
-    config = GatherResultsConfig(cmdline=cmdline, data=kwargs)
+    config = AggregateResultsConfig(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.repr2(config.asdict(), nl=1)))
 
     measure_globstr = config['measure_globstr']
@@ -601,7 +923,8 @@ def gather_measures(cmdline=False, **kwargs):
     print(len(measure_fpaths))
     # dataset_to_evals = ub.group_items(eval_dpaths, lambda x: x.parent.name)
 
-    jobs = ub.JobPool('thread', max_workers=10)
+    load_workers = config['io_workers']
+    jobs = ub.JobPool('thread', max_workers=load_workers)
     all_infos = []
     for measure_fpath in ub.ProgIter(measure_fpaths):
         job = jobs.submit(load_measure, measure_fpath)
@@ -727,7 +1050,7 @@ def gather_measures(cmdline=False, **kwargs):
                     ws.column_dimensions[col].width = 26
 
             # from matplotlib.colors import cmap
-            import matplotlib
+            # import matplotlib
             # cmap = matplotlib.cm.get_cmap('bwr')
             # cmap = matplotlib.cm.get_cmap('spectral')
             # metric_format = workbook.add_format({'num_format': '0.4f', 'bold': False})
@@ -796,8 +1119,8 @@ def gather_measures(cmdline=False, **kwargs):
     except Exception as ex:
         print('AnalysisError: ex = {!r}'.format(ex))
         print('Warning: Statistical analysis failed. Probably needs more data.')
-        import xdev
-        xdev.embed()
+        # import xdev
+        # xdev.embed()
     else:
         print('analysis.varied = {}'.format(ub.repr2(analysis.varied, nl=2)))
         if len(analysis.stats_table):
@@ -814,15 +1137,21 @@ def gather_measures(cmdline=False, **kwargs):
 
     if 'coi_mAPUC' in mean_df.columns:
         print('\nSort by coi_mAPUC')
-        print(mean_df.sort_values('coi_mAPUC').to_string())
+        _mean_by_metric = mean_df.sort_values('coi_mAPUC')
+        print(_mean_by_metric)
+        # print(_mean_by_metric.to_string())
 
     if 'salient_APUC' in mean_df.columns:
         print('\nSort by salient_APUC')
-        print(mean_df.sort_values('salient_APUC').to_string())
+        _salient_by_metric = mean_df.sort_values('salient_APUC')
+        print(_salient_by_metric)
+        # print(_salient_by_metric.to_string())
 
     if 'AP' in class_df.columns:
         print('\nClass: Sort by AP')
-        print(class_df[~class_df['AP'].isnull()].sort_values('AP').to_string())
+        _class_by_metric = class_df[~class_df['AP'].isnull()].sort_values('AP')
+        print(_class_by_metric)
+        # print(_class_by_metric.to_string())
 
     if 0:
         if 'AUC' in class_df.columns:
@@ -878,229 +1207,110 @@ def gather_measures(cmdline=False, **kwargs):
     except (ValueError, KeyError):
         pass
 
-    import kwplot
-    sns = kwplot.autosns()  # NOQA
-    plt = kwplot.autoplt()  # NOQA
-
-    dataset_title_part = "-".join(dataset_keys)
-
-    figsize = 'auto'
-    verbose = 1
-    if figsize == 'auto':
-        figsize = (9, 7)
-
-    if len(mean_df):
-        kwplot.figure(fnum=1, doclf=True)
-        y = class_metric
-        fig1 = plot_summary_over_epochs(y, mean_df, dataset_title_part)
-        _writefig(fig1, out_dpath, 'epoch_summary_class.png', figsize, verbose, tight=True)
-
-        kwplot.figure(fnum=2, doclf=True)
-        y = salient_metric
-        fig2 = plot_summary_over_epochs(y, mean_df, dataset_title_part)
-        _writefig(fig2, out_dpath, 'epoch_summary_salient.png', figsize, verbose, tight=True)
-
-        # kwplot.figure(fnum=2, doclf=True)
-        # ax = sns.lineplot(data=mean_df, x='epoch', y='class_mAUC', hue='expt_name', marker='o', style='channels')
-        # ax.set_title('Pixelwise mAUC AC metrics: KR_R001 + KR_R002')
-
-    if len(all_results):
-        fnum = 3
-        catname = 'Active Construction'
-        fig3 = plot_individual_class_curves(all_results, dataset_title_part, catname, fnum, 'ap')
-        _writefig(fig3, out_dpath, f'{catname}_ap_curve.png', figsize, verbose, tight=True)
-
-        fnum = 4
-        catname = 'Site Preparation'
-        fig4: mpl.figure.Figure = plot_individual_class_curves(all_results, dataset_title_part, catname, fnum, 'ap')
-        _writefig(fig4, out_dpath, f'{catname}_ap_curve.png', figsize, verbose, tight=True)
-
-    if len(all_results):
-        fnum = 5
-        fig5 = plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric='ap')
-        _writefig(fig5, out_dpath, 'salient_ap_curve.png', figsize, verbose, tight=True)
-        # print(best_per_expt.sort_values('mAP').to_string())
-
-    # # if 1:
-    #     # fig3.set_size_inches(np.array([6.4, 4.8]) * 2.0)
-    #     # fig3.tight_layout()
-    #     # fig4.set_size_inches(np.array([6.4, 4.8]) * 2.0)
-    #     # fig4.tight_layout()
-    #     # fig5.set_size_inches(np.array([5.4, 2.8]) * 2.0)
-    #     # fig5.tight_layout()
-
     _ = best_candidates(class_rows, mean_rows)
 
-    if config['show']:
-        plt.show()
+    DRAW = 1
+    if DRAW:
+        import kwplot
+        sns = kwplot.autosns()  # NOQA
+        plt = kwplot.autoplt()  # NOQA
 
+        dataset_title_part = "-".join(dataset_keys)
+        figsize = 'auto'
+        verbose = 1
+        if figsize == 'auto':
+            figsize = (9, 7)
 
-def hash_color(data):
-    import distinctipy
-    key_hash = ub.hash_data(data, hasher='blake3')
-    key_tensor = np.frombuffer(memoryview(key_hash.encode()), dtype=np.int32)
-    rng = kwarray.ensure_rng(rng=key_tensor.sum(), api='python')
-    color = distinctipy.get_random_color(rng=rng)
-    return color
+        if len(mean_df):
+            y = class_metric
+            fig1 = plot_summary_over_epochs(y, mean_df, dataset_title_part, fnum=1)
+            if fig1 is not None:
+                _writefig(fig1, out_dpath, 'epoch_summary_class.png', figsize, verbose, tight=True)
 
+            y = salient_metric
+            fig2 = plot_summary_over_epochs(y, mean_df, dataset_title_part, fnum=2)
+            if fig2 is not None:
+                _writefig(fig2, out_dpath, 'epoch_summary_salient.png', figsize, verbose, tight=True)
 
-def plot_summary_over_epochs(y, mean_df, dataset_title_part):
-    import seaborn as sns
-    data = mean_df[~mean_df[y].isnull()]
-    ax = sns.lineplot(data=data, x='epoch', y=y, hue='expt_name', marker='o', style='channels')
-    h, ell = ax.get_legend_handles_labels()
-    ax.legend(h, ell, loc='lower right')
-    ax.set_title(f'Pixelwise {y} metrics: {dataset_title_part}')  # todo: add train name
-    # ax.set_title('Pixelwise mAP AC metrics: KR_R001 + KR_R002')
-    fig = ax.figure
-    return fig
+            # kwplot.figure(fnum=2, doclf=True)
+            # ax = sns.lineplot(data=mean_df, x='epoch', y='class_mAUC', hue='expt_name', marker='o', style='channels')
+            # ax.set_title('Pixelwise mAUC AC metrics: KR_R001 + KR_R002')
 
+        if len(all_results):
+            fnum = 3
+            catname = 'Active Construction'
+            fig3 = plot_individual_class_curves(all_results, dataset_title_part, catname, fnum, 'ap')
+            if fig3 is not None:
+                _writefig(fig3, out_dpath, f'{catname}_ap_curve.png', figsize, verbose, tight=True)
 
-def plot_individual_class_curves(all_results, dataset_title_part, catname, fnum, metric='ap'):
-    from kwcoco.metrics import drawing
-    import kwplot
-    # max_num_curves = 16
-    # max_num_curves = 32
-    max_num_curves = 24
-    # max_num_curves = 16
-    max_per_expt = None
-    # max_per_expt = 10
-    max_per_expt = 3
-    fig = kwplot.figure(fnum=fnum, doclf=True)
+            fnum = 4
+            catname = 'Site Preparation'
+            fig4 = plot_individual_class_curves(all_results, dataset_title_part, catname, fnum, 'ap')
+            if fig4 is not None:
+                _writefig(fig4, out_dpath, f'{catname}_ap_curve.png', figsize, verbose, tight=True)
 
-    def lookup_metric(x):
-        return x.ovr_measures[catname][metric]
-
-    relevant_results = [r for r in all_results if catname in r.ovr_measures]
-    # ub.group_items(relevant_results)
-
-    if 1:
-        # Take best per experiment
-        groups = ub.group_items(relevant_results, key=lambda x: x.meta['fit_config']['name'])
-        ordered_groups = []
-        for name, group in groups.items():
-            # if not ('v53' in name or 'v54' in name):
-            #     continue
-            ordered_group = sorted(group, key=lookup_metric)[::-1][:max_per_expt]
-            ordered_groups.append(ordered_group)
-        ordered_groups = sorted(ordered_groups, key=lambda g: lookup_metric(g[0]))[::-1]
-        import itertools as it
-        sorted_results = [x for x in ub.flatten(it.zip_longest(*ordered_groups)) if x is not None]
-    else:
-        sorted_results = sorted(relevant_results, key=lookup_metric)[::-1]
-
-    results_to_plot = sorted_results[0:max_num_curves]
-    results_to_plot = sorted(results_to_plot, key=lookup_metric)[::-1]
-    # sorted_results = sorted(relevant_results, key=lookup_metric)[::-1]
-    results_to_plot = sorted_results[0:max_num_curves]
-    colors = kwplot.Color.distinct(len(results_to_plot))
-    for idx, result in enumerate(results_to_plot):
-        color = colors[idx]
-        color = [kwplot.Color(color).as01()]
-        measure = result.ovr_measures[catname]
-        if 'package_name' in result.meta:
-            prefix = result.meta['package_name']
-        elif 'title' in result.meta:
-            prefix = result.meta['title']
-        else:
-            prefix = '?label-unknown?'
-
-        color = hash_color(prefix)
-
-        kw = {'fnum': fnum}
-        if metric == 'ap':
-            drawing.draw_prcurve(measure, prefix=prefix, color=color, **kw)
-        elif metric == 'auc':
-            drawing.draw_roc(measure, prefix=prefix, color=color, **kw)
-        else:
-            raise KeyError
-    fig.gca().set_title(f'Comparison of runs {metric}: {catname} -\n{dataset_title_part}')
-    return fig
-
-
-def plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric='ap'):
-    from kwcoco.metrics import drawing
-    import kwplot
-    # max_num_curves = 32
-    max_num_curves = 24
-    # max_num_curves = 16
-    max_per_expt = None
-    # max_per_expt = 10
-    max_per_expt = 3
-    fig = kwplot.figure(fnum=fnum, doclf=True)
-    relevant_results = [r for r in all_results if r.nocls_measures and r.nocls_measures['nsupport'] > 0]
-
-    for result in relevant_results:
-        if 'package_name' in result.meta:
-            prefix = result.meta['package_name']
-        elif 'title' in result.meta:
-            prefix = result.meta['title']
-        else:
-            prefix = '?label-unknown?'
-        result.meta['prefix'] = prefix
-
-    def lookup_metric(x):
-        return x.nocls_measures[metric]
-
-    if 1:
-        # Take best per experiment
-        groups = ub.group_items(relevant_results, key=lambda x: x.meta['fit_config']['name'])
+        if len(all_results):
+            fnum = 5
+            fig5 = plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric='ap')
+            if fig5 is not None:
+                _writefig(fig5, out_dpath, 'salient_ap_curve.png', figsize, verbose, tight=True)
+            # print(best_per_expt.sort_values('mAP').to_string())
 
         if 0:
-            # HACK!!!!
-            groups2 = {}
-            for name in groups.keys():
-                group = groups[name]
-                if not ('v53' in name or 'v54' in name):
-                    continue
-                group2 = []
-                for g in group:
-                    flag1 = 'v53_epoch=15' in g.meta['prefix']
-                    flag2 = 'v54_epoch=13' in g.meta['prefix']
-                    if flag2 or flag1:
-                        group2.append(g)
-                group = group2
-                if group:
-                    groups2[name] = group
-            groups = groups2
-        ordered_groups = []
-        for name, group in groups.items():
-            ordered_group = sorted(group, key=lookup_metric)[::-1][:max_per_expt]
-            ordered_groups.append(ordered_group)
-        ordered_groups = sorted(ordered_groups, key=lambda g: lookup_metric(g[0]))[::-1]
-        import itertools as it
-        sorted_results = [x for x in ub.flatten(it.zip_longest(*ordered_groups)) if x is not None]
-    else:
-        sorted_results = sorted(relevant_results, key=lookup_metric)[::-1]
+            # import xdev
+            # xdev.embed()
+            # Make robust
+            resource_rows = []
+            # Resource scatter plots
+            for r in results_list2:
+                row = r.meta['resources'].copy()
+                row.update(r.params)
+                row['salient_AP'] = r.metrics['salient_AP']
+                resource_rows.append(row)
+            if resource_rows:
+                resource_df = pd.DataFrame(resource_rows)
 
-    results_to_plot = sorted_results[0:max_num_curves]
-    results_to_plot = sorted(results_to_plot, key=lookup_metric)[::-1]
+                fig = kwplot.figure(fnum=6)
+                fig.clf()
+                ax = fig.gca()
+                x = 'total_hours'
+                # x = 'co2_kg'
+                # x = 'vram_gb'
+                # x = 'iters_per_second'
+                y = 'salient_AP'
+                text_column = ['pred_tta_fliprot', 'pred_tta_time', 'pred_chip_overlap']
+                ax = sns.scatterplot(data=resource_df, x=x, y=y, ax=ax)
+                # Add text besides each point
+                data = resource_df
+                for line in range(0, data.shape[0]):
+                    xcoord = data[x][line]
+                    ycoord = data[y][line]
+                    subcol = data[text_column].iloc[line]
+                    text = ub.repr2(subcol.to_dict(), compact=1).replace('pred_', '')
+                    ax.text(xcoord, ycoord,
+                            text, horizontalalignment='left',
+                            size='medium', color='black', weight='semibold')
+                    ax.set_title(f'Time/Accuracy Tradeoffs: {dataset_title_part}')  # todo: add train name
 
-    colors = kwplot.Color.distinct(len(results_to_plot))
-    for idx, result in enumerate(results_to_plot):
-        color = colors[idx]
-        color = [kwplot.Color(color).as01()]
-        measure = result.nocls_measures
-        prefix = result.meta['prefix']
-        color = hash_color(prefix)
-        kw = {'fnum': fnum}
-        if metric == 'ap':
-            drawing.draw_prcurve(measure, prefix=prefix, color=color, **kw)
-        elif metric == 'auc':
-            drawing.draw_roc(measure, prefix=prefix, color=color, **kw)
-        else:
-            raise KeyError
-    fig.gca().set_title(f'Comparison of runs {metric}: Salient -\n{dataset_title_part}')
-    return fig
+        # # if 1:
+        #     # fig3.set_size_inches(np.array([6.4, 4.8]) * 2.0)
+        #     # fig3.tight_layout()
+        #     # fig4.set_size_inches(np.array([6.4, 4.8]) * 2.0)
+        #     # fig4.tight_layout()
+        #     # fig5.set_size_inches(np.array([5.4, 2.8]) * 2.0)
+        #     # fig5.tight_layout()
+
+        if config['show']:
+            plt.show()
 
 
 if __name__ == '__main__':
     """
     CommandLine:
-        # DVC_DPATH=$(python -m watch.cli.find_dvc)
+        # DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
         MEASURE_GLOBSTR=$DVC_DPATH/models/fusion/SC-20201117/*_TA1*/*/*/eval/curves/measures2.json
-        python -m watch.tasks.fusion.gather_results \
+        python -m watch.tasks.fusion.aggregate_results \
             --measure_globstr="$MEASURE_GLOBSTR" \
             --out_dpath="$DVC_DPATH/agg_results"
             --dset_group_key="Drop2-Aligned-TA1-2022-01_*.kwcoco"
@@ -1108,9 +1318,9 @@ if __name__ == '__main__':
 
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
         cd $DVC_DPATH/models/fusion/SC-20201117
-        python -m watch.tasks.fusion.gather_results \
+        python -m watch.tasks.fusion.aggregate_results \
             --measure_globstr="*/*/*/eval/curves/measures2.json" \
             --out_dpath="$DVC_DPATH/agg_results" \
             --dset_group_key="*" --show=True
     """
-    gather_measures(cmdline=True)
+    main(cmdline=True)

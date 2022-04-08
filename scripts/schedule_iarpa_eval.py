@@ -61,7 +61,6 @@ NAMEK_TO_EVALUATE_SC = [
 ]
 
 
-
 BEST_MODELS = [
 
     '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_smt_it_stm_p8_TUNE_L1_RAW_v58/pred_BAS_smt_it_stm_p8_TUNE_L1_RAW_v58_epoch=3-step=81135/Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco/pred.kwcoco.json',

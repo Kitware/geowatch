@@ -655,6 +655,12 @@ def main(args):
         To regenerate a region, delete or edit the region file before
         rerunning this script.
         '''))
+    required_args.add_argument('--out_fpath',
+                               help=ub.paragraph('''
+        If specified, this will write a json file containing a reference
+        to all of the site files written to the "out_dir". This file
+        serves as "proof" the tracks have been computed.
+        '''))
     convenience_args = parser.add_argument_group('convenience')
     convenience_args.add_argument(
         '--in_file_gt', help='If available, ground truth KWCOCO to visualize')
@@ -713,6 +719,12 @@ def main(args):
         or a region_model that includes site summaries. Each summary found will
         be added to in_file as 'Site Boundary' annotations.
         '''))
+    behavior_args.add_argument('--clear_annots',
+                               action='store_true',
+                               help=ub.paragraph('''
+        Clears all annotations before running tracking, so it starts
+        from a clean slate.
+        '''))
     # call run_metrics_framework as an optional subcommand
     # https://stackoverflow.com/a/4575792
     subparsers = parser.add_subparsers(dest='subparser_name')
@@ -725,11 +737,16 @@ def main(args):
     score_parser.add_argument('score_args', nargs=argparse.REMAINDER)
     args = parser.parse_args(args)
 
+    print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
+
+    coco_fpath = ub.Path(args.in_file)
+
     # set the out dir
-    out_dir = (args.out_dir if args.out_dir is not None else os.path.join(
-        os.path.dirname(args.in_file),
-        'regions' if args.bas_mode else 'sites'))
-    os.makedirs(out_dir, exist_ok=True)
+    if args.out_dir is None:
+        out_dir = coco_fpath.parent / ('regions' if args.bas_mode else 'sites')
+    else:
+        out_dir = ub.Path(args.out_dir)
+    out_dir.ensuredir()
 
     # load the track kwargs
     if os.path.isfile(args.track_kwargs):
@@ -739,7 +756,7 @@ def main(args):
     assert isinstance(track_kwargs, dict)
 
     # Read the kwcoco file
-    coco_dset = kwcoco.CocoDataset.coerce(args.in_file)
+    coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
     # HACK read auxiliary kwcoco files
     # these aren't used for core tracking algos, supported for legacy
     if args.in_file_gt is not None:
@@ -752,6 +769,38 @@ def main(args):
                 track_kwargs[k] = kwcoco.CocoDataset.coerce(v)
             except json.JSONDecodeError:  # TODO make this smarter
                 pass
+
+    if args.clear_annots:
+        coco_dset.clear_annotations()
+
+    tracking_output = {
+        'type': 'tracking_result',
+        'info': [],
+        'files': [],
+    }
+    from kwcoco.util import util_json
+    import socket
+    # Args will be serailized in kwcoco, so make sure it can be coerced to json
+    jsonified_args = util_json.ensure_json_serializable(args.__dict__)
+    walker = ub.IndexableWalker(jsonified_args)
+    for problem in util_json.find_json_unserializable(jsonified_args):
+        bad_data = problem['data']
+        walker[problem['loc']] = str(bad_data)
+    start_timestamp = ub.timestamp()
+    info = tracking_output['info']
+    info.append({
+        'type': 'process',
+        'properties': {
+            'name': 'watch.cli.kwcoco_to_geojson',
+            'args': jsonified_args,
+            'hostname': socket.gethostname(),
+            'cwd': os.getcwd(),
+            'userhome': ub.userhome(),
+            'timestamp': start_timestamp,
+            # TODO: could pass the info in from the input kwcoco file as well
+        }
+    })
+    fpaths = tracking_output['files']
 
     # Pick a track_fn
     # HACK remove potentially conflicting annotations as well
@@ -808,19 +857,22 @@ def main(args):
                                                          **track_kwargs)
 
     if args.write_in_file:
-        coco_dset.dump(args.in_file, indent=2)
+        coco_dset.dump(coco_fpath, indent=2)
     # Convert kwcoco to sites
     sites = convert_kwcoco_to_iarpa(coco_dset,
                                     args.region_id,
                                     as_summary=args.bas_mode)
 
+    import safer
+
     verbose = 1
-    if args.bas_mode:  # write sites to region models on disk
+    if args.bas_mode:
+        # write sites to region models on disk
         for region_id, site_summaries in ub.group_items(
                 sites,
                 lambda site: site['properties'].pop('region_id')).items():
-            region_fpath = os.path.join(out_dir, region_id + '.geojson')
-            if os.path.isfile(region_fpath):
+            region_fpath = out_dir / (region_id + '.geojson')
+            if region_fpath.is_file():
                 with open(region_fpath, 'r') as f:
                     region = geojson.load(f)
                 if verbose:
@@ -833,19 +885,19 @@ def main(args):
             for site_summary in site_summaries:
                 assert site_summary['properties']['type'] == 'site_summary'
                 region['features'].append(site_summary)
-            with open(region_fpath, 'w') as f:
+
+            fpaths.append(os.fspath(region_fpath))
+            with safer.open(region_fpath, 'w', temp_file=True) as f:
                 geojson.dump(region, f, indent=2)
 
-    else:  # write sites to disk
+    else:
+        # write sites to disk
         for site in ub.ProgIter(sites, desc='writing sites', verbose=verbose):
             site_props = site['features'][0]['properties']
             assert site_props['type'] == 'site'
-            site_fpath = os.path.join(out_dir,
-                                      site_props['site_id'] + '.geojson')
-            # if verbose:
-            #     print(f'writing site {site_props["site_id"]} to new '
-            #           f'site {site_fpath}')
-            with open(os.path.join(site_fpath), 'w') as f:
+            site_fpath = out_dir / (site_props['site_id'] + '.geojson')
+            fpaths.append(os.fspath(site_fpath))
+            with safer.open(site_fpath, 'w', temp_file=True) as f:
                 geojson.dump(site, f, indent=2)
 
     if args.subparser_name == 'score':
@@ -858,6 +910,24 @@ def main(args):
             main([json.dumps(site) for site in sites] + args.score_args)
         else:
             print('no sites to score!')
+
+    # Measure how long tracking takes
+    info.append({
+        'type': 'measure',
+        'properties': {
+            'start_timestamp': start_timestamp,
+            'end_timestamp': ub.timestamp(),
+        }
+    })
+
+    out_dir = ub.Path(out_dir)
+    if args.out_fpath is not None:
+        out_fpath = ub.Path(args.out_fpath)
+        print(f'Write track result to {out_fpath}')
+        with safer.open(out_fpath, 'w', temp_file=True) as file:
+            json.dump(tracking_output, file, indent='    ')
+    else:
+        print(f'No single file output. Results are written to {out_dir}')
 
 
 def demo(coco_dset,
@@ -929,4 +999,4 @@ def demo(coco_dset,
 
 
 if __name__ == '__main__':
-    sys.exit(main(sys.argv[1:]))
+    main(sys.argv[1:])

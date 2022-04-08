@@ -57,7 +57,18 @@ PRODUCTION_MODELS = [
         'train_dataset': 'Drop2-Aligned-L1-2022-01/combo_L_nowv.kwcoco.json',
         'sensors': ['L8', 'S2'],
         'input_channels': 'blue|green|red|nir|swir16|swir22,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field',
-    }
+    },
+
+    {
+        'name': 'Drop3_SpotCheck_V323_epoch=18-step=12976',
+        'file_name': 'models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt',
+        'task': 'BAS',
+        'input_channels': 'blue|green|red|nir|swir16|swir22',
+        'train_dataset': 'Aligned-Drop3-TA1-2022-03-10/data_nowv_train.kwcoco.json',
+        'sensors': ['L8', 'S2'],
+    },
+
+
 ]
 
 

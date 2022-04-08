@@ -8,7 +8,7 @@ SeeAlso:
 "
 
 data_splits(){
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
     python -m watch.cli.prepare_splits \
         --base_fpath="$DVC_DPATH/$DATASET_CODE/combo_LM.kwcoco.json" \
@@ -18,8 +18,8 @@ data_splits(){
 
 prep_teamfeat_drop2(){
     # Team Features on drop2
-    #DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="ssd")
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    #DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware="ssd")
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
     python -m watch.cli.prepare_teamfeats \
         --base_fpath="$DVC_DPATH/$DATASET_CODE/data.kwcoco.json" \
@@ -38,8 +38,10 @@ prep_teamfeat_drop2(){
 
 gather-checkpoints-repackage(){
 
-    # For Uncropped
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    #################################
+    # Repackage and commit new models
+    #################################
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -48,67 +50,110 @@ gather-checkpoints-repackage(){
         --storage_dpath="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages" \
         --train_dpath="$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/runs/*/lightning_logs" \
         --push_jobs=8 \
-        --mode=interact
+        --mode=commit
 }
 
 
 schedule-prediction-and-evlauation(){
 
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     cd "$DVC_DPATH" 
+    git pull
+    #################################
+    # Pull new models on eval machine
+    #################################
+
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    cd "$DVC_DPATH" 
+    git pull
     dvc pull -r aws -R models/fusion/eval3_candidates/packages
 
+    #################################
+    # Run Prediction & Evaluation
+    #################################
     # TODO: 
-    # - [ ] Argument for test time augmentation.
+    # - [X] Argument for test time augmentation.
     # - [ ] Argument general predict parameter grid
     # - [ ] Can a task request that slurm only schedule it on a specific GPU?
     # Note: change backend to tmux if slurm is not installed
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+    # The gpus flag does not work for the slurm backend. (Help wanted)
+    TMUX_GPUS="0,1"
+    #TMUX_GPUS="1,"
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0,1" \
-            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*V3*/*.pt" \
+            --gpus="$TMUX_GPUS" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*V3*.pt" \
             --test_dataset="$VALI_FPATH" \
-            --run=1 --skip_existing=True --backend=slurm
+            --run=1 --skip_existing=True --backend=tmux
 
+    TMUX_GPUS="0,1,2,3"
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="$TMUX_GPUS" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*xfer*V3*.pt" \
+            --test_dataset="$VALI_FPATH" \
+            --run=1 --skip_existing=True --backend=tmux
+
+    TMUX_GPUS="0,1,2,3"
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="$TMUX_GPUS" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*scratch*V3*.pt" \
+            --test_dataset="$VALI_FPATH" \
+            --run=1 --skip_existing=True --backend=tmux
+
+    # Iarpa BAS metrics only on existing predictions
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="$TMUX_GPUS" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*V3*.pt" \
+            --test_dataset="$VALI_FPATH" \
+            --skip_existing=True \
+            --enable_pred=0 \
+            --enable_eval=0 \
+            --enable_iarpa_eval=0 \
+            --backend=tmux --run=1 
+
+    #################################
+    # Commit Evaluation Results
+    #################################
     # Be sure to DVC add the eval results after!
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     cd "$DVC_DPATH" 
+    # Check for 
     ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
-    du -shL models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json | sort -h
+    # Check for uncommited evaluations
+    # shellcheck disable=SC2010
+    ls -al models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json | grep -v ' \-> '
+    #du -shL models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json | sort -h
     (cd "$DVC_DPATH" && dvc add models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json)
+    git commit -am "add eval from $HOSTNAME"
+    git push
     (cd "$DVC_DPATH" && dvc push -r aws -R models/fusion/eval3_candidates/eval)
 
-
-    # On other machines
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
-    cd "$DVC_DPATH" 
-    dvc pull -r aws models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
-}
-
-
-schedule-prediction-and-evaluate-team-models(){
-
-    # For Uncropped
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
-    DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
-    EXPT_GROUP_CODE=eval3_candidates
-    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
-    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0,1" \
-            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/DZYNE*/*.pt" \
-            --test_dataset="$VALI_FPATH" \
-            --run=0 --skip_existing=True --backend=serial
+    # For SSD drives
+    (cd "$DVC_DPATH" && dvc push -r local_store -R models/fusion/eval3_candidates/eval)
 }
 
 
 aggregate-results(){
 
-    DVC_DPATH=$(WATCH_HACK_IMPORT_ORDER=none python -m watch.cli.find_dvc)
+
+    #################################
+    # Aggregate Results
+    #################################
+    # On other machines
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
+    cd "$DVC_DPATH" 
+    git pull
+    dvc checkout aws models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+    cd "$DVC_DPATH" 
+    git pull
+    dvc pull -r horologic models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
+
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     EXPT_GROUP_CODE=eval3_candidates
     #EXPT_NAME_PAT="*"
     EXPT_NAME_PAT="*"
@@ -120,18 +165,91 @@ aggregate-results(){
     PRED_CFG_PAT="*"
     MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json
 
-    python -m watch.tasks.fusion.gather_results \
+    python -m watch.tasks.fusion.aggregate_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
-        --dset_group_key="*Drop3*" --show=True \
+        --dset_group_key="*Drop3*combo_LM_nowv_vali*" --show=True \
         --classes_of_interest "Site Preparation" "Active Construction"
 }
+
+
+schedule-prediction-and-evaluate-team-models(){
+    # For Uncropped
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+    EXPT_GROUP_CODE=eval3_candidates
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="0,1" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/DZYNE*/*.pt" \
+            --test_dataset="$VALI_FPATH" \
+            --run=0 --skip_existing=True --backend=serial
+}
+
+fix-bad-commit(){
+
+pyblock "
+
+import glob
+eval_fpaths = list(glob.glob('models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json'))
+fixme = []
+for eval_fpath in eval_fpaths:
+    eval_fpath = ub.Path(eval_fpath)
+    eval_dvc_fpath = eval_fpath.augment(tail='.dvc')
+    if eval_dvc_fpath.exists():
+        text = eval_dvc_fpath.read_text()
+        if '=====' in text:
+            fixme.append(eval_fpath)
+            print(text)
+
+from watch.utils.simple_dvc import SimpleDVC
+dvc = SimpleDVC('.')
+dvc.unprotect(fixme)
+
+for p in fixme:
+    p.augment(tail='.dvc').delete()
+
+"
+
+}
+
+
+singleton_commands(){
+
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    MODEL_FPATH=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_bells_mlp_V305/Drop3_bells_mlp_V305_epoch=5-step=3071-v1.pt
+    DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+
+    #PRED_FPATH=$HOME/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/Drop3_bells_mlp_V305/pred_Drop3_bells_mlp_V305_epoch=5-step=3071-v1/Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json
+
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="$TMUX_GPUS" \
+            --model_globstr="$MODEL_FPATH" \
+            --test_dataset="$VALI_FPATH" \
+            --skip_existing=0 \
+            --enable_pred=0 \
+            --enable_eval=1 \
+            --enable_eval=1 \
+            --enable_track=redo \
+            --enable_iarpa_eval=redo \
+            --backend=serial --run=0
+
+
+    # Find all models that have predictions
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    cd "$DVC_DPATH"
+    ls models/fusion/eval3_candidates/pred/*/*/*/*/pred.kwcoco.json
+}
+
 
 
 
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -200,7 +318,7 @@ python -m watch.tasks.fusion.fit \
 # ------------------
 
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -224,7 +342,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_BOTH_V301
@@ -239,7 +357,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_BOTH_V302
@@ -254,7 +372,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=2
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_BAS_V303
@@ -269,7 +387,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=3
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_SC_V304
@@ -287,7 +405,7 @@ python -m watch.tasks.fusion.fit \
 # -------------------
 
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -342,7 +460,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_bells_mlp_V305
@@ -354,7 +472,7 @@ python -m watch.tasks.fusion.fit \
     --decoder=mlp 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_bells_seg_V306
@@ -371,7 +489,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -427,7 +545,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
 EXPERIMENT_NAME=Drop3_bells_raw_mlp_V307
@@ -439,7 +557,7 @@ python -m watch.tasks.fusion.fit \
     --decoder=mlp 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_bells_raw_seg_V308
@@ -451,7 +569,7 @@ python -m watch.tasks.fusion.fit \
     --decoder=segmenter 
 
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
 EXPERIMENT_NAME=Drop3_bells_raw_mlp_V307-a
@@ -463,7 +581,7 @@ python -m watch.tasks.fusion.fit \
     --decoder=mlp 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_bells_raw_seg_V308-a
@@ -479,7 +597,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_BAS_V304-a
@@ -493,7 +611,7 @@ python -m watch.tasks.fusion.fit \
     --global_saliency_weight=1.00 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_BAS_V304-b
@@ -507,7 +625,7 @@ python -m watch.tasks.fusion.fit \
     --global_saliency_weight=1.00 
 
 export CUDA_VISIBLE_DEVICES=2
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_BAS_V304-c
@@ -521,7 +639,7 @@ python -m watch.tasks.fusion.fit \
     --global_saliency_weight=1.00 
 
 export CUDA_VISIBLE_DEVICES=3
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_BAS_V304-d
@@ -540,7 +658,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -570,7 +688,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -613,7 +731,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -655,7 +773,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -697,7 +815,7 @@ python -m watch.tasks.fusion.fit \
 # --------------------
 export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -737,7 +855,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -778,7 +896,7 @@ python -m watch.tasks.fusion.fit \
 # horologic abalate2
 # ------------------
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_BOTH_V315
@@ -793,7 +911,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_BOTH_V316
@@ -809,7 +927,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=2
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_BAS_V317
@@ -825,7 +943,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=3
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_SC_V318
@@ -844,7 +962,7 @@ python -m watch.tasks.fusion.fit \
 # --------------------
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -887,7 +1005,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -929,9 +1047,10 @@ python -m watch.tasks.fusion.fit \
     --modulate_class_weights="positive*0,negative*0,background*1.0,No Activity*0.0,Post Construction*0.1,Site Preparation*2.0" 
 
 
+INITIAL_STATE_BASELINE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/BASELINE_EXPERIMENT_V001/BASELINE_EXPERIMENT_V001_epoch=20-step=109829-v1.pt
+
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -974,4 +1093,334 @@ python -m watch.tasks.fusion.fit \
     --normalize_inputs=2048 \
     --stream_channels=16 \
     --temporal_dropout=0.5 \
-    --init="$HOME"/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/packages/BASELINE_EXPERIMENT_V001/BASELINE_EXPERIMENT_V001_epoch=20-step=109829-v1.pt
+    --init="$INITIAL_STATE_BASELINE"
+
+
+# horologic 2022-04-05
+# --------------------
+
+
+INITIAL_STATE_BASELINE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/BASELINE_EXPERIMENT_V001/BASELINE_EXPERIMENT_V001_epoch=20-step=109829-v1.pt
+INITIAL_STATE_V323="$DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+
+export CUDA_VISIBLE_DEVICES=0
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+INITIAL_STATE_V323="$DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+EXPERIMENT_NAME=Drop3_TeamFeats_LM_xfer323_V324
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --channels="$CHANNELS" \
+    --class_loss='focal' \
+    --saliency_loss='focal' \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.00 \
+    --global_saliency_weight=1.00 \
+    --learning_rate=1e-4 \
+    --weight_decay=1e-5 \
+    --accumulate_grad_batches=4 \
+    --max_epochs=160 \
+    --patience=160 \
+    --num_workers=0 \
+    --dist_weights=True \
+    --chip_size=256 \
+    --time_steps=11 \
+    --channels="$CHANNELS" \
+    --time_sampling=soft2+distribute \
+    --time_span=6m \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5m \
+    --num_draw=4 \
+    --use_centered_positives=False \
+    --normalize_inputs=2048 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --init="$INITIAL_STATE_V323" 
+
+
+export CUDA_VISIBLE_DEVICES=1
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+EXPERIMENT_NAME=Drop3_TeamFeats_LM_xfer323_V325
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+INITIAL_STATE_V323="$DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --channels="$CHANNELS" \
+    --init="$INITIAL_STATE" \
+    --class_loss='focal' \
+    --saliency_loss='dicefocal' \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.00 \
+    --global_saliency_weight=1.00 \
+    --learning_rate=1e-4 \
+    --weight_decay=1e-5 \
+    --accumulate_grad_batches=4 \
+    --max_epochs=160 \
+    --chip_size=288 \
+    --patience=160 \
+    --num_workers=4 \
+    --dist_weights=0 \
+    --time_steps=9 \
+    --channels="$CHANNELS" \
+    --time_sampling=soft2+distribute \
+    --time_span=6m \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5m \
+    --num_draw=4 \
+    --use_centered_positives=True \
+    --normalize_inputs=2048 \
+    --stream_channels=16 \
+    --multimodal_reduce=mean \
+    --temporal_dropout=0.5 \
+    --init="$INITIAL_STATE_V323" 
+
+
+export CUDA_VISIBLE_DEVICES=2
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+CHANNELS="matseg_0|matseg_1|matseg_2|matseg_3,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+EXPERIMENT_NAME=Drop3_TeamFeats_LM_scratch_V326
+INITIAL_STATE_BASELINE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/BASELINE_EXPERIMENT_V001/BASELINE_EXPERIMENT_V001_epoch=20-step=109829-v1.pt
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --channels="$CHANNELS" \
+    --class_loss='focal' \
+    --saliency_loss='focal' \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.00 \
+    --global_saliency_weight=1.00 \
+    --learning_rate=1e-4 \
+    --weight_decay=1e-5 \
+    --accumulate_grad_batches=4 \
+    --max_epochs=160 \
+    --patience=160 \
+    --num_workers=4 \
+    --dist_weights=True \
+    --chip_size=288 \
+    --time_steps=11 \
+    --channels="$CHANNELS" \
+    --time_sampling=soft2+distribute \
+    --time_span=6m \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5m \
+    --num_draw=4 \
+    --use_centered_positives=True \
+    --normalize_inputs=8 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --init="$INITIAL_STATE_BASELINE" 
+
+export CUDA_VISIBLE_DEVICES=3
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+INITIAL_STATE_BASELINE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/BASELINE_EXPERIMENT_V001/BASELINE_EXPERIMENT_V001_epoch=20-step=109829-v1.pt
+CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+EXPERIMENT_NAME=Drop3_TeamFeats_LM_xfer1_v328
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --channels="$CHANNELS" \
+    --class_loss='focal' \
+    --saliency_loss='focal' \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.00 \
+    --global_saliency_weight=1.00 \
+    --learning_rate=1e-4 \
+    --weight_decay=1e-5 \
+    --accumulate_grad_batches=4 \
+    --max_epochs=160 \
+    --patience=160 \
+    --num_workers=0 \
+    --dist_weights=True \
+    --chip_size=224 \
+    --time_steps=15 \
+    --channels="$CHANNELS" \
+    --time_sampling=soft2+distribute \
+    --time_span=6m \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5m \
+    --num_draw=4 \
+    --use_centered_positives=False \
+    --normalize_inputs=2048 \
+    --stream_channels=64 \
+    --temporal_dropout=0.5 \
+    --init="$INITIAL_STATE_BASELINE" 
+
+
+
+# toothbrush 2022-04-05
+# --------------------
+
+
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+
+export CUDA_VISIBLE_DEVICES=1
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+EXPERIMENT_NAME=Drop3_TeamFeats_LM_xfer1_V327
+INITIAL_STATE_BASELINE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/BASELINE_EXPERIMENT_V001/BASELINE_EXPERIMENT_V001_epoch=20-step=109829-v1.pt
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --channels="$CHANNELS" \
+    --init="$INITIAL_STATE" \
+    --class_loss='focal' \
+    --saliency_loss='dicefocal' \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.001 \
+    --global_saliency_weight=1.00 \
+    --learning_rate=1e-4 \
+    --weight_decay=1e-5 \
+    --accumulate_grad_batches=4 \
+    --neg_to_pos_ratio=0.2 \
+    --max_epochs=160 \
+    --patience=160 \
+    --chip_size=256 \
+    --num_workers=4 \
+    --dist_weights=True \
+    --time_steps=11 \
+    --channels="$CHANNELS" \
+    --time_sampling=soft2+distribute \
+    --time_span=6m \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5m \
+    --num_draw=4 \
+    --use_centered_positives=True \
+    --normalize_inputs=2048 \
+    --stream_channels=16 \
+    --multimodal_reduce=mean \
+    --temporal_dropout=0.2 \
+    --init="$INITIAL_STATE_BASELINE" 
+
+
+export CUDA_VISIBLE_DEVICES=0
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+EXPERIMENT_NAME=Drop3_TeamFeats_LM_xfer323_V327
+INITIAL_STATE_V323="$DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --channels="$CHANNELS" \
+    --init="$INITIAL_STATE" \
+    --class_loss='focal' \
+    --saliency_loss='dicefocal' \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.003 \
+    --global_saliency_weight=1.00 \
+    --learning_rate=4e-4 \
+    --weight_decay=1e-5 \
+    --accumulate_grad_batches=4 \
+    --max_epoch_length=4096 \
+    --max_epochs=160 \
+    --patience=160 \
+    --num_workers=4 \
+    --dist_weights=True \
+    --chip_size=288 \
+    --time_steps=10 \
+    --channels="$CHANNELS" \
+    --time_sampling=soft2+distribute \
+    --time_span=3m \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --accumulate_grad_batches=4 \
+    --draw_interval=5m \
+    --num_draw=4 \
+    --use_centered_positives=True \
+    --normalize_inputs=2048 \
+    --stream_channels=32 \
+    --multimodal_reduce=mean \
+    --temporal_dropout=0.2 \
+    --init="$INITIAL_STATE_V323" 
+
+# next is 329

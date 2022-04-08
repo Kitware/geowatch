@@ -1,10 +1,7 @@
-import itertools
 import kwcoco
 import kwimage
-import shapely
-import shapely.ops
+import warnings
 from os.path import join
-from progiter import ProgIter
 import numpy as np
 import ubelt as ub
 
@@ -23,49 +20,23 @@ def dedupe_annots(coco_dset):
     '''
     Check for annotations with different aids that are the same geometry
     '''
-    @ub.memoize
-    def geom(ann):
-        return kwimage.Segmentation.coerce(
-            ann['segmentation']).data.to_shapely().buffer(0)
+    annots = coco_dset.annots()
 
-    if 0:
-        # TODO is there already some check like this in dset.add_annotation()?
-        def _eq(ann1, ann2):
-            eq_keys = ['image_id', 'category_id', 'track_id']
-            if any(ann1.get(k) != ann2.get(k) for k in eq_keys):
-                return False
-            if ann1['segmentation'] == ann2['segmentation']:
-                return True
-            return geom(ann1).almost_equals(geom(ann2))
-
-        # this task is finding an equivalence partition of anns using _eq,
-        # which is O(n^2).
-        # if there were a key function, it'd be O(n) using groupby, but
-        # almost_equals() makes this difficult
-        def equivalence_partition(aids):
-            groups = dict()
-            for aid in set(aids):
-                partitioned = False
-                for repr_aid in groups:
-                    if _eq(coco_dset.anns[aid], coco_dset.anns[repr_aid]):
-                        groups[repr_aid].add(aid)
-                        partitioned = True
-                        break
-                if not partitioned:
-                    groups[aid] = set()
-
-        aids_to_remove = itertools.chain.from_iterable(
-            equivalence_partition(coco_dset.anns))
-    else:
-        annots = coco_dset.annots()
-        eq_keys = ['image_id', 'category_id', 'track_id', 'segmentation']
-        groups_dict = ub.group_items(
-            annots.aids,
-            zip(*(map(str, annots.get(k, None)) for k in eq_keys)))
-        aids_to_remove = itertools.chain.from_iterable(
-            aids[1:] for aids in groups_dict.values())
-
-    coco_dset.remove_annotations(aids_to_remove)
+    # NOTE: Using segmentations to dedup with segmentation data is fragile
+    eq_keys = ['image_id', 'category_id', 'track_id', 'segmentation']
+    eq_vals = annots.lookup(eq_keys, None)
+    group_keys = [str(row_vals) for row_vals in zip(*eq_vals.values())]
+    duplicates = ub.find_duplicates(group_keys)
+    if duplicates:
+        dup_idxs = list(ub.flatten([idxs[1:] for idxs in duplicates.values()]))
+        warnings.warn(ub.paragraph(
+            f'''
+            There were {len(duplicates)} annotation groups
+            with {dup_idxs} duplicate annotations based on
+            group keys {eq_keys}
+            '''))
+        aids_to_remove = list(annots.take(dup_idxs))
+        coco_dset.remove_annotations(aids_to_remove, verbose=1)
 
     return coco_dset
 
@@ -89,42 +60,38 @@ def add_geos(coco_dset, overwrite, max_workers=16):
         if None not in coco_dset.annots().get('segmentation_geos', None):
             return coco_dset
 
-    def annotated_band(img):
-        # this field picks out the (probable; heuristic-based)
-        # band that the annotation was actually done on
-        if img['file_name'] is not None:
-            return img
-        aux_ix = img.get('aux_annotated_candidate', 0)
-        if aux_ix is None:
-            aux_ix = 0
-        return img['auxiliary'][aux_ix]
-
-    def fpath(img):
-        return join(coco_dset.bundle_dpath, annotated_band(img)['file_name'])
-
-    # parallelize grabbing img CRS info
-    executor = ub.Executor('thread', max_workers)
-    # optimization: filter to only images containing at least 1 annotation
-    images = coco_dset.images()
-
     def needs_geos(ann):
         return 'segmentation' in ann and (overwrite or
                                           ('segmentation_geos' not in ann))
 
-    annotated_imgs = images.compress(
-        np.array(
-            [any(map(needs_geos, annots.objs)) for annots in images.annots]))
-    infos = {
-        img['id']: executor.submit(geotiff_crs_info, fpath(img))
-        for img in annotated_imgs.objs
-    }
-    for gid, img in ProgIter(zip(annotated_imgs.gids, annotated_imgs.objs),
-                             desc='precomputing geo-segmentations'):
+    # find images containing at least 1 annotation that needs geo coords
+    annots = coco_dset.annots()
+    annots_to_fix = annots.compress(map(needs_geos, annots.objs))
+    gid_to_aids = ub.group_items(annots_to_fix, annots_to_fix.lookup('image_id'))
+    images_to_fix = coco_dset.images(list(gid_to_aids.keys()))
 
-        # vectorize over anns; this does some unnecessary computation
-        annots = coco_dset.annots(gid=gid)
-        assert len(annots) > 0, f'image {gid} should have annotations!'
-        info = infos[gid].result()
+    # parallelize grabbing img CRS info
+    executor = ub.JobPool('thread', max_workers)
+
+    for gid in ub.ProgIter(images_to_fix, desc='submit crs jobs'):
+        coco_img: kwcoco.CocoImage = coco_dset.coco_image(gid)
+        # Hack: find an asset likely to have geoinfo
+        aux = coco_img.find_asset_obj('red|green|blue|panchromatic|pan')
+        if aux is None:
+            aux = coco_img.primary_asset()
+        fpath = join(coco_img.bundle_dpath, aux['file_name'])
+        job = executor.submit(geotiff_crs_info, fpath)
+        job.gid = gid
+        job.aux = aux
+
+    for job in executor.as_completed(desc='precomputing geo-segmentations'):
+        info = job.result()
+        gid = job.gid
+        aux = job.aux
+        aids = gid_to_aids[gid]
+
+        anns = coco_dset.annots(aids=aids).objs
+        assert len(anns) > 0, f'image {gid} should have annotations!'
         '''
         # if this was encoded into the image dict ok, we can just use it there
         # unfortunately info is still needed because wld_to_wgs84 may
@@ -132,22 +99,24 @@ def add_geos(coco_dset, overwrite, max_workers=16):
         assert np.allclose(info['pxl_to_wld'], np.array(kwimage.Affine.coerce(
             annotated_band(img)['wld_to_pxl']).inv()))
         '''
-        img_anns = annots.detections.data['segmentations']
-        assert len(img_anns) == len(annots), 'TODO skip anns w/o segmentations'
+        img_anns = kwimage.SegmentationList([
+            kwimage.Segmentation.coerce(ann['segmentation'])
+            for ann in anns])
+
         warp_aux_to_img = kwimage.Affine.coerce(
-            annotated_band(img).get('warp_aux_to_img', None)).inv()
+            aux.get('warp_aux_to_img', None)).inv()
         aux_anns = img_anns.warp(warp_aux_to_img)
         wld_anns = aux_anns.warp(info['pxl_to_wld'])
         wgs_anns = wld_anns.warp(info['wld_to_wgs84'])
-        geojson_anns = [poly.swap_axes().to_geojson() for poly in wgs_anns]
+        # Flip into traditional CRS84 coordinates if we need to
+        if info['wgs84_crs_info']['axis_mapping'] == 'OAMS_AUTHORITY_COMPLIANT':
+            crs84_anns = [poly.swap_axes() for poly in wgs_anns]
+        else:
+            crs84_anns = wgs_anns
+        geojson_anns = [poly.to_geojson() for poly in crs84_anns]
 
-        for aid, geojson_ann in zip(annots.aids, geojson_anns):
-
-            ann = coco_dset.anns[aid]
-
-            if needs_geos(ann):
-
-                ann['segmentation_geos'] = geojson_ann
+        for ann, geojson_ann in zip(anns, geojson_anns):
+            ann['segmentation_geos'] = geojson_ann
 
     return coco_dset
 
@@ -191,20 +160,20 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
         >>> from copy import deepcopy
         >>> from watch.tasks.tracking.normalize import remove_small_annots
         >>> from watch.demo import smart_kwcoco_demodata
-        >>> dset = smart_kwcoco_demodata.demo_kwcoco_with_heatmaps()
+        >>> coco_dset = smart_kwcoco_demodata.demo_kwcoco_with_heatmaps()
         >>> # This dset has 1 video with all images the same size
         >>> # For testing, resize one of the images so there is a meaningful
         >>> # difference between img space and vid space
         >>> scale_factor = 0.5
         >>> aff = kwimage.Affine.coerce({'scale': scale_factor})
-        >>> img = dset.imgs[1]
+        >>> img = coco_dset.imgs[1]
         >>> img['width'] *= scale_factor
         >>> img['height'] *= scale_factor
         >>> img['warp_img_to_vid']['scale'] = 1/scale_factor
         >>> for aux in img['auxiliary']:
         >>>     aux['warp_aux_to_img']['scale'] = aux['warp_aux_to_img'].get(
         >>>         'scale', 1) * scale_factor
-        >>> annots = dset.annots(gid=img['id'])
+        >>> annots = coco_dset.annots(gid=img['id'])
         >>> old_annots = deepcopy(annots)
         >>> dets = annots.detections.warp(aff)
         >>> # TODO this doesn't handle keypoints, and is rather brittle, is
@@ -219,101 +188,91 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
         >>>     old_annots.boxes.area)
         >>> # test that remove_small_annots no-ops with no threshold
         >>> # (ie there are no invalid annots here)
-        >>> assert dset.n_annots == remove_small_annots(deepcopy(dset),
+        >>> assert coco_dset.n_annots == remove_small_annots(deepcopy(coco_dset),
         >>>     min_area_px=0, min_geo_precision=None).n_annots
         >>> # test that annots can be removed
-        >>> assert remove_small_annots(deepcopy(dset), min_area_px=1e99,
+        >>> assert remove_small_annots(deepcopy(coco_dset), min_area_px=1e99,
         >>>     min_geo_precision=None).n_annots == 0
         >>> # test that annotations are filtered in video space
         >>> # pick a threshold above the img annot size and below the vid
         >>> # annot size; annot should not be removed
         >>> thresh = annots.boxes.area[0] + 1
-        >>> assert annots.aids[0] in remove_small_annots(deepcopy(dset),
+        >>> assert annots.aids[0] in remove_small_annots(deepcopy(coco_dset),
         >>>     min_area_px=thresh, min_geo_precision=None).annots(
         >>>         gid=img['id']).aids
+        >>> # test that some but not all annots can be removed
+        >>> filtered = remove_small_annots(
+        >>>     deepcopy(coco_dset), min_area_px=10000,
+        >>>     min_geo_precision=None)
+        >>> assert filtered.n_annots > 0 and filtered.n_annots < coco_dset.n_annots
         >>> # TODO test min_geo_precision
     '''
-    def remove_annotations(coco_dset, remove_fn):
-        # TODO merge into kwcoco?
-        annots = coco_dset.annots()
-        if len(annots) > 0:
-            empty_aids = annots.compress(remove_fn(annots)).aids
-            coco_dset.remove_annotations(empty_aids)
-            print(
-                f'Removing small aids: {empty_aids}. '
-                'After removing small, trackids: ',
-                set(coco_dset.annots().get('track_id', None)))
-        return coco_dset
-
-    def polys_in_video(annots, coco_dset):
-        # gets polygons in video space
-        # TODO are there vectorized versions of these functions?
-        # ideally, annots.detections.warp(list_of_affines)
-
-        # separate into lists
-        polys = annots.detections.data['segmentations'].to_polygon_list()
-        warps = [
-            kwimage.Affine.coerce(aff)
-            for aff in coco_dset.images(annots.gids).get(
-                'warp_img_to_vid', {'scale': 1})
-        ]
-
-        # apply warping
-        polys = [p.warp(w) for p, w in zip(polys, warps)]
-
-        # put them back together
-        polys = kwimage.PolygonList(polys)
-
-        return polys
-
-    #
-    # 1. and 2.
-    #
-
     if min_area_px is None:
         min_area_px = 0
 
-    def are_invalid_or_small(annots):
-        def _is_invalid_or_small(poly):
-            try:
-                # TODO split out polys with invalid subsets
-                # ex. https://gis.stackexchange.com/a/321804
-                shp_poly = poly.to_shapely().buffer(0)
-                return shp_poly.area <= min_area_px or not shp_poly.is_valid
-            except ValueError:
-                return True
+    empty_aids = []
+    remove_reason = []
 
-        return list(
-            map(_is_invalid_or_small, polys_in_video(annots, coco_dset)))
+    gid_iter = ub.ProgIter(
+        coco_dset.index.imgs.keys(), total=coco_dset.n_images,
+        desc='filter annotations')
+    for gid in gid_iter:
+        coco_img = coco_dset.coco_image(gid)
+        annots = coco_dset.annots(gid=gid)
+        for aid in annots:
+            ann = coco_dset.index.anns[aid]
 
-    coco_dset = remove_annotations(coco_dset, are_invalid_or_small)
+            if min_area_px is not None:
+                pxl_sseg = coco_img._annot_segmentation(ann, space='video')
 
-    #
-    # 3.
-    #
+                try:
+                    pxl_sseg_sh = pxl_sseg.to_multi_polygon().to_shapely()
+                except ValueError:
+                    remove_reason.append('invalid_shapely_conversion')
+                    empty_aids.append(aid)
+                    continue
 
-    if min_geo_precision is not None:
+                if not pxl_sseg_sh.is_valid:
+                    pxl_sseg_sh = pxl_sseg_sh.buffer(0)
 
-        # https://github.com/perrygeo/geojson-precision
-        def _set_precision(coords, precision):
-            result = []
-            try:
-                return round(coords, int(precision))
-            except TypeError:
-                for coord in coords:
-                    result.append(_set_precision(coord, precision))
-            return result
+                if not pxl_sseg_sh.is_valid:
+                    remove_reason.append('invalid_pixel_polygon')
+                    empty_aids.append(aid)
+                    continue
 
-        def is_empty_rounded(geom):
-            geom['coordinates'] = _set_precision(geom['coordinates'],
-                                                 min_geo_precision)
-            return shapely.geometry.shape(geom).is_empty
+                try:
+                    pxl_sseg_sh.area
+                except Exception:
+                    pxl_sseg_sh = pxl_sseg_sh.buffer(0)
 
-        def are_empty_rounded(annots):
-            return list(
-                map(is_empty_rounded, annots.lookup('segmentation_geos')))
+                if pxl_sseg_sh.area <= min_area_px:
+                    remove_reason.append('small pixel area {}'.format(round(pxl_sseg_sh.area, 1)))
+                    empty_aids.append(aid)
+                    continue
 
-        coco_dset = remove_annotations(coco_dset, are_empty_rounded)
+            if min_geo_precision is not None:
+                # TODO: could check this in UTM space instead of using rounding
+                wgs_sseg = kwimage.Segmentation.coerce(ann['segmentation_geos'])
+                wgs_sseg_sh = wgs_sseg.to_multi_polygon().to_shapely()
+                wgs_sseg_sh = shapely_round(wgs_sseg_sh, min_geo_precision).buffer(0)
+
+                if wgs_sseg_sh.is_empty:
+                    remove_reason.append('empty geos area')
+                    empty_aids.append(aid)
+                    continue
+
+    if not empty_aids:
+        print('Size filter: all annotations were valid')
+    else:
+        coco_dset.remove_annotations(empty_aids)
+        keep_annots = coco_dset.annots()
+        keep_tids = keep_annots.get('track_id', None)
+        keep_track_lengths = ub.dict_hist(keep_tids)
+        print(f'Size filter: removing {len(empty_aids)} annotations')
+        print('keep_track_lengths = {}'.format(ub.repr2(keep_track_lengths, nl=1)))
+        print(f'{len(keep_annots)=}')
+        removal_reasons = ub.dict_hist(remove_reason)
+        print('removal_reasons = {}'.format(ub.repr2(removal_reasons, nl=1)))
 
     return coco_dset
 
@@ -327,23 +286,34 @@ def ensure_videos(coco_dset):
     if 'videos' not in coco_dset.dataset:
         coco_dset.dataset['videos'] = list(coco_dset.index.videos.values())
 
-    # TODO guess frame_index in a better way, like by date
-    vid_gids = set().union(*coco_dset.index.vidid_to_gids.values())
-    missing_gids = set(coco_dset.imgs) - vid_gids
-    if missing_gids:
+    coco_dset.index.vidid_to_gids
+    all_images = coco_dset.images()
+    loose_flags = [vidid is None for vidid in all_images.get('video_id', None)]
+    loose_imgs = all_images.compress(loose_flags)
+    if loose_imgs:
+        from watch.utils import util_time
+        print(f'Warning: there are {len(loose_imgs)=} images without a video')
+        # guess frame_index by date
+        dt_guess = [
+            (util_time.coerce_datetime(dc), gid)
+            for gid, dc in loose_imgs.lookup('date_captured', '1970-01-01', keepid=1).items()
+        ]
+        loose_imgs = loose_imgs.take(ub.argsort(dt_guess))
+
         vidid = coco_dset.add_video('DEFAULT')
-        for ix, gid in enumerate(missing_gids):
+        for ix, gid in enumerate(loose_imgs):
             coco_dset.imgs[gid]['video_id'] = vidid
             coco_dset.imgs[gid]['frame_index'] = ix
 
-        # HACK TODO bug etc
-        gids = coco_dset.index.vidid_to_gids[vidid]
-        coco_dset.index.vidid_to_gids[vidid] = gids.union(missing_gids)
+        # This change invalidates the index, need to rebuild it.
+        # TODO: add kwcoco logic to flag exactly what index needs to be rebuilt
+        coco_dset._build_index()
 
-    try:
-        coco_dset.images().lookup('frame_index')
-    except KeyError:
-        raise AssertionError('all images in dset need a frame_index')
+    if __debug__:
+        try:
+            coco_dset.images().lookup('frame_index')
+        except KeyError:
+            raise AssertionError('all images in dset need a frame_index')
 
     return coco_dset
 
@@ -385,6 +355,17 @@ def add_track_index(coco_dset):
         annots.set('track_index', map(track_index_dict.get, annots.gids))
 
     return coco_dset
+
+
+def shapely_round(geom, precision):
+    """
+    References:
+        https://gis.stackexchange.com/questions/188622
+    """
+    import shapely
+    wkt = shapely.wkt.dumps(geom, rounding_precision=precision)
+    geom2 = shapely.wkt.loads(wkt).simplify(0)
+    return geom2
 
 
 @profile
@@ -504,9 +485,7 @@ def normalize_phases(coco_dset,
 
     # exclude untracked annots which might be unrelated
     annots = coco_dset.annots(
-        list(
-            itertools.chain.from_iterable(
-                coco_dset.index.trackid_to_aids.values())))
+        list(ub.flatten(coco_dset.index.trackid_to_aids.values())))
 
     has_prediction_heatmaps = all(
         kwcoco.FusedChannelSpec.coerce(prediction_key).as_set().issubset(
@@ -656,9 +635,6 @@ def normalize(
         >>> coco_dset = normalize_sensors(coco_dset)
         >>> assert (coco_dset.images().get('sensor_coarse') ==
         >>>     ['WorldView', 'Sentinel-2', 'Landsat 8'])
-
-
-
     '''
     viz_out_dir = ub.Path('_assets/tracking_visualization')
 
@@ -675,9 +651,11 @@ def normalize(
     if len(coco_dset.anns) > 0:
         coco_dset = _normalize_annots(coco_dset, overwrite)
     coco_dset = ensure_videos(coco_dset)
+
     # apply tracks
     assert issubclass(track_fn, TrackFunction), 'must supply a valid track_fn!'
-    coco_dset = track_fn(**track_kwargs).apply_per_video(coco_dset)
+    tracker: TrackFunction = track_fn(**track_kwargs)
+    coco_dset = tracker.apply_per_video(coco_dset)
 
     # normalize and add geo segmentations
     coco_dset = _normalize_annots(coco_dset, overwrite=False)

@@ -6,7 +6,7 @@ See Also:
 
 
 
-DVC_DPATH=$(python -m watch.cli.find_dvc)-hdd
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)-hdd
 cd $DVC_DPATH
 
 DATASET_SUFFIX=Drop3-TA1-2022-03-10 
@@ -52,7 +52,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --serial=True --run=0
 
 
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 DATASET_SUFFIX=Drop3-TA1-2022-03-10 
 python -m watch.cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
@@ -145,7 +145,7 @@ hack_fix_empty_imges(){
     dvc add -- */WV */L8 */S2 */*.json
     #dvc add data_*nowv*.kwcoco.json
 
-    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     echo "DVC_DPATH='$DVC_DPATH'"
 
     cd "$DVC_DPATH/"
@@ -157,7 +157,7 @@ hack_fix_empty_imges(){
 
     7z 
 
-    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     python -m watch.cli.prepare_splits \
         --base_fpath="$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json" \
         --run=1 --serial=True
@@ -185,7 +185,7 @@ hack_fix_empty_imges(){
                   /home/joncrall/data/dvc-repos/smart_watch_dvc/Aligned-Drop3-TA1-2022-03-10/rutgers_material_seg_v3.kwcoco.json \
         --dst /home/joncrall/data/dvc-repos/smart_watch_dvc/Aligned-Drop3-TA1-2022-03-10/combo_LM.kwcoco.json
 
-    DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="ssd")
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware="ssd")
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
     python -m watch.cli.prepare_splits \
         --base_fpath="$DVC_DPATH/$DATASET_CODE/data.kwcoco.json" \
@@ -225,8 +225,8 @@ hack_fix_empty_imges(){
 
 
 transfer_features(){
-    SSD_DVC_DPATH=$(python -m watch.cli.find_dvc --hardware=ssd)
-    HDD_DVC_DPATH=$(python -m watch.cli.find_dvc --hardware=hdd)
+    SSD_DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware=ssd)
+    HDD_DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware=hdd)
     echo "SSD_DVC_DPATH = $SSD_DVC_DPATH"
     echo "HDD_DVC_DPATH = $HDD_DVC_DPATH"
 
@@ -249,12 +249,12 @@ transfer_features(){
 
 prepare_l1_version_of_drop3(){
 
-    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     echo "DVC_DPATH = $DVC_DPATH"
     S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/ALL_ANNOTATED_REGIONS_TA-1_PROCESSED_20220222.unique.input.l1.mini
     DATASET_SUFFIX=Drop3-L1-MINI
 
-    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     echo "DVC_DPATH = $DVC_DPATH"
     S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/ALL_ANNOTATED_REGIONS_TA-1_PROCESSED_20220222.unique.input.l1
     DATASET_SUFFIX=Drop3-L1
@@ -279,7 +279,7 @@ prepare_l1_version_of_drop3(){
 
 prepare_wv_crop_from_sites(){
 
-    DVC_DPATH=$(python -m watch.cli.find_dvc)-hdd
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)-hdd
     cd "$DVC_DPATH"
 
     DATASET_SUFFIX=Drop3-TA1-SiteCropsWV-2022-03-30 
@@ -303,7 +303,7 @@ prepare_wv_crop_from_sites(){
 
 prepare_cropped_from_tracks(){
 
-    DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware="ssd")
     IMGONLY_FPATH="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/imgonly_S2_L8_WV.kwcoco.json"
     echo "IMGONLY_FPATH = $IMGONLY_FPATH"
     python -m watch.cli.coco_remove_empty_images \
@@ -316,6 +316,7 @@ prepare_cropped_from_tracks(){
 
     mv "$IMGONLY_FPATH.tmp" "$IMGONLY_FPATH"
 
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware="ssd")
     BASE_DPATH="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json"
     python -m watch project_annotations \
         --src "$IMGONLY_FPATH" \
@@ -325,7 +326,7 @@ prepare_cropped_from_tracks(){
 
     python -m watch.cli.prepare_splits \
         --base_fpath="$BASE_DPATH" \
-        --run=1 --backend=tmux
+        --run=0 --backend=serial
 
     7z a splits.zip data*.kwcoco.json
     dvc add -- *.zip
@@ -333,25 +334,62 @@ prepare_cropped_from_tracks(){
     git push 
     dvc push -r aws splits.zip
 
+    export CUDA_VISIBLE_DEVICES=1
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware="ssd")
+    echo "DVC_DPATH = $DVC_DPATH"
+    BASE_DPATH="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json"
+    python -m watch.cli.prepare_teamfeats \
+        --base_fpath="$BASE_DPATH" \
+        --dvc_dpath="$DVC_DPATH" \
+        --gres=",1" \
+        --with_landcover=0 \
+        --with_depth=1 \
+        --with_materials=0 \
+        --with_invariants=0 \
+        --do_splits=1 \
+        --depth_workers=0 \
+        --cache=1 --run=1 --backend=tmux
+
+
 }
 
 cropped_with_more_context(){
 
-    HDD_DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
-    SSD_DVC_DPATH=$(python -m watch.cli.find_dvc --hardware="hdd")
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware="hdd")
     echo "$DVC_DPATH"
-
-    INPUT_FPATH=$HDD_DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json
+    INPUT_FPATH=$BASE_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json
+    NEW_KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Cropped-Drop3-TA1-Context
     #smartwatch stats "$INPUT_FPATH"
 
     CHANNELS="blue|green|red|nir|swir16|swir22|cloudmask|near-ir1|panchromatic"
 
+    # This takes forever and a half (i.e. 7-12 hours)
     python -m watch.cli.coco_crop_tracks \
         --src="$INPUT_FPATH" \
-        --dst="$SSD_DVC_DPATH/Cropped-Drop3-TA1-Context/imgonly_S2_WV.kwcoco.json" \
+        --dst="$NEW_KWCOCO_BUNDLE_DPATH/imgonly_S2_WV.kwcoco.json" \
         --exclude_sensors=L8 \
         --channels=$CHANNELS \
         --mode=process --workers=24 \
         --channels="$CHANNELS" \
         --context_factor=1.8
+
+    python -m watch project_annotations \
+        --src "$NEW_KWCOCO_BUNDLE_DPATH/imgonly_S2_WV.kwcoco.json" \
+        --dst "$NEW_KWCOCO_BUNDLE_DPATH/data.kwcoco.json" \
+        --site_models="$DVC_DPATH/annotations/site_models/*.geojson" \
+        --region_models="$DVC_DPATH/annotations/region_models/*.geojson"
+
+    export CUDA_VISIBLE_DEVICES=1
+    python -m watch.cli.prepare_teamfeats \
+        --base_fpath="$NEW_KWCOCO_BUNDLE_DPATH/.kwcoco.json" \
+        --dvc_dpath="$DVC_DPATH" \
+        --gres="0,1" \
+        --with_landcover=0 \
+        --with_depth=1 \
+        --with_materials=0 \
+        --with_invariants=0 \
+        --do_splits=0 \
+        --depth_workers=0 \
+        --cache=1 --run=1 --backend=serial
+
 }

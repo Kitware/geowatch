@@ -11,7 +11,7 @@ S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/eval2/master_collation_work
 
 
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-#DVC_DPATH=$(python -m watch.cli.find_dvc)
+#DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 #S3_DPATH=s3://kitware-smart-watch-data/processed/ta1/eval2/master_collation_working
 QUERY_BASENAME=$(basename "$S3_FPATH")
 ALIGNED_BUNDLE_NAME=Aligned-$DATASET_SUFFIX
@@ -65,7 +65,7 @@ python -m watch.cli.coco_align_geotiffs \
     --rpc_align_method affine_warp
 
 
-#DVC_DPATH=$(python -m watch.cli.find_dvc)
+#DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 #python -m watch.cli.prepare_teamfeats \
 #    --base_fpath="$ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json" \
 #    --gres="0," \

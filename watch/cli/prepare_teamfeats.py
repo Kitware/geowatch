@@ -111,6 +111,7 @@ def prep_feats(cmdline=True, **kwargs):
     from scriptconfig.smartcast import smartcast
 
     config = TeamFeaturePipelineConfig(cmdline=cmdline, data=kwargs)
+    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
     gres = config['gres']
     # check = config['check']
@@ -238,8 +239,8 @@ def _populate_teamfeat_queue(queue, base_fpath, dvc_dpath, aligned_bundle_dpath,
     }
 
     print('Exist check: ')
-    print(ub.repr2(ub.map_vals(lambda x: x.exists(), model_fpaths)))
-    print(ub.repr2(ub.map_vals(lambda x: x.exists(), outputs)))
+    print('model_packages: ' + ub.repr2(ub.map_vals(lambda x: x.exists(), model_fpaths)))
+    print('feature outputs: ' + ub.repr2(ub.map_vals(lambda x: x.exists(), outputs)))
 
     # TODO: different versions of features need different codes.
     codes = {
@@ -366,14 +367,18 @@ def _populate_teamfeat_queue(queue, base_fpath, dvc_dpath, aligned_bundle_dpath,
             ''')
         combo_code_parts.append(codes[key])
         tasks.append(task)
+
+    task_jobs = []
     for task in tasks:
         if config['cache']:
             if not task['output_fpath'].exists():
                 # command = f"[[ -f '{task['output_fpath']}' ]] || " + task['command']
                 command = f"test -f '{task['output_fpath']}' || " + task['command']
-                queue.submit(command, gpus=task['gpus'])
+                job = queue.submit(command, gpus=task['gpus'])
+                task_jobs.append(job)
         else:
-            queue.submit(task['command'])
+            job = queue.submit(task['command'])
+            task_jobs.append(job)
 
     # Finalize features by combining them all into combo.kwcoco.json
     tocombine = [str(base_fpath)] + [str(task['output_fpath']) for task in tasks]
@@ -381,18 +386,18 @@ def _populate_teamfeat_queue(queue, base_fpath, dvc_dpath, aligned_bundle_dpath,
 
     base_combo_fpath = aligned_bundle_dpath / f'combo_{combo_code}.kwcoco.json'
 
-    # TODO: enable forcing if needbe
-    # if not base_combo_fpath.exists() or not config['cache']:
-    if True:
-        #  Indent of this the codeblock matters for this line
-        queue.sync()
-        src_lines = ' \\\n        '.join(tocombine)
-        command = '\n'.join([
-            'python -m watch.cli.coco_combine_features \\',
-            f'    --src {src_lines} \\',
-            f'    --dst {base_combo_fpath}'
-        ])
-        queue.submit(command)
+    # Note: sync tells the queue that everything after this
+    # depends on everything before this
+    queue.sync()
+
+    src_lines = ' \\\n        '.join(tocombine)
+    command = '\n'.join([
+        'python -m watch.cli.coco_combine_features \\',
+        f'    --src {src_lines} \\',
+        f'    --dst {base_combo_fpath}'
+    ])
+    print('task_jobs = {!r}'.format(task_jobs))
+    queue.submit(command)
 
     if config['do_splits']:
         # Also call the prepare-splits script
@@ -400,10 +405,6 @@ def _populate_teamfeat_queue(queue, base_fpath, dvc_dpath, aligned_bundle_dpath,
         base_fpath = str(base_combo_fpath)
         queue.sync()
         prepare_splits._submit_split_jobs(base_fpath, queue)
-        # split_config = ub.dict_isect(
-        #     config, prepare_splits.PrepareSplitsConfig.default)
-        # split_config['base_fpath'] = str(base_combo_fpath)
-        # prepare_splits.prepare_teamfeats(**split_config)
 
     return queue
 
@@ -412,7 +413,7 @@ main = prep_feats
 if __name__ == '__main__':
     """
     CommandLine:
-        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
         python -m watch.cli.prepare_teamfeats \
             --base_fpath="$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json" \
             --gres=0 \
@@ -427,7 +428,7 @@ if __name__ == '__main__':
 
         # TO UPDATE ANNOTS
         # Update to whatever the state of the annotations submodule is
-        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
         python -m watch project_annotations \
             --src $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
             --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
@@ -436,7 +437,7 @@ if __name__ == '__main__':
         kwcoco stats $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data_20220203.kwcoco.json $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json
 
         # Team Features on Drop2
-        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
         python -m watch.cli.prepare_teamfeats \
             --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
             --gres=0,1 --with_depth=0 --with_materials=False  --with_invariants=False \
@@ -444,7 +445,7 @@ if __name__ == '__main__':
 
         ###
         DATASET_CODE=Aligned-Drop2-TA1-2022-02-24
-        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
         DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
         python -m watch.cli.prepare_teamfeats \
@@ -458,7 +459,7 @@ if __name__ == '__main__':
             --do_splits=1  --cache=0 --run=0
 
         ###
-        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
         DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
         python -m watch.cli.prepare_teamfeats \

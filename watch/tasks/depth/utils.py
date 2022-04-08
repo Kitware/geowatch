@@ -47,7 +47,6 @@ def process_image_chunked(image,
             pbar.refresh()
         try:
             res = process_func(img)
-            # Quantize res?
         finally:
             pbar.update()
         return res
@@ -67,9 +66,6 @@ def process_image_chunked(image,
         'boundary': 'none',
         'pbar': tqdm(unit=' chip', disable=not verbose),
     }
-    # import ubelt as ub
-    # pbar = ub.ProgIter()
-
     if 0:
         print('overlap = {!r}'.format(overlap))
         print('image = {!r}'.format(image))
@@ -83,11 +79,15 @@ def process_image_chunked(image,
         drop_axis=2,
         # output will have this dtype
         dtype=output_dtype,
-        meta=np.array((), dtype=output_dtype),
+        # meta=np.array((), dtype=output_dtype),
         # pass through
         **mapkw,
     )
-    pred = pred.compute(scheduler='single-threaded')
+
+    # Is there a leak or memory issue here?
+    scheduler = 'single-threaded'
+    # scheduler = 'synchronous'
+    pred = pred.compute(scheduler=scheduler)
     mapkw['pbar'].close()
 
     return pred
