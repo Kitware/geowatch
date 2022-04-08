@@ -2675,9 +2675,10 @@ class BatchVisualizationBuilder:
         >>> for _ in range(0, sample_shape[0]):
         >>>     class_prob = kwimage.Heatmap.random(
         >>>         dims=sample_shape[1:3], classes=list(sampler.classes)).data['class_probs']
+        >>>     class_prob = einops.rearrange(class_prob, 'c h w -> h w c')
         >>>     if fliprot_params:
         >>>         class_prob = fliprot(class_prob, **fliprot_params)
-        >>>     class_prob_list += [einops.rearrange(class_prob, 'c h w -> h w c')]
+        >>>     class_prob_list += [class_prob]
         >>> class_probs = np.stack(class_prob_list)
         >>> item_output['class_probs'] = class_probs  # first frame does not have change
         >>> #
@@ -2686,7 +2687,10 @@ class BatchVisualizationBuilder:
         >>> for _ in range(0, sample_shape[0]):
         >>>     saliency_prob = kwimage.Heatmap.random(
         >>>         dims=sample_shape[1:3], classes=1).data['class_probs']
-        >>>     saliency_prob_list += [einops.rearrange(saliency_prob, 'c h w -> h w c')]
+        >>>     saliency_prob = einops.rearrange(saliency_prob, 'c h w -> h w c')
+        >>>     if fliprot_params:
+        >>>         saliency_prob = fliprot(saliency_prob, **fliprot_params)
+        >>>     saliency_prob_list += [saliency_prob]
         >>> saliency_probs = np.stack(saliency_prob_list)
         >>> item_output['saliency_probs'] = saliency_probs
         >>> #binprobs[0][:] = 0  # first change prob should be all zeros
