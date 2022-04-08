@@ -116,7 +116,7 @@ EXPT_GROUP_CODE=eval3_candidates
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
 python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-        --gpus="0," \
+        --gpus="0,1" \
         --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
         --test_dataset="$VALI_FPATH" \
         --skip_existing=True \
@@ -124,5 +124,5 @@ python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
         --enable_eval=0 \
         --enable_track=1 \
         --enable_iarpa_eval=1 \
-        --backend=tmux --run=0
+        --backend=tmux --run=1
 """

@@ -13,9 +13,9 @@ einops>=0.3.0
 dask[array]>=2021.12.0
 
 # Dask related
-cytoolz>=0.11.2
-xxhash>=3.0.0
-cityhash>=0.4.1
+# cytoolz>=0.11.2
+# xxhash>=3.0.0
+# cityhash>=0.4.1
 
 # Frameworks
 algorithm_toolkit==0.2.0
