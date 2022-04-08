@@ -9,10 +9,10 @@ import ubelt as ub
 import itertools
 from typing import Iterable, Tuple, Set, Union, Optional, Literal, Dict
 from dataclasses import dataclass, field
-from watch.tasks.tracking.utils import (Track, PolygonFilter, NewTrackFunction,
-                                        mask_to_polygons, heatmap, score, Poly,
-                                        CocoDsetFilter, _validate_keys,
-                                        Observation, pop_tracks, build_heatmaps)
+from watch.tasks.tracking.utils import (
+    Track, PolygonFilter, NewTrackFunction, mask_to_polygons, build_heatmap,
+    score_poly, Poly, CocoDsetFilter, _validate_keys, Observation, pop_tracks,
+    build_heatmaps)
 
 try:
     from xdev import profile
@@ -86,6 +86,12 @@ def frequency_weighted_mean(heatmaps, thresh, norm_ord=0, morph_kernel=3):
                                                morph_kernel)
 
     return aggregated_probs
+
+AGG_FN_REGISTRY = {
+    'frequency_weighted_mean': frequency_weighted_mean,
+    'mean_normalized': mean_normalized,
+    'probs': probs,
+}
 
 
 #
@@ -212,11 +218,8 @@ def add_tracks_to_dset(sub_dset,
 
     @ub.memoize
     def _heatmap(gid, key, space):
-        probs_tot, probs_dct = heatmap(coco_dset_sc,
-                                       gid,
-                                       key,
-                                       return_chan_probs=True,
-                                       space=space)
+        probs_tot, probs_dct = build_heatmap(
+            coco_dset_sc, gid, key, return_chan_probs=True, space=space)
         return probs_dct
 
     @ub.memoize
@@ -236,7 +239,7 @@ def add_tracks_to_dset(sub_dset,
             cand_keys = bg_key
         if len(cand_keys) > 1:
             cand_scores = [
-                score(poly, probs)  # awk, this could be a class
+                score_poly(poly, probs)  # awk, this could be a class
                 for probs in _heatmap(gid, key, space).values()
             ]
             cat_name = cand_keys[np.argmax(cand_scores)]
@@ -420,16 +423,12 @@ def _heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
     '''
     Use parameters: agg_fn, thresh, morph_kernel, thresh_hysteresis, norm_ord
     '''
-    #####!!!! Probably not safe!
-    _agg_fn = eval(agg_fn)
-    return list(
-        mask_to_polygons(_agg_fn(heatmaps,
-                                 thresh=thresh,
-                                 morph_kernel=morph_kernel,
-                                 norm_ord=norm_ord),
-                         thresh,
-                         thresh_hysteresis=thresh_hysteresis,
-                         bounds=bounds))
+    _agg_fn = AGG_FN_REGISTRY[agg_fn]
+    aggregated = _agg_fn(heatmaps, thresh=thresh, morph_kernel=morph_kernel,
+                         norm_ord=norm_ord)
+    return list(mask_to_polygons(aggregated, thresh,
+                                 thresh_hysteresis=thresh_hysteresis,
+                                 bounds=bounds))
 
 
 def tracks_polys_bounds(sub_dset, key, agg_fn, thresh, morph_kernel, thresh_hysteresis, norm_ord) -> Iterable[Tuple[Track, Poly]]:
@@ -480,7 +479,7 @@ def tracks_polys_bounds(sub_dset, key, agg_fn, thresh, morph_kernel, thresh_hyst
                     Observation(
                         poly=poly,
                         gid=obs.gid,
-                        score=score(
+                        score=score_poly(
                             poly,
                             # TODO optimize .index()
                             _heatmaps[gids.index(obs.gid)]))
@@ -498,10 +497,9 @@ def tracks_polys_bounds(sub_dset, key, agg_fn, thresh, morph_kernel, thresh_hyst
 def tracks_polys_nobounds(sub_dset, key, agg_fn, thresh, morph_kernel,
                           thresh_hysteresis, norm_ord) -> Iterable[Tuple[Track, Poly]]:
     gids = list(sub_dset.imgs.keys())
-    _heatmaps = build_heatmaps(
-        sub_dset,
-        gids, {'fg': key},
-        skipped='interpolate')['fg']
+    keys = {'fg': key}
+    skipped = 'interpolate'
+    _heatmaps = build_heatmaps(sub_dset, gids, keys, skipped)['fg']
 
     bounds = None
     polys = _heatmaps_to_polys(_heatmaps, bounds, agg_fn, thresh, morph_kernel,
