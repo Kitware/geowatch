@@ -98,7 +98,7 @@ def find_smart_dvc_dpath(hardware=None, name=None, on_error="raise"):
     NOTE: other team members can add their "standard" locations if they want.
 
     SeeAlso:
-        WATCH_DATA_DPATH=$(python -m watch.cli.find_dvc)
+        WATCH_DATA_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 
         python -m watch.cli.find_dvc --hardware=hdd
         python -m watch.cli.find_dvc --hardware=ssd

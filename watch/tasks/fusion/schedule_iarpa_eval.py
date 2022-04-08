@@ -110,7 +110,7 @@ def _build_iarpa_eval_job(track_out_fpath, iarpa_eval_dpath, annotations_dpath, 
 
 """
 # Note: change backend to tmux if slurm is not installed
-DVC_DPATH=$(python -m watch.cli.find_dvc)
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPT_GROUP_CODE=eval3_candidates
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -124,5 +124,5 @@ python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
         --enable_eval=0 \
         --enable_track=1 \
         --enable_iarpa_eval=1 \
-        --backend=tmux --run=0
+        --backend=tmux --run=1
 """

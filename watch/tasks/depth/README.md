@@ -26,7 +26,7 @@ Usage:
     # DVC_DPATH=/dvc
     # DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc/
 
-    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     KWCOCO_BUNDLE=$DVC_DPATH/Drop1-Aligned-L1
     KWCOCO_FPATH=$KWCOCO_BUNDLE/data.kwcoco.json
 

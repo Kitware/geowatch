@@ -1365,7 +1365,7 @@ if __name__ == '__main__':
         --draw_heatmaps=1 --workers=2
 
 
-    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     TEST_DATASET=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1.kwcoco.json
     EXPT_PATTERN="*"
     python -m watch.tasks.fusion.schedule_evaluation \

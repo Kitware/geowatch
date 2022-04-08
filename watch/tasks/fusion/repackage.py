@@ -329,7 +329,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     print(ub.codeblock(
         f"""
         # On the evaluation remote you need to run something like:
-        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
         cd $DVC_DPATH
         git pull
         dvc pull -r aws --recursive models/fusion/{rel_storage_dpath}

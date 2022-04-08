@@ -722,13 +722,14 @@ def main(args):
             print('error in metrics framework, probably due to zero '
                   'TP site matches.')
 
+    print('out_dirs = {}'.format(ub.repr2(out_dirs, nl=1)))
+
     main_out_dir = ub.Path(args.out_dir)
     if args.merge and out_dirs:
         merge_dpath = main_out_dir / 'merged'
         summary_path2 = merge_metrics_results(out_dirs, gt_dpath, merge_dpath,
                                               parent_info)[0]
         print('wrote {!r}'.format(summary_path2))
-    print('out_dirs = {}'.format(ub.repr2(out_dirs, nl=1)))
 
 
 if __name__ == '__main__':

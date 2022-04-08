@@ -400,7 +400,7 @@ if __name__ == '__main__':
     # window_size=1024: 17.111 GB
     # window_size=1152: 21.007 GB
 
-    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
     python -m watch.tasks.depth.predict \
         --dataset="$KWCOCO_BUNDLE_DPATH/data.kwcoco.json" \
@@ -409,7 +409,7 @@ if __name__ == '__main__':
         --data_workers=0 \
         --window_size=512
 
-    DVC_DPATH=$(python -m watch.cli.find_dvc --hdd)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hdd)
     echo "DVC_DPATH = $DVC_DPATH"
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
     python -m watch.tasks.depth.predict \

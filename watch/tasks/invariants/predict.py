@@ -17,7 +17,7 @@ from watch.utils import util_kwimage  # NOQA
 class predict(object):
     """
     CommandLine:
-        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
         DVC_DPATH=$DVC_DPATH xdoctest -m watch.tasks.invariants.predict predict
 
         python -m watch visualize $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/test_uky.kwcoco.json \
@@ -437,7 +437,7 @@ if __name__ == '__main__':
         ../../cli/prepare_teamfeats.py
 
         # Team Features on Drop3
-        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10
         python -m watch.cli.prepare_teamfeats \
             --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \

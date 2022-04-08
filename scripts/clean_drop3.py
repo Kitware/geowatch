@@ -275,7 +275,7 @@ def main(coco_fpath):
 if __name__ == '__main__':
     """
     CommandLine:
-        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
         DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
         python ~/code/watch/scripts/clean_drop3.py $KWCOCO_BUNDLE_DPATH/data_nowv_train.kwcoco.json
