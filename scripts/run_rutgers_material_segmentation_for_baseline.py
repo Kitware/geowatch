@@ -149,7 +149,11 @@ def run_rutgers_material_segmentation_for_baseline(
                     '--default_config_key', 'iarpa',
                     '--pred_dataset', rutgers_matseg_features_kwcoco_path,
                     '--num_workers', '0' if force_zero_num_workers else str(jobs),  # noqa: 501
-                    '--batch_size', '16'],
+                    '--batch_size', '32',
+                    '--compress', 'DEFLATE',
+                    '--blocksize', '128',
+                    '--cache', 'True',
+                    '--gpus', '0'],
                    check=True)
 
     # 4. Egress (envelop KWCOCO dataset in a STAC item and egress;
