@@ -393,7 +393,7 @@ def merge_metrics_results(region_dpaths, anns_root, merge_dpath, parent_info):
     print(concise_best_bas_rows.to_string())
 
     summary_path = merge_dpath / 'summary.csv'
-    if summary_path.isfile():
+    if summary_path.is_file():
         summary_path.delete()
     with open(summary_path, 'a+') as f:
         best_bas_row.to_csv(f)

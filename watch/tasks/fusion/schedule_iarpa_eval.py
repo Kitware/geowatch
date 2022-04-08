@@ -122,6 +122,7 @@ python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
         --skip_existing=True \
         --enable_pred=0 \
         --enable_eval=0 \
-        --iarpa_eval=1 \
-        --backend=tmux --run=1
+        --enable_track=1 \
+        --enable_iarpa_eval=1 \
+        --backend=tmux --run=0
 """
