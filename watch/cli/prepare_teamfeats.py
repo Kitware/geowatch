@@ -174,7 +174,7 @@ def prep_feats(cmdline=True, **kwargs):
                              aligned_bundle_dpath, config)
 
     if config['verbose']:
-        queue.rprint()
+        queue.rprint(1, 1)
 
     if config['run']:
         agg_state = None
@@ -367,14 +367,18 @@ def _populate_teamfeat_queue(queue, base_fpath, dvc_dpath, aligned_bundle_dpath,
             ''')
         combo_code_parts.append(codes[key])
         tasks.append(task)
+
+    task_jobs = []
     for task in tasks:
         if config['cache']:
             if not task['output_fpath'].exists():
                 # command = f"[[ -f '{task['output_fpath']}' ]] || " + task['command']
                 command = f"test -f '{task['output_fpath']}' || " + task['command']
-                queue.submit(command, gpus=task['gpus'])
+                job = queue.submit(command, gpus=task['gpus'])
+                task_jobs.append(job)
         else:
-            queue.submit(task['command'])
+            job = queue.submit(task['command'])
+            task_jobs.append(job)
 
     # Finalize features by combining them all into combo.kwcoco.json
     tocombine = [str(base_fpath)] + [str(task['output_fpath']) for task in tasks]
@@ -386,14 +390,19 @@ def _populate_teamfeat_queue(queue, base_fpath, dvc_dpath, aligned_bundle_dpath,
     # if not base_combo_fpath.exists() or not config['cache']:
     if True:
         #  Indent of this the codeblock matters for this line
+
+        # Note: sync tells the queue that everything after this
+        # depends on everything before this
         queue.sync()
+
         src_lines = ' \\\n        '.join(tocombine)
         command = '\n'.join([
             'python -m watch.cli.coco_combine_features \\',
             f'    --src {src_lines} \\',
             f'    --dst {base_combo_fpath}'
         ])
-        queue.submit(command)
+        print('task_jobs = {!r}'.format(task_jobs))
+        combo_job = queue.submit(command)
 
     if config['do_splits']:
         # Also call the prepare-splits script

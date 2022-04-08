@@ -376,7 +376,8 @@ class TMUXMultiQueue(cmd_queue.Queue):
                     worker.submit(command, bookkeeper=1)
 
                 for job in jobs:
-                    worker.submit(job.command)
+                    # worker.submit(job.command)
+                    worker.submit(job)
 
                 rank_workers.append(worker)
 
