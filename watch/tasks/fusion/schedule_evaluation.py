@@ -422,6 +422,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
         import kwarray
         expanded_packages_to_eval = kwarray.shuffle(expanded_packages_to_eval)
 
+    # expanded_packages_to_eval = expanded_packages_to_eval[0:2]
+
     for info in expanded_packages_to_eval:
         package_fpath = info['fpath']
         suggestions = info['suggestions']
@@ -448,15 +450,18 @@ def schedule_evaluation(cmdline=False, **kwargs):
         has_eval = eval_metrics_dvc_fpath.exists() or eval_metrics_fpath.exists()
         has_pred = pred_dataset_fpath.exists()
 
+        # Really should make this a class
         task_infos = {
             'pred': {
-                'enabled': with_pred or recompute_pred,
+                'name': 'pred',
+                'requested': with_pred,
                 'output': pred_dataset_fpath,
                 'requires': [],
                 'recompute': recompute_pred,
             },
             'eval': {
-                'enabled': with_eval or recompute_eval,
+                'name': 'eval',
+                'requested': with_eval,
                 'output': eval_metrics_fpath,
                 'requires': ['pred'],
                 'recompute': recompute_eval,
@@ -467,13 +472,26 @@ def schedule_evaluation(cmdline=False, **kwargs):
             # Check if each dependency will exist by the time we run this job
             deps_will_exist = []
             for req in task_info['requires']:
-                req_info = task_infos[req]
-                # If the req is not enabled, then it output must exist now.
-                will_exist = req_info['enabled'] or req_info['output'].exists()
-                deps_will_exist.append(will_exist)
+                deps_will_exist.append(task_infos[req]['will_exist'])
+            all_deps_will_exist = all(deps_will_exist)
+            task_info['all_deps_will_exist'] = all_deps_will_exist
 
-            # can only eval predictions that exist or will exist
-            return all(deps_will_exist) and task_info['enabled']
+            if not all_deps_will_exist:
+                # If dependencies wont exist, then we cant run
+                enabled = False
+            else:
+                # If we can run, then do it this task is requested
+                if skip_existing and task_info['output'].exists():
+                    enabled = task_info['recompute'] or recompute
+                else:
+                    enabled = bool(task_info['requested'])
+            # Only enable the task if we requested it and its dependencies will
+            # exist.
+            task_info['enabled'] = enabled
+            # Mark if we do exist, or we will exist
+            will_exist = enabled or task_info['output'].exists()
+            task_info['will_exist'] = will_exist
+            return task_info['enabled']
 
         name_suffix = (
             '_' + ub.hash_data(str(package_fpath))[0:8] +
@@ -506,18 +524,12 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 # Only run the command if its expected output does not exist
                 command = lazy_command(task_info['output'], command)
 
-            if task_info['recompute']:
-                needs_compute = True
-            else:
-                needs_compute = not (skip_existing and (has_pred or has_eval))
-
-            if needs_compute:
-                name = 'pred' + name_suffix
-                pred_cpus = workers_per_queue
-                pred_job = queue.submit(command, gpus=1, name=name,
-                                        cpus=pred_cpus,
-                                        partition=config['partition'],
-                                        mem=config['mem'])
+            name = 'pred' + name_suffix
+            pred_cpus = workers_per_queue
+            pred_job = queue.submit(command, gpus=1, name=name,
+                                    cpus=pred_cpus,
+                                    partition=config['partition'],
+                                    mem=config['mem'])
 
         task = 'eval'
         eval_job = None
@@ -540,16 +552,10 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 # Only run the command if its expected output does not exist
                 command = lazy_command(task_info['output'], command)
 
-            if task_info['recompute']:
-                needs_compute = True
-            else:
-                needs_compute = not (skip_existing and has_eval)
-
-            if needs_compute:
-                name = 'eval' + name_suffix
-                eval_job = queue.submit(
-                    command, depends=pred_job, name=name, cpus=2,
-                    partition=config['partition'], mem=config['mem'])
+            name = 'eval' + name_suffix
+            eval_job = queue.submit(
+                command, depends=pred_job, name=name, cpus=2,
+                partition=config['partition'], mem=config['mem'])
             task_info['job'] = eval_job
 
         tracking_param_basis = {
@@ -571,13 +577,15 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
             task_infos.update({
                 'track': {
-                    'enabled': with_track or recompute_track,
+                    'name': 'track',
+                    'requested': with_track,
                     'output': track_out_fpath,
                     'requires': ['pred'],
                     'recompute': recompute_track,
                 },
                 'iarpa_eval': {
-                    'enabled': with_iarpa_eval or recompute_iarpa_eval,
+                    'name': 'iarpa_eval',
+                    'requested': with_iarpa_eval,
                     'output': iarpa_summary_fpath,
                     'requires': ['track'],
                     'recompute': recompute_iarpa_eval,
@@ -597,22 +605,16 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     # Only run the command if its expected output does not exist
                     command = lazy_command(task_info['output'], command)
 
-                if task_info['recompute']:
-                    needs_compute = True
-                else:
-                    needs_compute = not (skip_existing and has_pred)
-
-                if needs_compute:
-                    name = 'track-' + name_suffix
-                    track_job = queue.submit(
-                        command=command,
-                        depends=pred_job,
-                        name=name,
-                        cpus=2,
-                        partition=config['partition'],
-                        mem=config['mem'],
-                    )
-                    task_info['job'] = track_job
+                name = 'track-' + name_suffix
+                track_job = queue.submit(
+                    command=command,
+                    depends=pred_job,
+                    name=name,
+                    cpus=2,
+                    partition=config['partition'],
+                    mem=config['mem'],
+                )
+                task_info['job'] = track_job
 
             # TODO: need a way of knowing if a package is BAS or SC.
             # Might need info on GSD as well.
@@ -629,22 +631,16 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     # Only run the command if its expected output does not exist
                     command = lazy_command(task_info['output'], command)
 
-                if task_info['recompute']:
-                    needs_compute = True
-                else:
-                    needs_compute = not (skip_existing and has_pred)
-
-                if needs_compute:
-                    name = 'iarpaeval-' + name_suffix
-                    iarpa_eval_job = queue.submit(
-                        command=command,
-                        depends=track_job,
-                        name=name,
-                        cpus=2,
-                        partition=config['partition'],
-                        mem=config['mem'],
-                    )
-                    task_info['job'] = iarpa_eval_job
+                name = 'iarpaeval-' + name_suffix
+                iarpa_eval_job = queue.submit(
+                    command=command,
+                    depends=track_job,
+                    name=name,
+                    cpus=2,
+                    partition=config['partition'],
+                    mem=config['mem'],
+                )
+                task_info['job'] = iarpa_eval_job
 
     print('queue = {!r}'.format(queue))
     # print(f'{len(queue)=}')

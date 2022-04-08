@@ -124,5 +124,5 @@ python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
         --enable_eval=0 \
         --enable_track=1 \
         --enable_iarpa_eval=1 \
-        --backend=tmux --run=1
+        --backend=tmux --run=0
 """
