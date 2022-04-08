@@ -28,6 +28,13 @@ from ..landcover.utils import setup_logging
 log = logging.getLogger(__name__)
 
 
+# Debug variables
+ENABLE_WRITES = 1  # set to zero to disable writing to disk
+ENABLE_MODEL = 1  # set to zero to disable running the model forward
+ENABLE_PROCESS = 1  # set to zero to disable chunked process
+ENABLE_CHUNKS = 1  # set to zero to disable chunking (increases VRAM)
+
+
 @click.command()
 @click.option('--dataset', required=True, type=click.Path(exists=True), help='input kwcoco dataset')
 @click.option('--deployed', required=True, type=click.Path(exists=True), help='pytorch weights file')
@@ -80,6 +87,7 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False,
     input_bundle_dpath = ub.Path(input_dset.bundle_dpath)
 
     from watch.utils import kwcoco_extensions
+    from watch.tasks.fusion.predict import quantize_float01
     filtered_gids = kwcoco_extensions.filter_image_ids(
         input_dset,
         include_sensors=['WV'],
@@ -145,7 +153,8 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False,
     process_func = partial(run_inference, model=model)
 
     log.debug('processing images')
-    dataloader = DataLoader(torch_dataset, num_workers=data_workers, batch_size=1, collate_fn=lambda x: x)
+    dataloader = DataLoader(torch_dataset, num_workers=data_workers,
+                            batch_size=1, pin_memory=1, collate_fn=lambda x: x)
     with torch.no_grad():
         for batch in tqdm(dataloader, miniters=1, unit='image', disable=False):
             assert len(batch) == 1
@@ -165,15 +174,26 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False,
 
             try:
                 image = batch_item['imgdata']
-                pred = process_image_chunked(image, process_func,
-                                             chip_size=chip_size,
-                                             overlap=overlap,
-                                             output_dtype=output_dtype)
+                log.info('processing image {}'.format(image.shape))
+
+                if ENABLE_PROCESS:
+                    use_chunks = ENABLE_CHUNKS
+                    if image.shape[0] < S and image.shape[1] < S:
+                        use_chunks = 0
+
+                    if use_chunks:
+                        pred = process_image_chunked(image, process_func,
+                                                     chip_size=chip_size,
+                                                     overlap=overlap,
+                                                     output_dtype=output_dtype)
+                    else:
+                        pred = process_func(image)
+                else:
+                    pred = np.zeros(image.shape[0:2], dtype=output_dtype)
                 # Dereference items after we are done with them
                 batch_item = None  # dereference for memory
                 image = None  # dereference for memory
 
-                from watch.tasks.fusion.predict import quantize_float01
                 quant_pred, quantization = quantize_float01(
                     pred, old_min=0, old_max=1, quantize_dtype=np.uint8)
                 pred = None  # dereference for memory
@@ -207,7 +227,7 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False,
             img_info = torch_dataset.dset.imgs[gid]
             pred_filename = _image_pred_filename(torch_dataset,
                                                  output_data_dir, img_info)
-            with util_gdal.GdalDataset(pred_filename, 'r') as gdal_img:
+            with util_gdal.GdalDataset.open(pred_filename, 'r') as gdal_img:
                 pred_shape = (gdal_img.RasterYSize, gdal_img.RasterXSize,
                               gdal_img.RasterCount)
             # pred_shape = kwimage.load_image_shape(pred_filename)
@@ -223,9 +243,10 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False,
             aux.append(info)
             output_dset.imgs[gid]['auxiliary'] = aux
 
-    output_dset.dump(str(output_dset_filename), indent=2)
-    output_dset.validate()
-    log.info('output written to {}'.format(output_dset_filename))
+    if ENABLE_WRITES:
+        output_dset.dump(str(output_dset_filename), indent=2)
+        output_dset.validate()
+        log.info('output written to {}'.format(output_dset_filename))
 
 
 def _image_pred_filename(torch_dataset, output_data_dir, img_info):
@@ -299,6 +320,10 @@ def run_inference(image, model, device=0):
         >>> kwplot.imshow(src, pnum=(1, 2, 1), doclf=True)
         >>> kwplot.imshow(result, pnum=(1, 2, 2))
     """
+    if not ENABLE_MODEL:
+        pred_shape = image.shape[0:2]
+        return np.full(pred_shape, fill_value=np.nan, dtype=np.float32)
+
     with torch.no_grad():
         nodata_mask = np.isnan(image)
         if not np.all(nodata_mask):
@@ -365,10 +390,12 @@ def _write_output(img_info, pred, pred_filename, output_bundle_dpath, quantizati
     pred_shape = pred.shape
     info = _build_aux_info(img_info, pred_shape, pred_filename,
                            output_bundle_dpath, quantization)
-    pred_filename.parent.mkdir(parents=True, exist_ok=True)
 
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore', UserWarning)
+    # with warnings.catch_warnings():
+    #     warnings.simplefilter('ignore', UserWarning)
+    if ENABLE_WRITES:
+        pred_filename.parent.mkdir(parents=True, exist_ok=True)
+
         kwimage.imwrite(str(pred_filename),
                         pred, backend='gdal', blocksize=256,
                         nodata=quantization['nodata'],
@@ -426,6 +453,13 @@ if __name__ == '__main__':
     python -m watch stats $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json
 
     python -m kwcoco stats $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json
+
+
+    Notes:
+        Does export MALLOC_MMAP_THRESHOLD_=0 help with memory?
+
+        export MALLOC_MMAP_THRESHOLD_=8192
+        export MALLOC_ARENA_MAX=4
 
     """
     setup_logging()
