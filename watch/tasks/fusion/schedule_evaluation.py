@@ -665,6 +665,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
     else:
         driver_fpath = queue.write()
         print('Wrote script: to run execute:\n{}'.format(driver_fpath))
+    # import xdev
+    # xdev.embed()
 
     """
     # Now postprocess script:

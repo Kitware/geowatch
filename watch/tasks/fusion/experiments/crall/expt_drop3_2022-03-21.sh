@@ -112,7 +112,8 @@ schedule-prediction-and-evlauation(){
             --skip_existing=True \
             --enable_pred=0 \
             --enable_eval=0 \
-            --enable_iarpa_eval=0 \
+            --enable_track=1 \
+            --enable_iarpa_eval=1 \
             --backend=tmux --run=1 
 
     #################################
@@ -1422,5 +1423,130 @@ python -m watch.tasks.fusion.fit \
     --multimodal_reduce=mean \
     --temporal_dropout=0.2 \
     --init="$INITIAL_STATE_V323" 
+
+# next is 329
+
+
+export CUDA_VISIBLE_DEVICES=0
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+
+
+kwcoco subset \
+    --select_images='.sensor_coarse == "S2"' \
+    --src="$KWCOCO_BUNDLE_DPATH"/combo_LM_nowv_train.kwcoco.json \
+    --dst="$KWCOCO_BUNDLE_DPATH"/combo_LM_s2_train.kwcoco.json
+
+kwcoco subset \
+    --select_images='.sensor_coarse == "S2"' \
+    --src="$KWCOCO_BUNDLE_DPATH"/combo_LM_nowv_vali.kwcoco.json \
+    --dst="$KWCOCO_BUNDLE_DPATH"/combo_LM_s2_vali.kwcoco.json
+
+
+export CUDA_VISIBLE_DEVICES=0
+CHANNELS="blue|green|red|nir|swir16|swir22,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field,matseg_0|matseg_1|matseg_2|matseg_3"
+INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+EXPERIMENT_NAME=Drop3_TeamFeats_LM_flatall_V329
+INITIAL_STATE_V323="$DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --channels="$CHANNELS" \
+    --init="$INITIAL_STATE" \
+    --class_loss='focal' \
+    --saliency_loss='dicefocal' \
+    --global_change_weight=0.00 \
+    --global_class_weight=3e-5 \
+    --global_saliency_weight=1.00 \
+    --learning_rate=4e-4 \
+    --weight_decay=1e-5 \
+    --accumulate_grad_batches=4 \
+    --max_epoch_length=2048 \
+    --max_epochs=160 \
+    --patience=160 \
+    --num_workers=4 \
+    --dist_weights=False \
+    --chip_size=128 \
+    --time_steps=24 \
+    --channels="$CHANNELS" \
+    --time_sampling=hardish3 \
+    --time_span=1year \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --accumulate_grad_batches=4 \
+    --draw_interval=5m \
+    --num_draw=4 \
+    --use_centered_positives=True \
+    --normalize_inputs=4096 \
+    --stream_channels=32 \
+    --multimodal_reduce=mean \
+    --temporal_dropout=0.2 \
+    --init="$INITIAL_STATE_V323" 
+
+export CUDA_VISIBLE_DEVICES=2
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field|matseg_0|matseg_1|matseg_2|matseg_3"
+INITIAL_STATE=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+EXPERIMENT_NAME=Drop3_TeamFeats_LM_flatsome_330
+INITIAL_STATE_BASELINE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/BASELINE_EXPERIMENT_V001/BASELINE_EXPERIMENT_V001_epoch=20-step=109829-v1.pt
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --channels="$CHANNELS" \
+    --init="$INITIAL_STATE" \
+    --class_loss='dicefocal' \
+    --saliency_loss='dicefocal' \
+    --global_change_weight=0.00 \
+    --global_class_weight=3e-5 \
+    --neg_to_pos_ratio=0.25 \
+    --global_saliency_weight=1.00 \
+    --learning_rate=4e-4 \
+    --weight_decay=1e-5 \
+    --accumulate_grad_batches=1 \
+    --max_epoch_length=4096 \
+    --max_epochs=160 \
+    --patience=160 \
+    --num_workers=4 \
+    --dist_weights=False \
+    --chip_size=128 \
+    --time_steps=10 \
+    --channels="$CHANNELS" \
+    --time_sampling=hardish3 \
+    --time_span=1year \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5m \
+    --num_draw=4 \
+    --use_centered_positives=False \
+    --normalize_inputs=4096 \
+    --stream_channels=16 \
+    --multimodal_reduce=mean \
+    --temporal_dropout=0.2 \
+    --init="$INITIAL_STATE_BASELINE" 
 
 # next is 329

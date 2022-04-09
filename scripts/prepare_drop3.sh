@@ -344,8 +344,8 @@ prepare_cropped_from_tracks(){
         --gres=",0" \
         --with_landcover=1 \
         --with_depth=1 \
-        --with_materials=1 \
-        --with_invariants=1 \
+        --with_materials=0 \
+        --with_invariants=0 \
         --do_splits=1 \
         --depth_workers=0 \
         --cache=1 --backend=tmux --run=1

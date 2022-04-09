@@ -71,6 +71,8 @@ class AggregateResultsConfig(scfg.Config):
         'io_workers': scfg.Value(10, help='number of workers to read metrics summaries'),
 
         'classes_of_interest': scfg.Value('*', nargs='+', help='One or more glob patterns'),
+
+        'embed': scfg.Value(False, help='if true embed into IPython before viz')
     }
 
 
@@ -1132,6 +1134,31 @@ def main(cmdline=False, **kwargs):
     class_df = class_df.drop(set(class_df.columns) & {'title', 'pred_fpath', 'package_name'}, axis=1)
     mean_df = mean_df.drop(set(mean_df.columns) & {'title', 'pred_fpath', 'package_name'}, axis=1)
 
+    # metric_correlation
+    metrics_of_interest = [
+        'BAS_F1',
+        'salient_AUC',
+        'salient_AP',
+        'coi_mAUC',
+        'coi_mAP',
+        'class_mAP',
+        'class_mAUC',
+    ]
+    metric_corr = mean_df[metrics_of_interest].corr()
+    print('Metric correleation')
+    print(metric_corr)
+
+    if 0:
+        import kwplot
+        sns = kwplot.autosns()
+        sns.scatterplot(data=mean_df, x='salient_AP', y='BAS_F1')
+        sns.scatterplot(data=mean_df, x='salient_AP', y='salient_AUC')
+
+    mean_desc = mean_df.describe().T
+    _nnull = mean_df.isnull().sum()
+    mean_desc = mean_desc.assign(null=_nnull)
+    print(mean_desc.to_string())
+
     class_df = shrink_notations(class_df, drop=1)
     mean_df = shrink_notations(mean_df, drop=1)
 
@@ -1208,6 +1235,10 @@ def main(cmdline=False, **kwargs):
         pass
 
     _ = best_candidates(class_rows, mean_rows)
+
+    if config['embed']:
+        import xdev
+        xdev.embed()
 
     DRAW = 1
     if DRAW:
