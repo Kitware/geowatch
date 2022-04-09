@@ -138,7 +138,8 @@ def run_stac_to_cropped_kwcoco(input_path,
     # up to S3, want to put any kwcoco manifests we may need
     # downstream into this directory.  TODO: rename variable to
     # include something like upload_dir or output_dir
-    ta1_cropped_dir = '/tmp/cropped_kwcoco/'
+    ta1_cropped_dir = '/tmp/cropped_kwcoco'
+    os.makedirs(ta1_cropped_dir, exist_ok=True)
 
     # 3a. Filter KWCOCO dataset by sensors used for BAS
     print("* Filtering KWCOCO dataset for BAS")
