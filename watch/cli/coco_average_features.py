@@ -1,11 +1,8 @@
-from multiprocessing.sharedctypes import Value
 import os
 import re
 import argparse
-from xml.dom import ValidationErr
 import kwcoco
 import kwimage
-import numpy as np
 import ubelt as ub
 from tqdm import tqdm
 
@@ -23,7 +20,7 @@ def split_channel_names_by_grammar(channel_names):
     Returns:
         list(str): A list of strings that were originally divided by certain characters.
     """
-    channel_names = re.split(",|\|", channel_names)
+    channel_names = re.split(r",|\|", channel_names)
     return channel_names
 
 
@@ -201,7 +198,7 @@ def merge_kwcoco_channels(
     for image_id, image_info in pbar:
         # Skip this image if its name is in the missing image name list.
         image_name = merge_kwcoco.index.imgs[image_id]["name"]
-        if not image_name in common_image_names:
+        if image_name not in common_image_names:
             continue
 
         # If sensor name specified, only merge channels for images from this sensor.
