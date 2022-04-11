@@ -168,8 +168,10 @@ aggregate-results(){
     python -m watch.tasks.fusion.aggregate_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
-        --dset_group_key="*Drop3*combo_LM_nowv_vali*" --show=True \
-        --classes_of_interest "Site Preparation" "Active Construction" --embed=True
+        --dset_group_key="*Drop3*combo_LM_nowv_vali*" \
+        --classes_of_interest "Site Preparation" "Active Construction" \
+        --io_workers=10 --show=True  \
+        --embed=True
 }
 
 
@@ -203,7 +205,42 @@ recovery_eval(){
             --enable_eval=0 \
             --enable_track=1 \
             --enable_iarpa_eval=0 \
-            --skip_existing=True --backend=tmux --run=1
+            --skip_existing=True --backend=tmux --run=0
+
+
+    TMUX_GPUS="0,1"
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="$TMUX_GPUS" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest.txt" \
+            --test_dataset="$VALI_FPATH" \
+            --enable_pred=0 \
+            --enable_eval=0 \
+            --enable_track=1 \
+            --enable_iarpa_eval=1 \
+            --skip_existing=True --backend=tmux --run=0
+
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
+    EXPT_GROUP_CODE=eval3_candidates
+    MEASURE_GLOBSTR=$DVC_DPATH/models/fusion/eval3_candidates/eval/BASELINE_EXPERIMENT_V001/pred_BASELINE_EXPERIMENT_V001_epoch=11-step=62759/Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco/predcfg_abd043ec/eval/curves/measures2.json
+    EXPT_GROUP_CODE=eval3_candidates
+    #EXPT_NAME_PAT="*"
+    EXPT_NAME_PAT="*"
+    #EXPT_NAME_PAT="*Drop3*"
+    EXPT_NAME_PAT="*"
+    #EXPT_NAME_PAT="BOTH_TA1_COMBO_TINY_p2w_raw*"
+    MODEL_EPOCH_PAT="*"
+    PRED_DSET_PAT="*"
+    PRED_CFG_PAT="*"
+    MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json
+
+    python -m watch.tasks.fusion.aggregate_results \
+        --measure_globstr="$MEASURE_GLOBSTR" \
+        --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
+        --dset_group_key="*Drop3*combo_LM_nowv_vali*" --show=0 \
+        --io_workers=10 --show=False  \
+        --classes_of_interest "Site Preparation" "Active Construction" --force-iarpa 
+        #    \
+        #--embed=True
 }
 
 fix-bad-commit(){

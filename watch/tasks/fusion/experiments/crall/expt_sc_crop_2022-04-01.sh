@@ -87,7 +87,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     python -m watch.tasks.fusion.aggregate_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
-        --dset_group_key="*Drop3*" --show=True \
+        --dset_group_key="*Drop3*s2_wv*" --show=True \
         --classes_of_interest "Site Preparation" "Active Construction" "Post Construction"
 }
 
@@ -113,6 +113,10 @@ prep_features(){
 
     rsync -avprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./_assets ooo:data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10
     rsync -avprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./combo* ooo:data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10
+
+
+    rsync -avprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./_assets horologic:data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10
+    rsync -avprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./combo* horologic:data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10
 
 
 }

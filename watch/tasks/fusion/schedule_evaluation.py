@@ -74,7 +74,7 @@ class ScheduleEvaluationConfig(scfg.Config):
         'enable_track': scfg.Value(False, help='if True, enable tracking'),
         'annotations_dpath': scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval'),
 
-        'track_thresholds': scfg.Value([0.1], help='grid of track thresholds'),
+        'bas_thresh': scfg.Value([0.1], type=list, help='grid of track thresholds'),
     }
 
 
@@ -369,7 +369,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     print('GPUS = {!r}'.format(GPUS))
     environ = {
-        'DVC_DPATH': dvc_dpath,
+        # 'DVC_DPATH': dvc_dpath,
     }
 
     from watch.utils import cmd_queue
@@ -611,7 +611,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             task_info['job'] = eval_job
 
         tracking_param_basis = {
-            'thresh': [0.1],
+            'thresh': config['bas_thresh'],
             # 'thresh': [0.1, 0.2, 0.3],
         }
         for track_cfg in ub.named_product(tracking_param_basis):
@@ -625,7 +625,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             ])
             iarpa_eval_dpath = track_suggestions['iarpa_eval_dpath']
             track_out_fpath = track_suggestions['track_out_fpath']
-            iarpa_summary_fpath = track_suggestions['iarpa_summary_fpath']
+            iarpa_merge_fpath = track_suggestions['iarpa_merge_fpath']
 
             task_infos.update({
                 'track': {
@@ -638,7 +638,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 'iarpa_eval': {
                     'name': 'iarpa_eval',
                     'requested': with_iarpa_eval,
-                    'output': iarpa_summary_fpath,
+                    'output': iarpa_merge_fpath,
                     'requires': ['track'],
                     'recompute': recompute_iarpa_eval,
                 }
@@ -675,7 +675,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             task_info = task_infos[task]
             if should_compute_task(task_info):
                 iarpa_eval_info = schedule_iarpa_eval._build_iarpa_eval_job(
-                    track_out_fpath, iarpa_eval_dpath, annotations_dpath, name_suffix)
+                    track_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath, annotations_dpath, name_suffix)
 
                 command = iarpa_eval_info['command']
 

@@ -44,6 +44,7 @@ import pandas as pd
 import numpy as np
 import ubelt as ub
 import yaml
+import io
 import shutil
 import kwarray
 import scriptconfig as scfg
@@ -90,40 +91,64 @@ def _writefig(fig, dpath, fname, figsize, verbose, tight):
     fig.savefig(fig_fpath)
 
 
+def debug_all_results():
+    """
+    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/iarpa_eval/scores/merged/summary2.json
+    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/iarpa_eval/scores/merged/summary2.json
+    """
+    pass
+
+
 def load_measure(measure_fpath):
     """
     Workers to load a single measure path. Has a hack to fix old configs.
     This can eventually be removed.
     """
+
+    if measure_fpath.is_dir():
+        cands = [
+            measure_fpath / 'curves/measures2.json',
+            measure_fpath / 'measures2.json',
+        ]
+        found = None
+        for c in cands:
+            if c.exists():
+                found = c
+                break
+        if found is None:
+            raise IOError(str(measure_fpath))
+        measure_fpath = found
+
     with open(measure_fpath, 'r') as file:
         info = json.load(file)
 
     HACK_FOR_IARPA = True
     if HACK_FOR_IARPA:
-        pred_parent = measure_fpath.parent.parent.parent
-        cand = ub.Path(*['pred' if p == 'eval' else p for p in pred_parent.parts])
-        iarpa_globs = cand / 'tracking/*/iarpa_eval/scores/merged/summary2.json'
         import glob
+        eval_dpath = measure_fpath.parent.parent
+        iarpa_globs = eval_dpath / 'tracking/*/iarpa_eval/scores/merged/summary2.json'
+
+        if 0:
+            eval_parents = measure_fpath.parent.parent.parent
+            cand = ub.Path(*['pred' if p == 'eval' else p for p in eval_parents.parts])
+            iarpa_globs = cand / 'tracking/*/iarpa_eval/scores/merged/summary2.json'
 
         iarpa_subresults = []
         iarpa_summary_fpaths = list(glob.glob(str(iarpa_globs)))
+        if ub.argflag('--force-iarpa'):
+            if not len(iarpa_summary_fpaths):
+                raise Exception('forcing-iarpa')
+
         for iarpa_fpath in iarpa_summary_fpaths:
             iarpa_fpath = ub.Path(iarpa_fpath)
             # HACK: need to persist the track params here
-            thresh = float(iarpa_fpath.parent.parent.parent.parent.name.split('_')[1].split('=')[1])
             with open(iarpa_fpath, 'r') as file:
-                iarpa_info = json.load(file)
-                iarpa_info
-                import io
-                best_bas_rows = pd.read_json(io.StringIO(json.dumps(iarpa_info['best_bas_rows'])), orient='table')
-                bas_row = best_bas_rows.loc['merged']
-                # bas_f1 = bas_row['F1'].values.ravel()[0]
-                row = bas_row.reset_index().iloc[0].to_dict()
-                row['thresh'] = thresh
-                iarpa_subresults.append(row)
-                # sc_df = pd.read_json(io.StringIO(json.dumps(iarpa_info['sc_df'])), orient='table')
-                # sc_cm = pd.read_json(io.StringIO(json.dumps(iarpa_info['sc_cm'])), orient='table')
-        info['meta']['iarpa_measures'] = iarpa_subresults
+                iarpa_merged = json.load(file)
+                iarpa_subresults.append(iarpa_merged)
+                # parent_info = iarpa_merged.get('parent_info', None)
+                # sc_df = pd.read_json(io.StringIO(json.dumps(iarpa_merged['sc_df'])), orient='table')
+                # sc_cm = pd.read_json(io.StringIO(json.dumps(iarpa_merged['sc_cm'])), orient='table')
+        info['meta']['iarpa_subresults'] = iarpa_subresults
 
     if True:
         # Hack to ensure fit config is properly serialized
@@ -317,8 +342,6 @@ def prepare_results(all_infos, coi_pattern, dvc_dpath=None):
 
         # _ = ub.Path(pred_fpath)
         # HACK
-        # import xdev
-        # xdev.embed()
         # model_fpath = (_.parent.parent.parent / (_.parent.parent.name.split('pred_')[-1] + '.pt'))
 
         title = meta['title']
@@ -409,19 +432,46 @@ def prepare_results(all_infos, coi_pattern, dvc_dpath=None):
         row['pred_fpath'] = pred_fpath
         row['model_fpath'] = str(package_fpath)
 
-        if 'iarpa_measures' in meta:
+        iarpa_subresults = meta.get('iarpa_subresults', [])
+
+        iarpa_simplified = []
+        for iarpa_merged in iarpa_subresults:
             try:
-                iarpa_measures = pd.DataFrame(meta['iarpa_measures'])
-                best_row = iarpa_measures.iloc[iarpa_measures['F1'].argmax()]
+                # thresh = float(iarpa_fpath.parent.parent.parent.parent.name.split('_')[1].split('=')[1])
+                # sc_cm = pd.read_json(io.StringIO(json.dumps(iarpa_merged['sc_cm'])), orient='table')
+                # sc_df = pd.read_json(io.StringIO(json.dumps(iarpa_merged['sc_df'])), orient='table')
+                best_bas_rows = pd.read_json(io.StringIO(json.dumps(iarpa_merged['best_bas_rows'])), orient='table')
+                parent_info = iarpa_merged.get('parent_info', None)
+                bas_row = best_bas_rows.loc['merged'].reset_index().iloc[0].to_dict()
+
+                # bas_f1 = bas_row['F1'].values.ravel()[0]
+                track_kwargs = None
+                # track_pred_info = None
+                for pinfo in parent_info:
+                    pinfo_type = pinfo.get('type', None)
+                    if pinfo_type == 'process':
+                        if pinfo['properties']['name'] == 'watch.cli.kwcoco_to_geojson':
+                            _prop = pinfo['properties']
+                            track_kwargs = json.loads(_prop['args']['track_kwargs'])
+                            # track_pred_info = _prop['pred_info']  # these should agree
+                # row['thresh'] = thresh
+                # if track_pred_info != predict_props:
+                #     pass
+
                 BAS_metrics = {
-                    'BAS_F1': best_row.F1,
-                    'BAS_thresh': best_row.thresh,
-                    'BAS_rho': best_row.tau,
-                    'BAS_tau': best_row.rho,
+                    'BAS_F1': bas_row['F1'],
+                    'BAS_thresh': track_kwargs['thresh'],
+                    'BAS_rho': bas_row['rho'],
+                    'BAS_tau': bas_row['tau'],
                 }
-                row.update(BAS_metrics)
+                iarpa_simplified.append(BAS_metrics)
+                # row.update(BAS_metrics)
             except Exception:
                 BAS_metrics = None
+
+        if iarpa_simplified:
+            BAS_metrics = max(iarpa_simplified, key=lambda x: x['BAS_F1'])
+            row.update(BAS_metrics)
 
         mean_rows.append(row)
 
@@ -628,8 +678,6 @@ def best_candidates(class_rows, mean_rows):
     print('all_model_candidates = {}'.format(ub.repr2(all_model_candidates, nl=1)))
 
     if 0:
-        # import xdev
-        # xdev.embed()
         # HACK
         # Check if models have predictions
         from watch.tasks.fusion.organize import suggest_paths
@@ -998,9 +1046,6 @@ def dump_spreadsheet(results_list2, out_dpath):
             #       # cell.number_format = '0.0000'
 
 
-def debug_all_results():
-    pass
-
 
 def main(cmdline=False, **kwargs):
     """
@@ -1067,8 +1112,6 @@ def main(cmdline=False, **kwargs):
     # dset_glob = config['dset_glob']
     # dset_glob = ''
     # measure_fpaths
-    # import xdev
-    # xdev.embed()
 
     print('dset_groups = {}'.format(ub.repr2(dset_groups, nl=2)))
 
@@ -1098,10 +1141,11 @@ def main(cmdline=False, **kwargs):
     failed_jobs = []
     for job in jobs.as_completed(desc='collect jobs'):
         try:
-            all_infos.append(job.result())
-        except Exception:
+            measure_info = job.result()
+            all_infos.append(measure_info)
+        except Exception as ex:
             failed_jobs.append(job.measure_fpath)
-            print('Failed job.measure_fpath = {!r}'.format(job.measure_fpath))
+            print('Failed job.measure_fpath = {!r} because {!r}'.format(job.measure_fpath, ex))
             pass
 
     if 0:
@@ -1170,8 +1214,6 @@ def main(cmdline=False, **kwargs):
     except Exception as ex:
         print('AnalysisError: ex = {!r}'.format(ex))
         print('Warning: Statistical analysis failed. Probably needs more data.')
-        # import xdev
-        # xdev.embed()
     else:
         print('analysis.varied = {}'.format(ub.repr2(analysis.varied, nl=2)))
         if len(analysis.stats_table):
@@ -1225,6 +1267,12 @@ def main(cmdline=False, **kwargs):
     if 'salient_APUC' in mean_df.columns:
         print('\nSort by salient_APUC')
         _salient_by_metric = mean_df.sort_values('salient_APUC')
+        # print(_salient_by_metric)
+        print(_salient_by_metric.to_string())
+
+    if 'BAS_F1' in mean_df.columns:
+        print('\nSort by BAS_F1')
+        _salient_by_metric = mean_df.sort_values('BAS_F1')
         # print(_salient_by_metric)
         print(_salient_by_metric.to_string())
 
@@ -1342,8 +1390,6 @@ def main(cmdline=False, **kwargs):
             # print(best_per_expt.sort_values('mAP').to_string())
 
         if 0:
-            # import xdev
-            # xdev.embed()
             # Make robust
             resource_rows = []
             # Resource scatter plots

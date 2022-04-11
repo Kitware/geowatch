@@ -15,17 +15,17 @@ def _suggest_track_paths(pred_fpath, track_cfg, eval_dpath=None):
     track_out_fpath = track_cfg_base / 'tracks.json'
 
     if eval_dpath is None:
-        iarpa_eval_dpath = eval_dpath / 'iarpa_eval'
+        iarpa_eval_dpath = track_cfg_base / 'iarpa_eval'
     else:
-        iarpa_eval_dpath = track_cfg_base / track_cfg_dname / 'iarpa_eval'
+        iarpa_eval_dpath = eval_dpath / track_cfg_dname / 'iarpa_eval'
 
-    iarpa_summary_fpath = iarpa_eval_dpath / 'scores' / 'merged' / 'summary2.json'
+    iarpa_merge_fpath = iarpa_eval_dpath / 'scores' / 'merged' / 'summary2.json'
 
     track_suggestions = {
         'iarpa_eval_dpath': iarpa_eval_dpath,
         'track_cfgstr': track_cfgstr,
         'track_out_fpath': track_out_fpath,
-        'iarpa_summary_fpath': iarpa_summary_fpath,
+        'iarpa_merge_fpath': iarpa_merge_fpath,
     }
     return track_suggestions
 
@@ -85,7 +85,7 @@ def _build_bas_track_job(pred_fpath, track_out_fpath, thresh=0.2):
     return track_info
 
 
-def _build_iarpa_eval_job(track_out_fpath, iarpa_eval_dpath, annotations_dpath, name=None):
+def _build_iarpa_eval_job(track_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath, annotations_dpath, name=None):
     import shlex
     tmp_dir = iarpa_eval_dpath / 'tmp'
     out_dir = iarpa_eval_dpath / 'scores'
@@ -99,6 +99,7 @@ def _build_iarpa_eval_job(track_out_fpath, iarpa_eval_dpath, annotations_dpath, 
             --tmp_dir "{tmp_dir}" \
             --out_dir "{out_dir}" \
             --name {shlex.quote(str(name))} \
+            --merge_fpath "{iarpa_merge_fpath}" \
             --inputs_are_paths \
             {track_out_fpath}
         ''')

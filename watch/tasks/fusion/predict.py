@@ -66,6 +66,9 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument('--tta_fliprot', type=smartcast, default=0, help='number of times to flip/rotate the frame, can be in [0,7]')
     parser.add_argument('--tta_time', type=smartcast, default=0, help='number of times to expand the temporal sample for a frame'),
 
+    # TODO:
+    # parser.add_argument('--cache', type=smartcast, default=0, help='if True, dont rerun prediction on images where predictions exist'),
+
     # TODO
     # parser.add_argument('--test_time_augmentation', default=False, help='')
 
