@@ -46,7 +46,7 @@ def make_predict_config(cmdline=False, **kwargs):
         args_for_writing_out_config_file=['--dump'],
     )
     parser.add_argument('--datamodule', default='KWCocoVideoDataModule')
-    parser.add_argument('--pred_dataset', default=None, dest='pred_dataset')
+    parser.add_argument('--pred_dataset', default=None, dest='pred_dataset', help='path to the output dataset (note: test_dataset is the input dataset)')
 
     # parser.add_argument('--pred_dpath', dest='pred_dpath', type=pathlib.Path, help='path to dump results. Deprecated, do not use.')
 

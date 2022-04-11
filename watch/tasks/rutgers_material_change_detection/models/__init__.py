@@ -10,6 +10,7 @@ from watch.tasks.rutgers_material_change_detection.models.timesformer import Tim
 from watch.tasks.rutgers_material_change_detection.models.dynamic_unet import DynamicUNet
 from watch.tasks.rutgers_material_change_detection.models.mat_ed_framework import MatED, MTMatED
 from watch.tasks.rutgers_material_change_detection.models.simple_cnn_encoder import SimpleCNNEncoder
+from watch.tasks.rutgers_material_change_detection.models.peri_resnet import resnet34 as peri_resnet34
 from watch.tasks.rutgers_material_change_detection.models.simple_decoder import SimpleDecoder, Decoder
 from watch.tasks.rutgers_material_change_detection.models.late_fusion_framework import LateFusionFramework
 from watch.tasks.rutgers_material_change_detection.models.early_fusion_framework import EarlyFusionFramework
@@ -34,12 +35,18 @@ def build_model(cfg, video_slice, n_in_channels, max_frames, n_out_channels, dev
     # Get pretrain information.
     pretrain = cfg.framework.pretrain
 
-    if framework.name in ["early_fusion", "patch_transformer", "attn_space_time"]:
+    if framework.name in ["early_fusion", "patch_transformer", "attn_space_time", "late_fusion"]:
 
         # Get model encoder.
         ## Hamdle special early fusion cases.
         if framework.name == "early_fusion":
             n_in_channels = max_frames * n_in_channels
+
+        # print(cfg.weights_load)
+        if cfg.weights_load == "all":
+            pretrain_path = pretrain
+        if cfg.weights_load != "encoder":
+            pretrain = None
 
         encoder = get_encoder(cfg, cfg.framework.encoder_name, n_in_channels, max_frames, pretrain)
 
@@ -73,15 +80,10 @@ def build_model(cfg, video_slice, n_in_channels, max_frames, n_out_channels, dev
                 feat_sizes=feat_sizes,
                 device=device,
             )
-        elif framework.name == "attn_space_time":
-            print("Not implemented yet.")
-            exit()
-            # discretizer = ResidualDiscritizer(
-            #     cfg.framework.discretizer.n_classes,
-            #     cfg.framework.encoder.proj_dim,
-            #     cfg.framework.discretizer.norm,
-            # )
-            # framework = AttnSpaceTimeFramework(encoder, decoder, discretizer)
+
+        if cfg.weights_load == "all":
+            print(f"loading weights from {pretrain_path}")
+            framework = load_pretrained_weights(framework, pretrain=pretrain_path, freeze_encoder=cfg.framework.freeze)
     elif framework.name in ["mat_ed", "mt_mat_ed"]:
         # Build encoder.
         encoder = get_encoder(cfg, cfg.framework.encoder_name, n_in_channels, max_frames, pretrain)
@@ -330,6 +332,8 @@ def load_resnet_model(encoder_name, n_channels, pretrain=None, freeze=False):
         model = resnet.resnet34()
     elif encoder_name == "resnet50":
         model = resnet.resnet50()
+    elif encoder_name == "resnet_peri_34":
+        model = peri_resnet34()
 
     # Get pretrained weights.
     if pretrain is not None:
@@ -347,6 +351,10 @@ def load_resnet_model(encoder_name, n_channels, pretrain=None, freeze=False):
 
             # Load pretrained weights into backbone model.
             model.load_state_dict(pt_model_weights.state_dict())
+        else:
+            if encoder_name == "resnet_peri_34":
+                print("INFO: Loading weights from Peri's model.")
+                model = peri_resnet34(pretrain)
 
     # Update first convolution layer.
     if n_channels != 3:

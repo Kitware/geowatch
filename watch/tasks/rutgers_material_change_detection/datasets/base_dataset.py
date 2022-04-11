@@ -3,6 +3,7 @@ import random
 
 import cv2
 import numpy as np
+from scipy import stats
 
 import torch
 from torch.utils.data import Dataset
@@ -17,7 +18,7 @@ class BaseDataset(Dataset):
         task_mode,
         transforms=None,
         seed_num=0,
-        pad_value=-1,
+        ignore_index=-1,
         normalize_mode=None,
         channels="RGB",
         max_iterations=None,
@@ -27,11 +28,11 @@ class BaseDataset(Dataset):
         self.split = split
         self.channels = channels
         self.dset_dir = dset_dir
-        self.pad_value = pad_value
         self.task_mode = task_mode
         self.transforms = transforms
         self.scale = video_slice.scale
         self.video_slice = video_slice
+        self.ignore_index = ignore_index
         self.n_frames = video_slice.n_frames
         self.normalize_mode = normalize_mode
         self.max_iterations = max_iterations
@@ -44,45 +45,34 @@ class BaseDataset(Dataset):
             self.mean_vals, self.std_vals = self.get_pixel_normalization_params()
 
     def __len__(self):
-        if (self.max_iterations is not None) and (self.max_iterations < len(self.dset_slices)):
+        if (self.max_iterations is not None) and (self.max_iterations < len(self.examples)):
             return self.max_iterations
         else:
-            return len(self.dset_slices)
-
-        raise NotImplementedError
+            return len(self.examples)
 
     def __getitem__(self, index):
-        if self.task_mode == "total_bin_change":
-            example = self.get_total_binary_change_example(index)
-        elif self.task_mode == "total_sem_change":
-            example = self.get_total_semantic_change_example(index)
-        elif self.task_mode == "pw_bin_change":
-            example = self.get_pairwise_binary_change_example(index)
-        elif self.task_mode == "pw_sem_change":
-            example = self.get_pairwise_semantic_change_example(index)
-        elif self.task_mode == "future_frame_pred":
-            example = self.get_future_frame_prediction_example(index)
-        elif self.task_mode == "sem_seg":
-            example = self.get_semantic_segmentation_example(index)
-        elif self.task_mode == "ss_triplet":
-            example = self.get_self_supervised_triplet_example(index)
-        elif self.task_mode == "ss_splice_change":
-            example = self.get_self_supervised_splice_change_example(index)
-        elif self.task_mode == "ss_crop_splice_change":
-            example = self.get_self_supervised_crop_splice_change_example(index)
-        elif self.task_mode == "ss_arrow_of_time":
-            example = self.get_self_supervised_arrow_of_time_example(index)
-        elif self.task_mode == "ss_mat_change":
-            example = self.get_self_supervised_material_change_example(index)
-        elif self.task_mode == "ss_mat_recon":
-            example = self.get_self_supervised_material_reconstruction_example(index)
-        elif self.task_mode == "ss_splice_change_index":
-            example = self.get_self_supervised_splice_change_index_example(index)
-        elif self.task_mode == "bas":
-            example = self.get_broad_area_search_example(index)
-        else:
+        task_mode_fns = {
+            "total_bin_change": self.get_total_binary_change_example,
+            "total_sem_change": self.get_total_semantic_change_example,
+            "pw_bin_change": self.get_pairwise_binary_change_example,
+            "pw_sem_change": self.get_pairwise_semantic_change_example,
+            "future_frame_pred": self.get_future_frame_prediction_example,
+            "sem_seg": self.get_semantic_segmentation_example,
+            "ss_triplet": self.get_self_supervised_triplet_example,
+            "ss_splice_change": self.get_self_supervised_splice_change_example,
+            "ss_crop_splice_change": self.get_self_supervised_crop_splice_change_example,
+            "ss_arrow_of_time": self.get_self_supervised_arrow_of_time_example,
+            "ss_mat_change": self.get_self_supervised_material_change_example,
+            "ss_mat_recon": self.get_self_supervised_material_reconstruction_example,
+            "ss_splice_change_index": self.get_self_supervised_splice_change_index_example,
+            "bas": self.get_broad_area_search_example,
+            "refine_sc": self.get_refine_site_characterization_example,
+        }
+        try:
+            task_mode_fn = task_mode_fns[self.task_mode]
+        except KeyError:
             raise NotImplementedError(f'Target task "{self.task_mode}" has not been implemented in BaseDataset class.')
-
+        example = task_mode_fn(index)
         return example
 
     def set_seed(self, seed_num):
@@ -90,8 +80,9 @@ class BaseDataset(Dataset):
             print("No random seed set!")
         else:
             print(f"Setting random seed to: {seed_num}")
-            torch.backends.cudnn.deterministic = True
-            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.enabled = True
+            torch.backends.cudnn.benchmark = True
+            torch.backends.cudnn.deterministic = False
             torch.manual_seed(seed_num)
             torch.cuda.manual_seed_all(seed_num)
             np.random.seed(seed_num)
@@ -133,6 +124,12 @@ class BaseDataset(Dataset):
     def get_self_supervised_splice_change_index_example(self, index):
         raise NotImplementedError(f'Task "{self.task_mode}" not implemented for this dataset.')
 
+    def get_self_supervised_material_reconstruction_example(self, index):
+        raise NotImplementedError(f'Task "{self.task_mode}" not implemented for this dataset.')
+
+    def get_refine_site_characterization_example(self, index):
+        raise NotImplementedError(f'Task "{self.task_mode}" not implemented for this dataset.')
+
     def get_broad_area_search_example(self, index):
         raise NotImplementedError(f'Task "{self.task_mode}" not implemented for this dataset.')
 
@@ -144,6 +141,30 @@ class BaseDataset(Dataset):
 
     def colorize_target_mask(self, target_mask):
         raise NotImplementedError("Load frames not implemented for this dataset.")
+
+    def compute_class_distribution(self, target_mask, n_classes, ignore_index=-1):
+        """Compute the class distribution of a target image as percentages.
+
+        Args:
+            target_mask (_type_): TODO: _description_
+            n_classes (_type_): TODO: _description_
+            ignore_index (int, optional): TODO: _description_. Defaults to -1.
+        """
+        unique_classes = list(np.unique(target_mask))
+
+        # Remove the ignore index class.
+        if ignore_index in unique_classes:
+            unique_classes.remove(ignore_index)
+
+        class_dist = np.zeros(n_classes)
+        for class_number in unique_classes:
+            x, y = np.where(target_mask == class_number)
+            class_dist[class_number] = x.shape[0]
+
+        # Normalize the class distribution to a probability.
+        class_dist /= class_dist.sum()
+
+        return class_dist
 
     def visualize_example(self, index, save_path=None, num_plot_images=5, overlay_last_anno=False):
         import matplotlib.pyplot as plt
@@ -178,7 +199,7 @@ class BaseDataset(Dataset):
             else:
                 # Fewer images in sequence than number of plot images.
                 for i in range(num_plot_images):
-                    rgb_image = self.to_rgb(example["video"][i])
+                    rgb_image = self.to_rgb(example["video"][i])  # TODO:
 
                     axes[i].imshow(rgb_image)
                     axes[i].set_title(f'{example["datetimes"][i].strftime("%m/%d/%Y")} | [{index}/{F-1}]')
@@ -215,7 +236,11 @@ class BaseDataset(Dataset):
                 indices.append(F - 1)
 
                 for i, index in enumerate(indices):
-                    rgb_image = self.to_rgb(example["video"][index])
+                    rgb_image = self.to_rgb(
+                        self.unnormalize(example["video"][index])[0],
+                        mean=example["mean"][index],
+                        std=example["std"][index],
+                    )
 
                     axes[i].imshow(rgb_image)
                     axes[i].set_title(f'{example["datetimes"][index].strftime("%m/%d/%Y")} | [{index}/{F-1}]')
@@ -223,14 +248,15 @@ class BaseDataset(Dataset):
             else:
                 # Fewer images in sequence than number of plot images.
                 for i in range(num_plot_images):
-                    rgb_image = self.to_rgb(example["video"][i])
+                    rgb_image = self.to_rgb(
+                        self.unnormalize(example["video"][i])[0], mean=example["mean"][i], std=example["std"][i]
+                    )
 
                     axes[i].imshow(rgb_image)
                     axes[i].set_title(f'{example["datetimes"][i].strftime("%m/%d/%Y")} | [{index}/{F-1}]')
                     axes[i].axis("off")
 
             # Add title to entire resquence.
-
             if "region_name" in list(example.keys()):
                 fig.suptitle(f'{example["region_name"]} | {self.task_mode} | Reverse: {reverse}')
             else:
@@ -265,7 +291,9 @@ class BaseDataset(Dataset):
                 indices.append(F - 1)
 
                 for i, index in enumerate(indices):
-                    rgb_image = self.to_rgb(example["video"][index])
+                    rgb_image = self.to_rgb(
+                        self.unnormalize(example["video"][index], mean=example["mean"], std=example["std"])
+                    )
 
                     if overlay_last_anno and i == (len(indices) - 1):
                         # Format label image
@@ -279,9 +307,10 @@ class BaseDataset(Dataset):
             else:
                 # Fewer images in sequence than number of plot images.
                 for i in range(num_plot_images):
-                    rgb_image = self.to_rgb(example["video"][i])
-
-                    if overlay_last_anno and i == (len(num_plot_images) - 1):
+                    rgb_image = self.to_rgb(
+                        self.unnormalize(example["video"][i], mean=example["mean"], std=example["std"])
+                    )
+                    if overlay_last_anno and i == (num_plot_images - 1):
                         # Format label image
                         mpl_label_image = np.ma.masked_where(label_image.numpy() == 0, label_image.numpy())
                         axes[i + 1].imshow(rgb_image, interpolation="none")
@@ -302,7 +331,7 @@ class BaseDataset(Dataset):
                 plt.savefig(save_path, dpi=300)
 
         elif self.task_mode == "sem_seg":
-            assert overlay_last_anno is False, "Overlaying annotation for sem_seg is not implmented yet."
+            assert not overlay_last_anno, "Overlaying annotation for sem_seg is not implmented yet."
             # Plot a subset of images in the sequence and change mask
             F = int(example["active_frames"].sum())
 
@@ -354,18 +383,22 @@ class BaseDataset(Dataset):
             # Plot a subset of images in the sequence and change mask
             F = int(example["active_frames"].sum())
 
-            if F < num_plot_images:
+            if F <= num_plot_images:
                 num_plot_images = F
+                indices = list(range(num_plot_images))
+            else:
+                ## Take a subset of frames but include the change frame.
+                indices = [(F // num_plot_images) * i for i in range(num_plot_images - 2)]
+                indices.append(F - 1)
+                indices.append(change_index)
+                indices = sorted(indices)
+
             fig, axes = plt.subplots(1, num_plot_images, figsize=(30, 5))
 
-            ## Take a subset of frames but include the change frame.
-            indices = [(F // num_plot_images) * i for i in range(num_plot_images - 2)]
-            indices.append(F - 1)
-            indices.append(change_index)
-            indices = sorted(indices)
-
             for i, index in enumerate(indices):
-                rgb_image = self.to_rgb(example["video"][index])
+                rgb_image = self.to_rgb(
+                    self.unnormalize(example["video"][index], mean=example["mean"], std=example["std"])
+                )
 
                 axes[i].imshow(rgb_image)
                 if i == change_index:
@@ -433,7 +466,7 @@ class BaseDataset(Dataset):
             rgb_frames = []
             for i in range(F):
                 # Load frame and convert to RGB.
-                rgb_frame = self.to_rgb(example["video"][i])
+                rgb_frame = self.to_rgb(self.unnormalize(example["video"][i], mean=example["mean"], std=example["std"]))
 
                 rgb_frames.append(rgb_frame)
 
@@ -582,69 +615,49 @@ class BaseDataset(Dataset):
             print(f"Saving figure to path: {save_path}")
             plt.savefig(save_path, dpi=300)
 
-    def scale_video_target(self, video, target, scale_factor, video_inter=cv2.INTER_NEAREST):
-        """[summary]
+    def scale_video(self, video, scale_factor, inter_mode=cv2.INTER_NEAREST):
+        """Up or down scale all frames of video.
 
         Args:
-            video ([type]): A float numpy array of shape [n_frames, n_channels, height, width] consisting of image data.
-            target ([type]): A uint8? numpy array of shape [n_channels, height, width] consisting of annotation data.
+            video (numpy array): A float numpy array of shape [n_frames, n_channels, height, width].
             scale_factor (int/float): The factor to scale the video and target by. NOTE: This variable be between (0, inf).
-            video_inter (int, optional): An OpenCV resize parameter to determine the resizing method. Defaults to cv2.INTER_NEAREST.
-
-        Raises:
-            NotImplementedError: Not implemented for all task_mode types.
+            inter_mode (int, optional): An OpenCV resize parameter to determine the resizing method. Defaults to cv2.INTER_NEAREST.
 
         Returns:
-            [type]: A tuple of scaled video and target numpy arrays.
+            numpy array: A resized video.
         """
-        # Scale resolution of video and target.
-        assert self.scale != 1 and self.scale is not None, "Scale must be a float not equal to 1 or None."
+        # Rearrange axes from [n_frames, n_channels, height, width] to [n_frames, height, width, n_channels].
+        video = video.transpose(0, 2, 3, 1)
 
-        if self.task_mode in ["total_bin_change", "total_sem_change", "sem_seg"]:
+        # Resize video.
+        rz_video = []
+        for frame_index in range(video.shape[0]):
+            rz_frame = self.scale_frame(video[frame_index], scale_factor, inter_mode=inter_mode)
+            rz_video.append(rz_frame)
+        video = np.stack(rz_video, axis=0)
 
-            # Rescale video resolution.
-            rz_video = []
-            for frame_index in range(video.shape[0]):
-                rz_frame = cv2.resize(
-                    video[frame_index].transpose(1, 2, 0),
-                    (int(self.video_slice.height * scale_factor), int(self.video_slice.width * scale_factor)),
-                    interpolation=video_inter,
-                ).transpose(2, 0, 1)
-                rz_video.append(rz_frame)
-            video = np.stack(rz_video, axis=0)
+        # Rearrange axes from [n_frames, height, width, n_channels] to [n_frames, n_channels, height, width].
+        video = video.transpose(0, 3, 1, 2)
 
-            # Rescale target resolution.
-            target = cv2.resize(
-                target,
-                (int(self.video_slice.height * scale_factor), int(self.video_slice.width * scale_factor)),
-                interpolation=cv2.INTER_NEAREST,
-            )
+        return video
 
-        elif self.task_mode in [
-            None,
-            "ss_triplet",
-            "ss_arrow_of_time",
-            "ss_splice_change",
-            "ss_splice_change_index",
-            "ss_mat_recon",
-        ]:
-            # Rescale video resolution.
-            rz_video = []
-            for frame_index in range(video.shape[0]):
-                rz_frame = cv2.resize(
-                    video[frame_index].transpose(1, 2, 0),
-                    (int(self.video_slice.height * scale_factor), int(self.video_slice.width * scale_factor)),
-                    interpolation=video_inter,
-                ).transpose(2, 0, 1)
-                rz_video.append(rz_frame)
-            video = np.stack(rz_video, axis=0)
+    def scale_frame(self, frame, scale_factor, inter_mode=cv2.INTER_NEAREST):
+        """Up or down scale a frame.
 
-            # No target to resize.
-            target = None
-        else:
-            raise NotImplementedError(f'Scale method is not implemented for task mode: "{self.task_mode}"')
+        Args:
+            frame (numpy array): A numpy array of shape [n_channels, height, width].
+            scale_factor (int/float): The factor to scale the video and target by. NOTE: This variable be between (0, inf).
+            inter_mode (int, optional): An OpenCV resize parameter to determine the resizing method. Defaults to cv2.INTER_NEAREST.
 
-        return video, target
+        Returns:
+            numpy array: A resized frame.
+        """
+        rz_frame = cv2.resize(
+            frame,
+            (int(self.video_slice.height * scale_factor), int(self.video_slice.width * scale_factor)),
+            interpolation=inter_mode,
+        )
+        return rz_frame
 
     def get_pixel_normalization_params(self):
         raise NotImplementedError
@@ -659,8 +672,9 @@ class BaseDataset(Dataset):
             torch.tensor: Shape [n_frames, channels, height, width]
         """
         if self.normalize_mode is None:
-            pass
+            mean, std = [0], [1]
         elif self.normalize_mode == "global":
+            mean, std = self.mean_vals, self.std_vals
             video = (video - self.mean_vals) / self.std_vals
         elif self.normalize_mode == "local":
             # Compute the video mean and std.
@@ -681,29 +695,33 @@ class BaseDataset(Dataset):
             mean = mean[np.newaxis, :, np.newaxis, np.newaxis]
             std = std[np.newaxis, :, np.newaxis, np.newaxis]
 
-            video = (video - mean) / std
-        else:
-            raise NotImplementedError(f"Normalize mode: {self.normalize_mode}")
+            self.local_mean, self.local_std = mean, std
+            video = (video - self.local_mean) / self.local_std
 
-        return video
+        elif self.normalize_mode == "local_trim":
+            # Compute the trimmed video mean and std over channels.
+            # Trim the top and bottom 15%.
+            trimmed_pct = 0.15
+            channel_means, channel_stds = [], []
+            for channel_index in range(video.shape[1]):
+                # Compute trimmed mean.
+                try:
+                    channel_mean = stats.trim_mean(video[:, channel_index], trimmed_pct, axis=None)
+                except Exception:
+                    print("Upset trim mean")
+                    channel_mean = 0
+                channel_means.append(channel_mean)
 
-    def unnormalize(self, video):
-        """Undo the normalization process.
+                # Compute trimmed mean.
+                try:
+                    channel_std = stats.mstats.trimmed_std(video[:, channel_index], trimmed_pct, axis=None)
+                except Exception:
+                    print("Upset trim STD")
+                    channel_std = 1
+                channel_stds.append(channel_std)
 
-        Args:
-            video (torch.tensor): Shape [n_frames, channels, height, width]
-
-        Returns:
-            torch.tensor: Shape [n_frames, channels, height, width]
-        """
-        if self.normalize_mode is None:
-            pass
-        elif self.normalize_mode == "global":
-            video = (video * self.std_vals) + self.mean_vals
-        elif self.normalize_mode == "local":
-            # Compute the video mean and std.
-            mean = np.mean(video, axis=(0, 2, 3))
-            std = np.std(video, axis=(0, 2, 3))
+            mean = np.asarray(channel_means)
+            std = np.asarray(channel_stds)
 
             if sum(mean) == 0:
                 mean = np.zeros(mean.shape[0])
@@ -719,7 +737,37 @@ class BaseDataset(Dataset):
             mean = mean[np.newaxis, :, np.newaxis, np.newaxis]
             std = std[np.newaxis, :, np.newaxis, np.newaxis]
 
+            self.local_trim_mean, self.local_trim_std = mean, std
+
+            video = (video - self.local_trim_mean) / self.local_trim_std
+
+        else:
+            raise NotImplementedError(f"Normalize mode: {self.normalize_mode}")
+
+        mean, std = torch.tensor(mean), torch.tensor(std)
+        return video, mean, std
+
+    def unnormalize(self, video, mean=None, std=None):
+        """Undo the normalization process.
+
+        Args:
+            video (torch.tensor): Shape [n_frames, channels, height, width]
+
+        Returns:
+            torch.tensor: Shape [n_frames, channels, height, width]
+        """
+        if mean is not None:
+            video = (video * std) + mean
+            return video
+
+        if self.normalize_mode is None:
+            video = video[None]
+        elif self.normalize_mode == "global":
             video = (video * self.std_vals) + self.mean_vals
+        elif self.normalize_mode == "local":
+            video = (video * self.local_std) + self.local_mean
+        elif self.normalize_mode == "local_trim":
+            video = (video * self.local_trim_std) + self.local_trim_mean
         else:
             raise NotImplementedError(f"Normalize mode: {self.normalize_mode}")
 
