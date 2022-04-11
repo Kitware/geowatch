@@ -151,7 +151,7 @@ class Evaluator(object):
         img_name = img.get('name', f'gid{gid:08d}')
         save_path = self.output_feat_dpath / f'{img_name}_{self.concise_chan_path_code}.tif'
         return save_path
-    
+
     def _features_path_for_image(self, gid, layer):
         img = self.output_coco_dataset.index.imgs[gid]
         img_name = img.get('name', f'gid{gid:08d}')
@@ -179,12 +179,12 @@ class Evaluator(object):
             if self.save_raw_features:
                 stitcher_up3 = self.stitcher_dict_up3[gid]
                 stitcher_up5 = self.stitcher_dict_up5[gid]
-            
+
             import warnings
             with warnings.catch_warnings():
                 warnings.filterwarnings('ignore', 'invalid value encountered in true_divide', category=RuntimeWarning)
                 recon = stitcher.finalize()
-                
+
                 if self.save_raw_features:
                     recon_up3 = stitcher_up3.finalize()
                     recon_up5 = stitcher_up5.finalize()
@@ -203,16 +203,16 @@ class Evaluator(object):
         # a std < 3, so this should be a decent range to work within.
         quant_recon, quantization = quantize_float01(recon, old_min=-11, old_max=11)
         nodata = quantization['nodata']
-        
+
         save_path = self._output_path_for_image(gid)
         save_path = os.fspath(save_path)
-        
+
         if self.save_raw_features:
             quant_recon_up3, quantization_up3 = quantize_float01(recon_up3, old_min=-11, old_max=11)
             nodata_up3 = quantization_up3['nodata']
             save_path_up3 = self._features_path_for_image(gid, 'up3')
             save_path_up3 = os.fspath(save_path_up3)
-            
+
             quant_recon_up5, quantization_up5 = quantize_float01(recon_up5, old_min=-11, old_max=11)
             nodata_up5 = quantization_up5['nodata']
             save_path_up5 = self._features_path_for_image(gid, 'up5')
@@ -220,7 +220,7 @@ class Evaluator(object):
 
         if cached:
             aux_height, aux_width = kwimage.load_image_shape(save_path)[0:2]
-            
+
             if self.save_raw_features:
                 aux_height_up3, aux_width_up3 = kwimage.load_image_shape(save_path_up3)[0:2]
                 aux_height_up5, aux_width_up5 = kwimage.load_image_shape(save_path_up5)[0:2]
@@ -228,54 +228,53 @@ class Evaluator(object):
             kwimage.imwrite(save_path, quant_recon, backend='gdal', space=None,
                             nodata=nodata, **self.imwrite_kw)
             aux_height, aux_width = quant_recon.shape[0:2]
-            
+
             if self.save_raw_features:
                 kwimage.imwrite(save_path_up3, quant_recon_up3, backend='gdal', space=None,
-                            nodata=nodata_up3, **self.imwrite_kw)
+                                nodata=nodata_up3, **self.imwrite_kw)
                 aux_height_up3, aux_width_up3 = quant_recon_up3.shape[0:2]
-                
+
                 kwimage.imwrite(save_path_up5, quant_recon_up5, backend='gdal', space=None,
-                            nodata=nodata_up5, **self.imwrite_kw)
+                                nodata=nodata_up5, **self.imwrite_kw)
                 aux_height_up5, aux_width_up5 = quant_recon_up5.shape[0:2]
 
         warp_aux_to_img = kwimage.Affine.scale(
             (img['width'] / aux_width,
              img['height'] / aux_height))
 
-        
         aux = {
-                'file_name': save_path,
-                'height': aux_height,
-                'width': aux_width,
-                'channels': self.concise_chan_code,
-                'warp_aux_to_img': warp_aux_to_img.concise(),
-                'quantization': quantization,
-                }
-        
+            'file_name': save_path,
+            'height': aux_height,
+            'width': aux_width,
+            'channels': self.concise_chan_code,
+            'warp_aux_to_img': warp_aux_to_img.concise(),
+            'quantization': quantization,
+        }
+
         auxiliary = img.setdefault('auxiliary', [])
         auxiliary.append(aux)
-        
+
         if self.save_raw_features:
             aux_up3 = {
-            'file_name': save_path_up3,
-            'height': aux_height,
-            'width': aux_width,
-            'channels': 'hidmat4:64',
-            'warp_aux_to_img': warp_aux_to_img.concise(),
-            'quantization': quantization_up3,
+                'file_name': save_path_up3,
+                'height': aux_height,
+                'width': aux_width,
+                'channels': 'hidmat4:64',
+                'warp_aux_to_img': warp_aux_to_img.concise(),
+                'quantization': quantization_up3,
             }
-            
+
             auxiliary.append(aux_up3)
-            
+
             aux_up5 = {
-            'file_name': save_path_up5,
-            'height': aux_height,
-            'width': aux_width,
-            'channels': 'hidmat4:128',
-            'warp_aux_to_img': warp_aux_to_img.concise(),
-            'quantization': quantization_up5,
+                'file_name': save_path_up5,
+                'height': aux_height,
+                'width': aux_width,
+                'channels': 'hidmat4:128',
+                'warp_aux_to_img': warp_aux_to_img.concise(),
+                'quantization': quantization_up5,
             }
-            
+
             auxiliary.append(aux_up5)
 
     @profile
@@ -365,8 +364,6 @@ class Evaluator(object):
                     keepna=False, mask=input_mask)
 
                 output1, outputs_layers = self.model(image1)  # [B,22,150,150]
-                
-                
 
                 # replace model outputs with nans in spatial locations
                 output_mask = input_mask.any(dim=1, keepdims=True).expand_as(output1)
@@ -379,30 +376,25 @@ class Evaluator(object):
                 if self.save_raw_features:
                     up3_to_save = outputs_layers['up3']
                     up5_to_save = outputs_layers['up5']
-                    
+
                     # print(output1.shape)
                     # print(up3_to_save.shape)
                     # print(up5_to_save.shape)
-                    
+
                     # up3_to_save = up3_to_save.permute(0, 2, 3, 1)
                     # up5_to_save = up5_to_save.permute(0, 2, 3, 1)
-                    
-                    
-                    
+
                     up3_to_save = F.upsample(up3_to_save, size=output1.shape[-2:], mode='bilinear', align_corners=True)
                     up5_to_save = F.upsample(up5_to_save, size=output1.shape[-2:], mode='bilinear', align_corners=True)
-                    
+
                     # print(up3_to_save.shape)
                     # print(up5_to_save.shape)
-                    
+
                     up3_to_save = up3_to_save.cpu().detach().numpy()
                     up5_to_save = up5_to_save.cpu().detach().numpy()
                     bs, c_up3, h, w  = up3_to_save.shape
                     bs, c_up5, h, w  = up5_to_save.shape
-                    
-                    
-                    
-                    
+
                 # print(f"output1_to_save: {output1_to_save.shape}")
                 # print(f"output1_to_save min: {output1_to_save.min()}, max: {output1_to_save.max()}")
                 # output_show = (output1_to_save - output1_to_save.min()) / (output1_to_save.max() - output1_to_save.min())
@@ -432,20 +424,20 @@ class Evaluator(object):
 
                         for gid in current_gids:
                             output = output1_to_save[b, :, :, :]
-                            
+
                             if self.save_raw_features:
-                                up3 = up3_to_save[b,:,:,:]
-                                up5 = up5_to_save[b,:,:,:]
-                                
+                                up3 = up3_to_save[b, :, :, :]
+                                up5 = up5_to_save[b, :, :, :]
+
                                 up3 = np.transpose(up3, (1, 2, 0))
                                 up5 = np.transpose(up5, (1, 2, 0))
-                            
+
                             if gid not in self.stitcher_dict.keys():
                                 self.stitcher_dict[gid] = kwarray.Stitcher(
                                     (*outputs['tr'].data[0][b]['space_dims'],
-                                    self.num_classes),
+                                     self.num_classes),
                                     device='numpy')
-                                
+
                                 if self.save_raw_features:
                                     self.stitcher_dict_up3[gid] = kwarray.Stitcher(
                                         (*outputs['tr'].data[0][b]['space_dims'], c_up3),
@@ -473,25 +465,25 @@ class Evaluator(object):
                                     spatial_valid_mask_up3 = (1 - invalid_up3_mask.any(axis=2, keepdims=True))
                                     weights_up3 = weights_up3 * spatial_valid_mask_up3
                                     up3[invalid_up3_mask] = 0
-                                
+
                                 if np.any(invalid_up5_mask):
                                     spatial_valid_mask_up5 = (1 - invalid_up5_mask.any(axis=2, keepdims=True))
                                     weights_up5 = weights_up5 * spatial_valid_mask_up5
                                     up5[invalid_up5_mask] = 0
-                                    
+
                             invalid_output_mask = np.isnan(output)
                             if np.any(invalid_output_mask):
                                 spatial_valid_mask = (1 - invalid_output_mask.any(axis=2, keepdims=True))
                                 weights = weights * spatial_valid_mask
                                 output[invalid_output_mask] = 0
-                            
+
                             # print(f"slice_: {slice_}")
                             # print(f"output weights: {weights.shape}, output: {output.shape}")
                             # print(f"output weights_up3: {weights_up3.shape}, up3: {up3.shape}")
                             # print(f"output weights_up5: {weights_up5.shape}, up5: {up5.shape}")
-                            
+
                             self.stitcher_dict[gid].add(slice_, output, weight=weights)
-                            
+
                             if self.save_raw_features:
                                 self.stitcher_dict_up3[gid].add(slice_, up3, weight=weights_up3)
                                 self.stitcher_dict_up5[gid].add(slice_, up5, weight=weights_up5)
@@ -836,7 +828,7 @@ def build_evaler(cmdline=False, **kwargs):
         imwrite_kw=imwrite_kw,
         batch_size=args.batch_size,
         cache=args.cache,
-        save_raw_features = args.export_raw_features
+        save_raw_features=args.export_raw_features
         )
     return evaler
 

@@ -172,7 +172,7 @@ class BaseDataset(Dataset):
         # Get an example.
         example = self.__getitem__(index)
 
-        if self.task_mode == None:
+        if self.task_mode is None:
             # Assumes that there are no labels in the example.
             F = int(example["active_frames"].sum())
 
@@ -331,7 +331,7 @@ class BaseDataset(Dataset):
                 plt.savefig(save_path, dpi=300)
 
         elif self.task_mode == "sem_seg":
-            assert overlay_last_anno == False, "Overlaying annotation for sem_seg is not implmented yet."
+            assert not overlay_last_anno, "Overlaying annotation for sem_seg is not implmented yet."
             # Plot a subset of images in the sequence and change mask
             F = int(example["active_frames"].sum())
 
@@ -586,7 +586,7 @@ class BaseDataset(Dataset):
         example = self.__getitem__(index)
 
         if "datetimes" not in example.keys():
-            raise KeyError(f"Dataset does not contain datetimes in example.")
+            raise KeyError("Dataset does not contain datetimes in example.")
 
         # Get unique years in datetimes.
         dates = example["datetimes"]
@@ -707,7 +707,7 @@ class BaseDataset(Dataset):
                 # Compute trimmed mean.
                 try:
                     channel_mean = stats.trim_mean(video[:, channel_index], trimmed_pct, axis=None)
-                except:
+                except Exception:
                     print("Upset trim mean")
                     channel_mean = 0
                 channel_means.append(channel_mean)
@@ -715,7 +715,7 @@ class BaseDataset(Dataset):
                 # Compute trimmed mean.
                 try:
                     channel_std = stats.mstats.trimmed_std(video[:, channel_index], trimmed_pct, axis=None)
-                except:
+                except Exception:
                     print("Upset trim STD")
                     channel_std = 1
                 channel_stds.append(channel_std)
