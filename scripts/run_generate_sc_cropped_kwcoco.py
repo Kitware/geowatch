@@ -63,7 +63,6 @@ def main():
 def run_generate_sc_cropped_kwcoco(input_path,
                                    input_region_path,
                                    output_path,
-                                   landcover_model_path,
                                    outbucket,
                                    aws_profile=None,
                                    dryrun=False,

@@ -234,7 +234,7 @@ def run_sc_fusion_for_baseline(
         ingress_dir, 'sc_fusion_kwcoco.json')
 
     subprocess.run(['python', '-m', 'watch.tasks.fusion.predict',
-                    '--gpus', '1',
+                    '--gpus', '0',
                     '--write_preds', 'False',
                     '--write_probs', 'True',
                     '--with_change', 'False',
