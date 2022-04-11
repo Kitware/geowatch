@@ -477,33 +477,6 @@ def normalize_phases(coco_dset,
     print('label status of tracks: ', log)
 
     #
-    # Phase prediction - do it all at once for efficiency
-    # Do this before viterbi so we can use this as an input in the future
-    #
-
-    ann_field = 'phase_transition_days'
-
-    # exclude untracked annots which might be unrelated
-    annots = coco_dset.annots(
-        list(ub.flatten(coco_dset.index.trackid_to_aids.values())))
-
-    has_prediction_heatmaps = all(
-        kwcoco.FusedChannelSpec.coerce(prediction_key).as_set().issubset(
-            coco_dset.coco_image(gid).channels.fuse().as_set())
-        for gid in set(annots.gids))
-    if has_prediction_heatmaps:
-        phase_transition_days = phase.phase_prediction_heatmap(
-            annots, coco_dset, prediction_key)
-        annots.set(ann_field, phase_transition_days)
-    else:
-        for trackid in coco_dset.index.trackid_to_aids.keys():
-            _annots = coco_dset.annots(trackid=trackid)
-            phase_transition_days = phase.phase_prediction_baseline(_annots)
-            _annots.set(ann_field, phase_transition_days)
-
-    old_cnames_dct = dict(zip(annots.aids, annots.cnames))
-
-    #
     # Continue transforming phase labels, now with smoothing and deduping
     #
 
@@ -531,6 +504,33 @@ def normalize_phases(coco_dset,
             # is not post construction, add another frame of post construction
             # coco_dset = phase.dedupe_background_anns(coco_dset, trackid)
             coco_dset = phase.ensure_post(coco_dset, trackid)
+
+    #
+    # Phase prediction - do it all at once for efficiency
+    # TODO do this before viterbi so we can use this as an input in the future
+    #
+
+    ann_field = 'phase_transition_days'
+
+    # exclude untracked annots which might be unrelated
+    annots = coco_dset.annots(
+        list(ub.flatten(coco_dset.index.trackid_to_aids.values())))
+
+    has_prediction_heatmaps = all(
+        kwcoco.FusedChannelSpec.coerce(prediction_key).as_set().issubset(
+            coco_dset.coco_image(gid).channels.fuse().as_set())
+        for gid in set(annots.gids))
+    if has_prediction_heatmaps:
+        phase_transition_days = phase.phase_prediction_heatmap(
+            annots, coco_dset, prediction_key)
+        annots.set(ann_field, phase_transition_days)
+    else:
+        for trackid in coco_dset.index.trackid_to_aids.keys():
+            _annots = coco_dset.annots(trackid=trackid)
+            phase_transition_days = phase.phase_prediction_baseline(_annots)
+            _annots.set(ann_field, phase_transition_days)
+
+    # old_cnames_dct = dict(zip(annots.aids, annots.cnames))
 
     #
     # Fixup phase prediction
