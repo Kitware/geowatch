@@ -257,7 +257,7 @@ class ResNet(nn.Module):
 
     def forward(self, x, layer=100):
         # x1 = F.relu(self.bn1(self.conv1(x)))
-
+        outputs = {}
         x1 = F.relu(self.bn1(self.conv1_cat(x)))
         
         # x1 = self._aff(x, x1)
@@ -275,13 +275,15 @@ class ResNet(nn.Module):
         # x = self.up1(x5, x4)
         x = self.up2(x, x4)
         x = self.up3(x, x3)
+        outputs['up3'] = x
         x = self.up4(x, x2)
         x = self.up5(x, x1)
+        outputs['up5'] = x
         x = self.outconv(x)
         # classifer = self.fc(x)
         
 
-        return x#, x_feats
+        return x, outputs#, x_feats
 
 
 def resnet18(**kwargs):
