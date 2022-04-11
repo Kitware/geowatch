@@ -8,6 +8,9 @@ CROPPED_PRE_EVAL_AND_AGG(){
 
     DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware="ssd")
     DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware="hdd")
+    cd $DVC_DPATH
+    git pull
+
     DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_sc_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -19,13 +22,14 @@ CROPPED_PRE_EVAL_AND_AGG(){
         --mode=commit
 
     #################################
-    # 2. Pull new models on eval machine
+    # 2. Pull new models (and existing evals) on eval machine
     #################################
 
     DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware="hdd")
     cd "$DVC_DPATH" 
     git pull
     dvc pull -r aws -R models/fusion/eval3_sc_candidates/packages
+    dvc pull -r aws -R models/fusion/eval3_sc_candidates/eval
 
     #################################
     # 3. Run Prediction & Evaluation
@@ -35,12 +39,16 @@ CROPPED_PRE_EVAL_AND_AGG(){
     DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_sc_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_wv_vali.kwcoco.json
+
+    #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_wv_vali.kwcoco.json
+    #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_D_wv_vali.kwcoco.json
+    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
+
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1" \
-            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*_D_*/*.pt" \
             --test_dataset="$VALI_FPATH" \
-            --skip_existing=True --backend=tmux --run=0 
+            --skip_existing=True --backend=tmux --run=0
 
 
     #################################
@@ -81,6 +89,32 @@ CROPPED_PRE_EVAL_AND_AGG(){
         --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
         --dset_group_key="*Drop3*" --show=True \
         --classes_of_interest "Site Preparation" "Active Construction" "Post Construction"
+}
+
+
+prep_features(){
+    export CUDA_VISIBLE_DEVICES=1
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    echo "DVC_DPATH = $DVC_DPATH"
+    BASE_DPATH="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json"
+    python -m watch.cli.prepare_teamfeats \
+        --base_fpath="$BASE_DPATH" \
+        --dvc_dpath="$DVC_DPATH" \
+        --gres="0,1" \
+        --with_landcover=1 \
+        --with_depth=1 \
+        --with_materials=0 \
+        --with_invariants=0 \
+        --do_splits=1 \
+        --depth_workers=0 \
+        --cache=1 --backend=tmux --run=1
+
+    # Or rsync features
+
+    rsync -avprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./_assets ooo:data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10
+    rsync -avprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./combo* ooo:data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10
+
+
 }
 
 # tooshbrush cropped

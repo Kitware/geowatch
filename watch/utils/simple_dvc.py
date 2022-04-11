@@ -66,28 +66,34 @@ class SimpleDVC():
             ub.cmd('dvc config cache.protected true', cwd=dvc_dpath, verbose=verbose)
         return dvc_dpath
 
-    def find_root(self, path=None):
-        if self.dvc_root is not None:
-            return self.dvc_root
-        else:
-            if path is None:
-                raise Exception('no way to find dvc root')
-            # Need to find it from the path
-            max_parts = len(path.parts)
-            curr = path
-            found = None
-            for _ in range(max_parts):
-                cand = curr / '.dvc'
-                if cand.exists():
-                    found = curr
-                    break
-                curr = curr.parent
-            return found
+    @classmethod
+    def coerce(cls, dvc_path):
+        """
+        Given a path inside DVC, finds the root.
+        """
+        dvc_root = cls.find_root(dvc_path)
+        return cls(dvc_root)
+
+    @classmethod
+    def find_root(cls, path=None):
+        if path is None:
+            raise Exception('no way to find dvc root')
+        # Need to find it from the path
+        max_parts = len(path.parts)
+        curr = path
+        found = None
+        for _ in range(max_parts):
+            cand = curr / '.dvc'
+            if cand.exists():
+                found = curr
+                break
+            curr = curr.parent
+        return found
 
     def add(self, paths):
         import dvc.main
         paths = _ensure_iterable(paths)
-        dvc_root = self.find_root(paths[0])
+        dvc_root = self.dvc_root
         rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
         with ChDir(dvc_root):
             dvc_command = ['add'] + rel_paths
@@ -100,7 +106,7 @@ class SimpleDVC():
     def push(self, path, remote=None, recursive=False, jobs=None):
         import dvc.main
         paths = _ensure_iterable(path)
-        dvc_root = self.find_root(paths[0])
+        dvc_root = self.dvc_root
         extra_args = []
         if remote:
             extra_args += ['-r', remote]
@@ -116,7 +122,7 @@ class SimpleDVC():
     def unprotect(self, path):
         import dvc.main
         paths = _ensure_iterable(path)
-        dvc_root = self.find_root(paths[0])
+        dvc_root = self.dvc_root
         rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
         with ChDir(dvc_root):
             dvc_command = ['unprotect'] + rel_paths

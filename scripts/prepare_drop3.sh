@@ -239,8 +239,9 @@ transfer_features(){
     # Ensure everything has relative paths
     jq .images[0] combo_LM.kwcoco.json
 
-    kwcoco reroot combo_LM.kwcoco.json \
-        combo_LM.rel.kwcoco.json --absolute=False --check=False
+    # See special reroot
+    #kwcoco reroot combo_LM.kwcoco.json \
+    #    combo_LM.rel.kwcoco.json --absolute=False --check=False
 
     rsync -p "$SRC_BUNDLE_DPATH/combo_LM.rel.kwcoco.json" "$DST_BUNDLE_DPATH/combo_LM.kwcoco.json"
 }

@@ -41,6 +41,7 @@ import kwimage
 import ubelt as ub
 import numpy as np
 import scriptconfig as scfg
+import io
 from watch.utils import kwcoco_extensions
 from watch.utils import util_kwplot
 from watch.utils import util_path
@@ -458,7 +459,7 @@ def expand_site_models_with_site_summaries(sites, regions):
                         geometry=mpoly_json)
                 )
                 psudo_site_model = geojson.FeatureCollection(psudo_site_features)
-                pseudo_gpd = util_gis.read_geojson(watch.utils.util_path.file_from_text(json.dumps(psudo_site_model)))
+                pseudo_gpd = util_gis.read_geojson(io.StringIO(json.dumps(psudo_site_model)))
                 region_id_to_sites[region_id].append(pseudo_gpd)
                 # if 1:
                 #     from watch.rc.registry import load_site_model_schema

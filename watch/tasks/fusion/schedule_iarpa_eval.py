@@ -1,7 +1,7 @@
 import ubelt as ub
 
 
-def _suggest_track_paths(pred_fpath, track_cfg):
+def _suggest_track_paths(pred_fpath, track_cfg, eval_dpath=None):
     """
     Helper for reasonable paths to keep everything organized for tracking eval
     """
@@ -10,12 +10,17 @@ def _suggest_track_paths(pred_fpath, track_cfg):
     human_part = ub.repr2(human_opts, compact=1)
     track_cfgstr = human_part + '_' + ub.hash_data(other_opts)[0:8]
     pred_bundle_dpath = pred_fpath.parent
-    track_cfg_dname = f'trackcfg_{track_cfgstr}'
-    track_cfg_base = pred_bundle_dpath / 'tracking' / track_cfg_dname
+    track_cfg_dname = f'tracking/trackcfg_{track_cfgstr}'
+    track_cfg_base = pred_bundle_dpath / track_cfg_dname
     track_out_fpath = track_cfg_base / 'tracks.json'
 
-    iarpa_eval_dpath = track_cfg_base / 'iarpa_eval'
+    if eval_dpath is None:
+        iarpa_eval_dpath = eval_dpath / 'iarpa_eval'
+    else:
+        iarpa_eval_dpath = track_cfg_base / track_cfg_dname / 'iarpa_eval'
+
     iarpa_summary_fpath = iarpa_eval_dpath / 'scores' / 'merged' / 'summary2.json'
+
     track_suggestions = {
         'iarpa_eval_dpath': iarpa_eval_dpath,
         'track_cfgstr': track_cfgstr,
