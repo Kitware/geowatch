@@ -229,10 +229,25 @@ recovery_eval(){
             --enable_pred=1 \
             --enable_eval=1 \
             --enable_track=0 \
+            --enable_iarpa_eval=0 \
             --chip_overlap=0.3 \
             --tta_time=0,1,2,3 \
             --tta_fliprot=0 \
-            --enable_iarpa_eval=0 \
+            --skip_existing=True --backend=tmux --run=1
+
+    TMUX_GPUS="0,"
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="$TMUX_GPUS" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest-2.txt" \
+            --test_dataset="$VALI_FPATH" \
+            --enable_pred=0 \
+            --enable_eval=0 \
+            --enable_track=1 \
+            --enable_iarpa_eval=1 \
+            --chip_overlap=0.3 \
+            --tta_time=0,1,2,3 \
+            --tta_fliprot=0 \
+            --bas_thresh=0.1,0.2 \
             --skip_existing=True --backend=tmux --run=1
 
 
@@ -246,7 +261,7 @@ recovery_eval(){
             --enable_track=1 \
             --enable_iarpa_eval=1 \
             --bas_thresh=0.2 \
-            --skip_existing=True --backend=tmux --run=0
+            --skip_existing=True --backend=tmux --run=1
 
     DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
     EXPT_GROUP_CODE=eval3_candidates

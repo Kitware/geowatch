@@ -95,6 +95,7 @@ setup(
         'console_scripts': [
             'watch-cli = watch.cli.__main__:main',
             'smartwatch= watch.cli.__main__:main',
+            'smartwatch_dvc= watch.cli.find_dvc:_CLI.main',
         ],
     },
     install_requires=REQUIREMENTS,

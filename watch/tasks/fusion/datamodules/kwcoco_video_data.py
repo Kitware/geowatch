@@ -1291,10 +1291,150 @@ class KWCocoVideoDataset(data.Dataset):
         return tr_
 
     @profile
+    def _sample_one_frame(self, gid, sampler, coco_dset, tr_, with_annots,
+                          gid_to_isbad, gid_to_sample):
+        # helper that was previously a nested function moved out for profiling
+        coco_img = coco_dset.coco_image(gid)
+        sensor_channels = (self.sample_channels & coco_img.channels).normalize()
+        tr_frame = tr_.copy()
+        tr_frame['gids'] = [gid]
+        sample_streams = {}
+        first_with_annot = with_annots
+
+        # TODO: Use the cloudmask here
+
+        # Flag will be set to true if any heuristic on any channel stream
+        # forces us to mark this image as bad.
+        force_bad = False
+
+        # TODO: separate ndsampler annotation loading function
+        USE_CLOUDMASK = self.use_cloudmask
+        if USE_CLOUDMASK:
+            if 'cloudmask' in coco_img.channels:
+                tr_cloud = tr_frame.copy()
+                tr_cloud['channels'] = 'cloudmask'
+                # tr_cloud['channels'] = 'red|green|blue'
+                tr_cloud['antialias'] = False
+                tr_cloud['interpolation'] = 'nearest'
+                tr_cloud['nodata'] = None
+                cloud_sample = sampler.load_sample(
+                    tr_cloud, with_annots=None,
+                    padkw={'constant_values': 255},
+                    dtype=np.float32
+                )
+                cloud_im = cloud_sample['im']
+
+                cloud_bits = 1 << np.array([1, 2, 3])
+                is_cloud_iffy = np.logical_or.reduce([cloud_im == b for b in cloud_bits])
+                cloud_frac = is_cloud_iffy.mean()
+                if cloud_frac > 0.5:
+                    # print('cloud_frac = {!r}'.format(cloud_frac))
+                    force_bad = True
+                    # valid_cloud_vals = cloud_im[np.isnan(cloud_im)]
+
+                # if 0:
+                #     obj = coco_img.find_asset_obj('cloudmask')
+                #     fpath = ub.Path(coco_img.bundle_dpath) / obj['file_name']
+
+                # Skip if more then 50% cloudy
+
+        if sensor_channels.numel() == 0:
+            force_bad = True
+
+        for stream in sensor_channels.streams():
+            if force_bad:
+                break
+            tr_frame['channels'] = stream
+            if 0:
+                coco_img = sampler.coco_dset.coco_img(tr_frame['gids'][0])
+                print(ub.repr2(coco_img.img, nl=-3))
+            sample = sampler.load_sample(
+                tr_frame, with_annots=first_with_annot,
+                nodata='float',
+                padkw={'constant_values': np.nan},
+                dtype=np.float32
+            )
+
+            WV_NODATA_HACK = 1
+            if WV_NODATA_HACK:
+                # Should be fixed in drop3
+                if coco_img.img.get('sensor_coarse') == 'WV':
+                    if set(stream).issubset({'blue', 'green', 'red'}):
+                        # Check to see if the nodata value is known in the
+                        # image metadata
+                        obj = coco_img.find_asset_obj('red')
+                        band_metas = obj.get('band_metas', [{}])
+                        nodata_vals = [m.get('nodata', None) for m in band_metas]
+                        # TODO: could be more careful about what band metas
+                        # we are looking at. Assuming they are all the same
+                        # here. The idea is only do this hack if the nodata
+                        # value is not set (like in L1 data, but dont do it
+                        # when the) values are set (like in TA1 data)
+                        if any(v is None for v in nodata_vals):
+                            mask = (sample['im'] == 0)
+                            sample['im'][mask] = np.nan
+
+            # dont ask for annotations multiple times
+            invalid_mask = np.isnan(sample['im'])
+
+            any_invalid = np.any(invalid_mask)
+            none_invalid = not any_invalid
+            if none_invalid:
+                all_invalid = False
+                # some_invalid = False
+            else:
+                all_invalid = np.all(invalid_mask)
+                # some_invalid = not all_invalid and any_invalid
+
+            if any_invalid:
+                sample['invalid_mask'] = invalid_mask
+            else:
+                sample['invalid_mask'] = None
+
+            if not all_invalid:
+                sample_streams[stream.spec] = sample
+                if 'annots' in sample:
+                    first_with_annot = False
+            else:
+                # HACK: if the red channel is all bad, discard the frame
+                # This can be removed once nodata is correctly propogated
+                # in the team features. OR we can add a feature where we
+                # keep track of an image wide observation mask and use that
+                # instead of using red as a proxy for it.
+                if 'red' in set(stream):
+                    force_bad = True
+
+            # TODO: mark frame as invalid when a red band is all 0
+            # We are going to try to generalize this with a concept of an
+            # "iffy" mask with will flag pixels that are minimum, zero, or
+            # nan.
+            RGB_IFFY_HACK = 1
+            if RGB_IFFY_HACK and set(stream).issubset({'blue', 'green', 'red'}):
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.filterwarnings('ignore', 'empty slice', RuntimeWarning)
+                    warnings.filterwarnings('ignore', 'All-NaN', RuntimeWarning)
+                    if any_invalid:
+                        chan_mins = np.nanmin(sample['im'], axis=(0, 1, 2), keepdims=1)
+                        invalid_mask
+                        is_min_mask = (sample['im'] == chan_mins)
+                        is_zero_mask = sample['im'] == 0
+                        is_iffy_mask = (invalid_mask | is_min_mask | is_zero_mask)
+                        chan_num_iffy = is_iffy_mask.sum(axis=(0, 1, 2))
+                        chan_num_pxls = np.prod(is_iffy_mask.shape[0:3])
+                        chan_frac_iffy = chan_num_iffy / chan_num_pxls
+                        chan_is_bad = chan_frac_iffy > 0.4
+                        if np.any(chan_is_bad):
+                            force_bad = True
+
+        gid_to_isbad[gid] = force_bad or len(sample_streams) == 0
+        gid_to_sample[gid] = sample_streams
+
+    @profile
     def __getitem__(self, index):
         """
 
-        Ignore:
+        Example:
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
             >>> # Debug issues seen in training
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
@@ -1302,8 +1442,8 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import ndsampler
             >>> import kwcoco
             >>> dvc_dpath = watch.find_smart_dvc_dpath()
-            >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
-            >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data_nowv_train.kwcoco.json'
+            >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
+            >>> #coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data_nowv_train.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> rng = kwarray.ensure_rng(0)
             >>> vidid = rng.choice(coco_dset.videos())
@@ -1336,6 +1476,10 @@ class KWCocoVideoDataset(data.Dataset):
                 canvas = self.draw_item(item)
                 kwplot.imshow(canvas)
                 xdev.InteractiveIter.draw()
+
+        CommandLine:
+            DVC_DPATH=$(smartwatch_dvc)
+            xdoctest -m watch.tasks.fusion.datamodules.kwcoco_video_data KWCocoVideoDataset.__getitem__:0
 
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
@@ -1509,146 +1653,9 @@ class KWCocoVideoDataset(data.Dataset):
         # 6 Clear
         # 7 Water
 
-        def sample_one_frame(gid):
-            coco_img = coco_dset.coco_image(gid)
-            sensor_channels = (self.sample_channels & coco_img.channels).normalize()
-            tr_frame = tr_.copy()
-            tr_frame['gids'] = [gid]
-            sample_streams = {}
-            first_with_annot = with_annots
-
-            # TODO: Use the cloudmask here
-
-            # Flag will be set to true if any heuristic on any channel stream
-            # forces us to mark this image as bad.
-            force_bad = False
-
-            # TODO: separate ndsampler annotation loading function
-            USE_CLOUDMASK = self.use_cloudmask
-            if USE_CLOUDMASK:
-                if 'cloudmask' in coco_img.channels:
-                    tr_cloud = tr_frame.copy()
-                    tr_cloud['channels'] = 'cloudmask'
-                    # tr_cloud['channels'] = 'red|green|blue'
-                    tr_cloud['antialias'] = False
-                    tr_cloud['interpolation'] = 'nearest'
-                    tr_cloud['nodata'] = None
-                    cloud_sample = sampler.load_sample(
-                        tr_cloud, with_annots=None,
-                        padkw={'constant_values': 255},
-                        dtype=np.float32
-                    )
-                    cloud_im = cloud_sample['im']
-
-                    cloud_bits = 1 << np.array([1, 2, 3])
-                    is_cloud_iffy = np.logical_or.reduce([cloud_im == b for b in cloud_bits])
-                    cloud_frac = is_cloud_iffy.mean()
-                    if cloud_frac > 0.5:
-                        # print('cloud_frac = {!r}'.format(cloud_frac))
-                        force_bad = True
-                        # valid_cloud_vals = cloud_im[np.isnan(cloud_im)]
-
-                    # if 0:
-                    #     obj = coco_img.find_asset_obj('cloudmask')
-                    #     fpath = ub.Path(coco_img.bundle_dpath) / obj['file_name']
-
-                    # Skip if more then 50% cloudy
-
-            if sensor_channels.numel() == 0:
-                force_bad = True
-
-            for stream in sensor_channels.streams():
-                if force_bad:
-                    break
-                tr_frame['channels'] = stream
-                if 0:
-                    coco_img = sampler.coco_dset.coco_img(tr_frame['gids'][0])
-                    print(ub.repr2(coco_img.img, nl=-3))
-                sample = sampler.load_sample(
-                    tr_frame, with_annots=first_with_annot,
-                    nodata='float',
-                    padkw={'constant_values': np.nan},
-                    dtype=np.float32
-                )
-
-                WV_NODATA_HACK = 1
-                if WV_NODATA_HACK:
-                    # Should be fixed in drop3
-                    if coco_img.img.get('sensor_coarse') == 'WV':
-                        if set(stream).issubset({'blue', 'green', 'red'}):
-                            # Check to see if the nodata value is known in the
-                            # image metadata
-                            obj = coco_img.find_asset_obj('red')
-                            band_metas = obj.get('band_metas', [{}])
-                            nodata_vals = [m.get('nodata', None) for m in band_metas]
-                            # TODO: could be more careful about what band metas
-                            # we are looking at. Assuming they are all the same
-                            # here. The idea is only do this hack if the nodata
-                            # value is not set (like in L1 data, but dont do it
-                            # when the) values are set (like in TA1 data)
-                            if any(v is None for v in nodata_vals):
-                                mask = (sample['im'] == 0)
-                                sample['im'][mask] = np.nan
-
-                # dont ask for annotations multiple times
-                invalid_mask = np.isnan(sample['im'])
-
-                any_invalid = np.any(invalid_mask)
-                none_invalid = not any_invalid
-                if none_invalid:
-                    all_invalid = False
-                    # some_invalid = False
-                else:
-                    all_invalid = np.all(invalid_mask)
-                    # some_invalid = not all_invalid and any_invalid
-
-                if any_invalid:
-                    sample['invalid_mask'] = invalid_mask
-                else:
-                    sample['invalid_mask'] = None
-
-                if not all_invalid:
-                    sample_streams[stream.spec] = sample
-                    if 'annots' in sample:
-                        first_with_annot = False
-                else:
-                    # HACK: if the red channel is all bad, discard the frame
-                    # This can be removed once nodata is correctly propogated
-                    # in the team features. OR we can add a feature where we
-                    # keep track of an image wide observation mask and use that
-                    # instead of using red as a proxy for it.
-                    if 'red' in set(stream):
-                        force_bad = True
-
-                # TODO: mark frame as invalid when a red band is all 0
-                # We are going to try to generalize this with a concept of an
-                # "iffy" mask with will flag pixels that are minimum, zero, or
-                # nan.
-                RGB_IFFY_HACK = 1
-                if RGB_IFFY_HACK and set(stream).issubset({'blue', 'green', 'red'}):
-                    import warnings
-                    with warnings.catch_warnings():
-                        warnings.filterwarnings('ignore', 'empty slice', RuntimeWarning)
-                        warnings.filterwarnings('ignore', 'All-NaN', RuntimeWarning)
-                        if any_invalid:
-                            chan_mins = np.nanmin(sample['im'], axis=(0, 1, 2), keepdims=1)
-                            invalid_mask
-                            is_min_mask = (sample['im'] == chan_mins)
-                            is_zero_mask = sample['im'] == 0
-                            is_iffy_mask = (invalid_mask | is_min_mask | is_zero_mask)
-                            chan_num_iffy = is_iffy_mask.sum(axis=(0, 1, 2))
-                            chan_num_pxls = np.prod(is_iffy_mask.shape[0:3])
-                            chan_frac_iffy = chan_num_iffy / chan_num_pxls
-                            chan_is_bad = chan_frac_iffy > 0.4
-                            if np.any(chan_is_bad):
-                                force_bad = True
-
-            gid_to_isbad[gid] = force_bad or len(sample_streams) == 0
-            gid_to_sample[gid] = sample_streams
-
         for gid in tr_['gids']:
-            pass
-            sample_one_frame(gid)
+            self._sample_one_frame(gid, sampler, coco_dset, tr_, with_annots,
+                                   gid_to_isbad, gid_to_sample)
 
         if 'video_id' not in tr_:
             arbitrary_sample = ub.peek(ub.peek(gid_to_sample.values()).values())
@@ -1696,7 +1703,9 @@ class KWCocoVideoDataset(data.Dataset):
                         # Exhausted all possibilities
                         break
                     for gid in new_gids:
-                        sample_one_frame(gid)
+                        self._sample_one_frame(gid, sampler, coco_dset, tr_,
+                                               with_annots, gid_to_isbad,
+                                               gid_to_sample)
 
         good_gids = [gid for gid, flag in gid_to_isbad.items() if not flag]
         if len(good_gids) == 0:
@@ -2370,6 +2379,9 @@ class KWCocoVideoDataset(data.Dataset):
         # what is registered in the dataset. Need to find a good way to account
         # for this.
 
+        # Turn off if this breaks old models
+        FIX_CSPEC = 1
+
         # Make a list of all unique modes in the dataset.
         unique_sensor_modes = set(sensor_mode_hist.keys())
         if True:
@@ -2381,10 +2393,22 @@ class KWCocoVideoDataset(data.Dataset):
             hacked = set()
             for c in coco_images:
                 sspec = c.img.get('sensor_coarse', '')
-                # Ensure channels are returned in requested order
-                cspec = (self.input_channels & c.channels.fuse().normalize()).fuse().normalize().spec
-                if cspec:
-                    hacked.add((sspec, cspec))
+                img_chans = c.channels.fuse().normalize()
+
+                # TODO: the input_channels should eventually define
+                # the sensor so we can do a specific lookup.
+                # In the meantime, hack it.
+                if FIX_CSPEC:
+                    canidates = self.input_channels & img_chans
+                    for a in canidates.streams():
+                        for b in self.input_channels.streams():
+                            if a.spec == b.spec:
+                                hacked.add((sspec, a.spec))
+                else:
+                    # Ensure channels are returned in requested order
+                    cspec = (self.input_channels & c.channels.fuse().normalize()).fuse().normalize().spec
+                    if cspec:
+                        hacked.add((sspec, cspec))
             unique_sensor_modes.update(hacked)
             print(f'{unique_sensor_modes=}')
 

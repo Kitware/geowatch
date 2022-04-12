@@ -6,7 +6,7 @@ import ubelt as ub
 import warnings
 
 
-__version__ = '0.2.2'
+__version__ = '0.2.3'
 
 
 __devnotes__ = """
@@ -72,10 +72,22 @@ def _imoprt_hack(modname):
 
 def _execute_import_order_hacks(WATCH_HACK_IMPORT_ORDER):
     if WATCH_HACK_IMPORT_ORDER == 'auto':
-        # Some imports need to happen in a specific order, otherwise we get crashes
-        # This is very annoying
-        # This is the "known" best order for importing
-        watch_hack_import_order = WATCH_AUTOHACK_IMPORT_VARIANTS['variant1']
+        # import sys
+        # There is crazy sys.argv behavior with -m
+        # https://stackoverflow.com/questions/42076706/sys-argv-behavior-with-python-m
+
+        # TODO:
+        # Figure out some want to make this not trigger for certain main
+        # modules. We can do it for installed modules
+        import sys
+        if sys.argv and 'smartwatch_dvc' in sys.argv[0]:
+            watch_hack_import_order = None
+        else:
+            # Some imports need to happen in a specific order, otherwise we get crashes
+            # This is very annoying
+            # This is the "known" best order for importing
+            # watch_hack_import_order = None
+            watch_hack_import_order = WATCH_AUTOHACK_IMPORT_VARIANTS['variant1']
     elif WATCH_HACK_IMPORT_ORDER in WATCH_AUTOHACK_IMPORT_VARIANTS:
         watch_hack_import_order = WATCH_AUTOHACK_IMPORT_VARIANTS[WATCH_HACK_IMPORT_ORDER]
     elif WATCH_HACK_IMPORT_ORDER.lower() in {'0', 'false', 'no', ''}:

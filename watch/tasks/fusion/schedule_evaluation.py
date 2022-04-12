@@ -56,8 +56,8 @@ class ScheduleEvaluationConfig(scfg.Config):
         'enable_eval': scfg.Value(True, help='if False, then evaluation is not run'),
         'enable_pred': scfg.Value(True, help='if False, then prediction is not run'),
 
-        'draw_heatmaps': scfg.Value(True, help='if true draw heatmaps on eval'),
-        'draw_curves': scfg.Value(True, help='if true draw curves on eval'),
+        'draw_heatmaps': scfg.Value(0, help='if true draw heatmaps on eval'),
+        'draw_curves': scfg.Value(0, help='if true draw curves on eval'),
 
         'partition': scfg.Value(None, help='specify slurm partition (slurm backend only)'),
         'mem': scfg.Value(None, help='specify slurm memory per task (slurm backend only)'),

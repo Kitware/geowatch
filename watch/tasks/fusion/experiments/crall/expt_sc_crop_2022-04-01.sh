@@ -765,7 +765,7 @@ VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
 smartwatch stats "$VALI_FPATH"
 #CHANNELS="WV:red|green|blue|depth,S2:red|green|blue|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
-CHANNELS="red|green|blue|near-ir1|near-ir2,blue|green|red|nir|swir16|swir22"
+CHANNELS="blue|green|red|near-ir1,blue|green|red|nir|swir16|swir22"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_raw_xver7_V012
 INIT_STATE_V007="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V007/CropDrop3_SC_xver1_V007_epoch=5-step=12287.pt"
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
@@ -796,7 +796,56 @@ python -m watch.tasks.fusion.fit \
     --draw_interval=5min \
     --use_centered_positives=True \
     --num_draw=8 \
-    --normalize_inputs=1024 \
+    --normalize_inputs=2048 \
+    --stream_channels=32 \
+    --temporal_dropout=0.5 \
+    --modulate_class_weights="positive*0,negative*0,background*1.5,No Activity*0.001,Post Construction*0.01,Site Preparation*3.0" \
+    --init="$INIT_STATE_V007"
+
+
+export CUDA_VISIBLE_DEVICES=0
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+smartwatch stats "$VALI_FPATH"
+#CHANNELS="WV:red|green|blue|depth,S2:red|green|blue|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field|matseg_0|matseg_1|matseg_2|matseg_3|mat_up5:64"
+EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_xver7_V013
+INIT_STATE_V007="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V007/CropDrop3_SC_xver1_V007_epoch=5-step=12287.pt"
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=0.00 \
+    --chip_size=256 \
+    --time_steps=12 \
+    --learning_rate=1e-4 \
+    --num_workers=4 \
+    --max_epochs=160 \
+    --patience=160 \
+    --dist_weights=True \
+    --time_sampling=hardish3 \
+    --time_span=12m \
+    --channels="$CHANNELS" \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --use_centered_positives=True \
+    --num_draw=8 \
+    --normalize_inputs=2048 \
     --stream_channels=32 \
     --temporal_dropout=0.5 \
     --modulate_class_weights="positive*0,negative*0,background*1.5,No Activity*0.001,Post Construction*0.01,Site Preparation*3.0" \
