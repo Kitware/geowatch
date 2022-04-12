@@ -84,6 +84,8 @@ class Evaluator(object):
         >>>     feat_dpath=dst_coco_fpath.parent / '_assets/test_rutgers_material_seg',
         >>>     gpus='auto:1',
         >>>     num_workers='avail',
+        >>>     save_raw_features=1,
+        >>>     batch_size=32,
         >>>     cache=0,
         >>>     #num_workers=0,
         >>>     #gpu=None,
@@ -130,7 +132,7 @@ class Evaluator(object):
         self.output_feat_dpath = output_feat_dpath
         self.stitcher_dict = {}
         if self.save_raw_features:
-            self.stitcher_dict_up3 = {}
+            # self.stitcher_dict_up3 = {}
             self.stitcher_dict_up5 = {}
         self.finalized_gids = set()
         self.imwrite_kw = imwrite_kw
@@ -179,7 +181,7 @@ class Evaluator(object):
         if not cached:
             stitcher = self.stitcher_dict[gid]
             if self.save_raw_features:
-                stitcher_up3 = self.stitcher_dict_up3[gid]
+                # stitcher_up3 = self.stitcher_dict_up3[gid]
                 stitcher_up5 = self.stitcher_dict_up5[gid]
 
             import warnings
@@ -188,15 +190,15 @@ class Evaluator(object):
                 recon = stitcher.finalize()
 
                 if self.save_raw_features:
-                    recon_up3 = stitcher_up3.finalize()
+                    # recon_up3 = stitcher_up3.finalize()
                     recon_up5 = stitcher_up5.finalize()
-                    self.stitcher_dict_up3.pop(gid)
+                    # self.stitcher_dict_up3.pop(gid)
                     self.stitcher_dict_up5.pop(gid)
             self.stitcher_dict.pop(gid)
         else:
             recon = None
             if self.save_raw_features:
-                recon_up3 = None
+                # recon_up3 = None
                 recon_up5 = None
 
         from watch.tasks.fusion.predict import quantize_float01
@@ -210,10 +212,10 @@ class Evaluator(object):
         save_path = os.fspath(save_path)
 
         if self.save_raw_features:
-            quant_recon_up3, quantization_up3 = quantize_float01(recon_up3, old_min=-11, old_max=11)
-            nodata_up3 = quantization_up3['nodata']
-            save_path_up3 = self._features_path_for_image(gid, 'up3')
-            save_path_up3 = os.fspath(save_path_up3)
+            # quant_recon_up3, quantization_up3 = quantize_float01(recon_up3, old_min=-11, old_max=11)
+            # nodata_up3 = quantization_up3['nodata']
+            # save_path_up3 = self._features_path_for_image(gid, 'up3')
+            # save_path_up3 = os.fspath(save_path_up3)
 
             quant_recon_up5, quantization_up5 = quantize_float01(recon_up5, old_min=-11, old_max=11)
             nodata_up5 = quantization_up5['nodata']
@@ -224,7 +226,7 @@ class Evaluator(object):
             aux_height, aux_width = kwimage.load_image_shape(save_path)[0:2]
 
             if self.save_raw_features:
-                aux_height_up3, aux_width_up3 = kwimage.load_image_shape(save_path_up3)[0:2]
+                # aux_height_up3, aux_width_up3 = kwimage.load_image_shape(save_path_up3)[0:2]
                 aux_height_up5, aux_width_up5 = kwimage.load_image_shape(save_path_up5)[0:2]
         else:
             kwimage.imwrite(save_path, quant_recon, backend='gdal', space=None,
@@ -232,9 +234,9 @@ class Evaluator(object):
             aux_height, aux_width = quant_recon.shape[0:2]
 
             if self.save_raw_features:
-                kwimage.imwrite(save_path_up3, quant_recon_up3, backend='gdal', space=None,
-                                nodata=nodata_up3, **self.imwrite_kw)
-                aux_height_up3, aux_width_up3 = quant_recon_up3.shape[0:2]
+                # kwimage.imwrite(save_path_up3, quant_recon_up3, backend='gdal', space=None,
+                #                 nodata=nodata_up3, **self.imwrite_kw)
+                # aux_height_up3, aux_width_up3 = quant_recon_up3.shape[0:2]
 
                 kwimage.imwrite(save_path_up5, quant_recon_up5, backend='gdal', space=None,
                                 nodata=nodata_up5, **self.imwrite_kw)
@@ -257,16 +259,15 @@ class Evaluator(object):
         auxiliary.append(aux)
 
         if self.save_raw_features:
-            aux_up3 = {
-                'file_name': save_path_up3,
-                'height': aux_height,
-                'width': aux_width,
-                'channels': 'hidmat4:64',
-                'warp_aux_to_img': warp_aux_to_img.concise(),
-                'quantization': quantization_up3,
-            }
-
-            auxiliary.append(aux_up3)
+            # aux_up3 = {
+            #     'file_name': save_path_up3,
+            #     'height': aux_height,
+            #     'width': aux_width,
+            #     'channels': 'hidmat4:64',
+            #     'warp_aux_to_img': warp_aux_to_img.concise(),
+            #     'quantization': quantization_up3,
+            # }
+            # auxiliary.append(aux_up3)
 
             aux_up5 = {
                 'file_name': save_path_up5,
@@ -310,9 +311,9 @@ class Evaluator(object):
                 fpaths.append(fpath)
                 if self.save_raw_features:
                     save_path_up5 = self._features_path_for_image(gid, 'up5')
-                    save_path_up3 = self._features_path_for_image(gid, 'up3')
+                    # save_path_up3 = self._features_path_for_image(gid, 'up3')
                     fpaths.append(save_path_up5)
-                    fpaths.append(save_path_up3)
+                    # fpaths.append(save_path_up3)
 
                 if all(p.exists() for p in fpaths):
                     hit_gids.append(gid)
@@ -385,25 +386,15 @@ class Evaluator(object):
                 bs, c, h, w = output1.shape
                 output1_to_save = output1.permute(0, 2, 3, 1).cpu().detach().numpy()
                 if self.save_raw_features:
-                    up3_to_save = outputs_layers['up3']
+                    # up3_to_save = outputs_layers['up3']
                     up5_to_save = outputs_layers['up5']
 
-                    # print(output1.shape)
-                    # print(up3_to_save.shape)
-                    # print(up5_to_save.shape)
-
-                    # up3_to_save = up3_to_save.permute(0, 2, 3, 1)
-                    # up5_to_save = up5_to_save.permute(0, 2, 3, 1)
-
-                    up3_to_save = F.interpolate(up3_to_save, size=output1.shape[-2:], mode='bilinear', align_corners=False)
+                    # up3_to_save = F.interpolate(up3_to_save, size=output1.shape[-2:], mode='bilinear', align_corners=False)
                     up5_to_save = F.interpolate(up5_to_save, size=output1.shape[-2:], mode='bilinear', align_corners=False)
 
-                    # print(up3_to_save.shape)
-                    # print(up5_to_save.shape)
-
-                    up3_to_save = up3_to_save.cpu().detach().numpy()
+                    # up3_to_save = up3_to_save.cpu().detach().numpy()
                     up5_to_save = up5_to_save.cpu().detach().numpy()
-                    bs, c_up3, h, w  = up3_to_save.shape
+                    # bs, c_up3, h, w  = up3_to_save.shape
                     bs, c_up5, h, w  = up5_to_save.shape
 
                 # print(f"output1_to_save: {output1_to_save.shape}")
@@ -437,10 +428,10 @@ class Evaluator(object):
                             output = output1_to_save[b, :, :, :]
 
                             if self.save_raw_features:
-                                up3 = up3_to_save[b, :, :, :]
+                                # up3 = up3_to_save[b, :, :, :]
                                 up5 = up5_to_save[b, :, :, :]
 
-                                up3 = np.transpose(up3, (1, 2, 0))
+                                # up3 = np.transpose(up3, (1, 2, 0))
                                 up5 = np.transpose(up5, (1, 2, 0))
 
                             if gid not in self.stitcher_dict.keys():
@@ -450,9 +441,9 @@ class Evaluator(object):
                                     device='numpy')
 
                                 if self.save_raw_features:
-                                    self.stitcher_dict_up3[gid] = kwarray.Stitcher(
-                                        (*outputs['tr'].data[0][b]['space_dims'], c_up3),
-                                        device='numpy')
+                                    # self.stitcher_dict_up3[gid] = kwarray.Stitcher(
+                                    #     (*outputs['tr'].data[0][b]['space_dims'], c_up3),
+                                    #     device='numpy')
                                     self.stitcher_dict_up5[gid] = kwarray.Stitcher(
                                         (*outputs['tr'].data[0][b]['space_dims'], c_up5),
                                         device='numpy')
@@ -492,16 +483,17 @@ class Evaluator(object):
                             # print(f"output weights: {weights.shape}, output: {output.shape}")
                             # print(f"output weights_up3: {weights_up3.shape}, up3: {up3.shape}")
                             # print(f"output weights_up5: {weights_up5.shape}, up5: {up5.shape}")
+                            # self.stitcher_dict[gid].add(slice_, output, weight=weights)
+                            # if self.save_raw_features:
+                            #    self.stitcher_dict_up3[gid].add(slice_, up3, weight=weights_up3)
+                            #    self.stitcher_dict_up5[gid].add(slice_, up5, weight=weights_up5)
 
                             from watch.tasks.fusion.predict import CocoStitchingManager
                             CocoStitchingManager._stitcher_center_weighted_add(self.stitcher_dict[gid], slice_, output)
-                            # self.stitcher_dict[gid].add(slice_, output, weight=weights)
 
                             if self.save_raw_features:
-                                CocoStitchingManager._stitcher_center_weighted_add(self.stitcher_dict_up3[gid], slice_, up3)
+                                # CocoStitchingManager._stitcher_center_weighted_add(self.stitcher_dict_up3[gid], slice_, up3)
                                 CocoStitchingManager._stitcher_center_weighted_add(self.stitcher_dict_up5[gid], slice_, up5)
-                                # self.stitcher_dict_up3[gid].add(slice_, up3, weight=weights_up3)
-                                # self.stitcher_dict_up5[gid].add(slice_, up5, weight=weights_up5)
 
         writer.wait_until_finished()  # prevents a race condition
 

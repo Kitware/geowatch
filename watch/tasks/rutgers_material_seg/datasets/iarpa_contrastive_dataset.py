@@ -190,14 +190,14 @@ class SequenceDataset(torch.utils.data.Dataset):
         cthw_im = frame_data.transpose(3, 0, 1, 2)
         # print(f"image min:{cthw_im.min()}, max:{cthw_im.max()}")
         inputs = {
-            'im': ItemContainer(torch.from_numpy(cthw_im), stack=True),
+            'im': ItemContainer(torch.from_numpy(cthw_im).contiguous(), stack=True),
         }
 
         if not self.inference_only:
             class_masks = np.concatenate([m[None, ...] for m in frame_masks], axis=0)
             label = {
                 'class_masks': ItemContainer(
-                    torch.from_numpy(class_masks), stack=False, cpu_only=True),
+                    torch.from_numpy(class_masks).contiguous(), stack=False, cpu_only=True),
             }
 
         if self.training:
@@ -242,7 +242,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             negative_cthw_im = negative_frame_data.transpose(3, 0, 1, 2)
             # UNUSED? FIXME?
             # negative_class_masks = np.concatenate([m[None, ...] for m in negative_frame_masks], axis=0)  # NOQA
-            inputs['negative_im'] = ItemContainer(torch.from_numpy(negative_cthw_im), stack=True)
+            inputs['negative_im'] = ItemContainer(torch.from_numpy(negative_cthw_im).contiguous(), stack=True)
 
         item = {
             'inputs': inputs,
