@@ -317,11 +317,20 @@ def track_to_site(coco_dset,
             map(_normalize_date,
                 coco_dset.images(set(gids)).lookup('date_captured')))
 
+        # https://smartgitlab.com/TE/annotations/-/wikis/Annotation-Status-Types#for-site-models-generated-by-performersalgorithms
+        # system_confirmed, system_rejected, or system_proposed
+        # TODO system_proposed pre val-net
+        status = set(
+            coco_dset.annots(trackid=trackid).get('status',
+                                                  'system_confirmed'))
+        assert len(status) == 1, f'inconsistent {status=} for {trackid=}'
+        status = status.pop()
+
         properties = {
             'site_id': site_id,
             'version': watch.__version__,
             'mgrs': MGRS().toMGRS(*centroid_latlon, MGRSPrecision=0),
-            'status': 'system_confirmed',  # TODO system_proposed pre val-net
+            'status': status,
             'model_content': 'proposed',
             'score': 1.0,  # TODO does this matter?
             'start_date': min(dates),
