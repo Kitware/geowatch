@@ -109,6 +109,8 @@ def _download_region(aws_base_command,
     for feature in out_region_data.get('features', ()):
         props = feature['properties']
         if props['type'] == 'region':
+            # Ensure the region feature has a "comments" field
+            props['comments'] = props.get('comments', '')
             region_id = props.get('region_model_id', props.get('region_id'))
             break
 
