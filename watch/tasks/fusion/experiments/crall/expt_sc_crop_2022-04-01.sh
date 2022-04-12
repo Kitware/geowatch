@@ -84,11 +84,45 @@ CROPPED_PRE_EVAL_AND_AGG(){
     PRED_CFG_PAT="*"
     MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json
 
+    GROUP_KEY="*Drop3*s2_wv*"
+    GROUP_KEY="*Drop3*"
+
     python -m watch.tasks.fusion.aggregate_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
-        --dset_group_key="*Drop3*s2_wv*" --show=True \
+        --dset_group_key="$GROUP_KEY" --show=True \
         --classes_of_interest "Site Preparation" "Active Construction" "Post Construction"
+}
+
+
+special_evaluation(){
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware="hdd")
+    cd "$DVC_DPATH" 
+    source "$HOME"/local/init/utils.sh
+    writeto models/fusion/eval3_sc_candidates/models_of_interest.txt "
+        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V001/CropDrop3_SC_V001_epoch=55-step=114687-v1.pt
+    "
+
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware="hdd")
+    DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
+    EXPT_GROUP_CODE=eval3_sc_candidates
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_wv_vali.kwcoco.json
+    #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_D_wv_vali.kwcoco.json
+    #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="0,1,2,3" \
+            --model_globstr="$DVC_DPATH"/models/fusion/eval3_sc_candidates/models_of_interest.txt \
+            --test_dataset="$VALI_FPATH" \
+            --enable_pred=1 \
+            --enable_eval=1 \
+            --enable_track=0 \
+            --enable_iarpa_eval=0 \
+            --pred_workers=3 \
+            --chip_overlap=0.0,0.3,0.5 \
+            --tta_time=0,1,2,3 \
+            --tta_fliprot=0,1,2 \
+            --skip_existing=True --backend=tmux --run=1
 }
 
 

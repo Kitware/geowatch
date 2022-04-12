@@ -323,6 +323,114 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
     return activity_table, confusion_matrix
 
 
+def _hack_remerge_data():
+    """
+    Hack to redo the merge with a different F1 maximization criterion
+
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
+    cd "$DVC_DPATH"
+    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
+    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json
+    """
+    import watch
+    dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
+    globstr = str(dvc_dpath / 'models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json')
+    from watch.utils import util_path
+    from watch.utils import simple_dvc
+    summary_metrics = util_path.coerce_patterned_paths(globstr)
+    import json
+    import safer
+    dvc = simple_dvc.SimpleDVC(dvc_dpath)
+
+    # for merge_fpath in summary_metrics:
+    #     if dvc.is_tracked(merge_fpath):
+    #     pass
+
+    dvc.unprotect(summary_metrics)
+
+    for merge_fpath in summary_metrics:
+        region_dpaths = [p for p in list(merge_fpath.parent.parent.glob('*')) if p.name != 'merged']
+        anns_root = dvc_dpath / 'annotations'
+
+        # merge_dpath = merge_fpath.parent
+
+        json_data = json.loads(merge_fpath.read_text())
+        parent_info = json_data['parent_info']
+
+        bas_concat_df, bas_df, sc_df, sc_cm = _make_merge_metrics(region_dpaths, anns_root)
+        new_json_data, *_ = _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info)
+
+        with safer.open(merge_fpath, 'w', temp_file=True) as f:
+            json.dump(json_data, f, indent=4)
+
+
+def _make_merge_metrics(region_dpaths, anns_root):
+    results = [
+        RegionResult.from_dpath_and_anns_root(pth, anns_root)
+        for pth in region_dpaths
+    ]
+
+    # merge BAS
+    bas_results = [r for r in results if r.bas_dpath]
+    bas_df, bas_concat_df = merge_bas_metrics_results(bas_results)
+
+    # merge SC
+    sc_df, sc_cm = merge_sc_metrics_results([r for r in results if r.sc_dpath])
+
+    return bas_concat_df, bas_df, sc_df, sc_cm
+
+
+def _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info):
+    # Find best bas row in combined results
+
+    min_rho, max_rho = 0.5, 0.5
+    min_tau, max_tau = 0.2, 0.2
+
+    bas_df = bas_df.reset_index()
+    rho = bas_df['rho']
+    tau = bas_df['tau']
+    rho_flags = (min_rho <= rho) & (rho <= max_rho)
+    tau_flags = (min_tau <= tau) & (tau <= max_tau)
+    flags = tau_flags & rho_flags
+    candidate_bas_df = bas_df[flags]
+
+    bas_concat_df = bas_concat_df.reset_index()
+    rho = bas_concat_df['rho']
+    tau = bas_concat_df['tau']
+    rho_flags = (min_rho <= rho) & (rho <= max_rho)
+    tau_flags = (min_tau <= tau) & (tau <= max_tau)
+    flags = tau_flags & rho_flags
+    candidate_bas_concat_df = bas_concat_df[flags]
+
+    # Find best merged bas row
+    best_bas_row = candidate_bas_df.loc[[candidate_bas_df['F1'].idxmax()]]
+    # Find best per-region bas row
+    best_ids = candidate_bas_concat_df.groupby('region_id')['F1'].idxmax()
+    best_per_region = candidate_bas_concat_df.loc[best_ids]
+    best_bas_row_ = pd.concat({'merged':  best_bas_row}, names=['region_id'])
+    # Get a best row for each region and the "merged" region
+    best_bas_rows = pd.concat([best_per_region, best_bas_row_])
+    concise_best_bas_rows = best_bas_rows.rename(
+        {'tp sites': 'tp',
+         'fp sites': 'fp',
+         'fn sites': 'fn',
+         'truth sites': 'truth',
+         'proposed sites': 'proposed',
+         'total sites': 'total'}, axis=1)
+    concise_best_bas_rows = concise_best_bas_rows.drop([
+        'truth slices',
+        'proposed slices', 'precision', 'recall (PD)', 'spatial FAR',
+        'temporal FAR', 'images FAR'], axis=1)
+
+    json_data = {}
+    json_data['best_bas_rows'] = json.loads(best_bas_rows.to_json(orient='table', indent=2))
+    json_data['sc_cm'] = json.loads(sc_cm.to_json(orient='table', indent=2))
+    json_data['sc_df'] = json.loads(sc_df.to_json(orient='table', indent=2))
+    json_data['parent_info'] = parent_info
+
+    return json_data, concise_best_bas_rows, best_bas_row_
+
+
 def merge_metrics_results(region_dpaths, anns_root, merge_dpath, merge_fpath,
                           parent_info):
     '''
@@ -341,78 +449,30 @@ def merge_metrics_results(region_dpaths, anns_root, merge_dpath, merge_fpath,
         (bas_df, sc_df)
         Two pd.DataFrames that are saved as
             {out_dpath}/(bas|sc)_scoreboard_df.pkl
-
-    Ignore:
-        pass
     '''
     import safer
     merge_dpath = ub.Path(merge_dpath)
     # assert merge_dpath not in region_dpaths
     # merge_dpath.delete().ensuredir()
 
-    results = [
-        RegionResult.from_dpath_and_anns_root(pth, anns_root)
-        for pth in region_dpaths
-    ]
-
-    #
-    # merge BAS
-    #
-
-    bas_results = [r for r in results if r.bas_dpath]
-    bas_df, bas_concat_df = merge_bas_metrics_results(bas_results)
+    bas_concat_df, bas_df, sc_df, sc_cm = _make_merge_metrics(region_dpaths, anns_root)
     bas_df.to_pickle(merge_dpath / 'bas_scoreboard_df.pkl')
-    #
-    # merge SC
-    #
-
-    sc_df, sc_cm = merge_sc_metrics_results([r for r in results if r.sc_dpath])
     sc_df.to_pickle(merge_dpath / 'sc_activity_df.pkl')
     sc_cm.to_pickle(merge_dpath / 'sc_confusion_df.pkl')
 
-    #
-    # write summary in readable form
-    #
-
-    # Find best bas row in combined results
-    best_bas_row = bas_df.loc[[bas_df['F1'].idxmax()]]
-
-    # Find best bas row per-region
-    best_ids = bas_concat_df.groupby('region_id')['F1'].idxmax()
-    best_per_region = bas_concat_df.loc[best_ids]
-    best_bas_row_ = pd.concat({'merged':  best_bas_row}, names=['region_id'])
-    # Get a best row for each region and the "merged" region
-    best_bas_rows = pd.concat([best_per_region, best_bas_row_])
-    concise_best_bas_rows = best_bas_rows.rename(
-        {'tp sites': 'tp',
-         'fp sites': 'fp',
-         'fn sites': 'fn',
-         'truth sites': 'truth',
-         'proposed sites': 'proposed',
-         'total sites': 'total'}, axis=1)
-    concise_best_bas_rows = concise_best_bas_rows.drop([
-        'truth slices',
-        'proposed slices', 'precision', 'recall (PD)', 'spatial FAR',
-        'temporal FAR', 'images FAR'], axis=1)
+    json_data, concise_best_bas_rows, best_bas_row = _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info)
     print(concise_best_bas_rows.to_string())
 
+    # write summary in readable form
+    #
     summary_path = merge_dpath / 'summary.csv'
-    if summary_path.is_file():
-        summary_path.delete()
-    with open(summary_path, 'a+') as f:
+    with open(summary_path, 'w') as f:
         best_bas_row.to_csv(f)
         f.write('\n')
         sc_df.to_csv(f)
         f.write('\n')
         sc_cm.to_csv(f)
 
-    json_data = {}
-    json_data['best_bas_rows'] = json.loads(best_bas_rows.to_json(orient='table', indent=2))
-    json_data['sc_cm'] = json.loads(sc_cm.to_json(orient='table', indent=2))
-    json_data['sc_df'] = json.loads(sc_df.to_json(orient='table', indent=2))
-    json_data['parent_info'] = parent_info
-
-    # merge_fpath = merge_dpath / 'summary2.json'
     with safer.open(merge_fpath, 'w', temp_file=True) as f:
         json.dump(json_data, f, indent=4)
 

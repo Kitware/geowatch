@@ -51,6 +51,8 @@ class ScheduleEvaluationConfig(scfg.Config):
         'skip_existing': scfg.Value(False, help='if True dont submit commands where the expected products already exist'),
         'backend': scfg.Value('tmux', help='can be tmux, slurm, or maybe serial in the future'),
 
+        'pred_workers': scfg.Value(4, help='number of prediction workers in each process'),
+
         'enable_eval': scfg.Value(True, help='if False, then evaluation is not run'),
         'enable_pred': scfg.Value(True, help='if False, then prediction is not run'),
 
@@ -202,6 +204,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # HACK FOR DVC PTH FIXME:
     if str(model_globstr).endswith('.txt'):
         from watch.utils.simple_dvc import SimpleDVC
+        print('model_globstr = {!r}'.format(model_globstr))
         dvc_dpath = SimpleDVC.find_root(ub.Path(model_globstr))
     else:
         dvc_dpath = watch.find_smart_dvc_dpath()
@@ -235,7 +238,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     with_saliency = 'auto'
     with_class = 'auto'
 
-    workers_per_queue = 4
+    workers_per_queue = config['pred_workers']
     recompute = False
 
     # HARD CODED

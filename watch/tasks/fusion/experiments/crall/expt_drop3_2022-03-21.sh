@@ -119,10 +119,11 @@ schedule-prediction-and-evlauation(){
     # Commit Evaluation Results
     #################################
     # Be sure to DVC add the eval results after!
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
     cd "$DVC_DPATH" 
     # Check for 
     ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
+
     # Check for uncommited evaluations
     # shellcheck disable=SC2010
     ls -al models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json | grep -v ' \-> '
@@ -132,8 +133,15 @@ schedule-prediction-and-evlauation(){
     git push
     dvc push -r aws -R models/fusion/eval3_candidates/eval
 
-    # For SSD drives
-    dvc push -r local_store -R models/fusion/eval3_candidates/eval
+    # For IARPA metrics
+    # shellcheck disable=SC2010
+    ls -al models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json | grep -v ' \-> '
+    dvc add models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json 
+    git commit -am "add iarpa eval from $HOSTNAME"
+    git push 
+    dvc push -r aws -R models/fusion/eval3_candidates/eval
+
+    #dvc push -r local_store -R models/fusion/eval3_candidates/eval
 }
 
 

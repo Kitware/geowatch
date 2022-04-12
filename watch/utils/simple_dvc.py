@@ -128,6 +128,36 @@ class SimpleDVC():
             dvc_command = ['unprotect'] + rel_paths
             dvc.main.main(dvc_command)
 
+    def is_tracked(self, path):
+        path = ub.Path(path)
+        tracker_fpath = self.find_file_tracker(path)
+        if tracker_fpath is not None:
+            return True
+        else:
+            tracker_fpath = self.find_dir_tracker(path)
+            if tracker_fpath is not None:
+                raise NotImplementedError
+
+    # @classmethod
+    # def find_dvc_tracking_fpath(cls, path):
+
+    def find_file_tracker(cls, path):
+        assert not path.name.endswith('.dvc')
+        tracker_fpath = path.augment(tail='.dvc')
+        if tracker_fpath.exists():
+            return tracker_fpath
+
+    def find_dir_tracker(cls, path):
+        # Find if an ancestor parent dpath is tracked
+        prev = path
+        dpath = path.parent
+        while (not (dpath / '.dvc').exists()) and prev != dpath:
+            tracker_fpath = dpath.augment(tail='.dvc')
+            if tracker_fpath.exists():
+                return tracker_fpath
+            prev = dpath
+            dpath = dpath.parent
+
 
 def _ensure_iterable(inputs):
     return inputs if ub.iterable(inputs) else [inputs]
