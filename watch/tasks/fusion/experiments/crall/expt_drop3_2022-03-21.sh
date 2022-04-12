@@ -228,11 +228,12 @@ recovery_eval(){
             --test_dataset="$VALI_FPATH" \
             --enable_pred=1 \
             --enable_eval=1 \
-            --enable_track=0 \
-            --enable_iarpa_eval=0 \
+            --enable_track=1 \
+            --enable_iarpa_eval=1 \
             --chip_overlap=0.3 \
-            --tta_time=0,1,2,3 \
+            --tta_time=0,1,2,3,8 \
             --tta_fliprot=0 \
+            --bas_thresh=0.1,0.2 \
             --skip_existing=True --backend=tmux --run=1
 
     TMUX_GPUS="0,"

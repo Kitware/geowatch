@@ -1430,9 +1430,33 @@ class KWCocoVideoDataset(data.Dataset):
         gid_to_isbad[gid] = force_bad or len(sample_streams) == 0
         gid_to_sample[gid] = sample_streams
 
+    def _input_grid_stats(self):
+        targets = self.new_sample_grid['targets']
+
+        freqs = ub.ddict(lambda: ub.ddict(lambda: 0))
+
+        for tr in ub.ProgIter(targets, desc='loop over targets'):
+            vidid = tr['video_id']
+            freqs['vidid'][vidid] += 1
+            gids = tr['gids']
+            for gid in gids:
+                freqs['gid'][gid] += 1
+            freqs['label'][tr['label']] += 1
+
+        dset = self.sampler.dset
+        for gid, freq in freqs['gid'].items():
+            sensor_coarse = dset.coco_image(gid).img.get('sensor_coarse', '')
+            sensor_coarse = dset.coco_image(gid).img.get('sensor_coarse', '')
+            freqs['sensor'][sensor_coarse] += 1
+
+        print(ub.repr2(ub.dict_diff(freqs, {'gid'})))
+
     @profile
     def __getitem__(self, index):
         """
+
+        CommandLine:
+            DVC_DPATH=$(smartwatch_dvc --hardware="hdd") xdoctest -m watch.tasks.fusion.datamodules.kwcoco_video_data KWCocoVideoDataset.__getitem__:0 --profile
 
         Example:
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -1442,8 +1466,8 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import ndsampler
             >>> import kwcoco
             >>> dvc_dpath = watch.find_smart_dvc_dpath()
-            >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
-            >>> #coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data_nowv_train.kwcoco.json'
+            >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
+            >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data_vali.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> rng = kwarray.ensure_rng(0)
             >>> vidid = rng.choice(coco_dset.videos())
@@ -1451,16 +1475,19 @@ class KWCocoVideoDataset(data.Dataset):
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> self = KWCocoVideoDataset(
             >>>     sampler,
-            >>>     sample_shape=(5, 224, 224),
+            >>>     sample_shape=(12, 256, 256),
             >>>     window_overlap=0,
             >>>     #channels="ASI|MF_Norm|AF|EVI|red|green|blue|swir16|swir22|nir",
-            >>>     channels="red|green|blue|nir",
-            >>>     neg_to_pos_ratio=0, time_sampling='auto', diff_inputs=0, temporal_dropout=0.5,
+            >>>     channels="blue|green|red|nir|swir16|swir22,blue|green|red",
+            >>>     neg_to_pos_ratio=0, time_sampling='soft2', diff_inputs=0, temporal_dropout=0.5,
             >>> )
             >>> self.requested_tasks['change'] = False
             >>> item = self[5]
-            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0)
+            >>> item = self[6]
+            >>> item = self[7]
+            >>> item = self[8]
             >>> # xdoctest: +REQUIRES(--show)
+            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0)
             >>> import kwplot
             >>> kwplot.autompl()
             >>> kwplot.imshow(canvas)
@@ -1476,10 +1503,6 @@ class KWCocoVideoDataset(data.Dataset):
                 canvas = self.draw_item(item)
                 kwplot.imshow(canvas)
                 xdev.InteractiveIter.draw()
-
-        CommandLine:
-            DVC_DPATH=$(smartwatch_dvc)
-            xdoctest -m watch.tasks.fusion.datamodules.kwcoco_video_data KWCocoVideoDataset.__getitem__:0
 
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
