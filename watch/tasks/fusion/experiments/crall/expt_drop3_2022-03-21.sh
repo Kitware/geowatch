@@ -63,10 +63,11 @@ schedule-prediction-and-evlauation(){
     # Pull new models on eval machine
     #################################
 
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware="hdd")
     cd "$DVC_DPATH" 
     git pull
     dvc pull -r aws -R models/fusion/eval3_candidates/packages
+    dvc pull -r aws -R models/fusion/eval3_candidates/eval
 
     #################################
     # Run Prediction & Evaluation
@@ -122,11 +123,15 @@ schedule-prediction-and-evlauation(){
     DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
     cd "$DVC_DPATH" 
     # Check for 
-    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
+    ls -al models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
+    ls -al models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json 
 
     # Check for uncommited evaluations
     # shellcheck disable=SC2010
     ls -al models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json | grep -v ' \-> '
+    # shellcheck disable=SC2010
+    ls -al models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json | grep -v ' \-> '
+
     #du -shL models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json | sort -h
     dvc add models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
     git commit -am "add eval from $HOSTNAME"
@@ -134,8 +139,6 @@ schedule-prediction-and-evlauation(){
     dvc push -r aws -R models/fusion/eval3_candidates/eval
 
     # For IARPA metrics
-    # shellcheck disable=SC2010
-    ls -al models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json | grep -v ' \-> '
     dvc add models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json 
     git commit -am "add iarpa eval from $HOSTNAME"
     git push 
@@ -214,6 +217,23 @@ recovery_eval(){
             --enable_track=1 \
             --enable_iarpa_eval=0 \
             --skip_existing=True --backend=tmux --run=0
+
+
+    writeto "$DVC_DPATH/models/fusion/eval3_candidates/models_of_interest-2.txt" "
+        models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+    "
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="$TMUX_GPUS" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest-2.txt" \
+            --test_dataset="$VALI_FPATH" \
+            --enable_pred=1 \
+            --enable_eval=1 \
+            --enable_track=0 \
+            --chip_overlap=0.3 \
+            --tta_time=0,1,2,3 \
+            --tta_fliprot=0 \
+            --enable_iarpa_eval=0 \
+            --skip_existing=True --backend=tmux --run=1
 
 
     TMUX_GPUS="0,1,2,3,4,5,6,7,8"

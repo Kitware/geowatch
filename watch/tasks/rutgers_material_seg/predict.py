@@ -98,6 +98,7 @@ class Evaluator(object):
 
     def __init__(self,
                  model: object,
+                 checkpoint_fpath: str,
                  input_coco_dset: SequenceDataset,
                  output_coco_dataset: kwcoco.CocoDataset,
                  write_probs : bool = True,
@@ -122,6 +123,7 @@ class Evaluator(object):
         """
 
         self.model = model
+        self.checkpoint_fpath = checkpoint_fpath
         self.save_raw_features = save_raw_features
         self.num_workers = num_workers
         self.output_coco_dataset = output_coco_dataset
@@ -144,6 +146,7 @@ class Evaluator(object):
         # Hack together a channel code
         self.chan_code = '|'.join(['matseg_{}'.format(i) for i in range(self.num_classes)])
         # self.chan_code = '|'.join(['matseg.{}'.format(i) for i in range(self.num_classes)])
+
         self.output_channels = kwcoco.FusedChannelSpec.coerce(self.chan_code).concise()
         self.concise_chan_code = self.output_channels.spec
         self.concise_chan_path_code = self.output_channels.path_sanitize()
@@ -263,7 +266,7 @@ class Evaluator(object):
             #     'file_name': save_path_up3,
             #     'height': aux_height,
             #     'width': aux_width,
-            #     'channels': 'hidmat4:64',
+            #     'channels': 'mat_up3:128',
             #     'warp_aux_to_img': warp_aux_to_img.concise(),
             #     'quantization': quantization_up3,
             # }
@@ -273,7 +276,7 @@ class Evaluator(object):
                 'file_name': save_path_up5,
                 'height': aux_height,
                 'width': aux_width,
-                'channels': 'hidmat4:128',
+                'channels': 'mat_up5:64',
                 'warp_aux_to_img': warp_aux_to_img.concise(),
                 'quantization': quantization_up5,
             }
@@ -290,9 +293,6 @@ class Evaluator(object):
         # from watch.utils import util_kwimage
         current_gids = []
         previous_gids = []
-
-        self.model = self.model.to(self.device)
-        self.model.eval()
 
         config = self.config
         window_dims = (config['data']['time_steps'], config['data']['image_size'], config['data']['image_size'])  # [t,h,w]
@@ -347,6 +347,15 @@ class Evaluator(object):
         writer = util_parallel.BlockingJobQueue(max_workers=self.num_workers)
 
         seen = set()
+
+        if len(eval_dataloader):
+            print('read self.checkpoint_fpath = {!r}'.format(self.checkpoint_fpath))
+            checkpoint_state = torch.load(self.checkpoint_fpath)
+            self.model.load_state_dict(checkpoint_state['model'])
+            print(f"loadded model weights from: {self.checkpoint_fpath}")
+            # print(f"Missing keys from loaded model: {missing_keys}, unexpected keys: {unexpexted_keys}")
+            self.model = self.model.to(self.device)
+            self.model.eval()
 
         with torch.no_grad():
             # from functools import partial
@@ -448,45 +457,6 @@ class Evaluator(object):
                                         (*outputs['tr'].data[0][b]['space_dims'], c_up5),
                                         device='numpy')
                             slice_ = outputs['tr'].data[0][b]['space_slice']
-
-                            # # print(output.shape[0:2])
-                            # # Create output weights to better blend the borders
-                            # # when stitching overlapping images.
-                            # # weights = kwimage.gaussian_patch(output.shape[0:2])[..., None]
-                            # # NOTE: do not change these inplace, these are memoized!
-                            # weights = util_kwimage.upweight_center_mask(output.shape[0:2])[..., None]
-                            # if self.save_raw_features:
-                            #     weights_up3 = util_kwimage.upweight_center_mask(output.shape[0:2])[..., None]
-                            #     weights_up5 = util_kwimage.upweight_center_mask(output.shape[0:2])[..., None]
-
-                            # # Handle stitching nan values
-                            # if self.save_raw_features:
-                            #     invalid_up3_mask = np.isnan(up3)
-                            #     invalid_up5_mask = np.isnan(up5)
-                            #     if np.any(invalid_up3_mask):
-                            #         spatial_valid_mask_up3 = (1 - invalid_up3_mask.any(axis=2, keepdims=True))
-                            #         weights_up3 = weights_up3 * spatial_valid_mask_up3
-                            #         up3[invalid_up3_mask] = 0
-
-                            #     if np.any(invalid_up5_mask):
-                            #         spatial_valid_mask_up5 = (1 - invalid_up5_mask.any(axis=2, keepdims=True))
-                            #         weights_up5 = weights_up5 * spatial_valid_mask_up5
-                            #         up5[invalid_up5_mask] = 0
-
-                            # invalid_output_mask = np.isnan(output)
-                            # if np.any(invalid_output_mask):
-                            #     spatial_valid_mask = (1 - invalid_output_mask.any(axis=2, keepdims=True))
-                            #     weights = weights * spatial_valid_mask
-                            #     output[invalid_output_mask] = 0
-
-                            # print(f"slice_: {slice_}")
-                            # print(f"output weights: {weights.shape}, output: {output.shape}")
-                            # print(f"output weights_up3: {weights_up3.shape}, up3: {up3.shape}")
-                            # print(f"output weights_up5: {weights_up5.shape}, up5: {up5.shape}")
-                            # self.stitcher_dict[gid].add(slice_, output, weight=weights)
-                            # if self.save_raw_features:
-                            #    self.stitcher_dict_up3[gid].add(slice_, up3, weight=weights_up3)
-                            #    self.stitcher_dict_up5[gid].add(slice_, up5, weight=weights_up5)
 
                             from watch.tasks.fusion.predict import CocoStitchingManager
                             CocoStitchingManager._stitcher_center_weighted_add(self.stitcher_dict[gid], slice_, output)
@@ -747,7 +717,7 @@ def build_evaler(cmdline=False, **kwargs):
     print('num_workers = {!r}'.format(num_workers))
 
     # Load input kwcoco dataset and prepare the sampler
-    input_coco_dset = kwcoco.CocoDataset.coerce(args.test_dataset)
+    input_coco_dset: kwcoco.CocoDataset = kwcoco.CocoDataset.coerce(args.test_dataset)
 
     # HACK: Filter to remove WV images
     invalid_sensors = {'WV'}
@@ -764,12 +734,6 @@ def build_evaler(cmdline=False, **kwargs):
     # THIS IS WHY WE SAVE METADATA WITH THE MODEL!
     # WE DONT WANT TO HAVE TO FUDGE RECONSTRUCTION IN PRODUCTION!!!
     args.checkpoint_fpath = os.fspath(args.checkpoint_fpath)
-    checkpoint_state = torch.load(args.checkpoint_fpath)
-
-    # num_classes = checkpoint_state['model']['module.outc.conv.weight'].shape[0]
-    # out_features_dim = checkpoint_state['model']['module.features_outc.conv.weight'].shape[0]
-    # config['data']['num_classes'] = num_classes
-    # config['training']['out_features_dim'] = out_features_dim
 
     base_path = '/'.join(str(args.checkpoint_fpath).split('/')[:-1])
     pretrain_config_path = f"{base_path}/config.yaml"
@@ -779,6 +743,7 @@ def build_evaler(cmdline=False, **kwargs):
         # config['training']['model_feats_channels'] = pretrain_config_path['training']['model_feats_channels']
 
     # Load the model
+    print('build model')
     model = build_model(model_name=config['training']['model_name'],
                         backbone=config['training']['backbone'],
                         pretrained=config['training']['pretrained'],
@@ -798,10 +763,6 @@ def build_evaler(cmdline=False, **kwargs):
     print("model has {} trainable parameters".format(num_params))
     model = mounted_model_cls(model)
 
-    model.load_state_dict(checkpoint_state['model'])
-    print(f"loadded model weights from: {args.checkpoint_fpath}")
-    # print(f"Missing keys from loaded model: {missing_keys}, unexpected keys: {unexpexted_keys}")
-
     output_coco_fpath = pathlib.Path(args.pred_dataset)
 
     if args.feat_dpath is None:
@@ -812,12 +773,15 @@ def build_evaler(cmdline=False, **kwargs):
     output_feat_dpath.mkdir(exist_ok=1, parents=True)
     output_coco_fpath.parent.mkdir(exist_ok=1, parents=True)
 
+    print('init output dataset')
     # Create the results dataset as a copy of the test CocoDataset
-    output_coco_dataset = input_coco_dset.copy()
+    output_coco_dataset: kwcoco.CocoDataset = input_coco_dset.copy()
+    print('clear output annots')
     # Remove all annotations in the results copy
     output_coco_dataset.clear_annotations()
+    print('reroot output dset')
     # Change all paths to be absolute paths
-    output_coco_dataset.reroot(absolute=True)
+    output_coco_dataset.reroot(absolute=True, check=False)
     output_coco_dataset.fpath = os.fspath(output_coco_fpath)
 
     imwrite_kw = {
@@ -825,8 +789,10 @@ def build_evaler(cmdline=False, **kwargs):
         'blocksize': args.blocksize,
     }
 
+    print('make evaluator')
     evaler = Evaluator(
         model,
+        checkpoint_fpath=args.checkpoint_fpath,
         input_coco_dset=input_coco_dset,
         output_coco_dataset=output_coco_dataset,
         config=config,

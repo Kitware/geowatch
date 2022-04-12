@@ -348,7 +348,7 @@ def _hack_remerge_data():
 
     dvc.unprotect(summary_metrics)
 
-    for merge_fpath in summary_metrics:
+    for merge_fpath in ub.ProgIter(summary_metrics, desc='rewrite merge metrics'):
         region_dpaths = [p for p in list(merge_fpath.parent.parent.glob('*')) if p.name != 'merged']
         anns_root = dvc_dpath / 'annotations'
 
@@ -362,6 +362,8 @@ def _hack_remerge_data():
 
         with safer.open(merge_fpath, 'w', temp_file=True) as f:
             json.dump(json_data, f, indent=4)
+
+    dvc.add(summary_metrics)
 
 
 def _make_merge_metrics(region_dpaths, anns_root):
