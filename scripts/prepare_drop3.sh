@@ -239,8 +239,9 @@ transfer_features(){
     # Ensure everything has relative paths
     jq .images[0] combo_LM.kwcoco.json
 
-    kwcoco reroot combo_LM.kwcoco.json \
-        combo_LM.rel.kwcoco.json --absolute=False --check=False
+    # See special reroot
+    #kwcoco reroot combo_LM.kwcoco.json \
+    #    combo_LM.rel.kwcoco.json --absolute=False --check=False
 
     rsync -p "$SRC_BUNDLE_DPATH/combo_LM.rel.kwcoco.json" "$DST_BUNDLE_DPATH/combo_LM.kwcoco.json"
 }
@@ -341,14 +342,14 @@ prepare_cropped_from_tracks(){
     python -m watch.cli.prepare_teamfeats \
         --base_fpath="$BASE_DPATH" \
         --dvc_dpath="$DVC_DPATH" \
-        --gres=",1" \
-        --with_landcover=0 \
+        --gres=",0" \
+        --with_landcover=1 \
         --with_depth=1 \
         --with_materials=0 \
         --with_invariants=0 \
         --do_splits=1 \
         --depth_workers=0 \
-        --cache=1 --run=1 --backend=tmux
+        --cache=1 --backend=tmux --run=1
 
 
 }

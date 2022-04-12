@@ -474,5 +474,19 @@ if __name__ == '__main__':
             --invariant_segmentation=0 \
             --do_splits=0  --cache=1 --run=0
 
+        # Simple demo
+        python -m watch.cli.prepare_teamfeats \
+            --base_fpath=./mydata/data.kwcoco.json \
+            --gres=0,1 \
+            --do_splits=0 \
+            --with_depth=0 \
+            --with_landcover=1 \
+            --with_invariants=0 \
+            --with_materials=1 \
+            --cache=0 \
+            --backend=serial \
+            --run=0
+
+
     """
     main(cmdline=True)

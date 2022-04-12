@@ -44,6 +44,7 @@ import pandas as pd
 import numpy as np
 import ubelt as ub
 import yaml
+import io
 import shutil
 import kwarray
 import scriptconfig as scfg
@@ -71,6 +72,8 @@ class AggregateResultsConfig(scfg.Config):
         'io_workers': scfg.Value(10, help='number of workers to read metrics summaries'),
 
         'classes_of_interest': scfg.Value('*', nargs='+', help='One or more glob patterns'),
+
+        'embed': scfg.Value(False, help='if true embed into IPython before viz')
     }
 
 
@@ -88,40 +91,64 @@ def _writefig(fig, dpath, fname, figsize, verbose, tight):
     fig.savefig(fig_fpath)
 
 
+def debug_all_results():
+    """
+    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/iarpa_eval/scores/merged/summary2.json
+    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/iarpa_eval/scores/merged/summary2.json
+    """
+    pass
+
+
 def load_measure(measure_fpath):
     """
     Workers to load a single measure path. Has a hack to fix old configs.
     This can eventually be removed.
     """
+
+    if measure_fpath.is_dir():
+        cands = [
+            measure_fpath / 'curves/measures2.json',
+            measure_fpath / 'measures2.json',
+        ]
+        found = None
+        for c in cands:
+            if c.exists():
+                found = c
+                break
+        if found is None:
+            raise IOError(str(measure_fpath))
+        measure_fpath = found
+
     with open(measure_fpath, 'r') as file:
         info = json.load(file)
 
     HACK_FOR_IARPA = True
     if HACK_FOR_IARPA:
-        pred_parent = measure_fpath.parent.parent.parent
-        cand = ub.Path(*['pred' if p == 'eval' else p for p in pred_parent.parts])
-        iarpa_globs = cand / 'tracking/*/iarpa_eval/scores/merged/summary2.json'
         import glob
+        eval_dpath = measure_fpath.parent.parent
+        iarpa_globs = eval_dpath / 'tracking/*/iarpa_eval/scores/merged/summary2.json'
+
+        if 0:
+            eval_parents = measure_fpath.parent.parent.parent
+            cand = ub.Path(*['pred' if p == 'eval' else p for p in eval_parents.parts])
+            iarpa_globs = cand / 'tracking/*/iarpa_eval/scores/merged/summary2.json'
 
         iarpa_subresults = []
         iarpa_summary_fpaths = list(glob.glob(str(iarpa_globs)))
+        if ub.argflag('--force-iarpa'):
+            if not len(iarpa_summary_fpaths):
+                raise Exception('forcing-iarpa')
+
         for iarpa_fpath in iarpa_summary_fpaths:
             iarpa_fpath = ub.Path(iarpa_fpath)
             # HACK: need to persist the track params here
-            thresh = float(iarpa_fpath.parent.parent.parent.parent.name.split('_')[1].split('=')[1])
             with open(iarpa_fpath, 'r') as file:
-                iarpa_info = json.load(file)
-                iarpa_info
-                import io
-                best_bas_rows = pd.read_json(io.StringIO(json.dumps(iarpa_info['best_bas_rows'])), orient='table')
-                bas_row = best_bas_rows.loc['merged']
-                # bas_f1 = bas_row['F1'].values.ravel()[0]
-                row = bas_row.reset_index().iloc[0].to_dict()
-                row['thresh'] = thresh
-                iarpa_subresults.append(row)
-                # sc_df = pd.read_json(io.StringIO(json.dumps(iarpa_info['sc_df'])), orient='table')
-                # sc_cm = pd.read_json(io.StringIO(json.dumps(iarpa_info['sc_cm'])), orient='table')
-        info['meta']['iarpa_measures'] = iarpa_subresults
+                iarpa_merged = json.load(file)
+                iarpa_subresults.append(iarpa_merged)
+                # parent_info = iarpa_merged.get('parent_info', None)
+                # sc_df = pd.read_json(io.StringIO(json.dumps(iarpa_merged['sc_df'])), orient='table')
+                # sc_cm = pd.read_json(io.StringIO(json.dumps(iarpa_merged['sc_cm'])), orient='table')
+        info['meta']['iarpa_subresults'] = iarpa_subresults
 
     if True:
         # Hack to ensure fit config is properly serialized
@@ -185,32 +212,59 @@ def load_measure(measure_fpath):
     return info
 
 
-def resolve_cross_machine_path(path):
+def resolve_cross_machine_path(path, dvc_dpath=None):
     """
     HACK
 
     Attempt to determine what the local path to a file/directry would be
     if it exists on this machine. This assumes the path is something
     that was checked into DVC.
-    """
-    if not path.exists():
 
-        try:
-            idx = path.parts.index('smart_watch_dvc')
-        except ValueError:
-            pass
-        else:
-            import watch
-            dvc_dpath = watch.find_smart_dvc_dpath()
+    Args:
+        dvc_dpath : the preferred dvc dpath to associate the file with
+            in case the older one points to multiple.
+    """
+    # pkg_dvc = SimpleDVC.find_root(package_fpath).resolve()
+    # SimpleDVC.find_root(package_fpath).resolve()
+    path = ub.Path(path)
+    needs_resolve = not path.exists()
+    if not needs_resolve:
+        if dvc_dpath is not None:
+            needs_resolve = not path.is_relative_to(dvc_dpath)
+
+    if needs_resolve:
+        expected_dnames = [
+            'smart_watch_dvc',
+            'smart_watch_dvc-hdd',
+            'smart_watch_dvc-ssd',
+        ]
+
+        found_idx = None
+        for dname in expected_dnames:
+            try:
+                idx = path.parts.index('smart_watch_dvc')
+            except ValueError:
+                pass
+            else:
+                found_idx = idx
+                break
+
+        if found_idx is not None:
+            # import watch
+            # dvc_dpath = watch.find_smart_dvc_dpath()
             pname = ub.Path(*path.parts[idx + 1:])
             pname_dvc = pname.augment(tail='.dvc')
-            cwd = ub.Path('.').resolve()
-            candidates = [
+            cwd = ub.Path('.').absolute()
+            candidates = []
+            if dvc_dpath is not None:
+                candidates.extend([
+                    dvc_dpath / pname,
+                    dvc_dpath / pname_dvc,
+                ])
+            candidates.extend([
                 cwd / pname,
                 cwd / pname_dvc,
-                dvc_dpath / pname,
-                dvc_dpath / pname_dvc,
-            ]
+            ])
             found = None
             try:
                 for cand_path in candidates:
@@ -226,7 +280,7 @@ def resolve_cross_machine_path(path):
     return path
 
 
-def prepare_results(all_infos, coi_pattern):
+def prepare_results(all_infos, coi_pattern, dvc_dpath=None):
     from kwcoco.coco_evaluator import CocoSingleResult
     from watch.utils import result_analysis
     from watch.utils import util_time
@@ -283,12 +337,11 @@ def prepare_results(all_infos, coi_pattern):
 
         pred_fpath = predict_args['pred_dataset']
         package_fpath = ub.Path(predict_args['package_fpath'])
-        package_fpath = resolve_cross_machine_path(package_fpath)
+
+        package_fpath = resolve_cross_machine_path(package_fpath, dvc_dpath)
 
         # _ = ub.Path(pred_fpath)
         # HACK
-        # import xdev
-        # xdev.embed()
         # model_fpath = (_.parent.parent.parent / (_.parent.parent.name.split('pred_')[-1] + '.pt'))
 
         title = meta['title']
@@ -379,19 +432,46 @@ def prepare_results(all_infos, coi_pattern):
         row['pred_fpath'] = pred_fpath
         row['model_fpath'] = str(package_fpath)
 
-        if 'iarpa_measures' in meta:
+        iarpa_subresults = meta.get('iarpa_subresults', [])
+
+        iarpa_simplified = []
+        for iarpa_merged in iarpa_subresults:
             try:
-                iarpa_measures = pd.DataFrame(meta['iarpa_measures'])
-                best_row = iarpa_measures.iloc[iarpa_measures['F1'].argmax()]
+                # thresh = float(iarpa_fpath.parent.parent.parent.parent.name.split('_')[1].split('=')[1])
+                # sc_cm = pd.read_json(io.StringIO(json.dumps(iarpa_merged['sc_cm'])), orient='table')
+                # sc_df = pd.read_json(io.StringIO(json.dumps(iarpa_merged['sc_df'])), orient='table')
+                best_bas_rows = pd.read_json(io.StringIO(json.dumps(iarpa_merged['best_bas_rows'])), orient='table')
+                parent_info = iarpa_merged.get('parent_info', None)
+                bas_row = best_bas_rows.loc['merged'].reset_index().iloc[0].to_dict()
+
+                # bas_f1 = bas_row['F1'].values.ravel()[0]
+                track_kwargs = None
+                # track_pred_info = None
+                for pinfo in parent_info:
+                    pinfo_type = pinfo.get('type', None)
+                    if pinfo_type == 'process':
+                        if pinfo['properties']['name'] == 'watch.cli.kwcoco_to_geojson':
+                            _prop = pinfo['properties']
+                            track_kwargs = json.loads(_prop['args']['track_kwargs'])
+                            # track_pred_info = _prop['pred_info']  # these should agree
+                # row['thresh'] = thresh
+                # if track_pred_info != predict_props:
+                #     pass
+
                 BAS_metrics = {
-                    'BAS_F1': best_row.F1,
-                    'BAS_thresh': best_row.thresh,
-                    'BAS_rho': best_row.tau,
-                    'BAS_tau': best_row.rho,
+                    'BAS_F1': bas_row['F1'],
+                    'BAS_thresh': track_kwargs['thresh'],
+                    'BAS_rho': bas_row['rho'],
+                    'BAS_tau': bas_row['tau'],
                 }
-                row.update(BAS_metrics)
+                iarpa_simplified.append(BAS_metrics)
+                # row.update(BAS_metrics)
             except Exception:
                 BAS_metrics = None
+
+        if iarpa_simplified:
+            BAS_metrics = max(iarpa_simplified, key=lambda x: x['BAS_F1'])
+            row.update(BAS_metrics)
 
         mean_rows.append(row)
 
@@ -493,8 +573,8 @@ def prepare_results(all_infos, coi_pattern):
 
 def best_candidates(class_rows, mean_rows):
     # TOP CANDIDATE MODELS - FIND TOP K MODELS FOR EVERY METRIC
-    K = 7
-    max_per_metric_per_expt = 2
+    K = 10
+    max_per_metric_per_expt = 3
     all_model_candidates = set()
 
     mean_metrics = [
@@ -589,11 +669,15 @@ def best_candidates(class_rows, mean_rows):
     print('bas_pred_candidates = {}'.format(ub.repr2(bas_pred_candidates, nl=1)))
 
     all_model_candidates = sorted(all_model_candidates)
+
+    # from watch.utils import util_path
+    # for p in all_model_candidates:
+    #     print(resolve_cross_machine_path(p, dvc_dpath))
+    #     # print(util_path.resolve_directory_symlinks(resolve_cross_machine_path(p)))
+
     print('all_model_candidates = {}'.format(ub.repr2(all_model_candidates, nl=1)))
 
     if 0:
-        # import xdev
-        # xdev.embed()
         # HACK
         # Check if models have predictions
         from watch.tasks.fusion.organize import suggest_paths
@@ -842,6 +926,126 @@ def plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric
     return fig
 
 
+def dump_spreadsheet(results_list2, out_dpath):
+    spreadsheet_rows = [ub.dict_union(
+        {'name': result.name},
+        result.metrics,
+        result.params,
+        result.meta or {},
+    )
+        for result in results_list2]
+
+    metrics_keys = set(ub.flatten(result.metrics.keys() for result in results_list2))
+
+    ignore_spreadsheet = {
+        'default_root_dir', 'enable_progress_bar'
+        'prepare_data_per_node', 'enable_model_summary', 'checkpoint_callback',
+        'detect_anomaly', 'gpus', 'terminate_on_nan',
+        'workdir', 'config', 'num_workers', 'amp_backend',
+        'enable_progress_bar', 'flush_logs_every_n_steps',
+        'enable_checkpointing', 'prepare_data_per_node', 'amp_level',
+        'package_fpath', 'num_draw',
+        'track_grad_norm',
+        'val_check_interval',
+        'weights_summary',
+        'process_position',
+        'overfit_batches',
+        'num_sanity_val_steps',
+        'num_processes',
+        'num_nodes',
+        'move_metrics_to_cpu',
+        'limit_val_batches',
+        'limit_train_batches',
+        'limit_predict_batches',
+        'fast_dev_run',
+        'eval_after_fit',
+        'deterministic',
+        'reload_dataloaders_every_epoch',
+        'reload_dataloaders_every_n_epochs',
+        'replace_sampler_ddp',
+    }
+
+    # https://pbpython.com/improve-pandas-excel-output.html
+    # https://www.ojdo.de/wp/2019/10/pandas-to-excel-with-openpyxl/
+    spreadsheet = pd.DataFrame(spreadsheet_rows)
+    spreadsheet = spreadsheet.drop(set(spreadsheet.columns) & ignore_spreadsheet, axis=1)
+    from openpyxl.formatting.rule import ColorScaleRule  # NOQA
+    from openpyxl.styles import Alignment, Font, NamedStyle  # NOQA
+    from openpyxl.utils import get_column_letter  # NOQA
+
+    excel_fpath = out_dpath / 'experiment_results.xlsx'
+    excel_fpath.delete()
+    writer = pd.ExcelWriter(excel_fpath, engine='openpyxl', mode='w')
+    with writer:
+        spreadsheet.to_excel(writer, sheet_name='report', index=False)
+        # workbook = writer.book
+        ws = writer.sheets['report']
+
+        ap_percentile_rule = ColorScaleRule(
+            start_type='percentile',
+            start_value=0,
+            start_color='ffaaaa',  # red-ish
+            mid_type='num',
+            mid_value=0.3,
+            mid_color='ffffff',  # white
+            end_type='percentile',
+            end_value=1,
+            end_color='aaffaa')  # green-ish
+
+        auc_percentile_rule = ColorScaleRule(
+            start_type='percentile',
+            start_value=0.4,
+            start_color='ffaaaa',  # red-ish
+            mid_type='num',
+            mid_value=0.7,
+            mid_color='ffffff',  # white
+            end_type='percentile',
+            end_value=1,
+            end_color='aaffaa')  # green-ish
+
+        metric_col_idxs = []
+
+        for col_idx in range(1, ws.max_column):
+            colname = spreadsheet.columns[col_idx - 1]
+            col = get_column_letter(col_idx)
+            if colname in metrics_keys:
+                metric_col_idxs.append(col_idx)
+            max_col_len = max(map(len, spreadsheet.iloc[:, (col_idx - 1)].to_string(index=False).split('\n')))
+            # print('max_col_len = {!r}'.format(max_col_len))
+            if max_col_len < 8:
+                ws.column_dimensions[col].width = min(max(max_col_len, len(colname)), 26)
+            else:
+                ws.column_dimensions[col].width = 26
+
+        # from matplotlib.colors import cmap
+        # import matplotlib
+        # cmap = matplotlib.cm.get_cmap('bwr')
+        # cmap = matplotlib.cm.get_cmap('spectral')
+        # metric_format = workbook.add_format({'num_format': '0.4f', 'bold': False})
+        ws.column_dimensions['A'].width = 40
+        for col_idx in metric_col_idxs:
+            colname = spreadsheet.columns[col_idx - 1]
+            col = get_column_letter(col_idx)
+            value_cells = '{col}2:{col}{row}'.format(col=col, row=ws.max_row)
+            ws.column_dimensions[col].width = 20
+            if 'AUC' in colname:
+                ws.conditional_formatting.add(value_cells, auc_percentile_rule)
+            else:
+                ws.conditional_formatting.add(value_cells, ap_percentile_rule)
+
+            # Not working in google slides?
+            # if 0:
+            #     for row in ws[value_cells]:
+            #         for cell in row:
+            #             import kwimage
+            #             try:
+            #                 cell.fill.bgColor.rgb = #kwimage.Color(cmap(cell.value)).ashex()[1:7]
+            #             except Exception:
+            #                 pass
+            #       # cell.fill.bgColor
+            #       # cell.number_format = '0.0000'
+
+
 def main(cmdline=False, **kwargs):
     """
     Ignore:
@@ -878,6 +1082,9 @@ def main(cmdline=False, **kwargs):
     else:
         measure_fpaths = util_path.coerce_patterned_paths(measure_globstr)
 
+    if 0:
+        pass
+
     coi_pattern = util_pattern.MultiPattern.coerce(
         config['classes_of_interest'], hint='glob')
 
@@ -904,8 +1111,6 @@ def main(cmdline=False, **kwargs):
     # dset_glob = config['dset_glob']
     # dset_glob = ''
     # measure_fpaths
-    # import xdev
-    # xdev.embed()
 
     print('dset_groups = {}'.format(ub.repr2(dset_groups, nl=2)))
 
@@ -935,10 +1140,11 @@ def main(cmdline=False, **kwargs):
     failed_jobs = []
     for job in jobs.as_completed(desc='collect jobs'):
         try:
-            all_infos.append(job.result())
-        except Exception:
+            measure_info = job.result()
+            all_infos.append(measure_info)
+        except Exception as ex:
             failed_jobs.append(job.measure_fpath)
-            print('Failed job.measure_fpath = {!r}'.format(job.measure_fpath))
+            print('Failed job.measure_fpath = {!r} because {!r}'.format(job.measure_fpath, ex))
             pass
 
     if 0:
@@ -956,126 +1162,14 @@ def main(cmdline=False, **kwargs):
 
     print(f'Failed Jobs {len(failed_jobs)=}/{len(jobs)}')
 
-    class_rows, mean_rows, all_results, results_list2 = prepare_results(all_infos, coi_pattern)
+    from watch.utils.simple_dvc import SimpleDVC
+    dvc = SimpleDVC.coerce(out_dpath)
+    dvc_dpath = dvc.dvc_root
+
+    class_rows, mean_rows, all_results, results_list2 = prepare_results(all_infos, coi_pattern, dvc_dpath=dvc_dpath)
 
     if 1:
-        spreadsheet_rows = [ub.dict_union(
-            {'name': result.name},
-            result.metrics,
-            result.params,
-            result.meta or {},
-        )
-            for result in results_list2]
-
-        metrics_keys = set(ub.flatten(result.metrics.keys() for result in results_list2))
-
-        ignore_spreadsheet = {
-            'default_root_dir', 'enable_progress_bar'
-            'prepare_data_per_node', 'enable_model_summary', 'checkpoint_callback',
-            'detect_anomaly', 'gpus', 'terminate_on_nan',
-            'workdir', 'config', 'num_workers', 'amp_backend',
-            'enable_progress_bar', 'flush_logs_every_n_steps',
-            'enable_checkpointing', 'prepare_data_per_node', 'amp_level',
-            'package_fpath', 'num_draw',
-            'track_grad_norm',
-            'val_check_interval',
-            'weights_summary',
-            'process_position',
-            'overfit_batches',
-            'num_sanity_val_steps',
-            'num_processes',
-            'num_nodes',
-            'move_metrics_to_cpu',
-            'limit_val_batches',
-            'limit_train_batches',
-            'limit_predict_batches',
-            'fast_dev_run',
-            'eval_after_fit',
-            'deterministic',
-            'reload_dataloaders_every_epoch',
-            'reload_dataloaders_every_n_epochs',
-            'replace_sampler_ddp',
-        }
-
-        # https://pbpython.com/improve-pandas-excel-output.html
-        # https://www.ojdo.de/wp/2019/10/pandas-to-excel-with-openpyxl/
-        spreadsheet = pd.DataFrame(spreadsheet_rows)
-        spreadsheet = spreadsheet.drop(set(spreadsheet.columns) & ignore_spreadsheet, axis=1)
-        from openpyxl.formatting.rule import ColorScaleRule  # NOQA
-        from openpyxl.styles import Alignment, Font, NamedStyle  # NOQA
-        from openpyxl.utils import get_column_letter  # NOQA
-
-        excel_fpath = out_dpath / 'experiment_results.xlsx'
-        excel_fpath.delete()
-        writer = pd.ExcelWriter(excel_fpath, engine='openpyxl', mode='w')
-        with writer:
-            spreadsheet.to_excel(writer, sheet_name='report', index=False)
-            # workbook = writer.book
-            ws = writer.sheets['report']
-
-            ap_percentile_rule = ColorScaleRule(
-                start_type='percentile',
-                start_value=0,
-                start_color='ffaaaa',  # red-ish
-                mid_type='num',
-                mid_value=0.3,
-                mid_color='ffffff',  # white
-                end_type='percentile',
-                end_value=1,
-                end_color='aaffaa')  # green-ish
-
-            auc_percentile_rule = ColorScaleRule(
-                start_type='percentile',
-                start_value=0.4,
-                start_color='ffaaaa',  # red-ish
-                mid_type='num',
-                mid_value=0.7,
-                mid_color='ffffff',  # white
-                end_type='percentile',
-                end_value=1,
-                end_color='aaffaa')  # green-ish
-
-            metric_col_idxs = []
-
-            for col_idx in range(1, ws.max_column):
-                colname = spreadsheet.columns[col_idx - 1]
-                col = get_column_letter(col_idx)
-                if colname in metrics_keys:
-                    metric_col_idxs.append(col_idx)
-                max_col_len = max(map(len, spreadsheet.iloc[:, (col_idx - 1)].to_string(index=False).split('\n')))
-                # print('max_col_len = {!r}'.format(max_col_len))
-                if max_col_len < 8:
-                    ws.column_dimensions[col].width = min(max(max_col_len, len(colname)), 26)
-                else:
-                    ws.column_dimensions[col].width = 26
-
-            # from matplotlib.colors import cmap
-            # import matplotlib
-            # cmap = matplotlib.cm.get_cmap('bwr')
-            # cmap = matplotlib.cm.get_cmap('spectral')
-            # metric_format = workbook.add_format({'num_format': '0.4f', 'bold': False})
-            ws.column_dimensions['A'].width = 40
-            for col_idx in metric_col_idxs:
-                colname = spreadsheet.columns[col_idx - 1]
-                col = get_column_letter(col_idx)
-                value_cells = '{col}2:{col}{row}'.format(col=col, row=ws.max_row)
-                ws.column_dimensions[col].width = 20
-                if 'AUC' in colname:
-                    ws.conditional_formatting.add(value_cells, auc_percentile_rule)
-                else:
-                    ws.conditional_formatting.add(value_cells, ap_percentile_rule)
-
-                # Not working in google slides?
-                # if 0:
-                #     for row in ws[value_cells]:
-                #         for cell in row:
-                #             import kwimage
-                #             try:
-                #                 cell.fill.bgColor.rgb = #kwimage.Color(cmap(cell.value)).ashex()[1:7]
-                #             except Exception:
-                #                 pass
-                #       # cell.fill.bgColor
-                #       # cell.number_format = '0.0000'
+        dump_spreadsheet(results_list2, out_dpath)
 
     if 0:
         best_candidates(class_rows, mean_rows)
@@ -1119,8 +1213,6 @@ def main(cmdline=False, **kwargs):
     except Exception as ex:
         print('AnalysisError: ex = {!r}'.format(ex))
         print('Warning: Statistical analysis failed. Probably needs more data.')
-        # import xdev
-        # xdev.embed()
     else:
         print('analysis.varied = {}'.format(ub.repr2(analysis.varied, nl=2)))
         if len(analysis.stats_table):
@@ -1132,26 +1224,62 @@ def main(cmdline=False, **kwargs):
     class_df = class_df.drop(set(class_df.columns) & {'title', 'pred_fpath', 'package_name'}, axis=1)
     mean_df = mean_df.drop(set(mean_df.columns) & {'title', 'pred_fpath', 'package_name'}, axis=1)
 
+    # metric_correlation
+    metrics_of_interest = [
+        'BAS_F1',
+        'salient_AUC',
+        'salient_AP',
+        'coi_mAUC',
+        'coi_mAP',
+        'class_mAP',
+        'class_mAUC',
+    ]
+    metrics_avail = mean_df.columns.intersection(metrics_of_interest)
+    metrics_unavail = ub.oset(metrics_of_interest) - ub.oset(mean_df.columns)
+    print('metrics_avail = {!r}'.format(metrics_avail.tolist()))
+    print('metrics_unavail = {!r}'.format(list(metrics_unavail)))
+
+    metric_corr = mean_df[metrics_avail].corr()
+    print('Metric correleation')
+    print(metric_corr)
+
+    if 0:
+        import kwplot
+        sns = kwplot.autosns()
+        sns.scatterplot(data=mean_df, x='salient_AP', y='BAS_F1')
+        sns.scatterplot(data=mean_df, x='salient_AP', y='salient_AUC')
+
+    mean_desc = mean_df.describe().T
+    _nnull = mean_df.isnull().sum()
+    mean_desc = mean_desc.assign(null=_nnull)
+    print(mean_desc.to_string())
+
     class_df = shrink_notations(class_df, drop=1)
     mean_df = shrink_notations(mean_df, drop=1)
 
     if 'coi_mAPUC' in mean_df.columns:
         print('\nSort by coi_mAPUC')
         _mean_by_metric = mean_df.sort_values('coi_mAPUC')
-        print(_mean_by_metric)
-        # print(_mean_by_metric.to_string())
+        # print(_mean_by_metric)
+        print(_mean_by_metric.to_string())
 
     if 'salient_APUC' in mean_df.columns:
         print('\nSort by salient_APUC')
         _salient_by_metric = mean_df.sort_values('salient_APUC')
-        print(_salient_by_metric)
-        # print(_salient_by_metric.to_string())
+        # print(_salient_by_metric)
+        print(_salient_by_metric.to_string())
+
+    if 'BAS_F1' in mean_df.columns:
+        print('\nSort by BAS_F1')
+        _salient_by_metric = mean_df.sort_values('BAS_F1')
+        # print(_salient_by_metric)
+        print(_salient_by_metric.to_string())
 
     if 'AP' in class_df.columns:
         print('\nClass: Sort by AP')
         _class_by_metric = class_df[~class_df['AP'].isnull()].sort_values('AP')
-        print(_class_by_metric)
-        # print(_class_by_metric.to_string())
+        # print(_class_by_metric)
+        print(_class_by_metric.to_string())
 
     if 0:
         if 'AUC' in class_df.columns:
@@ -1209,6 +1337,10 @@ def main(cmdline=False, **kwargs):
 
     _ = best_candidates(class_rows, mean_rows)
 
+    if config['embed']:
+        import xdev
+        xdev.embed()
+
     DRAW = 1
     if DRAW:
         import kwplot
@@ -1257,8 +1389,6 @@ def main(cmdline=False, **kwargs):
             # print(best_per_expt.sort_values('mAP').to_string())
 
         if 0:
-            # import xdev
-            # xdev.embed()
             # Make robust
             resource_rows = []
             # Resource scatter plots

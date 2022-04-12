@@ -323,7 +323,7 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
     return activity_table, confusion_matrix
 
 
-def merge_metrics_results(region_dpaths, anns_root, merge_dpath, parent_info):
+def merge_metrics_results(region_dpaths, anns_root, merge_dpath, merge_fpath, parent_info):
     '''
     Merge metrics results from multiple regions.
 
@@ -408,11 +408,11 @@ def merge_metrics_results(region_dpaths, anns_root, merge_dpath, parent_info):
     json_data['sc_df'] = json.loads(sc_df.to_json(orient='table', indent=2))
     json_data['parent_info'] = parent_info
 
-    summary_path2 = merge_dpath / 'summary2.json'
-    with safer.open(summary_path2, 'w', temp_file=True) as f:
+    # merge_fpath = merge_dpath / 'summary2.json'
+    with safer.open(merge_fpath, 'w', temp_file=True) as f:
         json.dump(json_data, f, indent=4)
 
-    return summary_path2, bas_df, sc_df, sc_cm
+    return bas_df, sc_df, sc_cm
 
 
 def ensure_thumbnails(image_root, region_id, sites):
@@ -538,6 +538,11 @@ def main(args):
                         help='''
         Merge BAS and SC metrics from all regions and output to
         {out_dir}/merged/
+        ''')
+
+    parser.add_argument('--merge_fpath',
+                        help='''
+        Forces the merge summary to be written to a specific location.
         ''')
 
     parser.add_argument('--tmp_dir',
@@ -727,9 +732,14 @@ def main(args):
     main_out_dir = ub.Path(args.out_dir)
     if args.merge and out_dirs:
         merge_dpath = main_out_dir / 'merged'
-        summary_path2 = merge_metrics_results(out_dirs, gt_dpath, merge_dpath,
-                                              parent_info)[0]
-        print('wrote {!r}'.format(summary_path2))
+
+        if args.merge_fpath is None:
+            merge_fpath = merge_dpath / 'summary2.json'
+        else:
+            merge_fpath = ub.Path(args.merge_fpath)
+        merge_metrics_results(out_dirs, gt_dpath, merge_dpath,
+                                              merge_fpath, parent_info)[0]
+        # print('wrote {!r}'.format(summary_path2))
 
 
 if __name__ == '__main__':

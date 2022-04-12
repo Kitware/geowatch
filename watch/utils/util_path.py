@@ -209,14 +209,87 @@ def find(pattern=None, dpath=None, include=None, exclude=None, type=None,
             break
 
 
-def file_from_text(text):
+def resolve_relative_to(path, dpath, strict=False):
     """
-    Create a StringIO object from text to use as a file.
+    Given a path, try to resolve its symlinks such that it is relative to the
+    given dpath.
 
-    # Probably does not belong in util_path
+    Ignore:
+        def _symlink(self, target, verbose=0):
+            return ub.Path(ub.symlink(target, self, verbose=verbose))
+        ub.Path._symlink = _symlink
+
+        # TODO: try to enumerate all basic cases
+
+        base = ub.Path.appdir('kwcoco/tests/reroot')
+        base.delete().ensuredir()
+
+        drive1 = (base / 'drive1').ensuredir()
+        drive2 = (base / 'drive2').ensuredir()
+
+        data_repo1 = (drive1 / 'data_repo1').ensuredir()
+        cache = (data_repo1 / '.cache').ensuredir()
+        real_file1 = (cache / 'real_file1').touch()
+
+        real_bundle = (data_repo1 / 'real_bundle').ensuredir()
+        real_assets = (real_bundle / 'assets').ensuredir()
+
+        # Symlink file outside of the bundle
+        link_file1 = (real_assets / 'link_file1')._symlink(real_file1)
+        real_file2 = (real_assets / 'real_file2').touch()
+        link_file2 = (real_assets / 'link_file2')._symlink(real_file2)
+
+
+        # A symlink to the data repo
+        data_repo2 = (drive1 / 'data_repo2')._symlink(data_repo1)
+        data_repo3 = (drive2 / 'data_repo3')._symlink(data_repo1)
+        data_repo4 = (drive2 / 'data_repo4')._symlink(data_repo2)
+
+        # A prediction repo TODO
+        pred_repo5 = (drive2 / 'pred_repo5').ensuredir()
+
+        _ = ub.cmd(f'tree -a {base}', verbose=3)
+
+        fpaths = []
+        for r, ds, fs in os.walk(base, followlinks=True):
+            for f in fs:
+                if 'file' in f:
+                    fpath = ub.Path(r) / f
+                    fpaths.append(fpath)
+
+
+        dpath = real_bundle.resolve()
+
+        for path in fpaths:
+            # print(f'{path}')
+            # print(f'{path.resolve()=}')
+            resolved_rel = resolve_relative_to(path, dpath)
+            print('resolved_rel = {!r}'.format(resolved_rel))
     """
-    import io
-    file = io.StringIO()
-    file.write(text)
-    file.seek(0)
-    return file
+    try:
+        resolved_abs = resolve_directory_symlinks(path)
+        resolved_rel = resolved_abs.relative_to(dpath)
+    except ValueError:
+        if strict:
+            raise
+        else:
+            return path
+    return resolved_rel
+
+
+def resolve_directory_symlinks(path):
+    """
+    Only resolve symlinks of directories
+    """
+    return path.parent.resolve() / path.name
+    # prev = path
+    # curr = prev.parent
+    # while prev != curr:
+    #     if curr.is_symlink():
+    #         rhs = path.relative_to(curr)
+    #         resolved_lhs = curr.resolve()
+    #         new_path = resolved_lhs / rhs
+    #         return new_path
+    #     prev = curr
+    #     curr = prev.parent
+    # return path

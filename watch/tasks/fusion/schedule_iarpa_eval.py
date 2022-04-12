@@ -1,7 +1,7 @@
 import ubelt as ub
 
 
-def _suggest_track_paths(pred_fpath, track_cfg):
+def _suggest_track_paths(pred_fpath, track_cfg, eval_dpath=None):
     """
     Helper for reasonable paths to keep everything organized for tracking eval
     """
@@ -10,17 +10,22 @@ def _suggest_track_paths(pred_fpath, track_cfg):
     human_part = ub.repr2(human_opts, compact=1)
     track_cfgstr = human_part + '_' + ub.hash_data(other_opts)[0:8]
     pred_bundle_dpath = pred_fpath.parent
-    track_cfg_dname = f'trackcfg_{track_cfgstr}'
-    track_cfg_base = pred_bundle_dpath / 'tracking' / track_cfg_dname
+    track_cfg_dname = f'tracking/trackcfg_{track_cfgstr}'
+    track_cfg_base = pred_bundle_dpath / track_cfg_dname
     track_out_fpath = track_cfg_base / 'tracks.json'
 
-    iarpa_eval_dpath = track_cfg_base / 'iarpa_eval'
-    iarpa_summary_fpath = iarpa_eval_dpath / 'scores' / 'merged' / 'summary2.json'
+    if eval_dpath is None:
+        iarpa_eval_dpath = track_cfg_base / 'iarpa_eval'
+    else:
+        iarpa_eval_dpath = eval_dpath / track_cfg_dname / 'iarpa_eval'
+
+    iarpa_merge_fpath = iarpa_eval_dpath / 'scores' / 'merged' / 'summary2.json'
+
     track_suggestions = {
         'iarpa_eval_dpath': iarpa_eval_dpath,
         'track_cfgstr': track_cfgstr,
         'track_out_fpath': track_out_fpath,
-        'iarpa_summary_fpath': iarpa_summary_fpath,
+        'iarpa_merge_fpath': iarpa_merge_fpath,
     }
     return track_suggestions
 
@@ -80,7 +85,7 @@ def _build_bas_track_job(pred_fpath, track_out_fpath, thresh=0.2):
     return track_info
 
 
-def _build_iarpa_eval_job(track_out_fpath, iarpa_eval_dpath, annotations_dpath, name=None):
+def _build_iarpa_eval_job(track_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath, annotations_dpath, name=None):
     import shlex
     tmp_dir = iarpa_eval_dpath / 'tmp'
     out_dir = iarpa_eval_dpath / 'scores'
@@ -94,6 +99,7 @@ def _build_iarpa_eval_job(track_out_fpath, iarpa_eval_dpath, annotations_dpath, 
             --tmp_dir "{tmp_dir}" \
             --out_dir "{out_dir}" \
             --name {shlex.quote(str(name))} \
+            --merge_fpath "{iarpa_merge_fpath}" \
             --inputs_are_paths \
             {track_out_fpath}
         ''')
@@ -116,7 +122,7 @@ EXPT_GROUP_CODE=eval3_candidates
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
 python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-        --gpus="0,1" \
+        --gpus="0,1,2,3,4,5,6,7,8" \
         --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
         --test_dataset="$VALI_FPATH" \
         --skip_existing=True \
