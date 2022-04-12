@@ -318,7 +318,6 @@ def _populate_teamfeat_queue(queue, base_fpath, dvc_dpath, aligned_bundle_dpath,
         task = {}
         task['output_fpath'] = outputs['rutgers_materials']
         task['gpus'] = 1
-        # --export_raw_features=1 \
         task['command'] = ub.codeblock(
             fr'''
             python -m watch.tasks.rutgers_material_seg.predict \
@@ -327,6 +326,7 @@ def _populate_teamfeat_queue(queue, base_fpath, dvc_dpath, aligned_bundle_dpath,
                 --pred_dataset="{task['output_fpath']}" \
                 --default_config_key=iarpa \
                 --num_workers="{data_workers}" \
+                --export_raw_features=1 \
                 --batch_size=32 --gpus "0" \
                 --compress=DEFLATE --blocksize=128 --cache=True
             ''')

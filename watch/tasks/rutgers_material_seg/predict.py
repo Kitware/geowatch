@@ -155,6 +155,8 @@ class Evaluator(object):
     def _features_path_for_image(self, gid, layer):
         img = self.output_coco_dataset.index.imgs[gid]
         img_name = img.get('name', f'gid{gid:08d}')
+        # FIXME: this shouldn't use the concise channel code, this should
+        # use the same name as the path-sanatized channel string.
         save_path = self.output_feat_dpath / f'{img_name}_{self.concise_chan_path_code}_{layer}.tif'
         return save_path
 
@@ -284,7 +286,7 @@ class Evaluator(object):
 
         Dumps images and the final kwcoco file to disk.
         """
-        from watch.utils import util_kwimage
+        # from watch.utils import util_kwimage
         current_gids = []
         previous_gids = []
 
@@ -302,8 +304,17 @@ class Evaluator(object):
             hit_gids = []
             all_gids = list(self.input_coco_dset.index.imgs.keys())
             for gid in all_gids:
+
+                fpaths = []
                 fpath = self._output_path_for_image(gid)
-                if fpath.exists():
+                fpaths.append(fpath)
+                if self.save_raw_features:
+                    save_path_up5 = self._features_path_for_image(gid, 'up5')
+                    save_path_up3 = self._features_path_for_image(gid, 'up3')
+                    fpaths.append(save_path_up5)
+                    fpaths.append(save_path_up3)
+
+                if all(p.exists() for p in fpaths):
                     hit_gids.append(gid)
                 else:
                     miss_gids.append(gid)
@@ -384,8 +395,8 @@ class Evaluator(object):
                     # up3_to_save = up3_to_save.permute(0, 2, 3, 1)
                     # up5_to_save = up5_to_save.permute(0, 2, 3, 1)
 
-                    up3_to_save = F.upsample(up3_to_save, size=output1.shape[-2:], mode='bilinear', align_corners=True)
-                    up5_to_save = F.upsample(up5_to_save, size=output1.shape[-2:], mode='bilinear', align_corners=True)
+                    up3_to_save = F.interpolate(up3_to_save, size=output1.shape[-2:], mode='bilinear', align_corners=False)
+                    up5_to_save = F.interpolate(up5_to_save, size=output1.shape[-2:], mode='bilinear', align_corners=False)
 
                     # print(up3_to_save.shape)
                     # print(up5_to_save.shape)
@@ -652,6 +663,7 @@ def make_predict_config(cmdline=False, **kwargs):
     Configuration for material prediction
     """
     from watch.utils import configargparse_ext
+    from scriptconfig.smartcast import smartcast
     parser = configargparse_ext.ArgumentParser(
         add_config_file_help=False,
         description='Prediction script for the fusion task',
@@ -668,7 +680,7 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument("--feat_dpath", type=str, help='path to dump asset files. If unspecified, choose a path adjacent to pred_dataset')
     # parser.add_argument("--tag", default='change_prob')
     # parser.add_argument("--package_fpath", type=pathlib.Path)
-    parser.add_argument("--export_raw_features", default=0, type=int, help='exporting raw features before classification head')
+    parser.add_argument("--export_raw_features", default=smartcast, type=int, help='exporting raw features before classification head')
 
     # TODO: use torch packages instead
     parser.add_argument("--checkpoint_fpath", type=str, help='path to checkpoint file')
@@ -680,7 +692,7 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument("--compress", default='DEFLATE', type=str, help="type of gdal compression to use")
     parser.add_argument("--blocksize", default=128, type=str, help="gdal COG blocksize")
 
-    parser.add_argument("--cache", default=False, type=bool, help="if True enables caching of predictions in case of a crash")
+    parser.add_argument("--cache", default=False, type=smartcast, help="if True enables caching of predictions in case of a crash")
     # parser.add_argument("--thresh", type=float, default=0.01)
 
     parser.set_defaults(**kwargs)
