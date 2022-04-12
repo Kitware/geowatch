@@ -664,7 +664,7 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument("--feat_dpath", type=str, help='path to dump asset files. If unspecified, choose a path adjacent to pred_dataset')
     # parser.add_argument("--tag", default='change_prob')
     # parser.add_argument("--package_fpath", type=pathlib.Path)
-    parser.add_argument("--export_raw_features", default=False, type=bool, help='exporting raw features before classification head')
+    parser.add_argument("--export_raw_features", default=0, type=int, help='exporting raw features before classification head')
 
     # TODO: use torch packages instead
     parser.add_argument("--checkpoint_fpath", type=str, help='path to checkpoint file')

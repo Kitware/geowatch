@@ -318,6 +318,7 @@ def _populate_teamfeat_queue(queue, base_fpath, dvc_dpath, aligned_bundle_dpath,
         task = {}
         task['output_fpath'] = outputs['rutgers_materials']
         task['gpus'] = 1
+        # --export_raw_features=1 \
         task['command'] = ub.codeblock(
             fr'''
             python -m watch.tasks.rutgers_material_seg.predict \
