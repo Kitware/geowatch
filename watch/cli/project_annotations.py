@@ -238,7 +238,7 @@ def expand_site_models_with_site_summaries(sites, regions):
     """
     import pandas as pd
     import geojson
-    import watch
+    # import watch
     import json
     from watch.utils import util_gis
 

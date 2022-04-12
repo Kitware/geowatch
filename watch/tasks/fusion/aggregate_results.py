@@ -1046,7 +1046,6 @@ def dump_spreadsheet(results_list2, out_dpath):
             #       # cell.number_format = '0.0000'
 
 
-
 def main(cmdline=False, **kwargs):
     """
     Ignore:
