@@ -217,7 +217,7 @@ recovery_eval(){
             --enable_eval=0 \
             --enable_track=1 \
             --enable_iarpa_eval=1 \
-            --bas_thresh=0.1,0.2 \
+            --bas_thresh=0.2 \
             --skip_existing=True --backend=tmux --run=0
 
     DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
