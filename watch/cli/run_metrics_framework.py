@@ -323,7 +323,8 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
     return activity_table, confusion_matrix
 
 
-def merge_metrics_results(region_dpaths, anns_root, merge_dpath, merge_fpath, parent_info):
+def merge_metrics_results(region_dpaths, anns_root, merge_dpath, merge_fpath,
+                          parent_info):
     '''
     Merge metrics results from multiple regions.
 
@@ -340,11 +341,14 @@ def merge_metrics_results(region_dpaths, anns_root, merge_dpath, merge_fpath, pa
         (bas_df, sc_df)
         Two pd.DataFrames that are saved as
             {out_dpath}/(bas|sc)_scoreboard_df.pkl
+
+    Ignore:
+        pass
     '''
     import safer
     merge_dpath = ub.Path(merge_dpath)
-    assert merge_dpath not in region_dpaths
-    merge_dpath.delete().ensuredir()
+    # assert merge_dpath not in region_dpaths
+    # merge_dpath.delete().ensuredir()
 
     results = [
         RegionResult.from_dpath_and_anns_root(pth, anns_root)
@@ -737,8 +741,8 @@ def main(args):
             merge_fpath = merge_dpath / 'summary2.json'
         else:
             merge_fpath = ub.Path(args.merge_fpath)
-        merge_metrics_results(out_dirs, gt_dpath, merge_dpath,
-                                              merge_fpath, parent_info)[0]
+        merge_metrics_results(out_dirs, gt_dpath, merge_dpath, merge_fpath,
+                              parent_info)[0]
         # print('wrote {!r}'.format(summary_path2))
 
 

@@ -103,11 +103,11 @@ prep_features(){
         --gres="0,1" \
         --with_landcover=1 \
         --with_depth=1 \
-        --with_materials=0 \
+        --with_materials=1 \
         --with_invariants=0 \
         --do_splits=1 \
         --depth_workers=0 \
-        --cache=1 --backend=tmux --run=1
+        --cache=1 --backend=tmux --run=0
 
     # Or rsync features
 

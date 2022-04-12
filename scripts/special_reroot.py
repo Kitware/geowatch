@@ -143,24 +143,29 @@ def _cleanup_lightning_logs():
     from watch.utils import util_path
     training_dpaths = util_path.coerce_patterned_paths('./**/lightning_logs/version_*')
 
-    dry = 0
     to_remove = []
     for train_dpath in training_dpaths:
         checkpoint_dpath = train_dpath / 'checkpoints'
         num_checkpoints = len(list(checkpoint_dpath.glob('*')))
         if num_checkpoints == 0:
             to_remove.append(train_dpath)
-
-        train_viz_dpath = train_dpath / 'monitor/train/batch'
-        vali_viz_dpath = train_dpath / 'monitor/vali/batch'
-        clean_viz_dpath(train_viz_dpath, max_keep=100, dry=dry)
-        clean_viz_dpath(vali_viz_dpath, max_keep=300, dry=dry)
-
     for dpath in to_remove:
         dpath.delete()
 
+    # Reduce number of diagnostic images
+    actions = []
+    for train_dpath in training_dpaths:
+        train_viz_dpath = train_dpath / 'monitor/train/batch'
+        vali_viz_dpath = train_dpath / 'monitor/vali/batch'
+        actions += clean_viz_dpath(train_viz_dpath, max_keep=100)
+        actions += clean_viz_dpath(vali_viz_dpath, max_keep=300)
 
-def clean_viz_dpath(viz_dpath, max_keep=300, dry=True):
+    dry = 1
+    all_actions = actions
+    _execute_actions(all_actions, dry=dry)
+
+
+def clean_viz_dpath(viz_dpath, max_keep=300):
     def _choose_action(file_infos):
         import kwarray
         file_infos = kwarray.shuffle(file_infos, rng=0)
@@ -171,17 +176,19 @@ def clean_viz_dpath(viz_dpath, max_keep=300, dry=True):
             info['action'] = 'delete'
     exts = ['*.png', '*.jpg' ]
 
-    all_files = []
+    all_actions = []
     for ext in exts:
         fpaths = list(viz_dpath.glob(ext))
         file_infos = [{'size': p.stat().st_size, 'fpath': p}
                       for p in fpaths]
         _choose_action(file_infos)
-        all_files.extend(file_infos)
+        all_actions.extend(file_infos)
+    return all_actions
 
-    print(f'{len(all_files)=}')
 
-    grouped_actions = ub.group_items(all_files, lambda x: x['action'])
+def _execute_actions(all_actions, dry=True):
+    print(f'{len(all_actions)=}')
+    grouped_actions = ub.group_items(all_actions, lambda x: x['action'])
 
     import xdev
     for key, group in grouped_actions.items():
@@ -203,20 +210,15 @@ def _relocate_preds_to_hdd():
     SSD_DPATH=$HOME/data/dvc-repos/smart_watch_dvc-ssd
     HDD_DPATH=$HOME/data/dvc-repos/smart_watch_dvc-hdd
 
+    ls $SSD_DPATH
+    ls $HDD_DPATH
+
     rsync -P "$SSD_DPATH"/Aligned-Drop3-TA1-2022-03-10/combo* "$HDD_DPATH"/Aligned-Drop3-TA1-2022-03-10
 
     ls $SSD_DPATH
     ls $HDD_DPATH
 
-    rsync -avrpRP "$SSD_DPATH"/models/fusion/eval3_candidates./pred "$HDD_DPATH"/models/fusion/eval3_candidates
-
-    rsync -avrpRP "$SSD_DPATH"/models/fusion/eval3_candidates./pred "$HDD_DPATH"/models/fusion/eval3_candidates
-    rsync -navrpRP "$SSD_DPATH"/models/fusion/eval3_candidates./pred "$HDD_DPATH"/models/fusion/eval3_candidates
-    mv $SSD_DPATH/pred $HDD_DPATH/pred
-
-    rsync --dry-run -avrpRP "$SSD_DPATH"/models/fusion/eval3_candidates./eval "$HDD_DPATH"/models/fusion/eval3_candidates
-
-    rsync --dry-run -arpRP "$SSD_DPATH"/./pred "$HDD_DPATH"
+    rsync -avrpRP "$SSD_DPATH"/models/fusion/eval3_candidates/./pred "$HDD_DPATH"/models/fusion/eval3_candidates
     """
 
 

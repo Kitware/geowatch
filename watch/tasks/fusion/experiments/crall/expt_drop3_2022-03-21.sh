@@ -16,7 +16,7 @@ data_splits(){
 }
 
 
-prep_teamfeat_drop2(){
+prep_teamfeat_drop3(){
     # Team Features on drop2
     #DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware="ssd")
     DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
@@ -30,7 +30,7 @@ prep_teamfeat_drop2(){
         --with_invariants=0 \
         --do_splits=1 \
         --depth_workers=0 \
-        --cache=0 --run=0 --backend=tmux
+        --cache=1 --run=0 --backend=tmux
         #--backend=slurm
         #python -m watch.cli.prepare_splits --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L.kwcoco.json --run=False
 }

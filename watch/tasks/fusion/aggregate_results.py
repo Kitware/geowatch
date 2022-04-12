@@ -467,11 +467,13 @@ def prepare_results(all_infos, coi_pattern, dvc_dpath=None):
                 iarpa_simplified.append(BAS_metrics)
                 # row.update(BAS_metrics)
             except Exception:
-                BAS_metrics = None
+                pass
 
         if iarpa_simplified:
             BAS_metrics = max(iarpa_simplified, key=lambda x: x['BAS_F1'])
             row.update(BAS_metrics)
+        else:
+            BAS_metrics = None
 
         mean_rows.append(row)
 
@@ -498,7 +500,7 @@ def prepare_results(all_infos, coi_pattern, dvc_dpath=None):
                 'salient_APUC': row['salient_APUC'],
             }
             if BAS_metrics is not None:
-                metrics['BAS_F1'] = BAS_metrics['BAS_F1'],
+                metrics['BAS_F1'] = BAS_metrics['BAS_F1']
 
             for class_row in expt_class_rows:
                 metrics[class_row['catname'] + '_AP'] = class_row['AP']
