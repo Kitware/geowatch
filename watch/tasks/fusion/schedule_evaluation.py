@@ -74,7 +74,7 @@ class ScheduleEvaluationConfig(scfg.Config):
         'enable_track': scfg.Value(False, help='if True, enable tracking'),
         'annotations_dpath': scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval'),
 
-        'bas_thresh': scfg.Value([0.1], type=list, help='grid of track thresholds'),
+        'bas_thresh': scfg.Value([0.1], help='grid of track thresholds'),
     }
 
 

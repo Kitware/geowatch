@@ -208,7 +208,7 @@ recovery_eval(){
             --skip_existing=True --backend=tmux --run=0
 
 
-    TMUX_GPUS="0,1"
+    TMUX_GPUS="0,1,2,3,4,5,6,7,8"
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest.txt" \
@@ -217,6 +217,7 @@ recovery_eval(){
             --enable_eval=0 \
             --enable_track=1 \
             --enable_iarpa_eval=1 \
+            --bas_thresh=0.1,0.2 \
             --skip_existing=True --backend=tmux --run=0
 
     DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
