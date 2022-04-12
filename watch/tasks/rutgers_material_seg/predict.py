@@ -6,7 +6,7 @@ CommandLine:
 
     export CUDA_VISIBLE_DEVICES=1
 
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    DVC_DPATH=$(smartwatch_dvc)
 
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10
@@ -54,7 +54,7 @@ except Exception:
 class Evaluator(object):
     """
     CommandLine:
-        DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+        DVC_DPATH=$(smartwatch_dvc)
         DVC_DPATH=$DVC_DPATH xdoctest -m watch.tasks.rutgers_material_seg.predict Evaluator
 
     Example:

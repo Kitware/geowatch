@@ -1,7 +1,7 @@
 r"""
 CommandLine:
 
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware="hdd")
+    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     echo $DVC_DPATH
     python -m watch.cli.coco_crop_tracks \
         --src="$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json" \
@@ -10,7 +10,7 @@ CommandLine:
 
 
     # Small test of KR only
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware="hdd")
+    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     echo $DVC_DPATH
     python -m watch.cli.coco_crop_tracks \
         --src="$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json" \
@@ -215,7 +215,7 @@ def main(cmdline=0, **kwargs):
         --animate=True \
         --workers=8
 
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware="hdd")
+    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     echo $DVC_DPATH
     cp $DVC_DPATH/Cropped-Drop2-TA1-2022-02-15/data.kwcoco.json \
        $DVC_DPATH/Cropped-Drop2-TA1-2022-02-15/imgonly.kwcoco.json

@@ -7,7 +7,7 @@ Helper for scheduling a set of prediction + evaluation jobs
 python -m watch.tasks.fusion.schedule_evaluation
 
 
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 EXPT_PATTERN="*"
@@ -19,7 +19,7 @@ python -m watch.tasks.fusion.schedule_evaluation \
         --run=0 --skip_existing=True
 
 # Note: change backend to tmux if slurm is not installed
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPT_GROUP_CODE=eval3_candidates
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE

@@ -8,7 +8,7 @@ SeeAlso:
 "
 
 data_splits(){
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    DVC_DPATH=$(smartwatch_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
     python -m watch.cli.prepare_splits \
         --base_fpath="$DVC_DPATH/$DATASET_CODE/combo_LM.kwcoco.json" \
@@ -18,8 +18,8 @@ data_splits(){
 
 prep_teamfeat_drop3(){
     # Team Features on drop2
-    #DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware="ssd")
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    #DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
+    DVC_DPATH=$(smartwatch_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
     python -m watch.cli.prepare_teamfeats \
         --base_fpath="$DVC_DPATH/$DATASET_CODE/data.kwcoco.json" \
@@ -41,7 +41,7 @@ gather-checkpoints-repackage(){
     #################################
     # Repackage and commit new models
     #################################
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    DVC_DPATH=$(smartwatch_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -56,14 +56,14 @@ gather-checkpoints-repackage(){
 
 schedule-prediction-and-evlauation(){
 
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    DVC_DPATH=$(smartwatch_dvc)
     cd "$DVC_DPATH" 
     git pull
     #################################
     # Pull new models on eval machine
     #################################
 
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware="hdd")
+    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     cd "$DVC_DPATH" 
     git pull
     dvc pull -r aws -R models/fusion/eval3_candidates/packages
@@ -77,7 +77,7 @@ schedule-prediction-and-evlauation(){
     # - [ ] Argument general predict parameter grid
     # - [ ] Can a task request that slurm only schedule it on a specific GPU?
     # Note: change backend to tmux if slurm is not installed
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    DVC_DPATH=$(smartwatch_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -188,7 +188,7 @@ aggregate-results(){
 
 schedule-prediction-and-evaluate-team-models(){
     # For Uncropped
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    DVC_DPATH=$(smartwatch_dvc)
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
     EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -317,7 +317,7 @@ for p in fixme:
 
 singleton_commands(){
 
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    DVC_DPATH=$(smartwatch_dvc)
     MODEL_FPATH=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_bells_mlp_V305/Drop3_bells_mlp_V305_epoch=5-step=3071-v1.pt
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -339,7 +339,7 @@ singleton_commands(){
 
 
     # Find all models that have predictions
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    DVC_DPATH=$(smartwatch_dvc)
     cd "$DVC_DPATH"
     ls models/fusion/eval3_candidates/pred/*/*/*/*/pred.kwcoco.json
 }
@@ -349,7 +349,7 @@ singleton_commands(){
 
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -418,7 +418,7 @@ python -m watch.tasks.fusion.fit \
 # ------------------
 
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -442,7 +442,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_BOTH_V301
@@ -457,7 +457,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_BOTH_V302
@@ -472,7 +472,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=2
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_BAS_V303
@@ -487,7 +487,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=3
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_SC_V304
@@ -505,7 +505,7 @@ python -m watch.tasks.fusion.fit \
 # -------------------
 
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -560,7 +560,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_bells_mlp_V305
@@ -572,7 +572,7 @@ python -m watch.tasks.fusion.fit \
     --decoder=mlp 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_bells_seg_V306
@@ -589,7 +589,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -645,7 +645,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
 EXPERIMENT_NAME=Drop3_bells_raw_mlp_V307
@@ -657,7 +657,7 @@ python -m watch.tasks.fusion.fit \
     --decoder=mlp 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_bells_raw_seg_V308
@@ -669,7 +669,7 @@ python -m watch.tasks.fusion.fit \
     --decoder=segmenter 
 
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
 EXPERIMENT_NAME=Drop3_bells_raw_mlp_V307-a
@@ -681,7 +681,7 @@ python -m watch.tasks.fusion.fit \
     --decoder=mlp 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_bells_raw_seg_V308-a
@@ -697,7 +697,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_BAS_V304-a
@@ -711,7 +711,7 @@ python -m watch.tasks.fusion.fit \
     --global_saliency_weight=1.00 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_BAS_V304-b
@@ -725,7 +725,7 @@ python -m watch.tasks.fusion.fit \
     --global_saliency_weight=1.00 
 
 export CUDA_VISIBLE_DEVICES=2
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_BAS_V304-c
@@ -739,7 +739,7 @@ python -m watch.tasks.fusion.fit \
     --global_saliency_weight=1.00 
 
 export CUDA_VISIBLE_DEVICES=3
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_BAS_V304-d
@@ -758,7 +758,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -788,7 +788,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -831,7 +831,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -873,7 +873,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -915,7 +915,7 @@ python -m watch.tasks.fusion.fit \
 # --------------------
 export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -955,7 +955,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -996,7 +996,7 @@ python -m watch.tasks.fusion.fit \
 # horologic abalate2
 # ------------------
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_BOTH_V315
@@ -1011,7 +1011,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_BOTH_V316
@@ -1027,7 +1027,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=2
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_BAS_V317
@@ -1043,7 +1043,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=3
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPERIMENT_NAME=Drop3_BASELINE_SC_V318
@@ -1062,7 +1062,7 @@ python -m watch.tasks.fusion.fit \
 # --------------------
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1105,7 +1105,7 @@ python -m watch.tasks.fusion.fit \
 
 export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1150,7 +1150,7 @@ python -m watch.tasks.fusion.fit \
 INITIAL_STATE_BASELINE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/BASELINE_EXPERIMENT_V001/BASELINE_EXPERIMENT_V001_epoch=20-step=109829-v1.pt
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1204,7 +1204,7 @@ INITIAL_STATE_BASELINE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/BASE
 INITIAL_STATE_V323="$DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
 
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1255,7 +1255,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1308,7 +1308,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=2
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1358,7 +1358,7 @@ python -m watch.tasks.fusion.fit \
     --init="$INITIAL_STATE_BASELINE" 
 
 export CUDA_VISIBLE_DEVICES=3
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1413,10 +1413,10 @@ python -m watch.tasks.fusion.fit \
 # --------------------
 
 
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1470,7 +1470,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE

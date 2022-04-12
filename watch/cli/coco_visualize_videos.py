@@ -1010,13 +1010,13 @@ def _next_multiple_of(x, m):
 if __name__ == '__main__':
     """
 
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    DVC_DPATH=$(smartwatch_dvc)
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
     python -m watch visualize $KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
         --animate=True --channels="red|green|blue" --skip_missing=True \
         --select_images '.sensor_coarse == "S2"' --workers=4 --draw_anns=False
 
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    DVC_DPATH=$(smartwatch_dvc)
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/
     python -m watch visualize $KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
         --animate=True --channels="red|green|blue" --skip_missing=True \

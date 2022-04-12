@@ -1857,7 +1857,7 @@ prep_teamfeat_drop2(){
 # Team Features on Drop2
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 python -m watch.cli.prepare_teamfeats \
     --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
     --gres=0,1 \
@@ -2573,7 +2573,7 @@ multiple_evaluations_schedule_and_agg(){
 
     #DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
     #DVC_DPATH=$HOME/flash1/smart_watch_dvc
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    DVC_DPATH=$(smartwatch_dvc)
 
     EXPT_NAME_PAT="*"
     MODEL_EPOCH_PAT="*"
@@ -2603,7 +2603,7 @@ gather_checkpoint_notes(){
     echo "DATASET_CODE = $DATASET_CODE"
     echo "EXPERIMENT_NAME = $EXPERIMENT_NAME"
 
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    DVC_DPATH=$(smartwatch_dvc)
     CHECKPOINT_GLOBSTR="$DEFAULT_ROOT_DIR/lightning_logs/version_*/checkpoints/*.ckpt"
 
     # This method only works for the current fusion model
@@ -2623,7 +2623,7 @@ gather_checkpoint_notes(){
 
 
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -2676,7 +2676,7 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=1
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE

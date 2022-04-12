@@ -414,7 +414,7 @@ main = prep_feats
 if __name__ == '__main__':
     """
     CommandLine:
-        DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+        DVC_DPATH=$(smartwatch_dvc)
         python -m watch.cli.prepare_teamfeats \
             --base_fpath="$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json" \
             --gres=0 \
@@ -429,7 +429,7 @@ if __name__ == '__main__':
 
         # TO UPDATE ANNOTS
         # Update to whatever the state of the annotations submodule is
-        DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+        DVC_DPATH=$(smartwatch_dvc)
         python -m watch project_annotations \
             --src $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
             --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
@@ -438,7 +438,7 @@ if __name__ == '__main__':
         kwcoco stats $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data_20220203.kwcoco.json $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json
 
         # Team Features on Drop2
-        DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+        DVC_DPATH=$(smartwatch_dvc)
         python -m watch.cli.prepare_teamfeats \
             --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
             --gres=0,1 --with_depth=0 --with_materials=False  --with_invariants=False \
@@ -446,7 +446,7 @@ if __name__ == '__main__':
 
         ###
         DATASET_CODE=Aligned-Drop2-TA1-2022-02-24
-        DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+        DVC_DPATH=$(smartwatch_dvc)
         DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
         python -m watch.cli.prepare_teamfeats \
@@ -460,7 +460,7 @@ if __name__ == '__main__':
             --do_splits=1  --cache=0 --run=0
 
         ###
-        DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+        DVC_DPATH=$(smartwatch_dvc)
         DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
         python -m watch.cli.prepare_teamfeats \
