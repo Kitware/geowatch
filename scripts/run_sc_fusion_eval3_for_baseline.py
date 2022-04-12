@@ -272,14 +272,29 @@ def run_sc_fusion_for_baseline(
                     '--track_kwargs', json.dumps(sc_track_kwargs)],
                    check=True)
 
+    region_models_outdir = os.path.join(ingress_dir, 'region_models')
+
+    cropped_region_models_outdir = os.path.join(ingress_dir,
+                                                'cropped_region_models')
+    cropped_site_models_outdir = os.path.join(ingress_dir,
+                                              'cropped_site_models')
+
+    subprocess.run(['python', '-m', 'watch.cli.crop_sites_to_regions',
+                    '--site_models',
+                    os.path.join(site_models_outdir, '*.geojson'),
+                    '--region_models',
+                    os.path.join(region_models_outdir, '*.geojson'),
+                    '--new_site_dpath', cropped_site_models_outdir,
+                    '--new_region_dpath', cropped_region_models_outdir],
+                   check=True)
+
     # 5. Update region model with computed sites
     # ** NOTE ** This is a destructive operation as the region file
     # ** gets modified in place (locally or on S3)
     # Referencing region model already computed during BAS fusion
-    region_models_outdir = os.path.join(ingress_dir, 'region_models')
     print("* Updating region *")
     _upload_region(aws_base_command,
-                   region_models_outdir,
+                   cropped_region_models_outdir,
                    local_region_path,
                    input_region_path)
 
@@ -299,8 +314,8 @@ def run_sc_fusion_for_baseline(
     if ta2_s3_collation_bucket is not None:
         print("* Collating TA-2 output")
         _ta2_collate_output(aws_base_command,
-                            region_models_outdir,
-                            site_models_outdir,
+                            cropped_region_models_outdir,
+                            cropped_site_models_outdir,
                             ta2_s3_collation_bucket)
 
 
