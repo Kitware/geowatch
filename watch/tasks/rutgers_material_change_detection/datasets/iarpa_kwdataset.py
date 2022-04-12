@@ -126,7 +126,7 @@ class IARPA_KWDATASET(BaseDataset):
                 self.video_dataset[video_id] = sesnor_image_ids
 
         # Create all slice versions
-        self.dset_slices = []
+        self.examples = []
         for video_id, image_ids in self.video_dataset.items():
             # Get video shape
             H = self.coco_dset.index.imgs[image_ids[0]]["height"]
@@ -147,7 +147,7 @@ class IARPA_KWDATASET(BaseDataset):
                     "space_crop_slice": crop_slice,
                     "region_name": region_name,
                 }
-                self.dset_slices.append(crop_info)
+                self.examples.append(crop_info)
 
         # Update max frames based on the number of frames.
         if self.n_frames is None:
@@ -222,7 +222,7 @@ class IARPA_KWDATASET(BaseDataset):
         return new_image_ids
 
     def get_total_binary_change_example(self, index):
-        crop_info = self.dset_slices[index]
+        crop_info = self.examples[index]
 
         # Get all image ids for this video
         image_ids = self.video_dataset[crop_info["video_id"]]
@@ -321,7 +321,7 @@ class IARPA_KWDATASET(BaseDataset):
         return output
 
     def get_total_semantic_change_example(self, index):
-        crop_info = self.dset_slices[index]
+        crop_info = self.examples[index]
 
         # Get all image ids for this video
         image_ids = self.video_dataset[crop_info["video_id"]]
@@ -409,7 +409,7 @@ class IARPA_KWDATASET(BaseDataset):
         return output
 
     def get_self_supervised_material_reconstruction_example(self, index):
-        crop_info = self.dset_slices[index]
+        crop_info = self.examples[index]
 
         # Get all image ids for this video
         image_ids = self.video_dataset[crop_info["video_id"]]
@@ -679,7 +679,7 @@ class IARPA_KWDATASET(BaseDataset):
 
     def generate_propagated_annotation_gif(self, index, save_path=None):
         # Get video id.
-        crop_info = self.dset_slices[index]
+        crop_info = self.examples[index]
         video_id = crop_info["video_id"]
 
         # Get image ids from video id.

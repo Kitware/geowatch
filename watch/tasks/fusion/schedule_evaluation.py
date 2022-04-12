@@ -73,6 +73,8 @@ class ScheduleEvaluationConfig(scfg.Config):
         'enable_iarpa_eval': scfg.Value(False, help='if True, enable iapra BAS evalaution'),
         'enable_track': scfg.Value(False, help='if True, enable tracking'),
         'annotations_dpath': scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval'),
+
+        'bas_thresh': scfg.Value([0.1], type=list, help='grid of track thresholds'),
     }
 
 
@@ -196,14 +198,14 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     if model_globstr is None and test_dataset is None:
         raise ValueError('model_globstr and test_dataset are required')
-        # dvc_dpath = watch.find_smart_dvc_dpath()
-        # model_globstr = str(dvc_dpath / 'models/fusion/SC-20201117/*/*.pt')
-        # test_dataset = dvc_dpath / 'Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json'
-        # # hack for train set
-        # # test_dataset = dvc_dpath / 'Drop1-Aligned-L1/combo_train_US_R001_small_nowv.kwcoco.json'
-        # gpus = 'auto'
 
-    dvc_dpath = watch.find_smart_dvc_dpath()
+    # HACK FOR DVC PTH FIXME:
+    if str(model_globstr).endswith('.txt'):
+        from watch.utils.simple_dvc import SimpleDVC
+        dvc_dpath = SimpleDVC.find_root(ub.Path(model_globstr))
+    else:
+        dvc_dpath = watch.find_smart_dvc_dpath()
+    print('dvc_dpath = {!r}'.format(dvc_dpath))
 
     HISTORICAL_MODELS_OF_INTEREST = [
         # 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_cs64_t5_perframe_rgb_v30/SC_smt_it_stm_p8_newanns_cs64_t5_perframe_rgb_v30_epoch=29-step=1284389.pt',
@@ -214,6 +216,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
         dvc_dpath / 'models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819.pt',
     ]
 
+    # REMOVE:
     HARDCODED = list(map(ub.Path, [
         dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=1-step=17305.pt',
         dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=4-step=43264.pt',
@@ -243,7 +246,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # model_dpath = dvc_dpath / 'models/fusion/SC-20201117'
     # test_dataset_fpath = dvc_dpath / 'Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json'
     test_dataset_fpath = ub.Path(test_dataset)
-    assert test_dataset_fpath.exists()
+    if not test_dataset_fpath.exists():
+        print('warning test dataset does not exist')
 
     annotations_dpath = config['annotations_dpath']
     if annotations_dpath is None:
@@ -256,22 +260,31 @@ def schedule_evaluation(cmdline=False, **kwargs):
             expt_name = package_fpath.name.split('_epoch')[0]
         except Exception:
             # Try to read package metadata
-            pkg_zip = ub.zopen(package_fpath, ext='.pt')
-            found = None
-            for member in pkg_zip.namelist():
-                # if member.endswith('model.pkl'):
-                if member.endswith('fit_config.yaml'):
-                    found = member
-                    break
-            if not found:
-                raise Exception(f'{package_fpath=} does not conform to name spec and does not seem to be a torch package with a package_header.json file')
+            if package_fpath.exists():
+                try:
+                    pkg_zip = ub.zopen(package_fpath, ext='.pt')
+                    namelist = pkg_zip.namelist()
+                except Exception:
+                    print(f'ERROR {package_fpath=} failed to open')
+                    raise
+                found = None
+                for member in namelist:
+                    # if member.endswith('model.pkl'):
+                    if member.endswith('fit_config.yaml'):
+                        found = member
+                        break
+                if not found:
+                    raise Exception(f'{package_fpath=} does not conform to name spec and does not seem to be a torch package with a package_header.json file')
+                else:
+                    import yaml
+                    config_file = ub.zopen(package_fpath / found, mode='r', ext='.pt')
+                    config = yaml.safe_load(config_file)
+                    expt_name = config['name']
+                    # No way to introspect this (yet), so hack it
+                    epoch_num = -1
             else:
-                import yaml
-                config_file = ub.zopen(package_fpath / found, mode='r', ext='.pt')
-                config = yaml.safe_load(config_file)
-                expt_name = config['name']
-                # No way to introspect this (yet), so hack it
                 epoch_num = -1
+                expt_name = package_fpath.name
 
         info = {
             'name': expt_name,
@@ -280,6 +293,28 @@ def schedule_evaluation(cmdline=False, **kwargs):
         }
         return info
 
+    def expand_model_list_file(model_lists_fpath, dvc_dpath=None):
+        """
+        Given a file containing paths to models, expand it into individual
+        paths.
+        """
+        expanded_fpaths = []
+        lines = [line for line in ub.Path(model_globstr).read_text().split('\n') if line]
+        missing = []
+        for line in lines:
+            if dvc_dpath is not None:
+                package_fpath = ub.Path(dvc_dpath / line)
+            else:
+                package_fpath = ub.Path(line)
+            if package_fpath.is_file():
+                expanded_fpaths.append(package_fpath)
+            else:
+                missing.append(line)
+        if missing:
+            print('WARNING: missing = {}'.format(ub.repr2(missing, nl=1)))
+            print(f'WARNING: specified a models-of-interest.txt and {len(missing)} / {len(lines)} models were missing')
+        return expanded_fpaths
+
     packages_to_eval = []
     import glob
     if model_globstr == 'special:HISTORY':
@@ -287,15 +322,31 @@ def schedule_evaluation(cmdline=False, **kwargs):
             assert package_fpath.exists()
             package_info = package_metadata(ub.Path(package_fpath))
             packages_to_eval.append(package_info)
-    if model_globstr == 'special:HARDCODED':
+    elif model_globstr == 'special:HARDCODED':
         for package_fpath in HARDCODED:
             assert package_fpath.exists(), f'{package_fpath}'
             package_info = package_metadata(ub.Path(package_fpath))
             packages_to_eval.append(package_info)
     else:
+        print('model_globstr = {!r}'.format(model_globstr))
+        package_fpaths = []
         for package_fpath in glob.glob(model_globstr, recursive=True):
-            package_info = package_metadata(ub.Path(package_fpath))
+            package_fpath = ub.Path(package_fpath)
+            if package_fpath.name.endswith('.txt'):
+                # HACK FOR PATH OF MODELS
+                model_lists_fpath = package_fpath
+                expanded_fpaths = expand_model_list_file(model_lists_fpath, dvc_dpath=dvc_dpath)
+                package_fpaths.extend(expanded_fpaths)
+            else:
+                package_fpaths.append(package_fpath)
+
+        for package_fpath in package_fpaths:
+            package_info = package_metadata(package_fpath)
             packages_to_eval.append(package_info)
+
+        if len(packages_to_eval) == 0:
+            if '*' not in str(model_globstr):
+                packages_to_eval.append(package_metadata(ub.Path(model_globstr)))
 
     print(f'{len(packages_to_eval)=}')
 
@@ -318,7 +369,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     print('GPUS = {!r}'.format(GPUS))
     environ = {
-        'DVC_DPATH': dvc_dpath,
+        # 'DVC_DPATH': dvc_dpath,
     }
 
     from watch.utils import cmd_queue
@@ -429,7 +480,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
         suggestions = info['suggestions']
         pred_cfg = info['pred_cfg']
         pred_dataset_fpath = ub.Path(suggestions['pred_dataset'])  # NOQA
-        eval_metrics_fpath = ub.Path(suggestions['eval_dpath']) / 'curves/measures2.json'
+        eval_dpath =  ub.Path(suggestions['eval_dpath'])
+        eval_metrics_fpath = eval_dpath / 'curves/measures2.json'
         eval_metrics_dvc_fpath = ub.Path(suggestions['eval_dpath']) / 'curves/measures2.json.dvc'
 
         suggestions['eval_metrics'] = eval_metrics_fpath
@@ -559,13 +611,13 @@ def schedule_evaluation(cmdline=False, **kwargs):
             task_info['job'] = eval_job
 
         tracking_param_basis = {
-            'thresh': [0.1],
+            'thresh': config['bas_thresh'],
             # 'thresh': [0.1, 0.2, 0.3],
         }
         for track_cfg in ub.named_product(tracking_param_basis):
             from watch.tasks.fusion import schedule_iarpa_eval
             track_suggestions = schedule_iarpa_eval._suggest_track_paths(
-                pred_dataset_fpath, track_cfg)
+                pred_dataset_fpath, track_cfg, eval_dpath=eval_dpath)
             name_suffix = '-'.join([
                 'pkg', suggestions['package_cfgstr'],
                 'prd', suggestions['pred_cfgstr'],
@@ -573,7 +625,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             ])
             iarpa_eval_dpath = track_suggestions['iarpa_eval_dpath']
             track_out_fpath = track_suggestions['track_out_fpath']
-            iarpa_summary_fpath = track_suggestions['iarpa_summary_fpath']
+            iarpa_merge_fpath = track_suggestions['iarpa_merge_fpath']
 
             task_infos.update({
                 'track': {
@@ -586,7 +638,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 'iarpa_eval': {
                     'name': 'iarpa_eval',
                     'requested': with_iarpa_eval,
-                    'output': iarpa_summary_fpath,
+                    'output': iarpa_merge_fpath,
                     'requires': ['track'],
                     'recompute': recompute_iarpa_eval,
                 }
@@ -623,7 +675,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             task_info = task_infos[task]
             if should_compute_task(task_info):
                 iarpa_eval_info = schedule_iarpa_eval._build_iarpa_eval_job(
-                    track_out_fpath, iarpa_eval_dpath, annotations_dpath, name_suffix)
+                    track_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath, annotations_dpath, name_suffix)
 
                 command = iarpa_eval_info['command']
 
@@ -655,6 +707,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
     else:
         driver_fpath = queue.write()
         print('Wrote script: to run execute:\n{}'.format(driver_fpath))
+    # import xdev
+    # xdev.embed()
 
     """
     # Now postprocess script:
@@ -739,6 +793,20 @@ def updates_dvc_measures():
 if __name__ == '__main__':
     """
     CommandLine:
+
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --model_globstr="/path/to/model.pt" \
+            --test_dataset="/path/to/data.kwcoco.json" \
+            --enable_pred=1 \
+            --enable_eval=0 \
+            --enable_iarpa_eval=1 \
+            --enable_track=1 \
+            --skip_existing=0 \
+            --cache=0 \
+            --backend=serial \
+            --run=0
+
+
         python ~/code/watch/watch/tasks/fusion/schedule_evaluation.py schedule_evaluation
 
         python ~/code/watch/watch/tasks/fusion/organize.py make_nice_dirs

@@ -46,7 +46,7 @@ def make_predict_config(cmdline=False, **kwargs):
         args_for_writing_out_config_file=['--dump'],
     )
     parser.add_argument('--datamodule', default='KWCocoVideoDataModule')
-    parser.add_argument('--pred_dataset', default=None, dest='pred_dataset')
+    parser.add_argument('--pred_dataset', default=None, dest='pred_dataset', help='path to the output dataset (note: test_dataset is the input dataset)')
 
     # parser.add_argument('--pred_dpath', dest='pred_dpath', type=pathlib.Path, help='path to dump results. Deprecated, do not use.')
 
@@ -65,6 +65,9 @@ def make_predict_config(cmdline=False, **kwargs):
 
     parser.add_argument('--tta_fliprot', type=smartcast, default=0, help='number of times to flip/rotate the frame, can be in [0,7]')
     parser.add_argument('--tta_time', type=smartcast, default=0, help='number of times to expand the temporal sample for a frame'),
+
+    # TODO:
+    # parser.add_argument('--cache', type=smartcast, default=0, help='if True, dont rerun prediction on images where predictions exist'),
 
     # TODO
     # parser.add_argument('--test_time_augmentation', default=False, help='')

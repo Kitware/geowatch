@@ -773,6 +773,8 @@ def main(args):
     if args.clear_annots:
         coco_dset.clear_annotations()
 
+    pred_info = coco_dset.dataset.get('info', [])
+
     tracking_output = {
         'type': 'tracking_result',
         'info': [],
@@ -797,6 +799,7 @@ def main(args):
             'cwd': os.getcwd(),
             'userhome': ub.userhome(),
             'timestamp': start_timestamp,
+            'pred_info': pred_info,
             # TODO: could pass the info in from the input kwcoco file as well
         }
     })
@@ -996,6 +999,25 @@ def demo(coco_dset,
             os.remove(coco_dset.fpath)
         if not os.path.isabs(coco_dset_sc.fpath):
             os.remove(coco_dset_sc.fpath)
+
+
+def _fix_pred_info():
+    # Hack to fix data provinence
+    from watch.utils import util_path
+    track_fpaths = util_path.coerce_patterned_paths('models/fusion/eval3_candidates/pred/**/tracks.json')
+    for fpath in track_fpaths:
+        data = json.loads(fpath.read_text())
+        for info_item in data['info']:
+            if info_item['type'] == 'process' and info_item['properties']['name'] == 'watch.cli.kwcoco_to_geojson':
+                pred_kwcoco_json = info_item['properties']['args']['in_file']
+                import kwcoco
+                pred_dset = kwcoco.CocoDataset(pred_kwcoco_json)
+                pred_info = pred_dset.dataset.get('info', [])
+                info_item['properties']['pred_info'] = pred_info
+
+        import safer
+        with safer.open(fpath, 'w', temp_file=True) as file:
+            json.dump(data, file)
 
 
 if __name__ == '__main__':

@@ -450,6 +450,7 @@ class TMUXMultiQueue(cmd_queue.Queue):
         if block:
             agg_state = self.monitor()
             if not agg_state['errored']:
+                self.capture()
                 self.kill()
             return agg_state
 
@@ -471,76 +472,110 @@ class TMUXMultiQueue(cmd_queue.Queue):
     def monitor(self, refresh_rate=0.4):
         """
         Monitor progress until the jobs are done
+
+        CommandLine:
+            xdoctest -m watch.utils.tmux_queue TMUXMultiQueue.monitor
+
+        Example:
+            >>> from watch.utils.tmux_queue import *  # NOQA
+            >>> self = TMUXMultiQueue(3, 'test-queue-monitor')
+            >>> job = None
+            >>> for i in range(10):
+            >>>     job = self.submit('sleep 2', depends=job)
+            >>> job = None
+            >>> for i in range(10):
+            >>>     job = self.submit('sleep 3', depends=job)
+            >>> job = None
+            >>> for i in range(10):
+            >>>     job = self.submit('sleep 5', depends=job)
+            >>> self.rprint()
+            >>> if ub.find_exe('tmux'):
+            >>>     self.run(block=True)
         """
         import time
         from rich.live import Live
-        from rich.table import Table
 
-        def update_status_table():
-            # https://rich.readthedocs.io/en/stable/live.html
-            table = Table()
-            columns = ['name', 'status', 'finished', 'errors', 'total']
-            for col in columns:
-                table.add_column(col)
+        if MonitorApp is None:
+            print('Kill commands:')
+            for command in self._kill_commands():
+                print(command)
+            try:
+                table, finished, agg_state = self._build_status_table()
+                with Live(table, refresh_per_second=4) as live:
+                    while not finished:
+                        time.sleep(refresh_rate)
+                        table, finished, agg_state = self._build_status_table()
+                        live.update(table)
+            except KeyboardInterrupt:
+                from rich.prompt import Confirm
+                flag = Confirm.ask('do you to kill the procs?')
+                if flag:
+                    self.kill()
+        else:
+            MonitorApp.self = self
+            MonitorApp.run()
+            table, finished, agg_state = self._build_status_table()
 
-            finished = True
-            agg_state = {
-                'name': 'agg',
-                'status': '',
-                'errored': 0,
-                'finished': 0,
-                'total': 0
-            }
-
-            for worker in self.workers:
-                fin_color = ''
-                err_color = ''
-                state = worker.read_state()
-                if state['status'] == 'unknown':
-                    finished = False
-                    fin_color = '[yellow]'
-                else:
-                    finished &= (state['status'] == 'done')
-                    if state['status'] == 'done':
-                        fin_color = '[green]'
-
-                    if (state['errored'] > 0):
-                        err_color = '[red]'
-
-                    agg_state['total'] += state['total']
-                    agg_state['finished'] += state['finished']
-                    agg_state['errored'] += state['errored']
-
-                table.add_row(
-                    state['name'],
-                    state['status'],
-                    f"{fin_color}{state['finished']}",
-                    f"{err_color}{state['errored']}",
-                    f"{state['total']}",
-                )
-
-            if not finished:
-                agg_state['status'] = 'run'
-            else:
-                agg_state['status'] = 'done'
-
-            if len(self.workers) > 1:
-                table.add_row(
-                    agg_state['name'],
-                    agg_state['status'],
-                    f"{agg_state['finished']}",
-                    f"{agg_state['errored']}",
-                    f"{agg_state['total']}",
-                )
-            return table, finished, agg_state
-
-        table, finished, agg_state = update_status_table()
-        with Live(table, refresh_per_second=4) as live:
-            while not finished:
-                time.sleep(refresh_rate)
-                table, finished, agg_state = update_status_table()
-                live.update(table)
         return agg_state
+
+    def _build_status_table(self):
+        from rich.table import Table
+        # https://rich.readthedocs.io/en/stable/live.html
+        table = Table()
+        columns = ['name', 'status', 'finished', 'errors', 'total']
+        for col in columns:
+            table.add_column(col)
+
+        finished = True
+        agg_state = {
+            'name': 'agg',
+            'status': '',
+            'errored': 0,
+            'finished': 0,
+            'total': 0
+        }
+
+        for worker in self.workers:
+            fin_color = ''
+            err_color = ''
+            state = worker.read_state()
+            if state['status'] == 'unknown':
+                finished = False
+                fin_color = '[yellow]'
+            else:
+                finished &= (state['status'] == 'done')
+                if state['status'] == 'done':
+                    fin_color = '[green]'
+
+                if (state['errored'] > 0):
+                    err_color = '[red]'
+
+                agg_state['total'] += state['total']
+                agg_state['finished'] += state['finished']
+                agg_state['errored'] += state['errored']
+
+            table.add_row(
+                state['name'],
+                state['status'],
+                f"{fin_color}{state['finished']}",
+                f"{err_color}{state['errored']}",
+                f"{state['total']}",
+            )
+
+        if not finished:
+            agg_state['status'] = 'run'
+        else:
+            agg_state['status'] = 'done'
+
+        if len(self.workers) > 1:
+            table.add_row(
+                agg_state['name'],
+                agg_state['status'],
+                f"{agg_state['finished']}",
+                f"{agg_state['errored']}",
+                f"{agg_state['total']}",
+            )
+        return table, finished, agg_state
 
     def rprint(self, with_status=False, with_gaurds=False, with_rich=0):
         """
@@ -571,14 +606,26 @@ class TMUXMultiQueue(cmd_queue.Queue):
             # First print out the contents for debug
             ub.cmd(f'tmux capture-pane -p -t "{queue.pathid}:0.0"', verbose=3)
 
+    def _print_commands(self):
+        # First print out the contents for debug
+        for queue in self.workers:
+            command1 = f'tmux capture-pane -p -t "{queue.pathid}:0.0"'
+            yield command1
+
+    def _kill_commands(self):
+        for queue in self.workers:
+            # Then kill it
+            command2 = f'tmux kill-session -t {queue.pathid}'
+            yield command2
+
+    def capture(self):
+        for command in self._print_commands():
+            ub.cmd(command, verbose=3)
+
     def kill(self):
         # Kills all the tmux panes
-        for queue in self.workers:
-            print('\n\nqueue = {!r}'.format(queue))
-            # First print out the contents for debug
-            ub.cmd(f'tmux capture-pane -p -t "{queue.pathid}:0.0"', verbose=3)
-            # Then kill it
-            ub.cmd(f'tmux kill-session -t {queue.pathid}', verbose=0)
+        for command in self._kill_commands():
+            ub.cmd(command, verbose=3)
 
     def _tmux_current_sessions(self):
         # Kills all the tmux panes
@@ -593,6 +640,50 @@ class TMUXMultiQueue(cmd_queue.Queue):
                     'rest': rest
                 })
         return sessions
+
+
+try:
+    raise ImportError
+    import textual  # NOQA
+except ImportError:
+    MonitorApp = None
+else:
+    from textual import App, events
+    # from rich.table import Table
+    from textual.widgets import ScrollView
+
+    class MonitorApp(App):
+
+        def on_key(self):
+            self.console.bell()
+            # super().on_key()
+
+        async def on_load(self, event: events.Load) -> None:
+            """Bind keys with the app loads (but before entering application mode)"""
+            # await self.bind("b", "view.toggle('sidebar')", "Toggle sidebar")
+            await self.bind("q", "quit", "Quit")
+            await self.bind("escape", "quit", "Quit")
+
+        async def on_mount(self, event: events.Mount) -> None:
+
+            self.body = body = ScrollView(auto_width=True)
+
+            await self.view.dock(body)
+
+            async def add_content():
+                table, finished, agg_state = self.self._build_status_table()
+                # table = Table(title="Demo")
+                # for i in range(20):
+                #     table.add_column(f"Col {i + 1}", style="magenta")
+                # for i in range(100):
+                #     table.add_row(*[f"cell {i},{j}" for j in range(20)])
+
+                await body.update(table)
+
+            await self.call_later(add_content)
+
+    def _demo_app():
+        MonitorApp.run(title="Simple App", log="textual.log")
 
 
 if 0:

@@ -25,10 +25,13 @@ S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/ALL_ANNOTATED_REGIONS_TA-1_
 DATASET_SUFFIX=Drop2-TA1-2022-02-24
 
 
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
 S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/ALL_ANNOTATED_REGIONS_TA-1_PROCESSED_20220222.unique.input.l1.mini
-DATASET_SUFFIX=foobar
 
+
+
+DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/big-stac-file-on-aws
+DATASET_SUFFIX=my-dataset-name
 python -m watch.cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --s3_fpath=$S3_FPATH \
