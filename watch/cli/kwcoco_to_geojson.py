@@ -457,7 +457,7 @@ def _validate_summary(site_summary_or_region_model,
             assert isinstance(site_summary_or_region_model,
                               dict), ('unknown site summary dtype ' +
                                       str(type(site_summary_or_region_model)))
-
+        # import xdev; xdev.embed()
         try:  # is this a region model?
             region_model_schema = watch.rc.load_region_model_schema()
             region_model = site_summary_or_region_model
@@ -466,7 +466,7 @@ def _validate_summary(site_summary_or_region_model,
                 f for f in region_model['features']
                 if (f['properties']['type'] == 'site_summary'
                     # TODO handle positive_partial
-                    and f['properties']['status'] == 'positive_annotated')
+                    and f['properties']['status'] in {'positive_annotated', 'system_proposed', 'system_confirmed'})
             ]
             region_feat = region_model['features'][0]
             assert region_feat['properties']['type'] == 'region'
@@ -496,6 +496,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
         default_region_id = ub.peek(coco_dset.index.name_to_video)
 
     site_summaries = _validate_summary(possible_summaries, default_region_id)
+    print(f'found {len(site_summaries)} site summaries')
 
     # TODO use pyproj instead, make sure it works with kwimage.warp
 
@@ -511,13 +512,28 @@ def add_site_summary_to_kwcoco(possible_summaries,
     print('warping site boundaries to pxl space...')
     cid = coco_dset.ensure_category(watch.heuristics.SITE_SUMMARY_CNAME)
     new_trackids = watch.utils.kwcoco_extensions.TrackidGenerator(coco_dset)
+    vids = coco_dset.videos()
+    possible_ids = dict(zip(vids.get('id'), zip(*vids.lookup(['name', 'region_id', 'site_id'], None).values())))
+
     for region_id, site_summary in site_summaries:
+
+        # lookup possible places to put this site_summary
+        vidid = None
+        site_id = site_summary['properties']['site_id']
+        for _id, names in possible_ids.items():
+            if region_id in names or site_id in names:
+                vidid = _id
+                print(f'matched site_summary {site_id} to video {names}')
+                break
+        if vidid is None:
+            print(f'failed to match site_summary {site_id}')
+            continue
+
 
         track_id = next(new_trackids)
 
         # get relevant images
-        images = coco_dset.images(
-            vidid=coco_dset.index.name_to_video[region_id]['id'])
+        images = coco_dset.images(vidid=vidid)
         start_date = dateutil.parser.parse(
             site_summary['properties']['start_date']).date()
         end_date = dateutil.parser.parse(
