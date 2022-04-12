@@ -296,7 +296,7 @@ def _populate_teamfeat_queue(queue, base_fpath, dvc_dpath, aligned_bundle_dpath,
             print('avail_gb = {!r}'.format(avail_gb))
 
         # depth_data_workers = min(2, data_workers)
-        depth_window_size = 512  # takes 18GB
+        depth_window_size = 1440
         task['output_fpath'] = outputs['dzyne_depth']
         task['gpus'] = 1
         task['command'] = ub.codeblock(

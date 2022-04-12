@@ -575,8 +575,9 @@ def prepare_results(all_infos, coi_pattern, dvc_dpath=None):
 
 def best_candidates(class_rows, mean_rows):
     # TOP CANDIDATE MODELS - FIND TOP K MODELS FOR EVERY METRIC
-    K = 10
-    max_per_metric_per_expt = 3
+    # K = 10
+    K = 4
+    max_per_metric_per_expt = 2
     all_model_candidates = set()
 
     mean_metrics = [

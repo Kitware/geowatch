@@ -27,8 +27,20 @@ def _process_image_chunked_with_kwarray(image,
     #     else:
     #         overlap = float(overlap[0]) / chip_size[0]
 
+    # if gh <= ch and gw <= cw:
+    #     stride = 1
+    # else:
+    #     if (chip_size[0] == 0):
+    #         stride = 1
+    #     else:
+    #         stride = (chip_size[0] - overlap[0], chip_size[1] - overlap[1])
+    #         # float(overlap[0]) / chip_size[0]
+
+    # HACK:
     slider = kwarray.SlidingWindow(image.shape[0:2], chip_size[0:2],
-                                   stride=overlap[0:2], keepbound=True,
+                                   # stride=stride,
+                                   overlap=0.3,
+                                   keepbound=True,
                                    allow_overshoot=True)
 
     output_shape = slider.input_shape

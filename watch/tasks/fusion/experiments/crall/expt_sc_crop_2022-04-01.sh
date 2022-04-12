@@ -92,7 +92,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     PRED_CFG_PAT="*"
     MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json
 
-    GROUP_KEY="*Drop3*s2_wv*"
+    GROUP_KEY="*Drop3*wv*"
     #GROUP_KEY="*Drop3*"
 
     python -m watch.tasks.fusion.aggregate_results \
@@ -107,7 +107,26 @@ special_evaluation(){
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     cd "$DVC_DPATH" 
     source "$HOME"/local/init/utils.sh
+    #smartwatch model_info models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_tf_xver7_V013/CropDrop3_SC_s2wv_tf_xver7_V013_epoch=0-step=2047-v1.pt
+
+
     writeto models/fusion/eval3_sc_candidates/models_of_interest.txt "
+        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V001/CropDrop3_SC_V001_epoch=1-step=4095-v1.pt
+        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V001/CropDrop3_SC_V001_epoch=20-step=43007-v1.pt
+        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V001/CropDrop3_SC_V001_epoch=90-step=186367-v1.pt
+        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V003/CropDrop3_SC_V003_epoch=17-step=36863-v1.pt
+        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V003/CropDrop3_SC_V003_epoch=30-step=63487.pt
+        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V004/CropDrop3_SC_V004_epoch=100-step=206847.pt
+        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V004/CropDrop3_SC_V004_epoch=11-step=24575-v2.pt
+        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V005/CropDrop3_SC_V005_epoch=1-step=4095.pt
+        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V006/CropDrop3_SC_V006_epoch=13-step=3583-v1.pt
+        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V006/CropDrop3_SC_V006_epoch=71-step=18431.pt
+        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_wvonly_D_V011/CropDrop3_SC_wvonly_D_V011_epoch=129-step=266239.pt
+        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V007/CropDrop3_SC_xver1_V007_epoch=17-step=36863.pt
+        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V008/CropDrop3_SC_xver1_V008_epoch=26-step=55295-v1.pt
+        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V007/CropDrop3_SC_xver1_V007_epoch=14-step=30719.pt
+        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_wvonly_D_V011/CropDrop3_SC_wvonly_D_V011_epoch=81-step=167935.pt
+        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_raw_xver7_V012/CropDrop3_SC_s2wv_raw_xver7_V012_epoch=0-step=2047-v1.pt
         models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V001/CropDrop3_SC_V001_epoch=55-step=114687-v1.pt
     "
 
@@ -126,10 +145,10 @@ special_evaluation(){
             --enable_eval=1 \
             --enable_track=0 \
             --enable_iarpa_eval=0 \
-            --pred_workers=3 \
-            --chip_overlap=0.0,0.3,0.5 \
-            --tta_time=0,1,2,3 \
-            --tta_fliprot=0,1,2 \
+            --pred_workers=4 \
+            --chip_overlap=0.3 \
+            --tta_time=0,1,4 \
+            --tta_fliprot=0 \
             --skip_existing=True --backend=tmux --run=1
 }
 
@@ -156,9 +175,11 @@ prep_features(){
     rsync -avprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./_assets ooo:data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10
     rsync -avprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./combo* ooo:data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10
 
-
     rsync -avprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./_assets horologic:data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10
     rsync -avprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./combo* horologic:data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10
+
+    rsync -avprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./combo_DLM_s2_wv_vali.kwcoco.json horologic:data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10
+    rsync -avprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./combo_DLM_*.kwcoco.json horologic:data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10
 
 
 }
@@ -864,7 +885,6 @@ KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
-smartwatch stats "$VALI_FPATH"
 CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_xver11_V013
 INIT_STATE_V011="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_wvonly_D_V011/CropDrop3_SC_wvonly_D_V011_epoch=81-step=167935.pt"
@@ -880,7 +900,7 @@ python -m watch.tasks.fusion.fit \
     --global_class_weight=1.00 \
     --global_saliency_weight=0.00 \
     --chip_size=256 \
-    --time_steps=12 \
+    --time_steps=11 \
     --learning_rate=1e-4 \
     --num_workers=4 \
     --max_epochs=160 \
@@ -896,8 +916,8 @@ python -m watch.tasks.fusion.fit \
     --draw_interval=5min \
     --use_centered_positives=True \
     --num_draw=8 \
-    --normalize_inputs=2048 \
-    --stream_channels=32 \
+    --normalize_inputs=1024 \
+    --stream_channels=16 \
     --temporal_dropout=0.5 \
     --modulate_class_weights="positive*0,negative*0,background*1.5,No Activity*0.001,Post Construction*0.01,Site Preparation*3.0" \
     --init="$INIT_STATE_V011"
@@ -913,7 +933,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
 smartwatch stats "$VALI_FPATH"
-CHANNELS="blue|green|red|near-ir1,depth,blue|green|red|nir|swir16|swir22,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_xver11_V014
 INIT_STATE_V007="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V007/CropDrop3_SC_xver1_V007_epoch=5-step=12287.pt"
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
@@ -928,7 +948,7 @@ python -m watch.tasks.fusion.fit \
     --global_class_weight=1.00 \
     --global_saliency_weight=0.00 \
     --chip_size=256 \
-    --time_steps=12 \
+    --time_steps=9 \
     --learning_rate=1e-4 \
     --num_workers=4 \
     --max_epochs=160 \
