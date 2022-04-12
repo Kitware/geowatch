@@ -447,46 +447,50 @@ class Evaluator(object):
                                         device='numpy')
                             slice_ = outputs['tr'].data[0][b]['space_slice']
 
-                            # print(output.shape[0:2])
-                            # Create output weights to better blend the borders
-                            # when stitching overlapping images.
-                            # weights = kwimage.gaussian_patch(output.shape[0:2])[..., None]
-                            # NOTE: do not change these inplace, these are memoized!
-                            weights = util_kwimage.upweight_center_mask(output.shape[0:2])[..., None]
-                            if self.save_raw_features:
-                                weights_up3 = util_kwimage.upweight_center_mask(output.shape[0:2])[..., None]
-                                weights_up5 = util_kwimage.upweight_center_mask(output.shape[0:2])[..., None]
+                            # # print(output.shape[0:2])
+                            # # Create output weights to better blend the borders
+                            # # when stitching overlapping images.
+                            # # weights = kwimage.gaussian_patch(output.shape[0:2])[..., None]
+                            # # NOTE: do not change these inplace, these are memoized!
+                            # weights = util_kwimage.upweight_center_mask(output.shape[0:2])[..., None]
+                            # if self.save_raw_features:
+                            #     weights_up3 = util_kwimage.upweight_center_mask(output.shape[0:2])[..., None]
+                            #     weights_up5 = util_kwimage.upweight_center_mask(output.shape[0:2])[..., None]
 
-                            # Handle stitching nan values
-                            if self.save_raw_features:
-                                invalid_up3_mask = np.isnan(up3)
-                                invalid_up5_mask = np.isnan(up5)
-                                if np.any(invalid_up3_mask):
-                                    spatial_valid_mask_up3 = (1 - invalid_up3_mask.any(axis=2, keepdims=True))
-                                    weights_up3 = weights_up3 * spatial_valid_mask_up3
-                                    up3[invalid_up3_mask] = 0
+                            # # Handle stitching nan values
+                            # if self.save_raw_features:
+                            #     invalid_up3_mask = np.isnan(up3)
+                            #     invalid_up5_mask = np.isnan(up5)
+                            #     if np.any(invalid_up3_mask):
+                            #         spatial_valid_mask_up3 = (1 - invalid_up3_mask.any(axis=2, keepdims=True))
+                            #         weights_up3 = weights_up3 * spatial_valid_mask_up3
+                            #         up3[invalid_up3_mask] = 0
 
-                                if np.any(invalid_up5_mask):
-                                    spatial_valid_mask_up5 = (1 - invalid_up5_mask.any(axis=2, keepdims=True))
-                                    weights_up5 = weights_up5 * spatial_valid_mask_up5
-                                    up5[invalid_up5_mask] = 0
+                            #     if np.any(invalid_up5_mask):
+                            #         spatial_valid_mask_up5 = (1 - invalid_up5_mask.any(axis=2, keepdims=True))
+                            #         weights_up5 = weights_up5 * spatial_valid_mask_up5
+                            #         up5[invalid_up5_mask] = 0
 
-                            invalid_output_mask = np.isnan(output)
-                            if np.any(invalid_output_mask):
-                                spatial_valid_mask = (1 - invalid_output_mask.any(axis=2, keepdims=True))
-                                weights = weights * spatial_valid_mask
-                                output[invalid_output_mask] = 0
+                            # invalid_output_mask = np.isnan(output)
+                            # if np.any(invalid_output_mask):
+                            #     spatial_valid_mask = (1 - invalid_output_mask.any(axis=2, keepdims=True))
+                            #     weights = weights * spatial_valid_mask
+                            #     output[invalid_output_mask] = 0
 
                             # print(f"slice_: {slice_}")
                             # print(f"output weights: {weights.shape}, output: {output.shape}")
                             # print(f"output weights_up3: {weights_up3.shape}, up3: {up3.shape}")
                             # print(f"output weights_up5: {weights_up5.shape}, up5: {up5.shape}")
 
-                            self.stitcher_dict[gid].add(slice_, output, weight=weights)
+                            from watch.tasks.fusion.predict import CocoStitchingManager
+                            CocoStitchingManager._stitcher_center_weighted_add(self.stitcher_dict[gid], slice_, output)
+                            # self.stitcher_dict[gid].add(slice_, output, weight=weights)
 
                             if self.save_raw_features:
-                                self.stitcher_dict_up3[gid].add(slice_, up3, weight=weights_up3)
-                                self.stitcher_dict_up5[gid].add(slice_, up5, weight=weights_up5)
+                                CocoStitchingManager._stitcher_center_weighted_add(self.stitcher_dict_up3[gid], slice_, up3)
+                                CocoStitchingManager._stitcher_center_weighted_add(self.stitcher_dict_up5[gid], slice_, up5)
+                                # self.stitcher_dict_up3[gid].add(slice_, up3, weight=weights_up3)
+                                # self.stitcher_dict_up5[gid].add(slice_, up5, weight=weights_up5)
 
         writer.wait_until_finished()  # prevents a race condition
 
