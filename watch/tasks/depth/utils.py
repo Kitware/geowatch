@@ -1,42 +1,56 @@
+from distutils.log import error
 import logging
 
 import dask.array as da
 import numpy as np
 from tqdm import tqdm
+import kwarray
 
 log = logging.getLogger(__name__)
 
-
-def process_image_chunked(image,
+def _process_image_chunked_with_kwarray(image,
                           process_func,
                           chip_size=(2048, 2048, 3),
                           overlap=(128, 128, 0),
                           output_dtype=np.uint8,
                           verbose=1):
-    """
-    Args:
-        chip_size : must be less than half of the overlap
 
-    Example:
-        >>> from watch.tasks.depth.utils import *  # NOQA
-        >>> import kwimage
-        >>> import kwarray
-        >>> image = kwimage.ensure_float01(kwimage.grab_test_image(dsize=(512, 512)))
-        >>> nan_poly = kwimage.Polygon.random(rng=None).scale(image.shape[0])
-        >>> image = nan_poly.fill(image.copy(), np.nan)
-        >>> process_func = lambda x: kwimage.gaussian_blur(x, sigma=7).mean(axis=2)
-        >>> non_chunked = process_func(image)
-        >>> chip_size = (128, 128, 3)
-        >>> overlap = (32, 32, 0)
-        >>> output_dtype = np.uint8
-        >>> verbose = 0
-        >>> result = process_image_chunked(image, process_func, chip_size, overlap, output_dtype, verbose=0)
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> kwplot.autompl()
-        >>> kwplot.imshow(image, pnum=(1, 2, 1), doclf=True)
-        >>> kwplot.imshow(result, pnum=(1, 2, 2))
-    """
+    gh, gw = image.shape[0:2]
+    ch, cw = chip_size[0:2]
+
+    if gh <= ch and gw <= cw:
+        overlap = 0
+    else:
+        if (chip_size[0] == 0):
+            overlap = 0 
+        else:
+            overlap = float(overlap[0]) / chip_size[0] 
+
+    slider = kwarray.SlidingWindow(image.shape[0:2], chip_size[0:2],
+                                overlap=overlap, keepbound=True,
+                                allow_overshoot=True)
+
+    output_shape = slider.input_shape
+    stitcher = kwarray.Stitcher(output_shape)
+
+    for sl in tqdm(slider, desc='sliding window'):
+        
+        chip = image[sl]
+        new_chip = process_func(chip)
+
+        # Basic add that treats all locations equally
+        stitcher.add(sl, new_chip)
+
+    final = stitcher.finalize()
+
+    return final
+
+def _process_image_chunked_with_dask(image,
+                          process_func,
+                          chip_size=(2048, 2048, 3),
+                          overlap=(128, 128, 0),
+                          output_dtype=np.uint8,
+                          verbose=1):
 
     def process_wrapper(img: np.ndarray, pbar, block_info=None):
         if block_info:
@@ -90,3 +104,41 @@ def process_image_chunked(image,
     mapkw['pbar'].close()
 
     return pred
+
+def process_image_chunked(image,
+                          process_func,
+                          chip_size=(2048, 2048, 3),
+                          overlap=(128, 128, 0),
+                          output_dtype=np.uint8,
+                          verbose=1,
+                          sliding_window_method='kwarray'):
+
+    """
+    Args:
+        chip_size : must be less than half of the overlap
+
+    Example:
+        >>> from watch.tasks.depth.utils import *  # NOQA
+        >>> import kwimage
+        >>> import kwarray
+        >>> image = kwimage.ensure_float01(kwimage.grab_test_image(dsize=(512, 512)))
+        >>> nan_poly = kwimage.Polygon.random(rng=None).scale(image.shape[0])
+        >>> image = nan_poly.fill(image.copy(), np.nan)
+        >>> process_func = lambda x: kwimage.gaussian_blur(x, sigma=7).mean(axis=2)
+        >>> non_chunked = process_func(image)
+        >>> chip_size = (128, 128, 3)
+        >>> overlap = (32, 32, 0)
+        >>> output_dtype = np.uint8
+        >>> verbose = 0
+        >>> result = process_image_chunked(image, process_func, chip_size, overlap, output_dtype, verbose=0)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(image, pnum=(1, 2, 1), doclf=True)
+        >>> kwplot.imshow(result, pnum=(1, 2, 2))
+    """
+
+    if sliding_window_method == 'kwarray':
+        return _process_image_chunked_with_kwarray(image, process_func, chip_size, overlap, output_dtype, verbose)
+    else:
+        return _process_image_chunked_with_dask(image, process_func, chip_size, overlap, output_dtype, verbose)
