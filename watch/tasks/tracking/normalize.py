@@ -578,6 +578,7 @@ def normalize_sensors(coco_dset):
 def normalize(
         coco_dset,
         track_fn,
+        polygon_fn,
         overwrite,
         gt_dset=None,
         viz_sc_bounds=False,
@@ -654,7 +655,7 @@ def normalize(
 
     # apply tracks
     assert issubclass(track_fn, TrackFunction), 'must supply a valid track_fn!'
-    tracker: TrackFunction = track_fn(**track_kwargs)
+    tracker: TrackFunction = track_fn(polygon_fn=polygon_fn, **track_kwargs)
     coco_dset = tracker.apply_per_video(coco_dset)
 
     # normalize and add geo segmentations
