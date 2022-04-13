@@ -515,7 +515,7 @@ def normalize_phases(coco_dset,
 
         if is_empty:
             print(
-                f'apply {EMPTY_TRACK_BEHAVIOR} to {trackid=}: only found No Activity'
+                f'apply {EMPTY_TRACK_BEHAVIOR} to {trackid=} with cats {set(annots.cnames)}'
             )
             if EMPTY_TRACK_BEHAVIOR == 'delete':
                 coco_dset.remove_annotations(annots.aids)
@@ -540,31 +540,32 @@ def normalize_phases(coco_dset,
     annots = coco_dset.annots(
         list(ub.flatten(coco_dset.index.trackid_to_aids.values())))
 
-    has_prediction_heatmaps = all(
-        kwcoco.FusedChannelSpec.coerce(prediction_key).as_set().issubset(
-            coco_dset.coco_image(gid).channels.fuse().as_set())
-        for gid in set(annots.gids))
-    if has_prediction_heatmaps:
-        phase_transition_days = phase.phase_prediction_heatmap(
-            annots, coco_dset, prediction_key)
-        annots.set(ann_field, phase_transition_days)
-    else:
-        for trackid in coco_dset.index.trackid_to_aids.keys():
-            _annots = coco_dset.annots(trackid=trackid)
-            phase_transition_days = phase.phase_prediction_baseline(_annots)
-            _annots.set(ann_field, phase_transition_days)
+    if len(annots) > 0:
+        has_prediction_heatmaps = all(
+            kwcoco.FusedChannelSpec.coerce(prediction_key).as_set().issubset(
+                coco_dset.coco_image(gid).channels.fuse().as_set())
+            for gid in set(annots.gids))
+        if has_prediction_heatmaps:
+            phase_transition_days = phase.phase_prediction_heatmap(
+                annots, coco_dset, prediction_key)
+            annots.set(ann_field, phase_transition_days)
+        else:
+            for trackid in coco_dset.index.trackid_to_aids.keys():
+                _annots = coco_dset.annots(trackid=trackid)
+                phase_transition_days = phase.phase_prediction_baseline(_annots)
+                _annots.set(ann_field, phase_transition_days)
 
     #
     # Fixup phase prediction
     #
 
-    # TODO do something with transition preds for phases which were altered
-    FIXUP_TRANSITION_PRED = 0
-    if FIXUP_TRANSITION_PRED:
-        n_diff_annots = sum(
-            np.array(annots.cnames) == np.array(old_cnames_dct.values()))
-        if n_diff_annots > 0:
-            raise NotImplementedError
+        # TODO do something with transition preds for phases which were altered
+        FIXUP_TRANSITION_PRED = 0
+        if FIXUP_TRANSITION_PRED:
+            n_diff_annots = sum(
+                np.array(annots.cnames) == np.array(old_cnames_dct.values()))
+            if n_diff_annots > 0:
+                raise NotImplementedError
 
     return coco_dset
 

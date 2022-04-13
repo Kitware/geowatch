@@ -512,15 +512,16 @@ def add_site_summary_to_kwcoco(possible_summaries,
     print('warping site boundaries to pxl space...')
     cid = coco_dset.ensure_category(watch.heuristics.SITE_SUMMARY_CNAME)
     new_trackids = watch.utils.kwcoco_extensions.TrackidGenerator(coco_dset)
-    vids = coco_dset.videos()
-    possible_ids = dict(zip(vids.get('id'), zip(*vids.lookup(['name', 'region_id', 'site_id'], None).values())))
 
     for region_id, site_summary in site_summaries:
 
         # lookup possible places to put this site_summary
         vidid = None
         site_id = site_summary['properties']['site_id']
-        for _id, names in possible_ids.items():
+        for _id, vid in coco_dset.index.videos.items():
+            # look for all possible places a region or site id could be
+            names = set(ub.dict_subset(vid, ['id', 'name', 'region_id', 'site_id'], None).values())
+            names |= set(ub.dict_subset(vid.get('properties', {}), ['region_id', 'site_id'], None).values())
             if region_id in names or site_id in names:
                 vidid = _id
                 print(f'matched site_summary {site_id} to video {names}')
