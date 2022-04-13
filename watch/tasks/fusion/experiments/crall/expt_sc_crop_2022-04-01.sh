@@ -92,7 +92,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     PRED_CFG_PAT="*"
     MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json
 
-    GROUP_KEY="*Drop3*wv*"
+    GROUP_KEY="*Drop3*s2_wv*"
     #GROUP_KEY="*Drop3*"
 
     python -m watch.tasks.fusion.aggregate_results \
@@ -134,9 +134,9 @@ special_evaluation(){
     DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_sc_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_wv_vali.kwcoco.json
+    #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_wv_vali.kwcoco.json
     #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_D_wv_vali.kwcoco.json
-    #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
+    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1,2,3" \
             --model_globstr="$DVC_DPATH"/models/fusion/eval3_sc_candidates/models_of_interest.txt \
@@ -147,7 +147,7 @@ special_evaluation(){
             --enable_iarpa_eval=0 \
             --pred_workers=4 \
             --chip_overlap=0.3 \
-            --tta_time=0,1,4 \
+            --tta_time=0,1,2,3 \
             --tta_fliprot=0 \
             --skip_existing=True --backend=tmux --run=1
 }
@@ -175,7 +175,7 @@ prep_features(){
     rsync -avprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./_assets ooo:data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10
     rsync -avprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./combo* ooo:data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10
 
-    rsync -avprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./_assets horologic:data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10
+    rsync -avprRP --compress "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./_assets horologic:data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10 
     rsync -avprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./combo* horologic:data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10
 
     rsync -avprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./combo_DLM_s2_wv_vali.kwcoco.json horologic:data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10
@@ -950,7 +950,7 @@ python -m watch.tasks.fusion.fit \
     --chip_size=256 \
     --time_steps=9 \
     --learning_rate=1e-4 \
-    --num_workers=4 \
+    --num_workers=2 \
     --max_epochs=160 \
     --patience=160 \
     --dist_weights=True \
@@ -965,7 +965,7 @@ python -m watch.tasks.fusion.fit \
     --use_centered_positives=True \
     --num_draw=8 \
     --normalize_inputs=2048 \
-    --stream_channels=32 \
+    --stream_channels=24 \
     --temporal_dropout=0.5 \
     --modulate_class_weights="positive*0,negative*0,background*1.5,No Activity*0.001,Post Construction*0.01,Site Preparation*3.0" \
     --init="$INIT_STATE_V011"
