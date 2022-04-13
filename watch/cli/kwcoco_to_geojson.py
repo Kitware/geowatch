@@ -301,7 +301,9 @@ def track_to_site(coco_dset,
                 transition_date_from('Site Preparation')
             }
         else:
-            raise ValueError(f'missing phases: {site_id=} {all_phases_set=}')
+            # raise ValueError(f'missing phases: {site_id=} {all_phases_set=}')
+            print(f'missing phases: {site_id=} {all_phases_set=}')
+            return {}
 
     def site_feature():
         '''

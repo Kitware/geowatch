@@ -511,7 +511,7 @@ def normalize_phases(coco_dset,
 
         annots = coco_dset.annots(trackid=trackid)
         is_empty = check_only_bg(annots.cnames)
-        EMPTY_TRACK_BEHAVIOR = 'delete'
+        EMPTY_TRACK_BEHAVIOR = 'ignore'
 
         if is_empty:
             print(
