@@ -970,7 +970,14 @@ class CocoStitchingManager(object):
         """
         TODO: refactor
         """
-        weights = util_kwimage.upweight_center_mask(data.shape[0:2])[..., None]
+        weights = util_kwimage.upweight_center_mask(data.shape[0:2])
+
+        is_2d = len(data.shape) == 2
+        is_3d = len(data.shape) == 3
+
+        if is_3d:
+            weights = weights[..., None]
+
         if stitcher.shape[0] < space_slice[0].stop or stitcher.shape[1] < space_slice[1].stop:
             # By embedding the space slice in the stitcher dimensions we can get a
             # slice corresponding to the valid region in the stitcher, and the extra
@@ -995,7 +1002,11 @@ class CocoStitchingManager(object):
         # Handle stitching nan values
         invalid_output_mask = np.isnan(stitch_data)
         if np.any(invalid_output_mask):
-            spatial_valid_mask = (1 - invalid_output_mask.any(axis=2, keepdims=True))
+            if is_3d:
+                spatial_valid_mask = (1 - invalid_output_mask.any(axis=2, keepdims=True))
+            else:
+                assert is_2d
+                spatial_valid_mask = (1 - invalid_output_mask)
             stitch_weights = stitch_weights * spatial_valid_mask
             stitch_data[invalid_output_mask] = 0
         stitcher.add(stitch_slice, stitch_data, weight=stitch_weights)
@@ -1368,7 +1379,7 @@ if __name__ == '__main__':
         --draw_heatmaps=1 --workers=2
 
 
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    DVC_DPATH=$(smartwatch_dvc)
     TEST_DATASET=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1.kwcoco.json
     EXPT_PATTERN="*"
     python -m watch.tasks.fusion.schedule_evaluation \

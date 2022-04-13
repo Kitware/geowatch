@@ -215,7 +215,7 @@ main = prep_splits
 if __name__ == '__main__':
     """
     CommandLine:
-        DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+        DVC_DPATH=$(smartwatch_dvc)
         python -m watch.cli.prepare_splits \
             --base_fpath=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json \
             --run=0 --backend=serial
@@ -224,7 +224,7 @@ if __name__ == '__main__':
             --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/foo.kwcoco.json \
             --run=1 --backend=slurm
 
-        DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+        DVC_DPATH=$(smartwatch_dvc)
         python -m watch.cli.prepare_splits \
             --base_fpath=$DVC_DPATH/Drop1-Aligned-L1-2022-01/data.kwcoco.json \
             --run=1 --backend=slurm

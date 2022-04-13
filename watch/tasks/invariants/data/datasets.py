@@ -351,9 +351,9 @@ class gridded_dataset(torch.utils.data.Dataset):
             for m in range(self.num_images):
                 out['image{}'.format(1 + m)] = image_dict[1 + m].float()
 
-            out['offset_image1'] = offset_image.float()
-            out['augmented_image1'] = augmented_image.float()
-            out['normalized_date'] = normalized_date.float()
+            out['offset_image1'] = offset_image.float().contiguous()
+            out['augmented_image1'] = augmented_image.float().contiguous()
+            out['normalized_date'] = normalized_date.float().contiguous()
             out['time_sort_label'] = float(normalized_date[0] < normalized_date[1])
             out['img1_id'] = gids[0]
             # img1_info = self.coco_dset.index.imgs[gids[0]]
@@ -361,7 +361,7 @@ class gridded_dataset(torch.utils.data.Dataset):
             # out['tr'] = ItemContainer(tr, stack=False)
             if self.segmentation:
                 for k in range(self.num_images):
-                    out['segmentation{}'.format(1 + k)] = torch.tensor(segmentation_masks[k])
+                    out['segmentation{}'.format(1 + k)] = torch.tensor(segmentation_masks[k]).contiguous()
         return out
 
 
@@ -808,8 +808,8 @@ class Onera(Dataset):
             display_image2 = torch.tensor([])
 
         if not self.multihead:
-            return {'image1': img1.float(),
-                    'image2': img2.float(),
+            return {'image1': img1.float().contiguous(),
+                    'image2': img2.float().contiguous(),
                     'change_map': change_map,
                     'label': label,
                     'date1': date1,
@@ -827,8 +827,8 @@ class Onera(Dataset):
                     'label': label,
                     'date1': date1,
                     'date2': date2,
-                    'display_image1': display_image1,
-                    'display_image2': display_image2,
+                    'display_image1': display_image1.contiguous(),
+                    'display_image2': display_image2.contiguous(),
                     'time_steps': torch.tensor([0, 1])}
 
 
@@ -836,7 +836,7 @@ class SpaceNet7(Dataset):
     normalize_params = [[0.16198677, 0.22665408, 0.1745371], [0.06108317, 0.06515977, 0.04128775]]
     def __init__(self,
                     patch_size=[128, 128],
-                    splits='satellite_sort/data/spacenet/splits_unmasked/', #### unmasked images
+                    splits='satellite_sort/data/spacenet/splits_unmasked/',  # ### unmasked images
                     train=True,
                     normalize=True,
                     yearly=True,
@@ -959,14 +959,15 @@ class SpaceNet7(Dataset):
             image = rotated['image']
             image2 = rotated['image2']
 
-        return {
-                'image1': torch.tensor(image).permute(2, 0, 1),
-                'image2': torch.tensor(image2).permute(2, 0, 1),
-                'label': int(date1 < date2),
-                'date1': date1,
-                'date2': date2,
-                'display_image1': display_image1,
-                'display_image2': display_image2,
-                'cloud_mask1': cloud_mask1,
-                'cloud_mask2': cloud_mask2
-               }
+        item = {
+            'image1': torch.tensor(image).permute(2, 0, 1).contiguous(),
+            'image2': torch.tensor(image2).permute(2, 0, 1).contiguous(),
+            'label': int(date1 < date2),
+            'date1': date1,
+            'date2': date2,
+            'display_image1': display_image1.contiguous(),
+            'display_image2': display_image2.contiguous(),
+            'cloud_mask1': cloud_mask1.contiguous(),
+            'cloud_mask2': cloud_mask2.contiguous(),
+        }
+        return item

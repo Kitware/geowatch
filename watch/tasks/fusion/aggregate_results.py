@@ -24,7 +24,7 @@ CommandLine:
 
     # TODO: - [ ] watch command to "register" which DVC directory to use
     # Locate a registered DVC directory
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    DVC_DPATH=$(smartwatch_dvc)
 
     # Replace with the name of the latest dataset
     DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
@@ -467,11 +467,13 @@ def prepare_results(all_infos, coi_pattern, dvc_dpath=None):
                 iarpa_simplified.append(BAS_metrics)
                 # row.update(BAS_metrics)
             except Exception:
-                BAS_metrics = None
+                pass
 
         if iarpa_simplified:
             BAS_metrics = max(iarpa_simplified, key=lambda x: x['BAS_F1'])
             row.update(BAS_metrics)
+        else:
+            BAS_metrics = None
 
         mean_rows.append(row)
 
@@ -498,7 +500,7 @@ def prepare_results(all_infos, coi_pattern, dvc_dpath=None):
                 'salient_APUC': row['salient_APUC'],
             }
             if BAS_metrics is not None:
-                metrics['BAS_F1'] = BAS_metrics['BAS_F1'],
+                metrics['BAS_F1'] = BAS_metrics['BAS_F1']
 
             for class_row in expt_class_rows:
                 metrics[class_row['catname'] + '_AP'] = class_row['AP']
@@ -573,8 +575,9 @@ def prepare_results(all_infos, coi_pattern, dvc_dpath=None):
 
 def best_candidates(class_rows, mean_rows):
     # TOP CANDIDATE MODELS - FIND TOP K MODELS FOR EVERY METRIC
-    K = 10
-    max_per_metric_per_expt = 3
+    # K = 10
+    K = 4
+    max_per_metric_per_expt = 2
     all_model_candidates = set()
 
     mean_metrics = [
@@ -1437,7 +1440,7 @@ def main(cmdline=False, **kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        # DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+        # DVC_DPATH=$(smartwatch_dvc)
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
         MEASURE_GLOBSTR=$DVC_DPATH/models/fusion/SC-20201117/*_TA1*/*/*/eval/curves/measures2.json
         python -m watch.tasks.fusion.aggregate_results \

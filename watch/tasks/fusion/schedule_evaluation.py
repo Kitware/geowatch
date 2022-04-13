@@ -7,7 +7,7 @@ Helper for scheduling a set of prediction + evaluation jobs
 python -m watch.tasks.fusion.schedule_evaluation
 
 
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 EXPT_PATTERN="*"
@@ -19,7 +19,7 @@ python -m watch.tasks.fusion.schedule_evaluation \
         --run=0 --skip_existing=True
 
 # Note: change backend to tmux if slurm is not installed
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPT_GROUP_CODE=eval3_candidates
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -51,11 +51,13 @@ class ScheduleEvaluationConfig(scfg.Config):
         'skip_existing': scfg.Value(False, help='if True dont submit commands where the expected products already exist'),
         'backend': scfg.Value('tmux', help='can be tmux, slurm, or maybe serial in the future'),
 
+        'pred_workers': scfg.Value(4, help='number of prediction workers in each process'),
+
         'enable_eval': scfg.Value(True, help='if False, then evaluation is not run'),
         'enable_pred': scfg.Value(True, help='if False, then prediction is not run'),
 
-        'draw_heatmaps': scfg.Value(True, help='if true draw heatmaps on eval'),
-        'draw_curves': scfg.Value(True, help='if true draw curves on eval'),
+        'draw_heatmaps': scfg.Value(0, help='if true draw heatmaps on eval'),
+        'draw_curves': scfg.Value(0, help='if true draw curves on eval'),
 
         'partition': scfg.Value(None, help='specify slurm partition (slurm backend only)'),
         'mem': scfg.Value(None, help='specify slurm memory per task (slurm backend only)'),
@@ -74,7 +76,7 @@ class ScheduleEvaluationConfig(scfg.Config):
         'enable_track': scfg.Value(False, help='if True, enable tracking'),
         'annotations_dpath': scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval'),
 
-        'bas_thresh': scfg.Value([0.1], type=list, help='grid of track thresholds'),
+        'bas_thresh': scfg.Value([0.1], help='grid of track thresholds'),
     }
 
 
@@ -202,6 +204,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # HACK FOR DVC PTH FIXME:
     if str(model_globstr).endswith('.txt'):
         from watch.utils.simple_dvc import SimpleDVC
+        print('model_globstr = {!r}'.format(model_globstr))
         dvc_dpath = SimpleDVC.find_root(ub.Path(model_globstr))
     else:
         dvc_dpath = watch.find_smart_dvc_dpath()
@@ -235,7 +238,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     with_saliency = 'auto'
     with_class = 'auto'
 
-    workers_per_queue = 4
+    workers_per_queue = config['pred_workers']
     recompute = False
 
     # HARD CODED

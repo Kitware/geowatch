@@ -6,7 +6,7 @@ CommandLine:
 
     export CUDA_VISIBLE_DEVICES=1
 
-    DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+    DVC_DPATH=$(smartwatch_dvc)
 
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10
@@ -54,7 +54,7 @@ except Exception:
 class Evaluator(object):
     """
     CommandLine:
-        DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+        DVC_DPATH=$(smartwatch_dvc)
         DVC_DPATH=$DVC_DPATH xdoctest -m watch.tasks.rutgers_material_seg.predict Evaluator
 
     Example:
@@ -84,6 +84,8 @@ class Evaluator(object):
         >>>     feat_dpath=dst_coco_fpath.parent / '_assets/test_rutgers_material_seg',
         >>>     gpus='auto:1',
         >>>     num_workers='avail',
+        >>>     save_raw_features=1,
+        >>>     batch_size=32,
         >>>     cache=0,
         >>>     #num_workers=0,
         >>>     #gpu=None,
@@ -96,6 +98,7 @@ class Evaluator(object):
 
     def __init__(self,
                  model: object,
+                 checkpoint_fpath: str,
                  input_coco_dset: SequenceDataset,
                  output_coco_dataset: kwcoco.CocoDataset,
                  write_probs : bool = True,
@@ -120,6 +123,7 @@ class Evaluator(object):
         """
 
         self.model = model
+        self.checkpoint_fpath = checkpoint_fpath
         self.save_raw_features = save_raw_features
         self.num_workers = num_workers
         self.output_coco_dataset = output_coco_dataset
@@ -130,7 +134,7 @@ class Evaluator(object):
         self.output_feat_dpath = output_feat_dpath
         self.stitcher_dict = {}
         if self.save_raw_features:
-            self.stitcher_dict_up3 = {}
+            # self.stitcher_dict_up3 = {}
             self.stitcher_dict_up5 = {}
         self.finalized_gids = set()
         self.imwrite_kw = imwrite_kw
@@ -142,6 +146,7 @@ class Evaluator(object):
         # Hack together a channel code
         self.chan_code = '|'.join(['matseg_{}'.format(i) for i in range(self.num_classes)])
         # self.chan_code = '|'.join(['matseg.{}'.format(i) for i in range(self.num_classes)])
+
         self.output_channels = kwcoco.FusedChannelSpec.coerce(self.chan_code).concise()
         self.concise_chan_code = self.output_channels.spec
         self.concise_chan_path_code = self.output_channels.path_sanitize()
@@ -155,6 +160,8 @@ class Evaluator(object):
     def _features_path_for_image(self, gid, layer):
         img = self.output_coco_dataset.index.imgs[gid]
         img_name = img.get('name', f'gid{gid:08d}')
+        # FIXME: this shouldn't use the concise channel code, this should
+        # use the same name as the path-sanatized channel string.
         save_path = self.output_feat_dpath / f'{img_name}_{self.concise_chan_path_code}_{layer}.tif'
         return save_path
 
@@ -177,7 +184,7 @@ class Evaluator(object):
         if not cached:
             stitcher = self.stitcher_dict[gid]
             if self.save_raw_features:
-                stitcher_up3 = self.stitcher_dict_up3[gid]
+                # stitcher_up3 = self.stitcher_dict_up3[gid]
                 stitcher_up5 = self.stitcher_dict_up5[gid]
 
             import warnings
@@ -186,15 +193,15 @@ class Evaluator(object):
                 recon = stitcher.finalize()
 
                 if self.save_raw_features:
-                    recon_up3 = stitcher_up3.finalize()
+                    # recon_up3 = stitcher_up3.finalize()
                     recon_up5 = stitcher_up5.finalize()
-                    self.stitcher_dict_up3.pop(gid)
+                    # self.stitcher_dict_up3.pop(gid)
                     self.stitcher_dict_up5.pop(gid)
             self.stitcher_dict.pop(gid)
         else:
             recon = None
             if self.save_raw_features:
-                recon_up3 = None
+                # recon_up3 = None
                 recon_up5 = None
 
         from watch.tasks.fusion.predict import quantize_float01
@@ -208,10 +215,10 @@ class Evaluator(object):
         save_path = os.fspath(save_path)
 
         if self.save_raw_features:
-            quant_recon_up3, quantization_up3 = quantize_float01(recon_up3, old_min=-11, old_max=11)
-            nodata_up3 = quantization_up3['nodata']
-            save_path_up3 = self._features_path_for_image(gid, 'up3')
-            save_path_up3 = os.fspath(save_path_up3)
+            # quant_recon_up3, quantization_up3 = quantize_float01(recon_up3, old_min=-11, old_max=11)
+            # nodata_up3 = quantization_up3['nodata']
+            # save_path_up3 = self._features_path_for_image(gid, 'up3')
+            # save_path_up3 = os.fspath(save_path_up3)
 
             quant_recon_up5, quantization_up5 = quantize_float01(recon_up5, old_min=-11, old_max=11)
             nodata_up5 = quantization_up5['nodata']
@@ -222,7 +229,7 @@ class Evaluator(object):
             aux_height, aux_width = kwimage.load_image_shape(save_path)[0:2]
 
             if self.save_raw_features:
-                aux_height_up3, aux_width_up3 = kwimage.load_image_shape(save_path_up3)[0:2]
+                # aux_height_up3, aux_width_up3 = kwimage.load_image_shape(save_path_up3)[0:2]
                 aux_height_up5, aux_width_up5 = kwimage.load_image_shape(save_path_up5)[0:2]
         else:
             kwimage.imwrite(save_path, quant_recon, backend='gdal', space=None,
@@ -230,9 +237,9 @@ class Evaluator(object):
             aux_height, aux_width = quant_recon.shape[0:2]
 
             if self.save_raw_features:
-                kwimage.imwrite(save_path_up3, quant_recon_up3, backend='gdal', space=None,
-                                nodata=nodata_up3, **self.imwrite_kw)
-                aux_height_up3, aux_width_up3 = quant_recon_up3.shape[0:2]
+                # kwimage.imwrite(save_path_up3, quant_recon_up3, backend='gdal', space=None,
+                #                 nodata=nodata_up3, **self.imwrite_kw)
+                # aux_height_up3, aux_width_up3 = quant_recon_up3.shape[0:2]
 
                 kwimage.imwrite(save_path_up5, quant_recon_up5, backend='gdal', space=None,
                                 nodata=nodata_up5, **self.imwrite_kw)
@@ -255,22 +262,21 @@ class Evaluator(object):
         auxiliary.append(aux)
 
         if self.save_raw_features:
-            aux_up3 = {
-                'file_name': save_path_up3,
-                'height': aux_height,
-                'width': aux_width,
-                'channels': 'hidmat4:64',
-                'warp_aux_to_img': warp_aux_to_img.concise(),
-                'quantization': quantization_up3,
-            }
-
-            auxiliary.append(aux_up3)
+            # aux_up3 = {
+            #     'file_name': save_path_up3,
+            #     'height': aux_height,
+            #     'width': aux_width,
+            #     'channels': 'mat_up3:128',
+            #     'warp_aux_to_img': warp_aux_to_img.concise(),
+            #     'quantization': quantization_up3,
+            # }
+            # auxiliary.append(aux_up3)
 
             aux_up5 = {
                 'file_name': save_path_up5,
                 'height': aux_height,
                 'width': aux_width,
-                'channels': 'hidmat4:128',
+                'channels': 'mat_up5:64',
                 'warp_aux_to_img': warp_aux_to_img.concise(),
                 'quantization': quantization_up5,
             }
@@ -284,12 +290,9 @@ class Evaluator(object):
 
         Dumps images and the final kwcoco file to disk.
         """
-        from watch.utils import util_kwimage
+        # from watch.utils import util_kwimage
         current_gids = []
         previous_gids = []
-
-        self.model = self.model.to(self.device)
-        self.model.eval()
 
         config = self.config
         window_dims = (config['data']['time_steps'], config['data']['image_size'], config['data']['image_size'])  # [t,h,w]
@@ -302,8 +305,17 @@ class Evaluator(object):
             hit_gids = []
             all_gids = list(self.input_coco_dset.index.imgs.keys())
             for gid in all_gids:
+
+                fpaths = []
                 fpath = self._output_path_for_image(gid)
-                if fpath.exists():
+                fpaths.append(fpath)
+                if self.save_raw_features:
+                    save_path_up5 = self._features_path_for_image(gid, 'up5')
+                    # save_path_up3 = self._features_path_for_image(gid, 'up3')
+                    fpaths.append(save_path_up5)
+                    # fpaths.append(save_path_up3)
+
+                if all(p.exists() for p in fpaths):
                     hit_gids.append(gid)
                 else:
                     miss_gids.append(gid)
@@ -335,6 +347,15 @@ class Evaluator(object):
         writer = util_parallel.BlockingJobQueue(max_workers=self.num_workers)
 
         seen = set()
+
+        if len(eval_dataloader):
+            print('read self.checkpoint_fpath = {!r}'.format(self.checkpoint_fpath))
+            checkpoint_state = torch.load(self.checkpoint_fpath)
+            self.model.load_state_dict(checkpoint_state['model'])
+            print(f"loadded model weights from: {self.checkpoint_fpath}")
+            # print(f"Missing keys from loaded model: {missing_keys}, unexpected keys: {unexpexted_keys}")
+            self.model = self.model.to(self.device)
+            self.model.eval()
 
         with torch.no_grad():
             # from functools import partial
@@ -374,25 +395,15 @@ class Evaluator(object):
                 bs, c, h, w = output1.shape
                 output1_to_save = output1.permute(0, 2, 3, 1).cpu().detach().numpy()
                 if self.save_raw_features:
-                    up3_to_save = outputs_layers['up3']
+                    # up3_to_save = outputs_layers['up3']
                     up5_to_save = outputs_layers['up5']
 
-                    # print(output1.shape)
-                    # print(up3_to_save.shape)
-                    # print(up5_to_save.shape)
+                    # up3_to_save = F.interpolate(up3_to_save, size=output1.shape[-2:], mode='bilinear', align_corners=False)
+                    up5_to_save = F.interpolate(up5_to_save, size=output1.shape[-2:], mode='bilinear', align_corners=False)
 
-                    # up3_to_save = up3_to_save.permute(0, 2, 3, 1)
-                    # up5_to_save = up5_to_save.permute(0, 2, 3, 1)
-
-                    up3_to_save = F.upsample(up3_to_save, size=output1.shape[-2:], mode='bilinear', align_corners=True)
-                    up5_to_save = F.upsample(up5_to_save, size=output1.shape[-2:], mode='bilinear', align_corners=True)
-
-                    # print(up3_to_save.shape)
-                    # print(up5_to_save.shape)
-
-                    up3_to_save = up3_to_save.cpu().detach().numpy()
+                    # up3_to_save = up3_to_save.cpu().detach().numpy()
                     up5_to_save = up5_to_save.cpu().detach().numpy()
-                    bs, c_up3, h, w  = up3_to_save.shape
+                    # bs, c_up3, h, w  = up3_to_save.shape
                     bs, c_up5, h, w  = up5_to_save.shape
 
                 # print(f"output1_to_save: {output1_to_save.shape}")
@@ -426,10 +437,10 @@ class Evaluator(object):
                             output = output1_to_save[b, :, :, :]
 
                             if self.save_raw_features:
-                                up3 = up3_to_save[b, :, :, :]
+                                # up3 = up3_to_save[b, :, :, :]
                                 up5 = up5_to_save[b, :, :, :]
 
-                                up3 = np.transpose(up3, (1, 2, 0))
+                                # up3 = np.transpose(up3, (1, 2, 0))
                                 up5 = np.transpose(up5, (1, 2, 0))
 
                             if gid not in self.stitcher_dict.keys():
@@ -439,54 +450,20 @@ class Evaluator(object):
                                     device='numpy')
 
                                 if self.save_raw_features:
-                                    self.stitcher_dict_up3[gid] = kwarray.Stitcher(
-                                        (*outputs['tr'].data[0][b]['space_dims'], c_up3),
-                                        device='numpy')
+                                    # self.stitcher_dict_up3[gid] = kwarray.Stitcher(
+                                    #     (*outputs['tr'].data[0][b]['space_dims'], c_up3),
+                                    #     device='numpy')
                                     self.stitcher_dict_up5[gid] = kwarray.Stitcher(
                                         (*outputs['tr'].data[0][b]['space_dims'], c_up5),
                                         device='numpy')
                             slice_ = outputs['tr'].data[0][b]['space_slice']
 
-                            # print(output.shape[0:2])
-                            # Create output weights to better blend the borders
-                            # when stitching overlapping images.
-                            # weights = kwimage.gaussian_patch(output.shape[0:2])[..., None]
-                            # NOTE: do not change these inplace, these are memoized!
-                            weights = util_kwimage.upweight_center_mask(output.shape[0:2])[..., None]
-                            if self.save_raw_features:
-                                weights_up3 = util_kwimage.upweight_center_mask(output.shape[0:2])[..., None]
-                                weights_up5 = util_kwimage.upweight_center_mask(output.shape[0:2])[..., None]
-
-                            # Handle stitching nan values
-                            if self.save_raw_features:
-                                invalid_up3_mask = np.isnan(up3)
-                                invalid_up5_mask = np.isnan(up5)
-                                if np.any(invalid_up3_mask):
-                                    spatial_valid_mask_up3 = (1 - invalid_up3_mask.any(axis=2, keepdims=True))
-                                    weights_up3 = weights_up3 * spatial_valid_mask_up3
-                                    up3[invalid_up3_mask] = 0
-
-                                if np.any(invalid_up5_mask):
-                                    spatial_valid_mask_up5 = (1 - invalid_up5_mask.any(axis=2, keepdims=True))
-                                    weights_up5 = weights_up5 * spatial_valid_mask_up5
-                                    up5[invalid_up5_mask] = 0
-
-                            invalid_output_mask = np.isnan(output)
-                            if np.any(invalid_output_mask):
-                                spatial_valid_mask = (1 - invalid_output_mask.any(axis=2, keepdims=True))
-                                weights = weights * spatial_valid_mask
-                                output[invalid_output_mask] = 0
-
-                            # print(f"slice_: {slice_}")
-                            # print(f"output weights: {weights.shape}, output: {output.shape}")
-                            # print(f"output weights_up3: {weights_up3.shape}, up3: {up3.shape}")
-                            # print(f"output weights_up5: {weights_up5.shape}, up5: {up5.shape}")
-
-                            self.stitcher_dict[gid].add(slice_, output, weight=weights)
+                            from watch.tasks.fusion.predict import CocoStitchingManager
+                            CocoStitchingManager._stitcher_center_weighted_add(self.stitcher_dict[gid], slice_, output)
 
                             if self.save_raw_features:
-                                self.stitcher_dict_up3[gid].add(slice_, up3, weight=weights_up3)
-                                self.stitcher_dict_up5[gid].add(slice_, up5, weight=weights_up5)
+                                # CocoStitchingManager._stitcher_center_weighted_add(self.stitcher_dict_up3[gid], slice_, up3)
+                                CocoStitchingManager._stitcher_center_weighted_add(self.stitcher_dict_up5[gid], slice_, up5)
 
         writer.wait_until_finished()  # prevents a race condition
 
@@ -648,6 +625,7 @@ def make_predict_config(cmdline=False, **kwargs):
     Configuration for material prediction
     """
     from watch.utils import configargparse_ext
+    from scriptconfig.smartcast import smartcast
     parser = configargparse_ext.ArgumentParser(
         add_config_file_help=False,
         description='Prediction script for the fusion task',
@@ -664,7 +642,7 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument("--feat_dpath", type=str, help='path to dump asset files. If unspecified, choose a path adjacent to pred_dataset')
     # parser.add_argument("--tag", default='change_prob')
     # parser.add_argument("--package_fpath", type=pathlib.Path)
-    parser.add_argument("--export_raw_features", default=False, type=bool, help='exporting raw features before classification head')
+    parser.add_argument("--export_raw_features", default=smartcast, type=int, help='exporting raw features before classification head')
 
     # TODO: use torch packages instead
     parser.add_argument("--checkpoint_fpath", type=str, help='path to checkpoint file')
@@ -676,7 +654,7 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument("--compress", default='DEFLATE', type=str, help="type of gdal compression to use")
     parser.add_argument("--blocksize", default=128, type=str, help="gdal COG blocksize")
 
-    parser.add_argument("--cache", default=False, type=bool, help="if True enables caching of predictions in case of a crash")
+    parser.add_argument("--cache", default=False, type=smartcast, help="if True enables caching of predictions in case of a crash")
     # parser.add_argument("--thresh", type=float, default=0.01)
 
     parser.set_defaults(**kwargs)
@@ -739,7 +717,7 @@ def build_evaler(cmdline=False, **kwargs):
     print('num_workers = {!r}'.format(num_workers))
 
     # Load input kwcoco dataset and prepare the sampler
-    input_coco_dset = kwcoco.CocoDataset.coerce(args.test_dataset)
+    input_coco_dset: kwcoco.CocoDataset = kwcoco.CocoDataset.coerce(args.test_dataset)
 
     # HACK: Filter to remove WV images
     invalid_sensors = {'WV'}
@@ -756,12 +734,6 @@ def build_evaler(cmdline=False, **kwargs):
     # THIS IS WHY WE SAVE METADATA WITH THE MODEL!
     # WE DONT WANT TO HAVE TO FUDGE RECONSTRUCTION IN PRODUCTION!!!
     args.checkpoint_fpath = os.fspath(args.checkpoint_fpath)
-    checkpoint_state = torch.load(args.checkpoint_fpath)
-
-    # num_classes = checkpoint_state['model']['module.outc.conv.weight'].shape[0]
-    # out_features_dim = checkpoint_state['model']['module.features_outc.conv.weight'].shape[0]
-    # config['data']['num_classes'] = num_classes
-    # config['training']['out_features_dim'] = out_features_dim
 
     base_path = '/'.join(str(args.checkpoint_fpath).split('/')[:-1])
     pretrain_config_path = f"{base_path}/config.yaml"
@@ -771,6 +743,7 @@ def build_evaler(cmdline=False, **kwargs):
         # config['training']['model_feats_channels'] = pretrain_config_path['training']['model_feats_channels']
 
     # Load the model
+    print('build model')
     model = build_model(model_name=config['training']['model_name'],
                         backbone=config['training']['backbone'],
                         pretrained=config['training']['pretrained'],
@@ -790,10 +763,6 @@ def build_evaler(cmdline=False, **kwargs):
     print("model has {} trainable parameters".format(num_params))
     model = mounted_model_cls(model)
 
-    model.load_state_dict(checkpoint_state['model'])
-    print(f"loadded model weights from: {args.checkpoint_fpath}")
-    # print(f"Missing keys from loaded model: {missing_keys}, unexpected keys: {unexpexted_keys}")
-
     output_coco_fpath = pathlib.Path(args.pred_dataset)
 
     if args.feat_dpath is None:
@@ -804,12 +773,15 @@ def build_evaler(cmdline=False, **kwargs):
     output_feat_dpath.mkdir(exist_ok=1, parents=True)
     output_coco_fpath.parent.mkdir(exist_ok=1, parents=True)
 
+    print('init output dataset')
     # Create the results dataset as a copy of the test CocoDataset
-    output_coco_dataset = input_coco_dset.copy()
+    output_coco_dataset: kwcoco.CocoDataset = input_coco_dset.copy()
+    print('clear output annots')
     # Remove all annotations in the results copy
     output_coco_dataset.clear_annotations()
+    print('reroot output dset')
     # Change all paths to be absolute paths
-    output_coco_dataset.reroot(absolute=True)
+    output_coco_dataset.reroot(absolute=True, check=False)
     output_coco_dataset.fpath = os.fspath(output_coco_fpath)
 
     imwrite_kw = {
@@ -817,8 +789,10 @@ def build_evaler(cmdline=False, **kwargs):
         'blocksize': args.blocksize,
     }
 
+    print('make evaluator')
     evaler = Evaluator(
         model,
+        checkpoint_fpath=args.checkpoint_fpath,
         input_coco_dset=input_coco_dset,
         output_coco_dataset=output_coco_dataset,
         config=config,

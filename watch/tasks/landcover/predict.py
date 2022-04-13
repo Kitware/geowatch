@@ -165,7 +165,7 @@ if __name__ == '__main__':
     """
     CommandLine:
         export CUDA_VISIBLE_DEVICES="1"
-        DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+        DVC_DPATH=$(smartwatch_dvc)
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
         DZYNE_LANDCOVER_MODEL_FPATH="$DVC_DPATH/models/landcover/visnav_remap_s2_subset.pt"
         python -m watch.tasks.landcover.predict \
@@ -185,8 +185,8 @@ if __name__ == '__main__':
         # Drop3 Test
         # ==========
         export CUDA_VISIBLE_DEVICES="1"
-        DVC_DPATH_SSH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware=ssd)
-        DVC_DPATH_HDD=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc --hardware=hdd)
+        DVC_DPATH_SSH=$(smartwatch_dvc --hardware=ssd)
+        DVC_DPATH_HDD=$(smartwatch_dvc --hardware=hdd)
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH_SSH/Aligned-Drop3-TA1-2022-03-10
         DZYNE_LANDCOVER_MODEL_FPATH="$DVC_DPATH_HDD/models/landcover/visnav_remap_s2_subset.pt"
         python -m watch.tasks.landcover.predict \

@@ -116,7 +116,7 @@ def _build_iarpa_eval_job(track_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath, 
 
 """
 # Note: change backend to tmux if slurm is not installed
-DVC_DPATH=$(WATCH_PREIMPORT=0 python -m watch.cli.find_dvc)
+DVC_DPATH=$(smartwatch_dvc)
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 EXPT_GROUP_CODE=eval3_candidates
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
