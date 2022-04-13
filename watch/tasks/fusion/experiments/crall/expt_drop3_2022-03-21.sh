@@ -139,6 +139,7 @@ schedule-prediction-and-evlauation(){
     dvc push -r aws -R models/fusion/eval3_candidates/eval
 
     # For IARPA metrics
+    dvc unprotect models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json 
     dvc add models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json 
     git commit -am "add iarpa eval from $HOSTNAME"
     git push 
@@ -182,7 +183,7 @@ aggregate-results(){
         --dset_group_key="*Drop3*combo_LM_nowv_vali*" \
         --classes_of_interest "Site Preparation" "Active Construction" \
         --io_workers=10 --show=True  \
-        --embed=True
+        --embed=True --force-iarpa
 }
 
 
@@ -207,6 +208,20 @@ recovery_eval(){
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
     TMUX_GPUS="0,1,2,3"
+
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="$TMUX_GPUS" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest-2.txt" \
+            --test_dataset="$VALI_FPATH" \
+            --enable_pred=0 \
+            --enable_eval=1 \
+            --enable_track=0 \
+            --enable_iarpa_eval=0 \
+            --chip_overlap=0.3 \
+            --tta_time=0 \
+            --tta_fliprot=0 \
+            --bas_thresh=0.1 \
+            --skip_existing=True --backend=tmux --run=0
 
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="$TMUX_GPUS" \

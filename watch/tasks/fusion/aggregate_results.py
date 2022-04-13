@@ -119,9 +119,6 @@ def load_measure(measure_fpath):
             raise IOError(str(measure_fpath))
         measure_fpath = found
 
-    with open(measure_fpath, 'r') as file:
-        info = json.load(file)
-
     HACK_FOR_IARPA = True
     if HACK_FOR_IARPA:
         import glob
@@ -133,12 +130,23 @@ def load_measure(measure_fpath):
             cand = ub.Path(*['pred' if p == 'eval' else p for p in eval_parents.parts])
             iarpa_globs = cand / 'tracking/*/iarpa_eval/scores/merged/summary2.json'
 
-        iarpa_subresults = []
         iarpa_summary_fpaths = list(glob.glob(str(iarpa_globs)))
         if ub.argflag('--force-iarpa'):
             if not len(iarpa_summary_fpaths):
                 raise Exception('forcing-iarpa')
+        # if len(iarpa_summary_fpaths) > 1:
+        #     import xdev
+        #     xdev.embed()
+    else:
+        iarpa_summary_fpaths = []
 
+    with open(measure_fpath, 'r') as file:
+        measure_info = json.load(file)
+
+    measure_info['meta']['measure_fpath'] = measure_fpath
+
+    if iarpa_summary_fpaths:
+        iarpa_subresults = []
         for iarpa_fpath in iarpa_summary_fpaths:
             iarpa_fpath = ub.Path(iarpa_fpath)
             # HACK: need to persist the track params here
@@ -148,13 +156,13 @@ def load_measure(measure_fpath):
                 # parent_info = iarpa_merged.get('parent_info', None)
                 # sc_df = pd.read_json(io.StringIO(json.dumps(iarpa_merged['sc_df'])), orient='table')
                 # sc_cm = pd.read_json(io.StringIO(json.dumps(iarpa_merged['sc_cm'])), orient='table')
-        info['meta']['iarpa_subresults'] = iarpa_subresults
+        measure_info['meta']['iarpa_subresults'] = iarpa_subresults
 
     if True:
         # Hack to ensure fit config is properly serialized
         try:
             predict_meta = None
-            for meta_item in info['meta']['info']:
+            for meta_item in measure_info['meta']['info']:
                 if meta_item['type'] == 'process':
                     if meta_item['properties']['name'] == 'watch.tasks.fusion.predict':
                         predict_meta = meta_item
@@ -206,10 +214,10 @@ def load_measure(measure_fpath):
                 print('Backup measures: {}'.format(measure_fpath))
                 shutil.copy(measure_fpath, ub.augpath(measure_fpath, suffix='.bak'))
                 with open(measure_fpath, 'w') as file:
-                    json.dump(info, file)
+                    json.dump(measure_info, file)
             else:
                 raise Exception
-    return info
+    return measure_info
 
 
 def resolve_cross_machine_path(path, dvc_dpath=None):
@@ -442,7 +450,10 @@ def prepare_results(all_infos, coi_pattern, dvc_dpath=None):
                 # sc_df = pd.read_json(io.StringIO(json.dumps(iarpa_merged['sc_df'])), orient='table')
                 best_bas_rows = pd.read_json(io.StringIO(json.dumps(iarpa_merged['best_bas_rows'])), orient='table')
                 parent_info = iarpa_merged.get('parent_info', None)
-                bas_row = best_bas_rows.loc['merged'].reset_index().iloc[0].to_dict()
+                try:
+                    bas_row = best_bas_rows.loc['merged'].reset_index().iloc[0].to_dict()
+                except Exception:
+                    bas_row = best_bas_rows[best_bas_rows['region_id'].isnull()].reset_index(drop=1).iloc[0].to_dict()
 
                 # bas_f1 = bas_row['F1'].values.ravel()[0]
                 track_kwargs = None
@@ -470,6 +481,11 @@ def prepare_results(all_infos, coi_pattern, dvc_dpath=None):
                 pass
 
         if iarpa_simplified:
+            # TODO: need to expand out these rows for each pred parameter
+            # setting
+            if len(iarpa_simplified) > 1:
+                import xdev
+                xdev.embed()
             BAS_metrics = max(iarpa_simplified, key=lambda x: x['BAS_F1'])
             row.update(BAS_metrics)
         else:
@@ -733,7 +749,7 @@ def shrink_notations(df, drop=0):
 
     if drop:
         drop_cols = set(df.columns) & {
-            'title', 'catname', 'normalize_perframe', 'normalize_inputs',
+            'title', 'normalize_perframe', 'normalize_inputs',
             'train_remote', 'step', 'arch_name', 'package_name',
             'pred_fpath', 'model_fpath',
         }
@@ -1244,7 +1260,7 @@ def main(cmdline=False, **kwargs):
 
     metric_corr = mean_df[metrics_avail].corr()
     print('Metric correleation')
-    print(metric_corr)
+    print(metric_corr.to_string())
 
     if 0:
         import kwplot

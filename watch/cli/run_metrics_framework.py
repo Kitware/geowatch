@@ -361,9 +361,11 @@ def _hack_remerge_data():
         new_json_data, *_ = _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info)
 
         with safer.open(merge_fpath, 'w', temp_file=True) as f:
-            json.dump(json_data, f, indent=4)
+            json.dump(new_json_data, f, indent=4)
 
     dvc.add(summary_metrics)
+    dvc.git_commitpush('Fixup merged iarpa metrics')
+    dvc.push(summary_metrics, remote='aws')
 
 
 def _make_merge_metrics(region_dpaths, anns_root):

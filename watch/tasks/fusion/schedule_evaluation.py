@@ -56,8 +56,8 @@ class ScheduleEvaluationConfig(scfg.Config):
         'enable_eval': scfg.Value(True, help='if False, then evaluation is not run'),
         'enable_pred': scfg.Value(True, help='if False, then prediction is not run'),
 
-        'draw_heatmaps': scfg.Value(0, help='if true draw heatmaps on eval'),
-        'draw_curves': scfg.Value(0, help='if true draw curves on eval'),
+        'draw_heatmaps': scfg.Value(1, help='if true draw heatmaps on eval'),
+        'draw_curves': scfg.Value(1, help='if true draw curves on eval'),
 
         'partition': scfg.Value(None, help='specify slurm partition (slurm backend only)'),
         'mem': scfg.Value(None, help='specify slurm memory per task (slurm backend only)'),
@@ -613,8 +613,11 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 partition=config['partition'], mem=config['mem'])
             task_info['job'] = eval_job
 
+        def _ensure_iterable(inputs):
+            return inputs if ub.iterable(inputs) else [inputs]
+
         tracking_param_basis = {
-            'thresh': config['bas_thresh'],
+            'thresh': _ensure_iterable(config['bas_thresh']),
             # 'thresh': [0.1, 0.2, 0.3],
         }
         for track_cfg in ub.named_product(tracking_param_basis):

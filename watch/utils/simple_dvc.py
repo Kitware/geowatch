@@ -91,20 +91,37 @@ class SimpleDVC():
         return found
 
     def add(self, paths):
-        import dvc.main
+        from dvc import main as dvc_main
         paths = _ensure_iterable(paths)
         dvc_root = self.dvc_root
         rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
         with ChDir(dvc_root):
             dvc_command = ['add'] + rel_paths
-            dvc.main.main(dvc_command)
+            dvc_main.main(dvc_command)
 
         has_autostage = ub.cmd('dvc config core.autostage', cwd=dvc_root, check=True)['out'].strip() == 'true'
         if not has_autostage:
             raise NotImplementedError('Need autostage to complete the git commit')
 
+    def git_commitpush(self, message='', pull_on_fail=True):
+        """
+        TODO: better name here?
+        """
+        dvc_root = self.dvc_root
+        git_info3 = ub.cmd(f'git commit -m "{message}"', verbose=3, check=True, cwd=dvc_root)  # dangerous?
+        assert git_info3['ret'] == 0
+        try:
+            git_info2 = ub.cmd('git push', verbose=3, check=True, cwd=dvc_root)
+        except Exception:
+            if pull_on_fail:
+                git_info2 = ub.cmd('git pull', verbose=3, check=True, cwd=dvc_root)
+                git_info2 = ub.cmd('git push', verbose=3, check=True, cwd=dvc_root)
+                assert git_info2['ret'] == 0
+            else:
+                raise
+
     def push(self, path, remote=None, recursive=False, jobs=None):
-        import dvc.main
+        from dvc import main as dvc_main
         paths = _ensure_iterable(path)
         dvc_root = self.dvc_root
         extra_args = []
@@ -117,16 +134,16 @@ class SimpleDVC():
 
         with ChDir(dvc_root):
             dvc_command = ['push'] + extra_args + [str(p.relative_to(dvc_root)) for p in paths]
-            dvc.main.main(dvc_command)
+            dvc_main.main(dvc_command)
 
     def unprotect(self, path):
-        import dvc.main
+        from dvc import main as dvc_main
         paths = _ensure_iterable(path)
         dvc_root = self.dvc_root
         rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
         with ChDir(dvc_root):
             dvc_command = ['unprotect'] + rel_paths
-            dvc.main.main(dvc_command)
+            dvc_main.main(dvc_command)
 
     def is_tracked(self, path):
         path = ub.Path(path)
