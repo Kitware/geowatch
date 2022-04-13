@@ -456,6 +456,7 @@ def merge_metrics_results(region_dpaths, anns_root, merge_dpath, merge_fpath,
     merge_dpath = ub.Path(merge_dpath)
     # assert merge_dpath not in region_dpaths
     # merge_dpath.delete().ensuredir()
+    merge_dpath.ensuredir()
 
     bas_concat_df, bas_df, sc_df, sc_cm = _make_merge_metrics(region_dpaths, anns_root)
     bas_df.to_pickle(merge_dpath / 'bas_scoreboard_df.pkl')
