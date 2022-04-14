@@ -200,8 +200,37 @@ class TrackFunction(collections.abc.Callable):
                 tracked_subdsets.append(sub_dset)
 
         if not legacy:
+            # Tracks were either updated or added.
+            # In the case they were updated the existing track ids should
+            # be disjoint. All new tracks should not overlap with
+
+            from watch.utils import kwcoco_extensions
+            new_trackids = kwcoco_extensions.TrackidGenerator(None)
+            for sub_dset in ub.ProgIter(tracked_subdsets, desc='Ensure ok tracks'):
+                # Rebuild the index to ensure any hacks are removed.
+                # We may be able to remove this step.
+                # sub_dset._build_index()
+                existing_annots = sub_dset.annots()
+                existing_tids = set(existing_annots.lookup('track_id'))
+                collisions = existing_tids & new_trackids.used_trackids
+                new_trackids.exclude_trackids(existing_tids)
+                if collisions:
+                    old_tid_to_aids = ub.group_items(existing_annots, existing_tids)
+                    print(f'Resolve {len(collisions)} track collisions')
+                    # Change the track ids of any collisions
+                    for old_tid in collisions:
+                        new_tid = next(new_trackids)
+                        # Note: this does not update the index, but we
+                        # are about to clobber it anyway, so it doesnt matter
+                        for aid in old_tid_to_aids[old_tid]:
+                            ann = sub_dset.index.anns[aid]
+                            ann['track_id'] = new_tid
+                        existing_tids.add(new_tid)
+                new_trackids.exclude_trackids(existing_tids)
+
             # Is this safe to do? It would be more efficient
-            coco_dset = kwcoco.CocoDataset.union(*tracked_subdsets, disjoint_tracks=True)
+            coco_dset = kwcoco.CocoDataset.union(
+                *tracked_subdsets, disjoint_tracks=False)
         return coco_dset
 
     @profile
@@ -210,7 +239,7 @@ class TrackFunction(collections.abc.Callable):
         if legacy:
             sub_dset, rest_dset = self.safe_partition(coco_dset, gids, remove=True)
         else:
-            sub_dset, rest_dset = self.safe_partition(coco_dset, gids, remove=False)
+            sub_dset = self.safe_partition(coco_dset, gids, remove=False)
 
         if overwrite:
             sub_dset = self(sub_dset)

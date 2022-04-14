@@ -400,19 +400,20 @@ def convert_kwcoco_to_iarpa(coco_dset,
         >>> SITE_SCHEMA = watch.rc.load_site_model_schema()
         >>> for site in sites:
         >>>     jsonschema.validate(site, schema=SITE_SCHEMA)
-
     """
-    sites = []
-    for vidid, video in coco_dset.index.videos.items():
-        region_id = video.get('name', default_region_id)
+    import xdev
+    with xdev.embed_on_exception_context:
+        sites = []
+        for vidid, video in coco_dset.index.videos.items():
+            region_id = video.get('name', default_region_id)
 
-        sub_dset = coco_dset.subset(gids=coco_dset.index.vidid_to_gids[vidid])
+            sub_dset = coco_dset.subset(gids=coco_dset.index.vidid_to_gids[vidid])
 
-        for site_idx, trackid in enumerate(sub_dset.index.trackid_to_aids):
+            for site_idx, trackid in enumerate(sub_dset.index.trackid_to_aids):
 
-            site = track_to_site(sub_dset, trackid, region_id, site_idx,
-                                 as_summary)
-            sites.append(site)
+                site = track_to_site(sub_dset, trackid, region_id, site_idx,
+                                     as_summary)
+                sites.append(site)
 
     return sites
 
