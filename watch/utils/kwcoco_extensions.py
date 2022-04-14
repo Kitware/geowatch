@@ -1756,7 +1756,7 @@ class TrackidGenerator:
 
     def __next__(self):
         next_id = next(self.generator)
-        while next_id not in self.used_trackids:
+        while next_id in self.used_trackids:
             next_id = next(self.generator)
         return next_id
 
