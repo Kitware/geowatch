@@ -96,6 +96,9 @@ def _build_sc_track_job(pred_fpath, track_out_fpath, thresh=0.2):
         PRED_DATASET=$DVC_DPATH/models/fusion/eval3_sc_candidates/pred/CropDrop3_SC_V006/pred_CropDrop3_SC_V006_epoch=71-step=18431/Cropped-Drop3-TA1-2022-03-10_combo_DL_s2_wv_vali.kwcoco/predcfg_464eb52f/pred.kwcoco.json
         SITE_SUMMARY_GLOB="$DVC_DPATH/annotations/region_models/KR_*.geojson"
 
+        ANNOTATIONS_DPATH=$DVC_DPATH/annotations
+        ls $ANNOTATIONS_DPATH
+
         python -m watch.cli.kwcoco_to_geojson \
             "$PRED_DATASET" \
             --default_track_fn class_heatmaps \
@@ -104,6 +107,15 @@ def _build_sc_track_job(pred_fpath, track_out_fpath, thresh=0.2):
             --out_dir ./tmp/site_models \
             --out_fpath ./tmp/site_models_stamp.json
 
+        python -m watch.cli.run_metrics_framework \
+            --merge \
+            --gt_dpath "$ANNOTATIONS_DPATH" \
+            --tmp_dir "./tmp/iarpa/tmp" \
+            --out_dir "./tmp/iarpa/scores" \
+            --name "mytest" \
+            --merge_fpath "./tmp/iarpa/merged.json" \
+            --inputs_are_paths \
+            ./tmp/site_models_stamp.json
 
     Args:
         pred_fpath (PathLike): path to predicted kwcoco file

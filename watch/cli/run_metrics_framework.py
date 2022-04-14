@@ -622,6 +622,11 @@ def main(args):
         non-persistant directory
         ''')
 
+    parser.add_argument('--enable_viz',
+                        help='''
+        If true, enables iarpa visualizations
+        ''')
+
     parser.add_argument('--name', default='unknown', help=(
         'Short name for the algorithm used to generate the model'))
 
@@ -788,15 +793,20 @@ def main(args):
         if not args.use_cache:
             cache_dpath = 'None'
 
-        disable_viz_flags = [
-            # '--no-viz-region',  # we do want this enabled
-            '--no-viz-slices',
-            '--no-viz-detection-table',
-            '--no-viz-comparison-table',
-            '--no-viz-associate-metrics',
-            '--no-viz-activity-metrics',
-        ]
-        disable_viz_flags_str = ' '.join(disable_viz_flags)
+        from scriptconfig.smartcast import smartcast
+        if smartcast(args.enable_viz):
+            viz_flags = [
+                # '--no-viz-region',  # we do want this enabled
+                '--no-viz-slices',
+                '--no-viz-detection-table',
+                '--no-viz-comparison-table',
+                '--no-viz-associate-metrics',
+                '--no-viz-activity-metrics',
+            ]
+        else:
+            viz_flags = []
+
+        viz_flags = ' '.join(viz_flags)
 
         # run metrics framework
         import shlex
@@ -811,7 +821,7 @@ def main(args):
                 --output_dir {out_dir if args.out_dir else None} \
                 --cache_dir {cache_dpath} \
                 --name {shlex.quote(name)} \
-                {disable_viz_flags_str}
+                {viz_flags}
             ''')
         (out_dir / 'invocation.sh').write_text(cmd)
 
