@@ -322,10 +322,15 @@ def site_feature(coco_dset, region_id, site_id, trackid, gids, features, as_summ
     '''
     Feature containing metadata about the site
     '''
-    geometry = _combined_geometries(
-        [_single_geometry(feat['geometry']) for feat in features])
 
-    centroid_latlon = np.array(geometry.centroid.coords)[0][::-1]
+    geom_list = [_single_geometry(feat['geometry']) for feat in features]
+    geometry = _combined_geometries(geom_list)
+
+    centroid_coords = np.array(geometry.centroid.coords)
+    if centroid_coords.size == 0:
+        raise AssertionError('Empty geometry. What happened?')
+
+    centroid_latlon = centroid_coords[0][::-1]
 
     # these are strings, but sorting should be correct in isoformat
     dates = sorted(
@@ -552,6 +557,8 @@ def add_site_summary_to_kwcoco(possible_summaries,
     print('warping site boundaries to pxl space...')
     cid = coco_dset.ensure_category(watch.heuristics.SITE_SUMMARY_CNAME)
     # new_trackids = watch.utils.kwcoco_extensions.TrackidGenerator(coco_dset)
+    import xdev
+    xdev.embed()
 
     for region_id, site_summary in site_summaries:
 
@@ -568,45 +575,49 @@ def add_site_summary_to_kwcoco(possible_summaries,
                 break
         if vidid is None:
             print(f'failed to match site_summary {site_id}')
-            continue
+        else:
+            # track_id = next(new_trackids)
+            track_id = site_id
 
-        # track_id = next(new_trackids)
-        track_id = site_id
+            # get relevant images
+            images = coco_dset.images(vidid=vidid)
+            start_date = dateutil.parser.parse(
+                site_summary['properties']['start_date']).date()
+            end_date = dateutil.parser.parse(
+                site_summary['properties']['end_date']).date()
+            xdev.fix_embed_globals()
+            flags = [
+                start_date <= dateutil.parser.parse(date_str).date() <= end_date
+                for date_str in images.lookup('date_captured')
+            ]
+            images = images.compress(flags)
+            if track_id in images.get('track_id', None):
+                print(f'warning: site_summary {track_id} already in dset!')
 
-        # get relevant images
-        images = coco_dset.images(vidid=vidid)
-        start_date = dateutil.parser.parse(
-            site_summary['properties']['start_date']).date()
-        end_date = dateutil.parser.parse(
-            site_summary['properties']['end_date']).date()
-        flags = [
-            start_date <= dateutil.parser.parse(date_str).date() <= end_date
-            for date_str in images.lookup('date_captured')
-        ]
-        images = images.compress(flags)
-        if track_id in images.get('track_id', None):
-            print(f'warning: site_summary {track_id} already in dset!')
-
-        # apply site boundary as polygons
-        geo_poly = kwimage.MultiPolygon.from_geojson(site_summary['geometry'])
-        for img in images.objs:
-            if 'utm_crs_info' in img:
-                utm_epsg_code = img['utm_crs_info']['auth'][1]
-            else:
-                utm_epsg_code = 4326
-            transform_utm_to_pxl = kwimage.Affine.coerce(
-                img.get('wld_to_pxl', {'scale': 1}))
-            img_poly = (
-                geo_poly.swap_axes()  # TODO bookkeep this convention
-                .warp(transform_wgs84_to(utm_epsg_code)).warp(
-                    transform_utm_to_pxl))
-            bbox = list(img_poly.bounding_box().to_coco())[0]
-            coco_dset.add_annotation(image_id=img['id'],
-                                     category_id=cid,
-                                     bbox=bbox,
-                                     segmentation=img_poly,
-                                     segmentation_geos=geo_poly,
-                                     track_id=track_id)
+            # apply site boundary as polygons
+            poly_crs84_geojson = site_summary['geometry']
+            # geo_poly = kwimage.MultiPolygon.from_geojson()
+            for img in images.objs:
+                # if 'utm_crs_info' in img:
+                #     utm_epsg_code = img['utm_crs_info']['auth'][1]
+                # else:
+                #     utm_epsg_code = 4326
+                # transform_utm_to_pxl = kwimage.Affine.coerce(
+                #     img.get('wld_to_pxl', {'scale': 1}))
+                # img_poly = (
+                #     geo_poly.swap_axes()  # TODO bookkeep this convention
+                #     .warp(transform_wgs84_to(utm_epsg_code)).warp(
+                #         transform_utm_to_pxl))
+                # bbox = list(img_poly.bounding_box().to_coco())[0]
+                # Add annotations in CRS84 geo-space
+                coco_dset.add_annotation(
+                    image_id=img['id'],
+                    category_id=cid,
+                    # bbox=bbox,
+                    # segmentation=img_poly,
+                    segmentation_geos=poly_crs84_geojson,
+                    track_id=track_id
+                )
 
     return coco_dset
 
