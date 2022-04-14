@@ -17,23 +17,22 @@ References:
 """
 import argparse
 import datetime
-import dateutil.parser
-import geojson
 import itertools
 import json
+import os
+import sys
+import warnings
+from collections import defaultdict
+from typing import Dict, List, Tuple, Union
+
+import dateutil.parser
+import geojson
 import jsonschema
 import kwcoco
 import numpy as np
-import os
 import shapely
 import shapely.ops
-import sys
 import ubelt as ub
-import warnings
-import watch
-from collections import defaultdict
-from kwcoco.coco_image import CocoImage
-from typing import Union, List, Tuple, Dict
 # import colored_traceback.auto  # noqa
 
 try:
@@ -82,7 +81,7 @@ def geojson_feature(anns, coco_dset, with_properties=True):
         return _single_geometry(seg_geo)
 
     @profile
-    def _per_image_properties(coco_img: CocoImage):
+    def _per_image_properties(coco_img: kwcoco.CocoImage):
         '''
         Properties defined per-img instead of per-ann, to reduce duplicate
         computation.
