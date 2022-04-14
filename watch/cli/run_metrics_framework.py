@@ -807,22 +807,34 @@ def main(args):
             ]
 
         viz_flags = ' '.join(viz_flags)
-
-        # run metrics framework
         import shlex
-        cmd = ub.codeblock(fr'''
-            {virtualenv_cmd} &&
-            python -m iarpa_smart_metrics.run_evaluation \
-                --roi {region_id} \
-                --gt_dir {gt_dpath / 'site_models'} \
-                --rm_dir {gt_dpath / 'region_models'} \
-                --sm_dir {site_sub_dpath} \
-                --image_dir {image_dpath} \
-                --output_dir {out_dir if args.out_dir else None} \
-                --cache_dir {cache_dpath} \
-                --name {shlex.quote(name)} \
-                {viz_flags}
-            ''')
+        run_eval_command = [
+            'python', '-m', 'iarpa_smart_metrics.run_evaluation',
+            '--roi', region_id,
+            '--gt_dir', gt_dpath / 'site_models',
+            '--rm_dir', gt_dpath / 'region_models',
+            '--sm_dir', site_sub_dpath,
+            '--image_dir', image_dpath,
+            '--output_dir', out_dir if args.out_dir else 'None',
+            '--cache_dir', cache_dpath,
+            '--name', shlex.quote(name)
+        ]
+        run_eval_command += viz_flags
+        # run metrics framework
+        cmd = '{virtualenv_cmd} &&' + ' '.join(run_eval_command)
+        # ub.codeblock(fr'''
+        #     {virtualenv_cmd} &&
+        #     python -m iarpa_smart_metrics.run_evaluation \
+        #         --roi {region_id} \
+        #         --gt_dir {gt_dpath / 'site_models'} \
+        #         --rm_dir {gt_dpath / 'region_models'} \
+        #         --sm_dir {site_sub_dpath} \
+        #         --image_dir {image_dpath} \
+        #         --output_dir {out_dir if args.out_dir else None} \
+        #         --cache_dir {cache_dpath} \
+        #         --name {shlex.quote(name)} \
+        #         {viz_flags}
+        #     ''')
         (out_dir / 'invocation.sh').write_text(cmd)
 
         try:
