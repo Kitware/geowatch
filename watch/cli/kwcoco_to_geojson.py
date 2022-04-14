@@ -257,115 +257,120 @@ def track_to_site(coco_dset,
         site_id = trackid
         region_id = '_'.join(site_id.split('_')[:-1])
 
-    def predict_phase_changes():
-        '''
-        Set predicted_phase_transition and predicted_phase_transition_date.
+    if as_summary:
+        return site_feature(coco_dset, region_id, site_id, trackid, gids, features, as_summary)
+    else:
+        _site_feat = site_feature(coco_dset, region_id, site_id, trackid, gids, features, as_summary)
+        return geojson.FeatureCollection([_site_feat] + features)
 
-        This should only kick in when the site does not end before the current
-        day (latest available image). See tracking.normalize.normalize_phases
-        for what happens if the site has ended.
 
-        https://smartgitlab.com/TE/standards/-/wikis/Site-Model-Specification
-        '''
-        all_phases = [
-            feat['properties']['current_phase'].split(sep) for feat in features
-        ]
+def predict_phase_changes(site_id, features):
+    '''
+    Set predicted_phase_transition and predicted_phase_transition_date.
 
-        tomorrow = (dateutil.parser.parse(
-            features[-1]['properties']['observation_date']) +
-                    datetime.timedelta(days=1)).isoformat()
+    This should only kick in when the site does not end before the current
+    day (latest available image). See tracking.normalize.normalize_phases
+    for what happens if the site has ended.
 
-        def transition_date_from(phase):
-            for feat, phases in zip(reversed(features), reversed(all_phases)):
-                if phase in phases:
-                    return (dateutil.parser.parse(
-                        feat['properties']['observation_date']) +
-                            datetime.timedelta(
-                                int(feat['properties']['misc_info']
-                                    ['phase_transition_days'][phases.index(
-                                        phase)]))).isoformat()
-            print(f'warning: {site_id=} is missing {phase=}')
-            return tomorrow
+    https://smartgitlab.com/TE/standards/-/wikis/Site-Model-Specification
+    '''
+    all_phases = [
+        feat['properties']['current_phase'].split(sep) for feat in features
+    ]
 
-        all_phases_set = set(itertools.chain.from_iterable(all_phases))
+    tomorrow = (dateutil.parser.parse(
+        features[-1]['properties']['observation_date']) +
+                datetime.timedelta(days=1)).isoformat()
 
-        if 'Post Construction' in all_phases_set:
-            return {}
-        elif 'Active Construction' in all_phases_set:
-            return {
-                'predicted_phase_transition':
-                'Post Construction',
-                'predicted_phase_transition_date':
-                transition_date_from('Active Construction')
-            }
-        elif 'Site Preparation' in all_phases_set:
-            return {
-                'predicted_phase_transition':
-                'Active Construction',
-                'predicted_phase_transition_date':
-                transition_date_from('Site Preparation')
-            }
-        else:
-            # raise ValueError(f'missing phases: {site_id=} {all_phases_set=}')
-            print(f'missing phases: {site_id=} {all_phases_set=}')
-            return {}
+    def transition_date_from(phase):
+        for feat, phases in zip(reversed(features), reversed(all_phases)):
+            if phase in phases:
+                return (dateutil.parser.parse(
+                    feat['properties']['observation_date']) +
+                        datetime.timedelta(
+                            int(feat['properties']['misc_info']
+                                ['phase_transition_days'][phases.index(
+                                    phase)]))).isoformat()
+        print(f'warning: {site_id=} is missing {phase=}')
+        return tomorrow
 
-    def site_feature():
-        '''
-        Feature containing metadata about the site
-        '''
-        geometry = _combined_geometries(
-            [_single_geometry(feat['geometry']) for feat in features])
+    all_phases_set = set(itertools.chain.from_iterable(all_phases))
 
-        centroid_latlon = np.array(geometry.centroid.coords)[0][::-1]
-
-        # these are strings, but sorting should be correct in isoformat
-        dates = sorted(
-            map(_normalize_date,
-                coco_dset.images(set(gids)).lookup('date_captured')))
-
-        # https://smartgitlab.com/TE/annotations/-/wikis/Annotation-Status-Types#for-site-models-generated-by-performersalgorithms
-        # system_confirmed, system_rejected, or system_proposed
-        # TODO system_proposed pre val-net
-        status = set(
-            coco_dset.annots(trackid=trackid).get('status',
-                                                  'system_confirmed'))
-        assert len(status) == 1, f'inconsistent {status=} for {trackid=}'
-        status = status.pop()
-
-        properties = {
-            'site_id': site_id,
-            'version': watch.__version__,
-            'mgrs': MGRS().toMGRS(*centroid_latlon, MGRSPrecision=0),
-            'status': status,
-            'model_content': 'proposed',
-            'score': 1.0,  # TODO does this matter?
-            'start_date': min(dates),
-            'end_date': max(dates),
-            'originator': 'kit',
-            'validated': 'False'
+    if 'Post Construction' in all_phases_set:
+        return {}
+    elif 'Active Construction' in all_phases_set:
+        return {
+            'predicted_phase_transition':
+            'Post Construction',
+            'predicted_phase_transition_date':
+            transition_date_from('Active Construction')
         }
+    elif 'Site Preparation' in all_phases_set:
+        return {
+            'predicted_phase_transition':
+            'Active Construction',
+            'predicted_phase_transition_date':
+            transition_date_from('Site Preparation')
+        }
+    else:
+        # raise ValueError(f'missing phases: {site_id=} {all_phases_set=}')
+        print(f'missing phases: {site_id=} {all_phases_set=}')
+        return {}
 
-        if as_summary:
-            properties.update(
-                **{
-                    'type': 'site_summary',
-                    'region_id': region_id,  # HACK to passthrough to main
-                })
-        else:
-            properties.update(
-                **{
-                    'type': 'site',
-                    'region_id': region_id,
-                    **predict_phase_changes(), 'misc_info': {}
-                })
 
-        return geojson.Feature(geometry=geometry, properties=properties)
+def site_feature(coco_dset, region_id, site_id, trackid, gids, features, as_summary):
+    '''
+    Feature containing metadata about the site
+    '''
+    geometry = _combined_geometries(
+        [_single_geometry(feat['geometry']) for feat in features])
+
+    centroid_latlon = np.array(geometry.centroid.coords)[0][::-1]
+
+    # these are strings, but sorting should be correct in isoformat
+    dates = sorted(
+        map(_normalize_date,
+            coco_dset.images(set(gids)).lookup('date_captured')))
+
+    # https://smartgitlab.com/TE/annotations/-/wikis/Annotation-Status-Types#for-site-models-generated-by-performersalgorithms
+    # system_confirmed, system_rejected, or system_proposed
+    # TODO system_proposed pre val-net
+    status = set(
+        coco_dset.annots(trackid=trackid).get('status',
+                                              'system_confirmed'))
+    assert len(status) == 1, f'inconsistent {status=} for {trackid=}'
+    status = status.pop()
+
+    PERFORMER_ID = 'kit'
+
+    properties = {
+        'site_id': site_id,
+        'version': watch.__version__,
+        'mgrs': MGRS().toMGRS(*centroid_latlon, MGRSPrecision=0),
+        'status': status,
+        'model_content': 'proposed',
+        'score': 1.0,  # TODO does this matter?
+        'start_date': min(dates),
+        'end_date': max(dates),
+        'originator': PERFORMER_ID,
+        'validated': 'False'
+    }
 
     if as_summary:
-        return site_feature()
+        properties.update(
+            **{
+                'type': 'site_summary',
+                'region_id': region_id,  # HACK to passthrough to main
+            })
     else:
-        return geojson.FeatureCollection([site_feature()] + features)
+        properties.update(
+            **{
+                'type': 'site',
+                'region_id': region_id,
+                **predict_phase_changes(site_id, features), 'misc_info': {}
+            })
+
+    return geojson.Feature(geometry=geometry, properties=properties)
 
 
 def convert_kwcoco_to_iarpa(coco_dset,
@@ -406,11 +411,10 @@ def convert_kwcoco_to_iarpa(coco_dset,
         sites = []
         for vidid, video in coco_dset.index.videos.items():
             region_id = video.get('name', default_region_id)
-
-            sub_dset = coco_dset.subset(gids=coco_dset.index.vidid_to_gids[vidid])
+            gids = coco_dset.index.vidid_to_gids[vidid]
+            sub_dset = coco_dset.subset(gids=gids)
 
             for site_idx, trackid in enumerate(sub_dset.index.trackid_to_aids):
-
                 site = track_to_site(sub_dset, trackid, region_id, site_idx,
                                      as_summary)
                 sites.append(site)
@@ -610,7 +614,8 @@ def add_site_summary_to_kwcoco(possible_summaries,
 @profile
 def create_region_feature(region_id, site_summaries):
     geometry = _combined_geometries([
-        _single_geometry(summary['geometry']) for summary in site_summaries
+        _single_geometry(summary['geometry'])
+        for summary in site_summaries
     ]).envelope
     start_date = min(summary['properties']['start_date']
                      for summary in site_summaries)
