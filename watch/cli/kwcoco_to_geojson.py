@@ -545,13 +545,13 @@ def add_site_summary_to_kwcoco(possible_summaries,
 
     # TODO use pyproj instead, make sure it works with kwimage.warp
 
-    @ub.memoize
-    def transform_wgs84_to(target_epsg_code):
-        wgs84 = osr.SpatialReference()
-        wgs84.ImportFromEPSG(4326)  # '+proj=longlat +datum=WGS84 +no_defs'
-        target = osr.SpatialReference()
-        target.ImportFromEPSG(int(target_epsg_code))
-        return osr.CoordinateTransformation(wgs84, target)
+    # @ub.memoize
+    # def transform_wgs84_to(target_epsg_code):
+    #     wgs84 = osr.SpatialReference()
+    #     wgs84.ImportFromEPSG(4326)  # '+proj=longlat +datum=WGS84 +no_defs'
+    #     target = osr.SpatialReference()
+    #     target.ImportFromEPSG(int(target_epsg_code))
+    #     return osr.CoordinateTransformation(wgs84, target)
 
     # write site summaries
     print('warping site boundaries to pxl space...')
@@ -561,7 +561,6 @@ def add_site_summary_to_kwcoco(possible_summaries,
     xdev.embed()
 
     for region_id, site_summary in site_summaries:
-
         # lookup possible places to put this site_summary
         vidid = None
         site_id = site_summary['properties']['site_id']
@@ -618,6 +617,12 @@ def add_site_summary_to_kwcoco(possible_summaries,
                     segmentation_geos=poly_crs84_geojson,
                     track_id=track_id
                 )
+
+    # TODO: we can be more efficient if we already have the transform data
+    # computed. We need to pass it in here, and prevent it from making
+    # more calls to geotiff_metadata
+    from watch.utils import kwcoco_extensions
+    kwcoco_extensions.warp_annot_segmentations_from_geos(coco_dset)
 
     return coco_dset
 
