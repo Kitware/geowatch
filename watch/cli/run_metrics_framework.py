@@ -384,7 +384,7 @@ def _make_merge_metrics(region_dpaths, anns_root):
     return bas_concat_df, bas_df, sc_df, sc_cm
 
 
-def _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info):
+def _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info, info):
     # Find best bas row in combined results
 
     min_rho, max_rho = 0.5, 0.5
@@ -427,16 +427,18 @@ def _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info):
         'temporal FAR', 'images FAR'], axis=1)
 
     json_data = {}
+    # TODO: parent info should probably belong to info itself
+    json_data['info'] = info
+    json_data['parent_info'] = parent_info
     json_data['best_bas_rows'] = json.loads(best_bas_rows.to_json(orient='table', indent=2))
     json_data['sc_cm'] = json.loads(sc_cm.to_json(orient='table', indent=2))
     json_data['sc_df'] = json.loads(sc_df.to_json(orient='table', indent=2))
-    json_data['parent_info'] = parent_info
 
     return json_data, concise_best_bas_rows, best_bas_row_
 
 
 def merge_metrics_results(region_dpaths, anns_root, merge_dpath, merge_fpath,
-                          parent_info):
+                          parent_info, info):
     '''
     Merge metrics results from multiple regions.
 
@@ -465,7 +467,7 @@ def merge_metrics_results(region_dpaths, anns_root, merge_dpath, merge_fpath,
     sc_df.to_pickle(merge_dpath / 'sc_activity_df.pkl')
     sc_cm.to_pickle(merge_dpath / 'sc_confusion_df.pkl')
 
-    json_data, concise_best_bas_rows, best_bas_row = _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info)
+    json_data, concise_best_bas_rows, best_bas_row = _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info, info)
     print(concise_best_bas_rows.to_string())
 
     # write summary in readable form
@@ -655,8 +657,31 @@ def main(args):
             'in your virtualenv')
     assert METRICS_VERSION >= version.Version('0.2.0')
 
-    parent_info = []
+    # Record information about this process
+    info = []
+    from kwcoco.util import util_json
+    import socket
+    # Args will be serailized in kwcoco, so make sure it can be coerced to json
+    jsonified_args = util_json.ensure_json_serializable(args.__dict__)
+    walker = ub.IndexableWalker(jsonified_args)
+    for problem in util_json.find_json_unserializable(jsonified_args):
+        bad_data = problem['data']
+        walker[problem['loc']] = str(bad_data)
+    start_timestamp = ub.timestamp()
+    info.append({
+        'type': 'process',
+        'properties': {
+            'name': 'watch.cli.run_metrics_framework',
+            'args': jsonified_args,
+            'hostname': socket.gethostname(),
+            'cwd': os.getcwd(),
+            'userhome': ub.userhome(),
+            'iarpa_smart_metrics_version': iarpa_smart_metrics.__version__,
+            'timestamp': start_timestamp,
+        }
+    })
 
+    parent_info = []
     for site_data in args.sites:
         if args.inputs_are_paths:
             in_fpath = ub.Path(site_data)
@@ -807,7 +832,7 @@ def main(args):
         else:
             merge_fpath = ub.Path(args.merge_fpath)
         merge_metrics_results(out_dirs, gt_dpath, merge_dpath, merge_fpath,
-                              parent_info)[0]
+                              parent_info, info)
         # print('wrote {!r}'.format(summary_path2))
 
 
