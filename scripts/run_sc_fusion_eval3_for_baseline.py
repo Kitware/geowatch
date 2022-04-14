@@ -244,7 +244,10 @@ def run_sc_fusion_for_baseline(
                     '--package_fpath', sc_fusion_model_path,
                     '--pred_dataset', sc_fusion_kwcoco_path,
                     '--num_workers', '0' if force_zero_num_workers else str(jobs),  # noqa: 501
-                    '--batch_size', '8'], check=True)
+                    '--batch_size', '8',
+                    '--tta_time', '1',
+                    '--tta_fliprot', '0',
+                    '--chip_overlap', '0.3'], check=True)
 
     # 4. Compute tracks (SC)
     # Referencing BAS fusion KWCOCO computed in previous step of workflow

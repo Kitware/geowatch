@@ -160,7 +160,7 @@ def run_stac_to_cropped_kwcoco(input_path,
                     '--src', ta1_kwcoco_path,
                     '--dst', ta1_sc_kwcoco_path,
                     '--select_images',
-                    '.sensor_coarse == "WV"'],
+                    '.sensor_coarse == "WV" or .sensor_coarse == "S2"'],
                    check=True)
 
     # 4. Crop ingress KWCOCO dataset to region for BAS
