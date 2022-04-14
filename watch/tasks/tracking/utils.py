@@ -187,20 +187,30 @@ class TrackFunction(collections.abc.Callable):
         '''
         Main entrypoint for this class.
         '''
-        # tracked_subdsets = []
+        legacy = False
+
+        tracked_subdsets = []
         vid_gids = coco_dset.index.vidid_to_gids.values()
         total = len(coco_dset.index.vidid_to_gids)
         for gids in ub.ProgIter(vid_gids, total=total, desc='apply_per_video', verbose=3):
-            coco_dset = self.safe_apply(coco_dset, gids, overwrite)
-            # tracked_subdsets.append(sub_dset)
-        # Is this safe to do? It would be more efficient
-        # coco_dset = kwcoco.CocoDataset.union(*tracked_subdsets, disjoint_tracks=True)
+            sub_dset = self.safe_apply(coco_dset, gids, overwrite, legacy=legacy)
+            if legacy:
+                coco_dset = sub_dset
+            else:
+                tracked_subdsets.append(sub_dset)
+
+        if not legacy:
+            # Is this safe to do? It would be more efficient
+            coco_dset = kwcoco.CocoDataset.union(*tracked_subdsets, disjoint_tracks=True)
         return coco_dset
 
     @profile
-    def safe_apply(self, coco_dset, gids, overwrite):
+    def safe_apply(self, coco_dset, gids, overwrite, legacy=True):
 
-        sub_dset, rest_dset = self.safe_partition(coco_dset, gids, remove=True)
+        if legacy:
+            sub_dset, rest_dset = self.safe_partition(coco_dset, gids, remove=True)
+        else:
+            sub_dset, rest_dset = self.safe_partition(coco_dset, gids, remove=False)
 
         if overwrite:
             sub_dset = self(sub_dset)
@@ -223,7 +233,10 @@ class TrackFunction(collections.abc.Callable):
 
         # TODO: why is this assert here?
         assert None not in sub_dset.annots().lookup('track_id', None)
-        return self.safe_union(rest_dset, sub_dset)
+        if legacy:
+            return self.safe_union(rest_dset, sub_dset)
+        else:
+            return sub_dset
 
     @staticmethod
     @profile
