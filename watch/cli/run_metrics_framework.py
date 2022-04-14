@@ -821,7 +821,7 @@ def main(args):
         ]
         run_eval_command += viz_flags
         # run metrics framework
-        cmd = '{virtualenv_cmd} &&' + ' '.join(list(map(str, run_eval_command)))
+        cmd = f'{virtualenv_cmd} &&' + ' '.join(list(map(str, run_eval_command)))
         # ub.codeblock(fr'''
         #     {virtualenv_cmd} &&
         #     python -m iarpa_smart_metrics.run_evaluation \
