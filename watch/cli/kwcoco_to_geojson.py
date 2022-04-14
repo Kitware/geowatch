@@ -675,6 +675,13 @@ def main(args):
         If set, write the normalized and tracked kwcoco in_file back to disk
         so you can skip the --track_fn next time this is run on it.
         '''))
+    convenience_args.add_argument('--polygon_fn',
+                                  default='heatmaps_to_polys',
+                                  help=ub.paragraph('''
+        Function to convert heatmaps to polygons. Default is 'heatmaps_to_polys' which
+        aggregates all heatmaps. Use 'heatmaps_to_polys_moving_window' to use a moving window
+        aggregation.
+        '''))
     track_args = parser.add_argument_group(
         'track', '--track_fn and --default_track_fn are mutually exclusive.')
     track = track_args.add_mutually_exclusive_group()
@@ -855,6 +862,7 @@ def main(args):
 
     coco_dset = watch.tasks.tracking.normalize.normalize(coco_dset,
                                                          track_fn=track_fn,
+                                                         polygon_fn=args.polygon_fn,
                                                          overwrite=False,
                                                          gt_dset=gt_dset,
                                                          **track_kwargs)

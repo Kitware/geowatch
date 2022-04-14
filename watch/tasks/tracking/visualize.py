@@ -7,7 +7,7 @@ import seaborn as sns
 import shapely.ops
 import pandas as pd
 from collections import defaultdict
-from watch.tasks.tracking.utils import pop_tracks, build_heatmaps
+from watch.tasks.tracking.utils import pop_tracks
 from watch.heuristics import CNAMES_DCT
 from watch.tasks.tracking.from_heatmap import mean_normalized  # NOQA
 
@@ -120,6 +120,7 @@ def visualize_videos(pred_dset,
         gids = pred_dset.index.vidid_to_gids[vidid]
 
         # save average heatmaps
+        """
         _heatmaps = build_heatmaps(
             pred_dset, gids, {'fg': 'salient'}, skipped='interpolate')['fg']
 
@@ -129,6 +130,7 @@ def visualize_videos(pred_dset,
         plt.colorbar()
         plt.savefig(os.path.join(out_dir, 'average_heatmap_' + str(vidid) + '.jpg'))
         plt.close()
+        """
 
         # visualize pred and GT polygons
         shape = (pred_dset.index.videos[vidid]['height'], pred_dset.index.videos[vidid]['width'])
@@ -328,7 +330,7 @@ def visualize_videos(pred_dset,
             plt.plot(track_labels[tid])
             plt.xlabel('images')
             plt.ylabel('class ID')
-            fname = os.path.join(out_dir_track, str(tid) + '_track.jpg')
+            fname = os.path.join(out_dir_track,   str(vidid) + '_' + str(tid) + '_track.jpg')
             plt.savefig(fname)
             plt.close()
 
