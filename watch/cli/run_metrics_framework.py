@@ -805,8 +805,6 @@ def main(args):
                 '--no-viz-associate-metrics',
                 '--no-viz-activity-metrics',
             ]
-
-        viz_flags = ' '.join(viz_flags)
         import shlex
         run_eval_command = [
             'python', '-m', 'iarpa_smart_metrics.run_evaluation',

@@ -200,7 +200,6 @@ class TrackFunction(collections.abc.Callable):
                 tracked_subdsets.append(sub_dset)
 
         if not legacy:
-            
             # Tracks were either updated or added.
             # In the case they were updated the existing track ids should
             # be disjoint. All new tracks should not overlap with

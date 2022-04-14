@@ -201,21 +201,22 @@ def _build_iarpa_eval_job(track_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath, 
     return iarpa_eval_info
 
 
-"""
+r"""
 # Note: change backend to tmux if slurm is not installed
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(smartwatch_dvc --hardware=hdd)
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
-EXPT_GROUP_CODE=eval3_candidates
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+
+
 python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-        --gpus="0,1,2,3,4,5,6,7,8" \
-        --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
+        --gpus="0" \
+        --model_globstr="$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt" \
         --test_dataset="$VALI_FPATH" \
-        --skip_existing=True \
+        --skip_existing=0 \
         --enable_pred=0 \
         --enable_eval=0 \
         --enable_track=1 \
         --enable_iarpa_eval=1 \
-        --backend=tmux --run=1
+        --backend=serial --run=0
 """
