@@ -299,6 +299,7 @@ def time_aggregated_polys(sub_dset,
                           norm_ord=1,
                           agg_fn='probs',
                           polygon_fn='heatmaps_to_polys',
+                          moving_window_size=150,
                           thresh_hysteresis=None):
     '''
     Track function.
@@ -373,11 +374,11 @@ def time_aggregated_polys(sub_dset,
     if use_boundaries:
         tracks_polys = tracks_polys_bounds(
             sub_dset, key, agg_fn, thresh, morph_kernel, thresh_hysteresis,
-            norm_ord, polygon_fn)
+            norm_ord, polygon_fn, moving_window_size)
     else:
         tracks_polys = tracks_polys_nobounds(
             sub_dset, key, agg_fn, thresh, morph_kernel, thresh_hysteresis,
-            norm_ord, polygon_fn)
+            norm_ord, polygon_fn, moving_window_size)
 
     print('time aggregation: number of polygons: ', len(tracks_polys))
 
@@ -420,7 +421,7 @@ def time_aggregated_polys(sub_dset,
 
 
 def _heatmaps_to_polys_moving_window(heatmaps, bounds, agg_fn, thresh, morph_kernel,
-                                     thresh_hysteresis, norm_ord, window_size=150):
+                                     thresh_hysteresis, norm_ord, moving_window_size=150):
     '''
     Use parameters: agg_fn, thresh, morph_kernel, thresh_hysteresis, norm_ord
     '''
@@ -473,7 +474,7 @@ def _heatmaps_to_polys_moving_window(heatmaps, bounds, agg_fn, thresh, morph_ker
 
     # calculate number of moving-window steps, based on window_size and number of heatmaps
     total_n = len(heatmaps)
-    final_size = int(total_n // np.ceil((total_n / window_size)))
+    final_size = int(total_n // np.ceil((total_n / moving_window_size)))
     n_steps = total_n // final_size
 
     # initialize heatmaps and initial polygons on the first set of heatmaps
@@ -495,7 +496,7 @@ def _heatmaps_to_polys_moving_window(heatmaps, bounds, agg_fn, thresh, morph_ker
 
 
 def _heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
-                       thresh_hysteresis, norm_ord):
+                       thresh_hysteresis, norm_ord, moving_window_size=None):
     '''
     Use parameters: agg_fn, thresh, morph_kernel, thresh_hysteresis, norm_ord
     '''
@@ -522,7 +523,8 @@ def tracks_polys_bounds(sub_dset,
                         morph_kernel,
                         thresh_hysteresis,
                         norm_ord,
-                        polygon_fn='heatmaps_to_polys') -> Iterable[Tuple[Track, Poly]]:
+                        polygon_fn='heatmaps_to_polys',
+                        moving_window_size=150) -> Iterable[Tuple[Track, Poly]]:
     import shapely.ops
     boundary_tracks = list(pop_tracks(sub_dset, [SITE_SUMMARY_CNAME]))
     assert len(boundary_tracks) > 0, 'need valid site boundaries!'
@@ -558,9 +560,13 @@ def tracks_polys_bounds(sub_dset,
 
         bounds = track_bounds
         _to_polygon_fn = POLY_FN_REGISTRY[polygon_fn]
-        track_polys = _to_polygon_fn(_heatmaps_in_track, bounds, agg_fn,
-                                         thresh, morph_kernel,
-                                         thresh_hysteresis, norm_ord)
+        track_polys = _to_polygon_fn(_heatmaps_in_track,
+                                     bounds,
+                                     agg_fn,
+                                     thresh, morph_kernel,
+                                     thresh_hysteresis,
+                                     norm_ord,
+                                     moving_window_size)
 
         poly = shapely.ops.unary_union(
             [p.to_shapely() for p in track_polys])
@@ -586,8 +592,15 @@ def tracks_polys_bounds(sub_dset,
     return list(filter(None, map(fill_boundary_track, boundary_tracks)))
 
 
-def tracks_polys_nobounds(sub_dset, key, agg_fn, thresh, morph_kernel,
-                          thresh_hysteresis, norm_ord, polygon_fn='heatmaps_to_polys') -> Iterable[Tuple[Track, Poly]]:
+def tracks_polys_nobounds(sub_dset,
+                          key,
+                          agg_fn,
+                          thresh,
+                          morph_kernel,
+                          thresh_hysteresis,
+                          norm_ord,
+                          polygon_fn='heatmaps_to_polys',
+                          moving_window_size=150) -> Iterable[Tuple[Track, Poly]]:
     gids = list(sub_dset.imgs.keys())
     keys = {'fg': key}
     skipped = 'interpolate'
@@ -596,13 +609,14 @@ def tracks_polys_nobounds(sub_dset, key, agg_fn, thresh, morph_kernel,
     bounds = None
     _to_polygon_fn = POLY_FN_REGISTRY[polygon_fn]
     polys = _to_polygon_fn(heatmaps, bounds, agg_fn, thresh, morph_kernel,
-                               thresh_hysteresis, norm_ord)
+                               thresh_hysteresis, norm_ord, moving_window_size)
 
     # turn each polygon into a list of polygons (map them across gids)
     tracks = [Track.from_polys(itertools.repeat(poly), sub_dset, probs=heatmaps)
               for poly in polys]
 
     tracks_polys = list(zip(tracks, polys))
+
     return tracks_polys
 
 
@@ -625,6 +639,7 @@ class TimeAggregatedBAS(NewTrackFunction):
     agg_fn: str = 'probs'
     thresh_hysteresis: Optional[float] = None
     polygon_fn: Optional[str] = 'heatmaps_to_polys'
+    moving_window_size: Optional[int] = 150
 
     def create_tracks(self, sub_dset):
         tracks = time_aggregated_polys(
@@ -637,7 +652,8 @@ class TimeAggregatedBAS(NewTrackFunction):
             norm_ord=self.norm_ord,
             agg_fn=self.agg_fn,
             thresh_hysteresis=self.thresh_hysteresis,
-            polygon_fn=self.polygon_fn)
+            polygon_fn=self.polygon_fn,
+            moving_window_size=self.moving_window_size)
         return tracks
 
     def add_tracks_to_dset(self, sub_dset, tracks):
@@ -662,6 +678,7 @@ class TimeAggregatedSC(NewTrackFunction):
     agg_fn: str = 'probs'
     thresh_hysteresis: Optional[float] = None
     polygon_fn: Optional[str] = 'heatmaps_to_polys'
+    moving_window_size: Optional[int] = 150
 
     def create_tracks(self, sub_dset):
         '''
@@ -699,7 +716,8 @@ class TimeAggregatedSC(NewTrackFunction):
                 norm_ord=self.norm_ord,
                 agg_fn=self.agg_fn,
                 thresh_hysteresis=self.thresh_hysteresis,
-                polygon_fn=self.polygon_fn)
+                polygon_fn=self.polygon_fn,
+                moving_window_size=self.moving_window_size)
 
         return tracks
 
@@ -723,6 +741,7 @@ class TimeAggregatedHybrid(NewTrackFunction):
     bas_kwargs: Optional[Dict] = field(default_factory=dict)
     sc_kwargs: Optional[Dict] = field(default_factory=dict)
     polygon_fn: Optional[str] = 'heatmaps_to_polys'
+    moving_window_size: Optional[int] = 150
 
     def __post_init__(self):
         if isinstance(self.coco_dset_sc, str):
@@ -730,11 +749,14 @@ class TimeAggregatedHybrid(NewTrackFunction):
 
     def create_tracks(self, sub_dset):
         return TimeAggregatedBAS(polygon_fn=self.polygon_fn,
+                                 moving_window_size=self.moving_window_size,
                                  **self.bas_kwargs).create_tracks(sub_dset)
 
     def add_tracks_to_dset(self, sub_dset, tracks):
         return TimeAggregatedSC(**self.sc_kwargs,
-                                boundaries_as='none').add_tracks_to_dset(
+                                boundaries_as='none',
+                                moving_window_size=self.moving_window_size,
+                                polygon_fn=self.polygon_fn).add_tracks_to_dset(
                                     sub_dset,
                                     tracks,
                                     coco_dset_sc=self.coco_dset_sc)
