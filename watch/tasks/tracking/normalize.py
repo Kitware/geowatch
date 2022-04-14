@@ -647,10 +647,10 @@ def normalize(
         >>> assert coco_dset.index.vidid_to_gids[1] == coco_dset.imgs.keys()
         >>> n_existing_annots = coco_dset.n_annots
         >>> coco_dset = OverlapTrack().apply_per_video(coco_dset, overwrite)
-        >>> assert set(coco_dset.annots().get('track_id')) == {0}  # not 1?
+        >>> assert set(coco_dset.annots().get('track_id')) == {1}
         >>> assert coco_dset.n_annots == n_existing_annots
         >>> coco_dset = dedupe_tracks(coco_dset)
-        >>> assert set(coco_dset.annots().get('track_id')) == {0}
+        >>> assert set(coco_dset.annots().get('track_id')) == {1}
         >>> coco_dset = add_track_index(coco_dset)
         >>> assert coco_dset.annots().get('track_index') == [0,1,2]
         >>> coco_dset = normalize_phases(coco_dset, baseline_keys={'change'})
