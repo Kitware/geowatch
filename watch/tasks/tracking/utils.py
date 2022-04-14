@@ -29,6 +29,12 @@ def trackid_is_default(trackid):
         return False
 
 
+try:
+    from xdev import profile
+except Exception:
+    profile = ub.identity
+
+
 Poly = Union[kwimage.Polygon, kwimage.MultiPolygon]
 
 
@@ -182,13 +188,16 @@ class TrackFunction(collections.abc.Callable):
         Main entrypoint for this class.
         '''
         # tracked_subdsets = []
-        for gids in coco_dset.index.vidid_to_gids.values():
+        vid_gids = coco_dset.index.vidid_to_gids.values()
+        total = len(coco_dset.index.vidid_to_gids)
+        for gids in ub.ProgIter(vid_gids, total=total, desc='apply_per_video', verbose=3):
             coco_dset = self.safe_apply(coco_dset, gids, overwrite)
             # tracked_subdsets.append(sub_dset)
         # Is this safe to do? It would be more efficient
         # coco_dset = kwcoco.CocoDataset.union(*tracked_subdsets, disjoint_tracks=True)
         return coco_dset
 
+    @profile
     def safe_apply(self, coco_dset, gids, overwrite):
 
         sub_dset, rest_dset = self.safe_partition(coco_dset, gids, remove=True)
@@ -217,6 +226,7 @@ class TrackFunction(collections.abc.Callable):
         return self.safe_union(rest_dset, sub_dset)
 
     @staticmethod
+    @profile
     def safe_partition(coco_dset, gids, remove=True):
         sub_dset = coco_dset.subset(gids=gids, copy=True)
         # HACK ensure tracks are not duplicated between videos
@@ -230,6 +240,7 @@ class TrackFunction(collections.abc.Callable):
             return sub_dset
 
     @staticmethod
+    @profile
     def safe_union(coco_dset, new_dset, existing_aids=[]):
         coco_dset._build_index()
         new_dset._build_index()
@@ -650,7 +661,7 @@ def build_heatmap(dset, gid, key, return_chan_probs=False, space='video',
         else:
             return fg_img_probs
 
-    if __debug__:
+    if 0 and __debug__:
         if common.numel() > 1:
             print('WARNING: Im not sure about that sum axis=-1, '
                   'I hope there is only ever one channel here')

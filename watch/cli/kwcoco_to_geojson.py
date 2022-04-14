@@ -565,7 +565,6 @@ def add_site_summary_to_kwcoco(possible_summaries,
             print(f'failed to match site_summary {site_id}')
             continue
 
-
         # track_id = next(new_trackids)
         track_id = site_id
 
