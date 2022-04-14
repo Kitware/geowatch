@@ -99,6 +99,9 @@ def _build_sc_track_job(pred_fpath, track_out_fpath, thresh=0.2):
         ANNOTATIONS_DPATH=$DVC_DPATH/annotations
         ls $ANNOTATIONS_DPATH
 
+        python -m watch.tasks.fusion.predict \
+                pass
+
         python -m watch.cli.kwcoco_to_geojson \
             "$PRED_DATASET" \
             --default_track_fn class_heatmaps \
@@ -115,6 +118,7 @@ def _build_sc_track_job(pred_fpath, track_out_fpath, thresh=0.2):
             --name "mytest" \
             --merge_fpath "./tmp/iarpa/merged.json" \
             --inputs_are_paths \
+            --enable_viz=True \
             ./tmp/site_models_stamp.json
 
     Args:

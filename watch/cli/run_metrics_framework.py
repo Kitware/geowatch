@@ -795,6 +795,8 @@ def main(args):
 
         from scriptconfig.smartcast import smartcast
         if smartcast(args.enable_viz):
+            viz_flags = []
+        else:
             viz_flags = [
                 # '--no-viz-region',  # we do want this enabled
                 '--no-viz-slices',
@@ -803,8 +805,6 @@ def main(args):
                 '--no-viz-associate-metrics',
                 '--no-viz-activity-metrics',
             ]
-        else:
-            viz_flags = []
 
         viz_flags = ' '.join(viz_flags)
 
