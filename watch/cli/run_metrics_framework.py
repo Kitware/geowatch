@@ -726,6 +726,8 @@ def main(args):
             'in your virtualenv')
     assert METRICS_VERSION >= version.Version('0.2.0')
 
+    main_out_dir = ub.Path(args.out_dir or '.')
+
     for region_id, region_sites in grouped_sites.items():
 
         site_dpath = (tmp_dpath / 'site' / region_id).ensuredir()
@@ -738,10 +740,7 @@ def main(args):
             _cache_dir = TemporaryDirectory(suffix='iarpa-metrics-cache')
             cache_dpath = ub.Path(_cache_dir.name)
 
-        if args.out_dir is not None:
-            out_dir = (ub.Path(args.out_dir) / region_id).ensuredir()
-        else:
-            out_dir = None
+        out_dir = (main_out_dir / region_id).ensuredir()
 
         # doctor site_dpath for expected structure
         site_sub_dpath = site_dpath / 'latest' / region_id
@@ -780,7 +779,7 @@ def main(args):
                 --rm_dir {gt_dpath / 'region_models'} \
                 --sm_dir {site_sub_dpath} \
                 --image_dir {image_dpath} \
-                --output_dir {out_dir} \
+                --output_dir {out_dir if args.out_dir else None} \
                 --cache_dir {cache_dpath} \
                 --name {shlex.quote(name)} \
                 {disable_viz_flags_str}
@@ -796,7 +795,6 @@ def main(args):
 
     print('out_dirs = {}'.format(ub.repr2(out_dirs, nl=1)))
 
-    main_out_dir = ub.Path(args.out_dir)
     if args.merge and out_dirs:
         merge_dpath = main_out_dir / 'merged'
 

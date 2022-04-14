@@ -33,7 +33,7 @@ from mgrs import MGRS
 from osgeo import osr
 from glob import glob
 from collections import defaultdict
-from typing import Union
+from typing import Union, List, Tuple, Dict
 import numpy as np
 import ubelt as ub
 from kwcoco.coco_image import CocoImage
@@ -248,9 +248,14 @@ def track_to_site(coco_dset,
         for gid, _anns in ub.group_items(anns, gids).items()
     ]
 
-    if site_idx is None:
-        site_idx = trackid
-    site_id = '_'.join((region_id, str(site_idx).zfill(4)))
+    # HACK to passthrough site_summary IDs
+    if watch.tasks.tracking.utils.trackid_is_default(trackid):
+        if site_idx is None:
+            site_idx = trackid
+        site_id = '_'.join((region_id, str(site_idx).zfill(4)))
+    else:
+        site_id = trackid
+        region_id = '_'.join(site_id.split('_')[:-1])
 
     def predict_phase_changes():
         '''
@@ -414,7 +419,7 @@ def convert_kwcoco_to_iarpa(coco_dset,
 
 def _validate_summary(site_summary_or_region_model,
                       default_region_id=None,
-                      raises=True):
+                      raises=True) -> List[Tuple[str, Dict]]:
     '''
     Possible input formats:
         - file path
@@ -430,7 +435,7 @@ def _validate_summary(site_summary_or_region_model,
         raises: if True, raise error on unknown input
 
     Returns:
-        List[Tuple[region_id: str, site_summary: Dict]]
+        (region_id, site_summary)
     '''
 
     # open the filepath(s)
@@ -513,7 +518,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
     # write site summaries
     print('warping site boundaries to pxl space...')
     cid = coco_dset.ensure_category(watch.heuristics.SITE_SUMMARY_CNAME)
-    new_trackids = watch.utils.kwcoco_extensions.TrackidGenerator(coco_dset)
+    # new_trackids = watch.utils.kwcoco_extensions.TrackidGenerator(coco_dset)
 
     for region_id, site_summary in site_summaries:
 
@@ -533,7 +538,8 @@ def add_site_summary_to_kwcoco(possible_summaries,
             continue
 
 
-        track_id = next(new_trackids)
+        # track_id = next(new_trackids)
+        track_id = site_id
 
         # get relevant images
         images = coco_dset.images(vidid=vidid)
@@ -546,6 +552,8 @@ def add_site_summary_to_kwcoco(possible_summaries,
             for date_str in images.lookup('date_captured')
         ]
         images = images.compress(flags)
+        if track_id in images.get('track_id', None):
+            print(f'warning: site_summary {track_id} already in dset!')
 
         # apply site boundary as polygons
         geo_poly = kwimage.MultiPolygon.from_geojson(site_summary['geometry'])
