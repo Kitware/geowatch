@@ -245,6 +245,7 @@ def track_to_site(coco_dset,
     ]
 
     # HACK to passthrough site_summary IDs
+    import watch
     if watch.tasks.tracking.utils.trackid_is_default(trackid):
         if site_idx is None:
             site_idx = trackid
@@ -345,6 +346,7 @@ def site_feature(coco_dset, region_id, site_id, trackid, gids, features, as_summ
 
     PERFORMER_ID = 'kit'
 
+    import watch
     properties = {
         'site_id': site_id,
         'version': watch.__version__,
@@ -487,6 +489,7 @@ def _validate_summary(site_summary_or_region_model,
             region_model = site_summary_or_region_model
 
             TRUST_REGION_SCHEMA = 0
+            import watch
             if TRUST_REGION_SCHEMA:
                 region_model_schema = watch.rc.load_region_model_schema()
                 jsonschema.validate(region_model, schema=region_model_schema)
@@ -550,6 +553,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
 
     # write site summaries
     print('warping site boundaries to pxl space...')
+    import watch
     cid = coco_dset.ensure_category(watch.heuristics.SITE_SUMMARY_CNAME)
     # new_trackids = watch.utils.kwcoco_extensions.TrackidGenerator(coco_dset)
 
@@ -882,6 +886,7 @@ def main(args):
     # Pick a track_fn
     # HACK remove potentially conflicting annotations as well
     # we shouldn't have saliency annots when we want class or vice versa
+    import watch
     CLEAN_DSET = 1
     class_cats = [cat['name'] for cat in watch.heuristics.CATEGORIES]
     saliency_cats = ['salient']
