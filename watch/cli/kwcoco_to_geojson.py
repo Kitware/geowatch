@@ -15,28 +15,25 @@ References:
     .. [2] https://infrastructure.smartgitlab.com/docs/pages/api/
     .. [3] https://smartgitlab.com/TE/annotations
 """
-import geojson
-import warnings
-import json
-import os
-import sys
 import argparse
+import datetime
+import dateutil.parser
+import geojson
+import itertools
+import json
 import jsonschema
 import kwcoco
-import kwimage
-import dateutil.parser
-import datetime
-import itertools
-import watch
+import numpy as np
+import os
 import shapely
 import shapely.ops
-from mgrs import MGRS
-from osgeo import osr
-from collections import defaultdict
-from typing import Union, List, Tuple, Dict
-import numpy as np
+import sys
 import ubelt as ub
+import warnings
+import watch
+from collections import defaultdict
 from kwcoco.coco_image import CocoImage
+from typing import Union, List, Tuple, Dict
 # import colored_traceback.auto  # noqa
 
 try:
@@ -322,6 +319,7 @@ def site_feature(coco_dset, region_id, site_id, trackid, gids, features, as_summ
     '''
     Feature containing metadata about the site
     '''
+    from mgrs import MGRS
 
     geom_list = [_single_geometry(feat['geometry']) for feat in features]
     geometry = _combined_geometries(geom_list)
