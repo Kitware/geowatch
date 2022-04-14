@@ -200,22 +200,38 @@ class TrackFunction(collections.abc.Callable):
                 tracked_subdsets.append(sub_dset)
 
         if not legacy:
+            
             # Tracks were either updated or added.
             # In the case they were updated the existing track ids should
             # be disjoint. All new tracks should not overlap with
 
+            _debug = 0
+
             from watch.utils import kwcoco_extensions
             new_trackids = kwcoco_extensions.TrackidGenerator(None)
-            for sub_dset in ub.ProgIter(tracked_subdsets, desc='Ensure ok tracks'):
+            fixed_subdataset = []
+            for sub_dset in ub.ProgIter(tracked_subdsets, desc='Ensure ok tracks', verbose=3):
+
+                if _debug:
+                    sub_dset = sub_dset.copy()
+
                 # Rebuild the index to ensure any hacks are removed.
-                # We may be able to remove this step.
+                # We should be able to remove this step.
                 # sub_dset._build_index()
-                existing_annots = sub_dset.annots()
-                existing_tids = set(existing_annots.lookup('track_id'))
+
+                sub_annots = sub_dset.annots()
+                sub_tids = sub_annots.lookup('track_id')
+                existing_tids = set(sub_tids)
+
                 collisions = existing_tids & new_trackids.used_trackids
+                if _debug:
+                    print('existing_tids = {!r}'.format(existing_tids))
+                    print('collisions = {!r}'.format(collisions))
+
                 new_trackids.exclude_trackids(existing_tids)
                 if collisions:
-                    old_tid_to_aids = ub.group_items(existing_annots, existing_tids)
+                    old_tid_to_aids = ub.group_items(sub_annots, sub_tids)
+                    assert len(old_tid_to_aids) == len(existing_tids)
                     print(f'Resolve {len(collisions)} track collisions')
                     # Change the track ids of any collisions
                     for old_tid in collisions:
@@ -228,9 +244,25 @@ class TrackFunction(collections.abc.Callable):
                         existing_tids.add(new_tid)
                 new_trackids.exclude_trackids(existing_tids)
 
+                if _debug:
+                    after_tids = set(sub_annots.lookup('track_id'))
+                    print('collisions = {!r}'.format(collisions))
+                    print(f'{after_tids=}')
+
+                fixed_subdataset.append(sub_dset)
+
             # Is this safe to do? It would be more efficient
             coco_dset = kwcoco.CocoDataset.union(
-                *tracked_subdsets, disjoint_tracks=False)
+                *fixed_subdataset, disjoint_tracks=False)
+
+            if _debug:
+                x = coco_dset.annots().images.get('video_id')
+                y = coco_dset.annots().get('track_id')
+                z = ub.group_items(x, y)
+                track_to_num_videos = ub.map_vals(set, z)
+                assert max(map(len, track_to_num_videos.values())) == 1, (
+                    'track belongs to multiple videos!'
+                )
         return coco_dset
 
     @profile
