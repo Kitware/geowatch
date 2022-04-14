@@ -33,7 +33,7 @@ from mgrs import MGRS
 from osgeo import osr
 from glob import glob
 from collections import defaultdict
-from typing import Union
+from typing import Union, List, Tuple, Dict
 import numpy as np
 import ubelt as ub
 from kwcoco.coco_image import CocoImage
@@ -248,9 +248,14 @@ def track_to_site(coco_dset,
         for gid, _anns in ub.group_items(anns, gids).items()
     ]
 
-    if site_idx is None:
-        site_idx = trackid
-    site_id = '_'.join((region_id, str(site_idx).zfill(4)))
+    # HACK to passthrough site_summary IDs
+    if watch.tasks.tracking.utils.trackid_is_default(trackid):
+        if site_idx is None:
+            site_idx = trackid
+        site_id = '_'.join((region_id, str(site_idx).zfill(4)))
+    else:
+        site_id = trackid
+        region_id = '_'.join(site_id.split('_')[:-1])
 
     def predict_phase_changes():
         '''
@@ -301,7 +306,9 @@ def track_to_site(coco_dset,
                 transition_date_from('Site Preparation')
             }
         else:
-            raise ValueError(f'missing phases: {site_id=} {all_phases_set=}')
+            # raise ValueError(f'missing phases: {site_id=} {all_phases_set=}')
+            print(f'missing phases: {site_id=} {all_phases_set=}')
+            return {}
 
     def site_feature():
         '''
@@ -317,11 +324,20 @@ def track_to_site(coco_dset,
             map(_normalize_date,
                 coco_dset.images(set(gids)).lookup('date_captured')))
 
+        # https://smartgitlab.com/TE/annotations/-/wikis/Annotation-Status-Types#for-site-models-generated-by-performersalgorithms
+        # system_confirmed, system_rejected, or system_proposed
+        # TODO system_proposed pre val-net
+        status = set(
+            coco_dset.annots(trackid=trackid).get('status',
+                                                  'system_confirmed'))
+        assert len(status) == 1, f'inconsistent {status=} for {trackid=}'
+        status = status.pop()
+
         properties = {
             'site_id': site_id,
             'version': watch.__version__,
             'mgrs': MGRS().toMGRS(*centroid_latlon, MGRSPrecision=0),
-            'status': 'system_confirmed',  # TODO system_proposed pre val-net
+            'status': status,
             'model_content': 'proposed',
             'score': 1.0,  # TODO does this matter?
             'start_date': min(dates),
@@ -403,7 +419,7 @@ def convert_kwcoco_to_iarpa(coco_dset,
 
 def _validate_summary(site_summary_or_region_model,
                       default_region_id=None,
-                      raises=True):
+                      raises=True) -> List[Tuple[str, Dict]]:
     '''
     Possible input formats:
         - file path
@@ -419,7 +435,7 @@ def _validate_summary(site_summary_or_region_model,
         raises: if True, raise error on unknown input
 
     Returns:
-        List[Tuple[region_id: str, site_summary: Dict]]
+        (region_id, site_summary)
     '''
 
     # open the filepath(s)
@@ -448,7 +464,7 @@ def _validate_summary(site_summary_or_region_model,
             assert isinstance(site_summary_or_region_model,
                               dict), ('unknown site summary dtype ' +
                                       str(type(site_summary_or_region_model)))
-
+        # import xdev; xdev.embed()
         try:  # is this a region model?
             region_model_schema = watch.rc.load_region_model_schema()
             region_model = site_summary_or_region_model
@@ -457,7 +473,7 @@ def _validate_summary(site_summary_or_region_model,
                 f for f in region_model['features']
                 if (f['properties']['type'] == 'site_summary'
                     # TODO handle positive_partial
-                    and f['properties']['status'] == 'positive_annotated')
+                    and f['properties']['status'] in {'positive_annotated', 'system_proposed', 'system_confirmed'})
             ]
             region_feat = region_model['features'][0]
             assert region_feat['properties']['type'] == 'region'
@@ -487,6 +503,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
         default_region_id = ub.peek(coco_dset.index.name_to_video)
 
     site_summaries = _validate_summary(possible_summaries, default_region_id)
+    print(f'found {len(site_summaries)} site summaries')
 
     # TODO use pyproj instead, make sure it works with kwimage.warp
 
@@ -501,14 +518,31 @@ def add_site_summary_to_kwcoco(possible_summaries,
     # write site summaries
     print('warping site boundaries to pxl space...')
     cid = coco_dset.ensure_category(watch.heuristics.SITE_SUMMARY_CNAME)
-    new_trackids = watch.utils.kwcoco_extensions.TrackidGenerator(coco_dset)
+    # new_trackids = watch.utils.kwcoco_extensions.TrackidGenerator(coco_dset)
+
     for region_id, site_summary in site_summaries:
 
-        track_id = next(new_trackids)
+        # lookup possible places to put this site_summary
+        vidid = None
+        site_id = site_summary['properties']['site_id']
+        for _id, vid in coco_dset.index.videos.items():
+            # look for all possible places a region or site id could be
+            names = set(ub.dict_subset(vid, ['id', 'name', 'region_id', 'site_id'], None).values())
+            names |= set(ub.dict_subset(vid.get('properties', {}), ['region_id', 'site_id'], None).values())
+            if region_id in names or site_id in names:
+                vidid = _id
+                print(f'matched site_summary {site_id} to video {names}')
+                break
+        if vidid is None:
+            print(f'failed to match site_summary {site_id}')
+            continue
+
+
+        # track_id = next(new_trackids)
+        track_id = site_id
 
         # get relevant images
-        images = coco_dset.images(
-            vidid=coco_dset.index.name_to_video[region_id]['id'])
+        images = coco_dset.images(vidid=vidid)
         start_date = dateutil.parser.parse(
             site_summary['properties']['start_date']).date()
         end_date = dateutil.parser.parse(
@@ -518,6 +552,8 @@ def add_site_summary_to_kwcoco(possible_summaries,
             for date_str in images.lookup('date_captured')
         ]
         images = images.compress(flags)
+        if track_id in images.get('track_id', None):
+            print(f'warning: site_summary {track_id} already in dset!')
 
         # apply site boundary as polygons
         geo_poly = kwimage.MultiPolygon.from_geojson(site_summary['geometry'])

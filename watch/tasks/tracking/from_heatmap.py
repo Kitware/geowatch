@@ -13,7 +13,7 @@ from shapely.ops import unary_union
 from watch.tasks.tracking.utils import (
     Track, PolygonFilter, NewTrackFunction, mask_to_polygons, build_heatmap,
     score_poly, Poly, CocoDsetFilter, _validate_keys, Observation, pop_tracks,
-    build_heatmaps)
+    build_heatmaps, trackid_is_default)
 
 try:
     from xdev import profile
@@ -57,7 +57,7 @@ def mean_normalized(heatmaps, norm_ord=1, morph_kernel=1, thresh=None):
     print('max heatmaps', np.max(heatmaps))
     print('max average', np.max(average))
 
-    #average *= scale_factor
+    # average *= scale_factor
     average = 0.75 * average * scale_factor
     print('scale_factor', scale_factor)
     print('After scaling, max:', np.max(average))
@@ -88,6 +88,7 @@ def frequency_weighted_mean(heatmaps, thresh, norm_ord=0, morph_kernel=3):
                                                morph_kernel)
 
     return aggregated_probs
+
 
 AGG_FN_REGISTRY = {
     'frequency_weighted_mean': frequency_weighted_mean,
@@ -269,7 +270,7 @@ def add_tracks_to_dset(sub_dset,
 
     all_new_anns = []
     for track in tracks:
-        if track.track_id is not None:
+        if not trackid_is_default(track.track_id):
             track_id = track.track_id
             new_trackids.exclude_trackids([track_id])
         else:

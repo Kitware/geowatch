@@ -29,8 +29,8 @@ def dedupe_annots(coco_dset):
     duplicates = ub.find_duplicates(group_keys)
     if duplicates:
         dup_idxs = list(ub.flatten([idxs[1:] for idxs in duplicates.values()]))
-        warnings.warn(ub.paragraph(
-            f'''
+        warnings.warn(
+            ub.paragraph(f'''
             There were {len(duplicates)} annotation groups
             with {dup_idxs} duplicate annotations based on
             group keys {eq_keys}
@@ -67,7 +67,8 @@ def add_geos(coco_dset, overwrite, max_workers=16):
     # find images containing at least 1 annotation that needs geo coords
     annots = coco_dset.annots()
     annots_to_fix = annots.compress(map(needs_geos, annots.objs))
-    gid_to_aids = ub.group_items(annots_to_fix, annots_to_fix.lookup('image_id'))
+    gid_to_aids = ub.group_items(annots_to_fix,
+                                 annots_to_fix.lookup('image_id'))
     images_to_fix = coco_dset.images(list(gid_to_aids.keys()))
 
     # parallelize grabbing img CRS info
@@ -99,9 +100,8 @@ def add_geos(coco_dset, overwrite, max_workers=16):
         assert np.allclose(info['pxl_to_wld'], np.array(kwimage.Affine.coerce(
             annotated_band(img)['wld_to_pxl']).inv()))
         '''
-        img_anns = kwimage.SegmentationList([
-            kwimage.Segmentation.coerce(ann['segmentation'])
-            for ann in anns])
+        img_anns = kwimage.SegmentationList(
+            [kwimage.Segmentation.coerce(ann['segmentation']) for ann in anns])
 
         warp_aux_to_img = kwimage.Affine.coerce(
             aux.get('warp_aux_to_img', None)).inv()
@@ -109,7 +109,8 @@ def add_geos(coco_dset, overwrite, max_workers=16):
         wld_anns = aux_anns.warp(info['pxl_to_wld'])
         wgs_anns = wld_anns.warp(info['wld_to_wgs84'])
         # Flip into traditional CRS84 coordinates if we need to
-        if info['wgs84_crs_info']['axis_mapping'] == 'OAMS_AUTHORITY_COMPLIANT':
+        if info['wgs84_crs_info'][
+                'axis_mapping'] == 'OAMS_AUTHORITY_COMPLIANT':
             crs84_anns = [poly.swap_axes() for poly in wgs_anns]
         else:
             crs84_anns = wgs_anns
@@ -213,9 +214,9 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
     empty_aids = []
     remove_reason = []
 
-    gid_iter = ub.ProgIter(
-        coco_dset.index.imgs.keys(), total=coco_dset.n_images,
-        desc='filter annotations')
+    gid_iter = ub.ProgIter(coco_dset.index.imgs.keys(),
+                           total=coco_dset.n_images,
+                           desc='filter annotations')
     for gid in gid_iter:
         coco_img = coco_dset.coco_image(gid)
         annots = coco_dset.annots(gid=gid)
@@ -246,15 +247,18 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
                     pxl_sseg_sh = pxl_sseg_sh.buffer(0)
 
                 if pxl_sseg_sh.area <= min_area_px:
-                    remove_reason.append('small pixel area {}'.format(round(pxl_sseg_sh.area, 1)))
+                    remove_reason.append('small pixel area {}'.format(
+                        round(pxl_sseg_sh.area, 1)))
                     empty_aids.append(aid)
                     continue
 
             if min_geo_precision is not None:
                 # TODO: could check this in UTM space instead of using rounding
-                wgs_sseg = kwimage.Segmentation.coerce(ann['segmentation_geos'])
+                wgs_sseg = kwimage.Segmentation.coerce(
+                    ann['segmentation_geos'])
                 wgs_sseg_sh = wgs_sseg.to_multi_polygon().to_shapely()
-                wgs_sseg_sh = shapely_round(wgs_sseg_sh, min_geo_precision).buffer(0)
+                wgs_sseg_sh = shapely_round(wgs_sseg_sh,
+                                            min_geo_precision).buffer(0)
 
                 if wgs_sseg_sh.is_empty:
                     remove_reason.append('empty geos area')
@@ -269,7 +273,8 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
         keep_tids = keep_annots.get('track_id', None)
         keep_track_lengths = ub.dict_hist(keep_tids)
         print(f'Size filter: removing {len(empty_aids)} annotations')
-        print('keep_track_lengths = {}'.format(ub.repr2(keep_track_lengths, nl=1)))
+        print('keep_track_lengths = {}'.format(
+            ub.repr2(keep_track_lengths, nl=1)))
         print(f'{len(keep_annots)=}')
         removal_reasons = ub.dict_hist(remove_reason)
         print('removal_reasons = {}'.format(ub.repr2(removal_reasons, nl=1)))
@@ -294,10 +299,9 @@ def ensure_videos(coco_dset):
         from watch.utils import util_time
         print(f'Warning: there are {len(loose_imgs)=} images without a video')
         # guess frame_index by date
-        dt_guess = [
-            (util_time.coerce_datetime(dc), gid)
-            for gid, dc in loose_imgs.lookup('date_captured', '1970-01-01', keepid=1).items()
-        ]
+        dt_guess = [(util_time.coerce_datetime(dc), gid)
+                    for gid, dc in loose_imgs.lookup(
+                        'date_captured', '1970-01-01', keepid=1).items()]
         loose_imgs = loose_imgs.take(ub.argsort(dt_guess))
 
         vidid = coco_dset.add_video('DEFAULT')
@@ -437,13 +441,14 @@ def normalize_phases(coco_dset,
         baseline_keys)
 
     # metrics-and-test-framework/evaluation.py:1684
-    cnames_to_score = set(CNAMES_DCT['positive']['scored']) | set(CNAMES_DCT['negative']['scored'])
+    cnames_to_score = set(CNAMES_DCT['positive']['scored']) | set(
+        CNAMES_DCT['negative']['scored'])
 
     allowed_cnames = cnames_to_replace | cnames_to_score
     have_cnames = set(coco_dset.name_to_cat)
     if not have_cnames.issubset(allowed_cnames):
-        raise AssertionError(ub.paragraph(
-            f'''
+        raise AssertionError(
+            ub.paragraph(f'''
             Unhandled Class Names
             {allowed_cnames=}
             {have_cnames=}
@@ -477,35 +482,10 @@ def normalize_phases(coco_dset,
     print('label status of tracks: ', log)
 
     #
-    # Phase prediction - do it all at once for efficiency
-    # Do this before viterbi so we can use this as an input in the future
-    #
-
-    ann_field = 'phase_transition_days'
-
-    # exclude untracked annots which might be unrelated
-    annots = coco_dset.annots(
-        list(ub.flatten(coco_dset.index.trackid_to_aids.values())))
-
-    has_prediction_heatmaps = all(
-        kwcoco.FusedChannelSpec.coerce(prediction_key).as_set().issubset(
-            coco_dset.coco_image(gid).channels.fuse().as_set())
-        for gid in set(annots.gids))
-    if has_prediction_heatmaps:
-        phase_transition_days = phase.phase_prediction_heatmap(
-            annots, coco_dset, prediction_key)
-        annots.set(ann_field, phase_transition_days)
-    else:
-        for trackid in coco_dset.index.trackid_to_aids.keys():
-            _annots = coco_dset.annots(trackid=trackid)
-            phase_transition_days = phase.phase_prediction_baseline(_annots)
-            _annots.set(ann_field, phase_transition_days)
-
-    old_cnames_dct = dict(zip(annots.aids, annots.cnames))
-
-    #
     # Continue transforming phase labels, now with smoothing and deduping
     #
+
+    old_cnames_dct = dict(zip(annots.aids, annots.cnames))
 
     for trackid, n_anns in ub.map_vals(
             len, coco_dset.index.trackid_to_aids).items():
@@ -514,16 +494,13 @@ def normalize_phases(coco_dset,
 
             if use_viterbi:
 
-                #with xdev.embed_on_exception_context():
+                # with xdev.embed_on_exception_context():
                 smoothed_cnames = phase.class_label_smoothing(
                     annots.cnames, t_probs, e_probs)
-                if check_only_bg(smoothed_cnames):
-                    print('removing track ', trackid, ': only found No Activity')
-                else:
-                    annots.set('category_id', [
-                        coco_dset.name_to_cat[name]['id']
-                        for name in smoothed_cnames
-                    ])
+                annots.set('category_id', [
+                    coco_dset.name_to_cat[name]['id']
+                    for name in smoothed_cnames
+                ])
 
             # after viterbi, the sequence of phases is in the correct order
 
@@ -532,17 +509,63 @@ def normalize_phases(coco_dset,
             # coco_dset = phase.dedupe_background_anns(coco_dset, trackid)
             coco_dset = phase.ensure_post(coco_dset, trackid)
 
+        annots = coco_dset.annots(trackid=trackid)
+        is_empty = check_only_bg(annots.cnames)
+        EMPTY_TRACK_BEHAVIOR = 'ignore'
+
+        if is_empty:
+            print(
+                f'apply {EMPTY_TRACK_BEHAVIOR} to {trackid=} with cats {set(annots.cnames)}'
+            )
+            if EMPTY_TRACK_BEHAVIOR == 'delete':
+                coco_dset.remove_annotations(annots.aids)
+            elif EMPTY_TRACK_BEHAVIOR == 'flag':
+                annots.set('status', 'system_rejected')
+            elif EMPTY_TRACK_BEHAVIOR == 'revert':
+                annots.cnames = list(
+                    ub.dict_subset(old_cnames_dct, annots.aids).values())
+            elif EMPTY_TRACK_BEHAVIOR == 'ignore':
+                pass
+            else:
+                raise ValueError(EMPTY_TRACK_BEHAVIOR)
+
+    #
+    # Phase prediction - do it all at once for efficiency
+    # TODO do this before viterbi so we can use this as an input in the future
+    #
+
+    ann_field = 'phase_transition_days'
+
+    # exclude untracked annots which might be unrelated
+    annots = coco_dset.annots(
+        list(ub.flatten(coco_dset.index.trackid_to_aids.values())))
+
+    if len(annots) > 0:
+        has_prediction_heatmaps = all(
+            kwcoco.FusedChannelSpec.coerce(prediction_key).as_set().issubset(
+                coco_dset.coco_image(gid).channels.fuse().as_set())
+            for gid in set(annots.gids))
+        if has_prediction_heatmaps:
+            phase_transition_days = phase.phase_prediction_heatmap(
+                annots, coco_dset, prediction_key)
+            annots.set(ann_field, phase_transition_days)
+        else:
+            for trackid in coco_dset.index.trackid_to_aids.keys():
+                _annots = coco_dset.annots(trackid=trackid)
+                phase_transition_days = phase.phase_prediction_baseline(_annots)
+                _annots.set(ann_field, phase_transition_days)
+
     #
     # Fixup phase prediction
     #
 
-    # TODO do something with transition preds for phases which were altered
-    FIXUP_TRANSITION_PRED = 0
-    if FIXUP_TRANSITION_PRED:
-        n_diff_annots = sum(
-            np.array(annots.cnames) == np.array(old_cnames_dct.values()))
-        if n_diff_annots > 0:
-            raise NotImplementedError
+        # TODO do something with transition preds for phases which were altered
+        FIXUP_TRANSITION_PRED = 0
+        if FIXUP_TRANSITION_PRED:
+            n_diff_annots = sum(
+                np.array(annots.cnames) == np.array(old_cnames_dct.values()))
+            if n_diff_annots > 0:
+                raise NotImplementedError
 
     return coco_dset
 
@@ -624,10 +647,10 @@ def normalize(
         >>> assert coco_dset.index.vidid_to_gids[1] == coco_dset.imgs.keys()
         >>> n_existing_annots = coco_dset.n_annots
         >>> coco_dset = OverlapTrack().apply_per_video(coco_dset, overwrite)
-        >>> assert set(coco_dset.annots().get('track_id')) == {0}  # not 1?
+        >>> assert set(coco_dset.annots().get('track_id')) == {1}
         >>> assert coco_dset.n_annots == n_existing_annots
         >>> coco_dset = dedupe_tracks(coco_dset)
-        >>> assert set(coco_dset.annots().get('track_id')) == {0}
+        >>> assert set(coco_dset.annots().get('track_id')) == {1}
         >>> coco_dset = add_track_index(coco_dset)
         >>> assert coco_dset.annots().get('track_index') == [0,1,2]
         >>> coco_dset = normalize_phases(coco_dset, baseline_keys={'change'})

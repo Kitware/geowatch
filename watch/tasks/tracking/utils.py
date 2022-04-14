@@ -14,6 +14,21 @@ from abc import abstractmethod
 from typing import Union, Iterable, Optional, Any, Tuple, List, Dict
 import warnings
 
+
+def trackid_is_default(trackid):
+    '''
+    Hack to decide if a trackid is really a site_id or if it was randomly
+    assigned
+    '''
+    if trackid is None:
+        return True
+    try:
+        int(trackid)
+        return True
+    except ValueError:
+        return False
+
+
 Poly = Union[kwimage.Polygon, kwimage.MultiPolygon]
 
 
@@ -167,7 +182,6 @@ class TrackFunction(collections.abc.Callable):
         Main entrypoint for this class.
         '''
         # tracked_subdsets = []
-        # TODO why are gids reordered in this index vs coco_dset.imgs?
         for gids in coco_dset.index.vidid_to_gids.values():
             coco_dset = self.safe_apply(coco_dset, gids, overwrite)
             # tracked_subdsets.append(sub_dset)
@@ -199,7 +213,7 @@ class TrackFunction(collections.abc.Callable):
                 new_annots.set('track_id', new_tids)
 
         # TODO: why is this assert here?
-        assert not any(tid is None for tid in sub_dset.annots().lookup('track_id', None))
+        assert None not in sub_dset.annots().lookup('track_id', None)
         return self.safe_union(rest_dset, sub_dset)
 
     @staticmethod
@@ -219,7 +233,11 @@ class TrackFunction(collections.abc.Callable):
     def safe_union(coco_dset, new_dset, existing_aids=[]):
         coco_dset._build_index()
         new_dset._build_index()
-        return coco_dset.union(new_dset, disjoint_tracks=True)
+        # we handle tracks in normalize.dedupe_tracks anyway, and
+        # disjoint_tracks=True interferes with keeping site_ids around as
+        # track_ids.
+        # return coco_dset.union(new_dset, disjoint_tracks=True)
+        return coco_dset.union(new_dset, disjoint_tracks=False)
 
 
 class NoOpTrackFunction(TrackFunction):
