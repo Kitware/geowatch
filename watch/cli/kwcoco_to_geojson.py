@@ -411,18 +411,16 @@ def convert_kwcoco_to_iarpa(coco_dset,
         >>> for site in sites:
         >>>     jsonschema.validate(site, schema=SITE_SCHEMA)
     """
-    import xdev
-    with xdev.embed_on_exception_context:
-        sites = []
-        for vidid, video in coco_dset.index.videos.items():
-            region_id = video.get('name', default_region_id)
-            gids = coco_dset.index.vidid_to_gids[vidid]
-            sub_dset = coco_dset.subset(gids=gids)
+    sites = []
+    for vidid, video in coco_dset.index.videos.items():
+        region_id = video.get('name', default_region_id)
+        gids = coco_dset.index.vidid_to_gids[vidid]
+        sub_dset = coco_dset.subset(gids=gids)
 
-            for site_idx, trackid in enumerate(sub_dset.index.trackid_to_aids):
-                site = track_to_site(sub_dset, trackid, region_id, site_idx,
-                                     as_summary)
-                sites.append(site)
+        for site_idx, trackid in enumerate(sub_dset.index.trackid_to_aids):
+            site = track_to_site(sub_dset, trackid, region_id, site_idx,
+                                 as_summary)
+            sites.append(site)
 
     return sites
 
@@ -557,8 +555,6 @@ def add_site_summary_to_kwcoco(possible_summaries,
     print('warping site boundaries to pxl space...')
     cid = coco_dset.ensure_category(watch.heuristics.SITE_SUMMARY_CNAME)
     # new_trackids = watch.utils.kwcoco_extensions.TrackidGenerator(coco_dset)
-    import xdev
-    xdev.embed()
 
     for region_id, site_summary in site_summaries:
         # lookup possible places to put this site_summary
@@ -584,7 +580,6 @@ def add_site_summary_to_kwcoco(possible_summaries,
                 site_summary['properties']['start_date']).date()
             end_date = dateutil.parser.parse(
                 site_summary['properties']['end_date']).date()
-            xdev.fix_embed_globals()
             flags = [
                 start_date <= dateutil.parser.parse(date_str).date() <= end_date
                 for date_str in images.lookup('date_captured')
@@ -597,18 +592,8 @@ def add_site_summary_to_kwcoco(possible_summaries,
             poly_crs84_geojson = site_summary['geometry']
             # geo_poly = kwimage.MultiPolygon.from_geojson()
             for img in images.objs:
-                # if 'utm_crs_info' in img:
-                #     utm_epsg_code = img['utm_crs_info']['auth'][1]
-                # else:
-                #     utm_epsg_code = 4326
-                # transform_utm_to_pxl = kwimage.Affine.coerce(
-                #     img.get('wld_to_pxl', {'scale': 1}))
-                # img_poly = (
-                #     geo_poly.swap_axes()  # TODO bookkeep this convention
-                #     .warp(transform_wgs84_to(utm_epsg_code)).warp(
-                #         transform_utm_to_pxl))
-                # bbox = list(img_poly.bounding_box().to_coco())[0]
-                # Add annotations in CRS84 geo-space
+                # Add annotations in CRS84 geo-space, we will project to pixel
+                # space in a later step
                 coco_dset.add_annotation(
                     image_id=img['id'],
                     category_id=cid,
