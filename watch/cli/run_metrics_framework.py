@@ -361,9 +361,11 @@ def _hack_remerge_data():
         new_json_data, *_ = _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info)
 
         with safer.open(merge_fpath, 'w', temp_file=True) as f:
-            json.dump(json_data, f, indent=4)
+            json.dump(new_json_data, f, indent=4)
 
     dvc.add(summary_metrics)
+    dvc.git_commitpush('Fixup merged iarpa metrics')
+    dvc.push(summary_metrics, remote='aws')
 
 
 def _make_merge_metrics(region_dpaths, anns_root):
@@ -643,6 +645,16 @@ def main(args):
     if len(args.sites) == 0:
         raise Exception('No input sites were given')
 
+    try:
+        # Do we have the latest and greatest?
+        import iarpa_smart_metrics
+        METRICS_VERSION = version.Version(iarpa_smart_metrics.__version__)
+    except Exception:
+        raise AssertionError(
+            'The iarpa_smart_metrics package should be pip installed '
+            'in your virtualenv')
+    assert METRICS_VERSION >= version.Version('0.2.0')
+
     parent_info = []
 
     for site_data in args.sites:
@@ -716,15 +728,7 @@ def main(args):
     grouped_sites = ub.group_items(
         sites, lambda site: site['features'][0]['properties']['region_id'])
 
-    try:
-        # Do we have the latest and greatest?
-        import iarpa_smart_metrics
-        METRICS_VERSION = version.Version(iarpa_smart_metrics.__version__)
-    except Exception:
-        raise AssertionError(
-            'The iarpa_smart_metrics package should be pip installed '
-            'in your virtualenv')
-    assert METRICS_VERSION >= version.Version('0.2.0')
+    main_out_dir = ub.Path(args.out_dir or '.')
 
     main_out_dir = ub.Path(args.out_dir or '.')
 

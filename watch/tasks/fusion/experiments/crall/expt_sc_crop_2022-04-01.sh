@@ -1,4 +1,4 @@
-#!/bin/bash
+#models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V00e!/bin/bash
 
 CROPPED_PRE_EVAL_AND_AGG(){
 
@@ -48,6 +48,8 @@ CROPPED_PRE_EVAL_AND_AGG(){
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*_D_*/*.pt" \
             --test_dataset="$VALI_FPATH" \
+            --enable_pred=1 \
+            --enable_eval=1 \
             --skip_existing=True --backend=tmux --run=0
 
 
@@ -62,10 +64,11 @@ CROPPED_PRE_EVAL_AND_AGG(){
     # shellcheck disable=SC2010
     ls -al models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json | grep -v ' \-> '
 
-    dvc unprotect models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json 
+    #dvc unprotect models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json 
     dvc unprotect models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json
 
     dvc add models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json
+    #dvc add models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json 
     git commit -am "add measures from $HOSTNAME" && git pull && git push
     dvc push -r aws -R models/fusion/eval3_sc_candidates/eval
 
@@ -145,6 +148,8 @@ special_evaluation(){
             --enable_eval=1 \
             --enable_track=0 \
             --enable_iarpa_eval=0 \
+            --draw_heatmaps=1 \
+            --draw_curves=1 \
             --pred_workers=4 \
             --chip_overlap=0.3 \
             --tta_time=0,1,2,3 \
@@ -168,12 +173,12 @@ prep_features(){
         --with_invariants=0 \
         --do_splits=1 \
         --depth_workers=0 \
-        --cache=1 --backend=tmux --run=0
+        --cache=1 --backend=tmux --run=1
 
     # Or rsync features
 
-    rsync -avprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./_assets ooo:data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10
-    rsync -avprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./combo* ooo:data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10
+    rsync -azvprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./_assets ooo:data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10
+    rsync -azvprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./combo* ooo:data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10
 
     rsync -avprRP --compress "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./_assets horologic:data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10 
     rsync -avprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./combo* horologic:data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10
@@ -181,6 +186,9 @@ prep_features(){
     rsync -avprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./combo_DLM_s2_wv_vali.kwcoco.json horologic:data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10
     rsync -avprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./combo_DLM_*.kwcoco.json horologic:data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10
 
+
+    rsync -azvprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./_assets horologic:data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10
+    rsync -azvprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./combo* horologic:data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10
 
 }
 
@@ -1071,3 +1079,107 @@ python -m watch.tasks.fusion.fit \
     --temporal_dropout=0.5 \
     --modulate_class_weights="positive*0,negative*0,background*1.5,No Activity*0.001,Post Construction*0.01,Site Preparation*3.0" \
     --init="$INIT_STATE_V007"
+
+
+# tooshbrush cropped + Depth WV only (2022-04-13)
+# -----------------------------------------------
+
+DVC_DPATH=$(smartwatch_dvc)
+export CUDA_VISIBLE_DEVICES=1
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+DVC_DPATH=$(smartwatch_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+#CHANNELS="WV:red|green|blue|depth,S2:red|green|blue|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+CHANNELS="blue|green|red|near-ir1,blue|green|red|nir|swir16|swir22"
+EXPERIMENT_NAME=CropDrop3_SC_s2wv_raw_xver12_V018
+INIT_STATE_V012="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_raw_xver7_V012/CropDrop3_SC_s2wv_raw_xver7_V012_epoch=19-step=40959-v1.pt"
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --accumulate_grad_batches=8 \
+    --global_saliency_weight=0.00 \
+    --chip_size=256 \
+    --time_steps=12 \
+    --learning_rate=1e-4 \
+    --num_workers=4 \
+    --max_epochs=160 \
+    --patience=160 \
+    --dist_weights=False \
+    --time_sampling=hardish3 \
+    --time_span=12m \
+    --channels="$CHANNELS" \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --use_centered_positives=True \
+    --num_draw=8 \
+    --normalize_inputs=2048 \
+    --stream_channels=32 \
+    --temporal_dropout=0.5 \
+    --modulate_class_weights="positive*0,negative*0,background*1.5,No Activity*0.001,Post Construction*0.01,Site Preparation*3.0" \
+    --init="$INIT_STATE_V012"
+
+
+# namek RGB continue
+# -----------------------------------------------
+export CUDA_VISIBLE_DEVICES=1
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+DVC_DPATH=$(smartwatch_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_s2_wv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_s2_wv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_s2_wv_vali.kwcoco.json
+CHANNELS="red|green|blue"
+EXPERIMENT_NAME=CropDrop3_SC_s2wv_rgb_xver6_V019
+INIT_STATE_V006="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V006/CropDrop3_SC_V006_epoch=71-step=18431.pt"
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=0.00 \
+    --accumulate_grad_batches=8 \
+    --saliency_loss='focal' \
+    --class_loss='dicefocal' \
+    --chip_size=256 \
+    --time_steps=12 \
+    --learning_rate=1e-4 \
+    --num_workers=4 \
+    --max_epochs=160 \
+    --patience=160 \
+    --dist_weights=False \
+    --time_sampling=soft2 \
+    --time_span=7m \
+    --channels="$CHANNELS" \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --use_centered_positives=False \
+    --num_draw=8 \
+    --normalize_inputs=2048 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --init="$INIT_STATE_V006"

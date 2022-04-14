@@ -1725,7 +1725,7 @@ def coco_channel_stats(coco_dset):
     return info
 
 
-class TrackidGenerator(ub.NiceRepr):
+class TrackidGenerator:
     """
     Keep track of which trackids have been used and generate new ones on demand
 
@@ -1734,6 +1734,8 @@ class TrackidGenerator(ub.NiceRepr):
     """
 
     def update_generator(self):
+        if self.dset is None:
+            raise Exception('cannot update unconnected generator. Manually exclude trackids')
         self.used_trackids.update(self.dset.index.trackid_to_aids.keys())
         new_generator = filter(lambda x: x not in self.used_trackids,
                                itertools.count(start=next(self.generator)))
@@ -1745,14 +1747,18 @@ class TrackidGenerator(ub.NiceRepr):
                   f'{self.used_trackids} already has trackids in {trackids}')
         self.used_trackids.update(trackids)
 
-    def __init__(self, coco_dset):
+    def __init__(self, coco_dset=None):
         self.dset = coco_dset
         self.used_trackids = set()
         self.generator = itertools.count(start=1)
-        self.update_generator()
+        if coco_dset is not None:
+            self.update_generator()
 
     def __next__(self):
-        return next(self.generator)
+        next_id = next(self.generator)
+        while next_id not in self.used_trackids:
+            next_id = next(self.generator)
+        return next_id
 
 
 @profile

@@ -56,8 +56,8 @@ class ScheduleEvaluationConfig(scfg.Config):
         'enable_eval': scfg.Value(True, help='if False, then evaluation is not run'),
         'enable_pred': scfg.Value(True, help='if False, then prediction is not run'),
 
-        'draw_heatmaps': scfg.Value(0, help='if true draw heatmaps on eval'),
-        'draw_curves': scfg.Value(0, help='if true draw curves on eval'),
+        'draw_heatmaps': scfg.Value(1, help='if true draw heatmaps on eval'),
+        'draw_curves': scfg.Value(1, help='if true draw curves on eval'),
 
         'partition': scfg.Value(None, help='specify slurm partition (slurm backend only)'),
         'mem': scfg.Value(None, help='specify slurm memory per task (slurm backend only)'),
@@ -368,7 +368,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             if len(gpu_info['procs']) == 0:
                 GPUS.append(gpu_idx)
     else:
-        GPUS = gpus
+        GPUS = None if gpus is None else _ensure_iterable(gpus)
 
     print('GPUS = {!r}'.format(GPUS))
     environ = {
@@ -427,6 +427,37 @@ def schedule_evaluation(cmdline=False, **kwargs):
     with_track = config['enable_track']
     with_iarpa_eval = config['enable_iarpa_eval']
 
+    class Task(dict):
+
+        @property
+        def name(self):
+            return self['name']
+
+        def should_compute_task(task_info):
+            # Check if each dependency will exist by the time we run this job
+            deps_will_exist = []
+            for req in task_info['requires']:
+                deps_will_exist.append(task_infos[req]['will_exist'])
+            all_deps_will_exist = all(deps_will_exist)
+            task_info['all_deps_will_exist'] = all_deps_will_exist
+
+            if not all_deps_will_exist:
+                # If dependencies wont exist, then we cant run
+                enabled = False
+            else:
+                # If we can run, then do it this task is requested
+                if skip_existing and task_info['output'].exists():
+                    enabled = task_info['recompute'] or recompute
+                else:
+                    enabled = bool(task_info['requested'])
+            # Only enable the task if we requested it and its dependencies will
+            # exist.
+            task_info['enabled'] = enabled
+            # Mark if we do exist, or we will exist
+            will_exist = enabled or task_info['output'].exists()
+            task_info['will_exist'] = will_exist
+            return task_info['enabled']
+
     def check_recompute(flag, depends_flags=[]):
         return recompute or flag == 'redo' or any(f == 'redo' for f in depends_flags)
 
@@ -457,6 +488,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     if with_eval == 'redo':
         # Need to dvc unprotect
+        # TODO: this can be a job in the queue
         needs_unprotect = []
         for info in expanded_packages_to_eval:
             suggestions = info['suggestions']
@@ -477,7 +509,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
         expanded_packages_to_eval = kwarray.shuffle(expanded_packages_to_eval)
 
     # expanded_packages_to_eval = expanded_packages_to_eval[0:2]
-
+    from watch.tasks.fusion import schedule_iarpa_eval
     for info in expanded_packages_to_eval:
         package_fpath = info['fpath']
         suggestions = info['suggestions']
@@ -507,56 +539,30 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
         # Really should make this a class
         task_infos = {
-            'pred': {
+            'pred': Task(**{
                 'name': 'pred',
                 'requested': with_pred,
                 'output': pred_dataset_fpath,
                 'requires': [],
                 'recompute': recompute_pred,
-            },
-            'eval': {
+            }),
+            'eval': Task(**{
                 'name': 'eval',
                 'requested': with_eval,
                 'output': eval_metrics_fpath,
                 'requires': ['pred'],
                 'recompute': recompute_eval,
-            }
+            })
         }
-
-        def should_compute_task(task_info):
-            # Check if each dependency will exist by the time we run this job
-            deps_will_exist = []
-            for req in task_info['requires']:
-                deps_will_exist.append(task_infos[req]['will_exist'])
-            all_deps_will_exist = all(deps_will_exist)
-            task_info['all_deps_will_exist'] = all_deps_will_exist
-
-            if not all_deps_will_exist:
-                # If dependencies wont exist, then we cant run
-                enabled = False
-            else:
-                # If we can run, then do it this task is requested
-                if skip_existing and task_info['output'].exists():
-                    enabled = task_info['recompute'] or recompute
-                else:
-                    enabled = bool(task_info['requested'])
-            # Only enable the task if we requested it and its dependencies will
-            # exist.
-            task_info['enabled'] = enabled
-            # Mark if we do exist, or we will exist
-            will_exist = enabled or task_info['output'].exists()
-            task_info['will_exist'] = will_exist
-            return task_info['enabled']
 
         name_suffix = (
             '_' + ub.hash_data(str(package_fpath))[0:8] +
             '_' + ub.hash_data(pred_cfg)[0:8]
         )
 
-        task = 'pred'
         pred_job = None
-        task_info = task_infos[task]
-        if should_compute_task(task_info):
+        task_info = task_infos['pred']
+        if task_info.should_compute_task():
             command = ub.codeblock(
                 r'''
                 python -m watch.tasks.fusion.predict \
@@ -586,10 +592,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
                                     partition=config['partition'],
                                     mem=config['mem'])
 
-        task = 'eval'
         eval_job = None
-        task_info = task_infos[task]
-        if should_compute_task(task_info):
+        task_info = task_infos['eval']
+        if task_info.should_compute_task():
             command = ub.codeblock(
                 r'''
                 python -m watch.tasks.fusion.evaluate \
@@ -614,11 +619,10 @@ def schedule_evaluation(cmdline=False, **kwargs):
             task_info['job'] = eval_job
 
         tracking_param_basis = {
-            'thresh': config['bas_thresh'],
+            'thresh': _ensure_iterable(config['bas_thresh']),
             # 'thresh': [0.1, 0.2, 0.3],
         }
         for track_cfg in ub.named_product(tracking_param_basis):
-            from watch.tasks.fusion import schedule_iarpa_eval
             track_suggestions = schedule_iarpa_eval._suggest_track_paths(
                 pred_dataset_fpath, track_cfg, eval_dpath=eval_dpath)
             name_suffix = '-'.join([
@@ -631,26 +635,26 @@ def schedule_evaluation(cmdline=False, **kwargs):
             iarpa_merge_fpath = track_suggestions['iarpa_merge_fpath']
 
             task_infos.update({
-                'track': {
+                'track': Task(**{
                     'name': 'track',
                     'requested': with_track,
                     'output': track_out_fpath,
                     'requires': ['pred'],
                     'recompute': recompute_track,
-                },
-                'iarpa_eval': {
+                }),
+                'iarpa_eval': Task(**{
                     'name': 'iarpa_eval',
                     'requested': with_iarpa_eval,
                     'output': iarpa_merge_fpath,
                     'requires': ['track'],
                     'recompute': recompute_iarpa_eval,
-                }
+                }),
             })
 
             task = 'track'
             track_job = None
             task_info = task_infos[task]
-            if should_compute_task(task_info):
+            if task_info.should_compute_task():
 
                 track_info = schedule_iarpa_eval._build_bas_track_job(
                     pred_dataset_fpath, track_out_fpath, **track_cfg)
@@ -676,7 +680,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             task = 'iarpa_eval'
             iarpa_eval_job = None
             task_info = task_infos[task]
-            if should_compute_task(task_info):
+            if task_info.should_compute_task():
                 iarpa_eval_info = schedule_iarpa_eval._build_iarpa_eval_job(
                     track_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath, annotations_dpath, name_suffix)
 
@@ -791,6 +795,10 @@ def updates_dvc_measures():
         dvc.main.main(dvc_command)
     finally:
         os.chdir(saved_cwd)
+
+
+def _ensure_iterable(inputs):
+    return inputs if ub.iterable(inputs) else [inputs]
 
 
 if __name__ == '__main__':

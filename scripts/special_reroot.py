@@ -205,23 +205,6 @@ def _execute_actions(all_actions, dry=True):
                 ub.delete(p)
 
 
-def _relocate_preds_to_hdd():
-    """
-    SSD_DPATH=$HOME/data/dvc-repos/smart_watch_dvc-ssd
-    HDD_DPATH=$HOME/data/dvc-repos/smart_watch_dvc-hdd
-
-    ls $SSD_DPATH
-    ls $HDD_DPATH
-
-    rsync -P "$SSD_DPATH"/Aligned-Drop3-TA1-2022-03-10/combo* "$HDD_DPATH"/Aligned-Drop3-TA1-2022-03-10
-
-    ls $SSD_DPATH
-    ls $HDD_DPATH
-
-    rsync -avrpRP "$SSD_DPATH"/models/fusion/eval3_candidates/./pred "$HDD_DPATH"/models/fusion/eval3_candidates
-    """
-
-
 if __name__ == '__main__':
     """
     CommandLine:

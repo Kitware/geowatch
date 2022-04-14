@@ -29,6 +29,12 @@ def trackid_is_default(trackid):
         return False
 
 
+try:
+    from xdev import profile
+except Exception:
+    profile = ub.identity
+
+
 Poly = Union[kwimage.Polygon, kwimage.MultiPolygon]
 
 
@@ -181,17 +187,59 @@ class TrackFunction(collections.abc.Callable):
         '''
         Main entrypoint for this class.
         '''
-        # tracked_subdsets = []
-        for gids in coco_dset.index.vidid_to_gids.values():
-            coco_dset = self.safe_apply(coco_dset, gids, overwrite)
-            # tracked_subdsets.append(sub_dset)
-        # Is this safe to do? It would be more efficient
-        # coco_dset = kwcoco.CocoDataset.union(*tracked_subdsets, disjoint_tracks=True)
+        legacy = False
+
+        tracked_subdsets = []
+        vid_gids = coco_dset.index.vidid_to_gids.values()
+        total = len(coco_dset.index.vidid_to_gids)
+        for gids in ub.ProgIter(vid_gids, total=total, desc='apply_per_video', verbose=3):
+            sub_dset = self.safe_apply(coco_dset, gids, overwrite, legacy=legacy)
+            if legacy:
+                coco_dset = sub_dset
+            else:
+                tracked_subdsets.append(sub_dset)
+
+        if not legacy:
+            # Tracks were either updated or added.
+            # In the case they were updated the existing track ids should
+            # be disjoint. All new tracks should not overlap with
+
+            from watch.utils import kwcoco_extensions
+            new_trackids = kwcoco_extensions.TrackidGenerator(None)
+            for sub_dset in ub.ProgIter(tracked_subdsets, desc='Ensure ok tracks'):
+                # Rebuild the index to ensure any hacks are removed.
+                # We may be able to remove this step.
+                # sub_dset._build_index()
+                existing_annots = sub_dset.annots()
+                existing_tids = set(existing_annots.lookup('track_id'))
+                collisions = existing_tids & new_trackids.used_trackids
+                new_trackids.exclude_trackids(existing_tids)
+                if collisions:
+                    old_tid_to_aids = ub.group_items(existing_annots, existing_tids)
+                    print(f'Resolve {len(collisions)} track collisions')
+                    # Change the track ids of any collisions
+                    for old_tid in collisions:
+                        new_tid = next(new_trackids)
+                        # Note: this does not update the index, but we
+                        # are about to clobber it anyway, so it doesnt matter
+                        for aid in old_tid_to_aids[old_tid]:
+                            ann = sub_dset.index.anns[aid]
+                            ann['track_id'] = new_tid
+                        existing_tids.add(new_tid)
+                new_trackids.exclude_trackids(existing_tids)
+
+            # Is this safe to do? It would be more efficient
+            coco_dset = kwcoco.CocoDataset.union(
+                *tracked_subdsets, disjoint_tracks=False)
         return coco_dset
 
-    def safe_apply(self, coco_dset, gids, overwrite):
+    @profile
+    def safe_apply(self, coco_dset, gids, overwrite, legacy=True):
 
-        sub_dset, rest_dset = self.safe_partition(coco_dset, gids, remove=True)
+        if legacy:
+            sub_dset, rest_dset = self.safe_partition(coco_dset, gids, remove=True)
+        else:
+            sub_dset = self.safe_partition(coco_dset, gids, remove=False)
 
         if overwrite:
             sub_dset = self(sub_dset)
@@ -214,9 +262,13 @@ class TrackFunction(collections.abc.Callable):
 
         # TODO: why is this assert here?
         assert None not in sub_dset.annots().lookup('track_id', None)
-        return self.safe_union(rest_dset, sub_dset)
+        if legacy:
+            return self.safe_union(rest_dset, sub_dset)
+        else:
+            return sub_dset
 
     @staticmethod
+    @profile
     def safe_partition(coco_dset, gids, remove=True):
         sub_dset = coco_dset.subset(gids=gids, copy=True)
         # HACK ensure tracks are not duplicated between videos
@@ -230,6 +282,7 @@ class TrackFunction(collections.abc.Callable):
             return sub_dset
 
     @staticmethod
+    @profile
     def safe_union(coco_dset, new_dset, existing_aids=[]):
         coco_dset._build_index()
         new_dset._build_index()
@@ -650,7 +703,7 @@ def build_heatmap(dset, gid, key, return_chan_probs=False, space='video',
         else:
             return fg_img_probs
 
-    if __debug__:
+    if 0 and __debug__:
         if common.numel() > 1:
             print('WARNING: Im not sure about that sum axis=-1, '
                   'I hope there is only ever one channel here')

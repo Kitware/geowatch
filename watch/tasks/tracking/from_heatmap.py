@@ -667,6 +667,8 @@ class TimeAggregatedBAS(NewTrackFunction):
 class TimeAggregatedSC(NewTrackFunction):
     '''
     Wrapper for Site Characterization that looks for phase heatmaps.
+
+    Alias: class_heatmaps
     '''
     thresh: float = 0.01
     morph_kernel: int = 3

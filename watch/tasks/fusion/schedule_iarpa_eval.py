@@ -85,6 +85,77 @@ def _build_bas_track_job(pred_fpath, track_out_fpath, thresh=0.2):
     return track_info
 
 
+def _build_sc_track_job(pred_fpath, track_out_fpath, thresh=0.2):
+    r"""
+    Given a predicted kwcoco file submit tracking and iarpa eval jobs
+
+
+    Notes:
+
+        DVC_DPATH=$(smartwatch_dvc --hardware=hdd)
+        PRED_DATASET=$DVC_DPATH/models/fusion/eval3_sc_candidates/pred/CropDrop3_SC_V006/pred_CropDrop3_SC_V006_epoch=71-step=18431/Cropped-Drop3-TA1-2022-03-10_combo_DL_s2_wv_vali.kwcoco/predcfg_464eb52f/pred.kwcoco.json
+        SITE_SUMMARY_GLOB="$DVC_DPATH/annotations/region_models/KR_*.geojson"
+
+        python -m watch.cli.kwcoco_to_geojson \
+            "$PRED_DATASET" \
+            --default_track_fn class_heatmaps \
+            --site_summary "$SITE_SUMMARY_GLOB" \
+            --track_kwargs '{"boundaries_as": "polys"}' \
+            --out_dir ./tmp/site_models \
+            --out_fpath ./tmp/site_models_stamp.json
+
+
+    Args:
+        pred_fpath (PathLike): path to predicted kwcoco file
+        task (str): bas or sc
+        annotations_dpath (PathLike): path to IARPA annotations file ($dvc/annotations)
+
+    Ignore:
+        pred_fpath = '/home/joncrall/data/dvc-repos/smart_watch_dvc/_tmp/_tmp_pred_00/pred.kwcoco.json'
+        annotations_dpath = '/home/joncrall/data/dvc-repos/smart_watch_dvc/annotations'
+        thresh = 0.2
+        task = 'bas'
+    """
+    pred_fpath = ub.Path(pred_fpath)
+
+    track_cfg = {
+        'thresh': thresh,
+    }
+
+    task = 'bas'
+    if task == 'bas':
+        import shlex
+        import json
+        track_kwargs_str = shlex.quote(json.dumps(track_cfg))
+        bas_args = f'--default_track_fn saliency_heatmaps --track_kwargs {track_kwargs_str}'  # NOQA
+        task_args = bas_args
+    elif task == 'sc':
+        sc_args = r'--track_fn watch.tasks.tracking.from_heatmap.TimeAggregatedHybrid --track_kwargs "{\"coco_dset_sc\": \"' + str(pred_fpath) + r'\"}"'  # NOQA
+        task_args = bas_args
+    else:
+        raise KeyError
+
+    # Because BAS is the first step we want ensure we clear annotations so
+    # everything that comes out is a track from BAS.
+
+    sites_dpath = track_out_fpath.parent / 'tracked_sites'
+    command = ub.codeblock(
+        fr'''
+        python -m watch.cli.kwcoco_to_geojson \
+            "{pred_fpath}" \
+             {task_args} \
+            --clear_annots \
+            --out_dir "{sites_dpath}" \
+            --out_fpath "{track_out_fpath}"
+        ''')
+
+    track_info = {
+        'command': command,
+        'track_out_fpath': track_out_fpath,
+    }
+    return track_info
+
+
 def _build_iarpa_eval_job(track_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath, annotations_dpath, name=None):
     import shlex
     tmp_dir = iarpa_eval_dpath / 'tmp'
