@@ -645,6 +645,16 @@ def main(args):
     if len(args.sites) == 0:
         raise Exception('No input sites were given')
 
+    try:
+        # Do we have the latest and greatest?
+        import iarpa_smart_metrics
+        METRICS_VERSION = version.Version(iarpa_smart_metrics.__version__)
+    except Exception:
+        raise AssertionError(
+            'The iarpa_smart_metrics package should be pip installed '
+            'in your virtualenv')
+    assert METRICS_VERSION >= version.Version('0.2.0')
+
     parent_info = []
 
     for site_data in args.sites:
@@ -717,16 +727,6 @@ def main(args):
     out_dirs = []
     grouped_sites = ub.group_items(
         sites, lambda site: site['features'][0]['properties']['region_id'])
-
-    try:
-        # Do we have the latest and greatest?
-        import iarpa_smart_metrics
-        METRICS_VERSION = version.Version(iarpa_smart_metrics.__version__)
-    except Exception:
-        raise AssertionError(
-            'The iarpa_smart_metrics package should be pip installed '
-            'in your virtualenv')
-    assert METRICS_VERSION >= version.Version('0.2.0')
 
     main_out_dir = ub.Path(args.out_dir or '.')
 

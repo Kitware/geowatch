@@ -16,6 +16,7 @@ References:
     .. [3] https://smartgitlab.com/TE/annotations
 """
 import geojson
+import warnings
 import json
 import os
 import sys
@@ -31,7 +32,6 @@ import shapely
 import shapely.ops
 from mgrs import MGRS
 from osgeo import osr
-from glob import glob
 from collections import defaultdict
 from typing import Union, List, Tuple, Dict
 import numpy as np
@@ -419,8 +419,8 @@ def convert_kwcoco_to_iarpa(coco_dset,
 
 def _validate_summary(site_summary_or_region_model,
                       default_region_id=None,
-                      raises=True) -> List[Tuple[str, Dict]]:
-    '''
+                      strict=True) -> List[Tuple[str, Dict]]:
+    """
     Possible input formats:
         - file path
         - globbed file paths
@@ -432,44 +432,70 @@ def _validate_summary(site_summary_or_region_model,
     Args:
         default_region_id: for summaries.
             Region models should already have a region_id.
-        raises: if True, raise error on unknown input
+        strict: if True, raise error on unknown input
 
     Returns:
-        (region_id, site_summary)
-    '''
+        List[Tuple[region_id: str, site_summary: Dict]]
+    """
+    from watch.utils import util_path
 
     # open the filepath(s)
     summaries_or_rms = []
 
     if isinstance(site_summary_or_region_model, str):
-        paths = glob(site_summary_or_region_model)
+        paths = util_path.coerce_patterned_paths(site_summary_or_region_model)
         if len(paths) > 0:
+            print(f'Loading {len(paths)} site/region geojson files')
             for path in paths:
-                with open(path) as f:
+                with open(path, 'r') as f:
                     summaries_or_rms.append(json.load(f))
         else:
+            warnings.warn(
+                f'Site summary {site_summary_or_region_model} did not '
+                'resolve to a path'
+            )
             try:
                 summaries_or_rms.append(
                     json.loads(site_summary_or_region_model))
             except json.JSONDecodeError as err:
-                if raises:
+                if strict:
                     raise err
+            else:
+                warnings.warn(
+                    'Site summary/region passed in via raw json text on the '
+                    'command line. It is best to avoid this because the '
+                    'command line has a max character limit'
+                )
 
     # validate the json
-    summaries = []
+    site_summaries = []
 
     for site_summary_or_region_model in summaries_or_rms:
 
-        if raises:
-            assert isinstance(site_summary_or_region_model,
-                              dict), ('unknown site summary dtype ' +
-                                      str(type(site_summary_or_region_model)))
-        # import xdev; xdev.embed()
+        if strict and not isinstance(site_summary_or_region_model, dict):
+            raise AssertionError(
+                f'unknown site summary {type(site_summary_or_region_model)=}'
+            )
+
         try:  # is this a region model?
-            region_model_schema = watch.rc.load_region_model_schema()
+            # Unfortunately, we can't trust the region file schema
             region_model = site_summary_or_region_model
-            jsonschema.validate(region_model, schema=region_model_schema)
-            site_summaries = [
+
+            TRUST_REGION_SCHEMA = 0
+            if TRUST_REGION_SCHEMA:
+                region_model_schema = watch.rc.load_region_model_schema()
+                jsonschema.validate(region_model, schema=region_model_schema)
+            else:
+                if region_model['type'] != 'FeatureCollection':
+                    raise AssertionError
+
+                for feat in region_model['features']:
+                    assert feat['type'] == 'Feature'
+                    row_type = feat['properties']['type']
+                    if row_type not in {'region', 'site_summary'}:
+                        raise jsonschema.ValidationError('not a region')
+
+            _summaries = [
                 f for f in region_model['features']
                 if (f['properties']['type'] == 'site_summary'
                     # TODO handle positive_partial
@@ -479,14 +505,14 @@ def _validate_summary(site_summary_or_region_model,
             assert region_feat['properties']['type'] == 'region'
             region_id = region_feat['properties'].get('region_id',
                                                       default_region_id)
-            summaries.extend([(region_id, s) for s in site_summaries])
+            site_summaries.extend([(region_id, s) for s in _summaries])
 
         except jsonschema.ValidationError:  # or a site model?
             # TODO validate this
             site_summary = site_summary_or_region_model
-            summaries.append((default_region_id, site_summary))
+            site_summaries.append((default_region_id, site_summary))
 
-    return summaries
+    return site_summaries
 
 
 def add_site_summary_to_kwcoco(possible_summaries,
@@ -502,7 +528,9 @@ def add_site_summary_to_kwcoco(possible_summaries,
     if default_region_id is None:
         default_region_id = ub.peek(coco_dset.index.name_to_video)
 
-    site_summaries = _validate_summary(possible_summaries, default_region_id)
+    site_summary_or_region_model = possible_summaries
+    site_summaries = _validate_summary(site_summary_or_region_model,
+                                       default_region_id)
     print(f'found {len(site_summaries)} site summaries')
 
     # TODO use pyproj instead, make sure it works with kwimage.warp

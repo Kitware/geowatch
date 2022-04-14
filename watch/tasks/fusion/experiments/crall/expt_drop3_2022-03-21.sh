@@ -120,7 +120,7 @@ schedule-prediction-and-evlauation(){
     # Commit Evaluation Results
     #################################
     # Be sure to DVC add the eval results after!
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
+    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     cd "$DVC_DPATH" 
     # Check for 
     ls -al models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
@@ -156,16 +156,16 @@ aggregate-results(){
     # Aggregate Results
     #################################
     # On other machines
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
+    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     cd "$DVC_DPATH" 
     git pull
     dvc checkout aws models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
+    DVC_DPATH=$(smartwatch_dvc)
     cd "$DVC_DPATH" 
     git pull
     dvc pull -r horologic models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
 
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
+    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     EXPT_GROUP_CODE=eval3_candidates
     #EXPT_NAME_PAT="*"
     EXPT_NAME_PAT="*"
@@ -202,26 +202,29 @@ schedule-prediction-and-evaluate-team-models(){
 }
 
 recovery_eval(){
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
+    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
     TMUX_GPUS="0,1,2,3"
 
+    #--model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest-2.txt" \
+
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="$TMUX_GPUS" \
-            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest-2.txt" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest.txt" \
             --test_dataset="$VALI_FPATH" \
-            --enable_pred=0 \
-            --enable_eval=1 \
+            --enable_pred=1 \
+            --enable_eval=redo \
             --enable_track=0 \
             --enable_iarpa_eval=0 \
             --chip_overlap=0.3 \
             --tta_time=0 \
             --tta_fliprot=0 \
             --bas_thresh=0.1 \
-            --skip_existing=True --backend=tmux --run=0
+            --draw_heatmaps=1 --draw_curves=1 \
+            --skip_existing=1 --backend=tmux --run=0
 
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="$TMUX_GPUS" \

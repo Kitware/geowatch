@@ -1725,7 +1725,7 @@ def coco_channel_stats(coco_dset):
     return info
 
 
-class TrackidGenerator(ub.NiceRepr):
+class TrackidGenerator:
     """
     Keep track of which trackids have been used and generate new ones on demand
 

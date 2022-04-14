@@ -48,6 +48,8 @@ CROPPED_PRE_EVAL_AND_AGG(){
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*_D_*/*.pt" \
             --test_dataset="$VALI_FPATH" \
+            --enable_pred=1 \
+            --enable_eval=1 \
             --skip_existing=True --backend=tmux --run=0
 
 
