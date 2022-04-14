@@ -730,6 +730,8 @@ def main(args):
 
     main_out_dir = ub.Path(args.out_dir or '.')
 
+    main_out_dir = ub.Path(args.out_dir or '.')
+
     for region_id, region_sites in grouped_sites.items():
 
         site_dpath = (tmp_dpath / 'site' / region_id).ensuredir()
