@@ -307,7 +307,6 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
     except ValueError:
         temporal_err = [np.nan] * len(phase_classifications)
 
-    # import xdev; xdev.embed()
     sc_df = pd.DataFrame(
         {
             'F1 score': f1,
@@ -469,9 +468,7 @@ def merge_metrics_results(region_dpaths, anns_root, merge_dpath, merge_fpath,
     # merge_dpath.delete().ensuredir()
     merge_dpath.ensuredir()
 
-    import xdev
-    with xdev.embed_on_exception_context:
-        bas_concat_df, bas_df, sc_df, sc_cm = _make_merge_metrics(region_dpaths, anns_root)
+    bas_concat_df, bas_df, sc_df, sc_cm = _make_merge_metrics(region_dpaths, anns_root)
     bas_df.to_pickle(merge_dpath / 'bas_scoreboard_df.pkl')
     sc_df.to_pickle(merge_dpath / 'sc_activity_df.pkl')
     sc_cm.to_pickle(merge_dpath / 'sc_confusion_df.pkl')
