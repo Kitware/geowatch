@@ -96,9 +96,9 @@ class SimpleDVC():
             self.dvc_root = self.find_root(paths[0])
         return self.dvc_root
 
-    def add(self, paths):
+    def add(self, path):
         from dvc import main as dvc_main
-        paths = list(map(ub.Path, _ensure_iterable(paths)))
+        paths = list(map(ub.Path, _ensure_iterable(path)))
         dvc_root = self._ensure_root(paths)
         rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
         with ChDir(dvc_root):
