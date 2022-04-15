@@ -87,6 +87,55 @@ class ScheduleEvaluationConfig(scfg.Config):
     }
 
 
+class Task(dict):
+
+    def __init__(self, *args, manager=None, skip_existing=0, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.manager = manager
+        self.skip_existing = skip_existing
+
+    @property
+    def name(self):
+        return self['name']
+
+    def should_compute_task(task_info):
+        # Check if each dependency will exist by the time we run this job
+        deps_will_exist = []
+        for req in task_info['requires']:
+            deps_will_exist.append(task_info.manager[req]['will_exist'])
+        all_deps_will_exist = all(deps_will_exist)
+        task_info['all_deps_will_exist'] = all_deps_will_exist
+
+        if not all_deps_will_exist:
+            # If dependencies wont exist, then we cant run
+            enabled = False
+        else:
+            # If we can run, then do it this task is requested
+            if task_info.skip_existing and task_info['output'].exists():
+                enabled = task_info['recompute']
+            else:
+                enabled = bool(task_info['requested'])
+        # Only enable the task if we requested it and its dependencies will
+        # exist.
+        task_info['enabled'] = enabled
+        # Mark if we do exist, or we will exist
+        will_exist = enabled or task_info['output'].exists()
+        task_info['will_exist'] = will_exist
+        return task_info['enabled']
+
+    def prefix_command(task_info, command):
+        """
+        Augments the command so it is lazy if its output exists
+
+        TODO: incorporate into cmdq
+        """
+        if task_info['recompute']:
+            stamp_fpath = task_info['output']
+            if stamp_fpath is not None:
+                command = f'test -f "{stamp_fpath}" || \\\n  ' + command
+        return command
+
+
 def schedule_evaluation(cmdline=False, **kwargs):
     """
     First ensure that models have been copied to the DVC repo in the
@@ -401,6 +450,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
     pred_cfg_basis['tta_fliprot'] = ensure_iterable(config['tta_fliprot'])
     pred_cfg_basis['chip_overlap'] = ensure_iterable(config['chip_overlap'])
 
+    HACK_HACKHACK = 1
+
+    other_existing_pred_infos = []
     expanded_packages_to_eval = []
     for raw_info in packages_to_eval:
         for pred_cfg in ub.named_product(pred_cfg_basis):
@@ -429,59 +481,39 @@ def schedule_evaluation(cmdline=False, **kwargs):
             info['pred_cfg'] = pred_cfg
             expanded_packages_to_eval.append(info)
 
+            if HACK_HACKHACK:
+                # The idea is we just want to schedule eval jobs
+                # for predictions that exist without having to remember
+                # the parent model / dataset.
+                pred_dpath = ub.Path(suggestions['pred_dpath'])
+                other_dset_pred_dpath = pred_dpath.parent
+                if other_dset_pred_dpath.exists():
+                    for other_pred_fpath in other_dset_pred_dpath.glob('*/pred.kwcoco.json'):
+                        eval_dpath = ub.Path(*other_pred_fpath.parts[:-6], 'eval', *other_pred_fpath.parts[-5:-1], 'eval')
+                        other_info = {
+                            'package_fpath': package_fpath,
+                            'pred_dataset': other_pred_fpath,
+                            'pred_cfgstr': other_pred_fpath.parent.name.split('_')[1],
+                            'package_cfgstr': suggestions['package_cfgstr'],
+                            'eval_dpath': eval_dpath,
+                        }
+                        other_existing_pred_infos.append(other_info)
+
+    if HACK_HACKHACK:
+        existing_expanded = []
+        for info in expanded_packages_to_eval:
+            pred_fpath = ub.Path(info['suggestions']['pred_dataset'])
+            if pred_fpath.exists():
+                existing_expanded.append(info)
+        print(f'{len(existing_expanded)=}')
+        print(f'{len(other_existing_pred_infos)=}')
+
     skip_existing = config['skip_existing']
 
     with_pred = config['enable_pred']  # TODO: allow caching
     with_eval = config['enable_eval']
     with_track = config['enable_track']
     with_iarpa_eval = config['enable_iarpa_eval']
-
-    class Task(dict):
-
-        def __init__(self, *args, manager=None, **kwargs):
-            super().__init__(*args, **kwargs)
-            self.manager = manager
-
-        @property
-        def name(self):
-            return self['name']
-
-        def should_compute_task(task_info):
-            # Check if each dependency will exist by the time we run this job
-            deps_will_exist = []
-            for req in task_info['requires']:
-                deps_will_exist.append(task_info.manager[req]['will_exist'])
-            all_deps_will_exist = all(deps_will_exist)
-            task_info['all_deps_will_exist'] = all_deps_will_exist
-
-            if not all_deps_will_exist:
-                # If dependencies wont exist, then we cant run
-                enabled = False
-            else:
-                # If we can run, then do it this task is requested
-                if skip_existing and task_info['output'].exists():
-                    enabled = task_info['recompute'] or recompute
-                else:
-                    enabled = bool(task_info['requested'])
-            # Only enable the task if we requested it and its dependencies will
-            # exist.
-            task_info['enabled'] = enabled
-            # Mark if we do exist, or we will exist
-            will_exist = enabled or task_info['output'].exists()
-            task_info['will_exist'] = will_exist
-            return task_info['enabled']
-
-        def prefix_command(task_info, command):
-            """
-            Augments the command so it is lazy if its output exists
-
-            TODO: incorporate into cmdq
-            """
-            if task_info['recompute']:
-                stamp_fpath = task_info['output']
-                if stamp_fpath is not None:
-                    command = f'test -f "{stamp_fpath}" || \\\n  ' + command
-            return command
 
     def check_recompute(flag, depends_flags=[]):
         return recompute or flag == 'redo' or any(f == 'redo' for f in depends_flags)
@@ -528,8 +560,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
         mem=config['mem']
     )
 
+    seen_predcfg = set()
+
     # expanded_packages_to_eval = expanded_packages_to_eval[0:2]
-    from watch.tasks.fusion import schedule_iarpa_eval
     for info in expanded_packages_to_eval:
         package_fpath = info['fpath']
         suggestions = info['suggestions']
@@ -565,7 +598,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             'output': pred_dataset_fpath,
             'requires': [],
             'recompute': recompute_pred,
-        }, manager=manager)
+        }, manager=manager, skip_existing=skip_existing)
 
         manager['pxl_eval'] = Task(**{
             'name': 'pxl_eval',
@@ -573,7 +606,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             'output': eval_metrics_fpath,
             'requires': ['pred'],
             'recompute': recompute_eval,
-        }, manager=manager)
+        }, manager=manager, skip_existing=skip_existing)
 
         name_suffix = (
             '_' + ub.hash_data(str(package_fpath))[0:8] +
@@ -628,157 +661,37 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 command, depends=pred_job, name=name, cpus=2,
                 **common_submitkw)
 
-        defaults = {
-            'thresh': [0.1],
-            'morph_kernel': [3],
-            'norm_ord': [1],
-            'agg_fn': ['probs'],
-            'thresh_hysteresis': [None],
-            'moving_window_size': [None],
-        }
-        bas_param_basis = defaults.copy()
-        bas_param_basis.update({
-            'thresh': _ensure_iterable(config['bas_thresh']),
-            # 'thresh': [0.1, 0.2, 0.3],
-        })
+        package_cfgstr = suggestions['package_cfgstr']
+        pred_cfgstr = suggestions['pred_cfgstr']
+        seen_predcfg.add(pred_cfgstr)
 
-        if config['hack_bas_grid']:
-            grid = {
-                'thresh': [0.01, 0.05, 0.1, 0.15, 0.2],
-                'morph_kernel': [3],
-                'norm_ord': [1],
-                'agg_fn': ['probs', 'mean_normalized'],
-                'thresh_hysteresis': [None, '2*{thresh}'],
-                'moving_window_size': [None, 150],
-            }
-            bas_param_basis.update(grid)
+        _schedule_track_jobs(
+            queue, manager, config, package_cfgstr, pred_cfgstr,
+            pred_dataset_fpath, eval_dpath, pred_job, with_track,
+            recompute_track, with_iarpa_eval, recompute_iarpa_eval,
+            annotations_dpath, common_submitkw, skip_existing,
+            region_model_dpath)
 
-        for bas_track_cfg in ub.named_product(bas_param_basis):
-            bas_suggestions = schedule_iarpa_eval._suggest_bas_path(
-                pred_dataset_fpath, bas_track_cfg, eval_dpath=eval_dpath)
-            name_suffix = '-'.join([
-                'pkg', suggestions['package_cfgstr'],
-                'prd', suggestions['pred_cfgstr'],
-                'trk', bas_suggestions['bas_cfgstr'],
-            ])
-            iarpa_eval_dpath = bas_suggestions['iarpa_eval_dpath']
-            bas_out_fpath = bas_suggestions['bas_out_fpath']
-            iarpa_merge_fpath = bas_suggestions['iarpa_merge_fpath']
-            manager['bas_track'] = Task(**{
-                'name': 'bas_track',
-                'requested': with_track,
-                'output': bas_out_fpath,
-                'requires': ['pred'],
-                'recompute': recompute_track,
-            }, manager=manager)
-            manager['bas_eval'] = Task(**{
-                'name': 'bas_eval',
-                'requested': with_iarpa_eval,
-                'output': iarpa_merge_fpath,
-                'requires': ['bas_track'],
-                'recompute': recompute_iarpa_eval,
-            }, manager=manager)
+    if HACK_HACKHACK:
+        for info in other_existing_pred_infos:
+            manager = {}
+            manager['pred'] = {'will_exist': True}
+            # info['package_fpath']
+            package_cfgstr = info['package_cfgstr']
+            pred_cfgstr = info['pred_cfgstr']
+            if pred_cfgstr in seen_predcfg:
+                print('Skip duplicate')
+                continue
+            pred_dataset_fpath = info['pred_dataset']
+            eval_dpath = info['eval_dpath']
 
-            bas_job = None
-            task_info = manager['bas_track']
-            if task_info.should_compute_task():
-                command = schedule_iarpa_eval._build_bas_track_job(
-                    pred_dataset_fpath, bas_out_fpath,
-                    bas_track_cfg=bas_track_cfg)
-                command = task_info.prefix_command(command)
-                name = task_info['name'] + name_suffix
-                bas_job = queue.submit(command=command, depends=pred_job,
-                                         name=name, cpus=2, **common_submitkw)
-                task_info['job'] = bas_job
-
-            # TODO: need a way of knowing if a package is BAS or SC.
-            # Might need info on GSD as well.
-            task_info = manager['bas_eval']
-            if task_info.should_compute_task():
-                command = schedule_iarpa_eval._build_iarpa_eval_job(
-                    bas_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath,
-                    annotations_dpath, name_suffix)
-                command = task_info.prefix_command(command)
-                name = task_info['name'] + name_suffix
-                bas_eval_job = queue.submit(
-                    command=command, depends=bas_job, name=name, cpus=2,
-                    **common_submitkw)
-                task_info['job'] = bas_eval_job
-
-        act_param_basis = {
-            # TODO viterbi or not
-            # Not sure what SC thresh is
-            # 'thresh': _ensure_iterable(config['bas_thresh']),
-            'thresh': [0.0],
-            'use_viterbi': [0],
-        }
-        if config['hack_sc_grid']:
-            grid = {
-                'thresh': [0, 0.01, 0.1, 0.5],
-                'use_viterbi': [0],
-            }
-            act_param_basis.update(grid)
-
-        for actcfg in ub.named_product(act_param_basis):
-            act_suggestions = schedule_iarpa_eval._suggest_act_paths(
-                pred_dataset_fpath, actcfg, eval_dpath=eval_dpath)
-            name_suffix = '-'.join([
-                'pkg', suggestions['package_cfgstr'],
-                'prd', suggestions['pred_cfgstr'],
-                'act', act_suggestions['act_cfgstr'],
-            ])
-            iarpa_eval_dpath = act_suggestions['iarpa_eval_dpath']
-            act_out_fpath = act_suggestions['act_out_fpath']
-            iarpa_merge_fpath = act_suggestions['iarpa_merge_fpath']
-
-            manager['actclf'] = Task(**{
-                'name': 'actclf',
-                'requested': config['enable_actclf'],
-                'output': act_out_fpath,
-                'requires': ['pred'],
-                'recompute': 0,
-            }, manager=manager)
-            manager['sc_eval'] = Task(**{
-                'name': 'sc_eval',
-                'requested': config['enable_actclf_eval'],
-                'output': iarpa_merge_fpath,
-                'requires': ['actclf'],
-                'recompute': 0,
-            }, manager=manager)
-
-            sc_job = None
-            task_info = manager['actclf']
-            if task_info.should_compute_task():
-                command = schedule_iarpa_eval._build_sc_actclf_job(
-                    pred_dataset_fpath, region_model_dpath, act_out_fpath, actcfg=actcfg)
-                command = task_info.prefix_command(command)
-                name = task_info['name'] + name_suffix
-                sc_job = queue.submit(
-                    command=command,
-                    depends=pred_job,
-                    name=name,
-                    cpus=2,
-                    partition=config['partition'],
-                    mem=config['mem'],
-                )
-                task_info['job'] = sc_job
-
-            task_info = manager['sc_eval']
-            if task_info.should_compute_task():
-                command = schedule_iarpa_eval._build_iarpa_eval_job(
-                    act_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath,
-                    annotations_dpath, name_suffix)
-                command = task_info.prefix_command(command)
-                name = task_info['name'] + name_suffix
-                sc_eval_job = queue.submit(
-                    command=command,
-                    depends=sc_job,
-                    name=name,
-                    cpus=2,
-                    partition=config['partition'],
-                    mem=config['mem'],
-                )
-                task_info['job'] = sc_eval_job
+            _schedule_track_jobs(
+                queue, manager, config, package_cfgstr, pred_cfgstr,
+                pred_dataset_fpath, eval_dpath, pred_job, with_track,
+                recompute_track, with_iarpa_eval, recompute_iarpa_eval,
+                annotations_dpath, common_submitkw, skip_existing,
+                region_model_dpath)
+            pass
 
     print('queue = {!r}'.format(queue))
     # print(f'{len(queue)=}')
@@ -814,6 +727,165 @@ def schedule_evaluation(cmdline=False, **kwargs):
     feh models/fusion/unevaluated-activity-2021-11-12/eval_links/*/curves/ovr_roc.png
     feh models/fusion/unevaluated-activity-2021-11-12/eval_links/*/curves/ovr_ap.png
     """
+
+
+def _schedule_track_jobs(queue, manager, config, package_cfgstr, pred_cfgstr,
+                         pred_dataset_fpath, eval_dpath, pred_job, with_track,
+                         recompute_track, with_iarpa_eval,
+                         recompute_iarpa_eval, annotations_dpath,
+                         common_submitkw, skip_existing, region_model_dpath):
+    from watch.tasks.fusion import schedule_iarpa_eval
+    defaults = {
+        'thresh': [0.1],
+        'morph_kernel': [3],
+        'norm_ord': [1],
+        'agg_fn': ['probs'],
+        'thresh_hysteresis': [None],
+        'moving_window_size': [None],
+    }
+    bas_param_basis = defaults.copy()
+    bas_param_basis.update({
+        'thresh': _ensure_iterable(config['bas_thresh']),
+        # 'thresh': [0.1, 0.2, 0.3],
+    })
+
+    if config['hack_bas_grid']:
+        grid = {
+            'thresh': [0.01, 0.05, 0.1, 0.15, 0.2],
+            'morph_kernel': [3],
+            'norm_ord': [1],
+            'agg_fn': ['probs', 'mean_normalized'],
+            'thresh_hysteresis': [None, '2*{thresh}'],
+            'moving_window_size': [None, 150],
+        }
+        bas_param_basis.update(grid)
+
+    for bas_track_cfg in ub.named_product(bas_param_basis):
+        bas_suggestions = schedule_iarpa_eval._suggest_bas_path(
+            pred_dataset_fpath, bas_track_cfg, eval_dpath=eval_dpath)
+        name_suffix = '-'.join([
+            'pkg', package_cfgstr,
+            'prd', pred_cfgstr,
+            'trk', bas_suggestions['bas_cfgstr'],
+        ])
+        iarpa_eval_dpath = bas_suggestions['iarpa_eval_dpath']
+        bas_out_fpath = bas_suggestions['bas_out_fpath']
+        iarpa_merge_fpath = bas_suggestions['iarpa_merge_fpath']
+        manager['bas_track'] = Task(**{
+            'name': 'bas_track',
+            'requested': with_track,
+            'output': bas_out_fpath,
+            'requires': ['pred'],
+            'recompute': recompute_track,
+        }, manager=manager, skip_existing=skip_existing)
+        manager['bas_eval'] = Task(**{
+            'name': 'bas_eval',
+            'requested': with_iarpa_eval,
+            'output': iarpa_merge_fpath,
+            'requires': ['bas_track'],
+            'recompute': recompute_iarpa_eval,
+        }, manager=manager, skip_existing=skip_existing)
+
+        bas_job = None
+        task_info = manager['bas_track']
+        if task_info.should_compute_task():
+            command = schedule_iarpa_eval._build_bas_track_job(
+                pred_dataset_fpath, bas_out_fpath,
+                bas_track_cfg=bas_track_cfg)
+            command = task_info.prefix_command(command)
+            name = task_info['name'] + name_suffix
+            bas_job = queue.submit(command=command, depends=pred_job,
+                                     name=name, cpus=2, **common_submitkw)
+            task_info['job'] = bas_job
+
+        # TODO: need a way of knowing if a package is BAS or SC.
+        # Might need info on GSD as well.
+        task_info = manager['bas_eval']
+        if task_info.should_compute_task():
+            command = schedule_iarpa_eval._build_iarpa_eval_job(
+                bas_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath,
+                annotations_dpath, name_suffix)
+            command = task_info.prefix_command(command)
+            name = task_info['name'] + name_suffix
+            bas_eval_job = queue.submit(
+                command=command, depends=bas_job, name=name, cpus=2,
+                **common_submitkw)
+            task_info['job'] = bas_eval_job
+
+    act_param_basis = {
+        # TODO viterbi or not
+        # Not sure what SC thresh is
+        # 'thresh': _ensure_iterable(config['bas_thresh']),
+        'thresh': [0.0],
+        'use_viterbi': [0],
+    }
+    if config['hack_sc_grid']:
+        grid = {
+            'thresh': [0, 0.01, 0.1, 0.5],
+            'use_viterbi': [0],
+        }
+        act_param_basis.update(grid)
+
+    for actcfg in ub.named_product(act_param_basis):
+        act_suggestions = schedule_iarpa_eval._suggest_act_paths(
+            pred_dataset_fpath, actcfg, eval_dpath=eval_dpath)
+        name_suffix = '-'.join([
+            'pkg', package_cfgstr,
+            'prd', pred_cfgstr,
+            'act', act_suggestions['act_cfgstr'],
+        ])
+        iarpa_eval_dpath = act_suggestions['iarpa_eval_dpath']
+        act_out_fpath = act_suggestions['act_out_fpath']
+        iarpa_merge_fpath = act_suggestions['iarpa_merge_fpath']
+
+        manager['actclf'] = Task(**{
+            'name': 'actclf',
+            'requested': config['enable_actclf'],
+            'output': act_out_fpath,
+            'requires': ['pred'],
+            'recompute': 0,
+        }, manager=manager, skip_existing=skip_existing)
+        manager['sc_eval'] = Task(**{
+            'name': 'sc_eval',
+            'requested': config['enable_actclf_eval'],
+            'output': iarpa_merge_fpath,
+            'requires': ['actclf'],
+            'recompute': 0,
+        }, manager=manager, skip_existing=skip_existing)
+
+        sc_job = None
+        task_info = manager['actclf']
+        if task_info.should_compute_task():
+            command = schedule_iarpa_eval._build_sc_actclf_job(
+                pred_dataset_fpath, region_model_dpath, act_out_fpath, actcfg=actcfg)
+            command = task_info.prefix_command(command)
+            name = task_info['name'] + name_suffix
+            sc_job = queue.submit(
+                command=command,
+                depends=pred_job,
+                name=name,
+                cpus=2,
+                partition=config['partition'],
+                mem=config['mem'],
+            )
+            task_info['job'] = sc_job
+
+        task_info = manager['sc_eval']
+        if task_info.should_compute_task():
+            command = schedule_iarpa_eval._build_iarpa_eval_job(
+                act_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath,
+                annotations_dpath, name_suffix)
+            command = task_info.prefix_command(command)
+            name = task_info['name'] + name_suffix
+            sc_eval_job = queue.submit(
+                command=command,
+                depends=sc_job,
+                name=name,
+                cpus=2,
+                partition=config['partition'],
+                mem=config['mem'],
+            )
+            task_info['job'] = sc_eval_job
 
 
 def updates_dvc_measures():

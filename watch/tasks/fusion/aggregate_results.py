@@ -126,6 +126,8 @@ def debug_all_results():
         'name',
         'time_sampling',
         'max_epochs',
+        'dist_weights',
+        'dist_weights',
     ]
 
     bas_globpats = [
@@ -158,6 +160,10 @@ def debug_all_results():
         }
         row = ub.odict(ub.dict_union(metrics, params))
         bas_rows.append(row)
+
+    print(f'{len(bas_rows)=}')
+    bas_rows = list(ub.unique(bas_rows, key=ub.hash_data))
+    print(f'{len(bas_rows)=}')
 
     df = pd.DataFrame(bas_rows)
     df = df.sort_values('BAS_F1')
@@ -202,8 +208,9 @@ def debug_all_results():
     if 0:
         ub.util_hash._HASHABLE_EXTENSIONS.register(ub.Path)(lambda x: (b'path', ub.hash_data(str(x)).encode()))
 
-    len(sc_rows)
+    print(f'{len(sc_rows)=}')
     sc_rows = list(ub.unique(sc_rows, key=ub.hash_data))
+    print(f'{len(sc_rows)=}')
 
     df = pd.DataFrame(sc_rows)
     df = df.sort_values('mean_f1')

@@ -245,24 +245,31 @@ recovery_eval(){
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+    #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
     writeto "$DVC_DPATH/models/fusion/eval3_candidates/models_of_interest-2.txt" "
         models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V319/Drop3_SpotCheck_V319_epoch=29-step=61439-v2.pt
     "
+
+    ls "$DVC_DPATH"/models/fusion/$EXPT_GROUP_CODE/pred/*/*Drop3*
+
+    MODEL_GLOBSTR=$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt
+    #MODEL_GLOBSTR="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest-2.txt" 
+
     TMUX_GPUS="0,1,2,3,4,5,6,7,8"
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="$TMUX_GPUS" \
-            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest-2.txt" \
+            --model_globstr="$MODEL_GLOBSTR" \
             --test_dataset="$VALI_FPATH" \
-            --enable_pred=1 \
-            --enable_eval=1 \
+            --enable_pred=0 \
+            --enable_eval=0 \
             --enable_track=1 \
             --enable_iarpa_eval=1 \
             --chip_overlap=0.3 \
             --tta_time=0 \
             --tta_fliprot=0 \
-            --bas_thresh=0.1,0.2 --hack_bas_grid=True \
-            --skip_existing=1 --backend=tmux --run=0
+            --bas_thresh=0.1 --hack_bas_grid=0 \
+            --skip_existing=0 --backend=tmux --run=0
 
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     EXPT_GROUP_CODE=eval3_candidates

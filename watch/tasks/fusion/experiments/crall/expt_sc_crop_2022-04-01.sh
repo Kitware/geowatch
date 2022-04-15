@@ -135,15 +135,16 @@ special_evaluation(){
     "
 
     MODEL_GLOBSTR="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt"
-    #MODEL_GLOBSTR="$DVC_DPATH"/models/fusion/eval3_sc_candidates/models_of_interest.txt
+    MODEL_GLOBSTR="$DVC_DPATH"/models/fusion/eval3_sc_candidates/models_of_interest.txt
 
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_sc_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-    #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_wv_vali.kwcoco.json
+    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_wv_vali.kwcoco.json
     #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_D_wv_vali.kwcoco.json
-    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
+    #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
+    #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1,2,3,4,5,6,7,8" \
             --model_globstr="$MODEL_GLOBSTR" \
@@ -158,10 +159,10 @@ special_evaluation(){
             --draw_curves=1 \
             --pred_workers=4 \
             --chip_overlap=0.3 \
-            --tta_time=0,1 \
+            --tta_time=0 \
             --tta_fliprot=0 \
-            --hack_sc_grid=True \
-            --skip_existing=0 --backend=tmux --run=1
+            --hack_sc_grid=1 \
+            --skip_existing=1 --backend=tmux --run=0
 }
 
 
