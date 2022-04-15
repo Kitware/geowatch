@@ -501,9 +501,9 @@ def expand_site_models_with_site_summaries(sites, regions):
     if __debug__:
         for region_id, region_sites in ub.ProgIter(region_id_to_sites.items(), desc='validate sites'):
             for site_df in region_sites:
-                import xdev
-                with xdev.embed_on_exception_context:
-                    validate_site_dataframe(site_df)
+                # import xdev
+                # with xdev.embed_on_exception_context:
+                validate_site_dataframe(site_df)
 
     return region_id_to_sites
 
@@ -692,10 +692,10 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
             if __debug__ and 0:
                 # Sanity check, the sites should have spatial overlap with each image in the video
                 image_overlaps = util_gis.geopandas_pairwise_overlaps(site_gdf, subimg_df)
-                import xdev
-                with xdev.embed_on_exception_context:
-                    num_unique_overlap_frames = set(ub.map_vals(len, image_overlaps).values())
-                    assert len(num_unique_overlap_frames) == 1
+                # import xdev
+                # with xdev.embed_on_exception_context:
+                num_unique_overlap_frames = set(ub.map_vals(len, image_overlaps).values())
+                assert len(num_unique_overlap_frames) == 1
 
             site_summary_row = site_gdf.iloc[0]
             site_rows = site_gdf.iloc[1:]

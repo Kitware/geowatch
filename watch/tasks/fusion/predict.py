@@ -635,12 +635,8 @@ def predict(cmdline=False, **kwargs):
             # self = method
             # with_loss = 0
             # item = batch[0]
-            # import xdev
-            # xdev.embed()
 
             # Predict on the batch
-            # import xdev
-            # with xdev.embed_on_exception_context:
             outputs = method.forward_step(batch, with_loss=False)
             outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
 
