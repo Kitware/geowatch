@@ -794,17 +794,22 @@ def main(args):
             cache_dpath = 'None'
 
         from scriptconfig.smartcast import smartcast
-        if smartcast(args.enable_viz):
+        enable_viz = smartcast(args.enable_viz)
+        if not enable_viz:
             viz_flags = []
         else:
-            viz_flags = [
-                # '--no-viz-region',  # we do want this enabled
-                '--no-viz-slices',
-                '--no-viz-detection-table',
-                '--no-viz-comparison-table',
-                '--no-viz-associate-metrics',
-                '--no-viz-activity-metrics',
-            ]
+            if enable_viz is True or enable_viz == 1:
+                viz_flags = [
+                    # '--no-viz-region',  # we do want this enabled
+                    '--no-viz-slices',
+                    '--no-viz-detection-table',
+                    '--no-viz-comparison-table',
+                    '--no-viz-associate-metrics',
+                    '--no-viz-activity-metrics',
+                ]
+            else:
+                raise ValueError(enable_viz)
+
         import shlex
         run_eval_command = [
             'python', '-m', 'iarpa_smart_metrics.run_evaluation',

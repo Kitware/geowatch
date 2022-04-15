@@ -86,6 +86,7 @@ def add_geos(coco_dset, overwrite, max_workers=16):
         job.aux = aux
 
     for job in executor.as_completed(desc='precomputing geo-segmentations'):
+        # job = executor.jobs[2]
         info = job.result()
         gid = job.gid
         aux = job.aux
@@ -103,9 +104,9 @@ def add_geos(coco_dset, overwrite, max_workers=16):
         img_anns = kwimage.SegmentationList(
             [kwimage.Segmentation.coerce(ann['segmentation']) for ann in anns])
 
-        warp_aux_to_img = kwimage.Affine.coerce(
+        warp_img_from_aux = kwimage.Affine.coerce(
             aux.get('warp_aux_to_img', None)).inv()
-        aux_anns = img_anns.warp(warp_aux_to_img)
+        aux_anns = img_anns.warp(warp_img_from_aux)
         wld_anns = aux_anns.warp(info['pxl_to_wld'])
         wgs_anns = wld_anns.warp(info['wld_to_wgs84'])
         # Flip into traditional CRS84 coordinates if we need to
@@ -555,9 +556,9 @@ def normalize_phases(coco_dset,
                 phase_transition_days = phase.phase_prediction_baseline(_annots)
                 _annots.set(ann_field, phase_transition_days)
 
-    #
-    # Fixup phase prediction
-    #
+        #
+        # Fixup phase prediction
+        #
 
         # TODO do something with transition preds for phases which were altered
         FIXUP_TRANSITION_PRED = 0
@@ -679,38 +680,40 @@ def normalize(
     # apply tracks
     assert issubclass(track_fn, TrackFunction), 'must supply a valid track_fn!'
     tracker: TrackFunction = track_fn(polygon_fn=polygon_fn, **track_kwargs)
-    coco_dset = tracker.apply_per_video(coco_dset)
+    out_dset = tracker.apply_per_video(coco_dset)
 
     # normalize and add geo segmentations
-    coco_dset = _normalize_annots(coco_dset, overwrite=False)
-    coco_dset._build_index()
+    out_dset = _normalize_annots(out_dset, overwrite=False)
+    out_dset._build_index()
     print('After normalizing: track ids',
-          set(coco_dset.annots().get('track_id', None)))
+          set(out_dset.annots().get('track_id', None)))
 
-    coco_dset = dedupe_tracks(coco_dset)
-    coco_dset = add_track_index(coco_dset)
+    out_dset = dedupe_tracks(out_dset)
+    out_dset = add_track_index(out_dset)
 
     if viz_sc_bounds:
-        from .visualize import keys_to_score_sc, viz_track_scores
-        viz_track_scores(coco_dset, SITE_SUMMARY_CNAME, keys_to_score_sc,
-                         viz_out_dir / 'track_scores.jpg')
+        from watch.tasks.tracking.visualize import keys_to_score_sc, viz_track_scores
+        track_cats = [SITE_SUMMARY_CNAME] + sorted(set(out_dset.annots().cnames))
+        keys_to_score = keys_to_score_sc
+        out_pth = viz_out_dir / 'track_scores.jpg'
+        viz_track_scores(out_dset, track_cats, keys_to_score, out_pth)
 
     phase_args = [use_viterbi, t_probs, e_probs]
     if 'key' in track_kwargs:  # assume this is a baseline (saliency) key
         phase_args.append(set(track_kwargs['key']))
-    coco_dset = normalize_phases(coco_dset, *phase_args)
+    out_dset = normalize_phases(out_dset, *phase_args)
 
-    coco_dset = normalize_sensors(coco_dset)
+    out_dset = normalize_sensors(out_dset)
 
-    # HACK, ensure coco_dset.index is up to date
-    coco_dset._build_index()
+    # HACK, ensure out_dset.index is up to date
+    out_dset._build_index()
 
     if viz_videos:
         # visualize predicted sites with true sites
         from .visualize import visualize_videos
-        visualize_videos(coco_dset,
+        visualize_videos(out_dset,
                          gt_dset,
                          viz_out_dir,
                          coco_dset_sc=track_kwargs.get('coco_dset_sc'))
 
-    return coco_dset
+    return out_dset

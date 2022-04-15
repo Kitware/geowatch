@@ -239,6 +239,7 @@ def track_to_site(coco_dset,
     except KeyError:
         # if track_index is missing, assume they're already sorted
         gids, anns = annots.gids, annots.objs
+
     features = [
         geojson_feature(_anns, coco_dset, with_properties=(not as_summary))
         for gid, _anns in ub.group_items(anns, gids).items()
@@ -609,6 +610,17 @@ def add_site_summary_to_kwcoco(possible_summaries,
     # more calls to geotiff_metadata
     from watch.utils import kwcoco_extensions
     kwcoco_extensions.warp_annot_segmentations_from_geos(coco_dset)
+
+    if 0:
+        import kwplot
+        import kwimage
+        kwplot.autompl()
+        gid = list(images)[0]
+        coco_img = coco_dset.coco_image(gid)
+        canvas = coco_img.delay('red|green|blue', space='image').finalize()
+        canvas = kwimage.normalize_intensity(canvas)
+        kwplot.imshow(canvas)
+        coco_dset.annots(gid=gid).detections.draw()
 
     return coco_dset
 
