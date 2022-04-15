@@ -93,8 +93,8 @@ def _writefig(fig, dpath, fname, figsize, verbose, tight):
 
 def debug_all_results():
     """
-    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/iarpa_eval/scores/merged/summary2.json
-    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/iarpa_eval/scores/merged/summary2.json
+    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json
+    ls models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json
 
     ls models/fusion/eval3_sc_candidates/pred/*/*/*/*/actclf/*/*_eval/scores/merged/summary3.json
 
@@ -127,7 +127,8 @@ def debug_all_results():
         'time_sampling',
         'max_epochs',
         'dist_weights',
-        'dist_weights',
+        'saliency_loss',
+        'global_class_weight',
     ]
 
     bas_globpats = [
@@ -174,7 +175,8 @@ def debug_all_results():
     df2 = df[varied_cols].sort_values('BAS_F1')
     df2 = shrink_notations(df2)
     df2 = df2.drop(ub.oset(df2.columns) & ignore_cols, axis=1)
-    print(df2.iloc[-70:].to_string())
+    print(df2.to_string())
+    # print(df2.iloc[-70:].to_string())
 
     ###
     ###
@@ -187,13 +189,16 @@ def debug_all_results():
     ]
     sc_paths = util_path.coerce_patterned_paths(sc_globpats)
 
+    seen = set()
     sc_rows = []
+    sc_cms = []
     for merged_fpath in sc_paths:
         with open(merged_fpath, 'r') as file:
             sc_info = json.load(file)
         # sc_info['sc_cm']
         sc_df = pd.read_json(io.StringIO(json.dumps(sc_info['sc_df'])), orient='table')
-        # sc_cm = pd.read_json(io.StringIO(json.dumps(sc_info['sc_cm'])), orient='table')
+        sc_cm = pd.read_json(io.StringIO(json.dumps(sc_info['sc_cm'])), orient='table')
+        sc_cms.append(sc_cm)
         tracker_info = sc_info['parent_info']
         params = parse_tracker_params(tracker_info, dvc_dpath)
 
@@ -203,13 +208,16 @@ def debug_all_results():
             'active_f1': sc_df.loc['F1 score', 'Active Construction'].mean(),
         }
         row = ub.odict(ub.dict_union(metrics, params))
-        sc_rows.append(row)
+
+        key = ub.hash_data(row)
+        if key not in seen:
+            sc_rows.append(row)
+            sc_cms.append(sc_cm)
+        seen.add(key)
 
     if 0:
         ub.util_hash._HASHABLE_EXTENSIONS.register(ub.Path)(lambda x: (b'path', ub.hash_data(str(x)).encode()))
 
-    print(f'{len(sc_rows)=}')
-    sc_rows = list(ub.unique(sc_rows, key=ub.hash_data))
     print(f'{len(sc_rows)=}')
 
     df = pd.DataFrame(sc_rows)
@@ -220,6 +228,7 @@ def debug_all_results():
     df2 = df[varied_cols].sort_values('mean_f1')
     df2 = shrink_notations(df2)
     df2 = df2.drop(ub.oset(df2.columns) & ignore_cols, axis=1)
+    print(df2.iloc[-80:].to_string())
     print(df2.to_string())
 
 

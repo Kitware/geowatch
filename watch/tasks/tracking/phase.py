@@ -173,6 +173,11 @@ allowed_transition_matrix = np.array(
     [[1, 1, 1, 0], [1, 1, 0, 0], [1, 0, 1, 1], [1, 0, 0, post_to_post]],
     dtype=bool)
 
+
+registered_transition_probs = {
+    'default': default_transition_probs,
+}
+
 # transition matrix
 default_transition_probs = np.array([[0.7, 0.1, 0.10, 0.10],
                                      [0.0, 0.7, 0.15, 0.15],
@@ -192,6 +197,12 @@ default_emission_probs = np.array([[0.250, 0.250, 0.250, 0.250],
                                    [0.000, 0.014, 0.986, 0.000],
                                    [0.000, 0.000, 1.000, 0.000]])
 
+# Based on CropDrop3_SC_V006_epoch=71-step=18431.pt
+default_emission_probs = np.array([[0.25, 0.25, 0.25, 0.25],
+                                   [0.00, 0.52, 0.48, 0.00],
+                                   [0.00, 0.35, 0.65, 0.000],
+                                   [0.00, 0.00, 1.000, 0.000]])
+
 
 def _load_probs(arr_or_file, default=None):
     if arr_or_file is None:
@@ -210,9 +221,8 @@ def _load_probs(arr_or_file, default=None):
     return arr
 
 
-def class_label_smoothing(track_cats,
-                          transition_probs=default_transition_probs,
-                          emission_probs=default_emission_probs):
+def class_label_smoothing(track_cats, transition_probs=None,
+                          emission_probs=None):
     """
     Args:
         track_cats: a list of scored SC phase names.
