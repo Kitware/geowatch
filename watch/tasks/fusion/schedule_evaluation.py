@@ -72,11 +72,11 @@ class ScheduleEvaluationConfig(scfg.Config):
 
         'shuffle_jobs': scfg.Value(True, help='if True, shuffles the jobs so they are submitted in a random order'),
 
-        'enable_iarpa_eval': scfg.Value(False, help='if True, enable iapra BAS evalaution'),
         'enable_track': scfg.Value(False, help='if True, enable tracking'),
+        'enable_iarpa_eval': scfg.Value(False, help='if True, enable iapra BAS evalaution'),
 
-        'enable_actclf_eval': scfg.Value(False, help='if True, enable iapra SC evalaution'),
         'enable_actclf': scfg.Value(False, help='if True, enable actclf'),
+        'enable_actclf_eval': scfg.Value(False, help='if True, enable iapra SC evalaution'),
 
         'annotations_dpath': scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval'),
 
