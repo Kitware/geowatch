@@ -6,7 +6,8 @@ def _suggest_bas_path(pred_fpath, bas_track_cfg, eval_dpath=None):
     """
     Helper for reasonable paths to keep everything organized for tracking eval
     """
-    human_opts = ub.dict_isect(bas_track_cfg, {'thresh'})
+    # human_opts = ub.dict_isect(bas_track_cfg, {'thresh'})
+    human_opts = ub.dict_isect(bas_track_cfg, {})
     other_opts = ub.dict_diff(bas_track_cfg, human_opts)
     if len(human_opts):
         human_part = ub.repr2(human_opts, compact=1) + '_'
@@ -76,12 +77,23 @@ def _build_bas_track_job(pred_fpath, bas_out_fpath, bas_track_cfg):
     import shlex
     pred_fpath = ub.Path(pred_fpath)
 
-    track_cfg = bas_track_cfg
-    track_kwargs_str = shlex.quote(json.dumps(track_cfg))
-    bas_args = f'--default_track_fn saliency_heatmaps --track_kwargs {track_kwargs_str}'  # NOQA
+    cfg = bas_track_cfg.copy()
+
+    from watch.utils.lightning_ext import util_globals
+
+    if isinstance(cfg['thresh_hysteresis'], str):
+        cfg['thresh_hysteresis'] = util_globals.restricted_eval(
+            cfg['thresh_hysteresis'].format(**cfg))
+
+    if cfg['moving_window_size'] is None:
+        cfg['moving_window_size'] = 'heatmaps_to_polys'
+    else:
+        cfg['moving_window_size'] = 'heatmaps_to_polys_moving_window'
+
+    track_kwargs_str = shlex.quote(json.dumps(cfg))
+    bas_args = f'--default_track_fn saliency_heatmaps --track_kwargs {track_kwargs_str}'
     # Because BAS is the first step we want ensure we clear annotations so
     # everything that comes out is a track from BAS.
-
     sites_dpath = bas_out_fpath.parent / 'tracked_sites'
     command = ub.codeblock(
         fr'''
@@ -251,6 +263,7 @@ python -m watch.cli.kwcoco_to_geojson \
 #### SC Notes:
 
 curl https://raw.githubusercontent.com/Erotemic/local/main/init/utils.sh -o utils.sh
+source utils.sh
 
 
 export DVC_DPATH=$(smartwatch_dvc --hardware=hdd)

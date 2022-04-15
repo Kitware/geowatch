@@ -164,6 +164,7 @@ aggregate-results(){
     cd "$DVC_DPATH" 
     git pull
     dvc pull -r horologic models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
+    dvc pull -r aws -R models/fusion/eval3_candidates/eval
 
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     EXPT_GROUP_CODE=eval3_candidates
@@ -237,9 +238,13 @@ recovery_eval(){
             --skip_existing=True --backend=tmux --run=0
 
 
+    #models/fusion/eval3_candidates/packages/BASELINE_EXPERIMENT_V001/BASELINE_EXPERIMENT_V001_epoch=8-step=47069.pt
+    #models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+    #models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V313/Drop3_SpotCheck_V313_epoch=34-step=71679.pt
     writeto "$DVC_DPATH/models/fusion/eval3_candidates/models_of_interest-2.txt" "
-        models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+        models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V319/Drop3_SpotCheck_V319_epoch=29-step=61439-v2.pt
     "
+    TMUX_GPUS="0,1"
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest-2.txt" \
@@ -249,10 +254,45 @@ recovery_eval(){
             --enable_track=1 \
             --enable_iarpa_eval=1 \
             --chip_overlap=0.3 \
-            --tta_time=0,1,2,3,8 \
+            --tta_time=0 \
             --tta_fliprot=0 \
-            --bas_thresh=0.1,0.2 \
-            --skip_existing=True --backend=tmux --run=1
+            --bas_thresh=0.1,0.2 --hack_bas_grid=True \
+            --skip_existing=1 --backend=tmux --run=0
+
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
+    EXPT_GROUP_CODE=eval3_candidates
+    MEASURE_GLOBSTR=$DVC_DPATH/models/fusion/eval3_candidates/eval/BASELINE_EXPERIMENT_V001/pred_BASELINE_EXPERIMENT_V001_epoch=11-step=62759/Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco/predcfg_abd043ec/eval/curves/measures2.json
+    EXPT_GROUP_CODE=eval3_candidates
+    #EXPT_NAME_PAT="*"
+    EXPT_NAME_PAT="*"
+    #EXPT_NAME_PAT="*Drop3*"
+    EXPT_NAME_PAT="*"
+    #EXPT_NAME_PAT="BOTH_TA1_COMBO_TINY_p2w_raw*"
+    MODEL_EPOCH_PAT="*"
+    PRED_DSET_PAT="*"
+    PRED_CFG_PAT="*"
+    MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json
+
+    python -m watch.tasks.fusion.aggregate_results \
+        --measure_globstr="$MEASURE_GLOBSTR" \
+        --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
+        --dset_group_key="*Drop3*combo_LM_nowv_vali*" --show=0 \
+        --io_workers=10 --show=False  \
+        --classes_of_interest "Site Preparation" "Active Construction" --force-iarpa 
+
+
+
+
+
+
+
+
+
+
+
+
+
+    # -----------
 
     TMUX_GPUS="0,"
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
@@ -282,26 +322,6 @@ recovery_eval(){
             --bas_thresh=0.2 \
             --skip_existing=True --backend=tmux --run=1
 
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
-    EXPT_GROUP_CODE=eval3_candidates
-    MEASURE_GLOBSTR=$DVC_DPATH/models/fusion/eval3_candidates/eval/BASELINE_EXPERIMENT_V001/pred_BASELINE_EXPERIMENT_V001_epoch=11-step=62759/Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco/predcfg_abd043ec/eval/curves/measures2.json
-    EXPT_GROUP_CODE=eval3_candidates
-    #EXPT_NAME_PAT="*"
-    EXPT_NAME_PAT="*"
-    #EXPT_NAME_PAT="*Drop3*"
-    EXPT_NAME_PAT="*"
-    #EXPT_NAME_PAT="BOTH_TA1_COMBO_TINY_p2w_raw*"
-    MODEL_EPOCH_PAT="*"
-    PRED_DSET_PAT="*"
-    PRED_CFG_PAT="*"
-    MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json
-
-    python -m watch.tasks.fusion.aggregate_results \
-        --measure_globstr="$MEASURE_GLOBSTR" \
-        --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
-        --dset_group_key="*Drop3*combo_LM_nowv_vali*" --show=0 \
-        --io_workers=10 --show=False  \
-        --classes_of_interest "Site Preparation" "Active Construction" --force-iarpa 
         #    \
         #--embed=True
 }

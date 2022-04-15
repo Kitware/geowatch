@@ -81,6 +81,8 @@ class ScheduleEvaluationConfig(scfg.Config):
         'annotations_dpath': scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval'),
 
         'bas_thresh': scfg.Value([0.1], help='grid of track thresholds'),
+
+        'hack_bas_grid': scfg.Value(False, help='if True use hard coded BAS grid'),
     }
 
 
@@ -621,11 +623,32 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 command, depends=pred_job, name=name, cpus=2,
                 **common_submitkw)
 
-        tracking_param_basis = {
+        defaults = {
+            'thresh': [0.1],
+            'morph_kernel': [3],
+            'norm_ord': [1],
+            'agg_fn': ['probs'],
+            'thresh_hysteresis': [None],
+            'moving_window_size': [None],
+        }
+        bas_param_basis = defaults.copy()
+        bas_param_basis.update({
             'thresh': _ensure_iterable(config['bas_thresh']),
             # 'thresh': [0.1, 0.2, 0.3],
-        }
-        for bas_track_cfg in ub.named_product(tracking_param_basis):
+        })
+
+        if config['hack_bas_grid']:
+            grid = {
+                'thresh': [0.1, 0.15, 0.2],
+                'morph_kernel': [3],
+                'norm_ord': [1],
+                'agg_fn': ['probs', 'mean_normalized'],
+                'thresh_hysteresis': [None, '2*{thresh}'],
+                'moving_window_size': [None, 150],
+            }
+            bas_param_basis.update(grid)
+
+        for bas_track_cfg in ub.named_product(bas_param_basis):
             bas_suggestions = schedule_iarpa_eval._suggest_bas_path(
                 pred_dataset_fpath, bas_track_cfg, eval_dpath=eval_dpath)
             name_suffix = '-'.join([

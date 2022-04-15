@@ -1,3 +1,4 @@
+#!/bin/bash
 #models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V00e!/bin/bash
 
 CROPPED_PRE_EVAL_AND_AGG(){
@@ -8,7 +9,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
 
     DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
-    cd $DVC_DPATH
+    cd "$DVC_DPATH"
     git pull
 
     DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
@@ -155,8 +156,8 @@ special_evaluation(){
             --draw_curves=1 \
             --pred_workers=4 \
             --chip_overlap=0.3 \
-            --tta_time=0,1,2,3 \
-            --tta_fliprot=0,1,2 \
+            --tta_time=0,1,2 \
+            --tta_fliprot=0 \
             --skip_existing=True --backend=tmux --run=0
 }
 

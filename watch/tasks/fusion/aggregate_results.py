@@ -483,9 +483,6 @@ def prepare_results(all_infos, coi_pattern, dvc_dpath=None):
         if iarpa_simplified:
             # TODO: need to expand out these rows for each pred parameter
             # setting
-            if len(iarpa_simplified) > 1:
-                import xdev
-                xdev.embed()
             BAS_metrics = max(iarpa_simplified, key=lambda x: x['BAS_F1'])
             row.update(BAS_metrics)
         else:
