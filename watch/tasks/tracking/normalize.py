@@ -701,8 +701,9 @@ def normalize(
         viz_track_scores(out_dset, track_cats, keys_to_score, out_pth)
 
     if isinstance(use_viterbi, str):
-        t_probs, e_probs = use_viterbi.split(',')
-        pass
+        parts = use_viterbi.split(',')
+        assert len(parts) == 2
+        t_probs, e_probs = parts
     else:
         t_probs = 'default'
         e_probs = 'default'
