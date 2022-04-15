@@ -22,25 +22,26 @@ class RegionResult:
     region_id: str  # 'KR_R001'
     region_model: Dict
     site_models: List[Dict]
-    bas_dpath: str = None  # 'path/to/scores/latest/KR_R001/bas/'
-    sc_dpath: str = None  # 'path/to/scores/latest/KR_R001/phase_activity/'
+    bas_dpath: ub.Path = None  # 'path/to/scores/latest/KR_R001/bas/'
+    sc_dpath: ub.Path = None  # 'path/to/scores/latest/KR_R001/phase_activity/'
 
     @classmethod
     def from_dpath_and_anns_root(cls, region_dpath, anns_root):
-        region_id = os.path.basename(os.path.normpath(region_dpath))
-        bas_dpath = os.path.join(region_dpath, 'bas')
-        bas_dpath = bas_dpath if os.path.isdir(bas_dpath) else None
-        sc_dpath = os.path.join(region_dpath, 'phase_activity')
-        sc_dpath = sc_dpath if os.path.isdir(sc_dpath) else None
-        region_model = json.load(
-            open(
-                os.path.join(anns_root, 'region_models',
-                             region_id + '.geojson')))
+        anns_root = ub.Path(anns_root)
+        region_dpath = ub.Path(region_dpath)
+        region_id = region_dpath.name
+        bas_dpath = region_dpath / 'bas'
+        bas_dpath = bas_dpath if bas_dpath.is_dir() else None
+        sc_dpath = region_dpath / 'phase_activity'
+        sc_dpath = sc_dpath if sc_dpath.is_dir() else None
+        region_fpath = anns_root / 'region_models' / (region_id + '.geojson')
+        with open(region_fpath, 'r') as f:
+            region_model = json.load(f)
+
+        site_globstr = str(anns_root / 'site_models' / (f'{region_id}_*.geojson'))
         site_models = [
-            json.load(open(pth)) for pth in sorted(
-                glob(
-                    os.path.join(anns_root, 'site_models',
-                                 f'{region_id}_*.geojson')))
+            json.loads(open(pth).read())
+            for pth in sorted(glob(site_globstr))
         ]
         return cls(region_id, region_model, site_models, bas_dpath, sc_dpath)
 
@@ -206,6 +207,45 @@ def merge_bas_metrics_results(bas_results: List[RegionResult]):
     return result_df, concat_df
 
 
+def _to_sc_df(sc_dpath, region_id):
+    '''
+    confusion matrix and f1 scores apprently ignore subsites,
+    so we must do the same
+    https://smartgitlab.com/TE/metrics-and-test-framework/-/issues/24
+    MWE:
+    >>> from sklearn.metrics import confusion_matrix
+    >>> confusion_matrix(['a,a', 'a'], ['a,a', 'b'], labels=['a', 'b'])
+    array([[0, 1],
+           [0, 0]])
+    '''
+
+    delim = ' vs. '
+    sc_dpath = ub.Path(sc_dpath)
+
+    df = pd.read_csv(sc_dpath / 'activity_phase_table.csv')
+
+    df['date'] = pd.to_datetime(df['date'])
+    df = df.set_index('date')
+    df = df.fillna(pd.NA).astype('string')
+
+    site_names = df.columns.values.tolist()
+
+    df = df.applymap(lambda cell: delim.join((cell, cell))
+                     if not pd.isna(cell) and delim not in cell else cell)
+    df = pd.concat(
+        [df[col].str.split(delim, expand=True) for col in site_names],
+        axis=1,
+        ignore_index=True)
+
+    df.columns = pd.MultiIndex.from_product(
+        #  ([region_id], site_names, ['truth', 'proposed']),
+        #  names=['region_id', 'site', 'type'])
+        (site_names, ['truth', 'proposed']),
+        names=['site', 'type'])
+
+    return df
+
+
 def merge_sc_metrics_results(sc_results: List[RegionResult]):
     '''
     Returns:
@@ -216,44 +256,12 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
 
     from sklearn.metrics import f1_score, confusion_matrix
 
-    def to_df(sc_dpath, region_id):
-        '''
-        confusion matrix and f1 scores apprently ignore subsites,
-        so we must do the same
-        https://smartgitlab.com/TE/metrics-and-test-framework/-/issues/24
-        MWE:
-        >>> from sklearn.metrics import confusion_matrix
-        >>> confusion_matrix(['a,a', 'a'], ['a,a', 'b'], labels=['a', 'b'])
-        array([[0, 1],
-               [0, 0]])
-        '''
+    # for r in sc_results:
+    #     sc_dpath = r.sc_dpath
+    #     region_id = r.region_id
+    #     to_df(sc_dpath, region_id)
 
-        delim = ' vs. '
-
-        df = pd.read_csv(os.path.join(sc_dpath, 'activity_phase_table.csv'))
-
-        df['date'] = pd.to_datetime(df['date'])
-        df = df.set_index('date')
-        df = df.fillna(pd.NA).astype('string')
-
-        site_names = df.columns.values.tolist()
-
-        df = df.applymap(lambda cell: delim.join((cell, cell))
-                         if not pd.isna(cell) and delim not in cell else cell)
-        df = pd.concat(
-            [df[col].str.split(delim, expand=True) for col in site_names],
-            axis=1,
-            ignore_index=True)
-
-        df.columns = pd.MultiIndex.from_product(
-            #  ([region_id], site_names, ['truth', 'proposed']),
-            #  names=['region_id', 'site', 'type'])
-            (site_names, ['truth', 'proposed']),
-            names=['site', 'type'])
-
-        return df
-
-    dfs = [to_df(r.sc_dpath, r.region_id) for r in sc_results]
+    dfs = [_to_sc_df(r.sc_dpath, r.region_id) for r in sc_results]
     df = pd.concat(dfs, axis=1).sort_values('date')
 
     # phase activity categories
@@ -270,25 +278,23 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
     phase_pred = np.concatenate(
         [df[site, 'proposed'].dropna().to_numpy() for site in sites])
 
-    f1 = f1_score(phase_true,
-                  phase_pred,
+    f1 = f1_score(phase_true, phase_pred,
                   labels=phase_classifications,
                   average=None)
 
     # TIoU is only ever evaluated per-site, so we can safely average these
     # per-site and call it a new metric mTIoU.
-    mtiou = pd.concat([
-        pd.read_csv(os.path.join(r.sc_dpath, 'activity_tiou_table.csv')).drop(
-            'TIoU', axis=1) for r in sc_results
-    ],
-                      axis=1).mean(axis=1, skipna=True).values
+    tious = pd.concat([
+        pd.read_csv(r.sc_dpath / 'activity_tiou_table.csv', index_col=0)
+        for r in sc_results
+    ], axis=1)
+    mtiou = tious.mean(axis=1, skipna=True)
+    mtiou_vals = [mtiou.get(c, default=np.nan) for c in phase_classifications]
 
     # these are averaged using the mean over sites for each phase.
     # So the correct average over regions is to weight by (sites/region)
     temporal_errs = [
-        pd.read_csv(os.path.join(
-            r.sc_dpath,
-            'activity_prediction_table.csv')).loc[0][1:].astype(float).values
+        pd.read_csv(r.sc_dpath / 'activity_prediction_table.csv').loc[0][1:].astype(float).values
         for r in sc_results
     ]
     n_sites = [df.shape[1] for df in dfs]
@@ -299,28 +305,28 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
             zip(temporal_errs, n_sites)))
         temporal_err = np.average(temporal_errs, weights=n_sites, axis=0)
     except ValueError:
-        temporal_err = [np.nan, np.nan, np.nan]
+        temporal_err = [np.nan] * len(phase_classifications)
 
     # import xdev; xdev.embed()
-    activity_table = pd.DataFrame(
+    sc_df = pd.DataFrame(
         {
             'F1 score': f1,
-            'mean TIoU': mtiou,
+            'mean TIoU': mtiou_vals,
             'Temporal Error (days)': temporal_err
         },
         index=phase_classifications).T
-    activity_table = activity_table.rename_axis('Activity Classification',
-                                                axis='columns')
+    sc_df = sc_df.rename_axis('Activity Classification', axis='columns')
 
-    confusion_matrix = pd.DataFrame(confusion_matrix(
-        phase_true, phase_pred, labels=phase_classifications),
-                                    columns=phase_classifications,
-                                    index=phase_classifications)
-    confusion_matrix = confusion_matrix.rename_axis("truth phase")
-    confusion_matrix = confusion_matrix.rename_axis("predicted phase",
-                                                    axis="columns")
+    _cmval = confusion_matrix(phase_true, phase_pred,
+                              labels=phase_classifications)
 
-    return activity_table, confusion_matrix
+    sc_cm = pd.DataFrame(_cmval,
+                         columns=phase_classifications,
+                         index=phase_classifications)
+    sc_cm = sc_cm.rename_axis("truth phase")
+    sc_cm = sc_cm.rename_axis("predicted phase", axis="columns")
+
+    return sc_df, sc_cm
 
 
 def _hack_remerge_data():
@@ -374,12 +380,13 @@ def _make_merge_metrics(region_dpaths, anns_root):
         for pth in region_dpaths
     ]
 
-    # merge BAS
+    # merge BA
     bas_results = [r for r in results if r.bas_dpath]
     bas_df, bas_concat_df = merge_bas_metrics_results(bas_results)
 
     # merge SC
-    sc_df, sc_cm = merge_sc_metrics_results([r for r in results if r.sc_dpath])
+    sc_results = [r for r in results if r.sc_dpath]
+    sc_df, sc_cm = merge_sc_metrics_results(sc_results)
 
     return bas_concat_df, bas_df, sc_df, sc_cm
 
@@ -462,7 +469,9 @@ def merge_metrics_results(region_dpaths, anns_root, merge_dpath, merge_fpath,
     # merge_dpath.delete().ensuredir()
     merge_dpath.ensuredir()
 
-    bas_concat_df, bas_df, sc_df, sc_cm = _make_merge_metrics(region_dpaths, anns_root)
+    import xdev
+    with xdev.embed_on_exception_context:
+        bas_concat_df, bas_df, sc_df, sc_cm = _make_merge_metrics(region_dpaths, anns_root)
     bas_df.to_pickle(merge_dpath / 'bas_scoreboard_df.pkl')
     sc_df.to_pickle(merge_dpath / 'sc_activity_df.pkl')
     sc_cm.to_pickle(merge_dpath / 'sc_confusion_df.pkl')
@@ -858,6 +867,7 @@ def main(args):
             merge_fpath = ub.Path(args.merge_fpath)
         merge_metrics_results(out_dirs, gt_dpath, merge_dpath, merge_fpath,
                               parent_info, info)
+        print('merge_fpath = {!r}'.format(merge_fpath))
         # print('wrote {!r}'.format(summary_path2))
 
 
