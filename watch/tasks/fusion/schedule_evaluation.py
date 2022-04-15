@@ -823,6 +823,7 @@ def _schedule_track_jobs(queue, manager, config, package_cfgstr, pred_cfgstr,
         grid = {
             'thresh': [0, 0.01, 0.1, 0.5],
             'use_viterbi': [0],
+            # 'use_viterbi': [0, 'default,v6'],
         }
         act_param_basis.update(grid)
 

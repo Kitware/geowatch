@@ -256,7 +256,7 @@ recovery_eval(){
     MODEL_GLOBSTR=$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt
     #MODEL_GLOBSTR="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest-2.txt" 
 
-    TMUX_GPUS="0,1,2,3,4,5,6,7,8"
+    TMUX_GPUS="0,1,2,3,4,5,6"
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="$TMUX_GPUS" \
             --model_globstr="$MODEL_GLOBSTR" \
@@ -269,7 +269,7 @@ recovery_eval(){
             --tta_time=0 \
             --tta_fliprot=0 \
             --bas_thresh=0.1 --hack_bas_grid=0 \
-            --skip_existing=0 --backend=tmux --run=0
+            --skip_existing=1 --backend=tmux --run=0
 
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     EXPT_GROUP_CODE=eval3_candidates
