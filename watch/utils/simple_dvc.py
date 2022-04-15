@@ -44,7 +44,7 @@ class SimpleDVC():
 
     """
 
-    def __init__(self, dvc_root):
+    def __init__(self, dvc_root=None):
         self.dvc_root = dvc_root
 
     @classmethod
