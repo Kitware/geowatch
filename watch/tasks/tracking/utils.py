@@ -327,6 +327,9 @@ class NoOpTrackFunction(TrackFunction):
     '''
     Use existing tracks.
     '''
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs  # Unused
+
     def __call__(self, sub_dset):
         return sub_dset
 

@@ -400,7 +400,7 @@ def convert_kwcoco_to_iarpa(coco_dset,
         >>> from watch.demo import smart_kwcoco_demodata
         >>> import ubelt as ub
         >>> coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
-        >>> coco_dset = normalize(coco_dset, track_fn=MonoTrack, overwrite=False)
+        >>> coco_dset = normalize(coco_dset, track_fn=MonoTrack, overwrite=False, polygon_fn='heatmaps_to_polys')
         >>> region_ids = ['KR_R001', 'KR_R002']
         >>> coco_dset.videos().set('name', region_ids)
         >>> sites = convert_kwcoco_to_iarpa(coco_dset)
