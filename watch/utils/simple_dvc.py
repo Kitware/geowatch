@@ -128,7 +128,7 @@ class SimpleDVC():
 
     def push(self, path, remote=None, recursive=False, jobs=None):
         from dvc import main as dvc_main
-        paths = list(map(ub.Path, _ensure_iterable(paths)))
+        paths = list(map(ub.Path, _ensure_iterable(path)))
         dvc_root = self._ensure_root(paths)
         extra_args = []
         if remote:
@@ -144,7 +144,7 @@ class SimpleDVC():
 
     def unprotect(self, path):
         from dvc import main as dvc_main
-        paths = list(map(ub.Path, _ensure_iterable(paths)))
+        paths = list(map(ub.Path, _ensure_iterable(path)))
         dvc_root = self._ensure_root(paths)
         rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
         with ChDir(dvc_root):
