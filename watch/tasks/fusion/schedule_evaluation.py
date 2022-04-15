@@ -438,6 +438,10 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     class Task(dict):
 
+        def __init__(self, *args, manager=None, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.manager = manager
+
         @property
         def name(self):
             return self['name']
@@ -446,7 +450,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             # Check if each dependency will exist by the time we run this job
             deps_will_exist = []
             for req in task_info['requires']:
-                deps_will_exist.append(task_infos[req]['will_exist'])
+                deps_will_exist.append(task_info.manager[req]['will_exist'])
             all_deps_will_exist = all(deps_will_exist)
             task_info['all_deps_will_exist'] = all_deps_will_exist
 
@@ -554,22 +558,22 @@ def schedule_evaluation(cmdline=False, **kwargs):
         # has_pred = pred_dataset_fpath.exists()
 
         # Really should make this a class
-        task_infos = {
-            'pred': Task(**{
-                'name': 'pred',
-                'requested': with_pred,
-                'output': pred_dataset_fpath,
-                'requires': [],
-                'recompute': recompute_pred,
-            }),
-            'pxl_eval': Task(**{
-                'name': 'pxl_eval',
-                'requested': with_eval,
-                'output': eval_metrics_fpath,
-                'requires': ['pred'],
-                'recompute': recompute_eval,
-            })
-        }
+        manager = {}
+        manager['pred'] = Task(**{
+            'name': 'pred',
+            'requested': with_pred,
+            'output': pred_dataset_fpath,
+            'requires': [],
+            'recompute': recompute_pred,
+        }, manager=manager)
+
+        manager['pxl_eval'] = Task(**{
+            'name': 'pxl_eval',
+            'requested': with_eval,
+            'output': eval_metrics_fpath,
+            'requires': ['pred'],
+            'recompute': recompute_eval,
+        }, manager=manager)
 
         name_suffix = (
             '_' + ub.hash_data(str(package_fpath))[0:8] +
@@ -577,7 +581,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
         )
 
         pred_job = None
-        task_info = task_infos['pred']
+        task_info = manager['pred']
         if task_info.should_compute_task():
             command = ub.codeblock(
                 r'''
@@ -604,7 +608,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             pred_job = queue.submit(command, gpus=1, name=name,
                                     cpus=pred_cpus, **common_submitkw)
 
-        task_info = task_infos['pxl_eval']
+        task_info = manager['pxl_eval']
         if task_info.should_compute_task():
             command = ub.codeblock(
                 r'''
@@ -660,23 +664,23 @@ def schedule_evaluation(cmdline=False, **kwargs):
             iarpa_eval_dpath = bas_suggestions['iarpa_eval_dpath']
             bas_out_fpath = bas_suggestions['bas_out_fpath']
             iarpa_merge_fpath = bas_suggestions['iarpa_merge_fpath']
-            task_infos['bas_track'] = Task(**{
+            manager['bas_track'] = Task(**{
                 'name': 'bas_track',
                 'requested': with_track,
                 'output': bas_out_fpath,
                 'requires': ['pred'],
                 'recompute': recompute_track,
-            })
-            task_infos['bas_eval'] = Task(**{
+            }, manager=manager)
+            manager['bas_eval'] = Task(**{
                 'name': 'bas_eval',
                 'requested': with_iarpa_eval,
                 'output': iarpa_merge_fpath,
                 'requires': ['bas_track'],
                 'recompute': recompute_iarpa_eval,
-            })
+            }, manager=manager)
 
             bas_job = None
-            task_info = task_infos['bas_track']
+            task_info = manager['bas_track']
             if task_info.should_compute_task():
                 command = schedule_iarpa_eval._build_bas_track_job(
                     pred_dataset_fpath, bas_out_fpath,
@@ -689,7 +693,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
             # TODO: need a way of knowing if a package is BAS or SC.
             # Might need info on GSD as well.
-            task_info = task_infos['bas_eval']
+            task_info = manager['bas_eval']
             if task_info.should_compute_task():
                 command = schedule_iarpa_eval._build_iarpa_eval_job(
                     bas_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath,
@@ -729,23 +733,23 @@ def schedule_evaluation(cmdline=False, **kwargs):
             act_out_fpath = act_suggestions['act_out_fpath']
             iarpa_merge_fpath = act_suggestions['iarpa_merge_fpath']
 
-            task_infos['actclf'] = Task(**{
+            manager['actclf'] = Task(**{
                 'name': 'actclf',
                 'requested': config['enable_actclf'],
                 'output': act_out_fpath,
                 'requires': ['pred'],
                 'recompute': 0,
-            })
-            task_infos['sc_eval'] = Task(**{
+            }, manager=manager)
+            manager['sc_eval'] = Task(**{
                 'name': 'sc_eval',
                 'requested': config['enable_actclf_eval'],
                 'output': iarpa_merge_fpath,
                 'requires': ['actclf'],
                 'recompute': 0,
-            })
+            }, manager=manager)
 
             sc_job = None
-            task_info = task_infos['actclf']
+            task_info = manager['actclf']
             if task_info.should_compute_task():
                 command = schedule_iarpa_eval._build_sc_actclf_job(
                     pred_dataset_fpath, region_model_dpath, act_out_fpath, actcfg=actcfg)
@@ -761,7 +765,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 )
                 task_info['job'] = sc_job
 
-            task_info = task_infos['sc_eval']
+            task_info = manager['sc_eval']
             if task_info.should_compute_task():
                 command = schedule_iarpa_eval._build_iarpa_eval_job(
                     act_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath,
