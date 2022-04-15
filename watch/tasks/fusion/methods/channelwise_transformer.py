@@ -625,16 +625,16 @@ class MultimodalTransformer(pl.LightningModule):
         self.head_metrics['class'] = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
-            'f1_micro': torchmetrics.F1(threshold=0.5, average='micro'),
-            'f1_macro': torchmetrics.F1(threshold=0.5, average='macro', num_classes=self.num_classes),
+            'f1_micro': torchmetrics.FBeta(beta=1.0, threshold=0.5, average='micro'),
+            'f1_macro': torchmetrics.FBeta(beta=1.0, threshold=0.5, average='macro', num_classes=self.num_classes),
         })
         self.head_metrics['change'] = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
-            'f1': torchmetrics.F1(),
+            'f1': torchmetrics.FBeta(beta=1.0),
         })
         self.head_metrics['saliency'] = nn.ModuleDict({
-            'f1': torchmetrics.F1(),
+            'f1': torchmetrics.FBeta(beta=1.0),
         })
 
         self.encode_h = utils.SinePositionalEncoding(3, 1, size=8)
