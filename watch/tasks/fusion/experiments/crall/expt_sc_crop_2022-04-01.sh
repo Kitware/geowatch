@@ -63,12 +63,16 @@ CROPPED_PRE_EVAL_AND_AGG(){
     # shellcheck disable=SC2010
     ls -al models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json | grep -v ' \-> '
     # shellcheck disable=SC2010
-    ls -al models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json | grep -v ' \-> '
+    ls -al models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json
 
     #dvc unprotect models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json 
     dvc unprotect models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json
 
     dvc add models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json
+
+    dvc add models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json
+    python -c "import sys, pathlib, watch.utils.simple_dvc; watch.utils.simple_dvc.SimpleDVC().add([p for p in sys.argv[1:] if not pathlib.Path(p).is_symlink()])" 
+
     #dvc add models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json 
     git commit -am "add measures from $HOSTNAME" && git pull && git push
     dvc push -r aws -R models/fusion/eval3_sc_candidates/eval
