@@ -79,6 +79,7 @@ class SimpleDVC():
         if path is None:
             raise Exception('no way to find dvc root')
         # Need to find it from the path
+        path = ub.Path(path)
         max_parts = len(path.parts)
         curr = path
         found = None
