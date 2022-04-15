@@ -425,6 +425,17 @@ def convert_kwcoco_to_iarpa(coco_dset,
     return sites
 
 
+def _validate():
+    # jsonschema.validate(site, schema=SITE_SCHEMA)
+    import jsonschema
+    import watch
+    SITE_SCHEMA = watch.rc.load_site_model_schema()
+    site_fpaths = list(ub.Path('.').glob('*.geojson'))
+    for fpath in site_fpaths:
+        site = json.load(open(fpath, 'r'))
+        jsonschema.validate(site, schema=SITE_SCHEMA)
+
+
 def _validate_summary(site_summary_or_region_model,
                       default_region_id=None,
                       strict=True) -> List[Tuple[str, Dict]]:

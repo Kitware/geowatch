@@ -83,6 +83,7 @@ class ScheduleEvaluationConfig(scfg.Config):
         'bas_thresh': scfg.Value([0.1], help='grid of track thresholds'),
 
         'hack_bas_grid': scfg.Value(False, help='if True use hard coded BAS grid'),
+        'hack_sc_grid': scfg.Value(False, help='if True use hard coded SC grid'),
     }
 
 
@@ -706,6 +707,13 @@ def schedule_evaluation(cmdline=False, **kwargs):
             'thresh': [0.1],
             'use_viterbi': [0],
         }
+        if config['hack_sc_grid']:
+            grid = {
+                'thresh': [0, 0.01, 0.1, 0.5],
+                'use_viterbi': [0],
+            }
+            act_param_basis.update(grid)
+
         for actcfg in ub.named_product(act_param_basis):
             act_suggestions = schedule_iarpa_eval._suggest_act_paths(
                 pred_dataset_fpath, actcfg, eval_dpath=eval_dpath)
@@ -752,8 +760,11 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
             task_info = task_infos['sc_eval']
             if task_info.should_compute_task():
+                import xdev
+                xdev.embed()
                 command = schedule_iarpa_eval._build_iarpa_eval_job(
-                    act_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath, annotations_dpath, name_suffix)
+                    act_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath,
+                    annotations_dpath, name_suffix)
                 command = task_info.prefix_command(command)
                 name = task_info['name'] + name_suffix
                 task_info['job']  = queue.submit(

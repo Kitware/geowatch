@@ -145,8 +145,8 @@ special_evaluation(){
             --gpus="0,1,2,3" \
             --model_globstr="$DVC_DPATH"/models/fusion/eval3_sc_candidates/models_of_interest.txt \
             --test_dataset="$VALI_FPATH" \
-            --enable_pred=1 \
-            --enable_eval=1 \
+            --enable_pred=0 \
+            --enable_eval=0 \
             --enable_track=0 \
             --enable_iarpa_eval=0 \
             --enable_track=0 \
@@ -156,9 +156,10 @@ special_evaluation(){
             --draw_curves=1 \
             --pred_workers=4 \
             --chip_overlap=0.3 \
-            --tta_time=0,1,2 \
+            --tta_time=0,1 \
             --tta_fliprot=0 \
-            --skip_existing=True --backend=tmux --run=0
+            --hack_sc_grid=True \
+            --skip_existing=0 --backend=tmux --run=0
 }
 
 

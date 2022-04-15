@@ -95,8 +95,160 @@ def debug_all_results():
     """
     ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/iarpa_eval/scores/merged/summary2.json
     ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/iarpa_eval/scores/merged/summary2.json
+
+    models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/
+
+    find models/fusion -iname "summary2.json"
+    find models/fusion -iname "summary3.json"
     """
-    pass
+
+    import watch
+    dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
+
+    bas_globpats = [
+        'models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json'
+    ]
+
+    from watch.utils import util_path
+    sc_globpats = [
+        dvc_dpath / 'models/fusion/eval3_sc_candidates/pred/*/*/*/*/actclf/*/*_eval/scores/merged/summary3.json'
+        dvc_dpath / 'models/fusion/eval3_sc_candidates/pred/*/*/*/*/actclf/*/iarpa_sc_eval/scores/merged/summary3.json'
+    ]
+    sc_paths = util_path.coerce_patterned_paths(sc_globpats)
+
+    rows = []
+    for sc_fapth in sc_paths:
+        with open(sc_fapth, 'r') as file:
+            sc_info = json.load(file)
+        # sc_info['sc_cm']
+        sc_df = pd.read_json(io.StringIO(json.dumps(sc_info['sc_df'])), orient='table')
+        sc_cm = pd.read_json(io.StringIO(json.dumps(sc_info['sc_cm'])), orient='table')
+        tracker_info = sc_info['parent_info']
+        params = parse_tracker_params(tracker_info, dvc_dpath)
+
+        metrics = {
+            'mean_f1': sc_df.loc['F1 score'].mean(),
+            'siteprep_f1': sc_df.loc['F1 score', 'Site Preparation'].mean(),
+            'active_f1': sc_df.loc['F1 score', 'Active Construction'].mean(),
+        }
+        row = ub.odict(ub.dict_union(metrics, params))
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+    df = df.sort_values('mean_f1')
+
+    varied = ub.oset(df.columns) & list(ub.varied_values(rows, 1).keys())
+
+    df2 = df[varied].sort_values('mean_f1')
+    shrink_notations(df2)
+    print(df2.drop(['modulate_class_weights', 'accumulate_grad_batches', 'pred_model_fpath'], axis=1))
+    print(df2.to_string())
+
+
+def parse_tracker_params(tracker_info, dvc_dpath):
+    track_item = find_track_item(tracker_info)
+    pred_info = track_item['properties']['pred_info']
+    pred_item = find_pred_item(pred_info)
+
+    track_args = track_item['properties']['args']
+    pred_args = pred_item['properties']['args']
+    fit_config = pred_item['properties']['fit_config']
+
+    pred_config = relevant_pred_config(pred_args, dvc_dpath)
+    fit_config = relevant_fit_config(fit_config)
+    track_config = relevant_track_config(track_args)
+
+    params = ub.dict_union(fit_config, pred_config, track_config)
+    return params
+
+
+def relevant_track_config(track_args):
+    track_config = json.loads(track_args['track_kwargs'])
+    track_config = {'trk_' + k: v for k, v in track_config.items()}
+    return track_config
+
+
+def relevant_pred_config(pred_args, dvc_dpath):
+    pred_config = {}
+    pred_config['tta_fliprot'] = pred_args.get('tta_fliprot', 0)
+    pred_config['tta_time'] = pred_args.get('tta_time', 0)
+    pred_config['chip_overlap'] = pred_args['chip_overlap']
+    package_fpath = pred_args['package_fpath']
+    test_dataset = pred_args['test_dataset']
+    if dvc_dpath is not None:
+        package_fpath = resolve_cross_machine_path(package_fpath, dvc_dpath)
+        test_dataset = resolve_cross_machine_path(test_dataset, dvc_dpath)
+    # pred_config['model_fpath'] = package_fpath
+    # pred_config['in_dataset'] = test_dataset
+    pred_config['model_fpath'] = package_fpath
+    pred_config['in_dataset_fpath'] = test_dataset
+
+    pred_config['model_name'] = ub.Path(package_fpath).name
+    pred_config['in_dataset_name'] = str(ub.Path(*test_dataset.parts[-2:]))
+
+    pred_config = {'pred_' + k: v for k, v in pred_config.items()}
+    return pred_config
+
+
+def relevant_fit_config(fit_config):
+    ignore_params = {
+        'default_root_dir', 'enable_progress_bar'
+        'prepare_data_per_node', 'enable_model_summary', 'checkpoint_callback',
+        'detect_anomaly', 'gpus', 'terminate_on_nan', 'train_dataset',
+        'workdir', 'config', 'num_workers', 'amp_backend',
+        'enable_progress_bar', 'flush_logs_every_n_steps',
+        'enable_checkpointing', 'prepare_data_per_node', 'amp_level',
+        'vali_dataset', 'test_dataset', 'package_fpath', 'num_draw',
+        'num_nodes', 'num_processes', 'num_sanity_val_steps',
+        'overfit_batches', 'process_position',
+        'reload_dataloaders_every_epoch', 'reload_dataloaders_every_n_epochs',
+        'replace_sampler_ddp', 'sync_batchnorm', 'torch_sharing_strategy',
+        'torch_start_method', 'val_check_interval', 'weights_summary',
+        'auto_lr_find', 'auto_select_gpus', 'auto_scale_batch_size', 'benchmark',
+        'check_val_every_n_epoch', 'draw_interval', 'eval_after_fit', 'fast_dev_run',
+        'limit_predict_batches', 'limit_test_batches', 'limit_train_batches',
+        'limit_val_batches', 'log_every_n_steps', 'logger',
+        'move_metrics_to_cpu', 'multiple_trainloader_mode',
+    }
+    from scriptconfig import smartcast
+    # hack, rectify different values of known parameters that mean the
+    # same thing
+    fit_config2 = ub.dict_diff(fit_config, ignore_params)
+    for k, v in fit_config2.items():
+        if k not in {'channels', 'init'}:
+            v2 = smartcast.smartcast(v)
+            if isinstance(v2, list):
+                # Dont coerce into a list
+                v2 = v
+            fit_config2[k] = v2
+        else:
+            fit_config2[k] = v
+
+    if 'init' in fit_config2:
+        # hack to make init only use the filename
+        fit_config2['init'] = fit_config2['init'].split('/')[-1]
+    return fit_config2
+
+
+def find_info_items(info, query_type, query_name):
+    for item in info:
+        if item['type'] == query_type:
+            if item['properties']['name'] == query_name:
+                yield item
+
+
+def find_track_item(tracker_info):
+    track_items = list(find_info_items(tracker_info, 'process', 'watch.cli.kwcoco_to_geojson'))
+    assert len(track_items) == 1
+    track_item = track_items[0]
+    return track_item
+
+
+def find_pred_item(pred_info):
+    pred_items = list(find_info_items(pred_info, 'process', 'watch.tasks.fusion.predict'))
+    assert len(pred_items) == 1
+    pred_item = pred_items[0]
+    return pred_item
 
 
 def load_measure(measure_fpath):
@@ -723,35 +875,35 @@ def shrink_notations(df, drop=0):
     pat_text = b.oneof(*map(b.group, (pat1, pat2)))
     pat = re.compile(pat_text)
 
-    df = df.copy()
+    shrunk = df.copy()
 
     if 0:
-        df['expt_name'] = (
-            df['expt_name'].apply(
+        shrunk['expt_name'] = (
+            shrunk['expt_name'].apply(
                 lambda x: pat.search(x).group()
             ))
-    if 'channels' in df:
-        df['channels'] = (
-            df['channels'].apply(
+    if 'channels' in shrunk:
+        shrunk['channels'] = (
+            shrunk['channels'].apply(
                 lambda x: kwcoco.ChannelSpec.coerce(x.replace('matseg_', 'matseg.')).concise().spec
             ))
-        df['channels'] = (
-            df['channels'].apply(
+        shrunk['channels'] = (
+            shrunk['channels'].apply(
                 lambda x: x.replace('blue|green|red|nir|swir16|swir22', 'BGRNSH'))
         )
-        df['channels'] = (
-            df['channels'].apply(
-                lambda x: x.replace('brush|bare_ground|built_up', 'seg:3'))
+        shrunk['channels'] = (
+            shrunk['channels'].apply(
+                lambda x: x.replace('brush|bare_ground|built_up', 'land:3'))
         )
 
     if drop:
-        drop_cols = set(df.columns) & {
+        drop_cols = set(shrunk.columns) & {
             'title', 'normalize_perframe', 'normalize_inputs',
             'train_remote', 'step', 'arch_name', 'package_name',
             'pred_fpath', 'model_fpath',
         }
-        df = df.drop(drop_cols, axis=1)
-    return df
+        shrunk = shrunk.drop(drop_cols, axis=1)
+    return shrunk
 
 
 def _oldhack():

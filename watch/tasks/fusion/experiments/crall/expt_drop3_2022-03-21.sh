@@ -259,9 +259,9 @@ recovery_eval(){
             --bas_thresh=0.1,0.2 --hack_bas_grid=True \
             --skip_existing=1 --backend=tmux --run=0
 
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
+    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     EXPT_GROUP_CODE=eval3_candidates
-    MEASURE_GLOBSTR=$DVC_DPATH/models/fusion/eval3_candidates/eval/BASELINE_EXPERIMENT_V001/pred_BASELINE_EXPERIMENT_V001_epoch=11-step=62759/Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco/predcfg_abd043ec/eval/curves/measures2.json
+    #MEASURE_GLOBSTR=$DVC_DPATH/models/fusion/eval3_candidates/eval/BASELINE_EXPERIMENT_V001/pred_BASELINE_EXPERIMENT_V001_epoch=11-step=62759/Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco/predcfg_abd043ec/eval/curves/measures2.json
     EXPT_GROUP_CODE=eval3_candidates
     #EXPT_NAME_PAT="*"
     EXPT_NAME_PAT="*"
@@ -269,9 +269,11 @@ recovery_eval(){
     EXPT_NAME_PAT="*"
     #EXPT_NAME_PAT="BOTH_TA1_COMBO_TINY_p2w_raw*"
     MODEL_EPOCH_PAT="*"
+    MODEL_EPOCH_PAT="*V319_epoch=29*"
     PRED_DSET_PAT="*"
     PRED_CFG_PAT="*"
     MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json
+    ls "$MEASURE_GLOBSTR"
 
     python -m watch.tasks.fusion.aggregate_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
@@ -279,18 +281,6 @@ recovery_eval(){
         --dset_group_key="*Drop3*combo_LM_nowv_vali*" --show=0 \
         --io_workers=10 --show=False  \
         --classes_of_interest "Site Preparation" "Active Construction" --force-iarpa 
-
-
-
-
-
-
-
-
-
-
-
-
 
     # -----------
 
