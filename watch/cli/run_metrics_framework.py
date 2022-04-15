@@ -631,7 +631,7 @@ def main(args):
         non-persistant directory
         ''')
 
-    parser.add_argument('--enable_viz',
+    parser.add_argument('--enable_viz', default=False,
                         help='''
         If true, enables iarpa visualizations
         ''')
@@ -805,16 +805,17 @@ def main(args):
         from scriptconfig.smartcast import smartcast
         enable_viz = smartcast(args.enable_viz)
         if not enable_viz:
-            viz_flags = []
+            viz_flags = [
+                # '--no-viz-region',  # we do want this enabled
+                '--no-viz-slices',
+                '--no-viz-detection-table',
+                '--no-viz-comparison-table',
+                '--no-viz-associate-metrics',
+                '--no-viz-activity-metrics',
+            ]
         else:
             if enable_viz is True or enable_viz == 1:
                 viz_flags = [
-                    # '--no-viz-region',  # we do want this enabled
-                    '--no-viz-slices',
-                    '--no-viz-detection-table',
-                    '--no-viz-comparison-table',
-                    '--no-viz-associate-metrics',
-                    '--no-viz-activity-metrics',
                 ]
             else:
                 raise ValueError(enable_viz)

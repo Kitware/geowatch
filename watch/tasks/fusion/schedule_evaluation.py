@@ -74,6 +74,10 @@ class ScheduleEvaluationConfig(scfg.Config):
 
         'enable_iarpa_eval': scfg.Value(False, help='if True, enable iapra BAS evalaution'),
         'enable_track': scfg.Value(False, help='if True, enable tracking'),
+
+        'enable_actclf_eval': scfg.Value(False, help='if True, enable iapra SC evalaution'),
+        'enable_actclf': scfg.Value(False, help='if True, enable actclf'),
+
         'annotations_dpath': scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval'),
 
         'bas_thresh': scfg.Value([0.1], help='grid of track thresholds'),
@@ -240,6 +244,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     workers_per_queue = config['pred_workers']
     recompute = False
+
+    region_model_dpath = dvc_dpath / 'annotations/region_models'
 
     # HARD CODED
     # model_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
@@ -458,6 +464,18 @@ def schedule_evaluation(cmdline=False, **kwargs):
             task_info['will_exist'] = will_exist
             return task_info['enabled']
 
+        def prefix_command(task_info, command):
+            """
+            Augments the command so it is lazy if its output exists
+
+            TODO: incorporate into cmdq
+            """
+            if task_info['recompute']:
+                stamp_fpath = task_info['output']
+                if stamp_fpath is not None:
+                    command = f'test -f "{stamp_fpath}" || \\\n  ' + command
+            return command
+
     def check_recompute(flag, depends_flags=[]):
         return recompute or flag == 'redo' or any(f == 'redo' for f in depends_flags)
 
@@ -475,16 +493,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
     print('recompute_eval = {!r}'.format(recompute_eval))
     print('recompute_track = {!r}'.format(recompute_track))
     print('recompute_iarpa_eval = {!r}'.format(recompute_iarpa_eval))
-
-    def lazy_command(stamp_fpath, command):
-        """
-        Augments the command so it is lazy if its output exists
-
-        TODO: incorporate into cmdq
-        """
-        if stamp_fpath is not None:
-            command = f'test -f "{stamp_fpath}" || \\\n  ' + command
-        return command
 
     if with_eval == 'redo':
         # Need to dvc unprotect
@@ -507,6 +515,11 @@ def schedule_evaluation(cmdline=False, **kwargs):
     if config['shuffle_jobs']:
         import kwarray
         expanded_packages_to_eval = kwarray.shuffle(expanded_packages_to_eval)
+
+    common_submitkw = dict(
+        partition=config['partition'],
+        mem=config['mem']
+    )
 
     # expanded_packages_to_eval = expanded_packages_to_eval[0:2]
     from watch.tasks.fusion import schedule_iarpa_eval
@@ -546,8 +559,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 'requires': [],
                 'recompute': recompute_pred,
             }),
-            'eval': Task(**{
-                'name': 'eval',
+            'pxl_eval': Task(**{
+                'name': 'pxl_eval',
                 'requested': with_eval,
                 'output': eval_metrics_fpath,
                 'requires': ['pred'],
@@ -581,19 +594,14 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     --gpus=0, \
                     --batch_size=1
                 ''').format(**suggestions, **predictkw)
-            if not task_info['recompute']:
-                # Only run the command if its expected output does not exist
-                command = lazy_command(task_info['output'], command)
 
-            name = 'pred' + name_suffix
+            command = task_info.prefix_command(command)
+            name = task_info['name'] + name_suffix
             pred_cpus = workers_per_queue
             pred_job = queue.submit(command, gpus=1, name=name,
-                                    cpus=pred_cpus,
-                                    partition=config['partition'],
-                                    mem=config['mem'])
+                                    cpus=pred_cpus, **common_submitkw)
 
-        eval_job = None
-        task_info = task_infos['eval']
+        task_info = task_infos['pxl_eval']
         if task_info.should_compute_task():
             command = ub.codeblock(
                 r'''
@@ -607,65 +615,109 @@ def schedule_evaluation(cmdline=False, **kwargs):
                       --workers=2
                 ''').format(**suggestions, draw_curves=draw_curves,
                             draw_heatmaps=draw_heatmaps)
-
-            if not task_info['recompute']:
-                # Only run the command if its expected output does not exist
-                command = lazy_command(task_info['output'], command)
-
-            name = 'eval' + name_suffix
-            eval_job = queue.submit(
+            command = task_info.prefix_command(command)
+            name = task_info['name'] + name_suffix
+            task_info['job'] = queue.submit(
                 command, depends=pred_job, name=name, cpus=2,
-                partition=config['partition'], mem=config['mem'])
-            task_info['job'] = eval_job
+                **common_submitkw)
 
         tracking_param_basis = {
             'thresh': _ensure_iterable(config['bas_thresh']),
             # 'thresh': [0.1, 0.2, 0.3],
         }
-        for track_cfg in ub.named_product(tracking_param_basis):
-            track_suggestions = schedule_iarpa_eval._suggest_track_paths(
-                pred_dataset_fpath, track_cfg, eval_dpath=eval_dpath)
+        for bas_track_cfg in ub.named_product(tracking_param_basis):
+            bas_suggestions = schedule_iarpa_eval._suggest_bas_path(
+                pred_dataset_fpath, bas_track_cfg, eval_dpath=eval_dpath)
             name_suffix = '-'.join([
                 'pkg', suggestions['package_cfgstr'],
                 'prd', suggestions['pred_cfgstr'],
-                'trk', track_suggestions['track_cfgstr'],
+                'trk', bas_suggestions['bas_cfgstr'],
             ])
-            iarpa_eval_dpath = track_suggestions['iarpa_eval_dpath']
-            track_out_fpath = track_suggestions['track_out_fpath']
-            iarpa_merge_fpath = track_suggestions['iarpa_merge_fpath']
-
-            task_infos.update({
-                'track': Task(**{
-                    'name': 'track',
-                    'requested': with_track,
-                    'output': track_out_fpath,
-                    'requires': ['pred'],
-                    'recompute': recompute_track,
-                }),
-                'iarpa_eval': Task(**{
-                    'name': 'iarpa_eval',
-                    'requested': with_iarpa_eval,
-                    'output': iarpa_merge_fpath,
-                    'requires': ['track'],
-                    'recompute': recompute_iarpa_eval,
-                }),
+            iarpa_eval_dpath = bas_suggestions['iarpa_eval_dpath']
+            bas_out_fpath = bas_suggestions['bas_out_fpath']
+            iarpa_merge_fpath = bas_suggestions['iarpa_merge_fpath']
+            task_infos['bas_track'] = Task(**{
+                'name': 'bas_track',
+                'requested': with_track,
+                'output': bas_out_fpath,
+                'requires': ['pred'],
+                'recompute': recompute_track,
+            })
+            task_infos['bas_eval'] = Task(**{
+                'name': 'bas_eval',
+                'requested': with_iarpa_eval,
+                'output': iarpa_merge_fpath,
+                'requires': ['bas_track'],
+                'recompute': recompute_iarpa_eval,
             })
 
-            task = 'track'
-            track_job = None
-            task_info = task_infos[task]
+            bas_job = None
+            task_info = task_infos['bas_track']
             if task_info.should_compute_task():
+                command = schedule_iarpa_eval._build_bas_track_job(
+                    pred_dataset_fpath, bas_out_fpath,
+                    bas_track_cfg=bas_track_cfg)
+                command = task_info.prefix_command(command)
+                name = task_info['name'] + name_suffix
+                bas_job = queue.submit(command=command, depends=pred_job,
+                                         name=name, cpus=2, **common_submitkw)
+                task_info['job'] = bas_job
 
-                track_info = schedule_iarpa_eval._build_bas_track_job(
-                    pred_dataset_fpath, track_out_fpath, **track_cfg)
-                command = track_info['command']
+            # TODO: need a way of knowing if a package is BAS or SC.
+            # Might need info on GSD as well.
+            task_info = task_infos['bas_eval']
+            if task_info.should_compute_task():
+                command = schedule_iarpa_eval._build_iarpa_eval_job(
+                    bas_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath,
+                    annotations_dpath, name_suffix)
+                command = task_info.prefix_command(command)
+                name = task_info['name'] + name_suffix
+                task_info['job'] = queue.submit(
+                    command=command, depends=bas_job, name=name, cpus=2,
+                    **common_submitkw)
 
-                if not task_info['recompute']:
-                    # Only run the command if its expected output does not exist
-                    command = lazy_command(task_info['output'], command)
+        act_param_basis = {
+            # TODO viterbi or not
+            # Not sure what SC thresh is
+            # 'thresh': _ensure_iterable(config['bas_thresh']),
+            'thresh': [0.1],
+            'use_viterbi': [0],
+        }
+        for actcfg in ub.named_product(act_param_basis):
+            act_suggestions = schedule_iarpa_eval._suggest_act_paths(
+                pred_dataset_fpath, actcfg, eval_dpath=eval_dpath)
+            name_suffix = '-'.join([
+                'pkg', suggestions['package_cfgstr'],
+                'prd', suggestions['pred_cfgstr'],
+                'act', act_suggestions['act_cfgstr'],
+            ])
+            iarpa_eval_dpath = act_suggestions['iarpa_eval_dpath']
+            act_out_fpath = act_suggestions['act_out_fpath']
+            iarpa_merge_fpath = act_suggestions['iarpa_merge_fpath']
 
-                name = 'track-' + name_suffix
-                track_job = queue.submit(
+            task_infos['actclf'] = Task(**{
+                'name': 'actclf',
+                'requested': config['enable_actclf'],
+                'output': act_out_fpath,
+                'requires': ['pred'],
+                'recompute': 0,
+            })
+            task_infos['sc_eval'] = Task(**{
+                'name': 'sc_eval',
+                'requested': config['enable_actclf_eval'],
+                'output': iarpa_merge_fpath,
+                'requires': ['actclf'],
+                'recompute': 0,
+            })
+
+            sc_job = None
+            task_info = task_infos['actclf']
+            if task_info.should_compute_task():
+                command = schedule_iarpa_eval._build_sc_actclf_job(
+                    pred_dataset_fpath, region_model_dpath, act_out_fpath, actcfg=actcfg)
+                command = task_info.prefix_command(command)
+                name = task_info['name'] + name_suffix
+                sc_job = queue.submit(
                     command=command,
                     depends=pred_job,
                     name=name,
@@ -673,33 +725,22 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     partition=config['partition'],
                     mem=config['mem'],
                 )
-                task_info['job'] = track_job
+                task_info['job'] = sc_job
 
-            # TODO: need a way of knowing if a package is BAS or SC.
-            # Might need info on GSD as well.
-            task = 'iarpa_eval'
-            iarpa_eval_job = None
-            task_info = task_infos[task]
+            task_info = task_infos['sc_eval']
             if task_info.should_compute_task():
-                iarpa_eval_info = schedule_iarpa_eval._build_iarpa_eval_job(
-                    track_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath, annotations_dpath, name_suffix)
-
-                command = iarpa_eval_info['command']
-
-                if not task_info['recompute']:
-                    # Only run the command if its expected output does not exist
-                    command = lazy_command(task_info['output'], command)
-
-                name = 'iarpaeval-' + name_suffix
-                iarpa_eval_job = queue.submit(
+                command = schedule_iarpa_eval._build_iarpa_eval_job(
+                    act_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath, annotations_dpath, name_suffix)
+                command = task_info.prefix_command(command)
+                name = task_info['name'] + name_suffix
+                task_info['job']  = queue.submit(
                     command=command,
-                    depends=track_job,
+                    depends=sc_job,
                     name=name,
                     cpus=2,
                     partition=config['partition'],
                     mem=config['mem'],
                 )
-                task_info['job'] = iarpa_eval_job
 
     print('queue = {!r}'.format(queue))
     # print(f'{len(queue)=}')

@@ -602,8 +602,8 @@ def normalize_sensors(coco_dset):
 def normalize(
         coco_dset,
         track_fn,
-        polygon_fn,
         overwrite,
+        polygon_fn='heatmaps_to_polys',
         gt_dset=None,
         viz_sc_bounds=False,
         viz_videos=False,

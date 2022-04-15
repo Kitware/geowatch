@@ -1,18 +1,22 @@
+import json
 import ubelt as ub
 
 
-def _suggest_track_paths(pred_fpath, track_cfg, eval_dpath=None):
+def _suggest_bas_path(pred_fpath, bas_track_cfg, eval_dpath=None):
     """
     Helper for reasonable paths to keep everything organized for tracking eval
     """
-    human_opts = ub.dict_isect(track_cfg, {'thresh'})
-    other_opts = ub.dict_diff(track_cfg, human_opts)
-    human_part = ub.repr2(human_opts, compact=1)
-    track_cfgstr = human_part + '_' + ub.hash_data(other_opts)[0:8]
+    human_opts = ub.dict_isect(bas_track_cfg, {'thresh'})
+    other_opts = ub.dict_diff(bas_track_cfg, human_opts)
+    if len(human_opts):
+        human_part = ub.repr2(human_opts, compact=1) + '_'
+    else:
+        human_part = ''
+    cfgstr = human_part + ub.hash_data(other_opts)[0:8]
     pred_bundle_dpath = pred_fpath.parent
-    track_cfg_dname = f'tracking/trackcfg_{track_cfgstr}'
+    track_cfg_dname = f'tracking/trackcfg_{cfgstr}'
     track_cfg_base = pred_bundle_dpath / track_cfg_dname
-    track_out_fpath = track_cfg_base / 'tracks.json'
+    bas_out_fpath = track_cfg_base / 'tracks.json'
 
     if eval_dpath is None:
         iarpa_eval_dpath = track_cfg_base / 'iarpa_eval'
@@ -21,74 +25,82 @@ def _suggest_track_paths(pred_fpath, track_cfg, eval_dpath=None):
 
     iarpa_merge_fpath = iarpa_eval_dpath / 'scores' / 'merged' / 'summary2.json'
 
-    track_suggestions = {
+    bas_suggestions = {
         'iarpa_eval_dpath': iarpa_eval_dpath,
-        'track_cfgstr': track_cfgstr,
-        'track_out_fpath': track_out_fpath,
+        'bas_cfgstr': cfgstr,
+        'bas_out_fpath': bas_out_fpath,
         'iarpa_merge_fpath': iarpa_merge_fpath,
     }
-    return track_suggestions
+    return bas_suggestions
 
 
-def _build_bas_track_job(pred_fpath, track_out_fpath, thresh=0.2):
+def _suggest_act_paths(pred_fpath, actcfg, eval_dpath=None):
+    """
+    Helper for reasonable paths to keep everything organized for tracking eval
+    """
+    human_opts = ub.dict_isect(actcfg, {})
+    other_opts = ub.dict_diff(actcfg, human_opts)
+    if len(human_opts):
+        human_part = ub.repr2(human_opts, compact=1) + '_'
+    else:
+        human_part = ''
+    cfgstr = human_part + ub.hash_data(other_opts)[0:8]
+    pred_bundle_dpath = pred_fpath.parent
+    cfg_dname = f'actclf/actcfg_{cfgstr}'
+    cfg_base = pred_bundle_dpath / cfg_dname
+    act_out_fpath = cfg_base / 'activity_tracks.json'
+
+    if eval_dpath is None:
+        iarpa_eval_dpath = cfg_base / 'iarpa_sc_eval'
+    else:
+        iarpa_eval_dpath = eval_dpath / cfg_base / 'iarpa_sc_eval'
+
+    iarpa_merge_fpath = iarpa_eval_dpath / 'scores' / 'merged' / 'summary3.json'
+
+    act_suggestions = {
+        'iarpa_eval_dpath': iarpa_eval_dpath,
+        'act_cfgstr': cfgstr,
+        'act_out_fpath': act_out_fpath,
+        'iarpa_merge_fpath': iarpa_merge_fpath,
+    }
+    return act_suggestions
+
+
+def _build_bas_track_job(pred_fpath, bas_out_fpath, bas_track_cfg):
     """
     Given a predicted kwcoco file submit tracking and iarpa eval jobs
 
     Args:
         pred_fpath (PathLike): path to predicted kwcoco file
-        task (str): bas or sc
-        annotations_dpath (PathLike): path to IARPA annotations file ($dvc/annotations)
-
-    Ignore:
-        pred_fpath = '/home/joncrall/data/dvc-repos/smart_watch_dvc/_tmp/_tmp_pred_00/pred.kwcoco.json'
-        annotations_dpath = '/home/joncrall/data/dvc-repos/smart_watch_dvc/annotations'
-        thresh = 0.2
-        task = 'bas'
     """
+    import shlex
     pred_fpath = ub.Path(pred_fpath)
 
-    track_cfg = {
-        'thresh': thresh,
-    }
-
-    task = 'bas'
-    if task == 'bas':
-        import shlex
-        import json
-        track_kwargs_str = shlex.quote(json.dumps(track_cfg))
-        bas_args = f'--default_track_fn saliency_heatmaps --track_kwargs {track_kwargs_str}'  # NOQA
-        task_args = bas_args
-    elif task == 'sc':
-        sc_args = r'--track_fn watch.tasks.tracking.from_heatmap.TimeAggregatedHybrid --track_kwargs "{\"coco_dset_sc\": \"' + str(pred_fpath) + r'\"}"'  # NOQA
-        task_args = bas_args
-    else:
-        raise KeyError
-
+    track_cfg = bas_track_cfg
+    track_kwargs_str = shlex.quote(json.dumps(track_cfg))
+    bas_args = f'--default_track_fn saliency_heatmaps --track_kwargs {track_kwargs_str}'  # NOQA
     # Because BAS is the first step we want ensure we clear annotations so
     # everything that comes out is a track from BAS.
 
-    sites_dpath = track_out_fpath.parent / 'tracked_sites'
+    sites_dpath = bas_out_fpath.parent / 'tracked_sites'
     command = ub.codeblock(
         fr'''
         python -m watch.cli.kwcoco_to_geojson \
             "{pred_fpath}" \
-             {task_args} \
+            {bas_args} \
             --clear_annots \
             --out_dir "{sites_dpath}" \
-            --out_fpath "{track_out_fpath}"
+            --out_fpath "{bas_out_fpath}"
         ''')
 
-    track_info = {
-        'command': command,
-        'track_out_fpath': track_out_fpath,
-    }
-    return track_info
+    return command
 
 
-def _build_sc_track_job(pred_fpath, track_out_fpath, thresh=0.2):
+def _build_sc_actclf_job(pred_fpath, region_model_dpath, act_out_fpath, actcfg):
     r"""
     Given a predicted kwcoco file submit tracking and iarpa eval jobs
 
+    We use truth annotations so this can be scored independently of SC
 
     Notes:
         DVC_DPATH=$(smartwatch_dvc --hardware=hdd)
@@ -122,61 +134,42 @@ def _build_sc_track_job(pred_fpath, track_out_fpath, thresh=0.2):
 
     Args:
         pred_fpath (PathLike): path to predicted kwcoco file
-        task (str): bas or sc
-        annotations_dpath (PathLike): path to IARPA annotations file ($dvc/annotations)
-
-    Ignore:
-        pred_fpath = '/home/joncrall/data/dvc-repos/smart_watch_dvc/_tmp/_tmp_pred_00/pred.kwcoco.json'
-        annotations_dpath = '/home/joncrall/data/dvc-repos/smart_watch_dvc/annotations'
-        thresh = 0.2
-        task = 'bas'
+        region_model_dpath (PathLike): path to IARPA region file ($dvc/annotations/region_models)
     """
+
+    # SITE_SUMMARY_GLOB="$DVC_DPATH/annotations/region_models
+
+    import shlex
     pred_fpath = ub.Path(pred_fpath)
 
-    track_cfg = {
-        'thresh': thresh,
+    actclf_cfg = {
+        'boundaries_as': 'polys',
     }
+    actclf_cfg.update(actcfg)
 
-    task = 'bas'
-    if task == 'bas':
-        import shlex
-        import json
-        track_kwargs_str = shlex.quote(json.dumps(track_cfg))
-        bas_args = f'--default_track_fn saliency_heatmaps --track_kwargs {track_kwargs_str}'  # NOQA
-        task_args = bas_args
-    elif task == 'sc':
-        sc_args = r'--track_fn watch.tasks.tracking.from_heatmap.TimeAggregatedHybrid --track_kwargs "{\"coco_dset_sc\": \"' + str(pred_fpath) + r'\"}"'  # NOQA
-        task_args = bas_args
-    else:
-        raise KeyError
+    kwargs_str = shlex.quote(json.dumps(actclf_cfg))
+    sc_args = f'--default_track_fn class_heatmaps --track_kwargs {kwargs_str}'
 
-    # Because BAS is the first step we want ensure we clear annotations so
-    # everything that comes out is a track from BAS.
+    site_summary_glob = (region_model_dpath / '*.geojson')
 
-    sites_dpath = track_out_fpath.parent / 'tracked_sites'
+    sites_dpath = act_out_fpath.parent / 'classified_sites'
     command = ub.codeblock(
         fr'''
         python -m watch.cli.kwcoco_to_geojson \
             "{pred_fpath}" \
-             {task_args} \
-            --clear_annots \
+            --site_summary '{site_summary_glob}' \
+            {sc_args} \
             --out_dir "{sites_dpath}" \
-            --out_fpath "{track_out_fpath}"
+            --out_fpath "{act_out_fpath}"
         ''')
-
-    track_info = {
-        'command': command,
-        'track_out_fpath': track_out_fpath,
-    }
-    return track_info
+    return command
 
 
-def _build_iarpa_eval_job(track_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath, annotations_dpath, name=None):
+def _build_iarpa_eval_job(track_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath,
+                          annotations_dpath, name=None):
     import shlex
     tmp_dir = iarpa_eval_dpath / 'tmp'
     out_dir = iarpa_eval_dpath / 'scores'
-    merge_dpath = out_dir / 'merged'
-
     command = ub.codeblock(
         fr'''
         python -m watch.cli.run_metrics_framework \
@@ -189,15 +182,7 @@ def _build_iarpa_eval_job(track_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath, 
             --inputs_are_paths \
             {track_out_fpath}
         ''')
-
-    iarpa_summary_fpath = merge_dpath / 'summary2.json'
-
-    iarpa_eval_info = {
-        'command': command,
-        'out_dir': out_dir,
-        'iarpa_summary_fpath': iarpa_summary_fpath,
-    }
-    return iarpa_eval_info
+    return command
 
 
 r"""
@@ -220,6 +205,47 @@ python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
         --backend=serial --run=0
 
 
+python -m watch.cli.kwcoco_to_geojson \
+    "$HOME/data/dvc-repos/smart_watch_dvc-hdd/models/fusion/eval3_candidates/pred/Drop3_SpotCheck_V323/pred_Drop3_SpotCheck_V323_epoch=18-step=12976/Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json" \
+        --default_track_fn saliency_heatmaps --track_kwargs '{"thresh": 0.1, "polygon_fn": "heatmaps_to_polys_moving_window"}' \
+    --clear_annots \
+    --out_dir   "./_tmp/_testbas2/tracks" \
+    --out_fpath "./_tmp/_testbas2/tracks/tracks.json"
+
+
+  python -m watch.cli.run_metrics_framework \
+    --merge \
+    --name testing \
+    --gt_dpath "$HOME/data/dvc-repos/smart_watch_dvc-hdd/annotations" \
+    --tmp_dir "./_tmp/_testbas2/iarpa_eval/tmp" \
+    --out_dir "./_tmp/_testbas2/iarpa_eval/scores" \
+    --merge_fpath "./_tmp/_testbas2/iarpa_eval/scores/merged/summary2.json" \
+    --inputs_are_paths \
+    "./_tmp/_testbas2/tracks/tracks.json"
+
+
+
+python -m watch.cli.kwcoco_to_geojson \
+    "$HOME/data/dvc-repos/smart_watch_dvc-hdd/models/fusion/eval3_candidates/pred/Drop3_SpotCheck_V323/pred_Drop3_SpotCheck_V323_epoch=18-step=12976/Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json" \
+        --default_track_fn saliency_heatmaps --track_kwargs '{"thresh": 0.1}' \
+    --clear_annots \
+    --out_dir   "./_tmp/_testbas/tracks" \
+    --out_fpath "./_tmp/_testbas/tracks/tracks.json"
+
+
+  python -m watch.cli.run_metrics_framework \
+    --merge \
+    --name testing \
+    --gt_dpath "$HOME/data/dvc-repos/smart_watch_dvc-hdd/annotations" \
+    --tmp_dir "./_tmp/_testbas/iarpa_eval/tmp" \
+    --out_dir "./_tmp/_testbas/iarpa_eval/scores" \
+    --merge_fpath "./_tmp/_testbas/iarpa_eval/scores/merged/summary2.json" \
+    --inputs_are_paths \
+    "./_tmp/_testbas/tracks/tracks.json"
+
+
+
+
 
 
 #### SC Notes:
@@ -227,13 +253,34 @@ python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
 curl https://raw.githubusercontent.com/Erotemic/local/main/init/utils.sh -o utils.sh
 
 
-DVC_DPATH=$(smartwatch_dvc --hardware=hdd)
+export DVC_DPATH=$(smartwatch_dvc --hardware=hdd)
+DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
+
 ls $DVC_DPATH/models/fusion/eval3_sc_candidates/pred/*/*/*/*/pred.kwcoco.json
 ls $DVC_DPATH/models/fusion/eval3_sc_candidates/eval/*/*/*/*/
-pred.kwcoco.json
 
-source $HOME/local/init/utils.sh
-PATH_PARTS=(
+MODEL_GLOB_PARTS=(
+    $DVC_DPATH/
+    models/fusion/eval3_sc_candidates/packages/
+    CropDrop3_SC_wvonly_D_V011/
+    CropDrop3_SC_wvonly_D_V011_epoch=81-step=167935.pt
+)
+MODEL_GLOBSTR=$(join_by "" "${MODEL_GLOB_PARTS[@]}")
+
+python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+        --gpus="0" \
+        --model_globstr="$MODEL_GLOBSTR" \
+        --test_dataset="$VALI_FPATH" \
+        --skip_existing=0 \
+        --enable_pred=1 \
+        --enable_eval=1 \
+        --enable_actclf=1 \
+        --enable_actclf_eval=1 \
+        --backend=serial --run=0
+
+PRED_PATH_PART=(
     $DVC_DPATH/
     models/fusion/eval3_sc_candidates/pred/CropDrop3_SC_wvonly_D_V011/
     pred_CropDrop3_SC_wvonly_D_V011_epoch=81-step=167935/
@@ -241,7 +288,7 @@ PATH_PARTS=(
     predcfg_abd043ec/
     pred.kwcoco.json
 )
-PRED_DATASET=$(join_by "" "${PATH_PARTS[@]}")
+PRED_DATASET=$(join_by "" "${PRED_PATH_PART[@]}")
 echo "PRED_DATASET = $PRED_DATASET"
 
 #SITE_SUMMARY_GLOB="$DVC_DPATH/annotations/region_models/KR_*.geojson"
