@@ -715,6 +715,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
             }
             act_param_basis.update(grid)
 
+        import xdev
+        xdev.embed()
         for actcfg in ub.named_product(act_param_basis):
             act_suggestions = schedule_iarpa_eval._suggest_act_paths(
                 pred_dataset_fpath, actcfg, eval_dpath=eval_dpath)
