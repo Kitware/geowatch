@@ -32,7 +32,7 @@ def main():
                         help="File path to SC fusion model")
     parser.add_argument("--sc_track_fn",
                         required=False,
-                        default='watch.tasks.tracking.from_heatmap.TimeAggregatedHybrid',  # noqa: 501
+                        default='class_heatmaps',  # noqa: 501
                         type=str,
                         help="Tracking function to use for generating sites")
     parser.add_argument("--aws_profile",
@@ -192,7 +192,7 @@ def run_sc_fusion_for_baseline(
         output_path,
         sc_fusion_model_path,
         outbucket,
-        sc_track_fn='watch.tasks.tracking.from_heatmap.TimeAggregatedHybrid',  # noqa: E501
+        sc_track_fn='class_heatmaps',  # noqa: E501
         aws_profile=None,
         dryrun=False,
         newline=False,
@@ -250,32 +250,20 @@ def run_sc_fusion_for_baseline(
                     '--chip_overlap', '0.3'], check=True)
 
     # 4. Compute tracks (SC)
-    # Referencing BAS fusion KWCOCO computed in previous step of workflow
-    bas_fusion_kwcoco_path = os.path.join(ingress_dir,
-                                          'bas_fusion_kwcoco.json')
     print("* Computing tracks (SC) *")
     site_models_outdir = os.path.join(ingress_dir, 'site_models')
 
-    sc_track_kwargs = {'coco_dset_sc': sc_fusion_kwcoco_path,
-                       'use_viterbi': False,
-                       'bas_kwargs': {'thresh': bas_thresh,
-                                      'morph_kernel': 3,
-                                      'time_filtering': True,
-                                      'response_filtering': False,
-                                      'norm_ord': 1},
-                       'sc_kwargs': {'thresh': sc_thresh,
-                                     'morph_kernel': 3,
-                                     'time_filtering': False,
-                                     'response_filtering': False,
-                                     'norm_ord': 1}}
+    region_models_outdir = os.path.join(ingress_dir, 'region_models')
+
+    sc_track_kwargs = {"boundaries_as": "polys"}
     subprocess.run(['python', '-m', 'watch.cli.kwcoco_to_geojson',
-                    bas_fusion_kwcoco_path,
+                    sc_fusion_kwcoco_path,
                     '--out_dir', site_models_outdir,
-                    '--track_fn', sc_track_fn,
+                    '--default_track_fn', sc_track_fn,
+                    '--site_summary',
+                    os.path.join(region_models_outdir, '*.geojson'),
                     '--track_kwargs', json.dumps(sc_track_kwargs)],
                    check=True)
-
-    region_models_outdir = os.path.join(ingress_dir, 'region_models')
 
     cropped_region_models_outdir = os.path.join(ingress_dir,
                                                 'cropped_region_models')
