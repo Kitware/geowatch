@@ -696,9 +696,10 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     annotations_dpath, name_suffix)
                 command = task_info.prefix_command(command)
                 name = task_info['name'] + name_suffix
-                task_info['job'] = queue.submit(
+                bas_eval_job = queue.submit(
                     command=command, depends=bas_job, name=name, cpus=2,
                     **common_submitkw)
+                task_info['job'] = bas_eval_job
 
         act_param_basis = {
             # TODO viterbi or not
@@ -760,14 +761,12 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
             task_info = task_infos['sc_eval']
             if task_info.should_compute_task():
-                import xdev
-                xdev.embed()
                 command = schedule_iarpa_eval._build_iarpa_eval_job(
                     act_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath,
                     annotations_dpath, name_suffix)
                 command = task_info.prefix_command(command)
                 name = task_info['name'] + name_suffix
-                task_info['job']  = queue.submit(
+                sc_eval_job = queue.submit(
                     command=command,
                     depends=sc_job,
                     name=name,
@@ -775,6 +774,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     partition=config['partition'],
                     mem=config['mem'],
                 )
+                task_info['job'] = sc_eval_job
 
     print('queue = {!r}'.format(queue))
     # print(f'{len(queue)=}')
