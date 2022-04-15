@@ -103,22 +103,72 @@ def debug_all_results():
     """
 
     import watch
+    from watch.utils import util_path
+    import pandas as pd
     dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
 
     bas_globpats = [
-        'models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json'
+        dvc_dpath / 'models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json'
     ]
+    bas_paths = util_path.coerce_patterned_paths(bas_globpats)
 
-    from watch.utils import util_path
+    bas_rows = []
+    for merged_fpath in bas_paths:
+        with open(merged_fpath, 'r') as file:
+            bas_info = json.load(file)
+
+        best_bas_rows = pd.read_json(io.StringIO(json.dumps(bas_info['best_bas_rows'])), orient='table')
+        try:
+            bas_row = best_bas_rows.loc['merged'].reset_index().iloc[0].to_dict()
+        except Exception:
+            bas_row = best_bas_rows[best_bas_rows['region_id'].isnull()].reset_index(drop=1).iloc[0].to_dict()
+
+        tracker_info = bas_info['parent_info']
+        path_hint = merged_fpath
+        params = parse_tracker_params(tracker_info, dvc_dpath, path_hint=path_hint)
+
+        metrics = {
+            'BAS_F1': bas_row['F1'],
+            'BAS_rho': bas_row['rho'],
+            'BAS_tau': bas_row['tau'],
+            # 'mean_f1': sc_df.loc['F1 score'].mean(),
+            # 'siteprep_f1': sc_df.loc['F1 score', 'Site Preparation'].mean(),
+            # 'active_f1': sc_df.loc['F1 score', 'Active Construction'].mean(),
+        }
+        row = ub.odict(ub.dict_union(metrics, params))
+        bas_rows.append(row)
+
+    df = pd.DataFrame(bas_rows)
+    df = df.sort_values('BAS_F1')
+
+    varied = ub.varied_values(bas_rows, 1, None)
+    varied2 = {k: v for k, v in varied.items() if len(ub.oset(v) - {None}) > 1}
+    varied_cols = ub.oset(df.columns) & list(varied2.keys())
+    df2 = df[varied_cols].sort_values('BAS_F1')
+    df2 = shrink_notations(df2)
+    ignore_cols = [
+        'modulate_class_weights', 'accumulate_grad_batches',
+        'pred_in_dataset_fpath', 'pred_model_fpath'
+        'name',
+        'patience', 'normalize_inputs',
+        'use_special_classes', 'pred_model_fpath',
+    ]
+    df2 = df2.drop(ub.oset(df2.columns) & ignore_cols, axis=1)
+    print(df2.to_string())
+
+    ###
+    ###
+    ###
+
     sc_globpats = [
         dvc_dpath / 'models/fusion/eval3_sc_candidates/pred/*/*/*/*/actclf/*/*_eval/scores/merged/summary3.json'
-        dvc_dpath / 'models/fusion/eval3_sc_candidates/pred/*/*/*/*/actclf/*/iarpa_sc_eval/scores/merged/summary3.json'
+        # dvc_dpath / 'models/fusion/eval3_sc_candidates/pred/*/*/*/*/actclf/*/iarpa_sc_eval/scores/merged/summary3.json',
     ]
     sc_paths = util_path.coerce_patterned_paths(sc_globpats)
 
     rows = []
-    for sc_fapth in sc_paths:
-        with open(sc_fapth, 'r') as file:
+    for merged_fpath in sc_paths:
+        with open(merged_fpath, 'r') as file:
             sc_info = json.load(file)
         # sc_info['sc_cm']
         sc_df = pd.read_json(io.StringIO(json.dumps(sc_info['sc_df'])), orient='table')
@@ -136,28 +186,42 @@ def debug_all_results():
 
     df = pd.DataFrame(rows)
     df = df.sort_values('mean_f1')
-
     varied = ub.oset(df.columns) & list(ub.varied_values(rows, 1).keys())
-
     df2 = df[varied].sort_values('mean_f1')
     shrink_notations(df2)
     print(df2.drop(['modulate_class_weights', 'accumulate_grad_batches', 'pred_model_fpath'], axis=1))
     print(df2.to_string())
 
 
-def parse_tracker_params(tracker_info, dvc_dpath):
+def parse_tracker_params(tracker_info, dvc_dpath, path_hint=None):
     track_item = find_track_item(tracker_info)
-    pred_info = track_item['properties']['pred_info']
-    pred_item = find_pred_item(pred_info)
 
+    if 'pred_info' not in track_item['properties']:
+        if path_hint is None:
+            raise Exception('cannot find pred info. This is an old result')
+        eval_dpath = path_hint.parent.parent.parent.parent.parent.parent
+        # Can we steal pred info from pixel metrics?
+        # eval_dpath / 'curves'
+        measures_fpath = eval_dpath / 'curves/measures2.json'
+        if measures_fpath.exists():
+            data = json.loads(measures_fpath.read_text())
+            pred_info = data['meta']['info']
+        else:
+            dvc_measures_fpath = measures_fpath.augment(tail='.dvc')
+            if dvc_measures_fpath.exists():
+                raise Exception('dvc pull')
+            else:
+                raise Exception('got nothing')
+    else:
+        pred_info = track_item['properties']['pred_info']
+
+    pred_item = find_pred_item(pred_info)
     track_args = track_item['properties']['args']
     pred_args = pred_item['properties']['args']
     fit_config = pred_item['properties']['fit_config']
-
     pred_config = relevant_pred_config(pred_args, dvc_dpath)
     fit_config = relevant_fit_config(fit_config)
     track_config = relevant_track_config(track_args)
-
     params = ub.dict_union(fit_config, pred_config, track_config)
     return params
 
