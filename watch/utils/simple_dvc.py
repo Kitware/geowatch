@@ -83,7 +83,7 @@ class SimpleDVC():
         max_parts = len(path.parts)
         curr = path
         found = None
-        for _ in range(max_parts):
+        for _ in range(max_parts + 1):
             cand = curr / '.dvc'
             if cand.exists():
                 found = curr
@@ -100,7 +100,6 @@ class SimpleDVC():
     def add(self, path):
         from dvc import main as dvc_main
         paths = list(map(ub.Path, _ensure_iterable(path)))
-        print('paths = {!r}'.format(paths))
         dvc_root = self._ensure_root(paths)
         rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
         with ChDir(dvc_root):
