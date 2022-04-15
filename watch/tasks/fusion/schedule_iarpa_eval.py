@@ -15,14 +15,14 @@ def _suggest_bas_path(pred_fpath, bas_track_cfg, eval_dpath=None):
         human_part = ''
     cfgstr = human_part + ub.hash_data(other_opts)[0:8]
     pred_bundle_dpath = pred_fpath.parent
-    track_cfg_dname = f'tracking/trackcfg_{cfgstr}'
-    track_cfg_base = pred_bundle_dpath / track_cfg_dname
-    bas_out_fpath = track_cfg_base / 'tracks.json'
+    cfg_dname = f'tracking/trackcfg_{cfgstr}'
+    cfg_base = pred_bundle_dpath / cfg_dname
+    bas_out_fpath = cfg_base / 'tracks.json'
 
     if eval_dpath is None:
-        iarpa_eval_dpath = track_cfg_base / 'iarpa_eval'
+        iarpa_eval_dpath = cfg_base / 'iarpa_eval'
     else:
-        iarpa_eval_dpath = eval_dpath / track_cfg_dname / 'iarpa_eval'
+        iarpa_eval_dpath = eval_dpath / cfg_dname / 'iarpa_eval'
 
     iarpa_merge_fpath = iarpa_eval_dpath / 'scores' / 'merged' / 'summary2.json'
 

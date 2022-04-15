@@ -47,7 +47,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
 
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1" \
-            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*_D_*/*.pt" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
             --test_dataset="$VALI_FPATH" \
             --enable_pred=1 \
             --enable_eval=1 \
@@ -134,6 +134,9 @@ special_evaluation(){
         models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V008/CropDrop3_SC_xver1_V008_epoch=26-step=55295-v1.pt
     "
 
+    MODEL_GLOBSTR="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt"
+    #MODEL_GLOBSTR="$DVC_DPATH"/models/fusion/eval3_sc_candidates/models_of_interest.txt
+
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_sc_candidates
@@ -143,7 +146,7 @@ special_evaluation(){
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1,2,3,4,5,6,7,8" \
-            --model_globstr="$DVC_DPATH"/models/fusion/eval3_sc_candidates/models_of_interest.txt \
+            --model_globstr="$MODEL_GLOBSTR" \
             --test_dataset="$VALI_FPATH" \
             --enable_pred=0 \
             --enable_eval=0 \

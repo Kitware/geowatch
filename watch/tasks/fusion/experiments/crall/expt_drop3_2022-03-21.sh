@@ -241,10 +241,15 @@ recovery_eval(){
     #models/fusion/eval3_candidates/packages/BASELINE_EXPERIMENT_V001/BASELINE_EXPERIMENT_V001_epoch=8-step=47069.pt
     #models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
     #models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V313/Drop3_SpotCheck_V313_epoch=34-step=71679.pt
+    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
+    EXPT_GROUP_CODE=eval3_candidates
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
     writeto "$DVC_DPATH/models/fusion/eval3_candidates/models_of_interest-2.txt" "
         models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V319/Drop3_SpotCheck_V319_epoch=29-step=61439-v2.pt
     "
-    TMUX_GPUS="0,1"
+    TMUX_GPUS="0,1,2,3,4,5,6,7,8"
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest-2.txt" \

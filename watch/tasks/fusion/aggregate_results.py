@@ -96,6 +96,8 @@ def debug_all_results():
     ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/iarpa_eval/scores/merged/summary2.json
     ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/iarpa_eval/scores/merged/summary2.json
 
+    ls models/fusion/eval3_sc_candidates/pred/*/*/*/*/actclf/*/*_eval/scores/merged/summary3.json
+
     models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/
 
     find models/fusion -iname "summary2.json"
@@ -106,6 +108,25 @@ def debug_all_results():
     from watch.utils import util_path
     import pandas as pd
     dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
+    ignore_cols = [
+        'modulate_class_weights', 'accumulate_grad_batches',
+        'pred_in_dataset_fpath', 'pred_model_fpath'
+        'name',
+        'patience', 'normalize_inputs',
+        'neg_to_pos_ratio',
+        'use_special_classes', 'pred_model_fpath',
+        'temporal_dropout',
+        'use_centered_positives',
+        'chip_overlap',
+        'arch_name',
+        'class_loss', 'global_change_weight',
+        'learning_rate',
+        'max_epoch_length',
+        'stream_channels',
+        'name',
+        'time_sampling',
+        'max_epochs',
+    ]
 
     bas_globpats = [
         dvc_dpath / 'models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json'
@@ -146,33 +167,21 @@ def debug_all_results():
     varied_cols = ub.oset(df.columns) & list(varied2.keys())
     df2 = df[varied_cols].sort_values('BAS_F1')
     df2 = shrink_notations(df2)
-    ignore_cols = [
-        'modulate_class_weights', 'accumulate_grad_batches',
-        'pred_in_dataset_fpath', 'pred_model_fpath'
-        'name',
-        'patience', 'normalize_inputs',
-        'neg_to_pos_ratio',
-        'use_special_classes', 'pred_model_fpath',
-        'temporal_dropout',
-        'use_centered_positives',
-        'chip_overlap',
-        'arch_name',
-        'class_loss', 'global_change_weight',
-    ]
     df2 = df2.drop(ub.oset(df2.columns) & ignore_cols, axis=1)
-    print(df2.to_string())
+    print(df2.iloc[-70:].to_string())
 
     ###
     ###
     ###
 
     sc_globpats = [
-        dvc_dpath / 'models/fusion/eval3_sc_candidates/pred/*/*/*/*/actclf/*/*_eval/scores/merged/summary3.json'
+        dvc_dpath / 'models/fusion/eval3_sc_candidates/pred/*/*/*/*/actclf/*/*_eval/scores/merged/summary3.json',
+        dvc_dpath / 'models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json'
         # dvc_dpath / 'models/fusion/eval3_sc_candidates/pred/*/*/*/*/actclf/*/iarpa_sc_eval/scores/merged/summary3.json',
     ]
     sc_paths = util_path.coerce_patterned_paths(sc_globpats)
 
-    rows = []
+    sc_rows = []
     for merged_fpath in sc_paths:
         with open(merged_fpath, 'r') as file:
             sc_info = json.load(file)
@@ -188,14 +197,22 @@ def debug_all_results():
             'active_f1': sc_df.loc['F1 score', 'Active Construction'].mean(),
         }
         row = ub.odict(ub.dict_union(metrics, params))
-        rows.append(row)
+        sc_rows.append(row)
 
-    df = pd.DataFrame(rows)
+    if 0:
+        ub.util_hash._HASHABLE_EXTENSIONS.register(ub.Path)(lambda x: (b'path', ub.hash_data(str(x)).encode()))
+
+    len(sc_rows)
+    sc_rows = list(ub.unique(sc_rows, key=ub.hash_data))
+
+    df = pd.DataFrame(sc_rows)
     df = df.sort_values('mean_f1')
-    varied = ub.oset(df.columns) & list(ub.varied_values(rows, 1).keys())
-    df2 = df[varied].sort_values('mean_f1')
-    shrink_notations(df2)
-    print(df2.drop(['modulate_class_weights', 'accumulate_grad_batches', 'pred_model_fpath'], axis=1))
+    varied = ub.varied_values(sc_rows, 1, None)
+    varied2 = {k: v for k, v in varied.items() if len(ub.oset(v) - {None}) > 1}
+    varied_cols = ub.oset(df.columns) & list(varied2.keys())
+    df2 = df[varied_cols].sort_values('mean_f1')
+    df2 = shrink_notations(df2)
+    df2 = df2.drop(ub.oset(df2.columns) & ignore_cols, axis=1)
     print(df2.to_string())
 
 
@@ -960,6 +977,14 @@ def shrink_notations(df, drop=0):
         shrunk['channels'] = (
             shrunk['channels'].apply(
                 lambda x: x.replace('blue|green|red|nir|swir16|swir22', 'BGRNSH'))
+        )
+        shrunk['channels'] = (
+            shrunk['channels'].apply(
+                lambda x: x.replace('red|green|blue', 'RGB'))
+        )
+        shrunk['channels'] = (
+            shrunk['channels'].apply(
+                lambda x: x.replace('forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field', 'land:8'))
         )
         shrunk['channels'] = (
             shrunk['channels'].apply(

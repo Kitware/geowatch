@@ -640,7 +640,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
         if config['hack_bas_grid']:
             grid = {
-                'thresh': [0.1, 0.15, 0.2],
+                'thresh': [0.01, 0.05, 0.1, 0.15, 0.2],
                 'morph_kernel': [3],
                 'norm_ord': [1],
                 'agg_fn': ['probs', 'mean_normalized'],
@@ -705,7 +705,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             # TODO viterbi or not
             # Not sure what SC thresh is
             # 'thresh': _ensure_iterable(config['bas_thresh']),
-            'thresh': [0.1],
+            'thresh': [0.0],
             'use_viterbi': [0],
         }
         if config['hack_sc_grid']:
