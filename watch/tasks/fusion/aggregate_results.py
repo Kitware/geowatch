@@ -151,7 +151,13 @@ def debug_all_results():
         'pred_in_dataset_fpath', 'pred_model_fpath'
         'name',
         'patience', 'normalize_inputs',
+        'neg_to_pos_ratio',
         'use_special_classes', 'pred_model_fpath',
+        'temporal_dropout',
+        'use_centered_positives',
+        'chip_overlap',
+        'arch_name',
+        'class_loss', 'global_change_weight',
     ]
     df2 = df2.drop(ub.oset(df2.columns) & ignore_cols, axis=1)
     print(df2.to_string())
@@ -172,7 +178,7 @@ def debug_all_results():
             sc_info = json.load(file)
         # sc_info['sc_cm']
         sc_df = pd.read_json(io.StringIO(json.dumps(sc_info['sc_df'])), orient='table')
-        sc_cm = pd.read_json(io.StringIO(json.dumps(sc_info['sc_cm'])), orient='table')
+        # sc_cm = pd.read_json(io.StringIO(json.dumps(sc_info['sc_cm'])), orient='table')
         tracker_info = sc_info['parent_info']
         params = parse_tracker_params(tracker_info, dvc_dpath)
 

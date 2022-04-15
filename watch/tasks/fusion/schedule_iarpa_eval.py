@@ -54,7 +54,7 @@ def _suggest_act_paths(pred_fpath, actcfg, eval_dpath=None):
     if eval_dpath is None:
         iarpa_eval_dpath = cfg_base / 'iarpa_sc_eval'
     else:
-        iarpa_eval_dpath = eval_dpath / cfg_base / 'iarpa_sc_eval'
+        iarpa_eval_dpath = eval_dpath / cfg_dname / 'iarpa_sc_eval'
 
     iarpa_merge_fpath = iarpa_eval_dpath / 'scores' / 'merged' / 'summary3.json'
 
