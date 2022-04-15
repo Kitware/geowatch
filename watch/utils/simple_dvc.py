@@ -94,6 +94,7 @@ class SimpleDVC():
     def _ensure_root(self, paths):
         if self.dvc_root is None:
             self.dvc_root = self.find_root(paths[0])
+            print('found new self.dvc_root = {!r}'.format(self.dvc_root))
         return self.dvc_root
 
     def add(self, path):
