@@ -103,8 +103,9 @@ def main(cmdline=False, **kwargs):
         new_region_fpath = new_region_dpath / old_region_fpath.name
 
         # Not sure why this insists on bytes. I dont think it was before
-        with safer.open(new_region_fpath, temp_file=True, mode='wb') as file:
-            cropped_region.to_file(file, driver='GeoJSON')
+        with safer.open(new_region_fpath, temp_file=True, mode='w') as file:
+            cropped_region_json = cropped_region.to_json(na='drop', indent=2)
+            file.write(cropped_region_json)
         print(f'Wrote cropped site summaries to {new_region_fpath}')
 
         # Save the cropped sites to disk
@@ -118,8 +119,11 @@ def main(cmdline=False, **kwargs):
                 num_valid += 1
                 old_site_fpath = cropped_site_info['fpath']
                 new_site_fpath = new_site_dpath / old_site_fpath.name
-                with safer.open(new_site_fpath, temp_file=True, mode='wb') as file:
-                    cropped_site.to_file(file, driver='GeoJSON')
+                with safer.open(new_site_fpath, temp_file=True, mode='w') as file:
+                    cropped_site_json = cropped_site.to_json(
+                        na='drop', indent=2)
+                    file.write(cropped_site_json)
+                    # cropped_site.to_file(file, driver='GeoJSON')
         print(f'Wrote {num_valid} / {total} valid cropped sites in {new_site_dpath}')
 
 
