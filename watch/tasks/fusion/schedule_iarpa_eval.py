@@ -91,10 +91,15 @@ def _build_sc_track_job(pred_fpath, track_out_fpath, thresh=0.2):
 
 
     Notes:
-
         DVC_DPATH=$(smartwatch_dvc --hardware=hdd)
         PRED_DATASET=$DVC_DPATH/models/fusion/eval3_sc_candidates/pred/CropDrop3_SC_V006/pred_CropDrop3_SC_V006_epoch=71-step=18431/Cropped-Drop3-TA1-2022-03-10_combo_DL_s2_wv_vali.kwcoco/predcfg_464eb52f/pred.kwcoco.json
         SITE_SUMMARY_GLOB="$DVC_DPATH/annotations/region_models/KR_*.geojson"
+
+        ANNOTATIONS_DPATH=$DVC_DPATH/annotations
+        ls $ANNOTATIONS_DPATH
+
+        python -m watch.tasks.fusion.predict \
+                pass
 
         python -m watch.cli.kwcoco_to_geojson \
             "$PRED_DATASET" \
@@ -104,6 +109,16 @@ def _build_sc_track_job(pred_fpath, track_out_fpath, thresh=0.2):
             --out_dir ./tmp/site_models \
             --out_fpath ./tmp/site_models_stamp.json
 
+        python -m watch.cli.run_metrics_framework \
+            --merge \
+            --gt_dpath "$ANNOTATIONS_DPATH" \
+            --tmp_dir "./tmp/iarpa/tmp" \
+            --out_dir "./tmp/iarpa/scores" \
+            --name "mytest" \
+            --merge_fpath "./tmp/iarpa/merged.json" \
+            --inputs_are_paths \
+            --enable_viz=True \
+            ./tmp/site_models_stamp.json
 
     Args:
         pred_fpath (PathLike): path to predicted kwcoco file
@@ -185,21 +200,71 @@ def _build_iarpa_eval_job(track_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath, 
     return iarpa_eval_info
 
 
-"""
+r"""
 # Note: change backend to tmux if slurm is not installed
-DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(smartwatch_dvc --hardware=hdd)
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
-EXPT_GROUP_CODE=eval3_candidates
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+
+
 python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-        --gpus="0,1,2,3,4,5,6,7,8" \
-        --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
+        --gpus="0" \
+        --model_globstr="$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt" \
         --test_dataset="$VALI_FPATH" \
-        --skip_existing=True \
-        --enable_pred=0 \
-        --enable_eval=0 \
+        --skip_existing=0 \
+        --enable_pred=1 \
+        --enable_eval=1 \
         --enable_track=1 \
         --enable_iarpa_eval=1 \
-        --backend=tmux --run=1
+        --backend=serial --run=0
+
+
+
+
+#### SC Notes:
+
+curl https://raw.githubusercontent.com/Erotemic/local/main/init/utils.sh -o utils.sh
+
+
+DVC_DPATH=$(smartwatch_dvc --hardware=hdd)
+ls $DVC_DPATH/models/fusion/eval3_sc_candidates/pred/*/*/*/*/pred.kwcoco.json
+ls $DVC_DPATH/models/fusion/eval3_sc_candidates/eval/*/*/*/*/
+pred.kwcoco.json
+
+source $HOME/local/init/utils.sh
+PATH_PARTS=(
+    $DVC_DPATH/
+    models/fusion/eval3_sc_candidates/pred/CropDrop3_SC_wvonly_D_V011/
+    pred_CropDrop3_SC_wvonly_D_V011_epoch=81-step=167935/
+    Cropped-Drop3-TA1-2022-03-10_combo_DL_s2_wv_vali.kwcoco/
+    predcfg_abd043ec/
+    pred.kwcoco.json
+)
+PRED_DATASET=$(join_by "" "${PATH_PARTS[@]}")
+echo "PRED_DATASET = $PRED_DATASET"
+
+#SITE_SUMMARY_GLOB="$DVC_DPATH/annotations/region_models/KR_*.geojson"
+SITE_SUMMARY_GLOB="$DVC_DPATH/annotations/region_models/KR_R001.geojson"
+
+python -m watch.cli.kwcoco_to_geojson \
+    "$PRED_DATASET" \
+    --default_track_fn class_heatmaps \
+    --site_summary "$SITE_SUMMARY_GLOB" \
+    --track_kwargs '{"boundaries_as": "polys"}' \
+    --out_dir ./tmp/site_models \
+    --out_fpath ./tmp/site_models_stamp.json
+
+python -m watch.cli.run_metrics_framework \
+    --merge \
+    --gt_dpath "$DVC_DPATH/annotations" \
+    --tmp_dir "./tmp/iarpa/tmp" \
+    --out_dir "./tmp/iarpa/scores" \
+    --name "mytest" \
+    --merge_fpath "./tmp/iarpa/merged.json" \
+    --inputs_are_paths \
+    --enable_viz=True \
+    ./tmp/site_models_stamp.json
+
+
 """

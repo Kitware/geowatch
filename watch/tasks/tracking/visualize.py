@@ -1,9 +1,8 @@
 import kwimage
 import kwcoco
-import matplotlib.pyplot as plt
 import numpy as np
 import os
-import seaborn as sns
+import ubelt as ub
 import shapely.ops
 import pandas as pd
 from collections import defaultdict
@@ -115,6 +114,7 @@ def visualize_videos(pred_dset,
                      out_dir='./_assets',
                      hide_axis=False,
                      coco_dset_sc=None):
+    import matplotlib.pyplot as plt
     os.makedirs(out_dir, exist_ok=True)
     for vidid, _ in pred_dset.index.videos.items():
         gids = pred_dset.index.vidid_to_gids[vidid]
@@ -359,6 +359,8 @@ def viz_track_scores(coco_dset, track_cats, keys_to_score, out_pth):
         >>> d = add_site_summary_to_kwcoco(kr_r002_path, d)
         >>> viz_track_scores(d, [SITE_SUMMARY_CNAME], keys_to_score_sc)
     '''
+    import seaborn as sns
+    import matplotlib.pyplot as plt
     def _score_track(track, gids=None):
         if gids is None:  # include only gids in track
             gids = [obs.gid for obs in track.observations]
@@ -389,31 +391,33 @@ def viz_track_scores(coco_dset, track_cats, keys_to_score, out_pth):
                             color=colors[sensor_coarse],
                             alpha=0.1)
 
+    track_cats = track_cats if ub.iterable(track_cats) else [track_cats]
+
     dfs = []
     for i, (vidid, gids) in enumerate(coco_dset.index.vidid_to_gids.items()):
         vid_name = coco_dset.index.videos[vidid]['name']
         sub_dset = coco_dset.subset(gids, copy=True)
-        tracks = pop_tracks(sub_dset,
-                            cnames=track_cats,
-                            score_chan=keys_to_score,
-                            remove=False)
-        df = pd.DataFrame({
-            'gid':
-            gids,
-            'vid_name':
-            vid_name,
-            'sensor_coarse':
-            coco_dset.images(gids).get('sensor_coarse'),
-            **{
-                f'track {i:3} area={_area_track(t):.2f}': _score_track(
-                    t, gids)
+        tracks = list(pop_tracks(sub_dset,
+                                 cnames=track_cats,
+                                 score_chan=keys_to_score,
+                                 remove=False))
+
+        if len(tracks) > 0:
+            track_props = {
+                f'track {i:3} area={_area_track(t):.2f}': _score_track(t, gids)
                 for i, t in enumerate(tracks)
-            },
-        })
-        dfs.append(df)
+            }
+            df = pd.DataFrame({
+                'gid': gids,
+                'vid_name': vid_name,
+                'sensor_coarse': coco_dset.images(gids).get('sensor_coarse'),
+                **track_props,
+            })
+            dfs.append(df)
 
     sns.set_context('paper')
 
+    print('visualize')
     df = pd.concat(dfs)
     df = pd.melt(df, ['gid', 'vid_name', 'sensor_coarse']).dropna()
     g = sns.FacetGrid(df,
@@ -428,4 +432,5 @@ def viz_track_scores(coco_dset, track_cats, keys_to_score, out_pth):
     plt.ylabel('mean foreground response')
     plt.ylim(1e-10, 5)
 
+    ub.Path(out_pth).parent.ensuredir()
     plt.savefig(out_pth)

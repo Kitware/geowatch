@@ -691,21 +691,20 @@ class TimeAggregatedSC(NewTrackFunction):
             'none': generated polys will ignore the boundaries
         '''
         if self.boundaries_as == 'polys':
-            tracks = pop_tracks(
+            tracks = list(pop_tracks(
                 sub_dset,
                 cnames=[SITE_SUMMARY_CNAME],
                 # these are SC scores, not BAS, so this is not a
                 # true reproduction of hybrid.
-                score_chan=kwcoco.ChannelSpec('|'.join(self.key)))
+                score_chan=kwcoco.ChannelSpec('|'.join(self.key))))
             # hack in always-foreground instead
             if 0:  # TODO
                 for track in list(tracks):
                     for obs in track.observations:
                         obs.score = 1
 
-            tracks = list(
-                filter(lambda track: len(list(track.observations)) > 0,
-                       tracks))
+            tracks = list(filter(
+                lambda track: len(list(track.observations)) > 0, tracks))
         else:
             tracks = time_aggregated_polys(
                 sub_dset,

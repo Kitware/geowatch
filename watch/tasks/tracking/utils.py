@@ -3,7 +3,6 @@ import numpy as np
 import kwcoco
 from rasterio import features
 import scipy.ndimage.measurements as ndm
-from copy import deepcopy
 import shapely.geometry
 import ubelt as ub
 from dataclasses import dataclass, astuple
@@ -200,7 +199,6 @@ class TrackFunction(collections.abc.Callable):
                 tracked_subdsets.append(sub_dset)
 
         if not legacy:
-            
             # Tracks were either updated or added.
             # In the case they were updated the existing track ids should
             # be disjoint. All new tracks should not overlap with
@@ -329,6 +327,9 @@ class NoOpTrackFunction(TrackFunction):
     '''
     Use existing tracks.
     '''
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs  # Unused
+
     def __call__(self, sub_dset):
         return sub_dset
 
@@ -387,11 +388,13 @@ def pop_tracks(
     if len(annots) < 1:
         print(f'warning: no {cnames} annots in dset {coco_dset.tag}!')
 
-    annots = deepcopy(annots)
-    if remove:
-        coco_dset.remove_categories(cnames, keep_annots=False)
+    # Load polygon annotation segmentation in video space
+    coco_imgs = annots.images.coco_images
+    polys = []
+    for coco_img, ann in zip(coco_imgs, annots.objs):
+        poly = coco_img._annot_segmentation(ann, space='video')
+        polys.append(poly)
 
-    polys = annots.detections.data['segmentations'].to_polygon_list()
     assert len(polys) == len(annots), ('TODO handle multipolygon boundaries')
 
     if score_chan is not None:
@@ -410,14 +413,18 @@ def pop_tracks(
         scores = [None] * len(annots)
         # scores = annots.get('score', None)
 
-    for track_id, track_info in ub.group_items(zip(polys, annots.gids, scores),
-                                               annots.get('track_id',
-                                                          None)).items():
+    _track_infos = zip(polys, annots.gids, scores)
+    _track_ids = annots.get('track_id', None)
+    _tid_to_info = ub.group_items(_track_infos, _track_ids)
+
+    if remove:
+        coco_dset.remove_categories(cnames, keep_annots=False)
+
+    for track_id, track_info in _tid_to_info.items():
         track_polys, track_gids, track_scores = zip(*track_info)
-        yield Track(list(
-            map(Observation, track_polys, track_gids, track_scores)),
-                    dset=coco_dset,
-                    track_id=track_id)
+        observations = list(map(Observation, track_polys, track_gids, track_scores))
+        track = Track(observations, dset=coco_dset, track_id=track_id)
+        yield track
 
 
 def score_poly(poly, probs, mode='score', threshold=0, use_rasterio=True):
