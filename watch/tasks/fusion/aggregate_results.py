@@ -239,6 +239,7 @@ def debug_all_results():
         # ignore_metrics=ignore_metrics,
         abalation_orders={1}
     )
+    analysis.analysis()
 
     print(f'{len(sc_rows)=}')
 
