@@ -135,6 +135,7 @@ def debug_all_results():
         dvc_dpath / 'models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json'
     ]
     bas_paths = util_path.coerce_patterned_paths(bas_globpats)
+    from watch.utils import result_analysis
 
     bas_rows = []
     for merged_fpath in bas_paths:
@@ -192,6 +193,7 @@ def debug_all_results():
     seen = set()
     sc_rows = []
     sc_cms = []
+    result_list = []
     for merged_fpath in sc_paths:
         with open(merged_fpath, 'r') as file:
             sc_info = json.load(file)
@@ -208,19 +210,40 @@ def debug_all_results():
             'active_f1': sc_df.loc['F1 score', 'Active Construction'].mean(),
         }
         row = ub.odict(ub.dict_union(metrics, params))
+        result = result_analysis.Result(
+             name=None,
+             params=params,
+             metrics=metrics,
+             meta=None
+        )
 
         key = ub.hash_data(row)
         if key not in seen:
             sc_rows.append(row)
             sc_cms.append(sc_cm)
+            result_list.append(result)
         seen.add(key)
 
     if 0:
         ub.util_hash._HASHABLE_EXTENSIONS.register(ub.Path)(lambda x: (b'path', ub.hash_data(str(x)).encode()))
 
+    analysis = result_analysis.ResultAnalysis(
+        result_list,
+        # ignore_params=ignore_params,
+        # metrics=['coi_mAPUC', 'coi_APUC'],
+        # metrics=['salient_AP'],
+        metrics=['mean_f1'],
+        metric_objectives={
+            'mean_f1': 'max',
+        },
+        # ignore_metrics=ignore_metrics,
+        abalation_orders={1}
+    )
+
     print(f'{len(sc_rows)=}')
 
     df = pd.DataFrame(sc_rows)
+    df = df[df['pred_in_dataset_name'] == 'Cropped-Drop3-TA1-2022-03-10/combo_DL_s2_wv_vali.kwcoco.json']
     df = df.sort_values('mean_f1')
     varied = ub.varied_values(sc_rows, 1, None)
     varied2 = {k: v for k, v in varied.items() if len(ub.oset(v) - {None}) > 1}

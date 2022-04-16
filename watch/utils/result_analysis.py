@@ -201,6 +201,69 @@ class ResultAnalysis:
         self.build()
         self.report()
 
+    def abalate_one(self, param):
+        rows = [r.to_dict() for r in self.results]
+        table = pd.DataFrame(rows)
+
+        config_rows = [r.params for r in self.results]
+
+        config_keys = list(map(set, config_rows))
+        if self.ignore_params:
+            config_keys = [c - self.ignore_params for c in config_keys]
+        isect_params = set.intersection(*config_keys)
+        union_params = set.union(*config_keys)
+        loose_params = union_params - isect_params
+        print('loose_params = {!r}'.format(loose_params))
+
+        other_params = sorted(isect_params - {param})
+
+        param_unique_vals = table[param].unique().tolist()
+        table[param]
+
+        total_groups = 0
+
+        class SkillTracker:
+            def __init__(skillboard, player_ids):
+                skillboard.player_ids = player_ids
+                skillboard.ratings = {m: openskill.Rating() for m in player_ids}
+                skillboard.observations = []
+
+            def observe(skillboard, ranking):
+                """
+                After simulating a round, pass the ranked order of who won
+                (winner is first, looser is last) to this function. And it
+                updates the rankings.
+
+                Args:
+                    ranking (list):
+                        ranking of all the players that played in this round
+                        winners are at the front (0-th place) of the list.
+                """
+                skillboard.observations.append(ranking)
+                ratings = skillboard.ratings
+                team_standings = [[r] for r in ub.take(ratings, ranking)]
+                new_values = openskill.rate(team_standings)  # Not inplace
+                new_ratings = [openskill.Rating(*new[0]) for new in new_values]
+                ratings.update(ub.dzip(ranking, new_ratings))
+
+        import openskill
+        scored_obs = []
+        skillboard = SkillTracker(param_unique_vals)
+        for key, group in table.groupby(other_params, dropna=False):
+            total_groups += 1
+            if len(group) > 1:
+                for metric_key in self.metrics:
+                    objective = self.metric_objectives.get(metric_key, None)
+                    ascending = objective == 'min'
+                    group = group.sort_values(metric_key, ascending=ascending)
+                    scored_ranking = group[[param, metric_key]].reset_index(drop=True)
+                    scored_obs.append(scored_ranking)
+                    skillboard.observe(scored_ranking[param])
+
+        sorted(scored_obs, key=lambda x: x['mean_f1'].max())
+        print('skillboard.ratings = {}'.format(ub.repr2(skillboard.ratings, nl=1)))
+        # self.varied[param]
+
     def build(self):
         import itertools as it
         import warnings

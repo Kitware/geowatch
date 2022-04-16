@@ -70,8 +70,8 @@ CROPPED_PRE_EVAL_AND_AGG(){
 
     dvc add models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json
 
-    dvc add models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json
-    python -c "import sys, pathlib, watch.utils.simple_dvc; watch.utils.simple_dvc.SimpleDVC().add([p for p in sys.argv[1:] if not pathlib.Path(p).is_symlink()])" 
+    dvc add 
+    python -c "import sys, pathlib, watch.utils.simple_dvc; watch.utils.simple_dvc.SimpleDVC().add([p for p in sys.argv[1:] if not pathlib.Path(p).is_symlink()])" models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json
 
     #dvc add models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json 
     git commit -am "add measures from $HOSTNAME" && git pull && git push
@@ -145,9 +145,9 @@ special_evaluation(){
     DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_sc_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_wv_vali.kwcoco.json
+    #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_wv_vali.kwcoco.json
     #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_D_wv_vali.kwcoco.json
-    #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
+    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
     #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1,2,3,4,5,6,7,8" \
