@@ -479,7 +479,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
             )
             info['suggestions'] = suggestions
             info['pred_cfg'] = pred_cfg
-            expanded_packages_to_eval.append(info)
 
             if HACK_HACKHACK:
                 # The idea is we just want to schedule eval jobs
@@ -487,8 +486,10 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 # the parent model / dataset.
                 pred_dpath = ub.Path(suggestions['pred_dpath'])
                 other_dset_pred_dpath = pred_dpath.parent
+                has_any_other = 0
                 if other_dset_pred_dpath.exists():
                     for other_pred_fpath in other_dset_pred_dpath.glob('*/pred.kwcoco.json'):
+                        has_any_other = 1
                         eval_dpath = ub.Path(*other_pred_fpath.parts[:-6], 'eval', *other_pred_fpath.parts[-5:-1], 'eval')
                         other_info = {
                             'package_fpath': package_fpath,
@@ -498,6 +499,12 @@ def schedule_evaluation(cmdline=False, **kwargs):
                             'eval_dpath': eval_dpath,
                         }
                         other_existing_pred_infos.append(other_info)
+
+                if ub.argflag('--without_alternatives'):
+                    if has_any_other:
+                        continue
+
+            expanded_packages_to_eval.append(info)
 
     if HACK_HACKHACK:
         existing_expanded = []

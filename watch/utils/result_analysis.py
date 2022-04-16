@@ -222,31 +222,12 @@ class ResultAnalysis:
 
         total_groups = 0
 
-        class SkillTracker:
-            def __init__(skillboard, player_ids):
-                import openskill
-                skillboard.player_ids = player_ids
-                skillboard.ratings = {m: openskill.Rating() for m in player_ids}
-                skillboard.observations = []
+        def metric_is_ascending(self, metric_key):
+            objective = self.metric_objectives.get(metric_key, None)
+            ascending = objective == 'min'
+            return ascending
 
-            def observe(skillboard, ranking):
-                """
-                After simulating a round, pass the ranked order of who won
-                (winner is first, looser is last) to this function. And it
-                updates the rankings.
-
-                Args:
-                    ranking (list):
-                        ranking of all the players that played in this round
-                        winners are at the front (0-th place) of the list.
-                """
-                import openskill
-                skillboard.observations.append(ranking)
-                ratings = skillboard.ratings
-                team_standings = [[r] for r in ub.take(ratings, ranking)]
-                new_values = openskill.rate(team_standings)  # Not inplace
-                new_ratings = [openskill.Rating(*new[0]) for new in new_values]
-                ratings.update(ub.dzip(ranking, new_ratings))
+        score_improvements = ub.ddict(list)
 
         scored_obs = []
         skillboard = SkillTracker(param_unique_vals)
@@ -256,13 +237,48 @@ class ResultAnalysis:
                 for metric_key in self.metrics:
                     objective = self.metric_objectives.get(metric_key, None)
                     ascending = objective == 'min'
+
                     group = group.sort_values(metric_key, ascending=ascending)
-                    scored_ranking = group[[param, metric_key]].reset_index(drop=True)
+                    subgroups = group.groupby(param)
+                    if ascending:
+                        best_idx = subgroups[metric_key].idxmax()
+                    else:
+                        best_idx = subgroups[metric_key].idxmin()
+                    best_group = group.loc[best_idx]
+                    best_group = best_group.sort_values(metric_key, ascending=ascending)
+
+                    import itertools as it
+                    for x1, x2 in it.product(best_group.index, best_group.index):
+                        if x1 != x2:
+                            r1 = best_group.loc[x1]
+                            r2 = best_group.loc[x2]
+                            k1 = r1[param]
+                            k2 = r2[param]
+                            diff = r1[metric_key] - r2[metric_key]
+                            score_improvements[(k1, k2)].append(diff)
+
+                    metric_vals = best_group[metric_key].values
+                    diffs = metric_vals[None, :] - metric_vals[:, None]
+
+                    best_group.set_index(param)
+
+                    best_group[param]
+
+                    best_group[metric_key].diff()
+
+                    scored_ranking = best_group[[param, metric_key]].reset_index(drop=True)
                     scored_obs.append(scored_ranking)
                     skillboard.observe(scored_ranking[param])
 
         sorted(scored_obs, key=lambda x: x['mean_f1'].max())
         print('skillboard.ratings = {}'.format(ub.repr2(skillboard.ratings, nl=1)))
+
+        for key, improves in score_improvements.items():
+            k1, k2 = key
+            improves = np.array(improves)
+            pos_delta = improves[improves > 0]
+            print(f'\nWhen {k1=} is better than {k2=}')
+            print(pd.DataFrame([pd.Series(pos_delta).describe().T]))
         # self.varied[param]
 
     def build(self):
@@ -468,3 +484,34 @@ class ResultAnalysis:
                     print(ub.color_text(f'    ttest_rel:  p={ttest_rel_result.pvalue:0.8f}', 'green' if ttest_rel_result.pvalue < p_threshold else None))
 
         print(self.stats_table)
+
+
+class SkillTracker:
+    """
+    Wrapper around openskill
+    """
+
+    def __init__(skillboard, player_ids):
+        import openskill
+        skillboard.player_ids = player_ids
+        skillboard.ratings = {m: openskill.Rating() for m in player_ids}
+        skillboard.observations = []
+
+    def observe(skillboard, ranking):
+        """
+        After simulating a round, pass the ranked order of who won
+        (winner is first, looser is last) to this function. And it
+        updates the rankings.
+
+        Args:
+            ranking (list):
+                ranking of all the players that played in this round
+                winners are at the front (0-th place) of the list.
+        """
+        import openskill
+        skillboard.observations.append(ranking)
+        ratings = skillboard.ratings
+        team_standings = [[r] for r in ub.take(ratings, ranking)]
+        new_values = openskill.rate(team_standings)  # Not inplace
+        new_ratings = [openskill.Rating(*new[0]) for new in new_values]
+        ratings.update(ub.dzip(ranking, new_ratings))

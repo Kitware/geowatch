@@ -36,21 +36,23 @@ CROPPED_PRE_EVAL_AND_AGG(){
     # 3. Run Prediction & Evaluation
     #################################
 
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    export DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_sc_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 
     #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_wv_vali.kwcoco.json
     #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_D_wv_vali.kwcoco.json
-    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
+    #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
+    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
 
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0,1" \
+            --gpus="0,1,2,3" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
             --test_dataset="$VALI_FPATH" \
             --enable_pred=1 \
             --enable_eval=1 \
+            --without_alternatives \
             --skip_existing=True --backend=tmux --run=0
 
 
@@ -63,7 +65,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     # shellcheck disable=SC2010
     ls -al models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json | grep -v ' \-> '
     # shellcheck disable=SC2010
-    ls -al models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json
+    ls -al models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json | grep -v ' \-> '
 
     #dvc unprotect models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json 
     dvc unprotect models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json

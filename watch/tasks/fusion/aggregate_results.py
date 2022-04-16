@@ -129,6 +129,7 @@ def debug_all_results():
         'dist_weights',
         'saliency_loss',
         'global_class_weight',
+        'init',
     ]
 
     bas_globpats = [
@@ -202,14 +203,24 @@ def debug_all_results():
         sc_cm = pd.read_json(io.StringIO(json.dumps(sc_info['sc_cm'])), orient='table')
         sc_cms.append(sc_cm)
         tracker_info = sc_info['parent_info']
-        params = parse_tracker_params(tracker_info, dvc_dpath)
+        param_types = parse_tracker_params(tracker_info, dvc_dpath)
 
+        non_measures = ub.dict_diff(param_types, ['resource'])
+
+        params = ub.dict_union(*non_measures.values())
         metrics = {
             'mean_f1': sc_df.loc['F1 score'].mean(),
             'siteprep_f1': sc_df.loc['F1 score', 'Site Preparation'].mean(),
             'active_f1': sc_df.loc['F1 score', 'Active Construction'].mean(),
         }
-        row = ub.odict(ub.dict_union(metrics, params))
+        metrics.update(
+            param_types['resource']
+        )
+        row = ub.odict(ub.dict_union(metrics, *param_types.values()))
+
+        if row['pred_in_dataset_name'] != 'Cropped-Drop3-TA1-2022-03-10/combo_DL_s2_wv_vali.kwcoco.json':
+            continue
+
         result = result_analysis.Result(
              name=None,
              params=params,
@@ -252,8 +263,8 @@ def debug_all_results():
     df2 = df[varied_cols].sort_values('mean_f1')
     df2 = shrink_notations(df2)
     df2 = df2.drop(ub.oset(df2.columns) & ignore_cols, axis=1)
-    print(df2.iloc[-80:].to_string())
-    print(df2.to_string())
+    print(df2.reset_index().iloc[-90:].to_string())
+    print(df2.reset_index().to_string())
 
 
 def parse_tracker_params(tracker_info, dvc_dpath, path_hint=None):
@@ -278,6 +289,11 @@ def parse_tracker_params(tracker_info, dvc_dpath, path_hint=None):
     else:
         pred_info = track_item['properties']['pred_info']
 
+    pred_measures = list(find_info_items(pred_info, 'measure', None))
+    assert len(pred_measures) == 1
+    item = pred_measures[0]
+    resources = parse_measure_item(item)
+
     pred_item = find_pred_item(pred_info)
     track_args = track_item['properties']['args']
     pred_args = pred_item['properties']['args']
@@ -285,8 +301,54 @@ def parse_tracker_params(tracker_info, dvc_dpath, path_hint=None):
     pred_config = relevant_pred_config(pred_args, dvc_dpath)
     fit_config = relevant_fit_config(fit_config)
     track_config = relevant_track_config(track_args)
-    params = ub.dict_union(fit_config, pred_config, track_config)
-    return params
+    param_types = {
+        'fit': fit_config,
+        'pred': pred_config,
+        'track': track_config,
+        'resource': resources,
+    }
+    return param_types
+
+
+def parse_measure_item(item):
+    from watch.utils import util_time
+    ureg = global_ureg()
+    predict_resources = item['properties']
+    start_time = util_time.coerce_datetime(predict_resources.get('start_timestamp', None))
+    end_time = util_time.coerce_datetime(predict_resources.get('end_timestamp', None))
+    iters_per_second = predict_resources.get('iters_per_second', None)
+    total_hours = (end_time - start_time).total_seconds() / (60 * 60)
+    vram = predict_resources['device_info']['allocated_vram']
+    vram_gb = ureg.parse_expression(f'{vram} bytes').to('gigabytes').m
+    co2_kg = predict_resources['emissions']['co2_kg']
+
+    try:
+        cpu_name = predict_resources['system_info']['cpu_info']['brand_raw']
+    except KeyError:
+        cpu_name = None
+    try:
+        gpu_name = predict_resources['device_info']['device_name']
+    except KeyError:
+        gpu_name = None
+    try:
+        disk_type = predict_resources['system_info']['disk_info']['filesystem']
+    except KeyError:
+        disk_type = None
+    try:
+        vram_gb = (predict_resources['device_info']['allocated_vram'] * ureg.bytes).to('gigabyte').m
+    except KeyError:
+        vram_gb = None
+
+    resources = {}
+    resources['co2_kg'] = co2_kg
+    resources['vram_gb'] = vram_gb
+    resources['total_hours'] = total_hours
+    resources['iters_per_second'] = iters_per_second
+    resources['cpu_name'] = cpu_name
+    resources['gpu_name'] = gpu_name
+    resources['disk_type'] = disk_type
+    resources['vram_gb'] = vram_gb
+    return resources
 
 
 def relevant_track_config(track_args):
@@ -357,10 +419,10 @@ def relevant_fit_config(fit_config):
     return fit_config2
 
 
-def find_info_items(info, query_type, query_name):
+def find_info_items(info, query_type, query_name=None):
     for item in info:
         if item['type'] == query_type:
-            if item['properties']['name'] == query_name:
+            if query_name is None or item['properties']['name'] == query_name:
                 yield item
 
 
@@ -567,12 +629,18 @@ def resolve_cross_machine_path(path, dvc_dpath=None):
     return path
 
 
+@ub.memoize
+def global_ureg():
+    import pint
+    ureg = pint.UnitRegistry()
+    return ureg
+
+
 def prepare_results(all_infos, coi_pattern, dvc_dpath=None):
     from kwcoco.coco_evaluator import CocoSingleResult
     from watch.utils import result_analysis
     from watch.utils import util_time
-    import pint
-    ureg = pint.UnitRegistry()
+    ureg = global_ureg()
 
     class_rows = []
     mean_rows = []
