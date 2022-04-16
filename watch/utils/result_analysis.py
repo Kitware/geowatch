@@ -224,6 +224,7 @@ class ResultAnalysis:
 
         class SkillTracker:
             def __init__(skillboard, player_ids):
+                import openskill
                 skillboard.player_ids = player_ids
                 skillboard.ratings = {m: openskill.Rating() for m in player_ids}
                 skillboard.observations = []
@@ -239,6 +240,7 @@ class ResultAnalysis:
                         ranking of all the players that played in this round
                         winners are at the front (0-th place) of the list.
                 """
+                import openskill
                 skillboard.observations.append(ranking)
                 ratings = skillboard.ratings
                 team_standings = [[r] for r in ub.take(ratings, ranking)]
@@ -246,7 +248,6 @@ class ResultAnalysis:
                 new_ratings = [openskill.Rating(*new[0]) for new in new_values]
                 ratings.update(ub.dzip(ranking, new_ratings))
 
-        import openskill
         scored_obs = []
         skillboard = SkillTracker(param_unique_vals)
         for key, group in table.groupby(other_params, dropna=False):
