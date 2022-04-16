@@ -450,7 +450,7 @@ class TMUXMultiQueue(cmd_queue.Queue):
         if block:
             agg_state = self.monitor()
             if not agg_state['errored']:
-                self.capture()
+                # self.capture()
                 self.kill()
             return agg_state
 

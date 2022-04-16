@@ -44,7 +44,7 @@ class SimpleDVC():
 
     """
 
-    def __init__(self, dvc_root):
+    def __init__(self, dvc_root=None):
         self.dvc_root = dvc_root
 
     @classmethod
@@ -79,10 +79,11 @@ class SimpleDVC():
         if path is None:
             raise Exception('no way to find dvc root')
         # Need to find it from the path
+        path = ub.Path(path)
         max_parts = len(path.parts)
         curr = path
         found = None
-        for _ in range(max_parts):
+        for _ in range(max_parts + 1):
             cand = curr / '.dvc'
             if cand.exists():
                 found = curr
@@ -90,10 +91,16 @@ class SimpleDVC():
             curr = curr.parent
         return found
 
-    def add(self, paths):
+    def _ensure_root(self, paths):
+        if self.dvc_root is None:
+            self.dvc_root = self.find_root(paths[0])
+            print('found new self.dvc_root = {!r}'.format(self.dvc_root))
+        return self.dvc_root
+
+    def add(self, path):
         from dvc import main as dvc_main
-        paths = _ensure_iterable(paths)
-        dvc_root = self.dvc_root
+        paths = list(map(ub.Path, _ensure_iterable(path)))
+        dvc_root = self._ensure_root(paths)
         rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
         with ChDir(dvc_root):
             dvc_command = ['add'] + rel_paths
@@ -122,8 +129,8 @@ class SimpleDVC():
 
     def push(self, path, remote=None, recursive=False, jobs=None):
         from dvc import main as dvc_main
-        paths = _ensure_iterable(path)
-        dvc_root = self.dvc_root
+        paths = list(map(ub.Path, _ensure_iterable(path)))
+        dvc_root = self._ensure_root(paths)
         extra_args = []
         if remote:
             extra_args += ['-r', remote]
@@ -138,8 +145,8 @@ class SimpleDVC():
 
     def unprotect(self, path):
         from dvc import main as dvc_main
-        paths = _ensure_iterable(path)
-        dvc_root = self.dvc_root
+        paths = list(map(ub.Path, _ensure_iterable(path)))
+        dvc_root = self._ensure_root(paths)
         rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
         with ChDir(dvc_root):
             dvc_command = ['unprotect'] + rel_paths

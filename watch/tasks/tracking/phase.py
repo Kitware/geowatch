@@ -128,7 +128,7 @@ def viterbi(input_sequence, transition_probs, emission_probs):
     T = len(input_sequence)
 
     # probs of most likely path
-    trellis = np.empty((num_states, T), dtype=np.float)
+    trellis = np.empty((num_states, T), dtype=float)
 
     # previous state of the most likely path
     pointers = np.empty((num_states, T), dtype=int)
@@ -173,11 +173,22 @@ allowed_transition_matrix = np.array(
     [[1, 1, 1, 0], [1, 1, 0, 0], [1, 0, 1, 1], [1, 0, 0, post_to_post]],
     dtype=bool)
 
+
+REGISTERED_TRANSITION_PROBS = {}
+REGISTERED_EMMISSION_PROBS = {}
+
 # transition matrix
-default_transition_probs = np.array([[0.7, 0.1, 0.10, 0.10],
-                                     [0.0, 0.7, 0.15, 0.15],
-                                     [0.25, 0.0, 0.7, 0.05],
-                                     [0.0, 0.0, 0.00, 1.00]])
+REGISTERED_TRANSITION_PROBS['default'] = np.array([
+    [0.7, 0.1, 0.10, 0.10],
+    [0.0, 0.7, 0.15, 0.15],
+    [0.25, 0.0, 0.7, 0.05],
+    [0.0, 0.0, 0.00, 1.00]])
+
+REGISTERED_TRANSITION_PROBS['v1'] = np.array([
+    [0.70,  0.301, 0.001, 0.001],
+    [0.001, 0.681, 0.321, 0.001],
+    [0.001, 0.001, 0.691, 0.311],
+    [0.001, 0.001, 0.001, 1.001]])
 
 # emission probability matrix
 # based on model predictions including "no activity"
@@ -187,32 +198,45 @@ default_transition_probs = np.array([[0.7, 0.1, 0.10, 0.10],
 #                                   [0.000, 0.000, 1.000, 0.000]])
 
 # based on model predictions without "no activity"
-default_emission_probs = np.array([[0.250, 0.250, 0.250, 0.250],
-                                   [0.000, 0.133, 0.867, 0.000],
-                                   [0.000, 0.014, 0.986, 0.000],
-                                   [0.000, 0.000, 1.000, 0.000]])
+REGISTERED_EMMISSION_PROBS['default'] = np.array([
+    [0.250, 0.250, 0.250, 0.250],
+    [0.001, 0.133, 0.867, 0.001],
+    [0.001, 0.014, 0.986, 0.001],
+    [0.001, 0.001, 1.000, 0.001]])
+
+# Based on CropDrop3_SC_V006_epoch=71-step=18431.pt
+REGISTERED_EMMISSION_PROBS['v6'] = np.array([
+    [0.25, 0.25, 0.25,  0.25],
+    [0.01, 0.52, 0.48,  0.01],
+    [0.01, 0.35, 0.65,  0.01],
+    [0.01, 0.01, 0.001, 1.000]])
+
+# [0.00, 0.00, 1.000, 0.000]])
 
 
-def _load_probs(arr_or_file, default=None):
+def _load_probs(arr_or_file, registry, default=None):
+
     if arr_or_file is None:
-        if default is None:
-            raise ValueError(arr_or_file)
-        else:
-            return default
-    if isinstance(arr_or_file, np.ndarray):
+        arr_or_file = 'default'
+
+    if isinstance(arr_or_file, str):
+        try:
+            arr = registry[arr_or_file]
+        except Exception:
+            arr = np.loadtxt(arr_or_file)
+    elif isinstance(arr_or_file, np.ndarray):
         arr = arr_or_file
     elif (isinstance(arr_or_file, list) and isinstance(arr_or_file[0],
                                                        (np.ndarray, list))):
         arr = np.ndarray(arr_or_file)
     else:
-        arr = np.loadtxt(arr_or_file)
+        raise AssertionError
     assert arr.shape == (len(phase_classes), len(phase_classes)), arr
     return arr
 
 
-def class_label_smoothing(track_cats,
-                          transition_probs=default_transition_probs,
-                          emission_probs=default_emission_probs):
+def class_label_smoothing(track_cats, transition_probs=None,
+                          emission_probs=None):
     """
     Args:
         track_cats: a list of scored SC phase names.
@@ -228,12 +252,42 @@ def class_label_smoothing(track_cats,
         Ex. ['Site Preparation', 'Active Construction', 'Active Construction']
 
     # TODO make this work for subsites
+
+    Example:
+        >>> from watch.tasks.tracking.phase import *  # NOQA
+        >>> track_cats = (
+        >>>     ['No Activity'] * 0 +
+        >>>     ['Active Construction'] * 1 +
+        >>>     ['Site Preparation'] * 2 +
+        >>>     ['Active Construction'] * 3 +
+        >>>     ['Site Preparation'] * 1 +
+        >>>     ['Post Construction'] * 2
+        >>> )
+        >>> transition_probs = 'v1'
+        >>> emission_probs = 'v6'
+        >>> smoothed_cats = class_label_smoothing(track_cats, transition_probs, emission_probs)
+        >>> print('smoothed_cats = {}'.format(ub.repr2(smoothed_cats, nl=1)))
+        smoothed_cats = [
+            'No Activity',
+            'No Activity',
+            'No Activity',
+            'Site Preparation',
+            'Site Preparation',
+            'Site Preparation',
+            'Active Construction',
+            'Active Construction',
+            'Active Construction',
+            'Post Construction',
+            'No Activity',
+            'No Activity',
+        ]
     """
 
     transition_probs = _load_probs(transition_probs,
-                                   default=default_transition_probs)
-    emission_probs = _load_probs(emission_probs,
-                                 default=default_emission_probs)
+                                   REGISTERED_TRANSITION_PROBS,
+                                   default='default')
+    emission_probs = _load_probs(emission_probs, REGISTERED_EMMISSION_PROBS,
+                                 default='default')
 
     #
     # Set up Viterbi Decoding
@@ -241,27 +295,33 @@ def class_label_smoothing(track_cats,
 
     canonical_sequence = [class_to_index[i] for i in track_cats]
 
+    na_idx = class_to_index['No Activity']
+    ac_idx = class_to_index['Active Construction']
+    # sp_idx = class_to_index['Site Preparation']
+    pc_idx = class_to_index['Post Construction']
+
     # Pre-processing: add post construction label at the end IF
     # 1) there was at least one active construction AND
     # 2) if the last frame is not active construction
-    if (canonical_sequence[-1] != 2) and (2 in canonical_sequence):
+    if (canonical_sequence[-1] != ac_idx) and (ac_idx in canonical_sequence):
         # canonical index of active construction is 2
         active_indices = [
-            i for i, x in enumerate(canonical_sequence) if x == 2
+            i for i, x in enumerate(canonical_sequence) if x == ac_idx
         ]
         last_active_ind = max(active_indices)
 
         # assign the frame after the last Active construction as Post
         # Construction
-        canonical_sequence[last_active_ind + 1] = 3
+        canonical_sequence[last_active_ind + 1] = pc_idx
 
+    input_sequence = canonical_sequence
     smoothed_sequence = list(
-        viterbi(canonical_sequence, transition_probs, emission_probs))
+        viterbi(input_sequence, transition_probs, emission_probs))
 
     # keep first post construction, mark others as no activity
-    post_indices = [i for i, x in enumerate(smoothed_sequence) if x == 3]
+    post_indices = [i for i, x in enumerate(smoothed_sequence) if x == pc_idx]
     for index in post_indices[1:]:
-        smoothed_sequence[index] = 0
+        smoothed_sequence[index] = na_idx
 
     smoothed_cats = [index_to_class[i] for i in smoothed_sequence]
     return smoothed_cats

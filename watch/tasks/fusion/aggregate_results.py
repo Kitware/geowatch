@@ -93,10 +93,289 @@ def _writefig(fig, dpath, fname, figsize, verbose, tight):
 
 def debug_all_results():
     """
-    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/iarpa_eval/scores/merged/summary2.json
-    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/iarpa_eval/scores/merged/summary2.json
+    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json
+    ls models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json
+
+    ls models/fusion/eval3_sc_candidates/pred/*/*/*/*/actclf/*/*_eval/scores/merged/summary3.json
+
+    models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/
+
+    find models/fusion -iname "summary2.json"
+    find models/fusion -iname "summary3.json"
     """
-    pass
+
+    import watch
+    from watch.utils import util_path
+    import pandas as pd
+    dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
+    ignore_cols = [
+        'modulate_class_weights', 'accumulate_grad_batches',
+        'pred_in_dataset_fpath', 'pred_model_fpath'
+        'name',
+        'patience', 'normalize_inputs',
+        'neg_to_pos_ratio',
+        'use_special_classes', 'pred_model_fpath',
+        'temporal_dropout',
+        'use_centered_positives',
+        'chip_overlap',
+        'arch_name',
+        'class_loss', 'global_change_weight',
+        'learning_rate',
+        'max_epoch_length',
+        'stream_channels',
+        'name',
+        'time_sampling',
+        'max_epochs',
+        'dist_weights',
+        'saliency_loss',
+        'global_class_weight',
+    ]
+
+    bas_globpats = [
+        dvc_dpath / 'models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json'
+    ]
+    bas_paths = util_path.coerce_patterned_paths(bas_globpats)
+    from watch.utils import result_analysis
+
+    bas_rows = []
+    for merged_fpath in bas_paths:
+        with open(merged_fpath, 'r') as file:
+            bas_info = json.load(file)
+
+        best_bas_rows = pd.read_json(io.StringIO(json.dumps(bas_info['best_bas_rows'])), orient='table')
+        try:
+            bas_row = best_bas_rows.loc['merged'].reset_index().iloc[0].to_dict()
+        except Exception:
+            bas_row = best_bas_rows[best_bas_rows['region_id'].isnull()].reset_index(drop=1).iloc[0].to_dict()
+
+        tracker_info = bas_info['parent_info']
+        path_hint = merged_fpath
+        params = parse_tracker_params(tracker_info, dvc_dpath, path_hint=path_hint)
+
+        metrics = {
+            'BAS_F1': bas_row['F1'],
+            'BAS_rho': bas_row['rho'],
+            'BAS_tau': bas_row['tau'],
+            # 'mean_f1': sc_df.loc['F1 score'].mean(),
+            # 'siteprep_f1': sc_df.loc['F1 score', 'Site Preparation'].mean(),
+            # 'active_f1': sc_df.loc['F1 score', 'Active Construction'].mean(),
+        }
+        row = ub.odict(ub.dict_union(metrics, params))
+        bas_rows.append(row)
+
+    print(f'{len(bas_rows)=}')
+    bas_rows = list(ub.unique(bas_rows, key=ub.hash_data))
+    print(f'{len(bas_rows)=}')
+
+    df = pd.DataFrame(bas_rows)
+    df = df.sort_values('BAS_F1')
+
+    varied = ub.varied_values(bas_rows, 1, None)
+    varied2 = {k: v for k, v in varied.items() if len(ub.oset(v) - {None}) > 1}
+    varied_cols = ub.oset(df.columns) & list(varied2.keys())
+    df2 = df[varied_cols].sort_values('BAS_F1')
+    df2 = shrink_notations(df2)
+    df2 = df2.drop(ub.oset(df2.columns) & ignore_cols, axis=1)
+    print(df2.to_string())
+    # print(df2.iloc[-70:].to_string())
+
+    ###
+    ###
+    ###
+
+    sc_globpats = [
+        dvc_dpath / 'models/fusion/eval3_sc_candidates/pred/*/*/*/*/actclf/*/*_eval/scores/merged/summary3.json',
+        dvc_dpath / 'models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json'
+        # dvc_dpath / 'models/fusion/eval3_sc_candidates/pred/*/*/*/*/actclf/*/iarpa_sc_eval/scores/merged/summary3.json',
+    ]
+    sc_paths = util_path.coerce_patterned_paths(sc_globpats)
+
+    seen = set()
+    sc_rows = []
+    sc_cms = []
+    result_list = []
+    for merged_fpath in sc_paths:
+        with open(merged_fpath, 'r') as file:
+            sc_info = json.load(file)
+        # sc_info['sc_cm']
+        sc_df = pd.read_json(io.StringIO(json.dumps(sc_info['sc_df'])), orient='table')
+        sc_cm = pd.read_json(io.StringIO(json.dumps(sc_info['sc_cm'])), orient='table')
+        sc_cms.append(sc_cm)
+        tracker_info = sc_info['parent_info']
+        params = parse_tracker_params(tracker_info, dvc_dpath)
+
+        metrics = {
+            'mean_f1': sc_df.loc['F1 score'].mean(),
+            'siteprep_f1': sc_df.loc['F1 score', 'Site Preparation'].mean(),
+            'active_f1': sc_df.loc['F1 score', 'Active Construction'].mean(),
+        }
+        row = ub.odict(ub.dict_union(metrics, params))
+        result = result_analysis.Result(
+             name=None,
+             params=params,
+             metrics=metrics,
+             meta=None
+        )
+
+        key = ub.hash_data(row)
+        if key not in seen:
+            sc_rows.append(row)
+            sc_cms.append(sc_cm)
+            result_list.append(result)
+        seen.add(key)
+
+    if 0:
+        ub.util_hash._HASHABLE_EXTENSIONS.register(ub.Path)(lambda x: (b'path', ub.hash_data(str(x)).encode()))
+
+    analysis = result_analysis.ResultAnalysis(
+        result_list,
+        # ignore_params=ignore_params,
+        # metrics=['coi_mAPUC', 'coi_APUC'],
+        # metrics=['salient_AP'],
+        metrics=['mean_f1'],
+        metric_objectives={
+            'mean_f1': 'max',
+        },
+        # ignore_metrics=ignore_metrics,
+        abalation_orders={1}
+    )
+    analysis.analysis()
+
+    print(f'{len(sc_rows)=}')
+
+    df = pd.DataFrame(sc_rows)
+    df = df[df['pred_in_dataset_name'] == 'Cropped-Drop3-TA1-2022-03-10/combo_DL_s2_wv_vali.kwcoco.json']
+    df = df.sort_values('mean_f1')
+    varied = ub.varied_values(sc_rows, 1, None)
+    varied2 = {k: v for k, v in varied.items() if len(ub.oset(v) - {None}) > 1}
+    varied_cols = ub.oset(df.columns) & list(varied2.keys())
+    df2 = df[varied_cols].sort_values('mean_f1')
+    df2 = shrink_notations(df2)
+    df2 = df2.drop(ub.oset(df2.columns) & ignore_cols, axis=1)
+    print(df2.iloc[-80:].to_string())
+    print(df2.to_string())
+
+
+def parse_tracker_params(tracker_info, dvc_dpath, path_hint=None):
+    track_item = find_track_item(tracker_info)
+
+    if 'pred_info' not in track_item['properties']:
+        if path_hint is None:
+            raise Exception('cannot find pred info. This is an old result')
+        eval_dpath = path_hint.parent.parent.parent.parent.parent.parent
+        # Can we steal pred info from pixel metrics?
+        # eval_dpath / 'curves'
+        measures_fpath = eval_dpath / 'curves/measures2.json'
+        if measures_fpath.exists():
+            data = json.loads(measures_fpath.read_text())
+            pred_info = data['meta']['info']
+        else:
+            dvc_measures_fpath = measures_fpath.augment(tail='.dvc')
+            if dvc_measures_fpath.exists():
+                raise Exception('dvc pull')
+            else:
+                raise Exception('got nothing')
+    else:
+        pred_info = track_item['properties']['pred_info']
+
+    pred_item = find_pred_item(pred_info)
+    track_args = track_item['properties']['args']
+    pred_args = pred_item['properties']['args']
+    fit_config = pred_item['properties']['fit_config']
+    pred_config = relevant_pred_config(pred_args, dvc_dpath)
+    fit_config = relevant_fit_config(fit_config)
+    track_config = relevant_track_config(track_args)
+    params = ub.dict_union(fit_config, pred_config, track_config)
+    return params
+
+
+def relevant_track_config(track_args):
+    track_config = json.loads(track_args['track_kwargs'])
+    track_config = {'trk_' + k: v for k, v in track_config.items()}
+    return track_config
+
+
+def relevant_pred_config(pred_args, dvc_dpath):
+    pred_config = {}
+    pred_config['tta_fliprot'] = pred_args.get('tta_fliprot', 0)
+    pred_config['tta_time'] = pred_args.get('tta_time', 0)
+    pred_config['chip_overlap'] = pred_args['chip_overlap']
+    package_fpath = pred_args['package_fpath']
+    test_dataset = pred_args['test_dataset']
+    if dvc_dpath is not None:
+        package_fpath = resolve_cross_machine_path(package_fpath, dvc_dpath)
+        test_dataset = resolve_cross_machine_path(test_dataset, dvc_dpath)
+    # pred_config['model_fpath'] = package_fpath
+    # pred_config['in_dataset'] = test_dataset
+    pred_config['model_fpath'] = package_fpath
+    pred_config['in_dataset_fpath'] = test_dataset
+
+    pred_config['model_name'] = ub.Path(package_fpath).name
+    pred_config['in_dataset_name'] = str(ub.Path(*test_dataset.parts[-2:]))
+
+    pred_config = {'pred_' + k: v for k, v in pred_config.items()}
+    return pred_config
+
+
+def relevant_fit_config(fit_config):
+    ignore_params = {
+        'default_root_dir', 'enable_progress_bar'
+        'prepare_data_per_node', 'enable_model_summary', 'checkpoint_callback',
+        'detect_anomaly', 'gpus', 'terminate_on_nan', 'train_dataset',
+        'workdir', 'config', 'num_workers', 'amp_backend',
+        'enable_progress_bar', 'flush_logs_every_n_steps',
+        'enable_checkpointing', 'prepare_data_per_node', 'amp_level',
+        'vali_dataset', 'test_dataset', 'package_fpath', 'num_draw',
+        'num_nodes', 'num_processes', 'num_sanity_val_steps',
+        'overfit_batches', 'process_position',
+        'reload_dataloaders_every_epoch', 'reload_dataloaders_every_n_epochs',
+        'replace_sampler_ddp', 'sync_batchnorm', 'torch_sharing_strategy',
+        'torch_start_method', 'val_check_interval', 'weights_summary',
+        'auto_lr_find', 'auto_select_gpus', 'auto_scale_batch_size', 'benchmark',
+        'check_val_every_n_epoch', 'draw_interval', 'eval_after_fit', 'fast_dev_run',
+        'limit_predict_batches', 'limit_test_batches', 'limit_train_batches',
+        'limit_val_batches', 'log_every_n_steps', 'logger',
+        'move_metrics_to_cpu', 'multiple_trainloader_mode',
+    }
+    from scriptconfig import smartcast
+    # hack, rectify different values of known parameters that mean the
+    # same thing
+    fit_config2 = ub.dict_diff(fit_config, ignore_params)
+    for k, v in fit_config2.items():
+        if k not in {'channels', 'init'}:
+            v2 = smartcast.smartcast(v)
+            if isinstance(v2, list):
+                # Dont coerce into a list
+                v2 = v
+            fit_config2[k] = v2
+        else:
+            fit_config2[k] = v
+
+    if 'init' in fit_config2:
+        # hack to make init only use the filename
+        fit_config2['init'] = fit_config2['init'].split('/')[-1]
+    return fit_config2
+
+
+def find_info_items(info, query_type, query_name):
+    for item in info:
+        if item['type'] == query_type:
+            if item['properties']['name'] == query_name:
+                yield item
+
+
+def find_track_item(tracker_info):
+    track_items = list(find_info_items(tracker_info, 'process', 'watch.cli.kwcoco_to_geojson'))
+    assert len(track_items) == 1
+    track_item = track_items[0]
+    return track_item
+
+
+def find_pred_item(pred_info):
+    pred_items = list(find_info_items(pred_info, 'process', 'watch.tasks.fusion.predict'))
+    assert len(pred_items) == 1
+    pred_item = pred_items[0]
+    return pred_item
 
 
 def load_measure(measure_fpath):
@@ -483,9 +762,6 @@ def prepare_results(all_infos, coi_pattern, dvc_dpath=None):
         if iarpa_simplified:
             # TODO: need to expand out these rows for each pred parameter
             # setting
-            if len(iarpa_simplified) > 1:
-                import xdev
-                xdev.embed()
             BAS_metrics = max(iarpa_simplified, key=lambda x: x['BAS_F1'])
             row.update(BAS_metrics)
         else:
@@ -726,35 +1002,43 @@ def shrink_notations(df, drop=0):
     pat_text = b.oneof(*map(b.group, (pat1, pat2)))
     pat = re.compile(pat_text)
 
-    df = df.copy()
+    shrunk = df.copy()
 
     if 0:
-        df['expt_name'] = (
-            df['expt_name'].apply(
+        shrunk['expt_name'] = (
+            shrunk['expt_name'].apply(
                 lambda x: pat.search(x).group()
             ))
-    if 'channels' in df:
-        df['channels'] = (
-            df['channels'].apply(
+    if 'channels' in shrunk:
+        shrunk['channels'] = (
+            shrunk['channels'].apply(
                 lambda x: kwcoco.ChannelSpec.coerce(x.replace('matseg_', 'matseg.')).concise().spec
             ))
-        df['channels'] = (
-            df['channels'].apply(
+        shrunk['channels'] = (
+            shrunk['channels'].apply(
                 lambda x: x.replace('blue|green|red|nir|swir16|swir22', 'BGRNSH'))
         )
-        df['channels'] = (
-            df['channels'].apply(
-                lambda x: x.replace('brush|bare_ground|built_up', 'seg:3'))
+        shrunk['channels'] = (
+            shrunk['channels'].apply(
+                lambda x: x.replace('red|green|blue', 'RGB'))
+        )
+        shrunk['channels'] = (
+            shrunk['channels'].apply(
+                lambda x: x.replace('forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field', 'land:8'))
+        )
+        shrunk['channels'] = (
+            shrunk['channels'].apply(
+                lambda x: x.replace('brush|bare_ground|built_up', 'land:3'))
         )
 
     if drop:
-        drop_cols = set(df.columns) & {
+        drop_cols = set(shrunk.columns) & {
             'title', 'normalize_perframe', 'normalize_inputs',
             'train_remote', 'step', 'arch_name', 'package_name',
             'pred_fpath', 'model_fpath',
         }
-        df = df.drop(drop_cols, axis=1)
-    return df
+        shrunk = shrunk.drop(drop_cols, axis=1)
+    return shrunk
 
 
 def _oldhack():

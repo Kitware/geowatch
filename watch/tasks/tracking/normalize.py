@@ -494,10 +494,12 @@ def normalize_phases(coco_dset,
         if n_anns > 1:
 
             if use_viterbi:
-
                 # with xdev.embed_on_exception_context():
                 smoothed_cnames = phase.class_label_smoothing(
-                    annots.cnames, t_probs, e_probs)
+                    annots.cnames,
+                    transition_probs=t_probs,
+                    emission_probs=e_probs
+                )
                 annots.set('category_id', [
                     coco_dset.name_to_cat[name]['id']
                     for name in smoothed_cnames
@@ -608,8 +610,8 @@ def normalize(
         viz_sc_bounds=False,
         viz_videos=False,
         use_viterbi=False,
-        t_probs=None,  # for viterbi
-        e_probs=None,  # for viterbi
+        # t_probs=None,  # for viterbi
+        # e_probs=None,  # for viterbi
         **track_kwargs):
     '''
     Driver function to apply all normalizations
@@ -698,10 +700,22 @@ def normalize(
         out_pth = viz_out_dir / 'track_scores.jpg'
         viz_track_scores(out_dset, track_cats, keys_to_score, out_pth)
 
-    phase_args = [use_viterbi, t_probs, e_probs]
+    if isinstance(use_viterbi, str):
+        parts = use_viterbi.split(',')
+        assert len(parts) == 2
+        t_probs, e_probs = parts
+    else:
+        t_probs = 'default'
+        e_probs = 'default'
+
+    phase_kw = dict(
+        use_viterbi=use_viterbi,
+        t_probs=t_probs,
+        e_probs=e_probs
+    )
     if 'key' in track_kwargs:  # assume this is a baseline (saliency) key
-        phase_args.append(set(track_kwargs['key']))
-    out_dset = normalize_phases(out_dset, *phase_args)
+        phase_kw['baseline_keys'] = set(track_kwargs['key'])
+    out_dset = normalize_phases(out_dset, **phase_kw)
 
     out_dset = normalize_sensors(out_dset)
 

@@ -1,3 +1,4 @@
+#!/bin/bash
 #models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V00e!/bin/bash
 
 CROPPED_PRE_EVAL_AND_AGG(){
@@ -8,7 +9,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
 
     DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
-    cd $DVC_DPATH
+    cd "$DVC_DPATH"
     git pull
 
     DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
@@ -46,7 +47,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
 
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1" \
-            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*_D_*/*.pt" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
             --test_dataset="$VALI_FPATH" \
             --enable_pred=1 \
             --enable_eval=1 \
@@ -62,12 +63,16 @@ CROPPED_PRE_EVAL_AND_AGG(){
     # shellcheck disable=SC2010
     ls -al models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json | grep -v ' \-> '
     # shellcheck disable=SC2010
-    ls -al models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json | grep -v ' \-> '
+    ls -al models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json
 
     #dvc unprotect models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json 
     dvc unprotect models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json
 
     dvc add models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json
+
+    dvc add 
+    python -c "import sys, pathlib, watch.utils.simple_dvc; watch.utils.simple_dvc.SimpleDVC().add([p for p in sys.argv[1:] if not pathlib.Path(p).is_symlink()])" models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json
+
     #dvc add models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json 
     git commit -am "add measures from $HOSTNAME" && git pull && git push
     dvc push -r aws -R models/fusion/eval3_sc_candidates/eval
@@ -113,6 +118,7 @@ special_evaluation(){
     #smartwatch model_info models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_tf_xver7_V013/CropDrop3_SC_s2wv_tf_xver7_V013_epoch=0-step=2047-v1.pt
 
 
+    #models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V001/CropDrop3_SC_V001_epoch=55-step=114687-v1.pt
     writeto models/fusion/eval3_sc_candidates/models_of_interest.txt "
         models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V001/CropDrop3_SC_V001_epoch=1-step=4095-v1.pt
         models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V001/CropDrop3_SC_V001_epoch=20-step=43007-v1.pt
@@ -124,14 +130,16 @@ special_evaluation(){
         models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V005/CropDrop3_SC_V005_epoch=1-step=4095.pt
         models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V006/CropDrop3_SC_V006_epoch=13-step=3583-v1.pt
         models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V006/CropDrop3_SC_V006_epoch=71-step=18431.pt
+        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_raw_xver7_V012/CropDrop3_SC_s2wv_raw_xver7_V012_epoch=0-step=2047-v1.pt
         models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_wvonly_D_V011/CropDrop3_SC_wvonly_D_V011_epoch=129-step=266239.pt
+        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_wvonly_D_V011/CropDrop3_SC_wvonly_D_V011_epoch=81-step=167935.pt
+        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V007/CropDrop3_SC_xver1_V007_epoch=14-step=30719.pt
         models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V007/CropDrop3_SC_xver1_V007_epoch=17-step=36863.pt
         models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V008/CropDrop3_SC_xver1_V008_epoch=26-step=55295-v1.pt
-        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V007/CropDrop3_SC_xver1_V007_epoch=14-step=30719.pt
-        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_wvonly_D_V011/CropDrop3_SC_wvonly_D_V011_epoch=81-step=167935.pt
-        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_raw_xver7_V012/CropDrop3_SC_s2wv_raw_xver7_V012_epoch=0-step=2047-v1.pt
-        models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V001/CropDrop3_SC_V001_epoch=55-step=114687-v1.pt
     "
+
+    MODEL_GLOBSTR="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt"
+    MODEL_GLOBSTR="$DVC_DPATH"/models/fusion/eval3_sc_candidates/models_of_interest.txt
 
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
@@ -140,21 +148,25 @@ special_evaluation(){
     #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_wv_vali.kwcoco.json
     #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_D_wv_vali.kwcoco.json
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
+    #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0,1,2,3" \
-            --model_globstr="$DVC_DPATH"/models/fusion/eval3_sc_candidates/models_of_interest.txt \
+            --gpus="0,1,2,3,4,5,6,7,8" \
+            --model_globstr="$MODEL_GLOBSTR" \
             --test_dataset="$VALI_FPATH" \
-            --enable_pred=1 \
-            --enable_eval=1 \
+            --enable_pred=0 \
+            --enable_eval=0 \
             --enable_track=0 \
             --enable_iarpa_eval=0 \
+            --enable_actclf=1 \
+            --enable_actclf_eval=1 \
             --draw_heatmaps=1 \
             --draw_curves=1 \
             --pred_workers=4 \
             --chip_overlap=0.3 \
-            --tta_time=0,1,2,3 \
+            --tta_time=0 \
             --tta_fliprot=0 \
-            --skip_existing=True --backend=tmux --run=1
+            --hack_sc_grid=1 \
+            --skip_existing=1 --backend=tmux --run=0
 }
 
 

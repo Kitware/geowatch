@@ -6,7 +6,8 @@ def _suggest_bas_path(pred_fpath, bas_track_cfg, eval_dpath=None):
     """
     Helper for reasonable paths to keep everything organized for tracking eval
     """
-    human_opts = ub.dict_isect(bas_track_cfg, {'thresh'})
+    # human_opts = ub.dict_isect(bas_track_cfg, {'thresh'})
+    human_opts = ub.dict_isect(bas_track_cfg, {})
     other_opts = ub.dict_diff(bas_track_cfg, human_opts)
     if len(human_opts):
         human_part = ub.repr2(human_opts, compact=1) + '_'
@@ -14,14 +15,14 @@ def _suggest_bas_path(pred_fpath, bas_track_cfg, eval_dpath=None):
         human_part = ''
     cfgstr = human_part + ub.hash_data(other_opts)[0:8]
     pred_bundle_dpath = pred_fpath.parent
-    track_cfg_dname = f'tracking/trackcfg_{cfgstr}'
-    track_cfg_base = pred_bundle_dpath / track_cfg_dname
-    bas_out_fpath = track_cfg_base / 'tracks.json'
+    cfg_dname = f'tracking/trackcfg_{cfgstr}'
+    cfg_base = pred_bundle_dpath / cfg_dname
+    bas_out_fpath = cfg_base / 'tracks.json'
 
     if eval_dpath is None:
-        iarpa_eval_dpath = track_cfg_base / 'iarpa_eval'
+        iarpa_eval_dpath = cfg_base / 'iarpa_eval'
     else:
-        iarpa_eval_dpath = eval_dpath / track_cfg_dname / 'iarpa_eval'
+        iarpa_eval_dpath = eval_dpath / cfg_dname / 'iarpa_eval'
 
     iarpa_merge_fpath = iarpa_eval_dpath / 'scores' / 'merged' / 'summary2.json'
 
@@ -53,7 +54,7 @@ def _suggest_act_paths(pred_fpath, actcfg, eval_dpath=None):
     if eval_dpath is None:
         iarpa_eval_dpath = cfg_base / 'iarpa_sc_eval'
     else:
-        iarpa_eval_dpath = eval_dpath / cfg_base / 'iarpa_sc_eval'
+        iarpa_eval_dpath = eval_dpath / cfg_dname / 'iarpa_sc_eval'
 
     iarpa_merge_fpath = iarpa_eval_dpath / 'scores' / 'merged' / 'summary3.json'
 
@@ -76,12 +77,23 @@ def _build_bas_track_job(pred_fpath, bas_out_fpath, bas_track_cfg):
     import shlex
     pred_fpath = ub.Path(pred_fpath)
 
-    track_cfg = bas_track_cfg
-    track_kwargs_str = shlex.quote(json.dumps(track_cfg))
-    bas_args = f'--default_track_fn saliency_heatmaps --track_kwargs {track_kwargs_str}'  # NOQA
+    cfg = bas_track_cfg.copy()
+
+    from watch.utils.lightning_ext import util_globals
+
+    if isinstance(cfg['thresh_hysteresis'], str):
+        cfg['thresh_hysteresis'] = util_globals.restricted_eval(
+            cfg['thresh_hysteresis'].format(**cfg))
+
+    if cfg['moving_window_size'] is None:
+        cfg['moving_window_size'] = 'heatmaps_to_polys'
+    else:
+        cfg['moving_window_size'] = 'heatmaps_to_polys_moving_window'
+
+    track_kwargs_str = shlex.quote(json.dumps(cfg))
+    bas_args = f'--default_track_fn saliency_heatmaps --track_kwargs {track_kwargs_str}'
     # Because BAS is the first step we want ensure we clear annotations so
     # everything that comes out is a track from BAS.
-
     sites_dpath = bas_out_fpath.parent / 'tracked_sites'
     command = ub.codeblock(
         fr'''
@@ -251,6 +263,7 @@ python -m watch.cli.kwcoco_to_geojson \
 #### SC Notes:
 
 curl https://raw.githubusercontent.com/Erotemic/local/main/init/utils.sh -o utils.sh
+source utils.sh
 
 
 export DVC_DPATH=$(smartwatch_dvc --hardware=hdd)
