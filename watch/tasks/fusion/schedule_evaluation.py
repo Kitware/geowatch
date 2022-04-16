@@ -679,7 +679,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             annotations_dpath, common_submitkw, skip_existing,
             region_model_dpath)
 
-    if HACK_HACKHACK:
+    if HACK_HACKHACK and not ub.argflag('--without_alternatives'):
         for info in other_existing_pred_infos:
             manager = {}
             manager['pred'] = {'will_exist': True}
