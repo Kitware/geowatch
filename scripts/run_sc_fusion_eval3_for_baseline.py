@@ -62,12 +62,12 @@ def main():
                         default=False,
                         help="Force predict scripts to use --num_workers=0")
     parser.add_argument("--bas_thresh",
-                        default=0.2,
+                        default=0.1,
                         type=float,
                         required=False,
                         help="Threshold for BAS tracking (kwarg 'thresh')")
     parser.add_argument("--sc_thresh",
-                        default=0.01,
+                        default=0.1,
                         type=float,
                         required=False,
                         help="Threshold for SC tracking (kwarg 'thresh')")
@@ -199,8 +199,8 @@ def run_sc_fusion_for_baseline(
         jobs=1,
         force_zero_num_workers=False,
         ta2_s3_collation_bucket=None,
-        bas_thresh=0.2,
-        sc_thresh=0.01):
+        bas_thresh=0.1,
+        sc_thresh=0.1):
     if aws_profile is not None:
         aws_base_command =\
             ['aws', 's3', '--profile', aws_profile, 'cp']
@@ -255,7 +255,9 @@ def run_sc_fusion_for_baseline(
 
     region_models_outdir = os.path.join(ingress_dir, 'region_models')
 
-    sc_track_kwargs = {"boundaries_as": "polys"}
+    sc_track_kwargs = {"boundaries_as": "polys",
+                       "use_viterbi": "v1,v6",
+                       "thresh": sc_thresh}
     subprocess.run(['python', '-m', 'watch.cli.kwcoco_to_geojson',
                     sc_fusion_kwcoco_path,
                     '--out_dir', site_models_outdir,

@@ -58,7 +58,7 @@ def main():
                         default=False,
                         help="Force predict scripts to use --num_workers=0")
     parser.add_argument("--bas_thresh",
-                        default=0.2,
+                        default=0.1,
                         type=float,
                         required=False,
                         help="Threshold for BAS tracking (kwarg 'thresh')")
@@ -184,7 +184,7 @@ def run_bas_fusion_for_baseline(
         newline=False,
         jobs=1,
         force_zero_num_workers=False,
-        bas_thresh=0.2):
+        bas_thresh=0.1):
     if aws_profile is not None:
         aws_base_command =\
             ['aws', 's3', '--profile', aws_profile, 'cp']
