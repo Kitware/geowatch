@@ -352,6 +352,11 @@ prepare_cropped_from_tracks(){
         --cache=1 --backend=tmux --run=0
 
 
+    python -m watch.cli.prepare_splits \
+        --base_fpath="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/combo_DLM.kwcoco.json" \
+        --run=1 --serial=True
+
+
 }
 
 cropped_with_more_context(){
