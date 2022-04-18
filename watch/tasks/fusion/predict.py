@@ -28,7 +28,8 @@ except Exception:
     profile = ub.identity
 
 import torchmetrics
-torchmetrics.classification.f_beta.F1 = ub.identity
+if not hasattr(torchmetrics.classification.f_beta, 'F1'):
+    torchmetrics.classification.f_beta.F1 = torchmetrics.classification.f_beta.FBetaScore
 
 
 def torchmetrics_compat_hack():
