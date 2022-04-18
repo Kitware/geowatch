@@ -27,6 +27,9 @@ try:
 except Exception:
     profile = ub.identity
 
+import torchmetrics
+torchmetrics.classification.f_beta.F1 = torchmetrics.classification.f_beta.FBeta
+
 
 def torchmetrics_compat_hack():
     import torchmetrics
