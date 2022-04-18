@@ -67,7 +67,7 @@ def main():
                         required=False,
                         help="Threshold for BAS tracking (kwarg 'thresh')")
     parser.add_argument("--sc_thresh",
-                        default=0.1,
+                        default=0.01,
                         type=float,
                         required=False,
                         help="Threshold for SC tracking (kwarg 'thresh')")
@@ -200,7 +200,7 @@ def run_sc_fusion_for_baseline(
         force_zero_num_workers=False,
         ta2_s3_collation_bucket=None,
         bas_thresh=0.1,
-        sc_thresh=0.1):
+        sc_thresh=0.01):
     if aws_profile is not None:
         aws_base_command =\
             ['aws', 's3', '--profile', aws_profile, 'cp']
