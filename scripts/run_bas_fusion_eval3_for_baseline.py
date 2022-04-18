@@ -248,7 +248,8 @@ def run_bas_fusion_for_baseline(
                         'morph_kernel': 3,
                         'time_filtering': True,
                         'response_filtering': False,
-                        'norm_ord': 1}
+                        'norm_ord': 1,
+                        'moving_window_size': 150}
     subprocess.run(['python', '-m', 'watch.cli.kwcoco_to_geojson',
                     bas_fusion_kwcoco_path,
                     '--out_dir', region_models_outdir,
