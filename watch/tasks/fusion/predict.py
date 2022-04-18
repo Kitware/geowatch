@@ -28,7 +28,7 @@ except Exception:
     profile = ub.identity
 
 import torchmetrics
-torchmetrics.classification.f_beta.F1 = torchmetrics.classification.f_beta.FBeta
+torchmetrics.classification.f_beta.F1 = ub.identity
 
 
 def make_predict_config(cmdline=False, **kwargs):
