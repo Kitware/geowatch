@@ -185,8 +185,11 @@ def debug_all_results():
     ###
 
     sc_globpats = [
-        dvc_dpath / 'models/fusion/eval3_sc_candidates/pred/*/*/*/*/actclf/*/*_eval/scores/merged/summary3.json',
-        dvc_dpath / 'models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json'
+        # dvc_dpath / 'models/fusion/eval3_sc_candidates/pred/*/*/*/*/actclf/*/*_eval/scores/merged/summary3.json',
+        # dvc_dpath / 'models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json'
+
+        dvc_dpath / 'models/fusion/eval3_sc_candidates/eval/CropDrop3_SC_V006/pred_CropDrop3_SC_V006_epoch=71-step=18431/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json'
+
         # dvc_dpath / 'models/fusion/eval3_sc_candidates/pred/*/*/*/*/actclf/*/iarpa_sc_eval/scores/merged/summary3.json',
     ]
     sc_paths = util_path.coerce_patterned_paths(sc_globpats)
@@ -221,12 +224,17 @@ def debug_all_results():
         if row['pred_in_dataset_name'] != 'Cropped-Drop3-TA1-2022-03-10/combo_DL_s2_wv_vali.kwcoco.json':
             continue
 
+        actcfg_dname = merged_fpath.parent.parent.parent.parent.name
+        predcfg_dname = merged_fpath.parent.parent.parent.parent.parent.parent.parent.name
+
         result = result_analysis.Result(
              name=None,
              params=params,
              metrics=metrics,
              meta=None
         )
+        row['actcfg_dname'] = actcfg_dname
+        row['predcfg_dname'] = predcfg_dname
 
         key = ub.hash_data(row)
         if key not in seen:
@@ -257,6 +265,11 @@ def debug_all_results():
     df = pd.DataFrame(sc_rows)
     df = df[df['pred_in_dataset_name'] == 'Cropped-Drop3-TA1-2022-03-10/combo_DL_s2_wv_vali.kwcoco.json']
     df = df.sort_values('mean_f1')
+
+    df[['trk_use_viterbi']]
+
+
+
     varied = ub.varied_values(sc_rows, 1, None)
     varied2 = {k: v for k, v in varied.items() if len(ub.oset(v) - {None}) > 1}
     varied_cols = ub.oset(df.columns) & list(varied2.keys())

@@ -20,7 +20,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
         --storage_dpath="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages" \
         --train_dpath="$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/runs/*/lightning_logs" \
         --push_jobs=8 --dvc_remote=aws \
-        --mode=list
+        --mode=interact
 
     #################################
     # 2. Pull new models (and existing evals) on eval machine
@@ -1285,7 +1285,7 @@ python -m watch.tasks.fusion.fit \
     --chip_size=256 \
     --time_steps=12 \
     --learning_rate=1e-4 \
-    --num_workers=4 \
+    --num_workers=8 \
     --max_epochs=160 \
     --patience=160 \
     --dist_weights=False \
