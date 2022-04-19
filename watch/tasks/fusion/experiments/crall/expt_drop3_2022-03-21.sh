@@ -134,6 +134,9 @@ schedule-prediction-and-evlauation(){
 
     #du -shL models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json | sort -h
     dvc add models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
+
+    python -c "import sys, pathlib, watch.utils.simple_dvc; watch.utils.simple_dvc.SimpleDVC().add([p for p in sys.argv[1:] if not pathlib.Path(p).is_symlink()])" models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
+
     git commit -am "add eval from $HOSTNAME"
     git push
     dvc push -r aws -R models/fusion/eval3_candidates/eval
