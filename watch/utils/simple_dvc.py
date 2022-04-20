@@ -143,6 +143,22 @@ class SimpleDVC():
             dvc_command = ['push'] + extra_args + [str(p.relative_to(dvc_root)) for p in paths]
             dvc_main.main(dvc_command)
 
+    def pull(self, path, remote=None, recursive=False, jobs=None):
+        from dvc import main as dvc_main
+        paths = list(map(ub.Path, _ensure_iterable(path)))
+        dvc_root = self._ensure_root(paths)
+        extra_args = []
+        if remote:
+            extra_args += ['-r', remote]
+        if jobs is not None:
+            extra_args += ['--jobs', str(jobs)]
+        if recursive:
+            extra_args += ['--recursive']
+
+        with ChDir(dvc_root):
+            dvc_command = ['pull'] + extra_args + [str(p.relative_to(dvc_root)) for p in paths]
+            dvc_main.main(dvc_command)
+
     def unprotect(self, path):
         from dvc import main as dvc_main
         paths = list(map(ub.Path, _ensure_iterable(path)))

@@ -136,6 +136,7 @@ schedule-prediction-and-evlauation(){
     dvc add models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
 
     python -c "import sys, pathlib, watch.utils.simple_dvc; watch.utils.simple_dvc.SimpleDVC().add([p for p in sys.argv[1:] if not pathlib.Path(p).is_symlink()])" models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
+    python -c "import sys, pathlib, watch.utils.simple_dvc; watch.utils.simple_dvc.SimpleDVC().add([p for p in sys.argv[1:] if not pathlib.Path(p).is_symlink()])" models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json
 
     git commit -am "add eval from $HOSTNAME"
     git push
@@ -162,9 +163,9 @@ aggregate-results(){
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     cd "$DVC_DPATH" 
     git pull
-    dvc checkout aws models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
-    DVC_DPATH=$(smartwatch_dvc)
-    cd "$DVC_DPATH" 
+    #dvc checkout aws models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
+    #DVC_DPATH=$(smartwatch_dvc)
+    #cd "$DVC_DPATH" 
     git pull
     dvc pull -r horologic models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
     dvc pull -r aws -R models/fusion/eval3_candidates/eval
@@ -186,7 +187,8 @@ aggregate-results(){
         --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
         --dset_group_key="*Drop3*combo_LM_nowv_vali*" \
         --classes_of_interest "Site Preparation" "Active Construction" \
-        --io_workers=10 --show=True  \
+        --io_workers=10 --show=True  
+            \
         --embed=True --force-iarpa
 }
 
@@ -394,6 +396,7 @@ singleton_commands(){
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 DVC_DPATH=$(smartwatch_dvc)
+DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
