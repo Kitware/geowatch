@@ -47,6 +47,7 @@ import yaml
 import io
 import shutil
 import kwarray
+import warnings
 import scriptconfig as scfg
 import itertools as it
 
@@ -268,8 +269,6 @@ def debug_all_results():
 
     df[['trk_use_viterbi']]
 
-
-
     varied = ub.varied_values(sc_rows, 1, None)
     varied2 = {k: v for k, v in varied.items() if len(ub.oset(v) - {None}) > 1}
     varied_cols = ub.oset(df.columns) & list(varied2.keys())
@@ -278,6 +277,174 @@ def debug_all_results():
     df2 = df2.drop(ub.oset(df2.columns) & ignore_cols, axis=1)
     print(df2.reset_index().iloc[-90:].to_string())
     print(df2.reset_index().to_string())
+
+
+@ub.memoize
+def _load_json(fpath):
+    # memo hack for development
+    with open(fpath, 'r') as file:
+        data = json.load(file)
+    return data
+
+
+def load_pxl_eval(fpath, dvc_dpath=None):
+    from kwcoco.coco_evaluator import CocoSingleResult
+    from watch.utils import util_pattern
+    # from watch.utils import result_analysis
+    # from watch.utils import util_time
+    measure_info = _load_json(fpath)
+
+    meta = measure_info['meta']
+
+    pred_info = meta['info']
+    param_types = parse_pred_params(pred_info, dvc_dpath)
+
+    predict_args = param_types['pred']
+    if predict_args is None:
+        raise Exception('no prediction metadata')
+
+    # pred_fpath = predict_args['pred_dataset']
+    # package_fpath = ub.Path(predict_args['pred_model_fpath'])
+    package_name = predict_args['pred_in_dataset_name']
+    title = meta['title']
+
+    if predict_args is not None:
+        # Relevant prediction parameters also count as params
+        pred_config = ub.dict_isect(predict_args, {
+            'pred_tta_fliprot',
+            'pred_tta_time',
+            'pred_chip_overlap',
+        })
+        pred_cfgstr = ub.hash_data(pred_config)[0:8]
+        title = title + pred_cfgstr
+        meta['prefix'] = package_name + pred_cfgstr
+
+    salient_measures = measure_info['nocls_measures']
+    class_measures = measure_info['ovr_measures']
+
+    # HACK: fixme
+    coi_pattern = util_pattern.MultiPattern.coerce(
+        ['Active Construction', 'Site Preparation'], hint='glob')
+
+    class_metrics = []
+    coi_metrics = []
+    for catname, bin_measure in class_measures.items():
+        class_row = {}
+        class_row['AP'] = bin_measure['ap']
+        class_row['AUC'] = bin_measure['auc']
+        class_row['APUC'] = np.nanmean([bin_measure['ap'], bin_measure['auc']])
+        class_row['catname'] = catname
+        if coi_pattern.match(catname):
+            coi_metrics.append(class_row)
+        class_metrics.append(class_row)
+
+    class_aps = [r['AP'] for r in class_metrics]
+    class_aucs = [r['AUC'] for r in class_metrics]
+    coi_aps = [r['AP'] for r in coi_metrics]
+    coi_aucs = [r['AUC'] for r in coi_metrics]
+    coi_catnames = [r['catname'] for r in coi_metrics]
+
+    metrics = {}
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', 'Mean of empty slice')
+        metrics['class_mAP'] = np.nanmean(class_aps) if len(class_aps) else np.nan
+        metrics['class_mAUC'] = np.nanmean(class_aucs) if len(class_aucs) else np.nan
+        metrics['class_mAPUC'] = np.nanmean([metrics['class_mAUC'], metrics['class_mAP']])
+
+        metrics['coi_mAP'] = np.nanmean(coi_aps) if len(coi_aps) else np.nan
+        metrics['coi_mAUC'] = np.nanmean(coi_aucs) if len(coi_aucs) else np.nan
+        metrics['coi_mAPUC'] = np.nanmean([metrics['coi_mAUC'], metrics['coi_mAP']])
+
+        metrics['salient_AP'] = salient_measures['ap']
+        metrics['salient_AUC'] = salient_measures['auc']
+        metrics['salient_APUC'] = np.nanmean([metrics['salient_AP'], metrics['salient_AUC']])
+
+    for class_row in class_metrics:
+        metrics[class_row['catname'] + '_AP'] = class_row['AP']
+        metrics[class_row['catname'] + '_AUC'] = class_row['AUC']
+
+    result = CocoSingleResult.from_json(measure_info)
+
+    info = {
+        'fpath': fpath,
+        'metrics': metrics,
+        'param_types': param_types,
+        'other': {
+            'result': result,
+            'coi_catnames': ','.join(sorted(coi_catnames)),
+            'title': title,
+            # 'sc_cm': sc_cm,
+            # 'sc_df': sc_df,
+        },
+        'raw': measure_info,
+    }
+    return info
+
+
+def load_bas_eval(fpath, dvc_dpath):
+    bas_info = _load_json(fpath)
+
+    best_bas_rows = pd.read_json(io.StringIO(json.dumps(bas_info['best_bas_rows'])), orient='table')
+    try:
+        bas_row = best_bas_rows.loc['merged'].reset_index().iloc[0].to_dict()
+    except Exception:
+        bas_row = best_bas_rows[best_bas_rows['region_id'].isnull()].reset_index(drop=1).iloc[0].to_dict()
+
+    tracker_info = bas_info['parent_info']
+    path_hint = fpath
+    param_types = parse_tracker_params(tracker_info, dvc_dpath, path_hint=path_hint)
+
+    metrics = {
+        'BAS_F1': bas_row['F1'],
+        'BAS_rho': bas_row['rho'],
+        'BAS_tau': bas_row['tau'],
+        # 'mean_f1': sc_df.loc['F1 score'].mean(),
+        # 'siteprep_f1': sc_df.loc['F1 score', 'Site Preparation'].mean(),
+        # 'active_f1': sc_df.loc['F1 score', 'Active Construction'].mean(),
+    }
+    info = {
+        'fpath': fpath,
+        'metrics': metrics,
+        'param_types': param_types,
+        'other': {
+            'best_bas_rows': best_bas_rows,
+        },
+        'raw': bas_info,
+    }
+    return info
+
+
+def load_sc_eval(fpath, dvc_dpath):
+    sc_info = _load_json(fpath)
+    # sc_info['sc_cm']
+    sc_df = pd.read_json(io.StringIO(json.dumps(sc_info['sc_df'])), orient='table')
+    sc_cm = pd.read_json(io.StringIO(json.dumps(sc_info['sc_cm'])), orient='table')
+    tracker_info = sc_info['parent_info']
+    param_types = parse_tracker_params(tracker_info, dvc_dpath)
+
+    # non_measures = ub.dict_diff(param_types, ['resource'])
+    # params = ub.dict_union(*non_measures.values())
+    metrics = {
+        'mean_f1': sc_df.loc['F1 score'].mean(),
+        'siteprep_f1': sc_df.loc['F1 score', 'Site Preparation'].mean(),
+        'active_f1': sc_df.loc['F1 score', 'Active Construction'].mean(),
+    }
+    # metrics.update(
+    #     param_types['resource']
+    # )
+    # row = ub.odict(ub.dict_union(metrics, *param_types.values()))
+
+    info = {
+        'fpath': fpath,
+        'metrics': metrics,
+        'param_types': param_types,
+        'other': {
+            'sc_cm': sc_cm,
+            'sc_df': sc_df,
+        },
+        'raw': sc_info,
+    }
+    return info
 
 
 def parse_tracker_params(tracker_info, dvc_dpath, path_hint=None):
@@ -302,22 +469,35 @@ def parse_tracker_params(tracker_info, dvc_dpath, path_hint=None):
     else:
         pred_info = track_item['properties']['pred_info']
 
-    pred_measures = list(find_info_items(pred_info, 'measure', None))
-    assert len(pred_measures) == 1
-    item = pred_measures[0]
-    resources = parse_measure_item(item)
-
-    pred_item = find_pred_item(pred_info)
+    param_types = parse_pred_params(pred_info, dvc_dpath, path_hint)
     track_args = track_item['properties']['args']
+    track_config = relevant_track_config(track_args)
+    param_types['track'] = track_config
+    return param_types
+
+
+def relevant_track_config(track_args):
+    track_config = json.loads(track_args['track_kwargs'])
+    track_config = {'trk_' + k: v for k, v in track_config.items()}
+    return track_config
+
+
+def parse_pred_params(pred_info, dvc_dpath, path_hint=None):
+    pred_measures = list(find_info_items(pred_info, 'measure', None))
+    assert len(pred_measures) <= 1
+    if len(pred_measures):
+        item = pred_measures[0]
+        resources = parse_measure_item(item)
+    else:
+        resources = {}
+    pred_item = find_pred_item(pred_info)
     pred_args = pred_item['properties']['args']
     fit_config = pred_item['properties']['fit_config']
     pred_config = relevant_pred_config(pred_args, dvc_dpath)
     fit_config = relevant_fit_config(fit_config)
-    track_config = relevant_track_config(track_args)
     param_types = {
         'fit': fit_config,
         'pred': pred_config,
-        'track': track_config,
         'resource': resources,
     }
     return param_types
@@ -364,12 +544,6 @@ def parse_measure_item(item):
     return resources
 
 
-def relevant_track_config(track_args):
-    track_config = json.loads(track_args['track_kwargs'])
-    track_config = {'trk_' + k: v for k, v in track_config.items()}
-    return track_config
-
-
 def relevant_pred_config(pred_args, dvc_dpath):
     pred_config = {}
     pred_config['tta_fliprot'] = pred_args.get('tta_fliprot', 0)
@@ -385,10 +559,28 @@ def relevant_pred_config(pred_args, dvc_dpath):
     pred_config['model_fpath'] = package_fpath
     pred_config['in_dataset_fpath'] = test_dataset
 
-    pred_config['model_name'] = ub.Path(package_fpath).name
+    pred_config['model_name'] = model_name = ub.Path(package_fpath).name
     pred_config['in_dataset_name'] = str(ub.Path(*test_dataset.parts[-2:]))
 
+    # Hack to get the epoch/step/expt_name
+    try:
+        epoch = int(model_name.split('epoch=')[1].split('-')[0])
+    except Exception:
+        epoch = -1
+    try:
+        step = int(model_name.split('step=')[1].split('-')[0])
+    except Exception:
+        step = -1
+    try:
+        expt_name = model_name.split('_epoch=')[0]
+    except Exception:
+        expt_name = '?'
+        # expt_name = predict_args[expt_name]
+
     pred_config = {'pred_' + k: v for k, v in pred_config.items()}
+    pred_config['step'] = step
+    pred_config['epoch'] = epoch
+    pred_config['expt_name'] = expt_name
     return pred_config
 
 
@@ -604,7 +796,7 @@ def resolve_cross_machine_path(path, dvc_dpath=None):
         found_idx = None
         for dname in expected_dnames:
             try:
-                idx = path.parts.index('smart_watch_dvc')
+                idx = path.parts.index(dname)
             except ValueError:
                 pass
             else:
@@ -1070,6 +1262,35 @@ def best_candidates(class_rows, mean_rows):
                 if has_preds:
                     print('has_preds = {!r}'.format(has_preds))
     return all_model_candidates
+
+
+def shrink_channels(x):
+    import kwcoco
+    aliases = {
+        'blue': 'B',
+        'red': 'R',
+        'green': 'G',
+        'nir': 'N',
+        'swir16': 'S',
+        'swir22': 'H',
+    }
+    for idx, part in enumerate('forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field'.split('|')):
+        aliases[part] =  'land.{}'.format(idx)
+    stream_parts = []
+    for stream in kwcoco.ChannelSpec.coerce(x).streams():
+        fused_parts = []
+        for c in stream.as_list():
+            c = aliases.get(c, c)
+            c = c.replace('matseg_', 'matseg.')
+            fused_parts.append(c)
+        fused = '|'.join(fused_parts)
+        fused = fused.replace('B|G|R|N|S|H', 'BGRNSH')
+        fused = fused.replace('R|G|B', 'RGB')
+        fused = fused.replace('B|G|R', 'BGR')
+        stream_parts.append(fused)
+    new = ','.join(stream_parts)
+    x = kwcoco.ChannelSpec.coerce(new).concise().spec
+    return x
 
 
 def shrink_notations(df, drop=0):

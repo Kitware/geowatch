@@ -257,28 +257,25 @@ class ResultAnalysis:
                             diff = r1[metric_key] - r2[metric_key]
                             score_improvements[(k1, k2)].append(diff)
 
-                    metric_vals = best_group[metric_key].values
-                    diffs = metric_vals[None, :] - metric_vals[:, None]
-
+                    # metric_vals = best_group[metric_key].values
+                    # diffs = metric_vals[None, :] - metric_vals[:, None]
                     best_group.set_index(param)
-
-                    best_group[param]
-
-                    best_group[metric_key].diff()
-
+                    # best_group[param]
+                    # best_group[metric_key].diff()
                     scored_ranking = best_group[[param, metric_key]].reset_index(drop=True)
                     scored_obs.append(scored_ranking)
                     skillboard.observe(scored_ranking[param])
 
-        sorted(scored_obs, key=lambda x: x['mean_f1'].max())
-        print('skillboard.ratings = {}'.format(ub.repr2(skillboard.ratings, nl=1)))
+        scored_obs = sorted(scored_obs, key=lambda x: x['mean_f1'].max())
+        print('skillboard.ratings = {}'.format(ub.repr2(skillboard.ratings, nl=1, align=':')))
 
         for key, improves in score_improvements.items():
             k1, k2 = key
             improves = np.array(improves)
             pos_delta = improves[improves > 0]
-            print(f'\nWhen {k1=} is better than {k2=}')
+            print(f'\nWhen {param}={k1} is better than {param}={k2}')
             print(pd.DataFrame([pd.Series(pos_delta).describe().T]))
+        return scored_obs
         # self.varied[param]
 
     def build(self):
