@@ -201,7 +201,7 @@ def planet_to_s2_coregister(path_to_input_planet, path_to_baseline_s2, output_fo
         print('Not enough GCPs - just VRT input files')
         # If we don't find enough GCPs - just vrt data
         fname_vrt = f'{fname_planet[:-4]}.vrt'
-        frame_out = None
+        fname_out = None
         os.system(f'gdal_translate -of VRT {path_to_input_planet} {os.path.join(output_folder, fname_vrt)}')
 
     planet_ds = None
@@ -212,7 +212,7 @@ def planet_to_s2_coregister(path_to_input_planet, path_to_baseline_s2, output_fo
     if os.path.isfile(os.path.join(output_folder, f'{fname_planet[:-4]}_s2_tmp.tif')):
         os.remove(os.path.join(output_folder, f'{fname_planet[:-4]}_s2_tmp.tif'))
 
-    return frame_out
+    return fname_out
 
 if __name__ == '__main__':
     num_arg = len(sys.argv)
