@@ -132,7 +132,8 @@ def run_stac_to_cropped_kwcoco(input_path,
                        assume_relative=False,
                        populate_watch_fields=True,
                        jobs=jobs,
-                       from_collated=from_collated)
+                       from_collated=from_collated,
+                       ignore_duplicates=True)
 
     # `ta1_cropped_dir` is the directory that gets recursively copied
     # up to S3, want to put any kwcoco manifests we may need
