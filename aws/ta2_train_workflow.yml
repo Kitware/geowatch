@@ -28,7 +28,7 @@ spec:
       image: gitlab.kitware.com:4567/smart/watch/ta2_training_v2
       command: [bash]
       # The second arg is which branch should be used
-      args: ["/root/code/watch/aws/train_remote_init.sh", "dev/flow34"]
+      args: ["/root/code/watch/aws/train_remote_init.sh", "dev/flow49"]
       resources:
         requests:
           memory: "32G"
