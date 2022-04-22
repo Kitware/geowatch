@@ -354,6 +354,8 @@ class MultimodalTransformer(pl.LightningModule):
                     input_norms[s][c] = nh.layers.InputNorm(**stats)
 
             for (s, c), stats in input_stats.items():
+                if s not in input_norms:
+                    input_norms[s] = RobustModuleDict()
                 input_norms[s][c] = nh.layers.InputNorm(**stats)
 
         self.known_sensors = known_sensors
@@ -625,16 +627,16 @@ class MultimodalTransformer(pl.LightningModule):
         self.head_metrics['class'] = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
-            'f1_micro': torchmetrics.FBeta(beta=1.0, threshold=0.5, average='micro'),
-            'f1_macro': torchmetrics.FBeta(beta=1.0, threshold=0.5, average='macro', num_classes=self.num_classes),
+            'f1_micro': torchmetrics.FBetaScore(beta=1.0, threshold=0.5, average='micro'),
+            'f1_macro': torchmetrics.FBetaScore(beta=1.0, threshold=0.5, average='macro', num_classes=self.num_classes),
         })
         self.head_metrics['change'] = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
-            'f1': torchmetrics.FBeta(beta=1.0),
+            'f1': torchmetrics.FBetaScore(beta=1.0),
         })
         self.head_metrics['saliency'] = nn.ModuleDict({
-            'f1': torchmetrics.FBeta(beta=1.0),
+            'f1': torchmetrics.FBetaScore(beta=1.0),
         })
 
         self.encode_h = utils.SinePositionalEncoding(3, 1, size=8)
@@ -1307,6 +1309,17 @@ class MultimodalTransformer(pl.LightningModule):
                     'chan_code': chan_code,
                     'sensor': sensor,
                 })
+
+        if len(tokenized) == 0:
+            print('Error concat of:')
+            print('tokenized = {}'.format(ub.repr2(tokenized, nl=1)))
+            print('item = {}'.format(ub.repr2(item, nl=1)))
+            for frame_idx, frame in enumerate(item['frames']):
+                if len(frame['modes']) == 0:
+                    print('Frame {} had no modal data'.format(frame_idx))
+            raise ValueError(
+                'Got an input sequence of length 0. '
+                'Is there a dataloader problem?')
 
         _tokens = torch.concat(tokenized, dim=0)
 

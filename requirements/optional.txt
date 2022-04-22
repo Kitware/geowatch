@@ -11,4 +11,4 @@ mkinit >= 0.3.3
 
 timerit >= 0.3.0
 
-codecarbon >= 1.2.0
+codecarbon >= 2.0.0

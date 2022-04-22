@@ -41,20 +41,24 @@ CROPPED_PRE_EVAL_AND_AGG(){
     EXPT_GROUP_CODE=eval3_sc_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 
+    EXPT_MODEL_GLOBNAME="CropDrop3_SC_s2wv_tf_*V02*"
+
     #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_wv_vali.kwcoco.json
     #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_D_wv_vali.kwcoco.json
     #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
 
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0,1,2,3" \
-            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
+            --gpus="0,1" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/$EXPT_MODEL_GLOBNAME/*.pt" \
             --test_dataset="$VALI_FPATH" \
             --enable_pred=1 \
             --enable_eval=1 \
+            --enable_actclf=1 \
+            --enable_actclf_eval=1 \
             --draw_heatmaps=0 \
             --without_alternatives \
-            --skip_existing=True --backend=tmux --run=1
+            --skip_existing=True --backend=slurm --run=0
 
 
     #################################

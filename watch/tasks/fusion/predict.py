@@ -142,7 +142,7 @@ def predict(cmdline=False, **kwargs):
         >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=5, gsize=(128, 128))
         >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=5, gsize=(128, 128))
         >>> fit_kwargs = kwargs = {
-        ...     'train_dataset': test_dset.fpath,
+        ...     'train_dataset': train_dset.fpath,
         ...     'datamodule': 'KWCocoVideoDataModule',
         ...     'workdir': ub.ensuredir((test_dpath, 'train')),
         ...     'package_fpath': package_fpath,
@@ -552,23 +552,27 @@ def predict(cmdline=False, **kwargs):
         'change_probs': 'change',
     }
 
-    # Start background procs before we make threads
     batch_iter = iter(test_dataloader)
+    prog = ub.ProgIter(batch_iter, desc='predicting', verbose=1)
+
+    # Start background procs before we make threads
     writer_queue = util_parallel.BlockingJobQueue(
         mode='thread',
         # mode='serial',
         max_workers=datamodule.num_workers)
-
-    prog = ub.ProgIter(batch_iter, desc='predicting', verbose=1)
 
     result_fpath.parent.ensuredir()
     print('result_fpath = {!r}'.format(result_fpath))
 
     try:
         if args.track_emissions:
+            import codecarbon
+            codecarbon.core.util.logger.setLevel('ERROR')
             from codecarbon import EmissionsTracker
             emissions_tracker = EmissionsTracker()
+            codecarbon.core.util.logger.setLevel('ERROR')
             emissions_tracker.start()
+            codecarbon.core.util.logger.setLevel('ERROR')
         else:
             emissions_tracker = None
     except Exception as ex:
@@ -576,12 +580,27 @@ def predict(cmdline=False, **kwargs):
             print('ex = {!r}'.format(ex))
         emissions_tracker = None
 
-    with torch.set_grad_enabled(False):
+    CHECK_GRID = 0
+    if CHECK_GRID:
+        # Check to see if the grid will cover all images
+        test_dataloader.dataset
 
+        seen_gids = set()
+        primary_gids = set()
+        for tr in test_dataloader.dataset.new_sample_grid['targets']:
+            primary_gids.add(tr['main_gid'])
+            seen_gids.update(tr['gids'])
+        all_gids = list(test_dataloader.dataset.sampler.dset.images())
+        from xdev import set_overlaps
+        img_overlaps = set_overlaps(all_gids, seen_gids)
+        primary_img_overlaps = set_overlaps(all_gids, primary_gids)
+        print('img_overlaps = {}'.format(ub.repr2(img_overlaps, nl=1)))
+        print('primary_img_overlaps = {}'.format(ub.repr2(primary_img_overlaps, nl=1)))
+
+    with torch.set_grad_enabled(False):
         # FIXME: that data loader should not be producing incorrect sensor/mode
         # pairs in the first place!
-        EMERGENCY_INPUT_AGREEMENT_HACK = True
-
+        EMERGENCY_INPUT_AGREEMENT_HACK = 1
         # prog.set_extra(' <will populate stats after first video>')
         _batch_iter = iter(prog)
         for orig_batch in _batch_iter:
@@ -591,9 +610,11 @@ def predict(cmdline=False, **kwargs):
             for item in orig_batch:
                 if item is None:
                     continue
+                item = item.copy()
+                batch_gids = [frame['gid'] for frame in item['frames']]
                 batch_trs.append({
                     'space_slice': tuple(item['tr']['space_slice']),
-                    'gids': [frame['gid'] for frame in item['frames']],
+                    'gids': batch_gids,
                     'fliprot_params': item['tr'].get('fliprot_params', None)
                 })
                 position_tensors = item.get('positional_tensors', None)
@@ -603,6 +624,7 @@ def predict(cmdline=False, **kwargs):
 
                 filtered_frames = []
                 for frame in item['frames']:
+                    frame = frame.copy()
                     sensor = frame['sensor']
                     if EMERGENCY_INPUT_AGREEMENT_HACK:
                         try:
@@ -616,7 +638,7 @@ def predict(cmdline=False, **kwargs):
                         if EMERGENCY_INPUT_AGREEMENT_HACK:
                             if key not in known_sensor_modes:
                                 continue
-                            filtered_modes[key] = mode.to(device)
+                        filtered_modes[key] = mode.to(device)
                     frame['modes'] = filtered_modes
                     filtered_frames.append(frame)
                 item['frames'] = filtered_frames
@@ -630,7 +652,6 @@ def predict(cmdline=False, **kwargs):
             if 0:
                 import netharn as nh
                 print(nh.data.collate._debug_inbatch_shapes(batch))
-                pass
 
             # self = method
             # with_loss = 0

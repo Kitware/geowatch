@@ -1309,6 +1309,31 @@ class KWCocoVideoDataset(data.Dataset):
 
         # TODO: separate ndsampler annotation loading function
         USE_CLOUDMASK = self.use_cloudmask
+        # NOTES ON CLOUDMASK
+        # https://github.com/GERSL/Fmask#46-version
+        # The cloudmask band is a class-idx based raster with labels
+        # 0 => clear land pixel
+        # 1 => clear water pixel
+        # 2 => cloud shadow
+        # 3 => snow
+        # 4 => cloud
+        # 255 => no observation
+
+        # However, in my data I seem to see:
+        # Unique values   8,  16,  65, 128
+
+        # These are specs
+        # https://smartgitlab.com/TE/standards/-/wikis/Data-Output-Specifications#quality-band
+        # TODO: this could be a specially handled frame like ASI.
+        # Bits
+        # 0 T&E binary mask
+        # 1 Dilated Cloud
+        # 2 Cirrus
+        # 3 Cloud
+        # 4 Cloud Shadow
+        # 5 Snow
+        # 6 Clear
+        # 7 Water
         if USE_CLOUDMASK:
             if 'cloudmask' in coco_img.channels:
                 tr_cloud = tr_frame.copy()
@@ -1323,13 +1348,12 @@ class KWCocoVideoDataset(data.Dataset):
                     dtype=np.float32
                 )
                 cloud_im = cloud_sample['im']
-
                 cloud_bits = 1 << np.array([1, 2, 3])
                 is_cloud_iffy = np.logical_or.reduce([cloud_im == b for b in cloud_bits])
                 cloud_frac = is_cloud_iffy.mean()
                 if cloud_frac > 0.5:
                     # print('cloud_frac = {!r}'.format(cloud_frac))
-                    force_bad = True
+                    force_bad = 'too cloudy'
                     # valid_cloud_vals = cloud_im[np.isnan(cloud_im)]
 
                 # if 0:
@@ -1339,7 +1363,7 @@ class KWCocoVideoDataset(data.Dataset):
                 # Skip if more then 50% cloudy
 
         if sensor_channels.numel() == 0:
-            force_bad = True
+            force_bad = 'Missing requested channels'
 
         for stream in sensor_channels.streams():
             if force_bad:
@@ -1374,17 +1398,14 @@ class KWCocoVideoDataset(data.Dataset):
                             mask = (sample['im'] == 0)
                             sample['im'][mask] = np.nan
 
-            # dont ask for annotations multiple times
             invalid_mask = np.isnan(sample['im'])
 
             any_invalid = np.any(invalid_mask)
             none_invalid = not any_invalid
             if none_invalid:
                 all_invalid = False
-                # some_invalid = False
             else:
                 all_invalid = np.all(invalid_mask)
-                # some_invalid = not all_invalid and any_invalid
 
             if any_invalid:
                 sample['invalid_mask'] = invalid_mask
@@ -1394,6 +1415,7 @@ class KWCocoVideoDataset(data.Dataset):
             if not all_invalid:
                 sample_streams[stream.spec] = sample
                 if 'annots' in sample:
+                    # dont ask for annotations multiple times
                     first_with_annot = False
             else:
                 # HACK: if the red channel is all bad, discard the frame
@@ -1402,7 +1424,8 @@ class KWCocoVideoDataset(data.Dataset):
                 # keep track of an image wide observation mask and use that
                 # instead of using red as a proxy for it.
                 if 'red' in set(stream):
-                    force_bad = True
+                    force_bad = 'invalid red channel'
+                    break
 
             # TODO: mark frame as invalid when a red band is all 0
             # We are going to try to generalize this with a concept of an
@@ -1425,9 +1448,14 @@ class KWCocoVideoDataset(data.Dataset):
                         chan_frac_iffy = chan_num_iffy / chan_num_pxls
                         chan_is_bad = chan_frac_iffy > 0.4
                         if np.any(chan_is_bad):
-                            force_bad = True
+                            force_bad = 'iffy RGB channel'
+                            break
 
-        gid_to_isbad[gid] = force_bad or len(sample_streams) == 0
+        if not force_bad:
+            if len(sample_streams) == 0:
+                force_bad = 'no-streams'
+
+        gid_to_isbad[gid] = force_bad
         gid_to_sample[gid] = sample_streams
 
     def _input_grid_stats(self):
@@ -1515,6 +1543,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, diff_inputs=0, dist_weights=1, temporal_dropout=0.5)
             >>> item = self[0]
             >>> canvas = self.draw_item(item)
+            h
             >>> # xdoctest: +REQUIRES(--show)
             >>> import kwplot
             >>> kwplot.autompl()
@@ -1649,33 +1678,6 @@ class KWCocoVideoDataset(data.Dataset):
         gid_to_sample: Dict[str, Dict] = {}
         gid_to_isbad: Dict[str, bool] = {}
 
-        # NOTES ON CLOUDMASK
-        # https://github.com/GERSL/Fmask#46-version
-        # The cloudmask band is a class-idx based raster with labels
-        # 0 => clear land pixel
-        # 1 => clear water pixel
-        # 2 => cloud shadow
-        # 3 => snow
-        # 4 => cloud
-        # 255 => no observation
-
-        # However, in my data I seem to see:
-        # Unique values   8,  16,  65, 128
-
-        # These are specs
-        # https://smartgitlab.com/TE/standards/-/wikis/Data-Output-Specifications#quality-band
-
-        # TODO: this could be a specially handled frame like ASI.
-        # Bits
-        # 0 T&E binary mask
-        # 1 Dilated Cloud
-        # 2 Cirrus
-        # 3 Cloud
-        # 4 Cloud Shadow
-        # 5 Snow
-        # 6 Clear
-        # 7 Water
-
         for gid in tr_['gids']:
             self._sample_one_frame(gid, sampler, coco_dset, tr_, with_annots,
                                    gid_to_isbad, gid_to_sample)
@@ -1688,6 +1690,13 @@ class KWCocoVideoDataset(data.Dataset):
         video = coco_dset.index.videos[vidid]
         time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
         video_gids = time_sampler.video_gids
+
+        # If we skipped the main gid, record why
+        main_gid = tr.get('main_gid', None)
+        if main_gid is not None and gid_to_isbad[main_gid]:
+            main_skip_reason = gid_to_isbad[main_gid]
+        else:
+            main_skip_reason = None
 
         if ALLOW_FEWER_FRAMES:
             error_level = 0
@@ -2239,6 +2248,8 @@ class KWCocoVideoDataset(data.Dataset):
         tr_subset = ub.dict_isect(tr_, {
             'gids', 'space_slice', 'vidid', 'fliprot_params',
         })
+        if main_skip_reason:
+            tr_subset['main_skip_reason'] = main_skip_reason
         item = {
             # TODO: breakup modes into different items
             'index': index,

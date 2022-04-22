@@ -284,7 +284,7 @@ def gathering():
     ax = sns.violinplot(data=load_df, x='trial', y='per_img_time',
                         # scale="width",
                         scale="area",
-                        inner="quartile", hue='label', split=True, cut=0)
+                        inner="quartile", hue='key', cut=0)
     ax.set_yscale('log')
     ax.set_title('Per Image Loading Time')
 

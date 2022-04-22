@@ -489,6 +489,12 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     # hack, this should be a callback, but it is not easy to pass the right
     # vars along without using lambdas, had issues with pickling objects
     if 1:
+        import os
+        import pathlib
+        for k in dir(args):
+            v = getattr(args, k)
+            if isinstance(v, pathlib.Path):
+                setattr(args, k, os.fspath(v))
         parser.write_config_file(args, [join(trainer.log_dir, 'fit_config.yaml')])
 
     modules = {

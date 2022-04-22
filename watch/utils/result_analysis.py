@@ -486,28 +486,63 @@ class ResultAnalysis:
 class SkillTracker:
     """
     Wrapper around openskill
+
+    Args:
+        player_ids (List[T]):
+            a list of ids (usually ints) used to represent each player
+
+    Example:
+        >>> from watch.utils.result_analysis import *  # NOQA
+        >>> self = SkillTracker([1, 2, 3, 4, 5])
+        >>> self.observe([2, 3])  # Player 2 beat player 3.
+        >>> self.observe([1, 2, 5, 3])  # Player 3 didnt play this round.
+        >>> self.observe([2, 3, 4, 5, 1])  # Everyone played, player 2 won.
+        >>> win_probs = self.predict_win()
+        >>> print('win_probs = {}'.format(ub.repr2(win_probs, nl=1, precision=2)))
+        win_probs = {
+            1: 0.20,
+            2: 0.21,
+            3: 0.19,
+            4: 0.20,
+            5: 0.20,
+        }
     """
 
-    def __init__(skillboard, player_ids):
+    def __init__(self, player_ids):
         import openskill
-        skillboard.player_ids = player_ids
-        skillboard.ratings = {m: openskill.Rating() for m in player_ids}
-        skillboard.observations = []
+        self.player_ids = player_ids
+        self.ratings = {m: openskill.Rating() for m in player_ids}
+        self.observations = []
 
-    def observe(skillboard, ranking):
+    def predict_win(self):
+        """
+        Estimate the probability that a particular player will win given the
+        current ratings.
+
+        Returns:
+            Dict[T, float]: mapping from player ids to win probabilites
+        """
+        from openskill import predict_win
+        teams = [[p] for p in list(self.ratings.keys())]
+        ratings = [[r] for r in self.ratings.values()]
+        probs = predict_win(ratings)
+        win_probs = {team[0]: prob for team, prob in zip(teams, probs)}
+        return win_probs
+
+    def observe(self, ranking):
         """
         After simulating a round, pass the ranked order of who won
         (winner is first, looser is last) to this function. And it
         updates the rankings.
 
         Args:
-            ranking (list):
+            ranking (List[T]):
                 ranking of all the players that played in this round
                 winners are at the front (0-th place) of the list.
         """
         import openskill
-        skillboard.observations.append(ranking)
-        ratings = skillboard.ratings
+        self.observations.append(ranking)
+        ratings = self.ratings
         team_standings = [[r] for r in ub.take(ratings, ranking)]
         new_values = openskill.rate(team_standings)  # Not inplace
         new_ratings = [openskill.Rating(*new[0]) for new in new_values]
