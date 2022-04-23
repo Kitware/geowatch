@@ -21,6 +21,10 @@ set -x
 cd "$WATCH_REPO_DPATH"
 
 # Add remote with our secret credentials and then pull from it
+# Note: these secrets are populated in the container environment by the
+# workflow file.  In other words, we registered these in the workflow and argo
+# knows how to tell the container how to use them. If running locally you need
+# to inject these into your environment.
 git remote add custom "https://${WATCH_REPO_GITLAB_RO_DEPLOY_USERNAME}:${WATCH_REPO_GITLAB_RO_DEPLOY_PASSWORD}@gitlab.kitware.com/smart/watch.git"
 git fetch custom
 

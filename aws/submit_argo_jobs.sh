@@ -9,9 +9,9 @@ argo submit dvc_check_workflow.yml --watch
 
 watch_recent_argo_logs(){
     # This is not 100% reliable has race conditions
-    WORKFLOW_NAME=$(argo list --running | head -n 2 | tail -n 1 | cut -d' ' -f1)
+    NAME_PREFIX="ta2-train-"
+    WORKFLOW_NAME=$(argo list --running | argo list --running | grep "$NAME_PREFIX" | head -n 1 | cut -d' ' -f1)
     echo "WORKFLOW_NAME = $WORKFLOW_NAME"
-    WORKFLOW_NAME=ta2-train-8slrf
     argo logs "${WORKFLOW_NAME}" --follow
     #argo logs "${WORKFLOW_NAME}" --follow
     #argo delete "dvc-access-check-*"

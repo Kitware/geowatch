@@ -11,7 +11,8 @@ spec:
   entrypoint: ta2-train-init
   serviceAccountName: argo-runner
   imagePullSecrets:
-    - name: gitlab-pull-secret
+    - name: crall-smartgitlab-secret
+    #- name: gitlab-pull-secret
   nodeSelector:
     kitware.com/node-pool: gpu
     #kitware.com/node-pool: mixed
@@ -25,7 +26,8 @@ spec:
       #image: gitlab.kitware.com:4567/smart/watch/training:{{inputs.parameters.container_tag}}
       #image: gitlab.kitware.com:4567/smart/watch/ta2_training_v2:{{inputs.parameters.container_tag}}
       #image: gitlab.kitware.com:4567/smart/watch/ta2_training_v2:981feb6592f2
-      image: gitlab.kitware.com:4567/smart/watch/ta2_training_v2
+      #image: gitlab.kitware.com:4567/smart/watch/ta2_training_v2
+      image: registry.smartgitlab.com/kitware/watch/ta2_training_v2
       command: [bash]
       # The second arg is which branch should be used
       args: ["/root/code/watch/aws/train_remote_init.sh", "dev/flow49"]

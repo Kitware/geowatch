@@ -11,7 +11,8 @@ spec:
   entrypoint: dvc-check
   serviceAccountName: argo-runner
   imagePullSecrets:
-    - name: gitlab-pull-secret
+    - name: smart-gitlab-pull-secret
+    #- name: gitlab-pull-secret
   nodeSelector:
     kitware.com/node-pool: standard
   volumes:
