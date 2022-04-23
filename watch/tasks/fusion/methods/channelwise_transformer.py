@@ -623,20 +623,25 @@ class MultimodalTransformer(pl.LightningModule):
                 else:
                     raise KeyError(self.decoder)
 
+        if hasattr(torchmetrics, 'FBetaScore'):
+            FBetaScore = torchmetrics.FBetaScore
+        else:
+            FBetaScore = torchmetrics.FBeta
+
         self.head_metrics = nn.ModuleDict()
         self.head_metrics['class'] = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
-            'f1_micro': torchmetrics.FBetaScore(beta=1.0, threshold=0.5, average='micro'),
-            'f1_macro': torchmetrics.FBetaScore(beta=1.0, threshold=0.5, average='macro', num_classes=self.num_classes),
+            'f1_micro': FBetaScore(beta=1.0, threshold=0.5, average='micro'),
+            'f1_macro': FBetaScore(beta=1.0, threshold=0.5, average='macro', num_classes=self.num_classes),
         })
         self.head_metrics['change'] = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
-            'f1': torchmetrics.FBetaScore(beta=1.0),
+            'f1': FBetaScore(beta=1.0),
         })
         self.head_metrics['saliency'] = nn.ModuleDict({
-            'f1': torchmetrics.FBetaScore(beta=1.0),
+            'f1': FBetaScore(beta=1.0),
         })
 
         self.encode_h = utils.SinePositionalEncoding(3, 1, size=8)
