@@ -1,7 +1,12 @@
 #!/bin/bash
 __doc__='
+
 load_secrets
+source ~/internal/safe/secrets
 docker login gitlab.kitware.com:4567 --username "$GITLAB_KITWARE_USERNAME" --password "$GITLAB_KITWARE_TOKEN"
+
+source ~/internal/safe/secrets
+docker login registry.smartgitlab.com --username "$CRALL_SMART_GITLAB_USERNAME" --password "$CRALL_SMART_GITLAB_TOKEN"
 '
 
 cd "$HOME/code/watch/"

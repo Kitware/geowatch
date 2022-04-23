@@ -11,6 +11,7 @@ watch_recent_argo_logs(){
     # This is not 100% reliable has race conditions
     WORKFLOW_NAME=$(argo list --running | head -n 2 | tail -n 1 | cut -d' ' -f1)
     echo "WORKFLOW_NAME = $WORKFLOW_NAME"
+    WORKFLOW_NAME=ta2-train-8slrf
     argo logs "${WORKFLOW_NAME}" --follow
     #argo logs "${WORKFLOW_NAME}" --follow
     #argo delete "dvc-access-check-*"

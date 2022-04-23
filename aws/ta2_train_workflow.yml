@@ -13,8 +13,8 @@ spec:
   imagePullSecrets:
     - name: gitlab-pull-secret
   nodeSelector:
-    #kitware.com/node-pool: gpu
-    kitware.com/node-pool: mixed
+    kitware.com/node-pool: gpu
+    #kitware.com/node-pool: mixed
   volumes:
     - name: dvc-access-secret-volume
       secret:
@@ -30,14 +30,23 @@ spec:
       # The second arg is which branch should be used
       args: ["/root/code/watch/aws/train_remote_init.sh", "dev/flow49"]
       resources:
+        #requests:
+        #  memory: "32G"
+        #  cpu: "15000m"
+        #  #nvidia.com/gpu: 1
+        #limits:
+        #  memory: "64G"
+        #  cpu: "15000m"
+        #  #nvidia.com/gpu: 1
+        #  #      resources:
         requests:
-          memory: "32G"
-          cpu: "15000m"
-          #nvidia.com/gpu: 1
+          memory: "8G"
+          cpu: "3000m"
+          nvidia.com/gpu: 1
         limits:
-          memory: "64G"
-          cpu: "15000m"
-          #nvidia.com/gpu: 1
+          memory: "15G"
+          cpu: "3500m"
+          nvidia.com/gpu: 1
       env:
         - name: DVC_GITLAB_USERNAME
           valueFrom:
