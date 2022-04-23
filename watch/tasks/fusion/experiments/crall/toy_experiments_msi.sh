@@ -144,7 +144,7 @@ python -m watch.tasks.fusion.fit \
         --train_dataset="$TRAIN_FPATH" \
          --vali_dataset="$VALI_FPATH" \
          --test_dataset="$TEST_FPATH" \
-          --num_workers="2"
+          --num_workers="2" || echo "Fit command failed with bad return code"
 
 
 demo_force_repackage(){
