@@ -82,7 +82,9 @@ EXPERIMENT_NAME=ToyFusion_${ARCH}_v001
 DATASET_NAME=ToyDataMSI
 
 # Place training inside of our DVC directory
-DVC_DPATH=$(smartwatch_dvc)
+echo "Query for train directory"
+DVC_DPATH=$(smartwatch_dvc || echo "$HOME/data/dvc-repos/smart_watch_dvc")
+echo "Finished query for train directory"
 
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_NAME/runs/$EXPERIMENT_NAME
