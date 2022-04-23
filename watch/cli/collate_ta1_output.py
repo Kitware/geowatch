@@ -223,13 +223,19 @@ def collate_item(stac_item,
 
     platform = stac_item.properties['platform']
 
-    if platform not in SUPPORTED_PLATFORMS:
+    if(platform not in SUPPORTED_PLATFORMS
+       and not platform.startswith('PlanetScope')):
         print("* Warning unknown platform: '{}' for item, "
               "skipping!".format(platform))
         return None
 
+    if platform.startswith('PlanetScope'):
+        platform_shorthand = 'pd'
+    else:
+        platform_shorthand = PLATFORM_SHORTHAND[platform]
+
     output_stac_collection_id = 'ta1-{}-{}'.format(
-        PLATFORM_SHORTHAND[platform], performer_code)
+        platform_shorthand, performer_code)
 
     if 'watch:original_item_id' in stac_item.properties:
         original_id = stac_item.properties['watch:original_item_id']
@@ -245,6 +251,8 @@ def collate_item(stac_item,
                 'nitf:auxiliary_image_identifier').split()
         else:
             original_id = stac_item.id
+    elif platform.startswith('PlanetScope'):
+        original_id = stac_item.id
 
     mgrs_utm_zone = str(stac_item.properties.get('mgrs:utm_zone', 'ZZ'))
     mgrs_lat_band = str(stac_item.properties.get('mgrs:latitude_band', 'B'))
@@ -292,6 +300,8 @@ def collate_item(stac_item,
                                         additional_ssh_qa_resolutions=[10, 60])
     elif platform in SUPPORTED_WV_PLATFORMS:
         platform_collation_fn = collate_wv_item
+    elif platform.startswith('PlanetScope'):
+        platform_collation_fn = collate_pd_item
 
     output_stac_item = platform_collation_fn(stac_item,
                                              aws_base_command,
@@ -613,6 +623,86 @@ def collate_wv_item(stac_item,
 
             output_band_path = convert_wv_to_cog(output_band_path,
                                                  resampling='AVERAGE')
+
+            stac_asset_outpath_basename = "{}_{}.tif".format(
+                output_item_id, asset_suffix)
+            stac_asset_outpath = '/'.join(
+                (item_outdir, stac_asset_outpath_basename))
+
+            # Default to asset_suffix if a map isn't found
+            output_asset_name = ASSET_SUFFIX_TO_NAME_MAP.get(
+                asset_suffix, asset_suffix)
+            output_assets[output_asset_name] = pystac.Asset.from_dict(
+                {'href': stac_asset_outpath,
+                 'title': '/'.join((item_outdir_base,
+                                    stac_asset_outpath_basename)),
+                 'roles': ['data'],
+                 'eo:bands': [eo_band_dict]})
+
+            # Copy assets up to S3
+            if not ssh_only:
+                subprocess.run([*aws_base_command,
+                                output_band_path, stac_asset_outpath],
+                               check=True)
+
+    stac_item.assets = output_assets
+
+    return stac_item
+
+
+def collate_pd_item(stac_item,
+                    aws_base_command,
+                    output_item_id,
+                    item_outdir,
+                    ssh_outdir,
+                    ssh_only=False,
+                    skip_ssh=False):
+    # Planet items only have a single "data" asset containing all bands
+    data_asset = stac_item.assets.get('data')
+    if data_asset is None:
+        print("** Error ** Missing expected 'data' asset from "
+              "Planet STAC Item skipping!")
+        return None
+
+    def _out_bands(band_dicts):
+        return [(_reformat_bandname(b['name']), b.copy())
+                for b in band_dicts]
+
+    bands = gdal.Info(data_asset.href, format='json')['bands']
+
+    if len(bands) == 3:
+        output_bands = _out_bands(util_bands.PLANETSCOPE_3BAND)
+    elif len(bands) == 4:
+        output_bands = _out_bands(util_bands.PLANETSCOPE_4BAND)
+    elif len(bands) == 8:
+        output_bands = _out_bands(util_bands.PLANETSCOPE_8BAND)
+    else:
+        print('unknown channel signature for Planet data asset')
+        return None
+
+    item_outdir_base = os.path.basename(item_outdir)
+    output_assets = {}
+    for band_i, band in enumerate(output_bands, start=1):
+        asset_suffix, eo_band_dict = band
+        eo_band_dict['name'] = asset_suffix
+        with tempfile.NamedTemporaryFile(suffix='.tif') as temporary_file:
+            if len(output_bands) > 1:
+                # Extract band as a seperate image
+                output_band_path = temporary_file.name
+                subprocess.run(['gdal_calc.py',
+                                '--quiet',
+                                '--calc', 'A',
+                                '--outfile', output_band_path,
+                                '-A', data_asset.href,
+                                '--A_band', str(band_i),
+                                '--overwrite'], check=True)
+            else:
+                # Only a single band output file, don't need to
+                # split our input image in this case
+                output_band_path = data_asset.href
+
+            output_band_path = convert_to_cog(output_band_path,
+                                              resampling='AVERAGE')
 
             stac_asset_outpath_basename = "{}_{}.tif".format(
                 output_item_id, asset_suffix)
