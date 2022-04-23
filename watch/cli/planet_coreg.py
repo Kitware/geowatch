@@ -45,17 +45,16 @@ def coreg_planet_stac_item(stac_item, outdir, baseline_scenes):
         baseline_scene)
     print("* Using S2 baseline scene band file "
           "(B04): {}".format(s2_baseline_scene_band_path))
-    coregistered_frame = planet_to_s2_coregister(
+    coregistered_fname = planet_to_s2_coregister(
         data_asset_path,
         s2_baseline_scene_band_path,
         outdir)
 
-    if(coregistered_frame is not None
-       and os.path.isfile(coregistered_frame)):
-        # Is there some proper convention here for S2 asset names?
-        stac_item.assets['data'] =\
-            pystac.Asset.from_dict(
-                {'href': coregistered_frame})
+    if coregistered_fname is not None:
+        coregistered_outpath = os.path.join(outdir, coregistered_fname)
+
+        stac_item.assets['data'] = pystac.Asset.from_dict(
+            {'href': coregistered_outpath})
     else:
         # Original 'data' asset not modified at all if coregistration
         # fails, so don't update assets
