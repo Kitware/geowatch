@@ -3,6 +3,27 @@
 # called on the branch as-is from when the docker container was created.  It
 # calls the train_remote_entrypoint.sh script which can be "hot-reloaded" in
 # effect because this script will update the repo before calling it.
+__doc__='
+
+
+Manual Local Debug:
+
+    cd ~/code/watch
+    transcrypt --cipher=aes-256-cbc --password "$WATCH_TRANSCRYPT_SECRET"
+    source ~/code/watch/secrets/secrets
+    export BRANCH_NAME=dev/flow49
+
+    docker run --gpus all \
+        -v $HOME/.aws:/root/.aws \
+        --env AWS_PROFILE=iarpa \
+        --env DVC_GITLAB_USERNAME \
+        --env DVC_GITLAB_PASSWORD \
+        --env BRANCH_NAME \
+        --env WATCH_REPO_GITLAB_RO_DEPLOY_PASSWORD \
+        --env WATCH_REPO_GITLAB_RO_DEPLOY_USERNAME \
+        -it kitware/watch/ta2_training_v2 bash
+
+'
 
 
 # First ensure we can grab the latest and greatest version of the current checkout

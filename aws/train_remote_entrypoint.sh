@@ -39,22 +39,6 @@ kubectl exec -it ta2-train-sd8qs -c main -- /bin/bash
 
     # Use this to check outputs
     aws s3 --profile iarpa ls s3://kitware-smart-watch-data/sync_root/
-
-
-Manual Local Debug:
-
-    cd ~/code/watch
-    transcrypt --cipher=aes-256-cbc --password "$WATCH_TRANSCRYPT_SECRET"
-    source ~/code/watch/secrets/secrets
-    docker run --gpus all \
-        -v $HOME/.aws:/root/.aws \
-        --env AWS_PROFILE=iarpa \
-        --env DVC_GITLAB_USERNAME \
-        --env DVC_GITLAB_PASSWORD \
-        --env WATCH_REPO_GITLAB_RO_DEPLOY_PASSWORD \
-        --env WATCH_REPO_GITLAB_RO_DEPLOY_USERNAME \
-        -it kitware/watch/ta2_training_v2 bash
-
 '
 set -ex
 
@@ -119,5 +103,9 @@ python -c "import torch; print('torch.__version__ = {}'.format(torch.__version__
 python -c "import torch; print('torch.__file__ = {}'.format(torch.__file__))"
 python -c "import torch; print(torch.cuda.is_available())"
 python -c "import torch; print(torch.cuda.device_count())"
+
+export NUM_TOY_TRAIN_VIDS=10
+export NUM_TOY_VALI_VIDS=5
+export NUM_TOY_TEST_VIDS=2
 
 source "$WATCH_REPO_DPATH/watch/tasks/fusion/experiments/crall/toy_experiments_msi.sh"
