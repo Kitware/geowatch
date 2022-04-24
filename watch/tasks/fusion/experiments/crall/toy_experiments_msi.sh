@@ -5,7 +5,7 @@ This demonstrates an end-to-end pipeline on multispectral toydata
 This walks through the entire process of fit -> predict -> evaluate and the
 output if you run this should end with something like
 
-bash ~/code/watch/watch/tasks/fusion/experiments/crall/toy_experiments_msi.sh
+source ~/code/watch/watch/tasks/fusion/experiments/crall/toy_experiments_msi.sh
 """
 
 # Generate toy datasets
@@ -16,9 +16,9 @@ TEST_FPATH=$TOY_DATA_DPATH/vidshapes_msi_test/data.kwcoco.json
 
 generate_data(){
     mkdir -p "$TOY_DATA_DPATH"
-    kwcoco toydata --key=vidshapes-videos100-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_train100" --verbose=1
-    kwcoco toydata --key=vidshapes-videos5-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_vali"  --verbose=1
-    kwcoco toydata --key=vidshapes-videos2-frames6-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_test" --verbose=1 
+    kwcoco toydata --key=vidshapes-videos100-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_train100" --verbose=0
+    kwcoco toydata --key=vidshapes-videos5-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_vali"  --verbose=0
+    kwcoco toydata --key=vidshapes-videos2-frames6-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_test" --verbose=0
 }
 
 
@@ -59,11 +59,11 @@ demo_visualize_toydata(){
 
 
 function join_by {
-  # https://stackoverflow.com/questions/1527049/how-can-i-join-elements-of-an-array-in-bash
-  local d=${1-} f=${2-}
-  if shift 2; then
-    printf %s "$f" "${@/#/$d}"
-  fi
+    # https://stackoverflow.com/questions/1527049/how-can-i-join-elements-of-an-array-in-bash
+    local d=${1-} f=${2-}
+    if shift 2; then
+      printf %s "$f" "${@/#/$d}"
+    fi
 }
 
 
@@ -75,8 +75,6 @@ STREAMS=(
     "B1|B8a"
     "flowx|flowy|distri"
 )
-
-#CHANNELS="disparity|gauss,,B1|B8a"
 CHANNELS=$(join_by , "${STREAMS[@]}")
 echo "CHANNELS = $CHANNELS"
 
