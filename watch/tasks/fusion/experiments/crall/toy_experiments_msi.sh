@@ -8,17 +8,27 @@ output if you run this should end with something like
 source ~/code/watch/watch/tasks/fusion/experiments/crall/toy_experiments_msi.sh
 """
 
+NUM_TOY_TRAIN_VIDS="${NUM_TOY_TRAIN_VIDS:-100}"  # If variable not set or null, use default.
+NUM_TOY_VALI_VIDS="${NUM_TOY_VALI_VIDS:-5}"  # If variable not set or null, use default.
+NUM_TOY_TEST_VIDS="${NUM_TOY_TEST_VIDS:-2}"  # If variable not set or null, use default.
+
 # Generate toy datasets
 TOY_DATA_DPATH=$HOME/data/work/toy_change
-TRAIN_FPATH=$TOY_DATA_DPATH/vidshapes_msi_train100/data.kwcoco.json
-VALI_FPATH=$TOY_DATA_DPATH/vidshapes_msi_vali/data.kwcoco.json
-TEST_FPATH=$TOY_DATA_DPATH/vidshapes_msi_test/data.kwcoco.json 
+TRAIN_FPATH=$TOY_DATA_DPATH/vidshapes_msi_train${NUM_TOY_TRAIN_VIDS}/data.kwcoco.json
+VALI_FPATH=$TOY_DATA_DPATH/vidshapes_msi_vali${NUM_TOY_VALI_VIDS}/data.kwcoco.json
+TEST_FPATH=$TOY_DATA_DPATH/vidshapes_msi_test${NUM_TOY_TEST_VIDS}/data.kwcoco.json 
 
 generate_data(){
     mkdir -p "$TOY_DATA_DPATH"
-    kwcoco toydata --key=vidshapes-videos100-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_train100" --verbose=0
-    kwcoco toydata --key=vidshapes-videos5-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_vali"  --verbose=0
-    kwcoco toydata --key=vidshapes-videos2-frames6-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_test" --verbose=0
+
+    kwcoco toydata --key="vidshapes-videos${NUM_TOY_TRAIN_VIDS}-frames5-randgsize-speed0.2-msi-multisensor" \
+        --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_train${NUM_TOY_TRAIN_VIDS}" --verbose=0
+
+    kwcoco toydata --key="vidshapes-videos${NUM_TOY_VALI_VIDS}-frames5-randgsize-speed0.2-msi-multisensor" \
+        --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_vali${NUM_TOY_VALI_VIDS}"  --verbose=0
+
+    kwcoco toydata --key="vidshapes-videos${NUM_TOY_TEST_VIDS}-frames6-randgsize-speed0.2-msi-multisensor" \
+        --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_test${NUM_TOY_TEST_VIDS}" --verbose=0
 }
 
 
@@ -118,7 +128,7 @@ python -m watch.tasks.fusion.fit \
     --time_steps=5 \
     --chip_size=256 \
     --batch_size=1 \
-    --tokenizer=dwcnn \
+    --tokenizer=linconv \
     --global_saliency_weight=1.0 \
     --global_change_weight=1.0 \
     --global_class_weight=1.0 \

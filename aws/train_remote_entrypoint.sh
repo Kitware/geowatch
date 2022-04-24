@@ -40,8 +40,23 @@ kubectl exec -it ta2-train-sd8qs -c main -- /bin/bash
     # Use this to check outputs
     aws s3 --profile iarpa ls s3://kitware-smart-watch-data/sync_root/
 
+
+Manual Local Debug:
+
+    cd ~/code/watch
+    transcrypt --cipher=aes-256-cbc --password "$WATCH_TRANSCRYPT_SECRET"
+    source ~/code/watch/secrets/secrets
+    docker run --gpus all \
+        -v $HOME/.aws:/root/.aws \
+        --env AWS_PROFILE=iarpa \
+        --env DVC_GITLAB_USERNAME \
+        --env DVC_GITLAB_PASSWORD \
+        --env WATCH_REPO_GITLAB_RO_DEPLOY_PASSWORD \
+        --env WATCH_REPO_GITLAB_RO_DEPLOY_USERNAME \
+        -it kitware/watch/ta2_training_v2 bash
+
 '
-set -e
+set -ex
 
 export SMART_DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 export WATCH_REPO_DPATH=$HOME/code/watch
@@ -56,7 +71,7 @@ cd "$SMART_DVC_DPATH"
 dvc remote add aws-noprofile s3://kitware-smart-watch-data/dvc
 
 # Grab the required datasets that we need
-dvc pull Drop2-Aligned-TA1-2022-01/data.kwcoco.json.dvc -r aws-noprofile --quiet
+dvc pull Aligned-Drop3-L1/splits.zip.dvc -r aws-noprofile --quiet
 
 #dvc checkout Drop1-Aligned-TA1-2022-01/data.kwcoco.json.dvc
 

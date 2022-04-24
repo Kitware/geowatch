@@ -15,7 +15,7 @@ export SMART_DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 export WATCH_REPO_DPATH=$HOME/code/watch
 source /opt/conda/etc/profile.d/conda.sh
 
-set -ex
+set -x
 
 # Update the watch code repo
 cd "$WATCH_REPO_DPATH"
