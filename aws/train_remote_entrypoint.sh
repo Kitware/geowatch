@@ -30,13 +30,10 @@ To submit these jobs run something like:
 
 kubectl exec -it ta2-train-sd8qs -c main -- /bin/bash
 
-
     kubectl exec --stdin --tty ta2-train-cdkc4 -- /bin/bash
 
     kubectl -n argo exec ta2-train-vxqb7 -- bash
     
-
-
     # Use this to check outputs
     aws s3 --profile iarpa ls s3://kitware-smart-watch-data/sync_root/
 '
@@ -104,8 +101,17 @@ python -c "import torch; print('torch.__file__ = {}'.format(torch.__file__))"
 python -c "import torch; print(torch.cuda.is_available())"
 python -c "import torch; print(torch.cuda.device_count())"
 
-export NUM_TOY_TRAIN_VIDS=10
-export NUM_TOY_VALI_VIDS=5
-export NUM_TOY_TEST_VIDS=2
 
-source "$WATCH_REPO_DPATH/watch/tasks/fusion/experiments/crall/toy_experiments_msi.sh"
+##### MSI TEST
+#export NUM_TOY_TRAIN_VIDS=10
+#export NUM_TOY_VALI_VIDS=5
+#export NUM_TOY_TEST_VIDS=2
+#source "$WATCH_REPO_DPATH/watch/tasks/fusion/experiments/crall/toy_experiments_msi.sh"
+
+
+##### Real work
+cd "$SMART_DVC_DPATH"
+dvc pull Aligned-Drop3-L1/splits.zip.dvc -r aws-noprofile --quiet
+dvc pull -R Aligned-Drop3-L1 -r aws-noprofile 
+
+# --quiet
