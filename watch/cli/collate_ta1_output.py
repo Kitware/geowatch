@@ -93,6 +93,15 @@ L8_SSH_ASSET_NAME_MAP = {'image-B1': 'B01',
                          'image-B7': 'B07',
                          'image-cloudmask': 'QA'}
 
+
+# Maps Planet data (using eo band name to harmonized band):
+PLANET_SSH_ASSET_NAME_MAP = {'red': 'B04',
+                             'green': 'B03',
+                             'blue': 'B02',
+                             'nir': 'B05',
+                             'coastal': 'B01'}
+
+
 # Helper map to take asset suffixes (if different) from maps above to
 # asset names as they should appear in the output STAC items
 ASSET_SUFFIX_TO_NAME_MAP = {'QA': 'quality',
@@ -427,6 +436,39 @@ def convert_wv_to_cog(input_filepath, resampling='AVERAGE'):
     return output_filepath
 
 
+def convert_pd_to_ssh_cog(input_filepath, resampling='AVERAGE'):
+    # Citing: https://smartgitlab.com/TE/standards/-/wikis/Data-Output-Specifications#cloud-optomized-geotiff-cog  # noqa
+    # Pixel interleaving
+    # Internal tiling with block size 256x256 pixels
+    # Internal overviews with block size 128x128 pixels and
+    # downsampling levels of 2, 4, 8, 16, 32, and 64
+    # Compression with the "deflate" algorithm
+    # Ensuring "Int16" datatype with -9999 nodata value
+    output_filepath = '_ssh_cog'.join(os.path.splitext(input_filepath))
+
+    # Need to use gdalwarp here as we're remapping the nodata value
+    # (gdal_translate doesn't seem to be able to transfer nodata
+    # values from the source file using the `-a_nodata` argument;
+    # quoting the gdal_translate documentations: "Note that, if the
+    # input dataset has a nodata value, this does not cause pixel
+    # values that are equal to that nodata value to be changed to the
+    # value specified with this option."
+    subprocess.run(['gdalwarp',
+                    input_filepath, output_filepath,
+                    '-q',  # quiet
+                    '-of', 'cog',
+                    '-ot', 'Int16',
+                    '-srcnodata', '0',
+                    '-dstnodata', '-9999',
+                    '-co', 'COMPRESS=DEFLATE',
+                    '-co', 'BIGTIFF=IF_SAFER',
+                    '-co', 'BLOCKSIZE=256',
+                    '-co', 'OVERVIEW_RESAMPLING={}'.format(resampling.upper()),
+                    '--config', 'GDAL_TIFF_OVR_BLOCKSIZE', '128'], check=True)
+
+    return output_filepath
+
+
 def _get_eo_bands_info(asset_name, eo_bands_list, replacement_name=None):
     band_name = asset_name.replace('image-', '')
 
@@ -701,8 +743,8 @@ def collate_pd_item(stac_item,
                 # split our input image in this case
                 output_band_path = data_asset.href
 
-            output_band_path = convert_to_cog(output_band_path,
-                                              resampling='AVERAGE')
+            output_cog_band_path = convert_to_cog(output_band_path,
+                                                  resampling='AVERAGE')
 
             stac_asset_outpath_basename = "{}_{}.tif".format(
                 output_item_id, asset_suffix)
@@ -719,11 +761,39 @@ def collate_pd_item(stac_item,
                  'roles': ['data'],
                  'eo:bands': [eo_band_dict]})
 
+            ssh_asset_suffix =\
+                PLANET_SSH_ASSET_NAME_MAP[eo_band_dict['common_name']]
+
             # Copy assets up to S3
             if not ssh_only:
                 subprocess.run([*aws_base_command,
-                                output_band_path, stac_asset_outpath],
+                                output_cog_band_path, stac_asset_outpath],
                                check=True)
+
+            if ssh_asset_suffix is not None and not skip_ssh:
+                output_ssh_cog_band_path = convert_pd_to_ssh_cog(
+                    output_band_path, resampling='AVERAGE')
+
+                ssh_asset_outpath = '/'.join(
+                    (ssh_outdir, "{}_SSH_{}.tif".format(
+                        output_item_id, ssh_asset_suffix)))
+
+                subprocess.run([*aws_base_command,
+                                output_ssh_cog_band_path,
+                                ssh_asset_outpath], check=True)
+
+    if not skip_ssh:
+        with tempfile.NamedTemporaryFile() as temporary_file:
+            datetime = stac_item.properties['datetime']
+
+            with open(temporary_file.name, 'w') as f:
+                print(datetime, file=f)
+
+            datetime_outpath = '/'.join(
+                        (ssh_outdir, "{}_SSH_datetime.txt".format(
+                            output_item_id)))
+            subprocess.run([*aws_base_command,
+                            temporary_file.name, datetime_outpath], check=True)
 
     stac_item.assets = output_assets
 

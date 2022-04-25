@@ -109,7 +109,8 @@ def _asset_selector(asset_name, asset):
 
 def _ssh_only_asset_selector(asset_name, asset):
     return (asset_name in S2_SSH_ASSET_NAME_MAP or
-            asset_name in L8_SSH_ASSET_NAME_MAP)
+            asset_name in L8_SSH_ASSET_NAME_MAP or
+            asset_name == 'data')
 
 
 def _default_item_selector(stac_item):
@@ -117,7 +118,9 @@ def _default_item_selector(stac_item):
 
 
 def _ssh_only_item_selector(stac_item):
-    return stac_item['properties'].get('platform') in SSH_ONLY_PLATFORMS
+    return (stac_item['properties'].get('platform') in SSH_ONLY_PLATFORMS
+            or stac_item['properties'].get(
+                'platform', '').startswith('PlanetScope'))
 
 
 def run_ta1_collation_streaming(input_path,
