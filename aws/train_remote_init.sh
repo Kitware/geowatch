@@ -23,6 +23,17 @@ Manual Local Debug:
         --env WATCH_REPO_GITLAB_RO_DEPLOY_USERNAME \
         -it kitware/watch/ta2_training_v2 bash
 
+
+Remote Submission:
+    cd "$HOME/code/watch/aws"
+
+    WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
+    argo submit "$WORKFLOW_FPATH" --watch
+    NAME_PREFIX=$(yq -r .metadata.generateName "$WORKFLOW_FPATH")
+    WORKFLOW_NAME=$(argo list --running | argo list --running | grep "$NAME_PREFIX" | head -n 1 | cut -d" " -f1)
+    argo logs "${WORKFLOW_NAME}" --follow
+
+
 '
 
 
