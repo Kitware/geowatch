@@ -1808,7 +1808,7 @@ def main(cmdline=False, **kwargs):
         expt_name_to_results2 = ub.group_items(results_list2, lambda r: r.meta['expt_name'])
         results3 = []
         for expt_name, sub_results in expt_name_to_results2.items():
-            top = sorted(sub_results, key=lambda r: r.metrics['salient_AP'], reverse=True)[0:3]
+            top = sorted(sub_results, key=lambda r: r.metrics['salient_AP'], reverse=True)[0:1]
             results3.extend(top)
         results_input = results3
     else:

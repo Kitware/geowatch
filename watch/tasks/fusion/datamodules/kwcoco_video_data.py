@@ -730,6 +730,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>> kwplot.imshow(canvas)
         >>> kwplot.show_if_requested()
 
+
     Ignore:
         import kwplot
         kwplot.autompl()
@@ -795,6 +796,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>> import kwcoco
         >>> import watch
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> self = KWCocoVideoDataset(
@@ -863,6 +865,16 @@ class KWCocoVideoDataset(data.Dataset):
         self.ignore_dilate = ignore_dilate
         self.min_spacetime_weight = min_spacetime_weight
 
+        self.window_overlap = window_overlap
+        self.sample_shape = sample_shape
+        self.exclude_sensors = exclude_sensors
+        self.time_sampling = time_sampling
+        self.time_span = time_span
+        self.use_centered_positives = use_centered_positives
+        self.use_grid_positives = use_grid_positives
+        self.diff_inputs = diff_inputs
+        self.neg_to_pos_ratio = neg_to_pos_ratio
+
         self.sampler = sampler
         # TODO: the set of "valid" background classnames should be defined
         # by the inputs, not hard-coded in the dataloader. This can either be a
@@ -901,6 +913,7 @@ class KWCocoVideoDataset(data.Dataset):
             # channels = ','.join(sorted(chan_info['chan_hist']))
             channels = chan_info['all_channels']
         channels = channel_spec.ChannelSpec.coerce(channels).normalize()
+        self.channels = channels
 
         if time_sampling == 'auto':
             time_sampling = 'hard+distribute'
@@ -940,11 +953,14 @@ class KWCocoVideoDataset(data.Dataset):
             n_pos = len(new_sample_grid['positives_indexes'])
             n_neg = len(new_sample_grid['negatives_indexes'])
 
-            max_neg = min(int(max(0, (neg_to_pos_ratio * n_pos))), n_neg)
-            if n_neg > max_neg:
-                print('restrict to max_neg = {!r}'.format(max_neg))
+            # max_neg = min(int(max(0, (neg_to_pos_ratio * n_pos))), n_neg)
+            # if n_neg > max_neg:
+            #     print('restrict to max_neg = {!r}'.format(max_neg))
 
             target_vidids = [v['video_id'] for v in new_sample_grid['targets']]
+
+            # Hack: determine if videos should be grouped together
+
             target_posbit = kwarray.boolmask(
                 new_sample_grid['positives_indexes'],
                 len(new_sample_grid['targets']))
@@ -954,13 +970,30 @@ class KWCocoVideoDataset(data.Dataset):
 
             if 1:
                 import pandas as pd
+                vidnames = self.sampler.dset.videos(target_vidids).lookup('name')
                 df = pd.DataFrame({
                     'vidid': target_vidids,
-                    'vidname': self.sampler.dset.videos(target_vidids).lookup('name'),
+                    'vidname': vidnames,
                     'is_positive': target_posbit,
                 }).reset_index(drop=False)
 
-                key_to_group = dict(list(df.groupby(['vidname', 'is_positive'])))
+                # Hack, because we didn't encode the region in the cropped site
+                # (rookie move)
+                import watch
+                pat = watch.utils.util_pattern.Pattern.coerce(r'\w+_R\d+_\d+', 'regex')
+                vidname_to_region_name = {}
+                for vidname in set(vidnames):
+                    if pat.match(vidname):
+                        vidname_to_region_name[vidname] = vidname.rsplit('_', 1)[0]
+
+                self.vidname_to_region_name = vidname_to_region_name
+
+                if vidname_to_region_name:
+                    df['region'] = df['vidname'].apply(vidname_to_region_name.__getitem__)
+                else:
+                    df['region'] = df['vidname']
+
+                key_to_group = dict(list(df.groupby(['region', 'is_positive'])))
                 vidname_to_pool = {}
                 for key, group in key_to_group.items():
                     vidname, flag = key
@@ -976,12 +1009,12 @@ class KWCocoVideoDataset(data.Dataset):
                         n_pos = len(group)
                         n_neg = len(other)
                         max_neg = min(int(max(1, (neg_to_pos_ratio * n_pos))), n_neg)
-                        print(f'restrict to {max_neg=} in {vidname=} with {n_pos=}')
+                        print(f'restrict to {max_neg=} in {vidname=} with {n_pos=} and {n_neg=}')
                         # neg_vid_idxs = posneg_groups[False]['index'].values
                         neg_vid_pool_ = list(util_iter.chunks(neg_vid_idxs, nchunks=max_neg))
                         pos_vid_pool_ = list(util_iter.chunks(pos_vid_idxs, nchunks=n_pos))
                         vid_pool = pos_vid_pool_ + neg_vid_pool_
-                        vidname_to_pool[vidname] = vid_pool
+                        vidname_to_pool[vidname] = [p for p in vid_pool if p]
 
                 freqs = list(map(len, vidname_to_pool.values()))
                 if len(freqs) == 0:
@@ -1010,8 +1043,6 @@ class KWCocoVideoDataset(data.Dataset):
 
         self.new_sample_grid = new_sample_grid
 
-        self.window_overlap = window_overlap
-
         bg_catname = ub.peek(sorted(self.background_classes))
         self.bg_idx = self.classes.node_to_idx[bg_catname]
 
@@ -1019,11 +1050,6 @@ class KWCocoVideoDataset(data.Dataset):
         # if 'color' not in bg_node:
         #     bg_node['color'] = (0., 0., 0.)
         utils.category_tree_ensure_color(self.classes)
-
-        self.sample_shape = sample_shape
-        self.channels = channels
-
-        self.diff_inputs = diff_inputs
 
         self.special_inputs = {}
 
@@ -1112,6 +1138,141 @@ class KWCocoVideoDataset(data.Dataset):
     #     transform(image=np.random.rand(10, 10), keypoints=[[2, 2]])
     #     transform(image=np.random.rand(10, 10), keypoints=[[2, 2]])
     #     transform( keypoints=[[2, 2]])
+
+    def check_nested_pool(self, num=4096):
+        """
+        Example:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+            >>> import watch
+            >>> import ndsampler
+            >>> import kwcoco
+            >>> dvc_dpath = watch.find_smart_dvc_dpath()
+            >>> coco_fpath = dvc_dpath / 'Cropped-Drop3-TA1-2022-03-10/data_nowv_train.kwcoco.json'
+            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> self = KWCocoVideoDataset(
+            >>>     sampler,
+            >>>     sample_shape=(11, 256, 256),
+            >>>     window_overlap=0,
+            >>>     #channels="ASI|MF_Norm|AF|EVI|red|green|blue|swir16|swir22|nir",
+            >>>     channels="blue|green|red|nir|swir16|swir22",
+            >>>     neg_to_pos_ratio=0, time_sampling='soft2', diff_inputs=0, temporal_dropout=0.5,
+            >>> )
+            >>> #self.requested_tasks['change'] = False
+
+            if 0:
+                infos = []
+                for num in [500, 1000, 2500, 5000, 7500, 10000, 20000]:
+                    row = self.check_nested_pool(num=num)
+                    infos.append(row)
+                df = pd.DataFrame(infos)
+                import kwplot
+                sns = kwplot.autosns()
+
+
+                data = df.melt(id_vars=['num'])
+                data['style'] = 'raw'
+                data.loc[data.variable.apply(lambda x: 'gids' in x), 'style'] = 'gids'
+                data.loc[data.variable.apply(lambda x: 'region' in x), 'style'] = 'region'
+                data['region'] = data.variable.apply(lambda x: x.split('_', 2)[-1].replace('seen', '') if 'R' in x else x)
+                sns.lineplot(data=data, x='num', y='value', style='style', hue='region')
+
+                    frac_seen = info['frac_gids_seen']
+                    frac_seen['num'] = num
+                    frac_seen['ideal_seen'] = ideal_seen
+                    frac_seen['ideal_frac'] = ideal_frac
+
+
+
+        """
+        # Check the nested pool
+        import pandas as pd
+
+        dset = self.sampler.dset
+        vidid_to_name = dset.videos().lookup('name', keepid=True)
+        idx_hist = ub.dict_hist(self.nested_pool.sample() for _ in range(num))
+        targets = self.new_sample_grid['targets']
+
+        gid_freq = ub.ddict(lambda: 0)
+        vidid_freq = ub.ddict(lambda: 0)
+        region_seen_gids = ub.ddict(set)
+        for idx, freq in ub.ProgIter(list(idx_hist.items())):
+            tr = targets[idx]
+            gids = tr['gids']
+            for gid in gids:
+                # frame_index = dset.index.imgs[gid]['frame_index']
+                gid_freq[gid] += freq
+            vidid = tr['video_id']
+            vidname = vidid_to_name[vidid]
+            region = self.vidname_to_region_name[vidname]
+            vidid_freq[vidid] += freq
+            region_seen_gids[region].update(gids)
+
+        vidname_to_freq = ub.map_keys(vidid_to_name, vidid_freq)
+
+        # TODO: these should be some concept of video groups
+        region_freq = ub.ddict(lambda: 0)
+        for vidname, freq in vidname_to_freq.items():
+            region_name = self.vidname_to_region_name[vidname]
+            region_freq[region_name] += freq
+
+        _region_total_gids = ub.ddict(lambda: 0)
+        for vidid, gids in dset.index.vidid_to_gids.items():
+            vidname = vidid_to_name[vidid]
+            region_name = self.vidname_to_region_name[vidname]
+            _region_total_gids[region_name] += len(gids)
+        region_total_num_gids = pd.Series(_region_total_gids)
+        region_seen_num_gids = pd.Series(ub.map_vals(len, region_seen_gids))
+
+        frac_gids_seen = region_seen_num_gids / region_total_num_gids
+
+        import pandas as pd
+        _count = pd.Series(region_freq)
+        _prob = _count / _count.sum()
+        seen_gids = set(gid_freq.keys())
+        total_gids = set(dset.images())
+        num_seen = len(seen_gids)
+        num_total = len(total_gids)
+        ideal_seen = (num * len(tr['gids']))
+        seen_frac = num_seen / num_total
+        ideal_frac = min(ideal_seen / num_total, 1.0)
+
+        row = frac_gids_seen.add_prefix('frac_gids_seen')
+        row = pd.concat([row, _prob.add_prefix('region_freq_')])
+
+        row['seen_frac'] = seen_frac
+        row['ideal_frac'] = ideal_frac
+        row['num'] = num
+        return row
+
+        if 0:
+            rows = []
+            for idx, freq in ub.ProgIter(list(idx_hist.items())):
+                tr = targets[idx]
+                for gid in tr['gids']:
+                    vidid = tr['video_id']
+                    vidname = vidid_to_name[vidid]
+                    region = self.vidname_to_region_name[vidname]
+                    frame_index = dset.index.imgs[gid]['frame_index']
+                    rows.append({
+                        'idx': idx,
+                        'gid': gid,
+                        'vidid': vidid,
+                        'frame_index': frame_index,
+                        'vidname': vidname,
+                        'region': region,
+                        'freq': freq,
+                    })
+            df = pd.DataFrame(rows)
+            region_freq = df.groupby('region')['freq'].sum()
+            region_freq = region_freq / region_freq.sum()
+            _freq = df.groupby('video_id')['freq'].sum()
+            _freq = _freq / _freq.sum()
+            _freq = df.groupby(['video_id', 'frame_index'])['freq'].sum()
+            _freq = _freq / _freq.sum()
+
+        # vidid_to_name = dset.videos(list(vidid_freq.keys())).lookup('name', keepid=True)
 
     def _expand_targets_time(self, n_time_expands):
         """
@@ -1495,21 +1656,21 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import kwcoco
             >>> dvc_dpath = watch.find_smart_dvc_dpath()
             >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
-            >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data_vali.kwcoco.json'
+            >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data_nowv_train.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
-            >>> rng = kwarray.ensure_rng(0)
-            >>> vidid = rng.choice(coco_dset.videos())
-            >>> coco_dset = coco_dset.subset(coco_dset.images(vidid=vidid))
+            >>> #rng = kwarray.ensure_rng(0)
+            >>> #vidid = rng.choice(coco_dset.videos())
+            >>> #coco_dset = coco_dset.subset(coco_dset.images(vidid=vidid))
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> self = KWCocoVideoDataset(
             >>>     sampler,
-            >>>     sample_shape=(12, 256, 256),
+            >>>     sample_shape=(7, 380, 380),
             >>>     window_overlap=0,
             >>>     #channels="ASI|MF_Norm|AF|EVI|red|green|blue|swir16|swir22|nir",
             >>>     channels="blue|green|red|nir|swir16|swir22,blue|green|red",
             >>>     neg_to_pos_ratio=0, time_sampling='soft2', diff_inputs=0, temporal_dropout=0.5,
             >>> )
-            >>> self.requested_tasks['change'] = False
+            >>> #self.requested_tasks['change'] = False
             >>> item = self[5]
             >>> item = self[6]
             >>> item = self[7]
@@ -1621,31 +1782,17 @@ class KWCocoVideoDataset(data.Dataset):
                 kwplot.imshow(canvas)
                 xdev.InteractiveIter.draw()
         """
-
         if isinstance(index, dict):
+            # User can specify a tr dict directly
             tr = index
             index = 'given-as-dictionary'
         else:
             if self.mode == 'test':
+                # Test mode gets determenistic indexes
                 tr = self.new_sample_grid['targets'][index]
             else:
-                # Hack: we will make all of the first indexes positives
-                # in the non-shuffled case. A negative index will randomly get
-                # assigned a real negative target from its "group"
-
-                # TODO: we can generalize this into generic pools
-                # that happend to correspond to positive / negative or any
-                # other distribution of examples we want
-                # if index < self.n_pos:
+                # The idea of the pool is to handle balanced sampling
                 tr_idx = self.nested_pool.sample()
-
-                if 0:
-                    tr_idx = self.nested_pool.sample()
-                    tr = self.new_sample_grid['targets'][tr_idx]
-                # tr_idx = self.new_sample_grid['positives_indexes'][index]
-                # else:
-                #     neg_chunk = self.negative_pool[self.n_pos - index]
-                # tr_idx = random.choice(neg_chunk)
                 tr = self.new_sample_grid['targets'][tr_idx]
 
         tr_ = tr.copy()
@@ -4043,15 +4190,34 @@ def make_track_based_spatial_samples(coco_dset):
 
 
 class NestedPool(list):
+    """
+    Example:
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> nested1 = NestedPool([[[1], [2, 3], [4, 5, 6], [7, 8, 9, 0]], [[11, 12, 13]]])
+        >>> print({nested1.sample() for i in range(100)})
+        >>> nested2 = NestedPool([[101], [102, 103], [104, 105, 106], [107, 8, 9, 0]])
+        >>> print({nested2.sample() for i in range(100)})
+        >>> nested3 = NestedPool([nested1, nested2, [4, 59, 9, [], []]])
+        >>> print({nested3.sample() for i in range(100)})
+        >>> print(ub.repr2(ub.dict_hist(nested3.sample() for i in range(100))))
+    """
     def __init__(nested, pools, rng=None):
         super().__init__(pools)
         nested.rng = rng = kwarray.ensure_rng(rng)
         nested.pools = pools
 
     def sample(nested):
+        # Hack for empty lists
         chosen = nested
         while ub.iterable(chosen):
-            chosen = nested.rng.randint(0, len(chosen))
+            chosen = nested
+            while ub.iterable(chosen):
+                num = len(chosen)
+                if not num:
+                    break
+                idx = nested.rng.randint(0, num)
+                chosen = chosen[idx]
+
         return chosen
 
 

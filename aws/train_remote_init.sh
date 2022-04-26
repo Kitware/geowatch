@@ -28,8 +28,8 @@ Remote Submission:
     cd "$HOME/code/watch/aws"
 
     WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
-    argo submit "$WORKFLOW_FPATH" --watch
     NAME_PREFIX=$(yq -r .metadata.generateName "$WORKFLOW_FPATH")
+    argo submit "$WORKFLOW_FPATH" --watch
     WORKFLOW_NAME=$(argo list --running | argo list --running | grep "$NAME_PREFIX" | head -n 1 | cut -d" " -f1)
     argo logs "${WORKFLOW_NAME}" --follow
 
