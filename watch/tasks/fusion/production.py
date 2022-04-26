@@ -73,3 +73,76 @@ PRODUCTION_MODELS = [
 
 
 # TODO Investigate v53 epoch 3. It might have a really good recall
+
+
+# These are good models to consider for BAS
+CANDIDATE_BAS_MODELS = [
+    'models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt',
+    'models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V313/Drop3_SpotCheck_V313_epoch=34-step=71679.pt'
+    'models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V319/Drop3_SpotCheck_V319_epoch=60-step=124927.pt'
+    'models/fusion/eval3_candidates/packages/BASELINE_EXPERIMENT_V001/BASELINE_EXPERIMENT_V001_epoch=4-step=26149-v3.pt'
+    'models/fusion/eval3_candidates/packages/Drop3_bells_seg_V306/Drop3_bells_seg_V306_epoch=28-step=14847-v1.pt',
+]
+
+__notes__ = r'''
+
+
+DVC_DPATH=$(smartwatch_dvc)
+cd $DVC_DPATH
+
+joinby(){
+    # https://stackoverflow.com/questions/1527049/how-can-i-join-elements-of-an-array-in-bash
+    local d=${1-} f=${2-}
+    if shift 2; then
+      printf %s "$f" "${@/#/$d}"
+    fi
+}
+
+# Define the candidate models
+CANDIDATE_MODELS=(
+    "models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt"
+    "models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V313/Drop3_SpotCheck_V313_epoch=34-step=71679.pt"
+    "models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V319/Drop3_SpotCheck_V319_epoch=60-step=124927.pt"
+    "models/fusion/eval3_candidates/packages/BASELINE_EXPERIMENT_V001/BASELINE_EXPERIMENT_V001_epoch=4-step=26149-v3.pt"
+    "models/fusion/eval3_candidates/packages/Drop3_bells_seg_V306/Drop3_bells_seg_V306_epoch=28-step=14847-v1.pt"
+)
+printf "$(joinby "\n" "${CANDIDATE_MODELS[@]}")" > bas-models-of-interest.txt
+
+# Pull models onto the system
+dvc pull -r aws $(joinby " " "${CANDIDATE_MODELS[@]}")
+
+# Define the dataset to predict models on
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+
+python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+        --gpus="$TMUX_GPUS" \
+        --model_globstr=bas-models-of-interest.txt \
+        --test_dataset="$VALI_FPATH" \
+        --enable_pred=1 \
+        --enable_eval=0 \
+        --chip_overlap=0.3 \
+        --skip_existing=0 --backend=tmux --run=0
+
+
+CANDIDATE_MEASURES=(
+    "models/fusion/eval3_candidates/eval/Drop3_SpotCheck_V323/pred_Drop3_SpotCheck_V323_epoch=18-step=12976*/*/*/eval/curves/measures2.json"
+    "models/fusion/eval3_candidates/eval/Drop3_SpotCheck_V313/pred_Drop3_SpotCheck_V313_epoch=34-step=71679*/*/*/eval/curves/measures2.json"
+    "models/fusion/eval3_candidates/eval/Drop3_SpotCheck_V319/pred_Drop3_SpotCheck_V319_epoch=60-step=124927*/*/*/eval/curves/measures2.json"
+    "models/fusion/eval3_candidates/eval/BASELINE_EXPERIMENT_V001/pred_BASELINE_EXPERIMENT_V001_epoch=4-step=26149-v3*/*/*/eval/curves/measures2.json"
+    "models/fusion/eval3_candidates/eval/Drop3_bells_seg_V306/pred_Drop3_bells_seg_V306_epoch=28-step=14847-v1*/*/*/eval/curves/measures2.json"
+)
+# Pull existing evaluation measures from DVC
+dvc pull -r aws $(joinby " " "${CANDIDATE_MEASURES[@]}")
+
+# Run the aggregate script on these models
+MEASURE_GLOBSTR=$(joinby "," "${CANDIDATE_MEASURES[@]}")
+python -m watch.tasks.fusion.aggregate_results \
+    --measure_globstr="$MEASURE_GLOBSTR" \
+    --out_dpath="$DVC_DPATH/agg_results/custom" \
+    --dset_group_key="*Drop3*combo_LM_nowv_vali*" \
+    --classes_of_interest "Site Preparation" "Active Construction" \
+    --io_workers=10 --show=True
+
+'''

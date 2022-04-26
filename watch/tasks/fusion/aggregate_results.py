@@ -1798,9 +1798,24 @@ def main(cmdline=False, **kwargs):
         # 'mauc',
     }
 
+    FILTER_OUTLIERS = 1
+    import xdev
+    xdev.embed()
+
+    # r = results_list2[0]
+    if FILTER_OUTLIERS:
+        # Filter outliers by only taking the top results for each experiment
+        expt_name_to_results2 = ub.group_items(results_list2, lambda r: r.meta['expt_name'])
+        results3 = []
+        for expt_name, sub_results in expt_name_to_results2.items():
+            top = sorted(sub_results, key=lambda r: r.metrics['salient_AP'], reverse=True)[0:3]
+            results3.extend(top)
+        results_input = results3
+    else:
+        results_input = results_list2
     abalation_orders = {1}
     analysis = result_analysis.ResultAnalysis(
-        results_list2, ignore_params=ignore_params,
+        results_input, ignore_params=ignore_params,
         # metrics=['coi_mAPUC', 'coi_APUC'],
         # metrics=['salient_AP'],
         metrics=['coi_mAP', 'salient_AP'],
@@ -1862,29 +1877,42 @@ def main(cmdline=False, **kwargs):
     class_df = shrink_notations(class_df, drop=1)
     mean_df = shrink_notations(mean_df, drop=1)
 
-    if 'coi_mAPUC' in mean_df.columns:
-        print('\nSort by coi_mAPUC')
-        _mean_by_metric = mean_df.sort_values('coi_mAPUC')
-        # print(_mean_by_metric)
-        print(_mean_by_metric.to_string())
+    def sort_via(label, df):
+        if label in df.columns:
+            _df_via_metric = df.sort_values(label)
+            _df_via_metric = _df_via_metric[~_df_via_metric[label].isnull()]
+            if len(_df_via_metric):
+                print(f'\nSort by {label}')
+                print(_df_via_metric.to_string())
 
-    if 'salient_APUC' in mean_df.columns:
-        print('\nSort by salient_APUC')
-        _salient_by_metric = mean_df.sort_values('salient_APUC')
-        # print(_salient_by_metric)
-        print(_salient_by_metric.to_string())
+    sort_via('coi_mAPUC', mean_df)
+    sort_via('salient_APUC', mean_df)
+    sort_via('BAS_F1', mean_df)
+    sort_via('AP', class_df)
 
-    if 'BAS_F1' in mean_df.columns:
-        print('\nSort by BAS_F1')
-        _salient_by_metric = mean_df.sort_values('BAS_F1')
-        # print(_salient_by_metric)
-        print(_salient_by_metric.to_string())
+    # if 'coi_mAPUC' in mean_df.columns:
+    #     print('\nSort by coi_mAPUC')
+    #     _mean_by_metric = mean_df.sort_values('coi_mAPUC')
+    #     # print(_mean_by_metric)
+    #     print(_mean_by_metric.to_string())
 
-    if 'AP' in class_df.columns:
-        print('\nClass: Sort by AP')
-        _class_by_metric = class_df[~class_df['AP'].isnull()].sort_values('AP')
-        # print(_class_by_metric)
-        print(_class_by_metric.to_string())
+    # if 'salient_APUC' in mean_df.columns:
+    #     print('\nSort by salient_APUC')
+    #     _salient_by_metric = mean_df.sort_values('salient_APUC')
+    #     # print(_salient_by_metric)
+    #     print(_salient_by_metric.to_string())
+
+    # if 'BAS_F1' in mean_df.columns:
+    #     print('\nSort by BAS_F1')
+    #     _salient_by_metric = mean_df.sort_values('BAS_F1')
+    #     # print(_salient_by_metric)
+    #     print(_salient_by_metric.to_string())
+
+    # if 'AP' in class_df.columns:
+    #     print('\nClass: Sort by AP')
+    #     _class_by_metric = class_df[~class_df['AP'].isnull()].sort_values('AP')
+    #     # print(_class_by_metric)
+    #     print(_class_by_metric.to_string())
 
     if 0:
         if 'AUC' in class_df.columns:

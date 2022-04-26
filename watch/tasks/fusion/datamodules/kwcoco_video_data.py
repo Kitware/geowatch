@@ -3345,7 +3345,7 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
         >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/combo_DILM_train.kwcoco.json'
         >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data_nowv_vali.kwcoco.json'
         >>> big_dset = kwcoco.CocoDataset(coco_fpath)
-        >>> dset = big_dset.subset(big_dset.videos(names=['BR_R002']).images.lookup('id')[0])
+        >>> dset = big_dset.subset(big_dset.videos(names=['KR_R002']).images.lookup('id')[0])
         >>> window_overlap = 0.0
         >>> window_dims = (3, 32, 32)
         >>> keepbound = False

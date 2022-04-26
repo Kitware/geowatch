@@ -161,16 +161,18 @@ aggregate-results(){
     #################################
     # On other machines
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+
+    DVC_DPATH=$(smartwatch_dvc)
     cd "$DVC_DPATH" 
     git pull
     #dvc checkout aws models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
     #DVC_DPATH=$(smartwatch_dvc)
     #cd "$DVC_DPATH" 
     git pull
-    dvc pull -r horologic models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
-    dvc pull -r aws -R models/fusion/eval3_candidates/eval
+    dvc pull -r aws -R models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
+    #dvc pull -r aws -R models/fusion/eval3_candidates/eval
 
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    #DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     EXPT_GROUP_CODE=eval3_candidates
     #EXPT_NAME_PAT="*"
     EXPT_NAME_PAT="*"
@@ -187,9 +189,27 @@ aggregate-results(){
         --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
         --dset_group_key="*Drop3*combo_LM_nowv_vali*" \
         --classes_of_interest "Site Preparation" "Active Construction" \
-        --io_workers=10 --show=True  
-            \
-        --embed=True --force-iarpa
+        --io_workers=10 --show=True
+        #\
+        #--embed=True --force-iarpa
+
+
+    DVC_DPATH=$(smartwatch_dvc)
+    cd "$DVC_DPATH" 
+    git pull
+    dvc pull -r aws -R models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json.dvc
+    EXPT_GROUP_CODE=eval3_candidates
+    EXPT_NAME_PAT="*"
+    MODEL_EPOCH_PAT="*"
+    PRED_DSET_PAT="*"
+    PRED_CFG_PAT="*"
+    MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json
+    python -m watch.tasks.fusion.aggregate_results \
+        --measure_globstr="$MEASURE_GLOBSTR" \
+        --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
+        --dset_group_key="*Drop3*combo_LM_nowv_vali*" \
+        --classes_of_interest "Site Preparation" "Active Construction" \
+        --io_workers=10 --show=True
 }
 
 
