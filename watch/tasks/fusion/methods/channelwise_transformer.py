@@ -1347,6 +1347,17 @@ class MultimodalTransformer(pl.LightningModule):
             # Special case for the explicit coordinate version
             encoded_tokens = self.encoder(_tokens, flat_coordinates=flat_coordinates)
 
+        """
+        notes:
+
+        TOKENS -> TRANSFORMER -> ENCODED_TOKENS
+
+        ENCODED_TOKENS -> (RESAMPLE PER-MODE IF NEEDED) -> POOL_OVER_MODES -> SPACE_TIME_FEATURES
+
+        SPACE_TIME_FEATURES -> HEAD
+
+        """
+
         token_split_points = np.cumsum([t.shape[0] for t in tokenized])
         token_split_sizes = np.diff(np.r_[[0], token_split_points]).tolist()
         # split_frames = np.array([r['frame_idx'] for r in recon_info])

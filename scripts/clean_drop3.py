@@ -275,7 +275,7 @@ def main(coco_fpath):
 if __name__ == '__main__':
     """
     CommandLine:
-        DVC_DPATH=$(smartwatch_dvc)
+        DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
         DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
         python ~/code/watch/scripts/clean_drop3.py $KWCOCO_BUNDLE_DPATH/data_nowv_train.kwcoco.json
@@ -284,6 +284,10 @@ if __name__ == '__main__':
         python ~/code/watch/scripts/clean_drop3.py $KWCOCO_BUNDLE_DPATH/data_nowv.kwcoco.json
         python ~/code/watch/scripts/clean_drop3.py $KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
         python ~/code/watch/scripts/clean_drop3.py $KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+
+        python ~/code/watch/scripts/clean_drop3.py $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json
+        python ~/code/watch/scripts/clean_drop3.py $KWCOCO_BUNDLE_DPATH/dzyne_landcover.kwcoco.json
+        python ~/code/watch/scripts/clean_drop3.py $KWCOCO_BUNDLE_DPATH/rutgers_material_seg_v3.kwcoco.json
 
         dvc unprotect splits.zip
 

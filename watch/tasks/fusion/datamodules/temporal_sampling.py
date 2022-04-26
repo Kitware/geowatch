@@ -450,11 +450,11 @@ class TimeWindowSampler:
             >>> vidid = video_ids[2]
             >>> # Demo behavior over a grid of parameters
             >>> grid = list(ub.named_product({
-            >>>     'affinity_type': ['hard', 'soft2', 'hardish3', 'hardish2'],
-            >>>     'update_rule': ['distribute', 'pairwise+distribute'],
+            >>>     'affinity_type': ['hard', 'soft2', 'hardish3', 'hardish2'][2:3],
+            >>>     'update_rule': ['distribute', 'pairwise+distribute'][0:1],
             >>>     #'determenistic': [False, True],
             >>>     'determenistic': [False],
-            >>>     'time_window': [2],
+            >>>     'time_window': [5],
             >>> }))
             >>> import kwplot
             >>> kwplot.autompl()

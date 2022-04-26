@@ -85,7 +85,9 @@ class CocoVisualizeConfig(scfg.Config):
         'num_frames': scfg.Value(None, type=str, help='show the first N frames from each video, if None, all are shown'),
         'start_frame': scfg.Value(0, type=str, help='If specified each video will start on this frame'),
 
-        'skip_missing': scfg.Value(True, type=str, help='If true, skip any image that does not have the requested channels. Otherwise a nan image will be shown'),
+        'skip_missing': scfg.Value(True, help='If true, skip any image that does not have the requested channels. Otherwise a nan image will be shown'),
+
+        'only_boxes': scfg.Value(False, help='If false, draws full annotation - which can be time consuming if there are a lot'),
 
         # TODO: better support for this
         # TODO: use the kwcoco_video_data, has good logic for this
@@ -347,6 +349,7 @@ def main(cmdline=True, **kwargs):
                                     'fixed_normalization_scheme'),
                                 cmap=config['cmap'],
                                 verbose=config['verbose'],
+                                only_boxes=config['only_boxes'],
                                 any3=config['any3'], dset_idstr=dset_idstr)
 
         else:
@@ -366,12 +369,13 @@ def main(cmdline=True, **kwargs):
                             draw_imgs=config['draw_imgs'],
                             draw_anns=config['draw_anns'],
                             _header_extra=_header_extra,
-                            cmap=config['cmap'],
                             chan_to_normalizer=chan_to_normalizer,
                             verbose=config['verbose'],
+                            only_boxes=config['only_boxes'],
                             fixed_normalization_scheme=config.get(
                                 'fixed_normalization_scheme'),
                             any3=config['any3'], dset_idstr=dset_idstr,
+                            cmap=config['cmap'],
                             skip_missing=config['skip_missing'])
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
@@ -798,10 +802,14 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                     canvas = valid_poly.draw_on(canvas, color='green', fill=False,
                                                 border=True)
 
+        # force_min_dim = 512
+        # min_dim = force_min_dim  # TODO: parameter
+        min_dim = max(min(canvas.shape[0:2]), 384)
+
         if draw_imgs:
             with ub.Timer('prep img_canvas', verbose=verbose):
                 img_canvas = kwimage.ensure_uint255(canvas)
-                img_canvas = kwimage.imresize(img_canvas, min_dim=384)
+                img_canvas = kwimage.imresize(img_canvas, min_dim=min_dim)
                 img_canvas = util_kwimage.draw_header_text(image=img_canvas,
                                                            text=header_text,
                                                            stack=True,
@@ -811,7 +819,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
         if draw_anns:
             canvas = kwimage.ensure_float01(canvas)
-            ann_canvas, info = kwimage.imresize(canvas, min_dim=384,
+            ann_canvas, info = kwimage.imresize(canvas, min_dim=min_dim,
                                                 return_info=True)
             ann_canvas = ann_canvas.clip(0, 1)
             dets = dets.scale(info['scale'])
@@ -820,8 +828,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             ONLY_BOXES = only_boxes
             if ONLY_BOXES:
                 with ub.Timer('dets.draw_on 1', verbose=verbose):
-                    # ann_canvas = dets.draw_on(ann_canvas, color='classes')
-                    ann_canvas = dets.boxes.draw_on(ann_canvas, color='blue')
+                    ann_canvas = dets.draw_on(ann_canvas, sseg=False,
+                                              labels=False, color='classes')
+                    # ann_canvas = dets.boxes.draw_on(ann_canvas, color='blue')
             else:
                 # THERE IS A IN DRAW POLY WITH LARGE POLYS. THIS IS FINE FOR
                 # REAL DATA BUT A TEST FAILS HARD. HACKING THIS OFF FOR NOW

@@ -11,18 +11,21 @@ used.
 To submit these jobs run something like:
 
     cd "$HOME/code/watch/aws"
-    argo submit "$HOME/code/watch/aws/ta2_train_workflow.yml" --watch
 
-    WORKFLOW_NAME=$(argo list --running | head -n 2 | tail -n 1 | cut -d" " -f1) && argo logs "${WORKFLOW_NAME}" --follow
+    WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
+    argo submit "$WORKFLOW_FPATH" --watch
+
+    WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
+    NAME_PREFIX=$(yq -r .metadata.generateName "$WORKFLOW_FPATH")
+    WORKFLOW_NAME=$(argo list --running | argo list --running | grep "$NAME_PREFIX" | head -n 1 | cut -d" " -f1)
+    argo logs "${WORKFLOW_NAME}" --follow
 
     # NOTE: It usually takes ~12-15 minutes for a job to startup after being
-    # submitted
+    # submitte
 
     # And then view the logs in real time (note: if the workflow ends, you need
     # to use the UI to access the old logs)
     # This is not 100% reliable has race conditions
-
-    WORKFLOW_NAME=$(argo list --running | head -n 2 | tail -n 1 | cut -d" " -f1)
     # Get a shell in the pod
     kubectl exec $WORKFLOW_NAME -- ls -al /root
     
@@ -51,9 +54,10 @@ git clone "https://${DVC_GITLAB_USERNAME}:${DVC_GITLAB_PASSWORD}@gitlab.kitware.
 cd "$SMART_DVC_DPATH"
 dvc remote add aws-noprofile s3://kitware-smart-watch-data/dvc
 
-# Grab the required datasets that we need
-dvc pull Aligned-Drop3-L1/splits.zip.dvc -r aws-noprofile --quiet
+ls -al "$HOME"
 
+# Grab the required datasets that we need
+#dvc pull Aligned-Drop3-L1/splits.zip.dvc -r aws-noprofile --quiet
 #dvc checkout Drop1-Aligned-TA1-2022-01/data.kwcoco.json.dvc
 
 if [[ "$HOSTNAME" == "" ]]; then 
@@ -103,15 +107,15 @@ python -c "import torch; print(torch.cuda.device_count())"
 
 
 ##### MSI TEST
-#export NUM_TOY_TRAIN_VIDS=10
-#export NUM_TOY_VALI_VIDS=5
-#export NUM_TOY_TEST_VIDS=2
-#source "$WATCH_REPO_DPATH/watch/tasks/fusion/experiments/crall/toy_experiments_msi.sh"
+export NUM_TOY_TRAIN_VIDS=100
+export NUM_TOY_VALI_VIDS=5
+export NUM_TOY_TEST_VIDS=2
+source "$WATCH_REPO_DPATH/watch/tasks/fusion/experiments/crall/toy_experiments_msi.sh"
 
 
 ##### Real work
-cd "$SMART_DVC_DPATH"
-dvc pull Aligned-Drop3-L1/splits.zip.dvc -r aws-noprofile --quiet
-dvc pull -R Aligned-Drop3-L1 -r aws-noprofile 
+#cd "$SMART_DVC_DPATH"
+#dvc pull Aligned-Drop3-L1/splits.zip.dvc -r aws-noprofile --quiet
+#dvc pull -R Aligned-Drop3-L1 -r aws-noprofile 
 
 # --quiet
