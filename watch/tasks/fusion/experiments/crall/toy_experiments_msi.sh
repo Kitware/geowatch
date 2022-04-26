@@ -147,7 +147,7 @@ python -m watch.tasks.fusion.predict \
 
 
 # Fit 
-python -m watch.tasks.fusion.fit \
+python -u -m watch.tasks.fusion.fit \
            --config="$TRAIN_CONFIG_FPATH" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
        --package_fpath="$PACKAGE_FPATH" \

@@ -42,6 +42,7 @@ kubectl exec -it ta2-train-sd8qs -c main -- /bin/bash
 '
 set -ex
 
+export PYTHONUNBUFFERED=1
 export SMART_DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 export WATCH_REPO_DPATH=$HOME/code/watch
 source /opt/conda/etc/profile.d/conda.sh
