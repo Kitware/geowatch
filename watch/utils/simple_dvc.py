@@ -100,6 +100,9 @@ class SimpleDVC():
     def add(self, path):
         from dvc import main as dvc_main
         paths = list(map(ub.Path, _ensure_iterable(path)))
+        if len(paths) == 0:
+            print('No paths to add')
+            return
         dvc_root = self._ensure_root(paths)
         rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
         with ChDir(dvc_root):
@@ -130,6 +133,9 @@ class SimpleDVC():
     def push(self, path, remote=None, recursive=False, jobs=None):
         from dvc import main as dvc_main
         paths = list(map(ub.Path, _ensure_iterable(path)))
+        if len(paths) == 0:
+            print('No paths to push')
+            return
         dvc_root = self._ensure_root(paths)
         extra_args = []
         if remote:
@@ -146,6 +152,9 @@ class SimpleDVC():
     def pull(self, path, remote=None, recursive=False, jobs=None):
         from dvc import main as dvc_main
         paths = list(map(ub.Path, _ensure_iterable(path)))
+        if len(paths) == 0:
+            print('No paths to pull')
+            return
         dvc_root = self._ensure_root(paths)
         extra_args = []
         if remote:
@@ -162,6 +171,9 @@ class SimpleDVC():
     def unprotect(self, path):
         from dvc import main as dvc_main
         paths = list(map(ub.Path, _ensure_iterable(path)))
+        if len(paths) == 0:
+            print('No paths to unprotect')
+            return
         dvc_root = self._ensure_root(paths)
         rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
         with ChDir(dvc_root):

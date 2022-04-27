@@ -1792,7 +1792,11 @@ class KWCocoVideoDataset(data.Dataset):
                 tr = self.new_sample_grid['targets'][index]
             else:
                 # The idea of the pool is to handle balanced sampling
-                tr_idx = self.nested_pool.sample()
+                try:
+                    tr_idx = self.nested_pool.sample()
+                except Exception as ex:
+                    print(f'Failed sample: {ex=}')
+                    return None
                 tr = self.new_sample_grid['targets'][tr_idx]
 
         tr_ = tr.copy()
@@ -4209,10 +4213,15 @@ class NestedPool(list):
     def sample(nested):
         # Hack for empty lists
         chosen = nested
+        i = 0
         while ub.iterable(chosen):
             chosen = nested
+            i += 1
             while ub.iterable(chosen):
+                i += 1
                 num = len(chosen)
+                if i > 100000:
+                    raise Exception('Too many samples. Bad balance?')
                 if not num:
                     break
                 idx = nested.rng.randint(0, num)

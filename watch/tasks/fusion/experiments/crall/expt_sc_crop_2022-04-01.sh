@@ -36,7 +36,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     # 3. Run Prediction & Evaluation
     #################################
 
-    export DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_sc_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -58,7 +58,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
             --enable_actclf_eval=1 \
             --draw_heatmaps=0 \
             --without_alternatives \
-            --skip_existing=True --backend=slurm --run=0
+            --skip_existing=True --backend=tmux --run=0
 
 
     #################################
@@ -73,9 +73,8 @@ CROPPED_PRE_EVAL_AND_AGG(){
     ls -al models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json | grep -v ' \-> '
 
     #dvc unprotect models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json 
-    dvc unprotect models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json
-
-    dvc add models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json
+    #dvc unprotect models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json
+    #dvc add models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json
 
     python -c "import sys, pathlib, watch.utils.simple_dvc; watch.utils.simple_dvc.SimpleDVC().add([p for p in sys.argv[1:] if not pathlib.Path(p).is_symlink()])" models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json
     python -c "import sys, pathlib, watch.utils.simple_dvc; watch.utils.simple_dvc.SimpleDVC().add([p for p in sys.argv[1:] if not pathlib.Path(p).is_symlink()])" models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json
