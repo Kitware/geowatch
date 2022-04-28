@@ -26,6 +26,8 @@ def special_reroot_worker(coco_fpath, verbose=0):
     if verbose:
         print('read coco_fpath = {!r}'.format(coco_fpath))
     dset = kwcoco.CocoDataset(coco_fpath)
+    if verbose:
+        print('finished read')
     any_modified = special_reroot_single(dset, verbose=verbose)
     if verbose:
         print(f'{len(any_modified)=}')
