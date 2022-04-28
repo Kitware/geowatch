@@ -28,18 +28,21 @@ def main():
     except Exception:
         dvc_ssd_dpath = None
 
+    mode = 'commit'
     if dvc_ssd_dpath is not None:
         # If the SSD has stuff, add it, but the HDD is primary
-        dvc_dpath = dvc_hdd_dpath
+        dvc_dpath = dvc_ssd_dpath
         dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath)
         dvc.git_pull()
+        sync_checkpoints(dvc_dpath, mode='list')
+        sync_checkpoints(dvc_dpath, mode=mode)
 
     # HDD part
     dvc_dpath = dvc_hdd_dpath
     dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath)
     dvc.git_pull()
 
-    mode = 'commit'
+    sync_checkpoints(dvc_dpath, mode='list')
     sync_checkpoints(dvc_dpath, mode=mode)
 
     eval_df = evaluation_state(dvc_dpath)
