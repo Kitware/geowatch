@@ -1,8 +1,18 @@
 #FROM nvidia/cuda:11.5.1-cudnn8-devel-ubuntu20.04
-#FROM nvidia/cuda:10.2-cudnn8-devel-ubuntu18.04
-FROM nvidia/cuda:11.6.0-devel-ubuntu20.04
+FROM nvidia/cuda:10.2-cudnn8-devel-ubuntu18.04
+#FROM nvidia/cuda:11.6.0-devel-ubuntu20.04
 
 ARG BUILD_STRICT=0
+
+
+# Note:
+# Nvidia updated the signing key
+
+
+sudo apt-key del 7fa2af80
+
+wget https://developer.download.nvidia.com/compute/cuda/repos/$distro/$arch/cuda-keyring_1.0-1_all.deb
+
 
 RUN apt-get update -q && \
     apt-get install -q -y --no-install-recommends \

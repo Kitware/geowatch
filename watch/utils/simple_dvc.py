@@ -27,7 +27,7 @@ class ChDir:
         os.chdir(self.orig_dpath)
 
 
-class SimpleDVC():
+class SimpleDVC(ub.NiceRepr):
     """
     A Simple DVC API
 
@@ -46,6 +46,9 @@ class SimpleDVC():
 
     def __init__(self, dvc_root=None):
         self.dvc_root = dvc_root
+
+    def __nice__(self):
+        return str(self.dvc_root)
 
     @classmethod
     def demo_dpath(cls, reset=False):
@@ -113,20 +116,27 @@ class SimpleDVC():
         if not has_autostage:
             raise NotImplementedError('Need autostage to complete the git commit')
 
+    def git_pull(self):
+        ub.cmd('git pull', verbose=3, check=True, cwd=self.dvc_root)
+
+    def git_push(self):
+        ub.cmd('git push', verbose=3, check=True, cwd=self.dvc_root)
+
+    def git_commit(self, message):
+        ub.cmd(f'git commit -m "{message}"', verbose=3, check=True, cwd=self.dvc_root)
+
     def git_commitpush(self, message='', pull_on_fail=True):
         """
         TODO: better name here?
         """
-        dvc_root = self.dvc_root
-        git_info3 = ub.cmd(f'git commit -m "{message}"', verbose=3, check=True, cwd=dvc_root)  # dangerous?
-        assert git_info3['ret'] == 0
+        # dangerous?
+        self.git_commit(message)
         try:
-            git_info2 = ub.cmd('git push', verbose=3, check=True, cwd=dvc_root)
+            self.git_push()
         except Exception:
             if pull_on_fail:
-                git_info2 = ub.cmd('git pull', verbose=3, check=True, cwd=dvc_root)
-                git_info2 = ub.cmd('git push', verbose=3, check=True, cwd=dvc_root)
-                assert git_info2['ret'] == 0
+                self.git_pull()
+                self.git_push()
             else:
                 raise
 
