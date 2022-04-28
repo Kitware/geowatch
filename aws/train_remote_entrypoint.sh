@@ -128,6 +128,10 @@ cd "$SMART_DVC_DPATH"
 dvc pull Aligned-Drop3-L1/splits.zip.dvc -r aws-noprofile --quiet
 dvc pull -R Aligned-Drop3-L1 -r aws-noprofile 
 
+unzip -o splits.zip
+
+#sudo apt install p7zip-full
+#7z x
 
 DVC_DPATH=$(smartwatch_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
