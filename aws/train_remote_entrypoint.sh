@@ -213,7 +213,7 @@ VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
 CHANNELS="blue|green|red|nir|swir16|swir22"
 INITIAL_STATE="noop"
-EXPERIMENT_NAME=L1_BASELINE_AWS_V005
+EXPERIMENT_NAME=L1_BASELINE_AWS_${HOSTNAME}_V005
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_l1_baseline_20220425.yaml" \
@@ -223,7 +223,7 @@ python -m watch.tasks.fusion.fit \
     --vali_dataset="$VALI_FPATH" \
     --test_dataset="$TEST_FPATH" \
     --channels="$CHANNELS" \
-    --num_workers=2 \
+    --num_workers=1 \
     --init="$INITIAL_STATE" 
 
 
