@@ -20,6 +20,9 @@ spec:
     - name: dvc-access-secret-volume
       secret:
         secretName: dvc-gitlab-access-token
+    - name: dshm
+      emptyDir:
+        medium: Memory
   templates:
   - name: ta2-train-init
     container:
@@ -73,3 +76,5 @@ spec:
       volumeMounts:
         - name: dvc-access-secret-volume
           mountPath: "/secret/dvc-access-secret-mountpath"
+        - name: dshm
+          mountPath: /dev/shm
