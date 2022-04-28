@@ -16,6 +16,9 @@ EVAL_GLOB_PATTERNS = {
 
 
 def main():
+    """
+    from watch.tasks.fusion.sync_machine_dvc_state import *  # NOQA
+    """
     import watch
     dvc_hdd_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
 
@@ -23,6 +26,11 @@ def main():
         dvc_ssd_dpath = watch.find_smart_dvc_dpath(hardware='ssd')
     except Exception:
         dvc_ssd_dpath = None
+
+    if dvc_ssd_dpath is not None:
+        dvc_dpath = dvc_hdd_dpath
+        dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath)
+        dvc.git_pull()
 
     # dvc_ssd_dpath = watch.find_smart_dvc_dpath(hardware='ssd')
     # dvc_dpaths = [

@@ -124,8 +124,8 @@ python -c "import torch; print(torch.cuda.device_count())"
 #export AWS_DEFAULT_PROFILE=iarpa
 #export AWS_REQUEST_PAYER='requester'
 
-apt-get update
-apt-get install unzip -y
+#apt-get update
+#apt-get install unzip -y
 
 cd "$SMART_DVC_DPATH"
 ls -al
