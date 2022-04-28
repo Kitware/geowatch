@@ -35,18 +35,18 @@ def main():
     dvc.git_pull()
 
     from watch.tasks.fusion import repackage
-
-    repackage.gather_checkpoints(dvc_dpath)
+    mode = 'list'
+    sync_checkpoints(dvc_dpath, mode=mode)
 
     eval_df = evaluation_state(dvc_dpath)
 
 
-def sync_checkpoints(dvc_dpath):
+def sync_checkpoints(dvc_dpath, mode='list'):
     from watch.tasks.fusion import repackage
 
     dataset_codes = [
         'Cropped-Drop3-TA1-2022-03-10',
-        'Aligned-Drop3-TA1-2022-03-10'
+        'Aligned-Drop3-TA1-2022-03-10',
         'Aligned-Drop3-L1',
     ]
     # hack for old scheme
@@ -59,15 +59,17 @@ def sync_checkpoints(dvc_dpath):
     code_to_path = {p.name: p for p in train_coded_paths}
 
     for dataset_code in dataset_codes:
-        storage_code = storage_repl.get(dataset_code, dataset_code)
+        print(f'dataset_code={dataset_code}')
         path = code_to_path.get(dataset_code, None)
-        train_dpath = str(path / 'runs/*')
-        storage_dpath = dvc_dpath / 'models/fusion' / storage_code
+        if path is not None:
+            storage_code = storage_repl.get(dataset_code, dataset_code)
+            train_dpath = str(path / 'runs/*')
+            storage_dpath = dvc_dpath / 'models/fusion' / storage_code
 
-        repackage.gather_checkpoints(
-            dvc_dpath=dvc_dpath, storage_dpath=storage_dpath,
-            train_dpath=train_dpath,
-            mode='list')
+            repackage.gather_checkpoints(
+                dvc_dpath=dvc_dpath, storage_dpath=storage_dpath,
+                train_dpath=train_dpath,
+                mode=mode)
 
 
 def evaluation_state(dvc_dpath):
