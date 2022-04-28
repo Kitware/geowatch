@@ -17,7 +17,7 @@ RUN echo "trying to fix nvidia stuff" && \
     VER=$( (source /etc/os-release && echo "$VERSION_ID") | sed 's/\.//g' ) && \
     NVIDIA_DISTRO=${NAME}${VER} && \
     NVIDIA_DISTRO_ARCH=${NVIDIA_DISTRO}/${INST_ARCH} && \
-    echo "NVIDIA_DISTRO_ARCH = $NVIDIA_DISTRO_ARCH" && 
+    echo "NVIDIA_DISTRO_ARCH = $NVIDIA_DISTRO_ARCH" && \
     apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/"$NVIDIA_DISTRO_ARCH"/3bf863cc.pub
 
 # https://forums.developer.nvidia.com/t/notice-cuda-linux-repository-key-rotation/212772
