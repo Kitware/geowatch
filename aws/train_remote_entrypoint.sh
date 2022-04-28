@@ -125,6 +125,10 @@ python -c "import torch; print(torch.cuda.device_count())"
 #export AWS_REQUEST_PAYER='requester'
 
 cd "$SMART_DVC_DPATH"
+ls -al "$SMART_DVC_DPATH"
+DATASET_CODE=Aligned-Drop3-L1
+ls -al "$SMART_DVC_DPATH/$DATASET_CODE"
+
 dvc pull Aligned-Drop3-L1/splits.zip.dvc -r aws-noprofile --quiet
 dvc pull -R Aligned-Drop3-L1 -r aws-noprofile 
 
@@ -134,6 +138,7 @@ unzip -o splits.zip
 #7z x
 
 DVC_DPATH=$(smartwatch_dvc)
+echo "DVC_DPATH = $DVC_DPATH"
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Aligned-Drop3-L1
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -220,7 +225,7 @@ Execute instructions:
     WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
     argo submit "$WORKFLOW_FPATH" --watch
 
-    # 
+    # Look at semi-live logs
     WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
     NAME_PREFIX=$(yq -r .metadata.generateName "$WORKFLOW_FPATH")
     WORKFLOW_NAME=$(argo list --running | argo list --running | grep "$NAME_PREFIX" | head -n 1 | cut -d" " -f1)
