@@ -1716,6 +1716,9 @@ python -m watch.tasks.fusion.fit \
     --init="$INIT_STATE_V024"
 
 
+
+~/code/watch/scripts/special_reroot.py combo_DILM_s2_wv_*.kwcoco.json
+
 ##### horologic 2022-04-27 invariants
 export CUDA_VISIBLE_DEVICES=0
 DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
@@ -1728,6 +1731,8 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_s2_wv_vali.kwcoco.json
 CHANNELS="blue|green|red,invariants:0:16"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_invar_scratch_V030
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+true || \
+    smartwatch stats "$VALI_FPATH"
 python -m watch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \

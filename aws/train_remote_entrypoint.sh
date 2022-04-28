@@ -108,15 +108,117 @@ python -c "import torch; print(torch.cuda.device_count())"
 
 
 ##### MSI TEST
-export NUM_TOY_TRAIN_VIDS=100
-export NUM_TOY_VALI_VIDS=5
-export NUM_TOY_TEST_VIDS=2
-source "$WATCH_REPO_DPATH/watch/tasks/fusion/experiments/crall/toy_experiments_msi.sh"
+#export NUM_TOY_TRAIN_VIDS=100
+#export NUM_TOY_VALI_VIDS=5
+#export NUM_TOY_TEST_VIDS=2
+#source "$WATCH_REPO_DPATH/watch/tasks/fusion/experiments/crall/toy_experiments_msi.sh"
 
 
 ##### Real work
-#cd "$SMART_DVC_DPATH"
-#dvc pull Aligned-Drop3-L1/splits.zip.dvc -r aws-noprofile --quiet
-#dvc pull -R Aligned-Drop3-L1 -r aws-noprofile 
+export AWS_PROFILE=iarpa
+export AWS_DEFAULT_PROFILE=iarpa
+export AWS_REQUEST_PAYER='requester'
 
-# --quiet
+cd "$SMART_DVC_DPATH"
+dvc pull Aligned-Drop3-L1/splits.zip.dvc -r aws-noprofile --quiet
+dvc pull -R Aligned-Drop3-L1 -r aws-noprofile 
+
+
+DVC_DPATH=$(smartwatch_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-L1
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22"
+INITIAL_STATE="noop"
+EXPERIMENT_NAME=L1_BASELINE_EXPERIMENT_V001
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+
+
+export CUDA_VISIBLE_DEVICES=0
+python -m watch.tasks.fusion.fit \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=L1_Template\
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --channels="$CHANNELS" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=1.00 \
+    --neg_to_pos_ratio=0.25 \
+    --saliency_loss='dicefocal' \
+    --class_loss='dicefocal' \
+    --num_workers=8 \
+    --gpus "0" \
+    --batch_size=1 \
+    --accumulate_grad_batches=1 \
+    --learning_rate=1e-4 \
+    --weight_decay=1e-5 \
+    --dropout=0.1 \
+    --attention_impl=exact \
+    --chip_size=380 \
+    --time_steps=5 \
+    --chip_overlap=0.0 \
+    --time_sampling=soft+distribute \
+    --time_span=7m \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --method="MultimodalTransformer" \
+    --arch_name=smt_it_stm_p8 \
+    --normalize_inputs=1024 \
+    --max_epochs=40 \
+    --patience=40 \
+    --max_epoch_length=none \
+    --draw_interval=5000m \
+    --num_draw=1 \
+    --amp_backend=apex \
+    --init="$INITIAL_STATE" \
+    --num_sanity_val_steps=0 \
+    --dump "$WORKDIR/configs/drop3_l1_baseline_20220425.yaml"
+
+#export CUDA_VISIBLE_DEVICES=0
+#DVC_DPATH=$(smartwatch_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-L1
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22"
+INITIAL_STATE="noop"
+EXPERIMENT_NAME=L1_BASELINE_AWS_V005
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_l1_baseline_20220425.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --channels="$CHANNELS" \
+    --num_workers=4 \
+    --init="$INITIAL_STATE" 
+
+
+__doc__='
+
+Execute instructions:
+
+    cd "$HOME/code/watch/aws"
+    WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
+    argo submit "$WORKFLOW_FPATH" --watch
+
+    # 
+    WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
+    NAME_PREFIX=$(yq -r .metadata.generateName "$WORKFLOW_FPATH")
+    WORKFLOW_NAME=$(argo list --running | argo list --running | grep "$NAME_PREFIX" | head -n 1 | cut -d" " -f1)
+    argo logs "${WORKFLOW_NAME}" --follow
+
+    # Use this to check outputs
+    aws s3 --profile iarpa ls s3://kitware-smart-watch-data/sync_root/ta2-train-xzzwv
+    mkdir -p $HOME/data/aws-sync
+    aws s3 --profile iarpa sync s3://kitware-smart-watch-data/sync_root/ta2-train-xzzwv/ $HOME/data/aws-sync
+'
