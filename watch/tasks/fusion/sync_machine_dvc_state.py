@@ -18,6 +18,12 @@ EVAL_GLOB_PATTERNS = {
 def main():
     import watch
     dvc_hdd_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
+
+    try:
+        dvc_ssd_dpath = watch.find_smart_dvc_dpath(hardware='ssd')
+    except Exception:
+        dvc_ssd_dpath = None
+
     # dvc_ssd_dpath = watch.find_smart_dvc_dpath(hardware='ssd')
     # dvc_dpaths = [
     #     dvc_ssd_dpath,
@@ -25,6 +31,43 @@ def main():
     # ]
     # dvc_dpath = dvc_ssd_dpath
     dvc_dpath = dvc_hdd_dpath
+    dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath)
+    dvc.git_pull()
+
+    from watch.tasks.fusion import repackage
+
+    repackage.gather_checkpoints(dvc_dpath)
+
+    eval_df = evaluation_state(dvc_dpath)
+
+
+def sync_checkpoints(dvc_dpath):
+    from watch.tasks.fusion import repackage
+
+    dataset_codes = [
+        'Cropped-Drop3-TA1-2022-03-10',
+        'Aligned-Drop3-TA1-2022-03-10'
+        'Aligned-Drop3-L1',
+    ]
+    # hack for old scheme
+    storage_repl = {
+        'Aligned-Drop3-TA1-2022-03-10': 'eval3_candidates',
+        'Cropped-Drop3-TA1-2022-03-10': 'eval3_sc_candidates',
+    }
+
+    train_coded_paths = list((dvc_dpath / "training").glob('*/*/*'))
+    code_to_path = {p.name: p for p in train_coded_paths}
+
+    for dataset_code in dataset_codes:
+        storage_code = storage_repl.get(dataset_code, dataset_code)
+        path = code_to_path.get(dataset_code, None)
+        train_dpath = str(path / 'runs/*')
+        storage_dpath = dvc_dpath / 'models/fusion' / storage_code
+
+        repackage.gather_checkpoints(
+            dvc_dpath=dvc_dpath, storage_dpath=storage_dpath,
+            train_dpath=train_dpath,
+            mode='list')
 
 
 def evaluation_state(dvc_dpath):
@@ -71,6 +114,7 @@ def evaluation_state(dvc_dpath):
 
     import pandas as pd
     eval_df = pd.DataFrame(eval_rows)
+    print(eval_df.drop(['type', 'raw', 'dvc'], axis=1).sum().to_frame().T)
     print(eval_df.groupby('type').sum())
     return eval_df
 

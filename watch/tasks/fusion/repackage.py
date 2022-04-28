@@ -155,7 +155,8 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
 
     lightning_log_dpaths = util_path.coerce_patterned_paths(train_dpath)
     lightning_log_dpaths = [ub.Path(p) for p in lightning_log_dpaths]
-    print('lightning_log_dpaths = {}'.format(ub.repr2(lightning_log_dpaths, nl=1)))
+    if 0:
+        print('lightning_log_dpaths = {}'.format(ub.repr2(lightning_log_dpaths, nl=1)))
 
     # for p in lightning_log_dpaths:
     #     pass
@@ -190,7 +191,8 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         checkpoint_fpaths = list(ub.unique(
             sorted(checkpoint_fpaths), key=remove_v_suffix))
 
-        print('checkpoint_fpaths = {}'.format(ub.repr2(checkpoint_fpaths, nl=1)))
+        if 0:
+            print('checkpoint_fpaths = {}'.format(ub.repr2(checkpoint_fpaths, nl=1)))
 
         for checkpoint_fpath in checkpoint_fpaths:
             if checkpoint_fpath.name.endswith('.ckpt'):

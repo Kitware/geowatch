@@ -7,24 +7,29 @@ ARG BUILD_STRICT=0
 
 # Note:
 # Nvidia updated the signing key
+# https://forums.developer.nvidia.com/t/notice-cuda-linux-repository-key-rotation/212772
+# https://forums.developer.nvidia.com/t/failed-to-fetch-https-developer-download-nvidia-com-compute-machine-learning-repos-ubuntu1804-x86-64-packages-gz/156287/3
+
 #sudo apt-key del 7fa2af80
 #wget https://developer.download.nvidia.com/compute/cuda/repos/$distro/$arch/cuda-keyring_1.0-1_all.deb
 
-RUN echo "trying to fix nvidia stuff" && \
-    apt-key del 7fa2af80 && \
-    INST_ARCH=$(uname -m) && echo $INST_ARCH && \
-    NAME=$( (. /etc/os-release && echo "$NAME") | tr '[:upper:]' '[:lower:]' ) && \
-    VER=$( (. /etc/os-release && echo "$VERSION_ID") | sed 's/\.//g' ) && \
-    NVIDIA_DISTRO=${NAME}${VER} && \
-    NVIDIA_DISTRO_ARCH=${NVIDIA_DISTRO}/${INST_ARCH} && \
-    echo "NVIDIA_DISTRO_ARCH = $NVIDIA_DISTRO_ARCH" && \
-    apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/"$NVIDIA_DISTRO_ARCH"/3bf863cc.pub
+RUN echo "trying to fix nvidia stuff" && 
+    rm /etc/apt/sources.list.d/cuda.list /etc/apt/sources.list.d/nvidia-ml.list && apt-get clean 
 
-# https://forums.developer.nvidia.com/t/notice-cuda-linux-repository-key-rotation/212772
+#RUN echo "trying to fix nvidia stuff" && \
+#    apt-key del 7fa2af80 && \
+#    INST_ARCH=$(uname -m) && echo $INST_ARCH && \
+#    NAME=$( (. /etc/os-release && echo "$NAME") | tr '[:upper:]' '[:lower:]' ) && \
+#    VER=$( (. /etc/os-release && echo "$VERSION_ID") | sed 's/\.//g' ) && \
+#    NVIDIA_DISTRO=${NAME}${VER} && \
+#    NVIDIA_DISTRO_ARCH=${NVIDIA_DISTRO}/${INST_ARCH} && \
+#    echo "NVIDIA_DISTRO_ARCH = $NVIDIA_DISTRO_ARCH" && \
+#    apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/"$NVIDIA_DISTRO_ARCH"/3bf863cc.pub
+
 #wget "https://developer.download.nvidia.com/compute/cuda/repos/${NVIDIA_DISTRO_ARCH}/cuda-keyring_1.0-1_all.deb"
 # sudo dpkg -i cuda-keyring_1.0-1_all.deb
 
-RUN (apt-get update -q || true) && \
+RUN apt-get update && \
     apt-get install -q -y --no-install-recommends \
         bzip2 \
         ca-certificates \
