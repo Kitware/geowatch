@@ -384,14 +384,15 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     import platform
     hostname = platform.node()
 
-    git_info3 = ub.cmd(f'git commit -am "new models from {hostname}"', verbose=3, check=True, cwd=dvc_dpath)  # dangerous?
-    assert git_info3['ret'] == 0
-    try:
-        git_info2 = ub.cmd('git push', verbose=3, check=True, cwd=dvc_dpath)
-    except Exception:
-        git_info2 = ub.cmd('git pull', verbose=3, check=True, cwd=dvc_dpath)
-        git_info2 = ub.cmd('git push', verbose=3, check=True, cwd=dvc_dpath)
-        assert git_info2['ret'] == 0
+    if toadd_expt_fpaths:
+        git_info3 = ub.cmd(f'git commit -am "new models from {hostname}"', verbose=3, check=True, cwd=dvc_dpath)  # dangerous?
+        assert git_info3['ret'] == 0
+        try:
+            git_info2 = ub.cmd('git push', verbose=3, check=True, cwd=dvc_dpath)
+        except Exception:
+            git_info2 = ub.cmd('git pull', verbose=3, check=True, cwd=dvc_dpath)
+            git_info2 = ub.cmd('git push', verbose=3, check=True, cwd=dvc_dpath)
+            assert git_info2['ret'] == 0
 
     if mode == 'commit':
         return
