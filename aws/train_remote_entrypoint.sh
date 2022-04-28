@@ -130,7 +130,10 @@ DATASET_CODE=Aligned-Drop3-L1
 ls -al "$SMART_DVC_DPATH/$DATASET_CODE"
 
 dvc pull Aligned-Drop3-L1/splits.zip.dvc -r aws-noprofile 
-apt-get install unzip
+
+apt update
+apt install unzip -y
+
 unzip -o splits.zip
 dvc pull -R Aligned-Drop3-L1 -r aws-noprofile 
 
@@ -221,8 +224,7 @@ __doc__='
 
 Execute instructions:
 
-    WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
-    argo submit "$WORKFLOW_FPATH" --watch
+    WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml argo submit "$WORKFLOW_FPATH" --watch
 
     WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
     NAME_PREFIX=$(yq -r .metadata.generateName "$WORKFLOW_FPATH")
