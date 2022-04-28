@@ -196,6 +196,8 @@ prep_features(){
         --depth_workers=0 \
         --cache=1 --backend=tmux --run=0
 
+    python ~/code/watch/scripts/special_reroot.py combo_DILM_s2_wv_*.kwcoco.json
+
     # Or rsync features
 
     rsync -azvprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./_assets ooo:data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10
@@ -216,7 +218,31 @@ prep_features(){
 
     # Move to ssd on horologic
     rsync -azvprRP "$HOME"/data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10/./_assets "$HOME"/data/dvc-repos/smart_watch_dvc-ssd/Cropped-Drop3-TA1-2022-03-10
-    rsync -azvprRP "$HOME"/data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10/./combo* "$HOME"/data/dvc-repos/smart_watch_dvc-ssd/Cropped-Drop3-TA1-2022-03-10
+    rsync -azvprRP "$HOME"/data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10/./combo_DILM_s2_wv* "$HOME"/data/dvc-repos/smart_watch_dvc-ssd/Cropped-Drop3-TA1-2022-03-10
+
+    FNAME=combo_DILM_s2_wv_train.kwcoco.json
+    FNAME=combo_DILM_s2_wv_vali.kwcoco.json
+
+                     '/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10'
+    kwcoco reroot --src $FNAME --dst $FNAME \
+        --old_prefix="/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10" --new_prefix="" \
+        --new_prefix="" --absolute=False
+    kwcoco validate $FNAME --require_relative=True
+
+    kwcoco reroot --src combo_DILM_s2_wv_vali.kwcoco.json --dst combo_DILM_s2_wv_vali.kwcoco \
+        --old_prefix="/data/projects/smart/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10" \
+        --new_prefix="" --absolute=False
+
+    kwcoco reroot --src combo_DILM_nowv_vali.kwcoco.json --dst combo_DILM_nowv_vali.kwcoco.json \
+        --old_prefix="/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10" \
+        --new_prefix="" --absolute=False
+
+    kwcoco validate combo_DILM_nowv_train.kwcoco.json --require_relative=True
+
+    FNAME=combo_DILM_s2_wv_vali.kwcoco.json
+    kwcoco validate $FNAME --require_relative=True
+    FNAME=combo_DILM_s2_wv_train.kwcoco.json
+    kwcoco validate $FNAME --require_relative=True
 
 }
 
@@ -1717,11 +1743,10 @@ python -m watch.tasks.fusion.fit \
 
 
 
-~/code/watch/scripts/special_reroot.py combo_DILM_s2_wv_*.kwcoco.json
 
 ##### horologic 2022-04-27 invariants
 export CUDA_VISIBLE_DEVICES=0
-DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
@@ -1731,8 +1756,10 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_s2_wv_vali.kwcoco.json
 CHANNELS="blue|green|red,invariants:0:16"
 EXPERIMENT_NAME=CropDrop3_SC_s2wv_invar_scratch_V030
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-true || \
-    smartwatch stats "$VALI_FPATH"
+#true || \
+#    smartwatch stats "$VALI_FPATH"
+#true || \
+#    kwcoco validate "$VALI_FPATH" --require_relative=True
 python -m watch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
