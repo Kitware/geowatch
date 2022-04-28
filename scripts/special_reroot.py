@@ -8,8 +8,10 @@ def main(*src):
     fpaths = util_path.coerce_patterned_paths(src)
     if len(src) == 0:
         max_workers = 0
+        verbose = 1
     else:
         max_workers = min(len(src), 8)
+    print(f'max_workers={max_workers}')
     jobs = ub.JobPool('process', max_workers=max_workers)
     verbose = 0
     for coco_fpath in ub.ProgIter(fpaths, desc='special reroot coco', verbose=3):
