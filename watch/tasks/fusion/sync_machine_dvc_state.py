@@ -7,30 +7,36 @@ import platform
 from watch.utils import simple_dvc
 
 
-EVAL_GLOB_PATTERNS = [
-    'models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json',
-    'models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json',
-    'models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json',
-    'models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json',
-]
+EVAL_GLOB_PATTERNS = {
+    'pxl_10': 'models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json',
+    'trk_10': 'models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json',
+    'pxl_1': 'models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json',
+    'act_1': 'models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json',
+}
 
 
 def main():
     import watch
     dvc_hdd_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
-    dvc_ssd_dpath = watch.find_smart_dvc_dpath(hardware='ssd')
-    dvc_dpaths = [
-        dvc_ssd_dpath,
-        dvc_hdd_dpath
-    ]
+    # dvc_ssd_dpath = watch.find_smart_dvc_dpath(hardware='ssd')
+    # dvc_dpaths = [
+    #     dvc_ssd_dpath,
+    #     dvc_hdd_dpath
+    # ]
+    # dvc_dpath = dvc_ssd_dpath
     dvc_dpath = dvc_hdd_dpath
-    dvc_dpath = dvc_ssd_dpath
 
 
 def evaluation_state(dvc_dpath):
-    found = []
-    for s in EVAL_GLOB_PATTERNS:
-        raw_pat = str(dvc_dpath / s)
+    """
+    Get a list of dictionaries with information for each known evaluation.
+
+    Information includes its real path if it exists, its dvc path if it exists
+    and what sort of actions need to be done to synchronize it.
+    """
+    eval_rows = []
+    for type, suffix in EVAL_GLOB_PATTERNS.items():
+        raw_pat = str(dvc_dpath / suffix)
         dvc_pat = raw_pat + '.dvc'
         found_raw = list(glob.glob(raw_pat))
         found_dvc = list(glob.glob(dvc_pat))
@@ -40,9 +46,12 @@ def evaluation_state(dvc_dpath):
             row = lut.setdefault(k, {})
             row.setdefault('raw', None)
             row['dvc'] = found_dvc
-        found.extend(list(lut.values()))
+        rows = list(lut.values())
+        for row in rows:
+            row['type'] = type
+        eval_rows.extend(rows)
 
-    for row in found:
+    for row in eval_rows:
         row['has_dvc'] = (row['dvc'] is not None)
         row['has_raw'] = (row['raw'] is not None)
         row['has_both'] = row['has_dvc'] and row['has_raw']
@@ -61,41 +70,34 @@ def evaluation_state(dvc_dpath):
                 row['unprotected'] = not row['is_link']
 
     import pandas as pd
-    df = pd.DataFrame(found)
-    print(df.sum())
-    return found
+    eval_df = pd.DataFrame(eval_rows)
+    print(eval_df.groupby('type').sum())
+    return eval_df
 
 
 def pull_all_evals(dvc_dpath):
     dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath)
     dvc.git_pull()
-    found = evaluation_state(dvc_dpath)
-
-    pull_rows = [row for row in found if row['needs_pull']]
-    pull_fpaths = [row['dvc'] for row in pull_rows]
-
+    eval_df = evaluation_state(dvc_dpath)
+    pull_fpaths = eval_df[eval_df.needs_pull]['dvc'].tolist()
     dvc.pull(pull_fpaths, remote='aws')
 
 
 def commit_unstaged_evals(dvc_dpath):
     dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath)
 
-    found = evaluation_state(dvc_dpath)
+    eval_df = evaluation_state(dvc_dpath)
 
-    for row in found:
-        if not row['is_link']:
-            assert not row['has_dvc'], 'probably not tracked'
+    is_weird = (eval_df.is_link & (~eval_df.has_dvc))
+    weird_df = eval_df[is_weird]
+    if len(weird_df):
+        print(f'weird_df=\n{weird_df}')
 
-    unstaged = []
-    for p in found:
-        path = ub.Path(p)
-        if not path.is_symlink():
-            unstaged.append(path)
+    to_push = eval_df[eval_df.needs_push == True]  # NOQA
+    assert not to_push['has_dvc'].any()
+    to_push_fpaths = to_push['raw'].tolist()
+    print(f'to_push=\n{to_push}')
 
-    for path in unstaged:
-        dvc_path = path.augment(tail='.dvc')
-        assert not dvc_path.exists()
-
-    dvc.add(unstaged)
+    dvc.add(to_push_fpaths)
     dvc.git_commitpush(f'Sync models from {platform.node()}')
-    dvc.push(unstaged, remote='aws')
+    dvc.push(to_push_fpaths, remote='aws')

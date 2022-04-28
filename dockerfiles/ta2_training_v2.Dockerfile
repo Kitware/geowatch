@@ -7,14 +7,24 @@ ARG BUILD_STRICT=0
 
 # Note:
 # Nvidia updated the signing key
+#sudo apt-key del 7fa2af80
+#wget https://developer.download.nvidia.com/compute/cuda/repos/$distro/$arch/cuda-keyring_1.0-1_all.deb
 
+RUN echo "trying to fix nvidia stuff" && \
+    apt-key del 7fa2af80 && \
+    INST_ARCH=$(uname -m) && echo $INST_ARCH && \
+    NAME=$( (source /etc/os-release && echo "$NAME") | tr '[:upper:]' '[:lower:]' ) && \
+    VER=$( (source /etc/os-release && echo "$VERSION_ID") | sed 's/\.//g' ) && \
+    NVIDIA_DISTRO=${NAME}${VER} && \
+    NVIDIA_DISTRO_ARCH=${NVIDIA_DISTRO}/${INST_ARCH} && \
+    echo "NVIDIA_DISTRO_ARCH = $NVIDIA_DISTRO_ARCH" && 
+    apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/"$NVIDIA_DISTRO_ARCH"/3bf863cc.pub
 
-sudo apt-key del 7fa2af80
+# https://forums.developer.nvidia.com/t/notice-cuda-linux-repository-key-rotation/212772
+#wget "https://developer.download.nvidia.com/compute/cuda/repos/${NVIDIA_DISTRO_ARCH}/cuda-keyring_1.0-1_all.deb"
+# sudo dpkg -i cuda-keyring_1.0-1_all.deb
 
-wget https://developer.download.nvidia.com/compute/cuda/repos/$distro/$arch/cuda-keyring_1.0-1_all.deb
-
-
-RUN apt-get update -q && \
+RUN (apt-get update -q || true) && \
     apt-get install -q -y --no-install-recommends \
         bzip2 \
         ca-certificates \
