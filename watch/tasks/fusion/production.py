@@ -8,6 +8,7 @@ This also contains metadata about what data the models expect to run on.
 PRODUCTION_MODELS = [
     {
         'name': 'BAS_smt_it_stm_p8_TUNE_L1_RAW_v58_epoch=3-step=81135',
+        'gsd': 10.0,
         'task': 'BAS',
         'file_name': 'models/fusion/SC-20201117/BAS_smt_it_stm_p8_TUNE_L1_RAW_v58/BAS_smt_it_stm_p8_TUNE_L1_RAW_v58_epoch=3-step=81135.pt',
         'input_channels': 'blue|green|red|nir|swir16|swir22',
@@ -16,6 +17,7 @@ PRODUCTION_MODELS = [
     },
     {
         'name': 'BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819',
+        'gsd': 10.0,
         'task': 'SC',
         'file_name': 'models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819.pt',
         'input_channels': 'blue|green|red|nir|swir16|swir22,depth,invariants:6|before_after_heatmap|segmentation_heatmap,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field',
@@ -26,6 +28,7 @@ PRODUCTION_MODELS = [
     {
         'name': 'SC_smt_it_stm_p8_TA1_xfer55_v70_epoch=34-step=71679',
         'file_name': 'models/fusion/SC-20201117/SC_smt_it_stm_p8_TA1_xfer55_v70/SC_smt_it_stm_p8_TA1_xfer55_v70_epoch=34-step=71679.pt',
+        'gsd': 10.0,
         'task': 'SC',
         'train_dataset': 'Drop2-Aligned-L1-2022-01/combo_L_nowv_train.kwcoco.json',
         'sensors': ['L8', 'S2'],
@@ -35,6 +38,7 @@ PRODUCTION_MODELS = [
     {
         'name': 'BAS_TA1_c001_v076_epoch=90-step=186367',
         'file_name': 'models/fusion/SC-20201117/BAS_TA1_c001_v076/BAS_TA1_c001_v076_epoch=90-step=186367.pt',
+        'gsd': 10.0,
         'task': 'BAS',
         'train_dataset': 'Drop2-Aligned-L1-2022-01/combo_L_nowv_train.kwcoco.json',
         'sensors': ['L8', 'S2'],
@@ -44,6 +48,7 @@ PRODUCTION_MODELS = [
     {
         'name': 'BAS_TA1_c001_v082_epoch=42-step=88063',
         'file_name': 'models/fusion/SC-20201117/BAS_TA1_c001_v082/BAS_TA1_c001_v082_epoch=42-step=88063.pt',
+        'gsd': 10.0,
         'task': 'BAS',
         'train_dataset': 'Drop2-Aligned-L1-2022-01/combo_L_nowv_train.kwcoco.json',
         'sensors': ['L8', 'S2'],
@@ -53,6 +58,7 @@ PRODUCTION_MODELS = [
     {
         'name': 'BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917',
         'file_name': 'models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917.pt',
+        'gsd': 10.0,
         'task': 'BAS',
         'train_dataset': 'Drop2-Aligned-L1-2022-01/combo_L_nowv.kwcoco.json',
         'sensors': ['L8', 'S2'],
@@ -62,11 +68,42 @@ PRODUCTION_MODELS = [
     {
         'name': 'Drop3_SpotCheck_V323_epoch=18-step=12976',
         'file_name': 'models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt',
+        'gsd': 10.0,
         'task': 'BAS',
         'input_channels': 'blue|green|red|nir|swir16|swir22',
         'train_dataset': 'Aligned-Drop3-TA1-2022-03-10/data_nowv_train.kwcoco.json',
         'sensors': ['L8', 'S2'],
     },
+
+    {
+        'name': 'Drop3_SpotCheck_V323_epoch=18-step=12976.pt ',
+        'file_name': 'models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt',
+        'task': 'BAS',
+        'gsd': 10.0,
+        'input_channels': 'blue|green|red|nir|swir16|swir22',
+        'train_dataset': 'Aligned-Drop3-TA1-2022-03-10/data_nowv_train.kwcoco.json',
+        'sensors': ['L8', 'S2'],
+        # TODO: populate this with summary measures so we can get a gist of the model "quality" from this list
+        'measures': {
+            'salient_AP': 0.27492,
+            'BAS_F1': 0.34782,
+        }
+    },
+    {
+        'name': 'CropDrop3_SC_V006_epoch=71-step=18431.pt',
+        'file_name': 'models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V006/CropDrop3_SC_V006_epoch=71-step=18431.pt',
+        'task': 'SC',
+        'gsd': 1.0,
+        'input_channels': 'red|green|blue',
+        'train_dataset': 'Cropped-Drop3-TA1-2022-03-10/data_s2_wv_train.kwcoco.json',
+        'sensors': ['L8', 'S2'],
+        # TODO: populate this with summary measures so we can get a gist of the model "quality" from this list
+        'measures': {
+            'coi_mAP': 0.336,
+            'mean_F1': 0.4489,
+        }
+    },
+
 
 
 ]

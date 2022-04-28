@@ -178,7 +178,9 @@ class predict(object):
             'warp_aux_to_img': warp_aux_to_img.concise(),
             'quantization': quantization,
         }
-        auxiliary = img.setdefault('auxiliary', [])
+        if 'auxiliary' not in img:
+            img['auxiliary'] = []
+        auxiliary = img['auxiliary']
         auxiliary.append(aux)
 
     def forward(self, args):

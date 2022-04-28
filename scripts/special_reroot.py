@@ -6,7 +6,11 @@ from watch.utils import util_path
 
 def main(*src):
     fpaths = util_path.coerce_patterned_paths(src)
-    jobs = ub.JobPool('process', max_workers=8)
+    if len(src) == 0:
+        max_workers = 0
+    else:
+        max_workers = min(len(src), 8)
+    jobs = ub.JobPool('process', max_workers=max_workers)
     verbose = 0
     for coco_fpath in ub.ProgIter(fpaths, desc='special reroot coco', verbose=3):
         jobs.submit(special_reroot_worker, coco_fpath, verbose=verbose)
