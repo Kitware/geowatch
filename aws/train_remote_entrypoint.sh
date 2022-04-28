@@ -120,9 +120,9 @@ python -c "import torch; print(torch.cuda.device_count())"
 
 
 ##### Real work
-export AWS_PROFILE=iarpa
-export AWS_DEFAULT_PROFILE=iarpa
-export AWS_REQUEST_PAYER='requester'
+#export AWS_PROFILE=iarpa
+#export AWS_DEFAULT_PROFILE=iarpa
+#export AWS_REQUEST_PAYER='requester'
 
 cd "$SMART_DVC_DPATH"
 dvc pull Aligned-Drop3-L1/splits.zip.dvc -r aws-noprofile --quiet
