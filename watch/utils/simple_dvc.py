@@ -130,15 +130,21 @@ class SimpleDVC(ub.NiceRepr):
         TODO: better name here?
         """
         # dangerous?
-        self.git_commit(message)
         try:
-            self.git_push()
-        except Exception:
-            if pull_on_fail:
-                self.git_pull()
-                self.git_push()
-            else:
+            self.git_commit(message)
+        except Exception as e:
+            ex = e
+            if 'nothing added to commit' not in ex.output:
                 raise
+        else:
+            try:
+                self.git_push()
+            except Exception:
+                if pull_on_fail:
+                    self.git_pull()
+                    self.git_push()
+                else:
+                    raise
 
     def push(self, path, remote=None, recursive=False, jobs=None):
         from dvc import main as dvc_main
