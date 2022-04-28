@@ -18,7 +18,7 @@ exec_shell_into_pod(){
     WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
     NAME_PREFIX=$(yq -r .metadata.generateName "$WORKFLOW_FPATH")
     WORKFLOW_NAME=$(argo list --running | argo list --running | grep "$NAME_PREFIX" | head -n 1 | cut -d" " -f1)
-    kubectl exec "$WORKFLOW_NAME" -- ls -al /root
+    #kubectl exec "$WORKFLOW_NAME" -- ls -al /root
     kubectl exec --stdin --tty "$WORKFLOW_NAME" -- /bin/bash
 }
 
