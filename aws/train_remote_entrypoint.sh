@@ -130,6 +130,7 @@ DATASET_CODE=Aligned-Drop3-L1
 ls -al "$SMART_DVC_DPATH/$DATASET_CODE"
 
 dvc pull Aligned-Drop3-L1/splits.zip.dvc -r aws-noprofile 
+sudo apt-get install unzip
 unzip -o splits.zip
 dvc pull -R Aligned-Drop3-L1 -r aws-noprofile 
 
