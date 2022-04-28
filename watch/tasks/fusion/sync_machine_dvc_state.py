@@ -45,7 +45,9 @@ def main():
     sync_checkpoints(dvc_dpath, mode='list')
     sync_checkpoints(dvc_dpath, mode=mode)
 
-    eval_df = evaluation_state(dvc_dpath)
+    # eval_df = evaluation_state(dvc_dpath)
+    push_unstaged_evals(dvc_dpath)
+    pull_nonlocal_evals(dvc_dpath)
 
 
 def sync_checkpoints(dvc_dpath, mode='list'):
@@ -103,6 +105,8 @@ def evaluation_state(dvc_dpath):
             row['type'] = type
         eval_rows.extend(rows)
 
+    import numpy as np
+
     for row in eval_rows:
         row['has_dvc'] = (row['dvc'] is not None)
         row['has_raw'] = (row['raw'] is not None)
@@ -110,9 +114,9 @@ def evaluation_state(dvc_dpath):
 
         row['needs_pull'] = row['has_dvc'] and not row['has_raw']
 
-        row['is_link'] = None
-        row['unprotected'] = None
-        row['needs_push'] = None
+        row['is_link'] = np.nan
+        row['unprotected'] = np.nan
+        row['needs_push'] = np.nan
 
         if row['has_raw']:
             p = ub.Path(row['raw'])
@@ -128,7 +132,7 @@ def evaluation_state(dvc_dpath):
     return eval_df
 
 
-def pull_all_evals(dvc_dpath):
+def pull_nonlocal_evals(dvc_dpath):
     dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath)
     dvc.git_pull()
     eval_df = evaluation_state(dvc_dpath)
@@ -136,7 +140,7 @@ def pull_all_evals(dvc_dpath):
     dvc.pull(pull_fpaths, remote='aws')
 
 
-def commit_unstaged_evals(dvc_dpath):
+def push_unstaged_evals(dvc_dpath):
     dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath)
 
     eval_df = evaluation_state(dvc_dpath)

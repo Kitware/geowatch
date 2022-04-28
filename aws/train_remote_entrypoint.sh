@@ -133,7 +133,7 @@ DATASET_CODE=Aligned-Drop3-L1
 cd "$SMART_DVC_DPATH/$DATASET_CODE"
 ls -al
 
-# sleep 28800
+sleep 28800
 
 dvc pull splits.zip.dvc -r aws-noprofile 
 unzip -o splits.zip
