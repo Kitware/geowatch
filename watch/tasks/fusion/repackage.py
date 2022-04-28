@@ -218,13 +218,15 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         name = package_fpath.name.split('_epoch')[0]
         name_dpath = storage_dpath / name
         name_fpath = name_dpath / package_fpath.name
+        dvc_name_fpath = name_fpath.augment(tail='.dvc')
         row['package_fpath'] = package_fpath
         row['name'] = name
         row['name_fpath'] = name_fpath
         row['was_packaged'] = package_fpath.exists()
-        row['was_copied'] = name_fpath.exists()
+        row['was_copied'] = name_fpath.exists() or dvc_name_fpath.exists()
         row['needs_repackage'] = not row['was_packaged']
         row['needs_copy'] = not row['was_copied']
+
         row['repackage_failed'] = 0
         row['repackage_passed'] = 0
         # name_dpath.ensuredir()
