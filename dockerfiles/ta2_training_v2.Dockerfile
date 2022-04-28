@@ -13,8 +13,8 @@ ARG BUILD_STRICT=0
 RUN echo "trying to fix nvidia stuff" && \
     apt-key del 7fa2af80 && \
     INST_ARCH=$(uname -m) && echo $INST_ARCH && \
-    NAME=$( (source /etc/os-release && echo "$NAME") | tr '[:upper:]' '[:lower:]' ) && \
-    VER=$( (source /etc/os-release && echo "$VERSION_ID") | sed 's/\.//g' ) && \
+    NAME=$( (. /etc/os-release && echo "$NAME") | tr '[:upper:]' '[:lower:]' ) && \
+    VER=$( (. /etc/os-release && echo "$VERSION_ID") | sed 's/\.//g' ) && \
     NVIDIA_DISTRO=${NAME}${VER} && \
     NVIDIA_DISTRO_ARCH=${NVIDIA_DISTRO}/${INST_ARCH} && \
     echo "NVIDIA_DISTRO_ARCH = $NVIDIA_DISTRO_ARCH" && \
