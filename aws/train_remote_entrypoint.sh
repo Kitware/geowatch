@@ -130,9 +130,8 @@ DATASET_CODE=Aligned-Drop3-L1
 ls -al "$SMART_DVC_DPATH/$DATASET_CODE"
 
 dvc pull Aligned-Drop3-L1/splits.zip.dvc -r aws-noprofile 
-dvc pull -R Aligned-Drop3-L1 -r aws-noprofile --quiet
-
 unzip -o splits.zip
+dvc pull -R Aligned-Drop3-L1 -r aws-noprofile 
 
 #sudo apt install p7zip-full
 #7z x
@@ -221,11 +220,9 @@ __doc__='
 
 Execute instructions:
 
-    cd "$HOME/code/watch/aws"
     WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
     argo submit "$WORKFLOW_FPATH" --watch
 
-    # Look at semi-live logs
     WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
     NAME_PREFIX=$(yq -r .metadata.generateName "$WORKFLOW_FPATH")
     WORKFLOW_NAME=$(argo list --running | argo list --running | grep "$NAME_PREFIX" | head -n 1 | cut -d" " -f1)
