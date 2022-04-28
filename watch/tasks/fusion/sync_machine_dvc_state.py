@@ -20,6 +20,7 @@ def main():
     from watch.tasks.fusion.sync_machine_dvc_state import *  # NOQA
     """
     import watch
+    from watch.tasks.fusion import repackage
     dvc_hdd_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
 
     try:
@@ -28,22 +29,17 @@ def main():
         dvc_ssd_dpath = None
 
     if dvc_ssd_dpath is not None:
+        # If the SSD has stuff, add it, but the HDD is primary
         dvc_dpath = dvc_hdd_dpath
         dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath)
         dvc.git_pull()
 
-    # dvc_ssd_dpath = watch.find_smart_dvc_dpath(hardware='ssd')
-    # dvc_dpaths = [
-    #     dvc_ssd_dpath,
-    #     dvc_hdd_dpath
-    # ]
-    # dvc_dpath = dvc_ssd_dpath
+    # HDD part
     dvc_dpath = dvc_hdd_dpath
     dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath)
     dvc.git_pull()
 
-    from watch.tasks.fusion import repackage
-    mode = 'list'
+    mode = 'commit'
     sync_checkpoints(dvc_dpath, mode=mode)
 
     eval_df = evaluation_state(dvc_dpath)
