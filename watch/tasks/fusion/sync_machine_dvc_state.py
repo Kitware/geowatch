@@ -71,7 +71,7 @@ def sync_checkpoints(dvc_dpath, mode='list'):
         if path is not None:
             storage_code = storage_repl.get(dataset_code, dataset_code)
             train_dpath = str(path / 'runs/*')
-            storage_dpath = dvc_dpath / 'models/fusion' / storage_code
+            storage_dpath = dvc_dpath / 'models/fusion' / storage_code / 'packages'
 
             repackage.gather_checkpoints(
                 dvc_dpath=dvc_dpath, storage_dpath=storage_dpath,
