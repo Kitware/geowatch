@@ -16,6 +16,8 @@ RUN apt-get update -q && \
         mercurial \
         subversion \
         wget jq \
+        p7zip-full \
+        unzip \
         ssh tmux tree curl iputils-ping \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*

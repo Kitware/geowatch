@@ -124,18 +124,18 @@ python -c "import torch; print(torch.cuda.device_count())"
 #export AWS_DEFAULT_PROFILE=iarpa
 #export AWS_REQUEST_PAYER='requester'
 
+apt-get update
+apt-get install unzip -y
+
 cd "$SMART_DVC_DPATH"
-ls -al "$SMART_DVC_DPATH"
+ls -al
 DATASET_CODE=Aligned-Drop3-L1
-ls -al "$SMART_DVC_DPATH/$DATASET_CODE"
+cd "$SMART_DVC_DPATH/$DATASET_CODE"
+ls -al
 
-dvc pull Aligned-Drop3-L1/splits.zip.dvc -r aws-noprofile 
-
-apt update
-apt install unzip -y
-
+dvc pull splits.zip.dvc -r aws-noprofile 
 unzip -o splits.zip
-dvc pull -R Aligned-Drop3-L1 -r aws-noprofile 
+dvc pull -R . -r aws-noprofile 
 
 #sudo apt install p7zip-full
 #7z x
@@ -226,10 +226,13 @@ Execute instructions:
 
     WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml argo submit "$WORKFLOW_FPATH" --watch
 
-    WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
-    NAME_PREFIX=$(yq -r .metadata.generateName "$WORKFLOW_FPATH")
-    WORKFLOW_NAME=$(argo list --running | argo list --running | grep "$NAME_PREFIX" | head -n 1 | cut -d" " -f1)
-    argo logs "${WORKFLOW_NAME}" --follow
+    argo_follow_recent(){
+        WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
+        NAME_PREFIX=$(yq -r .metadata.generateName "$WORKFLOW_FPATH")
+        WORKFLOW_NAME=$(argo list --running | argo list --running | grep "$NAME_PREFIX" | head -n 1 | cut -d" " -f1)
+        argo logs "${WORKFLOW_NAME}" --follow
+    }
+    argo_follow_recent
 
     # Use this to check outputs
     aws s3 --profile iarpa ls s3://kitware-smart-watch-data/sync_root/ta2-train-xzzwv
