@@ -137,7 +137,12 @@ sleep 28800
 
 dvc pull splits.zip.dvc -r aws-noprofile 
 unzip -o splits.zip
-dvc pull -R . -r aws-noprofile 
+
+# This seems to fail the first time. No idea why that is. Try it a few times.
+dvc pull -R . -r aws-noprofile || \
+    dvc pull -R . -r aws-noprofile || \
+    dvc pull -R . -r aws-noprofile || \
+    dvc pull -R . -r aws-noprofile 
 
 #sudo apt install p7zip-full
 #7z x
