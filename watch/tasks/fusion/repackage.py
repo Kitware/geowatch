@@ -302,10 +302,14 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
             raise Exception('No data gathered')
         print(f'storage_dpath={storage_dpath}')
         for is_loose, subgroup in df.groupby('is_loose'):
-            print(f'is_loose={is_loose}')
             header = ['was_packaged', 'needs_repackage', 'was_copied',  'needs_copy', 'needs_dvc_add', 'is_loose']
-            subgroup[header]
-            print(subgroup.groupby('expt_name')[header].sum())
+            needy_header = ['needs_repackage', 'needs_copy', 'needs_dvc_add']
+            if is_loose:
+                # dont print extra loose stuff
+                subgroup = subgroup[subgroup[needy_header].any(axis=1)]
+            if len(subgroup):
+                print(f'is_loose={is_loose}')
+                print(subgroup.groupby('expt_name')[header].sum())
 
     if mode == 'list':
         # import xdev
