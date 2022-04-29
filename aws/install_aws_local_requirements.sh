@@ -9,13 +9,13 @@ curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stabl
 curl -LO "https://dl.k8s.io/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl.sha256"
 echo "$(<kubectl.sha256)  kubectl" | sha256sum --check
 
+PREFIX=$HOME/.local
 chmod +x kubectl
-mkdir -p ~/.local/bin
-cp ./kubectl ~/.local/bin/kubectl
-# and then add ~/.local/bin/kubectl to $PATH
+mkdir -p "$PREFIX"/bin
+cp ./kubectl "$PREFIX"/bin/kubectl
+# ensure $PREFIX/bin is in the PATH
 
 kubectl version --client
-
 
 #Configure kubectl for EKS use automatically with AWS CLI:
 aws eks update-kubeconfig --region us-west-2 --name WATCH_PRODUCTION --profile iarpa
@@ -24,6 +24,7 @@ aws eks update-kubeconfig --region us-west-2 --name WATCH_PRODUCTION --profile i
 
 # Manual
 ## Add to  ~/.kube/config
+# This needs to go in users.user.exec.args
 echo "
 - --role-arn
 - arn:aws:iam::023300502152:role/WATCH_PRODUCTION_EKS_ACCESS
@@ -37,7 +38,7 @@ kubectl get svc
 
 
 
-#Install kubectl CLI
+#Install argo CLI
 mkdir -p "$HOME/tmp/argo"
 cd "$HOME/tmp/argo"
 
@@ -51,7 +52,8 @@ gunzip argo-linux-amd64.gz
 chmod +x argo-linux-amd64
 
 # Move binary to path
-cp ./argo-linux-amd64 "$HOME/.local/bin/argo"
+PREFIX=$HOME/.local
+cp ./argo-linux-amd64 "$PREFIX/bin/argo"
 
 # Test installation
 argo version

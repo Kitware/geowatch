@@ -1,5 +1,8 @@
 """
 Synchronize DVC states across the machine.
+
+Example:
+    python -m watch.tasks.fusion.sync_machine_dvc_state "pull evals"
 """
 import glob
 import ubelt as ub
@@ -82,12 +85,14 @@ class SyncMachineConfig(scfg.Config):
         $DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/$EXPT_MODEL_GLOBNAME/*.pt
     """
     default = {
+        'command': scfg.Value(None, help='if specified, will overload other options', position=1),
         'push': scfg.Value(True, help='if True, will push results to the dvc_remote'),
         'pull': scfg.Value(True, help='if True, will pull results to the dvc_remote'),
-        'dvc_remote': scfg.Value('aws', help='dvc remote to sync to/from'),
 
         'packages': scfg.Value(True, help='sync packages'),
         'evals': scfg.Value(True, help='sync evaluations'),
+
+        'dvc_remote': scfg.Value('aws', help='dvc remote to sync to/from'),
 
         'dataset_codes': scfg.Value(None, help=ub.paragraph(
             '''
@@ -196,6 +201,11 @@ class DVCSyncManager(ub.NiceRepr):
                 self.push_packages()
             if evals:
                 self.push_evals()
+        if pull:
+            # if packages:
+            #     self.pull_packages()
+            if evals:
+                self.pull_evals()
 
 
 def main(cmdline=True, **kwargs):
@@ -205,6 +215,23 @@ def main(cmdline=True, **kwargs):
     import watch
 
     config = SyncMachineConfig(cmdline=cmdline, data=kwargs)
+    command = config['command']
+    if command is not None:
+        config['push'] = False
+        config['pull'] = False
+        config['evals'] = False
+        config['packages'] = False
+        if 'pull' in command:
+            config['pull'] = True
+        if 'push' in command:
+            config['push'] = True
+        if 'evals' in command:
+            config['evals'] = True
+        if 'packages' in command:
+            config['packages'] = True
+
+    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+
     dvc_remote = config['dvc_remote']
 
     if config['dataset_codes'] is None:
@@ -212,8 +239,7 @@ def main(cmdline=True, **kwargs):
     else:
         raise Exception('must be defualt for now')
 
-    dvc_hdd_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
-
+    # If we have an SSD, and it has stuff, push it, but don't pull to SSD
     try:
         dvc_ssd_dpath = watch.find_smart_dvc_dpath(hardware='ssd')
     except Exception:
@@ -221,14 +247,16 @@ def main(cmdline=True, **kwargs):
     else:
         ssd_manager = DVCSyncManager(
             dvc_ssd_dpath, dvc_remote=dvc_remote, dataset_codes=dataset_codes)
-
-    # If the SSD has stuff, push it, but don't pull to SSD
     if ssd_manager is not None:
         synckw = ub.compatible(config, ssd_manager.sync)
         synckw['pull'] = False
         ssd_manager.sync(**synckw)
 
     # Do everything to the HDD.
+    try:
+        dvc_hdd_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
+    except Exception:
+        dvc_hdd_dpath = watch.find_smart_dvc_dpath()
     hdd_manager = DVCSyncManager(
         dvc_hdd_dpath, dvc_remote=dvc_remote, dataset_codes=dataset_codes)
     synckw = ub.compatible(config, hdd_manager.sync)
