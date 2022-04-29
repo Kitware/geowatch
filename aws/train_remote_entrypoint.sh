@@ -223,10 +223,10 @@ python -m watch.tasks.fusion.fit \
     --vali_dataset="$VALI_FPATH" \
     --test_dataset="$TEST_FPATH" \
     --channels="$CHANNELS" \
-    --max_epoch_length=4098 \
+    --max_epoch_length=10000 \
     --chip_size=380 \
     --gpus 1 \
-    --num_workers=2 \
+    --num_workers=6 \
     --init="$INITIAL_STATE"
 
 
