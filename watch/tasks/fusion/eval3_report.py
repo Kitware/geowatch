@@ -1,6 +1,6 @@
 """
 
-python -m watch.tasks.fusion.sync_machine_dvc_state "push evals"
+python -m watch.tasks.fusion.sync_machine_dvc_state "push pull evals"
 
 """
 import ubelt as ub
