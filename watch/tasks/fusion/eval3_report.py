@@ -594,9 +594,9 @@ def load_extended_data(df, dvc_dpath):
 
     gsd_groups = dict(list(merged_df.groupby(['gsd', 'type'])))
     if 1:
-        gsd_groups.pop((10, 'sc+pxl'))
-        gsd_groups.pop((1, 'sc+pxl'))
-        gsd_groups.pop((1, 'bas+pxl'))
+        gsd_groups.pop((10, 'sc+pxl'), None)
+        gsd_groups.pop((1, 'sc+pxl'), None)
+        gsd_groups.pop((1, 'bas+pxl'), None)
     for resource_type in ['total_hours', 'co2_kg']:
         human_resource_type = human_mapping.get(resource_type, resource_type)
 
@@ -624,21 +624,21 @@ def load_extended_data(df, dvc_dpath):
                     plotkw = {
                         'x': resource_type,
                         'y': metric_lut[type],
-                        # 'hue': 'sensorchan',
+                        'hue': 'sensorchan',
                         # 'style': 'pred_cfgstr',
                         # 'hue': 'pred_tta_fliprot',
-                        'hue': 'pred_tta_time',
+                        # 'hue': 'pred_tta_time',
                         # 'size': 'pred_tta_fliprot',
-                        'style': 'hardware',
+                        # 'style': 'hardware',
                     }
                 elif type == 'bas+pxl':
                     plotkw = {
                         'x': resource_type,
                         'y': metric_lut[type],
-                        # 'hue': 'sensorchan',
-                        'hue': 'pred_tta_time',
+                        'hue': 'sensorchan',
+                        # 'hue': 'pred_tta_time',
                         # 'size': 'pred_tta_fliprot',
-                        'style': 'hardware',
+                        # 'style': 'hardware',
                     }
                 else:
                     raise KeyError(type)

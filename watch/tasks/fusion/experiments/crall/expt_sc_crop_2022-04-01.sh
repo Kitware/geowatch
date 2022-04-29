@@ -57,7 +57,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
             --enable_actclf_eval=1 \
             --draw_heatmaps=0 \
             --without_alternatives \
-            --skip_existing=1 --backend=tmux --run=1
+            --skip_existing=1 --backend=tmux --run=0
 
 
     #################################

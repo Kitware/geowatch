@@ -1798,10 +1798,7 @@ def main(cmdline=False, **kwargs):
         # 'mauc',
     }
 
-    FILTER_OUTLIERS = 1
-    import xdev
-    xdev.embed()
-
+    FILTER_OUTLIERS = 0
     # r = results_list2[0]
     if FILTER_OUTLIERS:
         # Filter outliers by only taking the top results for each experiment

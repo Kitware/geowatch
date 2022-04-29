@@ -23,6 +23,7 @@ spec:
     - name: dshm
       emptyDir:
         medium: Memory
+        sizeLimit: 8G
   templates:
   - name: ta2-train-init
     container:

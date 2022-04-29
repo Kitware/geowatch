@@ -36,7 +36,6 @@ def main():
     from watch.tasks.fusion.sync_machine_dvc_state import *  # NOQA
     """
     import watch
-    from watch.tasks.fusion import repackage
     dvc_hdd_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
 
     try:
@@ -163,3 +162,10 @@ def push_unstaged_evals(dvc_dpath):
     dvc.add(to_push_fpaths)
     dvc.git_commitpush(f'Sync models from {platform.node()}')
     dvc.push(to_push_fpaths, remote='aws')
+
+if __name__ == '__main__':
+    """
+    CommandLine:
+        python ~/code/watch/watch/tasks/fusion/sync_machine_dvc_state.py
+    """
+    main()

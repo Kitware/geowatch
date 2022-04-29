@@ -224,7 +224,7 @@ python -m watch.tasks.fusion.fit \
     --test_dataset="$TEST_FPATH" \
     --channels="$CHANNELS" \
     --chip_size=380 \
-    --num_workers=0 \
+    --num_workers=2 \
     --init="$INITIAL_STATE" 
 
 
@@ -232,7 +232,7 @@ __doc__='
 
 Execute instructions:
 
-    WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml argo submit "$WORKFLOW_FPATH" --watch
+    argo submit "$HOME/code/watch/aws/ta2_train_workflow.yml" --watch
 
     argo_follow_recent(){
         WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
