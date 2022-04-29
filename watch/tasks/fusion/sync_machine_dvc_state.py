@@ -33,73 +33,206 @@ EVAL_GLOB_PATTERNS = {
 
 
 class SyncMachineConfig(scfg.Config):
+    """
+    Certain parts of these names have special nomenclature to make them easier
+    to work with in Python and Bash.
+
+    The "watch" module comes with a few nice command line programs. Given a
+    machine with the "watch" environment, the watch DVC repo is accessed as
+    follows:
+
+        DVC_DPATH=$(smartwatch_dvc)
+
+    The workdir is where a user on a machine puts all of their experiments.
+
+        WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+
+    Before we start an experment, we must choose a dataset. Lets use an
+    example:
+
+        DATASET_CODE=Aligned-Drop3-L1
+
+    Along with the DVC directory, this should uniquely specify a kwcoco dataset
+    bundle (although it might not specify the specific view of that dataset,
+    -- views can have different GSD or be bundle subsets). The directory
+    of this bundle should be:
+
+        KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+
+    and it should be the case that, there is a kwcoco manifest that describes
+    the entire bundle called:
+
+        MAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
+
+    But we may have precomputed splits also e.g
+
+        TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_train.kwcoco.json
+        VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
+
+    Each experiment should also be given a name:
+
+        EXPERIMENT_NAME=Drop3_L1_BASELINE_BAS_V001
+
+    For each experiment you choose an experiment name on a dataset.
+
+        DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+
+    The packaging part of this script works with
+
+        $DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/$EXPT_MODEL_GLOBNAME/*.pt
+    """
     default = {
         'push': scfg.Value(True, help='if True, will push results to the dvc_remote'),
         'pull': scfg.Value(True, help='if True, will pull results to the dvc_remote'),
         'dvc_remote': scfg.Value('aws', help='dvc remote to sync to/from'),
+
+        'packages': scfg.Value(True, help='sync packages'),
+        'evals': scfg.Value(True, help='sync evaluations'),
+
+        'dataset_codes': scfg.Value(None, help=ub.paragraph(
+            '''
+            if unset, will use the defaults, otherwise this should be a list of
+            the DVC dataset bundle names that we want to consider.  Note: we do
+            make assumptions that the about where these names go in paths.
+            We may make this more general in the future.
+
+            Namely:
+
+                # Training runs go here go here.
+                <dvc_dpath>/training/*/*/<dataset_code>/runs/<expt_name>/lightning_logs
+
+                # Packages go here.
+                <dvc_dpath>/models/fusion/<dataset_code>/packages
+
+                # Evaluations go here.
+                <dvc_dpath>/models/fusion/<dataset_code>/eval
+            ''')),
     }
+
+
+class DVCSyncManager(ub.NiceRepr):
+    """
+    Implements an API around our DVC structure, which can be described as
+    follows.
+
+    <dvc_dpath>
+        * [<dataset_code>, ...]
+
+        * training
+            * <hostname>/<user>/<dataset_code>/runs/<expt_name>/lightning_logs/...
+
+        * models
+            * <task>
+            * fusion/<storage_code>/packages/<expt_name>/<model_name.pt>
+            * fusion/<storage_code>/pred/<expt_name>/pred_<model_name.pt>/***
+            * fusion/<storage_code>/eval/<expt_name>/pred_<model_name.pt>/***
+
+    Note:
+        moving forward dataset_code and storage_code should always be the same.
+        so storage_code=dataset_code. But we have a weird case that we still
+        support ATM.
+
+    A breakdown of the packages dir is:
+        packages/<expt_name>/<model_name.pt>
+    """
+
+    def __nice__(self):
+        return str(self.dvc)
+
+    def __init__(self, dvc_dpath, dvc_remote, dataset_codes=None):
+        self.dvc_dpath = dvc_dpath
+        self.dvc_remote = dvc_remote
+        self.dataset_codes = dataset_codes
+        self.dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath, remote=dvc_remote)
+
+    def push_evals(self):
+        dvc = self.dvc
+        eval_df = evaluation_state(self.dvc_dpath)
+
+        is_weird = (eval_df.is_link & (~eval_df.has_dvc))
+        weird_df = eval_df[is_weird]
+        if len(weird_df):
+            print(f'weird_df=\n{weird_df}')
+
+        to_push = eval_df[eval_df.needs_push == True]  # NOQA
+        assert not to_push['has_dvc'].any()
+        to_push_fpaths = to_push['raw'].tolist()
+        print(f'to_push=\n{to_push}')
+
+        dvc.add(to_push_fpaths)
+        dvc.git_commitpush(f'Sync models from {platform.node()}')
+        dvc.push(to_push_fpaths)
+
+    def pull_evals(self):
+        dvc = self.dvc
+        dvc.git_pull()
+        eval_df = evaluation_state(self.dvc_dpath)
+        pull_fpaths = eval_df[eval_df.needs_pull]['dvc'].tolist()
+        dvc.pull(pull_fpaths)
+
+    def pull_packages(self):
+        raise NotImplementedError
+
+    def push_packages(self):
+        from watch.tasks.fusion import repackage
+        dvc_dpath = self.dvc_dpath
+        train_coded_paths = list((dvc_dpath / "training").glob('*/*/*'))
+        code_to_path = {p.name: p for p in train_coded_paths}
+        mode = 'commit'
+        for dataset_code in self.dataset_codes:
+            print(f'dataset_code={dataset_code}')
+            path = code_to_path.get(dataset_code, None)
+            if path is not None:
+                storage_code = STORAGE_REPL.get(dataset_code, dataset_code)
+                train_dpath = str(path / 'runs/*')
+                storage_dpath = dvc_dpath / 'models/fusion' / storage_code / 'packages'
+                repackage.gather_checkpoints(
+                    dvc_dpath=dvc_dpath, storage_dpath=storage_dpath,
+                    train_dpath=train_dpath, dvc_remote=self.dvc_remote, mode=mode)
+
+    def sync(self, push=True, pull=True, evals=True, packages=True):
+        if push:
+            if packages:
+                self.push_packages()
+            if evals:
+                self.push_evals()
 
 
 def main(cmdline=True, **kwargs):
     """
     from watch.tasks.fusion.sync_machine_dvc_state import *  # NOQA
     """
+    import watch
 
     config = SyncMachineConfig(cmdline=cmdline, data=kwargs)
     dvc_remote = config['dvc_remote']
 
-    import watch
+    if config['dataset_codes'] is None:
+        dataset_codes = DATASET_CODES
+    else:
+        raise Exception('must be defualt for now')
+
     dvc_hdd_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
 
     try:
         dvc_ssd_dpath = watch.find_smart_dvc_dpath(hardware='ssd')
     except Exception:
-        dvc_ssd_dpath = None
+        ssd_manager = None
+    else:
+        ssd_manager = DVCSyncManager(
+            dvc_ssd_dpath, dvc_remote=dvc_remote, dataset_codes=dataset_codes)
 
-    mode = 'commit'
-    if dvc_ssd_dpath is not None:
-        # If the SSD has stuff, add it, but the HDD is primary
-        dvc_dpath = dvc_ssd_dpath
-        dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath)
-        dvc.git_pull()
+    # If the SSD has stuff, push it, but don't pull to SSD
+    if ssd_manager is not None:
+        synckw = ub.compatible(config, ssd_manager.sync)
+        synckw['pull'] = False
+        ssd_manager.sync(**synckw)
 
-        if config['push']:
-            sync_checkpoints(dvc_dpath, mode='list', dvc_remote=dvc_remote)
-            sync_checkpoints(dvc_dpath, mode=mode, dvc_remote=dvc_remote)
-
-    # HDD part
-    dvc_dpath = dvc_hdd_dpath
-    dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath)
-    dvc.git_pull()
-
-    sync_checkpoints(dvc_dpath, mode='list', dvc_remote=dvc_remote)
-    sync_checkpoints(dvc_dpath, mode=mode, dvc_remote=dvc_remote)
-
-    # eval_df = evaluation_state(dvc_dpath)
-    if config['push']:
-        push_unstaged_evals(dvc_dpath, dvc_remote=dvc_remote)
-
-    if config['pull']:
-        pull_nonlocal_evals(dvc_dpath, dvc_remote=dvc_remote)
-
-
-def sync_checkpoints(dvc_dpath, mode='list', dvc_remote='aws'):
-    from watch.tasks.fusion import repackage
-
-    train_coded_paths = list((dvc_dpath / "training").glob('*/*/*'))
-    code_to_path = {p.name: p for p in train_coded_paths}
-
-    for dataset_code in DATASET_CODES:
-        print(f'dataset_code={dataset_code}')
-        path = code_to_path.get(dataset_code, None)
-        if path is not None:
-            storage_code = STORAGE_REPL.get(dataset_code, dataset_code)
-            train_dpath = str(path / 'runs/*')
-            storage_dpath = dvc_dpath / 'models/fusion' / storage_code / 'packages'
-
-            repackage.gather_checkpoints(
-                dvc_dpath=dvc_dpath, storage_dpath=storage_dpath,
-                train_dpath=train_dpath, dvc_remote=dvc_remote, mode=mode)
+    # Do everything to the HDD.
+    hdd_manager = DVCSyncManager(
+        dvc_hdd_dpath, dvc_remote=dvc_remote, dataset_codes=dataset_codes)
+    synckw = ub.compatible(config, hdd_manager.sync)
+    hdd_manager.sync(**synckw)
 
 
 def evaluation_state(dvc_dpath):
@@ -153,37 +286,11 @@ def evaluation_state(dvc_dpath):
     return eval_df
 
 
-def pull_nonlocal_evals(dvc_dpath, dvc_remote='aws'):
-    dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath)
-    dvc.git_pull()
-    eval_df = evaluation_state(dvc_dpath)
-    pull_fpaths = eval_df[eval_df.needs_pull]['dvc'].tolist()
-    dvc.pull(pull_fpaths, remote=dvc_remote)
-
-
-def push_unstaged_evals(dvc_dpath, dvc_remote='aws'):
-    dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath)
-
-    eval_df = evaluation_state(dvc_dpath)
-
-    is_weird = (eval_df.is_link & (~eval_df.has_dvc))
-    weird_df = eval_df[is_weird]
-    if len(weird_df):
-        print(f'weird_df=\n{weird_df}')
-
-    to_push = eval_df[eval_df.needs_push == True]  # NOQA
-    assert not to_push['has_dvc'].any()
-    to_push_fpaths = to_push['raw'].tolist()
-    print(f'to_push=\n{to_push}')
-
-    dvc.add(to_push_fpaths)
-    dvc.git_commitpush(f'Sync models from {platform.node()}')
-    dvc.push(to_push_fpaths, remote=dvc_remote)
-
 if __name__ == '__main__':
     """
     CommandLine:
         python ~/code/watch/watch/tasks/fusion/sync_machine_dvc_state.py
         python -m watch.tasks.fusion.sync_machine_dvc_state --push=True --pull=False
+        python -m watch.tasks.fusion.sync_machine_dvc_state --push=True --pull=False --help
     """
     main(cmdline=True)

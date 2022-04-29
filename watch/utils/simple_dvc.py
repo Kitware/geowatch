@@ -31,6 +31,10 @@ class SimpleDVC(ub.NiceRepr):
     """
     A Simple DVC API
 
+    Args:
+        dvc_root (Path): path to DVC repo directory
+        remote (str): dvc remote to sync to by default
+
     Ignore:
         >>> # xdoctest: +REQUIRES(--dvc-test)
         >>> import sys, ubelt
@@ -44,8 +48,9 @@ class SimpleDVC(ub.NiceRepr):
 
     """
 
-    def __init__(self, dvc_root=None):
+    def __init__(self, dvc_root=None, remote=None):
         self.dvc_root = dvc_root
+        self.remote = remote
 
     def __nice__(self):
         return str(self.dvc_root)
@@ -70,12 +75,12 @@ class SimpleDVC(ub.NiceRepr):
         return dvc_dpath
 
     @classmethod
-    def coerce(cls, dvc_path):
+    def coerce(cls, dvc_path, **kw):
         """
         Given a path inside DVC, finds the root.
         """
         dvc_root = cls.find_root(dvc_path)
-        return cls(dvc_root)
+        return cls(dvc_root, **kw)
 
     @classmethod
     def find_root(cls, path=None):
@@ -99,6 +104,11 @@ class SimpleDVC(ub.NiceRepr):
             self.dvc_root = self.find_root(paths[0])
             print('found new self.dvc_root = {!r}'.format(self.dvc_root))
         return self.dvc_root
+
+    def _ensure_remote(self, remote):
+        if remote is None:
+            remote = self.remote
+        return remote
 
     def add(self, path):
         from dvc import main as dvc_main
@@ -152,6 +162,7 @@ class SimpleDVC(ub.NiceRepr):
         if len(paths) == 0:
             print('No paths to push')
             return
+        remote = self._ensure_remote(remote)
         dvc_root = self._ensure_root(paths)
         extra_args = []
         if remote:
@@ -171,6 +182,7 @@ class SimpleDVC(ub.NiceRepr):
         if len(paths) == 0:
             print('No paths to pull')
             return
+        remote = self._ensure_remote(remote)
         dvc_root = self._ensure_root(paths)
         extra_args = []
         if remote:
