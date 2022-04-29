@@ -24,6 +24,10 @@ spec:
       emptyDir:
         medium: Memory
         sizeLimit: 8G
+            volumes:
+    - name: cachedir
+      persistentVolumeClaim:
+        claimName: ta2-data-volume
   templates:
   - name: ta2-train-init
     container:
@@ -79,3 +83,5 @@ spec:
           mountPath: "/secret/dvc-access-secret-mountpath"
         - name: dshm
           mountPath: /dev/shm
+        - name: cachedir
+          mountPath: /efsdata

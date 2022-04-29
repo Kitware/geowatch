@@ -39,5 +39,4 @@ check_synced_data(){
 __notes__(){
     argo logs "${WORKFLOW_NAME}" --follow
     argo delete "dvc-access-check-*"
-    argo delete dvc-access-check-bswmx   dvc-access-check-wd7qk   dvc-access-check-zcggj   dvc-access-check-vhc9k   dvc-access-check-gtdlr   dvc-access-check-mqttg   dvc-access-check-g6vpc   dvc-access-check-hwvzf   dvc-access-check-kmd4k   
 }
