@@ -133,7 +133,7 @@ DATASET_CODE=Aligned-Drop3-L1
 cd "$SMART_DVC_DPATH/$DATASET_CODE"
 ls -al
 
-sleep 28800
+#sleep 28800
 
 dvc pull splits.zip.dvc -r aws-noprofile 
 unzip -o splits.zip
@@ -223,7 +223,8 @@ python -m watch.tasks.fusion.fit \
     --vali_dataset="$VALI_FPATH" \
     --test_dataset="$TEST_FPATH" \
     --channels="$CHANNELS" \
-    --num_workers=1 \
+    --chip_size=380 \
+    --num_workers=0 \
     --init="$INITIAL_STATE" 
 
 
