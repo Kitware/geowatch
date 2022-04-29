@@ -4,6 +4,7 @@ Synchronize DVC states across the machine.
 import glob
 import ubelt as ub
 import platform
+import scriptconfig as scfg
 from watch.utils import simple_dvc
 
 DATASET_CODES = [
@@ -31,10 +32,22 @@ EVAL_GLOB_PATTERNS = {
 }
 
 
-def main():
+class SyncMachineConfig(scfg.Config):
+    default = {
+        'push': scfg.Value(True, help='if True, will push results to the remote'),
+        'pull': scfg.Value(True, help='if True, will pull results to the remote'),
+        'remote': scfg.Value('aws', help='dvc remote to sync to/from'),
+    }
+
+
+def main(cmdline=True, **kwargs):
     """
     from watch.tasks.fusion.sync_machine_dvc_state import *  # NOQA
     """
+
+    config = SyncMachineConfig(cmdline=cmdline, data=kwargs)
+    remote = config['remote']
+
     import watch
     dvc_hdd_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
 
@@ -49,23 +62,28 @@ def main():
         dvc_dpath = dvc_ssd_dpath
         dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath)
         dvc.git_pull()
-        sync_checkpoints(dvc_dpath, mode='list')
-        sync_checkpoints(dvc_dpath, mode=mode)
+
+        if config['push']:
+            sync_checkpoints(dvc_dpath, mode='list', remote=remote)
+            sync_checkpoints(dvc_dpath, mode=mode, remote=remote)
 
     # HDD part
     dvc_dpath = dvc_hdd_dpath
     dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath)
     dvc.git_pull()
 
-    sync_checkpoints(dvc_dpath, mode='list')
-    sync_checkpoints(dvc_dpath, mode=mode)
+    sync_checkpoints(dvc_dpath, mode='list', remote=remote)
+    sync_checkpoints(dvc_dpath, mode=mode, remote=remote)
 
     # eval_df = evaluation_state(dvc_dpath)
-    push_unstaged_evals(dvc_dpath)
-    pull_nonlocal_evals(dvc_dpath)
+    if config['push']:
+        push_unstaged_evals(dvc_dpath)
+
+    if config['pull']:
+        pull_nonlocal_evals(dvc_dpath)
 
 
-def sync_checkpoints(dvc_dpath, mode='list'):
+def sync_checkpoints(dvc_dpath, mode='list', remote='aws'):
     from watch.tasks.fusion import repackage
 
     train_coded_paths = list((dvc_dpath / "training").glob('*/*/*'))
@@ -81,8 +99,7 @@ def sync_checkpoints(dvc_dpath, mode='list'):
 
             repackage.gather_checkpoints(
                 dvc_dpath=dvc_dpath, storage_dpath=storage_dpath,
-                train_dpath=train_dpath,
-                mode=mode)
+                train_dpath=train_dpath, remote=remote, mode=mode)
 
 
 def evaluation_state(dvc_dpath):
@@ -167,5 +184,6 @@ if __name__ == '__main__':
     """
     CommandLine:
         python ~/code/watch/watch/tasks/fusion/sync_machine_dvc_state.py
+        python -m watch.tasks.fusion.sync_machine_dvc_state
     """
-    main()
+    main(cmdline=True)
