@@ -45,7 +45,7 @@ spec:
         #  #nvidia.com/gpu: 1
         #  #      resources:
         requests:
-          memory: "16G"
+          memory: "32G"
           cpu: "3000m"
           nvidia.com/gpu: 1
         limits:
