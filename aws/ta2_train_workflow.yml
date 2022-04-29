@@ -24,7 +24,6 @@ spec:
       emptyDir:
         medium: Memory
         sizeLimit: 8G
-            volumes:
     - name: cachedir
       persistentVolumeClaim:
         claimName: ta2-data-volume
