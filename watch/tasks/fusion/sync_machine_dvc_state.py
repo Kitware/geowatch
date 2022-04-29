@@ -34,9 +34,9 @@ EVAL_GLOB_PATTERNS = {
 
 class SyncMachineConfig(scfg.Config):
     default = {
-        'push': scfg.Value(True, help='if True, will push results to the remote'),
-        'pull': scfg.Value(True, help='if True, will pull results to the remote'),
-        'remote': scfg.Value('aws', help='dvc remote to sync to/from'),
+        'push': scfg.Value(True, help='if True, will push results to the dvc_remote'),
+        'pull': scfg.Value(True, help='if True, will pull results to the dvc_remote'),
+        'dvc_remote': scfg.Value('aws', help='dvc remote to sync to/from'),
     }
 
 
@@ -46,7 +46,7 @@ def main(cmdline=True, **kwargs):
     """
 
     config = SyncMachineConfig(cmdline=cmdline, data=kwargs)
-    remote = config['remote']
+    dvc_remote = config['dvc_remote']
 
     import watch
     dvc_hdd_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
@@ -64,16 +64,16 @@ def main(cmdline=True, **kwargs):
         dvc.git_pull()
 
         if config['push']:
-            sync_checkpoints(dvc_dpath, mode='list', remote=remote)
-            sync_checkpoints(dvc_dpath, mode=mode, remote=remote)
+            sync_checkpoints(dvc_dpath, mode='list', dvc_remote=dvc_remote)
+            sync_checkpoints(dvc_dpath, mode=mode, dvc_remote=dvc_remote)
 
     # HDD part
     dvc_dpath = dvc_hdd_dpath
     dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath)
     dvc.git_pull()
 
-    sync_checkpoints(dvc_dpath, mode='list', remote=remote)
-    sync_checkpoints(dvc_dpath, mode=mode, remote=remote)
+    sync_checkpoints(dvc_dpath, mode='list', dvc_remote=dvc_remote)
+    sync_checkpoints(dvc_dpath, mode=mode, dvc_remote=dvc_remote)
 
     # eval_df = evaluation_state(dvc_dpath)
     if config['push']:
@@ -83,7 +83,7 @@ def main(cmdline=True, **kwargs):
         pull_nonlocal_evals(dvc_dpath)
 
 
-def sync_checkpoints(dvc_dpath, mode='list', remote='aws'):
+def sync_checkpoints(dvc_dpath, mode='list', dvc_remote='aws'):
     from watch.tasks.fusion import repackage
 
     train_coded_paths = list((dvc_dpath / "training").glob('*/*/*'))
@@ -99,7 +99,7 @@ def sync_checkpoints(dvc_dpath, mode='list', remote='aws'):
 
             repackage.gather_checkpoints(
                 dvc_dpath=dvc_dpath, storage_dpath=storage_dpath,
-                train_dpath=train_dpath, remote=remote, mode=mode)
+                train_dpath=train_dpath, dvc_remote=dvc_remote, mode=mode)
 
 
 def evaluation_state(dvc_dpath):
@@ -153,15 +153,15 @@ def evaluation_state(dvc_dpath):
     return eval_df
 
 
-def pull_nonlocal_evals(dvc_dpath):
+def pull_nonlocal_evals(dvc_dpath, dvc_remote='aws'):
     dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath)
     dvc.git_pull()
     eval_df = evaluation_state(dvc_dpath)
     pull_fpaths = eval_df[eval_df.needs_pull]['dvc'].tolist()
-    dvc.pull(pull_fpaths, remote='aws')
+    dvc.pull(pull_fpaths, remote=dvc_remote)
 
 
-def push_unstaged_evals(dvc_dpath):
+def push_unstaged_evals(dvc_dpath, dvc_remote='aws'):
     dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath)
 
     eval_df = evaluation_state(dvc_dpath)
@@ -178,12 +178,12 @@ def push_unstaged_evals(dvc_dpath):
 
     dvc.add(to_push_fpaths)
     dvc.git_commitpush(f'Sync models from {platform.node()}')
-    dvc.push(to_push_fpaths, remote='aws')
+    dvc.push(to_push_fpaths, remote=dvc_remote)
 
 if __name__ == '__main__':
     """
     CommandLine:
         python ~/code/watch/watch/tasks/fusion/sync_machine_dvc_state.py
-        python -m watch.tasks.fusion.sync_machine_dvc_state
+        python -m watch.tasks.fusion.sync_machine_dvc_state --push=True --pull=False
     """
     main(cmdline=True)
