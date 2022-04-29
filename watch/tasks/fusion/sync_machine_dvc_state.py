@@ -6,12 +6,28 @@ import ubelt as ub
 import platform
 from watch.utils import simple_dvc
 
+DATASET_CODES = [
+    'Cropped-Drop3-TA1-2022-03-10',
+    'Aligned-Drop3-TA1-2022-03-10',
+    'Aligned-Drop3-L1',
+]
+
+# hack for old scheme
+STORAGE_REPL = {
+    'Aligned-Drop3-TA1-2022-03-10': 'eval3_candidates',
+    'Cropped-Drop3-TA1-2022-03-10': 'eval3_sc_candidates',
+}
+
 
 EVAL_GLOB_PATTERNS = {
-    'pxl_10': 'models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json',
-    'trk_10': 'models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json',
-    'pxl_1': 'models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json',
-    'act_1': 'models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json',
+    'pxl_ta1_10': 'models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json',
+    'trk_ta1_10': 'models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json',
+
+    'pxl_l1_10': 'models/fusion/Aligned-Drop3-L1/eval/*/*/*/*/eval/curves/measures2.json',
+    'trk_l1_10': 'models/fusion/Aligned-Drop3-L1/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json',
+
+    'pxl_ta1_1': 'models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json',
+    'act_ta1_1': 'models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json',
 }
 
 
@@ -53,25 +69,14 @@ def main():
 def sync_checkpoints(dvc_dpath, mode='list'):
     from watch.tasks.fusion import repackage
 
-    dataset_codes = [
-        'Cropped-Drop3-TA1-2022-03-10',
-        'Aligned-Drop3-TA1-2022-03-10',
-        'Aligned-Drop3-L1',
-    ]
-    # hack for old scheme
-    storage_repl = {
-        'Aligned-Drop3-TA1-2022-03-10': 'eval3_candidates',
-        'Cropped-Drop3-TA1-2022-03-10': 'eval3_sc_candidates',
-    }
-
     train_coded_paths = list((dvc_dpath / "training").glob('*/*/*'))
     code_to_path = {p.name: p for p in train_coded_paths}
 
-    for dataset_code in dataset_codes:
+    for dataset_code in DATASET_CODES:
         print(f'dataset_code={dataset_code}')
         path = code_to_path.get(dataset_code, None)
         if path is not None:
-            storage_code = storage_repl.get(dataset_code, dataset_code)
+            storage_code = STORAGE_REPL.get(dataset_code, dataset_code)
             train_dpath = str(path / 'runs/*')
             storage_dpath = dvc_dpath / 'models/fusion' / storage_code / 'packages'
 
