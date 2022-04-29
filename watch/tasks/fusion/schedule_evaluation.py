@@ -358,7 +358,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     pred_cfg_basis['tta_fliprot'] = ensure_iterable(config['tta_fliprot'])
     pred_cfg_basis['chip_overlap'] = ensure_iterable(config['chip_overlap'])
 
-    HACK_HACKHACK = 0
+    HACK_HACKHACK = 1
 
     num_skiped_via_alternatives = 0
 
