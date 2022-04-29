@@ -1,3 +1,8 @@
+"""
+
+python -m watch.tasks.fusion.sync_machine_dvc_state "push evals"
+
+"""
 import ubelt as ub
 import math
 import numpy as np
@@ -142,7 +147,7 @@ def eval3_report():
         # print('expt_name = {!r}'.format(expt_name))
         # dset_to_subgroup = dict(list(group.groupby('test_dset')))
         for model_name, subgroup in list(group.groupby('model_name')):
-            prefs = subgroup['test_dset'].apply(preference.__getitem__)
+            prefs = subgroup['test_dset'].apply(lambda x: preference.get(x, 0))
             keep_flags = prefs == prefs.min()
             keep_locs.extend(subgroup[keep_flags].index)
 
