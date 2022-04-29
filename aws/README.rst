@@ -104,3 +104,9 @@ Web UI
     argo auth token 
     # Login to server
     google-chrome https://127.0.0.1:2746/
+
+
+ 
+Notes on argo resources:
+
+https://argoproj.github.io/argo-workflows/resource-duration/#:~:text=If%20requests%20are%20not%20set,CPU%20and%20100Mi%20for%20memory.
