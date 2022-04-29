@@ -685,7 +685,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         import kwcoco
         dset = kwcoco.CocoDataset('/home/joncrall/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json')
         coco_img = dset.videos(names=['AE_C002']).images[0].coco_images[3]
-        imdata = coco_img.delay('red').finalize(nodata='auto')
+        imdata = coco_img.delay('red').finalize(nodata='float')
 
         import kwplot
         import kwimage
@@ -697,7 +697,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         # Note: Using 'nearest' here since we're just visualizing (and
         # otherwise nodata values can affect interpolated pixel
         # values)
-        # canvas = chan.finalize(interpolation='nearest', nodata='auto')
+        # canvas = chan.finalize(interpolation='nearest', nodata='float')
         with ub.Timer('load channels', verbose=verbose):
             raw_canvas = canvas = chan.finalize(interpolation='linear', nodata='float')
 
@@ -720,7 +720,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         #     print('input nans', np.nansum(raw_canvas))
         #     print('input nans', np.isnan(raw_canvas).sum())
 
-        # canvas = chan.finalize(, nodata='auto')
+        # canvas = chan.finalize(, nodata='float')
         # import kwarray
         # kwarray.atleast_nd(canvas, 3)
 

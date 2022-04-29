@@ -273,7 +273,7 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
             # handle multiclass case
             pred_chan_of_interest = '|'.join(classes_of_interest)
             delayed_probs = pred_coco_img.delay(pred_chan_of_interest, space=score_space)
-            class_probs = delayed_probs.finalize(as_xarray=True, nodata='auto')
+            class_probs = delayed_probs.finalize(as_xarray=True, nodata='float')
             invalid_mask = np.isnan(class_probs).all(axis=2)
             class_weights[invalid_mask] = 0
 
@@ -324,7 +324,7 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
         try:
             # TODO: consolidate this with above class-specific code
             salient_delay = pred_coco_img.delay(salient_class, space=score_space)
-            salient_prob = salient_delay.finalize(nodata='auto')[..., 0]
+            salient_prob = salient_delay.finalize(nodata='float')[..., 0]
             invalid_mask = np.isnan(salient_prob)
             salient_prob[invalid_mask] = 0
             saliency_weights[invalid_mask] = 0
@@ -659,7 +659,7 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
             else:
                 chosen_viz_channs = true_coco_img.primary_asset()['channels']
             try:
-                real_image = true_coco_img.delay(chosen_viz_channs, space=score_space).finalize(nodata='auto')
+                real_image = true_coco_img.delay(chosen_viz_channs, space=score_space).finalize(nodata='float')
                 real_image_norm = kwimage.normalize_intensity(real_image)
                 real_image_int = kwimage.ensure_uint255(real_image_norm)
             except Exception as ex:

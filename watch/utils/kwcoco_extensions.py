@@ -762,7 +762,7 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
         gid = coco_dset.images().take(cands).lookup('id')[0]
 
         coco_img = coco_dset.coco_image(gid)
-        imdata = coco_img.delay('blue').finalize(nodata='auto')
+        imdata = coco_img.delay('blue').finalize(nodata='float')
         valid_region_img = kwimage.MultiPolygon.coerce(coco_img.img['valid_region'])
         frac = valid_region_img.to_shapely().area / valid_region_img.bounding_box().area
         print('frac = {!r}'.format(frac))

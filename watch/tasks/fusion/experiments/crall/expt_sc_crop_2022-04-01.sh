@@ -6,7 +6,9 @@ CROPPED_PRE_EVAL_AND_AGG(){
     # 1. Repackage and commit new models
     #################################
 
-    python -m watch.tasks.fusion.sync_machine_dvc_state
+    python -m watch.tasks.fusion.sync_machine_dvc_state "push packages evals"
+    python -m watch.tasks.fusion.sync_machine_dvc_state "pull evals"
+    python -m watch.tasks.fusion.sync_machine_dvc_state "pull packages"
 
     DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
@@ -42,14 +44,15 @@ CROPPED_PRE_EVAL_AND_AGG(){
     EXPT_GROUP_CODE=eval3_sc_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 
-    #EXPT_MODEL_GLOBNAME="CropDrop3_SC_s2*wv_*invar*_*V03*"
-    EXPT_MODEL_GLOBNAME="CropDrop3_SC_s2*wv_*tf*_*V*"
-
     #BUNDLE_SUFFIX=data_wv_vali.kwcoco.json
     #BUNDLE_SUFFIX=combo_D_wv_vali.kwcoco.json
     #BUNDLE_SUFFIX=combo_DL_s2_wv_vali.kwcoco.json
-    #BUNDLE_SUFFIX=combo_DLM_s2_wv_vali.kwcoco.json
-    BUNDLE_SUFFIX=combo_DILM_s2_wv_vali.kwcoco.json
+
+    #BUNDLE_SUFFIX=combo_DILM_s2_wv_vali.kwcoco.json
+    #EXPT_MODEL_GLOBNAME="CropDrop3_SC_s2*wv_*invar*_*V03*"
+
+    BUNDLE_SUFFIX=combo_DLM_s2_wv_vali.kwcoco.json
+    EXPT_MODEL_GLOBNAME="CropDrop3_SC_s2*wv_*tf*_*V*"
 
 
     SSD_DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
@@ -71,7 +74,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
             --enable_actclf_eval=1 \
             --draw_heatmaps=0 \
             --without_alternatives \
-            --skip_existing=1 --backend=tmux --run=1
+            --skip_existing=1 --backend=tmux --run=0
 
 
     #################################
