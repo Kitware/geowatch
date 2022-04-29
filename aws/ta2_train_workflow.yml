@@ -45,11 +45,11 @@ spec:
         #  #nvidia.com/gpu: 1
         #  #      resources:
         requests:
-          memory: "32G"
+          memory: "16G"
           cpu: "3000m"
           nvidia.com/gpu: 1
         limits:
-          memory: "64G"
+          memory: "32G"
           cpu: "3500m"
           nvidia.com/gpu: 1
       env:
