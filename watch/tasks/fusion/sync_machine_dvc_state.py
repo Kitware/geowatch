@@ -109,7 +109,7 @@ def evaluation_state(dvc_dpath):
             row['type'] = type
         eval_rows.extend(rows)
 
-    import numpy as np
+    # import numpy as np
 
     for row in eval_rows:
         row['has_dvc'] = (row['dvc'] is not None)
@@ -118,9 +118,9 @@ def evaluation_state(dvc_dpath):
 
         row['needs_pull'] = row['has_dvc'] and not row['has_raw']
 
-        row['is_link'] = np.nan
-        row['unprotected'] = np.nan
-        row['needs_push'] = np.nan
+        row['is_link'] = False
+        row['unprotected'] = False
+        row['needs_push'] = False
 
         if row['has_raw']:
             p = ub.Path(row['raw'])
