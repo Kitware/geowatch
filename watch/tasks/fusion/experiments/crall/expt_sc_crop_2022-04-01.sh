@@ -40,13 +40,22 @@ CROPPED_PRE_EVAL_AND_AGG(){
     EXPT_GROUP_CODE=eval3_sc_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 
-    EXPT_MODEL_GLOBNAME="CropDrop3_SC_s2wv_tf_*V02*"
+    EXPT_MODEL_GLOBNAME="CropDrop3_SC_s2wv_*tf*_*V0"
 
     #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_wv_vali.kwcoco.json
     #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_D_wv_vali.kwcoco.json
     #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
-    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+    #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
 
+    BUNDLE_SUFFIX=combo_DILM_s2_wv_vali.kwcoco.json
+    SSD_DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
+    SSD_KWCOCO_BUNDLE_DPATH=$SSD_DVC_DPATH/$DATASET_CODE
+    SSD_VALI_FPATH=$SSD_KWCOCO_BUNDLE_DPATH/$BUNDLE_SUFFIX
+    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/$BUNDLE_SUFFIX
+
+    if [ -f "$SSD_VALI_FPATH" ]; then
+        VALI_FPATH=$SSD_VALI_FPATH
+    fi
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/$EXPT_MODEL_GLOBNAME/*.pt" \
@@ -64,6 +73,8 @@ CROPPED_PRE_EVAL_AND_AGG(){
     # 4. Commit Evaluation Results
     #################################
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+
+    python -m watch.tasks.fusion.sync_machine_dvc_state --push=True --pull=True --dvc_remote=aws
 
     # Check for uncommited evaluations
     # shellcheck disable=SC2010

@@ -360,6 +360,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     HACK_HACKHACK = 0
 
+    num_skiped_via_alternatives = 0
+
     other_existing_pred_infos = []
     expanded_packages_to_eval = []
     for raw_info in packages_to_eval:
@@ -410,6 +412,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
                 if ub.argflag('--without_alternatives'):
                     if has_any_other:
+                        num_skiped_via_alternatives += 1
                         continue
 
             expanded_packages_to_eval.append(info)
@@ -613,6 +616,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
     with_status = 0
     with_rich = 0
     queue.rprint(with_status=with_status, with_rich=with_rich)
+
+    print(f'num_skiped_via_alternatives={num_skiped_via_alternatives}')
 
     # RUN
     if config['run']:
