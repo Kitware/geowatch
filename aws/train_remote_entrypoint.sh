@@ -176,7 +176,7 @@ python -m watch.tasks.fusion.fit \
     --saliency_loss='dicefocal' \
     --class_loss='dicefocal' \
     --num_workers=8 \
-    --gpus "0" \
+    --gpus 1 \
     --batch_size=1 \
     --accumulate_grad_batches=1 \
     --learning_rate=1e-4 \
@@ -225,7 +225,7 @@ python -m watch.tasks.fusion.fit \
     --channels="$CHANNELS" \
     --chip_size=380 \
     --num_workers=2 \
-    --init="$INITIAL_STATE" 
+    --init="$INITIAL_STATE" | tee fit_stdout
 
 
 __doc__='
@@ -238,7 +238,9 @@ Execute instructions:
         WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
         NAME_PREFIX=$(yq -r .metadata.generateName "$WORKFLOW_FPATH")
         WORKFLOW_NAME=$(argo list --running | argo list --running | grep "$NAME_PREFIX" | head -n 1 | cut -d" " -f1)
-        argo logs "${WORKFLOW_NAME}" --follow
+        #argo logs "${WORKFLOW_NAME}" --follow
+        # kubctl gives better full logs
+        kubectl logs "${WORKFLOW_NAME}" -c main --follow  
     }
     argo_follow_recent
 
@@ -246,4 +248,46 @@ Execute instructions:
     aws s3 --profile iarpa ls s3://kitware-smart-watch-data/sync_root/ta2-train-xzzwv
     mkdir -p $HOME/data/aws-sync
     aws s3 --profile iarpa sync s3://kitware-smart-watch-data/sync_root/ta2-train-xzzwv/ $HOME/data/aws-sync
+
+
+    TODO:
+    Allow hard coded specs for the following:
+        datamodule.dataset_stats = {
+            "unique_sensor_modes": {
+                (
+                    "L8",
+                    "blue|green|red|nir|swir16|swir22",
+                ),
+                (
+                    "S2",
+                    "blue|green|red|nir|swir16|swir22",
+                ),
+            },
+            "sensor_mode_hist": {
+                ("L8", "blue|green|red|nir|swir16|swir22"): 1546,
+                ("S2", "blue|green|red|nir|swir16|swir22"): 3574,
+            },
+            "input_stats": {
+                ("L8", "blue|green|red|nir|swir16|swir22"): {
+                    "mean": np.array([[[11602.561]],[[11679.435]],[[12304.289]],[[15570.234]],[[15133.022]],[[12781.117]]], dtype=np.float64),
+                    "std": np.array([[[3267.417]],[[3930.465]],[[4846.832]],[[5261.937]],[[6077.674]],[[5040.008]]], dtype=np.float64),
+                },
+                ("S2", "blue|green|red|nir|swir16|swir22"): {
+                    "mean": np.array([[[1250.079]],[[1264.795]],[[1408.939]],[[1839.118]],[[1887.035]],[[1453.906]]], dtype=np.float64),
+                    "std": np.array([[[1016.882]],[[1088.721]],[[1313.853]],[[1473.62 ]],[[1633.727]],[[1320.249]]], dtype=np.float64),
+                },
+            },
+            "class_freq": {
+                "background": 719552801,
+                "ignore": 4800073,
+                "Unknown": 102704,
+                "positive": 12401990,
+                "negative": 0,
+                "Site Preparation": 144313,
+                "Active Construction": 818806,
+                "Post Construction": 1335078,
+                "No Activity": 172235,
+    },
+}
+     
 '

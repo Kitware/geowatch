@@ -11,7 +11,10 @@ def eval3_report():
     import kwplot
     kwplot.autosns()
     import watch
-    dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
+    try:
+        dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
+    except Exception:
+        dvc_dpath = watch.find_smart_dvc_dpath()
     gsd10_dpath = dvc_dpath / 'models/fusion/eval3_candidates'
     gsd1_dpath = dvc_dpath / 'models/fusion/eval3_sc_candidates'
 
