@@ -315,6 +315,8 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
                 print(f'is_loose={is_loose}')
                 print(subgroup.groupby('expt_name')[header].sum())
 
+    gathered = [r for r in gathered if not r['broken_link']]
+
     if mode == 'list':
         # import xdev
         # xdev.embed()
