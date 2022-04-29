@@ -114,7 +114,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
         --dset_group_key="$GROUP_KEY" --show=True \
-        --classes_of_interest "Site Preparation" "Active Construction" 
+        --classes_of_interest "Site Preparation" "Active Construction"  --embed=True
             #"Post Construction"
 }
 
@@ -1794,3 +1794,101 @@ python -m watch.tasks.fusion.fit \
     --stream_channels=16 \
     --temporal_dropout=0.5 \
     --init="noop"
+
+
+##### toothbrush 2022-04-26 --continue fixed sampler
+export CUDA_VISIBLE_DEVICES=1
+DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+INIT_STATE_V028="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_tf_cont24_V028/CropDrop3_SC_s2wv_tf_cont24_V028_epoch=1-step=4095-v1.pt"
+CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field|matseg_0|matseg_1|matseg_2|matseg_3|mat_up5:64"
+EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_cont28_V031
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=0.00 \
+    --accumulate_grad_batches=1 \
+    --saliency_loss='focal' \
+    --class_loss='focal' \
+    --chip_size=256 \
+    --time_steps=7 \
+    --learning_rate=1e-4 \
+    --num_workers=6 \
+    --max_epochs=160 \
+    --patience=160 \
+    --dist_weights=False \
+    --time_sampling=soft2 \
+    --time_span=6m \
+    --channels="$CHANNELS" \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --use_centered_positives=True \
+    --num_draw=8 \
+    --normalize_inputs=2048 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --init="$INIT_STATE_V028"
+
+
+##### toothbrush 2022-04-26 --continue fixed sampler
+export CUDA_VISIBLE_DEVICES=0
+DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+INIT_STATE_V028="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_tf_cont24_V028/CropDrop3_SC_s2wv_tf_cont24_V028_epoch=1-step=4095-v1.pt"
+CHANNELS="blue|green|red|near-ir1|depth,blue|green|red,matseg_0|matseg_1|matseg_2|matseg_3|mat_up5:64"
+EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_dm_cont28_V032
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=0.00 \
+    --accumulate_grad_batches=3 \
+    --saliency_loss='focal' \
+    --class_loss='focal' \
+    --chip_size=256 \
+    --time_steps=5 \
+    --learning_rate=3e-4 \
+    --num_workers=6 \
+    --max_epochs=160 \
+    --patience=160 \
+    --dist_weights=False \
+    --time_sampling=soft2 \
+    --time_span=6m \
+    --channels="$CHANNELS" \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --use_centered_positives=True \
+    --num_draw=8 \
+    --normalize_inputs=2048 \
+    --stream_channels=32 \
+    --temporal_dropout=0.2 \
+    --init="$INIT_STATE_V028"

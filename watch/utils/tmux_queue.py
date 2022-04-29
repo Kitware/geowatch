@@ -53,7 +53,8 @@ class TMUXMultiQueue(cmd_queue.Queue):
     Create multiple sets of jobs to start in detatched tmux sessions
 
     CommandLine:
-        xdoctest -m watch.utils.tmux_queue TMUXMultiQueue
+        xdoctest -m watch.utils.tmux_queue TMUXMultiQueue:0
+        xdoctest -m watch.utils.tmux_queue TMUXMultiQueue:1
 
     Example:
         >>> from watch.utils.serial_queue import *  # NOQA
@@ -62,11 +63,39 @@ class TMUXMultiQueue(cmd_queue.Queue):
         >>> job2 = self.submit('echo hi 2 && true')
         >>> job3 = self.submit('echo hi 3 && true', depends=job1)
         >>> self.rprint()
+        >>> self.print_graph()
         >>> if ub.find_exe('tmux'):
-        >>>     self.run()
-        >>>     self.monitor()
-        >>>     self.current_output()
-        >>>     self.kill()
+        >>>     self.run(block=True, onexit='capture')
+
+    Example:
+        >>> from watch.utils.tmux_queue import *  # NOQA
+        >>> import random
+        >>> rng = random.Random(54425367001)
+        >>> self = TMUXMultiQueue(1, 'real-world-usecase', gres=[0, 1])
+        >>> def add_edge(name, depends):
+        >>>     if name is not None:
+        >>>         _depends = [self.named_jobs[n] for n in depends if n is not None]
+        >>>         self.submit(f'echo {name=}, {depends=} && sleep 0.1', name=name, depends=_depends)
+        >>> def add_branch(suffix):
+        >>>     f = 0.3
+        >>>     pred = f'pred{suffix}' if rng.random() > f else None
+        >>>     track = f'track{suffix}' if rng.random() > f else None
+        >>>     actclf = f'actclf{suffix}' if rng.random() > f else None
+        >>>     pxl_eval = f'pxl_eval{suffix}' if rng.random() > f else None
+        >>>     trk_eval = f'trk_eval{suffix}' if rng.random() > f else None
+        >>>     act_eval = f'act_eval{suffix}' if rng.random() > f else None
+        >>>     add_edge(pred, [])
+        >>>     add_edge(track, [pred])
+        >>>     add_edge(actclf, [pred])
+        >>>     add_edge(pxl_eval, [pred])
+        >>>     add_edge(trk_eval, [track])
+        >>>     add_edge(act_eval, [actclf])
+        >>> for i in range(3):
+        >>>     add_branch(str(i))
+        >>> self.rprint()
+        >>> self.print_graph()
+        >>> if ub.find_exe('tmux'):
+        >>>     self.run(block=1, onexit='')
 
     Example:
         >>> from watch.utils.tmux_queue import *  # NOQA
@@ -125,8 +154,8 @@ class TMUXMultiQueue(cmd_queue.Queue):
         self.rootid = rootid
         self.pathid = '{}_{}'.format(self.name, self.rootid)
         if dpath is None:
-            dpath = ub.ensure_app_cache_dir('cmd_queue', self.pathid)
-        self.dpath = ub.Path(dpath)
+            dpath = ub.ensure_app_cache_dir('cmd_queue')
+        self.dpath = ub.Path(dpath) / self.pathid
 
         if environ is None:
             environ = {}
@@ -134,6 +163,7 @@ class TMUXMultiQueue(cmd_queue.Queue):
         self.environ = environ
         self.fpath = self.dpath / f'run_queues_{self.name}.sh'
         self.gres = gres
+        self.cmd_verbose = 2
 
         self.jobs = []
         self.header_commands = []
@@ -442,16 +472,18 @@ class TMUXMultiQueue(cmd_queue.Queue):
             stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP))
         return self.fpath
 
-    def run(self, block=False):
+    def run(self, block=False, onfail='kill', onexit=''):
         if not ub.find_exe('tmux'):
             raise Exception('tmux not found')
         self.write()
-        ub.cmd(f'bash {self.fpath}', verbose=3, check=True)
+        ub.cmd(f'bash {self.fpath}', verbose=self.cmd_verbose, check=True)
         if block:
             agg_state = self.monitor()
+            if onexit == 'capture':
+                self.capture()
             if not agg_state['errored']:
-                # self.capture()
-                self.kill()
+                if onfail == 'kill':
+                    self.kill()
             return agg_state
 
     def serial_run(self):
@@ -461,13 +493,14 @@ class TMUXMultiQueue(cmd_queue.Queue):
 
         See Serial Queue instead
         """
+        # deprecate: use serial queue instead
         self.order_jobs()
         queue_fpaths = []
         for queue in self.workers:
             fpath = queue.write()
             queue_fpaths.append(fpath)
         for fpath in queue_fpaths:
-            ub.cmd(f'{fpath}', verbose=3, check=True)
+            ub.cmd(f'{fpath}', verbose=self.cmd_verbose, check=True)
 
     def monitor(self, refresh_rate=0.4):
         """
@@ -604,7 +637,7 @@ class TMUXMultiQueue(cmd_queue.Queue):
         for queue in self.workers:
             print('\n\nqueue = {!r}'.format(queue))
             # First print out the contents for debug
-            ub.cmd(f'tmux capture-pane -p -t "{queue.pathid}:0.0"', verbose=3)
+            ub.cmd(f'tmux capture-pane -p -t "{queue.pathid}:0.0"', verbose=self.cmd_verbose)
 
     def _print_commands(self):
         # First print out the contents for debug
@@ -620,12 +653,12 @@ class TMUXMultiQueue(cmd_queue.Queue):
 
     def capture(self):
         for command in self._print_commands():
-            ub.cmd(command, verbose=3)
+            ub.cmd(command, verbose=self.cmd_verbose)
 
     def kill(self):
         # Kills all the tmux panes
         for command in self._kill_commands():
-            ub.cmd(command, verbose=3)
+            ub.cmd(command, verbose=self.cmd_verbose)
 
     def _tmux_current_sessions(self):
         # Kills all the tmux panes

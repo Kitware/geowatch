@@ -1451,7 +1451,7 @@ def plot_individual_class_curves(all_results, dataset_title_part, catname, fnum,
     return fig
 
 
-def plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric='ap'):
+def plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric='ap', rkey='nocls_measures'):
     from kwcoco.metrics import drawing
     import kwplot
     # max_num_curves = 32
@@ -1461,7 +1461,7 @@ def plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric
     # max_per_expt = 10
     # max_per_expt = 3
     fig = kwplot.figure(fnum=fnum, doclf=True)
-    relevant_results = [r for r in all_results if r.nocls_measures and r.nocls_measures['nsupport'] > 0]
+    relevant_results = [r for r in all_results if getattr(r, rkey) and getattr(r, rkey)['nsupport'] > 0]
 
     for result in relevant_results:
         if 'prefix' in result.meta:
@@ -1475,7 +1475,7 @@ def plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric
         result.meta['prefix'] = prefix
 
     def lookup_metric(x):
-        return x.nocls_measures[metric]
+        return getattr(x, rkey)[metric]
 
     if 1:
         # Take best per experiment
@@ -1517,7 +1517,7 @@ def plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric
     for idx, result in enumerate(results_to_plot):
         color = colors[idx]
         color = [kwplot.Color(color).as01()]
-        measure = result.nocls_measures
+        measure = getattr(result, rkey)
         prefix = result.meta['prefix']
         color = hash_color(prefix)
         kw = {'fnum': fnum}
@@ -1527,7 +1527,7 @@ def plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric
             drawing.draw_roc(measure, prefix=prefix, color=color, **kw)
         else:
             raise KeyError
-    fig.gca().set_title(f'Comparison of runs {metric}: Salient -\n{dataset_title_part}')
+    fig.gca().set_title(f'Comparison of runs {metric}: {rkey} -\n{dataset_title_part}')
     return fig
 
 
@@ -2000,6 +2000,22 @@ def main(cmdline=False, **kwargs):
 
         if len(all_results):
             fnum = 3
+
+            for result in all_results:
+                coi_measures = []
+                for c, m in result.ovr_measures.items():
+                    if coi_pattern.match(c):
+                        coi_measures.append(m)
+                # Is this actually macro or micro? I forget
+                import kwcoco
+                if coi_measures:
+                    ovr_coi_macro = kwcoco.metrics.Measures.combine(coi_measures)
+                    ovr_coi_macro = ovr_coi_macro.reconstruct()
+                    ovr_coi_macro.proxy['node'] = 'OVR-COI-Macro'
+                    result.ovr_coi_macro = ovr_coi_macro
+                else:
+                    result.ovr_coi_macro = None
+
             catname = 'Active Construction'
             fig3 = plot_individual_class_curves(all_results, dataset_title_part, catname, fnum, 'ap')
             if fig3 is not None:
@@ -2013,10 +2029,15 @@ def main(cmdline=False, **kwargs):
 
         if len(all_results):
             fnum = 5
-            fig5 = plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric='ap')
+            fig5 = plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric='ap', rkey='nocls_measures')
             if fig5 is not None:
                 _writefig(fig5, out_dpath, 'salient_ap_curve.png', figsize, verbose, tight=True)
             # print(best_per_expt.sort_values('mAP').to_string())
+
+            fnum = 6
+            fig5 = plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric='ap', rkey='ovr_coi_macro')
+            if fig5 is not None:
+                _writefig(fig5, out_dpath, 'ovr_coi_macro_ap_curve.png', figsize, verbose, tight=True)
 
         if 0:
             # Make robust

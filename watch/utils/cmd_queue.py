@@ -25,6 +25,7 @@ class Queue(ub.NiceRepr):
     def __init__(self):
         self.num_real_jobs = 0
         self.all_depends = None
+        self.named_jobs = {}
 
     def __len__(self):
         return self.num_real_jobs
@@ -66,6 +67,14 @@ class Queue(ub.NiceRepr):
             job = command
         self.jobs.append(job)
 
+        try:
+            if job.name in self.named_jobs:
+                raise KeyError(f'duplicate key {job.name}')
+        except Exception:
+            raise
+
+        self.named_jobs[job.name] = job
+
         if not job.bookkeeper:
             self.num_real_jobs += 1
         return job
@@ -86,6 +95,21 @@ class Queue(ub.NiceRepr):
         else:
             raise KeyError
         return self
+
+    def print_graph(self):
+        from watch.utils import cmd_queue
+        import networkx as nx
+        graph = self._dependency_graph()
+        print('\nGraph:')
+        print(cmd_queue.graph_str(graph))
+
+        print('\nReduced:')
+        try:
+            reduced_graph = nx.transitive_reduction(graph)
+            print(cmd_queue.graph_str(reduced_graph))
+        except Exception as ex:
+            print(f'ex={ex}')
+        print('\n')
 
     def _dependency_graph(self):
         """
