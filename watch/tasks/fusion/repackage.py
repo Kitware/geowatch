@@ -295,7 +295,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
 
     for row in gathered:
         p = row['name_fpath']
-        p['broken_link'] = p is not None and p.is_symlink() and not p.exists()
+        row['broken_link'] = p is not None and p.is_symlink() and not p.exists()
 
     if 1:
         import pandas as pd
