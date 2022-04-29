@@ -293,6 +293,10 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
                     model_name_to_row[model_name] = row
                     gathered.append(row)
 
+    for row in gathered:
+        p = row['name_fpath']
+        p['broken_link'] = p is not None and p.is_symlink() and not p.exists()
+
     if 1:
         import pandas as pd
         df = pd.DataFrame(gathered)
@@ -302,7 +306,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
             raise Exception('No data gathered')
         print(f'storage_dpath={storage_dpath}')
         for is_loose, subgroup in df.groupby('is_loose'):
-            header = ['was_packaged', 'needs_repackage', 'was_copied',  'needs_copy', 'needs_dvc_add', 'is_loose']
+            header = ['was_packaged', 'needs_repackage', 'was_copied',  'needs_copy', 'needs_dvc_add', 'is_loose', 'broken_link']
             needy_header = ['needs_repackage', 'needs_copy', 'needs_dvc_add']
             if is_loose:
                 # dont print extra loose stuff
