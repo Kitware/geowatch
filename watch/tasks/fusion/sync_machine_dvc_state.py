@@ -77,10 +77,10 @@ def main(cmdline=True, **kwargs):
 
     # eval_df = evaluation_state(dvc_dpath)
     if config['push']:
-        push_unstaged_evals(dvc_dpath)
+        push_unstaged_evals(dvc_dpath, dvc_remote=dvc_remote)
 
     if config['pull']:
-        pull_nonlocal_evals(dvc_dpath)
+        pull_nonlocal_evals(dvc_dpath, dvc_remote=dvc_remote)
 
 
 def sync_checkpoints(dvc_dpath, mode='list', dvc_remote='aws'):
