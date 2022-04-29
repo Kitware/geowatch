@@ -155,7 +155,7 @@ class TMUXMultiQueue(cmd_queue.Queue):
         self.pathid = '{}_{}'.format(self.name, self.rootid)
         if dpath is None:
             dpath = ub.ensure_app_cache_dir('cmd_queue')
-        self.dpath = ub.Path(dpath) / self.pathid
+        self.dpath = (ub.Path(dpath) / self.pathid).ensuredir()
 
         if environ is None:
             environ = {}
