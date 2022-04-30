@@ -151,7 +151,7 @@ if [ -d "$EFS_DEST" ]; then
     apt update || true
     apt install rsync -y
     mkdir -p "$SMART_DVC_DPATH"/.dvc/cache
-    time rsync -nvrPR -p "$EFS_DEST"/.dvc/./cache "$SMART_DVC_DPATH/.dvc/"
+    time rsync -vrPR -p "$EFS_DEST"/.dvc/./cache "$SMART_DVC_DPATH/.dvc/"
     # This seems to fail the first time. No idea why that is. Try it a few times.
     dvc checkout -R . || \
         dvc checkout -R . || \
@@ -272,9 +272,20 @@ Execute instructions:
         #argo logs "${WORKFLOW_NAME}" --follow
         # kubctl gives better full logs
         # kubectl logs "${WORKFLOW_NAME}" -c main --follow  
+        kubectl logs "${WORKFLOW_NAME}" -c main
         kubectl attach "${WORKFLOW_NAME}"
     }
     argo_follow_recent
+
+
+    # Get a shell
+    argo_get_a_shell(){
+        WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
+        NAME_PREFIX=$(yq -r .metadata.generateName "$WORKFLOW_FPATH")
+        WORKFLOW_NAME=$(argo list --running | argo list --running | grep "$NAME_PREFIX" | head -n 1 | cut -d" " -f1)
+        kubectl exec --stdin --tty $WORKFLOW_NAME -- /bin/bash
+    }
+    argo_get_a_shell
 
     # Use this to check outputs
     aws s3 --profile iarpa ls s3://kitware-smart-watch-data/sync_root/ta2-train-xzzwv
