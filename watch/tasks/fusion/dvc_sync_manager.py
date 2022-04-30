@@ -393,6 +393,9 @@ def main(cmdline=True, **kwargs):
         config['pull'] = False
         config['evals'] = False
         config['packages'] = False
+        if 'all' in command:
+            config['packages'] = True
+            config['eval'] = True
         if 'pull' in command:
             config['pull'] = True
         if 'push' in command:
@@ -438,9 +441,10 @@ def main(cmdline=True, **kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/tasks/fusion/dvc_sync_manager.py "pull packages"
-        python -m watch.tasks.fusion.dvc_sync_manager --push=True --pull=False
-        python -m watch.tasks.fusion.dvc_sync_manager --push=True --pull=False --help
+        python ~/code/watch/watch/tasks/fusion/dvc_sync_manager.py "pull all"
+        python -m watch.tasks.fusion.dvc_sync_manager "push all"
+        python -m watch.tasks.fusion.dvc_sync_manager "pull evals"
+        python -m watch.tasks.fusion.dvc_sync_manager "pull all"
 
         python -m watch.tasks.fusion.dvc_sync_manager "pull packages"
     """
