@@ -41,7 +41,7 @@ RUN apt-get update && \
         libxrender1 \
         mercurial \
         subversion \
-        wget jq \
+        wget jq rsync \
         p7zip-full \
         unzip \
         ssh tmux tree curl iputils-ping \

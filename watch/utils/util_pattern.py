@@ -8,6 +8,7 @@ TODO:
 import re
 import fnmatch
 import ubelt as ub
+from watch.utils import util_path
 
 if hasattr(re, 'Pattern'):
     RE_Pattern = re.Pattern
@@ -170,11 +171,38 @@ class Pattern(PatternBase, ub.NiceRepr):
             self = cls(data, backend)
         return self
 
+    def paths(self, cwd=None, recursive=False):
+        """
+        Find paths in the filesystem that match this pattern
+        """
+        if self.backend == 'glob':
+            import glob
+            with util_path.ChDir(cwd):
+                yield from glob.glob(self.pattern, recursive=recursive)
+        else:
+            raise NotImplementedError
+
 
 class MultiPattern(PatternBase, ub.NiceRepr):
     """
     Example:
-        MultiPattern.coerce(['.*', 'fds*'])
+        >>> from watch.utils.util_pattern import *  # NOQA
+        >>> dpath = ub.Path.appdir('xdev/tests/multipattern_paths').ensuredir().delete().ensuredir()
+        >>> (dpath / 'file0.txt').touch()
+        >>> (dpath / 'data0.dat').touch()
+        >>> (dpath / 'other0.txt').touch()
+        >>> ((dpath / 'dir1').ensuredir() / 'file1.txt').touch()
+        >>> ((dpath / 'dir2').ensuredir() / 'file2.txt').touch()
+        >>> ((dpath / 'dir2').ensuredir() / 'file3.txt').touch()
+        >>> ((dpath / 'dir1').ensuredir() / 'data.dat').touch()
+        >>> ((dpath / 'dir2').ensuredir() / 'data.dat').touch()
+        >>> ((dpath / 'dir2').ensuredir() / 'data.dat').touch()
+        >>> pat = MultiPattern.coerce(['*.txt'], 'glob')
+        >>> print(list(pat.paths(cwd=dpath)))
+        >>> pat = MultiPattern.coerce(['*0*', '**/*.txt'], 'glob')
+        >>> print(list(pat.paths(cwd=dpath, recursive=1)))
+        >>> pat = MultiPattern.coerce(['*.txt', '**/*.txt', '**/*.dat'], 'glob')
+        >>> print(list(pat.paths(cwd=dpath)))
     """
     def __init__(self, patterns, predicate):
         self.predicate = predicate
@@ -185,6 +213,15 @@ class MultiPattern(PatternBase, ub.NiceRepr):
 
     def match(self, text):
         return self.predicate(p.match(text) for p in self.patterns)
+
+    def paths(self, cwd=None, recursive=False):
+        groups = (p.paths(cwd=cwd, recursive=recursive) for p in self.patterns)
+        if self.predicate in {any}:  # all}:
+            yield from ub.unique(ub.flatten(groups))
+        elif self.predicate in {all}:  # all}:
+            yield from set.intersection(*map(set, groups))
+        else:
+            raise NotImplementedError
 
     # def search(self, text):
     #     return self.predicate(p.search(text) for p in self.patterns)

@@ -1,6 +1,6 @@
 """
 
-python -m watch.tasks.fusion.sync_machine_dvc_state "push pull evals"
+python -m watch.tasks.fusion.dvc_sync_manager "push pull evals"
 
 """
 import ubelt as ub
@@ -11,6 +11,8 @@ import os
 import glob
 import functools  # NOQA
 
+from watch.tasks.fusion import dvc_sync_manager
+
 
 def eval3_report():
     import kwplot
@@ -20,6 +22,9 @@ def eval3_report():
         dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
     except Exception:
         dvc_dpath = watch.find_smart_dvc_dpath()
+
+    dvc_manager = dvc_sync_manager.DVCSyncManager(dvc_dpath)
+
     gsd10_dpath = dvc_dpath / 'models/fusion/eval3_candidates'
     gsd1_dpath = dvc_dpath / 'models/fusion/eval3_sc_candidates'
 

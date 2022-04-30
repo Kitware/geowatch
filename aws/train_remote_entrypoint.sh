@@ -133,19 +133,41 @@ DATASET_CODE=Aligned-Drop3-L1
 cd "$SMART_DVC_DPATH/$DATASET_CODE"
 ls -al
 
+
+__devnote__='
+# The data was initialy copied into the efsdata cache manually via
+
+SMART_DVC_DPATH=$(smartwatch_dvc)
+du -sh $SMART_DVC_DPATH/.dvc/cache
+
+mkdir -p /efsdata/smart_watch_dvc/.dvc/
+rsync -vrPR $SMART_DVC_DPATH/.dvc/./cache 
+'
+
+if [ -d /efsdata/smart_dvc_cache ]; then
+    # If we have a mounted efs cache, then lets use it
+    apt update || true
+    apt install rsync
+    mkdir -p "$SMART_DVC_DPATH"/.dvc/cache
+    time rsync -nvrPR -p /efsdata/smart_watch_dvc/.dvc/./cache "$SMART_DVC_DPATH/.dvc/"
+    dvc checkout splits.zip.dvc
+    # This seems to fail the first time. No idea why that is. Try it a few times.
+    dvc checkout -R . || \
+        dvc checkout -R . || \
+        dvc checkout -R . || \
+        dvc checkout -R . 
+else
+    dvc pull splits.zip.dvc -r aws-noprofile 
+    # This seems to fail the first time. No idea why that is. Try it a few times.
+    dvc pull -R . -r aws-noprofile || \
+        dvc pull -R . -r aws-noprofile || \
+        dvc pull -R . -r aws-noprofile || \
+        dvc pull -R . -r aws-noprofile 
+fi
+
 #sleep 28800
-
-dvc pull splits.zip.dvc -r aws-noprofile 
 unzip -o splits.zip
-
-# This seems to fail the first time. No idea why that is. Try it a few times.
-dvc pull -R . -r aws-noprofile || \
-    dvc pull -R . -r aws-noprofile || \
-    dvc pull -R . -r aws-noprofile || \
-    dvc pull -R . -r aws-noprofile 
-
-#sudo apt install p7zip-full
-#7z x
+#7z x splits.zip
 
 DVC_DPATH=$(smartwatch_dvc)
 echo "DVC_DPATH = $DVC_DPATH"
@@ -213,7 +235,7 @@ VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
 CHANNELS="blue|green|red|nir|swir16|swir22"
 INITIAL_STATE="noop"
-EXPERIMENT_NAME=L1_BASELINE_AWS_${HOSTNAME}_V005
+EXPERIMENT_NAME=L1_BASELINE_AWS_${HOSTNAME}_V006
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_l1_baseline_20220425.yaml" \
@@ -223,12 +245,18 @@ python -m watch.tasks.fusion.fit \
     --vali_dataset="$VALI_FPATH" \
     --test_dataset="$TEST_FPATH" \
     --channels="$CHANNELS" \
-    --max_epoch_length=10000 \
-    --chip_size=380 \
+    --max_epoch_length=496 \
+    --time_sampling=hardish3 \
+    --chip_size=256 \
+    --time_steps=11 \
+    --time_span=6m \
+    --accumulate_grad_batches=3 \
+    --learning_rate=3e-4 \
+    --max_epochs=160 \
+    --patience=160 \
     --gpus 1 \
     --num_workers=6 \
     --init="$INITIAL_STATE"
-
 
 __doc__='
 
@@ -255,16 +283,6 @@ Execute instructions:
     TODO:
     Allow hard coded specs for the following:
         datamodule.dataset_stats = {
-            "unique_sensor_modes": {
-                (
-                    "L8",
-                    "blue|green|red|nir|swir16|swir22",
-                ),
-                (
-                    "S2",
-                    "blue|green|red|nir|swir16|swir22",
-                ),
-            },
             "sensor_mode_hist": {
                 ("L8", "blue|green|red|nir|swir16|swir22"): 1546,
                 ("S2", "blue|green|red|nir|swir16|swir22"): 3574,

@@ -3,28 +3,7 @@ A simplified Python DVC API
 """
 import ubelt as ub
 import os
-
-"""
-Python API to make DVC easier to work with
-"""
-
-
-class ChDir:
-    """
-    Context manager that changes the current working directory and then
-    returns you to where you were.
-    """
-    def __init__(self, dpath):
-        self.context_dpath = dpath
-        self.orig_dpath = None
-
-    def __enter__(self):
-        self.orig_dpath = os.getcwd()
-        os.chdir(self.context_dpath)
-        return self
-
-    def __exit__(self, a, b, c):
-        os.chdir(self.orig_dpath)
+from watch.utils import util_path
 
 
 class SimpleDVC(ub.NiceRepr):
@@ -118,7 +97,7 @@ class SimpleDVC(ub.NiceRepr):
             return
         dvc_root = self._ensure_root(paths)
         rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
-        with ChDir(dvc_root):
+        with util_path.ChDir(dvc_root):
             dvc_command = ['add'] + rel_paths
             dvc_main.main(dvc_command)
 
@@ -172,7 +151,7 @@ class SimpleDVC(ub.NiceRepr):
         if recursive:
             extra_args += ['--recursive']
 
-        with ChDir(dvc_root):
+        with util_path.ChDir(dvc_root):
             dvc_command = ['push'] + extra_args + [str(p.relative_to(dvc_root)) for p in paths]
             dvc_main.main(dvc_command)
 
@@ -204,7 +183,7 @@ class SimpleDVC(ub.NiceRepr):
             return
         dvc_root = self._ensure_root(paths)
         rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
-        with ChDir(dvc_root):
+        with util_path.ChDir(dvc_root):
             dvc_command = ['unprotect'] + rel_paths
             dvc_main.main(dvc_command)
 

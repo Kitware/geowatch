@@ -6,9 +6,9 @@ CROPPED_PRE_EVAL_AND_AGG(){
     # 1. Repackage and commit new models
     #################################
 
-    python -m watch.tasks.fusion.sync_machine_dvc_state "push packages evals"
-    python -m watch.tasks.fusion.sync_machine_dvc_state "pull evals"
-    python -m watch.tasks.fusion.sync_machine_dvc_state "pull packages"
+    python -m watch.tasks.fusion.dvc_sync_manager "push packages evals"
+    python -m watch.tasks.fusion.dvc_sync_manager "pull evals"
+    python -m watch.tasks.fusion.dvc_sync_manager "pull packages"
 
     DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
@@ -82,7 +82,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     #################################
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
 
-    python -m watch.tasks.fusion.sync_machine_dvc_state --push=True --pull=True --dvc_remote=aws
+    python -m watch.tasks.fusion.dvc_sync_manager --push=True --pull=True --dvc_remote=aws
 
     # Check for uncommited evaluations
     # shellcheck disable=SC2010

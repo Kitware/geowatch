@@ -2,9 +2,9 @@
 Synchronize DVC states across the machine.
 
 Example:
-    python -m watch.tasks.fusion.sync_machine_dvc_state "pull evals"
+    python -m watch.tasks.fusion.dvc_sync_manager "pull evals"
 """
-import glob
+import pandas as pd
 import ubelt as ub
 import platform
 import scriptconfig as scfg
@@ -33,6 +33,125 @@ EVAL_GLOB_PATTERNS = {
     'pxl_ta1_1': 'models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json',
     'act_ta1_1': 'models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json',
 }
+
+
+class WatchDVCState:
+    def __init__(self, dvc_dpath):
+        pass
+
+
+class ExperimentState:
+    """
+    Ignore:
+        >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
+        >>> import watch
+        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> dataset_code = 'Aligned-Drop3-TA1-2022-03-10'
+        >>> self = ExperimentState(dvc_dpath, dataset_code)
+        >>> gen = self.measure_rows()
+        >>> row = ub.peek(gen)
+        >>> table = self.measure_table()
+        >>> print(table)
+    """
+    def __init__(self, dvc_dpath, dataset_code, storage_code=None):
+        self.dvc_dpath = dvc_dpath
+        self.dataset_code = dataset_code
+        if storage_code is None:
+            storage_code = STORAGE_REPL.get(dataset_code, dataset_code)
+        self.storage_code = storage_code
+        self.storage_dpath = self.dvc_dpath / 'models/fusion' / storage_code
+
+        self.patterns = {
+            'expt': '*',
+            'dset': '*',
+            'model': '*',
+            'pred_cfg': '*',
+            'trk_cfg': '*',
+            'act_cfg': '*',
+        }
+        self.measure_templates = {
+            'pxl': 'eval/{expt}/{model}/{dset}/{pred_cfg}/eval/curves/measures2.json',
+            'trk': 'eval/{expt}/{model}/{dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
+            'act': 'eval/{expt}/{model}/{dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
+        }
+        self.measure_patterns = {}
+        self._build_path_patterns()
+
+    def _build_path_patterns(self):
+        self.measure_patterns = {
+            k: self.storage_dpath / v.format(**self.patterns)
+            for k, v in self.measure_templates.items()}
+
+    @classmethod
+    def _dvcglob(cls, pat):
+        """
+        Ignore:
+            >>> import watch
+            >>> dvc_dpath = watch.find_smart_dvc_dpath()
+            >>> bundle_dpath = dvc_dpath / 'deprecated/drop1-S2-L8-aligned'
+            >>> list(ExperimentState._dvcglob(bundle_dpath / '*'))
+        """
+        from watch.utils import util_pattern
+        import os
+        pat = os.fspath(pat)
+        mpat = util_pattern.Pattern.coerce(pat)
+        default = {'raw': None, 'dvc': None}
+        id_to_row = ub.ddict(default.copy)
+        paths = list(map(ub.Path, mpat.paths(recursive=0)))
+        dvc_ext = '.dvc'
+        len_ext = len(dvc_ext)
+        for path in paths:
+            parent = path.parent
+            name = path.name
+            if name.endswith(dvc_ext):
+                type = 'dvc'
+                raw_path = parent / name[:-len_ext]
+                # dvc_path = path
+            else:
+                type = 'raw'
+                raw_path = path
+                # dvc_path = parent / (name + '.dvc')
+            row = id_to_row[raw_path]
+            row[type] = path
+            yield row
+
+    def measure_rows(self, attrs=1):
+        keys = ['pxl', 'act', 'trk']
+        for key in keys:
+            pat = self.measure_patterns['pxl']
+            for row in self._dvcglob(pat):
+                row['type'] = key
+                row['has_dvc'] = (row['dvc'] is not None)
+                row['has_raw'] = (row['raw'] is not None)
+                row['needs_pull'] = row['has_dvc'] and not row['has_raw']
+                row['is_link'] = False
+                row['unprotected'] = False
+                row['needs_push'] = False
+                if attrs:
+                    row['dataset_code'] = self.dataset_code
+                    row['dataset_code'] = self.dataset_code
+
+                if row['has_raw']:
+                    p = ub.Path(row['raw'])
+                    row['is_link'] = p.is_symlink()
+                    row['needs_push'] = not row['has_dvc']
+                    if row['has_dvc']:
+                        row['unprotected'] = not row['is_link']
+                yield row
+
+    def measure_table(self):
+        """
+        Get a list of dictionaries with information for each known evaluation.
+
+        Information includes its real path if it exists, its dvc path if it exists
+        and what sort of actions need to be done to synchronize it.
+        """
+        eval_rows = list(self.measure_rows())
+        # import numpy as np
+        eval_df = pd.DataFrame(eval_rows)
+        print(eval_df.drop(['type', 'raw', 'dvc'], axis=1).sum().to_frame().T)
+        print(eval_df.groupby('type').sum())
+        return eval_df
 
 
 class SyncMachineConfig(scfg.Config):
@@ -139,20 +258,48 @@ class DVCSyncManager(ub.NiceRepr):
 
     A breakdown of the packages dir is:
         packages/<expt_name>/<model_name.pt>
+
+    Example:
+        >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
+        >>> # Default config is used if not provided
+        >>> self = DVCSyncManager.coerce()
     """
 
     def __nice__(self):
         return str(self.dvc)
 
-    def __init__(self, dvc_dpath, dvc_remote, dataset_codes=None):
+    def __init__(self, dvc_dpath, dvc_remote='aws', dataset_codes=None):
         self.dvc_dpath = dvc_dpath
         self.dvc_remote = dvc_remote
         self.dataset_codes = dataset_codes
         self.dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath, remote=dvc_remote)
+        self._evaluation_state()
+
+    @classmethod
+    def coerce(cls):
+        import watch
+        dvc_dpath = watch.find_smart_dvc_dpath()
+        dvc_remote = 'aws'
+        dataset_codes = DATASET_CODES
+        self = cls(dvc_dpath=dvc_dpath, dvc_remote=dvc_remote,
+                   dataset_codes=dataset_codes)
+        return self
+
+    def _evaluation_state(self):
+        states = []
+        for dataset_code in self.dataset_codes:
+            state = ExperimentState(self.dvc_dpath, dataset_code)
+            states.append(state)
+        self.states = states
+
+    def evaluation_state(self):
+        rows = list(ub.flatten(state.measure_rows() for state in self.states))
+        df = pd.DataFrame(rows)
+        return df
 
     def push_evals(self):
         dvc = self.dvc
-        eval_df = evaluation_state(self.dvc_dpath)
+        eval_df = self.evaluation_state()
 
         is_weird = (eval_df.is_link & (~eval_df.has_dvc))
         weird_df = eval_df[is_weird]
@@ -171,7 +318,7 @@ class DVCSyncManager(ub.NiceRepr):
     def pull_evals(self):
         dvc = self.dvc
         dvc.git_pull()
-        eval_df = evaluation_state(self.dvc_dpath)
+        eval_df = self.evaluation_state()
         pull_fpaths = eval_df[eval_df.needs_pull]['dvc'].tolist()
         dvc.pull(pull_fpaths)
 
@@ -210,7 +357,7 @@ class DVCSyncManager(ub.NiceRepr):
 
 def main(cmdline=True, **kwargs):
     """
-    from watch.tasks.fusion.sync_machine_dvc_state import *  # NOQA
+    from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
     """
     import watch
 
@@ -263,62 +410,11 @@ def main(cmdline=True, **kwargs):
     hdd_manager.sync(**synckw)
 
 
-def evaluation_state(dvc_dpath):
-    """
-    Get a list of dictionaries with information for each known evaluation.
-
-    Information includes its real path if it exists, its dvc path if it exists
-    and what sort of actions need to be done to synchronize it.
-    """
-    eval_rows = []
-    for type, suffix in EVAL_GLOB_PATTERNS.items():
-        raw_pat = str(dvc_dpath / suffix)
-        dvc_pat = raw_pat + '.dvc'
-        found_raw = list(glob.glob(raw_pat))
-        found_dvc = list(glob.glob(dvc_pat))
-        lut = {k: {'raw': k, 'dvc': None} for k in found_raw}
-        for found_dvc in found_dvc:
-            k = found_dvc[:-4]
-            row = lut.setdefault(k, {})
-            row.setdefault('raw', None)
-            row['dvc'] = found_dvc
-        rows = list(lut.values())
-        for row in rows:
-            row['type'] = type
-        eval_rows.extend(rows)
-
-    # import numpy as np
-
-    for row in eval_rows:
-        row['has_dvc'] = (row['dvc'] is not None)
-        row['has_raw'] = (row['raw'] is not None)
-        row['has_both'] = row['has_dvc'] and row['has_raw']
-
-        row['needs_pull'] = row['has_dvc'] and not row['has_raw']
-
-        row['is_link'] = False
-        row['unprotected'] = False
-        row['needs_push'] = False
-
-        if row['has_raw']:
-            p = ub.Path(row['raw'])
-            row['is_link'] = p.is_symlink()
-            row['needs_push'] = not row['has_dvc']
-            if row['has_dvc']:
-                row['unprotected'] = not row['is_link']
-
-    import pandas as pd
-    eval_df = pd.DataFrame(eval_rows)
-    print(eval_df.drop(['type', 'raw', 'dvc'], axis=1).sum().to_frame().T)
-    print(eval_df.groupby('type').sum())
-    return eval_df
-
-
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/tasks/fusion/sync_machine_dvc_state.py
-        python -m watch.tasks.fusion.sync_machine_dvc_state --push=True --pull=False
-        python -m watch.tasks.fusion.sync_machine_dvc_state --push=True --pull=False --help
+        python ~/code/watch/watch/tasks/fusion/dvc_sync_manager.py
+        python -m watch.tasks.fusion.dvc_sync_manager --push=True --pull=False
+        python -m watch.tasks.fusion.dvc_sync_manager --push=True --pull=False --help
     """
     main(cmdline=True)
