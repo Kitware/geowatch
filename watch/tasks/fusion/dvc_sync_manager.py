@@ -36,143 +36,6 @@ EVAL_GLOB_PATTERNS = {
 }
 
 
-class WatchDVCState:
-    def __init__(self, dvc_dpath):
-        pass
-
-
-class ExperimentState(ub.NiceRepr):
-    """
-    Ignore:
-        >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
-        >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
-        >>> dataset_code = 'Aligned-Drop3-TA1-2022-03-10'
-        >>> self = ExperimentState(dvc_dpath, dataset_code)
-        >>> gen = self.measure_rows(['trk'])
-        >>> row = ub.peek(gen)
-        >>> table = self.measure_table(types=['pkg'])
-        >>> print(table[['type', 'raw']])
-    """
-    def __init__(self, dvc_dpath, dataset_code, storage_code=None):
-        self.dvc_dpath = dvc_dpath
-        self.dataset_code = dataset_code
-        if storage_code is None:
-            storage_code = STORAGE_REPL.get(dataset_code, dataset_code)
-        self.storage_code = storage_code
-        self.storage_dpath = self.dvc_dpath / 'models/fusion' / storage_code
-        self.patterns = {
-            'expt': '*',
-            'test_dset': '*',
-            'model': '*',
-            'pred_cfg': '*',
-            'trk_cfg': '*',
-            'act_cfg': '*',
-        }
-        self.measure_templates = {
-            'pkg': 'packages/{expt}/{model}',
-            'pxl': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/curves/measures2.json',
-            'trk': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
-            'act': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
-        }
-        self.measure_patterns = {}
-        self._build_path_patterns()
-
-    def __nice__(self):
-        return self.dataset_code
-
-    def _build_path_patterns(self):
-        self.measure_patterns = {
-            k: self.storage_dpath / v.format(**self.patterns)
-            for k, v in self.measure_templates.items()}
-
-    @classmethod
-    def _dvcglob(cls, pat):
-        """
-        Ignore:
-            >>> import watch
-            >>> dvc_dpath = watch.find_smart_dvc_dpath()
-            >>> bundle_dpath = dvc_dpath / 'deprecated/drop1-S2-L8-aligned'
-            >>> list(ExperimentState._dvcglob(bundle_dpath / '*'))
-        """
-        from watch.utils import util_pattern
-        import os
-        pat = os.fspath(pat)
-        mpat = util_pattern.Pattern.coerce(pat)
-        default = {'raw': None, 'dvc': None}
-        id_to_row = ub.ddict(default.copy)
-        paths = list(map(ub.Path, mpat.paths(recursive=0)))
-        dvc_ext = '.dvc'
-        len_ext = len(dvc_ext)
-        for path in paths:
-            parent = path.parent
-            name = path.name
-            if name.endswith(dvc_ext):
-                type = 'dvc'
-                raw_path = parent / name[:-len_ext]
-                # dvc_path = path
-            else:
-                type = 'raw'
-                raw_path = path
-                # dvc_path = parent / (name + '.dvc')
-            row = id_to_row[raw_path]
-            row[type] = path
-            yield row
-
-    def measure_rows(self, attrs=1, types=None, notypes=None):
-        keys = ['pxl', 'act', 'trk', 'pkg']
-        if types is not None:
-            keys = types
-        if notypes is not None:
-            keys = list(ub.oset(keys) - set(notypes))
-        for key in keys:
-            pat = self.measure_patterns[key]
-            for row in self._dvcglob(pat):
-                row['type'] = key
-                row['has_dvc'] = (row['dvc'] is not None)
-                row['has_raw'] = (row['raw'] is not None)
-
-                row['needs_pull'] = row['has_dvc'] and not row['has_raw']
-                row['is_link'] = False
-                row['unprotected'] = False
-                row['needs_push'] = False
-                if attrs:
-                    path = row['raw'] or row['dvc']
-                    row['dataset_code'] = self.dataset_code
-                    template = self.storage_dpath / self.measure_templates[key]
-                    parser = parse.Parser(str(template))
-                    results = parser.parse(str(path))
-                    if results is None:
-                        parser = parse.Parser(str(template)[:-4])
-                        results = parser.parse(str(path))
-                    if results is not None:
-                        row.update(results.named)
-                    else:
-                        print('warning: bad attrs')
-
-                if row['has_raw']:
-                    p = ub.Path(row['raw'])
-                    row['is_link'] = p.is_symlink()
-                    row['needs_push'] = not row['has_dvc']
-                    if row['has_dvc']:
-                        row['unprotected'] = not row['is_link']
-                yield row
-
-    def measure_table(self, **kw):
-        """
-        Get a list of dictionaries with information for each known evaluation.
-
-        Information includes its real path if it exists, its dvc path if it exists
-        and what sort of actions need to be done to synchronize it.
-        """
-        # import numpy as np
-        eval_rows = list(self.measure_rows(**kw))
-        eval_df = pd.DataFrame(eval_rows)
-        # print(eval_df.drop(['type', 'raw', 'dvc'], axis=1).sum().to_frame().T)
-        # print(eval_df.groupby('type').sum())
-        return eval_df
-
-
 class SyncMachineConfig(scfg.Config):
     """
     Certain parts of these names have special nomenclature to make them easier
@@ -251,6 +114,143 @@ class SyncMachineConfig(scfg.Config):
                 <dvc_dpath>/models/fusion/<dataset_code>/eval
             ''')),
     }
+
+
+class WatchDVCState:
+    def __init__(self, dvc_dpath):
+        pass
+
+
+class ExperimentState(ub.NiceRepr):
+    """
+    Ignore:
+        >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
+        >>> import watch
+        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> dataset_code = 'Aligned-Drop3-TA1-2022-03-10'
+        >>> self = ExperimentState(dvc_dpath, dataset_code)
+        >>> gen = self.measure_rows(['trk'])
+        >>> row = ub.peek(gen)
+        >>> table = self.measure_table(types=['pkg'])
+        >>> print(table[['type', 'raw']])
+    """
+    def __init__(self, dvc_dpath, dataset_code, storage_code=None):
+        self.dvc_dpath = dvc_dpath
+        self.dataset_code = dataset_code
+        if storage_code is None:
+            storage_code = STORAGE_REPL.get(dataset_code, dataset_code)
+        self.storage_code = storage_code
+        self.storage_dpath = self.dvc_dpath / 'models/fusion' / storage_code
+        self.patterns = {
+            'expt': '*',
+            'test_dset': '*',
+            'model': '*',
+            'pred_cfg': '*',
+            'trk_cfg': '*',
+            'act_cfg': '*',
+        }
+        self.templates = {
+            'pkg': 'packages/{expt}/{model}',
+            'pxl': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/curves/measures2.json',
+            'trk': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
+            'act': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
+        }
+        self.patterns = {}
+        self._build_path_patterns()
+
+    def __nice__(self):
+        return self.dataset_code
+
+    def _build_path_patterns(self):
+        self.patterns = {
+            k: self.storage_dpath / v.format(**self.patterns)
+            for k, v in self.templates.items()}
+
+    @classmethod
+    def _dvcglob(cls, pat):
+        """
+        Ignore:
+            >>> import watch
+            >>> dvc_dpath = watch.find_smart_dvc_dpath()
+            >>> bundle_dpath = dvc_dpath / 'deprecated/drop1-S2-L8-aligned'
+            >>> list(ExperimentState._dvcglob(bundle_dpath / '*'))
+        """
+        from watch.utils import util_pattern
+        import os
+        pat = os.fspath(pat)
+        mpat = util_pattern.Pattern.coerce(pat)
+        default = {'raw': None, 'dvc': None}
+        id_to_row = ub.ddict(default.copy)
+        paths = list(map(ub.Path, mpat.paths(recursive=0)))
+        dvc_ext = '.dvc'
+        len_ext = len(dvc_ext)
+        for path in paths:
+            parent = path.parent
+            name = path.name
+            if name.endswith(dvc_ext):
+                type = 'dvc'
+                raw_path = parent / name[:-len_ext]
+                # dvc_path = path
+            else:
+                type = 'raw'
+                raw_path = path
+                # dvc_path = parent / (name + '.dvc')
+            row = id_to_row[raw_path]
+            row[type] = path
+            yield row
+
+    def measure_rows(self, attrs=1, types=None, notypes=None):
+        keys = ['pxl', 'act', 'trk', 'pkg']
+        if types is not None:
+            keys = types
+        if notypes is not None:
+            keys = list(ub.oset(keys) - set(notypes))
+        for key in keys:
+            pat = self.patterns[key]
+            for row in self._dvcglob(pat):
+                row['type'] = key
+                row['has_dvc'] = (row['dvc'] is not None)
+                row['has_raw'] = (row['raw'] is not None)
+
+                row['needs_pull'] = row['has_dvc'] and not row['has_raw']
+                row['is_link'] = False
+                row['unprotected'] = False
+                row['needs_push'] = False
+                if attrs:
+                    path = row['raw'] or row['dvc']
+                    row['dataset_code'] = self.dataset_code
+                    template = self.storage_dpath / self.templates[key]
+                    parser = parse.Parser(str(template))
+                    results = parser.parse(str(path))
+                    if results is None:
+                        parser = parse.Parser(str(template)[:-4])
+                        results = parser.parse(str(path))
+                    if results is not None:
+                        row.update(results.named)
+                    else:
+                        print('warning: bad attrs')
+
+                if row['has_raw']:
+                    p = ub.Path(row['raw'])
+                    row['is_link'] = p.is_symlink()
+                    row['needs_push'] = not row['has_dvc']
+                    if row['has_dvc']:
+                        row['unprotected'] = not row['is_link']
+                yield row
+
+    def measure_table(self, **kw):
+        """
+        Get a list of dictionaries with information for each known evaluation.
+
+        Information includes its real path if it exists, its dvc path if it exists
+        and what sort of actions need to be done to synchronize it.
+        """
+        # import numpy as np
+        eval_rows = list(self.measure_rows(**kw))
+        eval_df = pd.DataFrame(eval_rows)
+        # print(eval_df.drop(['type', 'raw', 'dvc'], axis=1).sum().to_frame().T)
+        # print(eval_df.groupby('type').sum())
+        return eval_df
 
 
 class DVCSyncManager(ub.NiceRepr):
@@ -395,7 +395,7 @@ def main(cmdline=True, **kwargs):
         config['packages'] = False
         if 'all' in command:
             config['packages'] = True
-            config['eval'] = True
+            config['evals'] = True
         if 'pull' in command:
             config['pull'] = True
         if 'push' in command:
