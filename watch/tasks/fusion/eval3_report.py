@@ -207,6 +207,7 @@ def plot_merged(merged_df, other):
         'co2_kg': 'CO2 Emissions (kg)',
         'total_hours': 'Time (hours)',
         'sensorchan': 'Sensor/Channel',
+        'has_teamfeat': 'Has Team Features',
     }
     actcfg_to_label = other['actcfg_to_label']
     predcfg_to_label = other['predcfg_to_label']
@@ -228,11 +229,7 @@ def plot_merged(merged_df, other):
     #  'trk_thresh_hysteresis',
     #  'trk_moving_window_size']
 
-    def _is_teamfeat(x):
-        if isinstance(x, float) and math.isnan(x):
-            return False
-        return any([a in x for a in ['depth', 'invariant', 'invariants', 'matseg', 'land']])
-    merged_df['has_teamfeat'] = merged_df['sensorchan'].apply(_is_teamfeat)
+    markersize = 60
 
     import kwplot
     expt_group = dict(list(merged_df.groupby(['dataset_code', 'type'])))
@@ -287,6 +284,7 @@ def plot_merged(merged_df, other):
             corr_lbl = 'corr={:0.4f}'.format(metric_corr.iloc[0])
         else:
             corr_lbl = ''
+        plotkw['s'] = markersize
         ax = humanized_scatterplot(human_mapping, data=group, ax=ax, **plotkw)
         ax.set_title(f'Pixelwise Vs IARPA metrics - {type} - {dataset_code=}\n{corr_lbl}')
 
@@ -335,6 +333,7 @@ def plot_merged(merged_df, other):
         metric_corr = metric_corr.loc[valid_idxs]
         # corr_lbl = 'corr({},{})={:0.4f}'.format(*metric_corr.index[0], metric_corr.iloc[0])
         corr_lbl = 'corr={:0.4f}'.format(metric_corr.iloc[0])
+        plotkw['s'] = markersize
         ax = humanized_scatterplot(human_mapping, data=group, ax=ax, **plotkw)
         ax.set_title(f'Pixelwise metrics - {type} - {dataset_code=}\n{corr_lbl}')
         fig.set_size_inches(16.85,  8.82)
@@ -367,7 +366,7 @@ def plot_merged(merged_df, other):
                 group.loc[group['pred_tta_time'] == 'nan', 'pred_tta_time'] = '0.0'
                 group.loc[group['pred_tta_fliprot'] == 'nan', 'pred_tta_fliprot'] = '0.0'
                 dataset_code, type = gsd_type
-                if type == 'sc+pxl':
+                if type == 'act+pxl':
                     plotkw = {
                         'x': resource_type,
                         'y': metric_lut[type],
@@ -394,6 +393,7 @@ def plot_merged(merged_df, other):
                 # fig.get_size_inches()
                 fig.set_size_inches(17.85,  6.82)
                 data = group
+                plotkw['s'] = markersize
                 ax = humanized_scatterplot(human_mapping, data=data, ax=ax, **plotkw)
                 ax.set_title(f'{human_resource_type} vs {human_metric_type} - {type} - {dataset_code=}')
 
@@ -418,7 +418,7 @@ def plot_merged(merged_df, other):
 
     merged_df.loc[merged_df['use_cloudmask'].isnull(), 'use_cloudmask'] = 0
 
-    gsd_type = (1, 'act+pxl')
+    gsd_type = ('Cropped-Drop3-TA1-2022-03-10', 'act+pxl')
     dataset_code, type = gsd_type
     group = expt_group[gsd_type]
 
@@ -465,10 +465,10 @@ def plot_merged(merged_df, other):
         ignore_metrics=ignore_metrics,
         abalation_orders=abalation_orders
     )
-    try:
-        analysis.run()
-    except TypeError:
-        raise
+    # try:
+    #     analysis.run()
+    # except TypeError:
+    #     raise
 
     param = 'trk_use_viterbi'
     scored_obs = analysis.abalate_one(param)
@@ -485,8 +485,8 @@ def plot_merged(merged_df, other):
             pts1.append(obspt.values[0])
             pts2.append(obspt.values[1])
             ab_rows.append(ab_row)
-    ab_df = pd.concat(ab_rows).reset_index(drop=True)
-    obs[param]
+    # ab_df = pd.concat(ab_rows).reset_index(drop=True)
+    # obs[param]
     kwplot.draw_line_segments(pts1, pts2)
     # ticks = ax.set_xticks([0, 1], ['0', 'v6,v1'])
     ax.set_ylabel(metric)
@@ -496,28 +496,28 @@ def plot_merged(merged_df, other):
     plt = kwplot.autoplt()
     ax = plt.gca()
 
+    return
+
     # ab_df
     # .reset_index()
-    ab_melt_df = ab_df.melt(id_vars=['index'], value_vars=ab_row.columns)
-    sns = kwplot.autosns()
-    sns.lineplot(data=ab_melt_df, x=param, y='value')
-
-    scored_obs['']
+    # ab_melt_df = ab_df.melt(id_vars=['index'], value_vars=ab_row.columns)
+    # sns = kwplot.autosns()
+    # sns.lineplot(data=ab_melt_df, x=param, y='value')
 
     import seaborn as sns
-    kwplot.figure(fnum=1)
+    kwplot.figure(fnum=1000)
     sns.violinplot(data=merged_df, x='temporal_dropout', y=pixel_metric)
 
-    kwplot.figure(fnum=2)
+    kwplot.figure(fnum=1001)
     sns.violinplot(data=merged_df, x='chip_size', y=pixel_metric)
 
-    kwplot.figure(fnum=2, doclf=True)
+    kwplot.figure(fnum=1002, doclf=True)
     sns.violinplot(data=merged_df, x='time_steps', y=pixel_metric)
 
-    kwplot.figure(fnum=2, doclf=True)
+    kwplot.figure(fnum=1003, doclf=True)
     sns.violinplot(data=merged_df, x='trk_use_viterbi', y=pixel_metric)
 
-    kwplot.figure(fnum=2, doclf=True)
+    kwplot.figure(fnum=1004, doclf=True)
     ax = sns.violinplot(data=group, x='sensorchan', y=pixel_metric)
     for xtick in ax.get_xticklabels():
         xtick.set_rotation(90)
@@ -624,15 +624,52 @@ def load_extended_data(df, dvc_dpath):
 def clean_loaded_data(big_rows):
     from watch.tasks.fusion import aggregate_results as agr
     try:
-        from kwcoco._experimental.sensorchan import concise_sensor_chan
+        from kwcoco._experimental.sensorchan import concise_sensor_chan, sensorchan_parts
     except Exception:
         concise_sensor_chan = ub.identity
+
+    def _is_teamfeat(x):
+        if isinstance(x, float) and math.isnan(x):
+            return False
+        return any([a in x for a in ['depth', 'invariant', 'invariants', 'matseg', 'land']])
 
     _actcfg_to_track_config = ub.ddict(list)
     _trkcfg_to_track_config = ub.ddict(list)
     _prdcfg_to_pred_config = ub.ddict(list)
     simple_rows = []
     missing_models = []
+    blocklist = {
+        'S2:|R|G',
+        'S2:|G|R|,invariants:16)',
+        'S2:(RGB|land:8,R|G,R|G|land:8)',
+    }
+
+    passlist = {
+        'BGR',
+        'RGB|near-ir1|near-ir2|red-edge|yellow',
+        'BGR|near-ir1',
+        'BGRNSH|land:8|matseg:4|mat_up5:64',
+        'BGRNSH',
+        'BGR|near-ir1|depth',
+        'RGB',
+        'RGB|near-ir1',
+        'RGB|land:8',
+        'RGB|near-ir1|near-ir2|depth',
+        'RGB|near_ir1|near_ir2|depth',
+        'land:8',
+        'invariants:16',
+        'matseg:4',
+        'matseg:4|mat_up5:64',
+    }
+    chan_blocklist = {
+        'R|G',
+        'G|R',
+        'G|R|N|S|H',
+        'R|G|land:8',
+        'RGB|near-ir1|depth',
+        'G|R|N|S|H|land:8|matseg:4|mat_up5:64',
+    }
+
     for big_row in ub.ProgIter(big_rows, desc='big rows'):
         # fpath = big_row['raw']
         row = ub.dict_diff(big_row, {'info'})
@@ -646,6 +683,9 @@ def clean_loaded_data(big_rows):
 
         fit_params['channels'] = agr.shrink_channels(fit_params['channels'])
 
+        # if 'invariants' in fit_params['channels']:
+        #     raise Exception
+
         # Dont trust what the model info says about channels, look
         # at the model stats to be sure.
         if model_fpath and model_fpath.exists():
@@ -655,13 +695,14 @@ def clean_loaded_data(big_rows):
             real_sensors = []
             for input_row in stats['model_stats']['known_inputs']:
                 real_chan = agr.shrink_channels(input_row['channel'])
-                real_chan_parts.add(real_chan)
-                real_sensors.append(input_row['sensor'])
-                senschan_parts.append('{}:{}'.format(input_row['sensor'], real_chan))
-
-            sensorchan = ','.join(sorted(senschan_parts))
+                if real_chan not in chan_blocklist:
+                    if real_chan not in passlist:
+                        print(real_chan)
+                    real_chan_parts.add(real_chan)
+                    real_sensors.append(input_row['sensor'])
+                    senschan_parts.append('{}:{}'.format(input_row['sensor'], real_chan))
+            sensorchan = ','.join(sorted(set(senschan_parts)))
             sensorchan = concise_sensor_chan(sensorchan)
-            fit_params['sensorchan'] = sensorchan
             request_chan_parts = set(fit_params['channels'].split(','))
             if not request_chan_parts.issubset(real_chan_parts):
                 print(f'{real_chan_parts=}')
@@ -672,7 +713,39 @@ def clean_loaded_data(big_rows):
                 fit_params['bad_channels'] = False
         else:
             missing_models.append(model_fpath)
-            fit_params['bad_channels'] = False
+
+            if 'Cropped' in big_row['test_dset']:
+                # Hack
+                sensors = ['WV', 'S2']
+            elif 'Cropped' in big_row['test_dset']:
+                sensors = ['S2', 'L8']
+            else:
+                sensors = ['*']
+
+            import kwcoco
+            channels = kwcoco.ChannelSpec.coerce(fit_params['channels'])
+            senschan_parts = []
+            for sensor in sensors:
+                for chan in channels.streams():
+                    senschan_parts.append(f'{sensor}:{chan.spec}')
+
+            sensorchan = ','.join(sorted(senschan_parts))
+            sensorchan = concise_sensor_chan(sensorchan)
+            request_chan_parts = set(fit_params['channels'].split(','))
+            if not request_chan_parts.issubset(real_chan_parts):
+                print(f'{real_chan_parts=}')
+                print(f'{request_chan_parts=}')
+                print(row['expt'])
+                fit_params['bad_channels'] = True
+            else:
+                fit_params['bad_channels'] = False
+
+        # MANUAL HACK:
+        if 1:
+            sensorchan = ','.join([p for p in sensorchan_parts(sensorchan) if p not in blocklist])
+
+        fit_params['sensorchan'] = sensorchan
+        row['has_teamfeat'] = _is_teamfeat(sensorchan)
 
         selected_fit_params = ub.dict_isect(fit_params, fit_param_keys)
 

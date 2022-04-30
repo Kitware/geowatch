@@ -152,7 +152,6 @@ if [ -d "$EFS_DEST" ]; then
     apt install rsync
     mkdir -p "$SMART_DVC_DPATH"/.dvc/cache
     time rsync -nvrPR -p "$EFS_DEST"/.dvc/./cache "$SMART_DVC_DPATH/.dvc/"
-    dvc checkout splits.zip.dvc
     # This seems to fail the first time. No idea why that is. Try it a few times.
     dvc checkout -R . || \
         dvc checkout -R . || \

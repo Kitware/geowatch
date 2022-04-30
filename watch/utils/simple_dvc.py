@@ -171,7 +171,7 @@ class SimpleDVC(ub.NiceRepr):
         if recursive:
             extra_args += ['--recursive']
 
-        with ChDir(dvc_root):
+        with util_path.ChDir(dvc_root):
             dvc_command = ['pull'] + extra_args + [str(p.relative_to(dvc_root)) for p in paths]
             dvc_main.main(dvc_command)
 

@@ -49,10 +49,10 @@ class ExperimentState(ub.NiceRepr):
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
         >>> dataset_code = 'Aligned-Drop3-TA1-2022-03-10'
         >>> self = ExperimentState(dvc_dpath, dataset_code)
-        >>> gen = self.measure_rows()
+        >>> gen = self.measure_rows(['trk'])
         >>> row = ub.peek(gen)
-        >>> table = self.measure_table()
-        >>> print(table)
+        >>> table = self.measure_table(types=['pkg'])
+        >>> print(table[['type', 'raw']])
     """
     def __init__(self, dvc_dpath, dataset_code, storage_code=None):
         self.dvc_dpath = dvc_dpath
@@ -70,9 +70,10 @@ class ExperimentState(ub.NiceRepr):
             'act_cfg': '*',
         }
         self.measure_templates = {
-            'pxl': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/curves/measures2.json',
-            'trk': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
-            'act': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
+            'pkg': 'packages/{expt}/{model}',
+            'pxl': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/curves/measures2.json',
+            'trk': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
+            'act': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
         }
         self.measure_patterns = {}
         self._build_path_patterns()
@@ -118,8 +119,12 @@ class ExperimentState(ub.NiceRepr):
             row[type] = path
             yield row
 
-    def measure_rows(self, attrs=1):
-        keys = ['pxl', 'act', 'trk']
+    def measure_rows(self, attrs=1, types=None, notypes=None):
+        keys = ['pxl', 'act', 'trk', 'pkg']
+        if types is not None:
+            keys = types
+        if notypes is not None:
+            keys = list(ub.oset(keys) - set(notypes))
         for key in keys:
             pat = self.measure_patterns[key]
             for row in self._dvcglob(pat):
@@ -153,7 +158,7 @@ class ExperimentState(ub.NiceRepr):
                         row['unprotected'] = not row['is_link']
                 yield row
 
-    def measure_table(self):
+    def measure_table(self, **kw):
         """
         Get a list of dictionaries with information for each known evaluation.
 
@@ -161,7 +166,7 @@ class ExperimentState(ub.NiceRepr):
         and what sort of actions need to be done to synchronize it.
         """
         # import numpy as np
-        eval_rows = list(self.measure_rows())
+        eval_rows = list(self.measure_rows(**kw))
         eval_df = pd.DataFrame(eval_rows)
         # print(eval_df.drop(['type', 'raw', 'dvc'], axis=1).sum().to_frame().T)
         # print(eval_df.groupby('type').sum())
@@ -278,6 +283,7 @@ class DVCSyncManager(ub.NiceRepr):
         >>> # Default config is used if not provided
         >>> self = DVCSyncManager.coerce()
         >>> df = self.evaluation_table()
+        >>> print(df)
     """
 
     def __nice__(self):
@@ -308,8 +314,8 @@ class DVCSyncManager(ub.NiceRepr):
             states.append(state)
         self.states = states
 
-    def evaluation_table(self):
-        rows = list(ub.flatten(state.measure_rows() for state in self.states))
+    def evaluation_table(self, **kw):
+        rows = list(ub.flatten(state.measure_rows(**kw) for state in self.states))
         df = pd.DataFrame(rows)
         return df
 
@@ -339,7 +345,10 @@ class DVCSyncManager(ub.NiceRepr):
         dvc.pull(pull_fpaths)
 
     def pull_packages(self):
-        raise NotImplementedError
+        pkg_df = self.evaluation_table(types=['pkg'])
+        pull_df = pkg_df[pkg_df['needs_pull']]
+        pull_fpaths = pull_df['dvc'].tolist()
+        self.dvc.pull(pull_fpaths)
 
     def push_packages(self):
         from watch.tasks.fusion import repackage
@@ -365,8 +374,8 @@ class DVCSyncManager(ub.NiceRepr):
             if evals:
                 self.push_evals()
         if pull:
-            # if packages:
-            #     self.pull_packages()
+            if packages:
+                self.pull_packages()
             if evals:
                 self.pull_evals()
 
@@ -429,8 +438,10 @@ def main(cmdline=True, **kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/tasks/fusion/dvc_sync_manager.py
+        python ~/code/watch/watch/tasks/fusion/dvc_sync_manager.py "pull packages"
         python -m watch.tasks.fusion.dvc_sync_manager --push=True --pull=False
         python -m watch.tasks.fusion.dvc_sync_manager --push=True --pull=False --help
+
+        python -m watch.tasks.fusion.dvc_sync_manager "pull packages"
     """
     main(cmdline=True)
