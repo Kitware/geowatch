@@ -149,7 +149,7 @@ EFS_DEST=/efsdata/smart_watch_dvc
 if [ -d "$EFS_DEST" ]; then
     # If we have a mounted efs cache, then lets use it
     apt update || true
-    apt install rsync
+    apt install rsync -y
     mkdir -p "$SMART_DVC_DPATH"/.dvc/cache
     time rsync -nvrPR -p "$EFS_DEST"/.dvc/./cache "$SMART_DVC_DPATH/.dvc/"
     # This seems to fail the first time. No idea why that is. Try it a few times.
