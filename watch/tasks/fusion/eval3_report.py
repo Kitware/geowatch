@@ -49,7 +49,7 @@ def eval3_report():
 
     from watch.tasks.fusion import dvc_sync_manager
     dvc_manager = dvc_sync_manager.DVCSyncManager.coerce(dvc_dpath)
-    table = dvc_manager.evaluation_table()
+    table = dvc_manager.evaluation_table(notypes=['pkg'])
 
     description = table[['type', 'dataset_code', 'expt', 'model', 'pred_cfg', 'act_cfg', 'trk_cfg']].describe()
     print(description)

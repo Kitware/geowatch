@@ -181,7 +181,7 @@ class ExperimentState(ub.NiceRepr):
         mpat = util_pattern.Pattern.coerce(pat)
         default = {'raw': None, 'dvc': None}
         id_to_row = ub.ddict(default.copy)
-        paths = list(map(ub.Path, mpat.paths(recursive=0)))
+        paths = list(mpat.paths(recursive=0))
         dvc_ext = '.dvc'
         len_ext = len(dvc_ext)
         for path in paths:
@@ -214,6 +214,7 @@ class ExperimentState(ub.NiceRepr):
 
                 row['needs_pull'] = row['has_dvc'] and not row['has_raw']
                 row['is_link'] = False
+                row['is_broken'] = False
                 row['unprotected'] = False
                 row['needs_push'] = False
                 if attrs:
@@ -233,9 +234,9 @@ class ExperimentState(ub.NiceRepr):
                 if row['has_raw']:
                     p = ub.Path(row['raw'])
                     row['is_link'] = p.is_symlink()
+                    row['is_broken'] = row['is_link'] and not p.exists()
                     row['needs_push'] = not row['has_dvc']
-                    if row['has_dvc']:
-                        row['unprotected'] = not row['is_link']
+                    row['unprotected'] = row['has_dvc'] and not row['is_link']
                 yield row
 
     def measure_table(self, **kw):
@@ -284,6 +285,10 @@ class DVCSyncManager(ub.NiceRepr):
         >>> self = DVCSyncManager.coerce()
         >>> df = self.evaluation_table()
         >>> print(df)
+
+    Ignore:
+        pass
+
     """
 
     def __nice__(self):
