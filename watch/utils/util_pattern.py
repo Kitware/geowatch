@@ -174,11 +174,15 @@ class Pattern(PatternBase, ub.NiceRepr):
     def paths(self, cwd=None, recursive=False):
         """
         Find paths in the filesystem that match this pattern
+
+        Yields:
+            ubelt.Path
         """
         if self.backend == 'glob':
             import glob
             with util_path.ChDir(cwd):
-                yield from glob.glob(self.pattern, recursive=recursive)
+                yield from map(ub.Path, glob.glob(
+                    self.pattern, recursive=recursive))
         else:
             raise NotImplementedError
 

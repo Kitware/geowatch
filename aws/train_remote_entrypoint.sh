@@ -18,7 +18,7 @@ To submit these jobs run something like:
     WORKFLOW_FPATH=$HOME/code/watch/aws/ta2_train_workflow.yml
     NAME_PREFIX=$(yq -r .metadata.generateName "$WORKFLOW_FPATH")
     WORKFLOW_NAME=$(argo list --running | argo list --running | grep "$NAME_PREFIX" | head -n 1 | cut -d" " -f1)
-    argo logs "${WORKFLOW_NAME}" --follow
+    kubctl logs "${WORKFLOW_NAME}" -c main --follow
 
     # NOTE: It usually takes ~12-15 minutes for a job to startup after being
     # submitte
@@ -270,7 +270,8 @@ Execute instructions:
         WORKFLOW_NAME=$(argo list --running | argo list --running | grep "$NAME_PREFIX" | head -n 1 | cut -d" " -f1)
         #argo logs "${WORKFLOW_NAME}" --follow
         # kubctl gives better full logs
-        kubectl logs "${WORKFLOW_NAME}" -c main --follow  
+        # kubectl logs "${WORKFLOW_NAME}" -c main --follow  
+        kubectl attach "${WORKFLOW_NAME}"
     }
     argo_follow_recent
 
@@ -278,6 +279,7 @@ Execute instructions:
     aws s3 --profile iarpa ls s3://kitware-smart-watch-data/sync_root/ta2-train-xzzwv
     mkdir -p $HOME/data/aws-sync
     aws s3 --profile iarpa sync s3://kitware-smart-watch-data/sync_root/ta2-train-xzzwv/ $HOME/data/aws-sync
+    kubectl exec $WORKFLOW_NAME -- ls -al /root
 
 
     TODO:

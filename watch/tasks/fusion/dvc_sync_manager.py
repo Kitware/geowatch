@@ -4,6 +4,7 @@ Synchronize DVC states across the machine.
 Example:
     python -m watch.tasks.fusion.dvc_sync_manager "pull evals"
 """
+import parse
 import pandas as pd
 import ubelt as ub
 import platform
@@ -40,7 +41,7 @@ class WatchDVCState:
         pass
 
 
-class ExperimentState:
+class ExperimentState(ub.NiceRepr):
     """
     Ignore:
         >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
@@ -60,22 +61,24 @@ class ExperimentState:
             storage_code = STORAGE_REPL.get(dataset_code, dataset_code)
         self.storage_code = storage_code
         self.storage_dpath = self.dvc_dpath / 'models/fusion' / storage_code
-
         self.patterns = {
             'expt': '*',
-            'dset': '*',
+            'test_dset': '*',
             'model': '*',
             'pred_cfg': '*',
             'trk_cfg': '*',
             'act_cfg': '*',
         }
         self.measure_templates = {
-            'pxl': 'eval/{expt}/{model}/{dset}/{pred_cfg}/eval/curves/measures2.json',
-            'trk': 'eval/{expt}/{model}/{dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
-            'act': 'eval/{expt}/{model}/{dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
+            'pxl': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/curves/measures2.json',
+            'trk': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
+            'act': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
         }
         self.measure_patterns = {}
         self._build_path_patterns()
+
+    def __nice__(self):
+        return self.dataset_code
 
     def _build_path_patterns(self):
         self.measure_patterns = {
@@ -118,18 +121,29 @@ class ExperimentState:
     def measure_rows(self, attrs=1):
         keys = ['pxl', 'act', 'trk']
         for key in keys:
-            pat = self.measure_patterns['pxl']
+            pat = self.measure_patterns[key]
             for row in self._dvcglob(pat):
                 row['type'] = key
                 row['has_dvc'] = (row['dvc'] is not None)
                 row['has_raw'] = (row['raw'] is not None)
+
                 row['needs_pull'] = row['has_dvc'] and not row['has_raw']
                 row['is_link'] = False
                 row['unprotected'] = False
                 row['needs_push'] = False
                 if attrs:
+                    path = row['raw'] or row['dvc']
                     row['dataset_code'] = self.dataset_code
-                    row['dataset_code'] = self.dataset_code
+                    template = self.storage_dpath / self.measure_templates[key]
+                    parser = parse.Parser(str(template))
+                    results = parser.parse(str(path))
+                    if results is None:
+                        parser = parse.Parser(str(template)[:-4])
+                        results = parser.parse(str(path))
+                    if results is not None:
+                        row.update(results.named)
+                    else:
+                        print('warning: bad attrs')
 
                 if row['has_raw']:
                     p = ub.Path(row['raw'])
@@ -146,11 +160,11 @@ class ExperimentState:
         Information includes its real path if it exists, its dvc path if it exists
         and what sort of actions need to be done to synchronize it.
         """
-        eval_rows = list(self.measure_rows())
         # import numpy as np
+        eval_rows = list(self.measure_rows())
         eval_df = pd.DataFrame(eval_rows)
-        print(eval_df.drop(['type', 'raw', 'dvc'], axis=1).sum().to_frame().T)
-        print(eval_df.groupby('type').sum())
+        # print(eval_df.drop(['type', 'raw', 'dvc'], axis=1).sum().to_frame().T)
+        # print(eval_df.groupby('type').sum())
         return eval_df
 
 
@@ -263,6 +277,7 @@ class DVCSyncManager(ub.NiceRepr):
         >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
         >>> # Default config is used if not provided
         >>> self = DVCSyncManager.coerce()
+        >>> df = self.evaluation_table()
     """
 
     def __nice__(self):
@@ -276,9 +291,10 @@ class DVCSyncManager(ub.NiceRepr):
         self._evaluation_state()
 
     @classmethod
-    def coerce(cls):
+    def coerce(cls, dvc_dpath=None):
         import watch
-        dvc_dpath = watch.find_smart_dvc_dpath()
+        if dvc_dpath is None:
+            dvc_dpath = watch.find_smart_dvc_dpath()
         dvc_remote = 'aws'
         dataset_codes = DATASET_CODES
         self = cls(dvc_dpath=dvc_dpath, dvc_remote=dvc_remote,
@@ -292,14 +308,14 @@ class DVCSyncManager(ub.NiceRepr):
             states.append(state)
         self.states = states
 
-    def evaluation_state(self):
+    def evaluation_table(self):
         rows = list(ub.flatten(state.measure_rows() for state in self.states))
         df = pd.DataFrame(rows)
         return df
 
     def push_evals(self):
         dvc = self.dvc
-        eval_df = self.evaluation_state()
+        eval_df = self.evaluation_table()
 
         is_weird = (eval_df.is_link & (~eval_df.has_dvc))
         weird_df = eval_df[is_weird]
@@ -318,7 +334,7 @@ class DVCSyncManager(ub.NiceRepr):
     def pull_evals(self):
         dvc = self.dvc
         dvc.git_pull()
-        eval_df = self.evaluation_state()
+        eval_df = self.evaluation_table()
         pull_fpaths = eval_df[eval_df.needs_pull]['dvc'].tolist()
         dvc.pull(pull_fpaths)
 
