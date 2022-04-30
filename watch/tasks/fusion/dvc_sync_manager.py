@@ -155,14 +155,14 @@ class ExperimentState(ub.NiceRepr):
             'trk': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
             'act': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
         }
-        self.patterns = {}
+        self.path_patterns = {}
         self._build_path_patterns()
 
     def __nice__(self):
         return self.dataset_code
 
     def _build_path_patterns(self):
-        self.patterns = {
+        self.path_patterns = {
             k: self.storage_dpath / v.format(**self.patterns)
             for k, v in self.templates.items()}
 
@@ -206,7 +206,7 @@ class ExperimentState(ub.NiceRepr):
         if notypes is not None:
             keys = list(ub.oset(keys) - set(notypes))
         for key in keys:
-            pat = self.patterns[key]
+            pat = self.path_patterns[key]
             for row in self._dvcglob(pat):
                 row['type'] = key
                 row['has_dvc'] = (row['dvc'] is not None)
