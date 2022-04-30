@@ -144,12 +144,14 @@ mkdir -p /efsdata/smart_watch_dvc/.dvc/
 rsync -vrPR $SMART_DVC_DPATH/.dvc/./cache 
 '
 
-if [ -d /efsdata/smart_dvc_cache ]; then
+EFS_DEST=/efsdata/smart_watch_dvc
+
+if [ -d "$EFS_DEST" ]; then
     # If we have a mounted efs cache, then lets use it
     apt update || true
     apt install rsync
     mkdir -p "$SMART_DVC_DPATH"/.dvc/cache
-    time rsync -nvrPR -p /efsdata/smart_watch_dvc/.dvc/./cache "$SMART_DVC_DPATH/.dvc/"
+    time rsync -nvrPR -p "$EFS_DEST"/.dvc/./cache "$SMART_DVC_DPATH/.dvc/"
     dvc checkout splits.zip.dvc
     # This seems to fail the first time. No idea why that is. Try it a few times.
     dvc checkout -R . || \
