@@ -287,8 +287,7 @@ class DVCSyncManager(ub.NiceRepr):
         >>> print(df)
 
     Ignore:
-        pass
-
+        broke = df[df['is_broken']]
     """
 
     def __nice__(self):
