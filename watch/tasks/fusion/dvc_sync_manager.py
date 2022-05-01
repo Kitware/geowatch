@@ -128,9 +128,9 @@ class ExperimentState(ub.NiceRepr):
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
         >>> dataset_code = 'Aligned-Drop3-TA1-2022-03-10'
         >>> self = ExperimentState(dvc_dpath, dataset_code)
-        >>> gen = self.state_rows(['trk'])
+        >>> gen = self.versioned_rows(['trk'])
         >>> row = ub.peek(gen)
-        >>> table = self.state_table()
+        >>> table = self.versioned_table()
         >>> print(table[['type', 'raw']])
 
     Ignore:
@@ -299,7 +299,7 @@ class ExperimentState(ub.NiceRepr):
             row.update(info)
             return rows
 
-    def state_rows(self, attrs=1, types=None, notypes=None):
+    def versioned_rows(self, attrs=1, types=None, notypes=None):
         keys = ['pxl', 'act', 'trk', 'pkg']
         if types is not None:
             keys = types
@@ -336,7 +336,7 @@ class ExperimentState(ub.NiceRepr):
         staging_df = pd.DataFrame(staging_rows)
         return staging_df
 
-    def state_table(self, **kw):
+    def versioned_table(self, **kw):
         """
         Get a list of dictionaries with information for each known evaluation.
 
@@ -344,11 +344,21 @@ class ExperimentState(ub.NiceRepr):
         and what sort of actions need to be done to synchronize it.
         """
         # import numpy as np
-        eval_rows = list(self.state_rows(**kw))
+        eval_rows = list(self.versioned_rows(**kw))
         eval_df = pd.DataFrame(eval_rows)
         # print(eval_df.drop(['type', 'raw', 'dvc'], axis=1).sum().to_frame().T)
         # print(eval_df.groupby('type').sum())
         return eval_df
+
+    def merged_table(self):
+        import kwarray
+        state_df = state.versioned_table()
+        stage_df = state.staging_table()
+        spkg_was_copied = kwarray.isect_flags(stage_df['model'], state_df['model'])
+        stage_df['spkg_was_copied'] = spkg_was_copied
+        num_need_repackage = (~stage_df['spkg_exists']).sum()
+        print(f'num_need_repackage={num_need_repackage}')
+
 
     def summarize(self):
         """
@@ -361,8 +371,10 @@ class ExperimentState(ub.NiceRepr):
             >>> self = ExperimentState(dvc_dpath, dataset_code)
             >>> self.summarize()
         """
-        state = self.state_table()
+        state = self.versioned_table()
         staging = self.staging_table()
+
+        state['expt'].unique()
         pass
 
 
@@ -395,7 +407,7 @@ class DVCSyncManager(ub.NiceRepr):
         >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
         >>> # Default config is used if not provided
         >>> self = DVCSyncManager.coerce()
-        >>> df = self.state_table()
+        >>> df = self.versioned_table()
         >>> print(df)
 
     Ignore:
@@ -434,14 +446,14 @@ class DVCSyncManager(ub.NiceRepr):
             states.append(state)
         self.states = states
 
-    def state_table(self, **kw):
-        rows = list(ub.flatten(state.state_rows(**kw) for state in self.states))
+    def versioned_table(self, **kw):
+        rows = list(ub.flatten(state.versioned_rows(**kw) for state in self.states))
         df = pd.DataFrame(rows)
         return df
 
     def push_evals(self):
         dvc = self.dvc
-        eval_df = self.state_table()
+        eval_df = self.versioned_table()
 
         is_weird = (eval_df.is_link & (~eval_df.has_dvc))
         weird_df = eval_df[is_weird]
@@ -460,13 +472,13 @@ class DVCSyncManager(ub.NiceRepr):
     def pull_evals(self):
         dvc = self.dvc
         dvc.git_pull()
-        eval_df = self.state_table()
+        eval_df = self.versioned_table()
         eval_df = eval_df[~eval_df['is_broken']]
         pull_fpaths = eval_df[eval_df.needs_pull]['dvc'].tolist()
         dvc.pull(pull_fpaths)
 
     def pull_packages(self):
-        pkg_df = self.state_table(types=['pkg'])
+        pkg_df = self.versioned_table(types=['pkg'])
         pull_df = pkg_df[pkg_df['needs_pull']]
         pull_fpaths = pull_df['dvc'].tolist()
         self.dvc.pull(pull_fpaths)
@@ -478,7 +490,7 @@ class DVCSyncManager(ub.NiceRepr):
             # TODO: use the "state" staging table instead
             if 0:
                 import kwarray
-                state_df = state.state_table()
+                state_df = state.versioned_table()
                 stage_df = state.staging_table()
                 spkg_was_copied = kwarray.isect_flags(stage_df['model'], state_df['model'])
                 stage_df['spkg_was_copied'] = spkg_was_copied
