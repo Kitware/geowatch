@@ -4,6 +4,7 @@ Synchronize DVC states across the machine.
 Example:
     python -m watch.tasks.fusion.dvc_sync_manager "pull evals"
 """
+import warnings
 import parse
 import pandas as pd
 import ubelt as ub
@@ -129,10 +130,13 @@ class ExperimentState(ub.NiceRepr):
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
         >>> dataset_code = 'Aligned-Drop3-TA1-2022-03-10'
         >>> self = ExperimentState(dvc_dpath, dataset_code)
-        >>> gen = self.measure_rows(['trk'])
+        >>> gen = self.state_rows(['trk'])
         >>> row = ub.peek(gen)
-        >>> table = self.measure_table(types=['pkg'])
+        >>> table = self.state_table()
         >>> print(table[['type', 'raw']])
+
+    Ignore:
+        table[table.type == 'pkg']['model'].unique()
     """
     def __init__(self, dvc_dpath, dataset_code, storage_code=None):
         self.dvc_dpath = dvc_dpath
@@ -141,29 +145,60 @@ class ExperimentState(ub.NiceRepr):
             storage_code = STORAGE_REPL.get(dataset_code, dataset_code)
         self.storage_code = storage_code
         self.storage_dpath = self.dvc_dpath / 'models/fusion' / storage_code
+        self.training_dpath = self.dvc_dpath / 'training'
         self.patterns = {
+            # General
             'expt': '*',
+            'dvc_dpath': dvc_dpath,
+            'dataset_code': dataset_code,
+            'storage_code': storage_code,
+            ### Storage
             'test_dset': '*',
-            'model': '*',
+            'model': '*',  # hack, should have ext
             'pred_cfg': '*',
             'trk_cfg': '*',
             'act_cfg': '*',
+            #### Staging
+            'host': '*',
+            'user': '*',
+            'lightning_version': '*',
+            'checkpoint': '*',  # hack, should have ext
+            'stage_model': '*',  # hack, should have ext
         }
         self.templates = {
-            'pkg': 'packages/{expt}/{model}',
-            'pxl': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/curves/measures2.json',
-            'trk': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
-            'act': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
+            # Staging
+            'ckpt': '{dvc_dpath}/training/{host}/{user}/{dataset_code}/runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{checkpoint}',
+            'spkg': '{dvc_dpath}/training/{host}/{user}/{dataset_code}/runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{model}',
+            # Storage
+            'pkg': '{dvc_dpath}/models/fusion/{storage_code}/packages/{expt}/{model}',
+            'pxl': '{dvc_dpath}/models/fusion/{storage_code}/eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/curves/measures2.json',
+            'trk': '{dvc_dpath}/models/fusion/{storage_code}/eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
+            'act': '{dvc_dpath}/models/fusion/{storage_code}/eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
         }
         self.path_patterns = {}
         self._build_path_patterns()
+
+    def _parse_pattern_attrs(self, key, path):
+        row = {}
+        template = self.templates[key]
+        parser = parse.Parser(str(template))
+        results = parser.parse(str(path))
+        if results is None:
+            raise AssertionError
+            parser = parse.Parser(str(template)[:-4])
+            results = parser.parse(str(path))
+        if results is not None:
+            row.update(results.named)
+        else:
+            warnings.warn('warning: bad attrs')
+        return row
 
     def __nice__(self):
         return self.dataset_code
 
     def _build_path_patterns(self):
         self.path_patterns = {
-            k: self.storage_dpath / v.format(**self.patterns)
+            k: v.format(**self.patterns)
             for k, v in self.templates.items()}
 
     @classmethod
@@ -199,7 +234,79 @@ class ExperimentState(ub.NiceRepr):
             row[type] = path
             yield row
 
-    def measure_rows(self, attrs=1, types=None, notypes=None):
+    def staging_rows(self):
+        # Gather checkpoints and packages from the training directory.
+        # Some checkpoints may not have been repackaged yet.
+        # Some packages may have had their checkpoints deleted.
+        # None of these files are in DVC, this is entirely volitile state.
+        from watch.utils import util_pattern
+        default = {'ckpt_path': None, 'spkg_path': None}
+        _id_to_row = ub.ddict(default.copy)
+
+        key = 'ckpt'
+        pat = self.path_patterns[key]
+        mpat = util_pattern.Pattern.coerce(pat)
+        # Find all checkpoints
+        rows = []
+        for ckpt_path in list(mpat.paths()):
+            if ckpt_path.ext != '.ckpt':
+                continue
+            row = default.copy()
+            row['ckpt_path'] = ckpt_path
+            row['type'] = 'ckpt'
+            row['spkg_exists'] = False
+            row['ckpt_exists'] = True
+
+            _attrs = self._parse_pattern_attrs(key, ckpt_path)
+            row.update(_attrs)
+            rows.append(row)
+            _id_to_row[ckpt_path] = row
+
+        # Find repackaged checkpoints
+        key = 'spkg'  # stands for staged package
+        pat = self.path_patterns[key]
+        mpat = util_pattern.Pattern.coerce(pat)
+        for spkg_path in list(mpat.paths()):
+            if ckpt_path.ext != '.pt':
+                continue
+            row = {}
+            row['spkg_path'] = spkg_path
+            row['type'] = 'ckpt'
+            # Does this correspond to an existing checkpoint?
+            _attrs = self._parse_pattern_attrs(key, spkg_path)
+
+            # Hack: making assumption about naming pattern
+            spkg_stem = spkg_path.stem
+            ckpt_stem = ''.join(spkg_stem.partition('_epoch')[-2:])[1:]
+            checkpoint = (ckpt_stem + '.ckpt')
+            ckpt_path = spkg_path.parent / checkpoint
+
+            if ckpt_path.exists():
+                # Modify existing row
+                row = _id_to_row[ckpt_path]
+            else:
+                # Add new row
+                row = {}
+                row['checkpoint'] = checkpoint
+                row['ckpt_exists'] = False
+                rows.append(row)
+            row['spkg_path'] = spkg_path
+            row['spkg_exists'] = True
+            row.update(_attrs)
+
+        # Hack: making name assumptions
+        for row in rows:
+            attrs = parse_epoch_from_fname(row['checkpoint'])
+            row.update(attrs)
+            return rows
+
+    def staging_table(self):
+        # import numpy as np
+        staging_rows = list(self.staging_rows())
+        staging_df = pd.DataFrame(staging_rows)
+        return staging_df
+
+    def state_rows(self, attrs=1, types=None, notypes=None):
         keys = ['pxl', 'act', 'trk', 'pkg']
         if types is not None:
             keys = types
@@ -211,7 +318,6 @@ class ExperimentState(ub.NiceRepr):
                 row['type'] = key
                 row['has_dvc'] = (row['dvc'] is not None)
                 row['has_raw'] = (row['raw'] is not None)
-
                 row['needs_pull'] = row['has_dvc'] and not row['has_raw']
                 row['is_link'] = False
                 row['is_broken'] = False
@@ -220,16 +326,8 @@ class ExperimentState(ub.NiceRepr):
                 if attrs:
                     path = row['raw'] or row['dvc']
                     row['dataset_code'] = self.dataset_code
-                    template = self.storage_dpath / self.templates[key]
-                    parser = parse.Parser(str(template))
-                    results = parser.parse(str(path))
-                    if results is None:
-                        parser = parse.Parser(str(template)[:-4])
-                        results = parser.parse(str(path))
-                    if results is not None:
-                        row.update(results.named)
-                    else:
-                        print('warning: bad attrs')
+                    _attrs = self._parse_pattern_attrs(key, path)
+                    row.update(_attrs)
 
                 if row['has_raw']:
                     p = ub.Path(row['raw'])
@@ -239,7 +337,7 @@ class ExperimentState(ub.NiceRepr):
                     row['unprotected'] = row['has_dvc'] and not row['is_link']
                 yield row
 
-    def measure_table(self, **kw):
+    def state_table(self, **kw):
         """
         Get a list of dictionaries with information for each known evaluation.
 
@@ -247,7 +345,7 @@ class ExperimentState(ub.NiceRepr):
         and what sort of actions need to be done to synchronize it.
         """
         # import numpy as np
-        eval_rows = list(self.measure_rows(**kw))
+        eval_rows = list(self.state_rows(**kw))
         eval_df = pd.DataFrame(eval_rows)
         # print(eval_df.drop(['type', 'raw', 'dvc'], axis=1).sum().to_frame().T)
         # print(eval_df.groupby('type').sum())
@@ -283,7 +381,7 @@ class DVCSyncManager(ub.NiceRepr):
         >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
         >>> # Default config is used if not provided
         >>> self = DVCSyncManager.coerce()
-        >>> df = self.evaluation_table()
+        >>> df = self.state_table()
         >>> print(df)
 
     Ignore:
@@ -298,7 +396,7 @@ class DVCSyncManager(ub.NiceRepr):
         self.dvc_remote = dvc_remote
         self.dataset_codes = dataset_codes
         self.dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath, remote=dvc_remote)
-        self._evaluation_state()
+        self._build_states()
 
     @classmethod
     def coerce(cls, dvc_dpath=None):
@@ -311,21 +409,21 @@ class DVCSyncManager(ub.NiceRepr):
                    dataset_codes=dataset_codes)
         return self
 
-    def _evaluation_state(self):
+    def _build_states(self):
         states = []
         for dataset_code in self.dataset_codes:
             state = ExperimentState(self.dvc_dpath, dataset_code)
             states.append(state)
         self.states = states
 
-    def evaluation_table(self, **kw):
-        rows = list(ub.flatten(state.measure_rows(**kw) for state in self.states))
+    def state_table(self, **kw):
+        rows = list(ub.flatten(state.state_rows(**kw) for state in self.states))
         df = pd.DataFrame(rows)
         return df
 
     def push_evals(self):
         dvc = self.dvc
-        eval_df = self.evaluation_table()
+        eval_df = self.state_table()
 
         is_weird = (eval_df.is_link & (~eval_df.has_dvc))
         weird_df = eval_df[is_weird]
@@ -344,31 +442,40 @@ class DVCSyncManager(ub.NiceRepr):
     def pull_evals(self):
         dvc = self.dvc
         dvc.git_pull()
-        eval_df = self.evaluation_table()
+        eval_df = self.state_table()
+        eval_df = eval_df[~eval_df['is_broken']]
         pull_fpaths = eval_df[eval_df.needs_pull]['dvc'].tolist()
         dvc.pull(pull_fpaths)
 
     def pull_packages(self):
-        pkg_df = self.evaluation_table(types=['pkg'])
+        pkg_df = self.state_table(types=['pkg'])
         pull_df = pkg_df[pkg_df['needs_pull']]
         pull_fpaths = pull_df['dvc'].tolist()
         self.dvc.pull(pull_fpaths)
 
     def push_packages(self):
         from watch.tasks.fusion import repackage
-        dvc_dpath = self.dvc_dpath
-        train_coded_paths = list((dvc_dpath / "training").glob('*/*/*'))
-        code_to_path = {p.name: p for p in train_coded_paths}
         mode = 'commit'
-        for dataset_code in self.dataset_codes:
-            print(f'dataset_code={dataset_code}')
-            path = code_to_path.get(dataset_code, None)
-            if path is not None:
-                storage_code = STORAGE_REPL.get(dataset_code, dataset_code)
-                train_dpath = str(path / 'runs/*')
-                storage_dpath = dvc_dpath / 'models/fusion' / storage_code / 'packages'
+        for state in self.states:
+            # TODO: use the "state" staging table instead
+            if 0:
+                state_df = state.state_table()
+                stage_df = state.staging_table()
+
+                spkg_was_copied = kwarray.isect_flags(stage_df['model'], state_df['model'])
+                stage_df['spkg_was_copied'] = spkg_was_copied
+
+                num_need_repackage = (~stage_df['spkg_exists']).sum()
+                print(f'num_need_repackage={num_need_repackage}')
+
+
+            else:
+                dataset_code = state.dataset_code
+                print(f'dataset_code={dataset_code}')
+                train_dpath = state.training_dpath / '*/*' / state.dataset_code / 'runs'
+                storage_dpath = state.storage_dpath / 'packages'
                 repackage.gather_checkpoints(
-                    dvc_dpath=dvc_dpath, storage_dpath=storage_dpath,
+                    dvc_dpath=state.dvc_dpath, storage_dpath=storage_dpath,
                     train_dpath=train_dpath, dvc_remote=self.dvc_remote, mode=mode)
 
     def sync(self, push=True, pull=True, evals=True, packages=True):
@@ -440,6 +547,28 @@ def main(cmdline=True, **kwargs):
         dvc_hdd_dpath, dvc_remote=dvc_remote, dataset_codes=dataset_codes)
     synckw = ub.compatible(config, hdd_manager.sync)
     hdd_manager.sync(**synckw)
+
+
+def parse_epoch_from_fname(fname):
+    # Hack: making name assumptions
+    parsers = [
+        parse.Parser('{prefix}epoch={epoch:d}-step={step:d}-{ckpt_ver}.{ext}'),
+        parse.Parser('{prefix}epoch={epoch:d}-step={step:d}.{ext}'),
+        parse.Parser('{prefix}epoch={epoch:d}-step={step:d}-{ckpt_ver}'),
+        parse.Parser('{prefix}epoch={epoch:d}-step={step:d}'),
+    ]
+    # results = parser.parse(str(path))
+    attrs = None
+    for parsers in parsers:
+        result = parsers.parse(fname)
+        if result:
+            break
+    if result:
+        attrs = result.named
+        if 'ckpt_ver' not in attrs:
+            attrs['ckpt_ver'] = 'v0'
+        attrs = ub.dict_diff(attrs, {'ext', 'prefix'})
+    return attrs
 
 
 if __name__ == '__main__':

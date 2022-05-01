@@ -4,10 +4,11 @@ An encapsulation of regex and glob (and maybe other) patterns.
 TODO:
     rectify with xdev / whatever package this goes in
 """
-
+import os
 import re
 import fnmatch
 import ubelt as ub
+import pathlib
 from watch.utils import util_path
 
 if hasattr(re, 'Pattern'):
@@ -82,6 +83,8 @@ class Pattern(PatternBase, ub.NiceRepr):
         >>> match = repat.match('baz-biz-foobar')
     """
     def __init__(self, pattern, backend):
+        if isinstance(pattern, pathlib.Path):
+            pattern = os.fspath(pattern)
         if backend == 'regex':
             if isinstance(pattern, str):
                 pattern = re.compile(pattern)

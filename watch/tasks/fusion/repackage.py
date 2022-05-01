@@ -102,6 +102,9 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     """
     Package and copy checkpoints into the DVC folder for evaluation.
 
+    TODO: a lot of this should be consolidated into the dvc_sync_manager
+    module.
+
     Args:
         mode (str): can be list, repackage, copy, dvc-commit, or commit
 
@@ -137,32 +140,15 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     else:
         dvc_dpath = ub.Path(dvc_dpath)
 
-    # storage_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
-    # if storage_dpath is None:
-    #     storage_dpath = dvc_dpath / 'models/fusion/SC-20201117'
-    # else:
     storage_dpath = ub.Path(storage_dpath)
 
     if storage_dpath.name != 'packages':
         print('warning: we usually want the storage dpath to be called packages')
 
-    # if train_dpath is None:
-    #     train_dpath = [
-    #         dvc_dpath / 'training/*/*/Drop1-20201117'
-    #     ]
-
-    # dset_dpaths = util_path.coerce_patterned_paths(train_dpath)
-    # dset_dpaths = [ub.Path(p) for p in dset_dpaths]
-    # # all_checkpoint_paths = [p / 'runs/*/lightning_logs/' for p in dset_dpaths]
-    # all_checkpoint_paths = dset_dpaths
-
     lightning_log_dpaths = util_path.coerce_patterned_paths(train_dpath)
     lightning_log_dpaths = [ub.Path(p) for p in lightning_log_dpaths]
     if 0:
         print('lightning_log_dpaths = {}'.format(ub.repr2(lightning_log_dpaths, nl=1)))
-
-    # for p in lightning_log_dpaths:
-    #     pass
 
     # Collect checkpoints from the training path
     gathered = []
@@ -194,18 +180,11 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         checkpoint_fpaths = list(ub.unique(
             sorted(checkpoint_fpaths), key=remove_v_suffix))
 
-        if 0:
-            print('checkpoint_fpaths = {}'.format(ub.repr2(checkpoint_fpaths, nl=1)))
-
         for checkpoint_fpath in checkpoint_fpaths:
             if checkpoint_fpath.name.endswith('.ckpt'):
                 checkpoint_fpath = ub.Path(checkpoint_fpath)
                 parts = checkpoint_fpath.name.split('-')
                 epoch = int(parts[0].split('epoch=')[1])
-
-                # print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
-                # print('parts = {!r}'.format(parts))
-                # print('epoch = {!r}'.format(epoch))
                 # Dont add the -v2 versions
                 if epoch >= 0:  # and parts[-1].startswith('step='):
                     # print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
@@ -234,9 +213,6 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         row['repackage_failed'] = 0
         row['repackage_passed'] = 0
         row['is_loose'] = False
-        # name_dpath.ensuredir()
-        # print('package_fpath = {!r}'.format(package_fpath))
-        # print('name_fpath = {!r}'.format(name_fpath))
 
     model_name_to_row = {row['package_fpath'].name: row for row in gathered}
 
