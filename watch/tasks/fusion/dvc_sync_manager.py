@@ -150,7 +150,7 @@ class ExperimentState(ub.NiceRepr):
             'dvc_dpath': dvc_dpath,
             'dataset_code': dataset_code,
             'storage_code': storage_code,
-            ### Storage
+            ### Versioned
             'test_dset': '*',
             'model': '*',  # hack, should have ext
             'pred_cfg': '*',
@@ -163,16 +163,32 @@ class ExperimentState(ub.NiceRepr):
             'checkpoint': '*',  # hack, should have ext
             'stage_model': '*',  # hack, should have ext
         }
-        self.templates = {
-            # Staging
+
+        self.staging_templates = {
             'ckpt': '{dvc_dpath}/training/{host}/{user}/{dataset_code}/runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{checkpoint}',
             'spkg': '{dvc_dpath}/training/{host}/{user}/{dataset_code}/runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{model}',
-            # Storage
+        }
+
+        # Volitile (unused: todo incorporate)
+        self.volitile_templates = {
+            'pred_pxl': '{dvc_dpath}/models/fusion/{storage_code}/pred/{expt}/pred_{model}/{test_dset}/{pred_cfg}/pred.kwcoco.json',
+            'pred_trk': '{dvc_dpath}/models/fusion/{storage_code}/pred/{expt}/pred_{model}/{test_dset}/{pred_cfg}/tracking/{trk_cfg}/tracks.json',
+            'pred_act': '{dvc_dpath}/models/fusion/{storage_code}/pred/{expt}/pred_{model}/{test_dset}/{pred_cfg}/actclf/{act_cfg}/activity_tracks.json',
+        }
+
+        self.versioned_templates = {
             'pkg': '{dvc_dpath}/models/fusion/{storage_code}/packages/{expt}/{model}',
             'pxl': '{dvc_dpath}/models/fusion/{storage_code}/eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/curves/measures2.json',
             'trk': '{dvc_dpath}/models/fusion/{storage_code}/eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
             'act': '{dvc_dpath}/models/fusion/{storage_code}/eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
         }
+
+        self.templates = ub.dict_union(
+            self.staging_templates,
+            self.volitile_templates,
+            self.versioned_templates,
+        )
+
         self.path_patterns = {}
         self._build_path_patterns()
 
@@ -199,40 +215,13 @@ class ExperimentState(ub.NiceRepr):
             k: v.format(**self.patterns)
             for k, v in self.templates.items()}
 
-    @classmethod
-    def _dvcglob(cls, pat):
-        """
-        Ignore:
-            >>> import watch
-            >>> dvc_dpath = watch.find_smart_dvc_dpath()
-            >>> bundle_dpath = dvc_dpath / 'deprecated/drop1-S2-L8-aligned'
-            >>> list(ExperimentState._dvcglob(bundle_dpath / '*'))
-        """
-        from watch.utils import util_pattern
-        import os
-        pat = os.fspath(pat)
-        mpat = util_pattern.Pattern.coerce(pat)
-        default = {'raw': None, 'dvc': None}
-        id_to_row = ub.ddict(default.copy)
-        paths = list(mpat.paths(recursive=0))
-        dvc_ext = '.dvc'
-        len_ext = len(dvc_ext)
-        for path in paths:
-            parent = path.parent
-            name = path.name
-            if name.endswith(dvc_ext):
-                type = 'dvc'
-                raw_path = parent / name[:-len_ext]
-                # dvc_path = path
-            else:
-                type = 'raw'
-                raw_path = path
-                # dvc_path = parent / (name + '.dvc')
-            row = id_to_row[raw_path]
-            row[type] = path
-            yield row
-
     def staging_rows(self):
+        """
+        A staging item are items that are the result of non-deterministic
+        processes like training. These are not versioned or recomputable.
+        These are things in the training directory that need to be repackaged
+        or copied into the versioned folder.
+        """
         # Gather checkpoints and packages from the training directory.
         # Some checkpoints may not have been repackaged yet.
         # Some packages may have had their checkpoints deleted.
@@ -299,7 +288,20 @@ class ExperimentState(ub.NiceRepr):
             row.update(info)
             return rows
 
+    # TODO: add another variant for non-versioned prediction files
+
+    def volitile_rows(self):
+        """
+        A volitile item is something that is derived from something versioned
+        (so it is recomputable), but it is not versioned itself. These are
+        raw prediction, tracking, and classification results.
+        """
+
     def versioned_rows(self, attrs=1, types=None, notypes=None):
+        """
+        Versioned items are things that are tracked with DVC. These are
+        packages and evaluation measures.
+        """
         keys = ['pxl', 'act', 'trk', 'pkg']
         if types is not None:
             keys = types
@@ -632,6 +634,39 @@ def checkpoint_filepath_info(fname):
             info['ckpt_ver'] = 'v0'
         info = ub.dict_diff(info, {'ext', 'prefix'})
     return info
+
+
+def dvcglob(pat):
+    """
+    Ignore:
+        >>> import watch
+        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> bundle_dpath = dvc_dpath / 'deprecated/drop1-S2-L8-aligned'
+        >>> list(dvcglob(bundle_dpath / '*'))
+    """
+    from watch.utils import util_pattern
+    import os
+    pat = os.fspath(pat)
+    mpat = util_pattern.Pattern.coerce(pat)
+    default = {'raw': None, 'dvc': None}
+    id_to_row = ub.ddict(default.copy)
+    paths = list(mpat.paths(recursive=0))
+    dvc_ext = '.dvc'
+    len_ext = len(dvc_ext)
+    for path in paths:
+        parent = path.parent
+        name = path.name
+        if name.endswith(dvc_ext):
+            type = 'dvc'
+            raw_path = parent / name[:-len_ext]
+            # dvc_path = path
+        else:
+            type = 'raw'
+            raw_path = path
+            # dvc_path = parent / (name + '.dvc')
+        row = id_to_row[raw_path]
+        row[type] = path
+        yield row
 
 
 if __name__ == '__main__':
