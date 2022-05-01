@@ -128,13 +128,13 @@ class ExperimentState(ub.NiceRepr):
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
         >>> dataset_code = 'Aligned-Drop3-TA1-2022-03-10'
         >>> self = ExperimentState(dvc_dpath, dataset_code)
-        >>> gen = self.versioned_rows(['trk'])
+        >>> gen = self.versioned_rows(['eval_trk'])
         >>> row = ub.peek(gen)
         >>> table = self.versioned_table()
         >>> print(table[['type', 'raw']])
 
     Ignore:
-        table[table.type == 'pkg']['model'].unique()
+        table[table.type == 'eval_pkg']['model'].unique()
     """
     def __init__(self, dvc_dpath, dataset_code, storage_code=None):
         self.dvc_dpath = dvc_dpath
@@ -164,26 +164,37 @@ class ExperimentState(ub.NiceRepr):
             'stage_model': '*',  # hack, should have ext
         }
 
+        self.staging_template_prefix = '{dvc_dpath}/training/{host}/{user}/{dataset_code}/'
+        self.storage_template_prefix = '{dvc_dpath}/models/fusion/{storage_code}/'
+
         self.staging_templates = {
-            'ckpt': '{dvc_dpath}/training/{host}/{user}/{dataset_code}/runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{checkpoint}',
-            'spkg': '{dvc_dpath}/training/{host}/{user}/{dataset_code}/runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{model}',
+            'ckpt': 'runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{checkpoint}',
+            'spkg': 'runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{model}',
         }
 
         # Volitile (unused: todo incorporate)
         self.volitile_templates = {
-            'pred_pxl': '{dvc_dpath}/models/fusion/{storage_code}/pred/{expt}/pred_{model}/{test_dset}/{pred_cfg}/pred.kwcoco.json',
-            'pred_trk': '{dvc_dpath}/models/fusion/{storage_code}/pred/{expt}/pred_{model}/{test_dset}/{pred_cfg}/tracking/{trk_cfg}/tracks.json',
-            'pred_act': '{dvc_dpath}/models/fusion/{storage_code}/pred/{expt}/pred_{model}/{test_dset}/{pred_cfg}/actclf/{act_cfg}/activity_tracks.json',
+            'pred_pxl': 'pred/{expt}/pred_{model}/{test_dset}/{pred_cfg}/pred.kwcoco.json',
+            'pred_trk': 'pred/{expt}/pred_{model}/{test_dset}/{pred_cfg}/tracking/{trk_cfg}/tracks.json',
+            'pred_act': 'pred/{expt}/pred_{model}/{test_dset}/{pred_cfg}/actclf/{act_cfg}/activity_tracks.json',
         }
 
         self.versioned_templates = {
-            'pkg': '{dvc_dpath}/models/fusion/{storage_code}/packages/{expt}/{model}',
-            'pxl': '{dvc_dpath}/models/fusion/{storage_code}/eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/curves/measures2.json',
-            'trk': '{dvc_dpath}/models/fusion/{storage_code}/eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
-            'act': '{dvc_dpath}/models/fusion/{storage_code}/eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
+            'pkg': 'packages/{expt}/{model}',
+            'eval_pxl': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/curves/measures2.json',
+            'eval_trk': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
+            'eval_act': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
         }
 
-        self.templates = ub.dict_union(
+        self.templates = {}
+        for k, v in self.staging_templates.items():
+            self.templates[k] = self.staging_template_prefix + v
+        for k, v in self.volitile_templates.items():
+            self.templates[k] = self.storage_template_prefix + v
+        for k, v in self.versioned_templates.items():
+            self.templates[k] = self.storage_template_prefix + v
+
+        ub.dict_union(
             self.staging_templates,
             self.volitile_templates,
             self.versioned_templates,
@@ -191,6 +202,14 @@ class ExperimentState(ub.NiceRepr):
 
         self.path_patterns = {}
         self._build_path_patterns()
+
+    def _build_path_patterns(self):
+        self.path_patterns = {
+            k: v.format(**self.patterns)
+            for k, v in self.templates.items()}
+
+    def __nice__(self):
+        return self.dataset_code
 
     def _parse_pattern_attrs(self, key, path):
         row = {}
@@ -206,14 +225,6 @@ class ExperimentState(ub.NiceRepr):
         else:
             warnings.warn('warning: bad attrs')
         return row
-
-    def __nice__(self):
-        return self.dataset_code
-
-    def _build_path_patterns(self):
-        self.path_patterns = {
-            k: v.format(**self.patterns)
-            for k, v in self.templates.items()}
 
     def staging_rows(self):
         """
@@ -297,19 +308,24 @@ class ExperimentState(ub.NiceRepr):
         raw prediction, tracking, and classification results.
         """
 
-    def versioned_rows(self, attrs=1, types=None, notypes=None):
+    def versioned_rows(self, with_attrs=1, types=None, notypes=None):
         """
         Versioned items are things that are tracked with DVC. These are
         packages and evaluation measures.
+
+        Ignore:
+            types = None
+            notypes = None
+            with_attrs = 1
         """
-        keys = ['pxl', 'act', 'trk', 'pkg']
+        keys = ['eval_pxl', 'eval_act', 'eval_trk', 'pkg']
         if types is not None:
             keys = types
         if notypes is not None:
             keys = list(ub.oset(keys) - set(notypes))
         for key in keys:
             pat = self.path_patterns[key]
-            for row in self._dvcglob(pat):
+            for row in dvcglob(pat):
                 row['type'] = key
                 row['has_dvc'] = (row['dvc'] is not None)
                 row['has_raw'] = (row['raw'] is not None)
@@ -318,7 +334,7 @@ class ExperimentState(ub.NiceRepr):
                 row['is_broken'] = False
                 row['unprotected'] = False
                 row['needs_push'] = False
-                if attrs:
+                if with_attrs:
                     path = row['raw'] or row['dvc']
                     row['dataset_code'] = self.dataset_code
                     _attrs = self._parse_pattern_attrs(key, path)
@@ -480,7 +496,7 @@ class DVCSyncManager(ub.NiceRepr):
         dvc.pull(pull_fpaths)
 
     def pull_packages(self):
-        pkg_df = self.versioned_table(types=['pkg'])
+        pkg_df = self.versioned_table(types=['eval_pkg'])
         pull_df = pkg_df[pkg_df['needs_pull']]
         pull_fpaths = pull_df['dvc'].tolist()
         self.dvc.pull(pull_fpaths)

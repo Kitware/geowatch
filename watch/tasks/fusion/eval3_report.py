@@ -555,9 +555,9 @@ def num_files_summary(df):
         row['gsd'] = gsd
         row['num_experiments'] = len(group['expt'].unique())
         row['num_models'] = len(group['model'].unique())
-        row['num_pxl_evals'] = type_evals.get('pxl', 0)
-        row['num_bas_evals'] = type_evals.get('trk', 0)
-        row['num_sc_evals'] = type_evals.get('act', 0)
+        row['num_pxl_evals'] = type_evals.get('eval_pxl', 0)
+        row['num_bas_evals'] = type_evals.get('eval_trk', 0)
+        row['num_sc_evals'] = type_evals.get('eval_act', 0)
         filt_summaries.append(row)
     _summary_df = pd.DataFrame(filt_summaries)
     total_row = _summary_df.sum().to_dict()
@@ -596,13 +596,13 @@ def load_extended_data(df, dvc_dpath):
         big_row = row.copy()
         fpath = row['raw']
         try:
-            if row['type'] == 'pxl':
+            if row['type'] == 'eval_pxl':
                 pxl_info = agr.load_pxl_eval(fpath, dvc_dpath)
                 big_row['info'] = pxl_info
-            elif row['type'] == 'act':
+            elif row['type'] == 'eval_act':
                 sc_info = agr.load_sc_eval(fpath, dvc_dpath)
                 big_row['info'] = sc_info
-            elif row['type'] == 'trk':
+            elif row['type'] == 'eval_trk':
                 bas_info = agr.load_bas_eval(fpath, dvc_dpath)
                 big_row['info'] = bas_info
             else:
@@ -827,7 +827,7 @@ def clean_loaded_data(big_rows):
     for pred_key, group in simple_df.groupby(['model', 'pred_cfg']):
         # Can propogate pixel metrics to child groups
         type_to_subgroup = dict(list(group.groupby('type')))
-        pxl_group = type_to_subgroup.pop('pxl', None)
+        pxl_group = type_to_subgroup.pop('eval_pxl', None)
         if pxl_group is not None:
             if len(pxl_group) > 1:
                 print(f'Warning more than one pixel group for {pred_key}')
@@ -857,7 +857,7 @@ def clean_loaded_data(big_rows):
     merged_df = pd.DataFrame(merged_rows)
     print(f'{len(merged_df)=}')
 
-    total_carbon_cost = simple_df[simple_df['type'] == 'pxl']['co2_kg'].sum()
+    total_carbon_cost = simple_df[simple_df['type'] == 'eval_pxl']['co2_kg'].sum()
     # total_carbon_cost = merged_df['co2_kg'].sum()
     print(f'{total_carbon_cost=}')
     merged_df['gpu_name'] = merged_df['gpu_name'].fillna('?')
@@ -896,9 +896,9 @@ def initial_summary(table):
             'gsd': gsd,
             'num_experiments': len(expt_hist),
             'num_models': len(model_hist),
-            'num_pxl_evals': type_hist.get('pxl', 0),
-            'num_bas_evals': type_hist.get('trk', 0),
-            'num_sc_evals': type_hist.get('act', 0),
+            'num_pxl_evals': type_hist.get('eval_pxl', 0),
+            'num_bas_evals': type_hist.get('eval_trk', 0),
+            'num_sc_evals': type_hist.get('eval_act', 0),
         }
         summary_stats.append(row)
     _summary_df = pd.DataFrame(summary_stats)
