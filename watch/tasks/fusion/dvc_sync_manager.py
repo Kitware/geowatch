@@ -294,8 +294,9 @@ class ExperimentState(ub.NiceRepr):
 
         # Hack: making name assumptions
         for row in rows:
-            attrs = parse_epoch_from_fname(row['checkpoint'])
-            row.update(attrs)
+            fname = row['checkpoint']
+            info = checkpoint_filepath_info(fname)
+            row.update(info)
             return rows
 
     def state_rows(self, attrs=1, types=None, notypes=None):
@@ -563,26 +564,53 @@ def main(cmdline=True, **kwargs):
     hdd_manager.sync(**synckw)
 
 
-def parse_epoch_from_fname(fname):
+def checkpoint_filepath_info(fname):
+    """
+    Finds information encoded in the checkpoint/model file path.
+
+    TODO:
+        We need to ensure this info is encoded inside the file header as well!
+
+    Ignore
+        parse.parse('{prefix}foo={bar}', 'foo=3')
+        parse.parse('{prefix}foo={bar}', 'afoao=3')
+
+    Example:
+        >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
+        >>> fnames = [
+        >>>     'epoch=1-step=10.foo'
+        >>>     'epoch=1-step=10-v2.foo'
+        >>>     'epoch=1-step=10'
+        >>>     'epoch=1-step=10-v2'
+        >>>     'junkepoch=1-step=10.foo'
+        >>>     'junk/epoch=1-step=10-v2.foo'
+        >>>     'junk-epoch=1-step=10'
+        >>>     'junk_epoch=1-step=10-v2'
+        >>> ]
+        >>> for fname in fnames:
+        >>>     info = checkpoint_filepath_info(info)
+    """
+    # We assume it must have this
+    suffix = ''.join(fname.partition('epoch=')[1:])
     # Hack: making name assumptions
     parsers = [
-        parse.Parser('{prefix}epoch={epoch:d}-step={step:d}-{ckpt_ver}.{ext}'),
-        parse.Parser('{prefix}epoch={epoch:d}-step={step:d}.{ext}'),
-        parse.Parser('{prefix}epoch={epoch:d}-step={step:d}-{ckpt_ver}'),
-        parse.Parser('{prefix}epoch={epoch:d}-step={step:d}'),
+        parse.Parser('epoch={epoch:d}-step={step:d}-{ckpt_ver}.{ext}'),
+        parse.Parser('epoch={epoch:d}-step={step:d}.{ext}'),
+        parse.Parser('epoch={epoch:d}-step={step:d}-{ckpt_ver}'),
+        parse.Parser('epoch={epoch:d}-step={step:d}'),
     ]
     # results = parser.parse(str(path))
-    attrs = None
+    info = None
     for parsers in parsers:
-        result = parsers.parse(fname)
+        result = parsers.parse(suffix)
         if result:
             break
     if result:
-        attrs = result.named
-        if 'ckpt_ver' not in attrs:
-            attrs['ckpt_ver'] = 'v0'
-        attrs = ub.dict_diff(attrs, {'ext', 'prefix'})
-    return attrs
+        info = result.named
+        if 'ckpt_ver' not in info:
+            info['ckpt_ver'] = 'v0'
+        info = ub.dict_diff(info, {'ext', 'prefix'})
+    return info
 
 
 if __name__ == '__main__':
