@@ -718,8 +718,8 @@ def dvcglob(pat, recursive=0):
         >>> import watch
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
         >>> bundle_dpath = dvc_dpath / 'Cropped-Drop3-TA1-2022-03-10'
-        >>> print(list(dvcglob(bundle_dpath / '*')))
-        >>> print(list(dvcglob(bundle_dpath / '*.dvc')))
+        >>> print(ub.repr2(list(dvcglob(bundle_dpath / '*'))))
+        >>> print(ub.repr2(list(dvcglob(bundle_dpath / '*.dvc'))))
     """
     from watch.utils import util_pattern
     import os
@@ -742,7 +742,7 @@ def dvcglob(pat, recursive=0):
             this_type = 'raw'
             other_type = 'dvc'
             raw_path = path
-            other_path = path + _dvc_ext
+            other_path = parent / (name + _dvc_ext)
         row = id_to_row[raw_path]
         row[this_type] = path
 
