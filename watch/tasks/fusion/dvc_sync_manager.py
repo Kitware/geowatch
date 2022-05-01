@@ -119,319 +119,6 @@ class SyncMachineConfig(scfg.Config):
     }
 
 
-class ExperimentState(ub.NiceRepr):
-    """
-    Ignore:
-        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
-        >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
-        >>> dataset_code = 'Aligned-Drop3-TA1-2022-03-10'
-        >>> self = ExperimentState(dvc_dpath, dataset_code)
-        >>> gen = self.versioned_rows(['eval_trk'])
-        >>> row = ub.peek(gen)
-        >>> table = self.versioned_table()
-        >>> print(table[['type', 'raw']])
-
-    Ignore:
-        table[table.type == 'eval_pkg']['model'].unique()
-    """
-    def __init__(self, dvc_dpath, dataset_code, storage_code=None):
-        self.dvc_dpath = dvc_dpath
-        self.dataset_code = dataset_code
-        if storage_code is None:
-            storage_code = STORAGE_REPL.get(dataset_code, dataset_code)
-        self.storage_code = storage_code
-        self.storage_dpath = self.dvc_dpath / 'models/fusion' / storage_code
-        self.training_dpath = self.dvc_dpath / 'training'
-        self.patterns = {
-            # General
-            'expt': '*',
-            'dvc_dpath': dvc_dpath,
-            'dataset_code': dataset_code,
-            'storage_code': storage_code,
-            ### Versioned
-            'test_dset': '*',
-            'model': '*',  # hack, should have ext
-            'pred_cfg': '*',
-            'trk_cfg': '*',
-            'act_cfg': '*',
-            #### Staging
-            'host': '*',
-            'user': '*',
-            'lightning_version': '*',
-            'checkpoint': '*',  # hack, should have ext
-            'stage_model': '*',  # hack, should have ext
-        }
-
-        self.staging_template_prefix = '{dvc_dpath}/training/{host}/{user}/{dataset_code}/'
-        self.storage_template_prefix = '{dvc_dpath}/models/fusion/{storage_code}/'
-
-        self.staging_templates = {
-            'ckpt': 'runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{checkpoint}',
-            'spkg': 'runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{model}',
-        }
-
-        # Volitile (unused: todo incorporate)
-        self.volitile_templates = {
-            'pred_pxl': 'pred/{expt}/pred_{model}/{test_dset}/{pred_cfg}/pred.kwcoco.json',
-            'pred_trk': 'pred/{expt}/pred_{model}/{test_dset}/{pred_cfg}/tracking/{trk_cfg}/tracks.json',
-            'pred_act': 'pred/{expt}/pred_{model}/{test_dset}/{pred_cfg}/actclf/{act_cfg}/activity_tracks.json',
-        }
-
-        self.versioned_templates = {
-            'pkg': 'packages/{expt}/{model}',
-            'eval_pxl': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/curves/measures2.json',
-            'eval_trk': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
-            'eval_act': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
-        }
-
-        self.templates = {}
-        for k, v in self.staging_templates.items():
-            self.templates[k] = self.staging_template_prefix + v
-        for k, v in self.volitile_templates.items():
-            self.templates[k] = self.storage_template_prefix + v
-        for k, v in self.versioned_templates.items():
-            self.templates[k] = self.storage_template_prefix + v
-
-        ub.dict_union(
-            self.staging_templates,
-            self.volitile_templates,
-            self.versioned_templates,
-        )
-
-        self.path_patterns = {}
-        self._build_path_patterns()
-
-    def _build_path_patterns(self):
-        self.path_patterns = {
-            k: v.format(**self.patterns)
-            for k, v in self.templates.items()}
-
-    def __nice__(self):
-        return self.dataset_code
-
-    def _parse_pattern_attrs(self, key, path):
-        row = {}
-        template = self.templates[key]
-        parser = parse.Parser(str(template))
-        results = parser.parse(str(path))
-        if results is None:
-            raise AssertionError
-            parser = parse.Parser(str(template)[:-4])
-            results = parser.parse(str(path))
-        if results is not None:
-            row.update(results.named)
-        else:
-            warnings.warn('warning: bad attrs')
-        return row
-
-    def staging_rows(self):
-        """
-        A staging item are items that are the result of non-deterministic
-        processes like training. These are not versioned or recomputable.
-        These are things in the training directory that need to be repackaged
-        or copied into the versioned folder.
-        """
-        # Gather checkpoints and packages from the training directory.
-        # Some checkpoints may not have been repackaged yet.
-        # Some packages may have had their checkpoints deleted.
-        # None of these files are in DVC, this is entirely volitile state.
-        from watch.utils import util_pattern
-        default = {'ckpt_path': None, 'spkg_path': None}
-        _id_to_row = ub.ddict(default.copy)
-
-        key = 'ckpt'
-        pat = self.path_patterns[key]
-        mpat = util_pattern.Pattern.coerce(pat)
-        # Find all checkpoints
-        rows = []
-        for ckpt_path in list(mpat.paths()):
-            if ckpt_path.suffix != '.ckpt':
-                continue
-            row = default.copy()
-            row['ckpt_path'] = ckpt_path
-            row['type'] = 'ckpt'
-            row['spkg_exists'] = False
-            row['ckpt_exists'] = True
-
-            _attrs = self._parse_pattern_attrs(key, ckpt_path)
-            row.update(_attrs)
-            rows.append(row)
-            _id_to_row[ckpt_path] = row
-
-        # Find repackaged checkpoints
-        key = 'spkg'  # stands for staged package
-        pat = self.path_patterns[key]
-        mpat = util_pattern.Pattern.coerce(pat)
-        for spkg_path in list(mpat.paths()):
-            if ckpt_path.suffix != '.pt':
-                continue
-            row = {}
-            row['spkg_path'] = spkg_path
-            row['type'] = 'ckpt'
-            # Does this correspond to an existing checkpoint?
-            _attrs = self._parse_pattern_attrs(key, spkg_path)
-
-            # Hack: making assumption about naming pattern
-            spkg_stem = spkg_path.stem
-            ckpt_stem = ''.join(spkg_stem.partition('_epoch')[-2:])[1:]
-            checkpoint = (ckpt_stem + '.ckpt')
-            ckpt_path = spkg_path.parent / checkpoint
-
-            if ckpt_path.exists():
-                # Modify existing row
-                row = _id_to_row[ckpt_path]
-            else:
-                # Add new row
-                row = {}
-                row['checkpoint'] = checkpoint
-                row['ckpt_exists'] = False
-                rows.append(row)
-            row['spkg_path'] = spkg_path
-            row['spkg_exists'] = True
-            row.update(_attrs)
-
-        # Hack: making name assumptions
-        for row in rows:
-            fname = row['checkpoint']
-            info = checkpoint_filepath_info(fname)
-            row.update(info)
-            return rows
-
-    # TODO: add another variant for non-versioned prediction files
-
-    def volitile_rows(self):
-        """
-        A volitile item is something that is derived from something versioned
-        (so it is recomputable), but it is not versioned itself. These are
-        raw prediction, tracking, and classification results.
-        """
-
-    def versioned_rows(self, with_attrs=1, types=None, notypes=None):
-        """
-        Versioned items are things that are tracked with DVC. These are
-        packages and evaluation measures.
-
-        Ignore:
-            types = None
-            notypes = None
-            with_attrs = 1
-        """
-        keys = ['eval_pxl', 'eval_act', 'eval_trk', 'pkg']
-        if types is not None:
-            keys = types
-        if notypes is not None:
-            keys = list(ub.oset(keys) - set(notypes))
-        for key in keys:
-            pat = self.path_patterns[key]
-            found = list(dvcglob(pat))
-            print(len(found))
-            for row in dvcglob(pat):
-                row['type'] = key
-                row['has_dvc'] = (row['dvc'] is not None)
-                row['has_raw'] = (row['raw'] is not None)
-                row['needs_pull'] = row['has_dvc'] and not row['has_raw']
-                row['is_link'] = False
-                row['is_broken'] = False
-                row['unprotected'] = False
-                row['needs_push'] = False
-                if with_attrs:
-                    path = row['raw'] or row['dvc']
-                    row['dataset_code'] = self.dataset_code
-                    _attrs = self._parse_pattern_attrs(key, path)
-                    row.update(_attrs)
-
-                if row['has_raw']:
-                    p = ub.Path(row['raw'])
-                    row['is_link'] = p.is_symlink()
-                    row['is_broken'] = row['is_link'] and not p.exists()
-                    row['needs_push'] = not row['has_dvc']
-                    row['unprotected'] = row['has_dvc'] and not row['is_link']
-                yield row
-
-    def staging_table(self):
-        # import numpy as np
-        staging_rows = list(self.staging_rows())
-        staging_df = pd.DataFrame(staging_rows)
-        return staging_df
-
-    def versioned_table(self, **kw):
-        """
-        Get a list of dictionaries with information for each known evaluation.
-
-        Information includes its real path if it exists, its dvc path if it exists
-        and what sort of actions need to be done to synchronize it.
-        """
-        # import numpy as np
-        eval_rows = list(self.versioned_rows(**kw))
-        eval_df = pd.DataFrame(eval_rows)
-        # print(eval_df.drop(['type', 'raw', 'dvc'], axis=1).sum().to_frame().T)
-        # print(eval_df.groupby('type').sum())
-        return eval_df
-
-    def merged_table(self):
-        import kwarray
-        state_df = state.versioned_table()
-        stage_df = state.staging_table()
-        spkg_was_copied = kwarray.isect_flags(stage_df['model'], state_df['model'])
-        stage_df['spkg_was_copied'] = spkg_was_copied
-        num_need_repackage = (~stage_df['spkg_exists']).sum()
-        print(f'num_need_repackage={num_need_repackage}')
-
-    def summarize(self):
-        """
-        Ignore:
-            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-            >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
-            >>> import watch
-            >>> dvc_dpath = watch.find_smart_dvc_dpath()
-            >>> dataset_code = 'Cropped-Drop3-TA1-2022-03-10'
-            >>> self = ExperimentState(dvc_dpath, dataset_code)
-            >>> self.summarize()
-        """
-        versioned = self.versioned_table()
-        staging = self.staging_table()
-
-        description = versioned[['type', 'dataset_code', 'expt', 'model', 'pred_cfg', 'act_cfg', 'trk_cfg']].describe()
-        print(description)
-
-        dset_code_to_gsd = {
-            'Aligned-Drop3-L1': 10.0,
-            'Aligned-Drop3-TA1-2022-03-10': 10.0,
-            'Cropped-Drop3-TA1-2022-03-10': 1.0,
-        }
-        summary_stats = []
-        for dset_code, group in table.groupby(['dataset_code']):
-            gsd = dset_code_to_gsd.get(dset_code, np.nan)
-            table.loc[group.index, 'gsd'] = gsd
-
-            type_hist = group.groupby('type').size()
-            model_hist = group.groupby('model').size()
-            expt_hist = group.groupby('expt').size()
-
-            row = {
-                'dataset_code': dset_code,
-                'gsd': gsd,
-                'num_experiments': len(expt_hist),
-                'num_models': len(model_hist),
-                'num_pxl_evals': type_hist.get('eval_pxl', 0),
-                'num_bas_evals': type_hist.get('eval_trk', 0),
-                'num_sc_evals': type_hist.get('eval_act', 0),
-            }
-            summary_stats.append(row)
-        _summary_df = pd.DataFrame(summary_stats)
-        total_row = _summary_df.sum().to_dict()
-        total_row['gsd'] = '*'
-        total_row['dataset_code'] = '*'
-        summary_df = pd.DataFrame(summary_stats + [total_row])
-        print('Number of Models & Evaluations')
-        print(summary_df.to_string(index=False))
-
-        state['expt'].unique()
-        pass
-
-
 class DVCSyncManager(ub.NiceRepr):
     """
     Implements an API around our DVC structure, which can be described as
@@ -461,8 +148,9 @@ class DVCSyncManager(ub.NiceRepr):
         >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
         >>> # Default config is used if not provided
         >>> self = DVCSyncManager.coerce()
-        >>> df = self.versioned_table()
-        >>> print(df)
+        >>> #df = self.versioned_table()
+        >>> #print(df)
+        >>> self.summarize()
 
     Ignore:
         broke = df[df['is_broken']]
@@ -478,9 +166,9 @@ class DVCSyncManager(ub.NiceRepr):
         self.dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath, remote=dvc_remote)
         self._build_states()
 
-    def summarize():
-        for state in self.state():
-            state.summarize()
+    def summarize(self):
+        versioned_df = self.versioned_table()
+        summarize_versioned_df(versioned_df)
 
     @classmethod
     def coerce(cls, dvc_dpath=None):
@@ -527,13 +215,21 @@ class DVCSyncManager(ub.NiceRepr):
         dvc = self.dvc
         dvc.git_pull()
         eval_df = self.versioned_table()
+
+        self.summarize()
+        print(f'self.dvc_dpath={self.dvc_dpath}')
+        print(len(eval_df))
+        # import xdev
+        # xdev.embed()
         eval_df = eval_df[~eval_df['is_broken']]
         pull_fpaths = eval_df[eval_df.needs_pull]['dvc'].tolist()
+        print(f'{len(pull_fpaths)=}')
         dvc.pull(pull_fpaths)
 
     def pull_packages(self):
         pkg_df = self.versioned_table(types=['eval_pkg'])
         pull_df = pkg_df[pkg_df['needs_pull']]
+
         pull_fpaths = pull_df['dvc'].tolist()
         self.dvc.pull(pull_fpaths)
 
@@ -548,7 +244,7 @@ class DVCSyncManager(ub.NiceRepr):
                 stage_df = state.staging_table()
                 spkg_was_copied = kwarray.isect_flags(stage_df['model'], state_df['model'])
                 stage_df['spkg_was_copied'] = spkg_was_copied
-                num_need_repackage = (~stage_df['spkg_exists']).sum()
+                num_need_repackage = (~stage_df['is_packaged']).sum()
                 print(f'num_need_repackage={num_need_repackage}')
             else:
                 dataset_code = state.dataset_code
@@ -630,6 +326,416 @@ def main(cmdline=True, **kwargs):
     hdd_manager.sync(**synckw)
 
 
+class ExperimentState(ub.NiceRepr):
+    """
+    Ignore:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
+        >>> import watch
+        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> dataset_code = 'Aligned-Drop3-TA1-2022-03-10'
+        >>> self = ExperimentState(dvc_dpath, dataset_code)
+        >>> gen = self.versioned_rows(['eval_trk'])
+        >>> row = ub.peek(gen)
+        >>> table = self.versioned_table()
+        >>> print(table[['type', 'raw']])
+
+    Ignore:
+        table[table.type == 'eval_pkg']['model'].unique()
+    """
+    def __init__(self, dvc_dpath, dataset_code, storage_code=None):
+        self.dvc_dpath = dvc_dpath
+        self.dataset_code = dataset_code
+        if storage_code is None:
+            storage_code = STORAGE_REPL.get(dataset_code, dataset_code)
+        self.storage_code = storage_code
+        self.storage_dpath = self.dvc_dpath / 'models/fusion' / storage_code
+        self.training_dpath = self.dvc_dpath / 'training'
+        self.patterns = {
+            # General
+            'expt': '*',
+            'dvc_dpath': dvc_dpath,
+            'dataset_code': dataset_code,
+            'storage_code': storage_code,
+            ### Versioned
+            'test_dset': '*',
+            'model': '*',  # hack, should have ext
+            'pred_cfg': '*',
+            'trk_cfg': '*',
+            'act_cfg': '*',
+            #### Staging
+            'host': '*',
+            'user': '*',
+            'lightning_version': '*',
+            'checkpoint': '*',  # hack, should have ext
+            'stage_model': '*',  # hack, should have ext
+        }
+
+        self.staging_template_prefix = '{dvc_dpath}/training/{host}/{user}/{dataset_code}/'
+        self.storage_template_prefix = '{dvc_dpath}/models/fusion/{storage_code}/'
+
+        self.staging_templates = {
+            'ckpt': 'runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{checkpoint}.ckpt',
+            'spkg': 'runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{model}.pt',
+        }
+
+        # Volitile (unused: todo incorporate)
+        self.volitile_templates = {
+            'pred_pxl': 'pred/{expt}/pred_{model}/{test_dset}/{pred_cfg}/pred.kwcoco.json',
+            'pred_trk': 'pred/{expt}/pred_{model}/{test_dset}/{pred_cfg}/tracking/{trk_cfg}/tracks.json',
+            'pred_act': 'pred/{expt}/pred_{model}/{test_dset}/{pred_cfg}/actclf/{act_cfg}/activity_tracks.json',
+        }
+
+        self.versioned_templates = {
+            'pkg': 'packages/{expt}/{model}.pt',
+            'eval_pxl': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/curves/measures2.json',
+            'eval_trk': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
+            'eval_act': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
+        }
+
+        self.templates = {}
+        for k, v in self.staging_templates.items():
+            self.templates[k] = self.staging_template_prefix + v
+        for k, v in self.volitile_templates.items():
+            self.templates[k] = self.storage_template_prefix + v
+        for k, v in self.versioned_templates.items():
+            self.templates[k] = self.storage_template_prefix + v
+
+        ub.dict_union(
+            self.staging_templates,
+            self.volitile_templates,
+            self.versioned_templates,
+        )
+
+        self.path_patterns = {}
+        self._build_path_patterns()
+
+    # def _check(self):
+    #     from watch.utils import util_pattern
+    #     pat = self.path_patterns['pkg']
+    #     # pat = self.path_patterns['eval_act']
+    #     p1 = [p for p in list(util_pattern.Pattern.coerce(pat).paths()) if not p.name.endswith('.dvc')]
+    #     p2 = list(util_pattern.Pattern.coerce(pat + '.dvc').paths())
+    #     for p in p2:
+    #         if not p.augment(ext='').exists():
+    #             break
+    #     print(len(p1))
+    #     print(len(p2))
+    # self.
+    # pass
+
+    def _build_path_patterns(self):
+        self.path_patterns = {
+            k: v.format(**self.patterns)
+            for k, v in self.templates.items()}
+
+    def __nice__(self):
+        return self.dataset_code
+
+    def _parse_pattern_attrs(self, key, path):
+        row = {}
+        template = self.templates[key]
+        parser = parse.Parser(str(template))
+        results = parser.parse(str(path))
+        if results is None:
+            raise AssertionError(path)
+            parser = parse.Parser(str(template)[:-4])
+            results = parser.parse(str(path))
+        if results is not None:
+            row.update(results.named)
+        else:
+            warnings.warn('warning: bad attrs')
+        return row
+
+    def staging_rows(self):
+        """
+        A staging item are items that are the result of non-deterministic
+        processes like training. These are not versioned or recomputable.
+        These are things in the training directory that need to be repackaged
+        or copied into the versioned folder.
+        """
+        # Gather checkpoints and packages from the training directory.
+        # Some checkpoints may not have been repackaged yet.
+        # Some packages may have had their checkpoints deleted.
+        # None of these files are in DVC, this is entirely volitile state.
+        from watch.utils import util_pattern
+        default = {'ckpt_path': None, 'spkg_path': None}
+        _id_to_row = ub.ddict(default.copy)
+
+        key = 'ckpt'
+        pat = self.path_patterns[key]
+        mpat = util_pattern.Pattern.coerce(pat)
+        # Find all checkpoints
+        rows = []
+        for ckpt_path in list(mpat.paths()):
+            if ckpt_path.suffix != '.ckpt':
+                continue
+            row = default.copy()
+            row['ckpt_path'] = ckpt_path
+            row['type'] = 'ckpt'
+            row['is_packaged'] = False
+            row['ckpt_exists'] = True
+
+            _attrs = self._parse_pattern_attrs(key, ckpt_path)
+            row.update(_attrs)
+            rows.append(row)
+            _id_to_row[ckpt_path] = row
+
+        # Find repackaged checkpoints
+        key = 'spkg'  # stands for staged package
+        pat = self.path_patterns[key]
+        mpat = util_pattern.Pattern.coerce(pat)
+        for spkg_path in list(mpat.paths()):
+            # Does this correspond to an existing checkpoint?
+            _attrs = self._parse_pattern_attrs(key, spkg_path)
+
+            # Hack: making assumption about naming pattern
+            spkg_stem = spkg_path.stem
+            ckpt_stem = ''.join(spkg_stem.partition('_epoch')[-2:])[1:]
+            ckpt_path = spkg_path.parent / (ckpt_stem + '.ckpt')
+
+            if ckpt_path.exists():
+                # Modify existing row
+                row = _id_to_row[ckpt_path]
+            else:
+                # Add new row
+                row = default.copy()
+                row['checkpoint'] = ckpt_stem
+                row['ckpt_exists'] = False
+                row['type'] = 'ckpt'
+                rows.append(row)
+            row['spkg_path'] = spkg_path
+            row['is_packaged'] = True
+            row.update(_attrs)
+
+        # Hack: making name assumptions
+        for row in rows:
+            fname = row['checkpoint']
+            info = checkpoint_filepath_info(fname)
+            row.update(info)
+        return rows
+
+    # TODO: add another variant for non-versioned prediction files
+
+    def volitile_rows(self):
+        """
+        A volitile item is something that is derived from something versioned
+        (so it is recomputable), but it is not versioned itself. These are
+        raw prediction, tracking, and classification results.
+        """
+
+    def versioned_rows(self, with_attrs=1, types=None, notypes=None):
+        """
+        Versioned items are things that are tracked with DVC. These are
+        packages and evaluation measures.
+
+        Ignore:
+            types = None
+            notypes = None
+            with_attrs = 1
+        """
+        keys = ['eval_pxl', 'eval_act', 'eval_trk', 'pkg']
+        if types is not None:
+            keys = types
+        if notypes is not None:
+            keys = list(ub.oset(keys) - set(notypes))
+        for key in keys:
+            pat = self.path_patterns[key]
+            found = list(sidecar_glob(pat, sidecar_ext='.dvc',
+                                      sidecar_key='dvc', main_key='raw'))
+            for row in found:
+                row['type'] = key
+                row['has_dvc'] = (row['dvc'] is not None)
+                row['has_raw'] = (row['raw'] is not None)
+                row['needs_pull'] = row['has_dvc'] and not row['has_raw']
+                row['is_link'] = False
+                row['is_broken'] = False
+                row['unprotected'] = False
+                row['needs_push'] = False
+                if with_attrs:
+                    if row['raw']:
+                        path = row['raw']
+                    else:
+                        path = row['dvc'].augment(ext='')
+                    row['dataset_code'] = self.dataset_code
+                    _attrs = self._parse_pattern_attrs(key, path)
+                    row.update(_attrs)
+
+                if row['has_raw']:
+                    p = ub.Path(row['raw'])
+                    row['is_link'] = p.is_symlink()
+                    row['is_broken'] = row['is_link'] and not p.exists()
+                    row['needs_push'] = not row['has_dvc']
+                    row['unprotected'] = row['has_dvc'] and not row['is_link']
+                yield row
+
+    def staging_table(self):
+        # import numpy as np
+        staging_rows = list(self.staging_rows())
+        staging_df = pd.DataFrame(staging_rows)
+
+        if len(staging_df) == 0:
+            staging_df[['ckpt_exists', 'is_packaged', 'is_staged', 'needs_package', 'needs_stage']] = 0
+        return staging_df
+
+    def versioned_table(self, **kw):
+        """
+        Get a list of dictionaries with information for each known evaluation.
+
+        Information includes its real path if it exists, its dvc path if it exists
+        and what sort of actions need to be done to synchronize it.
+        """
+        # import numpy as np
+        eval_rows = list(self.versioned_rows(**kw))
+        eval_df = pd.DataFrame(eval_rows)
+        # print(eval_df.drop(['type', 'raw', 'dvc'], axis=1).sum().to_frame().T)
+        # print(eval_df.groupby('type').sum())
+        return eval_df
+
+    def cross_referenced_tables(self):
+        import kwarray
+        # Cross reference the versioned table with the staging table to
+        # populate items in the staging table. Namely, if we have already
+        # completed the staging process or not.
+        staging_df = self.staging_table()
+        versioned_df = self.versioned_table()
+
+        if len(staging_df) and len(versioned_df):
+            spkg_was_copied = kwarray.isect_flags(staging_df['model'], versioned_df['model'])
+            staging_df['is_staged'] = spkg_was_copied
+            num_need_repackage = (~staging_df['is_packaged']).sum()
+            print(f'num_need_repackage={num_need_repackage}')
+
+            # Lightning might produce the same checkpoint multiple times.  I'm not
+            # sure if these checkpoints are actually different. Either way if they
+            # are different, the difference should only be slight.  Given that we
+            # now know which versions were stages, filter duplicates
+            #
+            # Given duplicates, prioritize:
+            # staged, packaged, higher lightning version, lower checkpoint version.
+            priority = [
+                {'name': 'is_staged', 'ascending': 1},
+                {'name': 'is_packaged', 'ascending': 1},
+                {'name': 'lightning_version', 'ascending': 1},
+                {'name': 'ckpt_ver', 'ascending': 1},
+            ]
+            by = [t['name'] for t in priority]
+            ascending = [t['ascending'] for t in priority]
+            deduped = []
+            for k, g in staging_df.groupby(['expt', 'lightning_version', 'epoch', 'step']):
+                if len(g) == 1:
+                    deduped.append(g)
+                else:
+                    # Choose one from the group with highest priority
+                    prioritized = g.sort_values(by=by, ascending=ascending)
+                    choice = prioritized.iloc[0:1]
+                    deduped.append(choice)
+            staging_df = pd.concat(deduped)
+
+            # Add info from staging into the versioned table
+            versioned_has_staged = kwarray.isect_flags(versioned_df['model'], staging_df['model'])
+            versioned_df['has_staged'] = versioned_has_staged
+        else:
+            staging_df['is_staged'] = False
+            staging_df['is_packaged'] = False
+            versioned_df['has_staged'] = False
+        return staging_df, versioned_df
+
+    def summarize(self):
+        """
+        Ignore:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
+            >>> import watch
+            >>> dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
+            >>> #dvc_dpath = watch.find_smart_dvc_dpath(hardware='ssd')
+            >>> dataset_code = 'Cropped-Drop3-TA1-2022-03-10'
+            >>> self = ExperimentState(dvc_dpath, dataset_code)
+            >>> self.summarize()
+
+            versioned_df = self.versioned_table()
+            flags = (versioned_df['model'] == 'CropDrop3_SC_s2wv_rgb_xver6_V019_epoch=119-step=30719')
+            versioned_df[flags]
+
+            flags = versioned_df['model'].apply(lambda x: 'V019_epoch=119-step=30719' in x)
+            flags.sum()
+
+            y = self.versioned_table(types=['pkg'])
+            y[y['expt'].apply(lambda x: 'V019' in x)]
+            flags = y['model'].apply(lambda x: '30719' in x)
+            flags.sum()
+            y[flags]
+        """
+        staging_df, versioned_df = self.cross_referenced_tables()
+        summarize_staging_df(staging_df)
+        summarize_versioned_df(versioned_df)
+
+
+def summarize_versioned_df(versioned_df):
+    import numpy as np
+    print('Versioned summary')
+    if 'has_staged' not in versioned_df.columns:
+        versioned_df['has_staged'] = np.nan
+
+    version_bitcols = ['has_raw', 'has_dvc', 'is_link', 'is_broken', 'needs_pull', 'needs_push', 'has_staged']
+    needy = versioned_df.groupby('dataset_code')[version_bitcols].sum()
+    print(needy)
+
+    want_cols = [
+        'type', 'dataset_code', 'expt', 'model',
+        # 'test_dset',
+        'pred_cfg', 'act_cfg', 'trk_cfg']
+
+    have_cols = versioned_df.columns.intersection(want_cols)
+    config_rows = versioned_df[have_cols]
+    if 0:
+        # Uniqueness Breakdown
+        print(config_rows.sort_values('expt').value_counts(dropna=False).to_string())
+    # description = config_rows.describe()
+    # print(description.to_string())
+
+    # Description with more stuff (not sure if there is a way to get pandas
+    # describe to do this.
+    for dataset_code, group in versioned_df.groupby('dataset_code'):
+        desc2_parts = []
+        for col in have_cols:
+            col_vals = config_rows[col]
+            col_freq = col_vals.value_counts()
+            col_description = {'name': col}
+            col_description['count'] = (~col_vals.isnull()).sum()
+            col_description['unique'] = col_freq.size
+            # col_description['max_freq'] = col_freq.max()
+            # col_description['min_freq'] = col_freq.min()
+            # col_description['med_freq'] = int(col_freq.median())
+            desc2_parts.append(col_description)
+        description2 = pd.DataFrame(desc2_parts).set_index('name').T
+        description2.columns.name = None
+        print('')
+        print(f'dataset_code={dataset_code}')
+        print('Number of Unique Entries')
+        print(description2.to_string())
+        print('Number of Models & Evaluations')
+        print(group.groupby('type')[version_bitcols].sum())
+
+    model_to_types = {}
+    for model, group in versioned_df.groupby('model'):
+        model_to_types[model] = tuple(sorted(group['type'].unique()))
+    types_to_models = ub.invert_dict(model_to_types, 0)
+    model_eval_counts = pd.DataFrame([ub.map_vals(len, types_to_models)])
+    print('Number of evals / package type for each model')
+    print('Ideally each model has a package, pixel eval, and either act or trk eval')
+    print('Models with evals, but no packages are a problem, probably a bug, maybe needs a git pull?')
+    print(model_eval_counts)
+    # print(types_to_models[('eval_pxl',)])
+
+
+def summarize_staging_df(staging_df):
+    print('Staging summary')
+    staging_df['needs_stage'] = (~staging_df['is_staged'])
+    staging_df['needs_package'] = (~staging_df['is_packaged'])
+    print(staging_df[['ckpt_exists', 'is_packaged', 'is_staged', 'needs_package', 'needs_stage']].sum().to_frame().T)
+
+
 def checkpoint_filepath_info(fname):
     """
     Finds information encoded in the checkpoint/model file path.
@@ -688,13 +794,17 @@ def checkpoint_filepath_info(fname):
     return info
 
 
-def dvcglob(pat, recursive=0):
+def sidecar_glob(pat, sidecar_ext, main_key='main', sidecar_key=None,
+                 recursive=0):
     """
     Similar to a regular glob, but returns a dictionary with associated
-    raw-file / dvc-file pairs.
+    main-file / sidecar-file pairs.
+
+    A sidecar file is defined by the sidecar extension. We usually use this
+    for .dvc sidecars.
 
     When the pattern includes a .dvc suffix, the result will include those .dvc
-    files and any matching raw files they correspond to. Note: if you search
+    files and any matching main files they correspond to. Note: if you search
     for paths like `foo_*.dvc` this might skiped unstaged files. Therefore it
     is recommended to only include the .dvc suffix in the pattern ONLY if you
     do not want any unstaged files.
@@ -714,42 +824,54 @@ def dvcglob(pat, recursive=0):
         be updated in this case, thus it is better to pass the result of this
         through list first.
 
-    Ignore:
+    TODO:
+        add as a general option to Pattern.paths?
+
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
         >>> import watch
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
         >>> bundle_dpath = dvc_dpath / 'Cropped-Drop3-TA1-2022-03-10'
-        >>> print(ub.repr2(list(dvcglob(bundle_dpath / '*'))))
-        >>> print(ub.repr2(list(dvcglob(bundle_dpath / '*.dvc'))))
+        >>> sidecar_ext = '.dvc'
+        >>> print(ub.repr2(list(sidecar_glob(bundle_dpath / '*R*', sidecar_ext)), nl=2))
+        >>> print(ub.repr2(list(sidecar_glob(bundle_dpath / '*.dvc', sidecar_ext)), nl=2))
     """
     from watch.utils import util_pattern
     import os
+    _len_ext = len(sidecar_ext)
     pat = os.fspath(pat)
-    mpat = util_pattern.Pattern.coerce(pat)
-    default = {'raw': None, 'dvc': None}
+    glob_patterns = [pat]
+    if not pat.endswith(sidecar_ext):
+        glob_patterns.append(pat + sidecar_ext)
+        # We could have a variant that removes the extension, but lets not do
+        # that and document it.
+        # glob_patterns.append(pat[:-_len_ext])
+
+    mpat = util_pattern.MultiPattern.coerce(glob_patterns)
+    if sidecar_key is None:
+        sidecar_key = sidecar_ext
+    default = {main_key: None, sidecar_key: None}
     id_to_row = ub.ddict(default.copy)
-    _dvc_ext = '.dvc'
-    _len_ext = len(_dvc_ext)
     paths = mpat.paths(recursive=0)
     for path in paths:
         parent = path.parent
         name = path.name
-        if name.endswith(_dvc_ext):
-            this_type = 'dvc'
-            other_type = 'raw'
-            raw_path = parent / name[:-_len_ext]
-            other_path = raw_path
+        if name.endswith(sidecar_ext):
+            this_key = sidecar_key
+            other_key = main_key
+            main_path = parent / name[:-_len_ext]
+            other_path = main_path
         else:
-            this_type = 'raw'
-            other_type = 'dvc'
-            raw_path = path
-            other_path = parent / (name + _dvc_ext)
-        row = id_to_row[raw_path]
-        row[this_type] = path
-
-        if row[other_type] is None:
+            this_key = main_key
+            other_key = sidecar_key
+            main_path = path
+            other_path = parent / (name + sidecar_ext)
+        row = id_to_row[main_path]
+        row[this_key] = path
+        if row[other_key] is None:
             if other_path.exists():
-                row[other_type] = other_path
-
+                row[other_key] = other_path
         yield row
 
 

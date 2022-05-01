@@ -49,7 +49,7 @@ def eval3_report():
 
     from watch.tasks.fusion import dvc_sync_manager
     dvc_manager = dvc_sync_manager.DVCSyncManager.coerce(dvc_dpath)
-    table = dvc_manager.state_table(notypes=['pkg'])
+    table = dvc_manager.versioned_table(notypes=['pkg'])
 
     initial_summary(table)
 
