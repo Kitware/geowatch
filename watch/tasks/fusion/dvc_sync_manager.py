@@ -325,6 +325,8 @@ class ExperimentState(ub.NiceRepr):
             keys = list(ub.oset(keys) - set(notypes))
         for key in keys:
             pat = self.path_patterns[key]
+            found = list(dvcglob(pat))
+            print(len(found))
             for row in dvcglob(pat):
                 row['type'] = key
                 row['has_dvc'] = (row['dvc'] is not None)
@@ -377,7 +379,6 @@ class ExperimentState(ub.NiceRepr):
         num_need_repackage = (~stage_df['spkg_exists']).sum()
         print(f'num_need_repackage={num_need_repackage}')
 
-
     def summarize(self):
         """
         Ignore:
@@ -389,8 +390,43 @@ class ExperimentState(ub.NiceRepr):
             >>> self = ExperimentState(dvc_dpath, dataset_code)
             >>> self.summarize()
         """
-        state = self.versioned_table()
+        versioned = self.versioned_table()
         staging = self.staging_table()
+
+        description = versioned[['type', 'dataset_code', 'expt', 'model', 'pred_cfg', 'act_cfg', 'trk_cfg']].describe()
+        print(description)
+
+        dset_code_to_gsd = {
+            'Aligned-Drop3-L1': 10.0,
+            'Aligned-Drop3-TA1-2022-03-10': 10.0,
+            'Cropped-Drop3-TA1-2022-03-10': 1.0,
+        }
+        summary_stats = []
+        for dset_code, group in table.groupby(['dataset_code']):
+            gsd = dset_code_to_gsd.get(dset_code, np.nan)
+            table.loc[group.index, 'gsd'] = gsd
+
+            type_hist = group.groupby('type').size()
+            model_hist = group.groupby('model').size()
+            expt_hist = group.groupby('expt').size()
+
+            row = {
+                'dataset_code': dset_code,
+                'gsd': gsd,
+                'num_experiments': len(expt_hist),
+                'num_models': len(model_hist),
+                'num_pxl_evals': type_hist.get('eval_pxl', 0),
+                'num_bas_evals': type_hist.get('eval_trk', 0),
+                'num_sc_evals': type_hist.get('eval_act', 0),
+            }
+            summary_stats.append(row)
+        _summary_df = pd.DataFrame(summary_stats)
+        total_row = _summary_df.sum().to_dict()
+        total_row['gsd'] = '*'
+        total_row['dataset_code'] = '*'
+        summary_df = pd.DataFrame(summary_stats + [total_row])
+        print('Number of Models & Evaluations')
+        print(summary_df.to_string(index=False))
 
         state['expt'].unique()
         pass
@@ -652,13 +688,38 @@ def checkpoint_filepath_info(fname):
     return info
 
 
-def dvcglob(pat):
+def dvcglob(pat, recursive=0):
     """
+    Similar to a regular glob, but returns a dictionary with associated
+    raw-file / dvc-file pairs.
+
+    When the pattern includes a .dvc suffix, the result will include those .dvc
+    files and any matching raw files they correspond to. Note: if you search
+    for paths like `foo_*.dvc` this might skiped unstaged files. Therefore it
+    is recommended to only include the .dvc suffix in the pattern ONLY if you
+    do not want any unstaged files.
+
+    If you want both staged and unstaged files, ensure the pattern does not
+    exclude objects without a .dvc suffix (i.e. don't end the pattern with
+    .dvc).
+
+    When the pattern does not include a .dvc suffix, we include all those
+    files, for other files that exist by adding a .dvc suffix.
+
+    With the pattern matches both a dvc and non-dvc file, they are grouped
+    together.
+
+    Note:
+        This might encounter a file twice, previously yielded dictionaries will
+        be updated in this case, thus it is better to pass the result of this
+        through list first.
+
     Ignore:
         >>> import watch
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
-        >>> bundle_dpath = dvc_dpath / 'deprecated/drop1-S2-L8-aligned'
-        >>> list(dvcglob(bundle_dpath / '*'))
+        >>> bundle_dpath = dvc_dpath / 'Cropped-Drop3-TA1-2022-03-10'
+        >>> print(list(dvcglob(bundle_dpath / '*')))
+        >>> print(list(dvcglob(bundle_dpath / '*.dvc')))
     """
     from watch.utils import util_pattern
     import os
@@ -666,22 +727,29 @@ def dvcglob(pat):
     mpat = util_pattern.Pattern.coerce(pat)
     default = {'raw': None, 'dvc': None}
     id_to_row = ub.ddict(default.copy)
-    paths = list(mpat.paths(recursive=0))
-    dvc_ext = '.dvc'
-    len_ext = len(dvc_ext)
+    _dvc_ext = '.dvc'
+    _len_ext = len(_dvc_ext)
+    paths = mpat.paths(recursive=0)
     for path in paths:
         parent = path.parent
         name = path.name
-        if name.endswith(dvc_ext):
-            type = 'dvc'
-            raw_path = parent / name[:-len_ext]
-            # dvc_path = path
+        if name.endswith(_dvc_ext):
+            this_type = 'dvc'
+            other_type = 'raw'
+            raw_path = parent / name[:-_len_ext]
+            other_path = raw_path
         else:
-            type = 'raw'
+            this_type = 'raw'
+            other_type = 'dvc'
             raw_path = path
-            # dvc_path = parent / (name + '.dvc')
+            other_path = path + _dvc_ext
         row = id_to_row[raw_path]
-        row[type] = path
+        row[this_type] = path
+
+        if row[other_type] is None:
+            if other_path.exists():
+                row[other_type] = other_path
+
         yield row
 
 
