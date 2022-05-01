@@ -227,7 +227,7 @@ class DVCSyncManager(ub.NiceRepr):
         dvc.pull(pull_fpaths)
 
     def pull_packages(self):
-        pkg_df = self.versioned_table(types=['eval_pkg'])
+        pkg_df = self.versioned_table(types=['pkg'])
         pull_df = pkg_df[pkg_df['needs_pull']]
 
         pull_fpaths = pull_df['dvc'].tolist()
@@ -341,7 +341,7 @@ class ExperimentState(ub.NiceRepr):
         >>> print(table[['type', 'raw']])
 
     Ignore:
-        table[table.type == 'eval_pkg']['model'].unique()
+        table[table.type == 'pkg']['model'].unique()
     """
     def __init__(self, dvc_dpath, dataset_code, storage_code=None):
         self.dvc_dpath = dvc_dpath
