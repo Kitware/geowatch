@@ -119,14 +119,10 @@ class SyncMachineConfig(scfg.Config):
     }
 
 
-class WatchDVCState:
-    def __init__(self, dvc_dpath):
-        pass
-
-
 class ExperimentState(ub.NiceRepr):
     """
     Ignore:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
         >>> import watch
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
@@ -251,7 +247,7 @@ class ExperimentState(ub.NiceRepr):
         # Find all checkpoints
         rows = []
         for ckpt_path in list(mpat.paths()):
-            if ckpt_path.ext != '.ckpt':
+            if ckpt_path.suffix != '.ckpt':
                 continue
             row = default.copy()
             row['ckpt_path'] = ckpt_path
@@ -269,7 +265,7 @@ class ExperimentState(ub.NiceRepr):
         pat = self.path_patterns[key]
         mpat = util_pattern.Pattern.coerce(pat)
         for spkg_path in list(mpat.paths()):
-            if ckpt_path.ext != '.pt':
+            if ckpt_path.suffix != '.pt':
                 continue
             row = {}
             row['spkg_path'] = spkg_path
@@ -302,12 +298,6 @@ class ExperimentState(ub.NiceRepr):
             row.update(attrs)
             return rows
 
-    def staging_table(self):
-        # import numpy as np
-        staging_rows = list(self.staging_rows())
-        staging_df = pd.DataFrame(staging_rows)
-        return staging_df
-
     def state_rows(self, attrs=1, types=None, notypes=None):
         keys = ['pxl', 'act', 'trk', 'pkg']
         if types is not None:
@@ -339,6 +329,12 @@ class ExperimentState(ub.NiceRepr):
                     row['unprotected'] = row['has_dvc'] and not row['is_link']
                 yield row
 
+    def staging_table(self):
+        # import numpy as np
+        staging_rows = list(self.staging_rows())
+        staging_df = pd.DataFrame(staging_rows)
+        return staging_df
+
     def state_table(self, **kw):
         """
         Get a list of dictionaries with information for each known evaluation.
@@ -352,6 +348,21 @@ class ExperimentState(ub.NiceRepr):
         # print(eval_df.drop(['type', 'raw', 'dvc'], axis=1).sum().to_frame().T)
         # print(eval_df.groupby('type').sum())
         return eval_df
+
+    def summarize(self):
+        """
+        Ignore:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
+            >>> import watch
+            >>> dvc_dpath = watch.find_smart_dvc_dpath()
+            >>> dataset_code = 'Cropped-Drop3-TA1-2022-03-10'
+            >>> self = ExperimentState(dvc_dpath, dataset_code)
+            >>> self.summarize()
+        """
+        state = self.state_table()
+        staging = self.staging_table()
+        pass
 
 
 class DVCSyncManager(ub.NiceRepr):
@@ -399,6 +410,10 @@ class DVCSyncManager(ub.NiceRepr):
         self.dataset_codes = dataset_codes
         self.dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath, remote=dvc_remote)
         self._build_states()
+
+    def summarize():
+        for state in self.state():
+            state.summarize()
 
     @classmethod
     def coerce(cls, dvc_dpath=None):
@@ -461,16 +476,13 @@ class DVCSyncManager(ub.NiceRepr):
         for state in self.states:
             # TODO: use the "state" staging table instead
             if 0:
+                import kwarray
                 state_df = state.state_table()
                 stage_df = state.staging_table()
-
                 spkg_was_copied = kwarray.isect_flags(stage_df['model'], state_df['model'])
                 stage_df['spkg_was_copied'] = spkg_was_copied
-
                 num_need_repackage = (~stage_df['spkg_exists']).sum()
                 print(f'num_need_repackage={num_need_repackage}')
-
-
             else:
                 dataset_code = state.dataset_code
                 print(f'dataset_code={dataset_code}')
