@@ -578,17 +578,26 @@ def checkpoint_filepath_info(fname):
     Example:
         >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
         >>> fnames = [
-        >>>     'epoch=1-step=10.foo'
-        >>>     'epoch=1-step=10-v2.foo'
-        >>>     'epoch=1-step=10'
-        >>>     'epoch=1-step=10-v2'
-        >>>     'junkepoch=1-step=10.foo'
-        >>>     'junk/epoch=1-step=10-v2.foo'
-        >>>     'junk-epoch=1-step=10'
-        >>>     'junk_epoch=1-step=10-v2'
+        >>>     'epoch=1-step=10.foo',
+        >>>     'epoch=1-step=10-v2.foo',
+        >>>     'epoch=1-step=10',
+        >>>     'epoch=1-step=10-v2',
+        >>>     'junkepoch=1-step=10.foo',
+        >>>     'junk/epoch=1-step=10-v2.foo',
+        >>>     'junk-epoch=1-step=10',
+        >>>     'junk_epoch=1-step=10-v2',
         >>> ]
         >>> for fname in fnames:
-        >>>     info = checkpoint_filepath_info(info)
+        >>>     info = checkpoint_filepath_info(fname)
+        >>>     print(f'info={info}')
+        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v0'}
+        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v2'}
+        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v0'}
+        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v2'}
+        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v0'}
+        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v2'}
+        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v0'}
+        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v2'}
     """
     # We assume it must have this
     suffix = ''.join(fname.partition('epoch=')[1:])
