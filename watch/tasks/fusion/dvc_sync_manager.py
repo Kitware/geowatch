@@ -269,7 +269,7 @@ class DVCSyncManager(ub.NiceRepr):
         print(f'to_push=\n{to_push}')
 
         dvc.add(to_push_fpaths)
-        dvc.git_commitpush(f'Sync models from {platform.node()}')
+        dvc.git_commitpush(f'Sync evals from {platform.node()}')
         dvc.push(to_push_fpaths)
 
     def pull_evals(self):
