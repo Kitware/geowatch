@@ -1,6 +1,7 @@
 """
 
 python -m watch.tasks.fusion.dvc_sync_manager "push pull evals"
+python -m watch.tasks.fusion.dvc_sync_manager "push evals"
 
 """
 import ubelt as ub
@@ -46,9 +47,7 @@ def eval3_report():
         dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
     except Exception:
         dvc_dpath = watch.find_smart_dvc_dpath()
-
     from watch.tasks.fusion import dvc_sync_manager
-
     dvc_manager = dvc_sync_manager.DVCSyncManager.coerce(dvc_dpath)
     # dvc_sync_manager.main(command='pull evals')
     # dvc_sync_manager.main(command='pull packages')
@@ -69,30 +68,8 @@ def eval3_report():
     test_dset_freq = raw_df['test_dset'].value_counts()
     print(f'test_dset_freq={test_dset_freq}')
 
-    preference = {
-        'Cropped-Drop3-TA1-2022-03-10_combo_DLM_s2_wv_vali.kwcoco': 0,
-        'Cropped-Drop3-TA1-2022-03-10_combo_DL_s2_wv_vali.kwcoco': 1,
-        'Cropped-Drop3-TA1-2022-03-10_data_wv_vali.kwcoco': 2,
-
-        'Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco': 0,
-        'Aligned-Drop3-TA1-2022-03-10_combo_LM_vali.kwcoco': 1,
-    }
-
-    # Filter out rows where models have predictions on "better" datasets
-    FILTER_DUPS = 1
-    if FILTER_DUPS:
-        keep_locs = []
-        for k, group in raw_df.groupby(['dataset_code', 'model', 'pred_cfg', 'type']):
-            prefs = group['test_dset'].apply(lambda x: preference.get(x, 0))
-            keep_flags = prefs == prefs.min()
-            keep_locs.extend(group[keep_flags].index)
-        print(f'Keep {len(keep_locs)} / {len(raw_df)} drop3 evals')
-        df = filt_df = raw_df.loc[keep_locs]
-        print('Column Unique Value Frequencies')
-        # print(col_stats_df2.to_string())
-        num_files_summary(filt_df)
-    else:
-        filt_df = raw_df.copy()
+    # Remove duplicate predictions on effectively the same dataset.
+    filt_df = deduplicate_test_datasets(raw_df)
 
     # Load detailed data
     eval_types_to_locs = ub.ddict(list)
@@ -109,6 +86,9 @@ def eval3_report():
     merged_df, other = clean_loaded_data(big_rows)
 
     total_carbon_cost_kg = merged_df['co2_kg'].sum()
+
+    resource_cost = merged_df[['co2_kg', 'total_hours']].sum()
+    print(resource_cost)
     print(f'total_carbon_cost_kg={total_carbon_cost_kg}')
 
     plot_merged(merged_df, other)
@@ -163,8 +143,8 @@ def plot_merged(merged_df, other):
     merged_df['in_production'] = star_flags
 
     common_plotkw = {
-        'connect': 'expt',
-        'mesh': 'model',
+        # 'connect': 'expt',
+        # 'mesh': 'model',
         # 'clique': 'model',
         'style': 'has_teamfeat',
         'star': 'in_production',
@@ -1112,3 +1092,34 @@ def describe_varied(expt_group):
         varied = ub.varied_values(rows, 0)
         print(ub.highlight_code(pprint.pformat(dict(varied), width=80)))
 
+
+def deduplicate_test_datasets(raw_df):
+    """
+    The same model might have been run on two variants of the dataset.
+    E.g. a RGB model might have run on data_vali.kwcoco.json and
+    combo_DILM.kwcoco.json. The system sees these as different datasets
+    even though the model will use the same subset of both. We define
+    a heuristic ordering and then take just one of them.
+    """
+    preference = {
+        'Cropped-Drop3-TA1-2022-03-10_combo_DLM_s2_wv_vali.kwcoco': 0,
+        'Cropped-Drop3-TA1-2022-03-10_combo_DL_s2_wv_vali.kwcoco': 1,
+        'Cropped-Drop3-TA1-2022-03-10_data_wv_vali.kwcoco': 2,
+        'Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco': 0,
+        'Aligned-Drop3-TA1-2022-03-10_combo_LM_vali.kwcoco': 1,
+    }
+    FILTER_DUPS = 1
+    if FILTER_DUPS:
+        keep_locs = []
+        for k, group in raw_df.groupby(['dataset_code', 'model', 'pred_cfg', 'type']):
+            prefs = group['test_dset'].apply(lambda x: preference.get(x, 0))
+            keep_flags = prefs == prefs.min()
+            keep_locs.extend(group[keep_flags].index)
+        print(f'Keep {len(keep_locs)} / {len(raw_df)} drop3 evals')
+        filt_df = raw_df.loc[keep_locs]
+        print('Column Unique Value Frequencies')
+        # print(col_stats_df2.to_string())
+        num_files_summary(filt_df)
+    else:
+        filt_df = raw_df.copy()
+    return filt_df

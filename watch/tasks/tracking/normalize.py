@@ -486,6 +486,7 @@ def normalize_phases(coco_dset,
     # Continue transforming phase labels, now with smoothing and deduping
     #
 
+    annots = coco_dset.annots()
     old_cnames_dct = dict(zip(annots.aids, annots.cnames))
 
     for trackid, n_anns in ub.map_vals(
