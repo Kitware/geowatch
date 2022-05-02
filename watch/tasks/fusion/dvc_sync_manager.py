@@ -274,15 +274,17 @@ class DVCSyncManager(ub.NiceRepr):
     def pull_evals(self):
         dvc = self.dvc
         dvc.git_pull()
-        eval_df = self.versioned_table(notypes=['pkg'])
+        eval_df = self.evaluation_table()
+        summarize_versioned_df(eval_df)
 
-        self.summarize()
+        # self.summarize()
         print(f'self.dvc_dpath={self.dvc_dpath}')
         print(len(eval_df))
         # import xdev
         # xdev.embed()
         eval_df = eval_df[~eval_df['is_broken']]
-        pull_fpaths = eval_df[eval_df.needs_pull]['dvc'].tolist()
+        pull_rows = eval_df[eval_df.needs_pull]
+        pull_fpaths = pull_rows['dvc'].tolist()
         print(f'{len(pull_fpaths)=}')
         dvc.pull(pull_fpaths)
 
@@ -688,55 +690,53 @@ def summarize_versioned_df(versioned_df):
         versioned_df['has_staged'] = np.nan
 
     version_bitcols = ['has_raw', 'has_dvc', 'is_link', 'is_broken', 'needs_pull', 'needs_push', 'has_staged']
-    needy = versioned_df.groupby('dataset_code')[version_bitcols].sum()
+    needy = versioned_df.groupby(['dataset_code', 'type'])[version_bitcols].sum()
     print(needy)
 
-    want_cols = [
-        'type', 'dataset_code', 'expt', 'model',
-        # 'test_dset',
-        'pred_cfg', 'act_cfg', 'trk_cfg']
+    # want_cols = [
+    #     'type', 'dataset_code', 'expt', 'model',
+    #     # 'test_dset',
+    #     'pred_cfg', 'act_cfg', 'trk_cfg']
 
-    have_cols = versioned_df.columns.intersection(want_cols)
-    config_rows = versioned_df[have_cols]
-    if 0:
-        # Uniqueness Breakdown
-        print(config_rows.sort_values('expt').value_counts(dropna=False).to_string())
-    # description = config_rows.describe()
-    # print(description.to_string())
-
-    # Description with more stuff (not sure if there is a way to get pandas
-    # describe to do this.
-    for dataset_code, group in versioned_df.groupby('dataset_code'):
-        desc2_parts = []
-        for col in have_cols:
-            col_vals = config_rows[col]
-            col_freq = col_vals.value_counts()
-            col_description = {'name': col}
-            col_description['count'] = (~col_vals.isnull()).sum()
-            col_description['unique'] = col_freq.size
-            # col_description['max_freq'] = col_freq.max()
-            # col_description['min_freq'] = col_freq.min()
-            # col_description['med_freq'] = int(col_freq.median())
-            desc2_parts.append(col_description)
-        description2 = pd.DataFrame(desc2_parts).set_index('name').T
-        description2.columns.name = None
-        print('')
-        print(f'dataset_code={dataset_code}')
-        print('Number of Unique Entries')
-        print(description2.to_string())
-        print('Number of Models & Evaluations')
-        print(group.groupby('type')[version_bitcols].sum())
-
-    model_to_types = {}
-    for model, group in versioned_df.groupby('model'):
-        model_to_types[model] = tuple(sorted(group['type'].unique()))
-    types_to_models = ub.invert_dict(model_to_types, 0)
-    model_eval_counts = pd.DataFrame([ub.map_vals(len, types_to_models)])
-    print('Number of evals / package type for each model')
-    # print('Ideally each model has a package, pixel eval, and either act or trk eval')
-    # print('Models with evals, but no packages are a problem, probably a bug, maybe needs a git pull?')
-    print(model_eval_counts)
-    # print(types_to_models[('eval_pxl',)])
+    # have_cols = versioned_df.columns.intersection(want_cols)
+    # config_rows = versioned_df[have_cols]
+    # if 0:
+    #     # Uniqueness Breakdown
+    #     print(config_rows.sort_values('expt').value_counts(dropna=False).to_string())
+    # # description = config_rows.describe()
+    # # print(description.to_string())
+    # # Description with more stuff (not sure if there is a way to get pandas
+    # # describe to do this.
+    # for dataset_code, group in versioned_df.groupby('dataset_code'):
+    #     desc2_parts = []
+    #     for col in have_cols:
+    #         col_vals = config_rows[col]
+    #         col_freq = col_vals.value_counts()
+    #         col_description = {'name': col}
+    #         col_description['count'] = (~col_vals.isnull()).sum()
+    #         col_description['unique'] = col_freq.size
+    #         # col_description['max_freq'] = col_freq.max()
+    #         # col_description['min_freq'] = col_freq.min()
+    #         # col_description['med_freq'] = int(col_freq.median())
+    #         desc2_parts.append(col_description)
+    #     description2 = pd.DataFrame(desc2_parts).set_index('name').T
+    #     description2.columns.name = None
+    #     print('')
+    #     print(f'dataset_code={dataset_code}')
+    #     print('Number of Unique Entries')
+    #     print(description2.to_string())
+    #     print('Number of Models & Evaluations')
+    #     print(group.groupby('type')[version_bitcols].sum())
+    # model_to_types = {}
+    # for model, group in versioned_df.groupby('model'):
+    #     model_to_types[model] = tuple(sorted(group['type'].unique()))
+    # types_to_models = ub.invert_dict(model_to_types, 0)
+    # model_eval_counts = pd.DataFrame([ub.map_vals(len, types_to_models)])
+    # print('Number of evals / package type for each model')
+    # # print('Ideally each model has a package, pixel eval, and either act or trk eval')
+    # # print('Models with evals, but no packages are a problem, probably a bug, maybe needs a git pull?')
+    # print(model_eval_counts)
+    # # print(types_to_models[('eval_pxl',)])
 
 
 def summarize_staging_df(staging_df):
@@ -802,6 +802,31 @@ def checkpoint_filepath_info(fname):
             info['ckpt_ver'] = 'v0'
         info = ub.dict_diff(info, {'ext', 'prefix'})
     return info
+
+
+def pull_from_s3_notes():
+    """
+
+    aws s3 --profile iarpa ls s3://kitware-smart-watch-data/sync_root/
+    aws s3 --profile iarpa sync s3://kitware-smart-watch-data/sync_root/ $HOME/data/aws-sync/sync_root/
+
+    ls $HOME/data/aws-sync/sync_root/ta2-train*/*/Aligned-Drop3-L1/runs
+    ls $HOME/data/aws-sync/sync_root/ta2-train*/*/Aligned-Drop3-L1/runs
+
+    ls $HOME/data/aws-sync/sync_root/ta2-train*/*/Aligned-Drop3-L1/runs/*/lightning_logs/*/checkpoints
+
+    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DATASET_CODE=Aligned-Drop3-L1
+    EXPT_GROUP_CODE=Aligned-Drop3-L1
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+    TRAIN_DPATH=$HOME/data/aws-sync/sync_root/*/*/$DATASET_CODE/runs/*/lightning_logs
+    python -m watch.tasks.fusion.repackage gather_checkpoints \
+        --dvc_dpath="$DVC_DPATH" \
+        --storage_dpath="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages" \
+        --train_dpath="$TRAIN_DPATH" \
+        --push_jobs=8 --dvc_remote=aws \
+        --mode=commit
+    """
 
 
 if __name__ == '__main__':

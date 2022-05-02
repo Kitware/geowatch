@@ -118,7 +118,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     EXPT_NAME_PAT="*"
     #EXPT_NAME_PAT="*Drop3*"
     EXPT_NAME_PAT="*"
-    EXPT_NAME_PAT="*tf*"
+    #EXPT_NAME_PAT="*tf*"
     #EXPT_NAME_PAT="BOTH_TA1_COMBO_TINY_p2w_raw*"
     MODEL_EPOCH_PAT="*"
     PRED_DSET_PAT="*"
