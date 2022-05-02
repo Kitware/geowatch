@@ -2,6 +2,7 @@
 Synchronize DVC states across the machine.
 
 Example:
+    python -m watch.tasks.fusion.dvc_sync_manager "list"
     python -m watch.tasks.fusion.dvc_sync_manager "pull evals"
     python -m watch.tasks.fusion.dvc_sync_manager "push evals"
     python -m watch.tasks.fusion.dvc_sync_manager "push packages evals"
@@ -172,7 +173,7 @@ def main(cmdline=True, **kwargs):
     hdd_manager.sync(**synckw)
 
     if dolist:
-        self.summarize()
+        hdd_manager.summarize()
 
 
 class DVCSyncManager(ub.NiceRepr):
