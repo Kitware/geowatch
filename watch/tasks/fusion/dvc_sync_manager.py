@@ -250,7 +250,8 @@ class DVCSyncManager(ub.NiceRepr):
 
     def push_evals(self):
         dvc = self.dvc
-        eval_df = self.versioned_table()
+        eval_df = self.evaluation_table()
+        summarize_versioned_df(eval_df)
 
         is_weird = (eval_df.is_link & (~eval_df.has_dvc))
         weird_df = eval_df[is_weird]
