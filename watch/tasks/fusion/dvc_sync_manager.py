@@ -13,7 +13,11 @@ import ubelt as ub
 import platform
 import scriptconfig as scfg
 from watch.utils import simple_dvc
+from watch.utils import util_pattern
+from watch.utils import util_path
 
+
+# TODO: replace globals with a global config if necessary
 DATASET_CODES = [
     'Cropped-Drop3-TA1-2022-03-10',
     'Aligned-Drop3-TA1-2022-03-10',
@@ -24,18 +28,6 @@ DATASET_CODES = [
 STORAGE_REPL = {
     'Aligned-Drop3-TA1-2022-03-10': 'eval3_candidates',
     'Cropped-Drop3-TA1-2022-03-10': 'eval3_sc_candidates',
-}
-
-
-EVAL_GLOB_PATTERNS = {
-    'pxl_ta1_10': 'models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json',
-    'trk_ta1_10': 'models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json',
-
-    'pxl_l1_10': 'models/fusion/Aligned-Drop3-L1/eval/*/*/*/*/eval/curves/measures2.json',
-    'trk_l1_10': 'models/fusion/Aligned-Drop3-L1/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json',
-
-    'pxl_ta1_1': 'models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json',
-    'act_ta1_1': 'models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json',
 }
 
 
@@ -119,155 +111,6 @@ class SyncMachineConfig(scfg.Config):
     }
 
 
-class DVCSyncManager(ub.NiceRepr):
-    """
-    Implements an API around our DVC structure, which can be described as
-    follows.
-
-    <dvc_dpath>
-        * [<dataset_code>, ...]
-
-        * training
-            * <hostname>/<user>/<dataset_code>/runs/<expt_name>/lightning_logs/...
-
-        * models
-            * <task>
-            * fusion/<storage_code>/packages/<expt_name>/<model_name.pt>
-            * fusion/<storage_code>/pred/<expt_name>/pred_<model_name.pt>/***
-            * fusion/<storage_code>/eval/<expt_name>/pred_<model_name.pt>/***
-
-    Note:
-        moving forward dataset_code and storage_code should always be the same.
-        so storage_code=dataset_code. But we have a weird case that we still
-        support ATM.
-
-    A breakdown of the packages dir is:
-        packages/<expt_name>/<model_name.pt>
-
-    Example:
-        >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
-        >>> # Default config is used if not provided
-        >>> self = DVCSyncManager.coerce()
-        >>> #df = self.versioned_table()
-        >>> #print(df)
-        >>> self.summarize()
-
-    Ignore:
-        broke = df[df['is_broken']]
-    """
-
-    def __nice__(self):
-        return str(self.dvc)
-
-    def __init__(self, dvc_dpath, dvc_remote='aws', dataset_codes=None):
-        self.dvc_dpath = dvc_dpath
-        self.dvc_remote = dvc_remote
-        self.dataset_codes = dataset_codes
-        self.dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath, remote=dvc_remote)
-        self._build_states()
-
-    def summarize(self):
-        versioned_df = self.versioned_table()
-        summarize_versioned_df(versioned_df)
-
-    @classmethod
-    def coerce(cls, dvc_dpath=None):
-        import watch
-        if dvc_dpath is None:
-            dvc_dpath = watch.find_smart_dvc_dpath()
-        dvc_remote = 'aws'
-        dataset_codes = DATASET_CODES
-        self = cls(dvc_dpath=dvc_dpath, dvc_remote=dvc_remote,
-                   dataset_codes=dataset_codes)
-        return self
-
-    def _build_states(self):
-        states = []
-        for dataset_code in self.dataset_codes:
-            state = ExperimentState(self.dvc_dpath, dataset_code)
-            states.append(state)
-        self.states = states
-
-    def versioned_table(self, **kw):
-        rows = list(ub.flatten(state.versioned_rows(**kw) for state in self.states))
-        df = pd.DataFrame(rows)
-        return df
-
-    def push_evals(self):
-        dvc = self.dvc
-        eval_df = self.versioned_table()
-
-        is_weird = (eval_df.is_link & (~eval_df.has_dvc))
-        weird_df = eval_df[is_weird]
-        if len(weird_df):
-            print(f'weird_df=\n{weird_df}')
-
-        to_push = eval_df[eval_df.needs_push == True]  # NOQA
-        assert not to_push['has_dvc'].any()
-        to_push_fpaths = to_push['raw'].tolist()
-        print(f'to_push=\n{to_push}')
-
-        dvc.add(to_push_fpaths)
-        dvc.git_commitpush(f'Sync models from {platform.node()}')
-        dvc.push(to_push_fpaths)
-
-    def pull_evals(self):
-        dvc = self.dvc
-        dvc.git_pull()
-        eval_df = self.versioned_table()
-
-        self.summarize()
-        print(f'self.dvc_dpath={self.dvc_dpath}')
-        print(len(eval_df))
-        # import xdev
-        # xdev.embed()
-        eval_df = eval_df[~eval_df['is_broken']]
-        pull_fpaths = eval_df[eval_df.needs_pull]['dvc'].tolist()
-        print(f'{len(pull_fpaths)=}')
-        dvc.pull(pull_fpaths)
-
-    def pull_packages(self):
-        pkg_df = self.versioned_table(types=['pkg'])
-        pull_df = pkg_df[pkg_df['needs_pull']]
-
-        pull_fpaths = pull_df['dvc'].tolist()
-        self.dvc.pull(pull_fpaths)
-
-    def push_packages(self):
-        from watch.tasks.fusion import repackage
-        mode = 'commit'
-        for state in self.states:
-            # TODO: use the "state" staging table instead
-            if 0:
-                import kwarray
-                state_df = state.versioned_table()
-                stage_df = state.staging_table()
-                spkg_was_copied = kwarray.isect_flags(stage_df['model'], state_df['model'])
-                stage_df['spkg_was_copied'] = spkg_was_copied
-                num_need_repackage = (~stage_df['is_packaged']).sum()
-                print(f'num_need_repackage={num_need_repackage}')
-            else:
-                dataset_code = state.dataset_code
-                print(f'dataset_code={dataset_code}')
-                train_dpath = state.training_dpath / '*/*' / state.dataset_code / 'runs'
-                storage_dpath = state.storage_dpath / 'packages'
-                repackage.gather_checkpoints(
-                    dvc_dpath=state.dvc_dpath, storage_dpath=storage_dpath,
-                    train_dpath=train_dpath, dvc_remote=self.dvc_remote, mode=mode)
-
-    def sync(self, push=True, pull=True, evals=True, packages=True):
-        if push:
-            if packages:
-                self.push_packages()
-            if evals:
-                self.push_evals()
-        if pull:
-            if packages:
-                self.pull_packages()
-            if evals:
-                self.pull_evals()
-
-
 def main(cmdline=True, **kwargs):
     """
     from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
@@ -324,6 +167,165 @@ def main(cmdline=True, **kwargs):
         dvc_hdd_dpath, dvc_remote=dvc_remote, dataset_codes=dataset_codes)
     synckw = ub.compatible(config, hdd_manager.sync)
     hdd_manager.sync(**synckw)
+
+
+class DVCSyncManager(ub.NiceRepr):
+    """
+    Implements an API around our DVC structure, which can be described as
+    follows.
+
+    <dvc_dpath>
+        * [<dataset_code>, ...]
+
+        * training
+            * <hostname>/<user>/<dataset_code>/runs/<expt_name>/lightning_logs/...
+
+        * models
+            * <task>
+            * fusion/<storage_code>/packages/<expt_name>/<model_name.pt>
+            * fusion/<storage_code>/pred/<expt_name>/pred_<model_name.pt>/***
+            * fusion/<storage_code>/eval/<expt_name>/pred_<model_name.pt>/***
+
+    Note:
+        moving forward dataset_code and storage_code should always be the same.
+        so storage_code=dataset_code. But we have a weird case that we still
+        support ATM.
+
+    A breakdown of the packages dir is:
+        packages/<expt_name>/<model_name.pt>
+
+    Example:
+        >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
+        >>> # Default config is used if not provided
+        >>> self = DVCSyncManager.coerce(watch.find_smart_dvc_dpath(hardware='hdd'))
+        >>> #df = self.versioned_table()
+        >>> #print(df)
+        >>> self.summarize()
+
+    Ignore:
+        broke = df[df['is_broken']]
+    """
+
+    def __nice__(self):
+        return str(self.dvc)
+
+    def __init__(self, dvc_dpath, dvc_remote='aws', dataset_codes=None):
+        self.dvc_dpath = dvc_dpath
+        self.dvc_remote = dvc_remote
+        self.dataset_codes = dataset_codes
+        self.dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath, remote=dvc_remote)
+        self._build_states()
+
+    def summarize(self):
+        versioned_df = self.versioned_table()
+        summarize_versioned_df(versioned_df)
+
+    @classmethod
+    def coerce(cls, dvc_dpath=None):
+        import watch
+        if dvc_dpath is None:
+            dvc_dpath = watch.find_smart_dvc_dpath()
+        dvc_remote = 'aws'
+        dataset_codes = DATASET_CODES
+        self = cls(dvc_dpath=dvc_dpath, dvc_remote=dvc_remote,
+                   dataset_codes=dataset_codes)
+        return self
+
+    def _build_states(self):
+        states = []
+        for dataset_code in self.dataset_codes:
+            state = ExperimentState(self.dvc_dpath, dataset_code)
+            states.append(state)
+        self.states = states
+
+    def versioned_table(self, **kw):
+        rows = list(ub.flatten(state.versioned_rows(**kw) for state in self.states))
+        df = pd.DataFrame(rows)
+        return df
+
+    def evaluation_table(self):
+        rows = list(ub.flatten(state.evaluation_rows() for state in self.states))
+        df = pd.DataFrame(rows)
+        return df
+
+    def push_evals(self):
+        dvc = self.dvc
+        eval_df = self.versioned_table()
+
+        is_weird = (eval_df.is_link & (~eval_df.has_dvc))
+        weird_df = eval_df[is_weird]
+        if len(weird_df):
+            print(f'weird_df=\n{weird_df}')
+
+        to_push = eval_df[eval_df.needs_push == True]  # NOQA
+        assert not to_push['has_dvc'].any()
+
+        # TODO: if we want to allow modifications we need to find
+        # unprotected files (or changed files on non-symlink dvc repos)
+        # to_push = eval_df[(eval_df.needs_push == True) | (eval_df.unprotected == True)]  # NOQA
+
+        to_push_fpaths = to_push['raw'].tolist()
+        print(f'to_push=\n{to_push}')
+
+        dvc.add(to_push_fpaths)
+        dvc.git_commitpush(f'Sync models from {platform.node()}')
+        dvc.push(to_push_fpaths)
+
+    def pull_evals(self):
+        dvc = self.dvc
+        dvc.git_pull()
+        eval_df = self.versioned_table(notypes=['pkg'])
+
+        self.summarize()
+        print(f'self.dvc_dpath={self.dvc_dpath}')
+        print(len(eval_df))
+        # import xdev
+        # xdev.embed()
+        eval_df = eval_df[~eval_df['is_broken']]
+        pull_fpaths = eval_df[eval_df.needs_pull]['dvc'].tolist()
+        print(f'{len(pull_fpaths)=}')
+        dvc.pull(pull_fpaths)
+
+    def pull_packages(self):
+        pkg_df = self.versioned_table(types=['pkg'])
+        pull_df = pkg_df[pkg_df['needs_pull']]
+
+        pull_fpaths = pull_df['dvc'].tolist()
+        self.dvc.pull(pull_fpaths)
+
+    def push_packages(self):
+        from watch.tasks.fusion import repackage
+        mode = 'commit'
+        for state in self.states:
+            # TODO: use the "state" staging table instead
+            if 0:
+                import kwarray
+                state_df = state.versioned_table()
+                stage_df = state.staging_table()
+                spkg_was_copied = kwarray.isect_flags(stage_df['model'], state_df['model'])
+                stage_df['spkg_was_copied'] = spkg_was_copied
+                num_need_repackage = (~stage_df['is_packaged']).sum()
+                print(f'num_need_repackage={num_need_repackage}')
+            else:
+                dataset_code = state.dataset_code
+                print(f'dataset_code={dataset_code}')
+                train_dpath = state.training_dpath / '*/*' / state.dataset_code / 'runs'
+                storage_dpath = state.storage_dpath / 'packages'
+                repackage.gather_checkpoints(
+                    dvc_dpath=state.dvc_dpath, storage_dpath=storage_dpath,
+                    train_dpath=train_dpath, dvc_remote=self.dvc_remote, mode=mode)
+
+    def sync(self, push=True, pull=True, evals=True, packages=True):
+        if push:
+            if packages:
+                self.push_packages()
+            if evals:
+                self.push_evals()
+        if pull:
+            if packages:
+                self.pull_packages()
+            if evals:
+                self.pull_evals()
 
 
 class ExperimentState(ub.NiceRepr):
@@ -458,7 +460,6 @@ class ExperimentState(ub.NiceRepr):
         # Some checkpoints may not have been repackaged yet.
         # Some packages may have had their checkpoints deleted.
         # None of these files are in DVC, this is entirely volitile state.
-        from watch.utils import util_pattern
         default = {'ckpt_path': None, 'spkg_path': None}
         _id_to_row = ub.ddict(default.copy)
 
@@ -524,6 +525,10 @@ class ExperimentState(ub.NiceRepr):
         raw prediction, tracking, and classification results.
         """
 
+    def evaluation_rows(self, with_attrs=1, types=None, notypes=None):
+        keys = ['eval_pxl', 'eval_act', 'eval_trk']
+        yield from self.versioned_rows(with_attrs=with_attrs, types=keys)
+
     def versioned_rows(self, with_attrs=1, types=None, notypes=None):
         """
         Versioned items are things that are tracked with DVC. These are
@@ -541,8 +546,8 @@ class ExperimentState(ub.NiceRepr):
             keys = list(ub.oset(keys) - set(notypes))
         for key in keys:
             pat = self.path_patterns[key]
-            found = list(sidecar_glob(pat, sidecar_ext='.dvc',
-                                      sidecar_key='dvc', main_key='raw'))
+            found = list(util_path.sidecar_glob(
+                pat, sidecar_ext='.dvc', sidecar_key='dvc', main_key='raw'))
             for row in found:
                 row['type'] = key
                 row['has_dvc'] = (row['dvc'] is not None)
@@ -565,8 +570,8 @@ class ExperimentState(ub.NiceRepr):
                     p = ub.Path(row['raw'])
                     row['is_link'] = p.is_symlink()
                     row['is_broken'] = row['is_link'] and not p.exists()
-                    row['needs_push'] = not row['has_dvc']
                     row['unprotected'] = row['has_dvc'] and not row['is_link']
+                    row['needs_push'] = not row['has_dvc']
                 yield row
 
     def staging_table(self):
@@ -591,6 +596,11 @@ class ExperimentState(ub.NiceRepr):
         # print(eval_df.drop(['type', 'raw', 'dvc'], axis=1).sum().to_frame().T)
         # print(eval_df.groupby('type').sum())
         return eval_df
+
+    def evaluation_table(self):
+        rows = list(self.evaluation_rows())
+        df = pd.DataFrame(rows)
+        return df
 
     def cross_referenced_tables(self):
         import kwarray
@@ -723,8 +733,8 @@ def summarize_versioned_df(versioned_df):
     types_to_models = ub.invert_dict(model_to_types, 0)
     model_eval_counts = pd.DataFrame([ub.map_vals(len, types_to_models)])
     print('Number of evals / package type for each model')
-    print('Ideally each model has a package, pixel eval, and either act or trk eval')
-    print('Models with evals, but no packages are a problem, probably a bug, maybe needs a git pull?')
+    # print('Ideally each model has a package, pixel eval, and either act or trk eval')
+    # print('Models with evals, but no packages are a problem, probably a bug, maybe needs a git pull?')
     print(model_eval_counts)
     # print(types_to_models[('eval_pxl',)])
 
@@ -792,87 +802,6 @@ def checkpoint_filepath_info(fname):
             info['ckpt_ver'] = 'v0'
         info = ub.dict_diff(info, {'ext', 'prefix'})
     return info
-
-
-def sidecar_glob(pat, sidecar_ext, main_key='main', sidecar_key=None,
-                 recursive=0):
-    """
-    Similar to a regular glob, but returns a dictionary with associated
-    main-file / sidecar-file pairs.
-
-    A sidecar file is defined by the sidecar extension. We usually use this
-    for .dvc sidecars.
-
-    When the pattern includes a .dvc suffix, the result will include those .dvc
-    files and any matching main files they correspond to. Note: if you search
-    for paths like `foo_*.dvc` this might skiped unstaged files. Therefore it
-    is recommended to only include the .dvc suffix in the pattern ONLY if you
-    do not want any unstaged files.
-
-    If you want both staged and unstaged files, ensure the pattern does not
-    exclude objects without a .dvc suffix (i.e. don't end the pattern with
-    .dvc).
-
-    When the pattern does not include a .dvc suffix, we include all those
-    files, for other files that exist by adding a .dvc suffix.
-
-    With the pattern matches both a dvc and non-dvc file, they are grouped
-    together.
-
-    Note:
-        This might encounter a file twice, previously yielded dictionaries will
-        be updated in this case, thus it is better to pass the result of this
-        through list first.
-
-    TODO:
-        add as a general option to Pattern.paths?
-
-    Example:
-        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
-        >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
-        >>> bundle_dpath = dvc_dpath / 'Cropped-Drop3-TA1-2022-03-10'
-        >>> sidecar_ext = '.dvc'
-        >>> print(ub.repr2(list(sidecar_glob(bundle_dpath / '*R*', sidecar_ext)), nl=2))
-        >>> print(ub.repr2(list(sidecar_glob(bundle_dpath / '*.dvc', sidecar_ext)), nl=2))
-    """
-    from watch.utils import util_pattern
-    import os
-    _len_ext = len(sidecar_ext)
-    pat = os.fspath(pat)
-    glob_patterns = [pat]
-    if not pat.endswith(sidecar_ext):
-        glob_patterns.append(pat + sidecar_ext)
-        # We could have a variant that removes the extension, but lets not do
-        # that and document it.
-        # glob_patterns.append(pat[:-_len_ext])
-
-    mpat = util_pattern.MultiPattern.coerce(glob_patterns)
-    if sidecar_key is None:
-        sidecar_key = sidecar_ext
-    default = {main_key: None, sidecar_key: None}
-    id_to_row = ub.ddict(default.copy)
-    paths = mpat.paths(recursive=0)
-    for path in paths:
-        parent = path.parent
-        name = path.name
-        if name.endswith(sidecar_ext):
-            this_key = sidecar_key
-            other_key = main_key
-            main_path = parent / name[:-_len_ext]
-            other_path = main_path
-        else:
-            this_key = main_key
-            other_key = sidecar_key
-            main_path = path
-            other_path = parent / (name + sidecar_ext)
-        row = id_to_row[main_path]
-        row[this_key] = path
-        if row[other_key] is None:
-            if other_path.exists():
-                row[other_key] = other_path
-        yield row
 
 
 if __name__ == '__main__':

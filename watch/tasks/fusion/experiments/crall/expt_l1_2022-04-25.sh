@@ -58,6 +58,8 @@ CROPPED_PRE_EVAL_AND_AGG(){
             --enable_eval=1 \
             --enable_actclf=1 \
             --enable_actclf_eval=1 \
+            --enable_track=1 \
+            --enable_iarpa_eval=1 \
             --draw_heatmaps=0 \
             --without_alternatives \
             --skip_existing=1 --backend=tmux --run=1

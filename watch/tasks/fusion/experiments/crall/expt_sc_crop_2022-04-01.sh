@@ -54,7 +54,6 @@ CROPPED_PRE_EVAL_AND_AGG(){
     BUNDLE_SUFFIX=combo_DLM_s2_wv_vali.kwcoco.json
     EXPT_MODEL_GLOBNAME="CropDrop3_SC_s2*wv_*tf*_*V*"
 
-
     SSD_DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
     SSD_KWCOCO_BUNDLE_DPATH=$SSD_DVC_DPATH/$DATASET_CODE
     SSD_VALI_FPATH=$SSD_KWCOCO_BUNDLE_DPATH/$BUNDLE_SUFFIX
@@ -65,7 +64,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     fi
     tmux_spawn \
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="1,2,3" \
+            --gpus="0,1,2,3" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/$EXPT_MODEL_GLOBNAME/*.pt" \
             --test_dataset="$VALI_FPATH" \
             --enable_pred=1 \
@@ -74,7 +73,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
             --enable_actclf_eval=1 \
             --draw_heatmaps=0 \
             --without_alternatives \
-            --skip_existing=1 --backend=tmux --run=0
+            --skip_existing=1 --backend=tmux --run=1
 
 
     #################################
@@ -82,7 +81,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     #################################
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
 
-    python -m watch.tasks.fusion.dvc_sync_manager --push=True --pull=True --dvc_remote=aws
+    python -m watch.tasks.fusion.dvc_sync_manager "push evals" --dvc_remote=aws
 
     # Check for uncommited evaluations
     # shellcheck disable=SC2010

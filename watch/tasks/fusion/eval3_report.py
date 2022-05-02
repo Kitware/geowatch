@@ -48,8 +48,13 @@ def eval3_report():
         dvc_dpath = watch.find_smart_dvc_dpath()
 
     from watch.tasks.fusion import dvc_sync_manager
+
     dvc_manager = dvc_sync_manager.DVCSyncManager.coerce(dvc_dpath)
-    table = dvc_manager.versioned_table(notypes=['pkg'])
+    # dvc_sync_manager.main(command='pull evals')
+    # dvc_sync_manager.main(command='pull packages')
+
+    table = dvc_manager.evaluation_table()
+    dvc_manager.summarize()
 
     initial_summary(table)
 
@@ -74,7 +79,7 @@ def eval3_report():
     }
 
     # Filter out rows where models have predictions on "better" datasets
-    FILTER_DUPS = 0
+    FILTER_DUPS = 1
     if FILTER_DUPS:
         keep_locs = []
         for k, group in raw_df.groupby(['dataset_code', 'model', 'pred_cfg', 'type']):
@@ -102,6 +107,10 @@ def eval3_report():
 
     big_rows = load_extended_data(df, dvc_dpath)
     merged_df, other = clean_loaded_data(big_rows)
+
+    total_carbon_cost_kg = merged_df['co2_kg'].sum()
+    print(f'total_carbon_cost_kg={total_carbon_cost_kg}')
+
     plot_merged(merged_df, other)
 
 
@@ -125,19 +134,19 @@ def plot_merged(merged_df, other):
         'sensorchan': 'Sensor/Channel',
         'has_teamfeat': 'Has Team Features',
     }
+
+    iarpa_metric_lut = {
+        'eval_act+pxl': 'mean_f1',
+        'eval_trk+pxl': 'BAS_F1',
+    }
+    pixel_metric_lut = {
+        'eval_act+pxl': 'coi_mAP',
+        'eval_trk+pxl': 'salient_AP',
+    }
     actcfg_to_label = other['actcfg_to_label']
     predcfg_to_label = other['predcfg_to_label']
     human_mapping.update(actcfg_to_label)
     human_mapping.update(predcfg_to_label)
-
-    iarpa_metric_lut = {
-        'act+pxl': 'mean_f1',
-        'trk+pxl': 'BAS_F1',
-    }
-    pixel_metric_lut = {
-        'act+pxl': 'coi_mAP',
-        'trk+pxl': 'salient_AP',
-    }
 
     # ['trk_thresh',
     #  'trk_morph_kernel',
@@ -145,29 +154,44 @@ def plot_merged(merged_df, other):
     #  'trk_thresh_hysteresis',
     #  'trk_moving_window_size']
 
+    from watch.tasks.fusion import production
+    production_models = [row['name'].replace('.pt', '') for row in production.PRODUCTION_MODELS]
+    # Star the production models
+    stared_models = set(merged_df['model'].unique()) & set(production_models)
+    import kwarray
+    star_flags = kwarray.isect_flags(merged_df['model'], stared_models)
+    merged_df['in_production'] = star_flags
+
     common_plotkw = {
-        'mesh': 'expt',
+        'connect': 'expt',
+        'mesh': 'model',
+        # 'clique': 'model',
         'style': 'has_teamfeat',
+        'star': 'in_production',
     }
 
-    markersize = 60
+    plot_pixel_ap_verus_iarpa(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw)
 
-    # TODO: compute total steps including with initialized continuations
-    from watch.tasks.fusion import dvc_sync_manager
-    epoch_info = merged_df['model'].apply(dvc_sync_manager.parse_epoch_from_fname).values
-    merged_df['epoch'] = [e.get('epoch', None) if e else None for e in epoch_info]
-    merged_df['step'] = [e.get('step', None) if e else None for e in epoch_info]
+    plot_pixel_ap_verus_auc(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw)
 
+    plot_resource_versus_metric(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw)
+
+    plot_viterbii_analysis(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw)
+
+
+def plot_pixel_ap_verus_iarpa(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw):
     import kwplot
-    expt_group = dict(list(merged_df.groupby(['dataset_code', 'type'])))
+    markersize = 60
     fnum = 0
-    for gsd_type, group in expt_group.items():
-        dataset_code, type = gsd_type
-        if type == 'act+pxl':
+    expt_group = dict(list(merged_df.groupby(['dataset_code', 'type'])))
+    for code_type, group in expt_group.items():
+
+        dataset_code, type = code_type
+        if type == 'eval_act+pxl':
             plotkw = {
                 'x': pixel_metric_lut[type],
                 'y': iarpa_metric_lut[type],
-                'hue': 'channels',
+                'hue': 'sensorchan',
                 **common_plotkw,
                 # 'hue': 'trk_use_viterbi',
                 # 'style': 'trk_thresh',
@@ -175,7 +199,7 @@ def plot_merged(merged_df, other):
                 # 'hue': 'pred_cfg',
                 # 'hue': 'expt',
             }
-        elif type == 'trk+pxl':
+        elif type == 'eval_trk+pxl':
             # hacks
             group['track_agg_fn'] = group['trk_agg_fn'].fillna('probs')
             flags = 1 - group['trk_thresh_hysteresis'].isnull()
@@ -184,7 +208,7 @@ def plot_merged(merged_df, other):
             plotkw = {
                 'x': pixel_metric_lut[type],
                 'y': iarpa_metric_lut[type],
-                'hue': 'channels',
+                'hue': 'sensorchan',
                 **common_plotkw,
                 # 'hue': 'trk_thresh',
                 # 'size': 'trk_thresh_hysteresis',
@@ -216,16 +240,19 @@ def plot_merged(merged_df, other):
         ax = humanized_scatterplot(human_mapping, data=data, ax=ax, **plotkw)
         ax.set_title(f'Pixelwise Vs IARPA metrics - {type} - {dataset_code=}\n{corr_lbl}')
 
-    fnum = 10
+
+def plot_pixel_ap_verus_auc(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw):
     import kwplot
+    markersize = 60
+    fnum = 10
     expt_group = dict(list(merged_df.groupby(['dataset_code', 'type'])))
-    for gsd_type, group in expt_group.items():
+    for code_type, group in expt_group.items():
 
         group = group[~group['sensorchan'].isnull()]
         # group['has_teamfeat'] = group['sensorchan'].apply(lambda x: (('depth' in x) or ('invariants' in x) or ('matseg' in x) or ('land' in x)))
 
-        dataset_code, type = gsd_type
-        if type == 'act+pxl':
+        dataset_code, type = code_type
+        if type == 'eval_act+pxl':
             plotkw = {
                 'x': pixel_metric_lut[type],
                 'y': 'coi_mAUC',
@@ -237,7 +264,7 @@ def plot_merged(merged_df, other):
                 # 'hue': 'pred_cfg',
                 # 'hue': 'expt',
             }
-        elif type == 'trk+pxl':
+        elif type == 'eval_trk+pxl':
             plotkw = {
                 'x': pixel_metric_lut[type],
                 'y': 'salient_AUC',
@@ -266,16 +293,23 @@ def plot_merged(merged_df, other):
         ax.set_title(f'Pixelwise metrics - {type} - {dataset_code=}\n{corr_lbl}')
         fig.set_size_inches(16.85,  8.82)
 
+
+def plot_resource_versus_metric(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw):
+    import kwplot
+    markersize = 60
+    fnum = 20
     expt_group = dict(list(merged_df.groupby(['dataset_code', 'type'])))
     if 1:
-        expt_group.pop((10, 'act+pxl'), None)
-        expt_group.pop((1, 'act+pxl'), None)
-        expt_group.pop((1, 'trk+pxl'), None)
+        expt_group.pop((10, 'eval_act+pxl'), None)
+        expt_group.pop((1, 'eval_act+pxl'), None)
+        expt_group.pop((1, 'eval_trk+pxl'), None)
+
     for resource_type in ['total_hours', 'co2_kg']:
         human_resource_type = human_mapping.get(resource_type, resource_type)
 
-        # for metric_type in ['iarpa', 'pixel']:
-        for metric_type in ['pixel']:
+        # 'pixel']:
+        # for metric_type in ['pixel']:
+        for metric_type in ['iarpa']:
             if metric_type == 'iarpa':
                 metric_lut = iarpa_metric_lut
                 human_metric_type = 'IARPA'
@@ -283,18 +317,18 @@ def plot_merged(merged_df, other):
                 metric_lut = pixel_metric_lut
                 human_metric_type = 'Pixelwise'
 
-            fnum += 1
-            fig = kwplot.figure(fnum=fnum)
-            pnum_ = kwplot.PlotNums(nCols=len(expt_group))
-            for gsd_type, group in expt_group.items():
+            # pnum_ = kwplot.PlotNums(nCols=len(expt_group))
+            for code_type, group in expt_group.items():
+                fnum += 1
+                fig = kwplot.figure(fnum=fnum)
 
                 group['pred_tta_time'] = group['pred_tta_time'].astype(str)
                 group['pred_tta_fliprot'] = group['pred_tta_fliprot'].astype(str)
 
                 group.loc[group['pred_tta_time'] == 'nan', 'pred_tta_time'] = '0.0'
                 group.loc[group['pred_tta_fliprot'] == 'nan', 'pred_tta_fliprot'] = '0.0'
-                dataset_code, type = gsd_type
-                if type == 'act+pxl':
+                dataset_code, type = code_type
+                if type == 'eval_act+pxl':
                     plotkw = {
                         'x': resource_type,
                         'y': metric_lut[type],
@@ -306,7 +340,7 @@ def plot_merged(merged_df, other):
                         # 'size': 'pred_tta_fliprot',
                         # 'style': 'hardware',
                     }
-                elif type == 'trk+pxl':
+                elif type == 'eval_trk+pxl':
                     plotkw = {
                         'x': resource_type,
                         'y': metric_lut[type],
@@ -318,15 +352,18 @@ def plot_merged(merged_df, other):
                     }
                 else:
                     raise KeyError(type)
-                fig = kwplot.figure(fnum=fnum, pnum=pnum_())
+                # fig = kwplot.figure(fnum=fnum, pnum=pnum_())
                 ax = fig.gca()
                 # fig.get_size_inches()
-                fig.set_size_inches(17.85,  6.82)
+                # fig.set_size_inches(17.85,  6.82)
                 data = group
                 plotkw['s'] = markersize
                 ax = humanized_scatterplot(human_mapping, data=data, ax=ax, **plotkw)
                 ax.set_title(f'{human_resource_type} vs {human_metric_type} - {type} - {dataset_code=}')
 
+
+def plot_viterbii_analysis(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw):
+    import kwplot
     expt_group = dict(list(merged_df.groupby(['dataset_code', 'type'])))
     from watch.utils import result_analysis
 
@@ -348,9 +385,9 @@ def plot_merged(merged_df, other):
 
     merged_df.loc[merged_df['use_cloudmask'].isnull(), 'use_cloudmask'] = 0
 
-    gsd_type = ('Cropped-Drop3-TA1-2022-03-10', 'act+pxl')
-    dataset_code, type = gsd_type
-    group = expt_group[gsd_type]
+    code_type = ('Cropped-Drop3-TA1-2022-03-10', 'eval_act+pxl')
+    dataset_code, type = code_type
+    group = expt_group[code_type]
 
     iarpa_metric = iarpa_metric_lut[type]
     pixel_metric = pixel_metric_lut[type]
@@ -417,14 +454,14 @@ def plot_merged(merged_df, other):
             ab_rows.append(ab_row)
     # ab_df = pd.concat(ab_rows).reset_index(drop=True)
     # obs[param]
+
+    plt = kwplot.autoplt()
+    ax = plt.gca()
     kwplot.draw_line_segments(pts1, pts2)
     # ticks = ax.set_xticks([0, 1], ['0', 'v6,v1'])
     ax.set_ylabel(metric)
     ax.set_xlabel(param)
     ax.set_title('Viterbi A/B tests')
-
-    plt = kwplot.autoplt()
-    ax = plt.gca()
 
     return
 
@@ -459,7 +496,7 @@ def plot_merged(merged_df, other):
     group[fit_param_keys]
 
 
-def humanized_scatterplot(human_mapping, data, ax, mesh=None, **plotkw):
+def humanized_scatterplot(human_mapping, data, ax, mesh=None, connect=None, star=None, **plotkw):
     """
     Example:
         import pandas as pd
@@ -471,16 +508,37 @@ def humanized_scatterplot(human_mapping, data, ax, mesh=None, **plotkw):
              'x': np.random.rand(n),
              'y': np.random.rand(n),
              'group': (np.random.rand(n) * 5).astype(int),
+             'star': (np.random.rand(n) > 0.9).astype(int),
         })
         mesh = 'group'
         import kwplot
         kwplot.autompl()
+        kwplot.figure(fnum=32)
         humanized_scatterplot(human_mapping, data, ax, mesh, **plotkw)
     """
     import seaborn as sns
-    ax = sns.scatterplot(data=data, ax=ax, **plotkw)
+    import kwplot
+    import kwimage
+    plt = kwplot.autoplt()
     xkey = plotkw['x']
     ykey = plotkw['y']
+
+    if ax is None:
+        import kwplot
+        plt = kwplot.autoplt()
+        ax = plt.gca()
+
+    if star is not None:
+        flags = data[star].apply(bool)
+        star_data = data[flags]
+        star_x = star_data[xkey]
+        star_y = star_data[ykey]
+        starkw = ub.dict_isect(plotkw, {'s'})
+        starkw['s'] = starkw.get('s', 10) + 250
+        starkw['color'] = 'orange'
+        ax.scatter(star_x, star_y, marker='*', **starkw)
+
+    ax = sns.scatterplot(data=data, ax=ax, **plotkw)
 
     ax.set_xlabel(human_mapping.get(xkey, xkey))
     ax.set_ylabel(human_mapping.get(ykey, ykey))
@@ -495,42 +553,50 @@ def humanized_scatterplot(human_mapping, data, ax, mesh=None, **plotkw):
             new_text = human_mapping.get(old_text, old_text)
             leg_lbl.set_text(new_text)
 
+    if connect:
+        import scipy
+        import scipy.spatial
+        groups = data.groupby(connect)
+        colors = kwimage.Color.distinct(len(groups))
+        i = 0
+        for gkey, subgroup in groups:
+            if 'step' in subgroup.columns:
+                subgroup = subgroup.sort_values('epoch')
+            points = subgroup[[xkey, ykey]].values
+            ax = plt.gca()
+            ax.plot(points[:, 0], points[:, 1], '--', alpha=0.3, color='gray')
+            i += 1
+
     if mesh:
         import scipy
         import scipy.spatial
-        import kwimage
-        import kwplot
-        plt = kwplot.autoplt()
         mesh_groups = data.groupby(mesh)
         colors = kwimage.Color.distinct(len(mesh_groups))
         i = 0
         for gkey, subgroup in mesh_groups:
-            print(subgroup['step'].unique())
-            if 'step' in subgroup.columns:
-                subgroup = subgroup.sort_values('epoch')
             points = subgroup[[xkey, ykey]].values
             did_plot = 0
             if 1:
                 if len(points) > 3:
                     try:
                         tri = scipy.spatial.Delaunay(points)
-                        # todo: cut off non-mse edges, or order based on epoch?
-
-                        import networkx as nx
-                        g = nx.Graph()
-                        g.add_edges_from(tri.simplices[:, 0:2])
-                        g.add_edges_from(tri.simplices[:, 1:3])
-                        g.add_edges_from(tri.simplices[:, [2, 0]])
-                        mse_edges = list(nx.minimum_spanning_tree(g).edges)
-                        segments = points[mse_edges, :]
-                        pts1 = segments[:, 0, :]
-                        pts2 = segments[:, 1, :]
-                        kwplot.draw_line_segments(pts1, pts2, color=colors[i])
-                        # plt.triplot(points[:, 0], points[:, 1], tri.simplices)
-                    except Exception as ex:
-                        print(f'ex={ex}')
-                        print(f'points={points}')
-                        raise
+                        if 0:
+                            # MSE
+                            # todo: cut off non-mse edges, or order based on epoch?
+                            import networkx as nx
+                            g = nx.Graph()
+                            g.add_edges_from(tri.simplices[:, 0:2])
+                            g.add_edges_from(tri.simplices[:, 1:3])
+                            g.add_edges_from(tri.simplices[:, [2, 0]])
+                            mse_edges = list(nx.minimum_spanning_tree(g).edges)
+                            segments = points[mse_edges, :]
+                            pts1 = segments[:, 0, :]
+                            pts2 = segments[:, 1, :]
+                            kwplot.draw_line_segments(pts1, pts2, color=colors[i])
+                        else:
+                            plt.triplot(points[:, 0], points[:, 1], tri.simplices, alpha=0.2)
+                    except Exception:
+                        pass
                     else:
                         did_plot = 1
             if not did_plot:
@@ -545,14 +611,14 @@ def humanized_scatterplot(human_mapping, data, ax, mesh=None, **plotkw):
 def num_files_summary(df):
     expt_group = dict(list(df.groupby('dataset_code')))
     filt_summaries = []
-    for gsd, group in sorted(expt_group.items())[::-1]:
-        print('gsd = {!r}'.format(gsd))
+    for dataset_code, group in sorted(expt_group.items())[::-1]:
+        print('dataset_code = {!r}'.format(dataset_code))
         print('Column Unique Value Frequencies')
         col_stats_df2 = unique_col_stats(group)
         print(col_stats_df2.to_string())
         row = {}
         type_evals = ub.dict_hist(group['type'])
-        row['gsd'] = gsd
+        row['dataset_code'] = dataset_code
         row['num_experiments'] = len(group['expt'].unique())
         row['num_models'] = len(group['model'].unique())
         row['num_pxl_evals'] = type_evals.get('eval_pxl', 0)
@@ -561,7 +627,7 @@ def num_files_summary(df):
         filt_summaries.append(row)
     _summary_df = pd.DataFrame(filt_summaries)
     total_row = _summary_df.sum().to_dict()
-    total_row['gsd'] = '*'
+    total_row['dataset_code'] = '*'
     summary_df = pd.DataFrame(filt_summaries + [total_row])
     print('Number of Models & Evaluations')
     print(summary_df.to_string(index=False))
@@ -581,7 +647,7 @@ def unique_col_stats(df):
         # col_stats[key]['max'] = stats['max']
     col_stats_df = pd.DataFrame(col_stats)
     # Hack
-    col_stats_df = col_stats_df.drop(['gsd', 'dvc', 'raw'], axis=1)
+    col_stats_df = col_stats_df.drop(['dataset_code', 'dvc', 'raw'], axis=1)
     col_stats_df = col_stats_df.astype(int)
     return col_stats_df
 
@@ -837,12 +903,12 @@ def clean_loaded_data(big_rows):
                 pxl_row = pxl_row.to_dict()
                 if not math.isnan(pxl_row.get('coi_mAP', np.nan)):
                     srow = pxl_row.copy()
-                    srow['type'] = 'act+pxl'
+                    srow['type'] = 'eval_act+pxl'
                     merged_rows.append(srow)
 
                 if not math.isnan(pxl_row.get('salient_AP', np.nan)):
                     srow = pxl_row.copy()
-                    srow['type'] = 'trk+pxl'
+                    srow['type'] = 'eval_trk+pxl'
                     merged_rows.append(srow)
 
             for type, subgroup in type_to_subgroup.items():
@@ -870,6 +936,52 @@ def clean_loaded_data(big_rows):
         'actcfg_to_label': actcfg_to_label,
         'predcfg_to_label': predcfg_to_label,
     }
+
+    # TODO: compute total steps including with initialized continuations
+    from watch.tasks.fusion import dvc_sync_manager
+    epoch_info = merged_df['model'].apply(dvc_sync_manager.checkpoint_filepath_info).values
+    merged_df['epoch'] = [e.get('epoch', None) if e else None for e in epoch_info]
+    merged_df['step'] = [e.get('step', None) if e else None for e in epoch_info]
+
+    merged_df['init'] = merged_df['init'].apply(lambda x: x[:-3] if x.endswith('.pt') else x)
+
+    known_models = merged_df['model'].unique()
+    init_models = merged_df['init'].unique()
+    traceable = sorted(set(init_models) & set(known_models))
+
+    merged_df = merged_df.reset_index(drop=True)  # because of enumerate
+    init_to_idxs = ub.map_vals(sorted, ub.invert_dict(dict(enumerate(merged_df['init'])), 0))
+    model_to_idxs = ub.map_vals(sorted, ub.invert_dict(dict(enumerate(merged_df['model'])), 0))
+    import networkx as nx
+    g = nx.DiGraph()
+    for model in traceable:
+        pred_idxs = model_to_idxs[model]
+        succ_idxs = init_to_idxs[model]
+        pred_df = merged_df.loc[pred_idxs]
+        succ_df = merged_df.loc[succ_idxs]
+        parents = pred_df['model'].unique()
+        children = succ_df['model'].unique()
+        for p in parents:
+            for c in children:
+                g.add_edge(p, c)
+
+    from watch.utils import cmd_queue
+    print(cmd_queue.graph_str(g))
+
+    # Ensure we compute total epochs for earlier models first
+    merged_df['total_steps'] = merged_df['step']
+    for model in list(nx.topological_sort(g)):
+        pred_idxs = model_to_idxs[model]
+        succ_idxs = init_to_idxs.get(model, [])
+        if len(succ_idxs):
+            pred_df = merged_df.loc[pred_idxs]
+            succ_df = merged_df.loc[succ_idxs]
+            assert len(pred_df['total_steps'].unique()) == 1
+            prev = pred_df['total_steps'].iloc[0]
+            merged_df.loc[succ_idxs, 'total_steps'] += prev
+
+    print(ub.repr2(merged_df.columns.tolist()))
+
     return merged_df, other
 
 
@@ -884,6 +996,8 @@ def initial_summary(table):
     }
     summary_stats = []
     for dset_code, group in table.groupby(['dataset_code']):
+        # dataset_code = dset_code_to_gsd.get(dset_code, np.nan)
+        # dataset_code = dset_code_to_gsd.get(dset_code, np.nan)
         gsd = dset_code_to_gsd.get(dset_code, np.nan)
         table.loc[group.index, 'gsd'] = gsd
 
@@ -893,7 +1007,6 @@ def initial_summary(table):
 
         row = {
             'dataset_code': dset_code,
-            'gsd': gsd,
             'num_experiments': len(expt_hist),
             'num_models': len(model_hist),
             'num_pxl_evals': type_hist.get('eval_pxl', 0),
@@ -903,7 +1016,7 @@ def initial_summary(table):
         summary_stats.append(row)
     _summary_df = pd.DataFrame(summary_stats)
     total_row = _summary_df.sum().to_dict()
-    total_row['gsd'] = '*'
+    total_row['dataset_code'] = '*'
     total_row['dataset_code'] = '*'
     summary_df = pd.DataFrame(summary_stats + [total_row])
     print('Number of Models & Evaluations')
@@ -926,21 +1039,58 @@ def resolve_model_info(model_fpath):
 
 def describe_varied(expt_group):
     import pprint
-    for gsd_type, group in expt_group.items():
-        gsd, type = gsd_type
+
+    fnum = 40
+
+    dpath = ub.Path.appdir('watch/report').ensuredir()
+    for code_type, group in expt_group.items():
+        fnum += 1
+        dataset_code, type = code_type
         print('Varied fit params')
         print('type = {}'.format(ub.repr2(type, nl=1)))
-        print('gsd = {}'.format(ub.repr2(gsd, nl=1)))
-        part = group[fit_param_keys].fillna('null')
+        print('dataset_code = {}'.format(ub.repr2(dataset_code, nl=1)))
+
+        if 1:
+            part = group[fit_param_keys].fillna('null')
+            param_to_row = ub.ddict(dict)
+            param_to_hist = {k: part[k].value_counts() for k in fit_param_keys}
+            for param, hist in param_to_hist.items():
+                row = param_to_row[param]
+                row['top_val'] = hist.idxmax()
+                row['top_freq'] = hist.max()
+            param_summary = pd.DataFrame(param_to_row).T
+            import dataframe_image as dfi
+            param_style = param_summary.style
+            param_style = param_style.set_caption(f'Varied Parameters: {code_type}')
+            dfi_converter = "chrome"  # matplotlib
+            fname = ub.hash_data([fnum, code_type])[0:16] + '.png'
+            fpath = dpath / fname
+            dfi.export(
+                param_style,
+                str(fpath),
+                table_conversion=dfi_converter,
+                fontsize=12,
+                max_rows=-1,
+            )
+            import kwimage
+            import kwplot
+            imdata = kwimage.imread(fpath)
+            kwplot.imshow(imdata, fnum=fnum)
+
+        part[fit_param_keys].value_counts()
+
         part = part.drop('channels', axis=1)
         rows = part.to_dict('records')
         varied = ub.varied_values(rows, 1)
+
+        varied.keys()
+
         print(ub.highlight_code(pprint.pformat(dict(varied), width=80)))
         # print('varied = {}'.format(ub.repr2(varied, nl=2)))
 
         print('Varied pred params')
         print('type = {}'.format(ub.repr2(type, nl=1)))
-        print('gsd = {}'.format(ub.repr2(gsd, nl=1)))
+        print('dataset_code = {}'.format(ub.repr2(dataset_code, nl=1)))
         part = group[pred_param_keys].fillna('null')
         rows = part.to_dict('records')
         varied = ub.varied_values(rows, 0)
@@ -948,7 +1098,7 @@ def describe_varied(expt_group):
 
         print('Varied track params')
         print('type = {}'.format(ub.repr2(type, nl=1)))
-        print('gsd = {}'.format(ub.repr2(gsd, nl=1)))
+        print('dataset_code = {}'.format(ub.repr2(dataset_code, nl=1)))
         part = group[trk_param_keys].fillna('null')
         rows = part.to_dict('records')
         varied = ub.varied_values(rows, 0)
@@ -956,8 +1106,9 @@ def describe_varied(expt_group):
 
         print('Varied activity params')
         print('type = {}'.format(ub.repr2(type, nl=1)))
-        print('gsd = {}'.format(ub.repr2(gsd, nl=1)))
+        print('dataset_code = {}'.format(ub.repr2(dataset_code, nl=1)))
         part = group[act_param_keys].fillna('null')
         rows = part.to_dict('records')
         varied = ub.varied_values(rows, 0)
         print(ub.highlight_code(pprint.pformat(dict(varied), width=80)))
+
