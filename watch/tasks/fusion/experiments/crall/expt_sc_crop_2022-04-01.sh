@@ -62,7 +62,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     if [ -f "$SSD_VALI_FPATH" ]; then
         VALI_FPATH=$SSD_VALI_FPATH
     fi
-    tmux_spawn \
+    #tmux_spawn \
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1,2,3" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/$EXPT_MODEL_GLOBNAME/*.pt" \
@@ -73,7 +73,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
             --enable_actclf_eval=1 \
             --draw_heatmaps=0 \
             --without_alternatives \
-            --skip_existing=1 --backend=tmux --run=1
+            --skip_existing=1 --backend=tmux --run=0
 
 
     #################################

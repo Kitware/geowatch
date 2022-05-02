@@ -4,7 +4,7 @@ Synchronize DVC states across the machine.
 Example:
     python -m watch.tasks.fusion.dvc_sync_manager "pull evals"
     python -m watch.tasks.fusion.dvc_sync_manager "push evals"
-    python -m watch.tasks.fusion.dvc_sync_manager "push packages"
+    python -m watch.tasks.fusion.dvc_sync_manager "push packages evals"
 """
 import warnings
 import parse
