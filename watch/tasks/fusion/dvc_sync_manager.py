@@ -161,6 +161,8 @@ def main(cmdline=True, **kwargs):
         synckw = ub.compatible(config, ssd_manager.sync)
         synckw['pull'] = False
         ssd_manager.sync(**synckw)
+        if dolist:
+            ssd_manager.summarize()
 
     # Do everything to the HDD.
     try:
