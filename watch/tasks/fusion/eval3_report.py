@@ -1,7 +1,9 @@
 """
 
+python -m watch.tasks.fusion.dvc_sync_manager "list"
 python -m watch.tasks.fusion.dvc_sync_manager "push pull evals"
 python -m watch.tasks.fusion.dvc_sync_manager "pull evals"
+python -m watch.tasks.fusion.dvc_sync_manager "pull packages"
 python -m watch.tasks.fusion.dvc_sync_manager "push evals"
 
 """
@@ -70,9 +72,8 @@ def eval3_report():
     if 0:
         loaded_table = load_extended_data(table, dvc_dpath)
         loaded_table = pd.DataFrame(loaded_table)
-        dataset_summary_tables(dpath)
-
-    initial_summary(table, loaded_table, dpath)
+        # dataset_summary_tables(dpath)
+        initial_summary(table, loaded_table, dpath)
 
     evaluations = table[~table['raw'].isnull()]
     raw_df = pd.DataFrame(evaluations)
@@ -458,7 +459,6 @@ def plot_resource_versus_metric(merged_df, human_mapping, iarpa_metric_lut, pixe
                     # fig2.savefig(fpath, **newkw)
 
 
-
 def plot_viterbii_analysis(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw):
     import kwplot
     expt_group = dict(list(merged_df.groupby(['dataset_code', 'type'])))
@@ -703,6 +703,7 @@ def clean_loaded_data(big_rows):
         'invariants:16',
         'matseg:4',
         'matseg:4|mat_up5:64',
+        'G|R|N|S|H|land:8',
     }
     chan_blocklist = {
         'R|G',
@@ -711,6 +712,7 @@ def clean_loaded_data(big_rows):
         'R|G|land:8',
         'RGB|near-ir1|depth',
         'G|R|N|S|H|land:8|matseg:4|mat_up5:64',
+        'BGRNSH|land:8',
     }
 
     for big_row in ub.ProgIter(big_rows, desc='big rows'):
@@ -775,13 +777,7 @@ def clean_loaded_data(big_rows):
             sensorchan = ','.join(sorted(senschan_parts))
             sensorchan = concise_sensor_chan(sensorchan)
             request_chan_parts = set(fit_params['channels'].split(','))
-            if not request_chan_parts.issubset(real_chan_parts):
-                print(f'{real_chan_parts=}')
-                print(f'{request_chan_parts=}')
-                print(row['expt'])
-                fit_params['bad_channels'] = True
-            else:
-                fit_params['bad_channels'] = False
+            fit_params['bad_channels'] = True
 
         # MANUAL HACK:
         if 1:

@@ -119,11 +119,14 @@ def main(cmdline=True, **kwargs):
 
     config = SyncMachineConfig(cmdline=cmdline, data=kwargs)
     command = config['command']
+    dolist = 0
     if command is not None:
         config['push'] = False
         config['pull'] = False
         config['evals'] = False
         config['packages'] = False
+        if 'list' in command:
+            dolist = True
         if 'all' in command:
             config['packages'] = True
             config['evals'] = True
@@ -167,6 +170,9 @@ def main(cmdline=True, **kwargs):
         dvc_hdd_dpath, dvc_remote=dvc_remote, dataset_codes=dataset_codes)
     synckw = ub.compatible(config, hdd_manager.sync)
     hdd_manager.sync(**synckw)
+
+    if dolist:
+        self.summarize()
 
 
 class DVCSyncManager(ub.NiceRepr):
