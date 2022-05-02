@@ -267,10 +267,10 @@ class DVCSyncManager(ub.NiceRepr):
 
         to_push_fpaths = to_push['raw'].tolist()
         print(f'to_push=\n{to_push}')
-
-        dvc.add(to_push_fpaths)
-        dvc.git_commitpush(f'Sync evals from {platform.node()}')
-        dvc.push(to_push_fpaths)
+        if len(to_push_fpaths):
+            dvc.add(to_push_fpaths)
+            dvc.git_commitpush(f'Sync evals from {platform.node()}')
+            dvc.push(to_push_fpaths)
 
     def pull_evals(self):
         dvc = self.dvc

@@ -28,6 +28,16 @@ except Exception:
     profile = ub.identity
 
 
+def torchmetrics_compat_hack():
+    import torchmetrics
+    if not hasattr(torchmetrics.classification.f_beta, 'FBeta'):
+        torchmetrics.classification.f_beta.FBeta = torchmetrics.classification.f_beta.FBetaScore
+    if not hasattr(torchmetrics.classification.f_beta, 'FBetaScore'):
+        torchmetrics.classification.f_beta.FBetaScore = torchmetrics.classification.f_beta.FBeta
+
+torchmetrics_compat_hack()
+
+
 def make_predict_config(cmdline=False, **kwargs):
     """
     Configuration for fusion prediction
