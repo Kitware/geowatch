@@ -16,7 +16,9 @@ import functools  # NOQA
 
 # TODO: move to heuristics
 fit_param_keys = [
-    'bad_channels', 'sensorchan', 'channels', 'time_steps',
+    'sensorchan',
+    # 'channels',
+    'time_steps',
     'chip_size', 'chip_overlap', 'arch_name', 'optimizer',
     'time_sampling', 'time_span', 'true_multimodal',
     'accumulate_grad_batches', 'modulate_class_weights', 'tokenizer',
@@ -107,7 +109,6 @@ def eval3_report():
 
 
 def plot_merged(merged_df, other, dpath):
-    expt_group = dict(list(merged_df.groupby(['dataset_code', 'type'])))
     human_mapping = {
         'coi_mAP': 'Pixelwise mAP (classes of interest)',
         'coi_mAUC': 'Pixelwise mAUC (classes of interest)',
@@ -125,7 +126,6 @@ def plot_merged(merged_df, other, dpath):
         'eval_act+pxl': 'SC',
         'eval_trk+pxl': 'BAS',
     }
-    describe_varied(expt_group, dpath, human_mapping=human_mapping)
 
     iarpa_metric_lut = {
         'eval_act+pxl': 'mean_f1',
@@ -156,13 +156,224 @@ def plot_merged(merged_df, other, dpath):
         's': 120,
     }
 
+    if 1:
+        metrics = [
+            'mean_f1',
+            # 'BAS_F1',
+            # 'salient_AP',
+            # 'coi_mAP'
+        ]
+
+        # HACK: need to maximize comparability, not the metric here.
+        # Do this for viz purposes, dont present if it changes the conclusion
+        # but might need to do this for visual clarity.
+        rows = []
+        for model, group in merged_df.groupby('model'):
+            if len(group) > 1:
+                chosen_idxs = [group[m].argmax() for m in metrics]
+                row = group.iloc[sorted(set(chosen_idxs))]
+            else:
+                row = group
+            rows.append(row)
+        merged_df = pd.concat(rows)
+
+    # describe_varied(merged_df, dpath, human_mapping=human_mapping)
+
+    plot_ta1_vs_l1(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath)
+
     plot_pixel_ap_verus_iarpa(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath)
 
-    plot_pixel_ap_verus_auc(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath)
+    # plot_pixel_ap_verus_auc(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath)
 
-    plot_resource_versus_metric(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath)
+    # plot_resource_versus_metric(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath)
 
-    plot_viterbii_analysis(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath)
+    # plot_viterbii_analysis(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath)
+
+
+def expt_over_time(merged_df, human_mapping, ):
+    import kpwlot
+    fnum = 320
+    merged_df['expt'].value_counts()
+    # merged_df['CropDrop3_SC_s2wv_invar_scratch_V030'].value_counts()
+    merged_df.query('in_production')
+    # merged_df[merged_df['expt'] == 'BASELINE_EXPERIMENT_V001']
+
+    metric = 'BAS_F1'
+    # metric = 'mean_f1'
+
+    expt = 'Drop3_SpotCheck_V323'
+    # expt = 'CropDrop3_SC_V005'
+    selected = merged_df[merged_df['expt'] == expt]
+
+    for g, group in merged_df.groupby('expt'):
+        if len(group['pred_cfg'].unique()) >= 2 and len(group['step'].unique()) > 2:
+            print(group['expt'].unique())
+            print(len(group))
+            break
+        pass
+
+    selected['step']
+    selected[metric]
+    # subidx = selected.groupby(['step', 'pred_cfg'])[metric].idxmax().values
+    subidx = selected.groupby(['step', 'pred_cfg'])[metric].idxmin().values
+    selected = selected.loc[subidx]
+
+    plotkw = {
+        'x': 'step',
+        'y': 'value',
+        # 'star': 'in_production',
+    }
+    melted = selected.melt(['step', 'in_production', 'pred_cfg'], ['salient_AP', 'BAS_F1'])
+    fig = kwplot.figure(fnum=fnum, doclf=True)
+    ax = fig.gca()
+    humanized_scatterplot(human_mapping, plot_type='line', data=melted, ax=ax, legend=0, style='pred_cfg', hue='variable', **plotkw)
+    humanized_scatterplot(human_mapping, plot_type='scatter', data=melted, ax=ax, legend=True, style='pred_cfg', hue='variable', s=250, **plotkw)
+    ax.set_title('Scores on Checkpoint Shortlist')
+
+    """
+
+    """
+    pass
+
+
+def plot_ta1_vs_l1(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath):
+    import kwplot
+    fnum = 0
+    expt_group = dict(list(merged_df.groupby(['dataset_code', 'type'])))
+    k1 = ('Aligned-Drop3-TA1-2022-03-10', 'eval_trk+pxl')
+    k2 = ('Aligned-Drop3-L1', 'eval_trk+pxl')
+    plot_name = 'ta1_vs_l1'
+    param = 'Processing'
+    plotkw = {
+        'x': 'salient_AP',
+        'y': 'BAS_F1',
+        'hue': param,
+        # 'hue': 'sensorchan',
+        **common_plotkw,
+        # 'hue': 'trk_use_viterbi',
+        # 'style': 'trk_thresh',
+        # 'size': 'trk_thresh',
+        # 'hue': 'pred_cfg',
+        # 'hue': 'expt',
+    }
+    x = plotkw['x']
+    y = plotkw['y']
+    plotkw.pop('style', None)
+
+    from watch.utils import result_analysis
+    all_param_keys = ub.oset.union(trk_param_keys, pred_param_keys,
+                                   fit_param_keys, act_param_keys)
+
+    all_param_keys = {
+        'trk_thresh',
+        # 'trk_morph_kernel',
+        'trk_agg_fn', 'trk_thresh_hysteresis', 'trk_moving_window_size',
+        'pred_tta_fliprot', 'pred_tta_time', 'pred_chip_overlap',
+        # 'sensorchan',
+        # 'time_steps',
+        # 'chip_size',
+        # 'chip_overlap',
+        # 'arch_name',
+        # 'optimizer', 'time_sampling', 'time_span', 'true_multimodal',
+        # 'accumulate_grad_batches', 'modulate_class_weights', 'tokenizer',
+        # 'use_grid_positives', 'use_cloudmask', 'upweight_centers',
+        # 'temporal_dropout', 'stream_channels', 'saliency_loss', 'class_loss',
+        # 'init', 'learning_rate', 'decoder',
+        'trk_use_viterbi'
+    }
+
+    merged_df.loc[merged_df['trk_use_viterbi'].isnull(), 'trk_use_viterbi'] = 0
+
+    data1 = expt_group[k1]
+    data2 = expt_group[k2]
+    data = pd.concat([data1, data2])
+    data = data[~data['has_teamfeat']]
+    data['Processing'] = '?'
+    is_l1 = data['dataset_code'] == "Aligned-Drop3-L1"
+    is_ta1 = data['dataset_code'] == "Aligned-Drop3-TA1-2022-03-10"
+    data.loc[is_l1, 'Processing'] = 'L1'
+    data.loc[is_ta1, 'Processing'] = 'TA1'
+    data['Processing'].unique()
+
+    varied = ub.varied_values(data.to_dict('records'))
+    print(varied.keys())
+
+    if 0:
+        # Reduce to comparable groups according to the abalate criterion
+        results_list = []
+        for row in data.to_dict('records'):
+            params = ub.dict_isect(row, {'Processing', *all_param_keys})
+            metrics = ub.dict_isect(row, {x, y})
+            result = result_analysis.Result(None, params, metrics)
+            results_list.append(result)
+        self = analysis = result_analysis.ResultAnalysis(
+            results_list, default_objective='max', metrics={'BAS_F1'})
+        comparable_data = []
+        for group in self.abalation_groups('Processing'):
+            print(len(group))
+            if len(group['Processing'].unique()) > 1:
+                comparable_data.append(group)
+        comparable = pd.concat(comparable_data)
+        data = data.iloc[comparable.index]
+
+    if 1:
+        # Remove duplicates for clarity
+        rows = []
+        for model, group in data.groupby('model'):
+            if len(group) > 1:
+                # group.pred_cfg.value_counts()
+                # group.trk_cfg.value_counts()
+                idx = group[y].argmax()
+                row = group.iloc[idx]
+            else:
+                row = group.iloc[0]
+            rows.append(row)
+        data = pd.DataFrame(rows)
+
+    results_list = []
+    for row in data.to_dict('records'):
+        # params = ub.dict_isect(row, {'Processing', *all_param_keys})
+        params = ub.dict_isect(row, {'Processing'})
+        metrics = ub.dict_isect(row, {x, y})
+        result = result_analysis.Result(None, params, metrics)
+        results_list.append(result)
+    self = analysis = result_analysis.ResultAnalysis(
+        results_list, default_objective='max', metrics={'BAS_F1'})
+
+    try:
+        analysis.run()
+    except TypeError:
+        raise
+
+    conclusions = []
+    for stat in analysis.statistics:
+        # param_name = stat['param_name']
+        metric = stat['metric']
+        hmetric = human_mapping.get(metric, metric)
+        for pairstat in stat['pairwise']:
+            value1 = pairstat['value1']
+            value2 = pairstat['value2']
+            pvalue = stat = pairstat['ttest_ind'].pvalue
+            # txt = f'p={pvalue:0.8f}, if p is low, {param_name}={value1} may outperform {param_name}={value2} on {hmetric}'
+            # txt = f'p={pvalue:0.8f}, if p is low, {value1} may outperform {value2} on {hmetric}'
+            txt = (f'p={pvalue:0.8f}, If p is low, {value2} may outperform {value1} on {hmetric}.')
+            conclusions.append(txt)
+
+    fig = kwplot.figure(fnum=fnum, doclf=True)
+    ax = fig.gca()
+    hue_order = {
+        'L1': 'blue',
+        'TA1': 'green',
+    }
+    ax = humanized_scatterplot(human_mapping, data=data, ax=ax, legend=True, hue_order=hue_order, **plotkw)
+    # nice_type = human_mapping.get(type, type)
+    ax.set_title('TA1 vs L1' + '\n' + '\n'.join(conclusions))
+    fname = f'{plot_name}.png'
+    plot_dpath = (dpath / plot_name).ensuredir()
+    fpath = plot_dpath / fname
+    fig.set_size_inches(np.array([6.4, 4.8]) * 1.4)
+    fig.tight_layout()
+    fig.savefig(fpath)
 
 
 def plot_pixel_ap_verus_iarpa(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath):
@@ -224,10 +435,10 @@ def plot_pixel_ap_verus_iarpa(merged_df, human_mapping, iarpa_metric_lut, pixel_
 
         fig = kwplot.figure(fnum=fnum, doclf=True)
         ax = fig.gca()
-        ax = humanized_scatterplot(human_mapping, data=data, ax=ax, legend=False, **plotkw)
+        ax = humanized_scatterplot(human_mapping, data=data, ax=ax, **plotkw)
         nice_type = human_mapping.get(type, type)
         ax.set_title(f'Pixelwise Vs IARPA metrics - {nice_type} - {dataset_code}\n{corr_lbl}')
-        fname = f'{dataset_code}_{type}_{plot_name}_nolegend.png'
+        fname = f'{dataset_code}_{type}_{plot_name}.png'
         fpath = plot_dpath / fname
         fig.set_size_inches(np.array([6.4, 4.8]) * 1.4)
         fig.tight_layout()
@@ -742,7 +953,7 @@ def clean_loaded_data(big_rows):
                 real_chan = agr.shrink_channels(input_row['channel'])
                 if real_chan not in chan_blocklist:
                     if real_chan not in passlist:
-                        print(real_chan)
+                        print(f'Unknown real_chan={real_chan}')
                     real_chan_parts.add(real_chan)
                     real_sensors.append(input_row['sensor'])
                     senschan_parts.append('{}:{}'.format(input_row['sensor'], real_chan))
@@ -750,9 +961,6 @@ def clean_loaded_data(big_rows):
             sensorchan = concise_sensor_chan(sensorchan)
             request_chan_parts = set(fit_params['channels'].split(','))
             if not request_chan_parts.issubset(real_chan_parts):
-                print(f'{real_chan_parts=}')
-                print(f'{request_chan_parts=}')
-                print(row['expt'])
                 fit_params['bad_channels'] = True
             else:
                 fit_params['bad_channels'] = False
@@ -786,7 +994,8 @@ def clean_loaded_data(big_rows):
         fit_params['sensorchan'] = sensorchan
         row['has_teamfeat'] = _is_teamfeat(sensorchan)
 
-        selected_fit_params = ub.dict_isect(fit_params, fit_param_keys)
+        fit_param_keys2 = list(fit_param_keys) + ['bad_channels', 'channels']
+        selected_fit_params = ub.dict_isect(fit_params, fit_param_keys2)
 
         param_type['fit']
         act_cfg = row['act_cfg']
@@ -1085,8 +1294,9 @@ def resolve_model_info(model_fpath):
     return stats
 
 
-def describe_varied(expt_group, dpath, human_mapping=None):
+def describe_varied(merged_df, dpath, human_mapping=None):
     # import pprint
+    expt_group = dict(list(merged_df.groupby(['dataset_code', 'type'])))
     fnum = 40
 
     human_mapping.update({
@@ -1370,7 +1580,7 @@ def humanize_legend(legend, human_mapping):
         leg_lbl.set_text(new_text)
 
 
-def humanized_scatterplot(human_mapping, data, ax, mesh=None, connect=None, star=None, starkw=None, **plotkw):
+def humanized_scatterplot(human_mapping, data, ax, plot_type='scatter', mesh=None, connect=None, star=None, starkw=None, **plotkw):
     """
     Example:
         import pandas as pd
@@ -1416,7 +1626,10 @@ def humanized_scatterplot(human_mapping, data, ax, mesh=None, connect=None, star
         star_y = star_data[ykey]
         ax.scatter(star_x, star_y, marker='*', **_starkw)
 
-    ax = sns.scatterplot(data=data, ax=ax, **plotkw)
+    if plot_type == 'scatter':
+        ax = sns.scatterplot(data=data, ax=ax, **plotkw)
+    else:
+        ax = sns.lineplot(data=data, ax=ax, **plotkw)
 
     ax.set_xlabel(human_mapping.get(xkey, xkey))
     ax.set_ylabel(human_mapping.get(ykey, ykey))

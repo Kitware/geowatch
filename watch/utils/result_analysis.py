@@ -65,6 +65,7 @@ Example:
 import kwarray
 import ubelt as ub
 import pandas as pd
+import math
 import scipy
 import numpy as np
 import scipy.stats  # NOQA
@@ -147,6 +148,9 @@ class ResultAnalysis:
             settings of parameters to be held constant. Using -1 or -2 means
             all but 1 or 2 parameters will be held constant, repsectively.
 
+        default_objective (str):
+            assume max or min for unknown metrics
+
     Example:
         >>> from watch.utils.result_analysis import *  # NOQA
         >>> self = ResultAnalysis.demo()
@@ -155,7 +159,7 @@ class ResultAnalysis:
 
     def __init__(self, results, metrics=None, ignore_params=None,
                  ignore_metrics=None, metric_objectives=None,
-                 abalation_orders={1}):
+                 abalation_orders={1}, default_objective='max'):
         self.results = results
         if ignore_metrics is None:
             ignore_metrics = set()
@@ -165,6 +169,7 @@ class ResultAnalysis:
         self.ignore_metrics = ignore_metrics
 
         self.abalation_orders = abalation_orders
+        self.default_objective = default_objective
 
         # encode if we want to maximize or minimize a metric
         default_metric_to_objective = {
@@ -183,12 +188,13 @@ class ResultAnalysis:
 
         self.metrics = metrics
         self.statistics = None
+        self.table = None
 
     @classmethod
     def demo(cls, num=10, rng=None):
         rng = kwarray.ensure_rng(rng)
         results = [Result.demo(rng=rng) for _ in range(num)]
-        self = cls(results)
+        self = cls(results, metrics={'f1', 'acc'})
         return self
 
     def run(self):
@@ -201,74 +207,80 @@ class ResultAnalysis:
         self.build()
         self.report()
 
-    def abalate_one(self, param):
+    def build_table(self):
         rows = [r.to_dict() for r in self.results]
-        table = pd.DataFrame(rows)
+        self.table = pd.DataFrame(rows)
+        return self.table
 
+    def abalation_groups(self, param):
+        """
+        Example:
+            >>> from watch.utils.result_analysis import *  # NOQA
+            >>> self = ResultAnalysis.demo()
+            >>> param = 'param2'
+            >>> self.abalate_one(param)
+        """
+        if self.table is None:
+            self.table = self.build_table()
+        table = self.table
         config_rows = [r.params for r in self.results]
-
         config_keys = list(map(set, config_rows))
         if self.ignore_params:
             config_keys = [c - self.ignore_params for c in config_keys]
         isect_params = set.intersection(*config_keys)
-        union_params = set.union(*config_keys)
-        loose_params = union_params - isect_params
-        print('loose_params = {!r}'.format(loose_params))
-
         other_params = sorted(isect_params - {param})
+        groups = []
+        for key, group in table.groupby(other_params, dropna=False):
+            if len(group) > 1:
+                groups.append(group)
+        return groups
 
-        param_unique_vals = table[param].unique().tolist()
-        table[param]
-
-        total_groups = 0
-
-        def metric_is_ascending(self, metric_key):
-            objective = self.metric_objectives.get(metric_key, None)
-            ascending = objective == 'min'
-            return ascending
-
+    def abalate_one(self, param):
+        import itertools as it
+        if self.table is None:
+            self.table = self.build_table()
+        param_unique_vals = self.table[param].unique().tolist()
         score_improvements = ub.ddict(list)
-
         scored_obs = []
         skillboard = SkillTracker(param_unique_vals)
-        for key, group in table.groupby(other_params, dropna=False):
-            total_groups += 1
-            if len(group) > 1:
-                for metric_key in self.metrics:
-                    objective = self.metric_objectives.get(metric_key, None)
-                    ascending = objective == 'min'
+        groups = self.abalation_groups(param)
 
-                    group = group.sort_values(metric_key, ascending=ascending)
-                    subgroups = group.groupby(param)
-                    if ascending:
-                        best_idx = subgroups[metric_key].idxmax()
-                    else:
-                        best_idx = subgroups[metric_key].idxmin()
-                    best_group = group.loc[best_idx]
-                    best_group = best_group.sort_values(metric_key, ascending=ascending)
+        for group in groups:
+            for metric_key in self.metrics:
+                objective = self.metric_objectives.get(
+                    metric_key, self.default_objective)
+                ascending = objective == 'min'
 
-                    import itertools as it
-                    for x1, x2 in it.product(best_group.index, best_group.index):
-                        if x1 != x2:
-                            r1 = best_group.loc[x1]
-                            r2 = best_group.loc[x2]
-                            k1 = r1[param]
-                            k2 = r2[param]
-                            diff = r1[metric_key] - r2[metric_key]
-                            score_improvements[(k1, k2)].append(diff)
+                group = group.sort_values(metric_key, ascending=ascending)
+                subgroups = group.groupby(param)
+                if ascending:
+                    best_idx = subgroups[metric_key].idxmax()
+                else:
+                    best_idx = subgroups[metric_key].idxmin()
+                best_group = group.loc[best_idx]
+                best_group = best_group.sort_values(metric_key, ascending=ascending)
 
-                    # metric_vals = best_group[metric_key].values
-                    # diffs = metric_vals[None, :] - metric_vals[:, None]
-                    best_group.set_index(param)
-                    # best_group[param]
-                    # best_group[metric_key].diff()
-                    scored_ranking = best_group[[param, metric_key]].reset_index(drop=True)
-                    scored_obs.append(scored_ranking)
-                    skillboard.observe(scored_ranking[param])
+                for x1, x2 in it.product(best_group.index, best_group.index):
+                    if x1 != x2:
+                        r1 = best_group.loc[x1]
+                        r2 = best_group.loc[x2]
+                        k1 = r1[param]
+                        k2 = r2[param]
+                        diff = r1[metric_key] - r2[metric_key]
+                        score_improvements[(k1, k2)].append(diff)
 
-        scored_obs = sorted(scored_obs, key=lambda x: x['mean_f1'].max())
+                # metric_vals = best_group[metric_key].values
+                # diffs = metric_vals[None, :] - metric_vals[:, None]
+                best_group.set_index(param)
+                # best_group[param]
+                # best_group[metric_key].diff()
+                scored_ranking = best_group[[param, metric_key]].reset_index(drop=True)
+                scored_obs.append(scored_ranking)
+                skillboard.observe(scored_ranking[param])
+
         print('skillboard.ratings = {}'.format(ub.repr2(skillboard.ratings, nl=1, align=':')))
-
+        win_probs = skillboard.predict_win()
+        print(f'win_probs={win_probs}')
         for key, improves in score_improvements.items():
             k1, k2 = key
             improves = np.array(improves)
@@ -294,6 +306,12 @@ class ResultAnalysis:
         if self.ignore_params:
             for k in self.ignore_params:
                 varied.pop(k, None)
+        # remove nans
+        varied = {
+            k: {v for v in vs if not (isinstance(v, float) and math.isnan(v))}
+            for k, vs in varied.items()}
+        varied = {k: vs for k, vs in varied.items() if len(vs)}
+        self.table = table
         self.varied = varied
 
         # Experimental:
@@ -322,6 +340,9 @@ class ResultAnalysis:
         #         for param_value, group in table.groupby(param_group):
         #             metric_group = group[['name', metric_key] + param_group]
 
+        param_of_interest = 'chip_size'
+        held_constant_groups = [[param_of_interest]]
+
         # Analyze the impact of each parameter
         self.statistics = statistics = []
         for param_group in held_constant_groups:
@@ -337,10 +358,11 @@ class ResultAnalysis:
 
                 objective = self.metric_objectives.get(metric_key, None)
                 if objective is None:
-                    warnings.warn(f'warning assume ascending for {metric_key=}')
-                    objective = 'max'
+                    warnings.warn(f'warning assume {self.default_objective} for {metric_key=}')
+                    objective = self.default_objective
+                    # 'max'
 
-                ascending = objective == 'min'
+                ascending = (objective == 'min')
 
                 # Find all items with this particular param value
                 value_to_metric_group = {}
@@ -351,22 +373,22 @@ class ResultAnalysis:
                     metric_group = group[['name', metric_key] + param_group]
                     metric_vals = metric_group[metric_key]
                     metric_vals = metric_vals.dropna()
-                    metric_stats = metric_vals.describe()
-                    # pd.Series({
-                    #     'mean' : metric_vals.mean(),
-                    #     'std': metric_vals.std(),
-                    #     'max': metric_vals.max(),
-                    #     'min': metric_vals.min(),
-                    #     'num': len(metric_vals),
-                    # })
-                    # metric_stats['best'] = metric_stats[objective]
-                    value_to_metric_stats[param_value] = metric_stats
-                    value_to_metric_group[param_value] = metric_group
-
-                    value_to_metric[param_value] = metric_vals.values
+                    if len(metric_vals) > 0:
+                        metric_stats = metric_vals.describe()
+                        # pd.Series({
+                        #     'mean' : metric_vals.mean(),
+                        #     'std': metric_vals.std(),
+                        #     'max': metric_vals.max(),
+                        #     'min': metric_vals.min(),
+                        #     'num': len(metric_vals),
+                        # })
+                        # metric_stats['best'] = metric_stats[objective]
+                        value_to_metric_stats[param_value] = metric_stats
+                        value_to_metric_group[param_value] = metric_group
+                        value_to_metric[param_value] = metric_vals.values
 
                 moments = pd.DataFrame(value_to_metric_stats).T
-                moments = moments.sort_values(objective, ascending=ascending)
+                # moments = moments.sort_values(metric_key, ascending=ascending)
                 moments.index.name = param_group_name
                 moments.columns.name = metric_key
 
@@ -468,11 +490,13 @@ class ResultAnalysis:
             print('')
             print('Pairwise T-Tests')
             for pairstat in stats_row['pairwise']:
+                # Is this backwards?
                 value1 = pairstat['value1']
                 value2 = pairstat['value2']
                 # n1 = pairstat['n1']
-                # print(f'  Is {param_name}={value1} about as good as {param_name}={value2}?')
-                print(f'  Is p is low, {param_name}={value1} may outperform {param_name}={value2}?')
+                # print(f'  If {param_name}={value1} about as good as {param_name}={value2}?')
+                # print(f'  If p is low, {param_name}={value1} may outperform {param_name}={value2}?')
+                print(f'  If p is low, {param_name}={value2} may outperform {param_name}={value1}.')
                 if 'ttest_ind' in pairstat:
                     ttest_ind_result = pairstat['ttest_ind']
                     print(ub.color_text(f'    ttest_ind:  p={ttest_ind_result.pvalue:0.8f}', 'green' if ttest_ind_result.pvalue < p_threshold else None))

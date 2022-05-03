@@ -1415,16 +1415,14 @@ if __name__ == '__main__':
             --model_globstr="$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=19-step=13659-v1.pt" \
             --test_dataset="$TEST_DATASET" \
             --workdir="$DVC_DPATH/_tmp/smalltest" \
-            --sidecar2=1 \
-            --tta_fliprot=0,1 \
-            --tta_time=0,1 \
-            --chip_overlap=0,0.3 \
-            --draw_heatmaps=1 \
-            --skip_existing=1 \
-            --run=0 --backend=tmux \
-            --enable_iarpa_eval=1 \
-            --enable_eval=1
-
+            --tta_fliprot=0 \
+            --tta_time=0,5 \
+            --chip_overlap=0.3 \
+            --draw_heatmaps=0 \
+            --enable_pred=1 \
+            --enable_iarpa_eval=0 \
+            --enable_eval=0 \
+            --skip_existing=0 --backend=tmux --run=1
 
     DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
     MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json
