@@ -376,7 +376,7 @@ def load_pxl_eval(fpath, dvc_dpath=None):
             # 'sc_cm': sc_cm,
             # 'sc_df': sc_df,
         },
-        'raw': measure_info,
+        'json_info': measure_info,
     }
     return info
 
@@ -409,7 +409,7 @@ def load_bas_eval(fpath, dvc_dpath):
         'other': {
             'best_bas_rows': best_bas_rows,
         },
-        'raw': bas_info,
+        'json_info': bas_info,
     }
     return info
 
@@ -442,7 +442,7 @@ def load_sc_eval(fpath, dvc_dpath):
             'sc_cm': sc_cm,
             'sc_df': sc_df,
         },
-        'raw': sc_info,
+        'json_info': sc_info,
     }
     return info
 
@@ -483,11 +483,16 @@ def relevant_track_config(track_args):
 
 
 def parse_pred_params(pred_info, dvc_dpath, path_hint=None):
+    from watch.utils import util_time
     pred_measures = list(find_info_items(pred_info, 'measure', None))
     assert len(pred_measures) <= 1
+    meta = {'pred_start_time': None}
     if len(pred_measures):
         item = pred_measures[0]
         resources = parse_measure_item(item)
+        predict_resources = item['properties']
+        start_time = util_time.coerce_datetime(predict_resources.get('start_timestamp', None))
+        meta['pred_start_time'] = start_time
     else:
         resources = {}
     pred_item = find_pred_item(pred_info)
@@ -495,10 +500,12 @@ def parse_pred_params(pred_info, dvc_dpath, path_hint=None):
     fit_config = pred_item['properties']['fit_config']
     pred_config = relevant_pred_config(pred_args, dvc_dpath)
     fit_config = relevant_fit_config(fit_config)
+
     param_types = {
         'fit': fit_config,
         'pred': pred_config,
         'resource': resources,
+        'meta': meta,
     }
     return param_types
 

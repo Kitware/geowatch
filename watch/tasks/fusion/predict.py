@@ -777,6 +777,8 @@ def predict(cmdline=False, **kwargs):
             print('ex = {!r}'.format(ex))
         else:
             reg = pint.UnitRegistry()
+            if co2_kg is None:
+                co2_kg = np.nan
             co2_ton = (co2_kg * reg.kg).to(reg.metric_ton)
             dollar_per_ton = 15 / reg.metric_ton  # cotap rate
             emissions['co2_ton'] = co2_ton.m

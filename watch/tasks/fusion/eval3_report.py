@@ -103,12 +103,11 @@ def eval3_report():
     num_files_summary(comp_df)
 
     big_rows = load_extended_data(df, dvc_dpath)
-    merged_df, other = clean_loaded_data(big_rows)
-
+    orid_merged_df, other = clean_loaded_data(big_rows)
     plot_merged(merged_df, other, dpath)
 
 
-def plot_merged(merged_df, other, dpath):
+def plot_merged(orid_merged_df, other, dpath):
     human_mapping = {
         'coi_mAP': 'Pixelwise mAP (classes of interest)',
         'coi_mAUC': 'Pixelwise mAUC (classes of interest)',
@@ -140,6 +139,15 @@ def plot_merged(merged_df, other, dpath):
     human_mapping.update(actcfg_to_label)
     human_mapping.update(predcfg_to_label)
 
+    label_to_cfgstr = ub.invert_dict(actcfg_to_label)
+    try:
+        # hack
+        a = label_to_cfgstr['trk_thresh=0,trk_use_viterbi=0']
+        b = label_to_cfgstr['trk_thresh=0.0,trk_use_viterbi=0']
+        orid_merged_df.loc[orid_merged_df['act_cfg'] == b, 'act_cfg'] = a
+    except Exception:
+        pass
+
     # ['trk_thresh',
     #  'trk_morph_kernel',
     #  'trk_agg_fn',
@@ -156,6 +164,29 @@ def plot_merged(merged_df, other, dpath):
         's': 120,
     }
 
+    merged_df = orid_merged_df.copy()
+
+    from watch.utils import util_time
+    deadline = util_time.coerce_datetime('2022-04-19')
+    before_deadline = ((merged_df['pred_start_time'] < deadline) | merged_df['pred_start_time'].isnull())
+    # after_deadline = ~before_deadline
+    # merged_df = merged_df[after_deadline]
+    merged_df = merged_df[before_deadline]
+
+    if 0:
+        chosen_pred_cfg = ub.invert_dict(predcfg_to_label)['pred_tta_time=0']
+        # chosen_act_cfg = ub.invert_dict(actcfg_to_label)['trk_thresh=0.01,trk_use_viterbi=v1,v6']
+        chosen_act_cfg = ub.invert_dict(actcfg_to_label)['trk_thresh=0,trk_use_viterbi=0']
+        # chosen_pred_cfg = 'predcfg_abd043ec'
+        # chosen_pred_cfg = 'predcfg_4d9147b0'
+        # chosen_pred_cfg = 'predcfg_036fdb96'
+        # chosen_act_cfg = 'actcfg_f1456a39'
+
+        merged_df = merged_df[(
+            (merged_df['pred_cfg'] == chosen_pred_cfg) &
+            ((merged_df['act_cfg'] == chosen_act_cfg) | merged_df['act_cfg'].isnull())
+        )]
+
     if 1:
         metrics = [
             'mean_f1',
@@ -164,11 +195,15 @@ def plot_merged(merged_df, other, dpath):
             # 'coi_mAP'
         ]
 
+        merged_df['pred_cfg'].value_counts()
+        merged_df['act_cfg'].value_counts()
+
         # HACK: need to maximize comparability, not the metric here.
         # Do this for viz purposes, dont present if it changes the conclusion
         # but might need to do this for visual clarity.
         rows = []
         for model, group in merged_df.groupby('model'):
+            pass
             if len(group) > 1:
                 chosen_idxs = [group[m].argmax() for m in metrics]
                 row = group.iloc[sorted(set(chosen_idxs))]
@@ -231,6 +266,54 @@ def expt_over_time(merged_df, human_mapping, ):
     ax.set_title('Scores on Checkpoint Shortlist')
 
     """
+
+    DVC_DPATH=$(smartwatch_dvc)
+    jq '.images[] | .id' $DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1.kwcoco.json
+
+    kwcoco subset \
+        --src $DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali.kwcoco.json \
+        --dst $DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1_small.kwcoco.json \
+        --select_videos '.name == "KR_R001"' \
+        --select_images '.id <  6495 and .id >  6375'
+
+    DVC_DPATH=$(smartwatch_dvc)
+    TEST_DATASET=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1_small.kwcoco.json
+    EXPT_PATTERN="*"
+    python -m watch.tasks.fusion.schedule_evaluation \
+            --gpus="0,1" \
+            --model_globstr="$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt" \
+            --test_dataset="$TEST_DATASET" \
+            --workdir="$DVC_DPATH/_tmp/smalltest2" \
+            --tta_fliprot=0 \
+            --tta_time=0,6 \
+            --chip_overlap=0.0,0.3 \
+            --draw_heatmaps=0 \
+            --enable_pred=1 \
+            --enable_iarpa_eval=0 \
+            --enable_eval=0 \
+            --skip_existing=0 --backend=tmux --run=0
+
+    DVC_DPATH=$(smartwatch_dvc)
+    TEST_DATASET=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1.kwcoco.json
+    PRED_TTA0_OV0_DATASET=$DVC_DPATH/_tmp/smalltest2/pred/Drop3_SpotCheck_V323/pred_Drop3_SpotCheck_V323_epoch=18-step=12976/Aligned-Drop3-TA1-2022-03-10_data_nowv_vali_kr1_small.kwcoco/predcfg_4a02a01c/pred.kwcoco.json
+    PRED_TTA6_OV3_DATASET=$DVC_DPATH/_tmp/smalltest2/pred/Drop3_SpotCheck_V323/pred_Drop3_SpotCheck_V323_epoch=18-step=12976/Aligned-Drop3-TA1-2022-03-10_data_nowv_vali_kr1_small.kwcoco/predcfg_4bef4048/pred.kwcoco.json
+    WITHOUT_DATASET=$DVC_DPATH/_tmp/without_tta.kwcoco.json
+    WITH_DATASET=$DVC_DPATH/_tmp/with_tta.kwcoco.json
+
+    python -m watch.cli.coco_combine_features $TEST_DATASET $PRED_TTA0_OV0_DATASET --dst=$WITHOUT_DATASET --absolute=True
+    python -m watch.cli.coco_combine_features $TEST_DATASET $PRED_TTA6_OV3_DATASET --dst=$WITH_DATASET --absolute=True
+
+    smartwatch visualize $WITH_DATASET --channels="salient,red|green|blue" --animate=True --with_anns=True --only_boxes=True
+    smartwatch visualize $WITHOUT_DATASET --channels="salient,red|green|blue" --animate=True --with_anns=True --only_boxes=True
+
+    smartwatch visualize $DVC_DPATH/_tmp/smalltest/pred/Drop3_SpotCheck_V323/pred_Drop3_SpotCheck_V323_epoch=19-step=13659-v1/Aligned-Drop3-TA1-2022-03-10_data_nowv_vali_kr1.kwcoco/predcfg_8db7dd3b/pred.kwcoco.json --channels="salient,red|green|blue" --animate=True --with_anns=True
+
+    echo $DVC_DPATH/_tmp/*/KR_R001/_anns/*
+
+
+    python -m watch.tasks.fusion.predict \
+            --
+    ptyhon
 
     """
     pass
@@ -438,25 +521,37 @@ def plot_pixel_ap_verus_iarpa(merged_df, human_mapping, iarpa_metric_lut, pixel_
         ax = humanized_scatterplot(human_mapping, data=data, ax=ax, **plotkw)
         nice_type = human_mapping.get(type, type)
         ax.set_title(f'Pixelwise Vs IARPA metrics - {nice_type} - {dataset_code}\n{corr_lbl}')
+        ax.set_xlim(0.1, 0.45)
+        ax.set_ylim(0.1, 0.45)
         fname = f'{dataset_code}_{type}_{plot_name}.png'
         fpath = plot_dpath / fname
         fig.set_size_inches(np.array([6.4, 4.8]) * 1.4)
         fig.tight_layout()
         fig.savefig(fpath)
 
-        if 0:
+        if 1:
             # TODO: incorporate that
             fig = kwplot.figure(fnum=fnum, doclf=True)
             ax = fig.gca()
-            ax = humanized_scatterplot(human_mapping, data=data, ax=ax, **plotkw)
+            ax = humanized_scatterplot(human_mapping, data=data, ax=ax, legend=False, **plotkw)
             nice_type = human_mapping.get(type, type)
             ax.set_title(f'Pixelwise Vs IARPA metrics - {nice_type} - {dataset_code}\n{corr_lbl}')
-            fname = f'{dataset_code}_{type}_{plot_name}.png'
+            ax.set_xlim(0.1, 0.45)
+            ax.set_ylim(0.1, 0.45)
+            fname = f'{dataset_code}_{type}_{plot_name}_nolegend.png'
             fpath = plot_dpath / fname
             fig.set_size_inches(np.array([6.4, 4.8]) * 1.4)
             fig.tight_layout()
             fig.savefig(fpath)
 
+            fig = kwplot.figure(fnum=fnum, doclf=True)
+            ax = fig.gca()
+            ax = humanized_scatterplot(human_mapping, data=data, ax=ax, legend=True, **plotkw)
+            nice_type = human_mapping.get(type, type)
+            ax.set_title(f'Pixelwise Vs IARPA metrics - {nice_type} - {dataset_code}\n{corr_lbl}')
+            fname = f'{dataset_code}_{type}_{plot_name}_nolegend.png'
+            fpath = plot_dpath / fname
+            fig.set_size_inches(np.array([6.4, 4.8]) * 1.4)
             fig2 = kwplot.figure(fnum=1000 + fnum, doclf=True)
             fig2.set_size_inches(np.array([6.4, 4.8]) * 1.4)
             ax2 = fig2.gca()
@@ -876,6 +971,10 @@ def load_extended_data(df, dvc_dpath):
 
 
 def clean_loaded_data(big_rows):
+    """
+    Turn the nested "loaded" data into flat data for tabulation.
+    Also combine eval types together into a single row per model / config.
+    """
     from watch.tasks.fusion import aggregate_results as agr
     try:
         from kwcoco._experimental.sensorchan import concise_sensor_chan, sensorchan_parts
@@ -933,6 +1032,7 @@ def clean_loaded_data(big_rows):
 
         param_type = info['param_types']
 
+        meta = param_type['meta']
         fit_params = param_type['fit']
         pred_params = param_type['pred']
         model_fpath = pred_params['pred_model_fpath']
@@ -1023,6 +1123,7 @@ def clean_loaded_data(big_rows):
 
         resource = param_type.get('resource', {})
         row['model_fpath'] = model_fpath
+        row.update(**meta)
         row.update(info['metrics'])
         row.update(resource)
         row.update(selected_fit_params)

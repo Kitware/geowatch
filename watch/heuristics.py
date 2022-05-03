@@ -415,11 +415,16 @@ def dummy_legend():
         for cat in CATEGORIES
     }
     label_to_color = ub.dict_subset(label_to_color, {
-        'Site Preparation', 'Active Construction', 'positive'})
+        'Post Construction', 'Site Preparation', 'Active Construction',
+        'No Activity', 'Unknown'})
 
     import kwplot
     kwplot.autompl()
-    kwplot.make_legend_img()
+    img = kwplot.make_legend_img(CONFUSION_COLOR_SCHEME)
+    kwplot.imshow(img)
+
+    img = kwplot.make_legend_img(label_to_color)
+    kwplot.imshow(img)
 
 
 def build_image_header_text(**kwargs):
