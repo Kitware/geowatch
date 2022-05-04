@@ -97,13 +97,24 @@ PRODUCTION_MODELS = [
         'input_channels': 'red|green|blue',
         'train_dataset': 'Cropped-Drop3-TA1-2022-03-10/data_s2_wv_train.kwcoco.json',
         'sensors': ['L8', 'S2'],
-        # TODO: populate this with summary measures so we can get a gist of the model "quality" from this list
         'measures': {
             'coi_mAP': 0.336,
             'mean_F1': 0.4489,
         }
     },
-
+    {
+        'name': 'CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt',
+        'file_name': 'models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_invar_scratch_V030/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt',
+        'task': 'SC',
+        'gsd': 1.0,
+        'input_channels': '(S2,WV):red|green|blue,S2:invariants:16',
+        'train_dataset': 'Cropped-Drop3-TA1-2022-03-10/data_s2_wv_train.kwcoco.json',
+        'sensors': ['WV', 'S2'],
+        'measures': {
+            # 'coi_mAP': 0.336,
+            # 'mean_F1': 0.4489,
+        }
+    },
 
 
 ]

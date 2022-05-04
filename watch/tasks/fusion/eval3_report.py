@@ -50,6 +50,109 @@ DSET_CODE_TO_GSD = {
 }
 
 
+class EvaluationReporter:
+    """
+    Manages handing the data off to experiment plotting functions.
+    """
+
+    def __init__(self, dvc_dpath):
+        from watch.tasks.fusion import dvc_sync_manager
+        self.dvc_dpath = dvc_dpath
+        self.dvc_manager = dvc_sync_manager.DVCSyncManager.coerce(dvc_dpath)
+        # dvc_sync_manager.main(command='pull evals')
+        # dvc_sync_manager.main(command='pull packages')
+
+        self.raw_df = None
+        self.filt_df = None
+        self.comp_df = None
+
+        self.dpath = ub.Path.appdir('watch/report').ensuredir()
+
+    def load1(self):
+        table = self.dvc_manager.evaluation_table()
+        self.dvc_manager.summarize()
+
+        if 0:
+            loaded_table = load_extended_data(table, self.dvc_dpath)
+            loaded_table = pd.DataFrame(loaded_table)
+            # dataset_summary_tables(dpath)
+            initial_summary(table, loaded_table, self.dpath)
+
+        evaluations = table[~table['raw'].isnull()]
+        self.raw_df = raw_df = pd.DataFrame(evaluations)
+
+        if 0:
+            col_stats_df = unique_col_stats(raw_df)
+            print('Column Unique Value Frequencies')
+            print(col_stats_df.to_string())
+
+        test_dset_freq = raw_df['test_dset'].value_counts()
+        print(f'test_dset_freq={test_dset_freq}')
+
+        print('\nRaw')
+        num_files_summary(raw_df)
+
+        # Remove duplicate predictions on effectively the same dataset.
+        self.filt_df = filt_df = deduplicate_test_datasets(raw_df)
+
+        print('\nDeduplicated (over test dataset)')
+        num_files_summary(filt_df)
+
+        eval_types_to_locs = ub.ddict(list)
+        for k, group in filt_df.groupby(['dataset_code', 'model', 'pred_cfg']):
+            eval_types = tuple(sorted(group['type'].unique()))
+            eval_types_to_locs[eval_types].extend(group.index)
+        print('Cross-Metric Comparable Locs')
+        print(ub.repr2(ub.map_vals(len, eval_types_to_locs)))
+        comparable_locs = list(ub.flatten(v for k, v in eval_types_to_locs.items() if len(k) > 1))
+        self.comp_df = comp_df = filt_df.loc[comparable_locs]
+
+        print('\nCross-Metric Comparable')
+        num_files_summary(comp_df)
+
+    def load2(self):
+        # Load detailed data
+        self.big_rows = load_extended_data(self.comp_df, self.dvc_dpath)
+        orid_merged_df, other = clean_loaded_data(self.big_rows)
+        self.orid_merged_df = orid_merged_df
+        self.other = other
+
+        human_mapping = {
+            'coi_mAP': 'Pixelwise mAP (classes of interest)',
+            'coi_mAUC': 'Pixelwise mAUC (classes of interest)',
+            'salient_AP': 'Pixelwise Salient AP',
+            'salient_AUC': 'Pixelwise Salient AUC',
+            'mean_f1': 'IARPA SC mean F1',
+            'BAS_F1': 'IARPA BAS F1',
+            'act_cfg': 'SC Tracking Config',
+            'trk_use_viterbi': 'Viterbi Enabled',
+            'trk_thresh': 'SC Tracking Threshold',
+            'co2_kg': 'CO2 Emissions (kg)',
+            'total_hours': 'Time (hours)',
+            'sensorchan': 'Sensor/Channel',
+            'has_teamfeat': 'Has Team Features',
+            'eval_act+pxl': 'SC',
+            'eval_trk+pxl': 'BAS',
+        }
+        self.iarpa_metric_lut = {
+            'eval_act+pxl': 'mean_f1',
+            'eval_trk+pxl': 'BAS_F1',
+        }
+        self.pixel_metric_lut = {
+            'eval_act+pxl': 'coi_mAP',
+            'eval_trk+pxl': 'salient_AP',
+        }
+        self.human_mapping = human_mapping
+        self.actcfg_to_label = other['actcfg_to_label']
+        self.predcfg_to_label = other['predcfg_to_label']
+        self.human_mapping.update(self.actcfg_to_label)
+        self.human_mapping.update(self.predcfg_to_label)
+
+    def load(self):
+        self.load1()
+        self.load2()
+
+
 def eval3_report():
     """
     from watch.tasks.fusion.eval3_report import *  # NOQA
@@ -61,92 +164,20 @@ def eval3_report():
         dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
     except Exception:
         dvc_dpath = watch.find_smart_dvc_dpath()
-    from watch.tasks.fusion import dvc_sync_manager
-    dvc_manager = dvc_sync_manager.DVCSyncManager.coerce(dvc_dpath)
-    # dvc_sync_manager.main(command='pull evals')
-    # dvc_sync_manager.main(command='pull packages')
-
-    table = dvc_manager.evaluation_table()
-    dvc_manager.summarize()
-
-    dpath = ub.Path.appdir('watch/report').ensuredir()
-
-    if 0:
-        loaded_table = load_extended_data(table, dvc_dpath)
-        loaded_table = pd.DataFrame(loaded_table)
-        # dataset_summary_tables(dpath)
-        initial_summary(table, loaded_table, dpath)
-
-    evaluations = table[~table['raw'].isnull()]
-    raw_df = pd.DataFrame(evaluations)
-
-    if 0:
-        col_stats_df = unique_col_stats(raw_df)
-        print('Column Unique Value Frequencies')
-        print(col_stats_df.to_string())
-
-    test_dset_freq = raw_df['test_dset'].value_counts()
-    print(f'test_dset_freq={test_dset_freq}')
-
-    # Remove duplicate predictions on effectively the same dataset.
-    filt_df = deduplicate_test_datasets(raw_df)
-
-    # Load detailed data
-    eval_types_to_locs = ub.ddict(list)
-    for k, group in filt_df.groupby(['dataset_code', 'model', 'pred_cfg']):
-        eval_types = tuple(sorted(group['type'].unique()))
-        eval_types_to_locs[eval_types].extend(group.index)
-    print('Comparable locs')
-    print(ub.repr2(ub.map_vals(len, eval_types_to_locs)))
-    comparable_locs = list(ub.flatten(v for k, v in eval_types_to_locs.items() if len(k) > 1))
-    df = comp_df = filt_df.loc[comparable_locs]
-    num_files_summary(comp_df)
-
-    big_rows = load_extended_data(df, dvc_dpath)
-    orid_merged_df, other = clean_loaded_data(big_rows)
-    plot_merged(merged_df, other, dpath)
+    reporter = EvaluationReporter(dvc_dpath)
+    reporter.load()
+    plot_merged(reporter)
 
 
-def plot_merged(orid_merged_df, other, dpath):
-    human_mapping = {
-        'coi_mAP': 'Pixelwise mAP (classes of interest)',
-        'coi_mAUC': 'Pixelwise mAUC (classes of interest)',
-        'salient_AP': 'Pixelwise Salient AP',
-        'salient_AUC': 'Pixelwise Salient AUC',
-        'mean_f1': 'IARPA SC mean F1',
-        'BAS_F1': 'IARPA BAS F1',
-        'act_cfg': 'SC Tracking Config',
-        'trk_use_viterbi': 'Viterbi Enabled',
-        'trk_thresh': 'SC Tracking Threshold',
-        'co2_kg': 'CO2 Emissions (kg)',
-        'total_hours': 'Time (hours)',
-        'sensorchan': 'Sensor/Channel',
-        'has_teamfeat': 'Has Team Features',
-        'eval_act+pxl': 'SC',
-        'eval_trk+pxl': 'BAS',
-    }
-
-    iarpa_metric_lut = {
-        'eval_act+pxl': 'mean_f1',
-        'eval_trk+pxl': 'BAS_F1',
-    }
-    pixel_metric_lut = {
-        'eval_act+pxl': 'coi_mAP',
-        'eval_trk+pxl': 'salient_AP',
-    }
-    actcfg_to_label = other['actcfg_to_label']
-    predcfg_to_label = other['predcfg_to_label']
-    human_mapping.update(actcfg_to_label)
-    human_mapping.update(predcfg_to_label)
-
-    label_to_cfgstr = ub.invert_dict(actcfg_to_label)
-    try:
-        # hack
-        a = label_to_cfgstr['trk_thresh=0,trk_use_viterbi=0']
-        b = label_to_cfgstr['trk_thresh=0.0,trk_use_viterbi=0']
-        orid_merged_df.loc[orid_merged_df['act_cfg'] == b, 'act_cfg'] = a
-    except Exception:
-        pass
+def plot_merged(reporter):
+    self = reporter
+    dpath = self.dpath
+    orid_merged_df = self.orid_merged_df
+    iarpa_metric_lut = self.iarpa_metric_lut
+    pixel_metric_lut = self.pixel_metric_lut
+    predcfg_to_label = self.predcfg_to_label
+    actcfg_to_label = self.actcfg_to_label
+    human_mapping = self.human_mapping
 
     # ['trk_thresh',
     #  'trk_morph_kernel',
@@ -166,12 +197,13 @@ def plot_merged(orid_merged_df, other, dpath):
 
     merged_df = orid_merged_df.copy()
 
-    from watch.utils import util_time
-    deadline = util_time.coerce_datetime('2022-04-19')
-    before_deadline = ((merged_df['pred_start_time'] < deadline) | merged_df['pred_start_time'].isnull())
-    # after_deadline = ~before_deadline
-    # merged_df = merged_df[after_deadline]
-    merged_df = merged_df[before_deadline]
+    if 0:
+        from watch.utils import util_time
+        deadline = util_time.coerce_datetime('2022-04-19')
+        before_deadline = ((merged_df['pred_start_time'] < deadline) | merged_df['pred_start_time'].isnull())
+        # after_deadline = ~before_deadline
+        # merged_df = merged_df[after_deadline]
+        merged_df = merged_df[before_deadline]
 
     if 0:
         chosen_pred_cfg = ub.invert_dict(predcfg_to_label)['pred_tta_time=0']
@@ -190,20 +222,17 @@ def plot_merged(orid_merged_df, other, dpath):
     if 1:
         metrics = [
             'mean_f1',
-            # 'BAS_F1',
+            'BAS_F1',
             # 'salient_AP',
             # 'coi_mAP'
         ]
-
-        merged_df['pred_cfg'].value_counts()
-        merged_df['act_cfg'].value_counts()
-
+        # merged_df['pred_cfg'].value_counts()
+        # merged_df['act_cfg'].value_counts()
         # HACK: need to maximize comparability, not the metric here.
         # Do this for viz purposes, dont present if it changes the conclusion
         # but might need to do this for visual clarity.
         rows = []
         for model, group in merged_df.groupby('model'):
-            pass
             if len(group) > 1:
                 chosen_idxs = [group[m].argmax() for m in metrics]
                 row = group.iloc[sorted(set(chosen_idxs))]
@@ -212,15 +241,15 @@ def plot_merged(orid_merged_df, other, dpath):
             rows.append(row)
         merged_df = pd.concat(rows)
 
-    # describe_varied(merged_df, dpath, human_mapping=human_mapping)
+    describe_varied(merged_df, dpath, human_mapping=human_mapping)
 
     plot_ta1_vs_l1(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath)
 
     plot_pixel_ap_verus_iarpa(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath)
 
-    # plot_pixel_ap_verus_auc(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath)
+    plot_pixel_ap_verus_auc(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath)
 
-    # plot_resource_versus_metric(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath)
+    plot_resource_versus_metric(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath)
 
     # plot_viterbii_analysis(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath)
 
@@ -365,21 +394,10 @@ def plot_ta1_vs_l1(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut,
         'trk_use_viterbi'
     }
 
-    merged_df.loc[merged_df['trk_use_viterbi'].isnull(), 'trk_use_viterbi'] = 0
-
     data1 = expt_group[k1]
     data2 = expt_group[k2]
     data = pd.concat([data1, data2])
     data = data[~data['has_teamfeat']]
-    data['Processing'] = '?'
-    is_l1 = data['dataset_code'] == "Aligned-Drop3-L1"
-    is_ta1 = data['dataset_code'] == "Aligned-Drop3-TA1-2022-03-10"
-    data.loc[is_l1, 'Processing'] = 'L1'
-    data.loc[is_ta1, 'Processing'] = 'TA1'
-    data['Processing'].unique()
-
-    varied = ub.varied_values(data.to_dict('records'))
-    print(varied.keys())
 
     if 0:
         # Reduce to comparable groups according to the abalate criterion
@@ -399,7 +417,7 @@ def plot_ta1_vs_l1(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut,
         comparable = pd.concat(comparable_data)
         data = data.iloc[comparable.index]
 
-    if 1:
+    if 0:
         # Remove duplicates for clarity
         rows = []
         for model, group in data.groupby('model'):
@@ -420,27 +438,16 @@ def plot_ta1_vs_l1(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut,
         metrics = ub.dict_isect(row, {x, y})
         result = result_analysis.Result(None, params, metrics)
         results_list.append(result)
-    self = analysis = result_analysis.ResultAnalysis(
-        results_list, default_objective='max', metrics={'BAS_F1'})
+    analysis = result_analysis.ResultAnalysis(
+        results_list, default_objective='max', metrics={'BAS_F1', 'salient_AP'})
 
     try:
         analysis.run()
     except TypeError:
         raise
 
-    conclusions = []
-    for stat in analysis.statistics:
-        # param_name = stat['param_name']
-        metric = stat['metric']
-        hmetric = human_mapping.get(metric, metric)
-        for pairstat in stat['pairwise']:
-            value1 = pairstat['value1']
-            value2 = pairstat['value2']
-            pvalue = stat = pairstat['ttest_ind'].pvalue
-            # txt = f'p={pvalue:0.8f}, if p is low, {param_name}={value1} may outperform {param_name}={value2} on {hmetric}'
-            # txt = f'p={pvalue:0.8f}, if p is low, {value1} may outperform {value2} on {hmetric}'
-            txt = (f'p={pvalue:0.8f}, If p is low, {value2} may outperform {value1} on {hmetric}.')
-            conclusions.append(txt)
+    self = analysis
+    conclusions = analysis.conclusions()
 
     fig = kwplot.figure(fnum=fnum, doclf=True)
     ax = fig.gca()
@@ -482,10 +489,6 @@ def plot_pixel_ap_verus_iarpa(merged_df, human_mapping, iarpa_metric_lut, pixel_
             }
         elif type == 'eval_trk+pxl':
             # hacks
-            group['track_agg_fn'] = group['trk_agg_fn'].fillna('probs')
-            flags = 1 - group['trk_thresh_hysteresis'].isnull()
-            group['trk_thresh_hysteresis'] = group['trk_thresh_hysteresis'].fillna(0) + (flags * group['trk_thresh'])
-
             plotkw = {
                 'x': pixel_metric_lut[type],
                 'y': iarpa_metric_lut[type],
@@ -733,36 +736,36 @@ def plot_resource_versus_metric(merged_df, human_mapping, iarpa_metric_lut, pixe
                 fig.tight_layout()
                 fig.savefig(fpath)
 
-                if 1:
-                    # TODO: incorporate that
-                    fig = kwplot.figure(fnum=fnum, doclf=True)
-                    ax = humanized_scatterplot(human_mapping, data=data, ax=ax, legend=False, **plotkw)
-                    nice_type = human_mapping.get(type, type)
-                    ax.set_title(f'{human_resource_type} vs {human_metric_type} - {nice_type} - {dataset_code}')
-                    fig.set_size_inches(np.array([6.4, 4.8]) * 1.4)
-                    fname = f'{dataset_code}_{type}_{resource_type}_{plot_name}.png'
-                    fpath = plot_dpath / fname
-                    fig.tight_layout()
-                    fig.savefig(fpath)
+                # if 1:
+                #     # TODO: incorporate that
+                #     fig = kwplot.figure(fnum=fnum, doclf=True)
+                #     ax = humanized_scatterplot(human_mapping, data=data, ax=ax, legend=False, **plotkw)
+                #     nice_type = human_mapping.get(type, type)
+                #     ax.set_title(f'{human_resource_type} vs {human_metric_type} - {nice_type} - {dataset_code}')
+                #     fig.set_size_inches(np.array([6.4, 4.8]) * 1.4)
+                #     fname = f'{dataset_code}_{type}_{resource_type}_{plot_name}.png'
+                #     fpath = plot_dpath / fname
+                #     fig.tight_layout()
+                #     fig.savefig(fpath)
 
-                    # fig2 = kwplot.figure(fnum=1000 + fnum, doclf=True)
-                    # fig2.set_size_inches(np.array([6.4, 4.8]) * 1.4)
-                    # ax2 = fig2.gca()
-                    # ax2.axis('off')
-                    # handles = ax.get_legend_handles_labels()
-                    # new_legend = ax2.legend(*handles, loc='lower center')
-                    # humanize_legend(new_legend, human_mapping)
-                    # fname = f'{dataset_code}_{type}_{plot_name}_onlylegend.png'
-                    # fpath = plot_dpath / fname
-                    # try:
-                    #     new_extent = new_legend.get_window_extent()
-                    #     inv_scale = fig2.dpi_scale_trans.inverted()
-                    #     bbox = new_extent.transformed(inv_scale)
-                    #     newkw = {'bbox_inches': bbox}
-                    # except Exception:
-                    #     newkw = {'bbox_inches': None}
-                    # fig2.tight_layout()
-                    # fig2.savefig(fpath, **newkw)
+                #     # fig2 = kwplot.figure(fnum=1000 + fnum, doclf=True)
+                #     # fig2.set_size_inches(np.array([6.4, 4.8]) * 1.4)
+                #     # ax2 = fig2.gca()
+                #     # ax2.axis('off')
+                #     # handles = ax.get_legend_handles_labels()
+                #     # new_legend = ax2.legend(*handles, loc='lower center')
+                #     # humanize_legend(new_legend, human_mapping)
+                #     # fname = f'{dataset_code}_{type}_{plot_name}_onlylegend.png'
+                #     # fpath = plot_dpath / fname
+                #     # try:
+                #     #     new_extent = new_legend.get_window_extent()
+                #     #     inv_scale = fig2.dpi_scale_trans.inverted()
+                #     #     bbox = new_extent.transformed(inv_scale)
+                #     #     newkw = {'bbox_inches': bbox}
+                #     # except Exception:
+                #     #     newkw = {'bbox_inches': None}
+                #     # fig2.tight_layout()
+                #     # fig2.savefig(fpath, **newkw)
 
 
 def plot_viterbii_analysis(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw):
@@ -903,10 +906,10 @@ def num_files_summary(df):
     expt_group = dict(list(df.groupby('dataset_code')))
     filt_summaries = []
     for dataset_code, group in sorted(expt_group.items())[::-1]:
-        print('dataset_code = {!r}'.format(dataset_code))
-        print('Column Unique Value Frequencies')
-        col_stats_df2 = unique_col_stats(group)
-        print(col_stats_df2.to_string())
+        # print('dataset_code = {!r}'.format(dataset_code))
+        # print('Column Unique Value Frequencies')
+        # col_stats_df2 = unique_col_stats(group)
+        # print(col_stats_df2.to_string())
         row = {}
         type_evals = ub.dict_hist(group['type'])
         row['dataset_code'] = dataset_code
@@ -1255,8 +1258,9 @@ def clean_loaded_data(big_rows):
             for c in children:
                 g.add_edge(p, c)
 
-    from watch.utils import cmd_queue
-    print(cmd_queue.graph_str(g))
+    if 0:
+        from watch.utils import cmd_queue
+        print(cmd_queue.graph_str(g))
 
     # Ensure we compute total epochs for earlier models first
     merged_df['total_steps'] = merged_df['step']
@@ -1270,7 +1274,8 @@ def clean_loaded_data(big_rows):
             prev = pred_df['total_steps'].iloc[0]
             merged_df.loc[succ_idxs, 'total_steps'] += prev
 
-    print(ub.repr2(merged_df.columns.tolist()))
+    if 0:
+        print(ub.repr2(merged_df.columns.tolist()))
 
     # Flag which models went into production.
     from watch.tasks.fusion import production
@@ -1279,6 +1284,29 @@ def clean_loaded_data(big_rows):
     stared_models = set(merged_df['model'].unique()) & set(production_models)
     star_flags = kwarray.isect_flags(merged_df['model'], stared_models)
     merged_df['in_production'] = star_flags
+
+    merged_df.loc[merged_df['trk_use_viterbi'].isnull(), 'trk_use_viterbi'] = 0
+
+    merged_df['track_agg_fn'] = merged_df['trk_agg_fn'].fillna('probs')
+    flags = 1 - group['trk_thresh_hysteresis'].isnull()
+    merged_df['trk_thresh_hysteresis'] = merged_df['trk_thresh_hysteresis'].fillna(0) + (flags * merged_df['trk_thresh'])
+
+    actcfg_to_label = other['actcfg_to_label']
+    predcfg_to_label = other['predcfg_to_label']
+    label_to_cfgstr = ub.invert_dict(actcfg_to_label)
+    try:
+        # hack
+        a = label_to_cfgstr['trk_thresh=0,trk_use_viterbi=0']
+        b = label_to_cfgstr['trk_thresh=0.0,trk_use_viterbi=0']
+        merged_df.loc[merged_df['act_cfg'] == b, 'act_cfg'] = a
+    except Exception:
+        pass
+
+    is_l1 = np.array(['L1' in c for c in merged_df['dataset_code']])
+    is_ta1 = np.array(['TA1' in c for c in merged_df['dataset_code']])
+    merged_df.loc[is_l1, 'Processing'] = 'L1'
+    merged_df.loc[is_ta1, 'Processing'] = 'TA1'
+
     return merged_df, other
 
 
@@ -1536,9 +1564,6 @@ def deduplicate_test_datasets(raw_df):
             keep_locs.extend(group[keep_flags].index)
         print(f'Keep {len(keep_locs)} / {len(raw_df)} drop3 evals')
         filt_df = raw_df.loc[keep_locs]
-        print('Column Unique Value Frequencies')
-        # print(col_stats_df2.to_string())
-        num_files_summary(filt_df)
     else:
         filt_df = raw_df.copy()
     return filt_df

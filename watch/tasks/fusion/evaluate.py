@@ -802,8 +802,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
 
     # Add info about where and when evaluation happened
     meta['hostname'] = platform.node()
-    meta['user'] = ub.Path(ub.userhome()).name
-    meta['time'] = ub.timestamp()
+    meta['user'] = user = ub.Path(ub.userhome()).name
+    meta['time'] = start_timestamp = ub.timestamp()
 
     if pred_coco.fpath is not None:
         pred_fpath = ub.Path(pred_coco.fpath)
@@ -869,8 +869,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     if eval_dpath is None:
         heatmap_dpath = None
     else:
-        heatmap_dpath = ub.Path(eval_dpath) / 'heatmaps'
-        heatmap_dpath.mkdir(exist_ok=True, parents=True)
+        heatmap_dpath = (ub.Path(eval_dpath) / 'heatmaps').ensuredir()
 
     # Objects that will aggregate confusion across multiple images
     salient_measure_combiner = MeasureCombiner(thresh_bins=thresh_bins)
@@ -1134,11 +1133,41 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         salient_combo_measures, ovr_combo_measures, None, meta)
     print('result = {}'.format(result))
 
+    end_timestamp = ub.timestamp()
+
+    if eval_dpath is not None:
+        import sys
+        import socket
+        from kwcoco.util import util_json
+        import shlex
+        curve_dpath = (ub.Path(eval_dpath) / 'curves').ensuredir()
+        invocation_fpath = curve_dpath / 'invocation.sh'
+        command = ' '.join(list(map(shlex.quote, sys.argv)))
+        invocation_fpath.write_text(ub.codeblock(
+            f'''
+            #!/bin/bash
+            {command}
+            '''))
+
+        jsonified_args = util_json.ensure_json_serializable(sys.argv)
+
+        meta['info'].append({
+            'type': 'process',
+            'properties': {
+                'name': 'watch.tasks.fusion.evaluate',
+                'args': jsonified_args,
+                'hostname': socket.gethostname(),
+                'user': user,
+                'cwd': os.getcwd(),
+                'start_timestamp': start_timestamp,
+                'end_timestamp': end_timestamp,
+            }
+        })
+
+        sys.argv
+
     if salient_combo_measures is not None:
         if eval_dpath is not None:
-            curve_dpath = ub.Path(eval_dpath) / 'curves'
-            curve_dpath.mkdir(exist_ok=True, parents=True)
-
             if isinstance(salient_combo_measures, dict):
                 salient_combo_measures['meta'] = meta
 

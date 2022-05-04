@@ -417,7 +417,7 @@ def predict(cmdline=False, **kwargs):
             'args': jsonified_args,
             'hostname': socket.gethostname(),
             'cwd': os.getcwd(),
-            'userhome': ub.userhome(),
+            'user': ub.Path(ub.userhome()).name,
             'timestamp': start_timestamp,
             'fit_config': traintime_params,
         }

@@ -63,6 +63,7 @@ Example:
         ttest_ind:  p=0.7626
 """
 import kwarray
+import warnings
 import ubelt as ub
 import pandas as pd
 import math
@@ -76,10 +77,18 @@ class Result(ub.NiceRepr):
     Storage of names, parameters, and quality metrics for a single experiment.
 
     Attributes:
-        name (str): name of the experiment
-        params (Dict[str, object]): configuration of the experiment
+        name (str | None):
+            Name of the experiment. Optional. This is unused in the analysis.
+            (i.e. names will never be used computationally. Use them for keys)
+
+        params (Dict[str, object]): configuration of the experiment.
+            This is a dictionary mapping a parameter name to its value.
+
         metrics (Dict[str, float]): quantitative results of the experiment
-        metrics (Dict | None): any other metadata about this result.
+            This is a dictionary for each quality metric computed on this
+            result.
+
+        meta (Dict | None): any other metadata about this result.
             This is unused in the analysis.
 
     Example:
@@ -123,7 +132,7 @@ class Result(ub.NiceRepr):
         return self
 
 
-class ResultAnalysis:
+class ResultAnalysis(ub.NiceRepr):
     """
     Groups and runs stats on results
 
@@ -188,7 +197,16 @@ class ResultAnalysis:
 
         self.metrics = metrics
         self.statistics = None
-        self.table = None
+
+        self._description = {}
+        self._description['built'] = False
+        self._description['num_results'] = len(self.results)
+
+    def __nice__(self):
+        # if len(self._description) == 0:
+        #     return 'unbuilt'
+        # else:
+        return ub.repr2(self._description, si=1, sv=1)
 
     @classmethod
     def demo(cls, num=10, rng=None):
@@ -207,10 +225,29 @@ class ResultAnalysis:
         self.build()
         self.report()
 
-    def build_table(self):
+    @ub.memoize_property
+    def table(self):
         rows = [r.to_dict() for r in self.results]
-        self.table = pd.DataFrame(rows)
-        return self.table
+        table = pd.DataFrame(rows)
+        return table
+
+    def metric_table(self):
+        rows = [r.to_dict() for r in self.results]
+        table = pd.DataFrame(rows)
+        return table
+
+    @ub.memoize_property
+    def varied(self):
+        config_rows = [r.params for r in self.results]
+        sentinel = object()
+        # pd.DataFrame(config_rows).channels
+        varied = dict(ub.varied_values(config_rows, default=sentinel, min_variations=1))
+        # remove nans
+        varied = {
+            k: {v for v in vs if not (isinstance(v, float) and math.isnan(v))}
+            for k, vs in varied.items()}
+        varied = {k: vs for k, vs in varied.items() if len(vs)}
+        return varied
 
     def abalation_groups(self, param):
         """
@@ -220,8 +257,6 @@ class ResultAnalysis:
             >>> param = 'param2'
             >>> self.abalate_one(param)
         """
-        if self.table is None:
-            self.table = self.build_table()
         table = self.table
         config_rows = [r.params for r in self.results]
         config_keys = list(map(set, config_rows))
@@ -247,9 +282,7 @@ class ResultAnalysis:
 
         for group in groups:
             for metric_key in self.metrics:
-                objective = self.metric_objectives.get(
-                    metric_key, self.default_objective)
-                ascending = objective == 'min'
+                ascending = self._objective_is_ascending(metric_key)
 
                 group = group.sort_values(metric_key, ascending=ascending)
                 subgroups = group.groupby(param)
@@ -290,35 +323,145 @@ class ResultAnalysis:
         return scored_obs
         # self.varied[param]
 
+    def _objective_is_ascending(self, metric_key):
+        """
+        Return True if we should minimize the objective (lower is better)
+        Return False if we should maximize the objective (higher is better)
+        """
+        objective = self.metric_objectives.get(metric_key, None)
+        if objective is None:
+            warnings.warn(f'warning assume {self.default_objective} for {metric_key=}')
+            objective = self.default_objective
+        ascending = (objective == 'min')
+        return ascending
+
+    def test_group(self, param_group, metric_key):
+        """
+        Get stats for a particular metric / constant group
+
+        Args:
+            param_group (List[str]): group of parameters to hold constant.
+            metric_key (str): The metric to test.
+
+        Returns:
+            dict
+            # TODO : document these stats clearly and accurately
+
+        Example:
+            >>> from watch.utils.result_analysis import *  # NOQA
+            >>> self = ResultAnalysis.demo()
+            >>> print(self.table)
+            >>> param_group = ['param1']
+            >>> metric_key = 'f1'
+            >>> stats_row = self.test_group(param_group, metric_key)
+            >>> print('stats_row = {}'.format(ub.repr2(stats_row, nl=2, precision=2)))
+        """
+        param_group_name = ','.join(param_group)
+        stats_row = {
+            'param_name': param_group_name,
+            'metric': metric_key,
+        }
+        # param_values = varied[param_name]
+        # stats_row['param_values'] = param_values
+        ascending = self._objective_is_ascending(metric_key)
+
+        # Find all items with this particular param value
+        value_to_metric_group = {}
+        value_to_metric_stats = {}
+        value_to_metric = {}
+
+        for param_value, group in self.table.groupby(param_group):
+            metric_group = group[['name', metric_key] + param_group]
+            metric_vals = metric_group[metric_key]
+            metric_vals = metric_vals.dropna()
+            if len(metric_vals) > 0:
+                metric_stats = metric_vals.describe()
+                value_to_metric_stats[param_value] = metric_stats
+                value_to_metric_group[param_value] = metric_group
+                value_to_metric[param_value] = metric_vals.values
+
+        moments = pd.DataFrame(value_to_metric_stats).T
+        moments = moments.sort_values('mean', ascending=ascending)
+        moments.index.name = param_group_name
+        moments.columns.name = metric_key
+        ranking = moments['mean'].index.to_list()
+        param_to_rank = ub.invert_dict(dict(enumerate(ranking)))
+
+        # Determine a set of value pairs to do pairwise comparisons on
+        value_pairs = ub.oset()
+        value_pairs.update(map(frozenset, ub.iter_window(moments.index, 2)))
+        value_pairs.update(map(frozenset, ub.iter_window(moments.sort_values('mean', ascending=ascending).index, 2)))
+
+        # https://en.wikipedia.org/wiki/Kruskal%E2%80%93Wallis_one-way_analysis_of_variance
+        # If the researcher can make the assumptions of an identically
+        # shaped and scaled distribution for all groups, except for any
+        # difference in medians, then the null hypothesis is that the
+        # medians of all groups are equal, and the alternative
+        # hypothesis is that at least one population median of one
+        # group is different from the population median of at least one
+        # other group.
+        try:
+            anova_krus_result = scipy.stats.kruskal(*value_to_metric.values())
+        except ValueError:
+            anova_krus_result = scipy.stats.stats.KruskalResult(np.nan, np.nan)
+
+        # https://en.wikipedia.org/wiki/One-way_analysis_of_variance
+        # The One-Way ANOVA tests the null hypothesis, which states
+        # that samples in all groups are drawn from populations with
+        # the same mean values
+        if len(value_to_metric) > 1:
+            anova_1way_result = scipy.stats.f_oneway(*value_to_metric.values())
+        else:
+            anova_1way_result = scipy.stats.stats.F_onewayResult(np.nan, np.nan)
+
+        stats_row['anova_rank_H'] = anova_krus_result.statistic
+        stats_row['anova_rank_p'] = anova_krus_result.pvalue
+        stats_row['anova_mean_F'] = anova_1way_result.statistic
+        stats_row['anova_mean_p'] = anova_1way_result.pvalue
+        stats_row['moments'] = moments
+
+        pairwise_statistics = []
+        for pair in value_pairs:
+            pair_statistics = {}
+            # try:
+            #     param_val1, param_val2 = sorted(pair)
+            # except Exception:
+            #     param_val1, param_val2 = (pair)
+            param_val1, param_val2 = pair
+            metric_vals1 = value_to_metric[param_val1]
+            metric_vals2 = value_to_metric[param_val2]
+            rank1 = param_to_rank[param_val1]
+            rank2 = param_to_rank[param_val2]
+            pair_statistics['winner'] = param_val1 if rank1 < rank2 else param_val2
+            pair_statistics['value1'] = param_val1
+            pair_statistics['value2'] = param_val2
+            pair_statistics['n1'] = n1 = len(metric_vals1)
+            pair_statistics['n2'] = n2 = len(metric_vals2)
+            ttest_ind_result = scipy.stats.ttest_ind(metric_vals1, metric_vals2, equal_var=False)
+            pair_statistics['ttest_ind'] = ttest_ind_result
+            if n1 == n2:
+                # Does this need to have the values aligned?
+                ttest_rel_result = scipy.stats.ttest_rel(metric_vals1, metric_vals2)
+                pair_statistics['ttest_rel'] = ttest_rel_result
+            pairwise_statistics.append(pair_statistics)
+
+        stats_row['pairwise'] = pairwise_statistics
+        return stats_row
+
     def build(self):
         import itertools as it
-        import warnings
         if len(self.results) < 2:
             raise Exception('need at least 2 results')
 
-        rows = [r.to_dict() for r in self.results]
-        table = pd.DataFrame(rows)
-
-        config_rows = [r.params for r in self.results]
-        sentinel = object()
-        # pd.DataFrame(config_rows).channels
-        varied = dict(ub.varied_values(config_rows, default=sentinel, min_variations=1))
+        varied = self.varied.copy()
         if self.ignore_params:
             for k in self.ignore_params:
                 varied.pop(k, None)
-        # remove nans
-        varied = {
-            k: {v for v in vs if not (isinstance(v, float) and math.isnan(v))}
-            for k, vs in varied.items()}
-        varied = {k: vs for k, vs in varied.items() if len(vs)}
-        self.table = table
-        self.varied = varied
 
         # Experimental:
         # Find Auto-abalation groups
         # TODO: when the group size is -1, instead of showing all of the group
-        # settings, for each group setting do the k=1 analysis within that
-        # group
+        # settings, for each group setting do the k=1 analysis within that group
         varied_param_names = list(varied.keys())
         num_varied_params = len(varied)
         held_constant_orders = {num_varied_params + i if i < 0 else i for i in self.abalation_orders}
@@ -330,125 +473,18 @@ class ResultAnalysis:
 
         if self.metrics is None:
             avail_metrics = set.intersection(*[set(r.metrics.keys()) for r in self.results])
-            self.metrics = sorted(avail_metrics - set(self.ignore_metrics))
-
-        # Analyze the impact of each parameter
-        # self.statistics = statistics = []
-        # for param_group in held_constant_groups:
-        #     for metric_key in self.metrics:
-        #         # group_values = ub.dict_isect(varied, param_group)
-        #         for param_value, group in table.groupby(param_group):
-        #             metric_group = group[['name', metric_key] + param_group]
-
-        param_of_interest = 'chip_size'
-        held_constant_groups = [[param_of_interest]]
+            metrics_of_interest = sorted(avail_metrics - set(self.ignore_metrics))
+        else:
+            metrics_of_interest = self.metrics
+        self._description['metrics_of_interest'] = metrics_of_interest
+        self._description['num_groups'] = len(held_constant_groups)
 
         # Analyze the impact of each parameter
         self.statistics = statistics = []
         for param_group in held_constant_groups:
-            for metric_key in self.metrics:
-                # param_values = varied[param_name]
-                param_group_name = ','.join(param_group)
-
-                stats_row = {
-                    'param_name': param_group_name,
-                    # 'param_values': param_values,
-                    'metric': metric_key,
-                }
-
-                objective = self.metric_objectives.get(metric_key, None)
-                if objective is None:
-                    warnings.warn(f'warning assume {self.default_objective} for {metric_key=}')
-                    objective = self.default_objective
-                    # 'max'
-
-                ascending = (objective == 'min')
-
-                # Find all items with this particular param value
-                value_to_metric_group = {}
-                value_to_metric_stats = {}
-                value_to_metric = {}
-
-                for param_value, group in table.groupby(param_group):
-                    metric_group = group[['name', metric_key] + param_group]
-                    metric_vals = metric_group[metric_key]
-                    metric_vals = metric_vals.dropna()
-                    if len(metric_vals) > 0:
-                        metric_stats = metric_vals.describe()
-                        # pd.Series({
-                        #     'mean' : metric_vals.mean(),
-                        #     'std': metric_vals.std(),
-                        #     'max': metric_vals.max(),
-                        #     'min': metric_vals.min(),
-                        #     'num': len(metric_vals),
-                        # })
-                        # metric_stats['best'] = metric_stats[objective]
-                        value_to_metric_stats[param_value] = metric_stats
-                        value_to_metric_group[param_value] = metric_group
-                        value_to_metric[param_value] = metric_vals.values
-
-                moments = pd.DataFrame(value_to_metric_stats).T
-                # moments = moments.sort_values(metric_key, ascending=ascending)
-                moments.index.name = param_group_name
-                moments.columns.name = metric_key
-
-                # Determine a set of value pairs to do pairwise comparisons on
-                value_pairs = ub.oset()
-                value_pairs.update(map(frozenset, ub.iter_window(moments.index, 2)))
-                value_pairs.update(map(frozenset, ub.iter_window(moments.sort_values('mean', ascending=ascending).index, 2)))
-
-                # https://en.wikipedia.org/wiki/Kruskal%E2%80%93Wallis_one-way_analysis_of_variance
-                # If the researcher can make the assumptions of an identically
-                # shaped and scaled distribution for all groups, except for any
-                # difference in medians, then the null hypothesis is that the
-                # medians of all groups are equal, and the alternative
-                # hypothesis is that at least one population median of one
-                # group is different from the population median of at least one
-                # other group.
-                try:
-                    anova_krus_result = scipy.stats.kruskal(*value_to_metric.values())
-                except ValueError:
-                    anova_krus_result = scipy.stats.stats.KruskalResult(np.nan, np.nan)
-
-                # https://en.wikipedia.org/wiki/One-way_analysis_of_variance
-                # The One-Way ANOVA tests the null hypothesis, which states
-                # that samples in all groups are drawn from populations with
-                # the same mean values
-                if len(value_to_metric) > 1:
-                    anova_1way_result = scipy.stats.f_oneway(*value_to_metric.values())
-                else:
-                    anova_1way_result = scipy.stats.stats.F_onewayResult(np.nan, np.nan)
-
-                stats_row['anova_rank_H'] = anova_krus_result.statistic
-                stats_row['anova_rank_p'] = anova_krus_result.pvalue
-                stats_row['anova_mean_F'] = anova_1way_result.statistic
-                stats_row['anova_mean_p'] = anova_1way_result.pvalue
-                stats_row['moments'] = moments
-
-                pairwise_statistics = []
-                for pair in value_pairs:
-                    pair_statistics = {}
-                    try:
-                        param_val1, param_val2 = sorted(pair)
-                    except Exception:
-                        param_val1, param_val2 = (pair)
-                    metric_vals1 = value_to_metric[param_val1]
-                    metric_vals2 = value_to_metric[param_val2]
-                    pair_statistics['value1'] = param_val1
-                    pair_statistics['value2'] = param_val2
-                    pair_statistics['n1'] = n1 = len(metric_vals1)
-                    pair_statistics['n1'] = n2 = len(metric_vals2)
-                    ttest_ind_result = scipy.stats.ttest_ind(metric_vals1, metric_vals2, equal_var=False)
-                    pair_statistics['ttest_ind'] = ttest_ind_result
-                    if n1 == n2:
-                        ttest_rel_result = scipy.stats.ttest_rel(metric_vals1, metric_vals2)
-                        pair_statistics['ttest_rel'] = ttest_rel_result
-                    pairwise_statistics.append(pair_statistics)
-
-                stats_row['pairwise'] = pairwise_statistics
+            for metric_key in metrics_of_interest:
+                stats_row = self.test_group(param_group, metric_key)
                 statistics.append(stats_row)
-
-                metric_stats[metric_key] = stats_row
 
         self.stats_table = pd.DataFrame([
             ub.dict_diff(d, {'pairwise', 'param_values', 'moments'})
@@ -457,7 +493,10 @@ class ResultAnalysis:
         if len(self.stats_table):
             self.stats_table = self.stats_table.sort_values('anova_rank_p')
 
+        self._description['built'] = True
+
     def report(self):
+        p_threshold = 0.05
         stat_groups = ub.group_items(self.statistics, key=lambda x: x['param_name'])
         stat_groups_items = list(stat_groups.items())
 
@@ -480,7 +519,6 @@ class ResultAnalysis:
             anova_rank_p = stats_row['anova_rank_p']
             anova_mean_p = stats_row['anova_mean_p']
             # Rougly speaking
-            p_threshold = 0.05
             print('')
             # print(f'ANOVA hypothesis (roughly): the param {param_name!r} has no effect on the metric')
             # print('    Reject this hypothesis if the p value is less than a threshold')
@@ -493,10 +531,13 @@ class ResultAnalysis:
                 # Is this backwards?
                 value1 = pairstat['value1']
                 value2 = pairstat['value2']
+                winner = pairstat['winner']
+                if value2 == winner:
+                    value1, value2 = value2, value1
                 # n1 = pairstat['n1']
                 # print(f'  If {param_name}={value1} about as good as {param_name}={value2}?')
                 # print(f'  If p is low, {param_name}={value1} may outperform {param_name}={value2}?')
-                print(f'  If p is low, {param_name}={value2} may outperform {param_name}={value1}.')
+                print(f'  If p is low, {param_name}={value1} may outperform {param_name}={value2}.')
                 if 'ttest_ind' in pairstat:
                     ttest_ind_result = pairstat['ttest_ind']
                     print(ub.color_text(f'    ttest_ind:  p={ttest_ind_result.pvalue:0.8f}', 'green' if ttest_ind_result.pvalue < p_threshold else None))
@@ -505,6 +546,25 @@ class ResultAnalysis:
                     print(ub.color_text(f'    ttest_rel:  p={ttest_rel_result.pvalue:0.8f}', 'green' if ttest_rel_result.pvalue < p_threshold else None))
 
         print(self.stats_table)
+
+    def conclusions(self):
+        conclusions = []
+        for stat in self.statistics:
+            param_name = stat['param_name']
+            metric = stat['metric']
+            for pairstat in stat['pairwise']:
+                value1 = pairstat['value1']
+                value2 = pairstat['value2']
+                winner = pairstat['winner']
+                if value2 == winner:
+                    value1, value2 = value2, value1
+                pvalue = stat = pairstat['ttest_ind'].pvalue
+                if 1:
+                    txt = (f'p={pvalue:0.8f}, If p is low, {value1} may outperform {value2} on {metric}.')
+                else:
+                    txt = (f'p={pvalue:0.8f}, If p is low, {param_name}={value1} may outperform {value2} on {metric}.')
+                conclusions.append(txt)
+        return conclusions
 
 
 class SkillTracker:

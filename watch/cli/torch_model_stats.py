@@ -43,10 +43,14 @@ def main(cmdline=False, **kwargs):
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
     package_paths = config['src']
 
+    if not ub.iterable(package_paths):
+        package_paths = [package_paths]
+
     dvc_dpath = watch.find_smart_dvc_dpath()
 
     package_rows = []
     for package_fpath in package_paths:
+        print(f'package_fpath={package_fpath}')
 
         stem_stats = config['stem_stats']
         row = torch_model_stats(package_fpath, stem_stats=stem_stats, dvc_dpath=dvc_dpath)
@@ -63,6 +67,13 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
     import xdev
 
     package_fpath = ub.Path(package_fpath)
+
+    if not package_fpath.exists():
+        if package_fpath.augment(tail='.dvc').exists():
+            raise Exception('model does not exist, but its dvc file does')
+        else:
+            raise Exception('model does not exist')
+
     file_stat = package_fpath.stat()
 
     # TODO: generalize the load-package
