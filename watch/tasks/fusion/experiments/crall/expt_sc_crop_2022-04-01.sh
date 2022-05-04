@@ -76,6 +76,19 @@ CROPPED_PRE_EVAL_AND_AGG(){
             --skip_existing=1 --backend=tmux --run=0
 
 
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="0,1,2,3" \
+            --model_globstr="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_invar_scratch_V030/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt" \
+            --test_dataset="$VALI_FPATH" \
+            --enable_pred=0 \
+            --enable_eval=1 \
+            --enable_actclf=1 \
+            --enable_actclf_eval=1 \
+            --draw_heatmaps=1 \
+            --without_alternatives \
+            --skip_existing=1 --backend=tmux --run=0
+
+
     #################################
     # 4. Commit Evaluation Results
     #################################

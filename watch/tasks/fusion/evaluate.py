@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import sys
 import json
 import kwarray
 import kwcoco
@@ -869,7 +870,34 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     if eval_dpath is None:
         heatmap_dpath = None
     else:
+        import socket
+        from kwcoco.util import util_json
+        import shlex
         heatmap_dpath = (ub.Path(eval_dpath) / 'heatmaps').ensuredir()
+
+        curve_dpath = (ub.Path(eval_dpath) / 'curves').ensuredir()
+        invocation_fpath = curve_dpath / 'invocation.sh'
+        command = ' '.join(list(map(shlex.quote, sys.argv)))
+        invocation_fpath.write_text(ub.codeblock(
+            f'''
+            #!/bin/bash
+            {command}
+            '''))
+
+        jsonified_args = util_json.ensure_json_serializable(sys.argv)
+        eval_process_info_item = {
+            'type': 'process',
+            'properties': {
+                'name': 'watch.tasks.fusion.evaluate',
+                'args': jsonified_args,
+                'hostname': socket.gethostname(),
+                'user': user,
+                'cwd': os.getcwd(),
+                'start_timestamp': start_timestamp,
+                'end_timestamp': None,
+            }
+        }
+        meta['info'].append(eval_process_info_item)
 
     # Objects that will aggregate confusion across multiple images
     salient_measure_combiner = MeasureCombiner(thresh_bins=thresh_bins)
@@ -1133,38 +1161,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         salient_combo_measures, ovr_combo_measures, None, meta)
     print('result = {}'.format(result))
 
-    end_timestamp = ub.timestamp()
-
-    if eval_dpath is not None:
-        import sys
-        import socket
-        from kwcoco.util import util_json
-        import shlex
-        curve_dpath = (ub.Path(eval_dpath) / 'curves').ensuredir()
-        invocation_fpath = curve_dpath / 'invocation.sh'
-        command = ' '.join(list(map(shlex.quote, sys.argv)))
-        invocation_fpath.write_text(ub.codeblock(
-            f'''
-            #!/bin/bash
-            {command}
-            '''))
-
-        jsonified_args = util_json.ensure_json_serializable(sys.argv)
-
-        meta['info'].append({
-            'type': 'process',
-            'properties': {
-                'name': 'watch.tasks.fusion.evaluate',
-                'args': jsonified_args,
-                'hostname': socket.gethostname(),
-                'user': user,
-                'cwd': os.getcwd(),
-                'start_timestamp': start_timestamp,
-                'end_timestamp': end_timestamp,
-            }
-        })
-
-        sys.argv
+    eval_process_info_item['properties']['end_timestamp'] = ub.timestamp()
 
     if salient_combo_measures is not None:
         if eval_dpath is not None:
