@@ -476,6 +476,7 @@ class ResultAnalysis(ub.NiceRepr):
             metrics_of_interest = sorted(avail_metrics - set(self.ignore_metrics))
         else:
             metrics_of_interest = self.metrics
+        self.metrics_of_interest = metrics_of_interest
         self._description['metrics_of_interest'] = metrics_of_interest
         self._description['num_groups'] = len(held_constant_groups)
 
@@ -503,7 +504,7 @@ class ResultAnalysis(ub.NiceRepr):
         # Modify this order to change the grouping pattern
         grid = ub.named_product({
             'stat_group_item': stat_groups_items,
-            'metrics': self.metrics,
+            'metrics': self.metrics_of_interest,
         })
         for grid_item in grid:
             metric_key = grid_item['metrics']
