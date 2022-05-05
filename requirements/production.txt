@@ -85,7 +85,7 @@ mgrs>=1.4.2
 # Machine learning
 scikit_learn>=0.24.2
 torch>=1.11.0   # 1.10 does not run latest models
-torchvision>=0.12.1
+torchvision>=0.12.0
 torchmetrics>=0.8.1
 torch_liberator>=0.1.0
 pytorch_lightning>=1.5.9,<1.6.0  # 1.6 breaks us right now
