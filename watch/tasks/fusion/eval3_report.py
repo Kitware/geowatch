@@ -467,6 +467,9 @@ def plot_ta1_vs_l1(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut,
         'L1': 'blue',
         'TA1': 'green',
     }
+    sns = kwplot.autosns()
+    sns.violinplot(data=merged_df, x='Processing', y='BAS_F1')
+
     ax = humanized_scatterplot(human_mapping, data=data, ax=ax, legend=True, hue_order=hue_order, **plotkw)
     # nice_type = human_mapping.get(type, type)
     ax.set_title('TA1 vs L1' + '\n' + '\n'.join(conclusions))
@@ -994,6 +997,8 @@ def clean_loaded_data(big_rows):
     try:
         from kwcoco._experimental.sensorchan import concise_sensor_chan, sensorchan_parts
     except Exception:
+        def sensorchan_parts(x):
+            return x.split(',')
         concise_sensor_chan = ub.identity
 
     def _is_teamfeat(x):
