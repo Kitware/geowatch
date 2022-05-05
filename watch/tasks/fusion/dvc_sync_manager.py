@@ -204,6 +204,7 @@ class DVCSyncManager(ub.NiceRepr):
         packages/<expt_name>/<model_name.pt>
 
     Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
         >>> # Default config is used if not provided
         >>> self = DVCSyncManager.coerce(watch.find_smart_dvc_dpath(hardware='hdd'))

@@ -910,8 +910,9 @@ class KWCocoVideoDataset(data.Dataset):
             # Hack to use all channels in the first image.
             # (Does not handle heterogeneous channels yet)
             chan_info = kwcoco_extensions.coco_channel_stats(sampler.dset)
-            # channels = ','.join(sorted(chan_info['chan_hist']))
-            channels = chan_info['all_channels']
+            channels = ','.join(sorted(chan_info['chan_hist']))
+            # channels = chan_info['all_channels']
+
         channels = channel_spec.ChannelSpec.coerce(channels).normalize()
         self.channels = channels
 
@@ -1704,7 +1705,6 @@ class KWCocoVideoDataset(data.Dataset):
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, diff_inputs=0, dist_weights=1, temporal_dropout=0.5)
             >>> item = self[0]
             >>> canvas = self.draw_item(item)
-            h
             >>> # xdoctest: +REQUIRES(--show)
             >>> import kwplot
             >>> kwplot.autompl()

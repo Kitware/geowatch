@@ -611,7 +611,7 @@ def predict(cmdline=False, **kwargs):
     with torch.set_grad_enabled(False):
         # FIXME: that data loader should not be producing incorrect sensor/mode
         # pairs in the first place!
-        EMERGENCY_INPUT_AGREEMENT_HACK = 1
+        EMERGENCY_INPUT_AGREEMENT_HACK = 0
         # prog.set_extra(' <will populate stats after first video>')
         _batch_iter = iter(prog)
         for orig_batch in _batch_iter:

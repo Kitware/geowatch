@@ -1079,7 +1079,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='special:vidshapes-watch',
             >>>     num_workers='avail / 2', chip_size=96, time_steps=4, true_multimodal=True,
-            >>>     normalize_inputs=1, neg_to_pos_ratio=0, batch_size=1,
+            >>>     normalize_inputs=8, neg_to_pos_ratio=0, batch_size=1,
             >>> )
             >>> datamodule.setup('fit')
             >>> train_dset = datamodule.torch_datasets['train']
