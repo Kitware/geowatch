@@ -111,8 +111,9 @@ PRODUCTION_MODELS = [
         'train_dataset': 'Cropped-Drop3-TA1-2022-03-10/data_s2_wv_train.kwcoco.json',
         'sensors': ['WV', 'S2'],
         'measures': {
-            # 'coi_mAP': 0.336,
+            'coi_mAP': 0.41,
             # 'mean_F1': 0.4489,
+            'mean_F1': '0.42477983495000005',
         }
     },
 

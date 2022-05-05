@@ -113,8 +113,8 @@ class EvaluationReporter:
     def load2(self):
         # Load detailed data
         self.big_rows = load_extended_data(self.comp_df, self.dvc_dpath)
-        orid_merged_df, other = clean_loaded_data(self.big_rows)
-        self.orid_merged_df = orid_merged_df
+        orig_merged_df, other = clean_loaded_data(self.big_rows)
+        self.orig_merged_df = orig_merged_df
         self.other = other
 
         human_mapping = {
@@ -168,11 +168,23 @@ def eval3_report():
     reporter.load()
     plot_merged(reporter)
 
+    if 0:
+        self = reporter
+        merged_df = self.orig_merged_df.copy()
+        merged_df[merged_df.expt.str.contains('invar')]['mean_f1']
+        merged_df[merged_df.in_production]['mean_f1']
+
+        selected = merged_df[merged_df.in_production].sort_values('mean_f1')
+        selected = selected[['siteprep_f1', 'active_f1', 'mean_f1', 'model']]
+        selected['coi_mean_f1'] = selected[['siteprep_f1', 'active_f1']].mean(axis=1)
+        selected = selected.sort_values('coi_mean_f1')
+        print(selected)
+
 
 def plot_merged(reporter):
     self = reporter
     dpath = self.dpath
-    orid_merged_df = self.orid_merged_df
+    orig_merged_df = self.orig_merged_df
     iarpa_metric_lut = self.iarpa_metric_lut
     pixel_metric_lut = self.pixel_metric_lut
     predcfg_to_label = self.predcfg_to_label
@@ -195,7 +207,7 @@ def plot_merged(reporter):
         's': 120,
     }
 
-    merged_df = orid_merged_df.copy()
+    merged_df = orig_merged_df.copy()
 
     if 0:
         from watch.utils import util_time
