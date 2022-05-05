@@ -267,7 +267,7 @@ def plot_merged(reporter):
 
 
 def expt_over_time(merged_df, human_mapping, ):
-    import kpwlot
+    import kwplot
     fnum = 320
     merged_df['expt'].value_counts()
     # merged_df['CropDrop3_SC_s2wv_invar_scratch_V030'].value_counts()

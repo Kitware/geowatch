@@ -975,7 +975,6 @@ def prepare_results(all_infos, coi_pattern, dvc_dpath=None):
         class_rows.extend(expt_class_rows)
 
         row = {}
-        import warnings
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', 'Mean of empty slice')
             row['class_mAP'] = np.nanmean(class_aps) if len(class_aps) else np.nan
