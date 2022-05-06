@@ -12,7 +12,6 @@ xdev >= 0.3.1
 # Machine learning
 tensorboard_logger >= 0.1.0 
 tensorboard >= 2.4.1
-torchmetrics >= 0.4.1
 performer_pytorch >= 1.0.11
 reformer_pytorch >= 1.4.3
 torch_optimizer >= 0.1.0 ;python_version>='3.6'
@@ -27,5 +26,4 @@ fels >= 1.4.0
 
 # For writing to excel spreadsheets
 openpyxl>=3.0.9
-
 openskill>=1.0.2
