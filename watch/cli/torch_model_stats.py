@@ -46,7 +46,10 @@ def main(cmdline=False, **kwargs):
     if not ub.iterable(package_paths):
         package_paths = [package_paths]
 
-    dvc_dpath = watch.find_smart_dvc_dpath()
+    try:
+        dvc_dpath = watch.find_smart_dvc_dpath()
+    except Exception:
+        dvc_dpath = None
 
     package_rows = []
     for package_fpath in package_paths:

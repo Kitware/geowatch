@@ -10,6 +10,9 @@ def coercepath(path_like):
         path_like (str | ub.Path | os.PathLike):
             an object representing a filesystem path
 
+    DEPRECATE:
+        you canjust call ub.Path instead
+
     Example:
         >>> from watch.utils.util_path import *  # NOQA
         >>> #
