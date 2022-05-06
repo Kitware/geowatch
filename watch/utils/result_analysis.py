@@ -255,7 +255,7 @@ class ResultAnalysis(ub.NiceRepr):
             >>> from watch.utils.result_analysis import *  # NOQA
             >>> self = ResultAnalysis.demo()
             >>> param = 'param2'
-            >>> self.abalate_one(param)
+            >>> self.abalation_groups(param)
         """
         table = self.table
         config_rows = [r.params for r in self.results]
@@ -271,6 +271,14 @@ class ResultAnalysis(ub.NiceRepr):
         return groups
 
     def abalate_one(self, param):
+        """
+        Example:
+            >>> from watch.utils.result_analysis import *  # NOQA
+            >>> self = ResultAnalysis.demo()
+            >>> param = 'param2'
+            >>> # xdoctest: +REQUIRES(module:openskill)
+            >>> self.abalate_one(param)
+        """
         import itertools as it
         if self.table is None:
             self.table = self.build_table()
@@ -577,6 +585,7 @@ class SkillTracker:
             a list of ids (usually ints) used to represent each player
 
     Example:
+        >>> # xdoctest: +REQUIRES(module:openskill)
         >>> from watch.utils.result_analysis import *  # NOQA
         >>> self = SkillTracker([1, 2, 3, 4, 5])
         >>> self.observe([2, 3])  # Player 2 beat player 3.

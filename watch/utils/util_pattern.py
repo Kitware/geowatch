@@ -9,7 +9,7 @@ import re
 import fnmatch
 import ubelt as ub
 import pathlib
-from watch.utils import util_path
+from . import util_path
 
 if hasattr(re, 'Pattern'):
     RE_Pattern = re.Pattern
@@ -69,7 +69,6 @@ class Pattern(PatternBase, ub.NiceRepr):
         ..[fnmatch_docs] https://docs.python.org/3/library/fnmatch.html
 
     Example:
-        >>> from watch.utils.util_pattern import *  # NOQA
         >>> repat = Pattern.coerce('foo.*', 'regex')
         >>> assert repat.match('foobar')
         >>> assert not repat.match('barfoo')
@@ -158,7 +157,6 @@ class Pattern(PatternBase, ub.NiceRepr):
     def coerce(cls, data, hint='glob'):
         """
         Example:
-            >>> from watch.utils.util_pattern import *  # NOQA
             >>> pat = Pattern.coerce('foo*', 'glob')
             >>> pat2 = Pattern.coerce(pat, 'regex')
             >>> print('pat = {}'.format(ub.repr2(pat, nl=1)))
@@ -193,7 +191,6 @@ class Pattern(PatternBase, ub.NiceRepr):
 class MultiPattern(PatternBase, ub.NiceRepr):
     """
     Example:
-        >>> from watch.utils.util_pattern import *  # NOQA
         >>> dpath = ub.Path.appdir('xdev/tests/multipattern_paths').ensuredir().delete().ensuredir()
         >>> (dpath / 'file0.txt').touch()
         >>> (dpath / 'data0.dat').touch()
@@ -247,7 +244,6 @@ class MultiPattern(PatternBase, ub.NiceRepr):
     def coerce(cls, data, hint='glob', predicate='any'):
         """
         Example:
-            >>> from watch.utils.util_pattern import *  # NOQA
             >>> pat = MultiPattern.coerce('foo*', 'glob')
             >>> pat2 = MultiPattern.coerce(pat, 'regex')
             >>> pat3 = MultiPattern.coerce([pat, pat], 'regex')

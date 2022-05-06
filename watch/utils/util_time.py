@@ -1,15 +1,16 @@
 import dateutil
-import datetime
+import datetime as datetime_mod
+from datetime import datetime as datetime_cls
 import ubelt as ub
 
 
 def isoformat(dt, sep='T', timespec='seconds', pathsafe=True):
     """
-    A path-safe version of datetime.datetime.isotime() that returns a
+    A path-safe version of datetime_cls.isotime() that returns a
     path-friendlier version of a ISO 8601 timestamp.
 
     Args:
-        dt (datetime.datetime): datetime to format
+        dt (datetime_cls): datetime to format
         pathsafe (bool):
 
     References:
@@ -19,16 +20,16 @@ def isoformat(dt, sep='T', timespec='seconds', pathsafe=True):
         >>> from watch.utils.util_time import *  # NOQA
         >>> import datetime
         >>> items = []
-        >>> dt = datetime.datetime.now()
-        >>> dt = ensure_timezone(dt, datetime.timezone(datetime.timedelta(hours=+5)))
+        >>> dt = datetime_cls.now()
+        >>> dt = ensure_timezone(dt, datetime_mod.timezone(datetime_mod.timedelta(hours=+5)))
         >>> items.append(dt)
-        >>> dt = datetime.datetime.utcnow()
+        >>> dt = datetime_cls.utcnow()
         >>> items.append(dt)
-        >>> dt = dt.replace(tzinfo=datetime.timezone.utc)
+        >>> dt = dt.replace(tzinfo=datetime_mod.timezone.utc)
         >>> items.append(dt)
-        >>> dt = ensure_timezone(datetime.datetime.now(), datetime.timezone(datetime.timedelta(hours=-5)))
+        >>> dt = ensure_timezone(datetime_cls.now(), datetime_mod.timezone(datetime_mod.timedelta(hours=-5)))
         >>> items.append(dt)
-        >>> dt = ensure_timezone(datetime.datetime.now(), datetime.timezone(datetime.timedelta(hours=+5)))
+        >>> dt = ensure_timezone(datetime_cls.now(), datetime_mod.timezone(datetime_mod.timedelta(hours=+5)))
         >>> items.append(dt)
         >>> print('items = {!r}'.format(items))
         >>> for dt in items:
@@ -68,7 +69,7 @@ def isoformat(dt, sep='T', timespec='seconds', pathsafe=True):
 def _format_offset(off):
     """
     Taken from CPython:
-        https://github.com/python/cpython/blob/main/Lib/datetime.py
+        https://github.com/python/cpython/blob/main/Lib/datetime_mod.py
     """
     s = ''
     if off is not None:
@@ -77,8 +78,8 @@ def _format_offset(off):
             off = -off
         else:
             sign = "+"
-        hh, mm = divmod(off, datetime.timedelta(hours=1))
-        mm, ss = divmod(mm, datetime.timedelta(minutes=1))
+        hh, mm = divmod(off, datetime_mod.timedelta(hours=1))
+        mm, ss = divmod(mm, datetime_mod.timedelta(minutes=1))
         s += "%s%02d:%02d" % (sign, hh, mm)
         if ss or ss.microseconds:
             s += ":%02d" % ss.seconds
@@ -99,17 +100,17 @@ def coerce_datetime(data, default_timezone='utc'):
     Example:
         >>> from watch.utils.util_time import *  # NOQA
         >>> assert coerce_datetime(None) is None
-        >>> assert coerce_datetime('2020-01-01') == datetime.datetime(2020, 1, 1, 0, 0, tzinfo=datetime.timezone.utc)
-        >>> assert coerce_datetime(datetime.datetime(2020, 1, 1, 0, 0)) == datetime.datetime(2020, 1, 1, 0, 0, tzinfo=datetime.timezone.utc)
-        >>> assert coerce_datetime(datetime.datetime(2020, 1, 1, 0, 0).date()) == datetime.datetime(2020, 1, 1, 0, 0, tzinfo=datetime.timezone.utc)
+        >>> assert coerce_datetime('2020-01-01') == datetime_cls(2020, 1, 1, 0, 0, tzinfo=datetime_mod.timezone.utc)
+        >>> assert coerce_datetime_cls.datetime_mod(2020, 1, 1, 0, 0)) == datetime_cls(2020, 1, 1, 0, 0, tzinfo=datetime_mod.timezone.utc)
+        >>> assert coerce_datetime_cls.datetime_mod(2020, 1, 1, 0, 0).date()) == datetime_cls(2020, 1, 1, 0, 0, tzinfo=datetime_mod.timezone.utc)
     """
     if data is None:
         return data
     elif isinstance(data, str):
         dt = dateutil.parser.parse(data)
-    elif isinstance(data, datetime.datetime):
+    elif isinstance(data, datetime_cls):
         dt = data
-    elif isinstance(data, datetime.date):
+    elif isinstance(data, datetime_mod.date):
         dt = dateutil.parser.parse(data.isoformat())
     else:
         raise TypeError('unhandled {}'.format(data))
@@ -119,23 +120,23 @@ def coerce_datetime(data, default_timezone='utc'):
 
 def ensure_timezone(dt, default='utc'):
     """
-    Gives a datetime a timezone (utc by default) if it doesnt have one
+    Gives a datetime_mod a timezone (utc by default) if it doesnt have one
 
     Example:
         >>> from watch.utils.util_time import *  # NOQA
-        >>> dt = ensure_timezone(datetime.datetime.now(), datetime.timezone(datetime.timedelta(hours=+5)))
+        >>> dt = ensure_timezone(datetime_cls.now(), datetime_mod.timezone(datetime_mod.timedelta(hours=+5)))
         >>> print('dt = {!r}'.format(dt))
-        >>> dt = ensure_timezone(datetime.datetime.utcnow())
+        >>> dt = ensure_timezone(datetime_cls.utcnow())
         >>> print('dt = {!r}'.format(dt))
     """
     if dt.tzinfo is not None:
         return dt
     else:
-        if isinstance(default, datetime.timezone):
+        if isinstance(default, datetime_mod.timezone):
             tzinfo = default
         else:
             if default == 'utc':
-                tzinfo = datetime.timezone.utc
+                tzinfo = datetime_mod.timezone.utc
             else:
                 raise NotImplementedError
         return dt.replace(tzinfo=tzinfo)
@@ -210,40 +211,40 @@ def coerce_timedelta(delta):
         >>> print(coerce_timedelta('1sec'))
 
     References:
-        https://docs.python.org/3.4/library/datetime.html#strftime-strptime-behavior
+        https://docs.python.org/3.4/library/datetime_mod.html#strftime-strptime-behavior
     """
     if isinstance(delta, (int, float)):
-        delta = datetime.timedelta(seconds=delta)
+        delta = datetime_mod.timedelta(seconds=delta)
     elif isinstance(delta, str):
 
         try:
             ureg = _time_unit_registery()
             seconds = ureg.parse_expression(delta).to('seconds').m
-            delta = datetime.timedelta(seconds=seconds)
+            delta = datetime_mod.timedelta(seconds=seconds)
         except Exception:
             # TODO: better coercion function
             if delta.endswith('y'):
-                delta = datetime.timedelta(days=365 * float(delta[:-1]))
+                delta = datetime_mod.timedelta(days=365 * float(delta[:-1]))
             elif delta.endswith('d'):
-                delta = datetime.timedelta(days=1 * float(delta[:-1]))
+                delta = datetime_mod.timedelta(days=1 * float(delta[:-1]))
             elif delta.endswith('m'):
-                delta = datetime.timedelta(days=30.437 * float(delta[:-1]))
+                delta = datetime_mod.timedelta(days=30.437 * float(delta[:-1]))
             elif delta.endswith('H'):
-                delta = datetime.timedelta(hours=float(delta[:-1]))
+                delta = datetime_mod.timedelta(hours=float(delta[:-1]))
             elif delta.endswith('M'):
-                delta = datetime.timedelta(minutes=float(delta[:-1]))
+                delta = datetime_mod.timedelta(minutes=float(delta[:-1]))
             elif delta.endswith('S'):
-                delta = datetime.timedelta(seconds=float(delta[:-1]))
+                delta = datetime_mod.timedelta(seconds=float(delta[:-1]))
             else:
                 import pytimeparse  #
                 print('warning: pytimeparse fallback')
                 seconds = pytimeparse.parse(delta)
                 if seconds is None:
                     raise Exception(delta)
-                delta = datetime.timedelta(seconds=seconds)
+                delta = datetime_mod.timedelta(seconds=seconds)
                 return delta
 
-    elif isinstance(delta, datetime.timedelta):
+    elif isinstance(delta, datetime_mod.timedelta):
         pass
     else:
         raise TypeError(type(delta))
