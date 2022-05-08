@@ -21,6 +21,8 @@ class CocoCombineFeatures(scfg.Config):
         'src': scfg.Value([], nargs='+', help='path to datasets. The first one will be the "base"', position=1),
 
         'dst': scfg.Value(None, help='dataset to write to'),
+
+        'absolute': scfg.Value(False, help='if True, use absolute paths'),
     }
 
 
@@ -107,6 +109,8 @@ def main(cmdline=True, **kwargs):
     dset_list = []
     for fpath in ub.ProgIter(fpaths, desc='read src datasets'):
         dset = kwcoco.CocoDataset.coerce(fpath)
+        if config['absolute']:
+            dset.reroot(absolute=True)
         dset_list.append(dset)
 
     dset1 = dset_list[0]
@@ -175,5 +179,6 @@ if __name__ == '__main__':
     """
     CommandLine:
         python ~/code/watch/watch/cli/coco_combine_features.py
+        python -m watch.cli.coco_combine_features
     """
     main(cmdline=True)

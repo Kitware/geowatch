@@ -4,19 +4,31 @@ This demonstrates an end-to-end pipeline on multispectral toydata
 
 This walks through the entire process of fit -> predict -> evaluate and the
 output if you run this should end with something like
+
+source ~/code/watch/watch/tasks/fusion/experiments/crall/toy_experiments_msi.sh
 """
+
+NUM_TOY_TRAIN_VIDS="${NUM_TOY_TRAIN_VIDS:-100}"  # If variable not set or null, use default.
+NUM_TOY_VALI_VIDS="${NUM_TOY_VALI_VIDS:-5}"  # If variable not set or null, use default.
+NUM_TOY_TEST_VIDS="${NUM_TOY_TEST_VIDS:-2}"  # If variable not set or null, use default.
 
 # Generate toy datasets
 TOY_DATA_DPATH=$HOME/data/work/toy_change
-TRAIN_FPATH=$TOY_DATA_DPATH/vidshapes_msi_train100/data.kwcoco.json
-VALI_FPATH=$TOY_DATA_DPATH/vidshapes_msi_vali/data.kwcoco.json
-TEST_FPATH=$TOY_DATA_DPATH/vidshapes_msi_test/data.kwcoco.json 
+TRAIN_FPATH=$TOY_DATA_DPATH/vidshapes_msi_train${NUM_TOY_TRAIN_VIDS}/data.kwcoco.json
+VALI_FPATH=$TOY_DATA_DPATH/vidshapes_msi_vali${NUM_TOY_VALI_VIDS}/data.kwcoco.json
+TEST_FPATH=$TOY_DATA_DPATH/vidshapes_msi_test${NUM_TOY_TEST_VIDS}/data.kwcoco.json 
 
 generate_data(){
     mkdir -p "$TOY_DATA_DPATH"
-    kwcoco toydata --key=vidshapes-videos100-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_train100" --verbose=1
-    kwcoco toydata --key=vidshapes-videos5-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_vali"  --verbose=1
-    kwcoco toydata --key=vidshapes-videos2-frames6-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_test" --verbose=1 
+
+    kwcoco toydata --key="vidshapes-videos${NUM_TOY_TRAIN_VIDS}-frames5-randgsize-speed0.2-msi-multisensor" \
+        --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_train${NUM_TOY_TRAIN_VIDS}" --verbose=0
+
+    kwcoco toydata --key="vidshapes-videos${NUM_TOY_VALI_VIDS}-frames5-randgsize-speed0.2-msi-multisensor" \
+        --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_vali${NUM_TOY_VALI_VIDS}"  --verbose=0
+
+    kwcoco toydata --key="vidshapes-videos${NUM_TOY_TEST_VIDS}-frames6-randgsize-speed0.2-msi-multisensor" \
+        --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_test${NUM_TOY_TEST_VIDS}" --verbose=0
 }
 
 
@@ -57,11 +69,11 @@ demo_visualize_toydata(){
 
 
 function join_by {
-  # https://stackoverflow.com/questions/1527049/how-can-i-join-elements-of-an-array-in-bash
-  local d=${1-} f=${2-}
-  if shift 2; then
-    printf %s "$f" "${@/#/$d}"
-  fi
+    # https://stackoverflow.com/questions/1527049/how-can-i-join-elements-of-an-array-in-bash
+    local d=${1-} f=${2-}
+    if shift 2; then
+      printf %s "$f" "${@/#/$d}"
+    fi
 }
 
 
@@ -73,8 +85,6 @@ STREAMS=(
     "B1|B8a"
     "flowx|flowy|distri"
 )
-
-#CHANNELS="disparity|gauss,,B1|B8a"
 CHANNELS=$(join_by , "${STREAMS[@]}")
 echo "CHANNELS = $CHANNELS"
 
@@ -82,7 +92,9 @@ EXPERIMENT_NAME=ToyFusion_${ARCH}_v001
 DATASET_NAME=ToyDataMSI
 
 # Place training inside of our DVC directory
+echo "Query for train directory"
 DVC_DPATH=$(smartwatch_dvc)
+echo "Finished query for train directory"
 
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_NAME/runs/$EXPERIMENT_NAME
@@ -116,7 +128,7 @@ python -m watch.tasks.fusion.fit \
     --time_steps=5 \
     --chip_size=256 \
     --batch_size=1 \
-    --tokenizer=dwcnn \
+    --tokenizer=linconv \
     --global_saliency_weight=1.0 \
     --global_change_weight=1.0 \
     --global_class_weight=1.0 \
@@ -135,14 +147,14 @@ python -m watch.tasks.fusion.predict \
 
 
 # Fit 
-python -m watch.tasks.fusion.fit \
+python -u -m watch.tasks.fusion.fit \
            --config="$TRAIN_CONFIG_FPATH" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
        --package_fpath="$PACKAGE_FPATH" \
         --train_dataset="$TRAIN_FPATH" \
          --vali_dataset="$VALI_FPATH" \
          --test_dataset="$TEST_FPATH" \
-          --num_workers="2"
+          --num_workers="2" || echo "Fit command failed with bad return code"
 
 
 demo_force_repackage(){

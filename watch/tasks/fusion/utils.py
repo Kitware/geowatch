@@ -1,5 +1,6 @@
 from torch import nn
 import torch
+import os
 import numpy as np
 import math
 import ubelt as ub
@@ -46,6 +47,7 @@ def load_model_from_package(package_path):
     if not isinstance(package_path, (str, pathlib.Path)):
         raise TypeError(type(package_path))
 
+    package_path = os.fspath(package_path)
     imp = package.PackageImporter(package_path)
     # Assume this standardized header information exists that tells us the
     # name of the resource corresponding to the model
@@ -73,9 +75,7 @@ def load_model_from_package(package_path):
     else:
         import io
         import yaml
-        file = io.StringIO()
-        file.write(fit_config_text)
-        file.seek(0)
+        file = io.StringIO(fit_config_text)
         # Note: types might be wrong here
         fit_config = yaml.safe_load(file)
         model.fit_config = fit_config

@@ -1,11 +1,14 @@
 #!/bin/bash
-#models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V00e!/bin/bash
 
 CROPPED_PRE_EVAL_AND_AGG(){
 
     #################################
     # 1. Repackage and commit new models
     #################################
+
+    python -m watch.tasks.fusion.dvc_sync_manager "push packages evals"
+    python -m watch.tasks.fusion.dvc_sync_manager "pull evals"
+    python -m watch.tasks.fusion.dvc_sync_manager "pull packages"
 
     DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
@@ -41,17 +44,49 @@ CROPPED_PRE_EVAL_AND_AGG(){
     EXPT_GROUP_CODE=eval3_sc_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 
-    #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_wv_vali.kwcoco.json
-    #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_D_wv_vali.kwcoco.json
-    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
+    #BUNDLE_SUFFIX=data_wv_vali.kwcoco.json
+    #BUNDLE_SUFFIX=combo_D_wv_vali.kwcoco.json
+    #BUNDLE_SUFFIX=combo_DL_s2_wv_vali.kwcoco.json
 
+    #BUNDLE_SUFFIX=combo_DILM_s2_wv_vali.kwcoco.json
+    #EXPT_MODEL_GLOBNAME="CropDrop3_SC_s2*wv_*invar*_*V03*"
+
+    BUNDLE_SUFFIX=combo_DLM_s2_wv_vali.kwcoco.json
+    EXPT_MODEL_GLOBNAME="CropDrop3_SC_s2*wv_*tf*_*V*"
+
+    SSD_DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
+    SSD_KWCOCO_BUNDLE_DPATH=$SSD_DVC_DPATH/$DATASET_CODE
+    SSD_VALI_FPATH=$SSD_KWCOCO_BUNDLE_DPATH/$BUNDLE_SUFFIX
+    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/$BUNDLE_SUFFIX
+
+    if [ -f "$SSD_VALI_FPATH" ]; then
+        VALI_FPATH=$SSD_VALI_FPATH
+    fi
+    #tmux_spawn \
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0,1" \
-            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
+            --gpus="0,1,2,3" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/$EXPT_MODEL_GLOBNAME/*.pt" \
             --test_dataset="$VALI_FPATH" \
             --enable_pred=1 \
             --enable_eval=1 \
-            --skip_existing=True --backend=tmux --run=0
+            --enable_actclf=1 \
+            --enable_actclf_eval=1 \
+            --draw_heatmaps=0 \
+            --without_alternatives \
+            --skip_existing=1 --backend=tmux --run=0
+
+
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="0,1,2,3" \
+            --model_globstr="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_invar_scratch_V030/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt" \
+            --test_dataset="$VALI_FPATH" \
+            --enable_pred=0 \
+            --enable_eval=1 \
+            --enable_actclf=1 \
+            --enable_actclf_eval=1 \
+            --draw_heatmaps=1 \
+            --without_alternatives \
+            --skip_existing=1 --backend=tmux --run=0
 
 
     #################################
@@ -59,23 +94,25 @@ CROPPED_PRE_EVAL_AND_AGG(){
     #################################
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
 
+    python -m watch.tasks.fusion.dvc_sync_manager "push evals" --dvc_remote=aws
+
     # Check for uncommited evaluations
     # shellcheck disable=SC2010
     ls -al models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json | grep -v ' \-> '
     # shellcheck disable=SC2010
-    ls -al models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json
+    ls -al models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json | grep -v ' \-> '
 
     #dvc unprotect models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json 
-    dvc unprotect models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json
+    #dvc unprotect models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json
+    #dvc add models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json
 
-    dvc add models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json
-
-    dvc add 
     python -c "import sys, pathlib, watch.utils.simple_dvc; watch.utils.simple_dvc.SimpleDVC().add([p for p in sys.argv[1:] if not pathlib.Path(p).is_symlink()])" models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json
+    python -c "import sys, pathlib, watch.utils.simple_dvc; watch.utils.simple_dvc.SimpleDVC().add([p for p in sys.argv[1:] if not pathlib.Path(p).is_symlink()])" models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/curves/measures2.json
 
     #dvc add models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json 
     git commit -am "add measures from $HOSTNAME" && git pull && git push
     dvc push -r aws -R models/fusion/eval3_sc_candidates/eval
+    dvc push -r aws -R models/fusion/*/eval
 
     
     #################################
@@ -94,6 +131,7 @@ CROPPED_PRE_EVAL_AND_AGG(){
     EXPT_NAME_PAT="*"
     #EXPT_NAME_PAT="*Drop3*"
     EXPT_NAME_PAT="*"
+    #EXPT_NAME_PAT="*tf*"
     #EXPT_NAME_PAT="BOTH_TA1_COMBO_TINY_p2w_raw*"
     MODEL_EPOCH_PAT="*"
     PRED_DSET_PAT="*"
@@ -107,7 +145,8 @@ CROPPED_PRE_EVAL_AND_AGG(){
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
         --dset_group_key="$GROUP_KEY" --show=True \
-        --classes_of_interest "Site Preparation" "Active Construction" "Post Construction"
+        --classes_of_interest "Site Preparation" "Active Construction"  --embed=True
+            #"Post Construction"
 }
 
 
@@ -172,7 +211,8 @@ special_evaluation(){
 
 prep_features(){
     export CUDA_VISIBLE_DEVICES=1
-    DVC_DPATH=$(smartwatch_dvc)
+    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+
     echo "DVC_DPATH = $DVC_DPATH"
     BASE_DPATH="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/data.kwcoco.json"
     python -m watch.cli.prepare_teamfeats \
@@ -182,10 +222,12 @@ prep_features(){
         --with_landcover=1 \
         --with_depth=1 \
         --with_materials=1 \
-        --with_invariants=0 \
+        --with_invariants=1 \
         --do_splits=1 \
         --depth_workers=0 \
-        --cache=1 --backend=tmux --run=1
+        --cache=1 --backend=tmux --run=0
+
+    python ~/code/watch/scripts/special_reroot.py combo_DILM_s2_wv_*.kwcoco.json
 
     # Or rsync features
 
@@ -201,6 +243,37 @@ prep_features(){
 
     rsync -azvprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./_assets horologic:data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10
     rsync -azvprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./combo* horologic:data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10
+    rsync -azvprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./dzyne* horologic:data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10
+    rsync -azvprRP "$HOME"/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10/./rutgers* horologic:data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10
+
+
+    # Move to ssd on horologic
+    rsync -azvprRP "$HOME"/data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10/./_assets "$HOME"/data/dvc-repos/smart_watch_dvc-ssd/Cropped-Drop3-TA1-2022-03-10
+    rsync -azvprRP "$HOME"/data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10/./combo_DILM_s2_wv* "$HOME"/data/dvc-repos/smart_watch_dvc-ssd/Cropped-Drop3-TA1-2022-03-10
+
+    FNAME=combo_DILM_s2_wv_train.kwcoco.json
+    FNAME=combo_DILM_s2_wv_vali.kwcoco.json
+
+                     '/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10'
+    kwcoco reroot --src $FNAME --dst $FNAME \
+        --old_prefix="/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10" --new_prefix="" \
+        --new_prefix="" --absolute=False
+    kwcoco validate $FNAME --require_relative=True
+
+    kwcoco reroot --src combo_DILM_s2_wv_vali.kwcoco.json --dst combo_DILM_s2_wv_vali.kwcoco \
+        --old_prefix="/data/projects/smart/smart_watch_dvc/Cropped-Drop3-TA1-2022-03-10" \
+        --new_prefix="" --absolute=False
+
+    kwcoco reroot --src combo_DILM_nowv_vali.kwcoco.json --dst combo_DILM_nowv_vali.kwcoco.json \
+        --old_prefix="/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc-hdd/Cropped-Drop3-TA1-2022-03-10" \
+        --new_prefix="" --absolute=False
+
+    kwcoco validate combo_DILM_nowv_train.kwcoco.json --require_relative=True
+
+    FNAME=combo_DILM_s2_wv_vali.kwcoco.json
+    kwcoco validate $FNAME --require_relative=True
+    FNAME=combo_DILM_s2_wv_train.kwcoco.json
+    kwcoco validate $FNAME --require_relative=True
 
 }
 
@@ -1195,3 +1268,658 @@ python -m watch.tasks.fusion.fit \
     --stream_channels=16 \
     --temporal_dropout=0.5 \
     --init="$INIT_STATE_V006"
+
+
+##### toothbrush 2022-04-17
+
+export CUDA_VISIBLE_DEVICES=0
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+DVC_DPATH=$(smartwatch_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+#CHANNELS="WV:red|green|blue|depth,S2:red|green|blue|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field|matseg_0|matseg_1|matseg_2|matseg_3|mat_up5:64"
+EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_scratch_V020
+INIT_STATE_V007="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V007/CropDrop3_SC_xver1_V007_epoch=5-step=12287.pt"
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=0.00 \
+    --accumulate_grad_batches=8 \
+    --saliency_loss='focal' \
+    --class_loss='focal' \
+    --chip_size=256 \
+    --time_steps=12 \
+    --learning_rate=1e-4 \
+    --num_workers=4 \
+    --max_epochs=160 \
+    --patience=160 \
+    --dist_weights=False \
+    --time_sampling=soft2 \
+    --time_span=7m \
+    --channels="$CHANNELS" \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --use_centered_positives=False \
+    --num_draw=8 \
+    --normalize_inputs=2048 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5
+
+
+export CUDA_VISIBLE_DEVICES=1
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+DVC_DPATH=$(smartwatch_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+#CHANNELS="WV:red|green|blue|depth,S2:red|green|blue|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field,matseg_0|matseg_1|matseg_2|matseg_3|mat_up5:64"
+EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_scratch_V021
+INIT_STATE_V007="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V007/CropDrop3_SC_xver1_V007_epoch=5-step=12287.pt"
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=0.00 \
+    --accumulate_grad_batches=8 \
+    --saliency_loss='focal' \
+    --class_loss='focal' \
+    --chip_size=256 \
+    --time_steps=12 \
+    --learning_rate=1e-4 \
+    --num_workers=8 \
+    --max_epochs=160 \
+    --patience=160 \
+    --dist_weights=False \
+    --time_sampling=soft2 \
+    --time_span=7m \
+    --channels="$CHANNELS" \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --use_centered_positives=False \
+    --num_draw=8 \
+    --normalize_inputs=1024 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5
+
+
+##### horologic 2022-04-17
+
+export CUDA_VISIBLE_DEVICES=2
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+DVC_DPATH=$(smartwatch_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+#CHANNELS="WV:red|green|blue|depth,S2:red|green|blue|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field|matseg_0|matseg_1|matseg_2|matseg_3|mat_up5:64"
+EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_scratch_V022
+INIT_STATE_V007="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V007/CropDrop3_SC_xver1_V007_epoch=5-step=12287.pt"
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=0.00 \
+    --accumulate_grad_batches=1 \
+    --saliency_loss='focal' \
+    --class_loss='focal' \
+    --chip_size=256 \
+    --time_steps=12 \
+    --learning_rate=1e-4 \
+    --num_workers=4 \
+    --max_epochs=160 \
+    --patience=160 \
+    --dist_weights=False \
+    --time_sampling=soft2 \
+    --time_span=7m \
+    --channels="$CHANNELS" \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --use_centered_positives=False \
+    --num_draw=8 \
+    --normalize_inputs=1024 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5
+
+
+export CUDA_VISIBLE_DEVICES=3
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+DVC_DPATH=$(smartwatch_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+#CHANNELS="WV:red|green|blue|depth,S2:red|green|blue|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field,matseg_0|matseg_1|matseg_2|matseg_3|mat_up5:64"
+EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_scratch_V023
+INIT_STATE_V007="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_xver1_V007/CropDrop3_SC_xver1_V007_epoch=5-step=12287.pt"
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=0.00 \
+    --accumulate_grad_batches=1 \
+    --saliency_loss='focal' \
+    --class_loss='focal' \
+    --chip_size=256 \
+    --time_steps=12 \
+    --learning_rate=1e-4 \
+    --num_workers=4 \
+    --max_epochs=160 \
+    --patience=160 \
+    --dist_weights=False \
+    --time_sampling=soft2 \
+    --time_span=7m \
+    --channels="$CHANNELS" \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --use_centered_positives=False \
+    --num_draw=8 \
+    --normalize_inputs=1024 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5
+
+
+##### toothbrush 2022-04-19 --continue
+
+export CUDA_VISIBLE_DEVICES=0
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+DVC_DPATH=$(smartwatch_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+#CHANNELS="WV:red|green|blue|depth,S2:red|green|blue|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field|matseg_0|matseg_1|matseg_2|matseg_3|mat_up5:64"
+EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_cont_V024
+INIT_STATE_V020="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_tf_scratch_V021/CropDrop3_SC_s2wv_tf_scratch_V021_epoch=10-step=2815.pt"
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=0.00 \
+    --accumulate_grad_batches=8 \
+    --saliency_loss='focal' \
+    --class_loss='focal' \
+    --chip_size=256 \
+    --time_steps=12 \
+    --learning_rate=8e-4 \
+    --num_workers=6 \
+    --max_epochs=160 \
+    --patience=160 \
+    --dist_weights=False \
+    --time_sampling=soft2 \
+    --time_span=7m \
+    --channels="$CHANNELS" \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=20min \
+    --use_centered_positives=False \
+    --num_draw=8 \
+    --normalize_inputs=2048 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --init="$INIT_STATE_V020"
+
+
+export CUDA_VISIBLE_DEVICES=1
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+#CHANNELS="WV:red|green|blue|depth,S2:red|green|blue|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field,matseg_0|matseg_1|matseg_2|matseg_3|mat_up5:64"
+EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_cont_V025
+INIT_STATE_V021="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_tf_scratch_V020/CropDrop3_SC_s2wv_tf_scratch_V020_epoch=5-step=1535.pt"
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=0.00 \
+    --accumulate_grad_batches=8 \
+    --saliency_loss='focal' \
+    --class_loss='dicefocal' \
+    --chip_size=256 \
+    --time_steps=5 \
+    --learning_rate=1e-3 \
+    --num_workers=4 \
+    --max_epochs=160 \
+    --patience=160 \
+    --dist_weights=False \
+    --time_sampling=soft2 \
+    --time_span=7m \
+    --channels="$CHANNELS" \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --max_epoch_length=4096 \
+    --use_centered_positives=False \
+    --num_draw=8 \
+    --normalize_inputs=1024 \
+    --multimodal_reduce=mean \
+    --stream_channels=24 \
+    --temporal_dropout=0.5 \
+    --init="$INIT_STATE_V021"
+
+
+export CUDA_VISIBLE_DEVICES=0
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+#CHANNELS="WV:red|green|blue|depth,S2:red|green|blue|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field|matseg_0|matseg_1|matseg_2|matseg_3|mat_up5:64"
+EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_cont2_V026
+INIT_STATE_V024="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_tf_cont_V024/CropDrop3_SC_s2wv_tf_cont_V024_epoch=4-step=1279.pt"
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=0.00 \
+    --accumulate_grad_batches=8 \
+    --saliency_loss='focal' \
+    --class_loss='focal' \
+    --chip_size=256 \
+    --time_steps=12 \
+    --learning_rate=3e-3 \
+    --num_workers=4 \
+    --max_epochs=160 \
+    --patience=160 \
+    --dist_weights=False \
+    --time_sampling=soft2 \
+    --time_span=7m \
+    --channels="$CHANNELS" \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --use_centered_positives=False \
+    --num_draw=4 \
+    --normalize_inputs=2048 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --multimodal_reduce=mean \
+    --init="$INIT_STATE_V024"
+
+
+
+##### toothbrush 2022-04-25 --continue
+export CUDA_VISIBLE_DEVICES=1
+DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+INIT_STATE_V024="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_tf_cont_V024/CropDrop3_SC_s2wv_tf_cont_V024_epoch=4-step=1279.pt"
+CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field|matseg_0|matseg_1|matseg_2|matseg_3|mat_up5:64"
+EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_cont24_V027
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=0.00 \
+    --accumulate_grad_batches=1 \
+    --saliency_loss='focal' \
+    --class_loss='dicefocal' \
+    --chip_size=256 \
+    --time_steps=12 \
+    --learning_rate=1e-4 \
+    --num_workers=6 \
+    --max_epochs=160 \
+    --patience=160 \
+    --dist_weights=False \
+    --time_sampling=hardish3 \
+    --time_span=7m \
+    --channels="$CHANNELS" \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --use_centered_positives=True \
+    --num_draw=8 \
+    --normalize_inputs=2048 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --init="$INIT_STATE_V024"
+
+
+##### toothbrush 2022-04-26 --continue fixed sampler
+export CUDA_VISIBLE_DEVICES=1
+DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+INIT_STATE_V024="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_tf_cont_V024/CropDrop3_SC_s2wv_tf_cont_V024_epoch=4-step=1279.pt"
+CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field|matseg_0|matseg_1|matseg_2|matseg_3|mat_up5:64"
+EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_cont24_V028
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=0.00 \
+    --accumulate_grad_batches=1 \
+    --saliency_loss='focal' \
+    --class_loss='dicefocal' \
+    --chip_size=256 \
+    --time_steps=12 \
+    --learning_rate=1e-4 \
+    --num_workers=6 \
+    --max_epochs=160 \
+    --patience=160 \
+    --dist_weights=False \
+    --time_sampling=hardish3 \
+    --time_span=7m \
+    --channels="$CHANNELS" \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --use_centered_positives=True \
+    --num_draw=8 \
+    --normalize_inputs=2048 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --init="$INIT_STATE_V024"
+
+
+##### toothbrush 2022-04-26 --continue fixed sampler
+export CUDA_VISIBLE_DEVICES=0
+DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+INIT_STATE_V024="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_tf_cont_V024/CropDrop3_SC_s2wv_tf_cont_V024_epoch=4-step=1279.pt"
+CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field|matseg_0|matseg_1|matseg_2|matseg_3|mat_up5:64"
+EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_cont24_V029
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=0.00 \
+    --accumulate_grad_batches=3 \
+    --saliency_loss='focal' \
+    --class_loss='dicefocal' \
+    --chip_size=256 \
+    --time_steps=12 \
+    --learning_rate=3e-4 \
+    --num_workers=6 \
+    --max_epochs=160 \
+    --patience=160 \
+    --dist_weights=False \
+    --time_sampling=hardish3 \
+    --time_span=7m \
+    --channels="$CHANNELS" \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --use_centered_positives=True \
+    --num_draw=8 \
+    --normalize_inputs=2048 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --init="$INIT_STATE_V024"
+
+
+
+
+##### horologic 2022-04-27 invariants
+export CUDA_VISIBLE_DEVICES=0
+DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_s2_wv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_s2_wv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_s2_wv_vali.kwcoco.json
+CHANNELS="blue|green|red,invariants:0:16"
+EXPERIMENT_NAME=CropDrop3_SC_s2wv_invar_scratch_V030
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+#true || \
+#    smartwatch stats "$VALI_FPATH"
+#true || \
+#    kwcoco validate "$VALI_FPATH" --require_relative=True
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=0.00 \
+    --accumulate_grad_batches=3 \
+    --saliency_loss='focal' \
+    --class_loss='dicefocal' \
+    --chip_size=256 \
+    --time_steps=12 \
+    --learning_rate=3e-4 \
+    --num_workers=4 \
+    --max_epochs=160 \
+    --patience=160 \
+    --dist_weights=True \
+    --time_sampling=soft2 \
+    --time_span=7m \
+    --channels="$CHANNELS" \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --use_centered_positives=False \
+    --num_draw=8 \
+    --normalize_inputs=1024 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --init="noop"
+
+
+##### toothbrush 2022-04-26 --continue fixed sampler
+export CUDA_VISIBLE_DEVICES=1
+DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+INIT_STATE_V028="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_tf_cont24_V028/CropDrop3_SC_s2wv_tf_cont24_V028_epoch=1-step=4095-v1.pt"
+CHANNELS="blue|green|red|near-ir1|depth,blue|green|red|nir|swir16|swir22|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field|matseg_0|matseg_1|matseg_2|matseg_3|mat_up5:64"
+EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_cont28_V031
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=0.00 \
+    --accumulate_grad_batches=1 \
+    --saliency_loss='focal' \
+    --class_loss='focal' \
+    --chip_size=256 \
+    --time_steps=7 \
+    --learning_rate=1e-4 \
+    --num_workers=6 \
+    --max_epochs=160 \
+    --patience=160 \
+    --dist_weights=False \
+    --time_sampling=soft2 \
+    --time_span=6m \
+    --channels="$CHANNELS" \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --use_centered_positives=True \
+    --num_draw=8 \
+    --normalize_inputs=2048 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --init="$INIT_STATE_V028"
+
+
+##### toothbrush 2022-04-26 --continue fixed sampler
+export CUDA_VISIBLE_DEVICES=0
+DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
+INIT_STATE_V028="$DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_tf_cont24_V028/CropDrop3_SC_s2wv_tf_cont24_V028_epoch=1-step=4095-v1.pt"
+CHANNELS="blue|green|red|near-ir1|depth,blue|green|red,matseg_0|matseg_1|matseg_2|matseg_3|mat_up5:64"
+EXPERIMENT_NAME=CropDrop3_SC_s2wv_tf_dm_cont28_V032
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=0.00 \
+    --accumulate_grad_batches=3 \
+    --saliency_loss='focal' \
+    --class_loss='focal' \
+    --chip_size=256 \
+    --time_steps=5 \
+    --learning_rate=3e-4 \
+    --num_workers=6 \
+    --max_epochs=160 \
+    --patience=160 \
+    --dist_weights=False \
+    --time_sampling=soft2 \
+    --time_span=6m \
+    --channels="$CHANNELS" \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --use_centered_positives=True \
+    --num_draw=8 \
+    --normalize_inputs=2048 \
+    --stream_channels=32 \
+    --temporal_dropout=0.2 \
+    --init="$INIT_STATE_V028"

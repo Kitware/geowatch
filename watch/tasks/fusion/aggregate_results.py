@@ -47,6 +47,7 @@ import yaml
 import io
 import shutil
 import kwarray
+import warnings
 import scriptconfig as scfg
 import itertools as it
 
@@ -129,6 +130,7 @@ def debug_all_results():
         'dist_weights',
         'saliency_loss',
         'global_class_weight',
+        'init',
     ]
 
     bas_globpats = [
@@ -184,8 +186,11 @@ def debug_all_results():
     ###
 
     sc_globpats = [
-        dvc_dpath / 'models/fusion/eval3_sc_candidates/pred/*/*/*/*/actclf/*/*_eval/scores/merged/summary3.json',
-        dvc_dpath / 'models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json'
+        # dvc_dpath / 'models/fusion/eval3_sc_candidates/pred/*/*/*/*/actclf/*/*_eval/scores/merged/summary3.json',
+        # dvc_dpath / 'models/fusion/eval3_sc_candidates/eval/*/*/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json'
+
+        dvc_dpath / 'models/fusion/eval3_sc_candidates/eval/CropDrop3_SC_V006/pred_CropDrop3_SC_V006_epoch=71-step=18431/*/*/eval/actclf/*/*_eval/scores/merged/summary3.json'
+
         # dvc_dpath / 'models/fusion/eval3_sc_candidates/pred/*/*/*/*/actclf/*/iarpa_sc_eval/scores/merged/summary3.json',
     ]
     sc_paths = util_path.coerce_patterned_paths(sc_globpats)
@@ -202,20 +207,35 @@ def debug_all_results():
         sc_cm = pd.read_json(io.StringIO(json.dumps(sc_info['sc_cm'])), orient='table')
         sc_cms.append(sc_cm)
         tracker_info = sc_info['parent_info']
-        params = parse_tracker_params(tracker_info, dvc_dpath)
+        param_types = parse_tracker_params(tracker_info, dvc_dpath)
 
+        non_measures = ub.dict_diff(param_types, ['resource'])
+
+        params = ub.dict_union(*non_measures.values())
         metrics = {
             'mean_f1': sc_df.loc['F1 score'].mean(),
             'siteprep_f1': sc_df.loc['F1 score', 'Site Preparation'].mean(),
             'active_f1': sc_df.loc['F1 score', 'Active Construction'].mean(),
         }
-        row = ub.odict(ub.dict_union(metrics, params))
+        metrics.update(
+            param_types['resource']
+        )
+        row = ub.odict(ub.dict_union(metrics, *param_types.values()))
+
+        if row['pred_in_dataset_name'] != 'Cropped-Drop3-TA1-2022-03-10/combo_DL_s2_wv_vali.kwcoco.json':
+            continue
+
+        actcfg_dname = merged_fpath.parent.parent.parent.parent.name
+        predcfg_dname = merged_fpath.parent.parent.parent.parent.parent.parent.parent.name
+
         result = result_analysis.Result(
              name=None,
              params=params,
              metrics=metrics,
              meta=None
         )
+        row['actcfg_dname'] = actcfg_dname
+        row['predcfg_dname'] = predcfg_dname
 
         key = ub.hash_data(row)
         if key not in seen:
@@ -246,14 +266,185 @@ def debug_all_results():
     df = pd.DataFrame(sc_rows)
     df = df[df['pred_in_dataset_name'] == 'Cropped-Drop3-TA1-2022-03-10/combo_DL_s2_wv_vali.kwcoco.json']
     df = df.sort_values('mean_f1')
+
+    df[['trk_use_viterbi']]
+
     varied = ub.varied_values(sc_rows, 1, None)
     varied2 = {k: v for k, v in varied.items() if len(ub.oset(v) - {None}) > 1}
     varied_cols = ub.oset(df.columns) & list(varied2.keys())
     df2 = df[varied_cols].sort_values('mean_f1')
     df2 = shrink_notations(df2)
     df2 = df2.drop(ub.oset(df2.columns) & ignore_cols, axis=1)
-    print(df2.iloc[-80:].to_string())
-    print(df2.to_string())
+    print(df2.reset_index().iloc[-90:].to_string())
+    print(df2.reset_index().to_string())
+
+
+@ub.memoize
+def _load_json(fpath):
+    # memo hack for development
+    with open(fpath, 'r') as file:
+        data = json.load(file)
+    return data
+
+
+def load_pxl_eval(fpath, dvc_dpath=None):
+    from kwcoco.coco_evaluator import CocoSingleResult
+    from watch.utils import util_pattern
+    # from watch.utils import result_analysis
+    # from watch.utils import util_time
+    measure_info = _load_json(fpath)
+
+    meta = measure_info['meta']
+
+    pred_info = meta['info']
+    param_types = parse_pred_params(pred_info, dvc_dpath)
+
+    predict_args = param_types['pred']
+    if predict_args is None:
+        raise Exception('no prediction metadata')
+
+    # pred_fpath = predict_args['pred_dataset']
+    # package_fpath = ub.Path(predict_args['pred_model_fpath'])
+    package_name = predict_args['pred_in_dataset_name']
+    title = meta['title']
+
+    if predict_args is not None:
+        # Relevant prediction parameters also count as params
+        pred_config = ub.dict_isect(predict_args, {
+            'pred_tta_fliprot',
+            'pred_tta_time',
+            'pred_chip_overlap',
+        })
+        pred_cfgstr = ub.hash_data(pred_config)[0:8]
+        title = title + pred_cfgstr
+        meta['prefix'] = package_name + pred_cfgstr
+
+    salient_measures = measure_info['nocls_measures']
+    class_measures = measure_info['ovr_measures']
+
+    # HACK: fixme
+    coi_pattern = util_pattern.MultiPattern.coerce(
+        ['Active Construction', 'Site Preparation'], hint='glob')
+
+    class_metrics = []
+    coi_metrics = []
+    for catname, bin_measure in class_measures.items():
+        class_row = {}
+        class_row['AP'] = bin_measure['ap']
+        class_row['AUC'] = bin_measure['auc']
+        class_row['APUC'] = np.nanmean([bin_measure['ap'], bin_measure['auc']])
+        class_row['catname'] = catname
+        if coi_pattern.match(catname):
+            coi_metrics.append(class_row)
+        class_metrics.append(class_row)
+
+    class_aps = [r['AP'] for r in class_metrics]
+    class_aucs = [r['AUC'] for r in class_metrics]
+    coi_aps = [r['AP'] for r in coi_metrics]
+    coi_aucs = [r['AUC'] for r in coi_metrics]
+    coi_catnames = [r['catname'] for r in coi_metrics]
+
+    metrics = {}
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', 'Mean of empty slice')
+        metrics['class_mAP'] = np.nanmean(class_aps) if len(class_aps) else np.nan
+        metrics['class_mAUC'] = np.nanmean(class_aucs) if len(class_aucs) else np.nan
+        metrics['class_mAPUC'] = np.nanmean([metrics['class_mAUC'], metrics['class_mAP']])
+
+        metrics['coi_mAP'] = np.nanmean(coi_aps) if len(coi_aps) else np.nan
+        metrics['coi_mAUC'] = np.nanmean(coi_aucs) if len(coi_aucs) else np.nan
+        metrics['coi_mAPUC'] = np.nanmean([metrics['coi_mAUC'], metrics['coi_mAP']])
+
+        metrics['salient_AP'] = salient_measures['ap']
+        metrics['salient_AUC'] = salient_measures['auc']
+        metrics['salient_APUC'] = np.nanmean([metrics['salient_AP'], metrics['salient_AUC']])
+
+    for class_row in class_metrics:
+        metrics[class_row['catname'] + '_AP'] = class_row['AP']
+        metrics[class_row['catname'] + '_AUC'] = class_row['AUC']
+
+    result = CocoSingleResult.from_json(measure_info)
+
+    info = {
+        'fpath': fpath,
+        'metrics': metrics,
+        'param_types': param_types,
+        'other': {
+            'result': result,
+            'coi_catnames': ','.join(sorted(coi_catnames)),
+            'title': title,
+            # 'sc_cm': sc_cm,
+            # 'sc_df': sc_df,
+        },
+        'json_info': measure_info,
+    }
+    return info
+
+
+def load_bas_eval(fpath, dvc_dpath):
+    bas_info = _load_json(fpath)
+
+    best_bas_rows = pd.read_json(io.StringIO(json.dumps(bas_info['best_bas_rows'])), orient='table')
+    try:
+        bas_row = best_bas_rows.loc['merged'].reset_index().iloc[0].to_dict()
+    except Exception:
+        bas_row = best_bas_rows[best_bas_rows['region_id'].isnull()].reset_index(drop=1).iloc[0].to_dict()
+
+    tracker_info = bas_info['parent_info']
+    path_hint = fpath
+    param_types = parse_tracker_params(tracker_info, dvc_dpath, path_hint=path_hint)
+
+    metrics = {
+        'BAS_F1': bas_row['F1'],
+        'BAS_rho': bas_row['rho'],
+        'BAS_tau': bas_row['tau'],
+        # 'mean_f1': sc_df.loc['F1 score'].mean(),
+        # 'siteprep_f1': sc_df.loc['F1 score', 'Site Preparation'].mean(),
+        # 'active_f1': sc_df.loc['F1 score', 'Active Construction'].mean(),
+    }
+    info = {
+        'fpath': fpath,
+        'metrics': metrics,
+        'param_types': param_types,
+        'other': {
+            'best_bas_rows': best_bas_rows,
+        },
+        'json_info': bas_info,
+    }
+    return info
+
+
+def load_sc_eval(fpath, dvc_dpath):
+    sc_info = _load_json(fpath)
+    # sc_info['sc_cm']
+    sc_df = pd.read_json(io.StringIO(json.dumps(sc_info['sc_df'])), orient='table')
+    sc_cm = pd.read_json(io.StringIO(json.dumps(sc_info['sc_cm'])), orient='table')
+    tracker_info = sc_info['parent_info']
+    param_types = parse_tracker_params(tracker_info, dvc_dpath)
+
+    # non_measures = ub.dict_diff(param_types, ['resource'])
+    # params = ub.dict_union(*non_measures.values())
+    metrics = {
+        'mean_f1': sc_df.loc['F1 score'].mean(),
+        'siteprep_f1': sc_df.loc['F1 score', 'Site Preparation'].mean(),
+        'active_f1': sc_df.loc['F1 score', 'Active Construction'].mean(),
+    }
+    # metrics.update(
+    #     param_types['resource']
+    # )
+    # row = ub.odict(ub.dict_union(metrics, *param_types.values()))
+
+    info = {
+        'fpath': fpath,
+        'metrics': metrics,
+        'param_types': param_types,
+        'other': {
+            'sc_cm': sc_cm,
+            'sc_df': sc_df,
+        },
+        'json_info': sc_info,
+    }
+    return info
 
 
 def parse_tracker_params(tracker_info, dvc_dpath, path_hint=None):
@@ -278,21 +469,86 @@ def parse_tracker_params(tracker_info, dvc_dpath, path_hint=None):
     else:
         pred_info = track_item['properties']['pred_info']
 
-    pred_item = find_pred_item(pred_info)
+    param_types = parse_pred_params(pred_info, dvc_dpath, path_hint)
     track_args = track_item['properties']['args']
-    pred_args = pred_item['properties']['args']
-    fit_config = pred_item['properties']['fit_config']
-    pred_config = relevant_pred_config(pred_args, dvc_dpath)
-    fit_config = relevant_fit_config(fit_config)
     track_config = relevant_track_config(track_args)
-    params = ub.dict_union(fit_config, pred_config, track_config)
-    return params
+    param_types['track'] = track_config
+    return param_types
 
 
 def relevant_track_config(track_args):
     track_config = json.loads(track_args['track_kwargs'])
     track_config = {'trk_' + k: v for k, v in track_config.items()}
     return track_config
+
+
+def parse_pred_params(pred_info, dvc_dpath, path_hint=None):
+    from watch.utils import util_time
+    pred_measures = list(find_info_items(pred_info, 'measure', None))
+    assert len(pred_measures) <= 1
+    meta = {'pred_start_time': None}
+    if len(pred_measures):
+        item = pred_measures[0]
+        resources = parse_measure_item(item)
+        predict_resources = item['properties']
+        start_time = util_time.coerce_datetime(predict_resources.get('start_timestamp', None))
+        meta['pred_start_time'] = start_time
+    else:
+        resources = {}
+    pred_item = find_pred_item(pred_info)
+    pred_args = pred_item['properties']['args']
+    fit_config = pred_item['properties']['fit_config']
+    pred_config = relevant_pred_config(pred_args, dvc_dpath)
+    fit_config = relevant_fit_config(fit_config)
+
+    param_types = {
+        'fit': fit_config,
+        'pred': pred_config,
+        'resource': resources,
+        'meta': meta,
+    }
+    return param_types
+
+
+def parse_measure_item(item):
+    from watch.utils import util_time
+    ureg = global_ureg()
+    predict_resources = item['properties']
+    start_time = util_time.coerce_datetime(predict_resources.get('start_timestamp', None))
+    end_time = util_time.coerce_datetime(predict_resources.get('end_timestamp', None))
+    iters_per_second = predict_resources.get('iters_per_second', None)
+    total_hours = (end_time - start_time).total_seconds() / (60 * 60)
+    vram = predict_resources['device_info']['allocated_vram']
+    vram_gb = ureg.parse_expression(f'{vram} bytes').to('gigabytes').m
+    co2_kg = predict_resources['emissions']['co2_kg']
+
+    try:
+        cpu_name = predict_resources['system_info']['cpu_info']['brand_raw']
+    except KeyError:
+        cpu_name = None
+    try:
+        gpu_name = predict_resources['device_info']['device_name']
+    except KeyError:
+        gpu_name = None
+    try:
+        disk_type = predict_resources['system_info']['disk_info']['filesystem']
+    except KeyError:
+        disk_type = None
+    try:
+        vram_gb = (predict_resources['device_info']['allocated_vram'] * ureg.bytes).to('gigabyte').m
+    except KeyError:
+        vram_gb = None
+
+    resources = {}
+    resources['co2_kg'] = co2_kg
+    resources['vram_gb'] = vram_gb
+    resources['total_hours'] = total_hours
+    resources['iters_per_second'] = iters_per_second
+    resources['cpu_name'] = cpu_name
+    resources['gpu_name'] = gpu_name
+    resources['disk_type'] = disk_type
+    resources['vram_gb'] = vram_gb
+    return resources
 
 
 def relevant_pred_config(pred_args, dvc_dpath):
@@ -310,10 +566,28 @@ def relevant_pred_config(pred_args, dvc_dpath):
     pred_config['model_fpath'] = package_fpath
     pred_config['in_dataset_fpath'] = test_dataset
 
-    pred_config['model_name'] = ub.Path(package_fpath).name
+    pred_config['model_name'] = model_name = ub.Path(package_fpath).name
     pred_config['in_dataset_name'] = str(ub.Path(*test_dataset.parts[-2:]))
 
+    # Hack to get the epoch/step/expt_name
+    try:
+        epoch = int(model_name.split('epoch=')[1].split('-')[0])
+    except Exception:
+        epoch = -1
+    try:
+        step = int(model_name.split('step=')[1].split('-')[0])
+    except Exception:
+        step = -1
+    try:
+        expt_name = model_name.split('_epoch=')[0]
+    except Exception:
+        expt_name = '?'
+        # expt_name = predict_args[expt_name]
+
     pred_config = {'pred_' + k: v for k, v in pred_config.items()}
+    pred_config['step'] = step
+    pred_config['epoch'] = epoch
+    pred_config['expt_name'] = expt_name
     return pred_config
 
 
@@ -357,10 +631,10 @@ def relevant_fit_config(fit_config):
     return fit_config2
 
 
-def find_info_items(info, query_type, query_name):
+def find_info_items(info, query_type, query_name=None):
     for item in info:
         if item['type'] == query_type:
-            if item['properties']['name'] == query_name:
+            if query_name is None or item['properties']['name'] == query_name:
                 yield item
 
 
@@ -529,7 +803,7 @@ def resolve_cross_machine_path(path, dvc_dpath=None):
         found_idx = None
         for dname in expected_dnames:
             try:
-                idx = path.parts.index('smart_watch_dvc')
+                idx = path.parts.index(dname)
             except ValueError:
                 pass
             else:
@@ -567,12 +841,18 @@ def resolve_cross_machine_path(path, dvc_dpath=None):
     return path
 
 
+@ub.memoize
+def global_ureg():
+    import pint
+    ureg = pint.UnitRegistry()
+    return ureg
+
+
 def prepare_results(all_infos, coi_pattern, dvc_dpath=None):
     from kwcoco.coco_evaluator import CocoSingleResult
     from watch.utils import result_analysis
     from watch.utils import util_time
-    import pint
-    ureg = pint.UnitRegistry()
+    ureg = global_ureg()
 
     class_rows = []
     mean_rows = []
@@ -695,7 +975,6 @@ def prepare_results(all_infos, coi_pattern, dvc_dpath=None):
         class_rows.extend(expt_class_rows)
 
         row = {}
-        import warnings
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', 'Mean of empty slice')
             row['class_mAP'] = np.nanmean(class_aps) if len(class_aps) else np.nan
@@ -991,6 +1270,35 @@ def best_candidates(class_rows, mean_rows):
     return all_model_candidates
 
 
+def shrink_channels(x):
+    import kwcoco
+    aliases = {
+        'blue': 'B',
+        'red': 'R',
+        'green': 'G',
+        'nir': 'N',
+        'swir16': 'S',
+        'swir22': 'H',
+    }
+    for idx, part in enumerate('forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field'.split('|')):
+        aliases[part] =  'land.{}'.format(idx)
+    stream_parts = []
+    for stream in kwcoco.ChannelSpec.coerce(x).streams():
+        fused_parts = []
+        for c in stream.as_list():
+            c = aliases.get(c, c)
+            c = c.replace('matseg_', 'matseg.')
+            fused_parts.append(c)
+        fused = '|'.join(fused_parts)
+        fused = fused.replace('B|G|R|N|S|H', 'BGRNSH')
+        fused = fused.replace('R|G|B', 'RGB')
+        fused = fused.replace('B|G|R', 'BGR')
+        stream_parts.append(fused)
+    new = ','.join(stream_parts)
+    x = kwcoco.ChannelSpec.coerce(new).concise().spec
+    return x
+
+
 def shrink_notations(df, drop=0):
     import kwcoco
     import re
@@ -1149,7 +1457,7 @@ def plot_individual_class_curves(all_results, dataset_title_part, catname, fnum,
     return fig
 
 
-def plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric='ap'):
+def plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric='ap', rkey='nocls_measures'):
     from kwcoco.metrics import drawing
     import kwplot
     # max_num_curves = 32
@@ -1159,7 +1467,7 @@ def plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric
     # max_per_expt = 10
     # max_per_expt = 3
     fig = kwplot.figure(fnum=fnum, doclf=True)
-    relevant_results = [r for r in all_results if r.nocls_measures and r.nocls_measures['nsupport'] > 0]
+    relevant_results = [r for r in all_results if getattr(r, rkey) and getattr(r, rkey)['nsupport'] > 0]
 
     for result in relevant_results:
         if 'prefix' in result.meta:
@@ -1173,7 +1481,7 @@ def plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric
         result.meta['prefix'] = prefix
 
     def lookup_metric(x):
-        return x.nocls_measures[metric]
+        return getattr(x, rkey)[metric]
 
     if 1:
         # Take best per experiment
@@ -1215,7 +1523,7 @@ def plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric
     for idx, result in enumerate(results_to_plot):
         color = colors[idx]
         color = [kwplot.Color(color).as01()]
-        measure = result.nocls_measures
+        measure = getattr(result, rkey)
         prefix = result.meta['prefix']
         color = hash_color(prefix)
         kw = {'fnum': fnum}
@@ -1225,7 +1533,7 @@ def plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric
             drawing.draw_roc(measure, prefix=prefix, color=color, **kw)
         else:
             raise KeyError
-    fig.gca().set_title(f'Comparison of runs {metric}: Salient -\n{dataset_title_part}')
+    fig.gca().set_title(f'Comparison of runs {metric}: {rkey} -\n{dataset_title_part}')
     return fig
 
 
@@ -1496,9 +1804,21 @@ def main(cmdline=False, **kwargs):
         # 'mauc',
     }
 
+    FILTER_OUTLIERS = 0
+    # r = results_list2[0]
+    if FILTER_OUTLIERS:
+        # Filter outliers by only taking the top results for each experiment
+        expt_name_to_results2 = ub.group_items(results_list2, lambda r: r.meta['expt_name'])
+        results3 = []
+        for expt_name, sub_results in expt_name_to_results2.items():
+            top = sorted(sub_results, key=lambda r: r.metrics['salient_AP'], reverse=True)[0:1]
+            results3.extend(top)
+        results_input = results3
+    else:
+        results_input = results_list2
     abalation_orders = {1}
     analysis = result_analysis.ResultAnalysis(
-        results_list2, ignore_params=ignore_params,
+        results_input, ignore_params=ignore_params,
         # metrics=['coi_mAPUC', 'coi_APUC'],
         # metrics=['salient_AP'],
         metrics=['coi_mAP', 'salient_AP'],
@@ -1560,29 +1880,42 @@ def main(cmdline=False, **kwargs):
     class_df = shrink_notations(class_df, drop=1)
     mean_df = shrink_notations(mean_df, drop=1)
 
-    if 'coi_mAPUC' in mean_df.columns:
-        print('\nSort by coi_mAPUC')
-        _mean_by_metric = mean_df.sort_values('coi_mAPUC')
-        # print(_mean_by_metric)
-        print(_mean_by_metric.to_string())
+    def sort_via(label, df):
+        if label in df.columns:
+            _df_via_metric = df.sort_values(label)
+            _df_via_metric = _df_via_metric[~_df_via_metric[label].isnull()]
+            if len(_df_via_metric):
+                print(f'\nSort by {label}')
+                print(_df_via_metric.to_string())
 
-    if 'salient_APUC' in mean_df.columns:
-        print('\nSort by salient_APUC')
-        _salient_by_metric = mean_df.sort_values('salient_APUC')
-        # print(_salient_by_metric)
-        print(_salient_by_metric.to_string())
+    sort_via('coi_mAPUC', mean_df)
+    sort_via('salient_APUC', mean_df)
+    sort_via('BAS_F1', mean_df)
+    sort_via('AP', class_df)
 
-    if 'BAS_F1' in mean_df.columns:
-        print('\nSort by BAS_F1')
-        _salient_by_metric = mean_df.sort_values('BAS_F1')
-        # print(_salient_by_metric)
-        print(_salient_by_metric.to_string())
+    # if 'coi_mAPUC' in mean_df.columns:
+    #     print('\nSort by coi_mAPUC')
+    #     _mean_by_metric = mean_df.sort_values('coi_mAPUC')
+    #     # print(_mean_by_metric)
+    #     print(_mean_by_metric.to_string())
 
-    if 'AP' in class_df.columns:
-        print('\nClass: Sort by AP')
-        _class_by_metric = class_df[~class_df['AP'].isnull()].sort_values('AP')
-        # print(_class_by_metric)
-        print(_class_by_metric.to_string())
+    # if 'salient_APUC' in mean_df.columns:
+    #     print('\nSort by salient_APUC')
+    #     _salient_by_metric = mean_df.sort_values('salient_APUC')
+    #     # print(_salient_by_metric)
+    #     print(_salient_by_metric.to_string())
+
+    # if 'BAS_F1' in mean_df.columns:
+    #     print('\nSort by BAS_F1')
+    #     _salient_by_metric = mean_df.sort_values('BAS_F1')
+    #     # print(_salient_by_metric)
+    #     print(_salient_by_metric.to_string())
+
+    # if 'AP' in class_df.columns:
+    #     print('\nClass: Sort by AP')
+    #     _class_by_metric = class_df[~class_df['AP'].isnull()].sort_values('AP')
+    #     # print(_class_by_metric)
+    #     print(_class_by_metric.to_string())
 
     if 0:
         if 'AUC' in class_df.columns:
@@ -1673,6 +2006,22 @@ def main(cmdline=False, **kwargs):
 
         if len(all_results):
             fnum = 3
+
+            for result in all_results:
+                coi_measures = []
+                for c, m in result.ovr_measures.items():
+                    if coi_pattern.match(c):
+                        coi_measures.append(m)
+                # Is this actually macro or micro? I forget
+                import kwcoco
+                if coi_measures:
+                    ovr_coi_macro = kwcoco.metrics.Measures.combine(coi_measures)
+                    ovr_coi_macro = ovr_coi_macro.reconstruct()
+                    ovr_coi_macro.proxy['node'] = 'OVR-COI-Macro'
+                    result.ovr_coi_macro = ovr_coi_macro
+                else:
+                    result.ovr_coi_macro = None
+
             catname = 'Active Construction'
             fig3 = plot_individual_class_curves(all_results, dataset_title_part, catname, fnum, 'ap')
             if fig3 is not None:
@@ -1686,10 +2035,15 @@ def main(cmdline=False, **kwargs):
 
         if len(all_results):
             fnum = 5
-            fig5 = plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric='ap')
+            fig5 = plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric='ap', rkey='nocls_measures')
             if fig5 is not None:
                 _writefig(fig5, out_dpath, 'salient_ap_curve.png', figsize, verbose, tight=True)
             # print(best_per_expt.sort_values('mAP').to_string())
+
+            fnum = 6
+            fig5 = plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric='ap', rkey='ovr_coi_macro')
+            if fig5 is not None:
+                _writefig(fig5, out_dpath, 'ovr_coi_macro_ap_curve.png', figsize, verbose, tight=True)
 
         if 0:
             # Make robust

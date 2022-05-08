@@ -255,8 +255,9 @@ def class_label_smoothing(track_cats, transition_probs=None,
 
     Example:
         >>> from watch.tasks.tracking.phase import *  # NOQA
+        >>> import ubelt as ub
         >>> track_cats = (
-        >>>     ['No Activity'] * 0 +
+        >>>     ['No Activity'] * 2 +
         >>>     ['Active Construction'] * 1 +
         >>>     ['Site Preparation'] * 2 +
         >>>     ['Active Construction'] * 3 +
@@ -268,7 +269,6 @@ def class_label_smoothing(track_cats, transition_probs=None,
         >>> smoothed_cats = class_label_smoothing(track_cats, transition_probs, emission_probs)
         >>> print('smoothed_cats = {}'.format(ub.repr2(smoothed_cats, nl=1)))
         smoothed_cats = [
-            'No Activity',
             'No Activity',
             'No Activity',
             'Site Preparation',

@@ -352,6 +352,12 @@ prepare_cropped_from_tracks(){
         --cache=1 --backend=tmux --run=0
 
 
+    DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
+    python -m watch.cli.prepare_splits \
+        --base_fpath="$DVC_DPATH/Cropped-Drop3-TA1-2022-03-10/combo_DLM.kwcoco.json" \
+        --run=0
+
+
 }
 
 cropped_with_more_context(){

@@ -3,33 +3,16 @@ A simplified Python DVC API
 """
 import ubelt as ub
 import os
-
-"""
-Python API to make DVC easier to work with
-"""
+from watch.utils import util_path
 
 
-class ChDir:
-    """
-    Context manager that changes the current working directory and then
-    returns you to where you were.
-    """
-    def __init__(self, dpath):
-        self.context_dpath = dpath
-        self.orig_dpath = None
-
-    def __enter__(self):
-        self.orig_dpath = os.getcwd()
-        os.chdir(self.context_dpath)
-        return self
-
-    def __exit__(self, a, b, c):
-        os.chdir(self.orig_dpath)
-
-
-class SimpleDVC():
+class SimpleDVC(ub.NiceRepr):
     """
     A Simple DVC API
+
+    Args:
+        dvc_root (Path): path to DVC repo directory
+        remote (str): dvc remote to sync to by default
 
     Ignore:
         >>> # xdoctest: +REQUIRES(--dvc-test)
@@ -44,8 +27,12 @@ class SimpleDVC():
 
     """
 
-    def __init__(self, dvc_root=None):
+    def __init__(self, dvc_root=None, remote=None):
         self.dvc_root = dvc_root
+        self.remote = remote
+
+    def __nice__(self):
+        return str(self.dvc_root)
 
     @classmethod
     def demo_dpath(cls, reset=False):
@@ -67,12 +54,12 @@ class SimpleDVC():
         return dvc_dpath
 
     @classmethod
-    def coerce(cls, dvc_path):
+    def coerce(cls, dvc_path, **kw):
         """
         Given a path inside DVC, finds the root.
         """
         dvc_root = cls.find_root(dvc_path)
-        return cls(dvc_root)
+        return cls(dvc_root, **kw)
 
     @classmethod
     def find_root(cls, path=None):
@@ -97,12 +84,20 @@ class SimpleDVC():
             print('found new self.dvc_root = {!r}'.format(self.dvc_root))
         return self.dvc_root
 
+    def _ensure_remote(self, remote):
+        if remote is None:
+            remote = self.remote
+        return remote
+
     def add(self, path):
         from dvc import main as dvc_main
         paths = list(map(ub.Path, _ensure_iterable(path)))
+        if len(paths) == 0:
+            print('No paths to add')
+            return
         dvc_root = self._ensure_root(paths)
         rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
-        with ChDir(dvc_root):
+        with util_path.ChDir(dvc_root):
             dvc_command = ['add'] + rel_paths
             dvc_main.main(dvc_command)
 
@@ -110,26 +105,43 @@ class SimpleDVC():
         if not has_autostage:
             raise NotImplementedError('Need autostage to complete the git commit')
 
+    def git_pull(self):
+        ub.cmd('git pull', verbose=3, check=True, cwd=self.dvc_root)
+
+    def git_push(self):
+        ub.cmd('git push', verbose=3, check=True, cwd=self.dvc_root)
+
+    def git_commit(self, message):
+        ub.cmd(f'git commit -m "{message}"', verbose=3, check=True, cwd=self.dvc_root)
+
     def git_commitpush(self, message='', pull_on_fail=True):
         """
         TODO: better name here?
         """
-        dvc_root = self.dvc_root
-        git_info3 = ub.cmd(f'git commit -m "{message}"', verbose=3, check=True, cwd=dvc_root)  # dangerous?
-        assert git_info3['ret'] == 0
+        # dangerous?
         try:
-            git_info2 = ub.cmd('git push', verbose=3, check=True, cwd=dvc_root)
-        except Exception:
-            if pull_on_fail:
-                git_info2 = ub.cmd('git pull', verbose=3, check=True, cwd=dvc_root)
-                git_info2 = ub.cmd('git push', verbose=3, check=True, cwd=dvc_root)
-                assert git_info2['ret'] == 0
-            else:
+            self.git_commit(message)
+        except Exception as e:
+            ex = e
+            if 'nothing added to commit' not in ex.output:
                 raise
+        else:
+            try:
+                self.git_push()
+            except Exception:
+                if pull_on_fail:
+                    self.git_pull()
+                    self.git_push()
+                else:
+                    raise
 
     def push(self, path, remote=None, recursive=False, jobs=None):
         from dvc import main as dvc_main
         paths = list(map(ub.Path, _ensure_iterable(path)))
+        if len(paths) == 0:
+            print('No paths to push')
+            return
+        remote = self._ensure_remote(remote)
         dvc_root = self._ensure_root(paths)
         extra_args = []
         if remote:
@@ -139,16 +151,39 @@ class SimpleDVC():
         if recursive:
             extra_args += ['--recursive']
 
-        with ChDir(dvc_root):
+        with util_path.ChDir(dvc_root):
             dvc_command = ['push'] + extra_args + [str(p.relative_to(dvc_root)) for p in paths]
+            dvc_main.main(dvc_command)
+
+    def pull(self, path, remote=None, recursive=False, jobs=None):
+        from dvc import main as dvc_main
+        paths = list(map(ub.Path, _ensure_iterable(path)))
+        if len(paths) == 0:
+            print('No paths to pull')
+            return
+        remote = self._ensure_remote(remote)
+        dvc_root = self._ensure_root(paths)
+        extra_args = []
+        if remote:
+            extra_args += ['-r', remote]
+        if jobs is not None:
+            extra_args += ['--jobs', str(jobs)]
+        if recursive:
+            extra_args += ['--recursive']
+
+        with util_path.ChDir(dvc_root):
+            dvc_command = ['pull'] + extra_args + [str(p.relative_to(dvc_root)) for p in paths]
             dvc_main.main(dvc_command)
 
     def unprotect(self, path):
         from dvc import main as dvc_main
         paths = list(map(ub.Path, _ensure_iterable(path)))
+        if len(paths) == 0:
+            print('No paths to unprotect')
+            return
         dvc_root = self._ensure_root(paths)
         rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
-        with ChDir(dvc_root):
+        with util_path.ChDir(dvc_root):
             dvc_command = ['unprotect'] + rel_paths
             dvc_main.main(dvc_command)
 

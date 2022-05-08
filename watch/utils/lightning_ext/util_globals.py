@@ -142,6 +142,7 @@ def check_shm_limits(threshold_gibibytes=1):
 
     if shm_gibibytes < threshold_gibibytes:
         import warnings
+        print(f'shm_gibibytes={shm_gibibytes}')
         warnings.warn('Likely do not have enough /dev/shm space')
 
     if 0:

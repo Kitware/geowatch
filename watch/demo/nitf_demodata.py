@@ -19,7 +19,7 @@ DEFAULT_KEY = 'i_3034c.ntf'  # use a small image as the default
 
 _TEST_IMAGES = [
     {'key': 'ns3114a.nsf', 'sha512': '5605cd0b0187900c1b43130bf157c6ed', 'size_bytes': 680, 'enabled': False, 'CID': 'QmQKr5fd5cp1b1LYFgYRJKT6jdNHyecEN1XqRMKp4JJ4SM'},
-    {'key': 'i_3034c.ntf', 'sha512': '5f42ab1034f20756bdf15043b58c828f', 'size_bytes': 933, 'CID': 'QmSRGeqnkmMGfXFDZS22yWt3TAbxun533kNCWjuw6rqqpC'},
+    {'key': 'i_3034c.ntf', 'sha512': '5f42ab1034f20756bdf15043b58c828f', 'size_bytes': 933, 'CID': 'QmSRGeqnkmMGfXFDZS22yWt3TAbxun533kNCWjuw6rqqpC', 'alt_url': 'https://data.kitware.com/api/v1/file/62757dff4acac99f42ce826b/download'},
     {'key': 'ns3034d.nsf', 'sha512': 'aaf65232611bdc53934fa7f58790529a', 'size_bytes': 937, 'CID': 'QmStHdJpmTtmwP1cV589p8yMr9aGprukNfaKxGWHT2gXLk'},
     {'key': 'i_3034f.ntf', 'sha512': '2c2c3a918fe2805dc78a090164d671dc', 'size_bytes': 948, 'CID': 'QmUHHD92Fecr1wviDihGUkEomVoF7XHSPYgK2vZN26Et9i'},
     {'key': 'i_3051e.ntf', 'sha512': 'a67e9c4172310faaadf34a0e6ce01a72', 'size_bytes': 1436, 'enabled': False, 'CID': 'QmZLE6WudN5ZRCwpMDnpK43BnERds3qNPanzqgCpuX1BZC'},
@@ -59,7 +59,8 @@ _TEST_IMAGES = [
     {'key': 'ns3301e.nsf', 'sha512': '2659e9f504b2427ebe064fa7bbfceeea', 'size_bytes': 197504, 'CID': 'QmVMwtyKUzzeUiHvNPWWhZV91rJbngy9F22wqkdFBBDUpW'},
     {'key': 'ns5600a.nsf', 'sha512': 'f7e27013e66568e02b0c4039120ff155', 'size_bytes': 219974, 'CID': 'Qmf6HT32uBxgPnYanYnaBrDyQdob9FuM5dv2mDSDejBxvK'},
     {'key': 'i_3128b.ntf', 'sha512': 'e4fa986099dcfdaaa74e66f68f48abbc', 'size_bytes': 248762, 'CID': 'QmQrnGbJ8XbUWipiw582WHbvpPqF2gLZsHj2tvRFgudC7H'},
-    {'key': 'i_3004g.ntf', 'sha512': '5285370808d15ffcbc57a53105ff7a1b', 'size_bytes': 263047, 'has_crs': True, 'has_rpc': False, 'CID': 'QmSZkJKidBsWAUyPRFRbHFYxy1d4DBArhXD8utgavNASDp'},
+    {'key': 'i_3004g.ntf', 'sha512': '5285370808d15ffcbc57a53105ff7a1b', 'size_bytes': 263047, 'has_crs': True, 'has_rpc': False, 'CID': 'QmSZkJKidBsWAUyPRFRbHFYxy1d4DBArhXD8utgavNASDp',
+     'alt_url': 'https://data.kitware.com/api/v1/file/627579e94acac99f42ce69b1/download'},
     {'key': 'ns3004f.nsf', 'sha512': '0bfbd6d378dfd0f0e8cad703498fa6c8', 'size_bytes': 263047, 'has_crs': True, 'has_rpc': False, 'CID': 'QmXNq8HGVk5cMRTPSc9br685tpJqhBvky8Wmd6KGBKGA6t'},
     {'key': 'ns3090i.nsf', 'sha512': '9be0244363bbe63c71b55217a90c346b', 'size_bytes': 264083, 'enabled': False, 'CID': 'QmPfNJhP4Ytgx6D566NTt4CYZG2FJDamibNZaZYSLjDVG1'},
     {'key': 'i_3090m.ntf', 'sha512': '30017da0f1c9c41130e79c18f99aba97', 'size_bytes': 264083, 'CID': 'QmXhiB3uFeNHT91PFSbSNEV3zbDrkGKr9FTGA3GeVrMbfU'},
@@ -172,19 +173,12 @@ _FNAME_TO_DESC = {
 }
 
 
-def grab_nitf_fpath(key=None, safe=True):
+def grab_nitf_fpath(key=None):
     """
     Args:
         key (str | None): the name the nitf to grab.
             Use ``grab_nitf_fpath.keys()`` to list available keys.
             If None, ``DEFAULT_KEY`` is used.
-
-        safe (bool): if True, only only allow access if we have the propert
-            certificates. Setting to False is a security risk.  Note, in the
-            past the certs did not seem to be provided by default authorities,
-            but now they do seem to work with default SSL.
-
-            DEPRECATED. NO LONGER DOES ANYTHING.
 
     Example:
         >>> # xdoctest: +SKIP
@@ -198,6 +192,10 @@ def grab_nitf_fpath(key=None, safe=True):
         >>> data = kwimage.imread(fpath)
         >>> kwplot.imshow(data)
         >>> kwplot.show_if_requested()
+
+    Ignore:
+        for key in grab_nitf_fpath.keys():
+            fpath = grab_nitf_fpath(key)
     """
     # base = 'https://gwg.nga.mil/ntb/baseline/software/testfile/Nitfv2_1/'
     if key is None:
@@ -207,6 +205,16 @@ def grab_nitf_fpath(key=None, safe=True):
         info = _FNAME_TO_INFO[key]
     else:
         raise KeyError(key)
+
+    if 'alt_url' in info:
+        try:
+            fname = info['key']
+            sha512 = info['sha512']
+            fpath = ub.grabdata(info['alt_url'], appname='watch/demodata/nitf',
+                                fname=fname, hash_prefix=sha512)
+            return fpath
+        except Exception:
+            pass
 
     if 'CID' in info:
         # Use IPFS instead
@@ -230,6 +238,13 @@ def grab_nitf_fpath(key=None, safe=True):
             except urllib.error.HTTPError as ex:
                 print('caught error ex = {!r}'.format(ex))
                 if try_idx == len(ipfs_gateways) - 1:
+                    # ipfs_exe = ub.find_exe('ipfs')
+                    # print(f'ipfs_exe={ipfs_exe}')
+                    # if ipfs_exe:
+                    #     fpath = ub.Path.appdir('watch/demodata/nitf') / fname
+                    #     print(f'fpath={fpath}')
+                    #     ub.cmd([ipfs_exe, 'get', '-o', str(fpath), str(url_fname)], verbose=3)
+                    # else:
                     raise
                 else:
                     print('Try again...')
@@ -238,23 +253,6 @@ def grab_nitf_fpath(key=None, safe=True):
     else:
         url_fname = info['key']
         raise Exception('Requires update to IPFS support. Old URLs are dead')
-
-    # except Exception:
-    #     if safe:
-    #         raise
-    #     else:
-    #         # Disable SSL verification. This is unsafe.
-    #         print('SAFE GRAB FAILED. FALLBACK TO UNSAFE GRAB (IGNORE SSL CERTS)')
-    #         import ssl
-    #         _orig_context = ssl._create_default_https_context
-    #         try:
-    #             ssl._create_default_https_context = ssl._create_unverified_context
-    #             fpath = ub.grabdata(url, appname='watch/demodata/nitf',
-    #                                 hash_prefix=sha512)
-    #         finally:
-    #             # Restore ssl context if we hacked it
-    #             ssl._create_default_https_context = _orig_context
-    #             print('RESTORED SSL CONTEXT')
     return fpath
 
 
@@ -363,51 +361,6 @@ def _check_properties():
         QmWqspPteMi38xHoohYLAhSqbcdNepWNNvS4f711uzicp8 i_3301a.ntf
         QmYYwyHfQnx4jdpsXuwQU1jTtHVWeaLsCq7ftFP6PkLP7H i_3301c.ntf
         QmSjNfgd2iue4ZoPbhzoTcp7isVK1aVBcDbPqYFsdRwTxg i_3301h.ntf
-        QmZP22WEv6X3Mr5XeyZDP1XeX5u7w7RrHhD3U3de5kbvo9 i_3301k.ntf
-        QmVmCk77Dw4sTHvHKRBDxsto4RDQ1FQrf2roS8ntrALuCv i_3303a.ntf
-        QmTgPnfTaHiz8zma8jDQ9n72yVeWLqApihmgQWrA4Q5wpk i_3309a.ntf
-        QmeQ3y7pAVgP7KxNwwaUuJyZQjvryL4yTisGneAoPS1eyJ i_3311a.ntf
-        QmTYF1Hn9wAUoo8aTbEnnr9ty2NCTAnC82Sys7My9D38mi i_3405a.ntf
-        QmU58g5BUDUc6k5UXX8CBgjUcR6yhvxLwicjdqMWkbADXj i_3430a.ntf
-        QmRiwn3nDxTmsjwiKgbyztMT7vwVqaKo2NP2N7Y42wy5MY i_3450c.ntf
-        QmbgWEVKE78tspn7ZYnmtPs2QYZFpirtEQxGYNQJkVghYw i_5012c.ntf
-        QmXNq8HGVk5cMRTPSc9br685tpJqhBvky8Wmd6KGBKGA6t ns3004f.nsf
-        QmViVzFPjWe7KEF1eFDniBDggRrd2V7vAomnghyvtWYjbm ns3005b.nsf
-        QmS8zETJ9fpJqAjSSiTMbTMEDcZJPjs5LG3EMhdGwYURef ns3010a.nsf
-        QmNTmkLffWuu4dKXz7WhAe99ErtvFMpiaogLQaRVDy3GSt ns3017a.nsf
-        QmT3TpNozoLqS96dA5WCiWyZU1j3CwiAtkPmnU4WFNNe5B ns3022b.nsf
-        QmXjnNXcAEwje3VFu6VYgVeeb9PacD6NRSRamV6Pr8z33s ns3033b.nsf
-        QmStHdJpmTtmwP1cV589p8yMr9aGprukNfaKxGWHT2gXLk ns3034d.nsf
-        QmYG9PdWmJLRxZj6Qesv4uAj5gjeq3WZMofaDCQZKRsbaa ns3038a.nsf
-        QmVQgiFEV1w1GGw9AM3abNqU3fhPFbLTrgSLsbGXPzhWXG ns3050a.nsf
-        QmRDMx5yDx8eBWFggj8556ke5iCtuvymLRfhBRonS2usba ns3051v.nsf
-        QmdjWZHsjBKa5YKTcNBaEuxZb1tXzrVy3JSnXfHCGjomBA ns3059a.nsf
-        QmUfNxVJttBDsJcjeQWpk8pY1FgxHkGbepy3WC4zsVTAjs ns3061a.nsf
-        QmcFNheBVnjUVakDi5So5UtpurAaPXxYwdEj6pxqRCX57e ns3063h.nsf
-        QmXUjPur9Cbe1sNgKkPP3sBfqkWfymKuiehNqHu8WuFU3A ns3073a.nsf
-        QmPfNJhP4Ytgx6D566NTt4CYZG2FJDamibNZaZYSLjDVG1 ns3090i.nsf
-        QmZBz5vKwygBtdfmRDG6xrbG2RtU8HWf5L7aAP5h4AF5gV ns3090q.nsf
-        QmTjPsxGvQzdvH9T61ewEuoJKkczRL8U4CSTnqJuZhH6DL ns3101b.nsf
-        QmQKr5fd5cp1b1LYFgYRJKT6jdNHyecEN1XqRMKp4JJ4SM ns3114a.nsf
-        QmS3rjo6yuhGVVMtXpjkoR8HhbzXv9B7nJ3CbE7uZedSrj ns3114i.nsf
-        QmRmjCMyhHYBN5WfXJteTnAxYoJSQ9iK3KWbjDTe6DoTav ns3118b.nsf
-        QmZzY3Vn93xKv5KEh7cSRLUEjFx29k8pxwD49e7fA4zfUx ns3119b.nsf
-        QmTibUeWxAW2YpC5WL6egku4aq95VfXTGC6CiJfcX3KLaJ ns3201a.nsf
-        QmZuqBAUYEtYiRZ8hHoDJ3iYRf86UzcJHfSh5f6HLjmveU ns3228b.nsf
-        QmRrdi31As3dguMeGUZC1CroMmuj4cD3AiBmZXyWJYX6wg ns3228d.nsf
-        QmTJHhqvnMNnTMhDkq3rbRvQ8Bw6by5UUYvH8FrBUTxCqQ ns3229b.nsf
-        QmQxKrj1SppQcXHhAJBv4GccQxjdXfSf8psWH5qAjXnqLc ns3301b.nsf
-        QmVMwtyKUzzeUiHvNPWWhZV91rJbngy9F22wqkdFBBDUpW ns3301e.nsf
-        QmW6Dpgrr2x94DGse6rRVuyAajMPnN7r6U9UgmEzeEQ8Uz ns3301j.nsf
-        QmVysZ9HexrwZ131U8iu4HVXgBtVGXazcJupA3yU7avp7n ns3302a.nsf
-        QmUq7tL1EH2KyByNCFvRQnrCUkds4ZjpoPi78YKc1ZA94o ns3304a.nsf
-        QmfMzFPqdeYvqpk33qRDsuhkzQbqydqXgQkvCMynMAtAnJ ns3310a.nsf
-        Qmf9LVfsMTyFfvLpcXJAqCkZEoGG5KFA4QX8BoaXnz8JjX ns3321a.nsf
-        QmSQBWmZm6WNzzuSySEYvSEiqKt3SpPTuuevVSjQh6g3DT ns3361c.nsf
-        QmQDsLkqiZ2yKbF7qdShEZupiAuuzYsL7UJQoWiakJ6zbL ns3417c.nsf
-        QmQhKDL4S7mr6WkHPx9g2YgpUodUNq5nmYkSEzfKcispYa ns3437a.nsf
-        QmQSNZY3kGTxSCGw3gJftrqUHjdpDnnq9hJL5BFq4aRxbu ns3450e.nsf
-        Qmf6HT32uBxgPnYanYnaBrDyQdob9FuM5dv2mDSDejBxvK ns5600a.nsf
         ''')
 
     name_to_cid = {}
@@ -439,9 +392,5 @@ def _check_properties():
                 row['has_rpc'] = info['is_rpc']
                 print('info = {}'.format(ub.repr2(info, nl=1, sort=False)))
                 _ = ub.cmd('gdalinfo {}'.format(fpath), verbose=3)
-
     [x['wld_crs_type'] for x in infos]
-
     print('_TEST_IMAGES = {}'.format(ub.repr2(_TEST_IMAGES, nl=1, sort=False)))
-
-    # i_3001a.ntf

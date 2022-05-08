@@ -80,8 +80,7 @@ class FindDVCConfig(scfg.Config):
             print(dpath)
         else:
             raise KeyError(config['mode'])
-
-        return 1
+        return 0
 
 
 _CLI = FindDVCConfig

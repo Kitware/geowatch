@@ -28,6 +28,17 @@ except Exception:
     profile = ub.identity
 
 
+def torchmetrics_compat_hack():
+    import torchmetrics
+    f_beta = torchmetrics.classification.f_beta
+    if not hasattr(f_beta, 'FBeta'):
+        f_beta.FBeta = f_beta.FBetaScore
+    if not hasattr(torchmetrics.classification.f_beta, 'FBetaScore'):
+        f_beta.FBetaScore = f_beta.FBeta
+
+torchmetrics_compat_hack()
+
+
 def make_predict_config(cmdline=False, **kwargs):
     """
     Configuration for fusion prediction
@@ -142,7 +153,7 @@ def predict(cmdline=False, **kwargs):
         >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=5, gsize=(128, 128))
         >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=5, gsize=(128, 128))
         >>> fit_kwargs = kwargs = {
-        ...     'train_dataset': test_dset.fpath,
+        ...     'train_dataset': train_dset.fpath,
         ...     'datamodule': 'KWCocoVideoDataModule',
         ...     'workdir': ub.ensuredir((test_dpath, 'train')),
         ...     'package_fpath': package_fpath,
@@ -406,7 +417,7 @@ def predict(cmdline=False, **kwargs):
             'args': jsonified_args,
             'hostname': socket.gethostname(),
             'cwd': os.getcwd(),
-            'userhome': ub.userhome(),
+            'user': ub.Path(ub.userhome()).name,
             'timestamp': start_timestamp,
             'fit_config': traintime_params,
         }
@@ -552,23 +563,27 @@ def predict(cmdline=False, **kwargs):
         'change_probs': 'change',
     }
 
-    # Start background procs before we make threads
     batch_iter = iter(test_dataloader)
+    prog = ub.ProgIter(batch_iter, desc='predicting', verbose=1)
+
+    # Start background procs before we make threads
     writer_queue = util_parallel.BlockingJobQueue(
         mode='thread',
         # mode='serial',
         max_workers=datamodule.num_workers)
-
-    prog = ub.ProgIter(batch_iter, desc='predicting', verbose=1)
 
     result_fpath.parent.ensuredir()
     print('result_fpath = {!r}'.format(result_fpath))
 
     try:
         if args.track_emissions:
+            import codecarbon
+            codecarbon.core.util.logger.setLevel('ERROR')
             from codecarbon import EmissionsTracker
             emissions_tracker = EmissionsTracker()
+            codecarbon.core.util.logger.setLevel('ERROR')
             emissions_tracker.start()
+            codecarbon.core.util.logger.setLevel('ERROR')
         else:
             emissions_tracker = None
     except Exception as ex:
@@ -576,12 +591,27 @@ def predict(cmdline=False, **kwargs):
             print('ex = {!r}'.format(ex))
         emissions_tracker = None
 
-    with torch.set_grad_enabled(False):
+    CHECK_GRID = 0
+    if CHECK_GRID:
+        # Check to see if the grid will cover all images
+        test_dataloader.dataset
 
+        seen_gids = set()
+        primary_gids = set()
+        for tr in test_dataloader.dataset.new_sample_grid['targets']:
+            primary_gids.add(tr['main_gid'])
+            seen_gids.update(tr['gids'])
+        all_gids = list(test_dataloader.dataset.sampler.dset.images())
+        from xdev import set_overlaps
+        img_overlaps = set_overlaps(all_gids, seen_gids)
+        primary_img_overlaps = set_overlaps(all_gids, primary_gids)
+        print('img_overlaps = {}'.format(ub.repr2(img_overlaps, nl=1)))
+        print('primary_img_overlaps = {}'.format(ub.repr2(primary_img_overlaps, nl=1)))
+
+    with torch.set_grad_enabled(False):
         # FIXME: that data loader should not be producing incorrect sensor/mode
         # pairs in the first place!
-        EMERGENCY_INPUT_AGREEMENT_HACK = True
-
+        EMERGENCY_INPUT_AGREEMENT_HACK = 0
         # prog.set_extra(' <will populate stats after first video>')
         _batch_iter = iter(prog)
         for orig_batch in _batch_iter:
@@ -591,9 +621,11 @@ def predict(cmdline=False, **kwargs):
             for item in orig_batch:
                 if item is None:
                     continue
+                item = item.copy()
+                batch_gids = [frame['gid'] for frame in item['frames']]
                 batch_trs.append({
                     'space_slice': tuple(item['tr']['space_slice']),
-                    'gids': [frame['gid'] for frame in item['frames']],
+                    'gids': batch_gids,
                     'fliprot_params': item['tr'].get('fliprot_params', None)
                 })
                 position_tensors = item.get('positional_tensors', None)
@@ -603,6 +635,7 @@ def predict(cmdline=False, **kwargs):
 
                 filtered_frames = []
                 for frame in item['frames']:
+                    frame = frame.copy()
                     sensor = frame['sensor']
                     if EMERGENCY_INPUT_AGREEMENT_HACK:
                         try:
@@ -616,7 +649,7 @@ def predict(cmdline=False, **kwargs):
                         if EMERGENCY_INPUT_AGREEMENT_HACK:
                             if key not in known_sensor_modes:
                                 continue
-                            filtered_modes[key] = mode.to(device)
+                        filtered_modes[key] = mode.to(device)
                     frame['modes'] = filtered_modes
                     filtered_frames.append(frame)
                 item['frames'] = filtered_frames
@@ -630,7 +663,6 @@ def predict(cmdline=False, **kwargs):
             if 0:
                 import netharn as nh
                 print(nh.data.collate._debug_inbatch_shapes(batch))
-                pass
 
             # self = method
             # with_loss = 0
@@ -745,6 +777,8 @@ def predict(cmdline=False, **kwargs):
             print('ex = {!r}'.format(ex))
         else:
             reg = pint.UnitRegistry()
+            if co2_kg is None:
+                co2_kg = np.nan
             co2_ton = (co2_kg * reg.kg).to(reg.metric_ton)
             dollar_per_ton = 15 / reg.metric_ton  # cotap rate
             emissions['co2_ton'] = co2_ton.m
@@ -1383,16 +1417,14 @@ if __name__ == '__main__':
             --model_globstr="$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=19-step=13659-v1.pt" \
             --test_dataset="$TEST_DATASET" \
             --workdir="$DVC_DPATH/_tmp/smalltest" \
-            --sidecar2=1 \
-            --tta_fliprot=0,1 \
-            --tta_time=0,1 \
-            --chip_overlap=0,0.3 \
-            --draw_heatmaps=1 \
-            --skip_existing=1 \
-            --run=0 --backend=tmux \
-            --enable_iarpa_eval=1 \
-            --enable_eval=1
-
+            --tta_fliprot=0 \
+            --tta_time=0,5 \
+            --chip_overlap=0.3 \
+            --draw_heatmaps=0 \
+            --enable_pred=1 \
+            --enable_iarpa_eval=0 \
+            --enable_eval=0 \
+            --skip_existing=0 --backend=tmux --run=1
 
     DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
     MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json

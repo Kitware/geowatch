@@ -175,69 +175,30 @@ def schedule_evaluation(cmdline=False, **kwargs):
             --test_dataset="$KWCOCO_TEST_FPATH" \
             --run=0  --skip_existing=True
 
-        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-        KWCOCO_TEST_FPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01/combo_DILM_nowv_vali.kwcoco.json
-        python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0,1" \
-            --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/BAS_*v53*/*.pt" \
-            --test_dataset="$KWCOCO_TEST_FPATH" \
-            --run=True
+        export DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+        DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
+        EXPT_GROUP_CODE=eval3_sc_candidates
+        KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 
-        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-        KWCOCO_TEST_FPATH=$DVC_DPATH/Drop1-Aligned-TA1-2022-01/vali_data_nowv.kwcoco.json
-        python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0,1" \
-            --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/BAS_*/*.pt" \
-            --test_dataset="$KWCOCO_TEST_FPATH" \
-            --run=0
+        EXPT_MODEL_GLOBNAME="CropDrop3_SC_s2wv_tf_*V02*"
 
-        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-        KWCOCO_TEST_FPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01/combo_DILM_nowv_vali.kwcoco.json
-        python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0,1" \
-            --model_globstr="special:HISTORY" \
-            --test_dataset="$KWCOCO_TEST_FPATH" \
-            --run=1
+        #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_wv_vali.kwcoco.json
+        #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_D_wv_vali.kwcoco.json
+        #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DL_s2_wv_vali.kwcoco.json
+        VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
 
-        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-        KWCOCO_TEST_FPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01/vali_data_nowv.kwcoco.json
         python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0,1" \
-            --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/SC_*/*.pt" \
-            --test_dataset="$KWCOCO_TEST_FPATH" \
-            --run=0 --skip_existing=1
+                --gpus="0,1" \
+                --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/$EXPT_MODEL_GLOBNAME/*.pt" \
+                --test_dataset="$VALI_FPATH" \
+                --enable_pred=1 \
+                --enable_eval=1 \
+                --enable_actclf=1 \
+                --enable_actclf_eval=1 \
+                --draw_heatmaps=0 \
+                --without_alternatives \
+                --skip_existing=True --backend=slurm --run=0
 
-        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-        KWCOCO_TEST_FPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L_nowv_vali.kwcoco.json
-        python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0,1" \
-            --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/*xfer*/*.pt" \
-            --test_dataset="$KWCOCO_TEST_FPATH" \
-            --run=0 --skip_existing=True
-
-        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-        KWCOCO_TEST_FPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L_nowv_vali.kwcoco.json
-        python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0,1" \
-            --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/SC_TA1_*/*.pt" \
-            --test_dataset="$KWCOCO_TEST_FPATH" \
-            --run=1 --skip_existing=True
-
-        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-        KWCOCO_TEST_FPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L_nowv_vali.kwcoco.json
-        python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0," \
-            --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/BAS_TA1_v08*/*.pt" \
-            --test_dataset="$KWCOCO_TEST_FPATH" \
-            --run=0 --skip_existing=True
-
-        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-        KWCOCO_ALL_FPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L_nowv.kwcoco.json
-        python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0,1" \
-            --model_globstr="special:HARDCODED" \
-            --test_dataset="$KWCOCO_ALL_FPATH" \
-            --run=0 --skip_existing=True
 
     TODO:
         - [ ] Specify the model_dpath as an arg
@@ -246,7 +207,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
     """
     import watch
     from watch.tasks.fusion import organize
-    # import json
 
     config = ScheduleEvaluationConfig(cmdline=cmdline, data=kwargs)
     model_globstr = config['model_globstr']
@@ -289,8 +249,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
         dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_c001_v082/BAS_TA1_c001_v082_epoch=42-step=88063.pt',
     ]))
 
-    # with_saliency = 'auto'
-    # with_class = 'auto'
     with_saliency = 'auto'
     with_class = 'auto'
 
@@ -299,13 +257,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     region_model_dpath = dvc_dpath / 'annotations/region_models'
 
-    # HARD CODED
-    # model_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
-    # test_dataset_fpath = dvc_dpath / 'Drop1-Aligned-L1/vali_combo11.kwcoco.json'
-
-    # model_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
-    # model_dpath = dvc_dpath / 'models/fusion/SC-20201117'
-    # test_dataset_fpath = dvc_dpath / 'Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json'
     test_dataset_fpath = ub.Path(test_dataset)
     if not test_dataset_fpath.exists():
         print('warning test dataset does not exist')
@@ -313,46 +264,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
     annotations_dpath = config['annotations_dpath']
     if annotations_dpath is None:
         annotations_dpath = dvc_dpath / 'annotations'
-
-    def package_metadata(package_fpath):
-        # Hack for choosing one model from this "type"
-        try:
-            epoch_num = int(package_fpath.name.split('epoch=')[1].split('-')[0])
-            expt_name = package_fpath.name.split('_epoch')[0]
-        except Exception:
-            # Try to read package metadata
-            if package_fpath.exists():
-                try:
-                    pkg_zip = ub.zopen(package_fpath, ext='.pt')
-                    namelist = pkg_zip.namelist()
-                except Exception:
-                    print(f'ERROR {package_fpath=} failed to open')
-                    raise
-                found = None
-                for member in namelist:
-                    # if member.endswith('model.pkl'):
-                    if member.endswith('fit_config.yaml'):
-                        found = member
-                        break
-                if not found:
-                    raise Exception(f'{package_fpath=} does not conform to name spec and does not seem to be a torch package with a package_header.json file')
-                else:
-                    import yaml
-                    config_file = ub.zopen(package_fpath / found, mode='r', ext='.pt')
-                    config = yaml.safe_load(config_file)
-                    expt_name = config['name']
-                    # No way to introspect this (yet), so hack it
-                    epoch_num = -1
-            else:
-                epoch_num = -1
-                expt_name = package_fpath.name
-
-        info = {
-            'name': expt_name,
-            'epoch': epoch_num,
-            'fpath': package_fpath,
-        }
-        return info
 
     def expand_model_list_file(model_lists_fpath, dvc_dpath=None):
         """
@@ -426,7 +337,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             if len(gpu_info['procs']) == 0:
                 GPUS.append(gpu_idx)
     else:
-        GPUS = None if gpus is None else _ensure_iterable(gpus)
+        GPUS = None if gpus is None else ensure_iterable(gpus)
 
     print('GPUS = {!r}'.format(GPUS))
     environ = {
@@ -442,15 +353,14 @@ def schedule_evaluation(cmdline=False, **kwargs):
     if virtualenv_cmd:
         queue.add_header_command(virtualenv_cmd)
 
-    def ensure_iterable(x):
-        return x if ub.iterable(x) else [x]
-
     pred_cfg_basis = {}
     pred_cfg_basis['tta_time'] = ensure_iterable(config['tta_time'])
     pred_cfg_basis['tta_fliprot'] = ensure_iterable(config['tta_fliprot'])
     pred_cfg_basis['chip_overlap'] = ensure_iterable(config['chip_overlap'])
 
-    HACK_HACKHACK = 1
+    HACK_HACKHACK = 0
+
+    num_skiped_via_alternatives = 0
 
     other_existing_pred_infos = []
     expanded_packages_to_eval = []
@@ -479,7 +389,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
             )
             info['suggestions'] = suggestions
             info['pred_cfg'] = pred_cfg
-            expanded_packages_to_eval.append(info)
 
             if HACK_HACKHACK:
                 # The idea is we just want to schedule eval jobs
@@ -487,8 +396,10 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 # the parent model / dataset.
                 pred_dpath = ub.Path(suggestions['pred_dpath'])
                 other_dset_pred_dpath = pred_dpath.parent
+                has_any_other = 0
                 if other_dset_pred_dpath.exists():
                     for other_pred_fpath in other_dset_pred_dpath.glob('*/pred.kwcoco.json'):
+                        has_any_other = 1
                         eval_dpath = ub.Path(*other_pred_fpath.parts[:-6], 'eval', *other_pred_fpath.parts[-5:-1], 'eval')
                         other_info = {
                             'package_fpath': package_fpath,
@@ -498,6 +409,13 @@ def schedule_evaluation(cmdline=False, **kwargs):
                             'eval_dpath': eval_dpath,
                         }
                         other_existing_pred_infos.append(other_info)
+
+                if ub.argflag('--without_alternatives'):
+                    if has_any_other:
+                        num_skiped_via_alternatives += 1
+                        continue
+
+            expanded_packages_to_eval.append(info)
 
     if HACK_HACKHACK:
         existing_expanded = []
@@ -672,7 +590,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             annotations_dpath, common_submitkw, skip_existing,
             region_model_dpath)
 
-    if HACK_HACKHACK:
+    if HACK_HACKHACK and not ub.argflag('--without_alternatives'):
         for info in other_existing_pred_infos:
             manager = {}
             manager['pred'] = {'will_exist': True}
@@ -698,6 +616,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
     with_status = 0
     with_rich = 0
     queue.rprint(with_status=with_status, with_rich=with_rich)
+
+    print(f'num_skiped_via_alternatives={num_skiped_via_alternatives}')
 
     # RUN
     if config['run']:
@@ -745,7 +665,7 @@ def _schedule_track_jobs(queue, manager, config, package_cfgstr, pred_cfgstr,
     }
     bas_param_basis = defaults.copy()
     bas_param_basis.update({
-        'thresh': _ensure_iterable(config['bas_thresh']),
+        'thresh': ensure_iterable(config['bas_thresh']),
         # 'thresh': [0.1, 0.2, 0.3],
     })
 
@@ -815,7 +735,7 @@ def _schedule_track_jobs(queue, manager, config, package_cfgstr, pred_cfgstr,
     act_param_basis = {
         # TODO viterbi or not
         # Not sure what SC thresh is
-        # 'thresh': _ensure_iterable(config['bas_thresh']),
+        # 'thresh': ensure_iterable(config['bas_thresh']),
         'thresh': [0.0],
         'use_viterbi': [0],
     }
@@ -949,8 +869,49 @@ def updates_dvc_measures():
         os.chdir(saved_cwd)
 
 
-def _ensure_iterable(inputs):
+def ensure_iterable(inputs):
     return inputs if ub.iterable(inputs) else [inputs]
+
+
+def package_metadata(package_fpath):
+    # Hack for choosing one model from this "type"
+    try:
+        epoch_num = int(package_fpath.name.split('epoch=')[1].split('-')[0])
+        expt_name = package_fpath.name.split('_epoch')[0]
+    except Exception:
+        # Try to read package metadata
+        if package_fpath.exists():
+            try:
+                pkg_zip = ub.zopen(package_fpath, ext='.pt')
+                namelist = pkg_zip.namelist()
+            except Exception:
+                print(f'ERROR {package_fpath=} failed to open')
+                raise
+            found = None
+            for member in namelist:
+                # if member.endswith('model.pkl'):
+                if member.endswith('fit_config.yaml'):
+                    found = member
+                    break
+            if not found:
+                raise Exception(f'{package_fpath=} does not conform to name spec and does not seem to be a torch package with a package_header.json file')
+            else:
+                import yaml
+                config_file = ub.zopen(package_fpath / found, mode='r', ext='.pt')
+                config = yaml.safe_load(config_file)
+                expt_name = config['name']
+                # No way to introspect this (yet), so hack it
+                epoch_num = -1
+        else:
+            epoch_num = -1
+            expt_name = package_fpath.name
+
+    info = {
+        'name': expt_name,
+        'epoch': epoch_num,
+        'fpath': package_fpath,
+    }
+    return info
 
 
 if __name__ == '__main__':
@@ -976,5 +937,20 @@ if __name__ == '__main__':
         python ~/code/watch/watch/tasks/fusion/organize.py make_eval_symlinks
         python ~/code/watch/watch/tasks/fusion/organize.py make_pred_symlinks
         python ~/code/watch/watch/tasks/fusion/schedule_evaluation.py
+
+
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --model_globstr="/path/to/packages/EXPERIMENT/MODEL.pt" \
+            --test_dataset="/path/to/KWCOCO_BUNDLE/DATA.kwcoco.json" \
+            --enable_pred=1 \
+            --enable_eval=1 \
+            --enable_track=1 \
+            --enable_actclf=1 \
+            --enable_iarpa_eval=1 \
+            --enable_actclf_eval=1 \
+            --skip_existing=0 \
+            --cache=0 \
+            --backend=serial \
+            --run=0
     """
     schedule_evaluation(cmdline=True)

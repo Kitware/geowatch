@@ -11,33 +11,51 @@ spec:
   entrypoint: ta2-train-init
   serviceAccountName: argo-runner
   imagePullSecrets:
-    - name: gitlab-pull-secret
+    - name: crall-smartgitlab-secret
+    #- name: gitlab-pull-secret
   nodeSelector:
-    #kitware.com/node-pool: gpu
-    kitware.com/node-pool: mixed
+    kitware.com/node-pool: gpu
+    #kitware.com/node-pool: mixed
   volumes:
     - name: dvc-access-secret-volume
       secret:
         secretName: dvc-gitlab-access-token
+    - name: dshm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 8G
+    - name: cachedir
+      persistentVolumeClaim:
+        claimName: ta2-data-volume
   templates:
   - name: ta2-train-init
     container:
       #image: gitlab.kitware.com:4567/smart/watch/training:{{inputs.parameters.container_tag}}
       #image: gitlab.kitware.com:4567/smart/watch/ta2_training_v2:{{inputs.parameters.container_tag}}
       #image: gitlab.kitware.com:4567/smart/watch/ta2_training_v2:981feb6592f2
-      image: gitlab.kitware.com:4567/smart/watch/ta2_training_v2
+      #image: gitlab.kitware.com:4567/smart/watch/ta2_training_v2
+      image: registry.smartgitlab.com/kitware/watch/ta2_training_v2
       command: [bash]
       # The second arg is which branch should be used
-      args: ["/root/code/watch/aws/train_remote_init.sh", "dev/flow34"]
+      args: ["/root/code/watch/aws/train_remote_init.sh", "dev/flow49"]
       resources:
+        #requests:
+        #  memory: "32G"
+        #  cpu: "15000m"
+        #  #nvidia.com/gpu: 1
+        #limits:
+        #  memory: "64G"
+        #  cpu: "15000m"
+        #  #nvidia.com/gpu: 1
+        #  #      resources:
         requests:
-          memory: "32G"
-          cpu: "15000m"
-          #nvidia.com/gpu: 1
+          memory: "28G"
+          cpu: "3000m"
+          nvidia.com/gpu: 1
         limits:
-          memory: "64G"
-          cpu: "15000m"
-          #nvidia.com/gpu: 1
+          memory: "30G"
+          cpu: "3500m"
+          nvidia.com/gpu: 1
       env:
         - name: DVC_GITLAB_USERNAME
           valueFrom:
@@ -62,3 +80,7 @@ spec:
       volumeMounts:
         - name: dvc-access-secret-volume
           mountPath: "/secret/dvc-access-secret-mountpath"
+        - name: dshm
+          mountPath: /dev/shm
+        - name: cachedir
+          mountPath: /efsdata

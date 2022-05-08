@@ -354,6 +354,8 @@ class MultimodalTransformer(pl.LightningModule):
                     input_norms[s][c] = nh.layers.InputNorm(**stats)
 
             for (s, c), stats in input_stats.items():
+                if s not in input_norms:
+                    input_norms[s] = RobustModuleDict()
                 input_norms[s][c] = nh.layers.InputNorm(**stats)
 
         self.known_sensors = known_sensors
@@ -621,20 +623,25 @@ class MultimodalTransformer(pl.LightningModule):
                 else:
                     raise KeyError(self.decoder)
 
+        if hasattr(torchmetrics, 'FBetaScore'):
+            FBetaScore = torchmetrics.FBetaScore
+        else:
+            FBetaScore = torchmetrics.FBeta
+
         self.head_metrics = nn.ModuleDict()
         self.head_metrics['class'] = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
-            'f1_micro': torchmetrics.FBeta(beta=1.0, threshold=0.5, average='micro'),
-            'f1_macro': torchmetrics.FBeta(beta=1.0, threshold=0.5, average='macro', num_classes=self.num_classes),
+            'f1_micro': FBetaScore(beta=1.0, threshold=0.5, average='micro'),
+            'f1_macro': FBetaScore(beta=1.0, threshold=0.5, average='macro', num_classes=self.num_classes),
         })
         self.head_metrics['change'] = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
-            'f1': torchmetrics.FBeta(beta=1.0),
+            'f1': FBetaScore(beta=1.0),
         })
         self.head_metrics['saliency'] = nn.ModuleDict({
-            'f1': torchmetrics.FBeta(beta=1.0),
+            'f1': FBetaScore(beta=1.0),
         })
 
         self.encode_h = utils.SinePositionalEncoding(3, 1, size=8)
@@ -1072,7 +1079,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='special:vidshapes-watch',
             >>>     num_workers='avail / 2', chip_size=96, time_steps=4, true_multimodal=True,
-            >>>     normalize_inputs=1, neg_to_pos_ratio=0, batch_size=1,
+            >>>     normalize_inputs=8, neg_to_pos_ratio=0, batch_size=1,
             >>> )
             >>> datamodule.setup('fit')
             >>> train_dset = datamodule.torch_datasets['train']
@@ -1308,6 +1315,17 @@ class MultimodalTransformer(pl.LightningModule):
                     'sensor': sensor,
                 })
 
+        if len(tokenized) == 0:
+            print('Error concat of:')
+            print('tokenized = {}'.format(ub.repr2(tokenized, nl=1)))
+            print('item = {}'.format(ub.repr2(item, nl=1)))
+            for frame_idx, frame in enumerate(item['frames']):
+                if len(frame['modes']) == 0:
+                    print('Frame {} had no modal data'.format(frame_idx))
+            raise ValueError(
+                'Got an input sequence of length 0. '
+                'Is there a dataloader problem?')
+
         _tokens = torch.concat(tokenized, dim=0)
 
         if DECOUPLED_COORDINATE_ATTENTION:
@@ -1328,6 +1346,17 @@ class MultimodalTransformer(pl.LightningModule):
         else:
             # Special case for the explicit coordinate version
             encoded_tokens = self.encoder(_tokens, flat_coordinates=flat_coordinates)
+
+        """
+        notes:
+
+        TOKENS -> TRANSFORMER -> ENCODED_TOKENS
+
+        ENCODED_TOKENS -> (RESAMPLE PER-MODE IF NEEDED) -> POOL_OVER_MODES -> SPACE_TIME_FEATURES
+
+        SPACE_TIME_FEATURES -> HEAD
+
+        """
 
         token_split_points = np.cumsum([t.shape[0] for t in tokenized])
         token_split_sizes = np.diff(np.r_[[0], token_split_points]).tolist()

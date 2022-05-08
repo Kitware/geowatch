@@ -102,6 +102,9 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     """
     Package and copy checkpoints into the DVC folder for evaluation.
 
+    TODO: a lot of this should be consolidated into the dvc_sync_manager
+    module.
+
     Args:
         mode (str): can be list, repackage, copy, dvc-commit, or commit
 
@@ -137,28 +140,15 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     else:
         dvc_dpath = ub.Path(dvc_dpath)
 
-    # storage_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
-    # if storage_dpath is None:
-    #     storage_dpath = dvc_dpath / 'models/fusion/SC-20201117'
-    # else:
     storage_dpath = ub.Path(storage_dpath)
 
-    # if train_dpath is None:
-    #     train_dpath = [
-    #         dvc_dpath / 'training/*/*/Drop1-20201117'
-    #     ]
-
-    # dset_dpaths = util_path.coerce_patterned_paths(train_dpath)
-    # dset_dpaths = [ub.Path(p) for p in dset_dpaths]
-    # # all_checkpoint_paths = [p / 'runs/*/lightning_logs/' for p in dset_dpaths]
-    # all_checkpoint_paths = dset_dpaths
+    if storage_dpath.name != 'packages':
+        print('warning: we usually want the storage dpath to be called packages')
 
     lightning_log_dpaths = util_path.coerce_patterned_paths(train_dpath)
     lightning_log_dpaths = [ub.Path(p) for p in lightning_log_dpaths]
-    print('lightning_log_dpaths = {}'.format(ub.repr2(lightning_log_dpaths, nl=1)))
-
-    # for p in lightning_log_dpaths:
-    #     pass
+    if 0:
+        print('lightning_log_dpaths = {}'.format(ub.repr2(lightning_log_dpaths, nl=1)))
 
     # Collect checkpoints from the training path
     gathered = []
@@ -190,17 +180,11 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         checkpoint_fpaths = list(ub.unique(
             sorted(checkpoint_fpaths), key=remove_v_suffix))
 
-        print('checkpoint_fpaths = {}'.format(ub.repr2(checkpoint_fpaths, nl=1)))
-
         for checkpoint_fpath in checkpoint_fpaths:
             if checkpoint_fpath.name.endswith('.ckpt'):
                 checkpoint_fpath = ub.Path(checkpoint_fpath)
                 parts = checkpoint_fpath.name.split('-')
                 epoch = int(parts[0].split('epoch=')[1])
-
-                # print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
-                # print('parts = {!r}'.format(parts))
-                # print('epoch = {!r}'.format(epoch))
                 # Dont add the -v2 versions
                 if epoch >= 0:  # and parts[-1].startswith('step='):
                     # print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
@@ -213,21 +197,81 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         p = row['checkpoint_fpath']
         package_fpath = repackage(str(p), dry=True)[0]
         package_fpath = ub.Path(package_fpath)
-        name = package_fpath.name.split('_epoch')[0]
-        name_dpath = storage_dpath / name
+        expt_name = package_fpath.name.split('_epoch')[0]
+        name_dpath = storage_dpath / expt_name
         name_fpath = name_dpath / package_fpath.name
+        dvc_name_fpath = name_fpath.augment(tail='.dvc')
         row['package_fpath'] = package_fpath
-        row['name'] = name
+        row['expt_name'] = expt_name
         row['name_fpath'] = name_fpath
         row['was_packaged'] = package_fpath.exists()
-        row['was_copied'] = name_fpath.exists()
+        row['was_copied'] = name_fpath.exists() or dvc_name_fpath.exists()
         row['needs_repackage'] = not row['was_packaged']
         row['needs_copy'] = not row['was_copied']
+        row['needs_dvc_add'] = not dvc_name_fpath.exists()
+
         row['repackage_failed'] = 0
         row['repackage_passed'] = 0
-        # name_dpath.ensuredir()
-        # print('package_fpath = {!r}'.format(package_fpath))
-        # print('name_fpath = {!r}'.format(name_fpath))
+        row['is_loose'] = False
+
+    model_name_to_row = {row['package_fpath'].name: row for row in gathered}
+
+    if True:
+        # Also check the storage dpath for models that were copied, but did not get
+        # added to DVC
+        expt_dpaths = list(storage_dpath.glob('*'))
+        for expt_dpath in expt_dpaths:
+            expt_name = expt_dpath.name
+            pt_fpaths = list(expt_dpath.glob('*.pt'))
+            dvc_fpaths = list(expt_dpath.glob('*.pt.dvc'))
+            for p in pt_fpaths:
+                model_name = p.name
+                if model_name in model_name_to_row:
+                    row = model_name_to_row[model_name]
+                    assert row['was_copied']
+                else:
+                    row = {
+                        'package_fpath': None,
+                        'expt_name': expt_name,
+                        'name_fpath': p,
+                        'was_packaged': True,
+                        'was_copied': True,
+                        'needs_repackage': False,
+                        'needs_copy': False,
+                        'repackage_failed': 0,
+                        'repackage_passed': 0,
+                        'needs_dvc_add': True,
+                        'is_loose': True,
+                    }
+                    model_name_to_row[model_name] = row
+                    gathered.append(row)
+
+            for p in dvc_fpaths:
+                model_name = p.name[:-4]
+                if model_name in model_name_to_row:
+                    row = model_name_to_row[model_name]
+                    row['needs_dvc_add'] = False
+                    assert row['was_copied']
+                else:
+                    row = {
+                        'package_fpath': None,
+                        'expt_name': expt_name,
+                        'name_fpath': p,
+                        'was_packaged': True,
+                        'was_copied': True,
+                        'needs_repackage': False,
+                        'needs_copy': False,
+                        'repackage_failed': 0,
+                        'repackage_passed': 0,
+                        'needs_dvc_add': False,
+                        'is_loose': True,
+                    }
+                    model_name_to_row[model_name] = row
+                    gathered.append(row)
+
+    for row in gathered:
+        p = row['name_fpath']
+        row['broken_link'] = p is not None and p.is_symlink() and not p.exists()
 
     if 1:
         import pandas as pd
@@ -236,7 +280,18 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         if len(df) == 0:
             print(df)
             raise Exception('No data gathered')
-        print(df.groupby('name')[['was_packaged', 'needs_repackage', 'was_copied',  'needs_copy']].sum())
+        print(f'storage_dpath={storage_dpath}')
+        for is_loose, subgroup in df.groupby('is_loose'):
+            header = ['was_packaged', 'needs_repackage', 'was_copied',  'needs_copy', 'needs_dvc_add', 'is_loose', 'broken_link']
+            needy_header = ['needs_repackage', 'needs_copy', 'needs_dvc_add']
+            if is_loose:
+                # dont print extra loose stuff
+                subgroup = subgroup[subgroup[needy_header].any(axis=1)]
+            if len(subgroup):
+                print(f'is_loose={is_loose}')
+                print(subgroup.groupby('expt_name')[header].sum())
+
+    gathered = [r for r in gathered if not r['broken_link']]
 
     if mode == 'list':
         # import xdev
@@ -261,8 +316,9 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         import pandas as pd
         df = pd.DataFrame(gathered)
         rich.print('[blue] Repackaged')
-        if len(df):
-            print(df.groupby('name')[['was_packaged', 'needs_repackage', 'repackage_failed', 'repackage_passed', 'was_copied',  'needs_copy']].sum())
+        for is_loose, subgroup in df.groupby('is_loose'):
+            if len(subgroup):
+                print(subgroup.groupby('expt_name')[['was_packaged', 'needs_repackage', 'repackage_failed', 'repackage_passed', 'was_copied',  'needs_copy', 'needs_dvc_add']].sum())
 
     if mode == 'repackage':
         return
@@ -275,7 +331,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     storage_dpath.ensuredir()
     to_copy = [r for r in gathered if r['needs_copy']]
 
-    staged_expt_fpaths = [r['name_fpath'] for r in gathered]
+    # staged_expt_fpaths = [r['name_fpath'] for r in gathered]
 
     # Find the unique directories we stage to DVC
     # staged_expt_dpaths = sorted({r['name_fpath'].parent for r in to_copy})
@@ -289,6 +345,9 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     if mode == 'copy':
         return
 
+    toadd_expt_fpaths = [r['name_fpath'] for r in gathered if r['needs_dvc_add']]
+    print(f'There are {len(toadd_expt_fpaths)} files without a .dvc file')
+
     if mode == 'interact':
         flag = Confirm.ask('do you want to dvc-commit?')
         if not flag:
@@ -297,8 +356,8 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     from watch.utils.simple_dvc import SimpleDVC
     dvc_api = SimpleDVC(dvc_dpath)
     # dvc_api.add(staged_expt_dpaths)
-    dvc_api.add(staged_expt_fpaths)
-    dvc_api.push(storage_dpath, remote=dvc_remote, jobs=push_jobs,
+    dvc_api.add(toadd_expt_fpaths)
+    dvc_api.push(toadd_expt_fpaths, remote=dvc_remote, jobs=push_jobs,
                  recursive=True)
 
     if mode == 'dvc-commit':
@@ -312,14 +371,8 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     import platform
     hostname = platform.node()
 
-    git_info3 = ub.cmd(f'git commit -am "new models from {hostname}"', verbose=3, check=True, cwd=dvc_dpath)  # dangerous?
-    assert git_info3['ret'] == 0
-    try:
-        git_info2 = ub.cmd('git push', verbose=3, check=True, cwd=dvc_dpath)
-    except Exception:
-        git_info2 = ub.cmd('git pull', verbose=3, check=True, cwd=dvc_dpath)
-        git_info2 = ub.cmd('git push', verbose=3, check=True, cwd=dvc_dpath)
-        assert git_info2['ret'] == 0
+    if toadd_expt_fpaths:
+        dvc_api.git_commitpush(f'new models from {hostname}')
 
     if mode == 'commit':
         return

@@ -169,6 +169,8 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         >>> assert not info['is_rpc']
         >>> assert info['img_shape'] == (515, 514)
 
+        >>> # The public gateways seem to be too slow in serving the content
+        >>> # xdoctest: +REQUIRES(--ipfs)
         >>> from watch.demo.nitf_demodata import grab_nitf_fpath
         >>> gpath_or_ref = gpath = grab_nitf_fpath('i_3004g.ntf')
         >>> info = geotiff_crs_info(gpath)

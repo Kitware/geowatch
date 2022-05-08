@@ -4,10 +4,12 @@ An encapsulation of regex and glob (and maybe other) patterns.
 TODO:
     rectify with xdev / whatever package this goes in
 """
-
+import os
 import re
 import fnmatch
 import ubelt as ub
+import pathlib
+from . import util_path
 
 if hasattr(re, 'Pattern'):
     RE_Pattern = re.Pattern
@@ -67,7 +69,6 @@ class Pattern(PatternBase, ub.NiceRepr):
         ..[fnmatch_docs] https://docs.python.org/3/library/fnmatch.html
 
     Example:
-        >>> from watch.utils.util_pattern import *  # NOQA
         >>> repat = Pattern.coerce('foo.*', 'regex')
         >>> assert repat.match('foobar')
         >>> assert not repat.match('barfoo')
@@ -81,6 +82,8 @@ class Pattern(PatternBase, ub.NiceRepr):
         >>> match = repat.match('baz-biz-foobar')
     """
     def __init__(self, pattern, backend):
+        if isinstance(pattern, pathlib.Path):
+            pattern = os.fspath(pattern)
         if backend == 'regex':
             if isinstance(pattern, str):
                 pattern = re.compile(pattern)
@@ -154,7 +157,6 @@ class Pattern(PatternBase, ub.NiceRepr):
     def coerce(cls, data, hint='glob'):
         """
         Example:
-            >>> from watch.utils.util_pattern import *  # NOQA
             >>> pat = Pattern.coerce('foo*', 'glob')
             >>> pat2 = Pattern.coerce(pat, 'regex')
             >>> print('pat = {}'.format(ub.repr2(pat, nl=1)))
@@ -170,11 +172,41 @@ class Pattern(PatternBase, ub.NiceRepr):
             self = cls(data, backend)
         return self
 
+    def paths(self, cwd=None, recursive=False):
+        """
+        Find paths in the filesystem that match this pattern
+
+        Yields:
+            ubelt.Path
+        """
+        if self.backend == 'glob':
+            import glob
+            with util_path.ChDir(cwd):
+                yield from map(ub.Path, glob.glob(
+                    self.pattern, recursive=recursive))
+        else:
+            raise NotImplementedError
+
 
 class MultiPattern(PatternBase, ub.NiceRepr):
     """
     Example:
-        MultiPattern.coerce(['.*', 'fds*'])
+        >>> dpath = ub.Path.appdir('xdev/tests/multipattern_paths').ensuredir().delete().ensuredir()
+        >>> (dpath / 'file0.txt').touch()
+        >>> (dpath / 'data0.dat').touch()
+        >>> (dpath / 'other0.txt').touch()
+        >>> ((dpath / 'dir1').ensuredir() / 'file1.txt').touch()
+        >>> ((dpath / 'dir2').ensuredir() / 'file2.txt').touch()
+        >>> ((dpath / 'dir2').ensuredir() / 'file3.txt').touch()
+        >>> ((dpath / 'dir1').ensuredir() / 'data.dat').touch()
+        >>> ((dpath / 'dir2').ensuredir() / 'data.dat').touch()
+        >>> ((dpath / 'dir2').ensuredir() / 'data.dat').touch()
+        >>> pat = MultiPattern.coerce(['*.txt'], 'glob')
+        >>> print(list(pat.paths(cwd=dpath)))
+        >>> pat = MultiPattern.coerce(['*0*', '**/*.txt'], 'glob')
+        >>> print(list(pat.paths(cwd=dpath, recursive=1)))
+        >>> pat = MultiPattern.coerce(['*.txt', '**/*.txt', '**/*.dat'], 'glob')
+        >>> print(list(pat.paths(cwd=dpath)))
     """
     def __init__(self, patterns, predicate):
         self.predicate = predicate
@@ -185,6 +217,15 @@ class MultiPattern(PatternBase, ub.NiceRepr):
 
     def match(self, text):
         return self.predicate(p.match(text) for p in self.patterns)
+
+    def paths(self, cwd=None, recursive=False):
+        groups = (p.paths(cwd=cwd, recursive=recursive) for p in self.patterns)
+        if self.predicate in {any}:  # all}:
+            yield from ub.unique(ub.flatten(groups))
+        elif self.predicate in {all}:  # all}:
+            yield from set.intersection(*map(set, groups))
+        else:
+            raise NotImplementedError
 
     # def search(self, text):
     #     return self.predicate(p.search(text) for p in self.patterns)
@@ -203,7 +244,6 @@ class MultiPattern(PatternBase, ub.NiceRepr):
     def coerce(cls, data, hint='glob', predicate='any'):
         """
         Example:
-            >>> from watch.utils.util_pattern import *  # NOQA
             >>> pat = MultiPattern.coerce('foo*', 'glob')
             >>> pat2 = MultiPattern.coerce(pat, 'regex')
             >>> pat3 = MultiPattern.coerce([pat, pat], 'regex')
