@@ -90,7 +90,8 @@ def run_dzyne_landcover_for_baseline(input_path,
                     '--dataset', ingress_kwcoco_path,
                     '--deployed', landcover_model_path,
                     '--output', dzyne_landcover_features_kwcoco_path,
-                    '--num_workers', 'auto',
+                    '--num_workers', '2',
+                    '--select_images', '.sensor_coarse == "S2"',
                     '--device', '0'],
                    check=True)
 

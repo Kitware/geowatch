@@ -2,16 +2,16 @@ import argparse
 import sys
 import os
 import subprocess
+import json
 
-from watch.cli.baseline_framework_ingress import baseline_framework_ingress
+from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress  # noqa: 501
 from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
-from watch.cli.ta1_stac_to_kwcoco import ta1_stac_to_kwcoco
 from watch.utils.util_framework import download_region
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate cropped KWCOCO dataset from TA-1 output")
+        description="Generate cropped KWCOCO dataset for SC")
 
     parser.add_argument('input_path',
                         type=str,
@@ -23,11 +23,6 @@ def main():
     parser.add_argument('output_path',
                         type=str,
                         help="S3 path for output JSON")
-    parser.add_argument("--from-collated",
-                        action='store_true',
-                        default=False,
-                        help="Data to convert has been run through TA-1 "
-                             "collation")
     parser.add_argument("--aws_profile",
                         required=False,
                         type=str,
@@ -36,21 +31,11 @@ def main():
                         action='store_true',
                         default=False,
                         help="Run AWS CLI commands with --dryrun flag")
-    parser.add_argument("--virtual",
-                        action='store_true',
-                        default=False,
-                        help="Ingress will be virtual (using GDAL's virtual "
-                             "file system)")
     parser.add_argument("-o", "--outbucket",
                         type=str,
                         required=True,
                         help="S3 Output directory for STAC item / asset "
                              "egress")
-    parser.add_argument("-r", "--requester_pays",
-                        action='store_true',
-                        default=False,
-                        help="Run AWS CLI commands with "
-                             "`--requestor_payer requester` flag")
     parser.add_argument("-n", "--newline",
                         action='store_true',
                         default=False,
@@ -70,24 +55,21 @@ def main():
                         default=False,
                         help="Force jobs=1 for cropping")
 
-    run_stac_to_cropped_kwcoco(**vars(parser.parse_args()))
+    run_generate_sc_cropped_kwcoco(**vars(parser.parse_args()))
 
     return 0
 
 
-def run_stac_to_cropped_kwcoco(input_path,
-                               input_region_path,
-                               output_path,
-                               outbucket,
-                               from_collated=False,
-                               aws_profile=None,
-                               dryrun=False,
-                               requester_pays=False,
-                               newline=False,
-                               jobs=1,
-                               virtual=False,
-                               dont_recompute=False,
-                               force_one_job_for_cropping=False):
+def run_generate_sc_cropped_kwcoco(input_path,
+                                   input_region_path,
+                                   output_path,
+                                   outbucket,
+                                   aws_profile=None,
+                                   dryrun=False,
+                                   newline=False,
+                                   jobs=1,
+                                   dont_recompute=False,
+                                   force_one_job_for_cropping=False):
     if dont_recompute:
         if aws_profile is not None:
             aws_ls_command = ['aws', 's3', '--profile', aws_profile, 'ls']
@@ -104,17 +86,13 @@ def run_stac_to_cropped_kwcoco(input_path,
             return
 
     # 1. Ingress data
-    print("* Running baseline framework ingress *")
+    print("* Running baseline framework kwcoco ingress *")
     ingress_dir = '/tmp/ingress'
-    ingress_catalog = baseline_framework_ingress(
+    _ = baseline_framework_kwcoco_ingress(
         input_path,
         ingress_dir,
-        aws_profile=aws_profile,
-        dryrun=dryrun,
-        requester_pays=requester_pays,
-        relative=False,
-        jobs=jobs,
-        virtual=virtual)
+        aws_profile,
+        dryrun)
 
     # 2. Download and prune region file
     print("* Downloading and pruning region file *")
@@ -124,58 +102,43 @@ def run_stac_to_cropped_kwcoco(input_path,
                                         aws_profile=aws_profile,
                                         strip_nonregions=True)
 
-    # 3. Convert ingressed STAC catalog to KWCOCO
-    print("* Converting STAC to KWCOCO *")
-    ta1_kwcoco_path = os.path.join(ingress_dir, 'ingress_kwcoco.json')
-    ta1_stac_to_kwcoco(ingress_catalog,
-                       ta1_kwcoco_path,
-                       assume_relative=False,
-                       populate_watch_fields=True,
-                       jobs=jobs,
-                       from_collated=from_collated,
-                       ignore_duplicates=True)
+    # Parse region_id from original region file
+    with open(local_region_path) as f:
+        region = json.load(f)
 
-    # `ta1_cropped_dir` is the directory that gets recursively copied
-    # up to S3, want to put any kwcoco manifests we may need
-    # downstream into this directory.  TODO: rename variable to
-    # include something like upload_dir or output_dir
-    ta1_cropped_dir = '/tmp/cropped_kwcoco'
-    os.makedirs(ta1_cropped_dir, exist_ok=True)
+        region_id = None
+        for feature in region.get('features', ()):
+            props = feature['properties']
+            if props['type'] == 'region':
+                region_id = props.get('region_model_id',
+                                      props.get('region_id'))
+                break
 
-    # 3a. Filter KWCOCO dataset by sensors used for BAS
-    print("* Filtering KWCOCO dataset for BAS")
-    ta1_bas_kwcoco_path = os.path.join(ta1_cropped_dir,
-                                       'kwcoco_for_bas.json')
-    subprocess.run(['kwcoco', 'subset',
-                    '--src', ta1_kwcoco_path,
-                    '--dst', ta1_bas_kwcoco_path,
-                    '--select_images',
-                    '.sensor_coarse == "L8" or .sensor_coarse == "S2"'],
-                   check=True)
+    if region_id is None:
+        raise RuntimeError("Couldn't parse 'region_id' from input region file")
 
-    # 3a. Filter KWCOCO dataset by sensors used for BAS
-    print("* Filtering KWCOCO dataset for SC")
-    ta1_sc_kwcoco_path = os.path.join(ta1_cropped_dir,
+    # Paths to inputs generated in previous pipeline steps
+    bas_region_path = os.path.join(ingress_dir,
+                                   'region_models',
+                                   '{}.geojson'.format(region_id))
+    ta1_sc_kwcoco_path = os.path.join(ingress_dir,
                                       'kwcoco_for_sc.json')
-    subprocess.run(['kwcoco', 'subset',
-                    '--src', ta1_kwcoco_path,
-                    '--dst', ta1_sc_kwcoco_path,
-                    '--select_images',
-                    '.sensor_coarse == "WV" or .sensor_coarse == "S2"'],
-                   check=True)
 
-    # 4. Crop ingress KWCOCO dataset to region for BAS
-    print("* Cropping KWCOCO dataset to region for BAS*")
-    ta1_cropped_kwcoco_path = os.path.join(ta1_cropped_dir,
-                                           'cropped_kwcoco_for_bas.json')
+    # 4. Crop ingress KWCOCO dataset to region for SC
+    print("* Cropping KWCOCO dataset to region for SC*")
+    ta1_sc_cropped_kwcoco_path = os.path.join(ingress_dir,
+                                              'cropped_kwcoco_for_sc.json')
+    # Crops to BAS generated site_summaries
     subprocess.run(['python', '-m', 'watch.cli.coco_align_geotiffs',
                     '--visualize', 'False',
-                    '--src', ta1_bas_kwcoco_path,
-                    '--dst', ta1_cropped_kwcoco_path,
-                    '--regions', local_region_path,
+                    '--src', ta1_sc_kwcoco_path,
+                    '--dst', ta1_sc_cropped_kwcoco_path,
+                    '--regions', bas_region_path,
+                    '--site_summary', 'True'
                     '--geo_preprop', 'auto',
                     '--keep', 'none',
-                    '--context_factor', '1',
+                    '--target_gsd', '1',  # TODO: Expose as cli parameter
+                    '--context_factor', '1.5',  # TODO: Expose as cli parameter
                     '--workers', '1' if force_one_job_for_cropping else str(jobs),  # noqa: 501
                     '--rpc_align_method', 'affine_warp'], check=True)
 
@@ -183,7 +146,7 @@ def run_stac_to_cropped_kwcoco(input_path,
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
-    baseline_framework_kwcoco_egress(ta1_cropped_kwcoco_path,
+    baseline_framework_kwcoco_egress(ta1_sc_cropped_kwcoco_path,
                                      local_region_path,
                                      output_path,
                                      outbucket,
