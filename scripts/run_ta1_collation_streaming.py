@@ -76,6 +76,10 @@ def main():
                         action='store_true',
                         default=False,
                         help='Only upload output for SSH scoring')
+    parser.add_argument('--skip-ssh',
+                        action='store_true',
+                        default=False,
+                        help='Skip SSH formatting / uploads')
     parser.add_argument("-j", "--jobs",
                         type=int,
                         default=1,
@@ -105,7 +109,8 @@ def _asset_selector(asset_name, asset):
 
 def _ssh_only_asset_selector(asset_name, asset):
     return (asset_name in S2_SSH_ASSET_NAME_MAP or
-            asset_name in L8_SSH_ASSET_NAME_MAP)
+            asset_name in L8_SSH_ASSET_NAME_MAP or
+            asset_name == 'data')
 
 
 def _default_item_selector(stac_item):
@@ -113,7 +118,9 @@ def _default_item_selector(stac_item):
 
 
 def _ssh_only_item_selector(stac_item):
-    return stac_item['properties'].get('platform') in SSH_ONLY_PLATFORMS
+    return (stac_item['properties'].get('platform') in SSH_ONLY_PLATFORMS
+            or stac_item['properties'].get(
+                'platform', '').startswith('PlanetScope'))
 
 
 def run_ta1_collation_streaming(input_path,
@@ -128,6 +135,7 @@ def run_ta1_collation_streaming(input_path,
                                 performer_code='kit',
                                 eval_num='1',
                                 ssh_only=False,
+                                skip_ssh=False,
                                 jobs=1):
     if aws_profile is not None:
         aws_base_command =\
@@ -180,7 +188,8 @@ def run_ta1_collation_streaming(input_path,
                                       destination_outbucket,
                                       performer_code,
                                       eval_num,
-                                      ssh_only=ssh_only)
+                                      ssh_only=ssh_only,
+                                      skip_ssh=skip_ssh)
                       for stac_item in input_stac_items]
 
     output_stac_items_by_collection = {}

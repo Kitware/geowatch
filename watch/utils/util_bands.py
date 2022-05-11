@@ -307,6 +307,30 @@ WORLDVIEW3_MS8 = [
     {'name': 'B8', 'common_name': 'near-ir2', 'center_wavelength': 0.95}
 ]
 
+PLANETSCOPE_3BAND = [
+    {'name': 'B1', 'common_name': 'red'},
+    {'name': 'B2', 'common_name': 'green'},
+    {'name': 'B3', 'common_name': 'blue'}
+]
+
+PLANETSCOPE_4BAND = [
+    {'name': 'B1', 'common_name': 'red'},
+    {'name': 'B2', 'common_name': 'green'},
+    {'name': 'B3', 'common_name': 'blue'},
+    {'name': 'B4', 'common_name': 'nir'}
+]
+
+PLANETSCOPE_8BAND = [
+    {'name': 'B1', 'common_name': 'coastal'},
+    {'name': 'B2', 'common_name': 'blue'},
+    {'name': 'B3', 'common_name': 'green1'},
+    {'name': 'B4', 'common_name': 'green'},
+    {'name': 'B5', 'common_name': 'yellow'},
+    {'name': 'B6', 'common_name': 'red'},
+    {'name': 'B7', 'common_name': 'red-edge'},
+    {'name': 'B8', 'common_name': 'nir'}
+]
+
 '''
 TODO
 

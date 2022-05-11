@@ -48,14 +48,15 @@ S2_ASSET_NAME_MAP = {'image-B01': 'B01',
                      'image-B10': 'B10',
                      'image-B11': 'B11',
                      'image-B12': 'B12',
-                     'image-B8A': 'B8A',
+                     'image-B8A': 'B08A',
                      'image-cloudmask': 'QA'}
 
 # Maps Sentinel 2 STAC item asset names to the suffixes they should
 # use in the collated output for SSH scoring.  Note that this also
 # serves as a filter as any asset name not found here will be excluded
 # from the output
-S2_SSH_ASSET_NAME_MAP = {'image-B02': '10m_B02',
+S2_SSH_ASSET_NAME_MAP = {'image-B01': '60m_B01',
+                         'image-B02': '10m_B02',
                          'image-B03': '10m_B03',
                          'image-B04': '10m_B04',
                          'image-B8A': 'B05',
@@ -83,13 +84,23 @@ L8_ASSET_NAME_MAP = {'image-B1': 'B01',
 # in the collated output for SSH scoring.  Note that this also serves
 # as a filter as any asset name not found here will be excluded from
 # the output
-L8_SSH_ASSET_NAME_MAP = {'image-B2': 'B02',
+L8_SSH_ASSET_NAME_MAP = {'image-B1': 'B01',
+                         'image-B2': 'B02',
                          'image-B3': 'B03',
                          'image-B4': 'B04',
                          'image-B5': 'B05',
                          'image-B6': 'B06',
                          'image-B7': 'B07',
                          'image-cloudmask': 'QA'}
+
+
+# Maps Planet data (using eo band name to harmonized band):
+PLANET_SSH_ASSET_NAME_MAP = {'red': 'B04',
+                             'green': 'B03',
+                             'blue': 'B02',
+                             'nir': 'B05',
+                             'coastal': 'B01'}
+
 
 # Helper map to take asset suffixes (if different) from maps above to
 # asset names as they should appear in the output STAC items
@@ -137,6 +148,10 @@ def main():
                         action='store_true',
                         default=False,
                         help='Only upload output for SSH scoring')
+    parser.add_argument('--skip-ssh',
+                        action='store_true',
+                        default=False,
+                        help='Skip SSH formatting / uploads')
     parser.add_argument("-j", "--jobs",
                         type=int,
                         default=1,
@@ -196,8 +211,8 @@ def _remap_quality_mask(quality_mask_path, outdir):
                     '--overwrite',
                     '--quiet',
                     '--calc',
-                    '1*(A==1)+64*(A==1)+128*(A==5)+16*(A==3)+32*(A==4)+8*(A==2)+255*(A==255)',  # noqa
-                    '--NoDataValue', '255'], check=True)
+                    '1*(A==1)+64*(A==1)+128*(A==5)+16*(A==3)+32*(A==4)+8*(A==2)+0*(A==255)',  # noqa
+                    '--NoDataValue', '0'], check=True)
 
     return output_path
 
@@ -208,7 +223,8 @@ def collate_item(stac_item,
                  output_bucket,
                  performer_code,
                  eval_num,
-                 ssh_only=False):
+                 ssh_only=False,
+                 skip_ssh=False):
     # TODO: Make use of `working_dir` argument here; not currently
     # used but expected by streaming decorators (in util_framework)
     if isinstance(stac_item, dict):
@@ -216,13 +232,19 @@ def collate_item(stac_item,
 
     platform = stac_item.properties['platform']
 
-    if platform not in SUPPORTED_PLATFORMS:
+    if(platform not in SUPPORTED_PLATFORMS
+       and not platform.startswith('PlanetScope')):
         print("* Warning unknown platform: '{}' for item, "
               "skipping!".format(platform))
         return None
 
+    if platform.startswith('PlanetScope'):
+        platform_shorthand = 'pd'
+    else:
+        platform_shorthand = PLATFORM_SHORTHAND[platform]
+
     output_stac_collection_id = 'ta1-{}-{}'.format(
-        PLATFORM_SHORTHAND[platform], performer_code)
+        platform_shorthand, performer_code)
 
     if 'watch:original_item_id' in stac_item.properties:
         original_id = stac_item.properties['watch:original_item_id']
@@ -238,6 +260,8 @@ def collate_item(stac_item,
                 'nitf:auxiliary_image_identifier').split()
         else:
             original_id = stac_item.id
+    elif platform.startswith('PlanetScope'):
+        original_id = stac_item.id
 
     mgrs_utm_zone = str(stac_item.properties.get('mgrs:utm_zone', 'ZZ'))
     mgrs_lat_band = str(stac_item.properties.get('mgrs:latitude_band', 'B'))
@@ -282,16 +306,19 @@ def collate_item(stac_item,
                                         S2_ASSET_NAME_MAP,
                                         S2_SSH_ASSET_NAME_MAP,
                                         util_bands.SENTINEL2,
-                                        additional_ssh_qa_resolutions=[10])
+                                        additional_ssh_qa_resolutions=[10, 60])
     elif platform in SUPPORTED_WV_PLATFORMS:
         platform_collation_fn = collate_wv_item
+    elif platform.startswith('PlanetScope'):
+        platform_collation_fn = collate_pd_item
 
     output_stac_item = platform_collation_fn(stac_item,
                                              aws_base_command,
                                              output_item_id,
                                              item_s3_outdir,
                                              ssh_outdir,
-                                             ssh_only=ssh_only)
+                                             ssh_only=ssh_only,
+                                             skip_ssh=skip_ssh)
 
     # Completely discard item if platform collation fails
     if output_stac_item is None:
@@ -308,6 +335,10 @@ def collate_item(stac_item,
         original_stac_item_uri = ''
 
     output_stac_item.id = output_item_id
+    # Ensure that 'mgrs:utm_zone' is an int (not string); this is
+    # required by the SMART standards
+    output_stac_item.properties['mgrs:utm_zone'] =\
+        int(output_stac_item.properties['mgrs:utm_zone'])
     output_stac_item.properties['smart:performer'] = performer_code
     output_stac_item.properties['smart:evaluation'] = eval_num
     output_stac_item.properties['smart:source'] = original_stac_item_uri
@@ -372,6 +403,72 @@ def convert_to_cog(input_filepath, resampling='AVERAGE'):
     return output_filepath
 
 
+def convert_wv_to_cog(input_filepath, resampling='AVERAGE'):
+    # Citing: https://smartgitlab.com/TE/standards/-/wikis/Data-Output-Specifications#cloud-optomized-geotiff-cog  # noqa
+    # Pixel interleaving
+    # Internal tiling with block size 256x256 pixels
+    # Internal overviews with block size 128x128 pixels and
+    # downsampling levels of 2, 4, 8, 16, 32, and 64
+    # Compression with the "deflate" algorithm
+    # Ensuring "Int16" datatype with -9999 nodata value
+    output_filepath = '_cog'.join(os.path.splitext(input_filepath))
+
+    # Need to use gdalwarp here as we're remapping the nodata value
+    # (gdal_translate doesn't seem to be able to transfer nodata
+    # values from the source file using the `-a_nodata` argument;
+    # quoting the gdal_translate documentations: "Note that, if the
+    # input dataset has a nodata value, this does not cause pixel
+    # values that are equal to that nodata value to be changed to the
+    # value specified with this option."
+    subprocess.run(['gdalwarp',
+                    input_filepath, output_filepath,
+                    '-q',  # quiet
+                    '-of', 'cog',
+                    '-ot', 'Int16',
+                    '-srcnodata', '65535',
+                    '-dstnodata', '-9999',
+                    '-co', 'COMPRESS=DEFLATE',
+                    '-co', 'BIGTIFF=IF_SAFER',
+                    '-co', 'BLOCKSIZE=256',
+                    '-co', 'OVERVIEW_RESAMPLING={}'.format(resampling.upper()),
+                    '--config', 'GDAL_TIFF_OVR_BLOCKSIZE', '128'], check=True)
+
+    return output_filepath
+
+
+def convert_pd_to_ssh_cog(input_filepath, resampling='AVERAGE'):
+    # Citing: https://smartgitlab.com/TE/standards/-/wikis/Data-Output-Specifications#cloud-optomized-geotiff-cog  # noqa
+    # Pixel interleaving
+    # Internal tiling with block size 256x256 pixels
+    # Internal overviews with block size 128x128 pixels and
+    # downsampling levels of 2, 4, 8, 16, 32, and 64
+    # Compression with the "deflate" algorithm
+    # Ensuring "Int16" datatype with -9999 nodata value
+    output_filepath = '_ssh_cog'.join(os.path.splitext(input_filepath))
+
+    # Need to use gdalwarp here as we're remapping the nodata value
+    # (gdal_translate doesn't seem to be able to transfer nodata
+    # values from the source file using the `-a_nodata` argument;
+    # quoting the gdal_translate documentations: "Note that, if the
+    # input dataset has a nodata value, this does not cause pixel
+    # values that are equal to that nodata value to be changed to the
+    # value specified with this option."
+    subprocess.run(['gdalwarp',
+                    input_filepath, output_filepath,
+                    '-q',  # quiet
+                    '-of', 'cog',
+                    '-ot', 'Int16',
+                    '-srcnodata', '0',
+                    '-dstnodata', '-9999',
+                    '-co', 'COMPRESS=DEFLATE',
+                    '-co', 'BIGTIFF=IF_SAFER',
+                    '-co', 'BLOCKSIZE=256',
+                    '-co', 'OVERVIEW_RESAMPLING={}'.format(resampling.upper()),
+                    '--config', 'GDAL_TIFF_OVR_BLOCKSIZE', '128'], check=True)
+
+    return output_filepath
+
+
 def _get_eo_bands_info(asset_name, eo_bands_list, replacement_name=None):
     band_name = asset_name.replace('image-', '')
 
@@ -396,7 +493,8 @@ def generic_collate_item(asset_name_map,
                          item_outdir,
                          ssh_outdir,
                          additional_ssh_qa_resolutions=[],
-                         ssh_only=False):
+                         ssh_only=False,
+                         skip_ssh=False):
     item_outdir_base = os.path.basename(item_outdir)
     output_assets = {}
     for asset_name, asset in stac_item.assets.items():
@@ -442,32 +540,34 @@ def generic_collate_item(asset_name_map,
 
                 asset_href = _remap_quality_mask(asset_href, tmpdirname)
 
-                for qa_res in additional_ssh_qa_resolutions:
-                    local_resized_qa_outpath = os.path.join(
-                        tmpdirname, 'qa_{}.tif'.format(qa_res))
+                if not skip_ssh:
+                    for qa_res in additional_ssh_qa_resolutions:
+                        local_resized_qa_outpath = os.path.join(
+                            tmpdirname, 'qa_{}.tif'.format(qa_res))
 
-                    if not os.path.isfile(local_resized_qa_outpath):
-                        subprocess.run(['gdalwarp',
-                                        '-overwrite',
-                                        '-of', 'GTiff',
-                                        '-r', 'near',
-                                        '-q',
-                                        '-tr', str(qa_res), str(qa_res),
-                                        asset_href,
-                                        local_resized_qa_outpath], check=True)
+                        if not os.path.isfile(local_resized_qa_outpath):
+                            subprocess.run(['gdalwarp',
+                                            '-overwrite',
+                                            '-of', 'GTiff',
+                                            '-r', 'near',
+                                            '-q',
+                                            '-tr', str(qa_res), str(qa_res),
+                                            asset_href,
+                                            local_resized_qa_outpath],
+                                           check=True)
 
-                    local_resized_qa_outpath = convert_to_cog(
-                        local_resized_qa_outpath,
-                        resampling='NEAREST')
+                        local_resized_qa_outpath = convert_to_cog(
+                            local_resized_qa_outpath,
+                            resampling='NEAREST')
 
-                    resized_qa_ssh_outpath = '/'.join(
-                        (ssh_outdir, "{}_SSH_{}m_{}.tif".format(
-                            output_item_id,
-                            int(qa_res),
-                            ssh_asset_suffix)))
-                    subprocess.run([*aws_base_command,
-                                    local_resized_qa_outpath,
-                                    resized_qa_ssh_outpath], check=True)
+                        resized_qa_ssh_outpath = '/'.join(
+                            (ssh_outdir, "{}_SSH_{}m_{}.tif".format(
+                                output_item_id,
+                                int(qa_res),
+                                ssh_asset_suffix)))
+                        subprocess.run([*aws_base_command,
+                                        local_resized_qa_outpath,
+                                        resized_qa_ssh_outpath], check=True)
 
                 asset_href = convert_to_cog(asset_href, resampling='NEAREST')
             else:
@@ -477,7 +577,7 @@ def generic_collate_item(asset_name_map,
                 subprocess.run([*aws_base_command,
                                 asset_href, stac_asset_outpath], check=True)
 
-            if ssh_asset_suffix is not None:
+            if ssh_asset_suffix is not None and not skip_ssh:
                 ssh_asset_outpath = '/'.join(
                     (ssh_outdir, "{}_SSH_{}.tif".format(
                         output_item_id, ssh_asset_suffix)))
@@ -485,25 +585,27 @@ def generic_collate_item(asset_name_map,
                 subprocess.run([*aws_base_command,
                                 asset_href, ssh_asset_outpath], check=True)
 
-    with tempfile.NamedTemporaryFile() as temporary_file:
-        datetime = stac_item.properties['datetime']
+    if not skip_ssh:
+        with tempfile.NamedTemporaryFile() as temporary_file:
+            datetime = stac_item.properties['datetime']
 
-        with open(temporary_file.name, 'w') as f:
-            print(datetime, file=f)
+            with open(temporary_file.name, 'w') as f:
+                print(datetime, file=f)
 
-        datetime_outpath = '/'.join(
-                    (ssh_outdir, "{}_SSH_datetime.txt".format(output_item_id)))
-        subprocess.run([*aws_base_command,
-                        temporary_file.name, datetime_outpath], check=True)
-
-        for qa_res in additional_ssh_qa_resolutions:
-            qa_res_datetime_outpath = '/'.join(
-                (ssh_outdir, "{}_SSH_{}m_datetime.txt".format(
-                    output_item_id, qa_res)))
-
+            datetime_outpath = '/'.join(
+                        (ssh_outdir, "{}_SSH_datetime.txt".format(
+                            output_item_id)))
             subprocess.run([*aws_base_command,
-                            temporary_file.name, qa_res_datetime_outpath],
-                           check=True)
+                            temporary_file.name, datetime_outpath], check=True)
+
+            for qa_res in additional_ssh_qa_resolutions:
+                qa_res_datetime_outpath = '/'.join(
+                    (ssh_outdir, "{}_SSH_{}m_datetime.txt".format(
+                        output_item_id, qa_res)))
+
+                subprocess.run([*aws_base_command,
+                                temporary_file.name, qa_res_datetime_outpath],
+                               check=True)
 
     stac_item.assets = output_assets
 
@@ -515,7 +617,8 @@ def collate_wv_item(stac_item,
                     output_item_id,
                     item_outdir,
                     ssh_outdir,
-                    ssh_only=False):
+                    ssh_only=False,
+                    skip_ssh=False):
     # WV items only have a single "data" asset containing all bands
     data_asset = stac_item.assets.get('data')
     if data_asset is None:
@@ -560,8 +663,8 @@ def collate_wv_item(stac_item,
                 # split our input image in this case
                 output_band_path = data_asset.href
 
-            output_band_path = convert_to_cog(output_band_path,
-                                              resampling='AVERAGE')
+            output_band_path = convert_wv_to_cog(output_band_path,
+                                                 resampling='AVERAGE')
 
             stac_asset_outpath_basename = "{}_{}.tif".format(
                 output_item_id, asset_suffix)
@@ -583,6 +686,114 @@ def collate_wv_item(stac_item,
                 subprocess.run([*aws_base_command,
                                 output_band_path, stac_asset_outpath],
                                check=True)
+
+    stac_item.assets = output_assets
+
+    return stac_item
+
+
+def collate_pd_item(stac_item,
+                    aws_base_command,
+                    output_item_id,
+                    item_outdir,
+                    ssh_outdir,
+                    ssh_only=False,
+                    skip_ssh=False):
+    # Planet items only have a single "data" asset containing all bands
+    data_asset = stac_item.assets.get('data')
+    if data_asset is None:
+        print("** Error ** Missing expected 'data' asset from "
+              "Planet STAC Item skipping!")
+        return None
+
+    def _out_bands(band_dicts):
+        return [(_reformat_bandname(b['name']), b.copy())
+                for b in band_dicts]
+
+    bands = gdal.Info(data_asset.href, format='json')['bands']
+
+    if len(bands) == 3:
+        output_bands = _out_bands(util_bands.PLANETSCOPE_3BAND)
+    elif len(bands) == 4:
+        output_bands = _out_bands(util_bands.PLANETSCOPE_4BAND)
+    elif len(bands) == 8:
+        output_bands = _out_bands(util_bands.PLANETSCOPE_8BAND)
+    else:
+        print('unknown channel signature for Planet data asset')
+        return None
+
+    item_outdir_base = os.path.basename(item_outdir)
+    output_assets = {}
+    for band_i, band in enumerate(output_bands, start=1):
+        asset_suffix, eo_band_dict = band
+        eo_band_dict['name'] = asset_suffix
+        with tempfile.NamedTemporaryFile(suffix='.tif') as temporary_file:
+            if len(output_bands) > 1:
+                # Extract band as a seperate image
+                output_band_path = temporary_file.name
+                subprocess.run(['gdal_calc.py',
+                                '--quiet',
+                                '--calc', 'A',
+                                '--outfile', output_band_path,
+                                '-A', data_asset.href,
+                                '--A_band', str(band_i),
+                                '--overwrite'], check=True)
+            else:
+                # Only a single band output file, don't need to
+                # split our input image in this case
+                output_band_path = data_asset.href
+
+            output_cog_band_path = convert_to_cog(output_band_path,
+                                                  resampling='AVERAGE')
+
+            stac_asset_outpath_basename = "{}_{}.tif".format(
+                output_item_id, asset_suffix)
+            stac_asset_outpath = '/'.join(
+                (item_outdir, stac_asset_outpath_basename))
+
+            # Default to asset_suffix if a map isn't found
+            output_asset_name = ASSET_SUFFIX_TO_NAME_MAP.get(
+                asset_suffix, asset_suffix)
+            output_assets[output_asset_name] = pystac.Asset.from_dict(
+                {'href': stac_asset_outpath,
+                 'title': '/'.join((item_outdir_base,
+                                    stac_asset_outpath_basename)),
+                 'roles': ['data'],
+                 'eo:bands': [eo_band_dict]})
+
+            ssh_asset_suffix =\
+                PLANET_SSH_ASSET_NAME_MAP[eo_band_dict['common_name']]
+
+            # Copy assets up to S3
+            if not ssh_only:
+                subprocess.run([*aws_base_command,
+                                output_cog_band_path, stac_asset_outpath],
+                               check=True)
+
+            if ssh_asset_suffix is not None and not skip_ssh:
+                output_ssh_cog_band_path = convert_pd_to_ssh_cog(
+                    output_band_path, resampling='AVERAGE')
+
+                ssh_asset_outpath = '/'.join(
+                    (ssh_outdir, "{}_SSH_{}.tif".format(
+                        output_item_id, ssh_asset_suffix)))
+
+                subprocess.run([*aws_base_command,
+                                output_ssh_cog_band_path,
+                                ssh_asset_outpath], check=True)
+
+    if not skip_ssh:
+        with tempfile.NamedTemporaryFile() as temporary_file:
+            datetime = stac_item.properties['datetime']
+
+            with open(temporary_file.name, 'w') as f:
+                print(datetime, file=f)
+
+            datetime_outpath = '/'.join(
+                        (ssh_outdir, "{}_SSH_datetime.txt".format(
+                            output_item_id)))
+            subprocess.run([*aws_base_command,
+                            temporary_file.name, datetime_outpath], check=True)
 
     stac_item.assets = output_assets
 
@@ -653,7 +864,8 @@ def collate_ta1_output(stac_catalog,
                        jobs=1,
                        upload_collections=False,
                        show_progress=False,
-                       ssh_only=False):
+                       ssh_only=False,
+                       skip_ssh=False):
     if isinstance(stac_catalog, str):
         catalog = pystac.read_file(href=stac_catalog).full_copy()
     else:
@@ -685,7 +897,8 @@ def collate_ta1_output(stac_catalog,
                                       output_bucket,
                                       performer_code,
                                       eval_num,
-                                      ssh_only)
+                                      ssh_only,
+                                      skip_ssh)
                       for stac_item_dict in input_stac_items]
 
     output_stac_items_by_collection = {}
