@@ -25,8 +25,7 @@ try:
 except ImportError:
     from osgeo import osr
 
-import os, shutil
-import glob
+import os
 import time
 import sys
 import numpy as np
@@ -54,37 +53,37 @@ def get_gcp_for_registration(master_ds, slave_ds, master_array, slave_array, w_s
         f_out = open(pfname_out, 'w')
         f_out.write('j,i,X_geo_slave_adj,Y_geo_slave_adj,error,offset_pixels_x,offset_pixels_y\n')
 
-    w_size_2 = int(w_size/2.)
+    w_size_2 = int(w_size / 2.)
     for i in np.arange(w_size_2, master_array.shape[0], w_step): # y-axis
         for j in np.arange(w_size_2, master_array.shape[1], w_step): # x-axis
-            if (i + w_size/2.) > master_array.shape[0]:
+            if (i + w_size / 2.) > master_array.shape[0]:
                 continue
-            if (j + w_size/2.) > master_array.shape[1]:
+            if (j + w_size / 2.) > master_array.shape[1]:
                 continue
-            master_array_window = master_array[(i-w_size_2):(i+w_size_2),(j-w_size_2):(j+w_size_2)]
-            slave_array_window = slave_array[(i-w_size_2):(i+w_size_2),(j-w_size_2):(j+w_size_2)]
-            if np.sum((master_array_window==0) | (slave_array_window==0)) > 0.5 * w_size*w_size:
-#                print("Window (%s,%s) too many nodata (>50%%). Unable to correlate" % (i,j))
+            master_array_window = master_array[(i - w_size_2):(i + w_size_2), (j - w_size_2):(j + w_size_2)]
+            slave_array_window = slave_array[(i - w_size_2):(i + w_size_2), (j - w_size_2):(j + w_size_2)]
+            if np.sum((master_array_window == 0) | (slave_array_window == 0)) > 0.5 * w_size * w_size:
+                # print("Window (%s,%s) too many nodata (>50%%). Unable to correlate" % (i,j))
                 s = "%s,%s,%.5f,%.5f,%.5f,%.5f,%.5f" % (j, i, 0.0, 0.0, np.nan, 0., 0.)
                 res.append(s)
                 continue
-            start_time = time.time()
+            # start_time = time.time()
             # offset_pixels, error, diffphase = register_translation(master_array_window, slave_array_window, 100)
             offset_pixels, error, diffphase = phase_cross_correlation(master_array_window, slave_array_window, upsample_factor=100)
-            end_time = time.time()
+            # end_time = time.time()
 #            print( "Window (%s,%s) processed in %.5f sec" % (i,j,end_time-start_time))
 #            print("\tDetected pixel offset (y, x) and error: (%.3f, %.3f) %.5f" %(offset_pixels[0], offset_pixels[1], error))
 #            print "\tDetected pixel offset (y, x) and (error, CCmax_norm): (%.3f, %.3f) (%.5f, %.5f)" %(offset_pixels[0], offset_pixels[1], error, 1-error)
             # this is the center of window in slave coordinates
-            X_geo_slave = geo_slave[0] + geo_slave[1]*j
-            Y_geo_slave = geo_slave[3] + geo_slave[5]*i
+            X_geo_slave = geo_slave[0] + geo_slave[1] * j
+            Y_geo_slave = geo_slave[3] + geo_slave[5] * i
             # adjusting due to offset
-            X_geo_slave_adj = X_geo_slave + geo_slave[1]*offset_pixels[1]
-            Y_geo_slave_adj = Y_geo_slave + geo_slave[5]*offset_pixels[0]
+            X_geo_slave_adj = X_geo_slave + geo_slave[1] * offset_pixels[1]
+            Y_geo_slave_adj = Y_geo_slave + geo_slave[5] * offset_pixels[0]
             s = "%s,%s,%.5f,%.5f,%.5f,%.5f,%.5f" % (j, i, X_geo_slave_adj, Y_geo_slave_adj, error, offset_pixels[1], offset_pixels[0])
             res.append(s)
             if (pfname_out != ''):
-                f_out.write(s+'\n')
+                f_out.write(s + '\n')
     total_end_time = time.time()
     print("--- Total processing time %s seconds ---" % (total_end_time - total_start_time))
     if (pfname_out != ''):
@@ -106,7 +105,7 @@ def planet_to_s2_coregister(path_to_input_planet, path_to_baseline_s2, output_fo
     red_target_band = 1
     if (planet_num_bands == 1):
         red_target_band = 1
-    elif((planet_num_bands == 3)|(planet_num_bands == 4)|(planet_num_bands == 5)):
+    elif((planet_num_bands == 3) | (planet_num_bands == 4) | (planet_num_bands == 5)):
         red_target_band = 3
     elif(planet_num_bands == 8):
         red_target_band = 6
@@ -134,7 +133,7 @@ def planet_to_s2_coregister(path_to_input_planet, path_to_baseline_s2, output_fo
     y_max = max(lr_y, ul_y)
 
     if not (os.path.isdir(output_folder)):
-       os.makedirs(output_folder)
+        os.makedirs(output_folder)
 
     # Here we are checking projection for targ
     # print(f'{proj4}')
@@ -147,11 +146,7 @@ def planet_to_s2_coregister(path_to_input_planet, path_to_baseline_s2, output_fo
     warp_options = gdal.WarpOptions(gdal.ParseCommandLine(string_options))
     s2_resampled_ds = gdal.Warp(os.path.join(output_folder, f'{fname_planet[:-4]}_s2_tmp.tif'),
                                 path_to_baseline_s2,
-                                options = warp_options)
-
-    s2_gt = s2_resampled_ds.GetGeoTransform()
-    s2_xres = s2_gt[1]
-    s2_yres = abs(s2_gt[5])
+                                options=warp_options)
 
     s2_primary_arr = s2_resampled_ds.GetRasterBand(1).ReadAsArray()
     planet_secondary_arr = planet_ds.GetRasterBand(red_target_band).ReadAsArray()
@@ -171,7 +166,7 @@ def planet_to_s2_coregister(path_to_input_planet, path_to_baseline_s2, output_fo
     num_gcp = 0
     for g in res_coregistration:
         array = [float(x) for x in g.split(',')] # pixel,line,X,Y,error,shift_x,shift_y
-        if ((array[4] < error_threshold) & (not np.isnan(array[4])) & (abs(array[5])<max_shift_threshold) &  (abs(array[6])<max_shift_threshold)):
+        if ((array[4] < error_threshold) & (not np.isnan(array[4])) & (abs(array[5]) < max_shift_threshold) & (abs(array[6]) < max_shift_threshold)):
             # We are using factor to convert to WV geometry
             pixel_ms = array[0]
             line_ms = array[1]
@@ -206,13 +201,13 @@ def planet_to_s2_coregister(path_to_input_planet, path_to_baseline_s2, output_fo
 
     planet_ds = None
     s2_resampled_ds = None
-    planet_resampled_ds = None
 
     # Deleting temporary files
     if os.path.isfile(os.path.join(output_folder, f'{fname_planet[:-4]}_s2_tmp.tif')):
         os.remove(os.path.join(output_folder, f'{fname_planet[:-4]}_s2_tmp.tif'))
 
     return fname_out
+
 
 if __name__ == '__main__':
     num_arg = len(sys.argv)
