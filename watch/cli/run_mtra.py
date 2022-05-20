@@ -78,7 +78,7 @@ def change_working_dir(destination_dir, create=True):
         os.chdir(previous_wd)
 
 
-def compute_harmonization(stac_items, outdir):
+def compute_harmonization(stac_items, outdir, mgrs_tile):
     os.makedirs(outdir, exist_ok=True)
 
     with tempfile.TemporaryDirectory() as tmpdirname:
@@ -87,8 +87,6 @@ def compute_harmonization(stac_items, outdir):
             os.makedirs(data_dir, exist_ok=True)
 
             for stac_item in stac_items:
-                platform = stac_item.properties.get('platform')
-
                 mtra_preprocessed_asset =\
                     stac_item.get_assets().get('mtra_preprocessed')
 
@@ -99,32 +97,26 @@ def compute_harmonization(stac_items, outdir):
 
                 mtra_pre_path = mtra_preprocessed_asset.get_absolute_href()
 
-                # We can pass globs to the MTRA Matlab binary, so we
-                # prefix based on Landsat or Sentinel as we want to
-                # pass one set as reference and the other as target
-                if platform in SUPPORTED_S2_PLATFORMS:
-                    stacked_outpath = os.path.join(data_dir, "S_{}".format(
-                        os.path.basename(mtra_pre_path)))
-                elif platform in SUPPORTED_LS_PLATFORMS:
-                    stacked_outpath = os.path.join(data_dir, "L_{}".format(
-                        os.path.basename(mtra_pre_path)))
-                else:
-                    print("* Warning * Platform '{}' not supported, "
-                          "skipping!".format(platform))
-                    continue
+                mtra_pre_out_base =\
+                    os.path.basename(mtra_pre_path).replace('_stacked', '')
+
+                stacked_outpath = os.path.join(data_dir, mtra_pre_out_base)
 
                 os.link(mtra_pre_path, stacked_outpath)
 
             with open(os.path.join(tmpdirname, "MTRA_Dir.txt"), 'w') as f:
-                print(os.path.join(data_dir, "L_*"), file=f)
-                print(os.path.join(data_dir, "S_*"), file=f)
+                print(os.path.join(data_dir, "L*.tif"), file=f)
+                print(os.path.join(data_dir, "S*.tif"), file=f)
                 print(outdir, file=f)
+                print('T{}'.format(mgrs_tile), file=f)
 
             subprocess.run(['mainMTRA_HLS'],
                            check=True)
 
-    return (os.path.join(outdir, "MTRAMap", "SlopeMap.tif"),
-            os.path.join(outdir, "MTRAMap", "InterceptMap.tif"))
+    return (os.path.join(outdir, "MTRAMap",
+                         "SlopeMap_T{}.tif".format(mgrs_tile)),
+            os.path.join(outdir, "MTRAMap",
+                         "InterceptMap_T{}.tif".format(mgrs_tile)))
 
 
 def _get_res_for_bandfile(filepath):
@@ -137,7 +129,7 @@ def _default_s2_item_selector(stac_item):
     return stac_item.properties.get('platform') in SUPPORTED_S2_PLATFORMS
 
 
-def _ensure_map_at_res(map_file, xres, yres):
+def ensure_map_at_res(map_file, xres, yres):
     base, ext = os.path.splitext(map_file)
 
     outpath = "{}_{}x{}{}".format(base, xres, yres, ext)
@@ -189,15 +181,17 @@ def apply_harmonization_item_map(stac_item,
 
         subprocess.run(
             ['gdal_calc.py',
+             '--quiet',
              '--calc="A * S + I"',
              '--outfile={}'.format(band_outpath),
              '-A', band_href,
              '--A_band=1',
-             '-S', _ensure_map_at_res(slope_map, xres, yres),
+             '-S', ensure_map_at_res(slope_map, xres, yres),
              '--S_band={}'.format(i + 1),
-             '-I', _ensure_map_at_res(intercept_map, xres, yres),
+             '-I', ensure_map_at_res(intercept_map, xres, yres),
              '--I_band={}'.format(i + 1),
-             '--type', 'Int16'])
+             '--type', 'Int16',
+             '--NoDataValue', '-9999'])
 
         # Replace asset href with harmonized version
         stac_item.assets[asset_name].href = band_outpath
@@ -352,15 +346,17 @@ def run_mtra(stac_catalog,
 
         print("* Computing harmonization model")
         slope_map, intercept_map = compute_harmonization(
-            preprocessed_stac_items, os.path.join(outdir, mgrs_tile))
+            preprocessed_stac_items,
+            os.path.join(outdir, mgrs_tile),
+            mgrs_tile)
 
         # Precompute different GSD slope & intercept map files to avoid
         # having difference processes try to do it at the same time.
         # TODO: Use a lock instead
-        _ensure_map_at_res(slope_map, 10.0, 10.0)
-        _ensure_map_at_res(intercept_map, 20.0, 20.0)
-        _ensure_map_at_res(slope_map, 10.0, 10.0)
-        _ensure_map_at_res(intercept_map, 20.0, 20.0)
+        ensure_map_at_res(slope_map, 10.0, 10.0)
+        ensure_map_at_res(intercept_map, 20.0, 20.0)
+        ensure_map_at_res(slope_map, 10.0, 10.0)
+        ensure_map_at_res(intercept_map, 20.0, 20.0)
 
         print("* Applying harmonization model to select items")
         harmonized_items = apply_harmonization(
