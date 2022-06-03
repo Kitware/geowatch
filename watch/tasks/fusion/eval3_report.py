@@ -68,16 +68,19 @@ class EvaluationReporter:
 
         self.dpath = ub.Path.appdir('watch/report').ensuredir()
 
-    def load1(self):
-        table = self.dvc_manager.evaluation_table()
+    def summarize(self, table=None):
+        if table is None:
+            table = self.dvc_manager.evaluation_table()
         self.dvc_manager.summarize()
-
         if 0:
             loaded_table = load_extended_data(table, self.dvc_dpath)
             loaded_table = pd.DataFrame(loaded_table)
             # dataset_summary_tables(dpath)
             initial_summary(table, loaded_table, self.dpath)
 
+    def load1(self):
+        table = self.dvc_manager.evaluation_table()
+        self.summarize(table)
         evaluations = table[~table['raw'].isnull()]
         self.raw_df = raw_df = pd.DataFrame(evaluations)
 
@@ -166,6 +169,7 @@ def eval3_report():
         dvc_dpath = watch.find_smart_dvc_dpath()
     reporter = EvaluationReporter(dvc_dpath)
     reporter.load()
+    reporter.summarize()
     plot_merged(reporter)
 
     if 0:
@@ -202,7 +206,7 @@ def plot_merged(reporter):
         # 'mesh': 'model',
         # 'clique': 'model',
         'style': 'has_teamfeat',
-        'star': 'in_production',
+        # 'star': 'in_production',
         'starkw': {'s': 500},
         's': 120,
     }
@@ -231,7 +235,7 @@ def plot_merged(reporter):
             ((merged_df['act_cfg'] == chosen_act_cfg) | merged_df['act_cfg'].isnull())
         )]
 
-    if 1:
+    if 0:
         metrics = [
             'mean_f1',
             'BAS_F1',
@@ -362,6 +366,8 @@ def expt_over_time(merged_df, human_mapping, ):
 
 def plot_ta1_vs_l1(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath):
     import kwplot
+    sns = kwplot.autosns()
+
     fnum = 0
     expt_group = dict(list(merged_df.groupby(['dataset_code', 'type'])))
     k1 = ('Aligned-Drop3-TA1-2022-03-10', 'eval_trk+pxl')
@@ -383,6 +389,8 @@ def plot_ta1_vs_l1(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut,
     x = plotkw['x']
     y = plotkw['y']
     plotkw.pop('style', None)
+
+    plot_dpath = (dpath / plot_name).ensuredir()
 
     from watch.utils import result_analysis
     all_param_keys = ub.oset.union(trk_param_keys, pred_param_keys,
@@ -458,37 +466,58 @@ def plot_ta1_vs_l1(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut,
     except TypeError:
         raise
 
+    # kitware_green = '#3caf49'
+    # kitware_blue = '#006ab6'
+    kitware_green = '#3EAE2B'
+    kitware_blue = '#0068C7'
+
     self = analysis
     conclusions = analysis.conclusions()
 
     fig = kwplot.figure(fnum=fnum, doclf=True)
     ax = fig.gca()
-    hue_order = {
-        'L1': 'blue',
-        'TA1': 'green',
+    palette = {
+        'L1': kitware_blue,
+        'TA1': kitware_green,
     }
-    sns = kwplot.autosns()
-    fig = kwplot.figure(fnum=fnum, doclf=True)
-    ax = fig.gca()
-    ax.set_title('BAS scores: TA1 vs L1')
-    sns.violinplot(data=merged_df, x='Processing', y='BAS_F1')
-    ax.set_title('TA1 vs L1')
-
-    fig = kwplot.figure(fnum=3, doclf=True)
-    ax = fig.gca()
-    sns.boxplot(data=merged_df, x='Processing', y='BAS_F1')
-    ax.set_title('TA1 vs L1')
-    # ax.set_title('TA1 vs L1' + '\n' + '\n'.join(conclusions))
-
-    ax = humanized_scatterplot(human_mapping, data=data, ax=ax, legend=True, hue_order=hue_order, **plotkw)
+    ax = humanized_scatterplot(human_mapping, data=data, ax=ax, legend=True, palette=palette, **plotkw)
     # nice_type = human_mapping.get(type, type)
-    ax.set_title('TA1 vs L1' + '\n' + '\n'.join(conclusions))
-    fname = f'{plot_name}.png'
-    plot_dpath = (dpath / plot_name).ensuredir()
+    # ax.set_title('TA1 vs L1' + '\n' + '\n'.join(conclusions))
+    ax.set_title('TA1 vs L1')
+    fname = f'{plot_name}_scatter.png'
     fpath = plot_dpath / fname
     fig.set_size_inches(np.array([6.4, 4.8]) * 1.4)
     fig.tight_layout()
     fig.savefig(fpath)
+
+    bas_conclusion = '\n'.join([c for c in conclusions if 'BAS_F1' in c])
+
+    fnum = fnum + 1
+    fig = kwplot.figure(fnum=fnum, doclf=True)
+    ax = fig.gca()
+    ax.set_title('BAS scores: TA1 vs L1')
+    sns.violinplot(data=merged_df, x='Processing', y='BAS_F1', palette=palette)
+    ax.set_title('TA1 vs L1' + '\n' + bas_conclusion)
+    fname = f'{plot_name}_violin.png'
+    fpath = plot_dpath / fname
+    fig.set_size_inches(np.array([6.4, 4.8]) * 1.0)
+    fig.tight_layout()
+    fig.savefig(fpath)
+    cropwhite_ondisk(fpath)
+
+    fnum = fnum + 1
+    fig = kwplot.figure(fnum=fnum, doclf=True)
+    ax = fig.gca()
+    sns.boxplot(data=merged_df, x='Processing', y='BAS_F1', palette=palette)
+    ax.set_title('TA1 vs L1' + '\n' + bas_conclusion)
+    fname = f'{plot_name}_boxwhisker.png'
+    fpath = plot_dpath / fname
+    fig.set_size_inches(np.array([6.4, 4.8]) * 1.0)
+    fig.tight_layout()
+    fig.savefig(fpath)
+    cropwhite_ondisk(fpath)
+
+    # ax.set_title('TA1 vs L1' + '\n' + '\n'.join(conclusions))
 
 
 def plot_pixel_ap_verus_iarpa(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath):
@@ -496,7 +525,10 @@ def plot_pixel_ap_verus_iarpa(merged_df, human_mapping, iarpa_metric_lut, pixel_
     fnum = 0
     expt_group = dict(list(merged_df.groupby(['dataset_code', 'type'])))
     plot_name = 'pxl_vs_iarpa'
-    plot_dpath = (dpath / plot_name).ensuredir()
+
+    plot_dpath_main = (dpath / plot_name).ensuredir()
+    plot_dpath_parts = (dpath / (plot_name + '_parts')).ensuredir()
+
     for code_type, group in expt_group.items():
 
         dataset_code, type = code_type
@@ -546,13 +578,14 @@ def plot_pixel_ap_verus_iarpa(merged_df, human_mapping, iarpa_metric_lut, pixel_
 
         fig = kwplot.figure(fnum=fnum, doclf=True)
         ax = fig.gca()
+        n = len(data)
         ax = humanized_scatterplot(human_mapping, data=data, ax=ax, **plotkw)
         nice_type = human_mapping.get(type, type)
-        ax.set_title(f'Pixelwise Vs IARPA metrics - {nice_type} - {dataset_code}\n{corr_lbl}')
-        ax.set_xlim(0.1, 0.45)
-        ax.set_ylim(0.1, 0.45)
+        ax.set_title(f'Pixelwise Vs IARPA metrics - {nice_type} - {dataset_code}\n{corr_lbl}, n={n}')
+        # ax.set_xlim(0.1, 0.45)
+        # ax.set_ylim(0.1, 0.45)
         fname = f'{dataset_code}_{type}_{plot_name}.png'
-        fpath = plot_dpath / fname
+        fpath = plot_dpath_main / fname
         fig.set_size_inches(np.array([6.4, 4.8]) * 1.4)
         fig.tight_layout()
         fig.savefig(fpath)
@@ -563,11 +596,11 @@ def plot_pixel_ap_verus_iarpa(merged_df, human_mapping, iarpa_metric_lut, pixel_
             ax = fig.gca()
             ax = humanized_scatterplot(human_mapping, data=data, ax=ax, legend=False, **plotkw)
             nice_type = human_mapping.get(type, type)
-            ax.set_title(f'Pixelwise Vs IARPA metrics - {nice_type} - {dataset_code}\n{corr_lbl}')
-            ax.set_xlim(0.1, 0.45)
-            ax.set_ylim(0.1, 0.45)
+            ax.set_title(f'Pixelwise Vs IARPA metrics - {nice_type} - {dataset_code}\n{corr_lbl}, n={n}')
+            # ax.set_xlim(0.1, 0.45)
+            # ax.set_ylim(0.1, 0.45)
             fname = f'{dataset_code}_{type}_{plot_name}_nolegend.png'
-            fpath = plot_dpath / fname
+            fpath = plot_dpath_parts / fname
             fig.set_size_inches(np.array([6.4, 4.8]) * 1.4)
             fig.tight_layout()
             fig.savefig(fpath)
@@ -576,9 +609,9 @@ def plot_pixel_ap_verus_iarpa(merged_df, human_mapping, iarpa_metric_lut, pixel_
             ax = fig.gca()
             ax = humanized_scatterplot(human_mapping, data=data, ax=ax, legend=True, **plotkw)
             nice_type = human_mapping.get(type, type)
-            ax.set_title(f'Pixelwise Vs IARPA metrics - {nice_type} - {dataset_code}\n{corr_lbl}')
+            ax.set_title(f'Pixelwise Vs IARPA metrics - {nice_type} - {dataset_code}\n{corr_lbl}, n={n}')
             fname = f'{dataset_code}_{type}_{plot_name}_nolegend.png'
-            fpath = plot_dpath / fname
+            fpath = plot_dpath_parts / fname
             fig.set_size_inches(np.array([6.4, 4.8]) * 1.4)
             fig2 = kwplot.figure(fnum=1000 + fnum, doclf=True)
             fig2.set_size_inches(np.array([6.4, 4.8]) * 1.4)
@@ -588,7 +621,7 @@ def plot_pixel_ap_verus_iarpa(merged_df, human_mapping, iarpa_metric_lut, pixel_
             new_legend = ax2.legend(*handles, loc='lower center')
             humanize_legend(new_legend, human_mapping)
             fname = f'{dataset_code}_{type}_{plot_name}_onlylegend.png'
-            fpath = plot_dpath / fname
+            fpath = plot_dpath_parts / fname
             try:
                 new_extent = new_legend.get_window_extent()
                 inv_scale = fig2.dpi_scale_trans.inverted()
@@ -598,6 +631,8 @@ def plot_pixel_ap_verus_iarpa(merged_df, human_mapping, iarpa_metric_lut, pixel_
                 newkw = {'bbox_inches': None}
             fig2.tight_layout()
             fig2.savefig(fpath, **newkw)
+            kwplot.close_figures([fig2])
+            cropwhite_ondisk(fpath)
 
         # legend = ax.get_legend()
         # plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
@@ -869,7 +904,7 @@ def plot_viterbii_analysis(merged_df, human_mapping, iarpa_metric_lut, pixel_met
     #     raise
 
     param = 'trk_use_viterbi'
-    scored_obs = analysis.abalate_one(param)
+    scored_obs = analysis.abalate(param)
     ab_rows = []
     pts1 = []
     pts2 = []
@@ -1844,3 +1879,11 @@ def humanized_scatterplot(human_mapping, data, ax, plot_type='scatter', mesh=Non
             i += 1
 
     return ax
+
+
+def cropwhite_ondisk(fpath):
+    import kwimage
+    from kwplot.mpl_make import crop_border_by_color
+    imdata = kwimage.imread(fpath)
+    imdata = crop_border_by_color(imdata)
+    kwimage.imwrite(fpath, imdata)
