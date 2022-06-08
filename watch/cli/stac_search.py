@@ -138,65 +138,64 @@ class StacSearchConfig(scfg.Config):
             help='s3 URI for output file',
             short_alias=['s']
         ),
-        'verbosity': scfg.Value(
+        'verbose': scfg.Value(
             2,
-            help='verbosity of logging [0, 1 or 2]',
+            help='verbose of logging [0, 1 or 2]',
             type=int,
             short_alias=['v']
         ),
     }
 
 
-def _make_parser():
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '-o',
-        '--outfile',
-        required=True,
-        help='output file name for STAC items'
-    )
-    parser.add_argument(
-        '-rf',
-        '--region_file',
-        help='path to a region geojson file; required if mode is area'
-    )
-    parser.add_argument(
-        '-sj',
-        '--search_json',
-        help='json string or path to json file containing '
-             'STAC search parameters'
-    )
-    parser.add_argument(
-        '-sf',
-        '--site_file',
-        help='path to a site geojson file; required if mode is id'
-    )
-    parser.add_argument(
-        '-m',
-        '--mode',
-        default='id',
-        help='"area" to search a bbox or "id" to provide a list of stac IDs'
-    )
-    parser.add_argument(
-        '-s',
-        '--s3_dest',
-        help='s3 URI for output file'
-    )
-    parser.add_argument(
-        '-v',
-        '--verbosity',
-        type=int,
-        default=2,
-        help='verbosity of logging [0, 1 or 2]'
-    )
-    if 0:
-        import scriptconfig as scfg
-        import argparse
-        text = scfg.Config.port_argparse(parser, 'StacSearchConfig')
-        print(text)
-    return parser
+# def _make_parser():
+#     import argparse
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument(
+#         '-o',
+#         '--outfile',
+#         required=True,
+#         help='output file name for STAC items'
+#     )
+#     parser.add_argument(
+#         '-rf',
+#         '--region_file',
+#         help='path to a region geojson file; required if mode is area'
+#     )
+#     parser.add_argument(
+#         '-sj',
+#         '--search_json',
+#         help='json string or path to json file containing '
+#              'STAC search parameters'
+#     )
+#     parser.add_argument(
+#         '-sf',
+#         '--site_file',
+#         help='path to a site geojson file; required if mode is id'
+#     )
+#     parser.add_argument(
+#         '-m',
+#         '--mode',
+#         default='id',
+#         help='"area" to search a bbox or "id" to provide a list of stac IDs'
+#     )
+#     parser.add_argument(
+#         '-s',
+#         '--s3_dest',
+#         help='s3 URI for output file'
+#     )
+#     parser.add_argument(
+#         '-v',
+#         '--verbose',
+#         type=int,
+#         default=2,
+#         help='verbose of logging [0, 1 or 2]'
+#     )
+#     if 0:
+#         import scriptconfig as scfg
+#         import argparse
+#         text = scfg.Config.port_argparse(parser, 'StacSearchConfig')
+#         print(text)
+#     return parser
 
 
 def main(cmdline=True, **kwargs):
@@ -223,22 +222,37 @@ def main(cmdline=True, **kwargs):
             -o "all_sensors_kit/${region_id}.input"
 
     Example:
+        from watch.cli.stac_search import *  # NOQA
         from watch.demo import demo_region
+        from watch.cli import make_stac_search_json
+        dpath = ub.Path.appdir('watch/tests/test-stac-search').ensuredir()
+        search_fpath = dpath / 'stac_search.json'
         region_fpath = demo_region.demo_khq_region_fpath()
-
+        input_fpath = dpath / 'demo.input'
+        make_stac_search_json.main(
+            cmdline=0,
+            start_date='2018-03-01',
+            end_date='2018-11-01',
+            out_fpath=search_fpath,
+        )
         kwargs = {
-
+            'region_file': str(region_fpath),
+            'search_json': str(search_fpath),
+            'mode': 'area',
+            'verbose': 2,
+            'outfile': str(input_fpath),
         }
         cmdline = 0
+        main(cmdline=cmdline, **kwargs)
     """
-    if 1:
-        config = StacSearchConfig(cmdline=cmdline, data=kwargs)
-        args = config.namespace
-    else:
-        parser = _make_parser()
-        args = parser.parse_args()
+    # if 1:
+    config = StacSearchConfig(cmdline=cmdline, data=kwargs)
+    args = config.namespace
+    # else:
+    #     parser = _make_parser()
+    #     args = parser.parse_args()
 
-    logger = util_logging.get_logger(verbose=args.verbosity)
+    logger = util_logging.get_logger(verbose=args.verbose)
     search_stac = StacSearcher(logger)
 
     outdir = os.path.dirname(args.outfile)
