@@ -1,75 +1,213 @@
 #!/usr/bin/env python
-
 import json
 import os
+import subprocess
+import uuid
 
 from pystac_client import Client
 from shapely.geometry import shape
+import logging.config
 
-from config import DEFAULT_STAC_CONFIG
-from file_utils import create_working_dir, get_file_from_s3, send_file_to_s3
-from log_utils import get_logger
+
+if 'SMART_STAC_API_KEY' in os.environ:
+    smart_stac_api_key = os.environ['SMART_STAC_API_KEY']
+else:
+    smart_stac_api_key = None
+
+
+DEFAULT_STAC_CONFIG = {
+    #"Landsat 8": {
+    #    "provider": "https://api.smart-stac.com",
+    #    "collections": ["landsat-c2l1"],
+    #    "headers": {
+    #        "x-api-key": smart_stac_api_key
+    #    },
+    #    "query": {}
+    #},
+    "Landsat 8": {
+        "provider": "https://landsatlook.usgs.gov/stac-server/",
+        "collections": ["landsat-c2l1"],
+        "headers": {},
+        "query": {}
+    },
+    "Sentinel-2": {
+        "provider": "https://earth-search.aws.element84.com/v0",
+        "collections": ["sentinel-s2-l1c"],
+        "query": {},
+        "headers": {}
+    }
+}
 
 stac_config = DEFAULT_STAC_CONFIG
-logger = None
 
 
-def search_stac_by_geometry(
-    provider, geom, collections, start, end, outfile, query, headers
-):
-    logger.info('Processing ' + provider)
-    catalog = Client.open(provider, headers=headers)
-    daterange = [start, end]
-    search = catalog.search(
-        collections=collections,
-        datetime=daterange,
-        intersects=geom,
-        query=query)
+def setup_logging(verbose=1):
+    """
+    Define logging level
 
-    items = search.get_all_items()
-    logger.info('Search found %s items' % str(len(items)))
-    for item in items:
-        with open(outfile, 'a') as the_file:
-            the_file.write(json.dumps(item.to_dict()) + '\n')
-    logger.info('Saved STAC results to: ' + outfile)
+    Args:
+        verbose (int):
+            Accepted values:
+                * 0: no logging
+                * 1: INFO level
+                * 2: DEBUG level
 
+    TODO:
+        - [ ] standardized loggers should probably be in watch.util
+    """
 
-def search_stac_by_id(
-    provider, collections, stac_id, outfile, query, headers
-):
-    logger.info('Processing ' + stac_id)
-    catalog = Client.open(provider, headers=headers)
-    if stac_id[-4:] == '_TCI':
-        stac_id = stac_id[0:-4]
-    search = catalog.search(
-        collections=collections, ids=[stac_id], query=query)
+    log_med = "%(asctime)s-15s %(name)-32s [%(levelname)-8s] %(message)s"
+    log_large = "%(asctime)s-15s %(name)-32s [%(levelname)-8s] "
+    log_large += "(%(module)-17s) %(message)s"
 
-    items = search.get_all_items()
-    logger.info('Item found')
-    for item in items:
-        with open(outfile, 'a') as the_file:
-            the_file.write(json.dumps(item.to_dict()) + '\n')
-    logger.info('Saved STAC result to: ' + outfile)
+    log_config = {}
 
-
-def get_stac_query(search_item):
-    if 'query' in search_item:
-        query = s['query']
+    if verbose == 0:
+        log_config = {
+            "version": 1,
+            "disable_existing_loggers": False,
+            "handlers": {
+                "null": {"level": "DEBUG", "class": "logging.NullHandler"}
+            },
+            "loggers": {
+                "watchlog": {
+                    "handlers": ["null"],
+                    "propagate": True,
+                    "level": "INFO"
+                }
+            },
+        }
+    elif verbose == 1:
+        log_config = {
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {
+                "standard": {
+                    "format": log_med
+                }
+            },
+            "handlers": {
+                "console": {
+                    "level": "DEBUG",
+                    "class": "logging.StreamHandler",
+                    "formatter": "standard",
+                }
+            },
+            "loggers": {
+                "watchlog": {
+                    "handlers": ["console"],
+                    "propagate": True,
+                    "level": "INFO",
+                }
+            },
+        }
+    elif verbose == 2:
+        log_config = {
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {
+                "verbose": {
+                    "format": log_large
+                }
+            },
+            "handlers": {
+                "console": {
+                    "level": "DEBUG",
+                    "class": "logging.StreamHandler",
+                    "formatter": "verbose",
+                }
+            },
+            "loggers": {
+                "watchlog": {
+                    "handlers": ["console"],
+                    "propagate": True,
+                    "level": "DEBUG",
+                }
+            },
+        }
     else:
-        query = {}
-    return query
+        raise ValueError("'verbose' must be one of: 0, 1, 2")
+    return log_config
 
 
-def get_stac_headers(search_item):
-    if 'headers' in search_item:
-        headers = s['headers']
-    else:
-        headers = {}
-    return headers
+def get_logger(verbose=1):
+    logcfg = setup_logging(verbose)
+    logging.config.dictConfig(logcfg)
+    logger = logging.getLogger('watchlog')
+    return logger
 
 
-if __name__ == '__main__':
+def create_working_dir():
+    rand_id = uuid.uuid4().hex
+    temp_dir = os.path.join('/tmp', rand_id)
+    os.makedirs(temp_dir, exist_ok=True)
 
+    return temp_dir
+
+
+def get_file_from_s3(uri, path):
+    dst_path = os.path.join(path, os.path.basename(uri))
+
+    try:
+        subprocess.check_call(
+            ['aws', 's3', 'cp', '--quiet', uri, dst_path]
+        )
+    except Exception:
+        raise OSError('Error getting file from s3URI: ' + uri)
+
+    return dst_path
+
+
+def send_file_to_s3(path, uri):
+    try:
+        subprocess.check_call(
+            ['aws', 's3', 'cp', '--quiet', path, uri]
+        )
+    except Exception:
+        raise OSError('Error sending file to s3URI: ' + uri)
+
+    return uri
+
+
+class StacSearcher:
+    def __init__(self, logger):
+        self.logger = logger
+
+    def by_geometry(self, provider, geom, collections, start, end, outfile,
+                    query, headers):
+        self.logger.info('Processing ' + provider)
+        catalog = Client.open(provider, headers=headers)
+        daterange = [start, end]
+        search = catalog.search(
+            collections=collections,
+            datetime=daterange,
+            intersects=geom,
+            query=query)
+
+        items = search.get_all_items()
+        self.logger.info('Search found %s items' % str(len(items)))
+        for item in items:
+            with open(outfile, 'a') as the_file:
+                the_file.write(json.dumps(item.to_dict()) + '\n')
+        self.logger.info('Saved STAC results to: ' + outfile)
+
+    def by_id(self, provider, collections, stac_id, outfile, query, headers):
+        self.logger.info('Processing ' + stac_id)
+        catalog = Client.open(provider, headers=headers)
+        if stac_id[-4:] == '_TCI':
+            stac_id = stac_id[0:-4]
+        search = catalog.search(
+            collections=collections, ids=[stac_id], query=query)
+
+        items = search.get_all_items()
+        self.logger.info('Item found')
+        for item in items:
+            with open(outfile, 'a') as the_file:
+                the_file.write(json.dumps(item.to_dict()) + '\n')
+        self.logger.info('Saved STAC result to: ' + outfile)
+
+
+def main():
     import argparse
 
     parser = argparse.ArgumentParser()
@@ -116,6 +254,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     logger = get_logger(verbose=args.verbosity)
+    search_stac = StacSearcher(logger)
 
     outdir = os.path.dirname(args.outfile)
 
@@ -160,15 +299,15 @@ if __name__ == '__main__':
             # assume only 1 region per region model file
             geom = shape(regions[0]['geometry'])
             for s in search_params['stac_search']:
-                search_stac_by_geometry(
+                search_stac.by_geometry(
                     s['endpoint'],
                     geom,
                     s['collections'],
                     s['start_date'],
                     s['end_date'],
                     dest_path,
-                    get_stac_query(s),
-                    get_stac_headers(s)
+                    s.get('query', {}),
+                    s.get('headers', {})
                 )
     else:
         if args.site_file.startswith('s3://'):
@@ -188,7 +327,7 @@ if __name__ == '__main__':
                 sensor = props['sensor_name']
                 if sensor.lower() != "worldview":
                     params = stac_config[sensor]
-                    search_stac_by_id(
+                    search_stac.by_id(
                         params['provider'],
                         params['collections'],
                         props['source'],
@@ -205,3 +344,6 @@ if __name__ == '__main__':
 
     logger.info('Search complete')
 
+
+if __name__ == '__main__':
+    main()
