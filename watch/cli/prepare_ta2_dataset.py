@@ -179,20 +179,29 @@ def main(cmdline=False, **kwargs):
     uncropped_coco_paths = []
     union_depends_jobs = []
     for s3_fpath, collated in zip(s3_fpath_list, collated_list):
-        s3_name = ub.Path(s3_fpath).name
-        uncropped_query_fpath = uncropped_query_dpath / ub.Path(s3_fpath).name
+        s3_fpath = ub.Path(s3_fpath)
+        s3_name = s3_fpath.name
+        uncropped_query_fpath = uncropped_query_dpath / s3_name
         uncropped_query_fpath = uncropped_query_fpath.shrinkuser(home='$HOME')
 
         uncropped_catalog_fpath = uncropped_ingress_dpath / f'catalog_{s3_name}.json'
         uncropped_ingress_dpath = uncropped_ingress_dpath.shrinkuser(home='$HOME')
 
         cache_prefix = '[[ -f {uncropped_query_fpath} ]] || ' if config['cache'] else ''
-        grab_job = queue.submit(ub.codeblock(
-            f'''
-            # GRAB Input STAC List
-            mkdir -p {uncropped_query_dpath}
-            {cache_prefix}aws s3 --profile {aws_profile} cp "{s3_fpath}" "{uncropped_query_dpath}"
-            '''))
+        if not str(s3_fpath).startswith('s3') and s3_fpath.exists():
+            grab_job = queue.submit(ub.codeblock(
+                f'''
+                # GRAB Input STAC List
+                mkdir -p {uncropped_query_dpath}
+                {cache_prefix}cp "{s3_fpath}" "{uncropped_query_dpath}"
+                '''))
+        else:
+            grab_job = queue.submit(ub.codeblock(
+                f'''
+                # GRAB Input STAC List
+                mkdir -p {uncropped_query_dpath}
+                {cache_prefix}aws s3 --profile {aws_profile} cp "{s3_fpath}" "{uncropped_query_dpath}"
+                '''))
 
         ingress_options = [
             '--virtual',

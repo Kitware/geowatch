@@ -49,6 +49,11 @@ SENSOR_TO_DEFAULTS = {
         }
     },
 
+    'sentinel-s2-l1c': {
+        "collections": ["sentinel-s2-l1c"],
+        "endpoint": "https://earth-search.aws.element84.com/v0",
+    },
+
     'sentinel-s2-l2a-cogs': {
         "collections": ["sentinel-s2-l2a-cogs"],
         "endpoint": "https://earth-search.aws.element84.com/v0",

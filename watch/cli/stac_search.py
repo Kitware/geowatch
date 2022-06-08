@@ -213,13 +213,29 @@ def main(cmdline=True, **kwargs):
             --start_date=2018-01-01 \
             --end_date=2020-01-01 \
             --out_fpath ./stac_search.json
+        input_fpath="all_sensors_kit/${region_id}.input"
         cat ./stac_search.json
         python -m watch.cli.stac_search \
             -rf "$region_file" \
             -sj ./stac_search.json \
             -m area \
-            --verbose 3 \
-            -o "all_sensors_kit/${region_id}.input"
+            --verbose 2 \
+            -o "${input_fpath}"
+
+        DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+        DATASET_SUFFIX=Demo-2022-06-08
+
+        python -m watch.cli.prepare_ta2_dataset \
+            --dataset_suffix=$DATASET_SUFFIX \
+            --s3_fpath ${input_fpath} \
+            --collated False \
+            --dvc_dpath="$DVC_DPATH" \
+            --aws_profile=iarpa \
+            --fields_workers=0 \
+            --convert_workers=0 \
+            --align_workers=0 \
+            --cache=0 \
+            --serial=True --run=0
 
     Example:
         from watch.cli.stac_search import *  # NOQA
