@@ -111,6 +111,7 @@ def coerce_datetime(data, default_timezone='utc'):
     if data is None:
         return data
     elif isinstance(data, str):
+        # Canse use ubelt.timeparse(data, default_timezone=default_timezone) here.
         dt = dateutil.parser.parse(data)
     elif isinstance(data, datetime_cls):
         dt = data

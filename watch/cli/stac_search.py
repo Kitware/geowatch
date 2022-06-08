@@ -6,13 +6,8 @@ import uuid
 
 from pystac_client import Client
 from shapely.geometry import shape
-import logging.config
-
-
-if 'SMART_STAC_API_KEY' in os.environ:
-    smart_stac_api_key = os.environ['SMART_STAC_API_KEY']
-else:
-    smart_stac_api_key = None
+from watch.utils import util_logging
+import scriptconfig as scfg
 
 
 DEFAULT_STAC_CONFIG = {
@@ -41,113 +36,15 @@ DEFAULT_STAC_CONFIG = {
 stac_config = DEFAULT_STAC_CONFIG
 
 
-def setup_logging(verbose=1):
-    """
-    Define logging level
-
-    Args:
-        verbose (int):
-            Accepted values:
-                * 0: no logging
-                * 1: INFO level
-                * 2: DEBUG level
-
-    TODO:
-        - [ ] standardized loggers should probably be in watch.util
-    """
-
-    log_med = "%(asctime)s-15s %(name)-32s [%(levelname)-8s] %(message)s"
-    log_large = "%(asctime)s-15s %(name)-32s [%(levelname)-8s] "
-    log_large += "(%(module)-17s) %(message)s"
-
-    log_config = {}
-
-    if verbose == 0:
-        log_config = {
-            "version": 1,
-            "disable_existing_loggers": False,
-            "handlers": {
-                "null": {"level": "DEBUG", "class": "logging.NullHandler"}
-            },
-            "loggers": {
-                "watchlog": {
-                    "handlers": ["null"],
-                    "propagate": True,
-                    "level": "INFO"
-                }
-            },
-        }
-    elif verbose == 1:
-        log_config = {
-            "version": 1,
-            "disable_existing_loggers": False,
-            "formatters": {
-                "standard": {
-                    "format": log_med
-                }
-            },
-            "handlers": {
-                "console": {
-                    "level": "DEBUG",
-                    "class": "logging.StreamHandler",
-                    "formatter": "standard",
-                }
-            },
-            "loggers": {
-                "watchlog": {
-                    "handlers": ["console"],
-                    "propagate": True,
-                    "level": "INFO",
-                }
-            },
-        }
-    elif verbose == 2:
-        log_config = {
-            "version": 1,
-            "disable_existing_loggers": False,
-            "formatters": {
-                "verbose": {
-                    "format": log_large
-                }
-            },
-            "handlers": {
-                "console": {
-                    "level": "DEBUG",
-                    "class": "logging.StreamHandler",
-                    "formatter": "verbose",
-                }
-            },
-            "loggers": {
-                "watchlog": {
-                    "handlers": ["console"],
-                    "propagate": True,
-                    "level": "DEBUG",
-                }
-            },
-        }
-    else:
-        raise ValueError("'verbose' must be one of: 0, 1, 2")
-    return log_config
-
-
-def get_logger(verbose=1):
-    logcfg = setup_logging(verbose)
-    logging.config.dictConfig(logcfg)
-    logger = logging.getLogger('watchlog')
-    return logger
-
-
 def create_working_dir():
     rand_id = uuid.uuid4().hex
     temp_dir = os.path.join('/tmp', rand_id)
     os.makedirs(temp_dir, exist_ok=True)
-
     return temp_dir
 
 
 def get_file_from_s3(uri, path):
     dst_path = os.path.join(path, os.path.basename(uri))
-
     try:
         subprocess.check_call(
             ['aws', 's3', 'cp', '--quiet', uri, dst_path]
@@ -165,7 +62,6 @@ def send_file_to_s3(path, uri):
         )
     except Exception:
         raise OSError('Error sending file to s3URI: ' + uri)
-
     return uri
 
 
@@ -207,7 +103,51 @@ class StacSearcher:
         self.logger.info('Saved STAC result to: ' + outfile)
 
 
-def main():
+class StacSearchConfig(scfg.Config):
+    """
+    """
+    default = {
+        'outfile': scfg.Value(
+            None,
+            help='output file name for STAC items',
+            short_alias=['o'],
+            required=True
+        ),
+        'region_file': scfg.Value(
+            None,
+            help='path to a region geojson file; required if mode is area',
+            short_alias=['rf']
+        ),
+        'search_json': scfg.Value(
+            None,
+            help='json string or path to json file containing STAC search parameters',
+            short_alias=['sj']
+        ),
+        'site_file': scfg.Value(
+            None,
+            help='path to a site geojson file; required if mode is id',
+            short_alias=['sf']
+        ),
+        'mode': scfg.Value(
+            'id',
+            help='"area" to search a bbox or "id" to provide a list of stac IDs',
+            short_alias=['m']
+        ),
+        's3_dest': scfg.Value(
+            None,
+            help='s3 URI for output file',
+            short_alias=['s']
+        ),
+        'verbosity': scfg.Value(
+            2,
+            help='verbosity of logging [0, 1 or 2]',
+            type=int,
+            short_alias=['v']
+        ),
+    }
+
+
+def _make_parser():
     import argparse
 
     parser = argparse.ArgumentParser()
@@ -251,9 +191,54 @@ def main():
         default=2,
         help='verbosity of logging [0, 1 or 2]'
     )
-    args = parser.parse_args()
+    if 0:
+        import scriptconfig as scfg
+        import argparse
+        text = scfg.Config.port_argparse(parser, 'StacSearchConfig')
+        print(text)
+    return parser
 
-    logger = get_logger(verbose=args.verbosity)
+
+def main(cmdline=True, **kwargs):
+    r"""
+    CommandLine:
+        xdoctest ~/code/watch/watch/demo/demo_region.py demo_region_fpath
+        region_file=$HOME/.cache/watch/demo/regions/KHQ_R001.geojson
+        start_date=$(jq -r '.features[] | select(.properties.type=="region") | .properties.start_date' $region_file)
+        end_date=$(jq -r '.features[] | select(.properties.type=="region") | .properties.end_date' $region_file)
+        region_id=$(jq -r '.features[] | select(.properties.type=="region") | .properties.region_id' $region_file)
+        echo "start_date = $start_date"
+        echo "end_date = $end_date"
+        echo "region_id = $region_id"
+        SMART_STAC_API_KEY='myapikey' python -m watch.cli.make_stac_search_json \
+            --start_date=2018-01-01 \
+            --end_date=2020-01-01 \
+            --out_fpath ./stac_search.json
+        cat ./stac_search.json
+        python -m watch.cli.stac_search \
+            -rf "$region_file" \
+            -sj ./stac_search.json \
+            -m area \
+            --verbose 3 \
+            -o "all_sensors_kit/${region_id}.input"
+
+    Example:
+        from watch.demo import demo_region
+        region_fpath = demo_region.demo_khq_region_fpath()
+
+        kwargs = {
+
+        }
+        cmdline = 0
+    """
+    if 1:
+        config = StacSearchConfig(cmdline=cmdline, data=kwargs)
+        args = config.namespace
+    else:
+        parser = _make_parser()
+        args = parser.parse_args()
+
+    logger = util_logging.get_logger(verbose=args.verbosity)
     search_stac = StacSearcher(logger)
 
     outdir = os.path.dirname(args.outfile)
