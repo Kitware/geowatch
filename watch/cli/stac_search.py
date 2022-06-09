@@ -201,18 +201,22 @@ class StacSearchConfig(scfg.Config):
 def main(cmdline=True, **kwargs):
     r"""
     CommandLine:
-        xdoctest ~/code/watch/watch/demo/demo_region.py demo_region_fpath
+
+        # Create a demo region file
+        xdoctest watch.demo.demo_region demo_khq_region_fpath
         region_file=$HOME/.cache/watch/demo/regions/KHQ_R001.geojson
         start_date=$(jq -r '.features[] | select(.properties.type=="region") | .properties.start_date' $region_file)
         end_date=$(jq -r '.features[] | select(.properties.type=="region") | .properties.end_date' $region_file)
         region_id=$(jq -r '.features[] | select(.properties.type=="region") | .properties.region_id' $region_file)
-        echo "start_date = $start_date"
-        echo "end_date = $end_date"
-        echo "region_id = $region_id"
-        SMART_STAC_API_KEY='myapikey' python -m watch.cli.make_stac_search_json \
-            --start_date=2018-01-01 \
-            --end_date=2020-01-01 \
+
+        # Create the search json wrt the sensors and processing level we want
+        python -m watch.cli.make_stac_search_json \
+            --start_date=$start_date \
+            --end_date=$end_date \
+            --sensors=L2 \
             --out_fpath ./stac_search.json
+
+        # Create the .input file
         input_fpath="all_sensors_kit/${region_id}.input"
         cat ./stac_search.json
         python -m watch.cli.stac_search \
@@ -222,18 +226,19 @@ def main(cmdline=True, **kwargs):
             --verbose 2 \
             -o "${input_fpath}"
 
+        # Construct the TA2-ready dataset
         DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
         DATASET_SUFFIX=Demo-2022-06-08
-
         python -m watch.cli.prepare_ta2_dataset \
             --dataset_suffix=$DATASET_SUFFIX \
             --s3_fpath ${input_fpath} \
             --collated False \
             --dvc_dpath="$DVC_DPATH" \
             --aws_profile=iarpa \
-            --fields_workers=0 \
-            --convert_workers=0 \
-            --align_workers=0 \
+            --region_globstr="$region_file" \
+            --fields_workers=avail \
+            --convert_workers=avail \
+            --align_workers=avail \
             --cache=0 \
             --serial=True --run=0
 

@@ -173,13 +173,18 @@ def ingress_item(feature,
 
             if virtual:
                 if parsed_asset_href.scheme == 's3':
-                    asset['href'] = '/vsis3/{}{}'.format(
+                    virtual_href = '/vsis3/{}{}'.format(
                         parsed_asset_href.netloc,
                         parsed_asset_href.path)
+                    # print(f'virtual_href={virtual_href}')
+                    asset['href'] = virtual_href
                 elif parsed_asset_href.scheme in {'http', 'https'}:
-                    asset['href'] = '/vsicurl/{}{}'.format(
+                    virtual_href = '/vsicurl/{}://{}{}'.format(
+                        parsed_asset_href.scheme,
                         parsed_asset_href.netloc,
                         parsed_asset_href.path)
+                    # print(f'virtual_href={virtual_href}')
+                    asset['href'] = virtual_href
                 else:
                     print("* Unsupported URI scheme '{}' for virtual ingress; "
                           "not updating href: {}".format(
@@ -222,6 +227,8 @@ def ingress_item(feature,
         item_href = os.path.relpath(item_href, outdir)
 
     item.set_self_href(item_href)
+    # import ubelt as ub
+    # print('item = {}'.format(ub.repr2(item.to_dict(), nl=2)))
     return item
 
 
@@ -338,6 +345,7 @@ def baseline_framework_ingress(input_path,
             traceback.print_exception(*sys.exc_info())
             continue
         else:
+            # print(mapped_item.to_dict())
             catalog.add_item(mapped_item)
 
     catalog.save(catalog_type=catalog_type)
