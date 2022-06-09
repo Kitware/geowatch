@@ -81,7 +81,7 @@ def make_upgrade_strict_line():
 
 
 def trace_all_deps(defined_req_lines):
-    """
+    r"""
     TODO: make this work.
 
     The issue is that the packages dependencies need to be installed for this
@@ -89,7 +89,35 @@ def trace_all_deps(defined_req_lines):
 
     pip install requirements-parser
 
-    defined_req_lines = parse_conda_reqs('conda_env.yml')
+    Ignore:
+        import sys, ubelt
+        sys.path.append(ubelt.expandpath('~/code/watch/dev'))
+        from make_reqs_from_conda import *  # NOQA
+        defined_req_lines = parse_conda_reqs('conda_env.yml')
+        groups = trace_all_deps(defined_req_lines)
+
+        print(r'\begin{multicols}{4}')
+        print(r'\begin{itemize}')
+        for line in groups['Defined']:
+            nover = line.partition('>')[0].partition('=')[0].partition(' ')[0]
+            print(r'    \item ' + nover.replace('_', '\_'))
+        print(r'\end{itemize}')
+        print(r'\end{multicols}')
+
+        print('\begin{multicols}{4}')
+        print('\begin{itemize}')
+        for line in groups['Implied']:
+            nover = line.partition('>')[0].partition('=')[0].partition(' ')[0]
+            print('    \item ' + nover.replace('_', '\_'))
+        print('\end{itemize}')
+        print('\end{multicols}')
+
+        for line in groups['Implied']:
+            print('    \item ' + line)
+
+        print('\n'.join(lines))
+
+
     """
     import pipdeptree
     from distutils.version import LooseVersion
@@ -167,8 +195,10 @@ def trace_all_deps(defined_req_lines):
     toplevel = list(name_to_conda_line.values())
     remain = list(ub.dict_diff(key_to_newline, ub.oset(name_to_conda_line)).values())
 
-    lines = ['# Defined'] + toplevel + ['', '# Implied'] + remain
-    return lines
+    groups = {}
+    groups['Defined'] = toplevel
+    groups['Implied'] = remain
+    return groups
 
 
 def main():
@@ -202,7 +232,8 @@ def main():
         # `pip install -r requirements/autogen/all-explicit.txt --no-deps`
         # which might help in avoiding opencv issues
         ''')
-    new_lines = trace_all_deps(defined_req_lines)
+    groups = trace_all_deps(defined_req_lines)
+    new_lines = ['# Defined'] + groups['Defined'] + ['', '# Implied'] + groups['Implied']
     new_lines = [header2, ''] + new_lines
     new_text = ('\n'.join(new_lines))
     with open('requirements/autogen/all-explicit.txt', 'w') as file:
