@@ -3,8 +3,7 @@ import json
 import os
 import subprocess
 import uuid
-
-from pystac_client import Client
+import pystac_client
 from shapely.geometry import shape
 from watch.utils import util_logging
 import scriptconfig as scfg
@@ -72,7 +71,7 @@ class StacSearcher:
     def by_geometry(self, provider, geom, collections, start, end, outfile,
                     query, headers):
         self.logger.info('Processing ' + provider)
-        catalog = Client.open(provider, headers=headers)
+        catalog = pystac_client.Client.open(provider, headers=headers)
         daterange = [start, end]
         search = catalog.search(
             collections=collections,
@@ -89,7 +88,7 @@ class StacSearcher:
 
     def by_id(self, provider, collections, stac_id, outfile, query, headers):
         self.logger.info('Processing ' + stac_id)
-        catalog = Client.open(provider, headers=headers)
+        catalog = pystac_client.Client.open(provider, headers=headers)
         if stac_id[-4:] == '_TCI':
             stac_id = stac_id[0:-4]
         search = catalog.search(
@@ -204,56 +203,68 @@ def main(cmdline=True, **kwargs):
 
         # Create a demo region file
         xdoctest watch.demo.demo_region demo_khq_region_fpath
-        region_file=$HOME/.cache/watch/demo/regions/KHQ_R001.geojson
-        start_date=$(jq -r '.features[] | select(.properties.type=="region") | .properties.start_date' $region_file)
-        end_date=$(jq -r '.features[] | select(.properties.type=="region") | .properties.end_date' $region_file)
-        region_id=$(jq -r '.features[] | select(.properties.type=="region") | .properties.region_id' $region_file)
+
+        DATASET_SUFFIX=DemoKHQ-2022-06-10
+        DEMO_DPATH=$HOME/.cache/watch/demo/build_dataset
+        REGION_FPATH="$HOME/.cache/watch/demo/annotations/KHQ_R001.geojson"
+        SITE_GLOBSTR="$HOME/.cache/watch/demo/annotations/KHQ_R001_sites/*.geojson"
+        START_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.start_date' $REGION_FPATH)
+        END_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.end_date' $REGION_FPATH)
+        REGION_ID=$(jq -r '.features[] | select(.properties.type=="region") | .properties.region_id' $REGION_FPATH)
+        SEARCH_FPATH=$DEMO_DPATH/stac_search.json
+        RESULT_FPATH=$DEMO_DPATH/all_sensors_kit/${REGION_ID}.input
+
+        mkdir -p "$DEMO_DPATH"
 
         # Create the search json wrt the sensors and processing level we want
         python -m watch.cli.stac_search_build \
-            --start_date=$start_date \
-            --end_date=$end_date \
+            --start_date="$START_DATE" \
+            --end_date="$END_DATE" \
+            --cloud_cover=10 \
             --sensors=L2 \
-            --out_fpath ./stac_search.json
+            --out_fpath "$SEARCH_FPATH"
+        cat "$SEARCH_FPATH"
 
         # Create the .input file
-        input_fpath="all_sensors_kit/${region_id}.input"
-        cat ./stac_search.json
         python -m watch.cli.stac_search \
-            -rf "$region_file" \
-            -sj ./stac_search.json \
+            -rf "$REGION_FPATH" \
+            -sj "$SEARCH_FPATH" \
             -m area \
             --verbose 2 \
-            -o "${input_fpath}"
+            -o "${RESULT_FPATH}"
 
         # Construct the TA2-ready dataset
-        DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
-        DATASET_SUFFIX=Demo-2022-06-08
         python -m watch.cli.prepare_ta2_dataset \
             --dataset_suffix=$DATASET_SUFFIX \
-            --s3_fpath ${input_fpath} \
+            --s3_fpath "${RESULT_FPATH}" \
             --collated False \
-            --dvc_dpath="$DVC_DPATH" \
+            --dvc_dpath="$DEMO_DPATH" \
             --aws_profile=iarpa \
-            --region_globstr="$region_file" \
-            --fields_workers=avail \
-            --convert_workers=avail \
-            --align_workers=avail \
+            --region_globstr="$REGION_FPATH" \
+            --site_globstr="$SITE_GLOBSTR" \
+            --fields_workers=8 \
+            --convert_workers=8 \
+            --align_workers=26 \
             --cache=0 \
-            --serial=True --run=0
+            --serial=True --run=1
 
     Example:
         >>> from watch.cli.stac_search import *  # NOQA
         >>> from watch.demo import demo_region
         >>> from watch.cli import stac_search_build
+        >>> from watch.utils import util_gis
         >>> dpath = ub.Path.appdir('watch/tests/test-stac-search').ensuredir()
         >>> search_fpath = dpath / 'stac_search.json'
         >>> region_fpath = demo_region.demo_khq_region_fpath()
-        >>> input_fpath = dpath / 'demo.input'
+        >>> region = util_gis.read_geojson(region_fpath)
+        >>> result_fpath = dpath / 'demo.input'
+        >>> start_date = region['start_date'].iloc[0]
+        >>> end_date = region['end_date'].iloc[0]
         >>> stac_search_build.main(
         >>>     cmdline=0,
-        >>>     start_date='2018-03-01',
-        >>>     end_date='2018-11-01',
+        >>>     start_date=start_date,
+        >>>     end_date=end_date,
+        >>>     cloud_cover=10,
         >>>     out_fpath=search_fpath,
         >>> )
         >>> kwargs = {
@@ -261,20 +272,30 @@ def main(cmdline=True, **kwargs):
         >>>     'search_json': str(search_fpath),
         >>>     'mode': 'area',
         >>>     'verbose': 2,
-        >>>     'outfile': str(input_fpath),
+        >>>     'outfile': str(result_fpath),
         >>> }
+        >>> result_fpath.delete()
         >>> cmdline = 0
         >>> main(cmdline=cmdline, **kwargs)
+        >>> # results are in the
+        >>> from watch.cli.baseline_framework_ingress import read_input_stac_items
+        >>> items = read_input_stac_items(result_fpath)
+        >>> len(items)
+        >>> for item in items:
+        >>>     print(item['properties']['eo:cloud_cover'])
+        >>>     print(item['properties']['datetime'])
     """
     # if 1:
     config = StacSearchConfig(cmdline=cmdline, data=kwargs)
+    import ubelt as ub
+    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
     args = config.namespace
     # else:
     #     parser = _make_parser()
     #     args = parser.parse_args()
 
     logger = util_logging.get_logger(verbose=args.verbose)
-    search_stac = StacSearcher(logger)
+    searcher = StacSearcher(logger)
 
     outdir = os.path.dirname(args.outfile)
 
@@ -319,7 +340,7 @@ def main(cmdline=True, **kwargs):
             # assume only 1 region per region model file
             geom = shape(regions[0]['geometry'])
             for s in search_params['stac_search']:
-                search_stac.by_geometry(
+                searcher.by_geometry(
                     s['endpoint'],
                     geom,
                     s['collections'],
@@ -347,7 +368,7 @@ def main(cmdline=True, **kwargs):
                 sensor = props['sensor_name']
                 if sensor.lower() != "worldview":
                     params = stac_config[sensor]
-                    search_stac.by_id(
+                    searcher.by_id(
                         params['provider'],
                         params['collections'],
                         props['source'],

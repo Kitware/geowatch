@@ -232,48 +232,55 @@ def ingress_item(feature,
     return item
 
 
-def load_input_stac_items(input_path, aws_base_command):
-    def _load_input(path):
+def read_input_stac_items(path):
+    """
+    Read the stac input format from a file on disk
+    """
+    try:
+        with open(path, 'r') as f:
+            input_json = json.load(f)
+        items = input_json['stac'].get('features', [])
+    # Excepting KeyError here in case of a single line STAC item input
+    except (json.decoder.JSONDecodeError, KeyError):
         try:
+            # Support for simple newline separated STAC items
             with open(path, 'r') as f:
-                input_json = json.load(f)
-            items = input_json['stac'].get('features', [])
-        # Excepting KeyError here in case of a single line STAC item input
-        except (json.decoder.JSONDecodeError, KeyError):
-            try:
-                # Support for simple newline separated STAC items
-                with open(path, 'r') as f:
-                    items = [json.loads(line) for line in f]
-            except json.decoder.JSONDecodeError:
-                # Support for whitespace separated data
-                with open(path, 'r') as f:
-                    text = f.read()
-                items = []
-                stack = [line for line in text.split('\n')[::-1] if line]
-                while stack:
-                    line = stack.pop()
-                    try:
-                        item = json.loads(line)
-                    except json.decoder.JSONDecodeError as e:
-                        # Hack for the case where a new line is missing
-                        if line[e.pos] == '{':
-                            stack.append(line[e.pos:].strip())
-                            stack.append(line[:e.pos])
-                        else:
-                            raise
+                items = [json.loads(line) for line in f]
+        except json.decoder.JSONDecodeError:
+            # Support for whitespace separated data
+            with open(path, 'r') as f:
+                text = f.read()
+            items = []
+            stack = [line for line in text.split('\n')[::-1] if line]
+            while stack:
+                line = stack.pop()
+                try:
+                    item = json.loads(line)
+                except json.decoder.JSONDecodeError as e:
+                    # Hack for the case where a new line is missing
+                    if line[e.pos] == '{':
+                        stack.append(line[e.pos:].strip())
+                        stack.append(line[:e.pos])
                     else:
-                        items.append(item)
-        return items
+                        raise
+                else:
+                    items.append(item)
+    return items
 
+
+def load_input_stac_items(input_path, aws_base_command):
+    """
+    Load the stac input format from a file on disk or AWS
+    """
     if input_path.startswith('s3'):
         with tempfile.NamedTemporaryFile() as temporary_file:
             subprocess.run(
                 [*aws_base_command, input_path, temporary_file.name],
                 check=True)
 
-            input_stac_items = _load_input(temporary_file.name)
+            input_stac_items = read_input_stac_items(temporary_file.name)
     else:
-        input_stac_items = _load_input(input_path)
+        input_stac_items = read_input_stac_items(input_path)
 
     return input_stac_items
 

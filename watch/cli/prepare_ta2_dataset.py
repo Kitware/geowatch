@@ -104,7 +104,10 @@ class PrepareTA2Config(scfg.Config):
 
         'channels': scfg.Value(None, help='specific channels to use in align crop'),
 
-        'region_globstr': scfg.Value('annotations/region_models', help='a region globstr (relative to the dvc path, unless prefixed by "./") channels to use in align crop'),
+        'splits': scfg.Value(False, help='if True do splits'),
+
+        'region_globstr': scfg.Value('annotations/region_models', help='region model globstr (relative to the dvc path, unless absolute or prefixed by "./")'),
+        'site_globstr': scfg.Value('annotations/site_models', help='site model globstr (relative to the dvc path, unless absolute or prefixed by "./")'),
     }
 
 
@@ -192,14 +195,14 @@ def main(cmdline=False, **kwargs):
             grab_job = queue.submit(ub.codeblock(
                 f'''
                 # GRAB Input STAC List
-                mkdir -p {uncropped_query_dpath}
+                mkdir -p "{uncropped_query_dpath}"
                 {cache_prefix}cp "{s3_fpath}" "{uncropped_query_dpath}"
                 '''))
         else:
             grab_job = queue.submit(ub.codeblock(
                 f'''
                 # GRAB Input STAC List
-                mkdir -p {uncropped_query_dpath}
+                mkdir -p "{uncropped_query_dpath}"
                 {cache_prefix}aws s3 --profile {aws_profile} cp "{s3_fpath}" "{uncropped_query_dpath}"
                 '''))
 
@@ -315,14 +318,17 @@ def main(cmdline=False, **kwargs):
     align_visualize = config['debug']
     channels = config['channels']
 
+    def _coerce_globstr(p):
+        globstr = ub.Path(p)
+        if str(globstr).startswith('./'):
+            final_globstr = globstr
+        else:
+            final_globstr = dvc_dpath / globstr
+        final_globstr = final_globstr.shrinkuser(home='$HOME')
+        return final_globstr
+
     # region_models = list(region_dpath.glob('*.geojson'))
-    region_globstr = ub.Path(config['region_globstr'])
-    if str(region_globstr).startswith('./'):
-        final_region_globstr = region_globstr
-    else:
-        final_region_globstr = dvc_dpath / region_globstr
-    # region_dpath = dvc_dpath / 'annotations/region_models'
-    final_region_globstr = final_region_globstr.shrinkuser(home='$HOME')
+    final_region_globstr = _coerce_globstr(config['region_globstr'])
 
     align_job = queue.submit(ub.codeblock(
         rf'''
@@ -362,8 +368,9 @@ def main(cmdline=False, **kwargs):
             '''), depends=[align_job])
 
     if 1:
-        site_model_dpath = (dvc_dpath / 'annotations/site_models').shrinkuser(home='$HOME')
-        region_model_dpath = (dvc_dpath / 'annotations/region_models').shrinkuser(home='$HOME')
+        # site_model_dpath = (dvc_dpath / 'annotations/site_models').shrinkuser(home='$HOME')
+        # region_model_dpath = (dvc_dpath / 'annotations/region_models').shrinkuser(home='$HOME')
+        final_site_globstr = _coerce_globstr(config['site_globstr'])
 
         viz_part = '--viz_dpath=auto' if config['visualize'] else ''
         project_anns_job = queue.submit(ub.codeblock(
@@ -372,8 +379,8 @@ def main(cmdline=False, **kwargs):
             python -m watch project_annotations \
                 --src "{aligned_imgonly_kwcoco_fpath}" \
                 --dst "{aligned_imganns_kwcoco_fpath}" \
-                --site_models="{site_model_dpath}/*.geojson" \
-                --region_models="{region_model_dpath}/*.geojson" {viz_part}
+                --site_models="{final_site_globstr}" \
+                --region_models="{final_region_globstr}" {viz_part}
             '''), depends=[align_job])
 
     # TODO:
@@ -381,7 +388,7 @@ def main(cmdline=False, **kwargs):
     # force all submissions to finish before starting new ones.
 
     # Do Basic Splits
-    if 1:
+    if config['splits']:
         from watch.cli import prepare_splits
         prepare_splits._submit_split_jobs(
             aligned_imganns_kwcoco_fpath, queue, depends=[project_anns_job])

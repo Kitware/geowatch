@@ -41,7 +41,7 @@ def demo_khq_annots():
     site_id = 'KHQ_R001_0000'
 
     # Boundary of the KHQ construction site
-    khq_site_geom = {
+    khq_site_geos = {
         "type": "Polygon",
         "coordinates": [
             [[-73.77200379967688, 42.864783745778894],
@@ -75,39 +75,45 @@ def demo_khq_annots():
                 "current_phase": 'No Activity',
                 "source": 'guess',
             }),
-            geometry=khq_site_geom,
+            geometry=khq_site_geos,
         ))
         observations.append(geojson.Feature(
-            geometry=khq_site_geom,
+            geometry=khq_site_geos,
             properties=ub.dict_union(obs_property_defaults, {
                 "observation_date": "2017-10-06",
                 "current_phase": 'Site Preparation',
                 "source": 'ground-photo',
             })))
         observations.append(geojson.Feature(
-            geometry=khq_site_geom,
+            geometry=khq_site_geos,
             properties=ub.dict_union(obs_property_defaults, {
                 "observation_date": "2017-11-19",
                 "current_phase": 'Active Construction',
                 "source": 'ground-photo',
             })))
         observations.append(geojson.Feature(
-            geometry=khq_site_geom,
+            geometry=khq_site_geos,
             properties=ub.dict_union(obs_property_defaults, {
                 "observation_date": "2018-11-29",
                 "current_phase": 'Active Construction',
                 "source": 'ground-photo',
             })))
         observations.append(geojson.Feature(
-            geometry=khq_site_geom,
+            geometry=khq_site_geos,
             properties=ub.dict_union(obs_property_defaults, {
                 "observation_date": "2019-01-01",
                 "current_phase": 'Post Construction',
                 "source": 'guess',
             })))
         obs_df = gpd.GeoDataFrame(observations, crs=crs84)
-        site_boundary_poly = kwimage.Polygon.coerce(obs_df.geometry.unary_union)
-        site_boundary_geom = site_boundary_poly.to_geojson()
+        # site_boundary_poly = kwimage.Polygon.coerce(obs_df.geometry.unary_union)
+        # Use context manager to do all transforms in UTM space
+        with util_gis.UTM_TransformContext(obs_df) as context:
+            site_boundary_poly = context.geoms_utm.unary_union
+            context.finalize(site_boundary_poly)
+        site_boundary_geom = context.final_geoms_crs84.iloc[0]
+        site_boundary_poly = kwimage.Polygon.coerce(site_boundary_geom)
+        site_boundary_geos = site_boundary_poly.to_geojson()
 
         obs_dates = [
             util_time.coerce_datetime(obs['properties']['observation_date'])
@@ -116,7 +122,7 @@ def demo_khq_annots():
         start_date = min(obs_dates)
         end_date = max(obs_dates)
 
-        lon, lat = kwimage.Polygon.from_geojson(khq_site_geom).centroid
+        lon, lat = kwimage.Polygon.from_geojson(khq_site_geos).centroid
         mgrs_code = mgrs.MGRS().toMGRS(lat, lon, MGRSPrecision=0)
         khq_sitesum = geojson.Feature(
             properties={
@@ -133,7 +139,7 @@ def demo_khq_annots():
                 "originator": "kit-demo",
                 "validated": "False",
             },
-            geometry=site_boundary_geom
+            geometry=site_boundary_geos
         )
         khq_site = geojson.FeatureCollection(
             [khq_sitesum] + observations
@@ -153,7 +159,23 @@ def demo_khq_annots():
         )
         site_summaries.append(site_summary)
 
-    khq_region_geom = {
+    # Aggregate information across sites to build info for the region
+    site_geoms = []
+    site_start_dates = []
+    site_end_dates = []
+    for site in site_summaries:
+        site_geoms.append(
+            kwimage.Polygon.coerce(site['geometry']).to_shapely()
+        )
+        start_date = site['properties']['start_date']
+        if start_date is not None:
+            site_start_dates.append(util_time.coerce_datetime(start_date))
+        end_date = site['properties']['end_date']
+        if end_date is not None:
+            site_end_dates.append(util_time.coerce_datetime(end_date))
+
+    # Custom region geom beyond that provided by sites
+    khq_region_geom = kwimage.Polygon.coerce({
         "type": "Polygon",
         "coordinates": [
             [[-73.77379417419434, 42.86254939745846],
@@ -164,20 +186,30 @@ def demo_khq_annots():
              [ -73.7750494480133, 42.862525805139775],
              [ -73.77379417419434, 42.86254939745846]]
         ]
-    }
+    }).to_shapely()
+    site_geoms.append(khq_region_geom)
+
+    # Use context manager to do all transforms in UTM space
+    with util_gis.UTM_TransformContext(site_geoms) as context:
+        tmp_geom_utm = context.geoms_utm.unary_union
+        tmp_poly_utm = kwimage.Polygon.coerce(tmp_geom_utm)
+        agg_geom_utm = tmp_poly_utm.scale(2.0, about='center').to_shapely()
+        context.finalize(agg_geom_utm)
+    khq_region_poly = context.final_geoms_crs84.iloc[0]
+    khq_region_geom = kwimage.Polygon.coerce(khq_region_poly).to_geojson()
+
+    khq_region_start_time = min(site_start_dates)
+    khq_region_end_time = max(site_end_dates)
 
     # Enlarge the region
-    khq_region_poly = kwimage.Polygon.coerce(khq_region_geom)
-    khq_region_geom = khq_region_poly.scale(2.0, about='center').to_geojson()
-
     khq_region_feature = geojson.Feature(
         properties={
             "type": "region",
             "region_id": "KHQ_R001",
             "version": "2.4.3",
             "mgrs": mgrs_code,
-            "start_date": "2017-01-01",
-            "end_date": "2020-01-01",
+            "start_date": khq_region_start_time.date().isoformat(),
+            "end_date": khq_region_end_time.date().isoformat(),
             "originator": "kit-demo",
             "model_content": "annotation",
             "comments": 'watch-demo-data',
@@ -266,6 +298,7 @@ def demo_khq_region_fpath():
     region_id = region['features'][0]['properties']['region_id']
     region_fpath = annot_dpath / (region_id + '.geojson')
     region_fpath.write_text(json.dumps(region))
+    print(f'wrote region_fpath={region_fpath}')
 
     # Dump site file
     site_dpath = (annot_dpath / (region_id + '_sites')).ensuredir()
@@ -273,5 +306,5 @@ def demo_khq_region_fpath():
         site_id = site['features'][0]['properties']['site_id']
         site_fpath = site_dpath / (site_id + '.geojson')
         site_fpath.write_text(json.dumps(site))
-
+        print(f'wrote site_fpath={site_fpath}')
     return region_fpath

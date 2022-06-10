@@ -1,7 +1,8 @@
 """
-A simple script to create a STAC search json
+A simple script to build a STAC search json
 """
 import os
+import ubelt as ub
 import scriptconfig as scfg
 
 
@@ -72,8 +73,9 @@ def main(cmdline=1, **kwargs):
             'sensors': 'TA1',
         }
         main(cmdline=cmdline, **kwargs)
-
     """
+    from watch.utils import util_time
+    import json
     config = StacSearchBuilderConfig(cmdline=cmdline, data=kwargs)
 
     if config['api_key'].startswith('env:'):
@@ -96,7 +98,6 @@ def main(cmdline=1, **kwargs):
     }
 
     # ub.timeparse()
-    from watch.utils import util_time
     start_date = util_time.coerce_datetime(
         config['start_date'], default_timezone='utc')
     end_date = util_time.coerce_datetime(
@@ -118,17 +119,17 @@ def main(cmdline=1, **kwargs):
         search_item['start_date'] = start_date.date().isoformat()
         search_item['end_date'] = end_date.date().isoformat()
         if config['cloud_cover'] is not None:
-            item_query['eo:cloud_cover'] = config['cloud_cover']
+            item_query['eo:cloud_cover'] = {
+                'lt': config['cloud_cover'],
+            }
         search_item_list.append(search_item)
 
     search_json = {
         'stac_search': search_item_list,
     }
-    import json
     text = json.dumps(search_json, indent='    ')
 
     if config['out_fpath'] is not None:
-        import ubelt as ub
         out_fpath = ub.Path(config['out_fpath'])
         out_fpath.write_text(text)
     else:
