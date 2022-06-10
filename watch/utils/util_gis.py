@@ -1,3 +1,6 @@
+"""
+Utilities for geopandas and other geographic information system tools
+"""
 import ubelt as ub
 import numpy as np
 
