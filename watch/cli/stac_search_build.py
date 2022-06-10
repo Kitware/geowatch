@@ -64,7 +64,7 @@ SENSOR_TO_DEFAULTS = {
 def main(cmdline=1, **kwargs):
     """
     Example:
-        from watch.cli.make_stac_search_json import *  # NOQA
+        from watch.cli.stac_search_build import *  # NOQA
         cmdline = 0
         kwargs = {
             'start_date': '2017-01-01',
@@ -137,6 +137,6 @@ def main(cmdline=1, **kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/cli/make_stac_search_json.py
+        python ~/code/watch/watch/cli/stac_search_build.py
     """
     main()

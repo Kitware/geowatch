@@ -210,7 +210,7 @@ def main(cmdline=True, **kwargs):
         region_id=$(jq -r '.features[] | select(.properties.type=="region") | .properties.region_id' $region_file)
 
         # Create the search json wrt the sensors and processing level we want
-        python -m watch.cli.make_stac_search_json \
+        python -m watch.cli.stac_search_build \
             --start_date=$start_date \
             --end_date=$end_date \
             --sensors=L2 \
@@ -243,28 +243,28 @@ def main(cmdline=True, **kwargs):
             --serial=True --run=0
 
     Example:
-        from watch.cli.stac_search import *  # NOQA
-        from watch.demo import demo_region
-        from watch.cli import make_stac_search_json
-        dpath = ub.Path.appdir('watch/tests/test-stac-search').ensuredir()
-        search_fpath = dpath / 'stac_search.json'
-        region_fpath = demo_region.demo_khq_region_fpath()
-        input_fpath = dpath / 'demo.input'
-        make_stac_search_json.main(
-            cmdline=0,
-            start_date='2018-03-01',
-            end_date='2018-11-01',
-            out_fpath=search_fpath,
-        )
-        kwargs = {
-            'region_file': str(region_fpath),
-            'search_json': str(search_fpath),
-            'mode': 'area',
-            'verbose': 2,
-            'outfile': str(input_fpath),
-        }
-        cmdline = 0
-        main(cmdline=cmdline, **kwargs)
+        >>> from watch.cli.stac_search import *  # NOQA
+        >>> from watch.demo import demo_region
+        >>> from watch.cli import stac_search_build
+        >>> dpath = ub.Path.appdir('watch/tests/test-stac-search').ensuredir()
+        >>> search_fpath = dpath / 'stac_search.json'
+        >>> region_fpath = demo_region.demo_khq_region_fpath()
+        >>> input_fpath = dpath / 'demo.input'
+        >>> stac_search_build.main(
+        >>>     cmdline=0,
+        >>>     start_date='2018-03-01',
+        >>>     end_date='2018-11-01',
+        >>>     out_fpath=search_fpath,
+        >>> )
+        >>> kwargs = {
+        >>>     'region_file': str(region_fpath),
+        >>>     'search_json': str(search_fpath),
+        >>>     'mode': 'area',
+        >>>     'verbose': 2,
+        >>>     'outfile': str(input_fpath),
+        >>> }
+        >>> cmdline = 0
+        >>> main(cmdline=cmdline, **kwargs)
     """
     # if 1:
     config = StacSearchConfig(cmdline=cmdline, data=kwargs)
