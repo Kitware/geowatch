@@ -96,27 +96,31 @@ def trace_all_deps(defined_req_lines):
         defined_req_lines = parse_conda_reqs('conda_env.yml')
         groups = trace_all_deps(defined_req_lines)
 
-        print(r'\begin{multicols}{4}')
-        print(r'\begin{itemize}')
-        for line in groups['Defined']:
-            nover = line.partition('>')[0].partition('=')[0].partition(' ')[0]
-            print(r'    \item ' + nover.replace('_', '\_'))
-        print(r'\end{itemize}')
-        print(r'\end{multicols}')
+        new = {}
+        for k in ['Defined', 'Implied']:
+            nover_lines = []
+            for line in groups[k]:
+                nover = line.partition('>')[0].partition('=')[0].partition(' ')[0]
+                nover_lines.append(nover)
+            new[k] = nover_lines
 
-        print('\begin{multicols}{4}')
+        for k in ['Defined', 'Implied']:
+            print(r'\begin{multicols}{4}')
+            print(r'\begin{itemize}')
+            for nover in new[k]:
+                print(r'    \item ' + nover.replace('_', '\_'))
+            print(r'\end{itemize}')
+            print(r'\end{multicols}')
+
+        new['Implied'] = ub.oset(new['Implied']) - new['Defined']
+
+        print('\begin{multicols}{3}')
         print('\begin{itemize}')
-        for line in groups['Implied']:
+        for line in new['Implied']:
             nover = line.partition('>')[0].partition('=')[0].partition(' ')[0]
             print('    \item ' + nover.replace('_', '\_'))
         print('\end{itemize}')
         print('\end{multicols}')
-
-        for line in groups['Implied']:
-            print('    \item ' + line)
-
-        print('\n'.join(lines))
-
 
     """
     import pipdeptree
