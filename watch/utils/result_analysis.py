@@ -815,6 +815,7 @@ class ResultAnalysis(ub.NiceRepr):
             >>> self.analysis()
             >>> print('self = {}'.format(self))
             >>> print('self.varied = {}'.format(ub.repr2(self.varied, nl=1)))
+            >>> # xdoctest: +REQUIRES(--show)
             >>> # xdoctest: +REQUIRES(module:kwplot)
             >>> import kwplot
             >>> kwplot.autosns()
