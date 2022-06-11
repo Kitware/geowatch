@@ -426,7 +426,8 @@ def main(cmdline=False, **kwargs):
                 --draw_anns=True \
                 --draw_imgs=False \
                 --channels="red|green|blue" \
-                --animate=True --workers=auto
+                --animate=True --workers=auto \
+                --only_boxes=True
             '''), depends=[project_anns_job])
 
     # queue.submit(ub.codeblock(

@@ -205,7 +205,7 @@ def main(cmdline=False, **kwargs):
 
     viz_dpath = config['viz_dpath']
     if viz_dpath == 'auto':
-        viz_dpath = (coco_dset.fpath.parent / '_viz_project_anns')
+        viz_dpath = (ub.Path(coco_dset.fpath).parent / '_viz_project_anns')
     if viz_dpath:
         import kwplot
         kwplot.autoplt()

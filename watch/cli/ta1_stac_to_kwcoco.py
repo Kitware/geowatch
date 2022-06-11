@@ -100,9 +100,27 @@ def _determine_channels_collated(asset_name, asset_dict):
 def _determine_s2_channels(asset_name, asset_dict):
     asset_href = asset_dict['href']
     eo_band_names = [eob['name'] for eob in asset_dict.get('eo:bands', ())]
+    # print(f'asset_href={asset_href}')
+    # print(f'eo_band_names={eo_band_names}')
 
     if re.search(r'TCI\.(tiff?|jp2)$', asset_href, re.I):
         return S2_CHANNEL_ALIAS.get('TCI', 'tci:3')
+    elif re.search(r'PVI\.(tiff?|jp2)$', asset_href, re.I):
+        return 'pvi:3'
+    elif re.search(r'PVI\.(tiff?|jp2)$', asset_href, re.I):
+        # PVI is preview image
+        return 'pvi:3'
+    elif re.search(r'AOT\.(tiff?|jp2)$', asset_href, re.I):
+        # AOT is Aerosol Optical Thickness
+        return 'aot'
+    elif re.search(r'WVP\.(tiff?|jp2)$', asset_href, re.I):
+        # https://sentinels.copernicus.eu/web/sentinel/user-guides/sentinel-2-msi/processing-levels/level-2
+        # WV is Water Vapour
+        return 'wvp'
+    elif re.search(r'SCL\.(tiff?|jp2)$', asset_href, re.I):
+        # https://sentinels.copernicus.eu/web/sentinel/user-guides/sentinel-2-msi/processing-levels/level-2
+        # SCL Scene Classification map
+        return 'scl'
     elif re.search(r'cloudmask\.(tiff?|jp2)$', asset_href, re.I):
         return 'cloudmask'
     elif re.search(r'SR_AEROSOL\.(tiff?|jp2)$', asset_href, re.I):
@@ -363,18 +381,6 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
 
     all_items = [stac_item for stac_item in catalog.get_all_items()]
 
-    # if 0:
-    #     dup_items = []
-    #     for key, dups in ub.group_items(all_items, key=lambda x: x.id).items():
-    #         if len(dups) > 1:
-    #             dup_items.append(key)
-    #             for item in dups:
-    #                 item_dict = item.to_dict()
-    #                 # print('item_dict = {}'.format(ub.repr2(item_dict, nl=1)))
-    #             for item in dups:
-    #                 item_dict = item.to_dict()
-    #                 # print(ub.hash_data(item_dict))
-
     for stac_item in all_items:
         executor.submit(_stac_item_to_kwcoco_image, stac_item,
                         assume_relative=assume_relative,
@@ -396,6 +402,11 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
                 output_dset.add_image(**kwcoco_img)
             except kwcoco.exceptions.DuplicateAddError:
                 if not ignore_duplicates:
+                    print(ub.paragraph(
+                        '''
+                        Error encountered duplicate item. Debugging duplicates.
+                        Did you append to the same input list multiple times?
+                        '''))
                     raise
 
     if populate_watch_fields:

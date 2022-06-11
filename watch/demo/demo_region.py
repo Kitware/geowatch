@@ -80,6 +80,22 @@ def demo_khq_annots():
         observations.append(geojson.Feature(
             geometry=khq_site_geos,
             properties=ub.dict_union(obs_property_defaults, {
+                "observation_date": "2017-09-13",
+                "current_phase": 'Site Preparation',
+                'sensor_name': 'S2_L2A',
+                "source": 'sentinel-2',
+            })))
+        observations.append(geojson.Feature(
+            geometry=khq_site_geos,
+            properties=ub.dict_union(obs_property_defaults, {
+                "observation_date": "2017-10-03",
+                "current_phase": 'Site Preparation',
+                'sensor_name': 'S2_L2A',
+                "source": 'sentinel-2',
+            })))
+        observations.append(geojson.Feature(
+            geometry=khq_site_geos,
+            properties=ub.dict_union(obs_property_defaults, {
                 "observation_date": "2017-10-06",
                 "current_phase": 'Site Preparation',
                 "source": 'ground-photo',
@@ -198,8 +214,10 @@ def demo_khq_annots():
     khq_region_poly = context.final_geoms_crs84.iloc[0]
     khq_region_geom = kwimage.Polygon.coerce(khq_region_poly).to_geojson()
 
-    khq_region_start_time = min(site_start_dates)
-    khq_region_end_time = max(site_end_dates)
+    delta_pad = util_time.coerce_timedelta('14days')
+
+    khq_region_start_time = min(site_start_dates) - delta_pad
+    khq_region_end_time = max(site_end_dates) + delta_pad
 
     # Enlarge the region
     khq_region_feature = geojson.Feature(

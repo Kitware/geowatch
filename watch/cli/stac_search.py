@@ -1,4 +1,60 @@
 #!/usr/bin/env python
+r"""
+Performs the stac search to create the .input file needed for
+prepare_ta2_dataset
+
+CommandLine:
+    # Create a demo region file
+    xdoctest watch.demo.demo_region demo_khq_region_fpath
+
+    DATASET_SUFFIX=DemoKHQ-2022-06-10-V2
+    DEMO_DPATH=$HOME/.cache/watch/demo/datasets
+    REGION_FPATH="$HOME/.cache/watch/demo/annotations/KHQ_R001.geojson"
+    SITE_GLOBSTR="$HOME/.cache/watch/demo/annotations/KHQ_R001_sites/*.geojson"
+    START_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.start_date' $REGION_FPATH)
+    END_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.end_date' $REGION_FPATH)
+    REGION_ID=$(jq -r '.features[] | select(.properties.type=="region") | .properties.region_id' $REGION_FPATH)
+    SEARCH_FPATH=$DEMO_DPATH/stac_search.json
+    RESULT_FPATH=$DEMO_DPATH/all_sensors_kit/${REGION_ID}.input
+
+    mkdir -p "$DEMO_DPATH"
+
+    # Create the search json wrt the sensors and processing level we want
+    python -m watch.cli.stac_search_build \
+        --start_date="$START_DATE" \
+        --end_date="$END_DATE" \
+        --cloud_cover=40 \
+        --sensors=L2 \
+        --out_fpath "$SEARCH_FPATH"
+    cat "$SEARCH_FPATH"
+
+    # Delete this to prevent duplicates
+    rm -f "$RESULT_FPATH"
+    # Create the .input file
+    python -m watch.cli.stac_search \
+        -rf "$REGION_FPATH" \
+        -sj "$SEARCH_FPATH" \
+        -m area \
+        --verbose 2 \
+        -o "${RESULT_FPATH}"
+
+    # Construct the TA2-ready dataset
+    python -m watch.cli.prepare_ta2_dataset \
+        --dataset_suffix=$DATASET_SUFFIX \
+        --s3_fpath "${RESULT_FPATH}" \
+        --collated False \
+        --dvc_dpath="$DEMO_DPATH" \
+        --aws_profile=iarpa \
+        --region_globstr="$REGION_FPATH" \
+        --site_globstr="$SITE_GLOBSTR" \
+        --fields_workers=8 \
+        --convert_workers=8 \
+        --align_workers=26 \
+        --cache=0 \
+        --ignore_duplicates=0 \
+        --visualize=True \
+        --serial=True --run=1
+"""
 import json
 import os
 import subprocess
@@ -146,107 +202,9 @@ class StacSearchConfig(scfg.Config):
     }
 
 
-# def _make_parser():
-#     import argparse
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument(
-#         '-o',
-#         '--outfile',
-#         required=True,
-#         help='output file name for STAC items'
-#     )
-#     parser.add_argument(
-#         '-rf',
-#         '--region_file',
-#         help='path to a region geojson file; required if mode is area'
-#     )
-#     parser.add_argument(
-#         '-sj',
-#         '--search_json',
-#         help='json string or path to json file containing '
-#              'STAC search parameters'
-#     )
-#     parser.add_argument(
-#         '-sf',
-#         '--site_file',
-#         help='path to a site geojson file; required if mode is id'
-#     )
-#     parser.add_argument(
-#         '-m',
-#         '--mode',
-#         default='id',
-#         help='"area" to search a bbox or "id" to provide a list of stac IDs'
-#     )
-#     parser.add_argument(
-#         '-s',
-#         '--s3_dest',
-#         help='s3 URI for output file'
-#     )
-#     parser.add_argument(
-#         '-v',
-#         '--verbose',
-#         type=int,
-#         default=2,
-#         help='verbose of logging [0, 1 or 2]'
-#     )
-#     if 0:
-#         import scriptconfig as scfg
-#         import argparse
-#         text = scfg.Config.port_argparse(parser, 'StacSearchConfig')
-#         print(text)
-#     return parser
-
-
 def main(cmdline=True, **kwargs):
     r"""
-    CommandLine:
-
-        # Create a demo region file
-        xdoctest watch.demo.demo_region demo_khq_region_fpath
-
-        DATASET_SUFFIX=DemoKHQ-2022-06-10
-        DEMO_DPATH=$HOME/.cache/watch/demo/build_dataset
-        REGION_FPATH="$HOME/.cache/watch/demo/annotations/KHQ_R001.geojson"
-        SITE_GLOBSTR="$HOME/.cache/watch/demo/annotations/KHQ_R001_sites/*.geojson"
-        START_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.start_date' $REGION_FPATH)
-        END_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.end_date' $REGION_FPATH)
-        REGION_ID=$(jq -r '.features[] | select(.properties.type=="region") | .properties.region_id' $REGION_FPATH)
-        SEARCH_FPATH=$DEMO_DPATH/stac_search.json
-        RESULT_FPATH=$DEMO_DPATH/all_sensors_kit/${REGION_ID}.input
-
-        mkdir -p "$DEMO_DPATH"
-
-        # Create the search json wrt the sensors and processing level we want
-        python -m watch.cli.stac_search_build \
-            --start_date="$START_DATE" \
-            --end_date="$END_DATE" \
-            --cloud_cover=10 \
-            --sensors=L2 \
-            --out_fpath "$SEARCH_FPATH"
-        cat "$SEARCH_FPATH"
-
-        # Create the .input file
-        python -m watch.cli.stac_search \
-            -rf "$REGION_FPATH" \
-            -sj "$SEARCH_FPATH" \
-            -m area \
-            --verbose 2 \
-            -o "${RESULT_FPATH}"
-
-        # Construct the TA2-ready dataset
-        python -m watch.cli.prepare_ta2_dataset \
-            --dataset_suffix=$DATASET_SUFFIX \
-            --s3_fpath "${RESULT_FPATH}" \
-            --collated False \
-            --dvc_dpath="$DEMO_DPATH" \
-            --aws_profile=iarpa \
-            --region_globstr="$REGION_FPATH" \
-            --site_globstr="$SITE_GLOBSTR" \
-            --fields_workers=8 \
-            --convert_workers=8 \
-            --align_workers=26 \
-            --cache=0 \
-            --serial=True --run=1
+    Execute the stac search and write the input file
 
     Example:
         >>> from watch.cli.stac_search import *  # NOQA
