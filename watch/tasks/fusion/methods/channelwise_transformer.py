@@ -1518,11 +1518,11 @@ class MultimodalTransformer(pl.LightningModule):
         mode_val = mode_val.float()
         if self.input_norms is not None:
             try:
-                print(f'self.input_norms={self.input_norms}')
                 mode_norm = self.input_norms[sensor][chan_code]
                 mode_val = mode_norm(mode_val)
             except KeyError:
                 print(f'Failed to process {sensor=!r} {chan_code=!r}')
+                print(f'self.input_norms={self.input_norms}')
                 print('Expected available norms (note the keys contain escape sequences) are:')
                 for _s in sorted(self.input_norms.keys()):
                     for _c in sorted(self.input_norms[_s].keys()):

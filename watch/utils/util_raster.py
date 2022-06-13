@@ -106,7 +106,9 @@ def mask(raster: Union[rasterio.DatasetReader, str],
         >>> mask_img = mask(path, as_poly=False)
         >>> import kwimage as ki
         >>> assert mask_img.shape == ki.load_image_shape(path)[:2]
-        >>> assert set(np.unique(mask_img)) == {0, 255}
+        >>> got = set(np.unique(mask_img))
+        >>> print(f'got={got}')
+        >>> assert got == {0, 255}
         >>> #
         >>> mask_poly = mask(path, as_poly=True)
         >>> import shapely
