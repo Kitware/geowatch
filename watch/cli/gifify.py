@@ -18,7 +18,7 @@ def main():
         ''')
     parser = argparse.ArgumentParser(prog='gifify', description=description)
 
-    parser.add_argument('image_list', nargs='*', help='list of images')
+    parser.add_argument('image_list', nargs='*', help='list of images (or a text file containing a list of images)')
     parser.add_argument('-i', '--input', nargs='*', help='alternate way to specify list of images')
     parser.add_argument('-d', '--delay', nargs=1, type=float, default=10, help='delay between frames')
     parser.add_argument('-o', '--output', default='out.gif', help='output file')
@@ -52,7 +52,14 @@ def main():
             toadd += sorted(glob.glob(join(p, '*.jpg')))
             frame_fpaths.extend(toadd)
         else:
-            frame_fpaths.append(p)
+            if str(p).endswith('.txt'):
+                with open(p, 'r') as f:
+                    lines = list(f.read().split('\n'))
+                lines = [line.strip() for line in lines]
+                lines = [line for line in lines if line and not line.startswith('#')]
+                frame_fpaths.extend(lines)
+            else:
+                frame_fpaths.append(p)
 
     # frame_fpaths = frame_fpaths[::2]
 

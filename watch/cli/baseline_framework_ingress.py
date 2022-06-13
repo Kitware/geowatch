@@ -173,13 +173,18 @@ def ingress_item(feature,
 
             if virtual:
                 if parsed_asset_href.scheme == 's3':
-                    asset['href'] = '/vsis3/{}{}'.format(
+                    virtual_href = '/vsis3/{}{}'.format(
                         parsed_asset_href.netloc,
                         parsed_asset_href.path)
+                    # print(f'virtual_href={virtual_href}')
+                    asset['href'] = virtual_href
                 elif parsed_asset_href.scheme in {'http', 'https'}:
-                    asset['href'] = '/vsicurl/{}{}'.format(
+                    virtual_href = '/vsicurl/{}://{}{}'.format(
+                        parsed_asset_href.scheme,
                         parsed_asset_href.netloc,
                         parsed_asset_href.path)
+                    # print(f'virtual_href={virtual_href}')
+                    asset['href'] = virtual_href
                 else:
                     print("* Unsupported URI scheme '{}' for virtual ingress; "
                           "not updating href: {}".format(
@@ -222,51 +227,60 @@ def ingress_item(feature,
         item_href = os.path.relpath(item_href, outdir)
 
     item.set_self_href(item_href)
+    # import ubelt as ub
+    # print('item = {}'.format(ub.repr2(item.to_dict(), nl=2)))
     return item
 
 
-def load_input_stac_items(input_path, aws_base_command):
-    def _load_input(path):
+def read_input_stac_items(path):
+    """
+    Read the stac input format from a file on disk
+    """
+    try:
+        with open(path, 'r') as f:
+            input_json = json.load(f)
+        items = input_json['stac'].get('features', [])
+    # Excepting KeyError here in case of a single line STAC item input
+    except (json.decoder.JSONDecodeError, KeyError):
         try:
+            # Support for simple newline separated STAC items
             with open(path, 'r') as f:
-                input_json = json.load(f)
-            items = input_json['stac'].get('features', [])
-        # Excepting KeyError here in case of a single line STAC item input
-        except (json.decoder.JSONDecodeError, KeyError):
-            try:
-                # Support for simple newline separated STAC items
-                with open(path, 'r') as f:
-                    items = [json.loads(line) for line in f]
-            except json.decoder.JSONDecodeError:
-                # Support for whitespace separated data
-                with open(path, 'r') as f:
-                    text = f.read()
-                items = []
-                stack = [line for line in text.split('\n')[::-1] if line]
-                while stack:
-                    line = stack.pop()
-                    try:
-                        item = json.loads(line)
-                    except json.decoder.JSONDecodeError as e:
-                        # Hack for the case where a new line is missing
-                        if line[e.pos] == '{':
-                            stack.append(line[e.pos:].strip())
-                            stack.append(line[:e.pos])
-                        else:
-                            raise
+                items = [json.loads(line) for line in f]
+        except json.decoder.JSONDecodeError:
+            # Support for whitespace separated data
+            with open(path, 'r') as f:
+                text = f.read()
+            items = []
+            stack = [line for line in text.split('\n')[::-1] if line]
+            while stack:
+                line = stack.pop()
+                try:
+                    item = json.loads(line)
+                except json.decoder.JSONDecodeError as e:
+                    # Hack for the case where a new line is missing
+                    if line[e.pos] == '{':
+                        stack.append(line[e.pos:].strip())
+                        stack.append(line[:e.pos])
                     else:
-                        items.append(item)
-        return items
+                        raise
+                else:
+                    items.append(item)
+    return items
 
+
+def load_input_stac_items(input_path, aws_base_command):
+    """
+    Load the stac input format from a file on disk or AWS
+    """
     if input_path.startswith('s3'):
         with tempfile.NamedTemporaryFile() as temporary_file:
             subprocess.run(
                 [*aws_base_command, input_path, temporary_file.name],
                 check=True)
 
-            input_stac_items = _load_input(temporary_file.name)
+            input_stac_items = read_input_stac_items(temporary_file.name)
     else:
-        input_stac_items = _load_input(input_path)
+        input_stac_items = read_input_stac_items(input_path)
 
     return input_stac_items
 
@@ -338,6 +352,7 @@ def baseline_framework_ingress(input_path,
             traceback.print_exception(*sys.exc_info())
             continue
         else:
+            # print(mapped_item.to_dict())
             catalog.add_item(mapped_item)
 
     catalog.save(catalog_type=catalog_type)

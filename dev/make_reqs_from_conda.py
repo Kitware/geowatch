@@ -81,7 +81,7 @@ def make_upgrade_strict_line():
 
 
 def trace_all_deps(defined_req_lines):
-    """
+    r"""
     TODO: make this work.
 
     The issue is that the packages dependencies need to be installed for this
@@ -89,7 +89,39 @@ def trace_all_deps(defined_req_lines):
 
     pip install requirements-parser
 
-    defined_req_lines = parse_conda_reqs('conda_env.yml')
+    Ignore:
+        import sys, ubelt
+        sys.path.append(ubelt.expandpath('~/code/watch/dev'))
+        from make_reqs_from_conda import *  # NOQA
+        defined_req_lines = parse_conda_reqs('conda_env.yml')
+        groups = trace_all_deps(defined_req_lines)
+
+        new = {}
+        for k in ['Defined', 'Implied']:
+            nover_lines = []
+            for line in groups[k]:
+                nover = line.partition('>')[0].partition('=')[0].partition(' ')[0]
+                nover_lines.append(nover)
+            new[k] = nover_lines
+
+        for k in ['Defined', 'Implied']:
+            print(r'\begin{multicols}{4}')
+            print(r'\begin{itemize}')
+            for nover in new[k]:
+                print(r'    \item ' + nover.replace('_', '\_'))
+            print(r'\end{itemize}')
+            print(r'\end{multicols}')
+
+        new['Implied'] = ub.oset(new['Implied']) - new['Defined']
+
+        print('\begin{multicols}{3}')
+        print('\begin{itemize}')
+        for line in new['Implied']:
+            nover = line.partition('>')[0].partition('=')[0].partition(' ')[0]
+            print('    \item ' + nover.replace('_', '\_'))
+        print('\end{itemize}')
+        print('\end{multicols}')
+
     """
     import pipdeptree
     from distutils.version import LooseVersion
@@ -167,8 +199,10 @@ def trace_all_deps(defined_req_lines):
     toplevel = list(name_to_conda_line.values())
     remain = list(ub.dict_diff(key_to_newline, ub.oset(name_to_conda_line)).values())
 
-    lines = ['# Defined'] + toplevel + ['', '# Implied'] + remain
-    return lines
+    groups = {}
+    groups['Defined'] = toplevel
+    groups['Implied'] = remain
+    return groups
 
 
 def main():
@@ -202,7 +236,8 @@ def main():
         # `pip install -r requirements/autogen/all-explicit.txt --no-deps`
         # which might help in avoiding opencv issues
         ''')
-    new_lines = trace_all_deps(defined_req_lines)
+    groups = trace_all_deps(defined_req_lines)
+    new_lines = ['# Defined'] + groups['Defined'] + ['', '# Implied'] + groups['Implied']
     new_lines = [header2, ''] + new_lines
     new_text = ('\n'.join(new_lines))
     with open('requirements/autogen/all-explicit.txt', 'w') as file:

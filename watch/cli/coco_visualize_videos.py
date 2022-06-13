@@ -510,7 +510,6 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     """
     # See if we can look at what we made
     from kwcoco import channel_spec
-    # from watch.utils.util_norm import normalize_intensity
     from watch.utils import util_kwimage
 
     sensor_coarse = img.get('sensor_coarse', 'unknown')
@@ -533,6 +532,10 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         # Hacks for common "heatmap" channels
         chan_to_normalizer['depth'] = {'type': 'normalize', 'mode': 'linear',
                                        'min_val': 0, 'max_val': 255}
+
+    if verbose > 0:
+        print(f'fixed_normalization_scheme={fixed_normalization_scheme}')
+        print(f'chan_to_normalizer={chan_to_normalizer}')
 
     if channels is not None:
         if isinstance(channels, list):
@@ -617,11 +620,6 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     img_view_dpath = sub_dpath / '_imgs'
     ann_view_dpath = sub_dpath / '_anns'
 
-    # try:
-    #     with ub.Timer('build dets', verbose=verbose):
-    #         dets = kwimage.Detections.from_coco_annots(anns, dset=coco_dset)
-    # except Exception:
-    #     # hack
     with ub.Timer('build dets', verbose=verbose):
         # Ignore keypoints
         anns_ = [ub.dict_diff(ann, ['keypoints']) for ann in anns]
@@ -629,7 +627,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
     if space == 'video':
         vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
-        with ub.Timer('warp dets', verbose=verbose):
+        with ub.Timer('warp dets', verbose=verbose > 2):
             dets = dets.warp(vid_from_img)
 
     if vid_crop_box is not None:
@@ -666,8 +664,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
         if len(chan_pname) > 10:
             # Hack to prevent long names for docker (limit is 242 chars)
-            num_bands = kwcoco.FusedChannelSpec.coerce(chan_group).numel()
-            chan_pname2 = '{}_{}'.format(ub.hash_data(chan_pname, base='abc')[0:8], num_bands)
+            chan_pname2 = kwcoco.FusedChannelSpec.coerce(chan_group).path_sanitize(maxlen=10)
+            # chan_pname2 = '{}_{}'.format(ub.hash_data(chan_pname, base='abc')[0:8], num_bands)
         else:
             chan_pname2 = chan_pname
         suffix = '_'.join([chan_pname2, sensor_coarse, align_method])
@@ -730,7 +728,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             needs_norm = dmax > 1.0
             # if canvas.max() <= 0 or canvas.min() >= 255:
             # Hack to only do noramlization on "non-standard" data ranges
-            with ub.Timer('normalize1', verbose=verbose):
+            with ub.Timer('normalize1', verbose=verbose > 2):
                 if needs_norm:
                     mask = ~np.isnan(raw_canvas)
                     # from watch.utils import util_norm
@@ -747,7 +745,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                 canvas = np.clip(canvas, 0, None)
         else:
             # from watch.utils import util_kwarray
-            with ub.Timer('normalize2', verbose=verbose):
+            with ub.Timer('normalize2', verbose=verbose > 2):
                 new_parts = []
                 for cx, c in enumerate(chan_list):
                     normalizer = chan_to_normalizer.get(c, None)
@@ -779,7 +777,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                     canvas = canvas[..., 0]
                     canvas = cmap_(canvas)[..., 0:3].astype(np.float32)
 
-        with ub.Timer('false color', verbose=verbose):
+        with ub.Timer('false color', verbose=verbose > 2):
             canvas = util_kwimage.ensure_false_color(canvas)
 
         if len(canvas.shape) > 2 and canvas.shape[2] > 4:
@@ -792,7 +790,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
         valid_region = img.get('valid_region', None)
         if valid_region:
-            with ub.Timer('valid region', verbose=verbose):
+            with ub.Timer('valid region', verbose=verbose > 2):
                 valid_poly: kwimage.MultiPolygon = kwimage.MultiPolygon.coerce(valid_region)
                 if space == 'video':
                     vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])

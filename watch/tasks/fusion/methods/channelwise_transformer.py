@@ -156,13 +156,25 @@ class MultimodalTransformer(pl.LightningModule):
     Example:
         >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
         >>> from watch.tasks.fusion import datamodules
+        >>> print('(STEP 0): SETUP THE DATA MODULE')
         >>> datamodule = datamodules.KWCocoVideoDataModule(
         >>>     train_dataset='special:vidshapes-watch', num_workers=4)
         >>> datamodule.setup('fit')
         >>> dataset = datamodule.torch_datasets['train']
+        >>> print('(STEP 1): ESTIMATE DATASET STATS')
         >>> dataset_stats = dataset.cached_dataset_stats(num=3)
+        >>> print('dataset_stats = {}'.format(ub.repr2(dataset_stats, nl=3)))
         >>> loader = datamodule.train_dataloader()
+        >>> print('(STEP 2): SAMPLE BATCH')
         >>> batch = next(iter(loader))
+        >>> for item_idx, item in enumerate(batch):
+        >>>     print(f'item_idx={item_idx}')
+        >>>     for frame_idx, frame in enumerate(item['frames']):
+        >>>         print(f'  * frame_idx={frame_idx}')
+        >>>         print(f'  * frame.sensor = {frame["sensor"]}')
+        >>>         for mode_code, mode_val in frame['modes'].items():
+        >>>             print(f'      * {mode_code=} @shape={mode_val.shape}')
+        >>> print('(STEP 3): THE REST OF THE TEST')
         >>> #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
         >>> self = MultimodalTransformer(arch_name='smt_it_joint_p8',
         >>>                              input_channels=datamodule.input_channels,
@@ -175,6 +187,7 @@ class MultimodalTransformer(pl.LightningModule):
         >>> # Run forward pass
         >>> num_params = nh.util.number_of_parameters(self)
         >>> print('num_params = {!r}'.format(num_params))
+        >>> output = self.forward_step(batch, with_loss=True)
         >>> import torch.profiler
         >>> from torch.profiler import profile, ProfilerActivity
         >>> with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True) as prof:
@@ -1278,7 +1291,9 @@ class MultimodalTransformer(pl.LightningModule):
         for frame_idx, (frame, frame_enc) in enumerate(zip(item['frames'], per_frame_pos_encoding)):
             modes = frame['modes']
             sensor = frame['sensor']
+            print(f'sensor={sensor}')
             for chan_code, mode_val in modes.items():
+                print(f'  * chan_code={chan_code}')
 
                 frame_sensor_chan_tokens, space_shape = self.forward_foot(sensor, chan_code, mode_val, frame_enc)
 
@@ -1507,6 +1522,7 @@ class MultimodalTransformer(pl.LightningModule):
                 mode_val = mode_norm(mode_val)
             except KeyError:
                 print(f'Failed to process {sensor=!r} {chan_code=!r}')
+                print(f'self.input_norms={self.input_norms}')
                 print('Expected available norms (note the keys contain escape sequences) are:')
                 for _s in sorted(self.input_norms.keys()):
                     for _c in sorted(self.input_norms[_s].keys()):

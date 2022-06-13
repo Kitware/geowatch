@@ -1,7 +1,8 @@
-import dateutil
 import datetime as datetime_mod
-from datetime import datetime as datetime_cls
+import dateutil
+import time
 import ubelt as ub
+from datetime import datetime as datetime_cls
 
 
 def isoformat(dt, sep='T', timespec='seconds', pathsafe=True):
@@ -15,6 +16,9 @@ def isoformat(dt, sep='T', timespec='seconds', pathsafe=True):
 
     References:
         https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes
+
+    SeeAlso:
+        ubelt.timestamp
 
     Example:
         >>> from watch.utils.util_time import *  # NOQA
@@ -107,6 +111,7 @@ def coerce_datetime(data, default_timezone='utc'):
     if data is None:
         return data
     elif isinstance(data, str):
+        # Canse use ubelt.timeparse(data, default_timezone=default_timezone) here.
         dt = dateutil.parser.parse(data)
     elif isinstance(data, datetime_cls):
         dt = data
@@ -128,6 +133,8 @@ def ensure_timezone(dt, default='utc'):
         >>> print('dt = {!r}'.format(dt))
         >>> dt = ensure_timezone(datetime_cls.utcnow())
         >>> print('dt = {!r}'.format(dt))
+        >>> ensure_timezone(datetime_cls.utcnow(), 'utc')
+        >>> ensure_timezone(datetime_cls.utcnow(), 'local')
     """
     if dt.tzinfo is not None:
         return dt
@@ -137,6 +144,8 @@ def ensure_timezone(dt, default='utc'):
         else:
             if default == 'utc':
                 tzinfo = datetime_mod.timezone.utc
+            elif default == 'local':
+                tzinfo = datetime_mod.timezone(datetime_mod.timedelta(seconds=-time.timezone))
             else:
                 raise NotImplementedError
         return dt.replace(tzinfo=tzinfo)

@@ -38,6 +38,7 @@ def find_baseline_scene(xmls, return_paths=False):
 
     Example:
         >>> # xdoctest: +REQUIRES(--network)
+        >>> # xdoctest: +REQUIRES(--network, --ta1)
         >>> from watch.datacube.registration.s2_baseline_scene import *
         >>> from watch.demo.sentinel2_demodata import grab_sentinel2_product
         >>> #

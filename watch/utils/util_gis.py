@@ -1,3 +1,6 @@
+"""
+Utilities for geopandas and other geographic information system tools
+"""
 import ubelt as ub
 import numpy as np
 
@@ -280,23 +283,93 @@ def shapely_flip_xy(geom):
     return ops.transform(_flip, geom)
 
 
-def project_gdf_to_local_utm(gdf):
+def project_gdf_to_local_utm(gdf_crs84):
     """
     Find the local UTM zone for a geo data frame and project to it.
 
     Assumes geometry is in CRS-84.
 
     All geometry in the GDF must be in the same UTM zone.
+
+    Args:
+        gdf_crs84 (geopandas.GeoDataFrame):
+            The data with CRS-84 geometry to project into a local UTM
+
+    Returns:
+        geopandas.GeoDataFrame
+
+    Example:
+        >>> import geopandas as gpd
+        >>> from watch.utils.util_gis import *  # NOQA
+        >>> import kwarray
+        >>> import kwimage
+        >>> rng = kwarray.ensure_rng(0)
+        >>> # Gen lat/lons between 0 and 1, which is in UTM zone 31N
+        >>> gdf_crs84 = gpd.GeoDataFrame({'geometry': [
+        >>>     kwimage.Polygon.random(rng=rng).to_shapely(),
+        >>>     kwimage.Polygon.random(rng=rng).to_shapely(),
+        >>>     kwimage.Polygon.random(rng=rng).to_shapely(),
+        >>> ]}, crs='crs84')
+        >>> gdf_utm = project_gdf_to_local_utm(gdf_crs84)
+        >>> assert gdf_utm.crs.name == 'WGS 84 / UTM zone 31N'
+
+    Example:
+        >>> import geopandas as gpd
+        >>> from watch.utils.util_gis import *  # NOQA
+        >>> import kwarray
+        >>> import kwimage
+        >>> # If the data is too big for a single UTM zone,
+        >>> rng = kwarray.ensure_rng(0)
+        >>> gdf_crs84 = gpd.GeoDataFrame({'geometry': [
+        >>>     kwimage.Polygon.random(rng=rng).scale(90).to_shapely(),
+        >>>     kwimage.Polygon.random(rng=rng).scale(90).to_shapely(),
+        >>>     kwimage.Polygon.random(rng=rng).scale(90).to_shapely(),
+        >>> ]}, crs='crs84')
+        >>> import pytest
+        >>> with pytest.raises(ValueError):
+        >>>     gdf_utm = project_gdf_to_local_utm(gdf_crs84)
+
+    # TODO: Gracefully handle cases where the UTM zones are different
+    # but all neighbors. Find a good example of this.
+    # Example:
+    #     >>> import geopandas as gpd
+    #     >>> from watch.utils.util_gis import *  # NOQA
+    #     >>> import kwarray
+    #     >>> # If the data is too big for a single UTM zone,
+    #     >>> rng = kwarray.ensure_rng(0)
+    #     >>> # Corner case in Madagascar where the extent isn't too big, but it
+    #     >>> # spans multiple UTM zones
+    #     >>> poly = kwimage.Polygon.coerce({
+    #     >>>     "type": "Polygon",
+    #     >>>     "coordinates": [
+    #     >>>         [[-73.77200379967688, 42.864783745778894],
+    #     >>>          [-73.77177715301514, 42.86412514733195],
+    #     >>>          [-73.77110660076141, 42.8641654498268],
+    #     >>>          [-73.77105563879013, 42.86423720786224],
+    #     >>>          [-73.7710489332676, 42.864399400374786],
+    #     >>>          [-73.77134531736374, 42.8649134986743],
+    #     >>>          [ -73.77200379967688, 42.864783745778894]]]
+    #     >>> })
+    #     >>> gdf_crs84 = gpd.GeoDataFrame({
+    #     >>>     'geometry': [poly.to_shapely()]}, crs='crs84')
     """
-    assert gdf.crs.name == 'WGS 84 (CRS84)'
+    # if gdf_crs84.crs.name != 'WGS 84 (CRS84)':
+    #     raise AssertionError('expected CRS-84 input')
     epsg_zones = []
-    for geom_crs84 in gdf.geometry:
+    for geom_crs84 in gdf_crs84.geometry:
         epsg_zone = find_local_meter_epsg_crs(geom_crs84)
         epsg_zones.append(epsg_zone)
-
-    assert ub.allsame(epsg_zones)
+    if not ub.allsame(epsg_zones):
+        unique_utm = set(epsg_zones)
+        raise ValueError(ub.paragraph(
+            '''
+            Input data spanned multiple UTM zones.
+            This is currently not allowed. {}
+            '''
+        ).format(unique_utm))
     epsg_zone = epsg_zones[0]
-    gdf.to_crs(epsg_zone)
+    gdf_utm = gdf_crs84.to_crs(epsg_zone)
+    return gdf_utm
 
 
 def utm_epsg_from_latlon(lat, lon):
@@ -335,6 +408,85 @@ def utm_epsg_from_latlon(lat, lon):
     if south is True:
         epsg_code += 100
     return epsg_code
+
+
+class UTM_TransformContext:
+    """
+    Helper to project into UTM space, perform some transform, and then project
+    back to the original CRS.
+
+    Currently only supports CRS84
+
+    Example:
+        >>> import kwimage
+        >>> from watch.utils.util_gis import *  # NOQA
+        >>> data_crs84 = kwimage.Polygon.random()
+        >>> with UTM_TransformContext(data_crs84) as self:
+        >>>     orig_utm_poly = kwimage.Polygon.coerce(self.geoms_utm.iloc[0])
+        >>>     new_utm_poly = orig_utm_poly.scale(2, about='center')
+        >>>     self.finalize(new_utm_poly)
+        >>> final_result = kwimage.Polygon.coerce(self.final_geoms_crs84.iloc[0])
+        >>> naive_result = data_crs84.scale(2, about='center')
+        >>> # Note the subtle difference in the naive vs context result
+        >>> print(f'final_result={final_result}')
+        >>> print(f'naive_result={naive_result}')
+    """
+    def __init__(self, data_crs84):
+        """
+        Args:
+            data_crs84 (Coercable[GeoSeries]):
+                something we know how to transform into a GeoSeries
+        """
+        from watch.utils import util_gis
+        self.crs84 = util_gis._get_crs84()
+        self.geoms_crs84 = self._coerce_geo_series(data_crs84, self.crs84)
+        self.crs_utm = None
+        self.gdf_utm = None
+        self.final_geoms_utm = None
+        self.final_geoms_crs84 = None
+
+    def __enter__(self):
+        from watch.utils import util_gis
+        import geopandas as gpd
+        gdf_crs84 = gpd.GeoDataFrame(geometry=self.geoms_crs84)
+        gdf_utm = util_gis.project_gdf_to_local_utm(gdf_crs84)
+        self.geoms_utm = gdf_utm.geometry
+        self.crs_utm = self.geoms_utm.crs
+        return self
+
+    def _coerce_geo_series(self, data, default_crs=None):
+        import shapely
+        import geopandas as gpd
+        import kwimage
+        if isinstance(data, list):
+            geoms = gpd.GeoSeries(data, crs=default_crs)
+        else:
+            if isinstance(data, shapely.geometry.base.BaseGeometry):
+                geoms = gpd.GeoSeries([data], crs=default_crs)
+            elif isinstance(data, kwimage.Polygon):
+                geoms = gpd.GeoSeries([data.to_shapely()], crs=default_crs)
+            elif isinstance(data, gpd.GeoDataFrame):
+                geoms = data.geometry
+            elif isinstance(data, gpd.GeoSeries):
+                geoms = data
+            else:
+                raise TypeError(type(data))
+        return geoms
+
+    def finalize(self, final_utm):
+        """
+        Args:
+            final_utm (Coercable[GeoSeries]):
+                something coercable to geometry in UTM coordinates
+        """
+        final_geoms_utm = self._coerce_geo_series(
+            final_utm, default_crs=self.crs_utm)
+        self.final_geoms_utm = final_geoms_utm
+
+    def __exit__(self, a, b, c):
+        if self.final_geoms_utm is None:
+            raise RuntimeError('Need to call finalize')
+        self.final_geoms_crs84 = self.final_geoms_utm.to_crs(self.crs84)
 
 
 def _demo_convert_latlon_to_utm():
@@ -408,7 +560,8 @@ def find_local_meter_epsg_crs(geom_crs84):
     projection if the geometry spans more than one UTM zone.
 
     Args:
-        geom_crs84 (Geometry): shapely geometry in CRS84 (lon/lat wgs84)
+        geom_crs84 (shapely.geometry.base.BaseGeometry):
+            shapely geometry in CRS84 (lon/lat wgs84)
 
     Returns:
         int: epsg code
