@@ -2595,7 +2595,7 @@ class KWCocoVideoDataset(data.Dataset):
                     if cspec:
                         hacked.add((sspec, cspec))
             unique_sensor_modes.update(hacked)
-            print(f'{unique_sensor_modes=}')
+            print('unique_sensor_modes = {}'.format(ub.repr2(unique_sensor_modes, nl=1)))
 
         prog = ub.ProgIter(loader, desc='estimate dataset stats')
         for batch_items in prog:

@@ -156,13 +156,24 @@ class MultimodalTransformer(pl.LightningModule):
     Example:
         >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
         >>> from watch.tasks.fusion import datamodules
+        >>> print('(STEP 0): SETUP THE DATA MODULE')
         >>> datamodule = datamodules.KWCocoVideoDataModule(
         >>>     train_dataset='special:vidshapes-watch', num_workers=4)
         >>> datamodule.setup('fit')
         >>> dataset = datamodule.torch_datasets['train']
+        >>> print('(STEP 1): ESTIMATE DATASET STATS')
         >>> dataset_stats = dataset.cached_dataset_stats(num=3)
         >>> loader = datamodule.train_dataloader()
+        >>> print('(STEP 2): SAMPLE BATCH')
         >>> batch = next(iter(loader))
+        >>> for item_idx, item in enumerate(batch):
+        >>>     print(f'item_idx={item_idx}')
+        >>>     for frame_idx, frame in enumerate(item['frames']):
+        >>>         print(f'  * frame_idx={frame_idx}')
+        >>>         print(f'  * frame.sensor = {frame["sensor"]}')
+        >>>         for mode_code, mode_val in frame['modes'].items():
+        >>>             print(f'      * {mode_code=} @shape={mode_val.shape}')
+        >>> print('(STEP 3): THE REST OF THE TEST')
         >>> #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
         >>> self = MultimodalTransformer(arch_name='smt_it_joint_p8',
         >>>                              input_channels=datamodule.input_channels,
