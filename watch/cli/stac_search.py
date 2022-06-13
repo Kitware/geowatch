@@ -211,6 +211,7 @@ def main(cmdline=True, **kwargs):
         >>> from watch.demo import demo_region
         >>> from watch.cli import stac_search_build
         >>> from watch.utils import util_gis
+        >>> import ubelt as ub
         >>> dpath = ub.Path.appdir('watch/tests/test-stac-search').ensuredir()
         >>> search_fpath = dpath / 'stac_search.json'
         >>> region_fpath = demo_region.demo_khq_region_fpath()

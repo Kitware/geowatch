@@ -390,9 +390,11 @@ def crop_to(
             "keep": Return the polygon unchanged.
             "crop": Crop the polygon to the bounds.
             "discard": Discard the polygon (replace it with None).
+
     Returns:
-        List[shapely.Polygon] of cropped polys, some of which may be None. This
-        maintains indexing relative to the input polygons.
+        List[shapely.Polygon | None]:
+            of cropped polys, some of which may be None. This maintains
+            indexing relative to the input polygons.
 
     Example:
         >>> # xdoctest: +REQUIRES(--network)
@@ -420,8 +422,6 @@ def crop_to(
         >>> # same with valid mask
         >>> cropped = crop_to([poly], path, bounds_policy='valid')[0]
         >>> assert cropped.bounds == (924, 14, 2000, 2000)
-
-
     """
     assert bounds_policy in {'none', 'bounds', 'valid'}, bounds_policy
     assert intersect_policy in {'keep', 'crop', 'discard'}, intersect_policy

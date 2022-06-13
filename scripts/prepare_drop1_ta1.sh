@@ -57,31 +57,31 @@ download_uncropped_data(){
     "
 
     # Grab the stac items we will query directly from S3 and combine it into a single query json file
-    mkdir -p $UNCROPPED_INGRESS_DPATH
-    mkdir -p $UNCROPPED_QUERY_DPATH
+    mkdir -p "$UNCROPPED_INGRESS_DPATH"
+    mkdir -p "$UNCROPPED_QUERY_DPATH"
     aws s3 --profile iarpa ls $S3_DPATH/
-    aws s3 --profile iarpa sync --exclude '*' --include '*.json' $S3_DPATH $UNCROPPED_QUERY_DPATH
+    aws s3 --profile iarpa sync --exclude '*' --include '*.json' "$S3_DPATH" "$UNCROPPED_QUERY_DPATH"
 
-    jq . --indent 0 $UNCROPPED_QUERY_DPATH/*.json > $UNCROPPED_QUERY_FPATH
+    jq . --indent 0 "$UNCROPPED_QUERY_DPATH"/*.json > "$UNCROPPED_QUERY_FPATH"
 
     # Use the watch script to pull down the images as a stac catalog
     python -m watch.cli.baseline_framework_ingress \
         --aws_profile iarpa \
         --jobs 4 \
-        --outdir $UNCROPPED_INGRESS_DPATH $UNCROPPED_QUERY_FPATH 
+        --outdir "$UNCROPPED_INGRESS_DPATH" "$UNCROPPED_QUERY_FPATH"
 
 
     # Convert the stac catalog to kwcoco format
     python -m watch.cli.ta1_stac_to_kwcoco \
-        $UNCROPPED_CATALOG_FPATH \
-        --outpath=$UNCROPPED_KWCOCO_FPATH 
+        "$UNCROPPED_CATALOG_FPATH" \
+        --outpath="$UNCROPPED_KWCOCO_FPATH"
 
 
     # Preprocess the unstructured kwcoco file to ensure geo-info is in the json
     # (This is optional, but it makes the next step faster)
     python -m watch.cli.coco_add_watch_fields \
-        --src $UNCROPPED_KWCOCO_FPATH \
-        --dst $UNCROPPED_KWCOCO_FPATH \
+        --src "$UNCROPPED_KWCOCO_FPATH" \
+        --dst "$UNCROPPED_KWCOCO_FPATH" \
         --overwrite=warp --workers=avail
 }
 
@@ -94,9 +94,9 @@ crop_to_regions(){
     "
     # Crop the unstructured data into "videos" aligned to each region.
     python -m watch.cli.coco_align_geotiffs \
-        --src $UNCROPPED_KWCOCO_FPATH \
-        --dst $ALIGNED_KWCOCO_FPATH \
-        --regions $REGION_FPATH \
+        --src "$UNCROPPED_KWCOCO_FPATH" \
+        --dst "$ALIGNED_KWCOCO_FPATH" \
+        --regions "$REGION_FPATH" \
         --workers=4 \
         --context_factor=1 \
         --skip_geo_preprop=auto \
@@ -106,8 +106,8 @@ crop_to_regions(){
     # Project and propogate annotations from the site files in the kwcoco files
     python -m watch.cli.project_annotations \
         --site_models="$DVC_DPATH/drop1/site_models/*.geojson" \
-        --src $ALIGNED_KWCOCO_FPATH \
-        --dst $ALIGNED_KWCOCO_FPATH 
+        --src "$ALIGNED_KWCOCO_FPATH" \
+        --dst "$ALIGNED_KWCOCO_FPATH" 
 }
 
 
@@ -115,8 +115,8 @@ unprotect_old_cropped_dvc_data(){
     __doc__="
     If we are updating a DVC repo we need to unprotect any file we could overwrite
     "
-    dvc unprotect $ALIGNED_KWCOCO_BUNDLE/*/*.json
-    dvc unprotect $ALIGNED_KWCOCO_BUNDLE/*.json
+    dvc unprotect "$ALIGNED_KWCOCO_BUNDLE"/*/*.json
+    dvc unprotect "$ALIGNED_KWCOCO_BUNDLE"/*.json
 }
 
 
@@ -131,21 +131,21 @@ add_new_data_to_dvc(){
 
     # Add the new files to our local DVC cache and 
     # creat the .dvc files for git to track
-    dvc add *.kwcoco.json
-    dvc add */L8 */S2 */WV
-    dvc add */subdata.kwcoco.json
+    dvc add -- *.kwcoco.json
+    dvc add -- */L8 */S2 */WV
+    dvc add -- */subdata.kwcoco.json
 
     # Tell git to track the new DVC files
-    git add *.kwcoco.json.dvc
-    git add */L8.dvc */S2.dvc */WV.dvc
-    git add */subdata.kwcoco.json.dvc
+    git add -- *.kwcoco.json.dvc
+    git add -- */L8.dvc */S2.dvc */WV.dvc
+    git add -- */subdata.kwcoco.json.dvc
 
     # Push new DVC files to git
     # TODO: what branch should we push to?
     git push origin
 
     # Push new items from the local cache to the remote AWS cache
-    dvc push -r aws --recursive $ALIGNED_KWCOCO_BUNDLE
+    dvc push -r aws --recursive "$ALIGNED_KWCOCO_BUNDLE"
 
 }
 
@@ -157,26 +157,25 @@ visualize_cropped_dataset(){
     source ~/code/watch/scripts/prepare_drop1_ta1.sh
     "
     smartwatch visualize \
-        --src $ALIGNED_KWCOCO_FPATH \
+        --src "$ALIGNED_KWCOCO_FPATH" \
         --space="video" \
         --num_workers=avail \
         --channels="red|green|blue" \
-        --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz \
+        --viz_dpath="$ALIGNED_KWCOCO_BUNDLE/_viz" \
         --draw_anns=False \
         --animate=True --norm_hack=True
 
     python -m watch.cli intensity_histograms \
 
     smartwatch intensity_histograms \
-        --src $ALIGNED_KWCOCO_FPATH \
+        --src "$ALIGNED_KWCOCO_FPATH" \
         --num_workers=avail \
         --mode=process \
         --include_channels="blue|green|red|nir|swir16|swir22" \
-        --dst=$ALIGNED_KWCOCO_BUNDLE/_viz/histograms.jpg  --show=True
+        --dst="$ALIGNED_KWCOCO_BUNDLE/_viz/histograms.jpg"  --show=True
 
-        --channels="red|green|blue" \
+        #--channels="red|green|blue" \
 }
-
 
 
 prep_drop1_ta1_main(){

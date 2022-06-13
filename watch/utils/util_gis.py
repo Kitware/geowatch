@@ -302,6 +302,7 @@ def project_gdf_to_local_utm(gdf_crs84):
         >>> import geopandas as gpd
         >>> from watch.utils.util_gis import *  # NOQA
         >>> import kwarray
+        >>> import kwimage
         >>> rng = kwarray.ensure_rng(0)
         >>> # Gen lat/lons between 0 and 1, which is in UTM zone 31N
         >>> gdf_crs84 = gpd.GeoDataFrame({'geometry': [
@@ -316,6 +317,7 @@ def project_gdf_to_local_utm(gdf_crs84):
         >>> import geopandas as gpd
         >>> from watch.utils.util_gis import *  # NOQA
         >>> import kwarray
+        >>> import kwimage
         >>> # If the data is too big for a single UTM zone,
         >>> rng = kwarray.ensure_rng(0)
         >>> gdf_crs84 = gpd.GeoDataFrame({'geometry': [
@@ -416,8 +418,9 @@ class UTM_TransformContext:
     Currently only supports CRS84
 
     Example:
-        >>> data_crs84 = kwimage.Polygon.random()
+        >>> import kwimage
         >>> from watch.utils.util_gis import *  # NOQA
+        >>> data_crs84 = kwimage.Polygon.random()
         >>> with UTM_TransformContext(data_crs84) as self:
         >>>     orig_utm_poly = kwimage.Polygon.coerce(self.geoms_utm.iloc[0])
         >>>     new_utm_poly = orig_utm_poly.scale(2, about='center')
