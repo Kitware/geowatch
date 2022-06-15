@@ -1,5 +1,8 @@
-An fully FOSS alternative to a conda environment is pyenv. On ubuntu this can
-be setup as follows:
+An fully FOSS alternative to a conda environment is pyenv. 
+The only real drawback to pyenv is that you must be able to compile Python
+itself. 
+
+On ubuntu this can be setup as follows:
 
 .. code:: bash
 
@@ -84,3 +87,59 @@ be setup as follows:
     echo "#### ADD THE ABOVE TO YOUR BASH RC ####"
     echo $BASHRC_CONTENTS
     #### END BASHRC PART ####
+
+
+Create WATCH environment with Pyenv
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+First create and activate a new virtual environment (note this could be done
+with conda as well).
+
+If using `pyenv installation instructions <docs/pyenv_alternative.rst>`_, then
+a virtual environment can be created with the standard ``venv`` module.
+Assuming you have installed Python 3.8.5 with pyenv the following will create a
+virtual environment.
+
+.. code:: bash
+
+    CHOSEN_PYTHON_VERSION=3.8.5
+    # Set your shell to use this pyenv shim
+    pyenv shell $CHOSEN_PYTHON_VERSION
+
+    # Create the virtual environment
+    python -m venv $(pyenv prefix)/envs/pyenv-watch
+
+    # Activate the virtual environment
+    source $(pyenv prefix)/envs/pyenv-watch/bin/activate
+
+
+Once you are in a virtual environment (managed by either conda or pyenv), the
+WATCH Python module can then be installed with ``pip`` via the following
+command, where ``/path/to/watch-repo`` is the absolute path to the directory
+containing this README.md file.
+
+NOTE: It is important you install the module with the editable (``-e``) flag,
+otherwise changes you make to the module, will not be reflected when you run
+your scripts.
+
+.. code:: bash
+
+   pip install -e /path/to/watch-repo
+
+
+This is more commonly done as
+
+.. code:: bash
+
+   cd /path/to/watch-repo
+   pip install -e .
+
+This installation process is also scripted in the top-level
+``run_developer_setup.sh`` script and takes care of issues that can arise with
+opencv-python.
+
+After the ``watch`` module has been installed to your python environment, it
+can be imported from anywhere regardless of the current working directory as
+long as the virtual environment was installed in is active.
+
+
