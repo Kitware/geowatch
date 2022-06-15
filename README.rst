@@ -27,11 +27,10 @@ The following table provides links to relevant resources for the SMART WATCH pro
 .. .. | The SMART WATCH DVC Repo           | https://gitlab.kitware.com/watch/smart_watch_dvc/              |
 .. .. +------------------------------------+----------------------------------------------------------------+
 
-For internal collaberators, please refer to the `internal docs <docs/internal_resources.rst>`_ 
-
 To contribute, please read the `contribution instructions <contribution_instructions.rst>`_.
 
 For information on testing please see `running and writing watch tests <testing_practices.rst>`_.
+
 
 Getting Started
 ---------------
@@ -84,6 +83,12 @@ To build the Docker image:
 .. code:: bash
 
    docker build .
+
+
+Internal Development
+--------------------
+
+For internal collaberators, please refer to the `internal docs <docs/internal_resources.rst>`_ 
 
 
 Module Structure
