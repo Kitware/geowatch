@@ -22,8 +22,10 @@ The following table provides links to relevant resources for the SMART WATCH pro
 +------------------------------------+----------------------------------------------------------------+
 | The SMART WATCH Python Module      | https://gitlab.kitware.com/watch/watch/                        |
 +------------------------------------+----------------------------------------------------------------+
-| The SMART WATCH DVC Repo           | https://gitlab.kitware.com/watch/smart_watch_dvc/              |
-+------------------------------------+----------------------------------------------------------------+
+
+.. .. Under construction
+.. .. | The SMART WATCH DVC Repo           | https://gitlab.kitware.com/watch/smart_watch_dvc/              |
+.. .. +------------------------------------+----------------------------------------------------------------+
 
 For internal collaberators, please refer to the `internal docs <docs/internal_resources.rst>`_ 
 
