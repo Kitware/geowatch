@@ -6,7 +6,11 @@ import ubelt as ub
 import warnings
 
 
-__version__ = '0.3.0'
+__version__ = '0.3.1'
+# git shortlog -e --summary --numbered
+__author__ = 'WATCH Developers, Kitware Inc., Jon Crall, David Joy, Matthew Bernstein, Benjamin Brodie, Usman Rafique, Jacob DeRosa, Connor Greenwell, Peri Akiva, Matthew Purri, Ajay Upadhyaya'
+__author_email__ = 'kitware@kitware.com, jon.crall@kitware.com'
+__url__ = 'https://gitlab.kitware.com/watch/watch'
 
 
 __devnotes__ = """
@@ -155,7 +159,6 @@ __getattr__ = lazy_import(
     submodules={
         'cli',
         'datacube',
-        'datasets',
         'demo',
         'gis',
         'heuristics',
@@ -180,6 +183,6 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
-__all__ = ['cli', 'coerce_kwcoco', 'datacube', 'datasets', 'demo',
+__all__ = ['cli', 'coerce_kwcoco', 'datacube', 'demo',
            'find_smart_dvc_dpath', 'gis', 'heuristics', 'models', 'rc',
            'sequencing', 'tasks', 'utils', 'validation']
