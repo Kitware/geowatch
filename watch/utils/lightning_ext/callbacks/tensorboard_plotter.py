@@ -111,7 +111,7 @@ def read_tensorboard_scalars(train_dpath, verbose=1, cache=1):
     event_paths = sorted(glob.glob(join(train_dpath, 'events.out.tfevents*')))
     # make a hash so we will re-read of we need to
     cfgstr = ub.hash_data(list(map(ub.hash_file, event_paths))) if cache else ''
-    cacher = ub.Cacher('tb_scalars', cfgstr=cfgstr, enabled=cache,
+    cacher = ub.Cacher('tb_scalars', depends=cfgstr, enabled=cache,
                        dpath=join(train_dpath, '_cache'))
     datas = cacher.tryload()
     if datas is None:
