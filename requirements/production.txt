@@ -85,7 +85,8 @@ torch>=1.11.0   # 1.10 does not run latest models
 torchvision>=0.12.0
 torchmetrics>=0.8.1
 torch_liberator>=0.1.0
-pytorch_lightning>=1.5.9,<1.6.0  # 1.6 breaks us right now
+# pytorch_lightning>=1.5.9,<1.6.0  # 1.6 breaks us right now
+# pytorch_lightning>=1.6.0  
 monai>=0.6.0
 torch_optimizer>=0.1.0
 netharn>=0.5.18
@@ -96,5 +97,5 @@ segmentation-models-pytorch>=0.2.0
 
 
 # Needs a kwcoco fix for latest version
-sqlalchemy==1.3.22
-# >= 1.4.32
+# sqlalchemy==1.3.22
+sqlalchemy>=1.3.22

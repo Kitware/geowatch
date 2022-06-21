@@ -1291,9 +1291,9 @@ class MultimodalTransformer(pl.LightningModule):
         for frame_idx, (frame, frame_enc) in enumerate(zip(item['frames'], per_frame_pos_encoding)):
             modes = frame['modes']
             sensor = frame['sensor']
-            print(f'sensor={sensor}')
+            # print(f'sensor={sensor}')
             for chan_code, mode_val in modes.items():
-                print(f'  * chan_code={chan_code}')
+                # print(f'  * chan_code={chan_code}')
 
                 frame_sensor_chan_tokens, space_shape = self.forward_foot(sensor, chan_code, mode_val, frame_enc)
 

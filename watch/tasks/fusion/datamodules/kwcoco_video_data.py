@@ -512,7 +512,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 stats_params['with_intensity'] = False
 
             # Hack for now:
-            # Note: also need for class weights
+            # TODO: Note: also need for class weights
             if stats_params is not None:
                 self.dataset_stats = train_dataset.cached_dataset_stats(**stats_params)
 
@@ -2474,6 +2474,7 @@ class KWCocoVideoDataset(data.Dataset):
 
         Ignore:
             import xdev
+            from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             globals().update(xdev.get_func_kwargs(KWCocoVideoDataset.compute_dataset_stats))
 
         Example:
