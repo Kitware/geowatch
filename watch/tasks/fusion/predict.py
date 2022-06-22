@@ -66,7 +66,7 @@ def make_predict_config(cmdline=False, **kwargs):
     # parser.add_argument('--pred_dpath', dest='pred_dpath', type=pathlib.Path, help='path to dump results. Deprecated, do not use.')
 
     parser.add_argument('--package_fpath', type=str)
-    parser.add_argument('--devices', default=None, help='todo: hook up to lightning')
+    parser.add_argument('--devices', default=None, help='lightning devices')
     parser.add_argument('--thresh', type=smartcast, default=0.01)
 
     parser.add_argument('--with_change', type=smartcast, default='auto')

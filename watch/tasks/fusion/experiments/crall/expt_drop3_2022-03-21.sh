@@ -82,32 +82,32 @@ schedule-prediction-and-evlauation(){
     EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
-    # The gpus flag does not work for the slurm backend. (Help wanted)
+    # The devices flag does not work for the slurm backend. (Help wanted)
     TMUX_GPUS="0,1"
     #TMUX_GPUS="1,"
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="$TMUX_GPUS" \
+            --devices="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*V3*.pt" \
             --test_dataset="$VALI_FPATH" \
             --run=1 --skip_existing=True --backend=tmux
 
     TMUX_GPUS="0,1,2,3"
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="$TMUX_GPUS" \
+            --devices="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*xfer*V3*.pt" \
             --test_dataset="$VALI_FPATH" \
             --run=1 --skip_existing=True --backend=tmux
 
     TMUX_GPUS="0,1,2,3"
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="$TMUX_GPUS" \
+            --devices="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*scratch*V3*.pt" \
             --test_dataset="$VALI_FPATH" \
             --run=1 --skip_existing=True --backend=tmux
 
     # Iarpa BAS metrics only on existing predictions
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="$TMUX_GPUS" \
+            --devices="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*V3*.pt" \
             --test_dataset="$VALI_FPATH" \
             --skip_existing=True \
@@ -221,7 +221,7 @@ schedule-prediction-and-evaluate-team-models(){
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0,1" \
+            --devices="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/DZYNE*/*.pt" \
             --test_dataset="$VALI_FPATH" \
             --run=0 --skip_existing=True --backend=serial
@@ -238,7 +238,7 @@ recovery_eval(){
     #--model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest-2.txt" \
 
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="$TMUX_GPUS" \
+            --devices="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest.txt" \
             --test_dataset="$VALI_FPATH" \
             --enable_pred=1 \
@@ -253,7 +253,7 @@ recovery_eval(){
             --skip_existing=1 --backend=tmux --run=0
 
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="$TMUX_GPUS" \
+            --devices="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest.txt" \
             --test_dataset="$VALI_FPATH" \
             --enable_pred=1 \
@@ -283,7 +283,7 @@ recovery_eval(){
 
     TMUX_GPUS="0,1,2,3,4,5,6"
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="$TMUX_GPUS" \
+            --devices="$TMUX_GPUS" \
             --model_globstr="$MODEL_GLOBSTR" \
             --test_dataset="$VALI_FPATH" \
             --enable_pred=0 \
@@ -323,7 +323,7 @@ recovery_eval(){
 
     TMUX_GPUS="0,"
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="$TMUX_GPUS" \
+            --devices="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest-2.txt" \
             --test_dataset="$VALI_FPATH" \
             --enable_pred=0 \
@@ -339,7 +339,7 @@ recovery_eval(){
 
     TMUX_GPUS="0,1,2,3,4,5,6,7,8"
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="$TMUX_GPUS" \
+            --devices="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/models_of_interest.txt" \
             --test_dataset="$VALI_FPATH" \
             --enable_pred=0 \
@@ -392,7 +392,7 @@ singleton_commands(){
     #PRED_FPATH=$HOME/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/Drop3_bells_mlp_V305/pred_Drop3_bells_mlp_V305_epoch=5-step=3071-v1/Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json
 
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="$TMUX_GPUS" \
+            --devices="$TMUX_GPUS" \
             --model_globstr="$MODEL_FPATH" \
             --test_dataset="$VALI_FPATH" \
             --skip_existing=0 \
@@ -441,7 +441,7 @@ python -m watch.tasks.fusion.fit \
     --saliency_loss='dicefocal' \
     --class_loss='dicefocal' \
     --num_workers=8 \
-    --gpus "1" \
+    --devices "1" \
     --batch_size=1 \
     --accumulate_grad_batches=1 \
     --learning_rate=1e-4 \
@@ -592,7 +592,7 @@ python -m watch.tasks.fusion.fit \
     --test_dataset="$TEST_FPATH" \
     --channels="$CHANNELS" \
     --num_workers=8 \
-    --gpus "1" \
+    --devices "1" \
     --batch_size=1 \
     --global_change_weight=0.00 \
     --global_class_weight=1.00 \
@@ -676,7 +676,7 @@ python -m watch.tasks.fusion.fit \
     --test_dataset="$TEST_FPATH" \
     --channels="$CHANNELS" \
     --num_workers=8 \
-    --gpus "1" \
+    --devices "1" \
     --batch_size=1 \
     --global_change_weight=0.00 \
     --global_class_weight=1.00 \
@@ -1816,6 +1816,59 @@ VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_ILM_nowv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_ILM_nowv_vali.kwcoco.json
 CHANNELS="blue|green|red,invariants:16"
 EXPERIMENT_NAME=Drop3_Simplify_S2_L8_RGB_I_V334
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --channels="$CHANNELS" \
+    --class_loss='focal' \
+    --saliency_loss='dicefocal' \
+    --global_change_weight=0.0 \
+    --global_class_weight=0.0 \
+    --global_saliency_weight=1.00 \
+    --learning_rate=1e-4 \
+    --weight_decay=1e-5 \
+    --max_epoch_length=4096 \
+    --max_epochs=160 \
+    --patience=160 \
+    --num_workers=4 \
+    --dist_weights=False \
+    --chip_size=380 \
+    --time_steps=5 \
+    --batch_size=1 \
+    --accumulate_grad_batches=1 \
+    --channels="$CHANNELS" \
+    --time_sampling=soft2+distribute \
+    --time_span=7m \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5m \
+    --num_draw=4 \
+    --use_centered_positives=True \
+    --normalize_inputs=2048 \
+    --stream_channels=16 \
+    --multimodal_reduce=mean \
+    --temporal_dropout=0.2 \
+    --init="noop" 
+
+# 2022-06-22
+
+export CUDA_VISIBLE_DEVICES=0
+DVC_DPATH=$(smartwatch_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_ILM_nowv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_ILM_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_ILM_nowv_vali.kwcoco.json
+CHANNELS="invariants:16"
+EXPERIMENT_NAME=Drop3_Simplify_S2_L8_I_V335
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
