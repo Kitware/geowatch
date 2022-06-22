@@ -47,10 +47,7 @@ def main(args):
 
     tb_logger = pl_loggers.TensorBoardLogger(log_dir, name='')
 
-    if args.device == 'cpu':
-        trainer = pl.Trainer.from_argparse_args(args, logger=tb_logger, callbacks=[*ckpt_monitors, lr_logger])
-    else:
-        trainer = pl.Trainer.from_argparse_args(args, logger=tb_logger, gpus=args.gpus, callbacks=[*ckpt_monitors, lr_logger])
+    trainer = pl.Trainer.from_argparse_args(args, logger=tb_logger, devices=args.devices, callbacks=[*ckpt_monitors, lr_logger])
     trainer.fit(model)
 
 
@@ -99,8 +96,7 @@ if __name__ == '__main__':
     parser.add_argument('--pca_projection_path', type=str, default='../pca_2022_03_10')
     parser.add_argument('--reduction_dim', type=int, default=6)
     ###device
-    parser.add_argument('--device', type=str, default='gpu')
-    parser.add_argument('--gpus', type=int, help='gpu(s) to run on', default=1)
+    parser.add_argument('--devices', type=str, help='lightning devices to run on', default=1)
 
     parser.set_defaults(
         terminate_on_nan=True,

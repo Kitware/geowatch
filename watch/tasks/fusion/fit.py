@@ -60,7 +60,7 @@ Example:
     ...     #'attention_impl': 'performer',  # note: exact seems to be faster and less memory at this scale
     ...     'gradient_clip_val': 0.5,
     ...     'gradient_clip_algorithm': 'value',
-    ...     'gpus': 1,
+    ...     'devices': 1,
     ... }
     >>> #modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
     >>> fit_model(cmdline=cmdline, **kwargs)
@@ -91,7 +91,7 @@ available_datamodules = [
 learning_irrelevant = {
     'workdir',
     'num_workers',
-    'gpus',
+    'devices',
     'limit_val_batches',
     'limit_test_batches',
     'limit_predict_batches',
@@ -251,10 +251,6 @@ def make_fit_config(cmdline=False, **kwargs):
         'gradient_clip_val': 0.5,
         'gradient_clip_algorithm': 'value',
 
-        # Device defaults
-        # 'auto_select_gpus': True,
-        # 'gpus': 1 if has_gpu else None,
-
         # Data defaults
         'train_dataset': 'special:vidshapes8-multispectral',
         'vali_dataset': None,
@@ -283,8 +279,6 @@ def make_fit_config(cmdline=False, **kwargs):
         args = None if cmdline else []
 
     args, _ = parser.parse_known_args(args=args)
-    if args.gpus == 'None':
-        args.gpus = None
 
     if args.normalize_inputs == 'True':
         args.normalize_inputs = True
@@ -527,7 +521,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
         ...     'workdir': workdir,
         ...     'num_sanity_val_steps': 0,
         ...     'eval_after_fit': True,
-        ...     'gpus': 1,
+        ...     'devices': 1,
         ...     'max_epochs': 2,
         ...     #'max_steps': 1,
         ...     'learning_rate': 1e-5,
@@ -613,7 +607,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
             'test_dataset': args.test_dataset,
             'pred_dataset': suggestions['pred_dataset'],
             'num_workers': args.num_workers,
-            'gpus': args.gpus,
+            'devices': args.devices,
         }
         eval_cfg = {
             'pred_dataset': suggestions['pred_dataset'],

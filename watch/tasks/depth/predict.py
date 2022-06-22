@@ -12,9 +12,10 @@ import numpy as np
 import torch
 # import torchvision.transforms
 from medpy.filter.smoothing import anisotropic_diffusion
-from scipy import ndimage
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+
+from scipy import ndimage
 
 from . import modules_monkeypatch  # NOQA
 from .datasets import WVRgbDataset

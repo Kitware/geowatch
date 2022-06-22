@@ -206,7 +206,7 @@ VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
 
 
 python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-        --gpus="0" \
+        --devices="0," \
         --model_globstr="$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt" \
         --test_dataset="$VALI_FPATH" \
         --skip_existing=0 \
@@ -283,7 +283,7 @@ MODEL_GLOB_PARTS=(
 MODEL_GLOBSTR=$(join_by "" "${MODEL_GLOB_PARTS[@]}")
 
 python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-        --gpus="0" \
+        --devices="0," \
         --model_globstr="$MODEL_GLOBSTR" \
         --test_dataset="$VALI_FPATH" \
         --skip_existing=0 \

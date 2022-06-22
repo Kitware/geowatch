@@ -66,7 +66,7 @@ def make_predict_config(cmdline=False, **kwargs):
     # parser.add_argument('--pred_dpath', dest='pred_dpath', type=pathlib.Path, help='path to dump results. Deprecated, do not use.')
 
     parser.add_argument('--package_fpath', type=str)
-    parser.add_argument('--gpus', default=None, help='todo: hook up to lightning')
+    parser.add_argument('--devices', default=None, help='todo: hook up to lightning')
     parser.add_argument('--thresh', type=smartcast, default=0.01)
 
     parser.add_argument('--with_change', type=smartcast, default='auto')
@@ -147,7 +147,7 @@ def predict(cmdline=False, **kwargs):
         >>> from watch.tasks.fusion.predict import *  # NOQA
         >>> args = None
         >>> cmdline = False
-        >>> gpus = None
+        >>> devices = None
         >>> test_dpath = ub.ensure_app_cache_dir('watch/test/fusion/')
         >>> results_path = ub.ensuredir((test_dpath, 'predict'))
         >>> ub.delete(results_path)
@@ -171,7 +171,7 @@ def predict(cmdline=False, **kwargs):
         ...     'max_steps': 1,
         ...     'learning_rate': 1e-5,
         ...     'num_workers': 0,
-        ...     'gpus': gpus,
+        ...     'devices': devices,
         ... }
         >>> package_fpath = fit_model(**fit_kwargs)
         >>> # Predict via that model
@@ -182,7 +182,7 @@ def predict(cmdline=False, **kwargs):
         >>>     'datamodule': 'KWCocoVideoDataModule',
         >>>     'batch_size': 1,
         >>>     'num_workers': 0,
-        >>>     'gpus': gpus,
+        >>>     'devices': devices,
         >>> }
         >>> result_dataset = predict(**kwargs)
         >>> dset = result_dataset
@@ -428,8 +428,8 @@ def predict(cmdline=False, **kwargs):
     })
 
     from watch.utils.lightning_ext import util_device
-    print('args.gpus = {!r}'.format(args.gpus))
-    devices = util_device.coerce_devices(args.gpus)
+    print('args.devices = {!r}'.format(args.devices))
+    devices = util_device.coerce_devices(args.devices)
     print('devices = {!r}'.format(devices))
     if len(devices) > 1:
         raise NotImplementedError('TODO: handle multiple devices')
@@ -1293,7 +1293,7 @@ if __name__ == '__main__':
         --pred_dataset=/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/training/raven/brodie/uky_invariants/features_22_03_14/runs/BASELINE_EXPERIMENT_V001/pred.kwcoco.json \
         --test_dataset=/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json \
         --num_workers=5 \
-        --gpus=0, \
+        --devices=0, \
         --batch_size=1
 
     Develop TTA:
@@ -1330,7 +1330,7 @@ if __name__ == '__main__':
         --with_change=False \
         --package_fpath=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=19-step=13659-v1.pt \
         --num_workers=5 \
-        --gpus=0, \
+        --devices=0, \
         --batch_size=1 \
         --exclude_sensors=L8 \
         --pred_dataset=$PRED_DATASET \
@@ -1417,7 +1417,7 @@ if __name__ == '__main__':
     TEST_DATASET=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1.kwcoco.json
     EXPT_PATTERN="*"
     python -m watch.tasks.fusion.schedule_evaluation \
-            --gpus="0,1" \
+            --devices="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=19-step=13659-v1.pt" \
             --test_dataset="$TEST_DATASET" \
             --workdir="$DVC_DPATH/_tmp/smalltest" \
