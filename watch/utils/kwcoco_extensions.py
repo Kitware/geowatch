@@ -1869,6 +1869,7 @@ def visualize_rois(coco_dset, zoom=None):
     Matplotlib visualization of image and annotation regions on a world map
 
     Example:
+        >>> # xdoctest: +REQUIRES(--slow)
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
         >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
         >>> coco_dset = demo_kwcoco_with_heatmaps(num_videos=1)

@@ -269,6 +269,7 @@ def main(cmdline=True, **kw):
         >>> new_dset = main(cmdline, **kw)
 
     Example:
+        >>> # xdoctest: +REQUIRES(--slow)
         >>> from watch.cli.coco_align_geotiffs import *  # NOQA
         >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
         >>> coco_dset = demo_kwcoco_with_heatmaps(num_videos=2, num_frames=2)
@@ -789,6 +790,7 @@ class SimpleDataCube(object):
             kwcoco.CocoDataset: the given or new dataset that was modified
 
         Example:
+            >>> # xdoctest: +REQUIRES(--slow)
             >>> from watch.cli.coco_align_geotiffs import *  # NOQA
             >>> cube, region_df = SimpleDataCube.demo(with_region=True)
             >>> extract_dpath = ub.ensure_app_cache_dir('watch/test/coco_align_geotiff/demo_extract_overlaps')

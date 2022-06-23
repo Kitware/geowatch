@@ -712,6 +712,7 @@ def main(args):
         >>>     os.remove(coco_dset.fpath)
 
     Example:
+        >>> # xdoctest: +REQUIRES(--slow)
         >>> # test a more complicated track function
         >>> from watch.cli.kwcoco_to_geojson import demo
         >>> from watch.demo import smart_kwcoco_demodata

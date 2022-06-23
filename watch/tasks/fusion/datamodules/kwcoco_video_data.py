@@ -629,6 +629,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
 
         Example:
+            >>> # xdoctest: +REQUIRES(--slow)
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> from watch.tasks.fusion import datamodules
             >>> import watch

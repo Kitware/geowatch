@@ -162,12 +162,10 @@ def main(cmdline=True, **kwargs):
 
     Example:
         >>> import ubelt as ub
-        >>> dpath = ub.ensure_app_cache_dir('watch/test/viz_video')
-        >>> ub.delete(dpath)
-        >>> ub.ensuredir(dpath)
+        >>> dpath = ub.Path.appdir('watch/test/viz_video').delete().ensuredir()
         >>> import kwcoco
         >>> from watch.utils import kwcoco_extensions
-        >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral', num_frames=5)
+        >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral', num_frames=2)
         >>> img = dset.dataset['images'][0]
         >>> coco_img = dset.coco_image(img['id'])
         >>> channel_chunks = list(ub.chunks(coco_img.channels.fuse().parsed, chunksize=3))
