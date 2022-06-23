@@ -241,8 +241,8 @@ def schedule_quantization():
 
     import glob
     pred_fpaths = glob.glob(str(pred_globpat))
-    from watch.utils import tmux_queue
-    queue = tmux_queue.TMUXMultiQueue(name='quantize-jobs', size=8)
+    import cmd_queue
+    queue = cmd_queue.Queue.create(backend='tmux', name='quantize-jobs', size=8)
     for pred_fpath in pred_fpaths:
         queue.submit(ub.codeblock(
             rf'''

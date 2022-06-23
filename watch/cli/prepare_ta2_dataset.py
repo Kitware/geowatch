@@ -160,7 +160,7 @@ def main(cmdline=False, **kwargs):
     aligned_imgonly_kwcoco_fpath = aligned_imgonly_kwcoco_fpath.shrinkuser(home='$HOME')
     aligned_imganns_kwcoco_fpath = aligned_imganns_kwcoco_fpath.shrinkuser(home='$HOME')
 
-    from watch.utils import cmd_queue
+    import cmd_queue
     queue = cmd_queue.Queue.create(
         backend=config['backend'], name='teamfeat', size=1, gres=None)
 

@@ -13,7 +13,7 @@ KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 EXPT_PATTERN="*"
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_nowv_vali.kwcoco.json
 python -m watch.tasks.fusion.schedule_evaluation \
-        --gpus="0,1" \
+        --devices="0,1" \
         --model_globstr="$DVC_DPATH/models/fusion/eval3_candidates/packages/${EXPT_PATTERN}/*.pt" \
         --test_dataset="$VALI_FPATH" \
         --run=0 --skip_existing=True
@@ -25,7 +25,7 @@ EXPT_GROUP_CODE=eval3_candidates
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
 python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-        --gpus="0,1,2,3" \
+        --devices="0,1,2,3" \
         --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
         --test_dataset="$VALI_FPATH" \
         --run=1 --skip_existing=True --backend=slurm \
@@ -45,7 +45,7 @@ class ScheduleEvaluationConfig(scfg.Config):
     default = {
         'model_globstr': scfg.Value(None, help='one or more glob patterns that match the models to predict/evaluate on'),
         'test_dataset': scfg.Value(None, help='path to the test dataset to predict/evaluate on'),
-        'gpus': scfg.Value('auto', help='if using tmux or serial, indicate which gpus are available for use as a comma separated list: e.g. 0,1'),
+        'devices': scfg.Value('auto', help='if using tmux or serial, indicate which gpus are available for use as a comma separated list: e.g. 0,1'),
         'run': scfg.Value(False, help='if False, only prints the commands, otherwise executes them'),
         'virtualenv_cmd': scfg.Value(None, help='command to activate a virtualenv if needed. (might have issues with slurm backend)'),
         'skip_existing': scfg.Value(False, help='if True dont submit commands where the expected products already exist'),
@@ -170,7 +170,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
         KWCOCO_TEST_FPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01/combo_DILM_nowv_vali.kwcoco.json
         python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0,1" \
+            --devices="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/*/*.pt" \
             --test_dataset="$KWCOCO_TEST_FPATH" \
             --run=0  --skip_existing=True
@@ -188,7 +188,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
         VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DLM_s2_wv_vali.kwcoco.json
 
         python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-                --gpus="0,1" \
+                --devices="0,1" \
                 --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/$EXPT_MODEL_GLOBNAME/*.pt" \
                 --test_dataset="$VALI_FPATH" \
                 --enable_pred=1 \
@@ -325,10 +325,10 @@ def schedule_evaluation(cmdline=False, **kwargs):
     queue_dpath = dvc_dpath / '_cmd_queue_schedule'
     queue_dpath.mkdir(exist_ok=True)
 
-    gpus = config['gpus']
-    print('gpus = {!r}'.format(gpus))
-    if gpus == 'auto':
-        # Use all unused gpus
+    devices = config['devices']
+    print('devices = {!r}'.format(devices))
+    if devices == 'auto':
+        # Use all unused devices
         import netharn as nh
         GPUS = []
         for gpu_idx, gpu_info in nh.device.gpu_info().items():
@@ -337,14 +337,14 @@ def schedule_evaluation(cmdline=False, **kwargs):
             if len(gpu_info['procs']) == 0:
                 GPUS.append(gpu_idx)
     else:
-        GPUS = None if gpus is None else ensure_iterable(gpus)
+        GPUS = None if devices is None else ensure_iterable(devices)
 
     print('GPUS = {!r}'.format(GPUS))
     environ = {
         # 'DVC_DPATH': dvc_dpath,
     }
 
-    from watch.utils import cmd_queue
+    import cmd_queue
     queue = cmd_queue.Queue.create(config['backend'], name='schedule-eval',
                                    size=len(GPUS), environ=environ,
                                    dpath=queue_dpath, gres=GPUS)
@@ -549,7 +549,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     --chip_overlap={chip_overlap} \
                     --tta_time={tta_time} \
                     --tta_fliprot={tta_fliprot} \
-                    --gpus=0, \
+                    --devices=0, \
                     --batch_size=1
                 ''').format(**suggestions, **predictkw)
 

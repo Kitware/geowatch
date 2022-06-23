@@ -93,11 +93,11 @@ class TextLogger(pl.callbacks.Callback):
         self._log.info('trainer.default_root_dir = {!r}'.format(trainer.default_root_dir))
         self._log.info('trainer.log_dir = {!r}'.format(trainer.log_dir))
 
-    def on_epoch_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
-        self._log.debug('on_epoch_start')
+    # def on_epoch_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
+    #     self._log.debug('on_epoch_start')
 
-    def on_epoch_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
-        self._log.debug('on_epoch_end')
+    # def on_epoch_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
+    #     self._log.debug('on_epoch_end')
 
     def on_train_epoch_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log.debug('on_train_epoch_start')
