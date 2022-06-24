@@ -3662,7 +3662,8 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                                    time_sampling='hard+distribute',
                                    time_span='2y', use_annot_info=True,
                                    use_grid_positives=True,
-                                   use_centered_positives=True):
+                                   use_centered_positives=True,
+                                   set_cover_algo=None):
     """
     This is the main driver that builds the sample grid.
 
@@ -3675,6 +3676,12 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
 
     Ask jon about what the params mean if you need this.
     This code badly needs a refactor.
+
+    Args:
+        set_cover_algo (str):
+            Algorithm used to find set cover of image IDs. Options are 'approx' (a greedy solution)
+            or 'exact' (an ILP solution). If None is passed, set cover is not computed. The 'exact'
+            method requires the packe pulp, available at PyPi.
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -3709,6 +3716,24 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> use_annot_info = True
         >>> time_sampling = 'hard+distribute'
         >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
+
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> import os
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> import watch
+        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/combo_LM_nowv_vali.kwcoco.json'
+        >>> dset = kwcoco.CocoDataset(coco_fpath)
+        >>> window_overlap = 0.5
+        >>> window_dims = (2, 128, 128)
+        >>> keepbound = False
+        >>> exclude_sensors = None
+        >>> set_cover_algo = 'approx'
+        >>> sample_grid = sample_video_spacetime_targets(dset, window_dims, window_overlap, set_cover_algo=set_cover_algo)
+        >>> time_sampling = 'hard+distribute'
+        >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
+        _ = xdev.profile_now(sample_video_spacetime_targets)(dset, window_dims, window_overlap)
 
     Example:
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
@@ -3930,6 +3955,14 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                 else:
                     main_idx_to_gids2 = main_idx_to_gids
                     resampled = False
+
+                if set_cover_algo is not None:
+                    debug = True
+                    if debug:
+                        print('before applying set cover, len of main_idx_to_gids2', len(main_idx_to_gids2))
+                    main_idx_to_gids2 = kwarray.setcover(main_idx_to_gids2, algo=set_cover_algo)
+                    if debug:
+                        print('after applying set cover', len(main_idx_to_gids2))
 
                 for main_idx, gids in main_idx_to_gids2.items():
                     main_gid = time_sampler.video_gids[main_idx]
