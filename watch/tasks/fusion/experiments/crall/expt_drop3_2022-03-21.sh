@@ -35,6 +35,25 @@ prep_teamfeat_drop3(){
         #python -m watch.cli.prepare_splits --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L.kwcoco.json --run=False
 }
 
+grab_feats_from_horologic(){
+    # On horologic
+    source ~/local/init/utils.sh
+    ls_array "KWCOCO_FNAMES" "*_ILM_nowv_*.kwcoco.json"
+    bash_array_repr "${KWCOCO_FNAMES[@]}"
+    for FNAME in "${KWCOCO_FNAMES[@]}"; do 
+        kwcoco reroot --src "./$FNAME" --dst "$FNAME" \
+            --old_prefix="/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc-ssd/Aligned-Drop3-TA1-2022-03-10/" --new_prefix="" \
+            --absolute=False
+    done
+    kwcoco validate --require_relative=True "${KWCOCO_FNAMES[@]}"
+
+    # On namek
+    DVC_DPATH=$(smartwatch_dvc)
+    echo "DVC_DPATH = $DVC_DPATH"
+    rsync -azvprRP horologic:data/dvc-repos/smart_watch_dvc-ssd/Aligned-Drop3-TA1-2022-03-10/_assets/./uky_invariants "$DVC_DPATH"/Aligned-Drop3-TA1-2022-03-10/_assets
+    rsync -azvprRP --prune-empty-dirs --include "*/"  --include="*combo*ILM*nowv*.kwcoco.json" --exclude="*" horologic:data/dvc-repos/smart_watch_dvc-ssd/./Aligned-Drop3-TA1-2022-03-10/ "$DVC_DPATH"
+}
+
 
 gather-checkpoints-repackage(){
 
@@ -50,11 +69,16 @@ gather-checkpoints-repackage(){
         --storage_dpath="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages" \
         --train_dpath="$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/runs/*/lightning_logs" \
         --push_jobs=8 \
-        --mode=commit
+        --mode=list
 }
 
 
 schedule-prediction-and-evlauation(){
+
+    #python -m watch.tasks.fusion.dvc_sync_manager "list"
+    python -m watch.tasks.fusion.dvc_sync_manager "pull packages"
+    #python -m watch.tasks.fusion.dvc_sync_manager "push evals"
+    #python -m watch.tasks.fusion.dvc_sync_manager "push packages evals"
 
     DVC_DPATH=$(smartwatch_dvc)
     cd "$DVC_DPATH" 
@@ -87,7 +111,7 @@ schedule-prediction-and-evlauation(){
     #TMUX_GPUS="1,"
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --devices="$TMUX_GPUS" \
-            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*V3*.pt" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*Simplify*/*.pt" \
             --test_dataset="$VALI_FPATH" \
             --run=1 --skip_existing=True --backend=tmux
 

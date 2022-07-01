@@ -32,18 +32,9 @@ class TextLogger(pl.callbacks.Callback):
         # Hack to log all args
         self.args = args
 
-    # def setup(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", stage: Optional[str] = None) -> None:
-    #     self._log('setup state _log')
-    #     self._log('trainer.default_root_dir = {!r}'.format(trainer.default_root_dir))
-
-    def teardown(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', stage: Optional[str] = None) -> None:
-        self._log('teardown state _log')
-
-    # def on_init_start(self, trainer: "pl.Trainer") -> None:
-    #     # self._log('on_init_start')
-    #     pass
-
-    def on_init_end(self, trainer: 'pl.Trainer') -> None:
+    def setup(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", stage: Optional[str] = None) -> None:
+        # self._log('setup state _log')
+        # self._log('trainer.default_root_dir = {!r}'.format(trainer.default_root_dir))
         import pathlib
         self.log_dir = pathlib.Path(trainer.log_dir)
         self.log_fpath = self.log_dir / 'text_logs.log'
@@ -53,6 +44,15 @@ class TextLogger(pl.callbacks.Callback):
         trainer.text_logger = self
         if self.args is not None:
             self._log.info('args_dict = {}'.format(ub.repr2(self.args.__dict__, nl=1, sort=0)))
+
+    def teardown(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', stage: Optional[str] = None) -> None:
+        self._log('teardown state _log')
+
+    # def on_init_start(self, trainer: "pl.Trainer") -> None:
+    #     # self._log('on_init_start')
+    #     pass
+
+    # def on_init_end(self, trainer: 'pl.Trainer') -> None:
 
     def on_fit_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log.info('on_fit_start')

@@ -7,6 +7,8 @@ import numpy as np
 from os.path import join
 import pandas as pd
 import pytorch_lightning as pl
+from packaging.version import parse as Version
+PL_VERSION = Version(pl.__version__)
 
 
 __all__ = ['TensorboardPlotter']
@@ -17,7 +19,7 @@ class TensorboardPlotter(pl.callbacks.Callback):
     Asynchronously dumps PNGs to disk visualize tensorboard scalars.
 
     CommandLine:
-        xdoctest -m watch.utils.lightning_ext.tensorboard_plotter TensorboardPlotter
+        xdoctest -m watch.utils.lightning_ext.callbacks.tensorboard_plotter TensorboardPlotter
 
     Example:
         >>> #
@@ -38,7 +40,7 @@ class TensorboardPlotter(pl.callbacks.Callback):
         >>>     print(df)
     """
 
-    def on_epoch_end(self, trainer, logs=None):
+    def _on_epoch_end(self, trainer, logs=None):
         # The following function draws the tensorboard result. This might take
         # a some non-trivial amount of time so we attempt to run in a separate
         # process.
@@ -91,6 +93,19 @@ class TensorboardPlotter(pl.callbacks.Callback):
                 #     harn.warn('NOT DOING MPL DRAW')
         else:
             func(*args)
+
+    if PL_VERSION < Version('1.6'):
+        def on_epoch_end(self, trainer, logs=None):
+            return self._on_epoch_end(trainer, logs=logs)
+    else:
+        def on_train_epoch_end(self, trainer, logs=None):
+            return self._on_epoch_end(trainer, logs=logs)
+
+        def on_validation_epoch_end(self, trainer, logs=None):
+            return self._on_epoch_end(trainer, logs=logs)
+
+        def on_test_epoch_end(self, trainer, logs=None):
+            return self._on_epoch_end(trainer, logs=logs)
 
 
 def read_tensorboard_scalars(train_dpath, verbose=1, cache=1):

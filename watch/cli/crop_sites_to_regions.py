@@ -187,6 +187,52 @@ def crop_sites_to_region(region_gdf_crs84, sites):
         >>> from watch.cli.crop_sites_to_regions import *  # NOQA
         >>> import geopandas as gpd
         >>> import kwimage
+        >>> from watch.utils import util_gis
+        >>> crs84 = util_gis._get_crs84()
+        >>> region_poly = kwimage.Polygon.random(rng=0).translate((42, 72))
+        >>> site_poly1 = region_poly.translate((0.0001, 0.0001))
+        >>> #
+        >>> def demo_site_summary(site_id, site_poly):
+        >>>     return {
+        >>>         'type': 'site_summary',
+        >>>         'region_id': None,
+        >>>         'site_id': site_id,
+        >>>         'start_date': '2020-01-01',
+        >>>         'end_date': '2020-01-03',
+        >>>         'geometry': site_poly.to_shapely()
+        >>>     }
+        >>> def demo_site(site_id, site_poly):
+        >>>     sh_poly = site_poly.to_shapely()
+        >>>     site = gpd.GeoDataFrame([
+        >>>         {'type': 'site', 'region_id': 'DemoRegion', 'site_id': site_id, 'geometry': sh_poly},
+        >>>         {'type': 'observation', 'observation_date': '2020-01-01', 'current_phase': 'phase1', 'geometry': sh_poly},
+        >>>         {'type': 'observation', 'observation_date': '2020-01-02', 'current_phase': 'phase2', 'geometry': sh_poly},
+        >>>         {'type': 'observation', 'observation_date': '2020-01-03', 'current_phase': 'phase3', 'geometry': sh_poly},
+        >>>     ], crs=crs84)
+        >>>     return {'fpath': None, 'gdf': site}
+        >>> region_gdf_crs84 = gpd.GeoDataFrame([
+        >>>     {
+        >>>         'type': 'region',
+        >>>         'region_id': 'DemoRegion',
+        >>>         'geometry': region_poly.to_shapely(),
+        >>>     },
+        >>>     demo_site_summary('DemoRegion_0001', site_poly1),
+        >>> ], crs=crs84)
+        >>> sites = [
+        >>>     demo_site('DemoRegion_0001', site_poly1),
+        >>> ]
+        >>> cropped_region, cropped_sites = crop_sites_to_region(region_gdf_crs84, sites)
+        >>> cropped_sites = list(cropped_sites)
+        >>> assert len(cropped_sites) == len(sites)
+        >>> assert len(cropped_region) == 2
+
+    Example:
+        >>> # xdoctest: +REQUIRES(--slow)
+        >>> from watch.cli.crop_sites_to_regions import *  # NOQA
+        >>> import geopandas as gpd
+        >>> import kwimage
+        >>> from watch.utils import util_gis
+        >>> crs84 = util_gis._get_crs84()
         >>> region_poly = kwimage.Polygon.random(rng=0).translate((42, 72))
         >>> site_poly0 = region_poly
         >>> site_poly1 = region_poly.translate((0.0001, 0.0001))
@@ -211,7 +257,7 @@ def crop_sites_to_region(region_gdf_crs84, sites):
         >>>         {'type': 'observation', 'observation_date': '2020-01-01', 'current_phase': 'phase1', 'geometry': sh_poly},
         >>>         {'type': 'observation', 'observation_date': '2020-01-02', 'current_phase': 'phase2', 'geometry': sh_poly},
         >>>         {'type': 'observation', 'observation_date': '2020-01-03', 'current_phase': 'phase3', 'geometry': sh_poly},
-        >>>     ], crs='crs84')
+        >>>     ], crs=crs84)
         >>>     return {'fpath': None, 'gdf': site}
         >>> region_gdf_crs84 = gpd.GeoDataFrame([
         >>>     {
@@ -221,7 +267,7 @@ def crop_sites_to_region(region_gdf_crs84, sites):
         >>>     },
         >>>     demo_site_summary('DemoRegion_0001', site_poly1),
         >>>     demo_site_summary('DemoRegion_0002', site_poly2),
-        >>> ], crs='crs84')
+        >>> ], crs=crs84)
         >>> sites = [
         >>>     demo_site('DemoRegion_0000', site_poly0),
         >>>     demo_site('DemoRegion_0001', site_poly1),
