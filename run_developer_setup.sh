@@ -15,10 +15,11 @@ fi
 #pip install -r requirements/no-deps.txt
 
 # Do everything
-pip install -r requirements.txt
+python -m pip install pip setuptools build -U
+python -m pip install -r requirements.txt
 
 # Install the watch module in development mode
-pip install -e .
+python -m pip install -e .
 
 # Install more fragile dependencies
 # pip install imgaug>=0.4.0
@@ -27,11 +28,11 @@ pip install -e .
 
 # TODO: we should skip trying to install gdal if possible
 
-pip install GDAL==3.4.1 --find-links https://girder.github.io/large_image_wheels -U
+python -m pip install GDAL==3.4.1 --find-links https://girder.github.io/large_image_wheels -U
 
-pip install dvc[all]>=2.9.3
+python -m pip install dvc[all]>=2.9.3
 
-pip install lru-dict || echo "unable to install lru-dict"
+python -m pip install lru-dict || echo "unable to install lru-dict"
 
 fix_opencv_conflicts(){
     __doc__="
@@ -39,22 +40,22 @@ fix_opencv_conflicts(){
     up the incorrect libraries and install the desired (headless) ones.
     "
     # Fix opencv issues
-    pip freeze | grep "opencv-python=="
+    python -m pip freeze | grep "opencv-python=="
     HAS_OPENCV_RETCODE="$?"
-    pip freeze | grep "opencv-python-headless=="
+    python -m pip freeze | grep "opencv-python-headless=="
     HAS_OPENCV_HEADLESS_RETCODE="$?"
 
     # VAR == 0 means we have it
     if [[ "$HAS_OPENCV_HEADLESS_RETCODE" == "0" ]]; then
         if [[ "$HAS_OPENCV_RETCODE" == "0" ]]; then
-            pip uninstall opencv-python opencv-python-headless -y
-            pip install opencv-python-headless
+            python -m pip uninstall opencv-python opencv-python-headless -y
+            python -m pip install opencv-python-headless
         fi
     else
         if [[ "$HAS_OPENCV_RETCODE" == "0" ]]; then
-            pip uninstall opencv-python -y
+            python -m pip uninstall opencv-python -y
         fi
-        pip install opencv-python-headless
+        python -m pip install opencv-python-headless
     fi
 }
 
@@ -66,7 +67,7 @@ torch_on_3090(){
     # if you are updating an existing checkout
     git submodule sync
     git submodule update --init --recursive --jobs 0
-    pip install . -v
+    python -m pip install . -v
 }
 
 fix_opencv_conflicts
