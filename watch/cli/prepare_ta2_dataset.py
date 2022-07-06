@@ -196,6 +196,11 @@ def main(cmdline=False, **kwargs):
         stac_query_dpath = (uncropped_query_dpath / 'stac_query_json').ensuredir()
         stac_inputs_dpath = (uncropped_query_dpath / 'stac_input_lists').ensuredir()
 
+        queue.submit('mkdir -p "{stac_query_dpath}"')
+        queue.sync()
+        queue.submit('mkdir -p "{stac_inputs_dpath}"')
+        queue.sync()
+
         s3_fpath_list = []
         # TODO: it would be nice to have just a single script that handles
         # multiple regions
@@ -230,7 +235,7 @@ def main(cmdline=False, **kwargs):
                     --search_json "{region_search_json_fpath}" \
                     --mode area \
                     --verbose 2 \
-                    --outfile "${region_inputs_fpath}"
+                    --outfile "{region_inputs_fpath}"
                 '''), depends=build_query_job)
 
             # Not really s3, but pretend it is
