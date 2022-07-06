@@ -257,6 +257,17 @@ def predict(cmdline=False, **kwargs):
         state_dict = checkpoint['state_dict']
         method.load_state_dict(state_dict)
 
+    # Hack to fix GELU issue
+    FIX_GELU_ISSUE = True
+    if FIX_GELU_ISSUE:
+        # Torch 1.12 added an approximate parameter that our old models dont
+        # have. Monkey patch it in.
+        # https://github.com/pytorch/pytorch/pull/61439
+        for name, mod in method.named_modules():
+            if mod.__class__.__name__ == 'GELU':
+                if not hasattr(mod, 'approximate'):
+                    mod.approximate = 'none'
+
     method.eval()
     method.freeze()
 
@@ -615,7 +626,7 @@ def predict(cmdline=False, **kwargs):
     with torch.set_grad_enabled(False):
         # FIXME: that data loader should not be producing incorrect sensor/mode
         # pairs in the first place!
-        EMERGENCY_INPUT_AGREEMENT_HACK = 0
+        EMERGENCY_INPUT_AGREEMENT_HACK = 1
         # prog.set_extra(' <will populate stats after first video>')
         _batch_iter = iter(prog)
         for orig_batch in _batch_iter:

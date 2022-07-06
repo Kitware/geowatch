@@ -213,6 +213,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         min_spacetime_weight=0.5,
         dist_weights=False,
         use_cloudmask=True,
+        set_cover_algo=None,
     ):
         """
         Args:
@@ -284,6 +285,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             min_spacetime_weight=min_spacetime_weight,
             dist_weights=dist_weights,
             use_cloudmask=use_cloudmask,
+            set_cover_algo=set_cover_algo,
         )
         for _k, _v in self.common_dataset_kwargs.items():
             setattr(self, _k, _v)
@@ -440,6 +442,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
         parser.add_argument(
             '--use_cloudmask', default=1, type=int, help=ub.paragraph('Allow the dataloader to use the cloud mask to skip frames'))
+
+        parser.add_argument(
+            '--set_cover_algo', default=None, type=smartcast, help=ub.paragraph('Set cover algorithm to remove redundant gids when building space time targets'))
 
         return parent_parser
 
@@ -852,6 +857,7 @@ class KWCocoVideoDataset(data.Dataset):
         min_spacetime_weight=0.5,
         dist_weights=False,
         use_cloudmask=1,
+        set_cover_algo=None,
     ):
         self.use_cloudmask = use_cloudmask
         self.dist_weights = dist_weights
@@ -864,6 +870,7 @@ class KWCocoVideoDataset(data.Dataset):
         self.use_conditional_classes = use_conditional_classes
         self.ignore_dilate = ignore_dilate
         self.min_spacetime_weight = min_spacetime_weight
+        self.set_cover_algo = set_cover_algo
 
         self.window_overlap = window_overlap
         self.sample_shape = sample_shape
@@ -933,6 +940,7 @@ class KWCocoVideoDataset(data.Dataset):
                 exclude_sensors=exclude_sensors,
                 time_sampling=time_sampling,
                 time_span=time_span,
+                set_cover_algo=set_cover_algo,
             )
             self.length = len(new_sample_grid['targets'])
         else:
@@ -949,6 +957,7 @@ class KWCocoVideoDataset(data.Dataset):
                 time_span=time_span,
                 use_centered_positives=use_centered_positives,
                 use_grid_positives=use_grid_positives,
+                set_cover_algo=set_cover_algo,
             )
 
             n_pos = len(new_sample_grid['positives_indexes'])
