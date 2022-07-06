@@ -16,7 +16,10 @@ fi
 
 # Do everything
 python -m pip install pip setuptools build -U
-python -m pip install -r requirements.txt
+
+pip install scikit-image  # not sure why this doesn't grab latest in req.txt (look into that)
+
+python -m pip install -r requirements.txt -v
 
 # Install the watch module in development mode
 python -m pip install -e .
