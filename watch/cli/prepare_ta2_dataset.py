@@ -208,16 +208,16 @@ def main(cmdline=False, **kwargs):
             region_search_json_fpath = (stac_query_dpath / (region_id + '.json')).shrinkuser(home='$HOME')
             region_inputs_fpath = (stac_inputs_dpath / (region_id + '.input')).shrinkuser(home='$HOME')
             if end_date is None:
-                end_date = util_time.coerce_datetime('now').date().isoformat()
+                end_date = util_time.coerce_datetime('now').date()
             if start_date is None:
-                start_date = util_time.coerce_datetime('2010-01-01').date().isoformat()
+                start_date = util_time.coerce_datetime('2010-01-01').date()
             cloud_cover = '40'  # TODO params
             sensors = 'L2'
             build_query_job = queue.submit(ub.codeblock(
                 rf'''
                 python -m watch.cli.stac_search_build \
-                    --start_date="{start_date}" \
-                    --end_date="{end_date}" \
+                    --start_date="{start_date.isoformat()}" \
+                    --end_date="{end_date.isoformat()}" \
                     --cloud_cover={cloud_cover} \
                     --sensors={sensors} \
                     --out_fpath "{region_search_json_fpath}"

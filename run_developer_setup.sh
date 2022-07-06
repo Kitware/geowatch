@@ -17,7 +17,9 @@ fi
 # Do everything
 python -m pip install pip setuptools build -U
 
-pip install scikit-image  # not sure why this doesn't grab latest in req.txt (look into that)
+# FIXME: Something in the req is pinning scikit-image to be less than 0.19 but
+# I'm not sure what it is.
+pip install scikit-image
 
 python -m pip install -r requirements.txt -v
 
