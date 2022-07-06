@@ -11,9 +11,9 @@ CommandLine:
     DEMO_DPATH=$HOME/.cache/watch/demo/datasets
     REGION_FPATH="$HOME/.cache/watch/demo/annotations/KHQ_R001.geojson"
     SITE_GLOBSTR="$HOME/.cache/watch/demo/annotations/KHQ_R001_sites/*.geojson"
-    START_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.start_date' $REGION_FPATH)
-    END_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.end_date' $REGION_FPATH)
-    REGION_ID=$(jq -r '.features[] | select(.properties.type=="region") | .properties.region_id' $REGION_FPATH)
+    START_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.start_date' "$REGION_FPATH")
+    END_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.end_date' "$REGION_FPATH")
+    REGION_ID=$(jq -r '.features[] | select(.properties.type=="region") | .properties.region_id' "$REGION_FPATH")
     SEARCH_FPATH=$DEMO_DPATH/stac_search.json
     RESULT_FPATH=$DEMO_DPATH/all_sensors_kit/${REGION_ID}.input
 
@@ -244,14 +244,10 @@ def main(cmdline=True, **kwargs):
         >>>     print(item['properties']['eo:cloud_cover'])
         >>>     print(item['properties']['datetime'])
     """
-    # if 1:
     config = StacSearchConfig(cmdline=cmdline, data=kwargs)
     import ubelt as ub
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
     args = config.namespace
-    # else:
-    #     parser = _make_parser()
-    #     args = parser.parse_args()
 
     logger = util_logging.get_logger(verbose=args.verbose)
     searcher = StacSearcher(logger)

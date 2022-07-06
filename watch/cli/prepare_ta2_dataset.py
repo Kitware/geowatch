@@ -74,7 +74,8 @@ import ubelt as ub
 class PrepareTA2Config(scfg.Config):
     default = {
         'dataset_suffix': scfg.Value(None, help=''),
-        's3_fpath': scfg.Value(None, nargs='+', help=''),
+        'stac_query_mode': scfg.Value(None, help='if set to auto we try to make the .input files'),
+        's3_fpath': scfg.Value(None, nargs='+', help='A list of .input files which were the results of an existing stac query. Mutex with stac_query_* args'),
         'dvc_dpath': scfg.Value('auto', help=''),
         'run': scfg.Value('0', help=''),
         'collated': scfg.Value([True], nargs='+', help='set to false if the input data is not collated'),
@@ -162,12 +163,7 @@ def main(cmdline=False, **kwargs):
 
     import cmd_queue
     queue = cmd_queue.Queue.create(
-        backend=config['backend'], name='teamfeat', size=1, gres=None)
-
-    s3_fpath_list = config['s3_fpath']
-    collated_list = config['collated']
-    if len(collated_list) != len(s3_fpath_list):
-        print('Indicate if each s3 path is collated or not')
+        backend=config['backend'], name='prep-ta2-dataset', size=1, gres=None)
 
     job_environs = [
         # 'PROJ_DEBUG=3',
@@ -178,6 +174,79 @@ def main(cmdline=False, **kwargs):
     job_environ_str = ' '.join(job_environs)
     if job_environ_str:
         job_environ_str += ' '
+
+    def _coerce_globstr(p):
+        globstr = ub.Path(p)
+        if str(globstr).startswith('./'):
+            final_globstr = globstr
+        else:
+            final_globstr = dvc_dpath / globstr
+        final_globstr = final_globstr.shrinkuser(home='$HOME')
+        return final_globstr
+
+    # region_models = list(region_dpath.glob('*.geojson'))
+    final_region_globstr = _coerce_globstr(config['region_globstr'])
+
+    if config['stac_query_mode'] == 'auto':
+        from watch.utils import util_path
+        from watch.utils import util_time
+        from watch.utils import util_gis
+        region_file_fpaths = util_path.coerce_patterned_paths(final_region_globstr.expand())
+
+        stac_query_dpath = (uncropped_query_dpath / 'stac_query_json').ensuredir()
+        stac_inputs_dpath = (uncropped_query_dpath / 'stac_input_lists').ensuredir()
+
+        s3_fpath_list = []
+        # TODO: it would be nice to have just a single script that handles
+        # multiple regions
+        for region_fpath in region_file_fpaths:
+            region_df = util_gis.read_geojson(region_fpath)
+            region_row = region_df[region_df['type'] == 'region'].iloc[0]
+            end_date = util_time.coerce_datetime(region_row['end_date'])
+            start_date = util_time.coerce_datetime(region_row['start_date'])
+            region_id = region_row['region_id']
+            region_search_json_fpath = (stac_query_dpath / (region_id + '.json')).shrinkuser(home='$HOME')
+            region_inputs_fpath = (stac_inputs_dpath / (region_id + '.input')).shrinkuser(home='$HOME')
+            if end_date is None:
+                end_date = util_time.coerce_datetime('now').date().isoformat()
+            if start_date is None:
+                start_date = util_time.coerce_datetime('2010-01-01').date().isoformat()
+            cloud_cover = '40'  # TODO params
+            sensors = 'L2'
+            build_query_job = queue.submit(ub.codeblock(
+                rf'''
+                python -m watch.cli.stac_search_build \
+                    --start_date="{start_date}" \
+                    --end_date="{end_date}" \
+                    --cloud_cover={cloud_cover} \
+                    --sensors={sensors} \
+                    --out_fpath "{region_search_json_fpath}"
+                '''))
+
+            build_query_job = queue.submit(ub.codeblock(
+                rf'''
+                python -m watch.cli.stac_search \
+                    --region_file "{region_fpath.shrinkuser(home='$HOME')}" \
+                    --search_json "{region_search_json_fpath}" \
+                    --mode area \
+                    --verbose 2 \
+                    --outfile "${region_inputs_fpath}"
+                '''), depends=build_query_job)
+
+            # Not really s3, but pretend it is
+            s3_fpath_list.append(region_inputs_fpath)
+
+        collated_list = [False] * len(s3_fpath_list)
+
+        queue.sync()
+
+        # Hack, todo, properly configure
+        # We need to construct the input lists manually here
+    else:
+        s3_fpath_list = config['s3_fpath']
+        collated_list = config['collated']
+        if len(collated_list) != len(s3_fpath_list):
+            print('Indicate if each s3 path is collated or not')
 
     uncropped_coco_paths = []
     union_depends_jobs = []
@@ -191,7 +260,8 @@ def main(cmdline=False, **kwargs):
         uncropped_ingress_dpath = uncropped_ingress_dpath.shrinkuser(home='$HOME')
 
         cache_prefix = '[[ -f {uncropped_query_fpath} ]] || ' if config['cache'] else ''
-        if not str(s3_fpath).startswith('s3') and s3_fpath.exists():
+        if not str(s3_fpath).startswith('s3'):
+            # and s3_fpath.exists():
             grab_job = queue.submit(ub.codeblock(
                 f'''
                 # GRAB Input STAC List
@@ -317,18 +387,6 @@ def main(cmdline=False, **kwargs):
     debug_valid_regions = config['debug']
     align_visualize = config['debug']
     channels = config['channels']
-
-    def _coerce_globstr(p):
-        globstr = ub.Path(p)
-        if str(globstr).startswith('./'):
-            final_globstr = globstr
-        else:
-            final_globstr = dvc_dpath / globstr
-        final_globstr = final_globstr.shrinkuser(home='$HOME')
-        return final_globstr
-
-    # region_models = list(region_dpath.glob('*.geojson'))
-    final_region_globstr = _coerce_globstr(config['region_globstr'])
 
     align_job = queue.submit(ub.codeblock(
         rf'''

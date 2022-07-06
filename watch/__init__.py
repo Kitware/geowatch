@@ -158,16 +158,12 @@ __getattr__ = lazy_import(
     __name__,
     submodules={
         'cli',
-        'datacube',
         'demo',
         'gis',
         'heuristics',
-        'models',
         'rc',
-        'sequencing',
         'tasks',
         'utils',
-        'validation',
     },
     submod_attrs={
         'demo': [
@@ -184,5 +180,5 @@ def __dir__():
     return __all__
 
 __all__ = ['cli', 'coerce_kwcoco', 'datacube', 'demo',
-           'find_smart_dvc_dpath', 'gis', 'heuristics', 'models', 'rc',
-           'sequencing', 'tasks', 'utils', 'validation']
+           'find_smart_dvc_dpath', 'gis', 'heuristics', 'rc',
+           'sequencing', 'tasks', 'utils']
