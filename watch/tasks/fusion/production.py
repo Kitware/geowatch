@@ -81,6 +81,7 @@ PRODUCTION_MODELS = [
     {
         'name': 'Drop3_SpotCheck_V323_epoch=18-step=12976.pt ',
         'file_name': 'models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt',
+        'predictions': 'models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt',
         'task': 'BAS',
         'gsd': 10.0,
         'input_channels': 'blue|green|red|nir|swir16|swir22',

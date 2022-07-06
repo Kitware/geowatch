@@ -27,7 +27,7 @@ pip install -e .
 
 # TODO: we should skip trying to install gdal if possible
 
-pip install GDAL==3.3.1 --find-links https://girder.github.io/large_image_wheels -U
+pip install GDAL==3.4.1 --find-links https://girder.github.io/large_image_wheels -U
 
 pip install dvc[all]>=2.9.3
 
