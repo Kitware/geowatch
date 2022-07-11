@@ -168,6 +168,9 @@ class StacSearchConfig(scfg.Config):
             short_alias=['o'],
             required=True
         ),
+
+        'region_globstr': scfg.Value(None, help='if specified, run over multiple region files and ignore "region_file" and "site_file"'),
+
         'region_file': scfg.Value(
             None,
             help='path to a region geojson file; required if mode is area',
@@ -254,83 +257,37 @@ def main(cmdline=True, **kwargs):
 
     outdir = os.path.dirname(args.outfile)
 
-    if outdir == '':
-        temp_dir = create_working_dir()
-        logger.info('Created temp folder: ' + temp_dir)
+    temp_dir = create_working_dir()
+    logger.info('Created temp folder: ' + temp_dir)
 
+    if outdir == '':
         dest_path = os.path.join(temp_dir, args.outfile)
     else:
         os.makedirs(outdir, exist_ok=True)
-
         dest_path = args.outfile
 
     if args.mode == 'area':
+        if config['region_globstr'] is not None:
+            from watch.utils import util_path
+            region_file_fpaths = util_path.coerce_patterned_paths(config['region_globstr'])
+            assert args.mode == 'area'
+        else:
+            if not hasattr(args, 'region_file'):
+                raise ValueError('Missing region file')
+            region_file_fpaths = [args.region_file]
+        print('region_file_fpaths = {}'.format(ub.repr2(region_file_fpaths, nl=1)))
+
         if not hasattr(args, 'search_json'):
             raise ValueError('Missing stac search parameters')
+        search_json = args.search_json
 
-        if not hasattr(args, 'region_file'):
-            raise ValueError('Missing region file')
-
-        logger.info('Reading STAC search JSON')
-        try:
-            search_params = json.loads(args.search_json)
-        except json.decoder.JSONDecodeError:
-            with open(args.search_json) as f:
-                search_params = json.load(f)
-
-        if args.region_file.startswith('s3://'):
-            r_file_loc = get_file_from_s3(args.region_file, temp_dir)
-        else:
-            r_file_loc = args.region_file
-
-        logger.info('Opening region file')
-        with open(r_file_loc, 'r') as r_file:
-            region = json.loads(r_file.read())
-
-        regions = [
-            f for f in region['features'] if (
-                f['properties']['type'].lower() == 'region')
-        ]
-        if len(regions) > 0:
-            # assume only 1 region per region model file
-            geom = shape(regions[0]['geometry'])
-            for s in search_params['stac_search']:
-                searcher.by_geometry(
-                    s['endpoint'],
-                    geom,
-                    s['collections'],
-                    s['start_date'],
-                    s['end_date'],
-                    dest_path,
-                    s.get('query', {}),
-                    s.get('headers', {})
-                )
+        # Might be reasonable to parallize this, but will need locks around
+        # writes to the same file, or write to separate files and then combine
+        for region_fpath in region_file_fpaths:
+            logger.info('Query region file: {}'.format(region_fpath))
+            area_query(region_fpath, search_json, searcher, temp_dir, dest_path)
     else:
-        if args.site_file.startswith('s3://'):
-            s_file_loc = get_file_from_s3(args.site_file, temp_dir)
-        else:
-            s_file_loc = args.site_file
-
-        logger.info('Opening site file')
-        with open(s_file_loc, 'r') as s_file:
-            site = json.loads(s_file.read())
-
-        features = site['features']
-
-        for f in features:
-            props = f['properties']
-            if props['type'] == 'observation':
-                sensor = props['sensor_name']
-                if sensor.lower() != "worldview":
-                    params = stac_config[sensor]
-                    searcher.by_id(
-                        params['provider'],
-                        params['collections'],
-                        props['source'],
-                        dest_path,
-                        params['query'],
-                        params['headers']
-                    )
+        id_query(searcher, logger, dest_path, temp_dir, args)
 
     if args.s3_dest is not None:
         logger.info('Saving output to S3')
@@ -339,6 +296,93 @@ def main(cmdline=True, **kwargs):
         logger.info('--s3_dest parameter not present; skipping S3 output')
 
     logger.info('Search complete')
+
+
+def area_query(region_fpath, search_json, searcher, temp_dir, dest_path):
+
+    if str(region_fpath).startswith('s3://'):
+        r_file_loc = get_file_from_s3(region_fpath, temp_dir)
+    else:
+        r_file_loc = region_fpath
+
+    if search_json == 'auto':
+        # hack to construct the search params here.
+        from watch.utils import util_gis
+        from watch.utils import util_time
+        from watch.cli.stac_search_build import build_search_json
+        region_df = util_gis.read_geojson(r_file_loc)
+        region_row = region_df[region_df['type'] == 'region'].iloc[0]
+        end_date = util_time.coerce_datetime(region_row['end_date'])
+        start_date = util_time.coerce_datetime(region_row['start_date'])
+        if end_date is None:
+            end_date = util_time.coerce_datetime('now').date()
+        if start_date is None:
+            start_date = util_time.coerce_datetime('2010-01-01').date()
+        # Hack to avoid pre-constructing the search json
+        cloud_cover = '10'  # TODO parametarize this
+        sensors = 'L2'
+        api_key = 'env:SMART_STAC_API_KEY'
+        search_params = build_search_json(
+            sensors=sensors, api_key=api_key,
+            start_date=start_date, end_date=end_date,
+            cloud_cover=cloud_cover)
+    else:
+        # Assume it is a path
+        try:
+            search_params = json.loads(search_json)
+        except json.decoder.JSONDecodeError:
+            with open(search_json) as f:
+                search_params = json.load(f)
+
+    with open(r_file_loc, 'r') as r_file:
+        region = json.loads(r_file.read())
+
+    regions = [
+        f for f in region['features'] if (
+            f['properties']['type'].lower() == 'region')
+    ]
+    if len(regions) > 0:
+        # assume only 1 region per region model file
+        geom = shape(regions[0]['geometry'])
+        for s in search_params['stac_search']:
+            searcher.by_geometry(
+                s['endpoint'],
+                geom,
+                s['collections'],
+                s['start_date'],
+                s['end_date'],
+                dest_path,
+                s.get('query', {}),
+                s.get('headers', {})
+            )
+
+
+def id_query(searcher, logger, dest_path, temp_dir, args):
+    if args.site_file.startswith('s3://'):
+        s_file_loc = get_file_from_s3(args.site_file, temp_dir)
+    else:
+        s_file_loc = args.site_file
+
+    logger.info('Opening site file')
+    with open(s_file_loc, 'r') as s_file:
+        site = json.loads(s_file.read())
+
+    features = site['features']
+
+    for f in features:
+        props = f['properties']
+        if props['type'] == 'observation':
+            sensor = props['sensor_name']
+            if sensor.lower() != "worldview":
+                params = stac_config[sensor]
+                searcher.by_id(
+                    params['provider'],
+                    params['collections'],
+                    props['source'],
+                    dest_path,
+                    params['query'],
+                    params['headers']
+                )
 
 
 if __name__ == '__main__':

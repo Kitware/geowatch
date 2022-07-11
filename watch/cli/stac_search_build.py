@@ -62,6 +62,52 @@ SENSOR_TO_DEFAULTS = {
 }
 
 
+def build_search_json(sensors, api_key='env:SMART_STAC_API_KEY', start_date=None, end_date=None, cloud_cover=None):
+    from watch.utils import util_time
+
+    if api_key.startswith('env:'):
+        api_environ_key = api_key.split(':')[1]
+        api_key = os.environ.get(api_environ_key, None)
+
+    if sensors == 'TA1':
+        sensors = [
+            'ta1-s2-kit',
+            'ta1-l8-kit',
+            'ta1-wv-kit',
+        ]
+    elif sensors == 'L2':
+        sensors = [
+            'sentinel-s2-l2a-cogs',
+        ]
+
+    headers = {
+            "x-api-key": api_key,
+    }
+    start_date = util_time.coerce_datetime(start_date, default_timezone='utc')
+    end_date = util_time.coerce_datetime(end_date, default_timezone='utc')
+
+    if start_date is None or end_date is None:
+        raise ValueError('need start and end date')
+
+    search_item_list = []
+    for sensor in sensors:
+        search_item = SENSOR_TO_DEFAULTS[sensor]
+        item_query = search_item.setdefault('query', {})
+        search_item['headers'] = headers
+        search_item['start_date'] = start_date.date().isoformat()
+        search_item['end_date'] = end_date.date().isoformat()
+        if cloud_cover is not None:
+            item_query['eo:cloud_cover'] = {
+                'lt': cloud_cover,
+            }
+        search_item_list.append(search_item)
+
+    search_json = {
+        'stac_search': search_item_list,
+    }
+    return search_json
+
+
 def main(cmdline=1, **kwargs):
     """
     Example:
@@ -74,59 +120,10 @@ def main(cmdline=1, **kwargs):
         }
         main(cmdline=cmdline, **kwargs)
     """
-    from watch.utils import util_time
     import json
     config = StacSearchBuilderConfig(cmdline=cmdline, data=kwargs)
 
-    if config['api_key'].startswith('env:'):
-        api_environ_key = config['api_key'].split(':')[1]
-        config['api_key'] = os.environ.get(api_environ_key, None)
-
-    if config['sensors'] == 'TA1':
-        config['sensors'] = [
-            'ta1-s2-kit',
-            'ta1-l8-kit',
-            'ta1-wv-kit',
-        ]
-    elif config['sensors'] == 'L2':
-        config['sensors'] = [
-            'sentinel-s2-l2a-cogs',
-        ]
-
-    headers = {
-            "x-api-key": config['api_key'],
-    }
-
-    # ub.timeparse()
-    start_date = util_time.coerce_datetime(
-        config['start_date'], default_timezone='utc')
-    end_date = util_time.coerce_datetime(
-        config['end_date'], default_timezone='utc')
-
-    # if end_date is None:
-    #     end_date = start_date
-    # if start_date is None:
-    #     start_date = end_date
-
-    if start_date is None or end_date is None:
-        raise ValueError('need start and end date')
-
-    search_item_list = []
-    for sensor in config['sensors']:
-        search_item = SENSOR_TO_DEFAULTS[sensor]
-        item_query = search_item.setdefault('query', {})
-        search_item['headers'] = headers
-        search_item['start_date'] = start_date.date().isoformat()
-        search_item['end_date'] = end_date.date().isoformat()
-        if config['cloud_cover'] is not None:
-            item_query['eo:cloud_cover'] = {
-                'lt': config['cloud_cover'],
-            }
-        search_item_list.append(search_item)
-
-    search_json = {
-        'stac_search': search_item_list,
-    }
+    search_json = build_search_json(**ub.compatible(config, build_search_json))
     text = json.dumps(search_json, indent='    ')
 
     if config['out_fpath'] is not None:

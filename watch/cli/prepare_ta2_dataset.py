@@ -201,55 +201,70 @@ def main(cmdline=False, **kwargs):
         queue.submit(f'mkdir -p "{stac_inputs_dpath}"')
         queue.sync()
 
-        s3_fpath_list = []
-        # TODO: it would be nice to have just a single script that handles
-        # multiple regions
-        for region_fpath in region_file_fpaths:
-            region_df = util_gis.read_geojson(region_fpath)
-            region_row = region_df[region_df['type'] == 'region'].iloc[0]
-            end_date = util_time.coerce_datetime(region_row['end_date'])
-            start_date = util_time.coerce_datetime(region_row['start_date'])
-            region_id = region_row['region_id']
-            region_search_json_fpath = (stac_query_dpath / (region_id + '.json')).shrinkuser(home='$HOME')
-            region_inputs_fpath = (stac_inputs_dpath / (region_id + '.input')).shrinkuser(home='$HOME')
-            if end_date is None:
-                end_date = util_time.coerce_datetime('now').date()
-            if start_date is None:
-                start_date = util_time.coerce_datetime('2010-01-01').date()
-            cloud_cover = '40'  # TODO params
-            sensors = 'L2'
-
-            cache_prefix = '[[ -f {region_search_json_fpath} ]] || ' if config['cache'] else ''
+        if 1:
+            combo_hash = ub.hash_data(sorted(list(map(ub.hash_file, region_file_fpaths))))[0:8]
+            combined_inputs_fpath = (stac_inputs_dpath / (f'combo_{combo_hash}.input')).shrinkuser(home='$HOME')
             build_query_job = queue.submit(ub.codeblock(
                 rf'''
-                {cache_prefix}python -m watch.cli.stac_search_build \
-                    --start_date="{start_date.isoformat()}" \
-                    --end_date="{end_date.isoformat()}" \
-                    --cloud_cover={cloud_cover} \
-                    --sensors={sensors} \
-                    --out_fpath "{region_search_json_fpath}"
-                '''))
-
-            cache_prefix = '[[ -f {region_inputs_fpath} ]] || ' if config['cache'] else ''
-            build_query_job = queue.submit(ub.codeblock(
-                rf'''
-                {cache_prefix}python -m watch.cli.stac_search \
-                    --region_file "{region_fpath.shrinkuser(home='$HOME')}" \
-                    --search_json "{region_search_json_fpath}" \
+                python -m watch.cli.stac_search \
+                    --region_globstr "{final_region_globstr}" \
+                    --search_json "auto" \
                     --mode area \
                     --verbose 2 \
-                    --outfile "{region_inputs_fpath}"
-                '''), depends=build_query_job)
+                    --outfile "{combined_inputs_fpath}"
+                '''))
+            s3_fpath_list = [combined_inputs_fpath]
+            collated_list = [False]
+        else:
+            s3_fpath_list = []
+            # TODO: it would be nice to have just a single script that handles
+            # multiple regions
+            for region_fpath in region_file_fpaths:
+                region_df = util_gis.read_geojson(region_fpath)
+                region_row = region_df[region_df['type'] == 'region'].iloc[0]
+                end_date = util_time.coerce_datetime(region_row['end_date'])
+                start_date = util_time.coerce_datetime(region_row['start_date'])
+                region_id = region_row['region_id']
+                region_search_json_fpath = (stac_query_dpath / (region_id + '.json')).shrinkuser(home='$HOME')
+                region_inputs_fpath = (stac_inputs_dpath / (region_id + '.input')).shrinkuser(home='$HOME')
+                if end_date is None:
+                    end_date = util_time.coerce_datetime('now').date()
+                if start_date is None:
+                    start_date = util_time.coerce_datetime('2010-01-01').date()
+                cloud_cover = '40'  # TODO params
+                sensors = 'L2'
 
-            # Not really s3, but pretend it is
-            s3_fpath_list.append(region_inputs_fpath)
+                cache_prefix = '[[ -f {region_search_json_fpath} ]] || ' if config['cache'] else ''
+                build_query_job = queue.submit(ub.codeblock(
+                    rf'''
+                    {cache_prefix}python -m watch.cli.stac_search_build \
+                        --start_date="{start_date.isoformat()}" \
+                        --end_date="{end_date.isoformat()}" \
+                        --cloud_cover={cloud_cover} \
+                        --sensors={sensors} \
+                        --out_fpath "{region_search_json_fpath}"
+                    '''))
+
+                cache_prefix = '[[ -f {region_inputs_fpath} ]] || ' if config['cache'] else ''
+                build_query_job = queue.submit(ub.codeblock(
+                    rf'''
+                    {cache_prefix}python -m watch.cli.stac_search \
+                        --region_file "{region_fpath.shrinkuser(home='$HOME')}" \
+                        --search_json "{region_search_json_fpath}" \
+                        --mode area \
+                        --verbose 2 \
+                        --outfile "{region_inputs_fpath}"
+                    '''), depends=build_query_job)
+
+                # Not really s3, but pretend it is
+                s3_fpath_list.append(region_inputs_fpath)
 
         # Hack, todo, properly configure
         # We need to construct the input lists manually here
         queue.sync()
         collated_list = [False] * len(s3_fpath_list)
 
-        if True:
+        if len(s3_fpath_list) > 1 and True:
             # Combine all into a single path.
             combo_hash = ub.hash_data(s3_fpath_list)[0:8]
             combined_inputs_fpath = (stac_inputs_dpath / (f'combo_{combo_hash}.input')).shrinkuser(home='$HOME')
@@ -260,7 +275,6 @@ def main(cmdline=False, **kwargs):
                 cat {' '.join(quoted_fpath_list)} > "{combined_inputs_fpath}"
                 '''))
             queue.sync()
-
             s3_fpath_list = [combined_inputs_fpath]
             collated_list = [False]
 
