@@ -202,6 +202,10 @@ class StacSearchConfig(scfg.Config):
             type=int,
             short_alias=['v']
         ),
+
+        'cloud_cover': scfg.Value(10, help='maximum cloud cover percentage (ignored if search_json given)'),
+        'sensors': scfg.Value("L2", help='(ignored if search_json given)'),
+        'api_key': scfg.Value('env:SMART_STAC_API_KEY', help='The API key or where to get it (ignored if search_json given)'),
     }
 
 
@@ -283,9 +287,12 @@ def main(cmdline=True, **kwargs):
 
         # Might be reasonable to parallize this, but will need locks around
         # writes to the same file, or write to separate files and then combine
+        sensors = config['sensors']
+        cloud_cover = config['cloud_cover']
         for region_fpath in region_file_fpaths:
             logger.info('Query region file: {}'.format(region_fpath))
-            area_query(region_fpath, search_json, searcher, temp_dir, dest_path)
+            area_query(region_fpath, search_json, searcher, temp_dir,
+                       dest_path, cloud_cover, sensors)
     else:
         id_query(searcher, logger, dest_path, temp_dir, args)
 
@@ -298,7 +305,7 @@ def main(cmdline=True, **kwargs):
     logger.info('Search complete')
 
 
-def area_query(region_fpath, search_json, searcher, temp_dir, dest_path):
+def area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config):
 
     if str(region_fpath).startswith('s3://'):
         r_file_loc = get_file_from_s3(region_fpath, temp_dir)
@@ -319,12 +326,12 @@ def area_query(region_fpath, search_json, searcher, temp_dir, dest_path):
         if start_date is None:
             start_date = util_time.coerce_datetime('2010-01-01').date()
         # Hack to avoid pre-constructing the search json
-        cloud_cover = '10'  # TODO parametarize this
-        sensors = 'L2'
-        api_key = 'env:SMART_STAC_API_KEY'
+        cloud_cover = config['cloud_cover']  # TODO parametarize this
+        sensors = config['sensors']
+        api_key = config['api_key']
         search_params = build_search_json(
-            sensors=sensors, api_key=api_key,
             start_date=start_date, end_date=end_date,
+            sensors=sensors, api_key=api_key,
             cloud_cover=cloud_cover)
     else:
         # Assume it is a path

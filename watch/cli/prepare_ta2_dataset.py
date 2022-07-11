@@ -74,7 +74,13 @@ import ubelt as ub
 class PrepareTA2Config(scfg.Config):
     default = {
         'dataset_suffix': scfg.Value(None, help=''),
-        'stac_query_mode': scfg.Value(None, help='if set to auto we try to make the .input files'),
+
+        'stac_query_mode': scfg.Value(None, help='if set to auto we try to make the .input files (ignored if s3_fpath given)'),
+        'cloud_cover': scfg.Value(10, help='maximum cloud cover percentage (ignored if s3_fpath given)'),
+        'sensors': scfg.Value("L2", help='(ignored if s3_fpath given)'),
+        'api_key': scfg.Value('env:SMART_STAC_API_KEY', help='The API key or where to get it (ignored if s3_fpath given)'),
+
+
         's3_fpath': scfg.Value(None, nargs='+', help='A list of .input files which were the results of an existing stac query. Mutex with stac_query_* args'),
         'dvc_dpath': scfg.Value('auto', help=''),
         'run': scfg.Value('0', help=''),
@@ -191,24 +197,22 @@ def main(cmdline=False, **kwargs):
         from watch.utils import util_path
         from watch.utils import util_time
         from watch.utils import util_gis
-        region_file_fpaths = util_path.coerce_patterned_paths(final_region_globstr.expand())
 
-        stac_query_dpath = (uncropped_query_dpath / 'stac_query_json').ensuredir()
         stac_inputs_dpath = (uncropped_query_dpath / 'stac_input_lists').ensuredir()
 
-        queue.submit(f'mkdir -p "{stac_query_dpath}"')
-        queue.sync()
         queue.submit(f'mkdir -p "{stac_inputs_dpath}"')
         queue.sync()
 
         if 1:
-            combo_hash = ub.hash_data(sorted(list(map(ub.hash_file, region_file_fpaths))))[0:8]
-            combined_inputs_fpath = (stac_inputs_dpath / (f'combo_{combo_hash}.input')).shrinkuser(home='$HOME')
+            combined_inputs_fpath = (stac_inputs_dpath / (f'combo_query_{config["dataset_suffix"]}.input')).shrinkuser(home='$HOME')
             build_query_job = queue.submit(ub.codeblock(
                 rf'''
                 python -m watch.cli.stac_search \
                     --region_globstr "{final_region_globstr}" \
                     --search_json "auto" \
+                    --cloud_cover "{config['cloud_cover']}" \
+                    --sensors "{config['sensors']}" \
+                    --api_key "{config['api_key']}" \
                     --mode area \
                     --verbose 2 \
                     --outfile "{combined_inputs_fpath}"
@@ -216,6 +220,10 @@ def main(cmdline=False, **kwargs):
             s3_fpath_list = [combined_inputs_fpath]
             collated_list = [False]
         else:
+            stac_query_dpath = (uncropped_query_dpath / 'stac_query_json').ensuredir()
+            queue.submit(f'mkdir -p "{stac_query_dpath}"')
+            queue.sync()
+            region_file_fpaths = util_path.coerce_patterned_paths(final_region_globstr.expand())
             s3_fpath_list = []
             # TODO: it would be nice to have just a single script that handles
             # multiple regions

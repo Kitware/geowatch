@@ -62,7 +62,7 @@ SENSOR_TO_DEFAULTS = {
 }
 
 
-def build_search_json(sensors, api_key='env:SMART_STAC_API_KEY', start_date=None, end_date=None, cloud_cover=None):
+def build_search_json(start_date, end_date, sensors, api_key, cloud_cover):
     from watch.utils import util_time
 
     if api_key.startswith('env:'):
