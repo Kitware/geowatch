@@ -196,9 +196,9 @@ def main(cmdline=False, **kwargs):
         stac_query_dpath = (uncropped_query_dpath / 'stac_query_json').ensuredir()
         stac_inputs_dpath = (uncropped_query_dpath / 'stac_input_lists').ensuredir()
 
-        queue.submit('mkdir -p "{stac_query_dpath}"')
+        queue.submit(f'mkdir -p "{stac_query_dpath}"')
         queue.sync()
-        queue.submit('mkdir -p "{stac_inputs_dpath}"')
+        queue.submit(f'mkdir -p "{stac_inputs_dpath}"')
         queue.sync()
 
         s3_fpath_list = []
