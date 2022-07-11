@@ -218,9 +218,11 @@ def main(cmdline=False, **kwargs):
                 start_date = util_time.coerce_datetime('2010-01-01').date()
             cloud_cover = '40'  # TODO params
             sensors = 'L2'
+
+            cache_prefix = '[[ -f {region_search_json_fpath} ]] || ' if config['cache'] else ''
             build_query_job = queue.submit(ub.codeblock(
                 rf'''
-                python -m watch.cli.stac_search_build \
+                {cache_prefix}python -m watch.cli.stac_search_build \
                     --start_date="{start_date.isoformat()}" \
                     --end_date="{end_date.isoformat()}" \
                     --cloud_cover={cloud_cover} \
@@ -228,9 +230,10 @@ def main(cmdline=False, **kwargs):
                     --out_fpath "{region_search_json_fpath}"
                 '''))
 
+            cache_prefix = '[[ -f {region_inputs_fpath} ]] || ' if config['cache'] else ''
             build_query_job = queue.submit(ub.codeblock(
                 rf'''
-                python -m watch.cli.stac_search \
+                {cache_prefix}python -m watch.cli.stac_search \
                     --region_file "{region_fpath.shrinkuser(home='$HOME')}" \
                     --search_json "{region_search_json_fpath}" \
                     --mode area \
@@ -241,12 +244,26 @@ def main(cmdline=False, **kwargs):
             # Not really s3, but pretend it is
             s3_fpath_list.append(region_inputs_fpath)
 
-        collated_list = [False] * len(s3_fpath_list)
-
-        queue.sync()
-
         # Hack, todo, properly configure
         # We need to construct the input lists manually here
+        queue.sync()
+        collated_list = [False] * len(s3_fpath_list)
+
+        if True:
+            # Combine all into a single path.
+            combo_hash = ub.hash_data(s3_fpath_list)[0:8]
+            combined_inputs_fpath = (stac_inputs_dpath / (f'combo_{combo_hash}.input')).shrinkuser(home='$HOME')
+            quoted_fpath_list = ['"{}"'.format(p) for p in s3_fpath_list]
+            queue.submit(ub.codeblock(
+                f'''
+                # GRAB Input STAC List
+                cat {' '.join(quoted_fpath_list)} > "{combined_inputs_fpath}"
+                '''))
+            queue.sync()
+
+            s3_fpath_list = [combined_inputs_fpath]
+            collated_list = [False]
+
     else:
         s3_fpath_list = config['s3_fpath']
         collated_list = config['collated']
