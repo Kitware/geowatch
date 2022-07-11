@@ -1,4 +1,4 @@
-"""
+r"""
 An end-to-end script for calling all the scripts needed to
 
 * Pulls the STAC catalog that points to processed large image tiles
@@ -95,7 +95,7 @@ class PrepareTA2Config(scfg.Config):
         'align_workers': scfg.Value(0, help='workers for align script'),
         'align_aux_workers': scfg.Value(0, help='threads per align process (typically set this to 0)'),
 
-        'ignore_duplicates': scfg.Value(0, help='workers for align script'),
+        'ignore_duplicates': scfg.Value(1, help='workers for align script'),
 
         'visualize': scfg.Value(0, help='if True runs visualize'),
 
