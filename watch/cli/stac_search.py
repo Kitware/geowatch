@@ -287,12 +287,9 @@ def main(cmdline=True, **kwargs):
 
         # Might be reasonable to parallize this, but will need locks around
         # writes to the same file, or write to separate files and then combine
-        sensors = config['sensors']
-        cloud_cover = config['cloud_cover']
         for region_fpath in region_file_fpaths:
             logger.info('Query region file: {}'.format(region_fpath))
-            area_query(region_fpath, search_json, searcher, temp_dir,
-                       dest_path, cloud_cover, sensors)
+            area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config)
     else:
         id_query(searcher, logger, dest_path, temp_dir, args)
 
