@@ -357,6 +357,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     pred_cfg_basis['tta_time'] = ensure_iterable(config['tta_time'])
     pred_cfg_basis['tta_fliprot'] = ensure_iterable(config['tta_fliprot'])
     pred_cfg_basis['chip_overlap'] = ensure_iterable(config['chip_overlap'])
+    pred_cfg_basis['set_cover_algo'] = [None, 'approx']
 
     HACK_HACKHACK = 0
 
@@ -549,6 +550,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     --chip_overlap={chip_overlap} \
                     --tta_time={tta_time} \
                     --tta_fliprot={tta_fliprot} \
+                    --set_cover_algo={set_cover_algo} \
                     --devices=0, \
                     --batch_size=1
                 ''').format(**suggestions, **predictkw)

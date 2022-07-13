@@ -213,6 +213,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         min_spacetime_weight=0.5,
         dist_weights=False,
         use_cloudmask=True,
+        set_cover_algo=None,
     ):
         """
         Args:
@@ -284,6 +285,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             min_spacetime_weight=min_spacetime_weight,
             dist_weights=dist_weights,
             use_cloudmask=use_cloudmask,
+            set_cover_algo=set_cover_algo,
         )
         for _k, _v in self.common_dataset_kwargs.items():
             setattr(self, _k, _v)
@@ -440,6 +442,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
         parser.add_argument(
             '--use_cloudmask', default=1, type=int, help=ub.paragraph('Allow the dataloader to use the cloud mask to skip frames'))
+
+        parser.add_argument(
+            '--set_cover_algo', default=None, type=smartcast, help=ub.paragraph('Set cover algorithm to remove redundant gids when building space time targets'))
 
         return parent_parser
 
@@ -853,6 +858,7 @@ class KWCocoVideoDataset(data.Dataset):
         min_spacetime_weight=0.5,
         dist_weights=False,
         use_cloudmask=1,
+        set_cover_algo=None,
     ):
         self.use_cloudmask = use_cloudmask
         self.dist_weights = dist_weights
@@ -865,6 +871,7 @@ class KWCocoVideoDataset(data.Dataset):
         self.use_conditional_classes = use_conditional_classes
         self.ignore_dilate = ignore_dilate
         self.min_spacetime_weight = min_spacetime_weight
+        self.set_cover_algo = set_cover_algo
 
         self.window_overlap = window_overlap
         self.sample_shape = sample_shape
@@ -934,6 +941,7 @@ class KWCocoVideoDataset(data.Dataset):
                 exclude_sensors=exclude_sensors,
                 time_sampling=time_sampling,
                 time_span=time_span,
+                set_cover_algo=set_cover_algo,
             )
             self.length = len(new_sample_grid['targets'])
         else:
@@ -950,6 +958,7 @@ class KWCocoVideoDataset(data.Dataset):
                 time_span=time_span,
                 use_centered_positives=use_centered_positives,
                 use_grid_positives=use_grid_positives,
+                set_cover_algo=set_cover_algo,
             )
 
             n_pos = len(new_sample_grid['positives_indexes'])
@@ -2443,7 +2452,7 @@ class KWCocoVideoDataset(data.Dataset):
         return dataset_stats
 
     def compute_dataset_stats(self, num=None, num_workers=0, batch_size=2,
-                              with_intensity=True, with_class=True):
+                              with_intensity=True, with_class=True, with_vidid=True):
         """
         Args:
             num (int | None): number of input items to compute stats for
@@ -2522,6 +2531,27 @@ class KWCocoVideoDataset(data.Dataset):
             >>> self.compute_dataset_stats(num=num, with_intensity=False)
             >>> self.compute_dataset_stats(num=num, with_class=False)
             >>> self.compute_dataset_stats(num=num, with_class=False, with_intensity=False)
+
+        Example:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> # Run the following tests on real watch data if DVC is available
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+            >>> import ndsampler
+            >>> import kwcoco
+            >>> import watch
+            >>> dvc_dpath = watch.find_smart_dvc_dpath()
+            >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/combo_LM_nowv_vali.kwcoco.json'
+            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> sample_shape = (6, 256, 256)
+            >>> channels = 'blue|green|red|nir|swir16'
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, neg_to_pos_ratio=1.0)
+            >>> item = self[100]
+            >>> #self.compute_dataset_stats(num=10)
+            >>> num_workers = 0
+            >>> num = 100s
+            >>> batch_size = 6
+            >>> self.compute_dataset_stats(num=num, num_workers=num_workers, batch_size=batch_size, with_vidid=True)
         """
         num = num if isinstance(num, int) and num is not True else 1000
         if not with_class and not with_intensity:
@@ -2556,6 +2586,8 @@ class KWCocoVideoDataset(data.Dataset):
         total_freq = np.zeros(num_classes, dtype=np.int64)
 
         sensor_mode_hist = ub.ddict(lambda: 0)
+
+        video_id_histogram = {}
 
         # TODO: we should ensure instance level frequency data as well
         # as pixel level frequency data.
@@ -2604,6 +2636,11 @@ class KWCocoVideoDataset(data.Dataset):
             for item in batch_items:
                 if item is None:
                     continue
+                if with_vidid:
+                    vidid = item['video_id']
+                    if vidid not in set(video_id_histogram.keys()):
+                        video_id_histogram[vidid] = 0
+                    video_id_histogram[vidid] += 1
                 for frame_item in item['frames']:
                     if with_class:
                         class_idxs = frame_item['class_idxs']
@@ -2672,6 +2709,7 @@ class KWCocoVideoDataset(data.Dataset):
             'sensor_mode_hist': dict(sensor_mode_hist),
             'input_stats': input_stats,
             'class_freq': class_freq,
+            'video_id_histogram': video_id_histogram,
         }
         return dataset_stats
 
@@ -3664,7 +3702,8 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                                    time_sampling='hard+distribute',
                                    time_span='2y', use_annot_info=True,
                                    use_grid_positives=True,
-                                   use_centered_positives=True):
+                                   use_centered_positives=True,
+                                   set_cover_algo=None):
     """
     This is the main driver that builds the sample grid.
 
@@ -3677,6 +3716,12 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
 
     Ask jon about what the params mean if you need this.
     This code badly needs a refactor.
+
+    Args:
+        set_cover_algo (str | None):
+            Algorithm used to find set cover of image IDs. Options are 'approx' (a greedy solution)
+            or 'exact' (an ILP solution). If None is passed, set cover is not computed. The 'exact'
+            method requires the packe pulp, available at PyPi.
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -3711,6 +3756,24 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> use_annot_info = True
         >>> time_sampling = 'hard+distribute'
         >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
+
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> import os
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> import watch
+        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/combo_LM_nowv_vali.kwcoco.json'
+        >>> dset = kwcoco.CocoDataset(coco_fpath)
+        >>> window_overlap = 0.5
+        >>> window_dims = (2, 128, 128)
+        >>> keepbound = False
+        >>> exclude_sensors = None
+        >>> set_cover_algo = 'approx'
+        >>> sample_grid = sample_video_spacetime_targets(dset, window_dims, window_overlap, set_cover_algo=set_cover_algo)
+        >>> time_sampling = 'hard+distribute'
+        >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
+        _ = xdev.profile_now(sample_video_spacetime_targets)(dset, window_dims, window_overlap)
 
     Example:
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
@@ -3932,6 +3995,14 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                 else:
                     main_idx_to_gids2 = main_idx_to_gids
                     resampled = False
+
+                if set_cover_algo is not None:
+                    debug = True
+                    if debug:
+                        print('before applying set cover, len of main_idx_to_gids2', len(main_idx_to_gids2))
+                    main_idx_to_gids2 = kwarray.setcover(main_idx_to_gids2, algo=set_cover_algo)
+                    if debug:
+                        print('after applying set cover', len(main_idx_to_gids2))
 
                 for main_idx, gids in main_idx_to_gids2.items():
                     main_gid = time_sampler.video_gids[main_idx]
