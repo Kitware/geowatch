@@ -360,6 +360,11 @@ def gdal_single_warp(in_fpath,
 
             -te_srs - Specifies the SRS in which to interpret the coordinates given with -te.
             -te - Set georeferenced extents of output file to be created
+
+    Ignore:
+        from kwcoco.util import util_archive
+        sample_zip_fpath = ub.grabdata('https://maxar-marketing.s3.amazonaws.com/product-samples/Rome_Colosseum_2022-03-22_WV03_HD.zip')
+        util_archive.Archive.extractall(sample_zip_fpath)
     """
 
     # Coordinate Reference System of the "target" destination image

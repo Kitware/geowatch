@@ -705,6 +705,17 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
             start_date = coerce_datetime2(site_summary_row['start_date'])
             end_date = coerce_datetime2(site_summary_row['end_date'])
 
+            ALLOW_BACKWARDS_DATES = True
+            if ALLOW_BACKWARDS_DATES:
+                # Some sites have backwards dates. Unfortunately we don't
+                # have any control to fix them, so we have to handle them.
+                if start_date is not None and end_date is not None:
+                    if start_date > end_date:
+                        warnings.warn(
+                            'A site has flipped start/end dates. '
+                            'Fixing here, but it should be fixed in the site model itself.')
+                        start_date, end_date = end_date, start_date
+
             flags = ~site_rows['observation_date'].isnull()
             valid_site_rows = site_rows[flags]
 
@@ -713,9 +724,9 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
             ])
 
             if start_date is not None and observation_dates[0] != start_date:
-                raise AssertionError
+                raise AssertionError(f'start_date={start_date}, obs[0]={observation_dates[0]}')
             if end_date is not None and observation_dates[-1] != end_date:
-                raise AssertionError
+                raise AssertionError(f'end_date={end_date}, obs[-1]={observation_dates[-1]}')
 
             # Assuming observations are sorted by date
             assert all([d.total_seconds() >= 0 for d in np.diff(observation_dates)])

@@ -19,7 +19,25 @@ class DigitalGlobeBundle(ub.NiceRepr):
 
     TODO: need public digital globe demodata for a doctest
 
-    Maybe we can grab them from here? https://www.maxar.com/product-samples
+    Maybe we can grab them from here?
+    https://www.maxar.com/product-samples
+    https://ard.maxar.com/samples#v5/
+
+    https://spacenet.ai/core3d/
+
+    Requirements:
+        pip isntall pyshp
+
+    Ignore:
+        # This has a different format than our stuff... bleh..
+        sample_zip_fpath = ub.grabdata('https://maxar-marketing.s3.amazonaws.com/product-samples/Rome_Colosseum_2022-03-22_WV03_HD.zip', hash_prefix='2a99cea2b37bed9b5867fa21a1bd')
+        from kwcoco.util import util_archive
+        archive = util_archive.Archive(sample_zip_fpath)
+        dpath = (ub.Path(sample_zip_fpath).parent / 'MaxarSample').ensuredir()
+        metadata_fpath = list(dpath.glob('*.MAN'))[0]
+        archive.extractall(dpath)
+        delivery_metadata_fpath = dpath / '050012575010_01/050012575010_01_README.XML'
+        self = DigitalGlobeBundle(delivery_metadata_fpath)
     """
 
     def __init__(self, delivery_metadata_fpath, pointer=None, autobuild=True):

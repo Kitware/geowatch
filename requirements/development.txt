@@ -28,4 +28,4 @@ fels >= 1.4.0
 openpyxl>=3.0.9
 # openskill>=1.0.2
 
-cmd_queue >= 0.1.0
+cmd_queue >= 0.1.1

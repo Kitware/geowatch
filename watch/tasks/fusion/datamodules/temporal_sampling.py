@@ -225,7 +225,8 @@ class TimeWindowSampler:
 
     def __init__(self, unixtimes, sensors, time_window,
                  affinity_type='hard', update_rule='distribute',
-                 determenistic=False, gamma=1, time_span='2y', name='?'):
+                 determenistic=False, gamma=1, time_span='2y',
+                 affkw=None, name='?'):
         self.sensors = sensors
         self.unixtimes = unixtimes
         self.time_window = time_window
@@ -236,8 +237,22 @@ class TimeWindowSampler:
         self.name = name
         self.num_frames = len(unixtimes)
         self.time_span = time_span
+        self.affkw = affkw  # extra args to affinity matrix building
 
         self.compute_affinity()
+
+    @classmethod
+    def from_datetimes(cls, datetimes, time_span='full', affinity_type='soft2',
+                       **kwargs):
+        unixtimes = np.array([dt.timestamp() for dt in datetimes])
+        if isinstance(time_span, str) and time_span == 'full':
+            time_span = max(datetimes) - min(datetimes)
+        kwargs['unixtimes'] = unixtimes
+        kwargs['sensors'] = None
+        kwargs['time_span'] = time_span
+        kwargs['affinity_type'] = affinity_type
+        self = cls(**kwargs)
+        return self
 
     @classmethod
     def from_coco_video(cls, dset, vidid, gids=None, **kwargs):
@@ -275,6 +290,9 @@ class TimeWindowSampler:
             >>> self.determenistic = True
             >>> self.show_procedure(fnum=1)
         """
+        if self.affkw is None:
+            self.affkw = {}
+
         if self.affinity_type.startswith('soft'):
             if self.affinity_type == 'soft':
                 version = 1
@@ -283,31 +301,36 @@ class TimeWindowSampler:
             # Soft affinity
             self.affinity = soft_frame_affinity(self.unixtimes, self.sensors,
                                                 self.time_span,
-                                                version=version)['final']
+                                                version=version,
+                                                **self.affkw)['final']
         elif self.affinity_type == 'hard':
             # Hard affinity
             self.affinity = hard_frame_affinity(self.unixtimes, self.sensors,
                                                 time_window=self.time_window,
                                                 blur=False,
-                                                time_span=self.time_span)
+                                                time_span=self.time_span,
+                                                **self.affkw)
         elif self.affinity_type == 'hardish':
             # Hardish affinity
             self.affinity = hard_frame_affinity(self.unixtimes, self.sensors,
                                                 time_window=self.time_window,
                                                 blur=True,
-                                                time_span=self.time_span)
+                                                time_span=self.time_span,
+                                                **self.affkw)
         elif self.affinity_type == 'hardish2':
             # Hardish affinity
             self.affinity = hard_frame_affinity(self.unixtimes, self.sensors,
                                                 time_window=self.time_window,
                                                 blur=3.0,
-                                                time_span=self.time_span)
+                                                time_span=self.time_span,
+                                                **self.affkw)
         elif self.affinity_type == 'hardish3':
             # Hardish affinity
             self.affinity = hard_frame_affinity(self.unixtimes, self.sensors,
                                                 time_window=self.time_window,
                                                 blur=6.0,
-                                                time_span=self.time_span)
+                                                time_span=self.time_span,
+                                                **self.affkw)
         elif self.affinity_type == 'contiguous':
             # Recovers the original method that we used to sample time.
             time_window = self.time_window
@@ -1102,7 +1125,8 @@ def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
     return sample_idxs
 
 
-def soft_frame_affinity(unixtimes, sensors=None, time_span='2y', version=1):
+def soft_frame_affinity(unixtimes, sensors=None, time_span='2y', version=1,
+                        heuristics='default'):
     """
     Produce a pairwise affinity weights between frames based on a dilated time
     heuristic.
@@ -1160,6 +1184,9 @@ def soft_frame_affinity(unixtimes, sensors=None, time_span='2y', version=1):
         >>> fig.gca().set_title('Affinity components for row={}'.format(row_idx))
 
     """
+    if heuristics == 'default':
+        heuristics = {'daylight', 'season'}
+
     missing_date = np.isnan(unixtimes)
     missing_any_dates = np.any(missing_date)
     have_any_dates = not np.all(missing_date)
@@ -1172,14 +1199,16 @@ def soft_frame_affinity(unixtimes, sensors=None, time_span='2y', version=1):
         seconds_per_day = datetime.timedelta(days=1).total_seconds()
 
         second_deltas = np.abs(unixtimes[None, :] - unixtimes[:, None])
-        year_deltas = second_deltas / seconds_per_year
-        day_deltas = second_deltas / seconds_per_day
 
         # Upweight similar seasons
-        season_weights = (1 + np.cos(year_deltas * math.tau)) / 2.0
+        if 'season' in heuristics:
+            year_deltas = second_deltas / seconds_per_year
+            season_weights = (1 + np.cos(year_deltas * math.tau)) / 2.0
 
         # Upweight similar times of day
-        daylight_weights = ((1 + np.cos(day_deltas * math.tau)) / 2.0) * 0.95 + 0.95
+        if 'daylight' in heuristics:
+            day_deltas = second_deltas / seconds_per_day
+            daylight_weights = ((1 + np.cos(day_deltas * math.tau)) / 2.0) * 0.95 + 0.95
 
         if version == 1:
             # backwards compat
@@ -1195,23 +1224,26 @@ def soft_frame_affinity(unixtimes, sensors=None, time_span='2y', version=1):
             # TODO:
             # incorporate the time_span?
             time_span = coerce_timedelta(time_span).total_seconds()
-
             span_delta = (second_deltas - time_span) ** 2
             norm_span_delta = span_delta / (time_span ** 2)
             weights['time_span'] = (1 - np.minimum(norm_span_delta, 1)) * 0.5 + 0.5
 
-            # squash daylight weight influence
-            try:
-                middle = np.nanmean(daylight_weights)
-            except Exception:
-                middle = 0
-
             # Modify the influence of season / daylight
-            daylight_weights = (daylight_weights - middle) * 0.1 + (middle / 2)
-            season_weights = ((season_weights - 0.5) / 2) + 0.5
+            if 'daylight' in heuristics:
+                # squash daylight weight influence
+                try:
+                    middle = np.nanmean(daylight_weights)
+                except Exception:
+                    middle = 0
+                daylight_weights = (daylight_weights - middle) * 0.1 + (middle / 2)
+            if 'season' in heuristics:
+                season_weights = ((season_weights - 0.5) / 2) + 0.5
 
-        weights['daylight'] = daylight_weights
-        weights['season'] = season_weights
+        if 'daylight' in heuristics:
+            weights['daylight'] = daylight_weights
+
+        if 'season' in heuristics:
+            weights['season'] = season_weights
 
         frame_weights = np.prod(np.stack(list(weights.values())), axis=0)
         # frame_weights = season_weights * daylight_weights
@@ -1524,4 +1556,85 @@ def plot_temporal_sample(affinity, sample_idxs, unixtimes, fnum=1):
     # =====================
     # Show Sample Pattern WRT to time
     kwplot.figure(fnum=fnum, pnum=(2, 1, 2))
+    plot_temporal_sample_indices(sample_idxs, unixtimes)
+
+
+def _dev_1darray_sample():
+    """
+    What are other options to sample roughly uniformly from clumpy data?
+
+    References:
+        https://stats.stackexchange.com/questions/122668/is-there-a-measure-of-evenness-of-spread
+    """
+    # The idea is that we are given cluttered datetimes
+    from watch.utils.util_time import coerce_timedelta, coerce_datetime
+    # Generate a "clumpy" sample
+    def demo_clumpy_data(N, rng):
+        uniform = np.linspace(0, 1, N)
+        noise = rng.randn(N) / N
+        initial = kwarray.normalize(uniform + noise)
+        num_clumps = int(N // 10)
+        # ranks = initial.argsort()
+        ranks = rng.rand(N).argsort()
+        clump_size = 7
+        clump_indexes = ranks[0:num_clumps]
+        # eaten_indexes = ranks[num_clumps:num_clumps + num_clumps * clump_size]
+        remain_indexes = ranks[num_clumps + num_clumps * clump_size:]
+        clump_seeds = uniform[clump_indexes]
+        clump_members = (clump_seeds[:, None] + rng.randn(num_clumps, clump_size) / N).ravel()
+        clumpy = kwarray.normalize(np.r_[initial[clump_indexes], initial[remain_indexes], clump_members])
+        clumpy.sort()
+        return clumpy
+    import kwarray
+    N = 100
+    rng = kwarray.ensure_rng()
+    clumpy = demo_clumpy_data(N, rng)
+    start_time = coerce_datetime('now').timestamp()
+    obs_time = coerce_timedelta('10years').total_seconds()
+    # time_span = N * sample_delta
+    # delta = time_span.total_seconds()
+    unixtimes = (clumpy * obs_time) + start_time
+    # time_span
+    import kwplot
+    plt = kwplot.autoplt()
+    plt.plot(unixtimes, 'o')
+
+    k_sizes = [3, 5, 10, 20]
+    all_idxs = np.arange(len(unixtimes))
+    with ub.Timer('kmeans'):
+        sample_idxs = [all_idxs]
+        for k in k_sizes:
+            from sklearn.cluster import KMeans
+            km = KMeans(n_clusters=k)
+            km = km.fit(unixtimes[:, None])
+            labels = km.predict(unixtimes[:, None])
+            # idx_to_cluster = kwarray.group_items(unixtimes, labels)
+            cx_to_sxs = ub.dzip(*kwarray.group_indices(labels))
+            km_sample_idxs = []
+            for cx, sxs in cx_to_sxs.items():
+                cluster = unixtimes[sxs]
+                midx = sxs[np.abs(cluster - km.cluster_centers_[cx]).argmin()]
+                km_sample_idxs.append(midx)
+            km_sample_idxs = np.array(km_sample_idxs)
+            sample_idxs.append(km_sample_idxs)
+        # plot_temporal_sample_indices(sample_idxs, unixtimes)
+
+    # from sklearn.cluster import MeanShift
+    # ms = MeanShift()
+    # ms.fit(unixtimes[:, None])
+    # Uniform bins method
+    with ub.Timer('1step'):
+        norm_data =  kwarray.normalize(unixtimes)
+        for k in k_sizes:
+            centers = np.linspace(0, 1, k, endpoint=0) + (1 / (k * 2))
+            labels = np.abs(norm_data[None, :] - centers[:, None]).argmin(axis=0)
+            cx_to_sxs = ub.dzip(*kwarray.group_indices(labels))
+            km_sample_idxs = []
+            for cx, sxs in cx_to_sxs.items():
+                cluster = unixtimes[sxs]
+                midx = sxs[np.abs(cluster - km.cluster_centers_[cx]).argmin()]
+                km_sample_idxs.append(midx)
+            km_sample_idxs = np.array(km_sample_idxs)
+            sample_idxs.append(km_sample_idxs)
+
     plot_temporal_sample_indices(sample_idxs, unixtimes)

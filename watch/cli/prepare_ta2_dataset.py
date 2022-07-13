@@ -43,7 +43,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --align_workers=0 \
     --convert_workers=0 \
     --debug=False \
-    --serial=True --run=0 --cache=False
+    --run=0 --cache=False
 
         --select_images '.id % 1200 == 0'  \
 
@@ -57,7 +57,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --dvc_dpath=$DVC_DPATH \
     --collated=False \
     --align_workers=4 \
-    --serial=True --run=0
+    --run=0
 
 
 jq .images[0] $HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json
@@ -78,6 +78,7 @@ class PrepareTA2Config(scfg.Config):
         'stac_query_mode': scfg.Value(None, help='if set to auto we try to make the .input files (ignored if s3_fpath given)'),
         'cloud_cover': scfg.Value(10, help='maximum cloud cover percentage (ignored if s3_fpath given)'),
         'sensors': scfg.Value("L2", help='(ignored if s3_fpath given)'),
+        'max_products_per_region': scfg.Value(None, help='does uniform affinity sampling over time to filter down to this many results per region'),
         'api_key': scfg.Value('env:SMART_STAC_API_KEY', help='The API key or where to get it (ignored if s3_fpath given)'),
 
 
@@ -213,6 +214,7 @@ def main(cmdline=False, **kwargs):
                     --cloud_cover "{config['cloud_cover']}" \
                     --sensors "{config['sensors']}" \
                     --api_key "{config['api_key']}" \
+                    --max_products_per_region "{config['max_products_per_region']}" \
                     --mode area \
                     --verbose 2 \
                     --outfile "{combined_inputs_fpath}"
@@ -239,8 +241,6 @@ def main(cmdline=False, **kwargs):
                     end_date = util_time.coerce_datetime('now').date()
                 if start_date is None:
                     start_date = util_time.coerce_datetime('2010-01-01').date()
-                cloud_cover = '40'  # TODO params
-                sensors = 'L2'
 
                 cache_prefix = '[[ -f {region_search_json_fpath} ]] || ' if config['cache'] else ''
                 build_query_job = queue.submit(ub.codeblock(
@@ -248,8 +248,8 @@ def main(cmdline=False, **kwargs):
                     {cache_prefix}python -m watch.cli.stac_search_build \
                         --start_date="{start_date.isoformat()}" \
                         --end_date="{end_date.isoformat()}" \
-                        --cloud_cover={cloud_cover} \
-                        --sensors={sensors} \
+                        --cloud_cover={config['cloud_cover']} \
+                        --sensors={config['sensors']} \
                         --out_fpath "{region_search_json_fpath}"
                     '''))
 
@@ -259,6 +259,7 @@ def main(cmdline=False, **kwargs):
                     {cache_prefix}python -m watch.cli.stac_search \
                         --region_file "{region_fpath.shrinkuser(home='$HOME')}" \
                         --search_json "{region_search_json_fpath}" \
+                        --max_products_per_region "{config['max_products_per_region']}" \
                         --mode area \
                         --verbose 2 \
                         --outfile "{region_inputs_fpath}"
@@ -466,6 +467,7 @@ def main(cmdline=False, **kwargs):
                 --draw_anns=False \
                 --draw_imgs=True \
                 --channels="red|green|blue" \
+                --max_dim=1000 \
                 --animate=True --workers=auto
             '''), depends=[align_job])
 
@@ -474,7 +476,10 @@ def main(cmdline=False, **kwargs):
         # region_model_dpath = (dvc_dpath / 'annotations/region_models').shrinkuser(home='$HOME')
         final_site_globstr = _coerce_globstr(config['site_globstr'])
 
-        viz_part = '--viz_dpath=auto' if config['visualize'] else ''
+        # Visualization here is too slow, add on another option if we really
+        # need to
+        # viz_part = '--viz_dpath=auto' if config['visualize'] else ''
+        viz_part = ''
         project_anns_job = queue.submit(ub.codeblock(
             rf'''
             # Update to whatever the state of the annotations submodule is
@@ -528,6 +533,7 @@ def main(cmdline=False, **kwargs):
                 --draw_anns=True \
                 --draw_imgs=False \
                 --channels="red|green|blue" \
+                --max_dim=1000 \
                 --animate=True --workers=auto \
                 --only_boxes=True
             '''), depends=[project_anns_job])

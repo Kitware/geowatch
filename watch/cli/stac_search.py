@@ -125,7 +125,7 @@ class StacSearcher:
         self.logger = logger
 
     def by_geometry(self, provider, geom, collections, start, end, outfile,
-                    query, headers):
+                    query, headers, max_products_per_region=None):
         self.logger.info('Processing ' + provider)
         catalog = pystac_client.Client.open(provider, headers=headers)
         daterange = [start, end]
@@ -135,11 +135,35 @@ class StacSearcher:
             intersects=geom,
             query=query)
 
+        # Found features
         items = search.get_all_items()
+        features = items.to_dict()['features']
+
         self.logger.info('Search found %s items' % str(len(items)))
-        for item in items:
-            with open(outfile, 'a') as the_file:
-                the_file.write(json.dumps(item.to_dict()) + '\n')
+        if max_products_per_region and max_products_per_region < len(features):
+            # Filter to a max number of items per region for testing
+            # Sample over time uniformly
+            from watch.utils import util_time
+            from watch.tasks.fusion.datamodules import temporal_sampling
+            import kwarray
+            import ubelt as ub
+            datetimes = [util_time.coerce_datetime(item['properties']['datetime']) for item in features]
+            # TODO: Can we get a linear variant that doesn't need the N**2
+            # affinity matrix?  Greedy set cover maybe? Or mean-shift
+            sampler = temporal_sampling.TimeWindowSampler.from_datetimes(
+                datetimes, time_span='full', time_window=max_products_per_region,
+                affinity_type='soft2', update_rule='pairwise+distribute',
+                affkw={'heuristics': []},
+            )
+            rng = kwarray.ensure_rng(sampler.unixtimes.sum())
+            take_idxs = sampler.sample(rng=rng)
+
+            features = list(ub.take(features, take_idxs))
+            self.logger.info('Filtered to %s items' % str(len(features)))
+
+        with open(outfile, 'a') as the_file:
+            for item in features:
+                the_file.write(json.dumps(item) + '\n')
         self.logger.info('Saved STAC results to: ' + outfile)
 
     def by_id(self, provider, collections, stac_id, outfile, query, headers):
@@ -170,6 +194,8 @@ class StacSearchConfig(scfg.Config):
         ),
 
         'region_globstr': scfg.Value(None, help='if specified, run over multiple region files and ignore "region_file" and "site_file"'),
+
+        'max_products_per_region': scfg.Value(None, help='does uniform affinity sampling over time to filter down to this many results per region'),
 
         'region_file': scfg.Value(
             None,
@@ -345,6 +371,7 @@ def area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config)
         f for f in region['features'] if (
             f['properties']['type'].lower() == 'region')
     ]
+    max_products_per_region = config['max_products_per_region']
     if len(regions) > 0:
         # assume only 1 region per region model file
         geom = shape(regions[0]['geometry'])
@@ -357,7 +384,8 @@ def area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config)
                 s['end_date'],
                 dest_path,
                 s.get('query', {}),
-                s.get('headers', {})
+                s.get('headers', {}),
+                max_products_per_region=max_products_per_region
             )
 
 
