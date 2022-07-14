@@ -331,8 +331,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     datamodule_class = getattr(datamodules, args.datamodule)
 
     # init datamodule from args
-    datamodule_vars = ub.compatible(args.__dict__, datamodule_class.__init__)
-    # datamodule_vars["preprocessing_step"] = model.preprocessing_step
+    datamodule_vars = datamodule_class.compatible(args.__dict__)
     datamodule = datamodule_class(**datamodule_vars)
     datamodule.setup('fit')
 

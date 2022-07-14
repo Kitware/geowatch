@@ -276,10 +276,7 @@ def predict(cmdline=False, **kwargs):
 
     # init datamodule from args
     datamodule_class = getattr(datamodules, args.datamodule)
-    datamodule_vars = ub.compatible(
-        vars(args),
-        datamodule_class.__init__,
-    )
+    datamodule_vars = datamodule_class.compatible(vars(args))
 
     parsetime_vals = ub.dict_isect(datamodule_vars, args.datamodule_defaults)
     need_infer = {k: v for k, v in parsetime_vals.items() if v == 'auto'}
