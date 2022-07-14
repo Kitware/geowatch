@@ -488,7 +488,9 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
             v = getattr(args, k)
             if isinstance(v, pathlib.Path):
                 setattr(args, k, os.fspath(v))
-        parser.write_config_file(args, [join(trainer.log_dir, 'fit_config.yaml')])
+        fpath = join(trainer.log_dir, 'fit_config.yaml')
+        ub.ensuredir(trainer.log_dir)
+        parser.write_config_file(args, [fpath])
 
     modules = {
         'datamodule': datamodule,

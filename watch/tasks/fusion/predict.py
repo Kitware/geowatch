@@ -206,10 +206,12 @@ def predict(cmdline=False, **kwargs):
         >>>         warnings.warn('should have some change predictions elsewhere')
         >>> coco_img = dset.images().coco_images[1]
         >>> # Test that new quantization does not existing APIs
-        >>> pred1 = coco_img.delay('salient').finalize(nodata='float')
-        >>> pred2 = coco_img.delay('salient').finalize(nodata='float', dequantize=False)
+        >>> pred1 = coco_img.delay('salient', nodata_method='float').finalize()
         >>> assert pred1.max() <= 1
-        >>> assert pred2.max() > 1
+        >>> # new delayed image does not make it easy to remove dequantization
+        >>> # add test back in if we add support for that.
+        >>> # pred2 = coco_img.delay('salient').finalize(nodata_method='float', dequantize=False)
+        >>> # assert pred2.max() > 1
     """
     args = make_predict_config(cmdline=cmdline, **kwargs)
     config = args.__dict__
@@ -380,7 +382,7 @@ def predict(cmdline=False, **kwargs):
     test_torch_dataset.inference_only = True
     test_dataloader = datamodule.test_dataloader()
 
-    T, H, W = test_torch_dataset.sample_shape
+    T, H, W = test_torch_dataset.window_dims
 
     # Create the results dataset as a copy of the test CocoDataset
     result_dataset: kwcoco.CocoDataset = test_coco_dataset.copy()

@@ -39,7 +39,7 @@ class TextLogger(pl.callbacks.Callback):
         self.log_dir = pathlib.Path(trainer.log_dir)
         self.log_fpath = self.log_dir / 'text_logs.log'
         self._log = _InstanceLogger.from_instance(trainer, self.log_fpath)
-        self._log.info('on_init_end')
+        self._log.info('setup/(previously on_init_end)')
         self._log.info('sys.argv = {!r}'.format(sys.argv))
         trainer.text_logger = self
         if self.args is not None:

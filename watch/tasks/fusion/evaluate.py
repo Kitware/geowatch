@@ -273,8 +273,12 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
         try:
             # handle multiclass case
             pred_chan_of_interest = '|'.join(classes_of_interest)
-            delayed_probs = pred_coco_img.delay(pred_chan_of_interest, space=score_space)
-            class_probs = delayed_probs.finalize(as_xarray=True, nodata='float')
+            # delayed_probs = pred_coco_img.delay(pred_chan_of_interest, space=score_space)
+            # class_probs = delayed_probs.finalize(as_xarray=True, nodata='float')
+            delayed_probs = pred_coco_img.delay(
+                pred_chan_of_interest, space=score_space,
+                nodata_method='float').as_xarray()
+            class_probs = delayed_probs.finalize()
             invalid_mask = np.isnan(class_probs).all(axis=2)
             class_weights[invalid_mask] = 0
 
@@ -660,7 +664,7 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
             else:
                 chosen_viz_channs = true_coco_img.primary_asset()['channels']
             try:
-                real_image = true_coco_img.delay(chosen_viz_channs, space=score_space).finalize(nodata='float')
+                real_image = true_coco_img.delay(chosen_viz_channs, space=score_space, nodata_method='float').finalize()[:]
                 real_image_norm = kwimage.normalize_intensity(real_image)
                 real_image_int = kwimage.ensure_uint255(real_image_norm)
             except Exception as ex:

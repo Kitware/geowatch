@@ -173,9 +173,10 @@ class KWCocoVideoDatasetConfig(scfg.Config):
 
         if self['chip_dims'] is None:
             d = int(self['chip_size'])
-            self['chip_dims'] = (d, d)
+            self['chip_dims'] = [d, d]  # has to be a list not a tuple for yaml
 
         self['chip_size'] = None
+
 
 class KWCocoVideoDataModuleConfig(scfg.Config):
     """

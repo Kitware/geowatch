@@ -1721,7 +1721,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> import ubelt as ub
             >>> from os.path import join
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-            >>> dpath = ub.ensure_app_cache_dir('watch/tests/package')
+            >>> dpath = ub.Path.appdir('watch/tests/package').ensuredir()
             >>> package_path = join(dpath, 'my_package.pt')
 
             >>> # Use one of our fusion.architectures in a test
@@ -1750,11 +1750,11 @@ class MultimodalTransformer(pl.LightningModule):
             >>> from watch.tasks.fusion import datamodules
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-            >>> dpath = ub.ensure_app_cache_dir('watch/tests/package')
-            >>> package_path = join(dpath, 'my_package.pt')
+            >>> dpath = ub.Path.appdir('watch/tests/package').ensuredir()
+            >>> package_path = dpath / 'my_package.pt'
 
             >>> datamodule = datamodules.kwcoco_video_data.KWCocoVideoDataModule(
-            >>>     'special:vidshapes8-multispectral-multisensor', chip_size=32,
+            >>>     train_dataset='special:vidshapes8-multispectral-multisensor', chip_size=32,
             >>>     batch_size=1, time_steps=2, num_workers=0)
             >>> datamodule.setup('fit')
             >>> dataset_stats = datamodule.torch_datasets['train'].cached_dataset_stats(num=3)
