@@ -11,6 +11,7 @@ Notes:
 """
 import ubelt as ub
 import numpy as np
+from functools import partial
 from watch.gis.elevation import ElevationDatabase
 
 
@@ -161,8 +162,16 @@ class RPCTransform(object):
         if D == 2:
             # Note: we can actually supply a DEM
             # via passing kwargs **{'RPC_DEM': <path>}
-
-            from rasterio._transform import _rpc_transform
+            from rasterio import _transform
+            if hasattr(_transform, '_rpc_transform'):
+                _rpc_transform = partial(_transform._rpc_transform, self.rpcs)
+                transform_direction = 0
+            else:
+                # TODO: use the new API more correctly
+                from rasterio.transform import RPCTransformer
+                transformer = RPCTransformer(self.rpcs)
+                _rpc_transform = transformer._transform
+                transform_direction = 1
             xs, ys = pts_in.T
             default_z = self._default_elevation()
             zs = np.full_like(xs, fill_value=default_z)
@@ -172,9 +181,9 @@ class RPCTransform(object):
             num_same = 0
 
             for iter_num in range(max_iters):
-                transform_direction = 0
-                lons, lats = _rpc_transform(self.rpcs, xs, ys, zs,
-                                            transform_direction)
+                lons, lats = _rpc_transform(xs, ys, zs, transform_direction)
+                print(f'lats={lats}')
+                print(f'lons={lons}')
                 new_zs = self.elevation.query(lats, lons)
 
                 if np.all(new_zs == zs):
@@ -232,10 +241,19 @@ class RPCTransform(object):
         Returns:
             pts_out (ndarray): An Nx2 array of pixel coordinates
         """
-        from rasterio._transform import _rpc_transform
+        from rasterio import _transform
+        if hasattr(_transform, '_rpc_transform'):
+            _rpc_transform = partial(_transform._rpc_transform, self.rpcs)
+            transform_direction = 1
+        else:
+            # TODO: use the new API more correctly
+            from rasterio.transform import RPCTransformer
+            transformer = RPCTransformer(self.rpcs)
+            _rpc_transform = transformer._transform
+            transform_direction = 0
+
         lons, lats, elev = self._ensure_lonlatz(pts_in)
-        transform_direction = 1
-        x_out, y_out = _rpc_transform(self.rpcs, lons, lats, elev,
+        x_out, y_out = _rpc_transform(lons, lats, elev,
                                       transform_direction)
         x_out = np.array(x_out)[:, None]
         y_out = np.array(y_out)[:, None]
@@ -293,12 +311,19 @@ class RPCTransform(object):
             >>> self = RPCTransform.from_gdal(rpc_info, elevation='open-elevation')
             >>> self.warp_world_from_pixel(pxl_pts)
         """
-        from rasterio._transform import _rpc_transform
+        from rasterio import _transform
+        if hasattr(_transform, '_rpc_transform'):
+            _rpc_transform = partial(_transform._rpc_transform, self.rpcs)
+            transform_direction = 0
+        else:
+            # TODO: use the new API more correctly
+            from rasterio.transform import RPCTransformer
+            transformer = RPCTransformer(self.rpcs)
+            _rpc_transform = transformer._transform
+            transform_direction = 1
 
-        transform_direction = 0
         xs, ys, zs = self._ensure_xyz(pts_in)
-        x_out, y_out = _rpc_transform(self.rpcs, xs, ys, zs,
-                                      transform_direction)
+        x_out, y_out = _rpc_transform(xs, ys, zs, transform_direction)
         lons = np.array(x_out)[:, None]
         lats = np.array(y_out)[:, None]
         if return_elevation:

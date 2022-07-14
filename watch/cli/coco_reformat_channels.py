@@ -62,9 +62,9 @@ def main(cmdline=False, **kwargs):
         >>> assert 'quantization' in reformatted_dset.imgs[1]['auxiliary'][-1]
         >>> new_coco_img = reformatted_dset.coco_image(gid)
         >>> new_pred1 = new_coco_img.delay('salient').finalize()
-        >>> new_pred2 = new_coco_img.delay('salient').finalize(dequantize=False)
         >>> assert np.allclose(new_pred1, new_pred1)
-        >>> assert new_pred2.dtype.kind == 'i'
+        >>> #new_pred2 = new_coco_img.delay('salient').finalize(dequantize=False)
+        >>> #assert new_pred2.dtype.kind == 'i'
     """
     config = CocoReformatChannels(default=kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
