@@ -174,7 +174,8 @@ def main(cmdline=False, **kwargs):
 
     # Ignore these regions
     blocklist = {
-        'IN_C000.geojson',
+        'IN_C000.geojson',  # bad files
+        'ET_C000.geojson',  # 404 errors
     }
 
     job_environs = [
