@@ -80,7 +80,7 @@ class PrepareTA2Config(scfg.Config):
         'cloud_cover': scfg.Value(10, help='maximum cloud cover percentage (ignored if s3_fpath given)'),
         'sensors': scfg.Value("L2", help='(ignored if s3_fpath given)'),
         'max_products_per_region': scfg.Value(None, help='does uniform affinity sampling over time to filter down to this many results per region'),
-        'separate_region_queues': scfg.Value(0, help='if True, create jobs for each region separately'),
+        'separate_region_queues': scfg.Value(True, help='if True, create jobs for each region separately'),
         'api_key': scfg.Value('env:SMART_STAC_API_KEY', help='The API key or where to get it (ignored if s3_fpath given)'),
 
         's3_fpath': scfg.Value(None, nargs='+', help='A list of .input files which were the results of an existing stac query. Mutex with stac_query_* args'),
@@ -325,19 +325,22 @@ def main(cmdline=False, **kwargs):
 
         cache_prefix = '[[ -f {uncropped_query_fpath} ]] || ' if config['cache'] else ''
         if not str(s3_fpath).startswith('s3'):
-            grab_job = queue.submit(ub.codeblock(
-                f'''
-                # GRAB Input STAC List
-                mkdir -p "{uncropped_query_dpath}"
-                {cache_prefix}cp "{s3_fpath}" "{uncropped_query_dpath}"
-                '''), depends=parent_job, name='psudo-s3-pull-inputs')
+            # Don't really need to copy anything in this case.
+            uncropped_query_fpath = s3_fpath
+            grab_job = parent_job
+            # grab_job = queue.submit(ub.codeblock(
+            #     f'''
+            #     # GRAB Input STAC List
+            #     mkdir -p "{uncropped_query_dpath}"
+            #     {cache_prefix}cp "{s3_fpath}" "{uncropped_query_dpath}"
+            #     '''), depends=parent_job, name=f'psudo-s3-pull-inputs-{s3_name}')
         else:
             grab_job = queue.submit(ub.codeblock(
                 f'''
                 # GRAB Input STAC List
                 mkdir -p "{uncropped_query_dpath}"
                 {cache_prefix}aws s3 --profile {aws_profile} cp "{s3_fpath}" "{uncropped_query_dpath}"
-                '''), depends=parent_job, name='s3-pull-inputs')
+                '''), depends=parent_job, name=f's3-pull-inputs-{s3_name}')
 
         ingress_options = [
             '--virtual',
