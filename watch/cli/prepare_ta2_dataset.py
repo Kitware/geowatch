@@ -328,7 +328,7 @@ def main(cmdline=False, **kwargs):
         uncropped_catalog_fpath = uncropped_ingress_dpath / f'catalog_{s3_name}.json'
         uncropped_ingress_dpath = uncropped_ingress_dpath.shrinkuser(home='$HOME')
 
-        cache_prefix = '[[ -f {uncropped_query_fpath} ]] || ' if config['cache'] else ''
+        cache_prefix = f'[[ -f {uncropped_query_fpath} ]] || ' if config['cache'] else ''
         if not str(s3_fpath).startswith('s3'):
             # Don't really need to copy anything in this case.
             uncropped_query_fpath = s3_fpath
@@ -352,7 +352,7 @@ def main(cmdline=False, **kwargs):
             ingress_options.append('--requester_pays')
         ingress_options_str = ' '.join(ingress_options)
 
-        cache_prefix = '[[ -f {uncropped_catalog_fpath} ]] || ' if config['cache'] else ''
+        cache_prefix = f'[[ -f {uncropped_catalog_fpath} ]] || ' if config['cache'] else ''
         ingress_job = queue.submit(ub.codeblock(
             rf'''
             {cache_prefix}python -m watch.cli.baseline_framework_ingress \
@@ -374,7 +374,7 @@ def main(cmdline=False, **kwargs):
             convert_options.append('--ignore_duplicates')
         convert_options_str = ' '.join(convert_options)
 
-        cache_prefix = '[[ -f {uncropped_kwcoco_fpath} ]] || ' if config['cache'] else ''
+        cache_prefix = f'[[ -f {uncropped_kwcoco_fpath} ]] || ' if config['cache'] else ''
         convert_job = queue.submit(ub.codeblock(
             rf'''
             {cache_prefix}{job_environ_str}python -m watch.cli.ta1_stac_to_kwcoco \
@@ -387,7 +387,7 @@ def main(cmdline=False, **kwargs):
         uncropped_fielded_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}_fielded.kwcoco.json'
         uncropped_fielded_kwcoco_fpath = uncropped_fielded_kwcoco_fpath.shrinkuser(home='$HOME')
 
-        cache_prefix = '[[ -f {uncropped_fielded_kwcoco_fpath} ]] || ' if config['cache'] else ''
+        cache_prefix = f'[[ -f {uncropped_fielded_kwcoco_fpath} ]] || ' if config['cache'] else ''
         add_fields_job = queue.submit(ub.codeblock(
             rf'''
             # PREPARE Uncropped datasets (usually for debugging)
@@ -428,7 +428,7 @@ def main(cmdline=False, **kwargs):
         uncropped_final_kwcoco_fpath = uncropped_dpath / f'data_{union_suffix}.kwcoco.json'
         uncropped_final_kwcoco_fpath = uncropped_final_kwcoco_fpath.shrinkuser(home='$HOME')
         uncropped_multi_src_part = ' '.join(['"{}"'.format(p) for p in uncropped_coco_paths])
-        cache_prefix = '[[ -f {uncropped_final_kwcoco_fpath} ]] || ' if config['cache'] else ''
+        cache_prefix = f'[[ -f {uncropped_final_kwcoco_fpath} ]] || ' if config['cache'] else ''
         union_job = queue.submit(ub.codeblock(
             rf'''
             # COMBINE Uncropped datasets
@@ -551,7 +551,7 @@ def main(cmdline=False, **kwargs):
         union_suffix = ub.hash_data([p.name for p in aligned_fpaths])[0:8]
         aligned_final_fpath = (aligned_kwcoco_bundle / 'data.kwcoco.json').shrinkuser(home='$HOME')
         aligned_multi_src_part = ' '.join(['"{}"'.format(p) for p in aligned_fpaths])
-        cache_prefix = '[[ -f {aligned_final_fpath} ]] || ' if config['cache'] else ''
+        cache_prefix = f'[[ -f {aligned_final_fpath} ]] || ' if config['cache'] else ''
         union_job = queue.submit(ub.codeblock(
             rf'''
             # COMBINE Uncropped datasets
