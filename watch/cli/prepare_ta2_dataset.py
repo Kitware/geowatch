@@ -214,7 +214,6 @@ def main(cmdline=False, **kwargs):
             stac_query_dpath = (uncropped_query_dpath / 'stac_query_json')
             query_mkdir_job = queue.submit(f'mkdir -p "{stac_query_dpath}"', depends=[base_mkdir_job], name='mkdir-query')
             region_file_fpaths = util_path.coerce_patterned_paths(final_region_globstr.expand())
-            region_file_fpaths = region_file_fpaths[0:1]
             # TODO: it would be nice to have just a single script that handles
             # multiple regions
             print('region_file_fpaths = {}'.format(ub.repr2(sorted(region_file_fpaths), nl=1)))
