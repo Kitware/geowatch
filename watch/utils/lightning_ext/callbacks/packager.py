@@ -174,8 +174,21 @@ class Packager(pl.callbacks.Callback):
         print('save package_fpath = {!r}'.format(package_fpath))
 
 
+def _torch_package_monkeypatch():
+    # Monkey Patch torch.package
+    import sys
+    if sys.version_info[0:2] >= (3, 10):
+        try:
+            from torch.package import _stdlib
+            _stdlib._get_stdlib_modules = lambda: sys.stdlib_module_names
+        except Exception:
+            pass
+
+
 def default_save_package(model, package_path, verbose=1):
     import torch.package
+    _torch_package_monkeypatch()
+
     # shallow copy of self, to apply attribute hacks to
     model = copy.copy(model)
     model.trainer = None

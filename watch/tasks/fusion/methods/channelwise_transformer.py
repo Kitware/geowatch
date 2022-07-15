@@ -1793,6 +1793,16 @@ class MultimodalTransformer(pl.LightningModule):
         # import copy
         import json
         import torch.package
+        def _torch_package_monkeypatch():
+            # Monkey Patch torch.package
+            import sys
+            if sys.version_info[0:2] >= (3, 10):
+                try:
+                    from torch.package import _stdlib
+                    _stdlib._get_stdlib_modules = lambda: sys.stdlib_module_names
+                except Exception:
+                    pass
+        _torch_package_monkeypatch()
 
         # shallow copy of self, to apply attribute hacks to
         # model = copy.copy(self)
