@@ -800,6 +800,7 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
                     HACK_TO_PASS = 1
                     if HACK_TO_PASS:
                         # We
+                        import warnings
                         warnings.warn(f'Positive annotation without a class label: status={status}, {annot_idx}, {site_row}')
                         continue
                     raise AssertionError(f'status={status}, {annot_idx}, {site_row}')
