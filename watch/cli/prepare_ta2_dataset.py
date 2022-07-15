@@ -162,8 +162,6 @@ def main(cmdline=False, **kwargs):
     uncropped_ingress_dpath = uncropped_dpath / 'ingress'
 
     aligned_kwcoco_bundle = dvc_dpath / aligned_bundle_name
-    aligned_imgonly_kwcoco_fpath = aligned_kwcoco_bundle / 'imgonly.kwcoco.json'
-    aligned_imganns_kwcoco_fpath = aligned_kwcoco_bundle / 'data.kwcoco.json'
 
     uncropped_dpath = uncropped_dpath.shrinkuser(home='$HOME')
     uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
@@ -171,8 +169,6 @@ def main(cmdline=False, **kwargs):
     uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
     uncropped_ingress_dpath = uncropped_ingress_dpath.shrinkuser(home='$HOME')
     aligned_kwcoco_bundle = aligned_kwcoco_bundle.shrinkuser(home='$HOME')
-    aligned_imgonly_kwcoco_fpath = aligned_imgonly_kwcoco_fpath.shrinkuser(home='$HOME')
-    aligned_imganns_kwcoco_fpath = aligned_imganns_kwcoco_fpath.shrinkuser(home='$HOME')
 
     # Ignore these regions (only works in separate region queue mode)
     blocklist = {
@@ -213,6 +209,7 @@ def main(cmdline=False, **kwargs):
         # Each region gets their own job in the queue
         if config['separate_region_queues']:
             region_file_fpaths = util_path.coerce_patterned_paths(final_region_globstr.expand())
+            # region_file_fpaths = region_file_fpaths[0:2]
             # TODO: it would be nice to have just a single script that handles
             # multiple regions
             print('region_file_fpaths = {}'.format(ub.repr2(sorted(region_file_fpaths), nl=1)))
@@ -244,6 +241,7 @@ def main(cmdline=False, **kwargs):
                     'name': region_id,
                     'job': stac_search_job,
                     'inputs_fpath': region_inputs_fpath,
+                    'region_globstr': final_region_fpath,
                     'collated': False,
                 })
 
@@ -267,7 +265,7 @@ def main(cmdline=False, **kwargs):
                     'name': combo_name,
                     'job': combine_job,
                     'inputs_fpath': combined_inputs_fpath,
-                    'region_globstr': final_region_fpath,
+                    'region_globstr': final_region_globstr,
                     'collated': False,
                 }]
         else:
@@ -403,16 +401,21 @@ def main(cmdline=False, **kwargs):
             'name': stac_job['name'],
             'job': add_fields_job,
             'uncropped_fielded_fpath': uncropped_fielded_kwcoco_fpath,
+            'region_globstr': stac_job['region_globstr'],
         })
 
-    alignment_input_jobs = []
     if config['separate_align_jobs']:
-        ...
+        alignment_input_jobs = []
+        final_site_globstr = _coerce_globstr(config['site_globstr'])
         for info in uncropped_fielded_jobs:
-            pass
-        import xdev
-        xdev.embed()
-        alignment_input_jobs = uncropped_fielded_jobs
+            toalign_info = info.copy()
+            name = toalign_info['name'] = info['name']
+            toalign_info['aligned_imgonly_fpath'] = aligned_kwcoco_bundle / f'imgonly-{name}.kwcoco.json'
+            toalign_info['aligned_imganns_fpath'] = aligned_kwcoco_bundle / f'imganns-{name}.kwcoco.json'
+            # TODO: take only the corresponding set of site models here.
+            toalign_info['site_globstr'] = final_site_globstr
+            toalign_info['region_globstr'] = info['region_globstr']
+            alignment_input_jobs.append(toalign_info)
     else:
         if len(uncropped_fielded_jobs) == 1:
             uncropped_final_kwcoco_fpath = uncropped_fielded_jobs[0]['uncropped_fielded_fpath']
@@ -433,18 +436,27 @@ def main(cmdline=False, **kwargs):
                     --dst "{uncropped_final_kwcoco_fpath}"
                 '''), depends=union_depends_jobs, name='kwcoco-union')
             uncropped_final_jobs = [union_job]
+
+        final_site_globstr = _coerce_globstr(config['site_globstr'])
         alignment_input_jobs = [{
             'name': f'align-{union_suffix}',
             'uncropped_fielded_fpath': uncropped_final_kwcoco_fpath,
-            'cropped_fpath': aligned_imgonly_kwcoco_fpath,
+            'aligned_imgonly_fpath': aligned_kwcoco_bundle / 'imgonly.kwcoco.json',
+            'aligned_imganns_fpath': aligned_kwcoco_bundle / 'data.kwcoco.json',
             'region_globstr': final_region_globstr,
-            'job': union_job,
+            'site_globstr': final_site_globstr,
+            'job': uncropped_final_jobs,
         }]
 
-    for aligninput in alignment_input_jobs:
-
-        to_align_fpath = aligninput['uncropped_fielded_fpath']
-        region_globstr = aligninput['region_globstr]']
+    alignment_jobs = []
+    for info in alignment_input_jobs:
+        name = info['name']
+        uncropped_fielded_fpath = info['uncropped_fielded_fpath']
+        aligned_imgonly_fpath = info['aligned_imgonly_fpath']
+        aligned_imganns_fpath = info['aligned_imganns_fpath']
+        region_globstr = info['region_globstr']
+        site_globstr = info['site_globstr']
+        parent_job = info['job']
 
         cache_crops = 1
         if cache_crops:
@@ -462,8 +474,8 @@ def main(cmdline=False, **kwargs):
             # MAIN WORKHORSE CROP IMAGES
             # Crop big images to the geojson regions
             {job_environ_str}python -m watch.cli.coco_align_geotiffs \
-                --src "{to_align_fpath}" \
-                --dst "{aligned_imgonly_kwcoco_fpath}" \
+                --src "{uncropped_fielded_fpath}" \
+                --dst "{aligned_imgonly_fpath}" \
                 --regions "{region_globstr}" \
                 --context_factor=1 \
                 --geo_preprop=auto \
@@ -475,7 +487,7 @@ def main(cmdline=False, **kwargs):
                 --verbose={config['verbose']} \
                 --aux_workers={config['align_aux_workers']} \
                 --workers={config['align_workers']}
-            '''), depends=uncropped_final_jobs, name='align_geotiffs')
+            '''), depends=parent_job, name=f'align-geotiffs-{name}')
 
         # TODO:
         # Project annotation from latest annotations subdir
@@ -487,18 +499,17 @@ def main(cmdline=False, **kwargs):
                 rf'''
                 # Update to whatever the state of the annotations submodule is
                 python -m watch visualize \
-                    --src "{aligned_imgonly_kwcoco_fpath}" \
+                    --src "{aligned_imgonly_fpath}" \
                     --draw_anns=False \
                     --draw_imgs=True \
                     --channels="red|green|blue" \
                     --max_dim=1000 \
                     --animate=True --workers=auto
-                '''), depends=[align_job], name='viz_imgs')
+                '''), depends=[align_job], name=f'viz-imgs-{name}')
 
         if 1:
             # site_model_dpath = (dvc_dpath / 'annotations/site_models').shrinkuser(home='$HOME')
             # region_model_dpath = (dvc_dpath / 'annotations/region_models').shrinkuser(home='$HOME')
-            final_site_globstr = _coerce_globstr(config['site_globstr'])
 
             # Visualization here is too slow, add on another option if we really
             # need to
@@ -508,25 +519,52 @@ def main(cmdline=False, **kwargs):
                 rf'''
                 # Update to whatever the state of the annotations submodule is
                 python -m watch project_annotations \
-                    --src "{aligned_imgonly_kwcoco_fpath}" \
-                    --dst "{aligned_imganns_kwcoco_fpath}" \
-                    --site_models="{final_site_globstr}" \
-                    --region_models="{final_region_globstr}" {viz_part}
-                '''), depends=[align_job], name='project_annots')
+                    --src "{aligned_imgonly_fpath}" \
+                    --dst "{aligned_imganns_fpath}" \
+                    --site_models="{site_globstr}" \
+                    --region_models="{region_globstr}" {viz_part}
+                '''), depends=[align_job], name=f'project-annots-{name}')
 
         if config['visualize']:
             queue.submit(ub.codeblock(
                 rf'''
                 # Update to whatever the state of the annotations submodule is
                 python -m watch visualize \
-                    --src "{aligned_imganns_kwcoco_fpath}" \
+                    --src "{aligned_imganns_fpath}" \
                     --draw_anns=True \
                     --draw_imgs=False \
                     --channels="red|green|blue" \
                     --max_dim=1000 \
                     --animate=True --workers=auto \
                     --only_boxes=True
-                '''), depends=[project_anns_job], name='viz_anns')
+                '''), depends=[project_anns_job], name=f'viz-annots-{name}')
+
+        align_info = info.copy()
+        align_info['job'] = project_anns_job
+        alignment_jobs.append(info)
+
+    if config['separate_align_jobs']:
+        # Need a final union step
+        # pass
+        aligned_fpaths = [d['aligned_imganns_fpath'] for d in alignment_jobs]
+        union_depends_jobs = [d['job'] for d in alignment_jobs]
+        union_suffix = ub.hash_data([p.name for p in aligned_fpaths])[0:8]
+        aligned_final_fpath = (aligned_kwcoco_bundle / f'data.kwcoco.json').shrinkuser(home='$HOME')
+        aligned_multi_src_part = ' '.join(['"{}"'.format(p) for p in aligned_fpaths])
+        cache_prefix = '[[ -f {aligned_final_fpath} ]] || ' if config['cache'] else ''
+        union_job = queue.submit(ub.codeblock(
+            rf'''
+            # COMBINE Uncropped datasets
+            {cache_prefix}{job_environ_str}python -m kwcoco union \
+                --src {aligned_multi_src_part} \
+                --dst "{aligned_final_fpath}"
+            '''), depends=union_depends_jobs, name='kwcoco-union')
+        aligned_final_jobs = [union_job]
+    else:
+        assert len(alignment_jobs) == 1
+        aligned_final_fpath = alignment_jobs[0]['aligned_imganns_fpath']
+        aligned_final_fpath = alignment_jobs[0]['aligned_imganns_fpath']
+        aligned_final_jobs = [alignment_jobs[0]['job']]
 
     # TODO:
     # queue.synchronize -
@@ -534,9 +572,11 @@ def main(cmdline=False, **kwargs):
 
     # Do Basic Splits
     if config['splits']:
+        # Note: we probably could just do unions more cleverly rather than
+        # splitting.
         from watch.cli import prepare_splits
         prepare_splits._submit_split_jobs(
-            aligned_imganns_kwcoco_fpath, queue, depends=[project_anns_job])
+            aligned_final_fpath, queue, depends=[aligned_final_jobs])
 
     # TODO: Can start the DVC add of the region subdirectories here
     ub.codeblock(
@@ -570,8 +610,8 @@ def main(cmdline=False, **kwargs):
     #         --run=1 --serial=True
     #     '''))
 
-    queue.print_graph()
     queue.rprint()
+    queue.print_graph()
 
     if config['run']:
         agg_state = None
