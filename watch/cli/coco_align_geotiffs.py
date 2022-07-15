@@ -475,7 +475,9 @@ def main(cmdline=True, **kw):
 
     new_dset.fpath = dst_fpath
     print('Dumping new_dset.fpath = {!r}'.format(new_dset.fpath))
-    new_dset.reroot(new_root=output_bundle_dpath, absolute=False)
+    reroot = 0
+    if reroot:
+        new_dset.reroot(new_root=output_bundle_dpath, absolute=False)
     new_dset.dump(new_dset.fpath, newlines=True)
     print('finished')
     return new_dset
