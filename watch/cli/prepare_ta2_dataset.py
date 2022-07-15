@@ -172,10 +172,10 @@ def main(cmdline=False, **kwargs):
     aligned_imgonly_kwcoco_fpath = aligned_imgonly_kwcoco_fpath.shrinkuser(home='$HOME')
     aligned_imganns_kwcoco_fpath = aligned_imganns_kwcoco_fpath.shrinkuser(home='$HOME')
 
-    # Ignore these regions
+    # Ignore these regions (only works in separate region queue mode)
     blocklist = {
-        'IN_C000.geojson',  # bad files
-        'ET_C000.geojson',  # 404 errors
+        'IN_C000',  # bad files
+        'ET_C000',  # 404 errors
     }
 
     job_environs = [
