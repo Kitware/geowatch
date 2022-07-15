@@ -70,6 +70,7 @@ kwcoco visualize $HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-
 
 import scriptconfig as scfg
 import ubelt as ub
+import warnings
 
 
 class PrepareTA2Config(scfg.Config):
@@ -80,9 +81,9 @@ class PrepareTA2Config(scfg.Config):
         'cloud_cover': scfg.Value(10, help='maximum cloud cover percentage (ignored if s3_fpath given)'),
         'sensors': scfg.Value("L2", help='(ignored if s3_fpath given)'),
         'max_products_per_region': scfg.Value(None, help='does uniform affinity sampling over time to filter down to this many results per region'),
-        'separate_region_queues': scfg.Value(True, help='if True, create jobs for each region separately'),
         'api_key': scfg.Value('env:SMART_STAC_API_KEY', help='The API key or where to get it (ignored if s3_fpath given)'),
 
+        'separate_region_queues': scfg.Value(True, help='if True, create jobs for each region separately'),
         'separate_align_jobs': scfg.Value(True, help='if True, perform alignment for each region in its own job'),
 
         's3_fpath': scfg.Value(None, nargs='+', help='A list of .input files which were the results of an existing stac query. Mutex with stac_query_* args'),
@@ -90,7 +91,8 @@ class PrepareTA2Config(scfg.Config):
         'run': scfg.Value('0', help=''),
         'collated': scfg.Value([True], nargs='+', help='set to false if the input data is not collated'),
 
-        'backend': scfg.Value('serial', help='can be serial, tmux, or slurm'),
+        'backend': scfg.Value('serial', help='can be serial, tmux, or slurm. Using tmux is recommended.'),
+        'max_queue_size': scfg.Value(100, help='the number of regions allowed to be processed in parallel with tmux backend'),
 
         'aws_profile': scfg.Value('iarpa', help='AWS profile to use for remote data access'),
 
@@ -269,6 +271,8 @@ def main(cmdline=False, **kwargs):
                     'collated': False,
                 }]
         else:
+            warnings.warn(
+                'It is usually faster to split the queue amongst regions')
             # All region queries are executed simultaniously and put into a
             # single inputs file. The advantage here is we dont need to know
             # how many regions there are beforehand.
@@ -310,7 +314,7 @@ def main(cmdline=False, **kwargs):
             })
 
     # hack to dynamically resize tmux jobs
-    queue.size = len(stac_jobs)
+    queue.size = min(len(stac_jobs), config['max_queue_size'])
 
     uncropped_fielded_jobs = []
     for stac_job in stac_jobs:
@@ -417,32 +421,29 @@ def main(cmdline=False, **kwargs):
             toalign_info['region_globstr'] = info['region_globstr']
             alignment_input_jobs.append(toalign_info)
     else:
-        if len(uncropped_fielded_jobs) == 1:
-            uncropped_final_kwcoco_fpath = uncropped_fielded_jobs[0]['uncropped_fielded_fpath']
-            uncropped_final_jobs = uncropped_fielded_jobs[0]['job']
-        else:
-            uncropped_coco_paths = [d['uncropped_fielded_fpath'] for d in uncropped_fielded_jobs]
-            union_depends_jobs = [d['job'] for d in uncropped_fielded_jobs]
-            union_suffix = ub.hash_data([p.name for p in uncropped_coco_paths])[0:8]
-            uncropped_final_kwcoco_fpath = uncropped_dpath / f'data_{union_suffix}.kwcoco.json'
-            uncropped_final_kwcoco_fpath = uncropped_final_kwcoco_fpath.shrinkuser(home='$HOME')
-            uncropped_multi_src_part = ' '.join(['"{}"'.format(p) for p in uncropped_coco_paths])
-            cache_prefix = '[[ -f {uncropped_final_kwcoco_fpath} ]] || ' if config['cache'] else ''
-            union_job = queue.submit(ub.codeblock(
-                rf'''
-                # COMBINE Uncropped datasets
-                {cache_prefix}{job_environ_str}python -m kwcoco union \
-                    --src {uncropped_multi_src_part} \
-                    --dst "{uncropped_final_kwcoco_fpath}"
-                '''), depends=union_depends_jobs, name='kwcoco-union')
-            uncropped_final_jobs = [union_job]
+        # Do a noop for this case? Or make it fast in kwcoco itself?
+        uncropped_coco_paths = [d['uncropped_fielded_fpath'] for d in uncropped_fielded_jobs]
+        union_depends_jobs = [d['job'] for d in uncropped_fielded_jobs]
+        union_suffix = ub.hash_data([p.name for p in uncropped_coco_paths])[0:8]
+        uncropped_final_kwcoco_fpath = uncropped_dpath / f'data_{union_suffix}.kwcoco.json'
+        uncropped_final_kwcoco_fpath = uncropped_final_kwcoco_fpath.shrinkuser(home='$HOME')
+        uncropped_multi_src_part = ' '.join(['"{}"'.format(p) for p in uncropped_coco_paths])
+        cache_prefix = '[[ -f {uncropped_final_kwcoco_fpath} ]] || ' if config['cache'] else ''
+        union_job = queue.submit(ub.codeblock(
+            rf'''
+            # COMBINE Uncropped datasets
+            {cache_prefix}{job_environ_str}python -m kwcoco union \
+                --src {uncropped_multi_src_part} \
+                --dst "{uncropped_final_kwcoco_fpath}"
+            '''), depends=union_depends_jobs, name='kwcoco-union')
+        uncropped_final_jobs = [union_job]
 
         final_site_globstr = _coerce_globstr(config['site_globstr'])
         alignment_input_jobs = [{
             'name': f'align-{union_suffix}',
             'uncropped_fielded_fpath': uncropped_final_kwcoco_fpath,
             'aligned_imgonly_fpath': aligned_kwcoco_bundle / 'imgonly.kwcoco.json',
-            'aligned_imganns_fpath': aligned_kwcoco_bundle / 'data.kwcoco.json',
+            'aligned_imganns_fpath': aligned_kwcoco_bundle / 'imganns.kwcoco.json',
             'region_globstr': final_region_globstr,
             'site_globstr': final_site_globstr,
             'job': uncropped_final_jobs,
@@ -545,11 +546,10 @@ def main(cmdline=False, **kwargs):
 
     if config['separate_align_jobs']:
         # Need a final union step
-        # pass
         aligned_fpaths = [d['aligned_imganns_fpath'] for d in alignment_jobs]
         union_depends_jobs = [d['job'] for d in alignment_jobs]
         union_suffix = ub.hash_data([p.name for p in aligned_fpaths])[0:8]
-        aligned_final_fpath = (aligned_kwcoco_bundle / f'data.kwcoco.json').shrinkuser(home='$HOME')
+        aligned_final_fpath = (aligned_kwcoco_bundle / 'data.kwcoco.json').shrinkuser(home='$HOME')
         aligned_multi_src_part = ' '.join(['"{}"'.format(p) for p in aligned_fpaths])
         cache_prefix = '[[ -f {aligned_final_fpath} ]] || ' if config['cache'] else ''
         union_job = queue.submit(ub.codeblock(
@@ -599,7 +599,6 @@ def main(cmdline=False, **kwargs):
         dvc pull */L8.dvc */S2.dvc
         dvc pull
         */*.json
-
         ''')
 
     # queue.submit(ub.codeblock(
