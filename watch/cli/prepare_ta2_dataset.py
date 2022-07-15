@@ -200,19 +200,15 @@ def main(cmdline=False, **kwargs):
     final_region_globstr = _coerce_globstr(config['region_globstr'])
 
     import cmd_queue
+    from watch.utils import util_path
     queue = cmd_queue.Queue.create(
         backend=config['backend'], name='prep-ta2-dataset', size=1, gres=None)
 
     stac_jobs = []
+    base_mkdir_job = queue.submit(f'mkdir -p "{uncropped_query_dpath}"', name='mkdir-base')
     if config['stac_query_mode'] == 'auto':
-        from watch.utils import util_path
-        stac_inputs_dpath = (uncropped_query_dpath / 'stac_input_lists')
-        base_mkdir_job = queue.submit(f'mkdir -p "{stac_inputs_dpath}"', name='mkdir-base')
-
         # Each region gets their own job in the queue
         if config['separate_region_queues']:
-            stac_query_dpath = (uncropped_query_dpath / 'stac_query_json')
-            query_mkdir_job = queue.submit(f'mkdir -p "{stac_query_dpath}"', depends=[base_mkdir_job], name='mkdir-query')
             region_file_fpaths = util_path.coerce_patterned_paths(final_region_globstr.expand())
             # TODO: it would be nice to have just a single script that handles
             # multiple regions
@@ -222,7 +218,7 @@ def main(cmdline=False, **kwargs):
                 if region_id in blocklist:
                     continue
 
-                region_inputs_fpath = (stac_inputs_dpath / (region_id + '.input')).shrinkuser(home='$HOME')
+                region_inputs_fpath = (uncropped_query_dpath / (region_id + '.input')).shrinkuser(home='$HOME')
 
                 cache_prefix = '[[ -f {region_inputs_fpath} ]] || ' if config['cache'] else ''
                 stac_search_job = queue.submit(ub.codeblock(
@@ -238,7 +234,7 @@ def main(cmdline=False, **kwargs):
                         --mode area \
                         --verbose 2 \
                         --outfile "{region_inputs_fpath}"
-                    '''), name=f'stac-search-{region_id}', depends=[query_mkdir_job])
+                    '''), name=f'stac-search-{region_id}', depends=[base_mkdir_job])
 
                 stac_jobs.append({
                     'name': region_id,
@@ -256,7 +252,7 @@ def main(cmdline=False, **kwargs):
                 jobs = [d['job'] for d in stac_jobs]
                 combo_hash = ub.hash_data(stac_jobs)[0:8]
                 combo_name = f'combo_{combo_hash}'
-                combined_inputs_fpath = (stac_inputs_dpath / (f'{combo_name}.input')).shrinkuser(home='$HOME')
+                combined_inputs_fpath = (uncropped_query_dpath / (f'{combo_name}.input')).shrinkuser(home='$HOME')
                 quoted_fpath_list = ['"{}"'.format(p) for p in input_fpath_list]
                 combine_job = queue.submit(ub.codeblock(
                     f'''
@@ -273,7 +269,7 @@ def main(cmdline=False, **kwargs):
             # All region queries are executed simultaniously and put into a
             # single inputs file. The advantage here is we dont need to know
             # how many regions there are beforehand.
-            combined_inputs_fpath = (stac_inputs_dpath / (f'combo_query_{config["dataset_suffix"]}.input')).shrinkuser(home='$HOME')
+            combined_inputs_fpath = (uncropped_query_dpath / (f'combo_query_{config["dataset_suffix"]}.input')).shrinkuser(home='$HOME')
             combo_stac_search_job = queue.submit(ub.codeblock(
                 rf'''
                 python -m watch.cli.stac_search \
@@ -331,14 +327,12 @@ def main(cmdline=False, **kwargs):
             # grab_job = queue.submit(ub.codeblock(
             #     f'''
             #     # GRAB Input STAC List
-            #     mkdir -p "{uncropped_query_dpath}"
             #     {cache_prefix}cp "{s3_fpath}" "{uncropped_query_dpath}"
             #     '''), depends=parent_job, name=f'psudo-s3-pull-inputs-{s3_name}')
         else:
             grab_job = queue.submit(ub.codeblock(
                 f'''
                 # GRAB Input STAC List
-                mkdir -p "{uncropped_query_dpath}"
                 {cache_prefix}aws s3 --profile {aws_profile} cp "{s3_fpath}" "{uncropped_query_dpath}"
                 '''), depends=parent_job, name=f's3-pull-inputs-{s3_name}')
 
@@ -548,7 +542,7 @@ def main(cmdline=False, **kwargs):
     #     '''))
 
     queue.print_graph()
-    # queue.rprint()
+    queue.rprint()
 
     if config['run']:
         agg_state = None
