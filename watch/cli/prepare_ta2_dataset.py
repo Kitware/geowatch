@@ -83,6 +83,8 @@ class PrepareTA2Config(scfg.Config):
         'separate_region_queues': scfg.Value(True, help='if True, create jobs for each region separately'),
         'api_key': scfg.Value('env:SMART_STAC_API_KEY', help='The API key or where to get it (ignored if s3_fpath given)'),
 
+        'separate_align_jobs': scfg.Value(True, help='if True, perform alignment for each region in its own job'),
+
         's3_fpath': scfg.Value(None, nargs='+', help='A list of .input files which were the results of an existing stac query. Mutex with stac_query_* args'),
         'dvc_dpath': scfg.Value('auto', help=''),
         'run': scfg.Value('0', help=''),
@@ -220,12 +222,13 @@ def main(cmdline=False, **kwargs):
                     continue
 
                 region_inputs_fpath = (uncropped_query_dpath / (region_id + '.input')).shrinkuser(home='$HOME')
+                final_region_fpath = region_fpath.shrinkuser(home='$HOME')
 
                 cache_prefix = '[[ -f {region_inputs_fpath} ]] || ' if config['cache'] else ''
                 stac_search_job = queue.submit(ub.codeblock(
                     rf'''
                     {cache_prefix}python -m watch.cli.stac_search \
-                        --region_file "{region_fpath.shrinkuser(home='$HOME')}" \
+                        --region_file "{final_region_fpath}" \
                         --search_json "auto" \
                         --cloud_cover "{config['cloud_cover']}" \
                         --sensors "{config['sensors']}" \
@@ -264,6 +267,7 @@ def main(cmdline=False, **kwargs):
                     'name': combo_name,
                     'job': combine_job,
                     'inputs_fpath': combined_inputs_fpath,
+                    'region_globstr': final_region_fpath,
                     'collated': False,
                 }]
         else:
@@ -288,6 +292,7 @@ def main(cmdline=False, **kwargs):
             stac_jobs.append({
                 'name': 'combined',
                 'job': combo_stac_search_job,
+                'region_globstr': final_region_globstr,
                 'inputs_fpath': combined_inputs_fpath,
                 'collated': False,
             })
@@ -302,6 +307,7 @@ def main(cmdline=False, **kwargs):
                 'job': None,
                 'name': ub.Path(s3_fpath).stem,
                 'inputs_fpath': s3_fpath,
+                'region_globstr': final_region_globstr,
                 'collated': collated,
             })
 
@@ -394,97 +400,133 @@ def main(cmdline=False, **kwargs):
             '''), depends=convert_job, name=f'coco_add_watch_fields-{s3_name}')
 
         uncropped_fielded_jobs.append({
+            'name': stac_job['name'],
             'job': add_fields_job,
             'uncropped_fielded_fpath': uncropped_fielded_kwcoco_fpath,
         })
 
-    if len(uncropped_fielded_jobs) == 1:
-        uncropped_final_kwcoco_fpath = uncropped_fielded_jobs[0]['uncropped_fielded_fpath']
-        uncropped_final_jobs = uncropped_fielded_jobs[0]['job']
+    alignment_input_jobs = []
+    if config['separate_align_jobs']:
+        ...
+        for info in uncropped_fielded_jobs:
+            pass
+        import xdev
+        xdev.embed()
+        alignment_input_jobs = uncropped_fielded_jobs
     else:
-        uncropped_coco_paths = [d['uncropped_fielded_fpath'] for d in uncropped_fielded_jobs]
-        union_depends_jobs = [d['job'] for d in uncropped_fielded_jobs]
-        union_suffix = ub.hash_data([p.name for p in uncropped_coco_paths])[0:8]
-        uncropped_final_kwcoco_fpath = uncropped_dpath / f'data_{union_suffix}.kwcoco.json'
-        uncropped_final_kwcoco_fpath = uncropped_final_kwcoco_fpath.shrinkuser(home='$HOME')
-        uncropped_multi_src_part = ' '.join(['"{}"'.format(p) for p in uncropped_coco_paths])
-        cache_prefix = '[[ -f {uncropped_final_kwcoco_fpath} ]] || ' if config['cache'] else ''
-        union_job = queue.submit(ub.codeblock(
+        if len(uncropped_fielded_jobs) == 1:
+            uncropped_final_kwcoco_fpath = uncropped_fielded_jobs[0]['uncropped_fielded_fpath']
+            uncropped_final_jobs = uncropped_fielded_jobs[0]['job']
+        else:
+            uncropped_coco_paths = [d['uncropped_fielded_fpath'] for d in uncropped_fielded_jobs]
+            union_depends_jobs = [d['job'] for d in uncropped_fielded_jobs]
+            union_suffix = ub.hash_data([p.name for p in uncropped_coco_paths])[0:8]
+            uncropped_final_kwcoco_fpath = uncropped_dpath / f'data_{union_suffix}.kwcoco.json'
+            uncropped_final_kwcoco_fpath = uncropped_final_kwcoco_fpath.shrinkuser(home='$HOME')
+            uncropped_multi_src_part = ' '.join(['"{}"'.format(p) for p in uncropped_coco_paths])
+            cache_prefix = '[[ -f {uncropped_final_kwcoco_fpath} ]] || ' if config['cache'] else ''
+            union_job = queue.submit(ub.codeblock(
+                rf'''
+                # COMBINE Uncropped datasets
+                {cache_prefix}{job_environ_str}python -m kwcoco union \
+                    --src {uncropped_multi_src_part} \
+                    --dst "{uncropped_final_kwcoco_fpath}"
+                '''), depends=union_depends_jobs, name='kwcoco-union')
+            uncropped_final_jobs = [union_job]
+        alignment_input_jobs = [{
+            'name': f'align-{union_suffix}',
+            'uncropped_fielded_fpath': uncropped_final_kwcoco_fpath,
+            'cropped_fpath': aligned_imgonly_kwcoco_fpath,
+            'region_globstr': final_region_globstr,
+            'job': union_job,
+        }]
+
+    for aligninput in alignment_input_jobs:
+
+        to_align_fpath = aligninput['uncropped_fielded_fpath']
+        region_globstr = aligninput['region_globstr]']
+
+        cache_crops = 1
+        if cache_crops:
+            align_keep = 'img'
+            align_keep = 'roi-img'
+        else:
+            align_keep = 'none'
+
+        debug_valid_regions = config['debug']
+        align_visualize = config['debug']
+        channels = config['channels']
+
+        align_job = queue.submit(ub.codeblock(
             rf'''
-            # COMBINE Uncropped datasets
-            {cache_prefix}{job_environ_str}python -m kwcoco union \
-                --src {uncropped_multi_src_part} \
-                --dst "{uncropped_final_kwcoco_fpath}"
-            '''), depends=union_depends_jobs, name='kwcoco-union')
-        uncropped_final_jobs = [union_job]
+            # MAIN WORKHORSE CROP IMAGES
+            # Crop big images to the geojson regions
+            {job_environ_str}python -m watch.cli.coco_align_geotiffs \
+                --src "{to_align_fpath}" \
+                --dst "{aligned_imgonly_kwcoco_fpath}" \
+                --regions "{region_globstr}" \
+                --context_factor=1 \
+                --geo_preprop=auto \
+                --keep={align_keep} \
+                --channels="{channels}" \
+                --visualize={align_visualize} \
+                --debug_valid_regions={debug_valid_regions} \
+                --rpc_align_method affine_warp \
+                --verbose={config['verbose']} \
+                --aux_workers={config['align_aux_workers']} \
+                --workers={config['align_workers']}
+            '''), depends=uncropped_final_jobs, name='align_geotiffs')
 
-    cache_crops = 1
-    if cache_crops:
-        align_keep = 'img'
-        align_keep = 'roi-img'
-    else:
-        align_keep = 'none'
+        # TODO:
+        # Project annotation from latest annotations subdir
+        # Prepare splits
+        # Add baseline datasets to DVC
 
-    debug_valid_regions = config['debug']
-    align_visualize = config['debug']
-    channels = config['channels']
+        if config['visualize']:
+            queue.submit(ub.codeblock(
+                rf'''
+                # Update to whatever the state of the annotations submodule is
+                python -m watch visualize \
+                    --src "{aligned_imgonly_kwcoco_fpath}" \
+                    --draw_anns=False \
+                    --draw_imgs=True \
+                    --channels="red|green|blue" \
+                    --max_dim=1000 \
+                    --animate=True --workers=auto
+                '''), depends=[align_job], name='viz_imgs')
 
-    align_job = queue.submit(ub.codeblock(
-        rf'''
-        # MAIN WORKHORSE CROP IMAGES
-        # Crop big images to the geojson regions
-        {job_environ_str}python -m watch.cli.coco_align_geotiffs \
-            --src "{uncropped_final_kwcoco_fpath}" \
-            --dst "{aligned_imgonly_kwcoco_fpath}" \
-            --regions "{final_region_globstr}" \
-            --context_factor=1 \
-            --geo_preprop=auto \
-            --keep={align_keep} \
-            --channels="{channels}" \
-            --visualize={align_visualize} \
-            --debug_valid_regions={debug_valid_regions} \
-            --rpc_align_method affine_warp \
-            --verbose={config['verbose']} \
-            --aux_workers={config['align_aux_workers']} \
-            --workers={config['align_workers']}
-        '''), depends=uncropped_final_jobs, name='align_geotiffs')
+        if 1:
+            # site_model_dpath = (dvc_dpath / 'annotations/site_models').shrinkuser(home='$HOME')
+            # region_model_dpath = (dvc_dpath / 'annotations/region_models').shrinkuser(home='$HOME')
+            final_site_globstr = _coerce_globstr(config['site_globstr'])
 
-    # TODO:
-    # Project annotation from latest annotations subdir
-    # Prepare splits
-    # Add baseline datasets to DVC
+            # Visualization here is too slow, add on another option if we really
+            # need to
+            # viz_part = '--viz_dpath=auto' if config['visualize'] else ''
+            viz_part = ''
+            project_anns_job = queue.submit(ub.codeblock(
+                rf'''
+                # Update to whatever the state of the annotations submodule is
+                python -m watch project_annotations \
+                    --src "{aligned_imgonly_kwcoco_fpath}" \
+                    --dst "{aligned_imganns_kwcoco_fpath}" \
+                    --site_models="{final_site_globstr}" \
+                    --region_models="{final_region_globstr}" {viz_part}
+                '''), depends=[align_job], name='project_annots')
 
-    if config['visualize']:
-        queue.submit(ub.codeblock(
-            rf'''
-            # Update to whatever the state of the annotations submodule is
-            python -m watch visualize \
-                --src "{aligned_imgonly_kwcoco_fpath}" \
-                --draw_anns=False \
-                --draw_imgs=True \
-                --channels="red|green|blue" \
-                --max_dim=1000 \
-                --animate=True --workers=auto
-            '''), depends=[align_job], name='viz_imgs')
-
-    if 1:
-        # site_model_dpath = (dvc_dpath / 'annotations/site_models').shrinkuser(home='$HOME')
-        # region_model_dpath = (dvc_dpath / 'annotations/region_models').shrinkuser(home='$HOME')
-        final_site_globstr = _coerce_globstr(config['site_globstr'])
-
-        # Visualization here is too slow, add on another option if we really
-        # need to
-        # viz_part = '--viz_dpath=auto' if config['visualize'] else ''
-        viz_part = ''
-        project_anns_job = queue.submit(ub.codeblock(
-            rf'''
-            # Update to whatever the state of the annotations submodule is
-            python -m watch project_annotations \
-                --src "{aligned_imgonly_kwcoco_fpath}" \
-                --dst "{aligned_imganns_kwcoco_fpath}" \
-                --site_models="{final_site_globstr}" \
-                --region_models="{final_region_globstr}" {viz_part}
-            '''), depends=[align_job], name='project_annots')
+        if config['visualize']:
+            queue.submit(ub.codeblock(
+                rf'''
+                # Update to whatever the state of the annotations submodule is
+                python -m watch visualize \
+                    --src "{aligned_imganns_kwcoco_fpath}" \
+                    --draw_anns=True \
+                    --draw_imgs=False \
+                    --channels="red|green|blue" \
+                    --max_dim=1000 \
+                    --animate=True --workers=auto \
+                    --only_boxes=True
+                '''), depends=[project_anns_job], name='viz_anns')
 
     # TODO:
     # queue.synchronize -
@@ -519,20 +561,6 @@ def main(cmdline=False, **kwargs):
         */*.json
 
         ''')
-
-    if config['visualize']:
-        queue.submit(ub.codeblock(
-            rf'''
-            # Update to whatever the state of the annotations submodule is
-            python -m watch visualize \
-                --src "{aligned_imganns_kwcoco_fpath}" \
-                --draw_anns=True \
-                --draw_imgs=False \
-                --channels="red|green|blue" \
-                --max_dim=1000 \
-                --animate=True --workers=auto \
-                --only_boxes=True
-            '''), depends=[project_anns_job], name='viz_anns')
 
     # queue.submit(ub.codeblock(
     #     '''

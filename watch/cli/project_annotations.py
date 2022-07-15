@@ -42,6 +42,7 @@ import ubelt as ub
 import numpy as np
 import scriptconfig as scfg
 import io
+import warnings
 from watch.utils import kwcoco_extensions
 from watch.utils import util_kwplot
 from watch.utils import util_path
@@ -626,7 +627,6 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
                     video_ids.extend(videos_gdf.iloc[overlapping_video_indexes]['video_id'].tolist())
             video_ids = sorted(set(video_ids))
             if len(video_ids) > 1:
-                import warnings
                 warnings.warn('A site exists in more than one video')
             # assert ub.allsame(video_ids)
             if len(video_ids) == 0:
@@ -804,7 +804,6 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
                     HACK_TO_PASS = 1
                     if HACK_TO_PASS:
                         # We should find out why this is happening
-                        import warnings
                         warnings.warn(f'Positive annotation without a class label: status={status}, {annot_idx}, {site_row}')
                         continue
                     raise AssertionError(f'status={status}, {annot_idx}, {site_row}')
