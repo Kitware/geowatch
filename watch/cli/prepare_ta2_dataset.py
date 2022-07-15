@@ -7,6 +7,7 @@ An end-to-end script for calling all the scripts needed to
 
 See Also:
     ~/code/watch/scripts/prepare_drop3.sh
+    ~/code/watch/scripts/prepare_drop4.sh
 
 
 TODO:
@@ -79,8 +80,8 @@ class PrepareTA2Config(scfg.Config):
         'cloud_cover': scfg.Value(10, help='maximum cloud cover percentage (ignored if s3_fpath given)'),
         'sensors': scfg.Value("L2", help='(ignored if s3_fpath given)'),
         'max_products_per_region': scfg.Value(None, help='does uniform affinity sampling over time to filter down to this many results per region'),
+        'separate_region_queues': scfg.Value(0, help='if True, create jobs for each region separately'),
         'api_key': scfg.Value('env:SMART_STAC_API_KEY', help='The API key or where to get it (ignored if s3_fpath given)'),
-
 
         's3_fpath': scfg.Value(None, nargs='+', help='A list of .input files which were the results of an existing stac query. Mutex with stac_query_* args'),
         'dvc_dpath': scfg.Value('auto', help=''),
@@ -171,9 +172,10 @@ def main(cmdline=False, **kwargs):
     aligned_imgonly_kwcoco_fpath = aligned_imgonly_kwcoco_fpath.shrinkuser(home='$HOME')
     aligned_imganns_kwcoco_fpath = aligned_imganns_kwcoco_fpath.shrinkuser(home='$HOME')
 
-    import cmd_queue
-    queue = cmd_queue.Queue.create(
-        backend=config['backend'], name='prep-ta2-dataset', size=1, gres=None)
+    # Ignore these regions
+    blocklist = {
+        'IN_C000.geojson',
+    }
 
     job_environs = [
         # 'PROJ_DEBUG=3',
@@ -197,19 +199,83 @@ def main(cmdline=False, **kwargs):
     # region_models = list(region_dpath.glob('*.geojson'))
     final_region_globstr = _coerce_globstr(config['region_globstr'])
 
+    import cmd_queue
+    queue = cmd_queue.Queue.create(
+        backend=config['backend'], name='prep-ta2-dataset', size=1, gres=None)
+
+    stac_jobs = []
     if config['stac_query_mode'] == 'auto':
         from watch.utils import util_path
-        from watch.utils import util_time
-        from watch.utils import util_gis
+        stac_inputs_dpath = (uncropped_query_dpath / 'stac_input_lists')
+        base_mkdir_job = queue.submit(f'mkdir -p "{stac_inputs_dpath}"', name='mkdir-base')
 
-        stac_inputs_dpath = (uncropped_query_dpath / 'stac_input_lists').ensuredir()
+        # Each region gets their own job in the queue
+        if config['separate_region_queues']:
+            stac_query_dpath = (uncropped_query_dpath / 'stac_query_json')
+            query_mkdir_job = queue.submit(f'mkdir -p "{stac_query_dpath}"', depends=[base_mkdir_job], name='mkdir-query')
+            region_file_fpaths = util_path.coerce_patterned_paths(final_region_globstr.expand())
+            region_file_fpaths = region_file_fpaths[0:1]
+            # TODO: it would be nice to have just a single script that handles
+            # multiple regions
+            print('region_file_fpaths = {}'.format(ub.repr2(sorted(region_file_fpaths), nl=1)))
+            for region_fpath in region_file_fpaths:
+                region_id = region_fpath.stem
+                if region_id in blocklist:
+                    continue
 
-        queue.submit(f'mkdir -p "{stac_inputs_dpath}"')
-        queue.sync()
+                region_inputs_fpath = (stac_inputs_dpath / (region_id + '.input')).shrinkuser(home='$HOME')
 
-        if 1:
+                cache_prefix = '[[ -f {region_inputs_fpath} ]] || ' if config['cache'] else ''
+                stac_search_job = queue.submit(ub.codeblock(
+                    rf'''
+                    {cache_prefix}python -m watch.cli.stac_search \
+                        --region_file "{region_fpath.shrinkuser(home='$HOME')}" \
+                        --search_json "auto" \
+                        --cloud_cover "{config['cloud_cover']}" \
+                        --sensors "{config['sensors']}" \
+                        --api_key "{config['api_key']}" \
+                        --max_products_per_region "{config['max_products_per_region']}" \
+                        --max_products_per_region "{config['max_products_per_region']}" \
+                        --mode area \
+                        --verbose 2 \
+                        --outfile "{region_inputs_fpath}"
+                    '''), name=f'stac-search-{region_id}', depends=[query_mkdir_job])
+
+                stac_jobs.append({
+                    'name': region_id,
+                    'job': stac_search_job,
+                    'inputs_fpath': region_inputs_fpath,
+                    'collated': False,
+                })
+
+            # Kind of pointless option, we could separate all stac jobs and
+            # then combine them, not sure if we want to be able to do that
+            # though. We could do it for a subset if we wanted.
+            if False and len(stac_jobs) > 1:
+                # Combine all into a single path.
+                input_fpath_list = [d['inputs_fpath'] for d in stac_jobs]
+                jobs = [d['job'] for d in stac_jobs]
+                combo_hash = ub.hash_data(stac_jobs)[0:8]
+                combo_name = f'combo_{combo_hash}'
+                combined_inputs_fpath = (stac_inputs_dpath / (f'{combo_name}.input')).shrinkuser(home='$HOME')
+                quoted_fpath_list = ['"{}"'.format(p) for p in input_fpath_list]
+                combine_job = queue.submit(ub.codeblock(
+                    f'''
+                    # GRAB Input STAC List
+                    cat {' '.join(quoted_fpath_list)} > "{combined_inputs_fpath}"
+                    '''), depends=jobs, name=combo_name)
+                stac_jobs = [{
+                    'name': combo_name,
+                    'job': combine_job,
+                    'inputs_fpath': combined_inputs_fpath,
+                    'collated': False,
+                }]
+        else:
+            # All region queries are executed simultaniously and put into a
+            # single inputs file. The advantage here is we dont need to know
+            # how many regions there are beforehand.
             combined_inputs_fpath = (stac_inputs_dpath / (f'combo_query_{config["dataset_suffix"]}.input')).shrinkuser(home='$HOME')
-            build_query_job = queue.submit(ub.codeblock(
+            combo_stac_search_job = queue.submit(ub.codeblock(
                 rf'''
                 python -m watch.cli.stac_search \
                     --region_globstr "{final_region_globstr}" \
@@ -221,87 +287,38 @@ def main(cmdline=False, **kwargs):
                     --mode area \
                     --verbose 2 \
                     --outfile "{combined_inputs_fpath}"
-                '''))
-            s3_fpath_list = [combined_inputs_fpath]
-            collated_list = [False]
-        else:
-            stac_query_dpath = (uncropped_query_dpath / 'stac_query_json').ensuredir()
-            queue.submit(f'mkdir -p "{stac_query_dpath}"')
-            queue.sync()
-            region_file_fpaths = util_path.coerce_patterned_paths(final_region_globstr.expand())
-            s3_fpath_list = []
-            # TODO: it would be nice to have just a single script that handles
-            # multiple regions
-            for region_fpath in region_file_fpaths:
-                region_df = util_gis.read_geojson(region_fpath)
-                region_row = region_df[region_df['type'] == 'region'].iloc[0]
-                end_date = util_time.coerce_datetime(region_row['end_date'])
-                start_date = util_time.coerce_datetime(region_row['start_date'])
-                region_id = region_row['region_id']
-                region_search_json_fpath = (stac_query_dpath / (region_id + '.json')).shrinkuser(home='$HOME')
-                region_inputs_fpath = (stac_inputs_dpath / (region_id + '.input')).shrinkuser(home='$HOME')
-                if end_date is None:
-                    end_date = util_time.coerce_datetime('now').date()
-                if start_date is None:
-                    start_date = util_time.coerce_datetime('2010-01-01').date()
+                '''), name='stac-search', depends=[base_mkdir_job])
 
-                cache_prefix = '[[ -f {region_search_json_fpath} ]] || ' if config['cache'] else ''
-                build_query_job = queue.submit(ub.codeblock(
-                    rf'''
-                    {cache_prefix}python -m watch.cli.stac_search_build \
-                        --start_date="{start_date.isoformat()}" \
-                        --end_date="{end_date.isoformat()}" \
-                        --cloud_cover={config['cloud_cover']} \
-                        --sensors={config['sensors']} \
-                        --out_fpath "{region_search_json_fpath}"
-                    '''))
-
-                cache_prefix = '[[ -f {region_inputs_fpath} ]] || ' if config['cache'] else ''
-                build_query_job = queue.submit(ub.codeblock(
-                    rf'''
-                    {cache_prefix}python -m watch.cli.stac_search \
-                        --region_file "{region_fpath.shrinkuser(home='$HOME')}" \
-                        --search_json "{region_search_json_fpath}" \
-                        --max_products_per_region "{config['max_products_per_region']}" \
-                        --mode area \
-                        --verbose 2 \
-                        --outfile "{region_inputs_fpath}"
-                    '''), depends=build_query_job)
-
-                # Not really s3, but pretend it is
-                s3_fpath_list.append(region_inputs_fpath)
-
-        # Hack, todo, properly configure
-        # We need to construct the input lists manually here
-        queue.sync()
-        collated_list = [False] * len(s3_fpath_list)
-
-        if len(s3_fpath_list) > 1 and True:
-            # Combine all into a single path.
-            combo_hash = ub.hash_data(s3_fpath_list)[0:8]
-            combined_inputs_fpath = (stac_inputs_dpath / (f'combo_{combo_hash}.input')).shrinkuser(home='$HOME')
-            quoted_fpath_list = ['"{}"'.format(p) for p in s3_fpath_list]
-            queue.submit(ub.codeblock(
-                f'''
-                # GRAB Input STAC List
-                cat {' '.join(quoted_fpath_list)} > "{combined_inputs_fpath}"
-                '''))
-            queue.sync()
-            s3_fpath_list = [combined_inputs_fpath]
-            collated_list = [False]
-
+            stac_jobs.append({
+                'name': 'combined',
+                'job': combo_stac_search_job,
+                'inputs_fpath': combined_inputs_fpath,
+                'collated': False,
+            })
     else:
         s3_fpath_list = config['s3_fpath']
         collated_list = config['collated']
         if len(collated_list) != len(s3_fpath_list):
             print('Indicate if each s3 path is collated or not')
+        stac_jobs = []
+        for s3_fpath, collated in zip(s3_fpath_list, collated_list):
+            stac_jobs.append({
+                'job': None,
+                'name': ub.Path(s3_fpath).stem,
+                'inputs_fpath': s3_fpath,
+                'collated': collated,
+            })
 
-    uncropped_coco_paths = []
-    union_depends_jobs = []
-    for s3_fpath, collated in zip(s3_fpath_list, collated_list):
-        s3_fpath = ub.Path(s3_fpath)
-        s3_name = s3_fpath.name
-        uncropped_query_fpath = uncropped_query_dpath / s3_name
+    # hack to dynamically resize tmux jobs
+    queue.size = len(stac_jobs)
+
+    uncropped_fielded_jobs = []
+    for stac_job in stac_jobs:
+        s3_fpath = ub.Path(stac_job['inputs_fpath'])
+        s3_name = stac_job['name']
+        parent_job = stac_job['job']
+        collated = stac_job['collated']
+        uncropped_query_fpath = uncropped_query_dpath / s3_fpath.name
         uncropped_query_fpath = uncropped_query_fpath.shrinkuser(home='$HOME')
 
         uncropped_catalog_fpath = uncropped_ingress_dpath / f'catalog_{s3_name}.json'
@@ -309,20 +326,19 @@ def main(cmdline=False, **kwargs):
 
         cache_prefix = '[[ -f {uncropped_query_fpath} ]] || ' if config['cache'] else ''
         if not str(s3_fpath).startswith('s3'):
-            # and s3_fpath.exists():
             grab_job = queue.submit(ub.codeblock(
                 f'''
                 # GRAB Input STAC List
                 mkdir -p "{uncropped_query_dpath}"
                 {cache_prefix}cp "{s3_fpath}" "{uncropped_query_dpath}"
-                '''))
+                '''), depends=parent_job, name='psudo-s3-pull-inputs')
         else:
             grab_job = queue.submit(ub.codeblock(
                 f'''
                 # GRAB Input STAC List
                 mkdir -p "{uncropped_query_dpath}"
                 {cache_prefix}aws s3 --profile {aws_profile} cp "{s3_fpath}" "{uncropped_query_dpath}"
-                '''))
+                '''), depends=parent_job, name='s3-pull-inputs')
 
         ingress_options = [
             '--virtual',
@@ -341,7 +357,7 @@ def main(cmdline=False, **kwargs):
                 --outdir "{uncropped_ingress_dpath}" \
                 --catalog_fpath "{uncropped_catalog_fpath}" \
                 "{uncropped_query_fpath}"
-            '''), depends=[grab_job])
+            '''), depends=[grab_job], name=f'baseline_ingress-{s3_name}')
 
         uncropped_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}.kwcoco.json'
         uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.shrinkuser(home='$HOME')
@@ -361,7 +377,7 @@ def main(cmdline=False, **kwargs):
                 --outpath="{uncropped_kwcoco_fpath}" \
                 {convert_options_str} \
                 --jobs "{config['convert_workers']}"
-            '''), depends=[ingress_job])
+            '''), depends=[ingress_job], name=f'ta1_stac_to_kwcoco-{s3_name}')
 
         uncropped_fielded_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}_fielded.kwcoco.json'
         uncropped_fielded_kwcoco_fpath = uncropped_fielded_kwcoco_fpath.shrinkuser(home='$HOME')
@@ -378,15 +394,19 @@ def main(cmdline=False, **kwargs):
                 --target_gsd={config['target_gsd']} \
                 --remove_broken={config['remove_broken']} \
                 --workers="{config['fields_workers']}"
-            '''), depends=convert_job)
+            '''), depends=convert_job, name=f'coco_add_watch_fields-{s3_name}')
 
-        uncropped_coco_paths.append(uncropped_fielded_kwcoco_fpath)
-        union_depends_jobs.append(add_fields_job)
+        uncropped_fielded_jobs.append({
+            'job': add_fields_job,
+            'uncropped_fielded_fpath': uncropped_fielded_kwcoco_fpath,
+        })
 
-    if len(uncropped_coco_paths) == 1:
-        uncropped_final_kwcoco_fpath = uncropped_coco_paths[0]
-        uncropped_final_jobs = union_depends_jobs
+    if len(uncropped_fielded_jobs) == 1:
+        uncropped_final_kwcoco_fpath = uncropped_fielded_jobs[0]['uncropped_fielded_fpath']
+        uncropped_final_jobs = uncropped_fielded_jobs[0]['job']
     else:
+        uncropped_coco_paths = [d['uncropped_fielded_fpath'] for d in uncropped_fielded_jobs]
+        union_depends_jobs = [d['job'] for d in uncropped_fielded_jobs]
         union_suffix = ub.hash_data([p.name for p in uncropped_coco_paths])[0:8]
         uncropped_final_kwcoco_fpath = uncropped_dpath / f'data_{union_suffix}.kwcoco.json'
         uncropped_final_kwcoco_fpath = uncropped_final_kwcoco_fpath.shrinkuser(home='$HOME')
@@ -398,33 +418,8 @@ def main(cmdline=False, **kwargs):
             {cache_prefix}{job_environ_str}python -m kwcoco union \
                 --src {uncropped_multi_src_part} \
                 --dst "{uncropped_final_kwcoco_fpath}"
-            '''), depends=union_depends_jobs)
+            '''), depends=union_depends_jobs, name='kwcoco-union')
         uncropped_final_jobs = [union_job]
-
-    # uncropped_prep_kwcoco_fpath = uncropped_dpath / 'data_prepped.kwcoco.json'
-    # uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.shrinkuser(home='$HOME')
-    # select_images_query = config['select_images']
-    # if select_images_query:
-    #     suffix = '_' + ub.hash_data(select_images_query)[0:8]
-    #     # Debugging
-    #     small_uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.augment(suffix=suffix)
-    #     subset_job = queue.submit(ub.codeblock(
-    #         rf'''
-    #         # SUBSET Uncropped datasets (usually for debugging)
-    #         python -m kwcoco subset \
-    #             --src="{uncropped_final_kwcoco_fpath}" \
-    #             --dst="{small_uncropped_kwcoco_fpath}" \
-    #             --select_images='{select_images_query}'
-    #         '''), jobs=uncropped_final_jobs)
-    #     # --populate-watch-fields \
-    #     add_fields_depends = [subset_job]
-    #     uncropped_final_kwcoco_fpath = small_uncropped_kwcoco_fpath
-    #     uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.augment(suffix=suffix)
-    #     aligned_imgonly_kwcoco_fpath = aligned_imgonly_kwcoco_fpath.augment(suffix=suffix)
-    # else:
-    # add_fields_depends = uncropped_final_jobs
-
-    # region_model_str = ' '.join([shlex.quote(str(p)) for p in region_models])
 
     cache_crops = 1
     if cache_crops:
@@ -455,7 +450,7 @@ def main(cmdline=False, **kwargs):
             --verbose={config['verbose']} \
             --aux_workers={config['align_aux_workers']} \
             --workers={config['align_workers']}
-        '''), depends=uncropped_final_jobs)
+        '''), depends=uncropped_final_jobs, name='align_geotiffs')
 
     # TODO:
     # Project annotation from latest annotations subdir
@@ -473,7 +468,7 @@ def main(cmdline=False, **kwargs):
                 --channels="red|green|blue" \
                 --max_dim=1000 \
                 --animate=True --workers=auto
-            '''), depends=[align_job])
+            '''), depends=[align_job], name='viz_imgs')
 
     if 1:
         # site_model_dpath = (dvc_dpath / 'annotations/site_models').shrinkuser(home='$HOME')
@@ -492,7 +487,7 @@ def main(cmdline=False, **kwargs):
                 --dst "{aligned_imganns_kwcoco_fpath}" \
                 --site_models="{final_site_globstr}" \
                 --region_models="{final_region_globstr}" {viz_part}
-            '''), depends=[align_job])
+            '''), depends=[align_job], name='project_annots')
 
     # TODO:
     # queue.synchronize -
@@ -540,7 +535,7 @@ def main(cmdline=False, **kwargs):
                 --max_dim=1000 \
                 --animate=True --workers=auto \
                 --only_boxes=True
-            '''), depends=[project_anns_job])
+            '''), depends=[project_anns_job], name='viz_anns')
 
     # queue.submit(ub.codeblock(
     #     '''
@@ -550,7 +545,8 @@ def main(cmdline=False, **kwargs):
     #         --run=1 --serial=True
     #     '''))
 
-    queue.rprint()
+    queue.print_graph()
+    # queue.rprint()
 
     if config['run']:
         agg_state = None
