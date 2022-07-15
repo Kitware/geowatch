@@ -194,11 +194,15 @@ def make_coco_aux_from_stac_asset(asset_name,
     asset_href = asset_dict['href']
 
     # Skip assets with metadata or thumbnail extensions
+    print(f'asset_href={asset_href}')
     if re.search(r'\.(txt|csv|json|xml|vrt|jpe?g)$', asset_href, re.I):
         return None
 
-    # HACK Skip TCI:
+    # HACK Skip common TCI (true color images) and PVI (preview images)
+    # naming schemes
     if re.search(r'TCI\.jp2$', asset_href, re.I):
+        return None
+    if re.search(r'_PVI\.tif$', asset_href, re.I):
         return None
 
     if from_collated and platform in (SUPPORTED_S2_PLATFORMS |
