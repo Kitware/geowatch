@@ -223,7 +223,7 @@ def main(cmdline=False, **kwargs):
                 region_inputs_fpath = (uncropped_query_dpath / (region_id + '.input')).shrinkuser(home='$HOME')
                 final_region_fpath = region_fpath.shrinkuser(home='$HOME')
 
-                cache_prefix = '[[ -f {region_inputs_fpath} ]] || ' if config['cache'] else ''
+                cache_prefix = f'[[ -f {region_inputs_fpath} ]] || ' if config['cache'] else ''
                 stac_search_job = queue.submit(ub.codeblock(
                     rf'''
                     {cache_prefix}python -m watch.cli.stac_search \
