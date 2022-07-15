@@ -192,8 +192,13 @@ def main(cmdline=False, **kwargs):
     region_id_to_sites = expand_site_models_with_site_summaries(sites, regions)
 
     propogate = config['propogate']
+
+    viz_dpath = config['viz_dpath']
+    want_viz = bool(viz_dpath)
+
     propogated_annotations, all_drawable_infos = assign_sites_to_images(
-        coco_dset, region_id_to_sites, propogate, geospace_lookup=geospace_lookup)
+        coco_dset, region_id_to_sites, propogate,
+        geospace_lookup=geospace_lookup, want_viz=want_viz)
 
     for ann in propogated_annotations:
         coco_dset.add_annotation(**ann)
@@ -203,7 +208,6 @@ def main(cmdline=False, **kwargs):
     print('dump coco_dset.fpath = {!r}'.format(coco_dset.fpath))
     coco_dset.dump(coco_dset.fpath)
 
-    viz_dpath = config['viz_dpath']
     if viz_dpath == 'auto':
         viz_dpath = (ub.Path(coco_dset.fpath).parent / '_viz_project_anns')
     if viz_dpath:
@@ -550,7 +554,7 @@ def validate_site_dataframe(site_df):
     return status
 
 
-def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lookup='auto'):
+def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lookup='auto', want_viz=1):
     """
     Given a coco dataset (with geo information) and a list of geojson sites,
     determines which images each site-annotations should go on.
@@ -876,73 +880,18 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
                         }
                         site_anns.append(ann)
 
-                # if propogate and needs_forward_propogate:
-                #     for gid in forward_gids:
-                #         img = coco_dset.imgs[gid]
-                #         img_datetime = util_time.coerce_datetime(img['date_captured'])
-                #         if propogate or img_datetime == site_row_datetime:
-                #             hack = 0
-                #             for subsite_catname, poly in zip(site_catnames, site_polygons):
-                #                 if subsite_catname in HEURISTIC_END_STATES:
-                #                     # Don't project end-states of we dont want to
-                #                     if not PROJECT_ENDSTATE:
-                #                         continue
-                #                 if hack == 0:
-                #                     propogated_on.append(img_datetime)
-                #                     hack = 1
-                #                 cid = coco_dset.ensure_category(subsite_catname)
-                #                 cat = coco_dset.index.cats[cid]
-                #                 category_colors.append(cat['color'])
-                #                 categories.append(subsite_catname)
-                #                 img['date_captured']
-                #                 ann = {
-                #                     'image_id': gid,
-                #                     'segmentation_geos': poly,
-                #                     'status': status,
-                #                     'category_id': cid,
-                #                     'track_id': track_id,
-                #                 }
-                #                 site_anns.append(ann)
+                if want_viz:
+                    drawable_summary.append(row_summary)
 
-                # if propogate and needs_backward_propogate:
-                #     forward_gids = region_gids[forward_gxs]
-                #     for gid in backward_gids:
-                #         img = coco_dset.imgs[gid]
-                #         img_datetime = util_time.coerce_datetime(img['date_captured'])
-                #         if propogate or img_datetime == site_row_datetime:
-                #             hack = 0
-                #             for catname, poly in zip(site_catnames, site_polygons):
-                #                 if catname in HEURISTIC_END_STATES:
-                #                     # Don't project end-states of we dont want to
-                #                     if not PROJECT_ENDSTATE:
-                #                         continue
-                #                 if hack == 0:
-                #                     propogated_on.append(img_datetime)
-                #                     hack = 1
-                #                 cid = coco_dset.ensure_category(catname)
-                #                 cat = coco_dset.index.cats[cid]
-                #                 category_colors.append(cat['color'])
-                #                 categories.append(catname)
-                #                 img['date_captured']
-                #                 ann = {
-                #                     'image_id': gid,
-                #                     'segmentation_geos': poly,
-                #                     'status': status,
-                #                     'category_id': cid,
-                #                     'track_id': track_id,
-                #                 }
-                #                 site_anns.append(ann)
-
-                drawable_summary.append(row_summary)
             propogated_annotations.extend(site_anns)
-            drawable_region_sites.append(drawable_summary)
+            if want_viz:
+                drawable_region_sites.append(drawable_summary)
 
-        import xdev
-        with xdev.embed_on_exception_context:
+        if want_viz:
             drawable_region_sites = sorted(
                 drawable_region_sites,
                 key=lambda drawable_summary: (
-                    min([r['site_row_datetime'] for r in drawable_summary])
+                    min([r['site_row_datetime'] for r in drawable_summary]).timestamp()
                     if len(drawable_summary) else
                     float('inf')
                 )
