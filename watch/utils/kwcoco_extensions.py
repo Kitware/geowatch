@@ -12,6 +12,7 @@ import ubelt as ub
 import kwimage
 import itertools
 import numbers
+import kwcoco
 
 from os.path import join
 from watch.utils import util_raster
@@ -173,8 +174,13 @@ def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
     coco_dset._ensure_json_serializable()
 
 
-def coco_populate_geo_heuristics(coco_dset, gids=None, overwrite=False,
-                                 default_gsd=None, workers=0, mode='thread', **kw):
+def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
+                                 gids=None,
+                                 overwrite=False,
+                                 default_gsd=None,
+                                 workers=0,
+                                 mode='thread',
+                                 remove_broken=False, **kw):
     """
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -208,12 +214,23 @@ def coco_populate_geo_heuristics(coco_dset, gids=None, overwrite=False,
             coco_img = coco_img.detach()
         executor.submit(coco_populate_geo_img_heuristics2, coco_img,
                         overwrite=overwrite, default_gsd=default_gsd, **kw)
+
+    broken_image_ids = []
     for job in ub.ProgIter(executor.as_completed(), total=len(executor), desc='collect populate imgs'):
-        img = job.result()
+        try:
+            img = job.result()
+        except RuntimeError as ex:
+            if remove_broken and "404" in str(ex):
+                broken_image_ids.append(img['id'])
+            else:
+                raise
         if mode == 'process':
             # for multiprocessing
             real_img = coco_dset.index.imgs[img['id']]
             real_img.update(img)
+    if broken_image_ids:
+        print(f'There were {len(broken_image_ids)} broken images')
+        coco_dset.remove_images(broken_image_ids, verbose=True)
 
 
 @profile
@@ -443,7 +460,6 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
         keep_geotiff_metadata = False
     """
     import watch
-    import kwcoco
     sensor_coarse = obj.get('sensor_coarse', None)  # not reliable
     num_bands = obj.get('num_bands', None)
     channels = obj.get('channels', None)

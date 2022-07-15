@@ -116,6 +116,9 @@ class PrepareTA2Config(scfg.Config):
 
         'region_globstr': scfg.Value('annotations/region_models', help='region model globstr (relative to the dvc path, unless absolute or prefixed by "./")'),
         'site_globstr': scfg.Value('annotations/site_models', help='site model globstr (relative to the dvc path, unless absolute or prefixed by "./")'),
+
+        'target_gsd': 10,
+        'remove_broken': scfg.Value(True, help='if True, will remove any image that fails population (e.g. caused by a 404)')
     }
 
 
@@ -372,7 +375,8 @@ def main(cmdline=False, **kwargs):
                 --dst "{uncropped_fielded_kwcoco_fpath}" \
                 --enable_video_stats=False \
                 --overwrite=warp \
-                --target_gsd=10 \
+                --target_gsd={config['target_gsd']} \
+                --remove_broken={config['remove_broken']} \
                 --workers="{config['fields_workers']}"
             '''), depends=convert_job)
 
