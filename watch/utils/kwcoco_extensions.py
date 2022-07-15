@@ -182,6 +182,15 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
                                  mode='thread',
                                  remove_broken=False, **kw):
     """
+    AWS_DEFAULT_PROFILE=iarpa python -m watch.cli.coco_add_watch_fields \
+        --src "/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/Uncropped-Drop4-L2-2022-07-14-demo64/data_combo_query_Drop4-L2-2022-07-14-demo64.input.kwcoco.json" \
+        --dst "/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/Uncropped-Drop4-L2-2022-07-14-demo64/data_combo_query_Drop4-L2-2022-07-14-demo64.input_fielded.kwcoco.json" \
+        --enable_video_stats=False \
+        --overwrite=warp \
+        --target_gsd=30 \
+        --remove_broken=True \
+        --workers="26"
+
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
@@ -202,6 +211,8 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
         raise NotImplementedError(ub.paragraph(
             '''
             Cannot keep keep geotiff metadata when using process parallelism.
+            import xdev
+            xdev.embed()
             Need to serialize gdal objects (i.e. RPC transforms and
             SwigPyObject) returned from ``watch.gis.geotiff.geotiff_metadata``
             to be able do this.
@@ -220,9 +231,15 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
         try:
             img = job.result()
         except RuntimeError as ex:
-            if remove_broken and "404" in str(ex):
+            if remove_broken and "404" in repr(ex):
                 broken_image_ids.append(img['id'])
+                print(f'ex={ex!r}')
+                print(f'ex={ex}')
+                print(f'ex.__dict__={ex.__dict__}')
             else:
+                print(f'ex={ex!r}')
+                print(f'ex={ex}')
+                print(f'ex.__dict__={ex.__dict__}')
                 raise
         if mode == 'process':
             # for multiprocessing
