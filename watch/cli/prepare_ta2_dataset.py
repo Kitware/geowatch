@@ -93,6 +93,7 @@ class PrepareTA2Config(scfg.Config):
 
         'backend': scfg.Value('serial', help='can be serial, tmux, or slurm. Using tmux is recommended.'),
         'max_queue_size': scfg.Value(100, help='the number of regions allowed to be processed in parallel with tmux backend'),
+        'max_regions': None,
 
         'aws_profile': scfg.Value('iarpa', help='AWS profile to use for remote data access'),
 
@@ -211,6 +212,9 @@ def main(cmdline=False, **kwargs):
         # Each region gets their own job in the queue
         if config['separate_region_queues']:
             region_file_fpaths = util_path.coerce_patterned_paths(final_region_globstr.expand())
+
+            if config['max_regions'] is not None:
+                region_file_fpaths = region_file_fpaths[:config['max_regions']]
             # region_file_fpaths = region_file_fpaths[0:2]
             # TODO: it would be nice to have just a single script that handles
             # multiple regions

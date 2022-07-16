@@ -454,6 +454,7 @@ def main(cmdline=True, **kw):
     ]
     to_extract = cube.query_image_overlaps(region_df)
 
+    # SUPER HACK TODO: We could remove channels we don't care about.
     for image_overlaps in ub.ProgIter(to_extract, desc='extract ROI videos', verbose=3):
         # tracker.print_diff()
         video_name = image_overlaps['video_name']
@@ -475,14 +476,19 @@ def main(cmdline=True, **kw):
 
     new_dset.fpath = dst_fpath
     print('Dumping new_dset.fpath = {!r}'.format(new_dset.fpath))
-    # reroot = 0
-    # if reroot:
-    # new_dset.reroot(new_root=output_bundle_dpath, absolute=False)
-    new_dset.reroot(new_root=output_bundle_dpath, absolute=True)
+    try:
+        rerooted_dataset = new_dset.copy()
+        rerooted_dataset = rerooted_dataset.reroot(new_root=output_bundle_dpath, absolute=False)
+    except Exception:
+        # Hack to fix broken pipeline, todo: find robust fix
+        hack_region_id = paths[0].stem
+        rerooted_dataset = new_dset.copy()
+        rerooted_dataset.reroot(new_prefix=hack_region_id)
+        rerooted_dataset.reroot(new_root=output_bundle_dpath, absolute=False)
 
-    new_dset.dump(new_dset.fpath, newlines=True)
+    rerooted_dataset.dump(rerooted_dataset.fpath, newlines=True)
     print('finished')
-    return new_dset
+    return rerooted_dataset
 
 
 class SimpleDataCube(object):
