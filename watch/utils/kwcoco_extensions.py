@@ -249,10 +249,11 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
                 print(f'ex={ex}')
                 print(f'ex.__dict__={ex.__dict__}')
                 raise
-        if mode == 'process':
-            # for multiprocessing
-            real_img = coco_dset.index.imgs[gid]
-            real_img.update(img)
+        else:
+            if mode == 'process':
+                # for multiprocessing
+                real_img = coco_dset.index.imgs[gid]
+                real_img.update(img)
     if broken_image_ids:
         print(f'There were {len(broken_image_ids)} broken images')
         coco_dset.remove_images(broken_image_ids, verbose=True)
