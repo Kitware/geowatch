@@ -99,7 +99,8 @@ def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
                           enable_valid_region=False,
                           enable_intensity_stats=False,
                           workers=0,
-                          mode='thread'):
+                          mode='thread',
+                          remove_broken=False):
     """
     Aggregate populate function for fields useful to WATCH.
 
@@ -164,7 +165,8 @@ def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
         coco_dset, gids=gids, overwrite=overwrite, default_gsd=default_gsd,
         workers=workers, mode=mode,
         enable_intensity_stats=enable_intensity_stats,
-        enable_valid_region=enable_valid_region)
+        enable_valid_region=enable_valid_region,
+        remove_broken=remove_broken)
 
     if enable_video_stats:
         for vidid in ub.ProgIter(vidids, total=len(vidids), desc='populate videos'):
@@ -182,15 +184,6 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
                                  mode='thread',
                                  remove_broken=False, **kw):
     """
-    AWS_DEFAULT_PROFILE=iarpa python -m watch.cli.coco_add_watch_fields \
-        --src "/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/Uncropped-Drop4-L2-2022-07-14-demo64/data_combo_query_Drop4-L2-2022-07-14-demo64.input.kwcoco.json" \
-        --dst "/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/Uncropped-Drop4-L2-2022-07-14-demo64/data_combo_query_Drop4-L2-2022-07-14-demo64.input_fielded.kwcoco.json" \
-        --enable_video_stats=False \
-        --overwrite=warp \
-        --target_gsd=30 \
-        --remove_broken=True \
-        --workers="26"
-
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.utils.kwcoco_extensions import *  # NOQA

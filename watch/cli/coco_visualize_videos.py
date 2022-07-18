@@ -711,9 +711,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         chan = delayed.take_channels(chan_group)
 
         if new_delayed_impl:
-            import xdev
-            with xdev.embed_on_exception_context:
-                chan = chan.prepare().optimize()
+            # import xdev
+            # with xdev.embed_on_exception_context:
+            chan = chan.prepare().optimize()
 
         with ub.Timer('load channels', verbose=verbose):
             # When util_delayed_poc is removed, remove **delayed_ops

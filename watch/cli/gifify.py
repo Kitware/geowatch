@@ -3,6 +3,9 @@
 A gif-ify script
 
 Wrapper around imgmagik convert or ffmpeg
+
+TODO:
+    - [ ] Moving this to kwplot
 """
 
 import ubelt as ub
