@@ -195,6 +195,18 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
         >>> coco_populate_geo_heuristics(coco_dset, overwrite=True, workers=12,
         >>>                              keep_geotiff_metadata=False,
         >>>                              mode='process')
+
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> from watch.utils.kwcoco_extensions import *  # NOQA
+        >>> from watch.utils.util_data import find_smart_dvc_dpath
+        >>> import kwcoco
+        >>> dvc_dpath = find_smart_dvc_dpath()
+        >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
+        >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+        >>> coco_populate_geo_heuristics(coco_dset, overwrite=True, workers=12,
+        >>>                              keep_geotiff_metadata=False,
+        >>>                              mode='process')
     """
     gids = coco_dset.images(gids)._ids
     # Cant multiprocess because of SwigPyObjects... bleh
@@ -216,16 +228,19 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
         coco_img = coco_dset.coco_image(gid)
         if mode == 'process':
             coco_img = coco_img.detach()
-        executor.submit(coco_populate_geo_img_heuristics2, coco_img,
-                        overwrite=overwrite, default_gsd=default_gsd, **kw)
+            job = executor.submit(
+                coco_populate_geo_img_heuristics2, coco_img,
+                overwrite=overwrite, default_gsd=default_gsd, **kw)
+            job.gid = gid
 
     broken_image_ids = []
     for job in ub.ProgIter(executor.as_completed(), total=len(executor), desc='collect populate imgs'):
+        gid = job.gid
         try:
             img = job.result()
         except RuntimeError as ex:
             if remove_broken and "404" in repr(ex):
-                broken_image_ids.append(img['id'])
+                broken_image_ids.append(gid)
                 print(f'ex={ex!r}')
                 print(f'ex={ex}')
                 print(f'ex.__dict__={ex.__dict__}')
@@ -236,7 +251,7 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
                 raise
         if mode == 'process':
             # for multiprocessing
-            real_img = coco_dset.index.imgs[img['id']]
+            real_img = coco_dset.index.imgs[gid]
             real_img.update(img)
     if broken_image_ids:
         print(f'There were {len(broken_image_ids)} broken images')
