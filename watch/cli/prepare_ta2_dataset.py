@@ -508,7 +508,7 @@ def main(cmdline=False, **kwargs):
                 # Update to whatever the state of the annotations submodule is
                 python -m watch visualize \
                     --src "{aligned_imgonly_fpath}" \
-                    --dst "{aligned_viz_dpath}" \
+                    --viz_dpath "{aligned_viz_dpath}" \
                     --draw_anns=False \
                     --draw_imgs=True \
                     --channels="red|green|blue" \
@@ -524,10 +524,11 @@ def main(cmdline=False, **kwargs):
             # need to
             # viz_part = '--viz_dpath=auto' if config['visualize'] else ''
             viz_part = ''
+            cache_prefix = f'[[ -f {aligned_imganns_fpath} ]] || ' if config['cache'] else ''
             project_anns_job = queue.submit(ub.codeblock(
                 rf'''
                 # Update to whatever the state of the annotations submodule is
-                python -m watch project_annotations \
+                {cache_prefix}python -m watch project_annotations \
                     --src "{aligned_imgonly_fpath}" \
                     --dst "{aligned_imganns_fpath}" \
                     --site_models="{site_globstr}" \
@@ -540,7 +541,7 @@ def main(cmdline=False, **kwargs):
                 # Update to whatever the state of the annotations submodule is
                 python -m watch visualize \
                     --src "{aligned_imganns_fpath}" \
-                    --dst "{aligned_viz_dpath}" \
+                    --viz_dpath "{aligned_viz_dpath}" \
                     --draw_anns=True \
                     --draw_imgs=False \
                     --channels="red|green|blue" \
