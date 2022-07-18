@@ -499,16 +499,20 @@ def main(cmdline=False, **kwargs):
         # Prepare splits
         # Add baseline datasets to DVC
 
+        aligned_viz_dpath = aligned_kwcoco_bundle / '_viz512'
+        viz_max_dim = 512
+
         if config['visualize']:
             queue.submit(ub.codeblock(
                 rf'''
                 # Update to whatever the state of the annotations submodule is
                 python -m watch visualize \
                     --src "{aligned_imgonly_fpath}" \
+                    --dst "{aligned_viz_dpath}" \
                     --draw_anns=False \
                     --draw_imgs=True \
                     --channels="red|green|blue" \
-                    --max_dim=1000 \
+                    --max_dim={viz_max_dim} \
                     --animate=True --workers=auto
                 '''), depends=[align_job], name=f'viz-imgs-{name}')
 
@@ -536,10 +540,11 @@ def main(cmdline=False, **kwargs):
                 # Update to whatever the state of the annotations submodule is
                 python -m watch visualize \
                     --src "{aligned_imganns_fpath}" \
+                    --dst "{aligned_viz_dpath}" \
                     --draw_anns=True \
                     --draw_imgs=False \
                     --channels="red|green|blue" \
-                    --max_dim=1000 \
+                    --max_dim={viz_max_dim} \
                     --animate=True --workers=auto \
                     --only_boxes=True
                 '''), depends=[project_anns_job], name=f'viz-annots-{name}')

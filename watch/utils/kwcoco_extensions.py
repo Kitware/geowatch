@@ -255,7 +255,7 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
                 real_img = coco_dset.index.imgs[gid]
                 real_img.update(img)
     if broken_image_ids:
-        print(f'There were {len(broken_image_ids)} broken images')
+        print(f'There were {len(broken_image_ids)} / {len(gids)} broken images')
         coco_dset.remove_images(broken_image_ids, verbose=True)
 
 
