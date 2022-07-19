@@ -37,6 +37,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --aws_profile=iarpa \
     --region_globstr="$REGION_GLOBSTR" \
     --site_globstr="$SITE_GLOBSTR" \
+    --requester_pays=True \
     --fields_workers=100 \
     --convert_workers=8 \
     --max_queue_size=100 \

@@ -623,16 +623,7 @@ def main(cmdline=False, **kwargs):
     queue.print_graph()
 
     if config['run']:
-        agg_state = None
-        # if config['serial']:
-        #     queue.serial_run()
-        # else:
-        queue.run(system=True)
-        # if config['follow']:
-        agg_state = queue.monitor()
-        # if not config['keep_sessions']:
-        if agg_state is not None and not agg_state['errored']:
-            queue.kill()
+        queue.run(block=True, system=True)
 
     # TODO: team features
     """
