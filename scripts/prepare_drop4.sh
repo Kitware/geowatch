@@ -74,8 +74,8 @@ small_onesite(){
     #SENSORS=L2-S2
     SENSORS=L2-L8
     #SENSORS=L2-S2-L8
-    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/AE_R001.geojson"
-    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/AE_R001.geojson"
+    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/US_R006.geojson"
+    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/US_R006.geojson"
     DATASET_SUFFIX=Drop4-2022-07-18-$SENSORS-demo
 
 
@@ -95,21 +95,25 @@ small_onesite(){
         --aws_profile=iarpa \
         --region_globstr="$REGION_GLOBSTR" \
         --site_globstr="$SITE_GLOBSTR" \
-        --fields_workers=100 \
-        --convert_workers=8 \
         --max_products_per_region=3 \
-        --align_workers=26 \
-        --cache=1 \
+        --fields_workers=0 \
+        --convert_workers=0 \
+        --align_workers=0 \
+        --cache=0 \
         --ignore_duplicates=1 \
         --visualize=True \
         --backend=serial --run=0
+        #--fields_workers=100 \
+        #--convert_workers=8 \
+        #--align_workers=26 \
 }
 
-small_allsites(){
+small_teregions(){
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
-    DATASET_SUFFIX=Drop4-L2-2022-07-14-demo3
-    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*.geojson"
-    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
+    SENSORS=L2-L8
+    DATASET_SUFFIX=Drop4-2022-07-18-$SENSORS-small-teregion
+    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*_R*.geojson"
+    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*_R*.geojson"
 
     #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
     #REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/NZ_R001.*"
@@ -120,7 +124,7 @@ small_allsites(){
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
         --cloud_cover=1 \
-        --sensors=L2 \
+        --sensors="$SENSORS" \
         --api_key=env:SMART_STAC_API_KEY \
         --collated False \
         --dvc_dpath="$DVC_DPATH" \
@@ -128,9 +132,9 @@ small_allsites(){
         --region_globstr="$REGION_GLOBSTR" \
         --site_globstr="$SITE_GLOBSTR" \
         --max_products_per_region=8 \
-        --fields_workers=26 \
-        --convert_workers=8 \
-        --align_workers=26 \
+        --fields_workers=0 \
+        --convert_workers=0 \
+        --align_workers=0 \
         --cache=0 \
         --ignore_duplicates=1 \
         --target_gsd=30 \
