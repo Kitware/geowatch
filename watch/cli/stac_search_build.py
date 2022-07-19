@@ -23,6 +23,8 @@ class StacSearchBuilderConfig(scfg.Config):
 SENSOR_TO_DEFAULTS = {
 
     # https://landsatlook.usgs.gov/stac-server/
+
+    # Kitware Phase 1 TA-1 Products
     'ta1-s2-kit': {
         'endpoint': "https://api.smart-stac.com",
         'collections': ['ta1-s2-kit'],
@@ -33,13 +35,38 @@ SENSOR_TO_DEFAULTS = {
     },
     'ta1-wv-kit': {
         'endpoint': "https://api.smart-stac.com",
-        'collections': ['ta1-l8-kit'],
+        'collections': ['ta1-wv-kit'],
         "query": {
             "nitf:imd": {
                 "eq": "true"
             },
         }
     },
+
+    # Accenture Phase 2 TA-1 Products
+    'ta1-s2-acc': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['ta1-s2-acc'],
+    },
+    'ta1-l8-acc': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['ta1-l8-acc'],
+    },
+    'ta1-pd-acc': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['ta1-pd-acc'],
+    },
+    'ta1-wv-acc': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['ta1-wv-acc'],
+        "query": {
+            "nitf:imd": {
+                "eq": "true"
+            },
+        }
+    },
+
+    # Public L1 Products
     'landsat-c2l1': {
         "collections": ["landsat-c2l1"],
         "endpoint": "https://landsatlook.usgs.gov/stac-server/",
@@ -51,14 +78,28 @@ SENSOR_TO_DEFAULTS = {
     },
 
     'sentinel-s2-l1c': {
+        # https://stacindex.org/catalogs/usgs-landsat-collection-2-api#/
         "collections": ["sentinel-s2-l1c"],
         "endpoint": "https://earth-search.aws.element84.com/v0",
     },
 
+
+
+    # Public L2 Products
     'sentinel-s2-l2a-cogs': {
         "collections": ["sentinel-s2-l2a-cogs"],
         "endpoint": "https://earth-search.aws.element84.com/v0",
-    }
+    },
+
+    'landsat-c2l2alb-sr': {
+        "collections": ["landsat-c2l2alb-sr"],
+        "endpoint": "https://landsatlook.usgs.gov/stac-server/",
+        "query": {
+            "platform": {
+                "eq": "LANDSAT_8"
+            }
+        }
+    },
 }
 
 
@@ -75,9 +116,23 @@ def build_search_json(start_date, end_date, sensors, api_key, cloud_cover):
             'ta1-l8-kit',
             'ta1-wv-kit',
         ]
-    elif sensors == 'L2':
+    elif sensors == 'L2-S2':
         sensors = [
             'sentinel-s2-l2a-cogs',
+        ]
+    elif sensors == 'L2-L8':
+        sensors = [
+            'landsat-c2l2alb-sr',
+        ]
+    elif sensors == 'L2-S2-L8':
+        sensors = [
+            'sentinel-s2-l2a-cogs',
+            'landsat-c2l2alb-sr',
+        ]
+    elif sensors == 'TA1-S2-L8-ACC':
+        sensors = [
+            'ta1-s2-acc',
+            'ta1-s2-acc',
         ]
 
     headers = {

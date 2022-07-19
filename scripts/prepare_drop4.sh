@@ -68,11 +68,16 @@ python -m watch.cli.prepare_ta2_dataset \
 #REGION_ID=$(jq -r '.features[] | select(.properties.type=="region") | .properties.region_id' "$REGION_FPATH")
 #PREPARE_DPATH=$ROOT_DPATH/_prepare/"$DATASET_SUFFIX"
 
-nocloud(){
+small_onesite(){
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     DATASET_SUFFIX=Drop4-L2-2022-07-18-demo
     REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/AE_R001.geojson"
     SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/AE_R001.geojson"
+
+    #SENSORS=TA1-S2-L8-ACC
+    SENSORS=L2-S2
+    SENSORS=L2-L8
+    #SENSORS=L2-S2-L8
 
     #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
     #REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/NZ_R001.*"
@@ -83,7 +88,7 @@ nocloud(){
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
         --cloud_cover=1 \
-        --sensors=L2 \
+        --sensors="$SENSORS" \
         --api_key=env:SMART_STAC_API_KEY \
         --collated False \
         --dvc_dpath="$DVC_DPATH" \

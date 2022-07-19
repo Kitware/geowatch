@@ -390,6 +390,7 @@ def area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config)
 
 
 def id_query(searcher, logger, dest_path, temp_dir, args):
+    raise NotImplementedError('This doesnt have the right stac endpoints setup for it.')
     if args.site_file.startswith('s3://'):
         s_file_loc = get_file_from_s3(args.site_file, temp_dir)
     else:
