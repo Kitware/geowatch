@@ -70,14 +70,14 @@ python -m watch.cli.prepare_ta2_dataset \
 
 small_onesite(){
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
-    DATASET_SUFFIX=Drop4-L2-2022-07-18-demo
-    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/AE_R001.geojson"
-    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/AE_R001.geojson"
-
     #SENSORS=TA1-S2-L8-ACC
-    SENSORS=L2-S2
+    #SENSORS=L2-S2
     SENSORS=L2-L8
     #SENSORS=L2-S2-L8
+    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/AE_R001.geojson"
+    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/AE_R001.geojson"
+    DATASET_SUFFIX=Drop4-2022-07-18-$SENSORS-demo
+
 
     #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
     #REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/NZ_R001.*"
@@ -102,7 +102,7 @@ small_onesite(){
         --cache=1 \
         --ignore_duplicates=1 \
         --visualize=True \
-        --backend=serial --run=1
+        --backend=serial --run=0
 }
 
 small_allsites(){

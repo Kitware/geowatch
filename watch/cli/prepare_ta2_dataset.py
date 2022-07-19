@@ -627,7 +627,7 @@ def main(cmdline=False, **kwargs):
         # if config['serial']:
         #     queue.serial_run()
         # else:
-        queue.run()
+        queue.run(system=True)
         # if config['follow']:
         agg_state = queue.monitor()
         # if not config['keep_sessions']:
