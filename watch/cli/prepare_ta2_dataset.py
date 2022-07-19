@@ -175,8 +175,8 @@ def main(cmdline=False, **kwargs):
 
     # Ignore these regions (only works in separate region queue mode)
     blocklist = {
-        'IN_C000',  # bad files
-        'ET_C000',  # 404 errors
+        # 'IN_C000',  # bad files
+        # 'ET_C000',  # 404 errors
     }
 
     job_environs = [

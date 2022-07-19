@@ -70,13 +70,16 @@ python -m watch.cli.prepare_ta2_dataset \
 
 small_onesite(){
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
-    #SENSORS=TA1-S2-L8-ACC
+    source ~/code/watch/secrets/secrets
+    SENSORS=TA1-S2-L8-ACC
     #SENSORS=L2-S2
-    SENSORS=L2-L8
+    #SENSORS=L2-L8
     #SENSORS=L2-S2-L8
     REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/US_R006.geojson"
     SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/US_R006.geojson"
     DATASET_SUFFIX=Drop4-2022-07-18-$SENSORS-demo
+
+    export AWS_DEFAULT_PROFILE=iarpa
 
 
     #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
