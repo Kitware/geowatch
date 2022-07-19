@@ -12,7 +12,8 @@ See Also:
 #ROOT_DPATH="$DVC_DPATH"
 
 DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
-DATASET_SUFFIX=Drop4-L2-2022-07-10
+SENSORS=L2-S2-L8
+DATASET_SUFFIX=Drop4-2022-07-18-c10-$SENSORS
 REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*.geojson"
 SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
 
@@ -25,21 +26,23 @@ python -m watch.cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --stac_query_mode=auto \
     --cloud_cover=10 \
-    --sensors=L2 \
+    --sensors="$SENSORS" \
     --api_key=env:SMART_STAC_API_KEY \
     --collated False \
     --dvc_dpath="$DVC_DPATH" \
     --aws_profile=iarpa \
     --region_globstr="$REGION_GLOBSTR" \
     --site_globstr="$SITE_GLOBSTR" \
-    --fields_workers=8 \
+    --fields_workers=100 \
     --convert_workers=8 \
     --max_queue_size=100 \
     --align_workers=26 \
     --cache=0 \
     --ignore_duplicates=1 \
+    --separate_region_queues=1 \
+    --separate_align_jobs=1 \
     --visualize=True \
-    --serial=True --run=0
+    --backend=tmux --run=0
 
 #mkdir -p "$DEMO_DPATH"
 ## Create the search json wrt the sensors and processing level we want
@@ -80,6 +83,10 @@ small_onesite(){
     DATASET_SUFFIX=Drop4-2022-07-18-$SENSORS-demo
 
     export AWS_DEFAULT_PROFILE=iarpa
+    export AWS_SECRET_ACCESS_KEY=$SMART_STAC_API_KEY
+
+    # Test credentials
+    gdalinfo /vsis3/smart-data-accenture/ta-1/ta1-s2-acc/15/T/TF/2021/4/24/S2B_14TQL_20210424_0_L1C_ACC/S2B_MSI_L1C_T14TQL_20210424_20210424_B02.img
 
 
     #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
