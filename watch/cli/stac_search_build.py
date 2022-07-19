@@ -20,10 +20,7 @@ class StacSearchBuilderConfig(scfg.Config):
     }
 
 
-SENSOR_TO_DEFAULTS = {
-
-    # https://landsatlook.usgs.gov/stac-server/
-
+_KITWARE_PHASE1_TA1_PRODUCTS = {
     # Kitware Phase 1 TA-1 Products
     'ta1-s2-kit': {
         'endpoint': "https://api.smart-stac.com",
@@ -42,7 +39,9 @@ SENSOR_TO_DEFAULTS = {
             },
         }
     },
+}
 
+_ACCENTURE_PHASE2_TA1_PRODUCTS = {
     # Accenture Phase 2 TA-1 Products
     'ta1-s2-acc': {
         'endpoint': "https://api.smart-stac.com",
@@ -65,7 +64,11 @@ SENSOR_TO_DEFAULTS = {
             },
         }
     },
+}
 
+
+_PUBLIC_L1_PRODUCTS = {
+    # https://landsatlook.usgs.gov/stac-server/
     # Public L1 Products
     'landsat-c2l1': {
         "collections": ["landsat-c2l1"],
@@ -76,23 +79,24 @@ SENSOR_TO_DEFAULTS = {
             }
         }
     },
-
     'sentinel-s2-l1c': {
         # https://stacindex.org/catalogs/usgs-landsat-collection-2-api#/
         "collections": ["sentinel-s2-l1c"],
         "endpoint": "https://earth-search.aws.element84.com/v0",
     },
+}
 
 
-
+_PUBLIC_L2_PRODUCTS = {
     # Public L2 Products
     'sentinel-s2-l2a-cogs': {
         "collections": ["sentinel-s2-l2a-cogs"],
         "endpoint": "https://earth-search.aws.element84.com/v0",
     },
 
-    'landsat-c2l2alb-sr': {
-        "collections": ["landsat-c2l2alb-sr"],
+    'landsat-c2ard-sr': {
+        # Note: AWS_REQUEST_PAYER='requester' is required to grab the data
+        "collections": ["landsat-c2ard-sr"],
         "endpoint": "https://landsatlook.usgs.gov/stac-server/",
         "query": {
             "platform": {
@@ -103,6 +107,38 @@ SENSOR_TO_DEFAULTS = {
 }
 
 
+SENSOR_TO_DEFAULTS = ub.dict_union(
+    _KITWARE_PHASE1_TA1_PRODUCTS,
+    _ACCENTURE_PHASE2_TA1_PRODUCTS,
+    _PUBLIC_L1_PRODUCTS,
+    _PUBLIC_L2_PRODUCTS,
+)
+
+
+# Simplified codes for the CLI
+CONVINIENCE_SENSOR_GROUPS = {
+    'TA1': [
+        'ta1-s2-kit',
+        'ta1-l8-kit',
+        'ta1-wv-kit',
+    ],
+    'L2-S2': [
+        'sentinel-s2-l2a-cogs',
+    ],
+    'L2-L8': [
+        'landsat-c2ard-sr',
+    ],
+    'L2-S2-L8': [
+        'sentinel-s2-l2a-cogs',
+        'landsat-c2ard-sr',
+    ],
+    'TA1-S2-L8-ACC': [
+        'ta1-s2-acc',
+        'ta1-l8-acc',
+    ],
+}
+
+
 def build_search_json(start_date, end_date, sensors, api_key, cloud_cover):
     from watch.utils import util_time
 
@@ -110,30 +146,8 @@ def build_search_json(start_date, end_date, sensors, api_key, cloud_cover):
         api_environ_key = api_key.split(':')[1]
         api_key = os.environ.get(api_environ_key, None)
 
-    if sensors == 'TA1':
-        sensors = [
-            'ta1-s2-kit',
-            'ta1-l8-kit',
-            'ta1-wv-kit',
-        ]
-    elif sensors == 'L2-S2':
-        sensors = [
-            'sentinel-s2-l2a-cogs',
-        ]
-    elif sensors == 'L2-L8':
-        sensors = [
-            'landsat-c2l2alb-sr',
-        ]
-    elif sensors == 'L2-S2-L8':
-        sensors = [
-            'sentinel-s2-l2a-cogs',
-            'landsat-c2l2alb-sr',
-        ]
-    elif sensors == 'TA1-S2-L8-ACC':
-        sensors = [
-            'ta1-s2-acc',
-            'ta1-s2-acc',
-        ]
+    if isinstance(sensors, str):
+        sensors = CONVINIENCE_SENSOR_GROUPS[sensors]
 
     headers = {
             "x-api-key": api_key,

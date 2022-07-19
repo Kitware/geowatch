@@ -814,7 +814,7 @@ class GdalDataset(ub.NiceRepr):
                 # gdal.GetLastErrorType()
                 # gdal.GetLastErrorNo()
                 msg = gdal.GetLastErrorMsg()
-                raise RuntimeError(msg)
+                raise RuntimeError(msg + f' for {_path}')
         except Exception:
             import time
             if _path.startswith(GDAL_VIRTUAL_FILESYSTEM_PREFIX):
@@ -824,7 +824,7 @@ class GdalDataset(ub.NiceRepr):
                         __ref = gdal.Open(_path, mode)
                         if __ref is None:
                             msg = gdal.GetLastErrorMsg()
-                            raise RuntimeError(msg)
+                            raise RuntimeError(msg + f' for {_path}')
                     except Exception:
                         time.sleep(wait_time)
                     else:

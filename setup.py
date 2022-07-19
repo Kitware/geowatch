@@ -59,7 +59,7 @@ except Exception:
 
 try:
     REQUIREMENTS = (
-        parse_requirements('requirements/production.txt')
+        parse_requirements('requirements/runtime.txt')
     )
     EXTRAS_REQUIRES = {
         'all': parse_requirements('requirements.txt'),
@@ -89,6 +89,7 @@ setup(
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
     ],
     description="",
     entry_points={
@@ -114,7 +115,8 @@ setup(
     },
     name='watch',
     packages=find_packages(include=['watch', 'watch.*']),
-    url='https://gitlab.kitware.com/smart/watch.git',
+    url='https://gitlab.kitware.com/watch/watch.git',
     version=VERSION,
     zip_safe=False,
+    license='Apache 2',
 )
