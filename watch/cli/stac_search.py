@@ -315,7 +315,7 @@ def main(cmdline=True, **kwargs):
         # writes to the same file, or write to separate files and then combine
         for region_fpath in region_file_fpaths:
             logger.info('Query region file: {}'.format(region_fpath))
-            area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config)
+            area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config, logger)
     else:
         id_query(searcher, logger, dest_path, temp_dir, args)
 
@@ -328,7 +328,7 @@ def main(cmdline=True, **kwargs):
     logger.info('Search complete')
 
 
-def area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config):
+def area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config, logger):
 
     if str(region_fpath).startswith('s3://'):
         r_file_loc = get_file_from_s3(region_fpath, temp_dir)
@@ -373,12 +373,16 @@ def area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config)
     ]
     if len(regions) != 1:
         raise AssertionError(
-            'Region file {r_file_loc!r} should have exactly 1 feature with '
-            'type "region", but we found {len(regions)}')
+            f'Region file {r_file_loc!r} should have exactly 1 feature with '
+            f'type "region", but we found {len(regions)}')
 
     max_products_per_region = config['max_products_per_region']
     # assume only 1 region per region model file
     geom = shape(regions[0]['geometry'])
+
+    searches = search_params['stac_search']
+    logger.info(f'Performing {len(searches)} geometry stac searches')
+
     for s in search_params['stac_search']:
         searcher.by_geometry(
             s['endpoint'],
