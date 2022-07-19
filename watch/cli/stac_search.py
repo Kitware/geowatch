@@ -371,22 +371,26 @@ def area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config)
         f for f in region['features'] if (
             f['properties']['type'].lower() == 'region')
     ]
+    if len(regions) != 1:
+        raise AssertionError(
+            'Region file {r_file_loc!r} should have exactly 1 feature with '
+            'type "region", but we found {len(regions)}')
+
     max_products_per_region = config['max_products_per_region']
-    if len(regions) > 0:
-        # assume only 1 region per region model file
-        geom = shape(regions[0]['geometry'])
-        for s in search_params['stac_search']:
-            searcher.by_geometry(
-                s['endpoint'],
-                geom,
-                s['collections'],
-                s['start_date'],
-                s['end_date'],
-                dest_path,
-                s.get('query', {}),
-                s.get('headers', {}),
-                max_products_per_region=max_products_per_region
-            )
+    # assume only 1 region per region model file
+    geom = shape(regions[0]['geometry'])
+    for s in search_params['stac_search']:
+        searcher.by_geometry(
+            s['endpoint'],
+            geom,
+            s['collections'],
+            s['start_date'],
+            s['end_date'],
+            dest_path,
+            s.get('query', {}),
+            s.get('headers', {}),
+            max_products_per_region=max_products_per_region
+        )
 
 
 def id_query(searcher, logger, dest_path, temp_dir, args):

@@ -810,7 +810,8 @@ class MultimodalTransformer(pl.LightningModule):
             >>> # Load one batch and show it before we do anything
             >>> batch = next(iter(loader))
             >>> import kwplot
-            >>> kwplot.autompl(force='Qt5Agg')
+            >>> plt = kwplot.autoplt(force='Qt5Agg')
+            >>> plt.ion()
             >>> canvas = datamodule.draw_batch(batch, max_channels=5, overlay_on_image=0)
             >>> kwplot.imshow(canvas, fnum=1)
             >>> # Run overfit
