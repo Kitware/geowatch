@@ -5,3 +5,4 @@
 	kdf = pbkdf2
 	salt-method = ed47559149376e2ff0da99c34005663f91f0da5fe4d3138c8a4c0a6d7b8a7254
 	base-salt = ed47559149376e2ff0da99c34005663f91f0da5fe4d3138c8a4c0a6d7b8a7254
+    use-versioned-config = 1

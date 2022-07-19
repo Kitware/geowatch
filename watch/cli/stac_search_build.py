@@ -16,7 +16,7 @@ class StacSearchBuilderConfig(scfg.Config):
         'cloud_cover': scfg.Value(10, help='maximum cloud cover percentage'),
         'out_fpath': scfg.Value(None, help='if unspecified, write to stdout'),
         'api_key': scfg.Value('env:SMART_STAC_API_KEY', help='The API key or where to get it'),
-        'sensors': scfg.Value('L2', help=''),
+        'sensors': scfg.Value('L2-S2', help=''),
     }
 
 

@@ -228,10 +228,10 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
         coco_img = coco_dset.coco_image(gid)
         if mode == 'process':
             coco_img = coco_img.detach()
-            job = executor.submit(
-                coco_populate_geo_img_heuristics2, coco_img,
-                overwrite=overwrite, default_gsd=default_gsd, **kw)
-            job.gid = gid
+        job = executor.submit(
+            coco_populate_geo_img_heuristics2, coco_img,
+            overwrite=overwrite, default_gsd=default_gsd, **kw)
+        job.gid = gid
 
     broken_image_ids = []
     for job in ub.ProgIter(executor.as_completed(), total=len(executor), desc='collect populate imgs'):
