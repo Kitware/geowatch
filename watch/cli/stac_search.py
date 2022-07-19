@@ -314,7 +314,6 @@ def main(cmdline=True, **kwargs):
         # Might be reasonable to parallize this, but will need locks around
         # writes to the same file, or write to separate files and then combine
         for region_fpath in region_file_fpaths:
-            logger.info('Query region file: {}'.format(region_fpath))
             area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config, logger)
     else:
         id_query(searcher, logger, dest_path, temp_dir, args)
@@ -329,6 +328,7 @@ def main(cmdline=True, **kwargs):
 
 
 def area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config, logger):
+    logger.info('Query region file: {}'.format(region_fpath))
 
     if str(region_fpath).startswith('s3://'):
         r_file_loc = get_file_from_s3(region_fpath, temp_dir)
