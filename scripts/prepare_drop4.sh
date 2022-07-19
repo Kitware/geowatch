@@ -70,9 +70,9 @@ python -m watch.cli.prepare_ta2_dataset \
 
 nocloud(){
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
-    DATASET_SUFFIX=Drop4-L2-2022-07-11-demo
-    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/AE_*001.geojson"
-    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/AE_*001.geojson"
+    DATASET_SUFFIX=Drop4-L2-2022-07-18-demo
+    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/AE_R001.geojson"
+    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/AE_R001.geojson"
 
     #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
     #REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/NZ_R001.*"
@@ -90,10 +90,11 @@ nocloud(){
         --aws_profile=iarpa \
         --region_globstr="$REGION_GLOBSTR" \
         --site_globstr="$SITE_GLOBSTR" \
-        --fields_workers=8 \
+        --fields_workers=100 \
         --convert_workers=8 \
+        --max_products_per_region=3 \
         --align_workers=26 \
-        --cache=0 \
+        --cache=1 \
         --ignore_duplicates=1 \
         --visualize=True \
         --backend=serial --run=1

@@ -708,7 +708,21 @@ class SimpleDataCube(object):
 
                 cand_gids = cube.img_geos_df.iloc[gidxs].gid
                 cand_datecaptured = cube.coco_dset.images(cand_gids).lookup('date_captured')
+
                 cand_datetimes = [util_time.coerce_datetime(c) for c in cand_datecaptured]
+
+                # By reducing the granularity we can group nearly
+                # identical images together. FIXME: Configure
+                REDUCE_GRANULARITY = True
+                if REDUCE_GRANULARITY:
+                    # Reduce images taken with the hour (does not account for
+                    # borders). Better method would be agglomerative
+                    # clustering.
+                    reduced = []
+                    for dt in cand_datetimes:
+                        new = dt.replace(minute=0, second=0, microsecond=0)
+                        reduced.append(new)
+                    cand_datetimes = reduced
 
                 if query_start_date is not None:
                     query_start_datetime = util_time.coerce_datetime(query_start_date)
