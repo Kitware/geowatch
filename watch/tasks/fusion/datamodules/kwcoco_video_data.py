@@ -389,6 +389,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         # will only correspond to train
         self.classes = None
         self.input_channels = None
+        self.input_sensorchan = None
 
         # Store train / test / vali
         self.torch_datasets: Dict[str, KWCocoVideoDataset] = {}
@@ -441,6 +442,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
             if self.input_channels is None:
                 self.input_channels = train_dataset.input_channels
+
+            if self.input_sensorchan is None:
+                self.input_sensorchan = train_dataset.input_sensorchan
 
             stats_params = {
                 'num': None,
@@ -887,16 +891,6 @@ class KWCocoVideoDataset(data.Dataset):
         neg_to_pos_ratio = config['neg_to_pos_ratio']
         max_epoch_length = config['max_epoch_length']
 
-        if channels is None:
-            # Hack to use all channels in the first image.
-            # (Does not handle heterogeneous channels yet)
-            chan_info = kwcoco_extensions.coco_channel_stats(sampler.dset)
-            channels = ','.join(sorted(chan_info['chan_hist']))
-            # channels = chan_info['all_channels']
-
-        channels = channel_spec.ChannelSpec.coerce(channels).normalize()
-        self.channels = channels
-
         if time_sampling == 'auto':
             time_sampling = 'hard+distribute'
 
@@ -1036,22 +1030,62 @@ class KWCocoVideoDataset(data.Dataset):
 
         self.special_inputs = {}
 
-        _input_channels = []
-        _sample_channels = []
-        for key, stream in channels.parse().items():
-            _stream = stream.as_oset()
-            _sample_stream = _stream.copy()
-            special_bands = _stream & util_bands.SPECIALIZED_BANDS
-            if special_bands:
-                # TODO: introspect which extra bands are needed for to compute
-                # the sample, but hard code for now
-                _sample_stream -= special_bands
-                _sample_stream = _sample_stream | ub.oset('blue|green|red|nir|swir16|swir22'.split('|'))
-                self.special_inputs[key] = special_bands
-            if self.diff_inputs:
-                _stream = [s + p for p in _stream for s in ['', 'D']]
-            _input_channels.append('|'.join(_stream))
-            _sample_channels.append('|'.join(_sample_stream))
+        if channels is None:
+            # Hack to use all channels in the first image.
+            # (Does not handle heterogeneous channels yet)
+            chan_info = kwcoco_extensions.coco_channel_stats(sampler.dset)
+            sensorchan_hist = kwcoco_extensions.coco_channel_stats(sampler.dset)['sensorchan_hist']
+            sensorchans = ','.join(sorted([f'{sensor}:{chans}' for sensor, chan_hist in sensorchan_hist.items() for chans in chan_hist.keys()]))
+            sensorchans = kwcoco.SensorChanSpec.coerce(sensorchans)
+            channels = ','.join(sorted(chan_info['chan_hist']))
+            # channels = chan_info['all_channels']
+        else:
+            # hack
+            sensorchans = channels
+
+        #### New: input_sensorchan will replace input_channels
+        self.input_sensorchan = kwcoco.SensorChanSpec.coerce(sensorchans).normalize()
+
+        channels = channel_spec.ChannelSpec.coerce(channels).normalize()
+        self.channels = channels
+
+        NEW = 1
+        if NEW:
+            _input_sensorchans = []
+            _sample_sensorchans = []
+            for sensor, chans in self.input_sensorchan.stream_pairs():
+                _stream = chans.as_oset()
+                _sample_stream = _stream.copy()
+                special_bands = _stream & util_bands.SPECIALIZED_BANDS
+                if special_bands:
+                    raise NotImplementedError('This is broken ATM')
+                    # TODO: introspect which extra bands are needed for to compute
+                    # the sample, but hard code for now
+                    _sample_stream -= special_bands
+                    _sample_stream = _sample_stream | ub.oset('blue|green|red|nir|swir16|swir22'.split('|'))
+                    self.special_inputs[key] = special_bands
+                if self.diff_inputs:
+                    raise NotImplementedError('This is broken ATM')
+                    _stream = [s + p for p in _stream for s in ['', 'D']]
+                _input_sensorchans.append('|'.join(_stream))
+                _sample_sensorchans.append('|'.join(_sample_stream))
+        else:
+            _input_channels = []
+            _sample_channels = []
+            for key, stream in channels.parse().items():
+                _stream = stream.as_oset()
+                _sample_stream = _stream.copy()
+                special_bands = _stream & util_bands.SPECIALIZED_BANDS
+                if special_bands:
+                    # TODO: introspect which extra bands are needed for to compute
+                    # the sample, but hard code for now
+                    _sample_stream -= special_bands
+                    _sample_stream = _sample_stream | ub.oset('blue|green|red|nir|swir16|swir22'.split('|'))
+                    self.special_inputs[key] = special_bands
+                if self.diff_inputs:
+                    _stream = [s + p for p in _stream for s in ['', 'D']]
+                _input_channels.append('|'.join(_stream))
+                _sample_channels.append('|'.join(_sample_stream))
 
         # Some of the channels are computed on the fly.
         # This is the list of ones that are loaded from disk.
@@ -1432,6 +1466,9 @@ class KWCocoVideoDataset(data.Dataset):
                           gid_to_isbad, gid_to_sample):
         # helper that was previously a nested function moved out for profiling
         coco_img = coco_dset.coco_image(gid)
+
+        coco_img
+
         sensor_channels = (self.sample_channels & coco_img.channels).normalize()
         tr_frame = tr_.copy()
         tr_frame['gids'] = [gid]
@@ -1877,7 +1914,6 @@ class KWCocoVideoDataset(data.Dataset):
                 good_gids = [gid for gid, flag in gid_to_isbad.items() if not flag]
 
         final_gids = ub.oset(video_gids) & good_gids
-        # requested_channel_order = self.input_channels.spec.split('|')
         num_frames = len(final_gids)
         if num_frames == 0:
             raise Exception('0 frames')

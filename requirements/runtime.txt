@@ -50,6 +50,10 @@ pytimeparse>=1.1.8
 progiter>=0.1.3
 fire>=0.4.0
 
+# Parsing
+lark >= 1.1.2
+lark_cython >= 0.0.11
+
 # Imaging
 distinctipy>=1.2.1
 kwimage>=0.9.0
