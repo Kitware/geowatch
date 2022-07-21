@@ -84,7 +84,12 @@ class CocoVisualizeConfig(scfg.Config):
 
         'channels': scfg.Value(None, type=str, help='only viz these channels'),
 
-        'any3': scfg.Value(False, help='if True, ensure the "any3" channels are drawn. If set to "only", then other per-channel visualizations are supressed. TODO: better name?'),
+        'any3': scfg.Value(False, help=ub.paragraph(
+            '''
+            if True, ensure the "any3" channels are drawn. If set to "only",
+            then other per-channel visualizations are supressed. TODO: better
+            name?
+            ''')),
 
         'draw_imgs': scfg.Value(True),
         'draw_anns': scfg.Value('auto', help='auto means only draw anns if they exist'),
@@ -311,7 +316,11 @@ def main(cmdline=True, **kwargs):
                 s = max(1, len(coco_imgs) // 10)
                 obs = []
                 for coco_img in coco_imgs[::s]:
-                    rawdata = coco_img.delay(channels=chan).finalize()
+                    new_delayed_impl = 1
+                    if new_delayed_impl:
+                        rawdata = coco_img.delay(channels=chan).prepare().optimize().finalize()
+                    else:
+                        rawdata = coco_img.delay(channels=chan).finalize()
                     mask = rawdata != 0
                     obs.append(rawdata[mask].ravel())
                 allobs = np.hstack(obs)
@@ -341,7 +350,8 @@ def main(cmdline=True, **kwargs):
                 vid_crop_box = vid_crop_box.quantize()
 
                 gid_subset = gids[start_frame:end_frame]
-                for gid in gid_subset:
+                local_max_frame = len(gid_subset)
+                for local_frame_index, gid in enumerate(gid_subset):
                     img = coco_dset.index.imgs[gid]
                     anns = coco_dset.annots(gid=gid).objs
 
@@ -362,11 +372,14 @@ def main(cmdline=True, **kwargs):
                                 only_boxes=config['only_boxes'],
                                 max_dim=config['max_dim'],
                                 min_dim=config['min_dim'],
+                                local_frame_index=local_frame_index,
+                                local_max_frame=local_max_frame,
                                 any3=config['any3'], dset_idstr=dset_idstr)
 
         else:
             gid_subset = gids[start_frame:end_frame]
-            for gid in gid_subset:
+            local_max_frame = len(gid_subset)
+            for local_frame_index, gid in enumerate(gid_subset):
                 img = coco_dset.index.imgs[gid]
                 anns = coco_dset.annots(gid=gid).objs
 
@@ -390,6 +403,8 @@ def main(cmdline=True, **kwargs):
                             cmap=config['cmap'],
                             max_dim=config['max_dim'],
                             min_dim=config['min_dim'],
+                            local_frame_index=local_frame_index,
+                            local_max_frame=local_max_frame,
                             skip_missing=config['skip_missing'])
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
@@ -400,6 +415,34 @@ def main(cmdline=True, **kwargs):
     print('Wrote images to viz_dpath = {!r}'.format(viz_dpath))
 
     if config['animate']:
+        def yaml_loads(text):
+            import io
+            import yaml
+            f = io.StringIO(text)
+            f.seek(0)
+            data = yaml.load(f, yaml.SafeLoader)
+            return data
+        # TODO: develop this idea more
+        # Try to parse out an animation config
+        import scriptconfig as scfg
+        @scfg.dataconf
+        class AnimateConfig:
+            # TODO: should be able to load from an alias
+            frames_per_second = scfg.Value(0.7, alias=['fps'])
+        animate_config = dict(AnimateConfig())
+        if isinstance(config['animate'], str):
+            try:
+                user_config = yaml_loads(config['animate'])
+                assert isinstance(user_config, dict), 'animate subconfig should be coercable into a dict'
+                # hack
+                if 'fps' in user_config:
+                    user_config['frames_per_second'] = user_config.pop('fps')
+                animate_config = AnimateConfig(**user_config)
+            except Exception:
+                print('Tried to pass animate as a yaml config but loading failed')
+                raise
+
+        print('animate_config = {}'.format(ub.repr2(animate_config, nl=1)))
         from watch.cli import animate_visualizations
         animate_visualizations.animate_visualizations(
             viz_dpath=viz_dpath,
@@ -409,7 +452,7 @@ def main(cmdline=True, **kwargs):
             draw_anns=config['draw_anns'],
             workers=max_workers,
             zoom_to_tracks=config['zoom_to_tracks'],
-            frames_per_second=0.7,
+            **animate_config,
         )
         pass
 
@@ -520,6 +563,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                cmap='viridis',
                                max_dim=None,
                                min_dim=None,
+                               local_frame_index=None,
+                               local_max_frame=None,
                                verbose=0):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
@@ -531,7 +576,28 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
     sensor_coarse = img.get('sensor_coarse', 'unknown')
     align_method = img.get('align_method', 'unknown')
-    name = img.get('name', 'unknown')
+    name = img.get('name', 'unnamed')
+
+    # Ensure names are differentiated between frames.
+    import math
+    num_digits = int(math.log10(max(local_max_frame, 1))) + 1
+    frame_id = f'{local_frame_index:0{num_digits}d}'
+    # frame_index = img.get('frame_index', None)
+    # timestamp = img.get('timestamp', None)
+    # if frame_index is not None:
+    #     frame_id = '{:04d}'.format(frame_index)
+    # else:
+    #     frame_id = timestamp
+    #     if timestamp is None:
+    #         if name is None:
+    #             raise AssertionError('No method to differentiate between frames')
+    #         else:
+    #             frame_id = 'noframeid'
+    #             import warnings
+    #             warnings.warn(
+    #                 'The image does not have a frame_index or a timestamp, '
+    #                 'we are assuming the name will differentiate frames, which '
+    #                 'may not be safe.')
 
     from watch import heuristics
     header_lines = heuristics.build_image_header_text(
@@ -565,6 +631,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     if verbose > 0:
         print(f'fixed_normalization_scheme={fixed_normalization_scheme}')
         print(f'chan_to_normalizer={chan_to_normalizer}')
+        print(f'channels={channels}')
 
     if channels is not None:
         if isinstance(channels, list):
@@ -574,6 +641,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             {'chan': chan_obj} for chan_obj in channels.streams()
         ]
     else:
+        if verbose > 0:
+            print('Choosing channels')
+            print(f'request_grouped_bands={request_grouped_bands}')
         channels = coco_img.channels
         if request_grouped_bands == 'default':
             # Use false color for special groups
@@ -585,7 +655,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             if has_cand:
                 channels = channels - cand
                 # todo: nicer way to join streams
-                channels = kwcoco.ChannelSpec.coerce(channels.spec + ',' + cand.spec)
+                # channels = kwcoco.ChannelSpec.coerce(channels.spec + ',' + cand.spec)
+                channels = channels + cand
+                # kwcoco.ChannelSpec.coerce(channels.spec + ',' + cand.spec)
 
         initial_groups = channels.streams()
         chan_groups = []
@@ -704,7 +776,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
         # Prevent long names for docker (limit is 242 chars)
         chan_pname2 = kwcoco.FusedChannelSpec.coerce(chan_group).path_sanitize(maxlen=10)
-        suffix = '_'.join([chan_pname2, sensor_coarse, align_method])
+        suffix = '_'.join([frame_id, chan_pname2, sensor_coarse, align_method])
         view_img_fpath = ub.augpath(name, dpath=img_chan_dpath) + '_' + suffix + '.view_img.jpg'
         view_ann_fpath = ub.augpath(name, dpath=ann_chan_dpath) + '_' + suffix + '.view_ann.jpg'
 
@@ -727,7 +799,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             try:
                 chan_stats = kwarray.stats_dict(raw_canvas, axis=2, nan=True)
                 print('chan_stats = {}'.format(ub.repr2(chan_stats, nl=1)))
-            except Exception:
+            except Exception as ex:
+                print(f'ex={ex}')
                 import warnings
                 warnings.warn('Error printing chan stats, probably need kwarray >= 0.6.1')
 
