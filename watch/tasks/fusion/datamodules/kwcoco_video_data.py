@@ -180,10 +180,9 @@ class KWCocoVideoDatasetConfig(scfg.Config):
 
 class KWCocoVideoDataModuleConfig(scfg.Config):
     """
-    These are the argument accepted by the KWCocoDataModule. The
-    scriptconfig class is not used directly as it normally would be
-    here.
+    These are the argument accepted by the KWCocoDataModule.
 
+    The scriptconfig class is not used directly as it normally would be here.
     Instead we use it as a convinience to minimize lightning boilerplate later
     when it constructs its own argparse object, and for handling arguments
     passed directly to the KWCocoDataModule
@@ -802,7 +801,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>> import kwcoco
         >>> import watch
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
-        >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
+        >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data_nowv_vali.kwcoco.json'
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> self = KWCocoVideoDataset(
@@ -810,7 +809,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>>     sample_shape=(5, 128, 128),
         >>>     window_overlap=0,
         >>>     channels="blue|green|red|nir|swir16",
-        >>>     neg_to_pos_ratio=0, time_sampling='auto', diff_inputs=1, mode='fit', match_histograms=0,
+        >>>     neg_to_pos_ratio=0, time_sampling='auto', diff_inputs=0, mode='fit', match_histograms=0,
         >>> )
         >>> item = self[0]
         >>> canvas = self.draw_item(item)
@@ -1033,27 +1032,64 @@ class KWCocoVideoDataset(data.Dataset):
         if channels is None:
             # Hack to use all channels in the first image.
             # (Does not handle heterogeneous channels yet)
-            chan_info = kwcoco_extensions.coco_channel_stats(sampler.dset)
+            # chan_info = kwcoco_extensions.coco_channel_stats(sampler.dset)
             sensorchan_hist = kwcoco_extensions.coco_channel_stats(sampler.dset)['sensorchan_hist']
             sensorchans = ','.join(sorted([f'{sensor}:{chans}' for sensor, chan_hist in sensorchan_hist.items() for chans in chan_hist.keys()]))
             sensorchans = kwcoco.SensorChanSpec.coerce(sensorchans)
-            channels = ','.join(sorted(chan_info['chan_hist']))
+            # channels = ','.join(sorted(chan_info['chan_hist']))
+            if len(sensorchan_hist) > 0:
+                import warnings
+                warnings.warn('Channels are unspecified, but the dataset has a complex set of channels with multiple sensors. Being explicit would be better')
             # channels = chan_info['all_channels']
         else:
             # hack
+            sensorchan_hist = None
             sensorchans = channels
+            # channels = ','.join(sorted([s.chans.spec for s in self.sensorchan.streams()]))
 
-        #### New: input_sensorchan will replace input_channels
-        self.input_sensorchan = kwcoco.SensorChanSpec.coerce(sensorchans).normalize()
+        self.sensorchan = kwcoco.SensorChanSpec.coerce(sensorchans).normalize()
 
+        # TODO: handle * sensors
+        if '*' in [s.sensor.spec for s in self.sensorchan.streams()]:
+            # handle * sensor in a way that works with previous models
+            # This code is a little messy and should be cleaned up
+            if sensorchan_hist is None:
+                sensorchan_hist = kwcoco_extensions.coco_channel_stats(sampler.dset)['sensorchan_hist']
+
+            expanded_input_sensorchan_streams = []
+            for fused_sensorchan in self.sensorchan.streams():
+                sensor = fused_sensorchan.sensor
+                chans = fused_sensorchan.chans
+                if sensor.spec == '*':
+                    for cand_sensor, cand_chans in sensorchan_hist.items():
+                        valid_chan_cands = []
+                        for cand_chan_group in cand_chans:
+                            cand_chan_group = kwcoco.FusedChannelSpec.coerce(cand_chan_group)
+                            chan_isect = chans & cand_chan_group
+                            if chan_isect.spec == chans.spec:
+                                valid_chan_cands.append(valid_chan_cands)
+                                expanded_input_sensorchan_streams.append(cand_sensor + ':' + chans.spec)
+                                break
+                else:
+                    expanded_input_sensorchan_streams.append('{}:{}'.format(sensor, chans))
+            self.sensorchan = kwcoco.SensorChanSpec.coerce(','.join(list(ub.unique(expanded_input_sensorchan_streams)))).normalize()
+
+        # Hack away sensors
+        print(f'self.sensorchan={self.sensorchan=!r}')
+        channels = ','.join(sorted(ub.unique([s.chans.spec for s in self.sensorchan.streams()])))
         channels = channel_spec.ChannelSpec.coerce(channels).normalize()
         self.channels = channels
 
         NEW = 1
         if NEW:
+            # TODO: Clean up this code.
+            _input_channels = []
+            _sample_channels = []
             _input_sensorchans = []
             _sample_sensorchans = []
-            for sensor, chans in self.input_sensorchan.stream_pairs():
+            for fused_sensorchan in self.sensorchan.streams():
+                sensor = fused_sensorchan.sensor
+                chans = fused_sensorchan.chans
                 _stream = chans.as_oset()
                 _sample_stream = _stream.copy()
                 special_bands = _stream & util_bands.SPECIALIZED_BANDS
@@ -1067,8 +1103,19 @@ class KWCocoVideoDataset(data.Dataset):
                 if self.diff_inputs:
                     raise NotImplementedError('This is broken ATM')
                     _stream = [s + p for p in _stream for s in ['', 'D']]
-                _input_sensorchans.append('|'.join(_stream))
-                _sample_sensorchans.append('|'.join(_sample_stream))
+                _input_sensorchans.append(sensor.spec + ':' + '|'.join(_stream))
+                _sample_sensorchans.append(sensor.spec + ':' + '|'.join(_sample_stream))
+                _input_channels.append('|'.join(_stream))
+                _sample_channels.append('|'.join(_sample_stream))
+
+                #### New: input_sensorchan will replace input_channels
+                self.sample_sensorchan = kwcoco.SensorChanSpec(
+                    ','.join(_sample_sensorchans)
+                )
+
+                self.input_sensorchan = kwcoco.SensorChanSpec.coerce(
+                    ','.join(_input_sensorchans)
+                )
         else:
             _input_channels = []
             _sample_channels = []
@@ -1087,12 +1134,15 @@ class KWCocoVideoDataset(data.Dataset):
                 _input_channels.append('|'.join(_stream))
                 _sample_channels.append('|'.join(_sample_stream))
 
+        # DEPRECATE channel only stuff. Use sensorchan everywhere
+        # * sample_channels
+        # * input_channels
+
         # Some of the channels are computed on the fly.
         # This is the list of ones that are loaded from disk.
         self.sample_channels = kwcoco.channel_spec.ChannelSpec(
             ','.join(_sample_channels)
         )
-
         self.input_channels = kwcoco.channel_spec.ChannelSpec.coerce(
             ','.join(_input_channels)
         )
@@ -1467,9 +1517,17 @@ class KWCocoVideoDataset(data.Dataset):
         # helper that was previously a nested function moved out for profiling
         coco_img = coco_dset.coco_image(gid)
 
-        coco_img
+        sensor_coarse = coco_img.img.get('sensor_coarse', '*')
 
-        sensor_channels = (self.sample_channels & coco_img.channels).normalize()
+        matching_sensorchan = self.sample_sensorchan.matching_sensor(sensor_coarse)
+        # if matching_sensorchan == 0:
+
+        sensor_channels = matching_sensorchan.chans
+
+        # Require
+        # self.sample_sensorchan
+
+        # sensor_channels = (self.sample_channels & coco_img.channels).normalize()
         tr_frame = tr_.copy()
         tr_frame['gids'] = [gid]
         sample_streams = {}
@@ -1543,9 +1601,6 @@ class KWCocoVideoDataset(data.Dataset):
             if force_bad:
                 break
             tr_frame['channels'] = stream
-            if 0:
-                coco_img = sampler.coco_dset.coco_img(tr_frame['gids'][0])
-                print(ub.repr2(coco_img.img, nl=-3))
             sample = sampler.load_sample(
                 tr_frame, with_annots=first_with_annot,
                 nodata='float',
@@ -1647,8 +1702,8 @@ class KWCocoVideoDataset(data.Dataset):
 
         dset = self.sampler.dset
         for gid, freq in freqs['gid'].items():
-            sensor_coarse = dset.coco_image(gid).img.get('sensor_coarse', '')
-            sensor_coarse = dset.coco_image(gid).img.get('sensor_coarse', '')
+            sensor_coarse = dset.coco_image(gid).img.get('sensor_coarse', '*')
+            sensor_coarse = dset.coco_image(gid).img.get('sensor_coarse', '*')
             freqs['sensor'][sensor_coarse] += 1
 
         print(ub.repr2(ub.dict_diff(freqs, {'gid'})))
@@ -1769,12 +1824,13 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import watch
             >>> coco_dset = watch.demo.demo_kwcoco_multisensor()
             >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> channels = '|'.join(sorted(set(ub.flatten([c.channels.fuse().as_list() for c in coco_dset.images().coco_images]))))
+            >>> #channels = '|'.join(sorted(set(ub.flatten([c.channels.fuse().as_list() for c in coco_dset.images().coco_images]))))
             >>> #channels = '|'.join(sorted(set(ub.flatten([kwcoco.ChannelSpec.coerce(c).fuse().as_list() for c in groups.keys()]))))
+            >>> channels = '(sensor0,sensor1,sensor2):' + '|'.join(sorted(set(ub.flatten([c.channels.fuse().as_list() for c in coco_dset.images().coco_images]))))
             >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 256, 256), channels=channels, normalize_perframe=False, true_multimodal=True)
             >>> self.disable_augmenter = False
             >>> index = 0
-            >>> index = self.new_sample_grid['targets'][0]
+            >>> index = tr = self.new_sample_grid['targets'][0]
             >>> item = self[index]
             >>> canvas = self.draw_item(item)
             >>> # xdoctest: +REQUIRES(--show)
@@ -1784,15 +1840,63 @@ class KWCocoVideoDataset(data.Dataset):
             >>> kwplot.show_if_requested()
 
         Ignore:
-            import kwplot
-            kwplot.autompl()
-            import xdev
-            sample_indices = list(range(len(self)))
-            for index in xdev.InteractiveIter(sample_indices):
-                item = self[index]
-                canvas = self.draw_item(item)
-                kwplot.imshow(canvas)
-                xdev.InteractiveIter.draw()
+            ### Useful Debugging Code. Dont remove. (Maybe could move somewhere else though)
+            ### Currently there is a problem where the image data isn't loading
+            ### correctly. This code verifies it for a gid and band of interest at
+            ### multiple levels of abstraction: the batch viz level, the dataloader
+            ### level, the ndsampler level, the kwcoco level (which seems correct,
+            ### so stopping there)
+
+            # Select the frame index of the image of interest causing issues
+            # As well as the band
+            frame_index = 2
+            band = 'B11'
+
+            gid = tr['gids'][frame_index]
+            sl = tr['space_slice']
+
+            index = tr
+            item = self[index]
+            canvas = self.draw_item(item)
+            kwplot.imshow(canvas, fnum=1)
+
+            ### Verify the Dataset item level
+            dset = self.sampler.dset
+            # Also we are making an assumption about streams here, fixme if needed
+            code, dataset_frame = ub.peek(item['frames'][frame_index]['modes'].items())
+            band_idx = kwcoco.FusedChannelSpec.coerce(code).as_list().index(band)
+            real_chan = dataset_frame[band_idx].numpy()
+            dset_level_norm = kwimage.normalize_intensity(real_chan)
+            kwplot.imshow(dset_level_norm, fnum=2, title='Dataloader Level')
+
+            ### Verify (visually) the ndsampler level
+            coco_img = coco_dset.coco_image(gid)
+            sensor_coarse = coco_img.img.get('sensor_coarse', '*')
+            matching_sensorchan = self.sample_sensorchan.matching_sensor(sensor_coarse)
+            sensor_channels = matching_sensorchan.chans
+            stream = ub.peek(sensor_channels.streams())
+            tr_frame = tr.copy()
+            tr_frame['gids'] = [gid]
+            tr_frame['channels'] = stream
+            sample = sampler.load_sample(
+                tr_frame, with_annots=first_with_annot,
+                nodata='float',
+                padkw={'constant_values': np.nan},
+                dtype=np.float32
+            )
+            chan_idx = stream.as_list().index(band)
+            raw_loaded = sample['im'][0, :, :, chan_idx]
+            loaded_norm = kwimage.normalize_intensity(raw_loaded)
+            kwplot.imshow(loaded_norm, fnum=3, title='NDsampler Level')
+
+            ### Verify (visually) the kwcoco level
+            delayed = dset.coco_image(gid).delay(space='video').take_channels(band)
+            delayed_chip = delayed.crop(sl)
+            chip = delayed_chip.finalize()
+            full_norm = kwimage.normalize_intensity(delayed.finalize())
+            full_norm = kwimage.Boxes.from_slice(sl).draw_on(full_norm)
+            kwplot.imshow(full_norm, fnum=4, pnum=(1, 2, 1), title='KWcoco Full Level')
+            kwplot.imshow(kwimage.normalize_intensity(chip), fnum=4, pnum=(1, 2, 2), title='KWcoco Chip Level')
         """
         if isinstance(index, dict):
             # User can specify a tr dict directly
@@ -1821,9 +1925,6 @@ class KWCocoVideoDataset(data.Dataset):
         tr_['use_experimental_loader'] = 1
 
         tr_ = self._augment_spacetime_target(tr_)
-
-        if self.channels:
-            tr_['channels'] = self.sample_channels
 
         if self.inference_only:
             with_annots = []
@@ -1936,18 +2037,19 @@ class KWCocoVideoDataset(data.Dataset):
             space_weights = util_kwimage.upweight_center_mask(input_dsize[::-1])
             space_weights = np.maximum(space_weights, self.min_spacetime_weight)
 
-        if 1:
+        if 0:
             # Replace nans with windows stats
             # TODO: handle nans outside of the dataloader
             # The dataloader **should** return nan values, it is up to the
             # method to handle them. So we have to fix RunningStats
+            # ALSO: this is broken.
             for gid in final_gids:
                 stream_sample = gid_to_sample[gid]
                 for sample in stream_sample.values():
                     im = sample['im']
-                    mask = np.isnan(im)
-                    if np.any(mask):
-                        if np.all(mask):
+                    invalid_mask = np.isnan(im)
+                    if np.any(invalid_mask):
+                        if np.all(invalid_mask):
                             im[:] = 0
                         else:
                             # TODO: Should use the global stream mean/std for this
@@ -1955,7 +2057,7 @@ class KWCocoVideoDataset(data.Dataset):
                             window_chan_med = np.nanmedian(im, axis=(0, 1, 2))
                             window_chan_mean = np.nanmean(im, axis=(0, 1, 2))
                             window_chan_ave = (window_chan_med + window_chan_mean) / 2
-                            im[mask.any(axis=3), :] = window_chan_ave[None, None, None, :]
+                            im[invalid_mask.any(axis=3), :] = window_chan_ave[None, None, None, :]
 
         if self.special_inputs:
             raise NotImplementedError(f'{self.special_inputs=}')
@@ -1981,23 +2083,10 @@ class KWCocoVideoDataset(data.Dataset):
                         frame_dets: kwimage.Detections = sample['annots']['frame_dets'][0]
                         break
                 if frame_dets is None:
-                    # AssertionError: Did not sample correctly. Please send this info to Jon:
-                    """
-                    dset=<CocoDataset(tag=data_nowv_train.kwcoco.json, n_anns=510788, n_imgs=6018, n_videos=24, n_cats=9) at 0x7f552fa4ab50>
-                    gid=5247
-                    index = tr = {
-                        'main_idx': 4, 'video_id': 11, 'gids': [5247, 5284, 5324, 5332, 5357, 5391],
-                        'main_gid': 5247,
-                        'space_slice': (slice(2965, 3346, None), slice(267, 648, None)),
-                        'label': 'positive_center', 'resampled': -1
-                    }
-                    tr_={'main_idx': 4, 'video_id': 11, 'gids': OrderedSet([5247, 5284, 5324, 5332, 5357, 5391]), 'main_gid': 5247, 'space_slice': (slice(3081, 3462, None), slice(173, 554, None)), 'label': 'positive_center', 'resampled': -1, 'as_xarray': False, 'use_experimental_loader': 1, 'channels': <ChannelSpec(blue|green|red|nir|swir16|swir22) at 0x7f549fa3e280>}
-
-                    """
-
                     raise AssertionError(ub.paragraph(
                         f'''
-                        Did not sample correctly. Please send this info to Jon:
+                        Did not sample correctly.
+                        Please send this info to jon.crall@kitware.com:
                         {dset=!r}
                         {gid=!r}
                         {tr=!r}
@@ -2079,8 +2168,8 @@ class KWCocoVideoDataset(data.Dataset):
 
                 # ensure channel dim is not squeezed
                 frame_hwc = kwarray.atleast_nd(frame, 3)
-                # catch nans
-                frame_hwc[np.isnan(frame_hwc)] = -1.
+                # catch nans (TODO: the network should really do this instead)
+                # frame_hwc[np.isnan(frame_hwc)] = -1.
                 # rearrange image axes for pytorch
                 input_chw = einops.rearrange(frame_hwc, 'h w c -> c h w')
                 mode_imdata[mode_key] = input_chw
@@ -2099,7 +2188,7 @@ class KWCocoVideoDataset(data.Dataset):
             else:
                 timestamp = np.nan
 
-            sensor = img.get('sensor_coarse', '')
+            sensor = img.get('sensor_coarse', '*')
 
             frame_item = {
                 'gid': gid,
@@ -2338,15 +2427,6 @@ class KWCocoVideoDataset(data.Dataset):
             # TODO: what is the standard way to do the learned embedding
             # "input vector"?
 
-            @ub.memoize
-            def _string_to_hashvec(key):
-                # Maybe this should be a model responsibility.
-                # I dont like defining the positional encoding in the dataset
-                key_hash = ub.hash_data(key, base=16, hasher='blake3').encode()
-                key_tensor = np.frombuffer(memoryview(key_hash), dtype=np.int32).astype(np.float32)
-                key_tensor = key_tensor / np.linalg.norm(key_tensor)
-                return key_tensor
-
             # TODO: preprocess any auxiliary learnable information into a
             # Tensor. It is likely ideal to pre-stack whenever possible, but we
             # need to keep the row-form data to make visualization
@@ -2363,6 +2443,9 @@ class KWCocoVideoDataset(data.Dataset):
                 frame_timestamp = np.array([frame_item[k]]).astype(np.float32)
 
                 for mode_code in frame_item['modes'].keys():
+                    # Maybe this should be a model responsibility.
+                    # I dont like defining the positional encoding in the
+                    # dataset
                     key_tensor = _string_to_hashvec(mode_code)
                     permode_datas['mode_tensor'].append(key_tensor)
                     #
@@ -2436,7 +2519,7 @@ class KWCocoVideoDataset(data.Dataset):
         depends = ub.odict([
             ('num', num),
             ('hashid', self.sampler.dset._build_hashid()),
-            ('channels', self.input_channels.__json__()),
+            ('sensorchan', self.input_sensorchan.concise().spec),
             ('normalize_perframe', self.normalize_perframe),
             ('with_intensity', with_intensity),
             ('with_class', with_class),
@@ -2611,7 +2694,7 @@ class KWCocoVideoDataset(data.Dataset):
             coco_images = self.sampler.dset.images().coco_images
             hacked = set()
             for c in coco_images:
-                sspec = c.img.get('sensor_coarse', '')
+                sspec = c.img.get('sensor_coarse', '*')
                 img_chans = c.channels.fuse().normalize()
 
                 # TODO: the input_channels should eventually define
@@ -3004,3 +3087,15 @@ def inv_fliprot(img, rot_k=0, flip_axis=None, axes=(0, 1)):
     if rot_k != 0:
         img = np.rot90(img, k=-rot_k, axes=axes)
     return img
+
+
+@ub.memoize
+def _string_to_hashvec(key):
+    """
+    Transform a string into a 16D float32 uniformly distributed random Tensor
+    based on the hash of the string.
+    """
+    key_hash = ub.hash_data(key, base=16, hasher='blake3').encode()
+    key_tensor = np.frombuffer(memoryview(key_hash), dtype=np.int32).astype(np.float32)
+    key_tensor = key_tensor / np.linalg.norm(key_tensor)
+    return key_tensor

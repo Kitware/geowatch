@@ -202,7 +202,7 @@ class BatchVisualizationBuilder:
                 'frame_available_chans': frame_available_chans,
                 'frame_truth': frame_truth,
                 'frame_weight': frame_weight,
-                'sensor': frame_item.get('sensor', ''),
+                'sensor': frame_item.get('sensor', '*'),
             }
             frame_metas.append(frame_meta)
 
@@ -292,30 +292,37 @@ class BatchVisualizationBuilder:
                 flat = [c['raw_signal'].ravel() for c in cells]
                 cums = np.cumsum(list(map(len, flat)))
                 combo = np.hstack(flat)
-                try:
-                    combo_normed = kwimage.normalize_intensity(combo, nodata=0).copy()
-                except Exception:
-                    combo_normed = combo.copy()
+                mask = (combo != 0) & np.isfinite(combo)
+                # try:
+                combo_normed = kwimage.normalize_intensity(combo, mask=mask).copy()
+                # except Exception:
+                #     combo_normed = combo.copy()
                 flat_normed = np.split(combo_normed, cums)
                 for cell, flat_item in zip(cells, flat_normed):
                     norm_signal = flat_item.reshape(*cell['raw_signal'].shape)
                     norm_signal = kwimage.atleast_3channels(norm_signal)
-                    norm_signal = np.nan_to_num(norm_signal)
+                    # norm_signal = np.nan_to_num(norm_signal)
+                    norm_signal = kwimage.fill_nans_with_checkers(norm_signal)
                     cell['norm_signal'] = norm_signal
         else:
             # Normalize each timestep by itself
             for frame_meta in frame_metas:
                 for row in frame_meta['chan_rows']:
                     raw_signal = row['raw_signal']
-                    needs_norm = np.nanmin(raw_signal) < 0 or np.nanmax(raw_signal) > 1
+                    import warnings
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings('ignore', message='All-NaN slice')
+                        needs_norm = np.nanmin(raw_signal) < 0 or np.nanmax(raw_signal) > 1
                     if needs_norm:
-                        try:
-                            norm_signal = kwimage.normalize_intensity(raw_signal).copy()
-                        except Exception:
-                            norm_signal = raw_signal.copy()
+                        mask = (raw_signal != 0) & np.isfinite(raw_signal)
+                        norm_signal = kwimage.normalize_intensity(raw_signal, mask=mask).copy()
+                        # try:
+                        # except Exception:
+                        #     norm_signal = raw_signal.copy()
                     else:
                         norm_signal = raw_signal.copy()
-                    norm_signal = np.nan_to_num(norm_signal)
+                    norm_signal = kwimage.fill_nans_with_checkers(norm_signal)
+                    # norm_signal = np.nan_to_num(norm_signal)
                     from watch.utils import util_kwimage
                     norm_signal = util_kwimage.ensure_false_color(norm_signal)
                     norm_signal = kwimage.atleast_3channels(norm_signal)
@@ -368,8 +375,8 @@ class BatchVisualizationBuilder:
             text=f't={frame_idx} gid={gid}', color='salmon')
         header_stack.append(header_part)
 
-        sensor = frame_item.get('sensor', '')
-        if sensor:
+        sensor = frame_item.get('sensor', '*')
+        if sensor != '*':
             header_part = kwimage.draw_header_text(
                 image=header_dims, fit=False, text=f'{sensor}',
                 color='salmon')

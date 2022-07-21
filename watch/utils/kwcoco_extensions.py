@@ -1747,7 +1747,7 @@ def coco_channel_stats(coco_dset):
         for obj in CocoImage(img).iter_asset_objs():
             channels.append(obj.get('channels', 'unknown-chan'))
         chan = '|'.join(channels)
-        sensor = img.get('sensor_coarse', '')
+        sensor = img.get('sensor_coarse', '*')
         chan_hist[chan] += 1
         sensor_hist[sensor] += 1
         sensorchan_hist[sensor][chan] += 1

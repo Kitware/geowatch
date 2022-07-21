@@ -84,11 +84,112 @@ from watch.tasks.fusion.methods.network_modules import ConvTokenizer
 from watch.tasks.fusion.methods.network_modules import LinearConvTokenizer
 from watch.tasks.fusion.methods.network_modules import DWCNNTokenizer
 
+import scriptconfig as scfg
+
 try:
     import xdev
     profile = xdev.profile
 except Exception:
     profile = ub.identity
+
+
+# Model names define the transformer encoder used by the method
+available_encoders = list(transformer.encoder_configs.keys()) + ['deit']
+
+
+@scfg.dataconf
+class MultimodalTransformerConfig:
+    """
+    Arguments accepted by the MultimodalTransformer
+
+    The scriptconfig class is not used directly as it normally would be here.
+    Instead we use it as a convinience to minimize lightning boilerplate needed
+    for the __init__ and add_argparse_args methods.
+
+    Note, this does not entirely define the `__init__` method, just the
+    parameters that are exposed on the command line. An update to
+    scriptconfig could allow that to be combined, but I'm not sure if its a
+    good idea. The arguments not specified here are usually ones that the
+    dataset must provide at definition time.
+    """
+    name = scfg.Value('unnamed_model', help=ub.paragraph(
+        '''
+        Specify a name for the experiment. (Unsure if the Model is
+        the place for this)
+        '''))
+    optimizer = scfg.Value('RAdam', type=str, help=ub.paragraph(
+        '''
+        Optimizer name supported by the netharn API
+        '''))
+    learning_rate = scfg.Value(0.001, type=float)
+    weight_decay = scfg.Value(0.0, type=float)
+    positive_change_weight = scfg.Value(1.0, type=float)
+    negative_change_weight = scfg.Value(1.0, type=float)
+    class_weights = scfg.Value('auto', type=str, help='class weighting strategy')
+    saliency_weights = scfg.Value('auto', type=str, help='class weighting strategy')
+    stream_channels = scfg.Value(8, type=int, help=ub.paragraph(
+        '''
+        number of channels to normalize each project stream to
+        '''))
+    tokenizer = scfg.Value('rearrange', type=str, choices=[
+        'dwcnn', 'rearrange', 'conv7', 'linconv'], help=ub.paragraph(
+        '''
+        How image patches are broken into tokens. rearrange is a 1x1
+        MLP and grouping of pixel grids. dwcnn is a is a mobile
+        convolutional stem. conv7 is a simple 1x1x7x7 convolutional
+        stem. linconv is a stack of 3x3 grouped convolutions without
+        any nonlinearity
+        '''))
+    token_norm = scfg.Value('none', type=str, choices=['none', 'auto', 'group', 'batch'])
+    arch_name = scfg.Value('smt_it_joint_p8', type=str, choices=available_encoders)
+    decoder = scfg.Value('mlp', type=str, choices=['mlp', 'segmenter'])
+    dropout = scfg.Value(0.1, type=float)
+    global_class_weight = scfg.Value(1.0, type=float)
+    global_change_weight = scfg.Value(1.0, type=float)
+    global_saliency_weight = scfg.Value(1.0, type=float)
+    modulate_class_weights = scfg.Value('', type=str, help=ub.paragraph(
+        '''
+        a special syntax that lets the user modulate automatically
+        computed class weights. Should be a comma separated list of
+        name*weight or name*weight+offset. E.g.
+        `negative*0,background*0.001,No Activity*0.1+1`
+        '''))
+    change_loss = scfg.Value('cce')
+    class_loss = scfg.Value('focal')
+    saliency_loss = scfg.Value('focal', help=ub.paragraph(
+        '''
+        saliency is trained to match any
+        "positive/foreground/salient" class
+        '''))
+    change_head_hidden = scfg.Value(2, type=int, help=ub.paragraph(
+        '''
+        number of hidden layers in the change head
+        '''))
+    class_head_hidden = scfg.Value(2, type=int, help=ub.paragraph(
+        '''
+        number of hidden layers in the category head
+        '''))
+    saliency_head_hidden = scfg.Value(2, type=int, help=ub.paragraph(
+        '''
+        number of hidden layers in the saliency head
+        '''))
+    window_size = scfg.Value(8, type=int)
+    squash_modes = scfg.Value(False)
+    decouple_resolution = scfg.Value(False, help=ub.paragraph(
+        '''
+        this turns on logic to decouple input and output
+        resolutions. Probably very slow
+        '''))
+    attention_impl = scfg.Value('exact', type=str, help=ub.paragraph(
+        '''
+        Implementation for attention computation. Can be: 'exact' -
+        the original O(n^2) method. 'performer' - a linear
+        approximation. 'reformer' - a LSH approximation.
+        '''))
+    multimodal_reduce = scfg.Value('max', help=ub.paragraph(
+        '''
+        operation used to combine multiple modes from the same timestep
+        '''))
 
 
 class MultimodalTransformer(pl.LightningModule):
@@ -158,124 +259,49 @@ class MultimodalTransformer(pl.LightningModule):
             >>> cls.add_argparse_args(parent_parser)
             >>> parent_parser.print_help()
             >>> parent_parser.parse_known_args()
+
+            print(scfg.Config.port_argparse(parent_parser, style='dataconf'))
         """
-        from scriptconfig.smartcast import smartcast
-        parser = parent_parser.add_argument_group('MultimodalTransformer')
-        parser.add_argument('--name', default='unnamed_model', help=ub.paragraph(
-            '''
-            Specify a name for the experiment. (Unsure if the Model is the place for this)
-            '''))
-
-        parser.add_argument('--optimizer', default='RAdam', type=str, help='Optimizer name supported by the netharn API')
-        parser.add_argument('--learning_rate', default=1e-3, type=float)
-        parser.add_argument('--weight_decay', default=0., type=float)
-
-        parser.add_argument('--positive_change_weight', default=1.0, type=float)
-        parser.add_argument('--negative_change_weight', default=1.0, type=float)
-        parser.add_argument('--class_weights', default='auto', type=str, help='class weighting strategy')
-        parser.add_argument('--saliency_weights', default='auto', type=str, help='class weighting strategy')
-
-        # Model names define the transformer encoder used by the method
-        available_encoders = list(transformer.encoder_configs.keys()) + ['deit']
-
-        parser.add_argument('--stream_channels', default=8, type=int, help='number of channels to normalize each project stream to')
-        parser.add_argument(
-            '--tokenizer', default='rearrange', type=str,
-            choices=['dwcnn', 'rearrange', 'conv7', 'linconv'], help=ub.paragraph(
-                '''
-                How image patches are broken into tokens.
-                rearrange is a 1x1 MLP and grouping of pixel grids.
-                dwcnn is a is a mobile convolutional stem.
-                conv7 is a simple 1x1x7x7 convolutional stem.
-                linconv is a stack of 3x3 grouped convolutions without any nonlinearity
-                '''))
-        parser.add_argument('--token_norm', default='none', type=str,
-                            choices=['none', 'auto', 'group', 'batch'])
-        parser.add_argument('--arch_name', default='smt_it_joint_p8', type=str,
-                            choices=available_encoders)
-        parser.add_argument('--decoder', default='mlp', type=str, choices=['mlp', 'segmenter'])
-        parser.add_argument('--dropout', default=0.1, type=float)
-        parser.add_argument('--global_class_weight', default=1.0, type=float)
-        parser.add_argument('--global_change_weight', default=1.0, type=float)
-        parser.add_argument('--global_saliency_weight', default=1.0, type=float)
-        parser.add_argument('--modulate_class_weights', default='', type=str, help='a special syntax that lets the user modulate automatically computed class weights. Should be a comma separated list of name*weight or name*weight+offset. E.g. `negative*0,background*0.001,No Activity*0.1+1`')
-
-        parser.add_argument('--change_loss', default='cce')
-        parser.add_argument('--class_loss', default='focal')
-        parser.add_argument('--saliency_loss', default='focal', help='saliency is trained to match any "positive/foreground/salient" class')
-
-        parser.add_argument('--change_head_hidden', default=2, type=int, help='number of hidden layers in the change head')
-        parser.add_argument('--class_head_hidden', default=2, type=int, help='number of hidden layers in the category head')
-        parser.add_argument('--saliency_head_hidden', default=2, type=int, help='number of hidden layers in the saliency head')
-
-        # parser.add_argument("--input_scale", default=2000.0, type=float)
-        parser.add_argument('--window_size', default=8, type=int)
-        parser.add_argument('--squash_modes', default=False, type=smartcast)
-        parser.add_argument('--decouple_resolution', default=False, type=smartcast, help='this turns on logic to decouple input and output resolutions. Probably very slow')
-        parser.add_argument(
-            '--attention_impl', default='exact', type=str, help=ub.paragraph(
-                '''
-                Implementation for attention computation.
-                Can be:
-                'exact' - the original O(n^2) method.
-                'performer' - a linear approximation.
-                'reformer' - a LSH approximation.
-                '''))
+        parser = parent_parser.add_argument_group('kwcoco_video_data')
+        config = MultimodalTransformerConfig()
+        config.argparse(parser)
         return parent_parser
 
     def get_cfgstr(self):
         cfgstr = f'{self.name}_{self.arch_name}'
         return cfgstr
 
-        # model_cfgstr
-        pass
-
-    def __init__(self,
-                 arch_name='smt_it_joint_p8',
-                 dropout=0.0,
-                 optimizer='RAdam',
-                 learning_rate=1e-3,
-                 weight_decay=0.,
-                 class_weights='auto',
-                 saliency_weights='auto',
-                 positive_change_weight=1.,
-                 negative_change_weight=1.,
-                 dataset_stats=None,
-                 input_channels=None,
-                 unique_sensors=None,
-                 attention_impl='exact',
-                 window_size=8,
-                 global_class_weight=1.0,
-                 global_change_weight=1.0,
-                 global_saliency_weight=1.0,
-                 change_head_hidden=1,
-                 class_head_hidden=1,
-                 saliency_head_hidden=1,
-                 change_loss='cce',
-                 class_loss='focal',
-                 saliency_loss='focal',
-                 tokenizer='rearrange',
-                 token_norm='auto',
-                 name='unnamed_expt',
-                 squash_modes=False,
-                 multimodal_reduce='max',
-                 modulate_class_weights='',
-                 stream_channels=8,
-                 decouple_resolution=False,
-                 decoder='mlp',
-                 classes=10):
+    def __init__(self, classes=10, dataset_stats=None, input_channels=None,
+                 unique_sensors=None, **kwargs):
 
         super().__init__()
-        self.save_hyperparameters()
-        self.name = name
-        self.decoder = decoder
-        self.decouple_resolution = decouple_resolution
+        config = MultimodalTransformerConfig(**kwargs)
+        self.config = config
+        cfgdict = self.config.to_dict()
+        self.save_hyperparameters(cfgdict)
+        # Backwards compatibility. Previous iterations had the
+        # config saved directly as datamodule arguments
+        self.__dict__.update(cfgdict)
 
-        self.arch_name = arch_name
-        self.squash_modes = squash_modes
-        self.multimodal_reduce = multimodal_reduce
-        self.modulate_class_weights = modulate_class_weights
-        self.stream_channels = stream_channels
+        # We are explicitly unpacking the config here to make
+        # transition to a scriptconfig style init easier. This
+        # code can be consolidated later.
+        saliency_weights = config['saliency_weights']
+        class_weights = config['class_weights']
+        tokenizer = config['tokenizer']
+        token_norm = config['token_norm']
+        change_head_hidden = config['change_head_hidden']
+        class_head_hidden = config['class_head_hidden']
+        saliency_head_hidden = config['saliency_head_hidden']
+        class_loss = config['class_loss']
+        change_loss = config['change_loss']
+        saliency_loss = config['saliency_loss']
+        arch_name = config['arch_name']
+        dropout = config['dropout']
+        attention_impl = config['attention_impl']
+        global_class_weight = config['global_class_weight']
+        global_change_weight = config['global_change_weight']
+        global_saliency_weight = config['global_saliency_weight']
 
         if dataset_stats is not None:
             input_stats = dataset_stats['input_stats']
@@ -341,8 +367,8 @@ class MultimodalTransformer(pl.LightningModule):
             'saliency': global_saliency_weight,
         }
 
-        self.positive_change_weight = positive_change_weight
-        self.negative_change_weight = negative_change_weight
+        self.positive_change_weight = config['positive_change_weight']
+        self.negative_change_weight = config['negative_change_weight']
 
         # TODO: this data should be introspectable via the kwcoco file
         hueristic_background_keys = heuristics.BACKGROUND_CLASSES
