@@ -6,6 +6,7 @@ import torch
 from torch.nn.modules.container import Module
 from torch._jit_internal import _copy_to_script_wrapper
 import einops
+import numpy as np
 import netharn as nh
 from torch import nn
 from timm.models.layers import drop_path
@@ -385,7 +386,6 @@ def _class_weights_from_freq(total_freq, mode='median-idf'):
         >>> print(_class_weights_from_freq(total_freq, mode='median-idf'))
         >>> print(_class_weights_from_freq(total_freq, mode='log-median-idf'))
     """
-    import numpy as np
 
     def logb(arr, base):
         if base == 'e':

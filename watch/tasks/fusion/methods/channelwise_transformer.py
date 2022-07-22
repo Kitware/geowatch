@@ -98,7 +98,7 @@ available_encoders = list(transformer.encoder_configs.keys()) + ['deit']
 
 
 @scfg.dataconf
-class MultimodalTransformerConfig:
+class MultimodalTransformerConfig(scfg.DataConfig):
     """
     Arguments accepted by the MultimodalTransformer
 
@@ -271,11 +271,31 @@ class MultimodalTransformer(pl.LightningModule):
         config.argparse(parser)
         return parent_parser
 
+    @classmethod
+    def compatible(cls, cfgdict):
+        """
+        Given keyword arguments, find the subset that is compatible with this
+        constructor. This is somewhat hacked because of usage of scriptconfig,
+        but could be made nicer by future updates.
+        """
+        # init_kwargs = ub.compatible(config, cls.__init__)
+        import inspect
+        nameable_kinds = {inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                          inspect.Parameter.KEYWORD_ONLY}
+        cls_sig = inspect.signature(cls)
+        explicit_argnames = [
+            argname for argname, argtype in cls_sig.parameters.items()
+            if argtype.kind in nameable_kinds
+        ]
+        valid_argnames = explicit_argnames + list(MultimodalTransformerConfig.__default__.keys())
+        clsvars = ub.dict_isect(cfgdict, valid_argnames)
+        return clsvars
+
     def get_cfgstr(self):
         cfgstr = f'{self.name}_{self.arch_name}'
         return cfgstr
 
-    def __init__(self, classes=10, dataset_stats=None, input_channels=None,
+    def __init__(self, *, classes=10, dataset_stats=None, input_channels=None,
                  unique_sensors=None, **kwargs):
 
         super().__init__()
@@ -652,7 +672,7 @@ class MultimodalTransformer(pl.LightningModule):
         Example:
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> from watch.tasks.fusion import methods
-            >>> self = methods.MultimodalTransformer("smt_it_stm_p8", input_channels='r|g|b')
+            >>> self = methods.MultimodalTransformer(arch_name="smt_it_stm_p8", input_channels='r|g|b')
             >>> self.trainer = pl.Trainer(max_epochs=400)
             >>> [opt], [sched] = self.configure_optimizers()
             >>> rows = []
@@ -1710,7 +1730,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> # Use one of our fusion.architectures in a test
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
-            >>> model = methods.MultimodalTransformer("smt_it_stm_p8", input_channels=13)
+            >>> model = self = methods.MultimodalTransformer(arch_name="smt_it_stm_p8", input_channels=13)
 
             >>> # Save the model (TODO: need to save datamodule as well)
             >>> model.save_package(package_path)
@@ -1745,7 +1765,7 @@ class MultimodalTransformer(pl.LightningModule):
 
             >>> # Use one of our fusion.architectures in a test
             >>> self = methods.MultimodalTransformer(
-            >>>     "smt_it_stm_p8", classes=classes,
+            >>>     arch_name="smt_it_stm_p8", classes=classes,
             >>>     dataset_stats=dataset_stats, input_channels=datamodule.input_channels)
 
             >>> # We have to run an input through the module because it is lazy

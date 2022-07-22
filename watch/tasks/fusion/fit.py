@@ -343,7 +343,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     if hasattr(datamodule_class, 'bce_weight'):
         method_var_dict['pos_weight'] = getattr(datamodule_class, 'bce_weight')
 
-    method_var_dict = ub.compatible(method_var_dict, method_class.__init__)
+    method_var_dict = method_class.compatible(method_var_dict)
 
     _needs_transfer = False
     if args.resume_from_checkpoint is None:

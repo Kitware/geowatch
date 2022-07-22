@@ -61,8 +61,8 @@ def main(cmdline=False, **kwargs):
         >>> reformatted_dset = kwcoco.CocoDataset(new_fpath)
         >>> assert 'quantization' in reformatted_dset.imgs[1]['auxiliary'][-1]
         >>> new_coco_img = reformatted_dset.coco_image(gid)
-        >>> new_pred1 = new_coco_img.delay('salient').finalize()
-        >>> assert np.allclose(new_pred1, new_pred1)
+        >>> new_pred1 = np.nan_to_num(new_coco_img.delay('salient').finalize())
+        >>> #assert np.allclose(new_pred1, new_pred2)
         >>> #new_pred2 = new_coco_img.delay('salient').finalize(dequantize=False)
         >>> #assert new_pred2.dtype.kind == 'i'
     """
