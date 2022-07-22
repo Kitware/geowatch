@@ -9,10 +9,12 @@ import subprocess
 import shutil
 
 # Deprecate?
-# from s2angs.cli import generate_anglebands
 import pystac
 
 from watch.utils.util_stac import parallel_map_items, maps
+
+# from s2angs.cli import generate_anglebands
+generate_anglebands = None
 
 
 L7_RE = re.compile(r'^L[COTEM]07')
