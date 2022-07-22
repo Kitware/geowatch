@@ -227,7 +227,7 @@ class MultimodalTransformer(pl.LightningModule):
         >>>             print(f'      * {mode_code=} @shape={mode_val.shape}, num_nam={mode_val.isnan().sum()}')
         >>> print('(STEP 3): THE REST OF THE TEST')
         >>> #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
-        >>> self = MultimodalTransformer(arch_name='smt_it_joint_p8',
+        >>> self = MultimodalTransformer(arch_name='smt_it_joint_p2',
         >>>                              input_channels=datamodule.input_channels,
         >>>                              dataset_stats=dataset_stats,
         >>>                              classes=datamodule.classes, decoder='segmenter',

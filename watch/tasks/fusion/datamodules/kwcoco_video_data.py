@@ -105,10 +105,13 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             data
             ''')),
 
-        'set_cover_algo': scfg.Value(None, help=ub.paragraph(
+        'set_cover_algo': scfg.Value(None, choices=[None, 'approx', 'exact'], help=ub.paragraph(
             '''
-            Set cover algorithm to remove redundant gids when building
-            space time targets
+            Set cover algorithm to remove redundant gids when building space
+            time targets. Options are 'approx' (a greedy solution) or 'exact'
+            (an ILP solution). If None is passed, set cover is not computed.
+            The 'exact' method requires the pulp package (and can be very slow
+            so it is generally not recommended).
             ''')),
 
         'temporal_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
