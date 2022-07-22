@@ -52,7 +52,7 @@ fire>=0.4.0
 
 # Parsing
 lark >= 1.1.2
-lark_cython >= 0.0.11
+# lark_cython >= 0.0.11
 
 # Imaging
 distinctipy>=1.2.1
