@@ -30,4 +30,4 @@ openpyxl>=3.0.9
 
 cmd_queue >= 0.1.1
 
-Pygments>=2.2.0
+# Pygments>=2.2.0
