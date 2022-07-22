@@ -3,6 +3,9 @@
 A gif-ify script
 
 Wrapper around imgmagik convert or ffmpeg
+
+TODO:
+    - [ ] Moving this to kwplot
 """
 
 import ubelt as ub
@@ -236,6 +239,16 @@ def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=3,
     # -vf scale=512:-1 \
     # out.gif \
 
+
+__notes__ = """
+
+Video to GiF
+
+ffmpeg -ss 30 -t 3 -i input.mp4 -vf "fps=10,scale=320:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" -loop 0 output.gif
+
+ffmpeg -i "$HOME/2022-06-29 18-36-30.mkv" -vf "fps=3,scale=1000:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" -loop 0 output.gif
+
+"""
 
 if __name__ == '__main__':
     """

@@ -141,22 +141,20 @@ class DEM_Collection(ElevationDatabase):
         >>> print(dems.query(lat, lon))
         499.0
 
+        >>> # Running one query on the CI is good enough
+        >>> # xdoctest: +REQUIRES(--slow)
         >>> lat, lon = (37.7280555555556, 129.008888888889)
         >>> print(dems.query(lat, lon))
         0
-
         >>> lat, lon = (37.6947222222222, 129.008888888889)
         >>> print(dems.query(lat, lon))
         95.0
-
         >>> lat, lon = (37.7127777777778, 128.780555555556)
         >>> print(dems.query(lat, lon))
         452.0
-
         >>> lat, lon = (0, 0)
         >>> print(dems.query(lat, lon))
         0
-
         >>> lon_basis = np.linspace(-175, 175, 100)
         >>> lat_basis = np.linspace(-85, 85, 100)
         >>> lats_, lons_ = np.meshgrid(lat_basis, lon_basis)

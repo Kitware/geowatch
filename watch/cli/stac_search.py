@@ -11,9 +11,9 @@ CommandLine:
     DEMO_DPATH=$HOME/.cache/watch/demo/datasets
     REGION_FPATH="$HOME/.cache/watch/demo/annotations/KHQ_R001.geojson"
     SITE_GLOBSTR="$HOME/.cache/watch/demo/annotations/KHQ_R001_sites/*.geojson"
-    START_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.start_date' $REGION_FPATH)
-    END_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.end_date' $REGION_FPATH)
-    REGION_ID=$(jq -r '.features[] | select(.properties.type=="region") | .properties.region_id' $REGION_FPATH)
+    START_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.start_date' "$REGION_FPATH")
+    END_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.end_date' "$REGION_FPATH")
+    REGION_ID=$(jq -r '.features[] | select(.properties.type=="region") | .properties.region_id' "$REGION_FPATH")
     SEARCH_FPATH=$DEMO_DPATH/stac_search.json
     RESULT_FPATH=$DEMO_DPATH/all_sensors_kit/${REGION_ID}.input
 
@@ -125,7 +125,7 @@ class StacSearcher:
         self.logger = logger
 
     def by_geometry(self, provider, geom, collections, start, end, outfile,
-                    query, headers):
+                    query, headers, max_products_per_region=None):
         self.logger.info('Processing ' + provider)
         catalog = pystac_client.Client.open(provider, headers=headers)
         daterange = [start, end]
@@ -135,11 +135,35 @@ class StacSearcher:
             intersects=geom,
             query=query)
 
+        # Found features
         items = search.get_all_items()
+        features = items.to_dict()['features']
+
         self.logger.info('Search found %s items' % str(len(items)))
-        for item in items:
-            with open(outfile, 'a') as the_file:
-                the_file.write(json.dumps(item.to_dict()) + '\n')
+        if max_products_per_region and max_products_per_region < len(features):
+            # Filter to a max number of items per region for testing
+            # Sample over time uniformly
+            from watch.utils import util_time
+            from watch.tasks.fusion.datamodules import temporal_sampling
+            import kwarray
+            import ubelt as ub
+            datetimes = [util_time.coerce_datetime(item['properties']['datetime']) for item in features]
+            # TODO: Can we get a linear variant that doesn't need the N**2
+            # affinity matrix?  Greedy set cover maybe? Or mean-shift
+            sampler = temporal_sampling.TimeWindowSampler.from_datetimes(
+                datetimes, time_span='full', time_window=max_products_per_region,
+                affinity_type='soft2', update_rule='pairwise+distribute',
+                affkw={'heuristics': []},
+            )
+            rng = kwarray.ensure_rng(sampler.unixtimes.sum())
+            take_idxs = sampler.sample(rng=rng)
+
+            features = list(ub.take(features, take_idxs))
+            self.logger.info('Filtered to %s items' % str(len(features)))
+
+        with open(outfile, 'a') as the_file:
+            for item in features:
+                the_file.write(json.dumps(item) + '\n')
         self.logger.info('Saved STAC results to: ' + outfile)
 
     def by_id(self, provider, collections, stac_id, outfile, query, headers):
@@ -168,6 +192,11 @@ class StacSearchConfig(scfg.Config):
             short_alias=['o'],
             required=True
         ),
+
+        'region_globstr': scfg.Value(None, help='if specified, run over multiple region files and ignore "region_file" and "site_file"'),
+
+        'max_products_per_region': scfg.Value(None, help='does uniform affinity sampling over time to filter down to this many results per region'),
+
         'region_file': scfg.Value(
             None,
             help='path to a region geojson file; required if mode is area',
@@ -199,6 +228,10 @@ class StacSearchConfig(scfg.Config):
             type=int,
             short_alias=['v']
         ),
+
+        'cloud_cover': scfg.Value(10, help='maximum cloud cover percentage (ignored if search_json given)'),
+        'sensors': scfg.Value("L2", help='(ignored if search_json given)'),
+        'api_key': scfg.Value('env:SMART_STAC_API_KEY', help='The API key or where to get it (ignored if search_json given)'),
     }
 
 
@@ -244,97 +277,46 @@ def main(cmdline=True, **kwargs):
         >>>     print(item['properties']['eo:cloud_cover'])
         >>>     print(item['properties']['datetime'])
     """
-    # if 1:
     config = StacSearchConfig(cmdline=cmdline, data=kwargs)
     import ubelt as ub
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
     args = config.namespace
-    # else:
-    #     parser = _make_parser()
-    #     args = parser.parse_args()
 
     logger = util_logging.get_logger(verbose=args.verbose)
     searcher = StacSearcher(logger)
 
     outdir = os.path.dirname(args.outfile)
 
-    if outdir == '':
-        temp_dir = create_working_dir()
-        logger.info('Created temp folder: ' + temp_dir)
+    temp_dir = create_working_dir()
+    logger.info('Created temp folder: ' + temp_dir)
 
+    if outdir == '':
         dest_path = os.path.join(temp_dir, args.outfile)
     else:
         os.makedirs(outdir, exist_ok=True)
-
         dest_path = args.outfile
 
     if args.mode == 'area':
+        if config['region_globstr'] is not None:
+            from watch.utils import util_path
+            region_file_fpaths = util_path.coerce_patterned_paths(config['region_globstr'])
+            assert args.mode == 'area'
+        else:
+            if not hasattr(args, 'region_file'):
+                raise ValueError('Missing region file')
+            region_file_fpaths = [args.region_file]
+        print('region_file_fpaths = {}'.format(ub.repr2(region_file_fpaths, nl=1)))
+
         if not hasattr(args, 'search_json'):
             raise ValueError('Missing stac search parameters')
+        search_json = args.search_json
 
-        if not hasattr(args, 'region_file'):
-            raise ValueError('Missing region file')
-
-        logger.info('Reading STAC search JSON')
-        try:
-            search_params = json.loads(args.search_json)
-        except json.decoder.JSONDecodeError:
-            with open(args.search_json) as f:
-                search_params = json.load(f)
-
-        if args.region_file.startswith('s3://'):
-            r_file_loc = get_file_from_s3(args.region_file, temp_dir)
-        else:
-            r_file_loc = args.region_file
-
-        logger.info('Opening region file')
-        with open(r_file_loc, 'r') as r_file:
-            region = json.loads(r_file.read())
-
-        regions = [
-            f for f in region['features'] if (
-                f['properties']['type'].lower() == 'region')
-        ]
-        if len(regions) > 0:
-            # assume only 1 region per region model file
-            geom = shape(regions[0]['geometry'])
-            for s in search_params['stac_search']:
-                searcher.by_geometry(
-                    s['endpoint'],
-                    geom,
-                    s['collections'],
-                    s['start_date'],
-                    s['end_date'],
-                    dest_path,
-                    s.get('query', {}),
-                    s.get('headers', {})
-                )
+        # Might be reasonable to parallize this, but will need locks around
+        # writes to the same file, or write to separate files and then combine
+        for region_fpath in region_file_fpaths:
+            area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config, logger)
     else:
-        if args.site_file.startswith('s3://'):
-            s_file_loc = get_file_from_s3(args.site_file, temp_dir)
-        else:
-            s_file_loc = args.site_file
-
-        logger.info('Opening site file')
-        with open(s_file_loc, 'r') as s_file:
-            site = json.loads(s_file.read())
-
-        features = site['features']
-
-        for f in features:
-            props = f['properties']
-            if props['type'] == 'observation':
-                sensor = props['sensor_name']
-                if sensor.lower() != "worldview":
-                    params = stac_config[sensor]
-                    searcher.by_id(
-                        params['provider'],
-                        params['collections'],
-                        props['source'],
-                        dest_path,
-                        params['query'],
-                        params['headers']
-                    )
+        id_query(searcher, logger, dest_path, temp_dir, args)
 
     if args.s3_dest is not None:
         logger.info('Saving output to S3')
@@ -343,6 +325,105 @@ def main(cmdline=True, **kwargs):
         logger.info('--s3_dest parameter not present; skipping S3 output')
 
     logger.info('Search complete')
+
+
+def area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config, logger):
+    logger.info('Query region file: {}'.format(region_fpath))
+
+    if str(region_fpath).startswith('s3://'):
+        r_file_loc = get_file_from_s3(region_fpath, temp_dir)
+    else:
+        r_file_loc = region_fpath
+
+    if search_json == 'auto':
+        # hack to construct the search params here.
+        from watch.utils import util_gis
+        from watch.utils import util_time
+        from watch.cli.stac_search_build import build_search_json
+        region_df = util_gis.read_geojson(r_file_loc)
+        region_row = region_df[region_df['type'] == 'region'].iloc[0]
+        end_date = util_time.coerce_datetime(region_row['end_date'])
+        start_date = util_time.coerce_datetime(region_row['start_date'])
+        if end_date is None:
+            end_date = util_time.coerce_datetime('now').date()
+        if start_date is None:
+            start_date = util_time.coerce_datetime('2010-01-01').date()
+        # Hack to avoid pre-constructing the search json
+        cloud_cover = config['cloud_cover']  # TODO parametarize this
+        sensors = config['sensors']
+        api_key = config['api_key']
+        search_params = build_search_json(
+            start_date=start_date, end_date=end_date,
+            sensors=sensors, api_key=api_key,
+            cloud_cover=cloud_cover)
+    else:
+        # Assume it is a path
+        try:
+            search_params = json.loads(search_json)
+        except json.decoder.JSONDecodeError:
+            with open(search_json) as f:
+                search_params = json.load(f)
+
+    with open(r_file_loc, 'r') as r_file:
+        region = json.loads(r_file.read())
+
+    regions = [
+        f for f in region['features'] if (
+            f['properties']['type'].lower() == 'region')
+    ]
+    if len(regions) != 1:
+        raise AssertionError(
+            f'Region file {r_file_loc!r} should have exactly 1 feature with '
+            f'type "region", but we found {len(regions)}')
+
+    max_products_per_region = config['max_products_per_region']
+    # assume only 1 region per region model file
+    geom = shape(regions[0]['geometry'])
+
+    searches = search_params['stac_search']
+    logger.info(f'Performing {len(searches)} geometry stac searches')
+
+    for s in search_params['stac_search']:
+        searcher.by_geometry(
+            s['endpoint'],
+            geom,
+            s['collections'],
+            s['start_date'],
+            s['end_date'],
+            dest_path,
+            s.get('query', {}),
+            s.get('headers', {}),
+            max_products_per_region=max_products_per_region
+        )
+
+
+def id_query(searcher, logger, dest_path, temp_dir, args):
+    raise NotImplementedError('This doesnt have the right stac endpoints setup for it.')
+    if args.site_file.startswith('s3://'):
+        s_file_loc = get_file_from_s3(args.site_file, temp_dir)
+    else:
+        s_file_loc = args.site_file
+
+    logger.info('Opening site file')
+    with open(s_file_loc, 'r') as s_file:
+        site = json.loads(s_file.read())
+
+    features = site['features']
+
+    for f in features:
+        props = f['properties']
+        if props['type'] == 'observation':
+            sensor = props['sensor_name']
+            if sensor.lower() != "worldview":
+                params = stac_config[sensor]
+                searcher.by_id(
+                    params['provider'],
+                    params['collections'],
+                    props['source'],
+                    dest_path,
+                    params['query'],
+                    params['headers']
+                )
 
 
 if __name__ == '__main__':

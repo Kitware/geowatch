@@ -2,7 +2,6 @@ import kwimage
 import numpy as np
 import kwcoco
 from rasterio import features
-import scipy.ndimage.measurements as ndm
 import shapely.geometry
 import ubelt as ub
 from dataclasses import dataclass, astuple
@@ -12,6 +11,12 @@ import collections
 from abc import abstractmethod
 from typing import Union, Iterable, Optional, Any, Tuple, List, Dict
 import warnings
+
+try:
+    from scipy.ndimage import label as ndm_label
+except ImportError:
+    # the `scipy.ndimage.measurements` namespace is deprecated.
+    from scipy.ndimage.measurements import label as ndm_label
 
 
 def trackid_is_default(trackid):
@@ -531,7 +536,7 @@ def mask_to_polygons(probs,
     else:
         mask = probs > thresh
         seeds = probs > thresh_hysteresis
-        label_img = ndm.label(mask)[0]
+        label_img = ndm_label(mask)[0]
         selected = np.unique(np.extract(seeds, label_img))
         binary_mask = np.isin(label_img, selected).astype(np.uint8)
     if bounds is not None:

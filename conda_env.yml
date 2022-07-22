@@ -7,7 +7,7 @@ dependencies:
   - python == 3.8
   - pip >= 21.0.1
   - pip:
-    - -r requirements/production.txt
+    - -r requirements/runtime.txt
     - -r requirements/development.txt
 
     # Brings in opencv-python, which conflicts with opencv-python-headless
@@ -15,13 +15,13 @@ dependencies:
     # Can conflict with opencv-python
     - opencv_python_headless >= 4.5.2.52
     # These package specification strings don't play nicely in
-    # requirements/production.txt when needed by setup.py
-    - git+https://github.com/dmjoy/sentinel2_angle_bands.git@54922e8#egg=s2angs
+    # requirements/runtime.txt when needed by setup.py
+    #- git+https://github.com/dmjoy/sentinel2_angle_bands.git@54922e8#egg=s2angs
 
     # find-links applies to everything after it, so make sure this is the last dep
     # References: https://stackoverflow.com/questions/60410173/find-links-conda-env
     - --find-links https://girder.github.io/large_image_wheels
-    - GDAL >= 3.3.1,!=3.4.0,!=3.3.3
+    - GDAL >= 3.4.1
 
 
 # Abuse conda environment spec and YAML notation to make a heredoc for notes

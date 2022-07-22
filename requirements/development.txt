@@ -27,3 +27,7 @@ fels >= 1.4.0
 # For writing to excel spreadsheets
 openpyxl>=3.0.9
 # openskill>=1.0.2
+
+cmd_queue >= 0.1.1
+
+# Pygments>=2.2.0

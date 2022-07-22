@@ -360,6 +360,11 @@ def gdal_single_warp(in_fpath,
 
             -te_srs - Specifies the SRS in which to interpret the coordinates given with -te.
             -te - Set georeferenced extents of output file to be created
+
+    Ignore:
+        from kwcoco.util import util_archive
+        sample_zip_fpath = ub.grabdata('https://maxar-marketing.s3.amazonaws.com/product-samples/Rome_Colosseum_2022-03-22_WV03_HD.zip')
+        util_archive.Archive.extractall(sample_zip_fpath)
     """
 
     # Coordinate Reference System of the "target" destination image
@@ -755,6 +760,19 @@ class GdalDataset(ub.NiceRepr):
         >>> ref = GdalDataset.open(path)
         >>> data = ref.GetRasterBand(1).ReadAsArray()
         >>> assert data.sum() == 37109758
+
+    Ignore:
+        # Test 404 handling
+        from watch.utils import util_gdal
+        gpath = '/vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/51R/TP2020/8/S2A_51RTP_20200811_0_L2A/B11.tif'
+        import watch
+        meta = watch.gis.geotiff.geotiff_metadata(gpath)
+        from watch.utils import util_gdal
+        infos = {}
+        try:
+            util_gdal.GdalDataset.open(gpath, 'r', virtual_retries=3)
+        except Exception as e:
+            ex = e
     """
 
     def __init__(self, __ref, _path='?', _str_mode='?'):
@@ -796,18 +814,19 @@ class GdalDataset(ub.NiceRepr):
                 # gdal.GetLastErrorType()
                 # gdal.GetLastErrorNo()
                 msg = gdal.GetLastErrorMsg()
-                raise RuntimeError(msg)
+                raise RuntimeError(msg + f' for {_path}')
         except Exception:
             import time
             if _path.startswith(GDAL_VIRTUAL_FILESYSTEM_PREFIX):
+                wait_time = 0.1
                 for _ in range(virtual_retries):
                     try:
                         __ref = gdal.Open(_path, mode)
                         if __ref is None:
                             msg = gdal.GetLastErrorMsg()
-                            raise RuntimeError(msg)
+                            raise RuntimeError(msg + f' for {_path}')
                     except Exception:
-                        time.sleep(0.01)
+                        time.sleep(wait_time)
                     else:
                         break
             if __ref is None:

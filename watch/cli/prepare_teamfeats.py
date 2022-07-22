@@ -158,8 +158,7 @@ def prep_feats(cmdline=True, **kwargs):
     else:
         size = len(gres)
 
-    # queue = tmux_queue.TMUXMultiQueue(name='teamfeat', size=size, gres=gres)
-    from watch.utils import cmd_queue
+    import cmd_queue
     queue = cmd_queue.Queue.create(
         name='watch-teamfeat',
         backend=config['backend'],

@@ -233,7 +233,7 @@ def orthorectify(in_fpath, out_fpath, geometry: shapely.geometry.Polygon,
 
     Example:
         >>> # xdoctest: +SKIP
-        >>> import seaborn_image as isns
+        >>> #import seaborn_image as isns
         >>> import matplotlib.pyplot as plt
         >>> from pystac import Item
         >>> import ubelt as ub
@@ -241,7 +241,6 @@ def orthorectify(in_fpath, out_fpath, geometry: shapely.geometry.Polygon,
         >>> import rasterio
         >>> import shapely.geometry
         >>> from watch.utils.util_raster import mask, ResampledRaster
-        >>> from watch.cli.wv_ortho import orthorectify
         >>> stac_item = Item.from_file(
         >>>     'original_18JAN07023100-M1BS-014525269010_01_P001.json')
         >>> href = ub.Path(stac_item.assets['data'].href)
@@ -253,6 +252,7 @@ def orthorectify(in_fpath, out_fpath, geometry: shapely.geometry.Polygon,
         >>>     img1 = f
         >>> geometry = shapely.geometry.shape(stac_item.geometry)
         >>> out_fpath = ub.Path('ortho') / ('gtx' + in_fpath.name)
+        >>> #from watch.cli.wv_ortho import orthorectify
         >>> out_fpath = orthorectify(in_fpath, out_fpath, geometry,
         >>>                          te_dems=False, as_vrt=False, as_utm=True)
         >>> with ResampledRaster(out_fpath, scale=0.1) as f:

@@ -12,6 +12,7 @@ import ubelt as ub
 import kwimage
 import itertools
 import numbers
+import kwcoco
 
 from os.path import join
 from watch.utils import util_raster
@@ -98,7 +99,8 @@ def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
                           enable_valid_region=False,
                           enable_intensity_stats=False,
                           workers=0,
-                          mode='thread'):
+                          mode='thread',
+                          remove_broken=False):
     """
     Aggregate populate function for fields useful to WATCH.
 
@@ -163,7 +165,8 @@ def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
         coco_dset, gids=gids, overwrite=overwrite, default_gsd=default_gsd,
         workers=workers, mode=mode,
         enable_intensity_stats=enable_intensity_stats,
-        enable_valid_region=enable_valid_region)
+        enable_valid_region=enable_valid_region,
+        remove_broken=remove_broken)
 
     if enable_video_stats:
         for vidid in ub.ProgIter(vidids, total=len(vidids), desc='populate videos'):
@@ -173,9 +176,26 @@ def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
     coco_dset._ensure_json_serializable()
 
 
-def coco_populate_geo_heuristics(coco_dset, gids=None, overwrite=False,
-                                 default_gsd=None, workers=0, mode='thread', **kw):
+def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
+                                 gids=None,
+                                 overwrite=False,
+                                 default_gsd=None,
+                                 workers=0,
+                                 mode='thread',
+                                 remove_broken=False, **kw):
     """
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> from watch.utils.kwcoco_extensions import *  # NOQA
+        >>> from watch.utils.util_data import find_smart_dvc_dpath
+        >>> import kwcoco
+        >>> dvc_dpath = find_smart_dvc_dpath()
+        >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
+        >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+        >>> coco_populate_geo_heuristics(coco_dset, overwrite=True, workers=12,
+        >>>                              keep_geotiff_metadata=False,
+        >>>                              mode='process')
+
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
@@ -196,6 +216,8 @@ def coco_populate_geo_heuristics(coco_dset, gids=None, overwrite=False,
         raise NotImplementedError(ub.paragraph(
             '''
             Cannot keep keep geotiff metadata when using process parallelism.
+            import xdev
+            xdev.embed()
             Need to serialize gdal objects (i.e. RPC transforms and
             SwigPyObject) returned from ``watch.gis.geotiff.geotiff_metadata``
             to be able do this.
@@ -206,14 +228,35 @@ def coco_populate_geo_heuristics(coco_dset, gids=None, overwrite=False,
         coco_img = coco_dset.coco_image(gid)
         if mode == 'process':
             coco_img = coco_img.detach()
-        executor.submit(coco_populate_geo_img_heuristics2, coco_img,
-                        overwrite=overwrite, default_gsd=default_gsd, **kw)
+        job = executor.submit(
+            coco_populate_geo_img_heuristics2, coco_img,
+            overwrite=overwrite, default_gsd=default_gsd, **kw)
+        job.gid = gid
+
+    broken_image_ids = []
     for job in ub.ProgIter(executor.as_completed(), total=len(executor), desc='collect populate imgs'):
-        img = job.result()
-        if mode == 'process':
-            # for multiprocessing
-            real_img = coco_dset.index.imgs[img['id']]
-            real_img.update(img)
+        gid = job.gid
+        try:
+            img = job.result()
+        except RuntimeError as ex:
+            if remove_broken and "404" in repr(ex):
+                broken_image_ids.append(gid)
+                print(f'ex={ex!r}')
+                print(f'ex={ex}')
+                print(f'ex.__dict__={ex.__dict__}')
+            else:
+                print(f'ex={ex!r}')
+                print(f'ex={ex}')
+                print(f'ex.__dict__={ex.__dict__}')
+                raise
+        else:
+            if mode == 'process':
+                # for multiprocessing
+                real_img = coco_dset.index.imgs[gid]
+                real_img.update(img)
+    if broken_image_ids:
+        print(f'There were {len(broken_image_ids)} / {len(gids)} broken images')
+        coco_dset.remove_images(broken_image_ids, verbose=True)
 
 
 @profile
@@ -443,7 +486,6 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
         keep_geotiff_metadata = False
     """
     import watch
-    import kwcoco
     sensor_coarse = obj.get('sensor_coarse', None)  # not reliable
     num_bands = obj.get('num_bands', None)
     channels = obj.get('channels', None)
@@ -1705,7 +1747,7 @@ def coco_channel_stats(coco_dset):
         for obj in CocoImage(img).iter_asset_objs():
             channels.append(obj.get('channels', 'unknown-chan'))
         chan = '|'.join(channels)
-        sensor = img.get('sensor_coarse', '')
+        sensor = img.get('sensor_coarse', '*')
         chan_hist[chan] += 1
         sensor_hist[sensor] += 1
         sensorchan_hist[sensor][chan] += 1
@@ -1869,6 +1911,7 @@ def visualize_rois(coco_dset, zoom=None):
     Matplotlib visualization of image and annotation regions on a world map
 
     Example:
+        >>> # xdoctest: +REQUIRES(--slow)
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
         >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
         >>> coco_dset = demo_kwcoco_with_heatmaps(num_videos=1)

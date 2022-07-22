@@ -180,8 +180,7 @@ def prep_splits(cmdline=False, **kwargs):
     else:
         base_fpath = ub.Path(config['base_fpath'])
 
-    # queue = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
-    from watch.utils import cmd_queue
+    import cmd_queue
     queue = cmd_queue.Queue.create(
         backend=config['backend'],
         name='watch-splits', size=2

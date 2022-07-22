@@ -6,6 +6,9 @@ def test_init_from_pretrained_state():
     from watch.tasks.fusion.fit import fit_model  # NOQA
     import kwcoco
 
+    import pytest
+    pytest.skip('slow test')
+
     # import xdev
     # xdev.make_warnings_print_tracebacks()
 

@@ -22,7 +22,6 @@ def main(cmdline=True, **kw):
         'coco_align_geotiffs',
         'coco_extract_geo_bounds',
         'geotiffs_to_kwcoco',
-        'hello_world',
         'watch_coco_stats',
         'merge_region_models',
         'project_annotations',

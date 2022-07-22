@@ -1322,8 +1322,8 @@ def clean_loaded_data(big_rows):
                 g.add_edge(p, c)
 
     if 0:
-        from watch.utils import cmd_queue
-        print(cmd_queue.graph_str(g))
+        from cmd_queue.util import graph_str
+        print(graph_str(g))
 
     # Ensure we compute total epochs for earlier models first
     merged_df['total_steps'] = merged_df['step']

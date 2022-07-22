@@ -41,6 +41,8 @@ class AddWatchFieldsConfig(scfg.Config):
         'enable_valid_region': scfg.Value(False, help='set to True to enable valid region computation'),
 
         'enable_intensity_stats': scfg.Value(False, help='if True, will compute intensity statistics on each channel of each image'),
+
+        'remove_broken': scfg.Value(False, help='if True, will remove any image that fails population (e.g. caused by a 404)')
     }
 
 

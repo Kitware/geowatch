@@ -32,9 +32,18 @@ class TextLogger(pl.callbacks.Callback):
         # Hack to log all args
         self.args = args
 
-    # def setup(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", stage: Optional[str] = None) -> None:
-    #     self._log('setup state _log')
-    #     self._log('trainer.default_root_dir = {!r}'.format(trainer.default_root_dir))
+    def setup(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", stage: Optional[str] = None) -> None:
+        # self._log('setup state _log')
+        # self._log('trainer.default_root_dir = {!r}'.format(trainer.default_root_dir))
+        import pathlib
+        self.log_dir = pathlib.Path(trainer.log_dir)
+        self.log_fpath = self.log_dir / 'text_logs.log'
+        self._log = _InstanceLogger.from_instance(trainer, self.log_fpath)
+        self._log.info('setup/(previously on_init_end)')
+        self._log.info('sys.argv = {!r}'.format(sys.argv))
+        trainer.text_logger = self
+        if self.args is not None:
+            self._log.info('args_dict = {}'.format(ub.repr2(self.args.__dict__, nl=1, sort=0)))
 
     def teardown(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', stage: Optional[str] = None) -> None:
         self._log('teardown state _log')
@@ -43,16 +52,7 @@ class TextLogger(pl.callbacks.Callback):
     #     # self._log('on_init_start')
     #     pass
 
-    def on_init_end(self, trainer: 'pl.Trainer') -> None:
-        import pathlib
-        self.log_dir = pathlib.Path(trainer.log_dir)
-        self.log_fpath = self.log_dir / 'text_logs.log'
-        self._log = _InstanceLogger.from_instance(trainer, self.log_fpath)
-        self._log.info('on_init_end')
-        self._log.info('sys.argv = {!r}'.format(sys.argv))
-        trainer.text_logger = self
-        if self.args is not None:
-            self._log.info('args_dict = {}'.format(ub.repr2(self.args.__dict__, nl=1, sort=0)))
+    # def on_init_end(self, trainer: 'pl.Trainer') -> None:
 
     def on_fit_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log.info('on_fit_start')
@@ -93,11 +93,11 @@ class TextLogger(pl.callbacks.Callback):
         self._log.info('trainer.default_root_dir = {!r}'.format(trainer.default_root_dir))
         self._log.info('trainer.log_dir = {!r}'.format(trainer.log_dir))
 
-    def on_epoch_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
-        self._log.debug('on_epoch_start')
+    # def on_epoch_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
+    #     self._log.debug('on_epoch_start')
 
-    def on_epoch_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
-        self._log.debug('on_epoch_end')
+    # def on_epoch_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
+    #     self._log.debug('on_epoch_end')
 
     def on_train_epoch_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log.debug('on_train_epoch_start')

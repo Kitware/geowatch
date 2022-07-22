@@ -7,6 +7,8 @@ import numpy as np
 from os.path import join
 import pandas as pd
 import pytorch_lightning as pl
+from packaging.version import parse as Version
+PL_VERSION = Version(pl.__version__)
 
 
 __all__ = ['TensorboardPlotter']
@@ -17,7 +19,7 @@ class TensorboardPlotter(pl.callbacks.Callback):
     Asynchronously dumps PNGs to disk visualize tensorboard scalars.
 
     CommandLine:
-        xdoctest -m watch.utils.lightning_ext.tensorboard_plotter TensorboardPlotter
+        xdoctest -m watch.utils.lightning_ext.callbacks.tensorboard_plotter TensorboardPlotter
 
     Example:
         >>> #
@@ -38,7 +40,7 @@ class TensorboardPlotter(pl.callbacks.Callback):
         >>>     print(df)
     """
 
-    def on_epoch_end(self, trainer, logs=None):
+    def _on_epoch_end(self, trainer, logs=None):
         # The following function draws the tensorboard result. This might take
         # a some non-trivial amount of time so we attempt to run in a separate
         # process.
@@ -92,6 +94,19 @@ class TensorboardPlotter(pl.callbacks.Callback):
         else:
             func(*args)
 
+    if PL_VERSION < Version('1.6'):
+        def on_epoch_end(self, trainer, logs=None):
+            return self._on_epoch_end(trainer, logs=logs)
+    else:
+        def on_train_epoch_end(self, trainer, logs=None):
+            return self._on_epoch_end(trainer, logs=logs)
+
+        def on_validation_epoch_end(self, trainer, logs=None):
+            return self._on_epoch_end(trainer, logs=logs)
+
+        def on_test_epoch_end(self, trainer, logs=None):
+            return self._on_epoch_end(trainer, logs=logs)
+
 
 def read_tensorboard_scalars(train_dpath, verbose=1, cache=1):
     """
@@ -111,7 +126,7 @@ def read_tensorboard_scalars(train_dpath, verbose=1, cache=1):
     event_paths = sorted(glob.glob(join(train_dpath, 'events.out.tfevents*')))
     # make a hash so we will re-read of we need to
     cfgstr = ub.hash_data(list(map(ub.hash_file, event_paths))) if cache else ''
-    cacher = ub.Cacher('tb_scalars', cfgstr=cfgstr, enabled=cache,
+    cacher = ub.Cacher('tb_scalars', depends=cfgstr, enabled=cache,
                        dpath=join(train_dpath, '_cache'))
     datas = cacher.tryload()
     if datas is None:

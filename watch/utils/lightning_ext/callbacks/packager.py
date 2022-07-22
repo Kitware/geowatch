@@ -4,6 +4,7 @@ Packager callback to interface with torch.package
 import pytorch_lightning as pl
 import ubelt as ub
 import copy
+from typing import Optional
 from os.path import join
 
 
@@ -83,13 +84,15 @@ class Packager(pl.callbacks.Callback):
         argparse_ext.add_arginfos_to_parser(parent_parser, arg_infos)
         return parent_parser
 
-    def on_init_end(self, trainer: 'pl.Trainer') -> None:
+    # def on_init_end(self, trainer: 'pl.Trainer') -> None:
+    def setup(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", stage: Optional[str] = None) -> None:
         """
         Finalize initialization step.
         Resolve the paths where files will be written.
         """
         # Rectify paths if we need to
-        print('on_init_start')
+        # print('on_init_start')
+        print('setup/(previously on_init_end)')
         if self.package_fpath == 'auto':
             self.package_fpath = join(trainer.default_root_dir, 'final_package.pt')
             print('setting auto self.package_fpath = {!r}'.format(self.package_fpath))
@@ -171,8 +174,21 @@ class Packager(pl.callbacks.Callback):
         print('save package_fpath = {!r}'.format(package_fpath))
 
 
+def _torch_package_monkeypatch():
+    # Monkey Patch torch.package
+    import sys
+    if sys.version_info[0:2] >= (3, 10):
+        try:
+            from torch.package import _stdlib
+            _stdlib._get_stdlib_modules = lambda: sys.stdlib_module_names
+        except Exception:
+            pass
+
+
 def default_save_package(model, package_path, verbose=1):
     import torch.package
+    _torch_package_monkeypatch()
+
     # shallow copy of self, to apply attribute hacks to
     model = copy.copy(model)
     model.trainer = None

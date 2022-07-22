@@ -42,6 +42,7 @@ import ubelt as ub
 import numpy as np
 import scriptconfig as scfg
 import io
+import warnings
 from watch.utils import kwcoco_extensions
 from watch.utils import util_kwplot
 from watch.utils import util_path
@@ -148,9 +149,10 @@ def main(cmdline=False, **kwargs):
     geo_preprop = config['geo_preprop']
     geospace_lookup = config['geospace_lookup']
     if geo_preprop == 'auto':
-        coco_img = coco_dset.coco_image(ub.peek(coco_dset.index.imgs.keys()))
-        geo_preprop = not any('geos_corners' in obj for obj in coco_img.iter_asset_objs())
-        print('auto-choose geo_preprop = {!r}'.format(geo_preprop))
+        if len(coco_dset.index.imgs):
+            coco_img = coco_dset.coco_image(ub.peek(coco_dset.index.imgs.keys()))
+            geo_preprop = not any('geos_corners' in obj for obj in coco_img.iter_asset_objs())
+            print('auto-choose geo_preprop = {!r}'.format(geo_preprop))
 
     if geo_preprop:
         kwcoco_extensions.coco_populate_geo_heuristics(
@@ -192,8 +194,13 @@ def main(cmdline=False, **kwargs):
     region_id_to_sites = expand_site_models_with_site_summaries(sites, regions)
 
     propogate = config['propogate']
+
+    viz_dpath = config['viz_dpath']
+    want_viz = bool(viz_dpath)
+
     propogated_annotations, all_drawable_infos = assign_sites_to_images(
-        coco_dset, region_id_to_sites, propogate, geospace_lookup=geospace_lookup)
+        coco_dset, region_id_to_sites, propogate,
+        geospace_lookup=geospace_lookup, want_viz=want_viz)
 
     for ann in propogated_annotations:
         coco_dset.add_annotation(**ann)
@@ -203,7 +210,6 @@ def main(cmdline=False, **kwargs):
     print('dump coco_dset.fpath = {!r}'.format(coco_dset.fpath))
     coco_dset.dump(coco_dset.fpath)
 
-    viz_dpath = config['viz_dpath']
     if viz_dpath == 'auto':
         viz_dpath = (ub.Path(coco_dset.fpath).parent / '_viz_project_anns')
     if viz_dpath:
@@ -550,7 +556,7 @@ def validate_site_dataframe(site_df):
     return status
 
 
-def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lookup='auto'):
+def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lookup='auto', want_viz=1):
     """
     Given a coco dataset (with geo information) and a list of geojson sites,
     determines which images each site-annotations should go on.
@@ -622,7 +628,6 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
                     video_ids.extend(videos_gdf.iloc[overlapping_video_indexes]['video_id'].tolist())
             video_ids = sorted(set(video_ids))
             if len(video_ids) > 1:
-                import warnings
                 warnings.warn('A site exists in more than one video')
             # assert ub.allsame(video_ids)
             if len(video_ids) == 0:
@@ -705,6 +710,17 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
             start_date = coerce_datetime2(site_summary_row['start_date'])
             end_date = coerce_datetime2(site_summary_row['end_date'])
 
+            ALLOW_BACKWARDS_DATES = True
+            if ALLOW_BACKWARDS_DATES:
+                # Some sites have backwards dates. Unfortunately we don't
+                # have any control to fix them, so we have to handle them.
+                if start_date is not None and end_date is not None:
+                    if start_date > end_date:
+                        warnings.warn(
+                            'A site has flipped start/end dates. '
+                            'Fixing here, but it should be fixed in the site model itself.')
+                        start_date, end_date = end_date, start_date
+
             flags = ~site_rows['observation_date'].isnull()
             valid_site_rows = site_rows[flags]
 
@@ -713,9 +729,9 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
             ])
 
             if start_date is not None and observation_dates[0] != start_date:
-                raise AssertionError
+                raise AssertionError(f'start_date={start_date}, obs[0]={observation_dates[0]}')
             if end_date is not None and observation_dates[-1] != end_date:
-                raise AssertionError
+                raise AssertionError(f'end_date={end_date}, obs[-1]={observation_dates[-1]}')
 
             # Assuming observations are sorted by date
             assert all([d.total_seconds() >= 0 for d in np.diff(observation_dates)])
@@ -784,6 +800,14 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
                     # Based on the status choose a kwcoco category name
                     # using the watch heuristics
                     catname = heuristics.PHASE_STATUS_TO_KWCOCO_CATNAME[status]
+
+                if catname is None:
+                    HACK_TO_PASS = 1
+                    if HACK_TO_PASS:
+                        # We should find out why this is happening
+                        warnings.warn(f'Positive annotation without a class label: status={status}, {annot_idx}, {site_row}')
+                        continue
+                    raise AssertionError(f'status={status}, {annot_idx}, {site_row}')
 
                 propogated_on = []
                 category_colors = []
@@ -856,77 +880,22 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
                         }
                         site_anns.append(ann)
 
-                # if propogate and needs_forward_propogate:
-                #     for gid in forward_gids:
-                #         img = coco_dset.imgs[gid]
-                #         img_datetime = util_time.coerce_datetime(img['date_captured'])
-                #         if propogate or img_datetime == site_row_datetime:
-                #             hack = 0
-                #             for subsite_catname, poly in zip(site_catnames, site_polygons):
-                #                 if subsite_catname in HEURISTIC_END_STATES:
-                #                     # Don't project end-states of we dont want to
-                #                     if not PROJECT_ENDSTATE:
-                #                         continue
-                #                 if hack == 0:
-                #                     propogated_on.append(img_datetime)
-                #                     hack = 1
-                #                 cid = coco_dset.ensure_category(subsite_catname)
-                #                 cat = coco_dset.index.cats[cid]
-                #                 category_colors.append(cat['color'])
-                #                 categories.append(subsite_catname)
-                #                 img['date_captured']
-                #                 ann = {
-                #                     'image_id': gid,
-                #                     'segmentation_geos': poly,
-                #                     'status': status,
-                #                     'category_id': cid,
-                #                     'track_id': track_id,
-                #                 }
-                #                 site_anns.append(ann)
+                if want_viz:
+                    drawable_summary.append(row_summary)
 
-                # if propogate and needs_backward_propogate:
-                #     forward_gids = region_gids[forward_gxs]
-                #     for gid in backward_gids:
-                #         img = coco_dset.imgs[gid]
-                #         img_datetime = util_time.coerce_datetime(img['date_captured'])
-                #         if propogate or img_datetime == site_row_datetime:
-                #             hack = 0
-                #             for catname, poly in zip(site_catnames, site_polygons):
-                #                 if catname in HEURISTIC_END_STATES:
-                #                     # Don't project end-states of we dont want to
-                #                     if not PROJECT_ENDSTATE:
-                #                         continue
-                #                 if hack == 0:
-                #                     propogated_on.append(img_datetime)
-                #                     hack = 1
-                #                 cid = coco_dset.ensure_category(catname)
-                #                 cat = coco_dset.index.cats[cid]
-                #                 category_colors.append(cat['color'])
-                #                 categories.append(catname)
-                #                 img['date_captured']
-                #                 ann = {
-                #                     'image_id': gid,
-                #                     'segmentation_geos': poly,
-                #                     'status': status,
-                #                     'category_id': cid,
-                #                     'track_id': track_id,
-                #                 }
-                #                 site_anns.append(ann)
-
-                drawable_summary.append(row_summary)
             propogated_annotations.extend(site_anns)
-            drawable_region_sites.append(drawable_summary)
+            if want_viz:
+                drawable_region_sites.append(drawable_summary)
 
-        # import xdev
-        # with xdev.embed_on_exception_context:
-        drawable_region_sites = sorted(
-            drawable_region_sites,
-            key=lambda drawable_summary: (
-                min([r['site_row_datetime'] for r in drawable_summary])
-                if len(drawable_summary) else
-                float('inf')
+        if want_viz:
+            drawable_region_sites = sorted(
+                drawable_region_sites,
+                key=lambda drawable_summary: (
+                    min([r['site_row_datetime'] for r in drawable_summary]).timestamp()
+                    if len(drawable_summary) else
+                    float('inf')
+                )
             )
-        )
 
         all_drawable_infos.append({
             'drawable_region_sites': drawable_region_sites,

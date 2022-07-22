@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+#r -*- coding: utf-8 -*-
 r"""
 Prediction script for Rutgers Material Semenatic Segmentation Models
 
@@ -24,7 +24,7 @@ CommandLine:
         --default_config_key=iarpa \
         --pred_dataset=$RUTGERS_MATERIAL_COCO_FPATH \
         --num_workers=8 \
-        --batch_size=32 --gpus 0
+        --batch_size=32 --devices auto:1
 
 """
 import os
@@ -184,7 +184,7 @@ def make_predict_config(cmdline=False, **kwargs):
 
     # TODO: use torch packages instead
     parser.add_argument("--checkpoint_fpath", type=str, help='path to checkpoint file')
-    parser.add_argument("--gpus", default=None, help="todo: hook up to lightning")
+    parser.add_argument("--devices", default=None, help="lightning devices")
 
     parser.add_argument("--batch_size", default=1, type=int, help="prediction batch size")
     parser.add_argument("--num_workers", default=0, type=str, help="data loader workers, can be set to auto")
@@ -247,7 +247,7 @@ def main(cmdline=True, **kwargs):
         torch.set_default_dtype(torch.float32)
 
     from watch.utils.lightning_ext import util_device
-    devices = util_device.coerce_devices(args.gpus)
+    devices = util_device.coerce_devices(args.devices)
     if len(devices) > 1:
         raise NotImplementedError('TODO: handle multiple devices')
     device = devices[0]

@@ -5,7 +5,6 @@ Prediction script for Rutgers Material Semenatic Segmentation Models
 CommandLine:
 
     export CUDA_VISIBLE_DEVICES=1
-
     DVC_DPATH=$(smartwatch_dvc)
 
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
@@ -23,7 +22,7 @@ CommandLine:
         --default_config_key=iarpa \
         --pred_dataset=$RUTGERS_MATERIAL_COCO_FPATH \
         --num_workers=avail \
-        --batch_size=4 --gpus 1
+        --batch_size=4 --devices auto:1
         --export_raw_features True
 
 """
@@ -82,7 +81,7 @@ class Evaluator(object):
         >>>     test_dataset=src_coco_fpath,
         >>>     pred_dataset=dst_coco_fpath,
         >>>     feat_dpath=dst_coco_fpath.parent / '_assets/test_rutgers_material_seg',
-        >>>     gpus='auto:1',
+        >>>     devices='auto:1',
         >>>     num_workers='avail',
         >>>     save_raw_features=1,
         >>>     batch_size=32,
@@ -646,7 +645,7 @@ def make_predict_config(cmdline=False, **kwargs):
 
     # TODO: use torch packages instead
     parser.add_argument("--checkpoint_fpath", type=str, help='path to checkpoint file')
-    parser.add_argument("--gpus", default=None, help="todo: hook up to lightning")
+    parser.add_argument("--devices", default=None, help="lightning devices")
 
     parser.add_argument("--batch_size", default=1, type=int, help="prediction batch size")
     parser.add_argument("--num_workers", default=0, type=str, help="data loader workers, can be set to auto")
@@ -704,10 +703,10 @@ def build_evaler(cmdline=False, **kwargs):
 
     from watch.utils.lightning_ext import util_device
     from watch.utils.lightning_ext import util_globals
-    devices = util_device.coerce_devices(args.gpus)
+    devices = util_device.coerce_devices(args.devices)
     num_workers = util_globals.coerce_num_workers(args.num_workers)
     if len(devices) > 1:
-        print('args.gpus = {!r}'.format(args.gpus))
+        print('args.devices = {!r}'.format(args.devices))
         print('devices = {!r}'.format(devices))
         raise NotImplementedError('TODO: handle multiple devices')
     device = devices[0]

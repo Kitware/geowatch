@@ -269,6 +269,7 @@ def main(cmdline=True, **kw):
         >>> new_dset = main(cmdline, **kw)
 
     Example:
+        >>> # xdoctest: +REQUIRES(--slow)
         >>> from watch.cli.coco_align_geotiffs import *  # NOQA
         >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
         >>> coco_dset = demo_kwcoco_with_heatmaps(num_videos=2, num_frames=2)
@@ -453,6 +454,7 @@ def main(cmdline=True, **kw):
     ]
     to_extract = cube.query_image_overlaps(region_df)
 
+    # SUPER HACK TODO: We could remove channels we don't care about.
     for image_overlaps in ub.ProgIter(to_extract, desc='extract ROI videos', verbose=3):
         # tracker.print_diff()
         video_name = image_overlaps['video_name']
@@ -474,10 +476,19 @@ def main(cmdline=True, **kw):
 
     new_dset.fpath = dst_fpath
     print('Dumping new_dset.fpath = {!r}'.format(new_dset.fpath))
-    new_dset.reroot(new_root=output_bundle_dpath, absolute=False)
-    new_dset.dump(new_dset.fpath, newlines=True)
+    try:
+        rerooted_dataset = new_dset.copy()
+        rerooted_dataset = rerooted_dataset.reroot(new_root=output_bundle_dpath, absolute=False)
+    except Exception:
+        # Hack to fix broken pipeline, todo: find robust fix
+        hack_region_id = paths[0].stem
+        rerooted_dataset = new_dset.copy()
+        rerooted_dataset.reroot(new_prefix=hack_region_id)
+        rerooted_dataset.reroot(new_root=output_bundle_dpath, absolute=False)
+
+    rerooted_dataset.dump(rerooted_dataset.fpath, newlines=True)
     print('finished')
-    return new_dset
+    return rerooted_dataset
 
 
 class SimpleDataCube(object):
@@ -697,7 +708,21 @@ class SimpleDataCube(object):
 
                 cand_gids = cube.img_geos_df.iloc[gidxs].gid
                 cand_datecaptured = cube.coco_dset.images(cand_gids).lookup('date_captured')
+
                 cand_datetimes = [util_time.coerce_datetime(c) for c in cand_datecaptured]
+
+                # By reducing the granularity we can group nearly
+                # identical images together. FIXME: Configure
+                REDUCE_GRANULARITY = True
+                if REDUCE_GRANULARITY:
+                    # Reduce images taken with the hour (does not account for
+                    # borders). Better method would be agglomerative
+                    # clustering.
+                    reduced = []
+                    for dt in cand_datetimes:
+                        new = dt.replace(minute=0, second=0, microsecond=0)
+                        reduced.append(new)
+                    cand_datetimes = reduced
 
                 if query_start_date is not None:
                     query_start_datetime = util_time.coerce_datetime(query_start_date)
@@ -789,6 +814,7 @@ class SimpleDataCube(object):
             kwcoco.CocoDataset: the given or new dataset that was modified
 
         Example:
+            >>> # xdoctest: +REQUIRES(--slow)
             >>> from watch.cli.coco_align_geotiffs import *  # NOQA
             >>> cube, region_df = SimpleDataCube.demo(with_region=True)
             >>> extract_dpath = ub.ensure_app_cache_dir('watch/test/coco_align_geotiff/demo_extract_overlaps')

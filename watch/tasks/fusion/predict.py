@@ -66,7 +66,7 @@ def make_predict_config(cmdline=False, **kwargs):
     # parser.add_argument('--pred_dpath', dest='pred_dpath', type=pathlib.Path, help='path to dump results. Deprecated, do not use.')
 
     parser.add_argument('--package_fpath', type=str)
-    parser.add_argument('--gpus', default=None, help='todo: hook up to lightning')
+    parser.add_argument('--devices', default=None, help='lightning devices')
     parser.add_argument('--thresh', type=smartcast, default=0.01)
 
     parser.add_argument('--with_change', type=smartcast, default='auto')
@@ -147,7 +147,7 @@ def predict(cmdline=False, **kwargs):
         >>> from watch.tasks.fusion.predict import *  # NOQA
         >>> args = None
         >>> cmdline = False
-        >>> gpus = None
+        >>> devices = None
         >>> test_dpath = ub.ensure_app_cache_dir('watch/test/fusion/')
         >>> results_path = ub.ensuredir((test_dpath, 'predict'))
         >>> ub.delete(results_path)
@@ -171,7 +171,7 @@ def predict(cmdline=False, **kwargs):
         ...     'max_steps': 1,
         ...     'learning_rate': 1e-5,
         ...     'num_workers': 0,
-        ...     'gpus': gpus,
+        ...     'devices': devices,
         ... }
         >>> package_fpath = fit_model(**fit_kwargs)
         >>> # Predict via that model
@@ -182,7 +182,7 @@ def predict(cmdline=False, **kwargs):
         >>>     'datamodule': 'KWCocoVideoDataModule',
         >>>     'batch_size': 1,
         >>>     'num_workers': 0,
-        >>>     'gpus': gpus,
+        >>>     'devices': devices,
         >>> }
         >>> result_dataset = predict(**kwargs)
         >>> dset = result_dataset
@@ -206,10 +206,12 @@ def predict(cmdline=False, **kwargs):
         >>>         warnings.warn('should have some change predictions elsewhere')
         >>> coco_img = dset.images().coco_images[1]
         >>> # Test that new quantization does not existing APIs
-        >>> pred1 = coco_img.delay('salient').finalize(nodata='float')
-        >>> pred2 = coco_img.delay('salient').finalize(nodata='float', dequantize=False)
+        >>> pred1 = coco_img.delay('salient', nodata_method='float').finalize()
         >>> assert pred1.max() <= 1
-        >>> assert pred2.max() > 1
+        >>> # new delayed image does not make it easy to remove dequantization
+        >>> # add test back in if we add support for that.
+        >>> # pred2 = coco_img.delay('salient').finalize(nodata_method='float', dequantize=False)
+        >>> # assert pred2.max() > 1
     """
     args = make_predict_config(cmdline=cmdline, **kwargs)
     config = args.__dict__
@@ -257,6 +259,17 @@ def predict(cmdline=False, **kwargs):
         state_dict = checkpoint['state_dict']
         method.load_state_dict(state_dict)
 
+    # Hack to fix GELU issue
+    FIX_GELU_ISSUE = True
+    if FIX_GELU_ISSUE:
+        # Torch 1.12 added an approximate parameter that our old models dont
+        # have. Monkey patch it in.
+        # https://github.com/pytorch/pytorch/pull/61439
+        for name, mod in method.named_modules():
+            if mod.__class__.__name__ == 'GELU':
+                if not hasattr(mod, 'approximate'):
+                    mod.approximate = 'none'
+
     method.eval()
     method.freeze()
 
@@ -265,10 +278,7 @@ def predict(cmdline=False, **kwargs):
 
     # init datamodule from args
     datamodule_class = getattr(datamodules, args.datamodule)
-    datamodule_vars = ub.compatible(
-        vars(args),
-        datamodule_class.__init__,
-    )
+    datamodule_vars = datamodule_class.compatible(vars(args))
 
     parsetime_vals = ub.dict_isect(datamodule_vars, args.datamodule_defaults)
     need_infer = {k: v for k, v in parsetime_vals.items() if v == 'auto'}
@@ -372,7 +382,7 @@ def predict(cmdline=False, **kwargs):
     test_torch_dataset.inference_only = True
     test_dataloader = datamodule.test_dataloader()
 
-    T, H, W = test_torch_dataset.sample_shape
+    T, H, W = test_torch_dataset.window_dims
 
     # Create the results dataset as a copy of the test CocoDataset
     result_dataset: kwcoco.CocoDataset = test_coco_dataset.copy()
@@ -428,8 +438,8 @@ def predict(cmdline=False, **kwargs):
     })
 
     from watch.utils.lightning_ext import util_device
-    print('args.gpus = {!r}'.format(args.gpus))
-    devices = util_device.coerce_devices(args.gpus)
+    print('args.devices = {!r}'.format(args.devices))
+    devices = util_device.coerce_devices(args.devices)
     print('devices = {!r}'.format(devices))
     if len(devices) > 1:
         raise NotImplementedError('TODO: handle multiple devices')
@@ -615,7 +625,7 @@ def predict(cmdline=False, **kwargs):
     with torch.set_grad_enabled(False):
         # FIXME: that data loader should not be producing incorrect sensor/mode
         # pairs in the first place!
-        EMERGENCY_INPUT_AGREEMENT_HACK = 0
+        EMERGENCY_INPUT_AGREEMENT_HACK = 1
         # prog.set_extra(' <will populate stats after first video>')
         _batch_iter = iter(prog)
         for orig_batch in _batch_iter:
@@ -1293,7 +1303,7 @@ if __name__ == '__main__':
         --pred_dataset=/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/training/raven/brodie/uky_invariants/features_22_03_14/runs/BASELINE_EXPERIMENT_V001/pred.kwcoco.json \
         --test_dataset=/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json \
         --num_workers=5 \
-        --gpus=0, \
+        --devices=0, \
         --batch_size=1
 
     Develop TTA:
@@ -1330,7 +1340,7 @@ if __name__ == '__main__':
         --with_change=False \
         --package_fpath=$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=19-step=13659-v1.pt \
         --num_workers=5 \
-        --gpus=0, \
+        --devices=0, \
         --batch_size=1 \
         --exclude_sensors=L8 \
         --pred_dataset=$PRED_DATASET \
@@ -1417,7 +1427,7 @@ if __name__ == '__main__':
     TEST_DATASET=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1.kwcoco.json
     EXPT_PATTERN="*"
     python -m watch.tasks.fusion.schedule_evaluation \
-            --gpus="0,1" \
+            --devices="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=19-step=13659-v1.pt" \
             --test_dataset="$TEST_DATASET" \
             --workdir="$DVC_DPATH/_tmp/smalltest" \
