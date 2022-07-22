@@ -16,7 +16,7 @@ dependencies:
     - opencv_python_headless >= 4.5.2.52
     # These package specification strings don't play nicely in
     # requirements/runtime.txt when needed by setup.py
-    - git+https://github.com/dmjoy/sentinel2_angle_bands.git@54922e8#egg=s2angs
+    #- git+https://github.com/dmjoy/sentinel2_angle_bands.git@54922e8#egg=s2angs
 
     # find-links applies to everything after it, so make sure this is the last dep
     # References: https://stackoverflow.com/questions/60410173/find-links-conda-env

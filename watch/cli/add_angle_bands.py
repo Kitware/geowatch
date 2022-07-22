@@ -8,7 +8,8 @@ import tempfile
 import subprocess
 import shutil
 
-from s2angs.cli import generate_anglebands
+# Deprecate?
+# from s2angs.cli import generate_anglebands
 import pystac
 
 from watch.utils.util_stac import parallel_map_items, maps
