@@ -41,7 +41,7 @@ girder_client>=3.1.6
 lxml>=4.6.3
 tempenv>=0.2.0
 pystac_client>=0.4.0
-scriptconfig>=0.6.1
+scriptconfig>=0.6.3
 pygtrie>=2.3.3
 protobuf>=3.15.8
 networkx>=2.5.1
@@ -57,7 +57,7 @@ lark_cython >= 0.0.11
 # Imaging
 distinctipy>=1.2.1
 kwimage>=0.9.0
-kwcoco>=0.3.0
+kwcoco>=0.3.2
 Pillow>=8.0.1
 albumentations>=1.0.0
 scikit_image>=0.18.1
