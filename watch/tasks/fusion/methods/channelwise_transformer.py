@@ -1730,7 +1730,10 @@ class MultimodalTransformer(pl.LightningModule):
             >>> # Use one of our fusion.architectures in a test
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
-            >>> model = self = methods.MultimodalTransformer(arch_name="smt_it_stm_p8", input_channels=13)
+            >>> model = self = methods.MultimodalTransformer(
+            >>>     arch_name="smt_it_joint_p2", input_channels=5,
+            >>>     change_head_hidden=0, saliency_head_hidden=0,
+            >>>     class_head_hidden=0)
 
             >>> # Save the model (TODO: need to save datamodule as well)
             >>> model.save_package(package_path)
@@ -1765,8 +1768,10 @@ class MultimodalTransformer(pl.LightningModule):
 
             >>> # Use one of our fusion.architectures in a test
             >>> self = methods.MultimodalTransformer(
-            >>>     arch_name="smt_it_stm_p8", classes=classes,
-            >>>     dataset_stats=dataset_stats, input_channels=datamodule.input_channels)
+            >>>     arch_name="smt_it_joint_p2", classes=classes,
+            >>>     dataset_stats=dataset_stats, input_channels=datamodule.input_channels,
+            >>>     change_head_hidden=0, saliency_head_hidden=0,
+            >>>     class_head_hidden=0)
 
             >>> # We have to run an input through the module because it is lazy
             >>> batch = ub.peek(iter(datamodule.train_dataloader()))

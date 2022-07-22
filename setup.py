@@ -57,7 +57,7 @@ def parse_description():
     return ''
 
 
-def parse_requirements1(fname='requirements.txt', versions=True):
+def parse_requirements(fname='requirements.txt', versions=True):
     """
     Parse the package dependencies listed in a requirements file but strips
     specific versioning information.
@@ -196,7 +196,6 @@ except Exception:
     README = ''
 
 # try:
-parse_requirements = parse_requirements1
 REQUIREMENTS = (
     parse_requirements('requirements/runtime.txt')
 )
