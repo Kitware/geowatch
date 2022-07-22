@@ -224,7 +224,7 @@ class MultimodalTransformer(pl.LightningModule):
         >>>         print(f'  * frame_idx={frame_idx}')
         >>>         print(f'  * frame.sensor = {frame["sensor"]}')
         >>>         for mode_code, mode_val in frame['modes'].items():
-        >>>             print(f'      * {mode_code=} @shape={mode_val.shape}')
+        >>>             print(f'      * {mode_code=} @shape={mode_val.shape}, num_nam={mode_val.isnan().sum()}')
         >>> print('(STEP 3): THE REST OF THE TEST')
         >>> #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
         >>> self = MultimodalTransformer(arch_name='smt_it_joint_p8',
@@ -245,6 +245,10 @@ class MultimodalTransformer(pl.LightningModule):
         >>>     with torch.profiler.record_function("model_inference"):
         >>>         output = self.forward_step(batch, with_loss=True)
         >>> print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
+
+    Ignore:
+        kwplot.autompl()
+        kwplot.imshow(dataset.draw_item(batch[0]))
     """
     _HANDLES_NANS = True
 
@@ -746,22 +750,23 @@ class MultimodalTransformer(pl.LightningModule):
             >>> self = methods.MultimodalTransformer(
             >>>     # ===========
             >>>     # Backbone
-            >>>     #arch_name='smt_it_joint_p2',
-            >>>     arch_name='smt_it_stm_p1',
-            >>>     learning_rate=1e-6,
+            >>>     arch_name='smt_it_joint_p2',
+            >>>     #arch_name='smt_it_stm_p8',
+            >>>     learning_rate=1e-8,
             >>>     #attention_impl='performer',
             >>>     attention_impl='exact',
             >>>     decoder='segmenter',
+            >>>     #decoder='mlp',
             >>>     #arch_name='deit',
-            >>>     change_loss='focal',
+            >>>     change_loss='dicefocal',
             >>>     #class_loss='cce',
             >>>     class_loss='dicefocal',
-            >>>     saliency_loss='focal',
+            >>>     saliency_loss='dicefocal',
             >>>     # ===========
             >>>     # Change Loss
             >>>     global_change_weight=1.00,
             >>>     positive_change_weight=1.0,
-            >>>     negative_change_weight=0.05,
+            >>>     negative_change_weight=0.5,
             >>>     # ===========
             >>>     # Class Loss
             >>>     global_class_weight=1.00,
@@ -849,6 +854,7 @@ class MultimodalTransformer(pl.LightningModule):
                 outputs['item_losses']
                 loss = outputs['loss']
                 if torch.any(torch.isnan(loss)):
+                    print('NAN OUTPUT!!!')
                     print('loss = {!r}'.format(loss))
                     print('prev = {!r}'.format(prev))
                     ex = Exception('prev = {!r}'.format(prev))

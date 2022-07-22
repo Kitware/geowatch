@@ -1725,6 +1725,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> dvc_dpath = watch.find_smart_dvc_dpath()
             >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
             >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data_nowv_train.kwcoco.json'
+            >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data_nowv_vali.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> #rng = kwarray.ensure_rng(0)
             >>> #vidid = rng.choice(coco_dset.videos())
@@ -1826,7 +1827,10 @@ class KWCocoVideoDataset(data.Dataset):
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> #channels = '|'.join(sorted(set(ub.flatten([c.channels.fuse().as_list() for c in coco_dset.images().coco_images]))))
             >>> #channels = '|'.join(sorted(set(ub.flatten([kwcoco.ChannelSpec.coerce(c).fuse().as_list() for c in groups.keys()]))))
-            >>> channels = '(sensor0,sensor1,sensor2):' + '|'.join(sorted(set(ub.flatten([c.channels.fuse().as_list() for c in coco_dset.images().coco_images]))))
+            >>> # Case where all channels from sensors are aligned and padded with nans
+            >>> # channels = '(sensor0,sensor1,sensor2):' + '|'.join(sorted(set(ub.flatten([c.channels.fuse().as_list() for c in coco_dset.images().coco_images]))))
+            >>> # Each sensor uses all of its own channels
+            >>> channels = None
             >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 256, 256), channels=channels, normalize_perframe=False, true_multimodal=True)
             >>> self.disable_augmenter = False
             >>> index = 0
@@ -1849,8 +1853,8 @@ class KWCocoVideoDataset(data.Dataset):
 
             # Select the frame index of the image of interest causing issues
             # As well as the band
-            frame_index = 2
-            band = 'B11'
+            frame_index = 1
+            band = 'X.2'
 
             gid = tr['gids'][frame_index]
             sl = tr['space_slice']
@@ -1879,7 +1883,7 @@ class KWCocoVideoDataset(data.Dataset):
             tr_frame['gids'] = [gid]
             tr_frame['channels'] = stream
             sample = sampler.load_sample(
-                tr_frame, with_annots=first_with_annot,
+                tr_frame, with_annots=0,
                 nodata='float',
                 padkw={'constant_values': np.nan},
                 dtype=np.float32
@@ -2627,7 +2631,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (6, 256, 256)
-            >>> channels = 'blue|green|red|nir|swir16'
+            >>> channels = '(L8,S2):(blue|green|red|nir|swir16),S2:red|green|blue'
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, neg_to_pos_ratio=1.0)
             >>> item = self[100]
             >>> #self.compute_dataset_stats(num=10)
@@ -2681,39 +2685,55 @@ class KWCocoVideoDataset(data.Dataset):
         # what is registered in the dataset. Need to find a good way to account
         # for this.
 
-        # Turn off if this breaks old models
-        FIX_CSPEC = 1
-
         # Make a list of all unique modes in the dataset.
-        unique_sensor_modes = set(sensor_mode_hist.keys())
-        if True:
-            print('Looking for unique modes')
-            # This looks at the entire dataset, might want to
-            # make a better way of getting this info.
-            # self.sampler.dset.videos().images
-            coco_images = self.sampler.dset.images().coco_images
-            hacked = set()
-            for c in coco_images:
-                sspec = c.img.get('sensor_coarse', '*')
-                img_chans = c.channels.fuse().normalize()
+        NEW = 1
+        if NEW:
+            # User specifies all of this explicitly now
+            unique_sensor_modes = set(
+                (s.sensor.spec, s.chans.spec)
+                for s in self.input_sensorchan.streams())
+        else:
+            FIX_CSPEC = 1
+            # Make a list of all unique modes in the dataset.
+            unique_sensor_modes = set(sensor_mode_hist.keys())
+            if True:
+                print('Looking for unique modes')
+                # This looks at the entire dataset, might want to
+                # make a better way of getting this info.
+                # self.sampler.dset.videos().images
+                coco_images = self.sampler.dset.images().coco_images
+                hacked = set()
+                for c in coco_images:
+                    sspec = c.img.get('sensor_coarse', '*')
+                    img_chans = c.channels.fuse().normalize()
 
-                # TODO: the input_channels should eventually define
-                # the sensor so we can do a specific lookup.
-                # In the meantime, hack it.
-                if FIX_CSPEC:
-                    canidates = self.input_channels & img_chans
-                    for a in canidates.streams():
-                        for b in self.input_channels.streams():
-                            if a.spec == b.spec:
-                                hacked.add((sspec, a.spec))
-                else:
-                    # Ensure channels are returned in requested order
-                    cspec = (self.input_channels & c.channels.fuse().normalize()).fuse().normalize().spec
-                    if cspec:
-                        hacked.add((sspec, cspec))
-            unique_sensor_modes.update(hacked)
-            print('unique_sensor_modes = {}'.format(ub.repr2(unique_sensor_modes, nl=1)))
+                    # TODO: the input_channels should eventually define
+                    # the sensor so we can do a specific lookup.
+                    # In the meantime, hack it.
 
+                    # Get only the requested bands for this sensor.
+                    sensor_input_chans = self.input_sensorchan.matching_sensor(sspec).chans
+
+                    if FIX_CSPEC:
+                        # # Get only the requested bands for this sensor.
+                        # sensor_input_chans = self.input_sensorchan.matching_sensor(sspec).chans
+                        # canidates = sensor_input_chans & img_chans
+                        canidates = sensor_input_chans & img_chans
+                        for a in canidates.streams():
+                            for b in sensor_input_chans.streams():
+                                if a.spec == b.spec:
+                                    hacked.add((sspec, a.spec))
+                    else:
+                        # Ensure channels are returned in requested order
+                        cspec = (self.input_channels & c.channels.fuse().normalize()).fuse().normalize().spec
+                        if cspec:
+                            hacked.add((sspec, cspec))
+                unique_sensor_modes.update(hacked)
+
+        print('unique_sensor_modes = {}'.format(ub.repr2(unique_sensor_modes, nl=1)))
+
+        # TODO: we can compute the intensity histogram much more efficiently by
+        # only doing it for unique channels (which might be duplicated)
         prog = ub.ProgIter(loader, desc='estimate dataset stats')
         for batch_items in prog:
             for item in batch_items:
