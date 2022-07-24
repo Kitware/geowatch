@@ -92,7 +92,7 @@ class PrepareTA2Config(scfg.Config):
         'collated': scfg.Value([True], nargs='+', help='set to false if the input data is not collated'),
 
         'backend': scfg.Value('serial', help='can be serial, tmux, or slurm. Using tmux is recommended.'),
-        'max_queue_size': scfg.Value(100, help='the number of regions allowed to be processed in parallel with tmux backend'),
+        'max_queue_size': scfg.Value(10, help='the number of regions allowed to be processed in parallel with tmux backend'),
         'max_regions': None,
 
         'aws_profile': scfg.Value('iarpa', help='AWS profile to use for remote data access'),

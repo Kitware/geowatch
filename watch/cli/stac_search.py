@@ -24,7 +24,7 @@ CommandLine:
         --start_date="$START_DATE" \
         --end_date="$END_DATE" \
         --cloud_cover=40 \
-        --sensors=L2 \
+        --sensors=sentinel-s2-l2a-cogs \
         --out_fpath "$SEARCH_FPATH"
     cat "$SEARCH_FPATH"
 
@@ -54,6 +54,40 @@ CommandLine:
         --ignore_duplicates=0 \
         --visualize=True \
         --serial=True --run=1
+
+
+CommandLine:
+    # Alternate invocation
+    # Create a demo region file
+    xdoctest watch.demo.demo_region demo_khq_region_fpath
+
+    DATASET_SUFFIX=DemoKHQ-2022-06-10-V3
+    DEMO_DPATH=$HOME/.cache/watch/demo/datasets
+    REGION_FPATH="$HOME/.cache/watch/demo/annotations/KHQ_R001.geojson"
+    SITE_GLOBSTR="$HOME/.cache/watch/demo/annotations/KHQ_R001_sites/*.geojson"
+    START_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.start_date' "$REGION_FPATH")
+    END_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.end_date' "$REGION_FPATH")
+    REGION_ID=$(jq -r '.features[] | select(.properties.type=="region") | .properties.region_id' "$REGION_FPATH")
+    SEARCH_FPATH=$DEMO_DPATH/stac_search.json
+    RESULT_FPATH=$DEMO_DPATH/all_sensors_kit/${REGION_ID}.input
+
+    mkdir -p "$DEMO_DPATH"
+
+    # Define SMART_STAC_API_KEY
+    source "$HOME"/code/watch/secrets/secrets
+
+    # Delete this to prevent duplicates
+    rm -f "$RESULT_FPATH"
+    # Create the .input file
+    python -m watch.cli.stac_search \
+        --region_file "$REGION_FPATH" \
+        --api_key=env:SMART_STAC_API_KEY \
+        --search_json "auto" \
+        --cloud_cover 10 \
+        --sensors=TA1-L8-ACC \
+        --mode area \
+        --verbose 2 \
+        --outfile "${RESULT_FPATH}"
 """
 import json
 import os
@@ -62,9 +96,68 @@ import uuid
 import pystac_client
 from shapely.geometry import shape
 from watch.utils import util_logging
+import ubelt as ub
 import scriptconfig as scfg
 
 
+class StacSearchConfig(scfg.Config):
+    """
+    Execute a STAC query
+    """
+    default = {
+        'outfile': scfg.Value(
+            None,
+            help='output file name for STAC items',
+            short_alias=['o'],
+            required=True
+        ),
+
+        'region_globstr': scfg.Value(None, help='if specified, run over multiple region files and ignore "region_file" and "site_file"'),
+
+        'max_products_per_region': scfg.Value(None, help='does uniform affinity sampling over time to filter down to this many results per region'),
+
+        'region_file': scfg.Value(
+            None,
+            help='path to a region geojson file; required if mode is area',
+            short_alias=['rf']
+        ),
+        'search_json': scfg.Value(
+            None, help=ub.paragraph(
+                '''
+                json string or path to json file containing STAC search
+                parameters. If "auto", then parameters are inferred from
+                '''),
+            short_alias=['sj']
+        ),
+        'site_file': scfg.Value(
+            None,
+            help='path to a site geojson file; required if mode is id',
+            short_alias=['sf']
+        ),
+        'mode': scfg.Value(
+            'id',
+            help='"area" to search a bbox or "id" to provide a list of stac IDs',
+            short_alias=['m']
+        ),
+        's3_dest': scfg.Value(
+            None,
+            help='s3 URI for output file',
+            short_alias=['s']
+        ),
+        'verbose': scfg.Value(
+            2,
+            help='verbose of logging [0, 1 or 2]',
+            type=int,
+            short_alias=['v']
+        ),
+
+        'cloud_cover': scfg.Value(10, help='maximum cloud cover percentage (only used if search_json is "auto")'),
+        'sensors': scfg.Value("L2", help='(only used if search_json is "auto")'),
+        'api_key': scfg.Value('env:SMART_STAC_API_KEY', help='The API key or where to get it (only used if search_json is "auto")'),
+    }
+
+
+# DEPRECATE FOR ITEMS IN STAC_BUILDER (which maybe moves somewhere else?)
 DEFAULT_STAC_CONFIG = {
     #"Landsat 8": {
     #    "provider": "https://api.smart-stac.com",
@@ -128,6 +221,8 @@ class StacSearcher:
                     query, headers, max_products_per_region=None):
         self.logger.info('Processing ' + provider)
         catalog = pystac_client.Client.open(provider, headers=headers)
+
+
         daterange = [start, end]
         search = catalog.search(
             collections=collections,
@@ -136,7 +231,16 @@ class StacSearcher:
             query=query)
 
         # Found features
-        items = search.get_all_items()
+        try:
+            items = search.get_all_items()
+        except pystac_client.exceptions.APIError as ex:
+            print('ERROR ex = {}'.format(ub.repr2(ex, nl=1)))
+            if 'no such index' in str(ex):
+                print('You may have the wrong collection. Listing available')
+                available_collections = list(catalog.get_all_collections())
+                print('available_collections = {}'.format(ub.repr2(available_collections, nl=1)))
+                pass
+            raise
         features = items.to_dict()['features']
 
         self.logger.info('Search found %s items' % str(len(items)))
@@ -180,59 +284,6 @@ class StacSearcher:
             with open(outfile, 'a') as the_file:
                 the_file.write(json.dumps(item.to_dict()) + '\n')
         self.logger.info('Saved STAC result to: ' + outfile)
-
-
-class StacSearchConfig(scfg.Config):
-    """
-    """
-    default = {
-        'outfile': scfg.Value(
-            None,
-            help='output file name for STAC items',
-            short_alias=['o'],
-            required=True
-        ),
-
-        'region_globstr': scfg.Value(None, help='if specified, run over multiple region files and ignore "region_file" and "site_file"'),
-
-        'max_products_per_region': scfg.Value(None, help='does uniform affinity sampling over time to filter down to this many results per region'),
-
-        'region_file': scfg.Value(
-            None,
-            help='path to a region geojson file; required if mode is area',
-            short_alias=['rf']
-        ),
-        'search_json': scfg.Value(
-            None,
-            help='json string or path to json file containing STAC search parameters',
-            short_alias=['sj']
-        ),
-        'site_file': scfg.Value(
-            None,
-            help='path to a site geojson file; required if mode is id',
-            short_alias=['sf']
-        ),
-        'mode': scfg.Value(
-            'id',
-            help='"area" to search a bbox or "id" to provide a list of stac IDs',
-            short_alias=['m']
-        ),
-        's3_dest': scfg.Value(
-            None,
-            help='s3 URI for output file',
-            short_alias=['s']
-        ),
-        'verbose': scfg.Value(
-            2,
-            help='verbose of logging [0, 1 or 2]',
-            type=int,
-            short_alias=['v']
-        ),
-
-        'cloud_cover': scfg.Value(10, help='maximum cloud cover percentage (ignored if search_json given)'),
-        'sensors': scfg.Value("L2", help='(ignored if search_json given)'),
-        'api_key': scfg.Value('env:SMART_STAC_API_KEY', help='The API key or where to get it (ignored if search_json given)'),
-    }
 
 
 def main(cmdline=True, **kwargs):

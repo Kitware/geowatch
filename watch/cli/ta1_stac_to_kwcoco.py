@@ -228,7 +228,7 @@ def make_coco_aux_from_stac_asset(asset_name,
             if asset_href.endswith(IGNORE_SUFFIXES):
                 return None
         print("* Warning * Couldn't determine channels for asset "
-              "at: '{}'".format(asset_href))
+              "at: '{}'. Asset will be ignored.".format(asset_href))
         return None
 
     if assume_relative:

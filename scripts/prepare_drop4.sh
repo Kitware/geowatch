@@ -46,14 +46,14 @@ python -m watch.cli.prepare_ta2_dataset \
     --requester_pays=True \
     --fields_workers=100 \
     --convert_workers=8 \
-    --max_queue_size=100 \
-    --align_workers=26 \
+    --max_queue_size=24 \
+    --align_workers=12 \
     --cache=1 \
     --ignore_duplicates=1 \
     --separate_region_queues=1 \
     --separate_align_jobs=1 \
     --visualize=True \
-    --backend=tmux --run=0
+    --backend=tmux --run=1
 
 #mkdir -p "$DEMO_DPATH"
 ## Create the search json wrt the sensors and processing level we want
@@ -87,14 +87,13 @@ small_onesite(){
     source ~/code/watch/secrets/secrets
     #SENSORS=TA1-S2-L8-ACC
     #SENSORS=L2-S2
-    SENSORS=L2-L8
+    #SENSORS=L2-L8
+    #SENSORS=TA1-S2-ACC
+    SENSORS=TA1-L8-ACC
     #SENSORS=L2-S2-L8
     REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/US_R004.geojson"
-    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/US_R004.geojson"
-    DATASET_SUFFIX=Drop4-2022-07-18-$SENSORS-demo
-
-    export AWS_DEFAULT_PROFILE=iarpa
-    export AWS_SECRET_ACCESS_KEY=$SMART_STAC_API_KEY
+    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/US_R004_*.geojson"
+    DATASET_SUFFIX=Drop4-2022-07-24-$SENSORS-onesite
 
     # Test credentials
     #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
@@ -115,10 +114,10 @@ small_onesite(){
         --region_globstr="$REGION_GLOBSTR" \
         --site_globstr="$SITE_GLOBSTR" \
         --max_products_per_region=3 \
-        --fields_workers=0 \
-        --convert_workers=0 \
-        --align_workers=0 \
-        --cache=0 \
+        --fields_workers=30 \
+        --convert_workers=20 \
+        --align_workers=20 \
+        --cache=1 \
         --ignore_duplicates=1 \
         --visualize=True \
         --backend=serial --run=1
