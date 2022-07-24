@@ -1621,6 +1621,8 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
             except RuntimeError:
                 # Data is likely corrupted
                 needs_recompute = True
+                print(f'The data exists {dst_gpath}, but is corrupted. Recomputing')
+                dst_gpath.delete()
                 pass
             else:
                 ref = None
