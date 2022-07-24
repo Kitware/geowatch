@@ -1609,10 +1609,26 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
 
     already_exists = exists(dst_gpath)
     needs_recompute = not (already_exists and keep in {'img', 'roi-img'})
+
     if not needs_recompute:
-        if 'crop_20191014T130000Z_S23.539915W046.611400_S23.283329W046.288255_S2_0' in dst_gpath:
-            import xdev
-            xdev.embed()
+        DOUBLE_CHECK = 1
+        if DOUBLE_CHECK:
+            # Sometimes the data will exist, but it's bad data. Check for this.
+            dst_gpath = ub.Path(dst_gpath)
+            try:
+                ref = util_gdal.GdalOpen(dst_gpath, mode='r')
+                ref
+            except RuntimeError:
+                # Data is likely corrupted
+                needs_recompute = True
+                pass
+            else:
+                ref = None
+
+    if not needs_recompute:
+        # if 'crop_20191014T130000Z_S23.539915W046.611400_S23.283329W046.288255_S2_0' in dst_gpath:
+        #     import xdev
+        #     xdev.embed()
         if verbose:
             print('cache hit dst = {!r}'.format(dst))
         return dst
@@ -1679,6 +1695,19 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     os.rename(tmp_dst_gpath, dst_gpath)
     if verbose > 2:
         print('finish gdal warp dst_gpath = {!r}'.format(dst_gpath))
+
+    CHECK_AFTER = 1
+    if CHECK_AFTER:
+        # Sometimes the warp screws up.
+        dst_gpath = ub.Path(dst_gpath)
+        try:
+            ref = util_gdal.GdalOpen(dst_gpath, mode='r')
+            ref
+        except RuntimeError as ex:
+            print(f'ERROR THE DATA WE JUST WROTE IS BAD: ex={ex}')
+            raise
+        else:
+            ref = None
     return dst
 
 

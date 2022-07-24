@@ -222,7 +222,6 @@ class StacSearcher:
         self.logger.info('Processing ' + provider)
         catalog = pystac_client.Client.open(provider, headers=headers)
 
-
         daterange = [start, end]
         search = catalog.search(
             collections=collections,
