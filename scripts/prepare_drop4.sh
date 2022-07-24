@@ -20,8 +20,8 @@ See Also:
 source "$HOME"/code/watch/secrets/secrets
 
 DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
-#SENSORS=TA1-S2-L8-ACC
-SENSORS=TA1-S2-ACC
+SENSORS=TA1-S2-L8-ACC
+#SENSORS=TA1-S2-ACC
 #SENSORS=L2-S2-L8
 DATASET_SUFFIX=Drop4-2022-07-18-c10-$SENSORS
 REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*.geojson"
@@ -52,6 +52,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --ignore_duplicates=1 \
     --separate_region_queues=1 \
     --separate_align_jobs=1 \
+    --exclude_channels="tci:3|B05|B06|B07|B8A|B09" \
     --visualize=True \
     --backend=tmux --run=1
 
@@ -236,7 +237,7 @@ _Debugging(){
         --dst /home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc-hdd/Aligned-Drop4-2022-07-18-c10-TA1-S2-ACC/imgonly-BR_R005.kwcoco.json \
         --regions /home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc-hdd/annotations/region_models/BR_R005.geojson \
         --context_factor=1 --geo_preprop=auto --keep=roi-img \
-        --exclude_channels="tci:3|B05|B06|B07|B08A|B09" \
+        --exclude_channels="tci:3|B05|B06|B07|B8A|B09" \
         --visualize=False --debug_valid_regions=False \
-        --rpc_align_method affine_warp --verbose=10 --aux_workers=0 --workers=0
+        --rpc_align_method affine_warp --verbose=10 --aux_workers=0 --workers=10
 }

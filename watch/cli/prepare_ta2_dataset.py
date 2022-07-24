@@ -116,7 +116,8 @@ class PrepareTA2Config(scfg.Config):
 
         'cache': scfg.Value(1, help='if enabled check cache'),
 
-        'channels': scfg.Value(None, help='specific channels to use in align crop'),
+        'include_channels': scfg.Value(None, help='specific channels to use in align crop'),
+        'exclude_channels': scfg.Value(None, help='specific channels to NOT use in align crop'),
 
         'splits': scfg.Value(False, help='if True do splits'),
 
@@ -471,7 +472,8 @@ def main(cmdline=False, **kwargs):
 
         debug_valid_regions = config['debug']
         align_visualize = config['debug']
-        channels = config['channels']
+        include_channels = config['include_channels']
+        exclude_channels = config['exclude_channels']
 
         align_job = queue.submit(ub.codeblock(
             rf'''
@@ -484,7 +486,8 @@ def main(cmdline=False, **kwargs):
                 --context_factor=1 \
                 --geo_preprop=auto \
                 --keep={align_keep} \
-                --channels="{channels}" \
+                --include_channels="{include_channels}" \
+                --exclude_channels="{exclude_channels}" \
                 --visualize={align_visualize} \
                 --debug_valid_regions={debug_valid_regions} \
                 --rpc_align_method affine_warp \
