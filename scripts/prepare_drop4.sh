@@ -44,9 +44,9 @@ python -m watch.cli.prepare_ta2_dataset \
     --region_globstr="$REGION_GLOBSTR" \
     --site_globstr="$SITE_GLOBSTR" \
     --requester_pays=True \
-    --fields_workers=100 \
+    --fields_workers=20 \
     --convert_workers=8 \
-    --max_queue_size=24 \
+    --max_queue_size=12 \
     --align_workers=12 \
     --cache=1 \
     --ignore_duplicates=1 \
@@ -237,7 +237,9 @@ _Debugging(){
         --dst /home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc-hdd/Aligned-Drop4-2022-07-18-c10-TA1-S2-ACC/imgonly-BR_R005.kwcoco.json \
         --regions /home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc-hdd/annotations/region_models/BR_R005.geojson \
         --context_factor=1 --geo_preprop=auto --keep=roi-img \
-        --exclude_channels="tci:3|B05|B06|B07|B8A|B09" \
+        --include_channels="red|green|blue" \
         --visualize=False --debug_valid_regions=False \
-        --rpc_align_method affine_warp --verbose=10 --aux_workers=0 --workers=10
+        --rpc_align_method affine_warp --verbose=10 --aux_workers=0 --workers=20
+
+        #--exclude_channels="tci:3|B05|B06|B07|B8A|B09" \
 }
