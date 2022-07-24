@@ -85,11 +85,11 @@ python -m watch.cli.prepare_ta2_dataset \
 small_onesite(){
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     source ~/code/watch/secrets/secrets
-    #SENSORS=TA1-S2-L8-ACC
+    SENSORS=TA1-S2-L8-ACC
     #SENSORS=L2-S2
     #SENSORS=L2-L8
     #SENSORS=TA1-S2-ACC
-    SENSORS=TA1-L8-ACC
+    #SENSORS=TA1-L8-ACC
     #SENSORS=L2-S2-L8
     REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/US_R004.geojson"
     SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/US_R004_*.geojson"
@@ -113,7 +113,7 @@ small_onesite(){
         --requester_pays=True \
         --region_globstr="$REGION_GLOBSTR" \
         --site_globstr="$SITE_GLOBSTR" \
-        --max_products_per_region=3 \
+        --max_products_per_region=10 \
         --fields_workers=30 \
         --convert_workers=20 \
         --align_workers=20 \
@@ -227,4 +227,14 @@ small_allsites(){
         --target_gsd=30 \
         --visualize=True \
         --backend=tmux --run=1
+}
+
+
+_Debugging(){
+    AWS_DEFAULT_PROFILE=iarpa AWS_REQUEST_PAYER=requester python -m watch.cli.coco_align_geotiffs \
+        --src /home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc-hdd/Uncropped-Drop4-2022-07-18-c10-TA1-S2-ACC/data_BR_R005_fielded.kwcoco.json \
+        --dst /home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc-hdd/Aligned-Drop4-2022-07-18-c10-TA1-S2-ACC/imgonly-BR_R005.kwcoco.json \
+        --regions /home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc-hdd/annotations/region_models/BR_R005.geojson \
+        --context_factor=1 --geo_preprop=auto --keep=roi-img --channels=None --visualize=False --debug_valid_regions=False \
+        --rpc_align_method affine_warp --verbose=3 --aux_workers=0 --workers=0
 }

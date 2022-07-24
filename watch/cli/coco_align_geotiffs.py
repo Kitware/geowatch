@@ -1591,6 +1591,9 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     already_exists = exists(dst_gpath)
     needs_recompute = not (already_exists and keep in {'img', 'roi-img'})
     if not needs_recompute:
+        if 'crop_20191014T130000Z_S23.539915W046.611400_S23.283329W046.288255_S2_0' in dst_gpath:
+            import xdev
+            xdev.embed()
         if verbose:
             print('cache hit dst = {!r}'.format(dst))
         return dst
