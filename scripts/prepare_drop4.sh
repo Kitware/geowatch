@@ -12,7 +12,11 @@ See Also:
 #ROOT_DPATH="$DVC_DPATH"
 
 
-# TODO: add a resouce for this?
+
+# Requires alternative-enhancement transcrypt branch
+#transcrypt -p "$WATCH_TRANSCRYPT_SECRET"
+
+# TODO: add a resource for this?
 source "$HOME"/code/watch/secrets/secrets
 
 DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
