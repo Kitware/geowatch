@@ -207,7 +207,7 @@ def main(cmdline=False, **kwargs):
         backend=config['backend'], name='prep-ta2-dataset', size=1, gres=None)
 
     stac_jobs = []
-    base_mkdir_job = queue.submit(f'mkdir -p "{uncropped_query_dpath}"', name='mkdir-base')
+    # base_mkdir_job = queue.submit(f'mkdir -p "{uncropped_query_dpath}"', name='mkdir-base')
     if config['stac_query_mode'] == 'auto':
         # Each region gets their own job in the queue
         if config['separate_region_queues']:
@@ -237,11 +237,10 @@ def main(cmdline=False, **kwargs):
                         --sensors "{config['sensors']}" \
                         --api_key "{config['api_key']}" \
                         --max_products_per_region "{config['max_products_per_region']}" \
-                        --max_products_per_region "{config['max_products_per_region']}" \
                         --mode area \
                         --verbose 2 \
                         --outfile "{region_inputs_fpath}"
-                    '''), name=f'stac-search-{region_id}', depends=[base_mkdir_job])
+                    '''), name=f'stac-search-{region_id}', depends=[])
 
                 stac_jobs.append({
                     'name': region_id,
@@ -293,7 +292,7 @@ def main(cmdline=False, **kwargs):
                     --mode area \
                     --verbose 2 \
                     --outfile "{combined_inputs_fpath}"
-                '''), name='stac-search', depends=[base_mkdir_job])
+                '''), name='stac-search', depends=[])
 
             stac_jobs.append({
                 'name': 'combined',

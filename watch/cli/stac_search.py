@@ -296,6 +296,8 @@ def main(cmdline=True, **kwargs):
         os.makedirs(outdir, exist_ok=True)
         dest_path = args.outfile
 
+    ub.Path(dest_path).parent.ensuredir()
+
     if args.mode == 'area':
         if config['region_globstr'] is not None:
             from watch.utils import util_path
