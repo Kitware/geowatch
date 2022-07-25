@@ -43,7 +43,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --aws_profile=iarpa \
     --region_globstr="$REGION_GLOBSTR" \
     --site_globstr="$SITE_GLOBSTR" \
-    --requester_pays=True \
+    --requester_pays=False \
     --fields_workers=20 \
     --convert_workers=8 \
     --max_queue_size=12 \
@@ -52,7 +52,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --ignore_duplicates=1 \
     --separate_region_queues=1 \
     --separate_align_jobs=1 \
-    --exclude_channels="tci:3|B05|B06|B07|B8A|B09" \
+    --include_channels="blue|green|red|nir|swir16|swir22" \
     --visualize=True \
     --backend=tmux --run=1
 
@@ -83,6 +83,50 @@ python -m watch.cli.prepare_ta2_dataset \
 #REGION_ID=$(jq -r '.features[] | select(.properties.type=="region") | .properties.region_id' "$REGION_FPATH")
 #PREPARE_DPATH=$ROOT_DPATH/_prepare/"$DATASET_SUFFIX"
 
+
+rgb_medium_drop4_only(){
+    source "$HOME"/code/watch/secrets/secrets
+
+    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    SENSORS=TA1-S2-L8-ACC
+    #SENSORS=TA1-S2-ACC
+    #SENSORS=L2-S2-L8
+    DATASET_SUFFIX=Drop4-2022-07-24-c10-rgb-$SENSORS
+    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*.geojson"
+    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
+
+    #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
+    #REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/NZ_R001.*"
+    #SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
+
+    # Construct the TA2-ready dataset
+    python -m watch.cli.prepare_ta2_dataset \
+        --dataset_suffix=$DATASET_SUFFIX \
+        --stac_query_mode=auto \
+        --cloud_cover=10 \
+        --sensors="$SENSORS" \
+        --api_key=env:SMART_STAC_API_KEY \
+        --collated False \
+        --dvc_dpath="$DVC_DPATH" \
+        --aws_profile=iarpa \
+        --region_globstr="$REGION_GLOBSTR" \
+        --site_globstr="$SITE_GLOBSTR" \
+        --requester_pays=False \
+        --max_products_per_region=100 \
+        --fields_workers=20 \
+        --convert_workers=8 \
+        --max_queue_size=12 \
+        --align_workers=12 \
+        --cache=1 \
+        --ignore_duplicates=1 \
+        --separate_region_queues=1 \
+        --separate_align_jobs=1 \
+        --include_channels="blue|green|red" \
+        --visualize=True \
+        --backend=serial --run=1
+}
+
+
 small_onesite(){
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     source ~/code/watch/secrets/secrets
@@ -111,7 +155,7 @@ small_onesite(){
         --collated False \
         --dvc_dpath="$DVC_DPATH" \
         --aws_profile=iarpa \
-        --requester_pays=True \
+        --requester_pays=False \
         --region_globstr="$REGION_GLOBSTR" \
         --site_globstr="$SITE_GLOBSTR" \
         --max_products_per_region=10 \
@@ -119,6 +163,7 @@ small_onesite(){
         --convert_workers=20 \
         --align_workers=20 \
         --cache=1 \
+        --include_channels="blue|green|red" \
         --ignore_duplicates=1 \
         --visualize=True \
         --backend=serial --run=1
