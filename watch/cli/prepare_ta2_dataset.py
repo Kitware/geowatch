@@ -394,7 +394,7 @@ def main(cmdline=False, **kwargs):
         cache_prefix = f'[[ -f {uncropped_fielded_kwcoco_fpath} ]] || ' if config['cache'] else ''
         add_fields_job = queue.submit(ub.codeblock(
             rf'''
-            # PREPARE Uncropped datasets (usually for debugging)
+            # PREPARE Uncropped datasets
             {cache_prefix}{job_environ_str}python -m watch.cli.coco_add_watch_fields \
                 --src "{uncropped_kwcoco_fpath}" \
                 --dst "{uncropped_fielded_kwcoco_fpath}" \
@@ -554,13 +554,13 @@ def main(cmdline=False, **kwargs):
 
         align_info = info.copy()
         align_info['job'] = project_anns_job
-        alignment_jobs.append(info)
+        alignment_jobs.append(align_info)
 
     if config['separate_align_jobs']:
         # Need a final union step
         aligned_fpaths = [d['aligned_imganns_fpath'] for d in alignment_jobs]
         union_depends_jobs = [d['job'] for d in alignment_jobs]
-        union_suffix = ub.hash_data([p.name for p in aligned_fpaths])[0:8]
+        # union_suffix = ub.hash_data([p.name for p in aligned_fpaths])[0:8]
         aligned_final_fpath = (aligned_kwcoco_bundle / 'data.kwcoco.json').shrinkuser(home='$HOME')
         aligned_multi_src_part = ' '.join(['"{}"'.format(p) for p in aligned_fpaths])
         cache_prefix = f'[[ -f {aligned_final_fpath} ]] || ' if config['cache'] else ''
