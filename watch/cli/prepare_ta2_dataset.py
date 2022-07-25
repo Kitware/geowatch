@@ -175,7 +175,7 @@ def main(cmdline=False, **kwargs):
     aligned_kwcoco_bundle = aligned_kwcoco_bundle.shrinkuser(home='$HOME')
 
     # Ignore these regions (only works in separate region queue mode)
-    blocklist = {
+    region_id_blocklist = {
         # 'IN_C000',  # bad files
         # 'ET_C000',  # 404 errors
     }
@@ -201,6 +201,7 @@ def main(cmdline=False, **kwargs):
 
     # region_models = list(region_dpath.glob('*.geojson'))
     final_region_globstr = _coerce_globstr(config['region_globstr'])
+    final_site_globstr = _coerce_globstr(config['site_globstr'])
 
     import cmd_queue
     from watch.utils import util_path
@@ -213,22 +214,40 @@ def main(cmdline=False, **kwargs):
         # Each region gets their own job in the queue
         if config['separate_region_queues']:
 
-            # Note: this requires the annotation files to exist on disk.
-            # or we have to write a mechanism that lets the explicit relative
-            # path be specified.
+            # Note: this requires the annotation files to exist on disk.  or we
+            # have to write a mechanism that lets the explicit relative path be
+            # specified.
             region_file_fpaths = util_path.coerce_patterned_paths(final_region_globstr.expand())
-            # region_site_fpaths = util_path.coerce_patterned_paths(final_site_globstr.expand())
+            region_site_fpaths = util_path.coerce_patterned_paths(final_site_globstr.expand())
+
+            # Assign site models to region files
+            ASSIGN_BY_FPATH = True
+            if ASSIGN_BY_FPATH:
+                # This is not robust, but it doesn't require touching the disk
+                region_id_to_fpath = {p.stem: p for p in region_file_fpaths}
+                site_id_to_fpath = {p.stem: p for p in region_site_fpaths}
+                region_id_to_site_fpaths = ub.ddict(list)
+                for site_id, site_fpaths in site_id_to_fpath.items():
+                    region_id, site_num = site_id.rsplit('_', maxsplit=1)
+                    region_id_to_site_fpaths[region_id].append(site_fpaths)
+
+                if 1:
+                    regions_without_sites = set(region_id_to_fpath) - set(region_id_to_site_fpaths)
+                    sites_without_regions = set(region_id_to_site_fpaths) - set(region_id_to_fpath)
+                    print(f'regions_without_sites={regions_without_sites}')
+                    print(f'sites_without_regions={sites_without_regions}')
+
+            else:
+                raise NotImplementedError(
+                    'TODO: implement more robust alternative that reads '
+                    'file data to make assignment if needed')
 
             if config['max_regions'] is not None:
                 region_file_fpaths = region_file_fpaths[:config['max_regions']]
-            # region_file_fpaths = region_file_fpaths[0:2]
-            # TODO: it would be nice to have just a single script that handles
-            # multiple regions
-            print('region_file_fpaths = {}'.format(ub.repr2(sorted(region_file_fpaths), nl=1)))
 
-            for region_fpath in region_file_fpaths:
-                region_id = region_fpath.stem
-                if region_id in blocklist:
+            print('region_file_fpaths = {}'.format(ub.repr2(sorted(region_file_fpaths), nl=1)))
+            for region_id, region_fpath in region_id_to_fpath.items():
+                if region_id in region_id_blocklist:
                     continue
 
                 region_inputs_fpath = (uncropped_query_dpath / (region_id + '.input')).shrinkuser(home='$HOME')
@@ -627,8 +646,8 @@ def main(cmdline=False, **kwargs):
     #         --run=1 --serial=True
     #     '''))
 
-    # queue.rprint()
-    # queue.print_graph()
+    queue.rprint()
+    queue.print_graph()
     if config['run']:
         queue.run(block=True, system=True)
 
