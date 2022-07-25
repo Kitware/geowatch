@@ -220,6 +220,9 @@ def main(cmdline=False, **kwargs):
             # TODO: it would be nice to have just a single script that handles
             # multiple regions
             print('region_file_fpaths = {}'.format(ub.repr2(sorted(region_file_fpaths), nl=1)))
+            import xdev
+            xdev.embed()
+
             for region_fpath in region_file_fpaths:
                 region_id = region_fpath.stem
                 if region_id in blocklist:
@@ -621,9 +624,8 @@ def main(cmdline=False, **kwargs):
     #         --run=1 --serial=True
     #     '''))
 
-    queue.rprint()
-    queue.print_graph()
-
+    # queue.rprint()
+    # queue.print_graph()
     if config['run']:
         queue.run(block=True, system=True)
 
