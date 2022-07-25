@@ -212,7 +212,12 @@ def main(cmdline=False, **kwargs):
     if config['stac_query_mode'] == 'auto':
         # Each region gets their own job in the queue
         if config['separate_region_queues']:
+
+            # Note: this requires the annotation files to exist on disk.
+            # or we have to write a mechanism that lets the explicit relative
+            # path be specified.
             region_file_fpaths = util_path.coerce_patterned_paths(final_region_globstr.expand())
+            # region_site_fpaths = util_path.coerce_patterned_paths(final_site_globstr.expand())
 
             if config['max_regions'] is not None:
                 region_file_fpaths = region_file_fpaths[:config['max_regions']]
@@ -220,8 +225,6 @@ def main(cmdline=False, **kwargs):
             # TODO: it would be nice to have just a single script that handles
             # multiple regions
             print('region_file_fpaths = {}'.format(ub.repr2(sorted(region_file_fpaths), nl=1)))
-            import xdev
-            xdev.embed()
 
             for region_fpath in region_file_fpaths:
                 region_id = region_fpath.stem
