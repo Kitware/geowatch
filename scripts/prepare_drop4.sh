@@ -53,8 +53,8 @@ python -m watch.cli.prepare_ta2_dataset \
     --separate_region_queues=1 \
     --separate_align_jobs=1 \
     --include_channels="blue|green|red|nir|swir16|swir22" \
-    --visualize=True \
-    --backend=tmux --run=1
+    --visualize=0 \
+    --backend=tmux --run=0
 
 #mkdir -p "$DEMO_DPATH"
 ## Create the search json wrt the sensors and processing level we want
