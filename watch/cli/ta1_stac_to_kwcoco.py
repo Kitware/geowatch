@@ -70,13 +70,16 @@ SUPPORTED_LS_PLATFORMS = {'OLI_TIRS',
 SUPPORTED_WV_PLATFORMS = {'DigitalGlobe',
                           'worldview-2',
                           'worldview-3'}  # Worldview
+SUPPORTED_PLANET_PLATFORMS = {'dove'}  # not sure if this name is good
 SUPPORTED_PLATFORMS = (SUPPORTED_S2_PLATFORMS |
                        SUPPORTED_LS_PLATFORMS |
-                       SUPPORTED_WV_PLATFORMS)
+                       SUPPORTED_WV_PLATFORMS |
+                       SUPPORTED_PLANET_PLATFORMS)
 
 SENSOR_COARSE_MAPPING = {**{p: 'S2' for p in SUPPORTED_S2_PLATFORMS},
                          **{p: 'L8' for p in SUPPORTED_LS_PLATFORMS},
-                         **{p: 'WV' for p in SUPPORTED_WV_PLATFORMS}}
+                         **{p: 'WV' for p in SUPPORTED_WV_PLATFORMS},
+                         **{'dove': 'dove'}}
 
 L8_CHANNEL_ALIAS = {band['name']: band['common_name']
                     for band in util_bands.LANDSAT8 if 'common_name' in band}
@@ -399,6 +402,9 @@ def _stac_item_to_kwcoco_image(stac_item,
     stac_item_dict = stac_item.to_dict()
 
     platform = stac_item_dict['properties']['platform']
+    if 'constellation' in stac_item_dict['properties']:
+        if stac_item_dict['properties']['constellation'] == 'dove':
+            platform = 'dove'
 
     if platform not in SUPPORTED_PLATFORMS:
         print("* Warning * platform '{}' not supported, not adding to "
@@ -524,6 +530,8 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
             sensorasset_hist[sensorasset.spec] += 1
         print('sensorchan_hist = {}'.format(ub.repr2(sensorchan_hist, nl=1)))
         print('sensorasset_hist = {}'.format(ub.repr2(sensorasset_hist, nl=1)))
+        import xdev
+        xdev.embed()
 
     for stac_item in all_items:
         executor.submit(_stac_item_to_kwcoco_image, stac_item,
