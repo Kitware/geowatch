@@ -189,6 +189,7 @@ def _determine_l8_channels(asset_name, asset_dict):
         >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/EG/2017/9/13/LC08_L1TP_114034_20170913_20200903_02_T1_ACC/LC08_L1TP_114034_20170913_20200903_02_T1_ACC_solar_zenith_angle.tif',
         >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/EG/2017/9/13/LC08_L1TP_114034_20170913_20200903_02_T1_ACC/LC08_L1TP_114034_20170913_20200903_02_T1_ACC_solar_azimuth_angle.tif',
         >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/EG/2017/9/13/LC08_L1TP_114034_20170913_20200903_02_T1_ACC/LC08_L1TP_114034_20170913_20200903_02_T1_ACC_view_zenith_angle.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/DG/2020/6/8/LC08_L1TP_115034_20200608_20200824_02_T1_ACC/LC08_L1TP_115034_20200608_20200824_02_T1_ACC_cloud_mask.tif',
         >>> ]
         >>> for href in test_hrefs:
         ...     asset_name = None
@@ -230,6 +231,7 @@ def _determine_l8_channels(asset_name, asset_dict):
             'view_zenith_angle',
             'solar_azimuth_angle',
             'solar_zenith_angle',
+            'cloud_mask',
         ]
         for suffix in known_suffixes:
             if stem.endswith('_' + suffix):
