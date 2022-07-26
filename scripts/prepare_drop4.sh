@@ -296,6 +296,10 @@ dvc_add(){
 
     python -m watch.cli.prepare_splits data.kwcoco.json --run=0
 
+    python -m watch.cli.prepare_splits \
+        --base_fpath=data.kwcoco.json \
+        --run=0 --backend=serial
+
     cd Aligned-Drop4-2022-07-25-c30-TA1-S2-L8-ACC
 
     # Cd into the bundle we want to add
