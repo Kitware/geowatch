@@ -164,6 +164,12 @@ CONVINIENCE_SENSOR_GROUPS = {
         'ta1-s2-acc',
         'ta1-ls-acc',
     ],
+    'TA1-S2-L8-WV-PL-ACC': [
+        'ta1-s2-acc',
+        'ta1-ls-acc',
+        'ta1-pd-acc',
+        'ta1-wv-acc',
+    ],
     'TA1-S2-ACC': [
         'ta1-s2-acc',
     ],

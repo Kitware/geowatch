@@ -57,12 +57,12 @@ lark >= 1.1.2
 
 # Imaging
 distinctipy>=1.2.1
-kwimage>=0.9.2
-kwcoco>=0.3.2
+kwimage>=0.9.3
+kwcoco>=0.3.3
 Pillow>=8.0.1
 albumentations>=1.0.0
 scikit_image>=0.18.1
-ndsampler>=0.6.9
+ndsampler>=0.6.10
 tifffile>=2021.4.8
 medpy>=0.4.0
 

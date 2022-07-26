@@ -58,6 +58,47 @@ python -m watch.cli.prepare_ta2_dataset \
     --backend=tmux --run=1
 
 
+
+build_drop4_all_sensors(){
+    source "$HOME"/code/watch/secrets/secrets
+    SENSORS=TA1-S2-L8-WV-PL-ACC
+    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DATASET_SUFFIX=Drop4-2022-07-26-c40-$SENSORS
+    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*.geojson"
+    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
+
+    #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
+    #REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/NZ_R001.*"
+    #SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
+
+    # Construct the TA2-ready dataset
+    python -m watch.cli.prepare_ta2_dataset \
+        --dataset_suffix=$DATASET_SUFFIX \
+        --stac_query_mode=auto \
+        --cloud_cover=40 \
+        --sensors="$SENSORS" \
+        --api_key=env:SMART_STAC_API_KEY \
+        --collated False \
+        --dvc_dpath="$DVC_DPATH" \
+        --aws_profile=iarpa \
+        --region_globstr="$REGION_GLOBSTR" \
+        --site_globstr="$SITE_GLOBSTR" \
+        --requester_pays=False \
+        --fields_workers=20 \
+        --convert_workers=8 \
+        --max_queue_size=12 \
+        --align_workers=12 \
+        --cache=0 \
+        --ignore_duplicates=1 \
+        --separate_region_queues=1 \
+        --separate_align_jobs=1 \
+        --include_channels="blue|green|red|nir|swir16|swir22" \
+        --visualize=0 \
+        --target_gsd=30 \
+        --backend=tmux --run=1
+}
+
+
 #mkdir -p "$DEMO_DPATH"
 ## Create the search json wrt the sensors and processing level we want
 #python -m watch.cli.stac_search_build \
@@ -299,6 +340,7 @@ dvc_add(){
     python -m watch.cli.prepare_splits \
         --base_fpath=data.kwcoco.json \
         --run=0 --backend=serial
+    7z a splits.zip data*.kwcoco.json
 
     cd Aligned-Drop4-2022-07-25-c30-TA1-S2-L8-ACC
 
@@ -308,6 +350,11 @@ dvc_add(){
     ls -- */*.json
 
     dvc add -- */L8 */S2 
+    dvc add -- *.zip
+    git commit -am "Add Drop4"
+
+    dvc push -r aws -R .
+
     #dvc add data_*nowv*.kwcoco.json
     
 }
