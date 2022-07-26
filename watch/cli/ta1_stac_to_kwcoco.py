@@ -135,6 +135,31 @@ def _determine_s2_channels(asset_name, asset_dict):
 
 
 def _determine_l8_channels(asset_name, asset_dict):
+    """
+    Example:
+        >>> from watch.cli.ta1_stac_to_kwcoco import *  # NOQA
+        >>> from watch.cli.ta1_stac_to_kwcoco import _determine_l8_channels
+        >>> test_hrefs = [
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/EG/2017/12/2/LC08_L1TP_114034_20171202_20200902_02_T1_ACC/LC08_L1TP_114034_20171202_20200902_02_T1_ACC_QA.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/EG/2017/12/2/LC08_L1TP_114034_20171202_20200902_02_T1_ACC/LC08_L1TP_114034_20171202_20200902_02_T1_ACC_TCI.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/DG/2017/9/20/LC08_L1TP_115034_20170920_20200903_02_T1_ACC/LC08_L1TP_115034_20170920_20200903_02_T1_ACC_ac_mask.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/DG/2017/9/20/LC08_L1TP_115034_20170920_20200903_02_T1_ACC/LC08_L1TP_115034_20170920_20200903_02_T1_ACC_solar_zenith_angle.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/DG/2017/9/20/LC08_L1TP_115034_20170920_20200903_02_T1_ACC/LC08_L1TP_115034_20170920_20200903_02_T1_ACC_solar_azimuth_angle.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/DG/2017/9/20/LC08_L1TP_115034_20170920_20200903_02_T1_ACC/LC08_L1TP_115034_20170920_20200903_02_T1_ACC_view_zenith_angle.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/DG/2017/9/20/LC08_L1TP_115034_20170920_20200903_02_T1_ACC/LC08_L1TP_115034_20170920_20200903_02_T1_ACC_view_azimuth_angle.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/DG/2017/9/20/LC08_L1TP_115034_20170920_20200903_02_T1_ACC/LC08_L1TP_115034_20170920_20200903_02_T1_ACC_QA.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/DG/2017/9/20/LC08_L1TP_115034_20170920_20200903_02_T1_ACC/LC08_L1TP_115034_20170920_20200903_02_T1_ACC_TCI.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/EG/2017/9/13/LC08_L1TP_114034_20170913_20200903_02_T1_ACC/LC08_L1TP_114034_20170913_20200903_02_T1_ACC_ac_mask.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/EG/2017/9/13/LC08_L1TP_114034_20170913_20200903_02_T1_ACC/LC08_L1TP_114034_20170913_20200903_02_T1_ACC_solar_zenith_angle.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/EG/2017/9/13/LC08_L1TP_114034_20170913_20200903_02_T1_ACC/LC08_L1TP_114034_20170913_20200903_02_T1_ACC_solar_azimuth_angle.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/EG/2017/9/13/LC08_L1TP_114034_20170913_20200903_02_T1_ACC/LC08_L1TP_114034_20170913_20200903_02_T1_ACC_view_zenith_angle.tif',
+        >>> ]
+        >>> for href in test_hrefs:
+        ...     asset_name = None
+        ...     asset_dict = {'href': href}
+        ...     channels = _determine_l8_channels(asset_name, asset_dict)
+        ...     print(f'channels={channels}')
+    """
     asset_href = asset_dict['href']
     eo_band_names = []
     for eob in asset_dict.get('eo:bands', []):
@@ -156,6 +181,23 @@ def _determine_l8_channels(asset_name, asset_dict):
     elif m := re.search(r'(B\w{1,2})\.(tiff?|jp2)$', asset_href, re.I):  # NOQA
         return L8_CHANNEL_ALIAS.get(m.group(1), m.group(1))
     else:
+        stem = ub.Path(asset_href).stem
+        if stem.endswith('_TCI'):
+            return 'tci:3'
+        known_suffixes = [
+            'QA',
+            'ac_mask',
+            'solar_zenith_angle',
+            'view_zenith_angle',
+            'solar_zenith_angle',
+            'view_azimuth_angle',
+            'view_zenith_angle',
+            'solar_azimuth_angle',
+            'solar_zenith_angle',
+        ]
+        for suffix in known_suffixes:
+            if stem.endswith('_' + suffix):
+                return suffix
         return None
 
 
@@ -224,6 +266,21 @@ def make_coco_aux_from_stac_asset(asset_name,
     else:
         raise NotImplementedError(
             "Unsupported platform '{}'".format(platform))
+
+    # Hard-coded
+    ignore_channels = [
+        'solar_zenith_angle',
+        'view_zenith_angle',
+        'solar_zenith_angle',
+        'view_azimuth_angle',
+        'view_zenith_angle',
+        'solar_azimuth_angle',
+        'solar_zenith_angle',
+        'tci:3',
+    ]
+    if channels is not None:
+        if channels in ignore_channels:
+            return None
 
     if channels is None:
         HACK_AWAY_SOME_WARNINGS = 1

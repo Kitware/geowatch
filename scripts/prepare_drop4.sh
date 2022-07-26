@@ -93,7 +93,7 @@ build_drop4_all_sensors(){
         --separate_region_queues=1 \
         --separate_align_jobs=1 \
         --include_channels="blue|green|red|nir|swir16|swir22" \
-        --visualize=0 \
+        --visualize=1 \
         --target_gsd=30 \
         --backend=tmux --run=1
 }
