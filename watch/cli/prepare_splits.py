@@ -80,7 +80,7 @@ def _submit_split_jobs(base_fpath, queue, depends=[]):
     }
 
     train_region_selector = '(' + ' or '.join(['(.name ==  "{}")'.format(n) for n in (ignore_regions | vali_regions)]) + ') | not'
-    vali_region_selector = ' or '.join(['(.name ==  {})'.format(n) for n in (vali_regions)])
+    vali_region_selector = ' or '.join(['(.name ==  "{}")'.format(n) for n in (vali_regions)])
 
     split_jobs = {}
     # Perform train/validation splits with and without worldview
