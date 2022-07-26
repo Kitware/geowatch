@@ -23,7 +23,7 @@ DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
 SENSORS=TA1-S2-L8-ACC
 #SENSORS=TA1-S2-ACC
 #SENSORS=L2-S2-L8
-DATASET_SUFFIX=Drop4-2022-07-18-c10-$SENSORS
+DATASET_SUFFIX=Drop4-2022-07-25-c30-$SENSORS
 REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*.geojson"
 SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
 
@@ -35,7 +35,7 @@ SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
 python -m watch.cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --stac_query_mode=auto \
-    --cloud_cover=10 \
+    --cloud_cover=30 \
     --sensors="$SENSORS" \
     --api_key=env:SMART_STAC_API_KEY \
     --collated False \
@@ -48,13 +48,15 @@ python -m watch.cli.prepare_ta2_dataset \
     --convert_workers=8 \
     --max_queue_size=12 \
     --align_workers=12 \
-    --cache=1 \
+    --cache=0 \
     --ignore_duplicates=1 \
     --separate_region_queues=1 \
     --separate_align_jobs=1 \
     --include_channels="blue|green|red|nir|swir16|swir22" \
     --visualize=0 \
-    --backend=tmux --run=0
+    --target_gsd=30 \
+    --backend=tmux --run=1
+
 
 #mkdir -p "$DEMO_DPATH"
 ## Create the search json wrt the sensors and processing level we want
