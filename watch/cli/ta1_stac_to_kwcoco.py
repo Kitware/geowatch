@@ -530,8 +530,6 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
             sensorasset_hist[sensorasset.spec] += 1
         print('sensorchan_hist = {}'.format(ub.repr2(sensorchan_hist, nl=1)))
         print('sensorasset_hist = {}'.format(ub.repr2(sensorasset_hist, nl=1)))
-        import xdev
-        xdev.embed()
 
     for stac_item in all_items:
         executor.submit(_stac_item_to_kwcoco_image, stac_item,
