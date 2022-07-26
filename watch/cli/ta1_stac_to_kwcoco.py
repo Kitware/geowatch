@@ -284,7 +284,7 @@ def make_coco_aux_from_stac_asset(asset_name,
     if re.search(r'\.(txt|csv|json|xml|vrt|jpe?g)$', asset_href, re.I):
         return None
 
-    if re.search(r'\.(img|hdr|hdf)$', asset_href, re.I):
+    if re.search(r'\.(img|hdr|hdf|imd)$', asset_href, re.I):
         return None
 
     # HACK Skip common TCI (true color images) and PVI (preview images)
