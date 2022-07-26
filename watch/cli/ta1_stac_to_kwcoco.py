@@ -383,6 +383,8 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
                           max_workers=jobs)
 
     all_items = [stac_item for stac_item in catalog.get_all_items()]
+    import xdev
+    xdev.embed()
 
     for stac_item in all_items:
         executor.submit(_stac_item_to_kwcoco_image, stac_item,

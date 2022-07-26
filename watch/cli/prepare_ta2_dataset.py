@@ -88,7 +88,7 @@ class PrepareTA2Config(scfg.Config):
 
         's3_fpath': scfg.Value(None, nargs='+', help='A list of .input files which were the results of an existing stac query. Mutex with stac_query_* args'),
         'dvc_dpath': scfg.Value('auto', help=''),
-        'run': scfg.Value('0', help=''),
+        'run': scfg.Value('0', help='if True execute the pipeline'),
         'collated': scfg.Value([True], nargs='+', help='set to false if the input data is not collated'),
 
         'backend': scfg.Value('serial', help='can be serial, tmux, or slurm. Using tmux is recommended.'),

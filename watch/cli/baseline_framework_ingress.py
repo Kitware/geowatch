@@ -320,8 +320,7 @@ def baseline_framework_ingress(input_path,
         catalog.make_all_asset_hrefs_relative()
 
     if aws_profile is not None:
-        aws_base_command =\
-            ['aws', 's3', '--profile', aws_profile, 'cp']
+        aws_base_command = ['aws', 's3', '--profile', aws_profile, 'cp']
     else:
         aws_base_command = ['aws', 's3', 'cp']
 
@@ -406,8 +405,8 @@ def download_mtd_msil1c(product_id,
 
     scheme, netloc, path, *_ = urlparse(metadata_href)
     index = path.find('tiles')
-    path = path[:index] + \
-        f'products/{dt.year}/{dt.month}/{dt.day}/{product_id}/metadata.xml'
+    path = (path[:index] +
+            f'products/{dt.year}/{dt.month}/{dt.day}/{product_id}/metadata.xml')
     mtd_msil1c_href = f'{scheme}://{netloc}{path}'
     mtd_msil1c_outpath = os.path.join(outdir, 'MTD_MSIL1C.xml')
 
