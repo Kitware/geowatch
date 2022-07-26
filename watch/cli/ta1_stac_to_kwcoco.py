@@ -98,6 +98,32 @@ def _determine_channels_collated(asset_name, asset_dict):
 
 
 def _determine_s2_channels(asset_name, asset_dict):
+    """
+        >>> from watch.cli.ta1_stac_to_kwcoco import *  # NOQA
+        >>> from watch.cli.ta1_stac_to_kwcoco import _determine_s2_channels
+        >>> test_hrefs = [
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/15/T/TF/2020/9/21/S2A_14TQL_20200921_0_L1C_ACC/S2A_14TQL_20200921_0_L1C_ACC_QA.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/14/T/QK/2020/8/9/LC08_L1TP_028032_20200809_20200917_02_T1_ACC/LC08_L1TP_028032_20200809_20200917_02_T1_ACC_cloud_mask.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/14/T/QK/2020/8/25/LC08_L1TP_028032_20200825_20200905_02_T1_ACC/LC08_L1TP_028032_20200825_20200905_02_T1_ACC_cloud_mask.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/14/T/QL/2020/10/14/S2A_14TQL_20201014_0_L1C_ACC/S2A_MSI_L1C_T14TQL_20201014_20201014_B02.img',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/14/T/QL/2020/10/14/S2A_14TQL_20201014_0_L1C_ACC/S2A_MSI_L1C_T14TQL_20201014_20201014_B02.hdr',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/14/T/QL/2020/10/14/S2A_14TQL_20201014_0_L1C_ACC/HLS.S10.T14TQL.2020288.T173227.v1.5.hdf',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/14/T/QL/2020/10/14/S2A_14TQL_20201014_0_L1C_ACC/angle_output.hdf',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/14/T/QL/2020/10/14/S2A_14TQL_20201014_0_L1C_ACC/S2A_14TQL_20201014_0_L1C_ACC_ac_mask.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/14/T/QL/2020/10/14/S2A_14TQL_20201014_0_L1C_ACC/S2A_14TQL_20201014_0_L1C_ACC_cloud_mask.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/14/T/QL/2020/10/14/S2A_14TQL_20201014_0_L1C_ACC/S2A_14TQL_20201014_0_L1C_ACC_QA.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/14/T/QM/2021/7/27/LC08_L1TP_028031_20210727_20210804_02_T1_ACC/LC08_L1TP_028031_20210727_20210804_02_T1_ACC_cloud_mask.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/14/T/QM/2021/8/28/LC08_L1TP_028031_20210828_20210901_02_T1_ACC/LC08_L1TP_028031_20210828_20210901_02_T1_ACC_cloud_mask.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/14/T/QK/2021/6/9/LC08_L1TP_028032_20210609_20210615_02_T1_ACC/LC08_L1TP_028032_20210609_20210615_02_T1_ACC_cloud_mask.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/14/T/QK/2021/7/27/LC08_L1TP_028032_20210727_20210804_02_T1_ACC/LC08_L1TP_028032_20210727_20210804_02_T1_ACC_cloud_mask.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/14/T/QM/2021/4/22/LC08_L1TP_028031_20210422_20210430_02_T1_ACC/LC08_L1TP_028031_20210422_20210430_02_T1_ACC_cloud_mask.tif',
+        >>> ]
+        >>> for href in test_hrefs:
+        ...     asset_name = None
+        ...     asset_dict = {'href': href}
+        ...     channels = _determine_s2_channels(asset_name, asset_dict)
+        ...     print(f'channels={channels}')
+    """
     asset_href = asset_dict['href']
     eo_band_names = [eob['name'] for eob in asset_dict.get('eo:bands', ())]
     # print(f'asset_href={asset_href}')
@@ -131,6 +157,16 @@ def _determine_s2_channels(asset_name, asset_dict):
     elif m := re.search(r'(B\w{2})\.(tiff?|jp2)$', asset_href, re.I):  # NOQA
         return S2_CHANNEL_ALIAS.get(m.group(1), m.group(1))
     else:
+        href_path = ub.Path(asset_href)
+        stem = href_path.stem
+        known_suffixes = [
+            'QA',
+            'ac_mask',
+            'cloud_mask',
+        ]
+        for suffix in known_suffixes:
+            if stem.endswith('_' + suffix):
+                return suffix
         return None
 
 
@@ -244,6 +280,9 @@ def make_coco_aux_from_stac_asset(asset_name,
 
     # Skip assets with metadata or thumbnail extensions
     if re.search(r'\.(txt|csv|json|xml|vrt|jpe?g)$', asset_href, re.I):
+        return None
+
+    if re.search(r'\.(img|hdr|hdf)$', asset_href, re.I):
         return None
 
     # HACK Skip common TCI (true color images) and PVI (preview images)
