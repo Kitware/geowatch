@@ -290,3 +290,20 @@ _Debugging(){
 
         #--exclude_channels="tci:3|B05|B06|B07|B8A|B09" \
 }
+
+
+dvc_add(){
+
+    python -m watch.cli.prepare_splits data.kwcoco.json --run=0
+
+    cd Aligned-Drop4-2022-07-25-c30-TA1-S2-L8-ACC
+
+    # Cd into the bundle we want to add
+    ls -- */L8
+    ls -- */S2
+    ls -- */*.json
+
+    dvc add -- */L8 */S2 
+    #dvc add data_*nowv*.kwcoco.json
+    
+}
