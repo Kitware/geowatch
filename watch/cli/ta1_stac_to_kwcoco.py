@@ -136,11 +136,18 @@ def _determine_s2_channels(asset_name, asset_dict):
 
 def _determine_l8_channels(asset_name, asset_dict):
     asset_href = asset_dict['href']
-    eo_band_names = [eob['name'] for eob in asset_dict.get('eo:bands', ())]
+    eo_band_names = []
+    for eob in asset_dict.get('eo:bands', []):
+        if isinstance(eob, dict):
+            eo_band_names.append(eob['name'])
+        elif isinstance(eob, str):
+            eo_band_names.append(eob)
+        else:
+            raise TypeError(f'type(eob) = {type(eob)}')
 
     if len(eo_band_names) > 0:
-        return '|'.join((L8_CHANNEL_ALIAS.get(eobn, eobn)
-                         for eobn in eo_band_names))
+        mapped_names = list(ub.unique([L8_CHANNEL_ALIAS.get(eobn, eobn) for eobn in eo_band_names]))
+        return '|'.join(mapped_names)
     elif re.search(r'cloudmask\.(tiff?|jp2)$', asset_href, re.I):
         return 'cloudmask'
     elif m := re.search(r'(QA_PIXEL|QA_RADSAT|SR_QA_AEROSOL)\.(tiff?|jp2)$',  # NOQA
@@ -306,10 +313,10 @@ def _stac_item_to_kwcoco_image(stac_item,
     }
     auxiliary = []
 
-    for asset_name, asset in stac_item_dict.get('assets', {}).items():
+    for asset_name, asset_dict in stac_item_dict.get('assets', {}).items():
         aux = make_coco_aux_from_stac_asset(
             asset_name,
-            asset,
+            asset_dict,
             platform,
             force_affine=True,
             assume_relative=assume_relative,
@@ -383,8 +390,42 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
                           max_workers=jobs)
 
     all_items = [stac_item for stac_item in catalog.get_all_items()]
-    import xdev
-    xdev.embed()
+
+    if 1:
+        # Sumamrize items before processing
+        sensorchan_hist = ub.ddict(lambda: 0)
+        sensorasset_hist = ub.ddict(lambda: 0)
+        for stac_item in all_items:
+            # TODO: we can use this data to prepopulate the kwcoco file
+            # so it takes far less time to field it.
+            stac_dict = stac_item.to_dict()
+            # stac_dict['geometry']
+            sensor = stac_dict['properties'].get(
+                'constellation', stac_dict['properties'].get('platform', None))
+            # proc_level = stac_dict['landsat:correction']
+            asset_names = stac_dict['assets'].keys()
+            eo_bands = []
+            for asset_name, asset_item in stac_dict['assets'].items():
+                if 'data' in asset_item['roles']:
+                    if 'eo:bands' in asset_item:
+                        for eo_band in asset_item['eo:bands']:
+                            if isinstance(eo_band, dict):
+                                if 'common_name' in eo_band:
+                                    eo_bands.append(eo_band['common_name'])
+                                elif 'name' in eo_band:
+                                    eo_bands.append(eo_band['name'])
+                                else:
+                                    raise AssertionError
+                            elif isinstance(eo_band, str):
+                                eo_bands.append(eo_band)
+            eo_bands = list(ub.unique(eo_bands))
+            eo_bands = list(ub.unique(eo_bands))
+            sensorchan = kwcoco.SensorChanSpec.coerce(f'{sensor}:' + '|'.join(eo_bands))
+            sensorchan_hist[sensorchan.spec] += 1
+            sensorasset = kwcoco.SensorChanSpec.coerce(f'{sensor}:' + '|'.join(sorted(asset_names)))
+            sensorasset_hist[sensorasset.spec] += 1
+        print('sensorchan_hist = {}'.format(ub.repr2(sensorchan_hist, nl=1)))
+        print('sensorasset_hist = {}'.format(ub.repr2(sensorasset_hist, nl=1)))
 
     for stac_item in all_items:
         executor.submit(_stac_item_to_kwcoco_image, stac_item,
