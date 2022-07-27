@@ -341,7 +341,7 @@ def predict(cmdline=False, **kwargs):
                     print('Warning: reported model channels may be incorrect '
                           'due to bad train hyperparams')
                     hack_common = hack_model_spec.intersection(datamodule_channel_spec)
-                    datamodule_vars['channels'] = hack_common
+                    datamodule_vars['channels'] = hack_common.spec
 
     DZYNE_MODEL_HACK = 1
     if DZYNE_MODEL_HACK:
@@ -349,13 +349,11 @@ def predict(cmdline=False, **kwargs):
             # This model has an issue with the L8 features it was trained on
             datamodule_vars['exclude_sensors'] = ['L8']
 
-    import xdev
-    with xdev.embed_on_exception_context:
-        datamodule = datamodule_class(
-            **datamodule_vars
-        )
-        # TODO: if TTA=True, disable determenistic time sampling
-        datamodule.setup('test')
+    datamodule = datamodule_class(
+        **datamodule_vars
+    )
+    # TODO: if TTA=True, disable determenistic time sampling
+    datamodule.setup('test')
 
     if config['tta_time']:
         # Expand targets to include time augmented samples
