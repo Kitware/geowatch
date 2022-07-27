@@ -14,7 +14,7 @@ import numpy as np
 
 
 def is_image_empty(coco_img, main_channels='red'):
-    raise AssertionError('on-off')
+    # raise AssertionError('on-off')
     # USe the remove empty image script instead
     bundle_dpath = ub.Path(coco_img.bundle_dpath)
 
@@ -30,7 +30,7 @@ def is_image_empty(coco_img, main_channels='red'):
             chan_info['exists'] = gpath.exists()
             if chan_info['exists']:
                 try:
-                    imdata = kwimage.imread(gpath, backend='gdal', nodata='ma', overview=-1)
+                    imdata = kwimage.imread(gpath, backend='gdal', nodata='ma', overview='coarsest')
                 except Exception:
                     imdata = kwimage.imread(gpath, backend='gdal', nodata='ma')
                 max_val = imdata.max()
@@ -122,8 +122,10 @@ def clean_drop3():
     import os
     import watch
     import kwcoco
-    dvc_dpath = watch.find_smart_dvc_dpath()
-    coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json'
+    # dvc_dpath = watch.find_smart_dvc_dpath()
+    # coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json'
+    dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
+    coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-25-c30-TA1-S2-L8-ACC/data.kwcoco.json'
     dset = kwcoco.CocoDataset(coco_fpath)
 
     no_activity_cid = dset.index.name_to_cat['No Activity']['id']

@@ -70,13 +70,16 @@ SUPPORTED_LS_PLATFORMS = {'OLI_TIRS',
 SUPPORTED_WV_PLATFORMS = {'DigitalGlobe',
                           'worldview-2',
                           'worldview-3'}  # Worldview
+SUPPORTED_PLANET_PLATFORMS = {'dove'}  # not sure if this name is good
 SUPPORTED_PLATFORMS = (SUPPORTED_S2_PLATFORMS |
                        SUPPORTED_LS_PLATFORMS |
-                       SUPPORTED_WV_PLATFORMS)
+                       SUPPORTED_WV_PLATFORMS |
+                       SUPPORTED_PLANET_PLATFORMS)
 
 SENSOR_COARSE_MAPPING = {**{p: 'S2' for p in SUPPORTED_S2_PLATFORMS},
                          **{p: 'L8' for p in SUPPORTED_LS_PLATFORMS},
-                         **{p: 'WV' for p in SUPPORTED_WV_PLATFORMS}}
+                         **{p: 'WV' for p in SUPPORTED_WV_PLATFORMS},
+                         **{'dove': 'dove'}}
 
 L8_CHANNEL_ALIAS = {band['name']: band['common_name']
                     for band in util_bands.LANDSAT8 if 'common_name' in band}
@@ -98,6 +101,32 @@ def _determine_channels_collated(asset_name, asset_dict):
 
 
 def _determine_s2_channels(asset_name, asset_dict):
+    """
+        >>> from watch.cli.ta1_stac_to_kwcoco import *  # NOQA
+        >>> from watch.cli.ta1_stac_to_kwcoco import _determine_s2_channels
+        >>> test_hrefs = [
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/15/T/TF/2020/9/21/S2A_14TQL_20200921_0_L1C_ACC/S2A_14TQL_20200921_0_L1C_ACC_QA.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/14/T/QK/2020/8/9/LC08_L1TP_028032_20200809_20200917_02_T1_ACC/LC08_L1TP_028032_20200809_20200917_02_T1_ACC_cloud_mask.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/14/T/QK/2020/8/25/LC08_L1TP_028032_20200825_20200905_02_T1_ACC/LC08_L1TP_028032_20200825_20200905_02_T1_ACC_cloud_mask.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/14/T/QL/2020/10/14/S2A_14TQL_20201014_0_L1C_ACC/S2A_MSI_L1C_T14TQL_20201014_20201014_B02.img',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/14/T/QL/2020/10/14/S2A_14TQL_20201014_0_L1C_ACC/S2A_MSI_L1C_T14TQL_20201014_20201014_B02.hdr',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/14/T/QL/2020/10/14/S2A_14TQL_20201014_0_L1C_ACC/HLS.S10.T14TQL.2020288.T173227.v1.5.hdf',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/14/T/QL/2020/10/14/S2A_14TQL_20201014_0_L1C_ACC/angle_output.hdf',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/14/T/QL/2020/10/14/S2A_14TQL_20201014_0_L1C_ACC/S2A_14TQL_20201014_0_L1C_ACC_ac_mask.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/14/T/QL/2020/10/14/S2A_14TQL_20201014_0_L1C_ACC/S2A_14TQL_20201014_0_L1C_ACC_cloud_mask.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/14/T/QL/2020/10/14/S2A_14TQL_20201014_0_L1C_ACC/S2A_14TQL_20201014_0_L1C_ACC_QA.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/14/T/QM/2021/7/27/LC08_L1TP_028031_20210727_20210804_02_T1_ACC/LC08_L1TP_028031_20210727_20210804_02_T1_ACC_cloud_mask.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/14/T/QM/2021/8/28/LC08_L1TP_028031_20210828_20210901_02_T1_ACC/LC08_L1TP_028031_20210828_20210901_02_T1_ACC_cloud_mask.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/14/T/QK/2021/6/9/LC08_L1TP_028032_20210609_20210615_02_T1_ACC/LC08_L1TP_028032_20210609_20210615_02_T1_ACC_cloud_mask.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/14/T/QK/2021/7/27/LC08_L1TP_028032_20210727_20210804_02_T1_ACC/LC08_L1TP_028032_20210727_20210804_02_T1_ACC_cloud_mask.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/14/T/QM/2021/4/22/LC08_L1TP_028031_20210422_20210430_02_T1_ACC/LC08_L1TP_028031_20210422_20210430_02_T1_ACC_cloud_mask.tif',
+        >>> ]
+        >>> for href in test_hrefs:
+        ...     asset_name = None
+        ...     asset_dict = {'href': href}
+        ...     channels = _determine_s2_channels(asset_name, asset_dict)
+        ...     print(f'channels={channels}')
+    """
     asset_href = asset_dict['href']
     eo_band_names = [eob['name'] for eob in asset_dict.get('eo:bands', ())]
     # print(f'asset_href={asset_href}')
@@ -131,16 +160,59 @@ def _determine_s2_channels(asset_name, asset_dict):
     elif m := re.search(r'(B\w{2})\.(tiff?|jp2)$', asset_href, re.I):  # NOQA
         return S2_CHANNEL_ALIAS.get(m.group(1), m.group(1))
     else:
+        href_path = ub.Path(asset_href)
+        stem = href_path.stem
+        known_suffixes = [
+            'QA',
+            'ac_mask',
+            'cloud_mask',
+        ]
+        for suffix in known_suffixes:
+            if stem.endswith('_' + suffix):
+                return suffix
         return None
 
 
 def _determine_l8_channels(asset_name, asset_dict):
+    """
+    Example:
+        >>> from watch.cli.ta1_stac_to_kwcoco import *  # NOQA
+        >>> from watch.cli.ta1_stac_to_kwcoco import _determine_l8_channels
+        >>> test_hrefs = [
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/EG/2017/12/2/LC08_L1TP_114034_20171202_20200902_02_T1_ACC/LC08_L1TP_114034_20171202_20200902_02_T1_ACC_QA.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/EG/2017/12/2/LC08_L1TP_114034_20171202_20200902_02_T1_ACC/LC08_L1TP_114034_20171202_20200902_02_T1_ACC_TCI.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/DG/2017/9/20/LC08_L1TP_115034_20170920_20200903_02_T1_ACC/LC08_L1TP_115034_20170920_20200903_02_T1_ACC_ac_mask.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/DG/2017/9/20/LC08_L1TP_115034_20170920_20200903_02_T1_ACC/LC08_L1TP_115034_20170920_20200903_02_T1_ACC_solar_zenith_angle.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/DG/2017/9/20/LC08_L1TP_115034_20170920_20200903_02_T1_ACC/LC08_L1TP_115034_20170920_20200903_02_T1_ACC_solar_azimuth_angle.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/DG/2017/9/20/LC08_L1TP_115034_20170920_20200903_02_T1_ACC/LC08_L1TP_115034_20170920_20200903_02_T1_ACC_view_zenith_angle.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/DG/2017/9/20/LC08_L1TP_115034_20170920_20200903_02_T1_ACC/LC08_L1TP_115034_20170920_20200903_02_T1_ACC_view_azimuth_angle.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/DG/2017/9/20/LC08_L1TP_115034_20170920_20200903_02_T1_ACC/LC08_L1TP_115034_20170920_20200903_02_T1_ACC_QA.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/DG/2017/9/20/LC08_L1TP_115034_20170920_20200903_02_T1_ACC/LC08_L1TP_115034_20170920_20200903_02_T1_ACC_TCI.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/EG/2017/9/13/LC08_L1TP_114034_20170913_20200903_02_T1_ACC/LC08_L1TP_114034_20170913_20200903_02_T1_ACC_ac_mask.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/EG/2017/9/13/LC08_L1TP_114034_20170913_20200903_02_T1_ACC/LC08_L1TP_114034_20170913_20200903_02_T1_ACC_solar_zenith_angle.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/EG/2017/9/13/LC08_L1TP_114034_20170913_20200903_02_T1_ACC/LC08_L1TP_114034_20170913_20200903_02_T1_ACC_solar_azimuth_angle.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/EG/2017/9/13/LC08_L1TP_114034_20170913_20200903_02_T1_ACC/LC08_L1TP_114034_20170913_20200903_02_T1_ACC_view_zenith_angle.tif',
+        >>>     '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/52/S/DG/2020/6/8/LC08_L1TP_115034_20200608_20200824_02_T1_ACC/LC08_L1TP_115034_20200608_20200824_02_T1_ACC_cloud_mask.tif',
+        >>> ]
+        >>> for href in test_hrefs:
+        ...     asset_name = None
+        ...     asset_dict = {'href': href}
+        ...     channels = _determine_l8_channels(asset_name, asset_dict)
+        ...     print(f'channels={channels}')
+    """
     asset_href = asset_dict['href']
-    eo_band_names = [eob['name'] for eob in asset_dict.get('eo:bands', ())]
+    eo_band_names = []
+    for eob in asset_dict.get('eo:bands', []):
+        if isinstance(eob, dict):
+            eo_band_names.append(eob['name'])
+        elif isinstance(eob, str):
+            eo_band_names.append(eob)
+        else:
+            raise TypeError(f'type(eob) = {type(eob)}')
 
     if len(eo_band_names) > 0:
-        return '|'.join((L8_CHANNEL_ALIAS.get(eobn, eobn)
-                         for eobn in eo_band_names))
+        mapped_names = list(ub.unique([L8_CHANNEL_ALIAS.get(eobn, eobn) for eobn in eo_band_names]))
+        return '|'.join(mapped_names)
     elif re.search(r'cloudmask\.(tiff?|jp2)$', asset_href, re.I):
         return 'cloudmask'
     elif m := re.search(r'(QA_PIXEL|QA_RADSAT|SR_QA_AEROSOL)\.(tiff?|jp2)$',  # NOQA
@@ -149,6 +221,24 @@ def _determine_l8_channels(asset_name, asset_dict):
     elif m := re.search(r'(B\w{1,2})\.(tiff?|jp2)$', asset_href, re.I):  # NOQA
         return L8_CHANNEL_ALIAS.get(m.group(1), m.group(1))
     else:
+        stem = ub.Path(asset_href).stem
+        if stem.endswith('_TCI'):
+            return 'tci:3'
+        known_suffixes = [
+            'QA',
+            'ac_mask',
+            'solar_zenith_angle',
+            'view_zenith_angle',
+            'solar_zenith_angle',
+            'view_azimuth_angle',
+            'view_zenith_angle',
+            'solar_azimuth_angle',
+            'solar_zenith_angle',
+            'cloud_mask',
+        ]
+        for suffix in known_suffixes:
+            if stem.endswith('_' + suffix):
+                return suffix
         return None
 
 
@@ -197,6 +287,9 @@ def make_coco_aux_from_stac_asset(asset_name,
     if re.search(r'\.(txt|csv|json|xml|vrt|jpe?g)$', asset_href, re.I):
         return None
 
+    if re.search(r'\.(img|hdr|hdf|imd)$', asset_href, re.I):
+        return None
+
     # HACK Skip common TCI (true color images) and PVI (preview images)
     # naming schemes
     if re.search(r'TCI\.jp2$', asset_href, re.I):
@@ -218,6 +311,21 @@ def make_coco_aux_from_stac_asset(asset_name,
         raise NotImplementedError(
             "Unsupported platform '{}'".format(platform))
 
+    # Hard-coded
+    ignore_channels = [
+        'solar_zenith_angle',
+        'view_zenith_angle',
+        'solar_zenith_angle',
+        'view_azimuth_angle',
+        'view_zenith_angle',
+        'solar_azimuth_angle',
+        'solar_zenith_angle',
+        'tci:3',
+    ]
+    if channels is not None:
+        if channels in ignore_channels:
+            return None
+
     if channels is None:
         HACK_AWAY_SOME_WARNINGS = 1
         if HACK_AWAY_SOME_WARNINGS:
@@ -228,7 +336,7 @@ def make_coco_aux_from_stac_asset(asset_name,
             if asset_href.endswith(IGNORE_SUFFIXES):
                 return None
         print("* Warning * Couldn't determine channels for asset "
-              "at: '{}'".format(asset_href))
+              "at: '{}'. Asset will be ignored.".format(asset_href))
         return None
 
     if assume_relative:
@@ -294,6 +402,9 @@ def _stac_item_to_kwcoco_image(stac_item,
     stac_item_dict = stac_item.to_dict()
 
     platform = stac_item_dict['properties']['platform']
+    if 'constellation' in stac_item_dict['properties']:
+        if stac_item_dict['properties']['constellation'] == 'dove':
+            platform = 'dove'
 
     if platform not in SUPPORTED_PLATFORMS:
         print("* Warning * platform '{}' not supported, not adding to "
@@ -306,10 +417,10 @@ def _stac_item_to_kwcoco_image(stac_item,
     }
     auxiliary = []
 
-    for asset_name, asset in stac_item_dict.get('assets', {}).items():
+    for asset_name, asset_dict in stac_item_dict.get('assets', {}).items():
         aux = make_coco_aux_from_stac_asset(
             asset_name,
-            asset,
+            asset_dict,
             platform,
             force_affine=True,
             assume_relative=assume_relative,
@@ -383,6 +494,42 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
                           max_workers=jobs)
 
     all_items = [stac_item for stac_item in catalog.get_all_items()]
+
+    if 1:
+        # Sumamrize items before processing
+        sensorchan_hist = ub.ddict(lambda: 0)
+        sensorasset_hist = ub.ddict(lambda: 0)
+        for stac_item in all_items:
+            # TODO: we can use this data to prepopulate the kwcoco file
+            # so it takes far less time to field it.
+            stac_dict = stac_item.to_dict()
+            # stac_dict['geometry']
+            sensor = stac_dict['properties'].get(
+                'constellation', stac_dict['properties'].get('platform', None))
+            # proc_level = stac_dict['landsat:correction']
+            asset_names = stac_dict['assets'].keys()
+            eo_bands = []
+            for asset_name, asset_item in stac_dict['assets'].items():
+                if 'data' in asset_item['roles']:
+                    if 'eo:bands' in asset_item:
+                        for eo_band in asset_item['eo:bands']:
+                            if isinstance(eo_band, dict):
+                                if 'common_name' in eo_band:
+                                    eo_bands.append(eo_band['common_name'])
+                                elif 'name' in eo_band:
+                                    eo_bands.append(eo_band['name'])
+                                else:
+                                    raise AssertionError
+                            elif isinstance(eo_band, str):
+                                eo_bands.append(eo_band)
+            eo_bands = list(ub.unique(eo_bands))
+            eo_bands = list(ub.unique(eo_bands))
+            sensorchan = kwcoco.SensorChanSpec.coerce(f'{sensor}:' + '|'.join(eo_bands))
+            sensorchan_hist[sensorchan.spec] += 1
+            sensorasset = kwcoco.SensorChanSpec.coerce(f'{sensor}:' + '|'.join(sorted(asset_names)))
+            sensorasset_hist[sensorasset.spec] += 1
+        print('sensorchan_hist = {}'.format(ub.repr2(sensorchan_hist, nl=1)))
+        print('sensorasset_hist = {}'.format(ub.repr2(sensorasset_hist, nl=1)))
 
     for stac_item in all_items:
         executor.submit(_stac_item_to_kwcoco_image, stac_item,

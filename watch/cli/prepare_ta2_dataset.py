@@ -88,11 +88,11 @@ class PrepareTA2Config(scfg.Config):
 
         's3_fpath': scfg.Value(None, nargs='+', help='A list of .input files which were the results of an existing stac query. Mutex with stac_query_* args'),
         'dvc_dpath': scfg.Value('auto', help=''),
-        'run': scfg.Value('0', help=''),
+        'run': scfg.Value('0', help='if True execute the pipeline'),
         'collated': scfg.Value([True], nargs='+', help='set to false if the input data is not collated'),
 
         'backend': scfg.Value('serial', help='can be serial, tmux, or slurm. Using tmux is recommended.'),
-        'max_queue_size': scfg.Value(100, help='the number of regions allowed to be processed in parallel with tmux backend'),
+        'max_queue_size': scfg.Value(10, help='the number of regions allowed to be processed in parallel with tmux backend'),
         'max_regions': None,
 
         'aws_profile': scfg.Value('iarpa', help='AWS profile to use for remote data access'),
@@ -116,7 +116,8 @@ class PrepareTA2Config(scfg.Config):
 
         'cache': scfg.Value(1, help='if enabled check cache'),
 
-        'channels': scfg.Value(None, help='specific channels to use in align crop'),
+        'include_channels': scfg.Value(None, help='specific channels to use in align crop'),
+        'exclude_channels': scfg.Value(None, help='specific channels to NOT use in align crop'),
 
         'splits': scfg.Value(False, help='if True do splits'),
 
@@ -174,7 +175,7 @@ def main(cmdline=False, **kwargs):
     aligned_kwcoco_bundle = aligned_kwcoco_bundle.shrinkuser(home='$HOME')
 
     # Ignore these regions (only works in separate region queue mode)
-    blocklist = {
+    region_id_blocklist = {
         # 'IN_C000',  # bad files
         # 'ET_C000',  # 404 errors
     }
@@ -200,6 +201,7 @@ def main(cmdline=False, **kwargs):
 
     # region_models = list(region_dpath.glob('*.geojson'))
     final_region_globstr = _coerce_globstr(config['region_globstr'])
+    final_site_globstr = _coerce_globstr(config['site_globstr'])
 
     import cmd_queue
     from watch.utils import util_path
@@ -207,21 +209,45 @@ def main(cmdline=False, **kwargs):
         backend=config['backend'], name='prep-ta2-dataset', size=1, gres=None)
 
     stac_jobs = []
-    base_mkdir_job = queue.submit(f'mkdir -p "{uncropped_query_dpath}"', name='mkdir-base')
+    # base_mkdir_job = queue.submit(f'mkdir -p "{uncropped_query_dpath}"', name='mkdir-base')
     if config['stac_query_mode'] == 'auto':
         # Each region gets their own job in the queue
         if config['separate_region_queues']:
+
+            # Note: this requires the annotation files to exist on disk.  or we
+            # have to write a mechanism that lets the explicit relative path be
+            # specified.
             region_file_fpaths = util_path.coerce_patterned_paths(final_region_globstr.expand())
+            region_site_fpaths = util_path.coerce_patterned_paths(final_site_globstr.expand())
+
+            # Assign site models to region files
+            ASSIGN_BY_FPATH = True
+            if ASSIGN_BY_FPATH:
+                # This is not robust, but it doesn't require touching the disk
+                region_id_to_fpath = {p.stem: p for p in region_file_fpaths}
+                site_id_to_fpath = {p.stem: p for p in region_site_fpaths}
+                region_id_to_site_fpaths = ub.ddict(list)
+                for site_id, site_fpaths in site_id_to_fpath.items():
+                    region_id, site_num = site_id.rsplit('_', maxsplit=1)
+                    region_id_to_site_fpaths[region_id].append(site_fpaths)
+
+                if 1:
+                    regions_without_sites = set(region_id_to_fpath) - set(region_id_to_site_fpaths)
+                    sites_without_regions = set(region_id_to_site_fpaths) - set(region_id_to_fpath)
+                    print(f'regions_without_sites={regions_without_sites}')
+                    print(f'sites_without_regions={sites_without_regions}')
+
+            else:
+                raise NotImplementedError(
+                    'TODO: implement more robust alternative that reads '
+                    'file data to make assignment if needed')
 
             if config['max_regions'] is not None:
                 region_file_fpaths = region_file_fpaths[:config['max_regions']]
-            # region_file_fpaths = region_file_fpaths[0:2]
-            # TODO: it would be nice to have just a single script that handles
-            # multiple regions
+
             print('region_file_fpaths = {}'.format(ub.repr2(sorted(region_file_fpaths), nl=1)))
-            for region_fpath in region_file_fpaths:
-                region_id = region_fpath.stem
-                if region_id in blocklist:
+            for region_id, region_fpath in region_id_to_fpath.items():
+                if region_id in region_id_blocklist:
                     continue
 
                 region_inputs_fpath = (uncropped_query_dpath / (region_id + '.input')).shrinkuser(home='$HOME')
@@ -237,11 +263,10 @@ def main(cmdline=False, **kwargs):
                         --sensors "{config['sensors']}" \
                         --api_key "{config['api_key']}" \
                         --max_products_per_region "{config['max_products_per_region']}" \
-                        --max_products_per_region "{config['max_products_per_region']}" \
                         --mode area \
                         --verbose 2 \
                         --outfile "{region_inputs_fpath}"
-                    '''), name=f'stac-search-{region_id}', depends=[base_mkdir_job])
+                    '''), name=f'stac-search-{region_id}', depends=[])
 
                 stac_jobs.append({
                     'name': region_id,
@@ -293,7 +318,7 @@ def main(cmdline=False, **kwargs):
                     --mode area \
                     --verbose 2 \
                     --outfile "{combined_inputs_fpath}"
-                '''), name='stac-search', depends=[base_mkdir_job])
+                '''), name='stac-search', depends=[])
 
             stac_jobs.append({
                 'name': 'combined',
@@ -394,7 +419,7 @@ def main(cmdline=False, **kwargs):
         cache_prefix = f'[[ -f {uncropped_fielded_kwcoco_fpath} ]] || ' if config['cache'] else ''
         add_fields_job = queue.submit(ub.codeblock(
             rf'''
-            # PREPARE Uncropped datasets (usually for debugging)
+            # PREPARE Uncropped datasets
             {cache_prefix}{job_environ_str}python -m watch.cli.coco_add_watch_fields \
                 --src "{uncropped_kwcoco_fpath}" \
                 --dst "{uncropped_fielded_kwcoco_fpath}" \
@@ -466,13 +491,14 @@ def main(cmdline=False, **kwargs):
         cache_crops = 1
         if cache_crops:
             align_keep = 'img'
-            align_keep = 'roi-img'
+            # align_keep = 'roi-img'
         else:
             align_keep = 'none'
 
         debug_valid_regions = config['debug']
         align_visualize = config['debug']
-        channels = config['channels']
+        include_channels = config['include_channels']
+        exclude_channels = config['exclude_channels']
 
         align_job = queue.submit(ub.codeblock(
             rf'''
@@ -485,7 +511,8 @@ def main(cmdline=False, **kwargs):
                 --context_factor=1 \
                 --geo_preprop=auto \
                 --keep={align_keep} \
-                --channels="{channels}" \
+                --include_channels="{include_channels}" \
+                --exclude_channels="{exclude_channels}" \
                 --visualize={align_visualize} \
                 --debug_valid_regions={debug_valid_regions} \
                 --rpc_align_method affine_warp \
@@ -552,13 +579,13 @@ def main(cmdline=False, **kwargs):
 
         align_info = info.copy()
         align_info['job'] = project_anns_job
-        alignment_jobs.append(info)
+        alignment_jobs.append(align_info)
 
     if config['separate_align_jobs']:
         # Need a final union step
         aligned_fpaths = [d['aligned_imganns_fpath'] for d in alignment_jobs]
         union_depends_jobs = [d['job'] for d in alignment_jobs]
-        union_suffix = ub.hash_data([p.name for p in aligned_fpaths])[0:8]
+        # union_suffix = ub.hash_data([p.name for p in aligned_fpaths])[0:8]
         aligned_final_fpath = (aligned_kwcoco_bundle / 'data.kwcoco.json').shrinkuser(home='$HOME')
         aligned_multi_src_part = ' '.join(['"{}"'.format(p) for p in aligned_fpaths])
         cache_prefix = f'[[ -f {aligned_final_fpath} ]] || ' if config['cache'] else ''
@@ -621,7 +648,6 @@ def main(cmdline=False, **kwargs):
 
     queue.rprint()
     queue.print_graph()
-
     if config['run']:
         queue.run(block=True, system=True)
 

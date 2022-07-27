@@ -47,9 +47,9 @@ _ACCENTURE_PHASE2_TA1_PRODUCTS = {
         'endpoint': "https://api.smart-stac.com",
         'collections': ['ta1-s2-acc'],
     },
-    'ta1-l8-acc': {
+    'ta1-ls-acc': {
         'endpoint': "https://api.smart-stac.com",
-        'collections': ['ta1-l8-acc'],
+        'collections': ['ta1-ls-acc'],
     },
     'ta1-pd-acc': {
         'endpoint': "https://api.smart-stac.com",
@@ -65,6 +65,33 @@ _ACCENTURE_PHASE2_TA1_PRODUCTS = {
         }
     },
 }
+
+### Available smartstac collections:
+# <CollectionClient id=landsat-c2l2-sr>,
+# <CollectionClient id=ta1-s2-ara>,
+# <CollectionClient id=ta1-pd-ara>,
+# <CollectionClient id=ssh-wv-acc>,
+# <CollectionClient id=ssh-ls-acc>,
+# <CollectionClient id=ta1-wv-ara>,
+# <CollectionClient id=ta1-ls-ara>,
+# <CollectionClient id=ta1-s2-acc>,
+# <CollectionClient id=worldview-nitf>,
+# <CollectionClient id=ta1-wv-str>,
+# <CollectionClient id=landsat-c2l1>,
+# <CollectionClient id=ta1-ls-str>,
+# <CollectionClient id=ta1-pd-str>,
+# <CollectionClient id=ta1-pd-kit>,
+# <CollectionClient id=planet-dove>,
+# <CollectionClient id=ta1-ls-kit>,
+# <CollectionClient id=ta1-wv-acc>,
+# <CollectionClient id=ta1-dsm-ara>,
+# <CollectionClient id=ssh-pd-acc>,
+# <CollectionClient id=ssh-s2-acc>,
+# <CollectionClient id=ta1-s2-kit>,
+# <CollectionClient id=ta1-wv-kit>,
+# <CollectionClient id=ta1-pd-acc>,
+# <CollectionClient id=ta1-ls-acc>,
+# <CollectionClient id=ta1-s2-str>,
 
 
 _PUBLIC_L1_PRODUCTS = {
@@ -132,12 +159,22 @@ CONVINIENCE_SENSOR_GROUPS = {
         'sentinel-s2-l2a-cogs',
         'landsat-c2ard-sr',
     ],
+
     'TA1-S2-L8-ACC': [
         'ta1-s2-acc',
-        'ta1-l8-acc',
+        'ta1-ls-acc',
+    ],
+    'TA1-S2-L8-WV-PL-ACC': [
+        'ta1-s2-acc',
+        'ta1-ls-acc',
+        'ta1-pd-acc',
+        'ta1-wv-acc',
     ],
     'TA1-S2-ACC': [
         'ta1-s2-acc',
+    ],
+    'TA1-L8-ACC': [
+        'ta1-ls-acc',
     ],
 }
 
@@ -150,7 +187,10 @@ def build_search_json(start_date, end_date, sensors, api_key, cloud_cover):
         api_key = os.environ.get(api_environ_key, None)
 
     if isinstance(sensors, str):
-        sensors = CONVINIENCE_SENSOR_GROUPS[sensors]
+        if sensors in SENSOR_TO_DEFAULTS:
+            sensors = [sensors]
+        else:
+            sensors = CONVINIENCE_SENSOR_GROUPS[sensors]
 
     headers = {
             "x-api-key": api_key,
@@ -183,14 +223,15 @@ def build_search_json(start_date, end_date, sensors, api_key, cloud_cover):
 def main(cmdline=1, **kwargs):
     """
     Example:
-        from watch.cli.stac_search_build import *  # NOQA
-        cmdline = 0
-        kwargs = {
-            'start_date': '2017-01-01',
-            'end_date': '2020-01-01',
-            'sensors': 'TA1',
-        }
-        main(cmdline=cmdline, **kwargs)
+        >>> # xdoctest: +SKIP
+        >>> from watch.cli.stac_search_build import main
+        >>> cmdline = 0
+        >>> kwargs = {
+        >>>     'start_date': '2017-01-01',
+        >>>     'end_date': '2020-01-01',
+        >>>     'sensors': 'L2-S2',
+        >>> }
+        >>> main(cmdline=cmdline, **kwargs)
     """
     import json
     config = StacSearchBuilderConfig(cmdline=cmdline, data=kwargs)

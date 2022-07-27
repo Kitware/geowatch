@@ -185,7 +185,10 @@ class CocoAlignGeotiffConfig(scfg.Config):
 
         'max_frames': scfg.Value(None),
 
-        'channels': scfg.Value(None, help='If specified only align the given channels'),
+        'warp_tries': scfg.Value(10, help='The maximum number of times to retry failed gdal warp commands before stopping.'),
+
+        'include_channels': scfg.Value(None, help='If specified only align the given channels'),
+        'exclude_channels': scfg.Value(None, help='If specified ignore these channels'),
 
         'verbose': scfg.Value(0, help='Note: no silent mode, 0 is just least verbose.'),
     }
@@ -470,7 +473,9 @@ def main(cmdline=True, **kw):
             aux_workers=aux_workers, keep=keep, target_gsd=target_gsd,
             max_frames=max_frames,
             debug_valid_regions=config['debug_valid_regions'],
-            channels=config['channels'],
+            include_channels=config['include_channels'],
+            exclude_channels=config['exclude_channels'],
+            tries=config['warp_tries'],
             verbose=config['verbose'],
         )
 
@@ -771,7 +776,8 @@ class SimpleDataCube(object):
                          write_subsets=True, visualize=True, max_workers=0,
                          aux_workers=0, keep='none', target_gsd=10,
                          max_frames=None, debug_valid_regions=False,
-                         channels=None, verbose=0):
+                         include_channels=None, exclude_channels=None,
+                         tries=10, verbose=0):
         """
         Given a region of interest, extract an aligned temporal sequence
         of data to a specified directory.
@@ -804,8 +810,11 @@ class SimpleDataCube(object):
                 "img": only add new images
                 "roi": only add new ROIs
 
-            channels (FusedChannelSpec):
+            include_channels (FusedChannelSpec):
                 if specified, only use these channels.
+
+            exclude_channels (FusedChannelSpec):
+                exclude these channels
 
             verbose (int):
                 note, there is no silent mode, 0 is just the least verbose.
@@ -1120,7 +1129,9 @@ class SimpleDataCube(object):
                     sub_bundle_dpath, space_str, space_region, space_box,
                     start_gid, start_aid, aux_workers, keep,
                     local_epsg=local_epsg, other_imgs=other_imgs,
-                    channels=channels, verbose=verbose)
+                    include_channels=include_channels,
+                    exclude_channels=exclude_channels,
+                    tries=tries, verbose=verbose)
                 start_gid = start_gid + 1
                 start_aid = start_aid + len(anns)
                 frame_index = frame_index + 1
@@ -1237,8 +1248,10 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
                       datetime_, num, frame_index, new_vidid, rpc_align_method,
                       sub_bundle_dpath, space_str, space_region, space_box,
                       start_gid, start_aid, aux_workers=0, keep=False,
-                      local_epsg=None, other_imgs=None, channels=None,
-                      verbose=0):
+                      local_epsg=None, other_imgs=None,
+                      include_channels=None,
+                      exclude_channels=None,
+                      tries=10, verbose=0):
     """
     Threaded worker function for :func:`SimpleDataCube.extract_overlaps`.
 
@@ -1323,7 +1336,9 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
             _aligncrop, obj_group, bundle_dpath, name, sensor_coarse,
             dst_dpath, space_region, space_box, align_method,
             is_multi_image, keep, local_epsg=local_epsg,
-            channels=channels, verbose=verbose)
+            include_channels=include_channels,
+            exclude_channels=exclude_channels,
+            tries=tries, verbose=verbose)
         job_list.append(job)
 
     dst_list = []
@@ -1361,7 +1376,6 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
     # Hack because heurstics break when fnames change
     for old_aux_group, new_aux in zip(obj_groups, dst_list):
         if new_aux is not None:
-            # new_aux['channels'] = old_aux['channels']
             if len(old_aux_group) > 1:
                 new_aux['parent_file_name'] = [g['file_name'] for g in old_aux_group]
             else:
@@ -1543,11 +1557,8 @@ def _fix_geojson_poly(geo):
 @profile
 def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
                space_box, align_method, is_multi_image, keep, local_epsg=None,
-               channels=None, verbose=0):
+               include_channels=None, exclude_channels=None, tries=10, verbose=0):
     import watch
-
-    # TODO: parameterize
-    tries = 10
 
     # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
     first_obj = obj_group[0]
@@ -1557,12 +1568,20 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     channels_ = kwcoco.FusedChannelSpec.coerce(chan_code)
     chan_pname = channels_.path_sanitize(maxlen=10)
 
-    if channels is not None:
+    if include_channels is not None:
         # Filter out bands we are not interested in
-        channels = kwcoco.FusedChannelSpec.coerce(channels)
-        if not channels.intersection(channels_).numel():
+        include_channels = kwcoco.FusedChannelSpec.coerce(include_channels)
+        if not channels_.intersection(include_channels).numel():
             if verbose > 2:
-                print('Skip {}'.format(channels_))
+                print('Skip not included {}'.format(channels_))
+            return None
+
+    if exclude_channels is not None:
+        # Filter out bands we are not interested in
+        exclude_channels = kwcoco.FusedChannelSpec.coerce(exclude_channels)
+        if channels_.difference(exclude_channels).numel() == 0:
+            if verbose > 2:
+                print('Skip excluded {}'.format(channels_))
             return None
 
     if is_multi_image:
@@ -1590,7 +1609,28 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
 
     already_exists = exists(dst_gpath)
     needs_recompute = not (already_exists and keep in {'img', 'roi-img'})
+
     if not needs_recompute:
+        DOUBLE_CHECK = 1
+        if DOUBLE_CHECK:
+            # Sometimes the data will exist, but it's bad data. Check for this.
+            dst_gpath = ub.Path(dst_gpath)
+            try:
+                ref = util_gdal.GdalOpen(dst_gpath, mode='r')
+                ref
+            except RuntimeError:
+                # Data is likely corrupted
+                needs_recompute = True
+                print(f'The data exists {dst_gpath}, but is corrupted. Recomputing')
+                dst_gpath.delete()
+                pass
+            else:
+                ref = None
+
+    if not needs_recompute:
+        # if 'crop_20191014T130000Z_S23.539915W046.611400_S23.283329W046.288255_S2_0' in dst_gpath:
+        #     import xdev
+        #     xdev.embed()
         if verbose:
             print('cache hit dst = {!r}'.format(dst))
         return dst
@@ -1657,6 +1697,19 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     os.rename(tmp_dst_gpath, dst_gpath)
     if verbose > 2:
         print('finish gdal warp dst_gpath = {!r}'.format(dst_gpath))
+
+    CHECK_AFTER = 1
+    if CHECK_AFTER:
+        # Sometimes the warp screws up.
+        dst_gpath = ub.Path(dst_gpath)
+        try:
+            ref = util_gdal.GdalOpen(dst_gpath, mode='r')
+            ref
+        except RuntimeError as ex:
+            print(f'ERROR THE DATA WE JUST WROTE IS BAD: ex={ex}')
+            raise
+        else:
+            ref = None
     return dst
 
 

@@ -312,15 +312,25 @@ def expand_site_models_with_site_summaries(sites, regions):
         for region_id, site_summaries in region_id_to_site_summaries.items():
             site_rows2.append(site_summaries)
 
-        site_df1 = pd.concat(site_rows1).reset_index()
-        site_df2 = pd.concat(site_rows2).reset_index()
-        assert len(set(site_df1['site_id'])) == len(site_df1), 'site ids must be unique'
-        assert len(set(site_df2['site_id'])) == len(site_df2), 'site ids must be unique'
-        site_df1 = site_df1.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
-        site_df2 = site_df2.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
+        expected_keys = ['index', 'observation_date', 'source', 'sensor_name', 'type',
+                         'current_phase', 'is_occluded', 'is_site_boundary', 'region_id',
+                         'site_id', 'version', 'status', 'mgrs', 'score', 'start_date',
+                         'end_date', 'model_content', 'originator', 'validated', 'geometry',
+                         'misc_info']
 
-        print(site_df1)
-        print(site_df2)
+        if site_rows1:
+            site_df1 = pd.concat(site_rows1).reset_index()
+            assert len(set(site_df1['site_id'])) == len(site_df1), 'site ids must be unique'
+            site_df1 = site_df1.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
+        else:
+            site_df1 = pd.DataFrame([], columns=expected_keys)
+
+        if site_rows2:
+            site_df2 = pd.concat(site_rows2).reset_index()
+            assert len(set(site_df2['site_id'])) == len(site_df2), 'site ids must be unique'
+            site_df2 = site_df2.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
+        else:
+            site_df2 = pd.DataFrame([], columns=expected_keys)
 
         common_site_ids = sorted(set(site_df1['site_id']) & set(site_df2['site_id']))
         common1 = site_df1.loc[common_site_ids]
