@@ -91,6 +91,12 @@ S2_CHANNEL_ALIAS.update({'TCI': 'tci:3'})
 
 
 def _determine_channels_collated(asset_name, asset_dict):
+    """
+    Note:
+        The term "collated" means that each band is its own asset and it has
+        the eo:bands property. For more details see:
+        https://smartgitlab.com/TE/standards/-/wikis/STAC-and-Storage-Specifications
+    """
     eo_band_names = [eob.get('common_name', eob['name'])
                      for eob in asset_dict.get('eo:bands', ())]
 
@@ -244,23 +250,36 @@ def _determine_l8_channels(asset_name, asset_dict):
 
 def _determine_wv_channels(asset_name, asset_dict):
     asset_href = asset_dict['href']
-    bands = gdal.Info(asset_href, format='json')['bands']
 
-    # the channel names are the same for all WV, just the
-    # center_wavelength is different so we can safely use this
-    # info from WV2
-    def _code(band_dicts):
-        return '|'.join(b.get('common_name', b['name'])
-                        for b in band_dicts)
+    eo_band_names = []
+    for eob in asset_dict.get('eo:bands', []):
+        if isinstance(eob, dict):
+            eo_band_names.append(eob['name'])
+        elif isinstance(eob, str):
+            eo_band_names.append(eob)
+        else:
+            raise TypeError(f'type(eob) = {type(eob)}')
 
-    if len(bands) == 1:
-        channels = _code(util_bands.WORLDVIEW2_PAN)
-    elif len(bands) == 4:
-        channels = _code(util_bands.WORLDVIEW2_MS4)
-    elif len(bands) == 8:
-        channels = _code(util_bands.WORLDVIEW2_MS8)
+    if eo_band_names:
+        channels = '|'.join(eo_band_names)
     else:
-        raise Exception('unknown channel signature for WV')
+        bands = gdal.Info(asset_href, format='json')['bands']
+
+        # the channel names are the same for all WV, just the
+        # center_wavelength is different so we can safely use this
+        # info from WV2
+        def _code(band_dicts):
+            return '|'.join(b.get('common_name', b['name'])
+                            for b in band_dicts)
+
+        if len(bands) == 1:
+            channels = _code(util_bands.WORLDVIEW2_PAN)
+        elif len(bands) == 4:
+            channels = _code(util_bands.WORLDVIEW2_MS4)
+        elif len(bands) == 8:
+            channels = _code(util_bands.WORLDVIEW2_MS8)
+        else:
+            raise Exception('unknown channel signature for WV')
     return channels
 
 
