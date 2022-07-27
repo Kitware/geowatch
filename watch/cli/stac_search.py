@@ -88,6 +88,31 @@ CommandLine:
         --mode area \
         --verbose 2 \
         --outfile "${RESULT_FPATH}"
+
+CommandLine:
+    # Alternate invocation
+    # Create a demo region file
+
+    mkdir -p "$DEMO_DPATH"
+
+    DVC_DPATH=$(smartwatch_dvc)
+    REGION_FAPTH=$DVC_DPATH/annotations/region_models/BR_R005.geojson
+
+    # Define SMART_STAC_API_KEY
+    source "$HOME"/code/watch/secrets/secrets
+
+    # Delete this to prevent duplicates
+    rm -f "$RESULT_FPATH"
+    # Create the .input file
+    python -m watch.cli.stac_search \
+        --region_file "$REGION_FPATH" \
+        --api_key=env:SMART_STAC_API_KEY \
+        --search_json "auto" \
+        --cloud_cover 10 \
+        --sensors=TA1-L8-ACC \
+        --mode area \
+        --verbose 2 \
+        --outfile "${RESULT_FPATH}"
 """
 import json
 import os
