@@ -1053,6 +1053,13 @@ class KWCocoVideoDataset(data.Dataset):
         self.sensorchan = kwcoco.SensorChanSpec.coerce(sensorchans).normalize()
 
         # TODO: handle * sensors
+        import xdev
+        """
+        python -m watch.tasks.fusion.predict --write_probs=True --write_preds=False --with_class=auto --with_saliency=auto --with_change=False --package_fpath=/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/packages/Drop3_Simplify_S2_L8_I_V335/Drop3_Simplify_S2_L8_I_V335_epoch=7-step=32768.pt --pred_dataset=/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/Drop3_Simplify_S2_L8_I_V335/pred_Drop3_Simplify_S2_L8_I_V335_epoch=7-step=32768/Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco/predcfg_1e9e1706/pred.kwcoco.json --test_dataset=/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/Aligned-Drop3-TA1-2022-03-10/combo_LM_nowv_vali.kwcoco.json --num_workers=4 --chip_overlap=0.3 --tta_time=None --tta_fliprot=None --set_cover_algo=None --devices=0, --batch_size=1
+        """
+        with xdev.embed_on_exception_context:
+            '*' in [s.sensor.spec for s in self.sensorchan.streams()]
+
         if '*' in [s.sensor.spec for s in self.sensorchan.streams()]:
             # handle * sensor in a way that works with previous models
             # This code is a little messy and should be cleaned up

@@ -113,6 +113,7 @@ schedule-prediction-and-evlauation(){
             --devices="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*Simplify*/*.pt" \
             --test_dataset="$VALI_FPATH" \
+            --set_cover_algo="approx," \
             --run=0 --skip_existing=True --backend=tmux
 
     TMUX_GPUS="0,1,2,3"
