@@ -208,6 +208,8 @@ def main(cmdline=False, **kwargs):
     queue = cmd_queue.Queue.create(
         backend=config['backend'], name='prep-ta2-dataset', size=1, gres=None)
 
+    default_collated = config['collated'][0]
+
     stac_jobs = []
     # base_mkdir_job = queue.submit(f'mkdir -p "{uncropped_query_dpath}"', name='mkdir-base')
     if config['stac_query_mode'] == 'auto':
@@ -273,7 +275,7 @@ def main(cmdline=False, **kwargs):
                     'job': stac_search_job,
                     'inputs_fpath': region_inputs_fpath,
                     'region_globstr': final_region_fpath,
-                    'collated': False,
+                    'collated': default_collated,
                 })
 
             # Kind of pointless option, we could separate all stac jobs and
@@ -297,7 +299,7 @@ def main(cmdline=False, **kwargs):
                     'job': combine_job,
                     'inputs_fpath': combined_inputs_fpath,
                     'region_globstr': final_region_globstr,
-                    'collated': False,
+                    'collated': default_collated,
                 }]
         else:
             warnings.warn(
@@ -325,7 +327,7 @@ def main(cmdline=False, **kwargs):
                 'job': combo_stac_search_job,
                 'region_globstr': final_region_globstr,
                 'inputs_fpath': combined_inputs_fpath,
-                'collated': False,
+                'collated': default_collated,
             })
     else:
         s3_fpath_list = config['s3_fpath']
