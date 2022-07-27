@@ -93,10 +93,8 @@ CommandLine:
     # Alternate invocation
     # Create a demo region file
 
-    mkdir -p "$DEMO_DPATH"
-
     DVC_DPATH=$(smartwatch_dvc)
-    REGION_FAPTH=$DVC_DPATH/annotations/region_models/BR_R005.geojson
+    REGION_FPATH=$DVC_DPATH/annotations/region_models/BR_R005.geojson
 
     # Define SMART_STAC_API_KEY
     source "$HOME"/code/watch/secrets/secrets
@@ -108,11 +106,11 @@ CommandLine:
         --region_file "$REGION_FPATH" \
         --api_key=env:SMART_STAC_API_KEY \
         --search_json "auto" \
-        --cloud_cover 10 \
-        --sensors=TA1-L8-ACC \
+        --cloud_cover 100 \
+        --sensors=TA1-S2-L8-WV-PL-ACC \
         --mode area \
         --verbose 2 \
-        --outfile "${RESULT_FPATH}"
+        --outfile "./result.input"
 """
 import json
 import os
@@ -248,15 +246,19 @@ class StacSearcher:
         catalog = pystac_client.Client.open(provider, headers=headers)
 
         daterange = [start, end]
+
         search = catalog.search(
             collections=collections,
             datetime=daterange,
             intersects=geom,
+            max_items=None,
             query=query)
 
         # Found features
         try:
-            items = search.get_all_items()
+            items_gen = search.items()
+            items = list(items_gen)
+            # items = search.get_all_items()
         except pystac_client.exceptions.APIError as ex:
             print('ERROR ex = {}'.format(ub.repr2(ex, nl=1)))
             if 'no such index' in str(ex):
@@ -265,9 +267,11 @@ class StacSearcher:
                 print('available_collections = {}'.format(ub.repr2(available_collections, nl=1)))
                 pass
             raise
-        features = items.to_dict()['features']
+        features = [d.to_dict() for d in items]
+        # items.to_dict()['features']
 
-        self.logger.info('Search found %s items' % str(len(items)))
+        self.logger.info('Search found {} items for {}'.format(
+            str(len(items)), str(collections)))
         if max_products_per_region and max_products_per_region < len(features):
             # Filter to a max number of items per region for testing
             # Sample over time uniformly
@@ -275,7 +279,8 @@ class StacSearcher:
             from watch.tasks.fusion.datamodules import temporal_sampling
             import kwarray
             import ubelt as ub
-            datetimes = [util_time.coerce_datetime(item['properties']['datetime']) for item in features]
+            datetimes = [util_time.coerce_datetime(item['properties']['datetime'])
+                         for item in features]
             # TODO: Can we get a linear variant that doesn't need the N**2
             # affinity matrix?  Greedy set cover maybe? Or mean-shift
             sampler = temporal_sampling.TimeWindowSampler.from_datetimes(
@@ -295,6 +300,7 @@ class StacSearcher:
         self.logger.info('Saved STAC results to: ' + outfile)
 
     def by_id(self, provider, collections, stac_id, outfile, query, headers):
+        raise NotImplementedError
         self.logger.info('Processing ' + stac_id)
         catalog = pystac_client.Client.open(provider, headers=headers)
         if stac_id[-4:] == '_TCI':
