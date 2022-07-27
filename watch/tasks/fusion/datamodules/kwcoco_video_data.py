@@ -1086,9 +1086,10 @@ class KWCocoVideoDataset(data.Dataset):
 
         # Hack away sensors
         print(f'self.sensorchan={self.sensorchan=!r}')
-        channels = ','.join(sorted(ub.unique([s.chans.spec for s in self.sensorchan.streams()])))
-        channels = channel_spec.ChannelSpec.coerce(channels).normalize()
-        self.channels = channels
+        with xdev.embed_on_exception_context:
+            channels = ','.join(sorted(ub.unique([s.chans.spec for s in self.sensorchan.streams()])))
+            channels = channel_spec.ChannelSpec.coerce(channels).normalize()
+            self.channels = channels
 
         NEW = 1
         if NEW:
