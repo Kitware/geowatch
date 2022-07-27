@@ -332,6 +332,8 @@ def predict(cmdline=False, **kwargs):
             unique_channel_streams = ub.oset()
             for sensor, tokenizers in method.sensor_channel_tokenizers.items():
                 for code in tokenizers.keys():
+                    from watch.tasks.fusion.methods.network_modules import RobustModuleDict
+                    code = RobustModuleDict._unnormalize_key(code)
                     unique_channel_streams.add(code)
             hack_model_spec = kwcoco.ChannelSpec.coerce(','.join(unique_channel_streams))
             if datamodule_channel_spec is not None:
