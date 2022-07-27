@@ -278,9 +278,7 @@ def predict(cmdline=False, **kwargs):
 
     # init datamodule from args
     datamodule_class = getattr(datamodules, args.datamodule)
-    import xdev
-    with xdev.embed_on_exception_context:
-        datamodule_vars = datamodule_class.compatible(vars(args))
+    datamodule_vars = datamodule_class.compatible(vars(args))
 
     parsetime_vals = ub.dict_isect(datamodule_vars, args.datamodule_defaults)
     need_infer = {k: v for k, v in parsetime_vals.items() if v == 'auto'}
@@ -349,11 +347,13 @@ def predict(cmdline=False, **kwargs):
             # This model has an issue with the L8 features it was trained on
             datamodule_vars['exclude_sensors'] = ['L8']
 
-    datamodule = datamodule_class(
-        **datamodule_vars
-    )
-    # TODO: if TTA=True, disable determenistic time sampling
-    datamodule.setup('test')
+    import xdev
+    with xdev.embed_on_exception_context:
+        datamodule = datamodule_class(
+            **datamodule_vars
+        )
+        # TODO: if TTA=True, disable determenistic time sampling
+        datamodule.setup('test')
 
     if config['tta_time']:
         # Expand targets to include time augmented samples
