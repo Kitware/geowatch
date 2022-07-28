@@ -105,7 +105,7 @@ schedule-prediction-and-evlauation(){
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_ILM_nowv_vali.kwcoco.json
     # The devices flag does not work for the slurm backend. (Help wanted)
     TMUX_GPUS="0,1"
     #TMUX_GPUS="1,"

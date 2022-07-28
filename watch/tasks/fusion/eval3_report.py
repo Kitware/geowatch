@@ -12,6 +12,8 @@ import math
 import numpy as np
 import pandas as pd
 import functools  # NOQA
+# APPLY Monkey Patches
+from watch.tasks.fusion import monkey  # NOQA
 
 
 # TODO: move to heuristics
@@ -158,6 +160,8 @@ class EvaluationReporter:
 
 def eval3_report():
     """
+    MAIN FUNCTION
+
     from watch.tasks.fusion.eval3_report import *  # NOQA
     """
     import kwplot

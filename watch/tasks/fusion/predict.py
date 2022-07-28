@@ -21,26 +21,13 @@ from watch.utils import util_path
 from watch.utils import util_parallel
 from watch.utils import util_kwimage
 from watch.tasks.fusion.datamodules.kwcoco_video_data import inv_fliprot
+# APPLY Monkey Patches
+from watch.tasks.fusion import monkey  # NOQA
 
 try:
     from xdev import profile
 except Exception:
     profile = ub.identity
-
-import torchmetrics
-if not hasattr(torchmetrics.classification.f_beta, 'F1'):
-    torchmetrics.classification.f_beta.F1 = torchmetrics.classification.f_beta.FBetaScore
-
-
-def torchmetrics_compat_hack():
-    import torchmetrics
-    f_beta = torchmetrics.classification.f_beta
-    if not hasattr(f_beta, 'FBeta'):
-        f_beta.FBeta = f_beta.FBetaScore
-    if not hasattr(torchmetrics.classification.f_beta, 'FBetaScore'):
-        f_beta.FBetaScore = f_beta.FBeta
-
-torchmetrics_compat_hack()
 
 
 def make_predict_config(cmdline=False, **kwargs):
