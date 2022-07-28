@@ -1698,18 +1698,19 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     if verbose > 2:
         print('finish gdal warp dst_gpath = {!r}'.format(dst_gpath))
 
-    CHECK_AFTER = 1
-    if CHECK_AFTER:
-        # Sometimes the warp screws up.
-        dst_gpath = ub.Path(dst_gpath)
-        try:
-            ref = util_gdal.GdalOpen(dst_gpath, mode='r')
-            ref
-        except RuntimeError as ex:
-            print(f'ERROR THE DATA WE JUST WROTE IS BAD: ex={ex}')
-            raise
-        else:
-            ref = None
+    # The internal commands do this now.
+    # CHECK_AFTER = 0
+    # if CHECK_AFTER:
+    #     # Sometimes the warp screws up.
+    #     dst_gpath = ub.Path(dst_gpath)
+    #     try:
+    #         ref = util_gdal.GdalOpen(dst_gpath, mode='r')
+    #         ref
+    #     except RuntimeError as ex:
+    #         print(f'ERROR THE DATA WE JUST WROTE IS BAD: ex={ex}')
+    #         raise
+    #     else:
+    #         ref = None
     return dst
 
 

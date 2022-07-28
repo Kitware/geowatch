@@ -173,15 +173,15 @@ rgb_medium_drop4_only(){
 small_onesite(){
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     source ~/code/watch/secrets/secrets
-    SENSORS=TA1-S2-L8-ACC
+    SENSORS=TA1-S2-L8-WV-PL-ACC
     #SENSORS=L2-S2
     #SENSORS=L2-L8
     #SENSORS=TA1-S2-ACC
     #SENSORS=TA1-L8-ACC
     #SENSORS=L2-S2-L8
-    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/US_R004.geojson"
-    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/US_R004_*.geojson"
-    DATASET_SUFFIX=Drop4-2022-07-24-$SENSORS-onesite
+    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/BR_R001.geojson"
+    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/BR_R001*.geojson"
+    DATASET_SUFFIX=Drop4-2022-07-28-$SENSORS-onesite
 
     # Test credentials
     #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
@@ -217,10 +217,12 @@ small_onesite(){
 
 small_teregions(){
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
-    SENSORS=L2-L8
+    SENSORS=L2-S2
     DATASET_SUFFIX=Drop4-2022-07-18-$SENSORS-small-teregion
-    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*_R*.geojson"
-    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*_R*.geojson"
+    #REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*_R*.geojson"
+    #SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*_R*.geojson"
+    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/BR_R001.geojson"
+    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/BR_R001_*.geojson"
 
     #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
     #REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/NZ_R001.*"
@@ -246,7 +248,7 @@ small_teregions(){
         --ignore_duplicates=1 \
         --target_gsd=30 \
         --visualize=True \
-        --backend=serial --run=1
+        --backend=serial --run=0
 }
 
 small_allsites(){

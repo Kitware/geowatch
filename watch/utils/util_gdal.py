@@ -61,15 +61,6 @@ GDAL_VIRTUAL_FILESYSTEM_PREFIX = '/vsi'
 # ]
 
 
-gdalwarp_performance_opts = ub.paragraph('''
-        -multi
-        --config GDAL_CACHEMAX 15%
-        -wm 15%
-        -co NUM_THREADS=ALL_CPUS
-        -wo NUM_THREADS=1
-        ''')
-
-
 class DummyLogger:
     def warning(self, msg, *args):
         print(msg % args)
@@ -313,6 +304,7 @@ def gdal_single_warp(in_fpath,
                      as_vrt=False,
                      use_te_geoidgrid=False,
                      dem_fpath=None,
+                     error_logfile=None,
                      tries=1,
                      verbose=0):
     r"""
@@ -351,6 +343,9 @@ def gdal_single_warp(in_fpath,
 
         dem_fpath (bool): undocumented
 
+        error_logfile (None | PathLike):
+            If specified, errors will be logged to this filepath.
+
         tries (int): gdal can be flakey, set to force some number of retries
 
     Notes:
@@ -360,6 +355,24 @@ def gdal_single_warp(in_fpath,
 
             -te_srs - Specifies the SRS in which to interpret the coordinates given with -te.
             -te - Set georeferenced extents of output file to be created
+
+    Ignore:
+        import xdev
+        import sys, ubelt
+        from watch.utils.util_gdal import *  # NOQA
+        globals().update(xdev.get_func_kwargs(gdal_single_warp))
+
+    Example:
+        >>> from watch.utils.util_gdal import gdal_single_warp
+        >>> in_fpath = '/vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/23/K/PQ/2019/6/S2B_23KPQ_20190623_0_L2A/B02.tif'
+        >>> from osgeo import gdal
+        >>> info = gdal.Info(in_fpath, format='json')
+        >>> bound_poly = kwimage.Polygon.coerce(info['wgs84Extent'])
+        >>> crop_poly = bound_poly.scale(0.03, about='origin')
+        >>> space_box = crop_poly.to_boxes()
+        >>> out_fpath = ub.Path.appdir('fds').ensuredir() / 'cropped.tif'
+        >>> error_logfile = '/dev/null'
+        >>> gdal_single_warp(in_fpath, out_fpath, space_box=space_box, error_logfile=error_logfile, verbose=3)
 
     Ignore:
         from kwcoco.util import util_archive
@@ -375,12 +388,12 @@ def gdal_single_warp(in_fpath,
         target_srs = 'epsg:{}'.format(local_epsg)
 
     template_parts = [
-        '''
+        ub.paragraph('''
         gdalwarp
         --debug off
         -t_srs {target_srs}
         -overwrite
-        '''
+        ''')
     ]
 
     template_kw = {
@@ -389,25 +402,33 @@ def gdal_single_warp(in_fpath,
         'DST': out_fpath,
     }
 
+    # https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-co
+    common_options = {}
+
+    # https://gdal.org/user/configoptions.html#configoptions
+    config_options = {}
+
+    # https://gdal.org/api/gdalwarp_cpp.html#_CPPv4N15GDALWarpOptions16papszWarpOptionsE
+    warp_options = {}
+
     if as_vrt:
-        template_parts.append('''
-            -of VRT
-            ''')
+        template_parts.append('-of VRT')
     else:
         if compress == 'RAW':
             compress = 'NONE'
+        common_options['OVERVIEWS'] = 'AUTO'
+        common_options['BLOCKSIZE'] = blocksize
+        common_options['COMPRESS'] = compress
 
         # Use the new COG output driver
-        template_parts.append('''
-            -of COG
-            -co OVERVIEWS=AUTO
-            -co BLOCKSIZE={blocksize}
-            -co COMPRESS={compress}
-            ''')
-        template_kw.update(**{
-            'blocksize': blocksize,
-            'compress': compress,
-        })
+        template_parts.append('-of COG')
+        # -co OVERVIEWS=AUTO
+        # -co BLOCKSIZE={blocksize}
+        # -co COMPRESS={compress}
+        # template_kw.update(**{
+        #     'blocksize': blocksize,
+        #     'compress': compress,
+        # })
 
     if space_box is not None:
         # Data is from geo-pandas so this should be traditional order
@@ -419,10 +440,11 @@ def gdal_single_warp(in_fpath,
         # crop_coordinate_srs = 'epsg:4326'
         crop_coordinate_srs = 'epsg:{}'.format(box_epsg)
 
-        template_parts.append('''
+        template_parts.append(ub.codeblock(
+            '''
             -te {xmin} {ymin} {xmax} {ymax}
             -te_srs {crop_coordinate_srs}
-            ''')
+            '''))
         template_kw.update(
             **{
                 'crop_coordinate_srs': crop_coordinate_srs,
@@ -472,17 +494,49 @@ def gdal_single_warp(in_fpath,
             ''')
         template_kw['geoidgrid_path'] = geoidgrid_path()
 
+    # use multithreaded warping implementation
+    template_parts.append('-multi')
+
+    # https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-wm
+    template_parts.append('-wm "{warp_memory}"')
+
+    if error_logfile is not None:
+        config_options['CPL_LOG'] = error_logfile
+
     if use_perf_opts:
+        template_kw['warp_memory'] = '15%'
+        config_options['GDAL_CACHEMAX'] = '15%'
+        common_options['NUM_THREADS'] = 'ALL_CPUS'
+        warp_options['NUM_THREADS'] = '1'
+
+        gdalwarp_performance_opts = ub.paragraph(
+            '''
+            --config GDAL_CACHEMAX 15%
+            -wm 15%
+            -co NUM_THREADS=ALL_CPUS
+            -wo NUM_THREADS=1
+            ''')
         template_parts.append(gdalwarp_performance_opts)
     else:
         # use existing options
-        template_parts.append(
-            ub.paragraph('''
-            -multi
-            --config GDAL_CACHEMAX 500
-            -wm 500
-            -co NUM_THREADS=2
-            '''))
+        # GDAL_CACHEMAX is in megabytes
+        template_kw['warp_memory'] = '500'
+        common_options['NUM_THREADS'] = '2'
+        config_options['GDAL_CACHEMAX'] = '500'
+        # template_parts.append(ub.paragraph(
+        #     '''
+        #     --config GDAL_CACHEMAX 500 -wm 500 -co NUM_THREADS=2
+        #     '''))
+        # --config CPL_LOG image.log
+
+    for co_key, co_val in common_options.items():
+        template_parts.append(f'-co {co_key}="{co_val}"')
+
+    for wo_key, wo_val in warp_options.items():
+        template_parts.append(f'-wo {co_key}="{co_val}"')
+
+    for conf_key, conf_val in warp_options.items():
+        template_parts.append(f'--config {conf_key}="{conf_val}"')
 
     template_parts.append('{SRC} {DST}')
     template = ' '.join(template_parts)
@@ -491,11 +545,17 @@ def gdal_single_warp(in_fpath,
     command = ub.paragraph(command)
 
     shell = False
+    check_after = True
 
     def _execute_warp():
         cmd_info = ub.cmd(command, check=True, verbose=verbose, shell=shell)
         if not ub.Path(out_fpath).exists():
             raise FileNotFoundError(f'Error: gdal did not write {out_fpath}')
+        if check_after:
+            try:
+                GdalOpen(out_fpath, mode='r')
+            except RuntimeError:
+                raise
         return cmd_info
     got = -1
     try:
@@ -516,6 +576,14 @@ def gdal_single_warp(in_fpath,
             print(
                 'Error: gdal seems to have returned with a valid exist code, '
                 'but the target file was not written')
+            print('got = {}'.format(ub.repr2(got, nl=1)))
+            print(command)
+        raise
+    except RuntimeError:
+        if verbose:
+            print(
+                'Error: gdal has written a file, but its contents '
+                'appear to be invalid')
             print('got = {}'.format(ub.repr2(got, nl=1)))
             print(command)
         raise

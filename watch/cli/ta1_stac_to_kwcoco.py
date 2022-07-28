@@ -88,6 +88,7 @@ S2_CHANNEL_ALIAS = {band['name']: band['common_name']
 # ...except for TCI, which is not a true band, but often included anyway
 # and this channel code is more specific to kwcoco
 S2_CHANNEL_ALIAS.update({'TCI': 'tci:3'})
+L8_CHANNEL_ALIAS.update({'TCI': 'tci:3'})
 
 
 def _determine_channels_collated(asset_name, asset_dict):
@@ -529,7 +530,7 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
             asset_names = stac_dict['assets'].keys()
             eo_bands = []
             for asset_name, asset_item in stac_dict['assets'].items():
-                if 'data' in asset_item['roles']:
+                if 'roles' in asset_item and 'data' in asset_item['roles']:
                     if 'eo:bands' in asset_item:
                         for eo_band in asset_item['eo:bands']:
                             if isinstance(eo_band, dict):
