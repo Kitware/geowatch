@@ -363,16 +363,24 @@ def gdal_single_warp(in_fpath,
         globals().update(xdev.get_func_kwargs(gdal_single_warp))
 
     Example:
+        >>> import kwimage
         >>> from watch.utils.util_gdal import gdal_single_warp
         >>> in_fpath = '/vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/23/K/PQ/2019/6/S2B_23KPQ_20190623_0_L2A/B02.tif'
         >>> from osgeo import gdal
         >>> info = gdal.Info(in_fpath, format='json')
         >>> bound_poly = kwimage.Polygon.coerce(info['wgs84Extent'])
-        >>> crop_poly = bound_poly.scale(0.03, about='origin')
+        >>> crop_poly = bound_poly.scale(0.03, about='centroid')
         >>> space_box = crop_poly.to_boxes()
         >>> out_fpath = ub.Path.appdir('fds').ensuredir() / 'cropped.tif'
         >>> error_logfile = '/dev/null'
         >>> gdal_single_warp(in_fpath, out_fpath, space_box=space_box, error_logfile=error_logfile, verbose=3)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> data = kwimage.imread(out_fpath)
+        >>> canvas = kwimage.normalize_intensity(data)
+        >>> kwplot.imshow(canvas)
+
 
     Ignore:
         from kwcoco.util import util_archive
