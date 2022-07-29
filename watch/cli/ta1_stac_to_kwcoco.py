@@ -61,7 +61,7 @@ def main():
     return 0
 
 
-COARSE_PLATFORMS = {
+SUPPORTED_COARSE_PLATFORMS = {
     'S2': {'S2A', 'S2B', 'sentinel-2a', 'sentinel-2b'},  # Sentinel-2
     'L8': {'OLI_TIRS', 'LANDSAT_8'},  # Landsat-8
     'WV': {'DigitalGlobe', 'worldview-2', 'worldview-3'},  # Worldview
@@ -69,13 +69,13 @@ COARSE_PLATFORMS = {
 }
 
 SUPPORTED_PLATFORMS = set.union(
-    *COARSE_PLATFORMS.values(),
-    set(COARSE_PLATFORMS.keys()))
+    *SUPPORTED_COARSE_PLATFORMS.values(),
+    set(SUPPORTED_COARSE_PLATFORMS.keys()))
 
 
 SENSOR_COARSE_MAPPING = {
     v: k
-    for k, vals in COARSE_PLATFORMS.items()
+    for k, vals in SUPPORTED_COARSE_PLATFORMS.items()
     for v in vals
 }
 
@@ -315,15 +315,13 @@ def make_coco_aux_from_stac_asset(asset_name,
     if re.search(r'_PVI\.tif$', asset_href, re.I):
         return None
 
-    if from_collated and platform in (SUPPORTED_S2_PLATFORMS |
-                                      SUPPORTED_LS_PLATFORMS |
-                                      SUPPORTED_WV_PLATFORMS):
+    if from_collated and platform in SUPPORTED_PLATFORMS:
         channels = _determine_channels_collated(asset_name, asset_dict)
-    elif platform in SUPPORTED_S2_PLATFORMS:
+    elif platform in SUPPORTED_COARSE_PLATFORMS['S2']:
         channels = _determine_s2_channels(asset_name, asset_dict)
-    elif platform in SUPPORTED_LS_PLATFORMS:
+    elif platform in SUPPORTED_COARSE_PLATFORMS['L8']:
         channels = _determine_l8_channels(asset_name, asset_dict)
-    elif platform in SUPPORTED_WV_PLATFORMS:
+    elif platform in SUPPORTED_COARSE_PLATFORMS['WV']:
         channels = _determine_wv_channels(asset_name, asset_dict)
     else:
         raise NotImplementedError(
