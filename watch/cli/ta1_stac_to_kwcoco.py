@@ -62,10 +62,10 @@ def main():
 
 
 SUPPORTED_COARSE_PLATFORMS = {
-    'S2': {'S2A', 'S2B', 'sentinel-2a', 'sentinel-2b'},  # Sentinel-2
-    'L8': {'OLI_TIRS', 'LANDSAT_8'},  # Landsat-8
-    'WV': {'DigitalGlobe', 'worldview-2', 'worldview-3'},  # Worldview
-    'PD': {'PlanetScope', 'dove'},  # Planet
+    'S2': {'S2A', 'S2B', 'sentinel-2a', 'sentinel-2b', 'S2'},  # Sentinel-2
+    'L8': {'OLI_TIRS', 'LANDSAT_8', 'L8'},  # Landsat-8
+    'WV': {'DigitalGlobe', 'worldview-2', 'worldview-3', 'WV'},  # Worldview
+    'PD': {'PlanetScope', 'dove', 'PD'},  # Planet
 }
 
 SUPPORTED_PLATFORMS = set.union(
