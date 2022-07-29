@@ -195,20 +195,20 @@ small_onesite(){
         --cloud_cover=10 \
         --sensors="$SENSORS" \
         --api_key=env:SMART_STAC_API_KEY \
-        --collated False \
+        --collated True \
         --dvc_dpath="$DVC_DPATH" \
         --aws_profile=iarpa \
         --requester_pays=False \
         --region_globstr="$REGION_GLOBSTR" \
         --site_globstr="$SITE_GLOBSTR" \
-        --max_products_per_region=10 \
+        --max_products_per_region=3 \
         --fields_workers=30 \
         --convert_workers=20 \
         --align_workers=20 \
-        --cache=1 \
-        --include_channels="blue|green|red" \
+        --cache=0 \
+        --include_channels="blue|green" \
         --ignore_duplicates=1 \
-        --visualize=True \
+        --visualize=0 \
         --backend=serial --run=1
         #--fields_workers=100 \
         #--convert_workers=8 \

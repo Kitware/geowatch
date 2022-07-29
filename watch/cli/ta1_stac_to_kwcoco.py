@@ -61,27 +61,23 @@ def main():
     return 0
 
 
-SUPPORTED_S2_PLATFORMS = {'S2A',
-                          'S2B',
-                          'sentinel-2a',
-                          'sentinel-2b'}  # Sentinel
-SUPPORTED_LS_PLATFORMS = {'OLI_TIRS',
-                          'LANDSAT_8'}  # Landsat
-SUPPORTED_WV_PLATFORMS = {'DigitalGlobe',
-                          'worldview-2',
-                          'worldview-3'}  # Worldview
-SUPPORTED_PD_PLATFORMS = {'dove', 'PlanetScope'}  # not sure if this name is good
+COARSE_PLATFORMS = {
+    'S2': {'S2A', 'S2B', 'sentinel-2a', 'sentinel-2b'},  # Sentinel-2
+    'L8': {'OLI_TIRS', 'LANDSAT_8'},  # Landsat-8
+    'WV': {'DigitalGlobe', 'worldview-2', 'worldview-3'},  # Worldview
+    'PD': {'PlanetScope', 'dove'},  # Planet
+}
 
-SUPPORTED_PLATFORMS = (SUPPORTED_S2_PLATFORMS |
-                       SUPPORTED_LS_PLATFORMS |
-                       SUPPORTED_WV_PLATFORMS |
-                       SUPPORTED_PD_PLATFORMS)
+SUPPORTED_PLATFORMS = set.union(
+    COARSE_PLATFORMS.values(),
+    COARSE_PLATFORMS.keys()
+)
+
 
 SENSOR_COARSE_MAPPING = {
-    **{p: 'S2' for p in SUPPORTED_S2_PLATFORMS},
-    **{p: 'L8' for p in SUPPORTED_LS_PLATFORMS},
-    **{p: 'WV' for p in SUPPORTED_WV_PLATFORMS},
-    **{p: 'PD' for p in SUPPORTED_WV_PLATFORMS},
+    v: k
+    for k, vals in COARSE_PLATFORMS.items()
+    for v in vals
 }
 
 L8_CHANNEL_ALIAS = {band['name']: band['common_name']
