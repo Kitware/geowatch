@@ -1677,6 +1677,10 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
             'chan_code = {!r}\n'.format(chan_code) +
             '\n* dst_gpath = {!r}'.format(dst_gpath))
 
+    error_logfile = None
+    # Uncomment to suppress warnings for debug purposes
+    error_logfile = '/dev/null'
+
     # Note: these methods take care of retries and checking that the
     # data is valid.
     if len(input_gpaths) > 1:
@@ -1684,6 +1688,7 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
         util_gdal.gdal_multi_warp(in_fpaths, out_fpath, space_box=space_box,
                                   local_epsg=local_epsg, rpcs=rpcs,
                                   nodata=nodata, tries=tries,
+                                  error_logfile=error_logfile,
                                   verbose=0 if verbose < 2 else verbose)
     else:
         in_fpath = input_gpaths[0]
@@ -1691,6 +1696,7 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
                                    space_box=space_box, local_epsg=local_epsg,
                                    rpcs=rpcs, nodata=nodata,
                                    tries=tries,
+                                   error_logfile=error_logfile,
                                    verbose=0 if verbose < 2 else verbose)
     if verbose > 2:
         print('finish gdal warp dst_gpath = {!r}'.format(dst_gpath))
