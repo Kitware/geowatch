@@ -351,8 +351,10 @@ def make_coco_aux_from_stac_asset(asset_name,
             )
             if asset_href.endswith(IGNORE_SUFFIXES):
                 return None
-        print("* Warning * Couldn't determine channels for asset "
-              "at: '{}'. Asset will be ignored.".format(asset_href))
+        # Collated output must always have eo:bands, so dont warn
+        if not from_collated:
+            print("* Warning * Couldn't determine channels for asset "
+                  "at: '{}'. Asset will be ignored.".format(asset_href))
         return None
 
     if assume_relative:

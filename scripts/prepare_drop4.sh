@@ -38,7 +38,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --cloud_cover=30 \
     --sensors="$SENSORS" \
     --api_key=env:SMART_STAC_API_KEY \
-    --collated False \
+    --collated True \
     --dvc_dpath="$DVC_DPATH" \
     --aws_profile=iarpa \
     --region_globstr="$REGION_GLOBSTR" \
@@ -78,7 +78,7 @@ build_drop4_all_sensors(){
         --cloud_cover=40 \
         --sensors="$SENSORS" \
         --api_key=env:SMART_STAC_API_KEY \
-        --collated False \
+        --collated True \
         --dvc_dpath="$DVC_DPATH" \
         --aws_profile=iarpa \
         --region_globstr="$REGION_GLOBSTR" \
@@ -149,7 +149,7 @@ rgb_medium_drop4_only(){
         --cloud_cover=10 \
         --sensors="$SENSORS" \
         --api_key=env:SMART_STAC_API_KEY \
-        --collated False \
+        --collated True \
         --dvc_dpath="$DVC_DPATH" \
         --aws_profile=iarpa \
         --region_globstr="$REGION_GLOBSTR" \
@@ -202,9 +202,9 @@ small_onesite(){
         --region_globstr="$REGION_GLOBSTR" \
         --site_globstr="$SITE_GLOBSTR" \
         --max_products_per_region=3 \
-        --fields_workers=30 \
-        --convert_workers=20 \
-        --align_workers=20 \
+        --fields_workers=0 \
+        --convert_workers=0 \
+        --align_workers=0 \
         --cache=0 \
         --include_channels="blue|green" \
         --ignore_duplicates=1 \
