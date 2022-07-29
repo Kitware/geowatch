@@ -69,9 +69,8 @@ COARSE_PLATFORMS = {
 }
 
 SUPPORTED_PLATFORMS = set.union(
-    COARSE_PLATFORMS.values(),
-    COARSE_PLATFORMS.keys()
-)
+    *COARSE_PLATFORMS.values(),
+    set(COARSE_PLATFORMS.keys()))
 
 
 SENSOR_COARSE_MAPPING = {
