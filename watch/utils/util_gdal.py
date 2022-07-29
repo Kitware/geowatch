@@ -73,7 +73,6 @@ def _demo_geoimg_with_nodata():
         self = LazyGDalFrameFile.demo()
 
     """
-    import kwimage
     import numpy as np
     from osgeo import osr
     # gdal.UseExceptions()
@@ -827,6 +826,36 @@ def GdalOpen(path, mode='r', **kwargs):
     return GdalDataset.open(path, mode=mode, **kwargs)
 
 
+class GdalSupressWarnings(object):
+    """
+    References:
+        https://gdal.org/api/python_gotchas.html
+
+    This currently will suppress warnings entirely. We could build this into
+    something a big nicer.
+    """
+    def __init__(self):
+        from osgeo import gdal
+        self.err_level = gdal.CE_None
+        self.err_no = 0
+        self.err_msg = ''
+
+    def handler(self, err_level, err_no, err_msg):
+        self.err_level = err_level
+        self.err_no = err_no
+        self.err_msg = err_msg
+
+    def __enter__(self):
+        from osgeo import gdal
+        gdal.PushErrorHandler(self.handler)
+        gdal.UseExceptions()  # Exceptions will get raised on anything >= gdal.CE_Failure
+
+    def __exit__(self, a, b, c):
+        from osgeo import gdal
+        gdal.PopErrorHandler()
+        pass
+
+
 class GdalDataset(ub.NiceRepr):
     """
     A wrapper around `gdal.Open` and the underlying dataset it returns.
@@ -889,6 +918,21 @@ class GdalDataset(ub.NiceRepr):
         >>> assert data.sum() == 37109758
 
     Ignore:
+        gpath = '/vsis3/smart-data-accenture/ta-1/ta1-wv-acc/14/T/QL/2014/9/29/14SEP29174805-M1BS-014484503010_01_P003_ACC/14SEP29174805-M1BS-014484503010_01_P003_ACC_B05.tif'
+
+        from watch.utils import util_gdal
+        import sys, ubelt
+        from watch.utils.util_gdal import *  # NOQA
+        os.environ['AWS_DEFAULT_PROFILE'] = 'iarpa'
+        gpath = '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/23/K/PQ/2017/9/6/S2A_23KPQ_20170906_0_L1C_ACC/S2A_23KPQ_20170906_0_L1C_ACC_B10.tif'
+        ref = util_gdal.GdalDataset.open(gpath, 'r', virtual_retries=3)
+        with GdalErrorHandler() as handler:
+            ref.GetMetadataDomainList()
+
+        from watch.gis.geotiff import *  # NOQA
+        _ = geotiff_metadata(gpath)
+
+
         # Test 404 handling
         from watch.utils import util_gdal
         gpath = '/vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/51R/TP2020/8/S2A_51RTP_20200811_0_L2A/B11.tif'
