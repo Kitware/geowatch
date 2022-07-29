@@ -70,16 +70,19 @@ SUPPORTED_LS_PLATFORMS = {'OLI_TIRS',
 SUPPORTED_WV_PLATFORMS = {'DigitalGlobe',
                           'worldview-2',
                           'worldview-3'}  # Worldview
-SUPPORTED_PLANET_PLATFORMS = {'dove'}  # not sure if this name is good
+SUPPORTED_PD_PLATFORMS = {'dove', 'PlanetScope'}  # not sure if this name is good
+
 SUPPORTED_PLATFORMS = (SUPPORTED_S2_PLATFORMS |
                        SUPPORTED_LS_PLATFORMS |
                        SUPPORTED_WV_PLATFORMS |
-                       SUPPORTED_PLANET_PLATFORMS)
+                       SUPPORTED_PD_PLATFORMS)
 
-SENSOR_COARSE_MAPPING = {**{p: 'S2' for p in SUPPORTED_S2_PLATFORMS},
-                         **{p: 'L8' for p in SUPPORTED_LS_PLATFORMS},
-                         **{p: 'WV' for p in SUPPORTED_WV_PLATFORMS},
-                         **{'dove': 'dove'}}
+SENSOR_COARSE_MAPPING = {
+    **{p: 'S2' for p in SUPPORTED_S2_PLATFORMS},
+    **{p: 'L8' for p in SUPPORTED_LS_PLATFORMS},
+    **{p: 'WV' for p in SUPPORTED_WV_PLATFORMS},
+    **{p: 'PD' for p in SUPPORTED_WV_PLATFORMS},
+}
 
 L8_CHANNEL_ALIAS = {band['name']: band['common_name']
                     for band in util_bands.LANDSAT8 if 'common_name' in band}
@@ -424,7 +427,7 @@ def _stac_item_to_kwcoco_image(stac_item,
     platform = stac_item_dict['properties']['platform']
     if 'constellation' in stac_item_dict['properties']:
         if stac_item_dict['properties']['constellation'] == 'dove':
-            platform = 'dove'
+            platform = 'PD'
 
     if platform not in SUPPORTED_PLATFORMS:
         print("* Warning * platform '{}' not supported, not adding to "

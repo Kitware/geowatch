@@ -61,7 +61,7 @@ python -m watch.cli.prepare_ta2_dataset \
 
 build_drop4_all_sensors(){
     source "$HOME"/code/watch/secrets/secrets
-    SENSORS=TA1-S2-L8-WV-PL-ACC
+    SENSORS=TA1-S2-L8-WV-PD-ACC
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     DATASET_SUFFIX=Drop4-2022-07-26-c40-$SENSORS
     REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*.geojson"
@@ -173,7 +173,7 @@ rgb_medium_drop4_only(){
 small_onesite(){
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     source ~/code/watch/secrets/secrets
-    SENSORS=TA1-S2-L8-WV-PL-ACC
+    SENSORS=TA1-S2-L8-WV-PD-ACC
     #SENSORS=L2-S2
     #SENSORS=L2-L8
     #SENSORS=TA1-S2-ACC
