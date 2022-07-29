@@ -61,9 +61,10 @@ python -m watch.cli.prepare_ta2_dataset \
 
 build_drop4_all_sensors(){
     source "$HOME"/code/watch/secrets/secrets
-    SENSORS=TA1-S2-L8-WV-PD-ACC
+    #SENSORS=TA1-S2-L8-WV-PD-ACC
+    SENSORS=TA1-S2-L8-ACC
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
-    DATASET_SUFFIX=Drop4-2022-07-26-c40-$SENSORS
+    DATASET_SUFFIX=Drop4-2022-07-28-c20-$SENSORS
     REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*.geojson"
     SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
 
@@ -75,7 +76,7 @@ build_drop4_all_sensors(){
     python -m watch.cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
-        --cloud_cover=40 \
+        --cloud_cover=20 \
         --sensors="$SENSORS" \
         --api_key=env:SMART_STAC_API_KEY \
         --collated True \
@@ -202,13 +203,13 @@ small_onesite(){
         --region_globstr="$REGION_GLOBSTR" \
         --site_globstr="$SITE_GLOBSTR" \
         --max_products_per_region=3 \
-        --fields_workers=0 \
-        --convert_workers=0 \
-        --align_workers=0 \
+        --fields_workers=10 \
+        --convert_workers=10 \
+        --align_workers=10 \
         --cache=0 \
-        --include_channels="blue|green" \
+        --include_channels="red|blue|green" \
         --ignore_duplicates=1 \
-        --visualize=0 \
+        --visualize=1 \
         --backend=serial --run=1
         #--fields_workers=100 \
         #--convert_workers=8 \
