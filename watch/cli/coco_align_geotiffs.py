@@ -1658,10 +1658,6 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
         # print('!!WARNING!! duplicates = {}'.format(ub.repr2(duplicates, nl=1)))
         input_gpaths = list(ub.oset(input_gpaths))
 
-    # Write to a temporary file and then rename the file to the final
-    # Destination so ctrl+c doesn't break everything
-    tmp_dst_gpath = ub.augpath(dst_gpath, prefix='.tmp.')
-
     nodata_cand = {obj.get('default_nodata', None) for obj in obj_group} - {None}
     if len(nodata_cand) > 1:
         raise AssertionError('Did not expect heterogeneous nodata values')
@@ -1674,12 +1670,15 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     # create 0x0 dataset is illegal,sizes must be larger than zero.  This new
     # method will call gdalwarp on each image individually and then merge them
     # all in a final step.
-    out_fpath = tmp_dst_gpath
+    out_fpath = dst_gpath
     if verbose > 2:
         print(
             'start gdal warp in_fpaths = {}'.format(ub.repr2(input_gpaths, nl=1)) +
             'chan_code = {!r}\n'.format(chan_code) +
             '\n* dst_gpath = {!r}'.format(dst_gpath))
+
+    # Note: these methods take care of retries and checking that the
+    # data is valid.
     if len(input_gpaths) > 1:
         in_fpaths = input_gpaths
         util_gdal.gdal_multi_warp(in_fpaths, out_fpath, space_box=space_box,
@@ -1693,24 +1692,8 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
                                    rpcs=rpcs, nodata=nodata,
                                    tries=tries,
                                    verbose=0 if verbose < 2 else verbose)
-
-    os.rename(tmp_dst_gpath, dst_gpath)
     if verbose > 2:
         print('finish gdal warp dst_gpath = {!r}'.format(dst_gpath))
-
-    # The internal commands do this now.
-    # CHECK_AFTER = 0
-    # if CHECK_AFTER:
-    #     # Sometimes the warp screws up.
-    #     dst_gpath = ub.Path(dst_gpath)
-    #     try:
-    #         ref = util_gdal.GdalOpen(dst_gpath, mode='r')
-    #         ref
-    #     except RuntimeError as ex:
-    #         print(f'ERROR THE DATA WE JUST WROTE IS BAD: ex={ex}')
-    #         raise
-    #     else:
-    #         ref = None
     return dst
 
 
