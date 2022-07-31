@@ -228,34 +228,8 @@ def predict(cmdline=False, **kwargs):
         # init method from checkpoint.
         raise
 
-        checkpoint = torch.load(package_fpath)
-        print(list(checkpoint.keys()))
-        from watch.tasks.fusion import methods
-        hparams = checkpoint['hyper_parameters']
-        if 'input_channels' in hparams:
-            from kwcoco.channel_spec import ChannelSpec
-            # Hack for strange pickle issue
-            chan = hparams['input_channels']
-            if not hasattr(chan, '_spec') and hasattr(chan, '_info'):
-                chan = ChannelSpec.coerce(chan._info['spec'])
-                hparams['input_channels'] = chan
-            else:
-                hparams['input_channels'] = ChannelSpec.coerce(chan.spec)
-
-        method = methods.MultimodalTransformer(**hparams)
-        state_dict = checkpoint['state_dict']
-        method.load_state_dict(state_dict)
-
     # Hack to fix GELU issue
-    FIX_GELU_ISSUE = True
-    if FIX_GELU_ISSUE:
-        # Torch 1.12 added an approximate parameter that our old models dont
-        # have. Monkey patch it in.
-        # https://github.com/pytorch/pytorch/pull/61439
-        for name, mod in method.named_modules():
-            if mod.__class__.__name__ == 'GELU':
-                if not hasattr(mod, 'approximate'):
-                    mod.approximate = 'none'
+    monkey.fix_gelu_issue(method)
 
     method.eval()
     method.freeze()
@@ -278,13 +252,12 @@ def predict(cmdline=False, **kwargs):
         traintime_params = {}
         if datamodule_vars['channels'] in {None, 'auto'}:
             print('Warning have to make assumptions. Might not always work')
+            raise NotImplementedError('TODO: needs to be sensorchan if we do this')
             if hasattr(method, 'input_channels'):
                 # note input_channels are sometimes different than the channels the
                 # datamodule expects. Depending on special keys and such.
-                raise NotImplementedError('TODO: needs to be sensorchan if we do this')
                 traintime_params['channels'] = method.input_channels.spec
             else:
-                raise NotImplementedError('TODO: needs to be sensorchan if we do this')
                 traintime_params['channels'] = list(method.input_norms.keys())[0]
 
     # FIXME: Some of the inferred args seem to not have the right type here.

@@ -2691,49 +2691,10 @@ class KWCocoVideoDataset(data.Dataset):
         # for this.
 
         # Make a list of all unique modes in the dataset.
-        NEW = 1
-        if NEW:
-            # User specifies all of this explicitly now
-            unique_sensor_modes = set(
-                (s.sensor.spec, s.chans.spec)
-                for s in self.input_sensorchan.streams())
-        else:
-            FIX_CSPEC = 1
-            # Make a list of all unique modes in the dataset.
-            unique_sensor_modes = set(sensor_mode_hist.keys())
-            if True:
-                print('Looking for unique modes')
-                # This looks at the entire dataset, might want to
-                # make a better way of getting this info.
-                # self.sampler.dset.videos().images
-                coco_images = self.sampler.dset.images().coco_images
-                hacked = set()
-                for c in coco_images:
-                    sspec = c.img.get('sensor_coarse', '*')
-                    img_chans = c.channels.fuse().normalize()
-
-                    # TODO: the input_channels should eventually define
-                    # the sensor so we can do a specific lookup.
-                    # In the meantime, hack it.
-
-                    # Get only the requested bands for this sensor.
-                    sensor_input_chans = self.input_sensorchan.matching_sensor(sspec).chans
-
-                    if FIX_CSPEC:
-                        # # Get only the requested bands for this sensor.
-                        # sensor_input_chans = self.input_sensorchan.matching_sensor(sspec).chans
-                        # canidates = sensor_input_chans & img_chans
-                        canidates = sensor_input_chans & img_chans
-                        for a in canidates.streams():
-                            for b in sensor_input_chans.streams():
-                                if a.spec == b.spec:
-                                    hacked.add((sspec, a.spec))
-                    else:
-                        # Ensure channels are returned in requested order
-                        cspec = (self.input_channels & c.channels.fuse().normalize()).fuse().normalize().spec
-                        if cspec:
-                            hacked.add((sspec, cspec))
-                unique_sensor_modes.update(hacked)
+        # User specifies all of this explicitly now
+        unique_sensor_modes = set(
+            (s.sensor.spec, s.chans.spec)
+            for s in self.input_sensorchan.streams())
 
         print('unique_sensor_modes = {}'.format(ub.repr2(unique_sensor_modes, nl=1)))
 
@@ -2752,9 +2713,10 @@ class KWCocoVideoDataset(data.Dataset):
                 for frame_item in item['frames']:
                     if with_class:
                         class_idxs = frame_item['class_idxs']
-                        # print(np.unique(class_idxs))
-                        item_freq = np.histogram(class_idxs.ravel(), bins=bins)[0]
-                        total_freq += item_freq
+                        if class_idxs is not None:
+                            # print(np.unique(class_idxs))
+                            item_freq = np.histogram(class_idxs.ravel(), bins=bins)[0]
+                            total_freq += item_freq
                     if with_intensity:
                         sensor_code = frame_item['sensor']
                         modes = frame_item['modes']

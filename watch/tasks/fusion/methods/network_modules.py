@@ -459,7 +459,10 @@ def _class_weights_from_freq(total_freq, mode='median-idf'):
     else:
         denom = 1
     weights[mask] = weights[mask] / denom
-    weights[~mask] = weights[mask].max() / 7
+    if np.any(mask):
+        weights[~mask] = weights[mask].max() / 7
+    else:
+        weights[~mask] = 1e-1
     weights = np.round(weights, 6)
     return weights
 

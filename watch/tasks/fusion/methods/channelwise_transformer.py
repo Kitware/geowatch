@@ -69,7 +69,6 @@ import pytorch_lightning as pl
 # import torch_optimizer as optim
 from torch import nn
 # from einops.layers.torch import Rearrange
-from kwcoco import channel_spec
 # from torchvision import transforms
 from torch.optim import lr_scheduler
 from watch import heuristics
@@ -174,7 +173,7 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         number of hidden layers in the saliency head
         '''))
     window_size = scfg.Value(8, type=int)
-    squash_modes = scfg.Value(False)
+    squash_modes = scfg.Value(False, help='deprecated doesnt do anything')
     decouple_resolution = scfg.Value(False, help=ub.paragraph(
         '''
         this turns on logic to decouple input and output
@@ -228,7 +227,6 @@ class MultimodalTransformer(pl.LightningModule):
         >>> print('(STEP 3): THE REST OF THE TEST')
         >>> #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
         >>> self = MultimodalTransformer(arch_name='smt_it_joint_p2',
-        >>>                              input_channels=datamodule.input_channels,
         >>>                              dataset_stats=dataset_stats,
         >>>                              classes=datamodule.classes, decoder='segmenter',
         >>>                              change_loss='dicefocal',
@@ -295,8 +293,8 @@ class MultimodalTransformer(pl.LightningModule):
         cfgstr = f'{self.name}_{self.arch_name}'
         return cfgstr
 
-    def __init__(self, *, classes=10, dataset_stats=None, input_channels=None,
-                 unique_sensors=None, **kwargs):
+    def __init__(self, *, classes=10, dataset_stats=None,
+                 input_sensorchan=None, input_channels=None, **kwargs):
 
         super().__init__()
         config = MultimodalTransformerConfig(**kwargs)
@@ -333,35 +331,52 @@ class MultimodalTransformer(pl.LightningModule):
         global_change_weight = config['global_change_weight']
         global_saliency_weight = config['global_saliency_weight']
 
+        # Moving towards sensror-channels everywhere so we always know what
+        # sensor we are dealing with.
+        if input_channels is not None:
+            ub.schedule_deprecation(
+                'watch', name='input_channels', type='model param',
+                deprecate='0.3.3', migration='user input_sensorchan instead'
+            )
+            if input_sensorchan is None:
+                input_sensorchan = input_channels
+            else:
+                raise AssertionError(
+                    'cant specify both input_channels and input_sensorchan')
+
         if dataset_stats is not None:
             input_stats = dataset_stats['input_stats']
             class_freq = dataset_stats['class_freq']
+            if input_sensorchan is None:
+                input_sensorchan = ','.join(
+                    [f'{s}:{c}' for s, c in self.dataset_stats['unique_sensor_modes']])
         else:
             class_freq = None
+            input_stats = None
 
         self.class_freq = class_freq
         self.dataset_stats = dataset_stats
 
         # Handle channel-wise input mean/std in the network (This is in
         # contrast to common practice where it is done in the dataloader)
-        input_norms = None
-        known_sensors = None
-        known_channels = None
-
-        # TODO: should allow sensorchan instead of just input-channels here
-        # Not sure how relevant (input_channels) is anymore
-        if input_channels is None:
-            raise Exception('need them for num input_channels!')
-        input_channels = channel_spec.ChannelSpec.coerce(input_channels)
-        self.input_channels = input_channels
+        if input_sensorchan is None:
+            raise Exception(
+                'need to specify input_sensorchan at least as the number of '
+                'input channels')
+        input_sensorchan = kwcoco.SensorChanSpec.coerce(input_sensorchan)
+        self.input_sensorchan = input_sensorchan
 
         if self.dataset_stats is None:
             # hack for tests (or no known sensors case)
             input_stats = None
-            self.unique_sensor_modes = {('', self.input_channels.spec)}
+            self.unique_sensor_modes = {
+                (s.sensor.spec, s.chans.spec)
+                for s in input_sensorchan.streams()
+            }
         else:
             self.unique_sensor_modes = self.dataset_stats['unique_sensor_modes']
 
+        input_norms = None
         if input_stats is not None:
             input_norms = RobustModuleDict()
             for s, c in self.unique_sensor_modes:
@@ -378,16 +393,10 @@ class MultimodalTransformer(pl.LightningModule):
                     input_norms[s] = RobustModuleDict()
                 input_norms[s][c] = nh.layers.InputNorm(**stats)
 
-        self.known_sensors = known_sensors
-        self.known_channels = known_channels
         self.input_norms = input_norms
 
         self.classes = kwcoco.CategoryTree.coerce(classes)
         self.num_classes = len(self.classes)
-
-        input_streams = list(input_channels.streams())
-        stream_num_channels = {s.spec: s.numel() for s in input_streams}
-        self.stream_num_channels = stream_num_channels
 
         self.global_class_weight = global_class_weight
         self.global_change_weight = global_change_weight
@@ -637,7 +646,7 @@ class MultimodalTransformer(pl.LightningModule):
                     from watch.tasks.fusion.architectures import segmenter_decoder
                     self.heads[head_name] = segmenter_decoder.MaskTransformerDecoder(
                         d_model=feat_dim,
-                        # hidden_channels=prop['hidden'],
+                        n_layers=prop['hidden'],
                         n_cls=prop['channels'],
                     )
                 else:
@@ -680,7 +689,7 @@ class MultimodalTransformer(pl.LightningModule):
         Example:
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> from watch.tasks.fusion import methods
-            >>> self = methods.MultimodalTransformer(arch_name="smt_it_joint_p2", input_channels='r|g|b')
+            >>> self = methods.MultimodalTransformer(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b')
             >>> max_epochs = 80
             >>> self.trainer = pl.Trainer(max_epochs=max_epochs)
             >>> [opt], [sched] = self.configure_optimizers()
@@ -702,22 +711,22 @@ class MultimodalTransformer(pl.LightningModule):
             >>> my_lr = 2.3e-5
             >>> my_decay = 2.3e-5
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-            >>> self = methods.MultimodalTransformer(arch_name="smt_it_joint_p2", input_channels='r|g|b', learning_rate=my_lr, weight_decay=my_decay)
+            >>> self = methods.MultimodalTransformer(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b', learning_rate=my_lr, weight_decay=my_decay)
             >>> [opt], [sched] = self.configure_optimizers()
             >>> assert opt.param_groups[0]['lr'] == my_lr
             >>> assert opt.param_groups[0]['weight_decay'] == my_decay
 
-            >>> self = methods.MultimodalTransformer(arch_name="smt_it_joint_p2", input_channels='r|g|b', learning_rate=my_lr, weight_decay=my_decay, optimizer='sgd')
+            >>> self = methods.MultimodalTransformer(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b', learning_rate=my_lr, weight_decay=my_decay, optimizer='sgd')
             >>> [opt], [sched] = self.configure_optimizers()
             >>> assert opt.param_groups[0]['lr'] == my_lr
             >>> assert opt.param_groups[0]['weight_decay'] == my_decay
 
-            >>> self = methods.MultimodalTransformer(arch_name="smt_it_joint_p2", input_channels='r|g|b', learning_rate=my_lr, weight_decay=my_decay, optimizer='AdamW')
+            >>> self = methods.MultimodalTransformer(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b', learning_rate=my_lr, weight_decay=my_decay, optimizer='AdamW')
             >>> [opt], [sched] = self.configure_optimizers()
             >>> assert opt.param_groups[0]['lr'] == my_lr
             >>> assert opt.param_groups[0]['weight_decay'] == my_decay
 
-            >>> self = methods.MultimodalTransformer(arch_name="smt_it_joint_p2", input_channels='r|g|b', learning_rate=my_lr, weight_decay=my_decay, optimizer='MADGRAD')
+            >>> self = methods.MultimodalTransformer(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b', learning_rate=my_lr, weight_decay=my_decay, optimizer='MADGRAD')
             >>> [opt], [sched] = self.configure_optimizers()
             >>> assert opt.param_groups[0]['lr'] == my_lr
             >>> assert opt.param_groups[0]['weight_decay'] == my_decay
@@ -807,10 +816,10 @@ class MultimodalTransformer(pl.LightningModule):
             >>> dataset = torch_dset = datamodule.torch_datasets['train']
             >>> torch_dset.disable_augmenter = True
             >>> dataset_stats = datamodule.dataset_stats
-            >>> input_channels = datamodule.input_channels
+            >>> input_sensorchan = datamodule.input_sensorchan
             >>> classes = datamodule.classes
             >>> print('dataset_stats = {}'.format(ub.repr2(dataset_stats, nl=3)))
-            >>> print('input_channels = {}'.format(input_channels))
+            >>> print('input_sensorchan = {}'.format(input_sensorchan))
             >>> print('classes = {}'.format(classes))
             >>> # Choose subclass to test this with (does not cover all cases)
             >>> self = methods.MultimodalTransformer(
@@ -818,24 +827,26 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     # Backbone
             >>>     arch_name='smt_it_joint_p2',
             >>>     #arch_name='smt_it_stm_p8',
-            >>>     learning_rate=1e-6,
+            >>>     #arch_name='deit',
+            >>>     optimizer='AdamW',
+            >>>     learning_rate=1e-5,
             >>>     #attention_impl='performer',
             >>>     attention_impl='exact',
             >>>     #decoder='segmenter',
+            >>>     #saliency_head_hidden=4,
             >>>     decoder='mlp',
-            >>>     #arch_name='deit',
             >>>     change_loss='dicefocal',
             >>>     #class_loss='cce',
             >>>     class_loss='dicefocal',
             >>>     saliency_loss='dicefocal',
             >>>     # ===========
             >>>     # Change Loss
-            >>>     global_change_weight=0.00,
+            >>>     global_change_weight=1.00,
             >>>     positive_change_weight=1.0,
             >>>     negative_change_weight=0.5,
             >>>     # ===========
             >>>     # Class Loss
-            >>>     global_class_weight=0.00,
+            >>>     global_class_weight=1.00,
             >>>     class_weights='auto',
             >>>     # ===========
             >>>     # Saliency Loss
@@ -844,17 +855,15 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     # Domain Metadata (Look Ma, not hard coded!)
             >>>     dataset_stats=dataset_stats,
             >>>     classes=classes,
-            >>>     input_channels=input_channels,
+            >>>     input_sensorchan=input_sensorchan,
             >>>     #tokenizer='dwcnn',
             >>>     tokenizer='linconv',
             >>>     #tokenizer='rearrange',
-            >>>     squash_modes=True,
             >>>     # normalize_perframe=True,
             >>>     window_size=8,
             >>>     )
-            >>> datamodule._notify_about_tasks(model=self)
             >>> self.datamodule = datamodule
-            >>> self.di = datamodule
+            >>> datamodule._notify_about_tasks(model=self)
             >>> # Run one visualization
             >>> loader = datamodule.train_dataloader()
             >>> # Load one batch and show it before we do anything
@@ -944,7 +953,10 @@ class MultimodalTransformer(pl.LightningModule):
             fig = kwplot.figure(fnum=fnum, pnum=(1, 2, 2))
             #kwplot.imshow(canvas, pnum=(1, 2, 1))
             ax = sns.lineplot(data=pd.DataFrame(loss_records), x='step', y='val', hue='part')
-            # ax.set_yscale('logit')
+            try:
+                ax.set_yscale('logit')
+            except Exception:
+                ...
             fig.suptitle(smart_truncate(str(optim).replace('\n', ''), max_length=64))
             img = render_figure_to_image(fig)
             img = kwimage.convert_colorspace(img, src_space='bgr', dst_space='rgb')
@@ -1001,7 +1013,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
             >>>     decoder='mlp', classes=clases, global_saliency_weight=1,
-            >>>     dataset_stats=dataset_stats, input_channels=channels)
+            >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
             >>> batch = self.demo_batch()
             >>> if 1:
             >>>   print(nh.data.collate._debug_inbatch_shapes(batch))
@@ -1016,7 +1028,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
             >>>     decoder='mlp', classes=clases, global_saliency_weight=1,
-            >>>     dataset_stats=dataset_stats, input_channels=channels)
+            >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
             >>> batch = self.demo_batch(nans=0.5, num_timesteps=2)
             >>> item = batch[0]
             >>> if 1:
@@ -1166,7 +1178,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     arch_name='smt_it_joint_p8', tokenizer='rearrange',
             >>>     decoder='segmenter',
             >>>     dataset_stats=datamodule.dataset_stats, global_saliency_weight=1.0, global_change_weight=1.0, global_class_weight=1.0,
-            >>>     classes=datamodule.classes, input_channels=datamodule.input_channels)
+            >>>     classes=datamodule.classes, input_sensorchan=datamodule.input_sensorchan)
             >>> with_loss = True
             >>> outputs = self.forward_step(batch, with_loss=with_loss)
             >>> canvas = datamodule.draw_batch(batch, outputs=outputs, max_items=3, overlay_on_image=False)
@@ -1182,7 +1194,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
             >>>     decoder='segmenter', classes=clases, global_saliency_weight=1,
-            >>>     dataset_stats=dataset_stats, input_channels=channels)
+            >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
             >>> batch = self.demo_batch()
             >>> outputs = self.forward_step(batch, with_loss=True)
             >>> print(nh.data.collate._debug_inbatch_shapes(batch))
@@ -1284,7 +1296,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
             >>>     decoder='segmenter', classes=clases, global_saliency_weight=1,
-            >>>     dataset_stats=dataset_stats, input_channels=channels)
+            >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
             >>> item = self.demo_batch(width=64, height=65)[0]
             >>> outputs = self.forward_item(item, with_loss=True)
             >>> print('item')
@@ -1299,7 +1311,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
             >>>     decoder='mlp', classes=clases, global_saliency_weight=1,
-            >>>     dataset_stats=dataset_stats, input_channels=channels, decouple_resolution=True)
+            >>>     dataset_stats=dataset_stats, input_sensorchan=channels, decouple_resolution=True)
             >>> batch = self.demo_batch(width=(11, 21), height=(16, 64), num_timesteps=3)
             >>> item = batch[0]
             >>> print(nh.data.collate._debug_inbatch_shapes(batch))
@@ -1789,7 +1801,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
             >>> model = self = methods.MultimodalTransformer(
-            >>>     arch_name="smt_it_joint_p2", input_channels=5,
+            >>>     arch_name="smt_it_joint_p2", input_sensorchan=5,
             >>>     change_head_hidden=0, saliency_head_hidden=0,
             >>>     class_head_hidden=0)
 
@@ -1827,7 +1839,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> # Use one of our fusion.architectures in a test
             >>> self = methods.MultimodalTransformer(
             >>>     arch_name="smt_it_joint_p2", classes=classes,
-            >>>     dataset_stats=dataset_stats, input_channels=datamodule.input_channels,
+            >>>     dataset_stats=dataset_stats, input_sensorchan=datamodule.input_sensorchan,
             >>>     change_head_hidden=0, saliency_head_hidden=0,
             >>>     class_head_hidden=0)
 
@@ -1959,7 +1971,6 @@ class MultimodalTransformer(pl.LightningModule):
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='special:vidshapes8-multispectral', num_workers=0, channels=channels)
             >>> datamodule.setup('fit')
-            >>> input_channels = datamodule.input_channels
             >>> train_dataset = datamodule.torch_datasets['train']
             >>> dataset_stats = train_dataset.cached_dataset_stats()
             >>> loader = datamodule.train_dataloader()
@@ -1969,7 +1980,6 @@ class MultimodalTransformer(pl.LightningModule):
             >>> #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_joint_p8',
-            >>>     input_channels=input_channels,
             >>>     dataset_stats=dataset_stats,
             >>>     change_loss='dicefocal',
             >>>     decoder='dicefocal',
