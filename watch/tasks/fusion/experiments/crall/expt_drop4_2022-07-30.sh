@@ -478,6 +478,7 @@ python -m watch.tasks.fusion.fit \
     --global_class_weight=0.00 \
     --global_saliency_weight=1.00 \
     --learning_rate=1e-4 \
+    --package_fpath="auto" \
     --weight_decay=1e-5 \
     --accumulate_grad_batches=4 \
     --max_epochs=160 \
@@ -521,6 +522,7 @@ python -m watch.tasks.fusion.fit \
     --test_dataset="$TEST_FPATH" \
     --class_loss='focal' \
     --saliency_loss='focal' \
+    --package_fpath="auto" \
     --global_change_weight=0.00 \
     --global_class_weight=0.00 \
     --global_saliency_weight=1.00 \

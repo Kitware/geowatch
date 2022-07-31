@@ -4,8 +4,6 @@ Packager callback to interface with torch.package
 import pytorch_lightning as pl
 import ubelt as ub
 import copy
-from typing import Optional
-from os.path import join
 
 
 class Packager(pl.callbacks.Callback):
@@ -51,16 +49,15 @@ class Packager(pl.callbacks.Callback):
         >>> from watch.utils.lightning_ext.demo import LightningToyNet2d
         >>> from watch.utils.lightning_ext.callbacks import StateLogger
         >>> import ubelt as ub
-        >>> default_root_dir = ub.get_app_cache_dir('lightning_ext/test/packager')
-        >>> ub.delete(default_root_dir)
+        >>> default_root_dir = ub.Path.appdir('lightning_ext/test/packager')
+        >>> default_root_dir.delete().ensuredir()
         >>> # Test starting a model without any existing checkpoints
         >>> trainer = pl.Trainer(default_root_dir=default_root_dir, callbacks=[
-        >>>     Packager(join(default_root_dir, 'final_package.pt')),
+        >>>     Packager(default_root_dir / 'final_package.pt'),
         >>>     StateLogger()
         >>> ], max_epochs=2)
         >>> model = LightningToyNet2d()
         >>> trainer.fit(model)
-
     """
 
     def __init__(self, package_fpath='auto'):
@@ -78,6 +75,30 @@ class Packager(pl.callbacks.Callback):
             >>> parent_parser = ArgumentParser(formatter_class='defaults')
             >>> cls.add_argparse_args(parent_parser)
             >>> parent_parser.print_help()
+            >>> assert parent_parser.parse_known_args()[0].package_fpath == 'auto'
+
+        Example:
+            >>> # having issues with this in the main fit function.
+            >>> # demo that we can use the trainer and argparse this
+            >>> from watch.utils import configargparse_ext
+            >>> from watch.utils import lightning_ext as pl_ext
+            >>> parser = configargparse_ext.ArgumentParser(
+            >>>     add_config_file_help=False,
+            >>>     description='demo',
+            >>>     auto_env_var_prefix='WATCH_FUSION_FIT_',
+            >>>     add_env_var_help=True,
+            >>>     formatter_class='defaults',
+            >>>     config_file_parser_class='yaml',
+            >>>     args_for_setting_config_path=['--config'],
+            >>>     args_for_writing_out_config_file=['--dump'],
+            >>> )
+            >>> callback_parser = parser.add_argument_group('Callbacks')
+            >>> pl_ext.callbacks.Packager.add_argparse_args(callback_parser)
+            >>> modal, _ = parser.parse_known_args(ignore_help_args=True,
+            >>>                                    ignore_write_args=True)
+            >>> pl.Trainer.add_argparse_args(parser)
+            >>> args, _ = parser.parse_known_args(args=None)
+            >>> assert args.package_fpath == 'auto'
         """
         from watch.utils.lightning_ext import argparse_ext
         arg_infos = argparse_ext.parse_docstring_args(cls)
@@ -85,16 +106,30 @@ class Packager(pl.callbacks.Callback):
         return parent_parser
 
     # def on_init_end(self, trainer: 'pl.Trainer') -> None:
-    def setup(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", stage: Optional[str] = None) -> None:
+    #   self._after_initialization(trainer)
+
+    def setup(self, trainer, pl_module, stage=None):
         """
         Finalize initialization step.
         Resolve the paths where files will be written.
+
+        Args:
+            trainer (pl.Trainer):
+            pl_module (pl.LightningModule):
+            stage (str | None):
+
+        Returns:
+            None
         """
+        self._after_initialization(trainer)
+
+    def _after_initialization(self, trainer):
         # Rectify paths if we need to
         # print('on_init_start')
         print('setup/(previously on_init_end)')
         if self.package_fpath == 'auto':
-            self.package_fpath = join(trainer.default_root_dir, 'final_package.pt')
+            root_dir = ub.Path(trainer.default_root_dir)
+            self.package_fpath =  root_dir / 'final_package.pt'
             print('setting auto self.package_fpath = {!r}'.format(self.package_fpath))
 
         # Hack this in. TODO: what is the best way to expose this?
@@ -108,11 +143,11 @@ class Packager(pl.callbacks.Callback):
         """
         if False:
             print('Training is starting, checking that the model can be packaged')
-            package_dpath = ub.ensuredir((trainer.log_dir, 'packages'))
-            package_fpath = join(package_dpath,
-                                 '_test_package_epoch{}_step{}.pt'.format(
-                                     trainer.current_epoch,
-                                     trainer.global_step))
+            package_dpath = (ub.Path(trainer.log_dir) / 'packages').ensuredir()
+            package_fpath = package_dpath / (
+                '_test_package_epoch{}_step{}.pt'.format(
+                    trainer.current_epoch,
+                    trainer.global_step))
             self._save_package(pl_module, package_fpath)
 
     def on_fit_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
@@ -127,10 +162,16 @@ class Packager(pl.callbacks.Callback):
         """
         print('Training is complete, packaging model')
         package_fpath = self._make_package_fpath(trainer)
+        print(f'self.package_fpath={self.package_fpath}')
+        print(f'package_fpath={package_fpath}')
         self._save_package(pl_module, package_fpath)
         final_package_fpath = self.package_fpath
-        ub.symlink(package_fpath, final_package_fpath, overwrite=True, verbose=3)
-        print('final_package_fpath = {!r}'.format(final_package_fpath))
+        print(f'final_package_fpath={final_package_fpath}')
+        if final_package_fpath:
+            print('Symlink to the requested final fpath')
+            ub.symlink(package_fpath, final_package_fpath, overwrite=True, verbose=3)
+        else:
+            print('Final fpath unspecified. Skipping link step.')
 
     # def state_dict(self):
     # pass
@@ -158,10 +199,11 @@ class Packager(pl.callbacks.Callback):
             self._save_package(pl_module, package_fpath)
 
     def _make_package_fpath(self, trainer, dname='packages'):
-        package_dpath = ub.ensuredir((trainer.log_dir, dname))
-        package_fpath = join(package_dpath,
-                             'package_epoch{}_step{}.pt'.format(
-                                 trainer.current_epoch, trainer.global_step))
+        log_dir = ub.Path(trainer.log_dir)
+        package_dpath = (log_dir / dname).ensuredir()
+        package_fpath = package_dpath / (
+            'package_epoch{}_step{}.pt'.format(
+                trainer.current_epoch, trainer.global_step))
         return package_fpath
 
     def _save_package(self, model, package_fpath):

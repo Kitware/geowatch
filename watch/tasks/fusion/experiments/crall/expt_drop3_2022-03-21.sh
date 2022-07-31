@@ -75,9 +75,10 @@ gather-checkpoints-repackage(){
 
 schedule-prediction-and-evlauation(){
 
-    #python -m watch.tasks.fusion.dvc_sync_manager "list"
+    python -m watch.tasks.fusion.dvc_sync_manager "list"
+    python -m watch.tasks.fusion.dvc_sync_manager "pull evals"
     python -m watch.tasks.fusion.dvc_sync_manager "pull packages"
-    #python -m watch.tasks.fusion.dvc_sync_manager "push evals"
+    python -m watch.tasks.fusion.dvc_sync_manager "push evals"
     #python -m watch.tasks.fusion.dvc_sync_manager "push packages evals"
 
     DVC_DPATH=$(smartwatch_dvc)
@@ -203,6 +204,7 @@ aggregate-results(){
     EXPT_NAME_PAT="*"
     #EXPT_NAME_PAT="*Drop3*"
     EXPT_NAME_PAT="*"
+    #EXPT_NAME_PAT="BOTH_TA1_COMBO_TINY_p2w_raw*"
     #EXPT_NAME_PAT="BOTH_TA1_COMBO_TINY_p2w_raw*"
     MODEL_EPOCH_PAT="*"
     PRED_DSET_PAT="*"

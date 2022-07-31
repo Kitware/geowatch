@@ -52,6 +52,38 @@ DSET_CODE_TO_GSD = {
 }
 
 
+def eval3_report():
+    """
+    MAIN FUNCTION
+
+    from watch.tasks.fusion.eval3_report import *  # NOQA
+    """
+    import kwplot
+    kwplot.autosns()
+    import watch
+    try:
+        dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
+    except Exception:
+        dvc_dpath = watch.find_smart_dvc_dpath()
+    reporter = EvaluationReporter(dvc_dpath)
+    reporter.load()
+    reporter.summarize()
+    plot_merged(reporter)
+    self = reporter
+
+    if 0:
+        self = reporter
+        merged_df = self.orig_merged_df.copy()
+        merged_df[merged_df.expt.str.contains('invar')]['mean_f1']
+        merged_df[merged_df.in_production]['mean_f1']
+
+        selected = merged_df[merged_df.in_production].sort_values('mean_f1')
+        selected = selected[['siteprep_f1', 'active_f1', 'mean_f1', 'model']]
+        selected['coi_mean_f1'] = selected[['siteprep_f1', 'active_f1']].mean(axis=1)
+        selected = selected.sort_values('coi_mean_f1')
+        print(selected)
+
+
 class EvaluationReporter:
     """
     Manages handing the data off to experiment plotting functions.
@@ -81,6 +113,9 @@ class EvaluationReporter:
             initial_summary(table, loaded_table, self.dpath)
 
     def load1(self):
+        """
+        Load basic data
+        """
         table = self.dvc_manager.evaluation_table()
         self.summarize(table)
         evaluations = table[~table['raw'].isnull()]
@@ -109,15 +144,19 @@ class EvaluationReporter:
             eval_types_to_locs[eval_types].extend(group.index)
         print('Cross-Metric Comparable Locs')
         print(ub.repr2(ub.map_vals(len, eval_types_to_locs)))
-        comparable_locs = list(ub.flatten(v for k, v in eval_types_to_locs.items() if len(k) > 1))
+        comparable_locs = list(ub.flatten(v for k, v in eval_types_to_locs.items() if len(k) > 0))
         self.comp_df = comp_df = filt_df.loc[comparable_locs]
 
         print('\nCross-Metric Comparable')
         num_files_summary(comp_df)
 
     def load2(self):
-        # Load detailed data
+        """
+        Load detailed data that might cross reference files
+        """
         self.big_rows = load_extended_data(self.comp_df, self.dvc_dpath)
+        set(r['expt'] for r in self.big_rows)
+
         orig_merged_df, other = clean_loaded_data(self.big_rows)
         self.orig_merged_df = orig_merged_df
         self.other = other
@@ -156,37 +195,6 @@ class EvaluationReporter:
     def load(self):
         self.load1()
         self.load2()
-
-
-def eval3_report():
-    """
-    MAIN FUNCTION
-
-    from watch.tasks.fusion.eval3_report import *  # NOQA
-    """
-    import kwplot
-    kwplot.autosns()
-    import watch
-    try:
-        dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
-    except Exception:
-        dvc_dpath = watch.find_smart_dvc_dpath()
-    reporter = EvaluationReporter(dvc_dpath)
-    reporter.load()
-    reporter.summarize()
-    plot_merged(reporter)
-
-    if 0:
-        self = reporter
-        merged_df = self.orig_merged_df.copy()
-        merged_df[merged_df.expt.str.contains('invar')]['mean_f1']
-        merged_df[merged_df.in_production]['mean_f1']
-
-        selected = merged_df[merged_df.in_production].sort_values('mean_f1')
-        selected = selected[['siteprep_f1', 'active_f1', 'mean_f1', 'model']]
-        selected['coi_mean_f1'] = selected[['siteprep_f1', 'active_f1']].mean(axis=1)
-        selected = selected.sort_values('coi_mean_f1')
-        print(selected)
 
 
 def plot_merged(reporter):

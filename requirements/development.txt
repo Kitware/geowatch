@@ -32,3 +32,5 @@ textual>=0.1.18
 cmd_queue >= 0.1.2
 
 # Pygments>=2.2.0
+
+dataframe_image>=0.1.1

@@ -35,8 +35,7 @@ class TextLogger(pl.callbacks.Callback):
     def setup(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", stage: Optional[str] = None) -> None:
         # self._log('setup state _log')
         # self._log('trainer.default_root_dir = {!r}'.format(trainer.default_root_dir))
-        import pathlib
-        self.log_dir = pathlib.Path(trainer.log_dir)
+        self.log_dir = ub.Path(trainer.log_dir)
         self.log_fpath = self.log_dir / 'text_logs.log'
         self._log = _InstanceLogger.from_instance(trainer, self.log_fpath)
         self._log.info('setup/(previously on_init_end)')
@@ -46,7 +45,7 @@ class TextLogger(pl.callbacks.Callback):
             self._log.info('args_dict = {}'.format(ub.repr2(self.args.__dict__, nl=1, sort=0)))
 
     def teardown(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', stage: Optional[str] = None) -> None:
-        self._log('teardown state _log')
+        self._log.debug('teardown state _log')
 
     # def on_init_start(self, trainer: "pl.Trainer") -> None:
     #     # self._log('on_init_start')
@@ -62,17 +61,17 @@ class TextLogger(pl.callbacks.Callback):
 
     if PL_VERSION < Version('1.6'):
         def on_load_checkpoint(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', callback_state: Dict[str, Any]) -> None:
-            self._log.info('on_load_checkpoint - callback_state = {}'.format(ub.repr2(callback_state.keys(), nl=1)))
+            self._log.debug('on_load_checkpoint - callback_state = {}'.format(ub.repr2(callback_state.keys(), nl=1)))
 
         def on_save_checkpoint(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', checkpoint: Dict[str, Any]) -> dict:
             self._log.debug('on_save_checkpoint - checkpoint = {}'.format(ub.repr2(checkpoint.keys(), nl=1)))
     else:
         def state_dict(self):
-            self._log.info('call pl state_dict')
+            self._log.debug('call pl state_dict')
             return super().state_dict()
 
         def load_state_dict(self, checkpoint):
-            self._log.info('call pl load_state_dict')
+            self._log.debug('call pl load_state_dict')
             return super().load_state_dict(checkpoint)
 
     def on_train_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
@@ -88,10 +87,10 @@ class TextLogger(pl.callbacks.Callback):
         self._log.debug('on_sanity_check_end')
 
     def on_exception(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', *args, **kw) -> None:
-        self._log.info('on_exception')
-        self._log.info('KEYBOARD INTERUPT')
-        self._log.info('trainer.default_root_dir = {!r}'.format(trainer.default_root_dir))
-        self._log.info('trainer.log_dir = {!r}'.format(trainer.log_dir))
+        self._log.error('on_exception')
+        # self._log.error('KEYBOARD INTERUPT')
+        self._log.error('trainer.default_root_dir = {!r}'.format(trainer.default_root_dir))
+        self._log.error('trainer.log_dir = {!r}'.format(trainer.log_dir))
 
     # def on_epoch_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
     #     self._log.debug('on_epoch_start')
@@ -118,15 +117,13 @@ class _InstanceLogger():
     instance of an object.
 
     Example:
-        >>> import pathlib
         >>> dpath = ub.ensure_app_cache_dir('watch/test/logger')
-        >>> fpath = pathlib.Path(dpath) / 'mylog.log'
+        >>> fpath = ub.Path(dpath) / 'mylog.log'
         >>> self = _InstanceLogger(fpath=fpath)
     """
 
     def __init__(self, name=None, fpath=None, verbose=1):
         from os.path import join
-        import pathlib
 
         if name is None:
             name = self._instance_name(self)
@@ -144,7 +141,7 @@ class _InstanceLogger():
 
         if fpath is not None:
             # File handlers
-            a_flog_fpath = pathlib.Path(fpath)
+            a_flog_fpath = ub.Path(fpath)
 
             history_dname = ('_' + a_flog_fpath.stem + '_history')
 

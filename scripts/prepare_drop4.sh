@@ -93,7 +93,7 @@ build_drop4_all_sensors(){
         --ignore_duplicates=1 \
         --separate_region_queues=1 \
         --separate_align_jobs=1 \
-        --include_channels="blue|green|red|nir|swir16|swir22" \
+        --include_channels="blue|green|red|nir|swir16|swir22|cloudmask" \
         --visualize=1 \
         --target_gsd=30 \
         --backend=tmux --run=1
@@ -337,23 +337,21 @@ _Debugging(){
 
 
 dvc_add(){
-
-    python -m watch.cli.prepare_splits data.kwcoco.json --run=0
-
-    python -m watch.cli.prepare_splits \
-        --base_fpath=data.kwcoco.json \
-        --run=0 --backend=serial
-    7z a splits.zip data*.kwcoco.json
-
     cd Aligned-Drop4-2022-07-25-c30-TA1-S2-L8-ACC
+
+    mkdir -p viz512_anns
+    cp _viz512/*/*ann*.gif ./viz512_anns
+
+    python -m watch.cli.prepare_splits data.kwcoco.json --run=1
+
+    7z a splits.zip data*.kwcoco.json
 
     # Cd into the bundle we want to add
     ls -- */L8
     ls -- */S2
     ls -- */*.json
 
-    dvc add -- */L8 */S2 
-    dvc add -- *.zip
+    dvc add -- */L8 */S2 *.zip viz512_anns
     git commit -am "Add Drop4"
 
     dvc push -r aws -R .

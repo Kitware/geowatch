@@ -74,7 +74,9 @@ class AggregateResultsConfig(scfg.Config):
 
         'classes_of_interest': scfg.Value('*', nargs='+', help='One or more glob patterns'),
 
-        'embed': scfg.Value(False, help='if true embed into IPython before viz')
+        'embed': scfg.Value(False, help='if true embed into IPython before viz'),
+
+        'max_per_expt_salient_curves': 3,
     }
 
 
@@ -1457,13 +1459,15 @@ def plot_individual_class_curves(all_results, dataset_title_part, catname, fnum,
     return fig
 
 
-def plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric='ap', rkey='nocls_measures'):
+def plot_individual_salient_curves(all_results, dataset_title_part, fnum,
+                                   metric='ap', rkey='nocls_measures',
+                                   max_num_curves=24, max_per_expt=None):
     from kwcoco.metrics import drawing
     import kwplot
     # max_num_curves = 32
-    max_num_curves = 24
+    # max_num_curves = 24
     # max_num_curves = 16
-    max_per_expt = None
+    # max_per_expt = None
     # max_per_expt = 10
     # max_per_expt = 3
     fig = kwplot.figure(fnum=fnum, doclf=True)
@@ -2041,7 +2045,7 @@ def main(cmdline=False, **kwargs):
             # print(best_per_expt.sort_values('mAP').to_string())
 
             fnum = 6
-            fig5 = plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric='ap', rkey='ovr_coi_macro')
+            fig5 = plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric='ap', rkey='ovr_coi_macro', max_per_expt=config['max_per_expt_salient_curves'])
             if fig5 is not None:
                 _writefig(fig5, out_dpath, 'ovr_coi_macro_ap_curve.png', figsize, verbose, tight=True)
 
