@@ -75,30 +75,7 @@ class Packager(pl.callbacks.Callback):
             >>> parent_parser = ArgumentParser(formatter_class='defaults')
             >>> cls.add_argparse_args(parent_parser)
             >>> parent_parser.print_help()
-            >>> assert parent_parser.parse_known_args()[0].package_fpath == 'auto'
-
-        Example:
-            >>> # having issues with this in the main fit function.
-            >>> # demo that we can use the trainer and argparse this
-            >>> from watch.utils import configargparse_ext
-            >>> from watch.utils import lightning_ext as pl_ext
-            >>> parser = configargparse_ext.ArgumentParser(
-            >>>     add_config_file_help=False,
-            >>>     description='demo',
-            >>>     auto_env_var_prefix='WATCH_FUSION_FIT_',
-            >>>     add_env_var_help=True,
-            >>>     formatter_class='defaults',
-            >>>     config_file_parser_class='yaml',
-            >>>     args_for_setting_config_path=['--config'],
-            >>>     args_for_writing_out_config_file=['--dump'],
-            >>> )
-            >>> callback_parser = parser.add_argument_group('Callbacks')
-            >>> pl_ext.callbacks.Packager.add_argparse_args(callback_parser)
-            >>> modal, _ = parser.parse_known_args(ignore_help_args=True,
-            >>>                                    ignore_write_args=True)
-            >>> pl.Trainer.add_argparse_args(parser)
-            >>> args, _ = parser.parse_known_args(args=None)
-            >>> assert args.package_fpath == 'auto'
+            >>> assert parent_parser.parse_known_args(None)[0].package_fpath == 'auto'
         """
         from watch.utils.lightning_ext import argparse_ext
         arg_infos = argparse_ext.parse_docstring_args(cls)
