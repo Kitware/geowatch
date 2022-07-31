@@ -324,7 +324,6 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     args_dict = args.__dict__
     print('{train_name}\n===================='.format(**args_dict))
     print('args_dict = {}'.format(ub.repr2(args_dict, nl=1, sort=1)))
-    raise Exception
 
     ub.Path(args.workdir).ensuredir()
 
@@ -490,7 +489,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
             if isinstance(v, pathlib.Path):
                 setattr(args, k, os.fspath(v))
         fpath = join(trainer.log_dir, 'fit_config.yaml')
-        ub.ensuredir(trainer.log_dir)
+        ub.Path(trainer.log_dir).ensuredir()
         parser.write_config_file(args, [fpath])
 
     modules = {
@@ -583,6 +582,8 @@ def fit_model(args=None, cmdline=False, **kwargs):
         if not package_fpath:
             print('package fpath was not set, so we cant eval')
         else:
+            # Perhaps this doesn't happen in the same Python process maybe we
+            # simply decouple this and force using a cmd-queue like scheduler?
             print('Attempting to unload resources after fit')
             # Unload fit resources
             trainer = None
