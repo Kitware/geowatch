@@ -2352,8 +2352,7 @@ class KWCocoVideoDataset(data.Dataset):
                     nodata_weight = 1 - nodata_frac
                     frame_weights = frame_weights * nodata_weight
 
-                # Dilate ignore masks (dont care about the surrounding area
-                # either)
+                # Dilate ignore masks (dont care about the surrounding area # either)
                 # frame_saliency = util_kwimage.morphology(frame_saliency, 'dilate', kernel=ignore_dilate)
                 saliency_ignore = util_kwimage.morphology(saliency_ignore, 'dilate', kernel=self.ignore_dilate)
                 frame_class_ignore = util_kwimage.morphology(frame_class_ignore, 'dilate', kernel=self.ignore_dilate)
@@ -2500,9 +2499,6 @@ class KWCocoVideoDataset(data.Dataset):
         # Only pass back some of the metadata (because I think torch
         # multiprocessing makes a new file descriptor for every Python object
         # or something like that)
-        # tr_subset = ub.dict_isect(sample['tr'], {
-        #     'gids', 'space_slice', 'vidid',
-        # })
         tr_subset = ub.dict_isect(tr_, {
             'gids', 'space_slice', 'vidid', 'fliprot_params',
         })

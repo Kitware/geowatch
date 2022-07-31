@@ -307,6 +307,12 @@ class MultimodalTransformer(pl.LightningModule):
         # config saved directly as datamodule arguments
         self.__dict__.update(cfgdict)
 
+        #####
+        ## TODO: ALL OF THESE CONFIGURATIONS VARS SHOULD BE
+        ## CONSOLIDATED. REMOVE DUPLICATES BETWEEN INSTANCE VARS
+        ## HPARAMS, CONFIG.... It is unclear what the single source of truth
+        ## is, and what needs to be modified if making changes.
+
         # We are explicitly unpacking the config here to make
         # transition to a scriptconfig style init easier. This
         # code can be consolidated later.
@@ -342,6 +348,7 @@ class MultimodalTransformer(pl.LightningModule):
         known_sensors = None
         known_channels = None
 
+        # TODO: should allow sensorchan instead of just input-channels here
         # Not sure how relevant (input_channels) is anymore
         if input_channels is None:
             raise Exception('need them for num input_channels!')
@@ -668,16 +675,18 @@ class MultimodalTransformer(pl.LightningModule):
 
         References:
             https://pytorch-optimizer.readthedocs.io/en/latest/index.html
+            https://pytorch-lightning.readthedocs.io/en/stable/common/optimization.html
 
         Example:
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> from watch.tasks.fusion import methods
-            >>> self = methods.MultimodalTransformer(arch_name="smt_it_stm_p8", input_channels='r|g|b')
-            >>> self.trainer = pl.Trainer(max_epochs=400)
+            >>> self = methods.MultimodalTransformer(arch_name="smt_it_joint_p2", input_channels='r|g|b')
+            >>> max_epochs = 80
+            >>> self.trainer = pl.Trainer(max_epochs=max_epochs)
             >>> [opt], [sched] = self.configure_optimizers()
             >>> rows = []
             >>> # Insepct what the LR curve will look like
-            >>> for _ in range(self.trainer.max_epochs):
+            >>> for _ in range(max_epochs):
             ...     sched.last_epoch += 1
             ...     lr = sched.get_lr()[0]
             ...     rows.append({'lr': lr, 'last_epoch': sched.last_epoch})
@@ -687,6 +696,31 @@ class MultimodalTransformer(pl.LightningModule):
             >>> import kwplot
             >>> sns = kwplot.autosns()
             >>> sns.lineplot(data=data, y='lr', x='last_epoch')
+
+        Example:
+            >>> # Verify lr and decay is set correctly
+            >>> my_lr = 2.3e-5
+            >>> my_decay = 2.3e-5
+            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> self = methods.MultimodalTransformer(arch_name="smt_it_joint_p2", input_channels='r|g|b', learning_rate=my_lr, weight_decay=my_decay)
+            >>> [opt], [sched] = self.configure_optimizers()
+            >>> assert opt.param_groups[0]['lr'] == my_lr
+            >>> assert opt.param_groups[0]['weight_decay'] == my_decay
+
+            >>> self = methods.MultimodalTransformer(arch_name="smt_it_joint_p2", input_channels='r|g|b', learning_rate=my_lr, weight_decay=my_decay, optimizer='sgd')
+            >>> [opt], [sched] = self.configure_optimizers()
+            >>> assert opt.param_groups[0]['lr'] == my_lr
+            >>> assert opt.param_groups[0]['weight_decay'] == my_decay
+
+            >>> self = methods.MultimodalTransformer(arch_name="smt_it_joint_p2", input_channels='r|g|b', learning_rate=my_lr, weight_decay=my_decay, optimizer='AdamW')
+            >>> [opt], [sched] = self.configure_optimizers()
+            >>> assert opt.param_groups[0]['lr'] == my_lr
+            >>> assert opt.param_groups[0]['weight_decay'] == my_decay
+
+            >>> self = methods.MultimodalTransformer(arch_name="smt_it_joint_p2", input_channels='r|g|b', learning_rate=my_lr, weight_decay=my_decay, optimizer='MADGRAD')
+            >>> [opt], [sched] = self.configure_optimizers()
+            >>> assert opt.param_groups[0]['lr'] == my_lr
+            >>> assert opt.param_groups[0]['weight_decay'] == my_decay
         """
         import netharn as nh
 
@@ -694,18 +728,30 @@ class MultimodalTransformer(pl.LightningModule):
         # keyword-arguments to create an instance.
         optim_cls, optim_kw = nh.api.Optimizer.coerce(
             optimizer=self.hparams.optimizer,
-            learning_rate=self.hparams.learning_rate,
+            # learning_rate=self.hparams.learning_rate,
+            lr=self.hparams.learning_rate,  # netharn bug?, some optimizers dont accept learning_rate and only lr
             weight_decay=self.hparams.weight_decay)
         if self.hparams.optimizer == 'RAdam':
             optim_kw['betas'] = (0.9, 0.99)  # backwards compat
 
+        # Hack to fix a netharn bug
+        if 'weight_decay' in optim_kw:
+            optim_kw['weight_decay'] = self.hparams.weight_decay
+
         optim_kw['params'] = self.parameters()
+        print('optim_kw = {}'.format(ub.repr2(optim_kw, nl=1)))
         optimizer = optim_cls(**optim_kw)
 
         # TODO:
         # - coerce schedulers
+        trainer = getattr(self, 'trainer')
+        if trainer is None:
+            max_epochs = 20
+        else:
+            max_epochs = self.trainer.max_epochs
+
         scheduler = lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=self.trainer.max_epochs)
+            optimizer, T_max=max_epochs)
         return [optimizer], [scheduler]
 
     def overfit(self, batch):
@@ -772,9 +818,9 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     # Backbone
             >>>     arch_name='smt_it_joint_p2',
             >>>     #arch_name='smt_it_stm_p8',
-            >>>     learning_rate=1e-8,
-            >>>     attention_impl='performer',
-            >>>     #attention_impl='exact',
+            >>>     learning_rate=1e-6,
+            >>>     #attention_impl='performer',
+            >>>     attention_impl='exact',
             >>>     #decoder='segmenter',
             >>>     decoder='mlp',
             >>>     #arch_name='deit',
@@ -784,14 +830,16 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     saliency_loss='dicefocal',
             >>>     # ===========
             >>>     # Change Loss
-            >>>     global_change_weight=1.00,
+            >>>     global_change_weight=0.00,
             >>>     positive_change_weight=1.0,
             >>>     negative_change_weight=0.5,
             >>>     # ===========
             >>>     # Class Loss
-            >>>     global_class_weight=1.00,
-            >>>     global_saliency_weight=1.00,
+            >>>     global_class_weight=0.00,
             >>>     class_weights='auto',
+            >>>     # ===========
+            >>>     # Saliency Loss
+            >>>     global_saliency_weight=1.00,
             >>>     # ===========
             >>>     # Domain Metadata (Look Ma, not hard coded!)
             >>>     dataset_stats=dataset_stats,
@@ -804,6 +852,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     # normalize_perframe=True,
             >>>     window_size=8,
             >>>     )
+            >>> datamodule._notify_about_tasks(model=self)
             >>> self.datamodule = datamodule
             >>> self.di = datamodule
             >>> # Run one visualization
@@ -823,7 +872,7 @@ class MultimodalTransformer(pl.LightningModule):
         nh.initializers.Orthogonal()(self)
         """
         import kwplot
-        import torch_optimizer
+        # import torch_optimizer
         import xdev
         import kwimage
         import pandas as pd
@@ -851,13 +900,13 @@ class MultimodalTransformer(pl.LightningModule):
         _frame_idx = 0
         # dpath = ub.ensuredir('_overfit_viz09')
 
-        optim_cls, optim_kw = nh.api.Optimizer.coerce(
-            optim='RAdam', lr=1e-3, weight_decay=0,
-            params=self.parameters())
-
+        # optim_cls, optim_kw = nh.api.Optimizer.coerce(
+        #     optim='RAdam', lr=1e-3, weight_decay=0,
+        #     params=self.parameters())
         #optim = torch.optim.SGD(self.parameters(), lr=1e-4)
         #optim = torch.optim.AdamW(self.parameters(), lr=1e-4)
-        optim = torch_optimizer.RAdam(self.parameters(), lr=3e-3, weight_decay=1e-5)
+        [optim], [sched] = self.configure_optimizers()
+        # optim = torch_optimizer.RAdam(self.parameters(), lr=self.learning_rate, weight_decay=1e-5)
 
         fnum = 2
         fig = kwplot.figure(fnum=fnum, doclf=True)
@@ -879,6 +928,10 @@ class MultimodalTransformer(pl.LightningModule):
                     print('prev = {!r}'.format(prev))
                     ex = Exception('prev = {!r}'.format(prev))
                     break
+                # elif loss > 1e4:
+                #     # Turn down the learning rate when loss gets huge
+                #     scale = (loss / 1e4).detach()
+                #     loss /= scale
                 prev = loss
                 item_losses_ = nh.data.collate.default_collate(outputs['item_losses'])
                 item_losses = ub.map_vals(lambda x: sum(x).item(), item_losses_)
@@ -891,7 +944,7 @@ class MultimodalTransformer(pl.LightningModule):
             fig = kwplot.figure(fnum=fnum, pnum=(1, 2, 2))
             #kwplot.imshow(canvas, pnum=(1, 2, 1))
             ax = sns.lineplot(data=pd.DataFrame(loss_records), x='step', y='val', hue='part')
-            ax.set_yscale('logit')
+            # ax.set_yscale('logit')
             fig.suptitle(smart_truncate(str(optim).replace('\n', ''), max_length=64))
             img = render_figure_to_image(fig)
             img = kwimage.convert_colorspace(img, src_space='bgr', dst_space='rgb')
@@ -904,6 +957,11 @@ class MultimodalTransformer(pl.LightningModule):
         # TODO: start a server process that listens for new images
         # as it gets new images, it starts playing through the animation
         # looping as needed
+
+    def reset_weights(self):
+        for name, mod in self.named_modules():
+            if hasattr(mod, 'reset_parameters'):
+                mod.reset_parameters()
 
     @classmethod
     def demo_dataset_stats(cls):

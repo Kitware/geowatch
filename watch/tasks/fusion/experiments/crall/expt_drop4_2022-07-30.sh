@@ -434,6 +434,7 @@ python -m watch.tasks.fusion.fit \
     --max_epoch_length=2048 \
     --draw_interval=5m \
     --num_draw=1 \
+    --eval_after_fit=False \
     --amp_backend=apex \
     --dist_weights=True \
     --use_centered_positives=True \
@@ -525,8 +526,8 @@ python -m watch.tasks.fusion.fit \
     --train_dataset="$TRAIN_FPATH" \
     --vali_dataset="$VALI_FPATH" \
     --test_dataset="$TEST_FPATH" \
-    --class_loss='focal' \
-    --saliency_loss='focal' \
+    --class_loss='dicefocal' \
+    --saliency_loss='dicefocal' \
     --package_fpath="auto" \
     --global_change_weight=0.00 \
     --global_class_weight=0.00 \
@@ -546,6 +547,7 @@ python -m watch.tasks.fusion.fit \
     --optimizer=AdamW \
     --arch_name=smt_it_stm_p8 \
     --decoder=mlp \
+    --eval_after_fit=False \
     --draw_interval=5m \
     --num_draw=4 \
     --use_centered_positives=False \

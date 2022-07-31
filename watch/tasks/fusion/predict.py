@@ -281,15 +281,17 @@ def predict(cmdline=False, **kwargs):
             if hasattr(method, 'input_channels'):
                 # note input_channels are sometimes different than the channels the
                 # datamodule expects. Depending on special keys and such.
+                raise NotImplementedError('TODO: needs to be sensorchan if we do this')
                 traintime_params['channels'] = method.input_channels.spec
             else:
+                raise NotImplementedError('TODO: needs to be sensorchan if we do this')
                 traintime_params['channels'] = list(method.input_norms.keys())[0]
 
     # FIXME: Some of the inferred args seem to not have the right type here.
     able_to_infer = ub.dict_isect(traintime_params, need_infer)
     if able_to_infer.get('channels', None) is not None:
         # do this before smartcast breaks the spec
-        able_to_infer['channels'] = kwcoco.ChannelSpec.coerce(able_to_infer['channels'])
+        able_to_infer['channels'] = kwcoco.SensorChanSpec.coerce(able_to_infer['channels'])
     from scriptconfig.smartcast import smartcast
     able_to_infer = ub.map_vals(smartcast, able_to_infer)
     unable_to_infer = ub.dict_diff(need_infer, traintime_params)
@@ -315,19 +317,34 @@ def predict(cmdline=False, **kwargs):
         # of those channels, which means the recorded channels disagree with
         # what the model was actually trained with.
         if hasattr(method, 'sensor_channel_tokenizers'):
-            datamodule_channel_spec = datamodule_vars['channels']
+            datamodule_sensorchan_spec = datamodule_vars['channels']
             unique_channel_streams = ub.oset()
+            model_sensorchan_stem_parts = []
             for sensor, tokenizers in method.sensor_channel_tokenizers.items():
                 for code in tokenizers.keys():
                     from watch.tasks.fusion.methods.network_modules import RobustModuleDict
                     code = RobustModuleDict._unnormalize_key(code)
                     unique_channel_streams.add(code)
-            hack_model_spec = kwcoco.ChannelSpec.coerce(','.join(unique_channel_streams))
-            if datamodule_channel_spec is not None:
-                if hack_model_spec != datamodule_channel_spec:
+                    model_sensorchan_stem_parts.append(f'{sensor}:{code}')
+
+            hack_model_sensorchan_spec = kwcoco.SensorChanSpec.coerce(','.join(model_sensorchan_stem_parts))
+            # hack_model_spec = kwcoco.ChannelSpec.coerce(','.join(unique_channel_streams))
+            if datamodule_sensorchan_spec is not None:
+                if hack_model_sensorchan_spec.normalize().spec != datamodule_sensorchan_spec.normalize().spec:
                     print('Warning: reported model channels may be incorrect '
                           'due to bad train hyperparams')
-                    hack_common = hack_model_spec.intersection(datamodule_channel_spec)
+                    compat_parts = []
+                    for model_part in hack_model_sensorchan_spec.streams():
+                        data_part = datamodule_sensorchan_spec.matching_sensor(model_part.sensor.spec)
+                        isect_part = model_part.chans.intersection(data_part.chans)
+                        # Stems required chunked channels, cant take subsets of them
+                        if isect_part.spec == model_part.chans.spec:
+                            compat_parts.append(model_part)
+
+                    if len(compat_parts) == 0:
+                        raise ValueError('no compatible channels between model and data')
+                    hack_common = sum(compat_parts)
+                    # hack_common = hack_model_sensorchan_spec.intersection(datamodule_sensorchan_spec)
                     datamodule_vars['channels'] = hack_common.spec
 
     DZYNE_MODEL_HACK = 1
