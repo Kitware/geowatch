@@ -411,7 +411,7 @@ python -m watch.tasks.fusion.fit \
     --saliency_loss='dicefocal' \
     --class_loss='dicefocal' \
     --num_workers=8 \
-    --gpus "1" \
+    --devices "0," \
     --batch_size=1 \
     --accumulate_grad_batches=4 \
     --learning_rate=1e-4 \
@@ -448,11 +448,11 @@ python -m watch.tasks.fusion.fit \
          --vali_dataset="$VALI_FPATH" \
          --test_dataset="$TEST_FPATH" \
          --num_sanity_val_steps=0 \
-         --dump "$WORKDIR/configs/drop3_baseline_20220323.yaml"
+         --dump "$WORKDIR/configs/drop4_baseline_20220731.yaml"
 
 
 
-INITIAL_STATE_BASELINE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+# Its breaking when using this. Not sure why
 
 export CUDA_VISIBLE_DEVICES=1
 DVC_DPATH=$(smartwatch_dvc --hardware=hdd)
@@ -463,8 +463,10 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 CHANNELS="(S2,L8):blue|green|red|nir|swir16|swir22"
-EXPERIMENT_NAME=Drop4_BAS_30m_Retrain_V001
+#EXPERIMENT_NAME=Drop4_BAS_30m_S2-L8_BGRNSH_retrain_v1
+EXPERIMENT_NAME=Drop4_BAS_30m_S2-L8_BGRNSH_scratch_v1
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+INITIAL_STATE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
 python -m watch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
@@ -499,7 +501,9 @@ python -m watch.tasks.fusion.fit \
     --normalize_inputs=2048 \
     --stream_channels=16 \
     --temporal_dropout=0.5 \
-    --init="$INITIAL_STATE_BASELINE"
+    --devices "0," \
+    --init="noop"
+    #--init="$INITIAL_STATE"
 
 
 export CUDA_VISIBLE_DEVICES=0
@@ -511,8 +515,9 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 CHANNELS="(S2,L8):blue|green|red"
-EXPERIMENT_NAME=Drop4_BAS_30m_RGB_Retrain_V002
+EXPERIMENT_NAME=Drop4_BAS_30m_RGB_V002
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+INITIAL_STATE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
 python -m watch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
@@ -547,4 +552,5 @@ python -m watch.tasks.fusion.fit \
     --normalize_inputs=2048 \
     --stream_channels=16 \
     --temporal_dropout=0.5 \
-    --init="$INITIAL_STATE_BASELINE"
+    --devices "0," \
+    --init="noop"
