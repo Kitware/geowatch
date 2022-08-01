@@ -688,8 +688,7 @@ class MultimodalTransformer(pl.LightningModule):
 
         Example:
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-            >>> from watch.tasks.fusion import methods
-            >>> self = methods.MultimodalTransformer(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b')
+            >>> self = MultimodalTransformer(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b')
             >>> max_epochs = 80
             >>> self.trainer = pl.Trainer(max_epochs=max_epochs)
             >>> [opt], [sched] = self.configure_optimizers()
@@ -699,34 +698,35 @@ class MultimodalTransformer(pl.LightningModule):
             ...     sched.last_epoch += 1
             ...     lr = sched.get_lr()[0]
             ...     rows.append({'lr': lr, 'last_epoch': sched.last_epoch})
-            >>> import pandas as pd
-            >>> data = pd.DataFrame(rows)
             >>> # xdoctest +REQUIRES(--show)
             >>> import kwplot
+            >>> import pandas as pd
+            >>> data = pd.DataFrame(rows)
             >>> sns = kwplot.autosns()
             >>> sns.lineplot(data=data, y='lr', x='last_epoch')
 
         Example:
             >>> # Verify lr and decay is set correctly
+            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> my_lr = 2.3e-5
             >>> my_decay = 2.3e-5
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-            >>> self = methods.MultimodalTransformer(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b', learning_rate=my_lr, weight_decay=my_decay)
+            >>> kw = dict(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b', learning_rate=my_lr, weight_decay=my_decay)
+            >>> self = MultimodalTransformer(**kw)
             >>> [opt], [sched] = self.configure_optimizers()
             >>> assert opt.param_groups[0]['lr'] == my_lr
             >>> assert opt.param_groups[0]['weight_decay'] == my_decay
-
-            >>> self = methods.MultimodalTransformer(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b', learning_rate=my_lr, weight_decay=my_decay, optimizer='sgd')
+            >>> #
+            >>> self = MultimodalTransformer(**kw, optimizer='sgd')
             >>> [opt], [sched] = self.configure_optimizers()
             >>> assert opt.param_groups[0]['lr'] == my_lr
             >>> assert opt.param_groups[0]['weight_decay'] == my_decay
-
-            >>> self = methods.MultimodalTransformer(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b', learning_rate=my_lr, weight_decay=my_decay, optimizer='AdamW')
+            >>> #
+            >>> self = MultimodalTransformer(**kw, optimizer='AdamW')
             >>> [opt], [sched] = self.configure_optimizers()
             >>> assert opt.param_groups[0]['lr'] == my_lr
             >>> assert opt.param_groups[0]['weight_decay'] == my_decay
-
-            >>> self = methods.MultimodalTransformer(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b', learning_rate=my_lr, weight_decay=my_decay, optimizer='MADGRAD')
+            >>> #
+            >>> self = MultimodalTransformer(**kw, optimizer='MADGRAD')
             >>> [opt], [sched] = self.configure_optimizers()
             >>> assert opt.param_groups[0]['lr'] == my_lr
             >>> assert opt.param_groups[0]['weight_decay'] == my_decay
@@ -748,6 +748,7 @@ class MultimodalTransformer(pl.LightningModule):
             optim_kw['weight_decay'] = self.hparams.weight_decay
 
         optim_kw['params'] = self.parameters()
+        print('optim_cls = {}'.format(ub.repr2(optim_cls, nl=1)))
         print('optim_kw = {}'.format(ub.repr2(optim_kw, nl=1)))
         optimizer = optim_cls(**optim_kw)
 
@@ -1840,6 +1841,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> self = methods.MultimodalTransformer(
             >>>     arch_name="smt_it_joint_p2", classes=classes,
             >>>     dataset_stats=dataset_stats, input_sensorchan=datamodule.input_sensorchan,
+            >>>     learning_rate=1e-8, optimizer='sgd',
             >>>     change_head_hidden=0, saliency_head_hidden=0,
             >>>     class_head_hidden=0)
 
@@ -1862,8 +1864,13 @@ class MultimodalTransformer(pl.LightningModule):
             >>> assert recon is not self
             >>> assert set(recon_state) == set(recon_state)
             >>> for key in recon_state.keys():
-            >>>     assert (model_state[key] == recon_state[key]).all()
-            >>>     assert model_state[key] is not recon_state[key]
+            >>>     v1 = model_state[key]
+            >>>     v2 = recon_state[key]
+            >>>     if not (v1 == v2).all():
+            >>>         print('v1 = {}'.format(ub.repr2(v1, nl=1)))
+            >>>         print('v2 = {}'.format(ub.repr2(v2, nl=1)))
+            >>>         raise AssertionError(f'Difference in key={key}')
+            >>>     assert v1 is not v2, 'should be distinct copies'
 
         Ignore:
             7z l $HOME/.cache/watch/tests/package/my_package.pt
