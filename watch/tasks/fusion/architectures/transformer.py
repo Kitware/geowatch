@@ -91,9 +91,9 @@ class MultiheadSelfAttention(torch.nn.MultiheadAttention):
         >>> y0 = self.forward(x[:, 0:1, :])
         >>> y1 = self.forward(x[:, 1:2, :])
         >>> y2 = self.forward(x[:, 2:3, :])
-        >>> assert (y[:, 0:1, :] == y0).all()
-        >>> assert (y[:, 1:2, :] == y1).all()
-        >>> assert (y[:, 2:3, :] == y2).all()
+        >>> assert torch.allclose(y[:, 0:1, :], y0)
+        >>> assert torch.allclose(y[:, 1:2, :], y1)
+        >>> assert torch.allclose(y[:, 2:3, :], y2)
     """
 
     def __init__(self, embed_dim, num_heads, *args, **kwargs):
