@@ -2489,11 +2489,11 @@ class KWCocoVideoDataset(data.Dataset):
             time_offset = positional_arrays.pop('time_offset', None)
             if time_offset is not None:
                 def abslog_scaling(arr):
-                    orig_sign = np.sign(arr)
+                    orig_sign = np.nan_to_num(np.sign(arr))
                     shifted = np.abs(arr) + 1
-                    shifted = np.abs(arr) + 1
+                    shifted = np.log(shifted)
                     shifted[np.isnan(shifted)] = 0.1
-                    return orig_sign * np.log(shifted)
+                    return orig_sign * shifted
                 scaled_time_offset = abslog_scaling(time_offset)
                 positional_arrays['time_offset'] = scaled_time_offset
                 # if np.any(scaled_time_offset <= 0):
