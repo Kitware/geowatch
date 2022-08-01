@@ -315,6 +315,8 @@ def predict(cmdline=False, **kwargs):
                             compat_parts.append(model_part)
 
                     if len(compat_parts) == 0:
+                        print(f'datamodule_sensorchan_spec={datamodule_sensorchan_spec}')
+                        print(f'hack_model_sensorchan_spec={hack_model_sensorchan_spec}')
                         raise ValueError('no compatible channels between model and data')
                     hack_common = sum(compat_parts)
                     # hack_common = hack_model_sensorchan_spec.intersection(datamodule_sensorchan_spec)
