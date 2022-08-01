@@ -303,12 +303,17 @@ def predict(cmdline=False, **kwargs):
             hack_model_sensorchan_spec = kwcoco.SensorChanSpec.coerce(','.join(model_sensorchan_stem_parts))
             # hack_model_spec = kwcoco.ChannelSpec.coerce(','.join(unique_channel_streams))
             if datamodule_sensorchan_spec is not None:
+                hack_model_sensorchan_spec = hack_model_sensorchan_spec.normalize()
+                datamodule_sensorchan_spec = datamodule_sensorchan_spec.normalize()
                 if hack_model_sensorchan_spec.normalize().spec != datamodule_sensorchan_spec.normalize().spec:
                     print('Warning: reported model channels may be incorrect '
                           'due to bad train hyperparams')
                     compat_parts = []
                     for model_part in hack_model_sensorchan_spec.streams():
                         data_part = datamodule_sensorchan_spec.matching_sensor(model_part.sensor.spec)
+                        if not data_part.chans.spec:
+                            # Try the generic sensor
+                            data_part = datamodule_sensorchan_spec.matching_sensor('*')
                         isect_part = model_part.chans.intersection(data_part.chans)
                         # Stems required chunked channels, cant take subsets of them
                         if isect_part.spec == model_part.chans.spec:
