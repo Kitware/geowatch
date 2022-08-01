@@ -574,7 +574,7 @@ EXPERIMENT_NAME=Drop4_BAS_30m_S2_RGBN_V003
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 INITIAL_STATE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
 python -m watch.tasks.fusion.fit \
-    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    --config="$WORKDIR/configs/drop4_baseline_20220731.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -582,6 +582,7 @@ python -m watch.tasks.fusion.fit \
     --test_dataset="$TEST_FPATH" \
     --class_loss='dicefocal' \
     --saliency_loss='dicefocal' \
+    --chip_size=256 \
     --package_fpath="auto" \
     --global_change_weight=0.00 \
     --global_class_weight=0.00 \

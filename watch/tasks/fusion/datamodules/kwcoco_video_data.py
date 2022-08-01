@@ -845,6 +845,8 @@ class KWCocoVideoDataset(data.Dataset):
                 config['chip_dims'] = sample_shape[1:3]
 
         chip_dims = config['chip_dims']
+        if not ub.iterable(chip_dims):
+            chip_dims = (chip_dims, chip_dims)
         chip_h, chip_w = chip_dims
         window_dims = (config['time_steps'], chip_h, chip_w)
         window_overlap = config['chip_overlap']
