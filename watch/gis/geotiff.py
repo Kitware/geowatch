@@ -52,7 +52,10 @@ def geotiff_metadata(gpath, elevation='gtop30', strict=False):
 
     infos['fname'] = geotiff_filepath_info(gpath)
     try:
-        infos['crs'] = geotiff_crs_info(ref, elevation=elevation)
+        # TODO: we probably shouldn't suppress warnings here, remove once we
+        # figure out why we are getting the current ones.
+        with util_gdal.GdalSupressWarnings():
+            infos['crs'] = geotiff_crs_info(ref, elevation=elevation)
     except exceptions.GeoMetadataNotFound as ex:
         if strict:
             raise

@@ -75,9 +75,10 @@ gather-checkpoints-repackage(){
 
 schedule-prediction-and-evlauation(){
 
-    #python -m watch.tasks.fusion.dvc_sync_manager "list"
+    python -m watch.tasks.fusion.dvc_sync_manager "list"
+    python -m watch.tasks.fusion.dvc_sync_manager "pull evals"
     python -m watch.tasks.fusion.dvc_sync_manager "pull packages"
-    #python -m watch.tasks.fusion.dvc_sync_manager "push evals"
+    python -m watch.tasks.fusion.dvc_sync_manager "push evals"
     #python -m watch.tasks.fusion.dvc_sync_manager "push packages evals"
 
     DVC_DPATH=$(smartwatch_dvc)
@@ -105,7 +106,7 @@ schedule-prediction-and-evlauation(){
     DATASET_CODE=Aligned-Drop3-TA1-2022-03-10
     EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
+    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_ILM_nowv_vali.kwcoco.json
     # The devices flag does not work for the slurm backend. (Help wanted)
     TMUX_GPUS="0,1"
     #TMUX_GPUS="1,"
@@ -113,6 +114,7 @@ schedule-prediction-and-evlauation(){
             --devices="$TMUX_GPUS" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*Simplify*/*.pt" \
             --test_dataset="$VALI_FPATH" \
+            --set_cover_algo="approx," \
             --run=1 --skip_existing=True --backend=tmux
 
     TMUX_GPUS="0,1,2,3"
@@ -202,6 +204,7 @@ aggregate-results(){
     EXPT_NAME_PAT="*"
     #EXPT_NAME_PAT="*Drop3*"
     EXPT_NAME_PAT="*"
+    #EXPT_NAME_PAT="BOTH_TA1_COMBO_TINY_p2w_raw*"
     #EXPT_NAME_PAT="BOTH_TA1_COMBO_TINY_p2w_raw*"
     MODEL_EPOCH_PAT="*"
     PRED_DSET_PAT="*"

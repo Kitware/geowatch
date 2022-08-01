@@ -107,7 +107,7 @@ CommandLine:
         --api_key=env:SMART_STAC_API_KEY \
         --search_json "auto" \
         --cloud_cover 100 \
-        --sensors=TA1-S2-L8-WV-PL-ACC \
+        --sensors=TA1-S2-L8-WV-PD-ACC \
         --mode area \
         --verbose 2 \
         --outfile "./result.input"

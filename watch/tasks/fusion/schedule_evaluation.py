@@ -65,6 +65,7 @@ class ScheduleEvaluationConfig(scfg.Config):
         'tta_fliprot': scfg.Value(None, help='grid of flip test-time-augmentation to test'),
         'tta_time': scfg.Value(None, help='grid of temporal test-time-augmentation to test'),
         'chip_overlap': scfg.Value(0.3, help='grid of chip overlaps test'),
+        'set_cover_algo': scfg.Value(['approx'], help='grid of set_cover_algo to test'),
 
         'workdir': scfg.Value(None, help='if specified, dumps predictions/results here, otherwise uses our DVC sidecar pattern'),
 

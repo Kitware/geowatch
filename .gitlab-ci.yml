@@ -70,7 +70,7 @@ stages:
         XDG_CACHE_HOME:
             "$CI_PROJECT_DIR/.cache/xdg_cache"
     tags:
-        - aws
+        #- aws
         - docker
         - linux
         - linux-3.17
@@ -84,7 +84,7 @@ stages:
     - linux
     - linux-3.17
     - build
-    - aws
+    #- aws
     - smart
   before_script:
     - docker info
@@ -196,7 +196,7 @@ run_linter:
         - pip install -r requirements/linting.txt 
 
     script:
-        - python dev/lint.py [watch] --mode=lint
+        - ./run_linter.sh
 
     # We should eventually enforce linting
     allow_failure: true

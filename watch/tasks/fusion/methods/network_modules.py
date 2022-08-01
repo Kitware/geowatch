@@ -37,6 +37,13 @@ class RobustModuleDict(torch.nn.ModuleDict):
         key = self.repl_empty if key == '' else key.replace('.', self.repl_dot)
         return key
 
+    @classmethod
+    def _unnormalize_key(self, key):
+        if key == self.repl_empty:
+            return ''
+        else:
+            return key.replace(self.repl_dot, '.')
+
     @_copy_to_script_wrapper
     def __getitem__(self, key: str) -> Module:
         key = self._normalize_key(key)
@@ -452,7 +459,10 @@ def _class_weights_from_freq(total_freq, mode='median-idf'):
     else:
         denom = 1
     weights[mask] = weights[mask] / denom
-    weights[~mask] = weights[mask].max() / 7
+    if np.any(mask):
+        weights[~mask] = weights[mask].max() / 7
+    else:
+        weights[~mask] = 1e-1
     weights = np.round(weights, 6)
     return weights
 

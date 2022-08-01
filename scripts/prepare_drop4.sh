@@ -38,7 +38,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --cloud_cover=30 \
     --sensors="$SENSORS" \
     --api_key=env:SMART_STAC_API_KEY \
-    --collated False \
+    --collated True \
     --dvc_dpath="$DVC_DPATH" \
     --aws_profile=iarpa \
     --region_globstr="$REGION_GLOBSTR" \
@@ -61,9 +61,10 @@ python -m watch.cli.prepare_ta2_dataset \
 
 build_drop4_all_sensors(){
     source "$HOME"/code/watch/secrets/secrets
-    SENSORS=TA1-S2-L8-WV-PL-ACC
+    #SENSORS=TA1-S2-L8-WV-PD-ACC
+    SENSORS=TA1-S2-L8-ACC
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
-    DATASET_SUFFIX=Drop4-2022-07-26-c40-$SENSORS
+    DATASET_SUFFIX=Drop4-2022-07-28-c20-$SENSORS
     REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*.geojson"
     SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
 
@@ -75,10 +76,10 @@ build_drop4_all_sensors(){
     python -m watch.cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
-        --cloud_cover=40 \
+        --cloud_cover=20 \
         --sensors="$SENSORS" \
         --api_key=env:SMART_STAC_API_KEY \
-        --collated False \
+        --collated True \
         --dvc_dpath="$DVC_DPATH" \
         --aws_profile=iarpa \
         --region_globstr="$REGION_GLOBSTR" \
@@ -92,7 +93,7 @@ build_drop4_all_sensors(){
         --ignore_duplicates=1 \
         --separate_region_queues=1 \
         --separate_align_jobs=1 \
-        --include_channels="blue|green|red|nir|swir16|swir22" \
+        --include_channels="blue|green|red|nir|swir16|swir22|cloudmask" \
         --visualize=1 \
         --target_gsd=30 \
         --backend=tmux --run=1
@@ -149,7 +150,7 @@ rgb_medium_drop4_only(){
         --cloud_cover=10 \
         --sensors="$SENSORS" \
         --api_key=env:SMART_STAC_API_KEY \
-        --collated False \
+        --collated True \
         --dvc_dpath="$DVC_DPATH" \
         --aws_profile=iarpa \
         --region_globstr="$REGION_GLOBSTR" \
@@ -173,15 +174,15 @@ rgb_medium_drop4_only(){
 small_onesite(){
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     source ~/code/watch/secrets/secrets
-    SENSORS=TA1-S2-L8-ACC
+    SENSORS=TA1-S2-L8-WV-PD-ACC
     #SENSORS=L2-S2
     #SENSORS=L2-L8
     #SENSORS=TA1-S2-ACC
     #SENSORS=TA1-L8-ACC
     #SENSORS=L2-S2-L8
-    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/US_R004.geojson"
-    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/US_R004_*.geojson"
-    DATASET_SUFFIX=Drop4-2022-07-24-$SENSORS-onesite
+    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/BR_R001.geojson"
+    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/BR_R001*.geojson"
+    DATASET_SUFFIX=Drop4-2022-07-28-$SENSORS-onesite
 
     # Test credentials
     #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
@@ -195,20 +196,20 @@ small_onesite(){
         --cloud_cover=10 \
         --sensors="$SENSORS" \
         --api_key=env:SMART_STAC_API_KEY \
-        --collated False \
+        --collated True \
         --dvc_dpath="$DVC_DPATH" \
         --aws_profile=iarpa \
         --requester_pays=False \
         --region_globstr="$REGION_GLOBSTR" \
         --site_globstr="$SITE_GLOBSTR" \
-        --max_products_per_region=10 \
-        --fields_workers=30 \
-        --convert_workers=20 \
-        --align_workers=20 \
-        --cache=1 \
-        --include_channels="blue|green|red" \
+        --max_products_per_region=3 \
+        --fields_workers=10 \
+        --convert_workers=10 \
+        --align_workers=10 \
+        --cache=0 \
+        --include_channels="red|blue|green" \
         --ignore_duplicates=1 \
-        --visualize=True \
+        --visualize=1 \
         --backend=serial --run=1
         #--fields_workers=100 \
         #--convert_workers=8 \
@@ -217,10 +218,12 @@ small_onesite(){
 
 small_teregions(){
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
-    SENSORS=L2-L8
+    SENSORS=L2-S2
     DATASET_SUFFIX=Drop4-2022-07-18-$SENSORS-small-teregion
-    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*_R*.geojson"
-    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*_R*.geojson"
+    #REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*_R*.geojson"
+    #SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*_R*.geojson"
+    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/BR_R001.geojson"
+    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/BR_R001_*.geojson"
 
     #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
     #REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/NZ_R001.*"
@@ -246,7 +249,7 @@ small_teregions(){
         --ignore_duplicates=1 \
         --target_gsd=30 \
         --visualize=True \
-        --backend=serial --run=1
+        --backend=serial --run=0
 }
 
 small_allsites(){
@@ -334,23 +337,21 @@ _Debugging(){
 
 
 dvc_add(){
-
-    python -m watch.cli.prepare_splits data.kwcoco.json --run=0
-
-    python -m watch.cli.prepare_splits \
-        --base_fpath=data.kwcoco.json \
-        --run=0 --backend=serial
-    7z a splits.zip data*.kwcoco.json
-
     cd Aligned-Drop4-2022-07-25-c30-TA1-S2-L8-ACC
+
+    mkdir -p viz512_anns
+    cp _viz512/*/*ann*.gif ./viz512_anns
+
+    python -m watch.cli.prepare_splits data.kwcoco.json --run=1
+
+    7z a splits.zip data*.kwcoco.json
 
     # Cd into the bundle we want to add
     ls -- */L8
     ls -- */S2
     ls -- */*.json
 
-    dvc add -- */L8 */S2 
-    dvc add -- *.zip
+    dvc add -- */L8 */S2 *.zip viz512_anns
     git commit -am "Add Drop4"
 
     dvc push -r aws -R .

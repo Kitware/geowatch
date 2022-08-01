@@ -205,8 +205,18 @@ def main(cmdline=False, **kwargs):
 
     import cmd_queue
     from watch.utils import util_path
+
+    api_key = config['api_key']
+    environ = {}
+    if api_key.startswith('env:'):
+        import os
+        api_key_name = api_key[4:]
+        api_key_val = os.environ[api_key_name]
+        environ[api_key_name] = api_key_val
+
     queue = cmd_queue.Queue.create(
-        backend=config['backend'], name='prep-ta2-dataset', size=1, gres=None)
+        backend=config['backend'], name='prep-ta2-dataset', size=1, gres=None,
+        environ=environ)
 
     default_collated = config['collated'][0]
 

@@ -388,7 +388,8 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         # TODO: allow for hardcoding per-sensor/channel mean/std in the
         # heuristics and then using those to have the option to skip computing
         # them for new datasets.
-        method_var_dict['input_channels'] = datamodule.input_channels
+        # method_var_dict['input_channels'] = datamodule.input_channels
+        method_var_dict['input_sensorchan'] = datamodule.input_sensorchan
 
         if args.normalize_inputs == 'transfer':
             assert other_model is not None
@@ -417,11 +418,21 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
 
     # init trainer from args
     if 1:
+        # OLD:
+        #     ('S2', 'blue|green|red'): {
+        #         'mean': np.array([[[311.356341]],[[523.429458]],[[690.607918]]], dtype=np.float64),
+        #         'std': np.array([[[2129.805325]],[[2222.820243]],[[2348.7701  ]]], dtype=np.float64),
+        #     },
+        #     ('L8', 'blue|green|red'): {
+        #         'mean': np.array([[[ 949.545103]],[[1397.652219]],[[1568.746219]]], dtype=np.float64),
+        #         'std': np.array([[[ 817.128624]],[[ 986.585357]],[[1210.746754]]], dtype=np.float64),
+        #     },
+        # },
+        #
         callbacks = [
             # pl_ext.callbacks.AutoResumer(),
             # pl_ext.callbacks.StateLogger(),
             pl_ext.callbacks.TextLogger(args),
-            # pl.callbacks.LambdaCallback(on_init_end=_on_init_end),
             pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
             pl_ext.callbacks.BatchPlotter(
                 num_draw=args.num_draw,
@@ -489,7 +500,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
             if isinstance(v, pathlib.Path):
                 setattr(args, k, os.fspath(v))
         fpath = join(trainer.log_dir, 'fit_config.yaml')
-        ub.ensuredir(trainer.log_dir)
+        ub.Path(trainer.log_dir).ensuredir()
         parser.write_config_file(args, [fpath])
 
     modules = {
@@ -579,44 +590,49 @@ def fit_model(args=None, cmdline=False, **kwargs):
 
     args = modules['args']
     if args.eval_after_fit:
-        print('Attempting to unload resources after fit')
-        # Unload fit resources
-        trainer = None
-        model = None
-        datamodule = None
-        modules = None
+        if not package_fpath:
+            print('package fpath was not set, so we cant eval')
+        else:
+            # Perhaps this doesn't happen in the same Python process maybe we
+            # simply decouple this and force using a cmd-queue like scheduler?
+            print('Attempting to unload resources after fit')
+            # Unload fit resources
+            trainer = None
+            model = None
+            datamodule = None
+            modules = None
 
-        import gc
-        gc.collect()
+            import gc
+            gc.collect()
 
-        import torch
-        torch.cuda.empty_cache()
+            import torch
+            torch.cuda.empty_cache()
 
-        # TODO: evaluate multiple checkpoints?
+            # TODO: evaluate multiple checkpoints?
 
-        from watch.tasks.fusion import organize
-        suggestions = organize.suggest_paths(
-            test_dataset=args.test_dataset,
-            package_fpath=package_fpath)
-        import json
-        suggestions = json.loads(suggestions)
-        print('suggestions = {}'.format(ub.repr2(suggestions, nl=1)))
-        from watch.tasks.fusion import predict
-        from watch.tasks.fusion import evaluate
-        predict_cfg = {
-            'package_fpath': package_fpath,
-            'test_dataset': args.test_dataset,
-            'pred_dataset': suggestions['pred_dataset'],
-            'num_workers': args.num_workers,
-            'devices': args.devices,
-        }
-        eval_cfg = {
-            'pred_dataset': suggestions['pred_dataset'],
-            'true_dataset': args.test_dataset,
-            'eval_dpath': suggestions['eval_dpath'],
-        }
-        predict.main(cmdline=False, **predict_cfg)
-        evaluate.main(cmdline=False, **eval_cfg)
+            from watch.tasks.fusion import organize
+            suggestions = organize.suggest_paths(
+                test_dataset=args.test_dataset,
+                package_fpath=package_fpath)
+            import json
+            suggestions = json.loads(suggestions)
+            print('suggestions = {}'.format(ub.repr2(suggestions, nl=1)))
+            from watch.tasks.fusion import predict
+            from watch.tasks.fusion import evaluate
+            predict_cfg = {
+                'package_fpath': package_fpath,
+                'test_dataset': args.test_dataset,
+                'pred_dataset': suggestions['pred_dataset'],
+                'num_workers': args.num_workers,
+                'devices': args.devices,
+            }
+            eval_cfg = {
+                'pred_dataset': suggestions['pred_dataset'],
+                'true_dataset': args.test_dataset,
+                'eval_dpath': suggestions['eval_dpath'],
+            }
+            predict.main(cmdline=False, **predict_cfg)
+            evaluate.main(cmdline=False, **eval_cfg)
 
     # TODO:
     # Run prediction code here
@@ -667,8 +683,8 @@ def main(**kwargs):
 
     import logging
     # configure logging at the root level of lightning
-    logging.getLogger('pytorch_lightning').setLevel(logging.DEBUG)
-
+    # logging.getLogger('pytorch_lightning').setLevel(logging.DEBUG)
+    logging.getLogger('pytorch_lightning').setLevel(logging.INFO)
     fit_model(cmdline=True, **kwargs)
 
 

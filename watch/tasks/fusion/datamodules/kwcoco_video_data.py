@@ -845,6 +845,8 @@ class KWCocoVideoDataset(data.Dataset):
                 config['chip_dims'] = sample_shape[1:3]
 
         chip_dims = config['chip_dims']
+        if not ub.iterable(chip_dims):
+            chip_dims = (chip_dims, chip_dims)
         chip_h, chip_w = chip_dims
         window_dims = (config['time_steps'], chip_h, chip_w)
         window_overlap = config['chip_overlap']
@@ -1052,7 +1054,8 @@ class KWCocoVideoDataset(data.Dataset):
 
         self.sensorchan = kwcoco.SensorChanSpec.coerce(sensorchans).normalize()
 
-        # TODO: handle * sensors
+        # handle generic * sensors, the idea is that we find matches
+        # in the dataset that can support the requested channels.
         if '*' in [s.sensor.spec for s in self.sensorchan.streams()]:
             # handle * sensor in a way that works with previous models
             # This code is a little messy and should be cleaned up
@@ -1075,6 +1078,11 @@ class KWCocoVideoDataset(data.Dataset):
                                 break
                 else:
                     expanded_input_sensorchan_streams.append('{}:{}'.format(sensor, chans))
+
+            if not expanded_input_sensorchan_streams:
+                print('sensorchan_hist = {}'.format(ub.repr2(sensorchan_hist, nl=1)))
+                raise ValueError('The generic sensor * was given, but no data in the kwcoco file matched')
+
             self.sensorchan = kwcoco.SensorChanSpec.coerce(','.join(list(ub.unique(expanded_input_sensorchan_streams)))).normalize()
 
         # Hack away sensors
@@ -2346,8 +2354,7 @@ class KWCocoVideoDataset(data.Dataset):
                     nodata_weight = 1 - nodata_frac
                     frame_weights = frame_weights * nodata_weight
 
-                # Dilate ignore masks (dont care about the surrounding area
-                # either)
+                # Dilate ignore masks (dont care about the surrounding area # either)
                 # frame_saliency = util_kwimage.morphology(frame_saliency, 'dilate', kernel=ignore_dilate)
                 saliency_ignore = util_kwimage.morphology(saliency_ignore, 'dilate', kernel=self.ignore_dilate)
                 frame_class_ignore = util_kwimage.morphology(frame_class_ignore, 'dilate', kernel=self.ignore_dilate)
@@ -2481,9 +2488,16 @@ class KWCocoVideoDataset(data.Dataset):
             positional_arrays = ub.map_vals(np.stack, permode_datas)
             time_offset = positional_arrays.pop('time_offset', None)
             if time_offset is not None:
-                time_offset = time_offset + 1
-                time_offset[np.isnan(time_offset)] = 0.1
-                positional_arrays['time_offset'] = np.log(time_offset)
+                def abslog_scaling(arr):
+                    orig_sign = np.nan_to_num(np.sign(arr))
+                    shifted = np.abs(arr) + 1
+                    shifted = np.log(shifted)
+                    shifted[np.isnan(shifted)] = 0.1
+                    return orig_sign * shifted
+                scaled_time_offset = abslog_scaling(time_offset)
+                positional_arrays['time_offset'] = scaled_time_offset
+                # if np.any(scaled_time_offset <= 0):
+                #     print(f'time_offset={time_offset}')
             else:
                 print(list(permode_datas.keys()))
 
@@ -2494,9 +2508,6 @@ class KWCocoVideoDataset(data.Dataset):
         # Only pass back some of the metadata (because I think torch
         # multiprocessing makes a new file descriptor for every Python object
         # or something like that)
-        # tr_subset = ub.dict_isect(sample['tr'], {
-        #     'gids', 'space_slice', 'vidid',
-        # })
         tr_subset = ub.dict_isect(tr_, {
             'gids', 'space_slice', 'vidid', 'fliprot_params',
         })
@@ -2530,7 +2541,7 @@ class KWCocoVideoDataset(data.Dataset):
             ('normalize_perframe', self.normalize_perframe),
             ('with_intensity', with_intensity),
             ('with_class', with_class),
-            ('depends_version', 15),  # bump if `compute_dataset_stats` changes
+            ('depends_version', 16),  # bump if `compute_dataset_stats` changes
         ])
         workdir = None
         cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
@@ -2629,8 +2640,8 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import ndsampler
             >>> import kwcoco
             >>> import watch
-            >>> dvc_dpath = watch.find_smart_dvc_dpath()
-            >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/combo_LM_nowv_vali.kwcoco.json'
+            >>> dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
+            >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_train.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (6, 256, 256)
@@ -2689,51 +2700,27 @@ class KWCocoVideoDataset(data.Dataset):
         # for this.
 
         # Make a list of all unique modes in the dataset.
-        NEW = 1
-        if NEW:
-            # User specifies all of this explicitly now
-            unique_sensor_modes = set(
-                (s.sensor.spec, s.chans.spec)
-                for s in self.input_sensorchan.streams())
-        else:
-            FIX_CSPEC = 1
-            # Make a list of all unique modes in the dataset.
-            unique_sensor_modes = set(sensor_mode_hist.keys())
-            if True:
-                print('Looking for unique modes')
-                # This looks at the entire dataset, might want to
-                # make a better way of getting this info.
-                # self.sampler.dset.videos().images
-                coco_images = self.sampler.dset.images().coco_images
-                hacked = set()
-                for c in coco_images:
-                    sspec = c.img.get('sensor_coarse', '*')
-                    img_chans = c.channels.fuse().normalize()
-
-                    # TODO: the input_channels should eventually define
-                    # the sensor so we can do a specific lookup.
-                    # In the meantime, hack it.
-
-                    # Get only the requested bands for this sensor.
-                    sensor_input_chans = self.input_sensorchan.matching_sensor(sspec).chans
-
-                    if FIX_CSPEC:
-                        # # Get only the requested bands for this sensor.
-                        # sensor_input_chans = self.input_sensorchan.matching_sensor(sspec).chans
-                        # canidates = sensor_input_chans & img_chans
-                        canidates = sensor_input_chans & img_chans
-                        for a in canidates.streams():
-                            for b in sensor_input_chans.streams():
-                                if a.spec == b.spec:
-                                    hacked.add((sspec, a.spec))
-                    else:
-                        # Ensure channels are returned in requested order
-                        cspec = (self.input_channels & c.channels.fuse().normalize()).fuse().normalize().spec
-                        if cspec:
-                            hacked.add((sspec, cspec))
-                unique_sensor_modes.update(hacked)
+        # User specifies all of this explicitly now
+        unique_sensor_modes = set(
+            (s.sensor.spec, s.chans.spec)
+            for s in self.input_sensorchan.streams())
 
         print('unique_sensor_modes = {}'.format(ub.repr2(unique_sensor_modes, nl=1)))
+
+        """
+        run stats test:
+
+            import kwarray
+            running = kwarray.RunningStats()
+            data = np.array([[1, 1, 1], [0, 1, 0.]])
+            running.update(data)
+            data = np.array([[2, 0, 1], [0, 1, np.nan]])
+            running.update(data)
+            data = np.array([[3, 1, 1], [0, 1, np.nan]])
+            running.update(data)
+            data = np.array([[4, 1, 1], [0, 1, 1.]])
+            running.update(data)
+        """
 
         # TODO: we can compute the intensity histogram much more efficiently by
         # only doing it for unique channels (which might be duplicated)
@@ -2750,9 +2737,10 @@ class KWCocoVideoDataset(data.Dataset):
                 for frame_item in item['frames']:
                     if with_class:
                         class_idxs = frame_item['class_idxs']
-                        # print(np.unique(class_idxs))
-                        item_freq = np.histogram(class_idxs.ravel(), bins=bins)[0]
-                        total_freq += item_freq
+                        if class_idxs is not None:
+                            # print(np.unique(class_idxs))
+                            item_freq = np.histogram(class_idxs.ravel(), bins=bins)[0]
+                            total_freq += item_freq
                     if with_intensity:
                         sensor_code = frame_item['sensor']
                         modes = frame_item['modes']
@@ -2763,12 +2751,14 @@ class KWCocoVideoDataset(data.Dataset):
                             if not running:
                                 running = kwarray.RunningStats()
                                 channel_stats[sensor_code][mode_code] = running
-                            val = mode_val.numpy()
-                            flags = np.isfinite(val)
-                            if not np.all(flags):
-                                # Hack it:
-                                val[~flags] = 0
-                            running.update(val.astype(np.float64))
+                            dtype = np.float64
+                            val = mode_val.numpy().astype(dtype)
+                            weights = np.isfinite(val).astype(dtype)
+                            # if not np.all(flags):
+                            #     # Hack it:
+                            #     val[~flags] = 0
+                            # kwarray can handle nans now
+                            running.update(val, weights=weights)
 
             if timer.first or timer.toc() > 5:
                 from watch.utils.slugify_ext import smart_truncate
@@ -2803,9 +2793,22 @@ class KWCocoVideoDataset(data.Dataset):
             for sensor, submodes in channel_stats.items():
                 for chan_key, running in submodes.items():
                     perchan_stats = running.summarize(axis=(1, 2))
+                    chan_mean = perchan_stats['mean']
+                    chan_std = perchan_stats['std']
+
+                    # For nans, set the mean to zero and set the std to a huge
+                    # number if we dont have any data on it. That will prevent
+                    # the network from doing much with it which is really the
+                    # best we can do here.
+                    chan_mean[np.isnan(chan_mean)] = 0
+                    chan_std[np.isnan(chan_std)] = 1e8
+
+                    chan_mean = chan_mean.round(6)
+                    chan_std = chan_std.round(6)
+                    # print('perchan_stats = {}'.format(ub.repr2(perchan_stats, nl=1)))
                     input_stats[(sensor, chan_key)] = {
-                        'mean': perchan_stats['mean'].round(3),  # only take 3 sigfigs
-                        'std': np.maximum(perchan_stats['std'], 1e-3).round(3),
+                        'mean': chan_mean,
+                        'std': chan_std,
                     }
         else:
             input_stats = None

@@ -489,6 +489,8 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                                 qtree.insert(aid, tlbr_box)
                                 qtree.aid_to_tlbr[aid] = tlbr_box
 
+            # TODO: we probably can disable respect valid regions here and then
+            # just do it on the fly in the datalaoder.
             RESPECT_VALID_REGIONS = True
             for space_region in ub.ProgIter(list(slider), desc='Sliding window'):
                 y_sl, x_sl = space_region

@@ -21,26 +21,13 @@ from watch.utils import util_path
 from watch.utils import util_parallel
 from watch.utils import util_kwimage
 from watch.tasks.fusion.datamodules.kwcoco_video_data import inv_fliprot
+# APPLY Monkey Patches
+from watch.tasks.fusion import monkey  # NOQA
 
 try:
     from xdev import profile
 except Exception:
     profile = ub.identity
-
-import torchmetrics
-if not hasattr(torchmetrics.classification.f_beta, 'F1'):
-    torchmetrics.classification.f_beta.F1 = torchmetrics.classification.f_beta.FBetaScore
-
-
-def torchmetrics_compat_hack():
-    import torchmetrics
-    f_beta = torchmetrics.classification.f_beta
-    if not hasattr(f_beta, 'FBeta'):
-        f_beta.FBeta = f_beta.FBetaScore
-    if not hasattr(torchmetrics.classification.f_beta, 'FBetaScore'):
-        f_beta.FBetaScore = f_beta.FBeta
-
-torchmetrics_compat_hack()
 
 
 def make_predict_config(cmdline=False, **kwargs):
@@ -241,34 +228,8 @@ def predict(cmdline=False, **kwargs):
         # init method from checkpoint.
         raise
 
-        checkpoint = torch.load(package_fpath)
-        print(list(checkpoint.keys()))
-        from watch.tasks.fusion import methods
-        hparams = checkpoint['hyper_parameters']
-        if 'input_channels' in hparams:
-            from kwcoco.channel_spec import ChannelSpec
-            # Hack for strange pickle issue
-            chan = hparams['input_channels']
-            if not hasattr(chan, '_spec') and hasattr(chan, '_info'):
-                chan = ChannelSpec.coerce(chan._info['spec'])
-                hparams['input_channels'] = chan
-            else:
-                hparams['input_channels'] = ChannelSpec.coerce(chan.spec)
-
-        method = methods.MultimodalTransformer(**hparams)
-        state_dict = checkpoint['state_dict']
-        method.load_state_dict(state_dict)
-
     # Hack to fix GELU issue
-    FIX_GELU_ISSUE = True
-    if FIX_GELU_ISSUE:
-        # Torch 1.12 added an approximate parameter that our old models dont
-        # have. Monkey patch it in.
-        # https://github.com/pytorch/pytorch/pull/61439
-        for name, mod in method.named_modules():
-            if mod.__class__.__name__ == 'GELU':
-                if not hasattr(mod, 'approximate'):
-                    mod.approximate = 'none'
+    monkey.fix_gelu_issue(method)
 
     method.eval()
     method.freeze()
@@ -291,6 +252,7 @@ def predict(cmdline=False, **kwargs):
         traintime_params = {}
         if datamodule_vars['channels'] in {None, 'auto'}:
             print('Warning have to make assumptions. Might not always work')
+            raise NotImplementedError('TODO: needs to be sensorchan if we do this')
             if hasattr(method, 'input_channels'):
                 # note input_channels are sometimes different than the channels the
                 # datamodule expects. Depending on special keys and such.
@@ -302,7 +264,7 @@ def predict(cmdline=False, **kwargs):
     able_to_infer = ub.dict_isect(traintime_params, need_infer)
     if able_to_infer.get('channels', None) is not None:
         # do this before smartcast breaks the spec
-        able_to_infer['channels'] = kwcoco.ChannelSpec.coerce(able_to_infer['channels'])
+        able_to_infer['channels'] = kwcoco.SensorChanSpec.coerce(able_to_infer['channels'])
     from scriptconfig.smartcast import smartcast
     able_to_infer = ub.map_vals(smartcast, able_to_infer)
     unable_to_infer = ub.dict_diff(need_infer, traintime_params)
@@ -328,18 +290,42 @@ def predict(cmdline=False, **kwargs):
         # of those channels, which means the recorded channels disagree with
         # what the model was actually trained with.
         if hasattr(method, 'sensor_channel_tokenizers'):
-            datamodule_channel_spec = datamodule_vars['channels']
+            datamodule_sensorchan_spec = datamodule_vars['channels']
             unique_channel_streams = ub.oset()
+            model_sensorchan_stem_parts = []
             for sensor, tokenizers in method.sensor_channel_tokenizers.items():
                 for code in tokenizers.keys():
+                    from watch.tasks.fusion.methods.network_modules import RobustModuleDict
+                    code = RobustModuleDict._unnormalize_key(code)
                     unique_channel_streams.add(code)
-            hack_model_spec = kwcoco.ChannelSpec.coerce(','.join(unique_channel_streams))
-            if datamodule_channel_spec is not None:
-                if hack_model_spec != datamodule_channel_spec:
+                    model_sensorchan_stem_parts.append(f'{sensor}:{code}')
+
+            hack_model_sensorchan_spec = kwcoco.SensorChanSpec.coerce(','.join(model_sensorchan_stem_parts))
+            # hack_model_spec = kwcoco.ChannelSpec.coerce(','.join(unique_channel_streams))
+            if datamodule_sensorchan_spec is not None:
+                hack_model_sensorchan_spec = hack_model_sensorchan_spec.normalize()
+                datamodule_sensorchan_spec = datamodule_sensorchan_spec.normalize()
+                if hack_model_sensorchan_spec.normalize().spec != datamodule_sensorchan_spec.normalize().spec:
                     print('Warning: reported model channels may be incorrect '
                           'due to bad train hyperparams')
-                    hack_common = hack_model_spec.intersection(datamodule_channel_spec)
-                    datamodule_vars['channels'] = hack_common
+                    compat_parts = []
+                    for model_part in hack_model_sensorchan_spec.streams():
+                        data_part = datamodule_sensorchan_spec.matching_sensor(model_part.sensor.spec)
+                        if not data_part.chans.spec:
+                            # Try the generic sensor
+                            data_part = datamodule_sensorchan_spec.matching_sensor('*')
+                        isect_part = model_part.chans.intersection(data_part.chans)
+                        # Stems required chunked channels, cant take subsets of them
+                        if isect_part.spec == model_part.chans.spec:
+                            compat_parts.append(model_part)
+
+                    if len(compat_parts) == 0:
+                        print(f'datamodule_sensorchan_spec={datamodule_sensorchan_spec}')
+                        print(f'hack_model_sensorchan_spec={hack_model_sensorchan_spec}')
+                        raise ValueError('no compatible channels between model and data')
+                    hack_common = sum(compat_parts)
+                    # hack_common = hack_model_sensorchan_spec.intersection(datamodule_sensorchan_spec)
+                    datamodule_vars['channels'] = hack_common.spec
 
     DZYNE_MODEL_HACK = 1
     if DZYNE_MODEL_HACK:
