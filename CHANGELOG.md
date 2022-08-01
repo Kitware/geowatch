@@ -4,10 +4,14 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.3.3 - Unreleased
+## Version 0.3.4 - Unreleased
 
 ### Changed
 
+
+## Version 0.3.3 - Unreleased
+
+### Changed
 * Updates to handle new "Drop4" datasets
 * Fixes to sensorchan integration with the model and dataset (training with new settings is now verified)
 * Fixes to handling of nan data
