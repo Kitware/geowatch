@@ -388,7 +388,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         # TODO: allow for hardcoding per-sensor/channel mean/std in the
         # heuristics and then using those to have the option to skip computing
         # them for new datasets.
-        method_var_dict['input_channels'] = datamodule.input_channels
+        # method_var_dict['input_channels'] = datamodule.input_channels
         method_var_dict['input_sensorchan'] = datamodule.input_sensorchan
 
         if args.normalize_inputs == 'transfer':

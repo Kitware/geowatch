@@ -2486,9 +2486,16 @@ class KWCocoVideoDataset(data.Dataset):
             positional_arrays = ub.map_vals(np.stack, permode_datas)
             time_offset = positional_arrays.pop('time_offset', None)
             if time_offset is not None:
-                time_offset = time_offset + 1
-                time_offset[np.isnan(time_offset)] = 0.1
-                positional_arrays['time_offset'] = np.log(time_offset)
+                def abslog_scaling(arr):
+                    orig_sign = np.sign(arr)
+                    shifted = np.abs(arr) + 1
+                    shifted = np.abs(arr) + 1
+                    shifted[np.isnan(shifted)] = 0.1
+                    return orig_sign * np.log(shifted)
+                scaled_time_offset = abslog_scaling(time_offset)
+                positional_arrays['time_offset'] = scaled_time_offset
+                # if np.any(scaled_time_offset <= 0):
+                #     print(f'time_offset={time_offset}')
             else:
                 print(list(permode_datas.keys()))
 
@@ -2532,7 +2539,7 @@ class KWCocoVideoDataset(data.Dataset):
             ('normalize_perframe', self.normalize_perframe),
             ('with_intensity', with_intensity),
             ('with_class', with_class),
-            ('depends_version', 15),  # bump if `compute_dataset_stats` changes
+            ('depends_version', 16),  # bump if `compute_dataset_stats` changes
         ])
         workdir = None
         cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
@@ -2631,8 +2638,8 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import ndsampler
             >>> import kwcoco
             >>> import watch
-            >>> dvc_dpath = watch.find_smart_dvc_dpath()
-            >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/combo_LM_nowv_vali.kwcoco.json'
+            >>> dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
+            >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_train.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (6, 256, 256)
@@ -2698,6 +2705,21 @@ class KWCocoVideoDataset(data.Dataset):
 
         print('unique_sensor_modes = {}'.format(ub.repr2(unique_sensor_modes, nl=1)))
 
+        """
+        run stats test:
+
+            import kwarray
+            running = kwarray.RunningStats()
+            data = np.array([[1, 1, 1], [0, 1, 0.]])
+            running.update(data)
+            data = np.array([[2, 0, 1], [0, 1, np.nan]])
+            running.update(data)
+            data = np.array([[3, 1, 1], [0, 1, np.nan]])
+            running.update(data)
+            data = np.array([[4, 1, 1], [0, 1, 1.]])
+            running.update(data)
+        """
+
         # TODO: we can compute the intensity histogram much more efficiently by
         # only doing it for unique channels (which might be duplicated)
         prog = ub.ProgIter(loader, desc='estimate dataset stats')
@@ -2727,12 +2749,14 @@ class KWCocoVideoDataset(data.Dataset):
                             if not running:
                                 running = kwarray.RunningStats()
                                 channel_stats[sensor_code][mode_code] = running
-                            val = mode_val.numpy()
-                            flags = np.isfinite(val)
-                            if not np.all(flags):
-                                # Hack it:
-                                val[~flags] = 0
-                            running.update(val.astype(np.float64))
+                            dtype = np.float64
+                            val = mode_val.numpy().astype(dtype)
+                            weights = np.isfinite(val).astype(dtype)
+                            # if not np.all(flags):
+                            #     # Hack it:
+                            #     val[~flags] = 0
+                            # kwarray can handle nans now
+                            running.update(val, weights=weights)
 
             if timer.first or timer.toc() > 5:
                 from watch.utils.slugify_ext import smart_truncate
@@ -2767,9 +2791,22 @@ class KWCocoVideoDataset(data.Dataset):
             for sensor, submodes in channel_stats.items():
                 for chan_key, running in submodes.items():
                     perchan_stats = running.summarize(axis=(1, 2))
+                    chan_mean = perchan_stats['mean']
+                    chan_std = perchan_stats['std']
+
+                    # For nans, set the mean to zero and set the std to a huge
+                    # number if we dont have any data on it. That will prevent
+                    # the network from doing much with it which is really the
+                    # best we can do here.
+                    chan_mean[np.isnan(chan_mean)] = 0
+                    chan_std[np.isnan(chan_std)] = 1e8
+
+                    chan_mean = chan_mean.round(6)
+                    chan_std = chan_std.round(6)
+                    # print('perchan_stats = {}'.format(ub.repr2(perchan_stats, nl=1)))
                     input_stats[(sensor, chan_key)] = {
-                        'mean': perchan_stats['mean'].round(3),  # only take 3 sigfigs
-                        'std': np.maximum(perchan_stats['std'], 1e-3).round(3),
+                        'mean': chan_mean,
+                        'std': chan_std,
                     }
         else:
             input_stats = None

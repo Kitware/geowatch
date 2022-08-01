@@ -1,7 +1,7 @@
 # Core dependencies needed at runtime that that should install without much issue
 
 # Numeric
-kwarray>=0.6.2
+kwarray>=0.6.3
 numpy>=1.20.0
 scipy>=1.6.3
 shapely>=1.7.1
