@@ -418,6 +418,17 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
 
     # init trainer from args
     if 1:
+        # OLD:
+        #     ('S2', 'blue|green|red'): {
+        #         'mean': np.array([[[311.356341]],[[523.429458]],[[690.607918]]], dtype=np.float64),
+        #         'std': np.array([[[2129.805325]],[[2222.820243]],[[2348.7701  ]]], dtype=np.float64),
+        #     },
+        #     ('L8', 'blue|green|red'): {
+        #         'mean': np.array([[[ 949.545103]],[[1397.652219]],[[1568.746219]]], dtype=np.float64),
+        #         'std': np.array([[[ 817.128624]],[[ 986.585357]],[[1210.746754]]], dtype=np.float64),
+        #     },
+        # },
+        #
         callbacks = [
             # pl_ext.callbacks.AutoResumer(),
             # pl_ext.callbacks.StateLogger(),

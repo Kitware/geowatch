@@ -1,4 +1,4 @@
 # Requirements for running our linting policy
 flake8>=4.0.1
-ubelt>=0.11.0
+ubelt>=1.1.2
 fire>=0.4.0

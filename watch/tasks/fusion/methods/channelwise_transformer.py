@@ -349,7 +349,7 @@ class MultimodalTransformer(pl.LightningModule):
             class_freq = dataset_stats['class_freq']
             if input_sensorchan is None:
                 input_sensorchan = ','.join(
-                    [f'{s}:{c}' for s, c in self.dataset_stats['unique_sensor_modes']])
+                    [f'{s}:{c}' for s, c in dataset_stats['unique_sensor_modes']])
         else:
             class_freq = None
             input_stats = None

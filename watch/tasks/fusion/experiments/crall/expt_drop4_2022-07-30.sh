@@ -418,7 +418,7 @@ python -m watch.tasks.fusion.fit \
     --weight_decay=1e-5 \
     --dropout=0.1 \
     --attention_impl=exact \
-    --chip_size=380 \
+    --chip_dims=380,380 \
     --time_steps=5 \
     --chip_overlap=0.0 \
     --time_sampling=soft+distribute \
@@ -582,7 +582,7 @@ python -m watch.tasks.fusion.fit \
     --test_dataset="$TEST_FPATH" \
     --class_loss='dicefocal' \
     --saliency_loss='dicefocal' \
-    --chip_size=256 \
+    --chip_dims=256,256 \
     --package_fpath="auto" \
     --global_change_weight=0.00 \
     --global_class_weight=0.00 \

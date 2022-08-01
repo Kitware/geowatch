@@ -196,7 +196,7 @@ run_linter:
         - pip install -r requirements/linting.txt 
 
     script:
-        - python dev/lint.py [watch] --mode=lint
+        - ./run_linter.sh
 
     # We should eventually enforce linting
     allow_failure: true
