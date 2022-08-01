@@ -57,7 +57,7 @@ lark >= 1.1.2
 
 # Imaging
 distinctipy>=1.2.1
-kwimage>=0.9.3
+kwimage>=0.9.4
 kwcoco>=0.3.3
 Pillow>=8.0.1
 albumentations>=1.0.0
