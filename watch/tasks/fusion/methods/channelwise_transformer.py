@@ -743,9 +743,9 @@ class MultimodalTransformer(pl.LightningModule):
         if self.hparams.optimizer == 'RAdam':
             optim_kw['betas'] = (0.9, 0.99)  # backwards compat
 
-        # Hack to fix a netharn bug
-        if 'weight_decay' in optim_kw:
-            optim_kw['weight_decay'] = self.hparams.weight_decay
+        # Hack to fix a netharn bug where weight decay is not set for AdamW
+        optim_kw.update(ub.compatible(
+            {'weight_decay': self.hparams.weight_decay}, optim_cls))
 
         optim_kw['params'] = self.parameters()
         print('optim_cls = {}'.format(ub.repr2(optim_cls, nl=1)))
