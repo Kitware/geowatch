@@ -180,6 +180,7 @@ def main(cmdline=False, **kwargs):
         # 'ET_C000',  # 404 errors
     }
 
+    # Job environments are specific to single jobs
     job_environs = [
         # 'PROJ_DEBUG=3',
         f'AWS_DEFAULT_PROFILE={aws_profile}',
@@ -206,8 +207,11 @@ def main(cmdline=False, **kwargs):
     import cmd_queue
     from watch.utils import util_path
 
+    # Global environs are given to all jobs
     api_key = config['api_key']
     environ = {}
+    # https://trac.osgeo.org/gdal/wiki/ConfigOptions#GDAL_DISABLE_READDIR_ON_OPEN
+    environ['GDAL_DISABLE_READDIR_ON_OPEN'] = 'EMPTY_DIR'
     if api_key.startswith('env:'):
         import os
         api_key_name = api_key[4:]
