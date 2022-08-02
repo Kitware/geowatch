@@ -93,7 +93,7 @@ except Exception:
 
 
 # Model names define the transformer encoder used by the method
-available_encoders = list(transformer.encoder_configs.keys()) + ['deit']
+available_encoders = list(transformer.encoder_configs.keys()) + ['deit', "perceiver"]
 
 
 @scfg.dataconf
@@ -584,6 +584,13 @@ class MultimodalTransformer(pl.LightningModule):
             self.encoder = encoder
         elif arch_name.startswith('deit'):
             self.encoder = transformer.DeiTEncoder(
+                # **encoder_config,
+                in_features=in_features,
+                # attention_impl=attention_impl,
+                # dropout=dropout,
+            )
+        elif arch_name.startswith('perceiver'):
+            self.encoder = transformer.PerceiverEncoder(
                 # **encoder_config,
                 in_features=in_features,
                 # attention_impl=attention_impl,
