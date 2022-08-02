@@ -16,7 +16,6 @@ import kwcoco
 
 from os.path import join
 from watch.utils import util_raster
-from kwcoco.coco_image import CocoImage
 from watch import exceptions
 
 try:
@@ -832,6 +831,7 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
         kw_poly = kwimage.MultiPolygon.from_shapely(sh_poly)
         print('rasterio kw_poly.data = {!r}'.format(kw_poly.data))
     """
+    from kwcoco.coco_image import CocoImage
     # Compute an image-to-video transform that aligns all frames to some
     # common resolution.
     video = coco_dset.index.videos[vidid]
@@ -1738,9 +1738,12 @@ def coco_channel_stats(coco_dset):
         >>> info = kwcoco_extensions.coco_channel_stats(coco_dset)
         >>> print(ub.repr2(info, nl=3))
     """
+    import kwcoco
+    from kwcoco.coco_image import CocoImage
     sensor_hist = ub.ddict(lambda: 0)
     chan_hist = ub.ddict(lambda: 0)
     sensorchan_hist = ub.ddict(lambda: ub.ddict(lambda: 0))
+    sensorchan_hist2 = ub.ddict(lambda: 0)
 
     for _gid, img in coco_dset.index.imgs.items():
         channels = []
@@ -1751,18 +1754,28 @@ def coco_channel_stats(coco_dset):
         chan_hist[chan] += 1
         sensor_hist[sensor] += 1
         sensorchan_hist[sensor][chan] += 1
+        # TODO: replace other usages with sensorchan_hist2 then remove other
+        # uses, and rename sensorchan_hist2 to sensorchan_hist
+        sensorchan = f'{sensor}:{chan}'
+        sensorchan_hist2[sensorchan] += 1
 
-    from kwcoco.channel_spec import FusedChannelSpec as FS
+    FS = kwcoco.FusedChannelSpec
     osets = [FS.coerce(c).as_oset() for c in chan_hist]
     common_channels = FS.coerce(list(ub.oset.intersection(*osets))).concise()
     all_channels = FS.coerce(list(ub.oset.union(*osets))).concise()
+
+    all_sensorchan = sum([
+        kwcoco.SensorChanSpec.coerce(s)
+        for s in sensorchan_hist2.keys()]).concise()
 
     info = {
         'chan_hist': chan_hist,
         'sensor_hist': sensor_hist,
         'sensorchan_hist': sensorchan_hist,
+        'sensorchan_hist2': sensorchan_hist2,
         'common_channels': common_channels,
         'all_channels': all_channels,
+        'all_sensorchan': all_sensorchan,
     }
     return info
 

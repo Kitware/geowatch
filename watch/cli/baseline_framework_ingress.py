@@ -9,9 +9,9 @@ from datetime import datetime
 from concurrent.futures import as_completed
 import traceback
 
-import ubelt
 import requests
 import pystac
+import ubelt as ub
 
 
 SENTINEL_PLATFORMS = {'sentinel-2b', 'sentinel-2a'}
@@ -19,7 +19,12 @@ SENTINEL_PLATFORMS = {'sentinel-2b', 'sentinel-2a'}
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Ingress data from T&E baseline framework input file')
+        description=ub.paragraph(
+            '''
+            Ingress data from T&E baseline framework input file.
+
+            The output will be stored as a json catalog
+            '''))
 
     parser.add_argument('input_path',
                         type=str,
@@ -227,7 +232,6 @@ def ingress_item(feature,
         item_href = os.path.relpath(item_href, outdir)
 
     item.set_self_href(item_href)
-    # import ubelt as ub
     # print('item = {}'.format(ub.repr2(item.to_dict(), nl=2)))
     return item
 
@@ -335,8 +339,8 @@ def baseline_framework_ingress(input_path,
 
     input_stac_items = load_input_stac_items(input_path, aws_base_command)
 
-    executor = ubelt.Executor(mode='process' if jobs > 1 else 'serial',
-                              max_workers=jobs)
+    executor = ub.Executor(mode='process' if jobs > 1 else 'serial',
+                           max_workers=jobs)
 
     jobs = [executor.submit(ingress_item, feature, outdir, aws_base_command,
                             dryrun, relative, asset_selector, virtual)

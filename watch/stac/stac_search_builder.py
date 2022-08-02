@@ -1,5 +1,8 @@
 """
-A simple script to build a STAC search json
+A tool to help build a STAC search json.
+
+This does contain a command line interface, for legacy reasons, but
+is not intended to be a fully supported part of the WATCH CLI.
 """
 import os
 import ubelt as ub
