@@ -664,5 +664,5 @@ python -m watch.tasks.fusion.fit \
     --normalize_inputs=2048 \
     --stream_channels=16 \
     --temporal_dropout=0.1 \
-    --devices "0," \
+    --devices "1" --gpus 1 \
     --init="noop"

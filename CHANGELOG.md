@@ -6,8 +6,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.3.4 - Unreleased
 
-### Changed
-
+### Added
+* New "space_scale" parameter to Dataset such that a specific GSD can be given on the fly
+* New samecolor heuristic to remove invalid regions in data sampling.
 
 ## Version 0.3.3 - Unreleased
 

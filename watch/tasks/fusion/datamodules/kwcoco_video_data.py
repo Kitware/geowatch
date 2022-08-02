@@ -1990,6 +1990,24 @@ class KWCocoVideoDataset(data.Dataset):
         tr_['as_xarray'] = False
         tr_['use_experimental_loader'] = 1
 
+        # Compute scale if we are doing that
+        # This should live somewhere else, but lets just get it hooked up
+        space_scale = self.config['space_scale']
+        scale = None
+        if space_scale is not None:
+            if isinstance(space_scale, str):
+                if space_scale.endswith('gsd'):
+                    request_gsd = float(space_scale[:-3].strip())
+                    target_gsd = sampler.dset.index.videos[tr_['video_id']]['target_gsd']
+                    scale = target_gsd / request_gsd
+                    # Should we also change the window size somewhere else?
+                else:
+                    scale = float(space_scale)
+            elif isinstance(space_scale, (int, float)):
+                scale = space_scale
+        if scale is not None:
+            tr_['scale'] = scale
+
         allow_augment = tr_.get('allow_augment', True)
         if allow_augment:
             tr_ = self._augment_spacetime_target(tr_)
@@ -2090,11 +2108,13 @@ class KWCocoVideoDataset(data.Dataset):
         # coco_dset.images(final_gids).lookup('date_captured')
         tr_['gids'] = final_gids
 
-        if self.window_dims is None:
-            # Do something better
-            input_dsize = ub.peek(gid_to_sample[final_gids[0]])['im'].shape[1:3][::-1]
-        else:
-            input_dsize = self.window_dims[-2:][::-1]
+        input_dsize = ub.peek(gid_to_sample[final_gids[0]].values())['im'].shape[1:3][::-1]
+        # We should have already sampled at this size correctly
+        # if self.window_dims is None:
+        #     # Do something better
+        #     input_dsize = ub.peek(gid_to_sample[final_gids[0]])['im'].shape[1:3][::-1]
+        # else:
+        #     input_dsize = self.window_dims[-2:][::-1]
 
         if not self.inference_only:
             # Learn more from the center of the space-time patch
