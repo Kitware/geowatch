@@ -191,6 +191,7 @@ class CocoAlignGeotiffConfig(scfg.Config):
         'exclude_channels': scfg.Value(None, help='If specified ignore these channels'),
 
         'verbose': scfg.Value(0, help='Note: no silent mode, 0 is just least verbose.'),
+        'force_nodata': scfg.Value(None, help='if specified, forces nodata to this value (e.g. -9999)'),
     }
 
 
@@ -477,6 +478,7 @@ def main(cmdline=True, **kw):
             exclude_channels=config['exclude_channels'],
             tries=config['warp_tries'],
             verbose=config['verbose'],
+            force_nodata=config['force_nodata'],
         )
 
     new_dset.fpath = dst_fpath
@@ -777,7 +779,7 @@ class SimpleDataCube(object):
                          aux_workers=0, keep='none', target_gsd=10,
                          max_frames=None, debug_valid_regions=False,
                          include_channels=None, exclude_channels=None,
-                         tries=10, verbose=0):
+                         tries=10, force_nodata=None, verbose=0):
         """
         Given a region of interest, extract an aligned temporal sequence
         of data to a specified directory.
@@ -1131,6 +1133,7 @@ class SimpleDataCube(object):
                     local_epsg=local_epsg, other_imgs=other_imgs,
                     include_channels=include_channels,
                     exclude_channels=exclude_channels,
+                    force_nodata=force_nodata,
                     tries=tries, verbose=verbose)
                 start_gid = start_gid + 1
                 start_aid = start_aid + len(anns)
@@ -1251,6 +1254,7 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
                       local_epsg=None, other_imgs=None,
                       include_channels=None,
                       exclude_channels=None,
+                      force_nodata=None,
                       tries=10, verbose=0):
     """
     Threaded worker function for :func:`SimpleDataCube.extract_overlaps`.
@@ -1338,6 +1342,7 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
             is_multi_image, keep, local_epsg=local_epsg,
             include_channels=include_channels,
             exclude_channels=exclude_channels,
+            force_nodata=force_nodata,
             tries=tries, verbose=verbose)
         job_list.append(job)
 
@@ -1557,7 +1562,8 @@ def _fix_geojson_poly(geo):
 @profile
 def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
                space_box, align_method, is_multi_image, keep, local_epsg=None,
-               include_channels=None, exclude_channels=None, tries=10, verbose=0):
+               include_channels=None, exclude_channels=None, tries=10,
+               force_nodata=None, verbose=0):
     import watch
 
     # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
@@ -1658,13 +1664,17 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
         # print('!!WARNING!! duplicates = {}'.format(ub.repr2(duplicates, nl=1)))
         input_gpaths = list(ub.oset(input_gpaths))
 
-    nodata_cand = {obj.get('default_nodata', None) for obj in obj_group} - {None}
-    if len(nodata_cand) > 1:
-        raise AssertionError('Did not expect heterogeneous nodata values')
-    elif len(nodata_cand) == 0:
-        nodata = None
+    if 1:
+        nodata = force_nodata
     else:
-        nodata = ub.peek(nodata_cand)
+        # DONT USE THIS ANYMORE
+        nodata_cand = {obj.get('default_nodata', None) for obj in obj_group} - {None}
+        if len(nodata_cand) > 1:
+            raise AssertionError('Did not expect heterogeneous nodata values')
+        elif len(nodata_cand) == 0:
+            nodata = None
+        else:
+            nodata = ub.peek(nodata_cand)
 
     # When trying to get a gdalmerge to take multiple inputs I got a Attempt to
     # create 0x0 dataset is illegal,sizes must be larger than zero.  This new
@@ -1679,7 +1689,7 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
 
     error_logfile = None
     # Uncomment to suppress warnings for debug purposes
-    error_logfile = '/dev/null'
+    # error_logfile = '/dev/null'
 
     # Note: these methods take care of retries and checking that the
     # data is valid.

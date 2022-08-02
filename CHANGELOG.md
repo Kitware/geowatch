@@ -9,6 +9,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 * New "space_scale" parameter to Dataset such that a specific GSD can be given on the fly
 * New samecolor heuristic to remove invalid regions in data sampling.
+* Can now force nodata values in prep ta2 and align script.
 
 ### Changed
 * The nir08 sensor for L8 is now aliased to nir for consistency.

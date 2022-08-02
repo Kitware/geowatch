@@ -472,6 +472,32 @@ def gdal_single_warp(in_fpath,
 
         gdal_multi_warp([in_fpath], out_fpath)
         --config CPL_LOG image.log
+
+    Ignore:
+        # Debug cropping out nodata regions with good nodat inputs
+        from watch.utils.util_gdal import gdal_single_warp
+        import os
+        import kwimage
+        os.environ['AWS_DEFAULT_PROFILE'] = 'iarpa'
+        os.environ['GDAL_DISABLE_READDIR_ON_OPEN'] = 'EMPTY_DIR'
+        in_fpath = '/vsis3/smart-data-accenture/ta-1/ta1-ls-acc/43/R/FM/2017/9/20/LC08_L1TP_147040_20170920_20200903_02_T1_ACC/LC08_L1TP_147040_20170920_20200903_02_T1_ACC_B04.tif'
+
+        poly = kwimage.Polygon.from_geojson({'type': 'Polygon',
+            'coordinates': [[[77.27218762135243, 28.70482485539147],
+            [77.2657637374316, 28.405355530761582],
+            [77.58047165321304, 28.399754342998616],
+            [77.58778551938957, 28.699153840660728]]],
+            'properties': {'crs_info': {'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
+            'auth': ['EPSG', '4326']}}})
+        space_box = poly.bounding_box()
+        out_fpath = ub.Path.appdir('watch/test/gdal-warp/').ensuredir() / 'acc_red_nodata.tif'
+        gdal_single_warp(in_fpath, out_fpath, space_box=space_box, verbose=3)
+
+        info = gdal.Info(os.fspath(out_fpath), format='json')
+        [b['noDataValue'] for b in info['bands']]
+
+        data = kwimage.imread(out_fpath, nodata_method='float')
+
     """
     tmp_out_fpath = ub.augpath(out_fpath, prefix='.tmpwarp.')
 
@@ -564,7 +590,8 @@ def gdal_single_warp(in_fpath,
 
 def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
                     compress='DEFLATE', error_logfile=None,
-                    _intermediate_vrt=False, verbose=0, **kwargs):
+                    _intermediate_vrt=False, verbose=0,
+                    return_intermediate=False, **kwargs):
     """
     See gdal_single_warp() for args
 
@@ -612,6 +639,47 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
         >>> data = kwimage.imread(out_fpath)
         >>> canvas = kwimage.normalize_intensity(data)
         >>> kwplot.imshow(canvas)
+
+    Ignore:
+
+        import os
+        import kwimage
+        raw_in_fpaths = [
+            '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/17/S/QD/2017/4/9/S2A_17SQD_20170409_0_L1C_ACC/S2A_17SQD_20170409_0_L1C_ACC_B02.tif',
+            '/vsis3/smart-data-accenture/ta-1/ta1-s2-acc/18/S/TJ/2017/4/9/S2A_18STJ_20170409_0_L1C_ACC/S2A_18STJ_20170409_0_L1C_ACC_B02.tif',
+        ]
+        from watch.utils.util_gdal import *  # NOQA
+        os.environ['AWS_DEFAULT_PROFILE'] = 'iarpa'
+        os.environ['GDAL_DISABLE_READDIR_ON_OPEN'] = 'EMPTY_DIR'
+        poly = kwimage.Polygon.from_geojson({
+            'type': 'Polygon',
+            'coordinates': [[[-77.60220173397242, 39.11233656244506],
+                             [-77.59458000000001, 38.904157000000005],
+                             [-77.3686613232846, 38.90896183926332],
+                             [-77.375621, 39.117177000000005]]],
+            'properties': {'crs_info': {'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
+                                        'auth': ['EPSG', '4326']}}})
+        space_box = poly.bounding_box()
+        dpath = ub.Path.appdir('watch/test/gdal-warp/')
+        out_fpath = dpath.ensuredir() / 'acc_multi_data.tif'
+
+        # Put data on disk for faster debug iteration
+        crop_in_fpath1 = dpath / 'part1.tif'
+        crop_in_fpath2 = dpath / 'part2.tif'
+        gdal_single_warp(raw_in_fpaths[0], crop_in_fpath1, verbose=3, space_box=space_box)
+        gdal_single_warp(raw_in_fpaths[1], crop_in_fpath2, verbose=3, space_box=space_box)
+
+        in_fpaths = [crop_in_fpath1, crop_in_fpath2]
+        gdal_multi_warp(in_fpaths, out_fpath, space_box=space_box, verbose=3, nodata=-9999)
+
+        gdal_multi_warp(in_fpaths, out_fpath, space_box=space_box, verbose=3, nodata=-9999)
+
+
+        info = gdal.Info(os.fspath(out_fpath), format='json')
+        [b['noDataValue'] for b in info['bands']]
+
+        data = kwimage.imread(out_fpath, nodata_method='float')
+
 
     Ignore:
         # Debugging
@@ -674,15 +742,16 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
         # FIXME: might not be necessary
         from watch.utils import util_raster
         valid_polygons = []
-        for part_out_fpath in warped_gpaths:
-            sh_poly = util_raster.mask(part_out_fpath,
-                                       tolerance=10,
-                                       default_nodata=nodata)
-            valid_polygons.append(sh_poly)
-        valid_areas = [p.area for p in valid_polygons]
-        # Determine order by valid data
-        warped_gpaths = list(
-            ub.sorted_vals(ub.dzip(warped_gpaths, valid_areas)).keys())
+        if 0:
+            for part_out_fpath in warped_gpaths:
+                sh_poly = util_raster.mask(part_out_fpath,
+                                           tolerance=10,
+                                           default_nodata=nodata)
+                valid_polygons.append(sh_poly)
+            valid_areas = [p.area for p in valid_polygons]
+            # Determine order by valid data
+            warped_gpaths = list(
+                ub.sorted_vals(ub.dzip(warped_gpaths, valid_areas)).keys())
         warped_gpaths = warped_gpaths[::-1]
     else:
         # Last image is copied over earlier ones, but we expect first image to

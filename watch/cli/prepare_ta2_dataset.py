@@ -125,7 +125,8 @@ class PrepareTA2Config(scfg.Config):
         'site_globstr': scfg.Value('annotations/site_models', help='site model globstr (relative to the dvc path, unless absolute or prefixed by "./")'),
 
         'target_gsd': 10,
-        'remove_broken': scfg.Value(True, help='if True, will remove any image that fails population (e.g. caused by a 404)')
+        'remove_broken': scfg.Value(True, help='if True, will remove any image that fails population (e.g. caused by a 404)'),
+        'force_nodata': scfg.Value(None, help='if specified, forces nodata to this value'),
     }
 
 
@@ -527,6 +528,7 @@ def main(cmdline=False, **kwargs):
                 --context_factor=1 \
                 --geo_preprop=auto \
                 --keep={align_keep} \
+                --force_nodata={config['force_nodata']} \
                 --include_channels="{include_channels}" \
                 --exclude_channels="{exclude_channels}" \
                 --visualize={align_visualize} \
