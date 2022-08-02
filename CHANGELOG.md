@@ -13,6 +13,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 * The nir08 sensor for L8 is now aliased to nir for consistency.
+* Add support for lightning 1.7
 
 
 ## Version 0.3.3 - Unreleased

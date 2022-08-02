@@ -1,4 +1,6 @@
 """
+Based on ~/code/watch/dev/oneoffs/clean_drop3.py
+
 Ignore:
     import watch
     import sys, ubelt
@@ -89,15 +91,30 @@ def main(cmdline=True, **kwargs):
         job = pool.submit(get_imagedata_stats, coco_img)
         job.coco_img = coco_img
 
-    bad_images = []
-    good_images = []
+    import kwarray
+    stats = kwarray.RunningStats()
+
+
+    img_info_list = []
     prog = ub.ProgIter(pool.as_completed(), total=len(pool), desc='collect image stats')
     for job in prog:
         coco_img = job.coco_img
         img_info = job.result()
+        img_info_list.append(img_info)
+
+        for chan, chan_info in img_info['chan_infos'].items():
+            chan_info['num_masked']
+            chan_info['num_samecolor']
+            chan_info['num_pixels']
+
+        prog.set_postfix_str(f'num_bad = {len(bad_images)} / {len(all_gids)}')
+
+    bad_images = []
+    good_images = []
+    prog = ub.ProgIter(pool.as_completed(), total=len(pool), desc='collect image stats')
+    for img_info in img_info_list:
         if img_info['is_bad']:
             bad_images.append(img_info)
-            prog.set_postfix_str(f'num_bad = {len(bad_images)} / {len(all_gids)}')
         else:
             good_images.append(img_info)
 
@@ -135,6 +152,7 @@ def main(cmdline=True, **kwargs):
 
 def get_imagedata_stats(coco_img, main_channels='red'):
     from osgeo import gdal
+    from watch.utils import util_kwimage
     main_channels = kwcoco.FusedChannelSpec.coerce(main_channels)
 
     delayed = coco_img.delay(channels=main_channels, nodata_method='ma')
@@ -151,14 +169,20 @@ def get_imagedata_stats(coco_img, main_channels='red'):
         chan_fpath = ub.Path(chan_node.fpath)
         chan_info['exists'] = chan_fpath.exists()
         if chan_info['exists']:
-            sf = 1 / (2 ** chan_node.prepare().num_overviews)
-            chan_node = chan_node.warp({'scale': sf}).optimize()
-            imdata = chan_node.finalize()
+            num_overviews = chan_node.prepare().num_overviews
+            num_overviews = min(0, num_overviews)
+            chan_overview = chan_node.get_overview(num_overviews).optimize()
+            imdata = chan_overview.finalize()
             max_val = imdata.max()
             min_val = imdata.min()
+            imdata_f = imdata.data.astype(np.float32)
+            imdata_f[imdata.mask] = np.nan
+            labels = util_kwimage.find_samecolor_regions(imdata_f)
             chan_info['gdal_info'] = gdal.Info(os.fspath(chan_fpath), format='json')
             chan_info['max_val'] = max_val
             chan_info['min_val'] = min_val
+            chan_info['num_samecolor'] = labels.sum()
+            chan_info['num_pixels'] = imdata.size
             chan_info['num_masked'] = imdata.mask.sum()
 
     img_info = {

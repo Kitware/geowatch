@@ -687,7 +687,7 @@ class MultimodalTransformer(pl.LightningModule):
             https://pytorch-lightning.readthedocs.io/en/stable/common/optimization.html
 
         Example:
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # noqa
             >>> self = MultimodalTransformer(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b')
             >>> max_epochs = 80
             >>> self.trainer = pl.Trainer(max_epochs=max_epochs)
@@ -754,11 +754,10 @@ class MultimodalTransformer(pl.LightningModule):
 
         # TODO:
         # - coerce schedulers
-        trainer = getattr(self, 'trainer')
-        if trainer is None:
-            max_epochs = 20
-        else:
+        if self.has_trainer:
             max_epochs = self.trainer.max_epochs
+        else:
+            max_epochs = 20
 
         scheduler = lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=max_epochs)
@@ -1265,7 +1264,7 @@ class MultimodalTransformer(pl.LightningModule):
                     to_compare['saliency'] = (_true, _pred)
 
                 # compute metrics
-                if self.trainer is not None:
+                if self.has_trainer:
                     item_metrics = {}
 
                     for head_key in to_compare.keys():
@@ -1288,6 +1287,14 @@ class MultimodalTransformer(pl.LightningModule):
             outputs['item_losses'] = item_losses
 
         return outputs
+
+    @property
+    def has_trainer(self):
+        try:
+            # Lightning 1.7 raises an attribute error if not attached
+            return self.trainer is not None
+        except RuntimeError:
+            return False
 
     def forward_item(self, item, with_loss=False):
         """
@@ -1896,14 +1903,18 @@ class MultimodalTransformer(pl.LightningModule):
             'val_dataloader',
             'test_dataloader',
             '_load_state_dict_pre_hooks',  # lightning 1.5
+            '_trainer',  # lightning 1.7
         ]
         for key in unsaved_attributes:
-            val = getattr(model, key)
+            try:
+                val = getattr(model, key, None)
+            except Exception:
+                val = None
             if val is not None:
                 backup_attributes[key] = val
 
         train_dpath_hint = getattr(model, 'train_dpath_hint', None)
-        if model.trainer is not None:
+        if model.has_trainer:
             if train_dpath_hint is None:
                 train_dpath_hint = model.trainer.log_dir
             datamodule = model.trainer.datamodule
@@ -1919,7 +1930,6 @@ class MultimodalTransformer(pl.LightningModule):
         try:
             for key in backup_attributes.keys():
                 setattr(model, key, None)
-
             arch_name = 'model.pkl'
             module_name = 'watch_tasks_fusion'
             """
