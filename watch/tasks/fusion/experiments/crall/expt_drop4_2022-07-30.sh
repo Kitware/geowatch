@@ -623,8 +623,8 @@ KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
-CHANNELS="(S2,L8):blue|green|red|nir"
-EXPERIMENT_NAME=Drop4_BAS_30m_S2_L8_RGBN_V004
+CHANNELS="(S2,L8):blue|green|red"
+EXPERIMENT_NAME=Drop4_BAS_30m_S2_L8_RGB_V004
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 INITIAL_STATE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
 python -m watch.tasks.fusion.fit \
