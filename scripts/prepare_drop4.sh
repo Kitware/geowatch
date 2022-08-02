@@ -86,12 +86,12 @@ build_drop4_BAS(){
         --align_workers=12 \
         --cache=0 \
         --ignore_duplicates=1 \
-        --separate_region_queues=1 \
-        --separate_align_jobs=1 \
+        --separate_region_queues=0 \
+        --separate_align_jobs=0 \
         --include_channels="blue|green|red|nir|swir16|swir22|cloudmask" \
         --visualize=1 \
         --target_gsd=30 \
-        --backend=tmux --run=1
+        --backend=tmux --run=0
 }
 
 
