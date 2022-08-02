@@ -84,7 +84,8 @@ build_drop4_BAS(){
         --convert_workers=8 \
         --max_queue_size=12 \
         --align_workers=12 \
-        --cache=0 \
+        --cache="before:aligned_kwcoco" \
+        --align_keep=none \
         --ignore_duplicates=1 \
         --separate_region_queues=0 \
         --separate_align_jobs=0 \
