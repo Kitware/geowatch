@@ -665,4 +665,4 @@ python -m watch.tasks.fusion.fit \
     --stream_channels=16 \
     --temporal_dropout=0.1 \
     --devices "1" --gpus 1 \
-    --init="noop"
+    --init="noop" --space_scale="30gsd"

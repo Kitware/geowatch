@@ -1869,7 +1869,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_vali.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 256, 256), channels='red|green|blue|swir16', normalize_perframe=False)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 256, 256), channels='red|green|blue|swir16', normalize_perframe=False, space_scale="20gsd")
             >>> self.disable_augmenter = True
             >>> index = 300
             >>> item = self[index]

@@ -705,8 +705,9 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
     import kwimage
     h, w = image.shape[0:2]
 
-    if not image.flags['C_CONTIGUOUS']:
-        image = np.ascontiguousarray(image)
+    if not image.flags['C_CONTIGUOUS'] or not image.flags['OWNDATA']:
+        # Cv2 only likes certain types of numpy arrays
+        image = np.ascontiguousarray(image).copy()
 
     # Enumerate a set of pixel positions that we will try to flood fill.
     if seed_method == 'grid':
@@ -758,8 +759,10 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
             # handle 254 different regions, which should be fine, but its a
             # limitaiton (we could work around it if needed)
             ff_flags = ff_flags_base | (cluster_label << 8)
-            num, im, mask, rect = cv2.floodFill(image, mask=mask, seedPoint=seed_point,
-                                                newVal=1, flags=ff_flags)
+            num, im, mask, rect = cv2.floodFill(
+                image, mask=mask, seedPoint=seed_point, newVal=1, loDiff=0, upDiff=0,
+                # rect=None,
+                flags=ff_flags)
             if num > min_region_size:
                 # Accept this as a cluster of similar colors
                 if 1:
@@ -829,6 +832,8 @@ def connected_components(image, connectivity=8, ltype=np.int32,
     Example:
         >>> # xdoctest: +SKIP
         >>> import kwimage
+        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> from watch.utils.util_kwimage import _morph_kernel_core, _morph_kernel, _auto_kernel_sigma
         >>> from kwimage.im_cv2 import *  # NOQA
         >>> mask = kwimage.Mask.demo()
         >>> image = mask.data
