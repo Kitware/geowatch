@@ -716,7 +716,7 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
         # that a sampling point doesn't land on.
         stride = int(np.ceil(np.sqrt(min_region_size)))
         x_grid = np.arange(0, w, stride)
-        y_grid = np.arange(0, w, stride)
+        y_grid = np.arange(0, h, stride)
         x_locs, y_locs = np.meshgrid(x_grid, y_grid)
         x_locs = x_locs.ravel()
         y_locs = y_locs.ravel()
