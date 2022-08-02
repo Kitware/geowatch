@@ -20,7 +20,7 @@ CommandLine:
     mkdir -p "$DEMO_DPATH"
 
     # Create the search json wrt the sensors and processing level we want
-    python -m watch.stack.stac_search_builder \
+    python -m watch.stac.stac_search_builder \
         --start_date="$START_DATE" \
         --end_date="$END_DATE" \
         --cloud_cover=40 \
@@ -422,7 +422,7 @@ def area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config,
         # hack to construct the search params here.
         from watch.utils import util_gis
         from watch.utils import util_time
-        from watch.stack.stac_search_builder import build_search_json
+        from watch.stac.stac_search_builder import build_search_json
         region_df = util_gis.read_geojson(r_file_loc)
         region_row = region_df[region_df['type'] == 'region'].iloc[0]
         end_date = util_time.coerce_datetime(region_row['end_date'])
