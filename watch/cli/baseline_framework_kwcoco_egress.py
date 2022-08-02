@@ -55,7 +55,7 @@ def _kwcoco_to_stac_item(item_id,
 
     region_features = []
     for feature in region.get('features', ()):
-        if('properties' in feature
+        if ('properties' in feature
            and feature['properties'].get('type') == 'region'):
             region_features.append(feature)
 

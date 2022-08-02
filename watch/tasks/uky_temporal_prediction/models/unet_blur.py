@@ -41,19 +41,19 @@ class BlurPool(nn.Module):
         self.off = int((self.stride - 1) / 2.)
         self.channels = channels
 
-        if(self.filt_size == 1):
+        if (self.filt_size == 1):
             a = np.array([1., ])
-        elif(self.filt_size == 2):
+        elif (self.filt_size == 2):
             a = np.array([1., 1.])
-        elif(self.filt_size == 3):
+        elif (self.filt_size == 3):
             a = np.array([1., 2., 1.])
-        elif(self.filt_size == 4):
+        elif (self.filt_size == 4):
             a = np.array([1., 3., 3., 1.])
-        elif(self.filt_size == 5):
+        elif (self.filt_size == 5):
             a = np.array([1., 4., 6., 4., 1.])
-        elif(self.filt_size == 6):
+        elif (self.filt_size == 6):
             a = np.array([1., 5., 10., 10., 5., 1.])
-        elif(self.filt_size == 7):
+        elif (self.filt_size == 7):
             a = np.array([1., 6., 15., 20., 15., 6., 1.])
 
         filt = torch.Tensor(a[:, None] * a[None, :])
@@ -97,19 +97,19 @@ class BlurPool1D(nn.Module):
         self.channels = channels
 
         # print('Filter size [%i]' % filt_size)
-        if(self.filt_size == 1):
+        if (self.filt_size == 1):
             a = np.array([1., ])
-        elif(self.filt_size == 2):
+        elif (self.filt_size == 2):
             a = np.array([1., 1.])
-        elif(self.filt_size == 3):
+        elif (self.filt_size == 3):
             a = np.array([1., 2., 1.])
-        elif(self.filt_size == 4):
+        elif (self.filt_size == 4):
             a = np.array([1., 3., 3., 1.])
-        elif(self.filt_size == 5):
+        elif (self.filt_size == 5):
             a = np.array([1., 4., 6., 4., 1.])
-        elif(self.filt_size == 6):
+        elif (self.filt_size == 6):
             a = np.array([1., 5., 10., 10., 5., 1.])
-        elif(self.filt_size == 7):
+        elif (self.filt_size == 7):
             a = np.array([1., 6., 15., 20., 15., 6., 1.])
 
         filt = torch.Tensor(a)
@@ -119,8 +119,8 @@ class BlurPool1D(nn.Module):
         self.pad = get_pad_layer_1d(pad_type)(self.pad_sizes)
 
     def forward(self, inp):
-        if(self.filt_size == 1):
-            if(self.pad_off == 0):
+        if (self.filt_size == 1):
+            if (self.pad_off == 0):
                 return inp[:, :, ::self.stride]
             else:
                 return self.pad(inp)[:, :, ::self.stride]
@@ -129,11 +129,11 @@ class BlurPool1D(nn.Module):
 
 
 def get_pad_layer_1d(pad_type):
-    if(pad_type in ['refl', 'reflect']):
+    if (pad_type in ['refl', 'reflect']):
         PadLayer = nn.ReflectionPad1d
-    elif(pad_type in ['repl', 'replicate']):
+    elif (pad_type in ['repl', 'replicate']):
         PadLayer = nn.ReplicationPad1d
-    elif(pad_type == 'zero'):
+    elif (pad_type == 'zero'):
         PadLayer = nn.ZeroPad1d
     else:
         print('Pad type [%s] not recognized' % pad_type)

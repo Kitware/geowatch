@@ -44,7 +44,7 @@ class change(pl.LightningModule):
         elif hparams.trainset == 'onera':
             self.trainset = Onera(train=True, patch_size=hparams.patch_size, num_channels=hparams.num_channels)
             self.valset = Onera(train=False, num_channels=hparams.num_channels)
-            assert(hparams.num_images == 2)
+            assert hparams.num_images == 2
 
         if hparams.binary:
             num_classes = 2

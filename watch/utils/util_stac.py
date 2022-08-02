@@ -170,7 +170,7 @@ def maps(_item_map=None, history_entry=None):
         if output_stac_items is None:
             return []
 
-        if(isinstance(output_stac_items, pystac.Item)):
+        if isinstance(output_stac_items, pystac.Item):
             output_stac_items = [output_stac_items]
 
         for output_stac_item in output_stac_items:

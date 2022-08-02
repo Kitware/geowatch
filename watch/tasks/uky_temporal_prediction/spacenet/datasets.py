@@ -60,7 +60,7 @@ class S7_sort(data.Dataset):
         self.num_images = num_images
 
     def __len__(self):
-        return(self.length)
+        return (self.length)
 
     def __getitem__(self, idx):
 

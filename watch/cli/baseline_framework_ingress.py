@@ -130,7 +130,7 @@ def ingress_item(feature,
         asset_href = asset['href']
 
         try:
-            if('productmetadata' not in assets
+            if ('productmetadata' not in assets
                and feature['properties']['platform'] in SENTINEL_PLATFORMS
                and asset_name == 'metadata'):
                 asset_outpath = os.path.join(
@@ -167,7 +167,7 @@ def ingress_item(feature,
         else:
             # Prefer to pull asset from S3 if available
             parsed_asset_href = urlparse(asset_href)
-            if(parsed_asset_href.scheme != 's3'
+            if (parsed_asset_href.scheme != 's3'
                and 'alternate' in asset and 's3' in asset['alternate']):
                 asset_href_for_download = asset['alternate']['s3']['href']
             else:
