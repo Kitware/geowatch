@@ -60,6 +60,7 @@ class WatchCocoStats(scfg.Config):
                 **stat_info['basic_stats'],
                 **stat_info['chan_hist'],
                 **stat_info['sensor_hist'],
+                **stat_info['sensorchan_hist2'],
             }
             collatables.append(collatable)
 
