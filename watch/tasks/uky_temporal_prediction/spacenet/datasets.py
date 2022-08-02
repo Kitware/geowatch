@@ -164,7 +164,7 @@ class S7_time_aligned(data.Dataset):
             max_pixel_value=1.0)
 
     def __len__(self):
-        return(self.length)
+        return self.length
 
     def __getitem__(self, idx):
 
