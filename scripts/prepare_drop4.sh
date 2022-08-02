@@ -59,18 +59,13 @@ python -m watch.cli.prepare_ta2_dataset \
 
 
 
-build_drop4_all_sensors(){
+build_drop4_BAS(){
     source "$HOME"/code/watch/secrets/secrets
-    #SENSORS=TA1-S2-L8-WV-PD-ACC
     SENSORS=TA1-S2-L8-ACC
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     DATASET_SUFFIX=Drop4-2022-07-28-c20-$SENSORS
     REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*.geojson"
     SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
-
-    #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
-    #REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/NZ_R001.*"
-    #SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
     python -m watch.cli.prepare_ta2_dataset \

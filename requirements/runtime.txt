@@ -104,3 +104,6 @@ segmentation-models-pytorch>=0.2.0
 # Needs a kwcoco fix for latest version
 # sqlalchemy==1.3.22
 sqlalchemy>=1.3.22
+
+ujson>=5.2.0 
+kwimage_ext >= 0.2.0
