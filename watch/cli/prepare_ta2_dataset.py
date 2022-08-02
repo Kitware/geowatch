@@ -592,6 +592,7 @@ def main(cmdline=False, **kwargs):
                 --rpc_align_method affine_warp \
                 --verbose={config['verbose']} \
                 --aux_workers={config['align_aux_workers']} \
+                --target_gsd={config['target_gsd']} \
                 --workers={config['align_workers']}
             '''), depends=parent_job, name=f'align-geotiffs-{name}')
 
