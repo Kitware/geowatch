@@ -191,7 +191,8 @@ class CocoAlignGeotiffConfig(scfg.Config):
         'exclude_channels': scfg.Value(None, help='If specified ignore these channels'),
 
         'verbose': scfg.Value(0, help='Note: no silent mode, 0 is just least verbose.'),
-        'force_nodata': scfg.Value(None, help='if specified, forces nodata to this value (e.g. -9999)'),
+        'force_nodata': scfg.Value(None, help=('if specified, forces nodata to this value (e.g. -9999) '
+                                               'Ideally this is not needed and all source geotiffs properly specify nodata')),
     }
 
 

@@ -559,12 +559,12 @@ def main(cmdline=False, **kwargs):
         site_globstr = info['site_globstr']
         parent_job = info['job']
 
-        cache_crops = 1
-        if cache_crops:
-            align_keep = 'img'
-            # align_keep = 'roi-img'
-        else:
-            align_keep = 'none'
+        # cache_crops = 1
+        # if cache_crops:
+        #     align_keep = 'img'
+        #     # align_keep = 'roi-img'
+        # else:
+        #     align_keep = 'none'
 
         debug_valid_regions = config['debug']
         align_visualize = config['debug']
@@ -583,7 +583,7 @@ def main(cmdline=False, **kwargs):
                 --regions "{region_globstr}" \
                 --context_factor=1 \
                 --geo_preprop=auto \
-                --keep={align_keep} \
+                --keep={config['align_keep']} \
                 --force_nodata={config['force_nodata']} \
                 --include_channels="{include_channels}" \
                 --exclude_channels="{exclude_channels}" \
