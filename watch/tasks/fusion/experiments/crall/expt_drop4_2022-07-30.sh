@@ -612,3 +612,57 @@ python -m watch.tasks.fusion.fit \
     --temporal_dropout=0.1 \
     --devices "0," \
     --init="noop"
+
+
+# namek
+export CUDA_VISIBLE_DEVICES=1
+DVC_DPATH=$(smartwatch_dvc --hardware=hdd)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+CHANNELS="(S2,L8):blue|green|red|nir"
+EXPERIMENT_NAME=Drop4_BAS_30m_S2_L8_RGBN_V004
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+INITIAL_STATE="$DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop4_baseline_20220731.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --class_loss='dicefocal' \
+    --saliency_loss='dicefocal' \
+    --chip_dims=256,256 \
+    --package_fpath="auto" \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.00 \
+    --global_saliency_weight=1.00 \
+    --learning_rate=8e-4 \
+    --weight_decay=1e-8 \
+    --accumulate_grad_batches=8 \
+    --max_epochs=160 \
+    --max_epoch_length=8192 \
+    --patience=160 \
+    --num_workers=4 \
+    --dist_weights=True \
+    --time_steps=5 \
+    --channels="$CHANNELS" \
+    --time_sampling=soft2+distribute \
+    --time_span=6m \
+    --tokenizer=linconv \
+    --optimizer=RAdam \
+    --arch_name=smt_it_joint_p8 \
+    --decoder=mlp \
+    --eval_after_fit=False \
+    --draw_interval=10min \
+    --num_draw=4 \
+    --use_centered_positives=True \
+    --normalize_inputs=2048 \
+    --stream_channels=16 \
+    --temporal_dropout=0.1 \
+    --devices "0," \
+    --init="noop"
