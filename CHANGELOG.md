@@ -10,6 +10,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * New "space_scale" parameter to Dataset such that a specific GSD can be given on the fly
 * New samecolor heuristic to remove invalid regions in data sampling.
 
+### Changed
+* The nir08 sensor for L8 is now aliased to nir for consistency.
+
+
 ## Version 0.3.3 - Unreleased
 
 ### Changed
