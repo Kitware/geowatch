@@ -22,3 +22,7 @@ def fix_gelu_issue(method):
         if mod.__class__.__name__ == 'GELU':
             if not hasattr(mod, 'approximate'):
                 mod.approximate = 'none'
+
+
+# Also one in:
+# from watch.utils.lightning_ext.callbacks.packager import _torch_package_monkeypatch

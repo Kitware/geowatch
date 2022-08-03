@@ -148,6 +148,8 @@ It will need to be updated to match RGD's when that is STAC-compliant.
 References:
     https://www.element84.com/earth-search/
     https://docs.sentinel-hub.com/api/latest/data/landsat-8/
+    https://landsat.gsfc.nasa.gov/satellites/landsat-8/
+    https://planetarycomputer.microsoft.com/dataset/landsat-c2-l2
 
 Example:
     >>> from pystac_client import Client
@@ -166,27 +168,41 @@ Example:
 '''
 LANDSAT8 = [
     {'name': 'B1', 'common_name': 'coastal', 'gsd': 30,
-        'center_wavelength': 0.48, 'full_width_half_max': 0.02},
+     'center_wavelength': 0.48, 'full_width_half_max': 0.02,
+     'alias': ['aerosol']},
+
     {'name': 'B2', 'common_name': 'blue', 'gsd': 30,
-        'center_wavelength': 0.44, 'full_width_half_max': 0.06},
+     'center_wavelength': 0.44, 'full_width_half_max': 0.06},
+
     {'name': 'B3', 'common_name': 'green', 'gsd': 30,
-        'center_wavelength': 0.56, 'full_width_half_max': 0.06},
+     'center_wavelength': 0.56, 'full_width_half_max': 0.06},
+
     {'name': 'B4', 'common_name': 'red', 'gsd': 30,
-        'center_wavelength': 0.65, 'full_width_half_max': 0.04},
+     'center_wavelength': 0.65, 'full_width_half_max': 0.04},
+
     {'name': 'B5', 'common_name': 'nir', 'gsd': 30,
-        'center_wavelength': 0.86, 'full_width_half_max': 0.03},
+     'center_wavelength': 0.86, 'full_width_half_max': 0.03,
+     'alias': ['nir08']},
+
     {'name': 'B6', 'common_name': 'swir16', 'gsd': 30,
-        'center_wavelength': 1.6, 'full_width_half_max': 0.08},
+     'center_wavelength': 1.6, 'full_width_half_max': 0.08},
+
     {'name': 'B7', 'common_name': 'swir22', 'gsd': 30,
-        'center_wavelength': 2.2, 'full_width_half_max': 0.2},
+     'center_wavelength': 2.2, 'full_width_half_max': 0.2},
+
     {'name': 'B8', 'common_name': 'pan', 'gsd': 15,
-        'center_wavelength': 0.59, 'full_width_half_max': 0.18},
+     'center_wavelength': 0.59, 'full_width_half_max': 0.18},
+
     {'name': 'B9', 'common_name': 'cirrus', 'gsd': 30,
-        'center_wavelength': 1.37, 'full_width_half_max': 0.02},
+     'center_wavelength': 1.37, 'full_width_half_max': 0.02},
+
     {'name': 'B10', 'common_name': 'lwir11', 'gsd': 100,
-        'center_wavelength': 10.9, 'full_width_half_max': 0.8},
+     'center_wavelength': 10.9, 'full_width_half_max': 0.8,
+     'alias': ['tir1'], 'notes': 'thermal-ir'},
+
     {'name': 'B11', 'common_name': 'lwir12', 'gsd': 100,
-        'center_wavelength': 12, 'full_width_half_max': 1}
+     'center_wavelength': 12, 'full_width_half_max': 1,
+     'alias': ['tir2'], 'notes': 'thermal-ir'},
 ]
 
 

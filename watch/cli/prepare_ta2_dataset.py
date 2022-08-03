@@ -114,7 +114,7 @@ class PrepareTA2Config(scfg.Config):
         'debug': scfg.Value(False, help='if enabled, turns on debug visualizations'),
         'select_images': scfg.Value(False, help='if enabled only uses select images'),
 
-        'cache': scfg.Value(1, help='if enabled check cache'),
+        'cache': scfg.Value(1, help='If 1 or 0 globally enable/disable caching. If a comma separated list of strings, only cache those stages'),
 
         'include_channels': scfg.Value(None, help='specific channels to use in align crop'),
         'exclude_channels': scfg.Value(None, help='specific channels to NOT use in align crop'),
@@ -125,7 +125,10 @@ class PrepareTA2Config(scfg.Config):
         'site_globstr': scfg.Value('annotations/site_models', help='site model globstr (relative to the dvc path, unless absolute or prefixed by "./")'),
 
         'target_gsd': 10,
-        'remove_broken': scfg.Value(True, help='if True, will remove any image that fails population (e.g. caused by a 404)')
+        'remove_broken': scfg.Value(True, help='if True, will remove any image that fails population (e.g. caused by a 404)'),
+        'force_nodata': scfg.Value(None, help='if specified, forces nodata to this value'),
+
+        'align_keep': scfg.Value('img', choices=['img', 'img-roi', 'none', None], help='if the coco align script caches or recomputes images / rois')
     }
 
 
@@ -180,6 +183,7 @@ def main(cmdline=False, **kwargs):
         # 'ET_C000',  # 404 errors
     }
 
+    # Job environments are specific to single jobs
     job_environs = [
         # 'PROJ_DEBUG=3',
         f'AWS_DEFAULT_PROFILE={aws_profile}',
@@ -206,8 +210,11 @@ def main(cmdline=False, **kwargs):
     import cmd_queue
     from watch.utils import util_path
 
+    # Global environs are given to all jobs
     api_key = config['api_key']
     environ = {}
+    # https://trac.osgeo.org/gdal/wiki/ConfigOptions#GDAL_DISABLE_READDIR_ON_OPEN
+    environ['GDAL_DISABLE_READDIR_ON_OPEN'] = 'EMPTY_DIR'
     if api_key.startswith('env:'):
         import os
         api_key_name = api_key[4:]
@@ -219,6 +226,58 @@ def main(cmdline=False, **kwargs):
         environ=environ)
 
     default_collated = config['collated'][0]
+
+    import networkx as nx
+    stage_data = [
+        {'name': 'stac_search'},
+        {'name': 'catalog', 'depends': ['stac_search']},
+        {'name': 'uncropped_kwcoco', 'depends': ['catalog']},
+        {'name': 'uncropped_feilds', 'depends': ['uncropped_kwcoco']},
+        {'name': 'aligned_kwcoco', 'depends': ['uncropped_feilds']},
+        {'name': 'project_annots', 'depends': ['aligned_kwcoco']},
+        {'name': 'final_union', 'depends': ['project_annots']},
+    ]
+    stages = nx.DiGraph()
+    for stage in stage_data:
+        stages.add_node(stage['name'], cache=0, **stage)
+    for stage in stage_data:
+        for dep in stage.get('depends', []):
+            stages.add_edge(dep, stage['name'])
+
+    # Determine what stages will be cached.
+    cache = config['cache']
+    if isinstance(cache, str):
+        cache = [p.strip() for p in cache.split(',')]
+    elif isinstance(cache, list):
+        pass
+    elif not ub.iterable(cache):
+        if cache:
+            cache = list(stages.keys())
+        else:
+            cache = []
+    else:
+        raise AssertionError
+
+    for code in cache:
+        parts = code.split(':')
+        stage_name = parts[-1]
+        if len(parts) == 2:
+            action = parts[0]
+        else:
+            action = 'this'
+        if action == 'this':
+            stages.nodes[stage_name]['cache'] = 1
+        elif action == 'before':
+            for n in nx.ancestors(stages, stage_name):
+                stages.nodes[n]['cache'] = 1
+        else:
+            raise KeyError
+
+    for stage_name, stage_data in stages.nodes(data=True):
+        stage_data['label'] = '{name}:cache={cache}'.format(**stage_data)
+
+    from cmd_queue.util.util_networkx import write_network_text
+    write_network_text(stages)
 
     stac_jobs = []
     # base_mkdir_job = queue.submit(f'mkdir -p "{uncropped_query_dpath}"', name='mkdir-base')
@@ -265,7 +324,7 @@ def main(cmdline=False, **kwargs):
                 region_inputs_fpath = (uncropped_query_dpath / (region_id + '.input')).shrinkuser(home='$HOME')
                 final_region_fpath = region_fpath.shrinkuser(home='$HOME')
 
-                cache_prefix = f'[[ -f {region_inputs_fpath} ]] || ' if config['cache'] else ''
+                cache_prefix = f'[[ -f {region_inputs_fpath} ]] || ' if stages.nodes['stac_search']['cache'] else ''
                 stac_search_job = queue.submit(ub.codeblock(
                     rf'''
                     {cache_prefix}python -m watch.cli.stac_search \
@@ -369,7 +428,6 @@ def main(cmdline=False, **kwargs):
         uncropped_catalog_fpath = uncropped_ingress_dpath / f'catalog_{s3_name}.json'
         uncropped_ingress_dpath = uncropped_ingress_dpath.shrinkuser(home='$HOME')
 
-        cache_prefix = f'[[ -f {uncropped_query_fpath} ]] || ' if config['cache'] else ''
         if not str(s3_fpath).startswith('s3'):
             # Don't really need to copy anything in this case.
             uncropped_query_fpath = s3_fpath
@@ -380,6 +438,7 @@ def main(cmdline=False, **kwargs):
             #     {cache_prefix}cp "{s3_fpath}" "{uncropped_query_dpath}"
             #     '''), depends=parent_job, name=f'psudo-s3-pull-inputs-{s3_name}')
         else:
+            cache_prefix = f'[[ -f {uncropped_query_fpath} ]] || ' if stages.nodes['stac_search']['cache'] else ''
             grab_job = queue.submit(ub.codeblock(
                 f'''
                 # GRAB Input STAC List
@@ -393,7 +452,7 @@ def main(cmdline=False, **kwargs):
             ingress_options.append('--requester_pays')
         ingress_options_str = ' '.join(ingress_options)
 
-        cache_prefix = f'[[ -f {uncropped_catalog_fpath} ]] || ' if config['cache'] else ''
+        cache_prefix = f'[[ -f {uncropped_catalog_fpath} ]] || ' if stages.nodes['catalog']['cache'] else ''
         ingress_job = queue.submit(ub.codeblock(
             rf'''
             {cache_prefix}python -m watch.cli.baseline_framework_ingress \
@@ -415,7 +474,7 @@ def main(cmdline=False, **kwargs):
             convert_options.append('--ignore_duplicates')
         convert_options_str = ' '.join(convert_options)
 
-        cache_prefix = f'[[ -f {uncropped_kwcoco_fpath} ]] || ' if config['cache'] else ''
+        cache_prefix = f'[[ -f {uncropped_kwcoco_fpath} ]] || ' if stages.nodes['uncropped_kwcoco']['cache'] else ''
         convert_job = queue.submit(ub.codeblock(
             rf'''
             {cache_prefix}{job_environ_str}python -m watch.cli.ta1_stac_to_kwcoco \
@@ -428,7 +487,7 @@ def main(cmdline=False, **kwargs):
         uncropped_fielded_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}_fielded.kwcoco.json'
         uncropped_fielded_kwcoco_fpath = uncropped_fielded_kwcoco_fpath.shrinkuser(home='$HOME')
 
-        cache_prefix = f'[[ -f {uncropped_fielded_kwcoco_fpath} ]] || ' if config['cache'] else ''
+        cache_prefix = f'[[ -f {uncropped_fielded_kwcoco_fpath} ]] || ' if stages.nodes['uncropped_feilds']['cache'] else ''
         add_fields_job = queue.submit(ub.codeblock(
             rf'''
             # PREPARE Uncropped datasets
@@ -469,7 +528,7 @@ def main(cmdline=False, **kwargs):
         uncropped_final_kwcoco_fpath = uncropped_dpath / f'data_{union_suffix}.kwcoco.json'
         uncropped_final_kwcoco_fpath = uncropped_final_kwcoco_fpath.shrinkuser(home='$HOME')
         uncropped_multi_src_part = ' '.join(['"{}"'.format(p) for p in uncropped_coco_paths])
-        cache_prefix = f'[[ -f {uncropped_final_kwcoco_fpath} ]] || ' if config['cache'] else ''
+        cache_prefix = f'[[ -f {uncropped_final_kwcoco_fpath} ]] || ' if stages.nodes['uncropped_feilds']['cache'] else ''
         union_job = queue.submit(ub.codeblock(
             rf'''
             # COMBINE Uncropped datasets
@@ -500,17 +559,19 @@ def main(cmdline=False, **kwargs):
         site_globstr = info['site_globstr']
         parent_job = info['job']
 
-        cache_crops = 1
-        if cache_crops:
-            align_keep = 'img'
-            # align_keep = 'roi-img'
-        else:
-            align_keep = 'none'
+        # cache_crops = 1
+        # if cache_crops:
+        #     align_keep = 'img'
+        #     # align_keep = 'roi-img'
+        # else:
+        #     align_keep = 'none'
 
         debug_valid_regions = config['debug']
         align_visualize = config['debug']
         include_channels = config['include_channels']
         exclude_channels = config['exclude_channels']
+
+        # if stages.nodes['aligned_kwcoco']['cache'] else ''
 
         align_job = queue.submit(ub.codeblock(
             rf'''
@@ -522,7 +583,8 @@ def main(cmdline=False, **kwargs):
                 --regions "{region_globstr}" \
                 --context_factor=1 \
                 --geo_preprop=auto \
-                --keep={align_keep} \
+                --keep={config['align_keep']} \
+                --force_nodata={config['force_nodata']} \
                 --include_channels="{include_channels}" \
                 --exclude_channels="{exclude_channels}" \
                 --visualize={align_visualize} \
@@ -530,6 +592,7 @@ def main(cmdline=False, **kwargs):
                 --rpc_align_method affine_warp \
                 --verbose={config['verbose']} \
                 --aux_workers={config['align_aux_workers']} \
+                --target_gsd={config['target_gsd']} \
                 --workers={config['align_workers']}
             '''), depends=parent_job, name=f'align-geotiffs-{name}')
 
@@ -563,7 +626,7 @@ def main(cmdline=False, **kwargs):
             # need to
             # viz_part = '--viz_dpath=auto' if config['visualize'] else ''
             viz_part = ''
-            cache_prefix = f'[[ -f {aligned_imganns_fpath} ]] || ' if config['cache'] else ''
+            cache_prefix = f'[[ -f {aligned_imganns_fpath} ]] || ' if stages.nodes['project_annots']['cache'] else ''
             project_anns_job = queue.submit(ub.codeblock(
                 rf'''
                 # Update to whatever the state of the annotations submodule is
@@ -600,7 +663,7 @@ def main(cmdline=False, **kwargs):
         # union_suffix = ub.hash_data([p.name for p in aligned_fpaths])[0:8]
         aligned_final_fpath = (aligned_kwcoco_bundle / 'data.kwcoco.json').shrinkuser(home='$HOME')
         aligned_multi_src_part = ' '.join(['"{}"'.format(p) for p in aligned_fpaths])
-        cache_prefix = f'[[ -f {aligned_final_fpath} ]] || ' if config['cache'] else ''
+        cache_prefix = f'[[ -f {aligned_final_fpath} ]] || ' if stages.nodes['final_union']['cache'] else ''
         union_job = queue.submit(ub.codeblock(
             rf'''
             # COMBINE Uncropped datasets

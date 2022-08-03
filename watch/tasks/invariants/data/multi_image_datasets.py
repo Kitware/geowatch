@@ -391,7 +391,7 @@ class SpaceNet7(Dataset):
         return (year % 2018) * 12 + month
 
     def __len__(self):
-        return(self.length)
+        return self.length
 
     def __getitem__(self, idx):
         images = dict()

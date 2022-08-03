@@ -20,7 +20,7 @@ CommandLine:
     mkdir -p "$DEMO_DPATH"
 
     # Create the search json wrt the sensors and processing level we want
-    python -m watch.cli.stac_search_build \
+    python -m watch.stac.stac_search_builder \
         --start_date="$START_DATE" \
         --end_date="$END_DATE" \
         --cloud_cover=40 \
@@ -323,7 +323,7 @@ def main(cmdline=True, **kwargs):
     Example:
         >>> from watch.cli.stac_search import *  # NOQA
         >>> from watch.demo import demo_region
-        >>> from watch.cli import stac_search_build
+        >>> from watch.stac import stac_search_builder
         >>> from watch.utils import util_gis
         >>> import ubelt as ub
         >>> dpath = ub.Path.appdir('watch/tests/test-stac-search').ensuredir()
@@ -333,7 +333,7 @@ def main(cmdline=True, **kwargs):
         >>> result_fpath = dpath / 'demo.input'
         >>> start_date = region['start_date'].iloc[0]
         >>> end_date = region['end_date'].iloc[0]
-        >>> stac_search_build.main(
+        >>> stac_search_builder.main(
         >>>     cmdline=0,
         >>>     start_date=start_date,
         >>>     end_date=end_date,
@@ -422,7 +422,7 @@ def area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config,
         # hack to construct the search params here.
         from watch.utils import util_gis
         from watch.utils import util_time
-        from watch.cli.stac_search_build import build_search_json
+        from watch.stac.stac_search_builder import build_search_json
         region_df = util_gis.read_geojson(r_file_loc)
         region_row = region_df[region_df['type'] == 'region'].iloc[0]
         end_date = util_time.coerce_datetime(region_row['end_date'])

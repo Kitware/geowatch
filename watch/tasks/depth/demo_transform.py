@@ -71,7 +71,7 @@ class ToTensor(object):
         return image
 
     def to_tensor(self, pic):
-        if not(_is_pil_image(pic) or _is_numpy_image(pic)):
+        if not (_is_pil_image(pic) or _is_numpy_image(pic)):
             raise TypeError(
                 'pic should be PIL Image or ndarray. Got {}'.format(
                     type(pic)))

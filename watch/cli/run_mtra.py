@@ -239,7 +239,7 @@ def _item_has_cloudmask(stac_item):
     # Ensure that the STAC item has a cloudmask (needed by MTRA)
     for asset_name, asset in stac_item.assets.items():
         asset_dict = asset.to_dict()
-        if('roles' in asset_dict and
+        if ('roles' in asset_dict and
            'cloudmask' in asset_dict['roles']):
             return True
 
@@ -247,13 +247,13 @@ def _item_has_cloudmask(stac_item):
 
 
 def select_best_pairs(stac_items, num_pairs):
-    landsat_items =\
-        [item for item in stac_items
-         if(item.properties.get('platform') in SUPPORTED_LS_PLATFORMS and
+    landsat_items = [
+        item for item in stac_items
+        if (item.properties.get('platform') in SUPPORTED_LS_PLATFORMS and
             _item_has_cloudmask(item))]
-    sentinel_items =\
-        [item for item in stac_items
-         if(item.properties.get('platform') in SUPPORTED_S2_PLATFORMS and
+    sentinel_items = [
+        item for item in stac_items
+        if (item.properties.get('platform') in SUPPORTED_S2_PLATFORMS and
             _item_has_cloudmask(item))]
 
     potential_pairs = []
@@ -275,7 +275,7 @@ def select_best_pairs(stac_items, num_pairs):
         if selected_pairs >= num_pairs:
             break
 
-        if(ls_item not in selected_ls_items and
+        if (ls_item not in selected_ls_items and
            s2_item not in selected_s2_items):
             selected_items.append(ls_item)
             selected_ls_items.add(ls_item)

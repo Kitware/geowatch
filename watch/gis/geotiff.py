@@ -19,7 +19,8 @@ except Exception:
 
 
 @profile
-def geotiff_metadata(gpath, elevation='gtop30', strict=False):
+def geotiff_metadata(gpath, elevation='gtop30', strict=False,
+                     supress_warnings=False):
     """
     Extract all relevant metadata we know how to extract.
 
@@ -50,11 +51,17 @@ def geotiff_metadata(gpath, elevation='gtop30', strict=False):
     infos = {}
     ref = util_gdal.GdalDataset.open(gpath, 'r', virtual_retries=3)
 
+    if supress_warnings:
+        context = util_gdal.GdalSupressWarnings()
+    else:
+        import contextlib
+        context = contextlib.nullcontext()
+
     infos['fname'] = geotiff_filepath_info(gpath)
     try:
         # TODO: we probably shouldn't suppress warnings here, remove once we
         # figure out why we are getting the current ones.
-        with util_gdal.GdalSupressWarnings():
+        with context:
             infos['crs'] = geotiff_crs_info(ref, elevation=elevation)
     except exceptions.GeoMetadataNotFound as ex:
         if strict:

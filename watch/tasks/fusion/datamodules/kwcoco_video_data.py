@@ -61,6 +61,16 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             deprecated chip_size, but in the future will be 128.
             ''')),
 
+        'space_scale': scfg.Value(None, help=ub.paragraph(
+            '''
+            Change the "scale" or resolution of video space.  If specified as a
+            numeric value then this is applied to as a scale factor. (E.g.
+            setting this to 2 is equivalent to scaling video space by 2). For
+            geospatial data where each video has a "target_gsd", then this can
+            be set to as an absolute by including the "GSD" suffix. (e.g. If
+            this is set to "10GSD", then video space will be scaled to match).
+            ''')),
+
         # 'time_overlap': scfg.Value(0.0, help='fraction of time steps to overlap'),
         'chip_overlap': scfg.Value(0.0, help='fraction of space steps to overlap'),
 
@@ -803,8 +813,9 @@ class KWCocoVideoDataset(data.Dataset):
         >>> import ndsampler
         >>> import kwcoco
         >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
-        >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data_nowv_vali.kwcoco.json'
+        >>> dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
+        >>> #coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data_nowv_vali.kwcoco.json'
+        >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_vali.kwcoco.json'
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> self = KWCocoVideoDataset(
@@ -853,6 +864,8 @@ class KWCocoVideoDataset(data.Dataset):
 
         self.window_dims = window_dims
         self.config = config
+        # TODO: either maintain instance variables or items in the config, not
+        # both.
         self.__dict__.update(self.config.to_dict())
         self.sampler = sampler
         # TODO: the set of "valid" background classnames should be defined
@@ -1035,22 +1048,22 @@ class KWCocoVideoDataset(data.Dataset):
         self.special_inputs = {}
 
         if channels is None:
-            # Hack to use all channels in the first image.
-            # (Does not handle heterogeneous channels yet)
-            # chan_info = kwcoco_extensions.coco_channel_stats(sampler.dset)
+            # If channels is not specified, attempt to determine a something
+            # sensible from the dataset statistics
             sensorchan_hist = kwcoco_extensions.coco_channel_stats(sampler.dset)['sensorchan_hist']
             sensorchans = ','.join(sorted([f'{sensor}:{chans}' for sensor, chan_hist in sensorchan_hist.items() for chans in chan_hist.keys()]))
             sensorchans = kwcoco.SensorChanSpec.coerce(sensorchans)
-            # channels = ','.join(sorted(chan_info['chan_hist']))
             if len(sensorchan_hist) > 0:
                 import warnings
-                warnings.warn('Channels are unspecified, but the dataset has a complex set of channels with multiple sensors. Being explicit would be better')
-            # channels = chan_info['all_channels']
+                warnings.warn(
+                    'Channels are unspecified, but the dataset has a complex '
+                    'set of channels with multiple sensors. '
+                    'Passing an explicit sensorchan spec (via the `channels` '
+                    'argument would be better.')
         else:
             # hack
             sensorchan_hist = None
             sensorchans = channels
-            # channels = ','.join(sorted([s.chans.spec for s in self.sensorchan.streams()]))
 
         self.sensorchan = kwcoco.SensorChanSpec.coerce(sensorchans).normalize()
 
@@ -1538,6 +1551,8 @@ class KWCocoVideoDataset(data.Dataset):
         # Require
         # self.sample_sensorchan
 
+        REPLACE_SAMECOLOR_REGIONS_WITH_NAN = tr_.get('REPLACE_SAMECOLOR_REGIONS_WITH_NAN', 1)
+
         # sensor_channels = (self.sample_channels & coco_img.channels).normalize()
         tr_frame = tr_.copy()
         tr_frame['gids'] = [gid]
@@ -1619,7 +1634,30 @@ class KWCocoVideoDataset(data.Dataset):
                 dtype=np.float32
             )
 
-            WV_NODATA_HACK = 1
+            # from watch.utils import util_kwimage
+            if REPLACE_SAMECOLOR_REGIONS_WITH_NAN:
+                # This should be a better heuristic than the others we were
+                # using
+
+                # Process the bands in groups of 3
+                hwc = sample['im'][0]
+                # band_slider = kwarray.SlidingWindow((int(np.ceil(hwc.shape[2] / 3) * 3),), window=(3,))
+                band_slider = kwarray.SlidingWindow((hwc.shape[2],), window=(1,))
+                flag_stack = []
+                for b_sl in band_slider:
+                    bands = hwc[:, :, b_sl[0]]
+                    bands = np.ascontiguousarray(bands)
+                    is_samecolor = util_kwimage.find_samecolor_regions(bands)
+                    flag_stack.append(is_samecolor)
+                is_samecolor = np.stack(flag_stack, axis=2)
+                samecolor_flags = is_samecolor[None, :] > 0
+                num_samecolor = samecolor_flags.sum()
+                if num_samecolor > 0:
+                    # print(f'stream={stream}')
+                    # print(f'num_samecolor={num_samecolor}')
+                    sample['im'][samecolor_flags] = np.nan
+
+            WV_NODATA_HACK = 0
             if WV_NODATA_HACK:
                 # Should be fixed in drop3
                 if coco_img.img.get('sensor_coarse') == 'WV':
@@ -1671,7 +1709,7 @@ class KWCocoVideoDataset(data.Dataset):
             # We are going to try to generalize this with a concept of an
             # "iffy" mask with will flag pixels that are minimum, zero, or
             # nan.
-            RGB_IFFY_HACK = 1
+            RGB_IFFY_HACK = 0
             if RGB_IFFY_HACK and set(stream).issubset({'blue', 'green', 'red'}):
                 import warnings
                 with warnings.catch_warnings():
@@ -1737,6 +1775,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
             >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data_nowv_train.kwcoco.json'
             >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data_nowv_vali.kwcoco.json'
+            >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_train.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> #rng = kwarray.ensure_rng(0)
             >>> #vidid = rng.choice(coco_dset.videos())
@@ -1744,18 +1783,22 @@ class KWCocoVideoDataset(data.Dataset):
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> self = KWCocoVideoDataset(
             >>>     sampler,
-            >>>     sample_shape=(7, 380, 380),
+            >>>     sample_shape=(5, 380, 380),
             >>>     window_overlap=0,
             >>>     #channels="ASI|MF_Norm|AF|EVI|red|green|blue|swir16|swir22|nir",
-            >>>     channels="blue|green|red|nir|swir16|swir22,blue|green|red",
+            >>>     #channels="blue|green|red|nir|swir16|swir22,blue|green|red",
+            >>>     channels="(S2,L8):blue|green|red|nir",
             >>>     neg_to_pos_ratio=0, time_sampling='soft2', diff_inputs=0, temporal_dropout=0.5,
             >>> )
             >>> #self.requested_tasks['change'] = False
+            >>> item = self[0]
             >>> item = self[5]
             >>> item = self[6]
             >>> item = self[7]
-            >>> item = self[8]
+            >>> item = self[100]
+            >>> tr = item['tr']
             >>> # xdoctest: +REQUIRES(--show)
+            >>> item = self[tr]
             >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0)
             >>> import kwplot
             >>> kwplot.autompl()
@@ -1769,7 +1812,15 @@ class KWCocoVideoDataset(data.Dataset):
             sample_indices = list(range(len(self)))
             for index in xdev.InteractiveIter(sample_indices):
                 item = self[index]
-                canvas = self.draw_item(item)
+                canvas1 = self.draw_item(item)
+                # Show variant with and without our new hack
+                # tr = item['tr']
+                # tr['REPLACE_SAMECOLOR_REGIONS_WITH_NAN'] = 1
+                # tr['allow_augment'] = False
+                # item = self[tr]
+                # canvas2 = self.draw_item(item)
+                canvas = canvas1
+                # canvas = kwimage.stack_images([canvas1, canvas2], axis=1)
                 kwplot.imshow(canvas)
                 xdev.InteractiveIter.draw()
 
@@ -1798,7 +1849,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> channels = 'B10|B8|B1'
             >>> sample_shape = (4, 96, 96)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, neg_to_pos_ratio=0.1, true_multimodal=True)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, neg_to_pos_ratio=0.1)
             >>> item = self[-1]
             >>> canvas = self.draw_item(item)
             >>> # xdoctest: +REQUIRES(--show)
@@ -1816,9 +1867,10 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import watch
             >>> dvc_dpath = watch.find_smart_dvc_dpath()
             >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1/vali_data_nowv.kwcoco.json'
+            >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_vali.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 256, 256), channels='red|green|blue|swir16|pan|lwir11|lwir12', normalize_perframe=False, true_multimodal=True)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 256, 256), channels='red|green|blue|swir16', normalize_perframe=False, space_scale="20gsd")
             >>> self.disable_augmenter = True
             >>> index = 300
             >>> item = self[index]
@@ -1842,7 +1894,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> # channels = '(sensor0,sensor1,sensor2):' + '|'.join(sorted(set(ub.flatten([c.channels.fuse().as_list() for c in coco_dset.images().coco_images]))))
             >>> # Each sensor uses all of its own channels
             >>> channels = None
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 256, 256), channels=channels, normalize_perframe=False, true_multimodal=True)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 256, 256), channels=channels, normalize_perframe=False)
             >>> self.disable_augmenter = False
             >>> index = 0
             >>> index = tr = self.new_sample_grid['targets'][0]
@@ -1939,7 +1991,30 @@ class KWCocoVideoDataset(data.Dataset):
         tr_['as_xarray'] = False
         tr_['use_experimental_loader'] = 1
 
-        tr_ = self._augment_spacetime_target(tr_)
+        # Compute scale if we are doing that
+        # This should live somewhere else, but lets just get it hooked up
+        space_scale = self.config['space_scale']
+        scale = None
+        request_gsd = None
+        if space_scale is not None:
+            if isinstance(space_scale, str):
+                if space_scale.endswith('gsd'):
+                    request_gsd = float(space_scale[:-3].strip())
+                    target_gsd = sampler.dset.index.videos[tr_['video_id']]['target_gsd']
+                    scale = target_gsd / request_gsd
+                    # Should we also change the window size somewhere else?
+                    # Probably not... at least in the heterogeneous case we
+                    # definately should not.
+                else:
+                    scale = float(space_scale)
+            elif isinstance(space_scale, (int, float)):
+                scale = space_scale
+        if scale is not None:
+            tr_['scale'] = scale
+
+        allow_augment = tr_.get('allow_augment', True)
+        if allow_augment:
+            tr_ = self._augment_spacetime_target(tr_)
 
         if self.inference_only:
             with_annots = []
@@ -2037,11 +2112,16 @@ class KWCocoVideoDataset(data.Dataset):
         # coco_dset.images(final_gids).lookup('date_captured')
         tr_['gids'] = final_gids
 
+        # input_dsize = ub.peek(gid_to_sample[final_gids[0]].values())['im'].shape[1:3][::-1]
+        # We should have already sampled at this size correctly
         if self.window_dims is None:
             # Do something better
             input_dsize = ub.peek(gid_to_sample[final_gids[0]])['im'].shape[1:3][::-1]
         else:
             input_dsize = self.window_dims[-2:][::-1]
+            # HACK!!!! TODO: fix the sampling size.
+            if request_gsd == 30:
+                input_dsize = (input_dsize[0] * 3, input_dsize[1] * 3)
 
         if not self.inference_only:
             # Learn more from the center of the space-time patch
@@ -2173,6 +2253,11 @@ class KWCocoVideoDataset(data.Dataset):
                 else:
                     invalid_mask = None
 
+                # OI! This is very likely NOT the right thing to do here.
+                # We spent all this effort on robustly sampling the data.
+                # Let's not throw it away with a rando scale factor.
+                # ... but we do still need to solve the issue where different
+                # windows sizes are returned.
                 frame_imdata = sample['im'][0]
                 frame, info = kwimage.imresize(frame_imdata, dsize=input_dsize,
                                                interpolation='linear',
@@ -2509,7 +2594,7 @@ class KWCocoVideoDataset(data.Dataset):
         # multiprocessing makes a new file descriptor for every Python object
         # or something like that)
         tr_subset = ub.dict_isect(tr_, {
-            'gids', 'space_slice', 'vidid', 'fliprot_params',
+            'gids', 'space_slice', 'video_id', 'fliprot_params',
         })
         if main_skip_reason:
             tr_subset['main_skip_reason'] = main_skip_reason
@@ -2668,14 +2753,7 @@ class KWCocoVideoDataset(data.Dataset):
             collate_fn=ub.identity, num_workers=num_workers, shuffle=True,
             batch_size=batch_size)
 
-        # dataset_sensors = set(
-        #     self.sampler.dset.images().lookup('sensor_coarse', None))
         # Track moving average of each fused channel stream
-        # channel_stats = {
-        #     sensor: {key: kwarray.RunningStats()
-        #              for key in self.input_channels.keys()}
-        #     for sensor in dataset_sensors
-        # }
         channel_stats = ub.AutoDict()
 
         timer = ub.Timer().tic()
@@ -2706,22 +2784,6 @@ class KWCocoVideoDataset(data.Dataset):
             for s in self.input_sensorchan.streams())
 
         print('unique_sensor_modes = {}'.format(ub.repr2(unique_sensor_modes, nl=1)))
-
-        """
-        run stats test:
-
-            import kwarray
-            running = kwarray.RunningStats()
-            data = np.array([[1, 1, 1], [0, 1, 0.]])
-            running.update(data)
-            data = np.array([[2, 0, 1], [0, 1, np.nan]])
-            running.update(data)
-            data = np.array([[3, 1, 1], [0, 1, np.nan]])
-            running.update(data)
-            data = np.array([[4, 1, 1], [0, 1, 1.]])
-            running.update(data)
-        """
-
         # TODO: we can compute the intensity histogram much more efficiently by
         # only doing it for unique channels (which might be duplicated)
         prog = ub.ProgIter(loader, desc='estimate dataset stats')
@@ -2754,9 +2816,6 @@ class KWCocoVideoDataset(data.Dataset):
                             dtype = np.float64
                             val = mode_val.numpy().astype(dtype)
                             weights = np.isfinite(val).astype(dtype)
-                            # if not np.all(flags):
-                            #     # Hack it:
-                            #     val[~flags] = 0
                             # kwarray can handle nans now
                             running.update(val, weights=weights)
 

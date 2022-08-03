@@ -397,7 +397,7 @@ class kwcoco_dataset(Dataset):
             # avail_sensors = set(self.images.lookup('sensor_coarse'))
             # filter images by desired sensor
             self.images = self.images.compress([x in sensor for x in self.images.lookup('sensor_coarse')])
-            assert(self.images)
+            assert self.images
         # else:
         #     avail_sensors = None
 
@@ -878,7 +878,7 @@ class SpaceNet7(Dataset):
         self.time_adjust = [-1, 1]
 
     def __len__(self):
-        return(self.length)
+        return (self.length)
 
     def __getitem__(self, idx):
 

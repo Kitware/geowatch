@@ -78,7 +78,7 @@ def align_crs(stac_catalog, outdir, aoi_bounds):
         for asset_name, asset in original_item.assets.items():
             # 'worldview-nitf' from T&E STAC doesn't include roles,
             # but asset_name is "data"
-            if((asset.roles is None
+            if ((asset.roles is None
                 or 'data' not in asset.roles)
                and asset_name != 'data'):
                 print("Asset '{}' for item '{}' is not data, skipping "

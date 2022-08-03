@@ -232,7 +232,7 @@ def collate_item(stac_item,
 
     platform = stac_item.properties['platform']
 
-    if(platform not in SUPPORTED_PLATFORMS
+    if (platform not in SUPPORTED_PLATFORMS
        and not platform.startswith('PlanetScope')):
         print("* Warning unknown platform: '{}' for item, "
               "skipping!".format(platform))
@@ -838,7 +838,7 @@ def dissociate_wv_pan_items(stac_items):
     for stac_item in stac_items:
         platform = stac_item['properties']['platform']
 
-        if(platform in SUPPORTED_WV_PLATFORMS
+        if (platform in SUPPORTED_WV_PLATFORMS
            and 'pan' in stac_item['properties']):
             pan_item = stac_item['properties'].pop('pan')
             pan_asset = stac_item['assets'].pop('data_pan')

@@ -59,18 +59,13 @@ python -m watch.cli.prepare_ta2_dataset \
 
 
 
-build_drop4_all_sensors(){
+build_drop4_BAS(){
     source "$HOME"/code/watch/secrets/secrets
-    #SENSORS=TA1-S2-L8-WV-PD-ACC
     SENSORS=TA1-S2-L8-ACC
     DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     DATASET_SUFFIX=Drop4-2022-07-28-c20-$SENSORS
     REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*.geojson"
     SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
-
-    #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
-    #REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/NZ_R001.*"
-    #SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
     python -m watch.cli.prepare_ta2_dataset \
@@ -89,13 +84,15 @@ build_drop4_all_sensors(){
         --convert_workers=8 \
         --max_queue_size=12 \
         --align_workers=12 \
-        --cache=0 \
         --ignore_duplicates=1 \
         --separate_region_queues=1 \
         --separate_align_jobs=1 \
         --include_channels="blue|green|red|nir|swir16|swir22|cloudmask" \
         --visualize=1 \
         --target_gsd=30 \
+        --force_nodata=-9999 \
+        --cache="before:aligned_kwcoco" \
+        --align_keep=none \
         --backend=tmux --run=1
 }
 
@@ -353,8 +350,8 @@ dvc_add(){
 
     dvc add -- */L8 */S2 *.zip viz512_anns
     git commit -am "Add Drop4"
-
     dvc push -r aws -R .
+    git push 
 
     #dvc add data_*nowv*.kwcoco.json
     

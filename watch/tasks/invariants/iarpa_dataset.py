@@ -33,7 +33,7 @@ class kwcoco_dataset(torch.utils.data.Dataset):
                 # filter images by desired sensor
                 else:
                     self.images = self.images.compress([x == sensor for x in self.images.lookup('sensor_coarse')])
-                    assert(self.images)
+                    assert self.images
             else:
                 avail_sensors = None
 

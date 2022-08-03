@@ -79,25 +79,51 @@ SENSOR_COARSE_MAPPING = {
     for v in vals
 }
 
-L8_CHANNEL_ALIAS = {band['name']: band['common_name']
-                    for band in util_bands.LANDSAT8 if 'common_name' in band}
-S2_CHANNEL_ALIAS = {band['name']: band['common_name']
-                    for band in util_bands.SENTINEL2 if 'common_name' in band}
-# ...except for TCI, which is not a true band, but often included anyway
-# and this channel code is more specific to kwcoco
-S2_CHANNEL_ALIAS.update({'TCI': 'tci:3'})
-L8_CHANNEL_ALIAS.update({'TCI': 'tci:3'})
+
+def _construct_sensor_channel_alias():
+    """
+    Construct mappings from possible names for each bands to the ones that we
+    want to use in kwcoco.
+    """
+    UTIL_BAND_INFOS = {
+        'S2': util_bands.SENTINEL2,
+        'L8': util_bands.LANDSAT8,
+    }
+    SENSOR_CHANNEL_ALIAS = {}
+    for sensor_code, band_infos in UTIL_BAND_INFOS.items():
+        alias_lut = SENSOR_CHANNEL_ALIAS[sensor_code] = {}
+        for band in band_infos:
+            if 'common_name' in band:
+                alias_lut[band['name']] = band['common_name']
+                alias_lut[band['common_name']] = band['common_name']
+                for alias in band.get('alias', []):
+                    alias_lut[alias] = band['common_name']
+        # TCI is not a true band, but often included anyway
+        # and this channel code is more specific to kwcoco
+        alias_lut['TCI'] = 'tci:3'
+    return SENSOR_CHANNEL_ALIAS
 
 
-def _determine_channels_collated(asset_name, asset_dict):
+SENSOR_CHANNEL_ALIAS = _construct_sensor_channel_alias()
+
+
+def _determine_channels_collated(asset_name, asset_dict, platform):
     """
     Note:
         The term "collated" means that each band is its own asset and it has
         the eo:bands property. For more details see:
         https://smartgitlab.com/TE/standards/-/wikis/STAC-and-Storage-Specifications
     """
+    sensor_coarse = SENSOR_COARSE_MAPPING.get(platform, platform)
+
     eo_band_names = [eob.get('common_name', eob['name'])
                      for eob in asset_dict.get('eo:bands', ())]
+
+    # Map aliases for this sensor if we have registered it
+    channel_alias_lut = SENSOR_CHANNEL_ALIAS.get(sensor_coarse, None)
+    if channel_alias_lut is not None:
+        eo_band_names = [
+            channel_alias_lut.get(name, name) for name in eo_band_names]
 
     if len(eo_band_names) > 0:
         return '|'.join(eo_band_names)
@@ -138,7 +164,7 @@ def _determine_s2_channels(asset_name, asset_dict):
     # print(f'eo_band_names={eo_band_names}')
 
     if re.search(r'TCI\.(tiff?|jp2)$', asset_href, re.I):
-        return S2_CHANNEL_ALIAS.get('TCI', 'tci:3')
+        return SENSOR_CHANNEL_ALIAS['S2'].get('TCI', 'tci:3')
     elif re.search(r'PVI\.(tiff?|jp2)$', asset_href, re.I):
         return 'pvi:3'
     elif re.search(r'PVI\.(tiff?|jp2)$', asset_href, re.I):
@@ -160,10 +186,10 @@ def _determine_s2_channels(asset_name, asset_dict):
     elif re.search(r'SR_AEROSOL\.(tiff?|jp2)$', asset_href, re.I):
         return 'sr_aerosol_mask'
     elif len(eo_band_names) > 0:
-        return '|'.join((S2_CHANNEL_ALIAS.get(eobn, eobn)
+        return '|'.join((SENSOR_CHANNEL_ALIAS['S2'].get(eobn, eobn)
                          for eobn in eo_band_names))
     elif m := re.search(r'(B\w{2})\.(tiff?|jp2)$', asset_href, re.I):  # NOQA
-        return S2_CHANNEL_ALIAS.get(m.group(1), m.group(1))
+        return SENSOR_CHANNEL_ALIAS['S2'].get(m.group(1), m.group(1))
     else:
         href_path = ub.Path(asset_href)
         stem = href_path.stem
@@ -216,7 +242,7 @@ def _determine_l8_channels(asset_name, asset_dict):
             raise TypeError(f'type(eob) = {type(eob)}')
 
     if len(eo_band_names) > 0:
-        mapped_names = list(ub.unique([L8_CHANNEL_ALIAS.get(eobn, eobn) for eobn in eo_band_names]))
+        mapped_names = list(ub.unique([SENSOR_CHANNEL_ALIAS['L8'].get(eobn, eobn) for eobn in eo_band_names]))
         return '|'.join(mapped_names)
     elif re.search(r'cloudmask\.(tiff?|jp2)$', asset_href, re.I):
         return 'cloudmask'
@@ -224,7 +250,7 @@ def _determine_l8_channels(asset_name, asset_dict):
                         asset_href, re.I):
         return m.group(1).lower()
     elif m := re.search(r'(B\w{1,2})\.(tiff?|jp2)$', asset_href, re.I):  # NOQA
-        return L8_CHANNEL_ALIAS.get(m.group(1), m.group(1))
+        return SENSOR_CHANNEL_ALIAS['L8'].get(m.group(1), m.group(1))
     else:
         stem = ub.Path(asset_href).stem
         if stem.endswith('_TCI'):
@@ -316,7 +342,8 @@ def make_coco_aux_from_stac_asset(asset_name,
         return None
 
     if from_collated and platform in SUPPORTED_PLATFORMS:
-        channels = _determine_channels_collated(asset_name, asset_dict)
+        channels = _determine_channels_collated(asset_name, asset_dict,
+                                                platform)
     elif platform in SUPPORTED_COARSE_PLATFORMS['S2']:
         channels = _determine_s2_channels(asset_name, asset_dict)
     elif platform in SUPPORTED_COARSE_PLATFORMS['L8']:
@@ -368,6 +395,9 @@ def make_coco_aux_from_stac_asset(asset_name,
     })
 
     if populate_watch_fields:
+        # TODO: we could remove this, we usually handle this as a secondary
+        # step.
+
         # Largely a copy-paste of
         # `watch.gis.geotiff.geotiff_metadata(asset_href)` without
         # attempting to parse metadata from the filename / path

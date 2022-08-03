@@ -53,7 +53,7 @@ def run_fmask_for_item(stac_item, outdir):
 
     data_asset_hrefs = []
     for asset_name, asset in stac_item.assets.items():
-        if((asset.roles is not None and 'data' in asset.roles) or
+        if ((asset.roles is not None and 'data' in asset.roles) or
            asset_name == 'data' or
            re.search(r'\.(tiff?|jp2)$', asset.href, re.I) is not None):
             data_asset_hrefs.append(asset.href)
@@ -73,7 +73,7 @@ def run_fmask_for_item(stac_item, outdir):
     cloudmask_outpath = os.path.join(assets_root, cloudmask_basename)
 
     print("* Generating cloudmask for item '{}'".format(stac_item.id))
-    if(sensor == 'S2'
+    if (sensor == 'S2'
        and not os.path.isdir(os.path.join(assets_root, 'IMG_DATA'))):
         # Fake a S2 granuledir structure, if not dealing with a
         # true granuledir ..

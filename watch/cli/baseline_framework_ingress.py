@@ -9,9 +9,9 @@ from datetime import datetime
 from concurrent.futures import as_completed
 import traceback
 
-import ubelt
 import requests
 import pystac
+import ubelt as ub
 
 
 SENTINEL_PLATFORMS = {'sentinel-2b', 'sentinel-2a'}
@@ -19,7 +19,12 @@ SENTINEL_PLATFORMS = {'sentinel-2b', 'sentinel-2a'}
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Ingress data from T&E baseline framework input file')
+        description=ub.paragraph(
+            '''
+            Ingress data from T&E baseline framework input file.
+
+            The output will be stored as a json catalog
+            '''))
 
     parser.add_argument('input_path',
                         type=str,
@@ -125,7 +130,7 @@ def ingress_item(feature,
         asset_href = asset['href']
 
         try:
-            if('productmetadata' not in assets
+            if ('productmetadata' not in assets
                and feature['properties']['platform'] in SENTINEL_PLATFORMS
                and asset_name == 'metadata'):
                 asset_outpath = os.path.join(
@@ -162,7 +167,7 @@ def ingress_item(feature,
         else:
             # Prefer to pull asset from S3 if available
             parsed_asset_href = urlparse(asset_href)
-            if(parsed_asset_href.scheme != 's3'
+            if (parsed_asset_href.scheme != 's3'
                and 'alternate' in asset and 's3' in asset['alternate']):
                 asset_href_for_download = asset['alternate']['s3']['href']
             else:
@@ -227,7 +232,6 @@ def ingress_item(feature,
         item_href = os.path.relpath(item_href, outdir)
 
     item.set_self_href(item_href)
-    # import ubelt as ub
     # print('item = {}'.format(ub.repr2(item.to_dict(), nl=2)))
     return item
 
@@ -335,8 +339,8 @@ def baseline_framework_ingress(input_path,
 
     input_stac_items = load_input_stac_items(input_path, aws_base_command)
 
-    executor = ubelt.Executor(mode='process' if jobs > 1 else 'serial',
-                              max_workers=jobs)
+    executor = ub.Executor(mode='process' if jobs > 1 else 'serial',
+                           max_workers=jobs)
 
     jobs = [executor.submit(ingress_item, feature, outdir, aws_base_command,
                             dryrun, relative, asset_selector, virtual)
