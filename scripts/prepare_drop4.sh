@@ -336,10 +336,12 @@ _Debugging(){
 dvc_add(){
     cd Aligned-Drop4-2022-07-25-c30-TA1-S2-L8-ACC
 
-    mkdir -p viz512_anns
-    cp _viz512/*/*ann*.gif ./viz512_anns
+    dvc unprotect -- */L8 */S2 *.zip viz512_anns
 
     python -m watch.cli.prepare_splits data.kwcoco.json --run=1
+
+    mkdir -p viz512_anns
+    cp _viz512/*/*ann*.gif ./viz512_anns
 
     7z a splits.zip data*.kwcoco.json
 
@@ -348,10 +350,8 @@ dvc_add(){
     ls -- */S2
     ls -- */*.json
 
-    dvc add -- */L8 */S2 *.zip viz512_anns
-    git commit -am "Add Drop4"
-    dvc push -r aws -R .
-    git push 
+    dvc add -- */L8 */S2 *.zip viz512_anns && dvc push -r aws -R .
+    git commit -am "Add Drop4" && git push 
 
     #dvc add data_*nowv*.kwcoco.json
     

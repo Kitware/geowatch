@@ -27,9 +27,8 @@ class BatchVisualizationBuilder:
         >>> channels = 'r|g|b,B10|B8a|B1|B8|B11,X.2|Y.2'
         >>> combinable_extra = [['B10', 'B8', 'B8a']]  # special behavior
         >>> # combinable_extra = None  # uncomment for raw behavior
-        >>> sample_shape = (5, 530, 610)
         >>> self = KWCocoVideoDataset(
-        >>>     sampler, sample_shape=sample_shape, channels=channels,
+        >>>     sampler, sample_shape=(5, 530, 610), channels=channels,
         >>>     use_centered_positives=True, neg_to_pos_ratio=0)
         >>> index = len(self) // 4
         >>> item = self[index]
@@ -37,9 +36,9 @@ class BatchVisualizationBuilder:
         >>> item_output = {}
         >>> change_prob_list = []
         >>> fliprot_params = item['tr'].get('fliprot_params', None)
-        >>> for _ in range(1, sample_shape[0]):
+        >>> for frame in item['frames'][1:]:
         >>>     change_prob = kwimage.Heatmap.random(
-        >>>         dims=sample_shape[1:3], classes=1).data['class_probs'][0]
+        >>>         dims=frame['target_dims'], classes=1).data['class_probs'][0]
         >>>     if fliprot_params:
         >>>         change_prob = fliprot(change_prob, **fliprot_params)
         >>>     change_prob_list += [change_prob]
@@ -48,9 +47,9 @@ class BatchVisualizationBuilder:
         >>> #
         >>> # Probability of each class for each frame
         >>> class_prob_list = []
-        >>> for _ in range(0, sample_shape[0]):
+        >>> for frame in item['frames']:
         >>>     class_prob = kwimage.Heatmap.random(
-        >>>         dims=sample_shape[1:3], classes=list(sampler.classes)).data['class_probs']
+        >>>         dims=frame['target_dims'], classes=list(sampler.classes)).data['class_probs']
         >>>     class_prob = einops.rearrange(class_prob, 'c h w -> h w c')
         >>>     if fliprot_params:
         >>>         class_prob = fliprot(class_prob, **fliprot_params)
@@ -60,9 +59,9 @@ class BatchVisualizationBuilder:
         >>> #
         >>> # Probability of "saliency" (i.e. non-background) for each frame
         >>> saliency_prob_list = []
-        >>> for _ in range(0, sample_shape[0]):
+        >>> for frame in item['frames']:
         >>>     saliency_prob = kwimage.Heatmap.random(
-        >>>         dims=sample_shape[1:3], classes=1).data['class_probs']
+        >>>         dims=frame['target_dims'], classes=1).data['class_probs']
         >>>     saliency_prob = einops.rearrange(saliency_prob, 'c h w -> h w c')
         >>>     if fliprot_params:
         >>>         saliency_prob = fliprot(saliency_prob, **fliprot_params)
@@ -351,6 +350,11 @@ class BatchVisualizationBuilder:
         width = body_canvas.shape[1]
 
         vid_text = f'video: {builder.item["video_id"]} - {builder.item["video_name"]}'
+
+        sample_gsd = builder.item.get('sample_gsd', None)
+        if sample_gsd is not None:
+            vid_text = vid_text + ' @ {:0.2f} GSD'.format(sample_gsd)
+
         vid_header = kwimage.draw_text_on_image(
             {'width': width}, vid_text, org=(width // 2, 3), valign='top',
             halign='center', color='pink')
@@ -410,7 +414,10 @@ class BatchVisualizationBuilder:
         vertical_stack.extend(header_stack)
 
         # Build truth / metadata overlays
-        overlay_shape = ub.peek(frame_truth.values()).shape[0:2]
+        if len(frame_truth):
+            overlay_shape = ub.peek(frame_truth.values()).shape[0:2]
+        else:
+            overlay_shape = None
 
         # Create overlays for training objective targets
         overlay_items = []
