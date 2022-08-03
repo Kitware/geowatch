@@ -92,9 +92,8 @@ def main(cmdline=True, **kwargs):
         job.coco_img = coco_img
 
     import kwarray
-    stats = kwarray.RunningStats()
-
-
+    samecolor_stats = kwarray.RunningStats()
+    mask_stats = kwarray.RunningStats()
     img_info_list = []
     prog = ub.ProgIter(pool.as_completed(), total=len(pool), desc='collect image stats')
     for job in prog:
@@ -103,11 +102,13 @@ def main(cmdline=True, **kwargs):
         img_info_list.append(img_info)
 
         for chan, chan_info in img_info['chan_infos'].items():
-            chan_info['num_masked']
-            chan_info['num_samecolor']
-            chan_info['num_pixels']
-
-        prog.set_postfix_str(f'num_bad = {len(bad_images)} / {len(all_gids)}')
+            frac_mask = chan_info['num_masked'] / chan_info['num_pixels']
+            frac_samecolor = chan_info['num_samecolor'] / chan_info['num_pixels']
+            mask_stats.update(frac_mask)
+            samecolor_stats.update(frac_samecolor)
+        lbl1 = 'stat(same)=' + ub.repr2(ub.dict_isect(samecolor_stats.current(), ['n', 'mean', 'max', 'min']), compact=1, precision=4)
+        lbl2 = 'stat(mask)=' + ub.repr2(ub.dict_isect(mask_stats.current(), ['n', 'mean', 'max', 'min']), compact=1, precision=4)
+        prog.set_postfix_str(f'{lbl1} - {lbl2}')
 
     bad_images = []
     good_images = []
@@ -170,7 +171,7 @@ def get_imagedata_stats(coco_img, main_channels='red'):
         chan_info['exists'] = chan_fpath.exists()
         if chan_info['exists']:
             num_overviews = chan_node.prepare().num_overviews
-            num_overviews = min(0, num_overviews)
+            num_overviews = min(4, num_overviews)
             chan_overview = chan_node.get_overview(num_overviews).optimize()
             imdata = chan_overview.finalize()
             max_val = imdata.max()
