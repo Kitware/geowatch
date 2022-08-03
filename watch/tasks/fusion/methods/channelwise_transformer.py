@@ -726,10 +726,10 @@ class MultimodalTransformer(pl.LightningModule):
             >>> assert opt.param_groups[0]['lr'] == my_lr
             >>> assert opt.param_groups[0]['weight_decay'] == my_decay
             >>> #
-            >>> self = MultimodalTransformer(**kw, optimizer='MADGRAD')
-            >>> [opt], [sched] = self.configure_optimizers()
-            >>> assert opt.param_groups[0]['lr'] == my_lr
-            >>> assert opt.param_groups[0]['weight_decay'] == my_decay
+            >>> # self = MultimodalTransformer(**kw, optimizer='MADGRAD')
+            >>> # [opt], [sched] = self.configure_optimizers()
+            >>> # assert opt.param_groups[0]['lr'] == my_lr
+            >>> # assert opt.param_groups[0]['weight_decay'] == my_decay
         """
         import netharn as nh
 

@@ -350,8 +350,8 @@ dvc_add(){
 
     dvc add -- */L8 */S2 *.zip viz512_anns
     git commit -am "Add Drop4"
-
     dvc push -r aws -R .
+    git push 
 
     #dvc add data_*nowv*.kwcoco.json
     
