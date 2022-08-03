@@ -35,7 +35,7 @@ class attention_unet(nn.Module):
         else:
             self.positional_layers = positional_layers
 
-        assert(num_attention_layers <= 8)
+        assert (num_attention_layers <= 8)
 
         if self.mode == 'concatenation':
             self.pos_embed_dim = 16
