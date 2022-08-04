@@ -2501,10 +2501,25 @@ class KWCocoVideoDataset(data.Dataset):
                         # New feature where we encode that we care much more about
                         # segmenting the inside of the object than the outside.
                         # Effectively boundaries become uncertain.
+                        """
+                        Example:
+                            import cv2
+                            import kwimage
+                            poly = kwimage.Polygon.random().scale(32)
+                            poly_mask = np.zeros((32, 32), dtype=np.uint8)
+                            poly_mask = poly.fill(poly_mask, value=1)
+                            dist = cv2.distanceTransform(poly_mask, cv2.DIST_L2, 3)
+                            ###
+                            import kwplot
+                            kwplot.autompl()
+                            kwplot.imshow(dist, cmap='viridis', doclf=1)
+                            poly.draw(fill=0, border=1)
+                        """
                         import cv2
                         poly_mask = np.zeros_like(frame_class_ohe[0])
                         poly_mask = poly.fill(poly_mask, value=1)
-                        dist = cv2.distanceTransform(poly_mask, cv2.DIST_L2, 3)
+                        dist = cv2.distanceTransform(
+                            src=poly_mask, distanceType=cv2.DIST_L2, maskSize=3)
                         max_dist = dist.max()
                         if max_dist > 0:
                             dist_weight = dist / max_dist
