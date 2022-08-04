@@ -1,5 +1,14 @@
 """
 Maybe a CV2 tracker could work for us?
+
+
+
+References:
+    https://livecodestream.dev/post/object-tracking-with-opencv/
+    https://pyimagesearch.com/2018/08/06/tracking-multiple-objects-with-opencv/
+
+Requires:
+    pip install opencv-contrib-python-headless
 """
 
 import kwcoco
@@ -61,22 +70,25 @@ for gid in video_images:
     # heatmap = vidspace_dets.rasterize((1, 1), vid_dims)
 
 
-# https://livecodestream.dev/post/object-tracking-with-opencv/
-
 first_boxes = video_boxes[0]
 first_frame = video_frames[0]
 bbox = first_boxes.to_xywh().quantize().data[0]
 
-tracker = cv2.TrackerMIL_create()
-tracker.init(first_frame, bbox)
+multitracker = cv2.legacy.MultiTracker_create()
+
+for first_box in first_boxes.to_xywh().quantize().data:
+    # tracker = cv2.TrackerMIL_create()
+    multitracker.add(cv2.legacy.TrackerMIL_create(), first_frame, first_box)
+
+# multitracker.init(first_frame, bbox)
 
 
 import xdev  # NOQA
 for frame in xdev.InteractiveIter(video_frames):
-    status_flag, tracked_bbox = tracker.update(frame)
+    # status_flag, tracked_bbox = tracker.update(frame)
+    (status_flag, tracked_bboxes) = multitracker.update(frame)
     print(f'status_flag={status_flag}')
-    print(f'tracked_bbox={tracked_bbox}')
-    new_bbox = kwimage.Boxes([tracked_bbox], 'xywh')
+    new_bbox = kwimage.Boxes(tracked_bboxes, 'xywh')
     canvas = new_bbox.draw_on(frame.copy())
     kwplot.imshow(canvas)
     # new_bbox.draw()
