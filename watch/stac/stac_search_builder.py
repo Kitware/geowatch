@@ -3,6 +3,9 @@ A tool to help build a STAC search json.
 
 This does contain a command line interface, for legacy reasons, but
 is not intended to be a fully supported part of the WATCH CLI.
+
+SeeAlso:
+    ~/code/watch/watch/cli/stac_search.py
 """
 import os
 import ubelt as ub
@@ -110,7 +113,6 @@ _PUBLIC_L1_PRODUCTS = {
         }
     },
     'sentinel-s2-l1c': {
-        # https://stacindex.org/catalogs/usgs-landsat-collection-2-api#/
         "collections": ["sentinel-s2-l1c"],
         "endpoint": "https://earth-search.aws.element84.com/v0",
     },
@@ -124,17 +126,11 @@ _PUBLIC_L2_PRODUCTS = {
         "endpoint": "https://earth-search.aws.element84.com/v0",
     },
 
-    'landsat-c2ard-sr': {
-        # Note: AWS_REQUEST_PAYER='requester' is required to grab the data
-        "collections": ["landsat-c2ard-sr"],
-        "endpoint": "https://landsatlook.usgs.gov/stac-server/",
-        "query": {
-            "platform": {
-                "eq": "LANDSAT_8"
-            }
-        }
-    },
-}
+# https://stacindex.org/catalogs/usgs-landsat-collection-2-api#/
+    'landsat-c2ard-sr': {# Note: AWS_REQUEST_PAYER='requester' is required to grab the data
+"collections": ["landsat-c2ard-sr"], "endpoint":
+"https://landsatlook.usgs.gov/stac-server/", "query": { "platform": { "eq":
+"LANDSAT_8" } } }, }
 
 
 SENSOR_TO_DEFAULTS = ub.dict_union(
@@ -251,6 +247,6 @@ def main(cmdline=1, **kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/cli/stac_search_build.py
+        python ~/code/watch/watch/stac/stac_search_build.py
     """
     main()
