@@ -126,11 +126,18 @@ _PUBLIC_L2_PRODUCTS = {
         "endpoint": "https://earth-search.aws.element84.com/v0",
     },
 
-# https://stacindex.org/catalogs/usgs-landsat-collection-2-api#/
-    'landsat-c2ard-sr': {# Note: AWS_REQUEST_PAYER='requester' is required to grab the data
-"collections": ["landsat-c2ard-sr"], "endpoint":
-"https://landsatlook.usgs.gov/stac-server/", "query": { "platform": { "eq":
-"LANDSAT_8" } } }, }
+    # https://stacindex.org/catalogs/usgs-landsat-collection-2-api#/
+    'landsat-c2ard-sr': {
+        # Note: AWS_REQUEST_PAYER='requester' is required to grab the data
+        "collections": ["landsat-c2ard-sr"],
+        "endpoint": "https://landsatlook.usgs.gov/stac-server/",
+        "query": {
+            "platform": {
+                "eq": "LANDSAT_8"
+            }
+        }
+    },
+}
 
 
 SENSOR_TO_DEFAULTS = ub.dict_union(
