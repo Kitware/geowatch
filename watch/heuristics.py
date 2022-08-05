@@ -155,6 +155,9 @@ CATEGORIES = [
 
 def hack_track_categories(track_catnames, task):
     """
+    Returns:
+        List[str]: Modified categories
+
     Example:
         >>> from watch.heuristics import *  # NOQA
         >>> basis = {
@@ -174,6 +177,15 @@ def hack_track_categories(track_catnames, task):
         >>>     track_catnames = kw['track_catnames']
         >>>     print('kw = {}'.format(ub.repr2(kw, nl=1)))
         >>>     print(hack_track_categories(track_catnames, task))
+
+    Example:
+        >>> from watch.heuristics import *  # NOQA
+        >>> track_catnames = ['negative', 'negative']
+        >>> task = 'saliency'
+        >>> result = hack_track_categories(track_catnames, task)
+        >>> print(result)
+        ['negative', 'negative']
+
     """
     # FIXME! This is hard coded nonsense, need to come up with a general
     # way to encode these conditions in the categories themselves. Getting
