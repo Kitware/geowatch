@@ -93,7 +93,7 @@ class SpaceNet2Dataset(object):
             self.images_paths = self.images_paths[num_train:]
 
     def __getitem__(self, idx):
-        
+
         image_path = self.images_paths[idx]
         base_path = '/'.join(image_path.split('/')[:-2])
         mask_base_path = f"{base_path}/geojson/buildings/"
@@ -103,7 +103,6 @@ class SpaceNet2Dataset(object):
         mask_path = f"{mask_base_path}{mask_name}"
         img = tifffile.imread(image_path).astype(np.float32)
         og_height, og_width, channels = img.shape
-        
 
         gdf = geopandas.read_file(mask_path)
         # else:
@@ -119,19 +118,18 @@ class SpaceNet2Dataset(object):
                 features = [feature for feature in gdf["geometry"]]
                 mask, out_transform = rasterio.mask.mask(src, features, crop=False)
             mask = mask.mean(axis=0)
-            mask[mask>0] = 1
+            mask[mask > 0] = 1
 
         #     new_image = self.ms_transforms(image=img)
 
         new_image = self.transforms(img)
-        new_mask = FT.to_tensor(mask) #* 255
+        new_mask = FT.to_tensor(mask)  # * 255
         # print(torch.unique(new_image))
         # print(f"new_image min:{new_image.min()}, max:{new_image.max()}")
 
         crop_params = self.randomcrop_transform.get_params(new_image, output_size=(self.crop_size, self.crop_size))
         new_image = FT.crop(new_image, *crop_params)
         new_mask = FT.crop(new_mask, *crop_params)
-
 
         if self.split == "train":
             new_image, new_mask = utils.random_horizonal_flip(new_image, new_mask)

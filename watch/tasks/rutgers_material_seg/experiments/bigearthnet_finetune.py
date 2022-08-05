@@ -90,7 +90,7 @@ class Trainer(object):
         self.kmeans = KMeans(n_clusters=self.k, mode='euclidean', verbose=0, minibatch=None)
         self.max_label = config['data']['num_classes']
         self.all_crops_params = [tuple([i, j, config['data']['window_size'], config['data']['window_size']]) for i in range(config['data']['window_size'], config['data']
-                                                                                                                            ['image_size']-config['data']['window_size']) for j in range(config['data']['window_size'], config['data']['image_size']-config['data']['window_size'])]
+                                                                                                                            ['image_size'] - config['data']['window_size']) for j in range(config['data']['window_size'], config['data']['image_size'] - config['data']['window_size'])]
         self.inference_all_crops_params = [tuple([i, j, config['evaluation']['inference_window'], config['evaluation']['inference_window']]) for i in range(0, config['data']['image_size']) for j in range(0, config['data']['image_size'])]
         self.all_crops_params_np = np.array(self.all_crops_params)
         self.change_threshold = 0.2
@@ -141,7 +141,7 @@ class Trainer(object):
 
         filtered_features = (features > features_max).type_as(features)
         filtered_features = filtered_features.view(
-            bs, c, h, w)*features.view(bs, c, h, w)
+            bs, c, h, w) * features.view(bs, c, h, w)
         return filtered_features
 
     def train(self, epoch: int, cometml_experiemnt: object) -> float:
@@ -185,7 +185,7 @@ class Trainer(object):
 
             # print(torch.unique(mask1))
             # image1 = utils.stad_image(image1)
-            image1 = F.normalize(image1, dim=1, p=1) 
+            image1 = F.normalize(image1, dim=1, p=1)
             # print(f"image1 min: {image1.min()} max: {image1.max()}")
 
             output = self.model(image1)  # [B,22,150,150]
@@ -226,14 +226,13 @@ class Trainer(object):
             # print(label)
             # acc = accuracy_score(label, preds1)
             ap = average_precision_score(label.cpu(), torch.sigmoid(output).detach().cpu(), average='micro') * 100.0
-            cometml_experiemnt.log_metric("average precision iteration", ap, epoch=epoch+1)
+            cometml_experiemnt.log_metric("average precision iteration", ap, epoch=epoch + 1)
             aps.append(ap)
             # acc = accuracy_score(preds1.numpy(), preds1.numpy())
             # print(f" accuracy: {acc}, average precision: {ap}")
             # preds.append(preds1)
-            
-            # targets.append(label)  # .numpy())
 
+            # targets.append(label)  # .numpy())
 
             if config['visualization']['train_visualizer']:
                 if (epoch) % config['visualization']['visualize_training_every'] == 0:
@@ -258,7 +257,6 @@ class Trainer(object):
                         image_show1 = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, :3]
                         image_show1 = np.flip(image_show1, axis=2)
 
-
                         image_show1 = (image_show1 - image_show1.min()) / (image_show1.max() - image_show1.min())
                         gt_mask_show1 = mask1.cpu().detach()[batch_index_to_show, :, :].numpy().squeeze()
 
@@ -266,7 +264,7 @@ class Trainer(object):
                         # pred2_show = masks2.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
 
                         # histc_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*histc_int_change_feats_pred_show)
-                        pred1_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*pred1_show)
+                        pred1_fp_tp_fn_prediction_mask = gt_mask_show1 + (2 * pred1_show)
 
                         classes_in_gt = np.unique(gt_mask_show1)
                         ax1.imshow(image_show1)
@@ -274,8 +272,7 @@ class Trainer(object):
                         ax2.imshow(image_show1)
                         ax2.imshow(gt_mask_show1, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
-
-                        masks_show = masks.cpu().detach().numpy()[batch_index_to_show,1,:,:]
+                        masks_show = masks.cpu().detach().numpy()[batch_index_to_show, 1, :, :]
                         ax3.imshow(masks_show, cmap=cmap_gradients)
 
                         ax4.imshow(pred1_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
@@ -327,7 +324,7 @@ class Trainer(object):
 
         aps = np.array(aps)
         mean_ap = aps.mean()
-        cometml_experiemnt.log_metric("Training Mean Average Precision", mean_ap, epoch=epoch+1)
+        cometml_experiemnt.log_metric("Training Mean Average Precision", mean_ap, epoch=epoch + 1)
 
         # mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=19)
 
@@ -360,9 +357,9 @@ class Trainer(object):
         # cometml_experiemnt.log_metrics({f"Concat Training Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
         # cometml_experiemnt.log_metrics({f"Concat Training F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
 
-        print("Training Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/self.train_loader.__len__()))
+        print("Training Epoch {0:2d} average loss: {1:1.2f}".format(epoch + 1, total_loss / self.train_loader.__len__()))
 
-        return total_loss/self.train_loader.__len__()
+        return total_loss / self.train_loader.__len__()
 
     def validate(self, epoch: int, cometml_experiemnt: object, save_individual_plots_specific: bool = False) -> tuple:
         """validating single epoch
@@ -403,12 +400,12 @@ class Trainer(object):
                 label = label.to(device)
 
                 # image1 = utils.stad_image(image1)
-                image1 = F.normalize(image1, dim=1, p=1) 
+                image1 = F.normalize(image1, dim=1, p=1)
 
                 output = self.model(image1)
 
                 ap = average_precision_score(label.cpu(), torch.sigmoid(output).detach().cpu(), average='micro') * 100.0
-                cometml_experiemnt.log_metric("validation average precision iteration", ap, epoch=epoch+1)
+                cometml_experiemnt.log_metric("validation average precision iteration", ap, epoch=epoch + 1)
                 aps.append(ap)
 
                 if config['visualization']['val_visualizer'] or (config['visualization']['save_individual_plots'] and save_individual_plots_specific):
@@ -440,23 +437,20 @@ class Trainer(object):
                             # histograms_intersection_show = (histograms_intersection_show - histograms_intersection_show.min())/(histograms_intersection_show.max() - histograms_intersection_show.min())
 
                             pred1_show = masks.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
-                            pred_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*pred1_show)
-
+                            pred_fp_tp_fn_prediction_mask = gt_mask_show1 + (2 * pred1_show)
 
                             classes_in_gt = np.unique(gt_mask_show1)
                             ax1.imshow(image_show1)
-
 
                             ax2.imshow(image_show1)
                             ax2.imshow(gt_mask_show1, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
                             # ax3.imshow(pred1_show)
 
-                            masks_show = masks.cpu().detach().numpy()[batch_index_to_show,1,:,:]
+                            masks_show = masks.cpu().detach().numpy()[batch_index_to_show, 1, :, :]
                             ax3.imshow(masks_show, cmap=cmap_gradients)
 
                             ax4.imshow(pred1_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
-
 
                             # ax1.axis('off')
                             # ax2.axis('off')
@@ -485,7 +479,7 @@ class Trainer(object):
                             figure.tight_layout()
                             if config['visualization']['val_imshow']:
                                 plt.show()
-                            
+
                             if (config['visualization']['save_individual_plots'] and save_individual_plots_specific):
 
                                 plots_path_save = f"{config['visualization']['save_individual_plots_path']}{config['dataset']}/"
@@ -516,7 +510,7 @@ class Trainer(object):
 
         aps = np.array(aps)
         mean_ap = aps.mean()
-        cometml_experiemnt.log_metric("Validation Mean Average Precision", mean_ap, epoch=epoch+1)
+        cometml_experiemnt.log_metric("Validation Mean Average Precision", mean_ap, epoch=epoch + 1)
 
         # mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=2)
 
@@ -549,7 +543,7 @@ class Trainer(object):
 
         # cometml_experiemnt.log_metric("Validation Average Loss", total_loss/loader.__len__(), epoch=epoch+1)
 
-        return total_loss/loader.__len__(), mean_ap
+        return total_loss / loader.__len__(), mean_ap
 
     def forward(self, cometml_experiment: object, world_size: int = 8) -> tuple:
         """forward pass for all epochs
@@ -594,7 +588,7 @@ class Trainer(object):
                 if config['procedures']['train']:
                     config['val_mAP'] = str(val_mAP)
                     config['train_loss'] = str(train_loss)
-                    with open(model_save_dir+"config.yaml", 'w') as file:
+                    with open(model_save_dir + "config.yaml", 'w') as file:
                         yaml.dump(config, file)
 
                     torch.save({'epoch': epoch,
@@ -602,7 +596,7 @@ class Trainer(object):
                                 'optimizer': self.optimizer.state_dict(),
                                 'scheduler': self.scheduler.state_dict(),
                                 'loss': train_loss},
-                               model_save_dir+model_save_name)
+                               model_save_dir + model_save_name)
                 if config['visualization']['save_individual_plots']:
                     _, _ = self.validate(
                         epoch, cometml_experiment, save_individual_plots_specific=True)
@@ -626,7 +620,6 @@ if __name__ == "__main__":
     config['start_time'] = datetime.datetime.today().strftime(
         '%Y-%m-%d-%H:%M:%S')
 
-
     # _{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}"
     project_name = f"{current_path[-3]}_{current_path[-1]}_{config['dataset']}"
     experiment_name = f"attention_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}"
@@ -636,7 +629,7 @@ if __name__ == "__main__":
                                      display_summary_level=0)
 
     config['experiment_url'] = str(experiment.url)
-    
+
     experiment.set_name(experiment_name)
 
     torch.manual_seed(config['seed'])
@@ -676,7 +669,6 @@ if __name__ == "__main__":
         config['data']['num_classes'] = pretrain_config['data']['num_classes']
         config['training']['model_feats_channels'] = pretrain_config['training']['model_feats_channels']
 
-
     if config['data']['name'] == 'watch' or config['data']['name'] == 'onera':
         coco_fpath = ub.expandpath(config['data'][config['location']]['train_coco_json'])
         dset = kwcoco.CocoDataset(coco_fpath)
@@ -699,25 +691,23 @@ if __name__ == "__main__":
         test_dataset = SequenceDataset(test_sampler, window_dims, input_dims, channels)
         test_dataloader = test_dataset.make_loader(batch_size=config['evaluation']['batch_size'])
     else:
-        train_dataloader = build_dataset(dataset_name=config['data']['name'], 
-                                        root=config['data'][config['location']]['train_dir'], 
+        train_dataloader = build_dataset(dataset_name=config['data']['name'],
+                                        root=config['data'][config['location']]['train_dir'],
                                         batch_size=config['training']['batch_size'],
-                                        num_workers=config['training']['num_workers'], 
+                                        num_workers=config['training']['num_workers'],
                                         split='train',
                                         crop_size=config['data']['image_size'],
                                         channels=config['data']['channels'],
                                         )
-        
-        test_dataloader = build_dataset(dataset_name=config['data']['name'], 
-                                        root=config['data'][config['location']]['train_dir'], 
+
+        test_dataloader = build_dataset(dataset_name=config['data']['name'],
+                                        root=config['data'][config['location']]['train_dir'],
                                         batch_size=config['training']['batch_size'],
-                                        num_workers=config['training']['num_workers'], 
+                                        num_workers=config['training']['num_workers'],
                                         split='val',
                                         crop_size=config['data']['image_size'],
                                         channels=config['data']['channels'],
                                         )
-        
-        
 
     # if not config['training']['model_single_input']:
     #     config['training']['num_channels'] = 2*config['training']['num_channels']
@@ -749,7 +739,7 @@ if __name__ == "__main__":
                                                      verbose=True)
 
     # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60,80])
-    
+
     if config['training']['resume'] != False:
 
         if os.path.isfile(config['training']['resume']):

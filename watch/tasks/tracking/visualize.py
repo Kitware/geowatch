@@ -330,7 +330,7 @@ def visualize_videos(pred_dset,
             plt.plot(track_labels[tid])
             plt.xlabel('images')
             plt.ylabel('class ID')
-            fname = os.path.join(out_dir_track,   str(vidid) + '_' + str(tid) + '_track.jpg')
+            fname = os.path.join(out_dir_track, str(vidid) + '_' + str(tid) + '_track.jpg')
             plt.savefig(fname)
             plt.close()
 
@@ -361,6 +361,7 @@ def viz_track_scores(coco_dset, track_cats, keys_to_score, out_pth):
     '''
     import seaborn as sns
     import matplotlib.pyplot as plt
+
     def _score_track(track, gids=None):
         if gids is None:  # include only gids in track
             gids = [obs.gid for obs in track.observations]

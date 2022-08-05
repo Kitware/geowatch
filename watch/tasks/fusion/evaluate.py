@@ -1018,7 +1018,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             rich.progress.TimeElapsedColumn(),
         )
     else:
-        score_prog = ub.ProgIter(desc='Scoring',  total=num_jobs)
+        score_prog = ub.ProgIter(desc='Scoring', total=num_jobs)
         num_draw_finished = 1
         progress = score_prog  # Hack
 

@@ -83,7 +83,7 @@ class Trainer(object):
         self._aff = TeRN(num_iter=10, dilations=[1, 2, 4, 8, 12, 24]).to(device)
         self.max_label = config['data']['num_classes']
         # self.all_crops_params = [tuple([i,j,config['data']['window_size'], config['data']['window_size']]) for i in range(config['data']['window_size'],config['data']['image_size']-config['data']['window_size']) for j in range(config['data']['window_size'],config['data']['image_size']-config['data']['window_size'])]
-        self.all_crops_params = [tuple([i,j,config['data']['window_size'], config['data']['window_size']]) for i in range(0,config['data']['image_size']) for j in range(0,config['data']['image_size'])]
+        self.all_crops_params = [tuple([i, j, config['data']['window_size'], config['data']['window_size']]) for i in range(0, config['data']['image_size']) for j in range(0, config['data']['image_size'])]
         self.inference_all_crops_params = [tuple([i, j, config['evaluation']['inference_window'], config['evaluation']['inference_window']]) for i in range(0, config['data']['image_size']) for j in range(0, config['data']['image_size'])]
         if test_loader is not None:
             self.test_loader = test_loader
@@ -95,7 +95,6 @@ class Trainer(object):
                                                            first_color_black=True, last_color_black=True,
                                                            bg_alpha=config['visualization']['bg_alpha'],
                                                            fg_alpha=config['visualization']['fg_alpha'])
-
 
     def validate(self, epoch: int, cometml_experiemnt: object, save_individual_plots_specific: bool = False) -> tuple:
         """validating single epoch
@@ -133,7 +132,7 @@ class Trainer(object):
                     # original_width, original_height = outputs['tr'].data[0][batch_index_to_show]['space_dims']
                     # print(outputs['tr'].data[0][batch_index_to_show])
                     # print(outputs['tr'].data[0][batch_index_to_show]['slices'])
-                    
+
                     mask = torch.stack(mask)
                     mask = mask.long().squeeze(1)
 
@@ -151,20 +150,20 @@ class Trainer(object):
 
                 image1 = utils.stad_image(image1)
                 image2 = utils.stad_image(image2)
-                # image1 = F.normalize(image1, dim=1, p=2) 
+                # image1 = F.normalize(image1, dim=1, p=2)
                 # sampled_crops = random.sample(self.all_crops_params, 1000)
-                pad_amount = (config['evaluation']['inference_window']-1)//2
-                padded_image1 = F.pad(input=image1, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
-                padded_image2 = F.pad(input=image2, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
+                pad_amount = (config['evaluation']['inference_window'] - 1) // 2
+                padded_image1 = F.pad(input=image1, pad=(pad_amount, pad_amount, pad_amount, pad_amount), mode='replicate')
+                padded_image2 = F.pad(input=image2, pad=(pad_amount, pad_amount, pad_amount, pad_amount), mode='replicate')
 
                 start = time.time()
-                patched_image1 = torch.stack([transforms.functional.crop(padded_image1, *params) for params in self.inference_all_crops_params],dim=1)
-                patched_image2 = torch.stack([transforms.functional.crop(padded_image2, *params) for params in self.inference_all_crops_params],dim=1)
+                patched_image1 = torch.stack([transforms.functional.crop(padded_image1, *params) for params in self.inference_all_crops_params], dim=1)
+                patched_image2 = torch.stack([transforms.functional.crop(padded_image2, *params) for params in self.inference_all_crops_params], dim=1)
 
                 bs, ps, c, ph, pw = patched_image1.shape
-                patched_image1 = patched_image1.view(bs*ps,c,ph,pw)
-                patched_image2 = patched_image2.view(bs*ps,c,ph,pw)
-                
+                patched_image1 = patched_image1.view(bs * ps, c, ph, pw)
+                patched_image2 = patched_image2.view(bs * ps, c, ph, pw)
+
                 crop_collection_time = time.time() - start
 
                 start = time.time()
@@ -206,7 +205,7 @@ class Trainer(object):
                 dictionary_feats2 = self.kmeans_features.predict(output2)
                 centroids_feats2 = self.kmeans_features.centroids.T
                 residuals_feats2 = torch.cdist(output2, centroids_feats2.T, p=1)
-                
+
                 dictionary_image = self.kmeans.fit_predict(patched_image1)
                 centroids_image = self.kmeans.centroids.T
                 residuals_image = torch.cdist(patched_image1, centroids_image.T, p=2)
@@ -232,7 +231,6 @@ class Trainer(object):
                     # print(min_distances.shape)
                     min_dist_mean = min_distances.mean()
 
-
                     perplexity = 100.0
                     early_exaggeration = 12.0
                     steps = 5000
@@ -253,7 +251,7 @@ class Trainer(object):
                     # scax3 = scatter_fig.add_subplot(1, 3, 3)
                     num_sampled = 6000
                     perm = torch.randperm(patched_image1.size(0))
-                    idx = min_distances<min_dist_mean*0.6#).nonzero()
+                    idx = min_distances < min_dist_mean * 0.6  # ).nonzero()
 
                     # idx = idx[:num_sampled]
                     # idx = perm[:num_sampled]
@@ -261,10 +259,10 @@ class Trainer(object):
                     image_samples = patched_image1[idx]
                     resnet_samples = resnet_output1[idx]
                     ours_samples = output1[idx]
-                    
-                    image_samples = F.normalize(image_samples, dim=1, p=1) 
-                    resnet_samples = F.normalize(resnet_samples, dim=1, p=1) 
-                    ours_samples = F.normalize(ours_samples, dim=1, p=1) 
+
+                    image_samples = F.normalize(image_samples, dim=1, p=1)
+                    resnet_samples = F.normalize(resnet_samples, dim=1, p=1)
+                    ours_samples = F.normalize(ours_samples, dim=1, p=1)
                     # ours_samples = (ours_samples - ours_samples.min()) / (ours_samples.max() - ours_samples.min())
 
                     # print(ours_samples.shape)
@@ -282,7 +280,7 @@ class Trainer(object):
                     # ours_tsne_feats = tsne_model.fit(ours_samples.detach().cpu())  # [num_pixels, 507] -> [num_pixels, 2]
                     # image_tsne_feats = tsne_model.fit(image_samples.detach().cpu())  # [num_pixels, 507] -> [num_pixels, 2]
                     # resnet_tsne_feats = tsne_model.fit(resnet_samples.detach().cpu())  # [num_pixels, 507] -> [num_pixels, 2]
-                    
+
                     # scax1.scatter(image_tsne_feats[:, 0], image_tsne_feats[:, 1],
                     #                 c=dictionary_image.cpu().detach()[idx],
                     #                 s=15.5,
@@ -290,7 +288,7 @@ class Trainer(object):
                     #                 marker='.',
                     #                 linewidths=1.0
                     #                 )
-                    
+
                     # scax2.scatter(resnet_tsne_feats[:, 0], resnet_tsne_feats[:, 1],
                     #                 c=dictionary_baseline_feats.cpu().detach()[idx],
                     #                 s=15.5,
@@ -313,19 +311,16 @@ class Trainer(object):
 
                 start = time.time()
                 output1 = torch.stack(torch.chunk(output1, chunks=bs, dim=0), dim=0)
-                dictionary_feats = torch.stack(torch.chunk(dictionary_feats, chunks=bs, dim=0), dim=0).view(bs,h,w)
-                dictionary_baseline_feats = torch.stack(torch.chunk(dictionary_baseline_feats, chunks=bs, dim=0), dim=0).view(bs,h,w)
-                dictionary_image = torch.stack(torch.chunk(dictionary_image, chunks=bs, dim=0), dim=0).view(bs,h,w)
+                dictionary_feats = torch.stack(torch.chunk(dictionary_feats, chunks=bs, dim=0), dim=0).view(bs, h, w)
+                dictionary_baseline_feats = torch.stack(torch.chunk(dictionary_baseline_feats, chunks=bs, dim=0), dim=0).view(bs, h, w)
+                dictionary_image = torch.stack(torch.chunk(dictionary_image, chunks=bs, dim=0), dim=0).view(bs, h, w)
 
-                dictionary_feats2 = torch.stack(torch.chunk(dictionary_feats2, chunks=bs, dim=0), dim=0).view(bs,h,w)
-                dictionary_baseline_feats2 = torch.stack(torch.chunk(dictionary_baseline_feats2, chunks=bs, dim=0), dim=0).view(bs,h,w)
-                dictionary_image2 = torch.stack(torch.chunk(dictionary_image2, chunks=bs, dim=0), dim=0).view(bs,h,w)
+                dictionary_feats2 = torch.stack(torch.chunk(dictionary_feats2, chunks=bs, dim=0), dim=0).view(bs, h, w)
+                dictionary_baseline_feats2 = torch.stack(torch.chunk(dictionary_baseline_feats2, chunks=bs, dim=0), dim=0).view(bs, h, w)
+                dictionary_image2 = torch.stack(torch.chunk(dictionary_image2, chunks=bs, dim=0), dim=0).view(bs, h, w)
 
                 # quant1 = torch.stack(torch.chunk(quant1, chunks=bs, dim=0), dim=0)
                 # quant2 = torch.stack(torch.chunk(quant2, chunks=bs, dim=0), dim=0)
-                
-
-
 
                 # pbar.set_description(f"(timing, secs) crop_collection: {crop_collection_time:0.3f}, network_run: {network_run_time:0.3f}, chunking_time: {chunking_time:0.3f}")
                 if config['visualization']['val_visualizer'] or (config['visualization']['save_individual_plots'] and save_individual_plots_specific):
@@ -357,11 +352,11 @@ class Trainer(object):
 
                                 cmap_gradients = plt.cm.get_cmap('jet')
                                 # image_show = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))[:,:1:4,:3]
-                                image1 = F.normalize(image1, dim=1, p=1) 
+                                image1 = F.normalize(image1, dim=1, p=1)
                                 image_show1 = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:80, :80, :3]
                                 image_show1 = np.flip(image_show1, axis=2)
 
-                                image2 = F.normalize(image2, dim=1, p=1) 
+                                image2 = F.normalize(image2, dim=1, p=1)
                                 image_show2 = np.transpose(image2.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:80, :80, :3]
                                 image_show2 = np.flip(image_show2, axis=2)
 
@@ -374,7 +369,6 @@ class Trainer(object):
                                 dictionary_img_show2 = dictionary_image2.cpu().detach().numpy()[batch_index_to_show, :80, :80]
                                 # image_show2 = np.transpose(image2.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, :3]
                                 # image_show2 = np.flip(image_show2, axis=2)
-
 
                                 gamma = 1.2
                                 image_show1 = (image_show1 - image_show1.min()) / (image_show1.max() - image_show1.min())
@@ -413,7 +407,6 @@ class Trainer(object):
                                 # dictionary_show = dictionary2_post_assignment.cpu().detach()[batch_index_to_show, :, :].numpy()
                                 # dictionary2_show = dictionary1_post_assignment.cpu().detach()[batch_index_to_show, :, :].numpy()
 
-
                                 classes_in_gt = np.unique(gt_mask_show1)
                                 ax1.imshow(image_show1)
 
@@ -422,13 +415,11 @@ class Trainer(object):
                                 ax3.imshow(image_show1)
                                 ax3.imshow(gt_mask_show1, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
-
                                 ax4.imshow(dictionary_img_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
                                 ax5.imshow(dictionary_baseline_feats_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
                                 ax6.imshow(dictionary_feats_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
-
 
                                 # ax7.imshow(image_show1)
                                 # ax7.imshow(dictionary_img_show, cmap=self.cmap, vmin=0, vmax=self.max_label, alpha=0.4)
@@ -444,11 +435,9 @@ class Trainer(object):
                                 ax8.imshow(dictionary_baseline_feats_show2, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
                                 ax9.imshow(dictionary_feats_show2, cmap=self.cmap, vmin=0, vmax=self.max_label)
-                                
-                                
 
                                 if config['visualization']['log_scatters']:
-                                    from matplotlib.colors import Normalize 
+                                    from matplotlib.colors import Normalize
                                     ax10.scatter(image_tsne_feats[:, 0], image_tsne_feats[:, 1],
                                                 c=image_scatter_dict,
                                                 s=15.5,
@@ -457,7 +446,7 @@ class Trainer(object):
                                                 marker='.',
                                                 linewidths=0.8
                                                 )
-                        
+
                                     ax11.scatter(resnet_tsne_feats[:, 0], resnet_tsne_feats[:, 1],
                                                     c=resnet_scatter_dict,
                                                     s=15.5,
@@ -496,11 +485,11 @@ class Trainer(object):
                                 # ax13.axis('off')
                                 # ax14.axis('off')
                                 # ax15.axis('off')
-                                ax10.tick_params(axis="y", direction="in", pad=-25)#, reset=True)
+                                ax10.tick_params(axis="y", direction="in", pad=-25)  # , reset=True)
                                 ax10.tick_params(axis="x", direction="in", pad=-15)
-                                ax11.tick_params(axis="y", direction="in", pad=-25)#, reset=True)
+                                ax11.tick_params(axis="y", direction="in", pad=-25)  # , reset=True)
                                 ax11.tick_params(axis="x", direction="in", pad=-15)
-                                ax12.tick_params(axis="y", direction="in", pad=-25)#, reset=True)
+                                ax12.tick_params(axis="y", direction="in", pad=-25)  # , reset=True)
                                 ax12.tick_params(axis="x", direction="in", pad=-15)
 
                                 if config['visualization']['titles']:
@@ -521,7 +510,7 @@ class Trainer(object):
 
                                 if config['visualization']['val_imshow']:
                                     plt.show()
-                                
+
                                 if (config['visualization']['save_individual_plots'] or save_individual_plots_specific):
 
                                     # plots_path_save = f"{config['visualization']['save_individual_plots_path']}"
@@ -567,7 +556,7 @@ class Trainer(object):
                                         utils.create_dir_if_doesnt_exist(root)
                                         file_path = f"{root}/{image_name}_{str(b)}.png"
                                         # extent = ax.get_window_extent().transformed(figure.dpi_scale_trans.inverted())
-                                        extent = ax.get_tightbbox(figure.canvas.get_renderer()).transformed(figure.dpi_scale_trans.inverted()).padded(2/72)
+                                        extent = ax.get_tightbbox(figure.canvas.get_renderer()).transformed(figure.dpi_scale_trans.inverted()).padded(2 / 72)
                                         figure.savefig(file_path, bbox_inches=extent)
 
                                 cometml_experiemnt.log_figure(figure_name=f"Validation, Image name: {image_name}", figure=figure)
@@ -605,13 +594,12 @@ class Trainer(object):
         overall_miou = mean_iou.mean()
         classwise_f1_score = 2 * (precision * recall) / (precision + recall)
         mean_f1_score = classwise_f1_score.mean()
-        
 
         # print("Validation Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/loader.__len__()))
-        cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation precision", mean_precision, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation recall", mean_recall, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation mean f1_score", mean_f1_score, epoch=epoch+1)
+        cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Validation precision", mean_precision, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Validation recall", mean_recall, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Validation mean f1_score", mean_f1_score, epoch=epoch + 1)
         print({f"Recall class {str(x)}": recall[x] for x in range(len(recall))})
         print({f"Precision class {str(x)}": precision[x] for x in range(len(precision))})
         print({f"F1 class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))})
@@ -620,22 +608,22 @@ class Trainer(object):
         # cometml_experiemnt.log_metrics({f"Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
         # cometml_experiemnt.log_metrics({f"F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
 
-        cometml_experiemnt.log_metrics({f"L1 Training Recall class {str(x)}": l1_recall[x] for x in range(len(l1_recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L1 Training Precision class {str(x)}": l1_precision[x] for x in range(len(l1_precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L1 Training F1_score class {str(x)}": l1_f1[x] for x in range(len(l1_f1))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"L1 Training Recall class {str(x)}": l1_recall[x] for x in range(len(l1_recall))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L1 Training Precision class {str(x)}": l1_precision[x] for x in range(len(l1_precision))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L1 Training F1_score class {str(x)}": l1_f1[x] for x in range(len(l1_f1))}, epoch=epoch + 1)
 
-        cometml_experiemnt.log_metrics({f"L2 Training Recall class {str(x)}": l2_recall[x] for x in range(len(l2_recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L2 Training Precision class {str(x)}": l2_precision[x] for x in range(len(l2_precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L2 Training F1_score class {str(x)}": l2_f1[x] for x in range(len(l2_f1))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"L2 Training Recall class {str(x)}": l2_recall[x] for x in range(len(l2_recall))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L2 Training Precision class {str(x)}": l2_precision[x] for x in range(len(l2_precision))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L2 Training F1_score class {str(x)}": l2_f1[x] for x in range(len(l2_f1))}, epoch=epoch + 1)
 
-        cometml_experiemnt.log_metrics({f"Histogram Distance Training Recall class {str(x)}": hist_recall[x] for x in range(len(hist_recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Histogram Distance Training Precision class {str(x)}": hist_precision[x] for x in range(len(hist_precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Histogram Distance Training F1_score class {str(x)}": hist_f1[x] for x in range(len(hist_f1))}, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation Average Loss", total_loss/loader.__len__(), epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"Histogram Distance Training Recall class {str(x)}": hist_recall[x] for x in range(len(hist_recall))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"Histogram Distance Training Precision class {str(x)}": hist_precision[x] for x in range(len(hist_precision))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"Histogram Distance Training F1_score class {str(x)}": hist_f1[x] for x in range(len(hist_f1))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Validation Average Loss", total_loss / loader.__len__(), epoch=epoch + 1)
 
-        return total_loss/loader.__len__(), classwise_f1_score
+        return total_loss / loader.__len__(), classwise_f1_score
 
-    def forward(self, cometml_experiment: object, world_size: int =8) -> tuple:
+    def forward(self, cometml_experiment: object, world_size: int = 8) -> tuple:
         """forward pass for all epochs
 
         Args:
@@ -646,7 +634,7 @@ class Trainer(object):
             tuple: (train losses, validation losses, mIoU)
         """
         train_losses, val_losses = [], []
-        mean_ious_val,mean_ious_val_list,count_metrics_list = [], [], []
+        mean_ious_val, mean_ious_val_list, count_metrics_list = [], [], []
 
         model_save_dir = config['data'][config['location']]['model_save_dir'] + f"{current_path[-1]}_{config['dataset']}/{cometml_experiment.project_name}_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}/"
         utils.create_dir_if_doesnt_exist(model_save_dir)
@@ -714,7 +702,6 @@ if __name__ == "__main__":
     dset = kwcoco.CocoDataset(coco_fpath)
     sampler = ndsampler.CocoSampler(dset)
 
-
     if config['training']['resume'] != False:
         base_path = '/'.join(config['training']['resume'].split('/')[:-1])
         pretrain_config_path = f"{base_path}/config.yaml"
@@ -727,7 +714,6 @@ if __name__ == "__main__":
         # config['training']['model_feats_channels'] = pretrain_config_path['training']['model_feats_channels']
         # config['data']['num_classes'] = pretrain_config['data']['num_classes']
         config['training']['model_feats_channels'] = pretrain_config['training']['model_feats_channels']
-
 
     # window_dims = (config['data']['time_steps'], config['data']['image_size'], config['data']['image_size'])  # [t,h,w]
     # input_dims = (config['data']['image_size'], config['data']['image_size'])
@@ -764,29 +750,27 @@ if __name__ == "__main__":
         test_dataset = SequenceDataset(test_sampler, window_dims, input_dims, channels)
         test_dataloader = test_dataset.make_loader(batch_size=config['evaluation']['batch_size'])
     else:
-        train_dataloader = build_dataset(dataset_name=config['data']['name'], 
-                                        root=config['data'][config['location']]['train_dir'], 
+        train_dataloader = build_dataset(dataset_name=config['data']['name'],
+                                        root=config['data'][config['location']]['train_dir'],
                                         batch_size=config['training']['batch_size'],
-                                        num_workers=config['training']['num_workers'], 
+                                        num_workers=config['training']['num_workers'],
                                         split='train',
                                         crop_size=config['data']['image_size'],
                                         channels=config['data']['channels'],
                                         )
-        
+
         channels = config['data']['channels']
         num_channels = len(channels.split('|'))
         config['training']['num_channels'] = num_channels
         window_dims = (config['data']['time_steps'], config['data']['image_size'], config['data']['image_size'])  # [t,h,w]
         input_dims = (config['data']['image_size'], config['data']['image_size'])
 
-        
         test_coco_fpath = ub.expandpath(config['data'][config['location']]['test_coco_json'])
         test_dset = kwcoco.CocoDataset(test_coco_fpath)
         test_sampler = ndsampler.CocoSampler(test_dset)
 
         test_dataset = SequenceDataset(test_sampler, window_dims, input_dims, channels)
         test_dataloader = test_dataset.make_loader(batch_size=config['evaluation']['batch_size'])
-                
 
     ours_path = "/home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_trainWin_7_modelName_resnet_enc_2021-10-19-21:07/experiments_epoch_5_loss_2.1330662268512652_valmF1_0.6782787764504841_valChangeF1_0.47969179367601383_time_2021-10-20-03:39:36.pth"
     # ours_path = "/home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_trainWin_11_modelName_resnet_enc_2021-11-06-09:43/experiments_epoch_7_loss_12.406291961669922_valmF1_0.6657271284686177_valChangeF1_0.46656415450485705_time_2021-11-06-19:08:36.pth"
@@ -836,12 +820,11 @@ if __name__ == "__main__":
 
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, len(train_dataloader),
                                                      eta_min=config['training']['learning_rate'])
-    
+
     ours_checkpoint = torch.load(ours_path)
     resnet_checkpoint = torch.load(resnet_path)
-    ours_model.load_state_dict(ours_checkpoint['model'], strict= False)
+    ours_model.load_state_dict(ours_checkpoint['model'], strict=False)
     # resnet_model.load_state_dict(resnet_checkpoint['model'], strict= False)
-
 
     trainer = Trainer(ours_model,
                       resnet_model,

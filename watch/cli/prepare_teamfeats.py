@@ -408,6 +408,7 @@ def _populate_teamfeat_queue(queue, base_fpath, dvc_dpath, aligned_bundle_dpath,
 
     return queue
 
+
 main = prep_feats
 
 if __name__ == '__main__':

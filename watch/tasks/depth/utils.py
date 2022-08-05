@@ -129,7 +129,6 @@ def process_image_chunked(image,
                           output_dtype=np.uint8,
                           verbose=1,
                           sliding_window_method='kwarray'):
-
     """
     Args:
         chip_size : must be less than half of the overlap

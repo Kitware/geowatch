@@ -72,9 +72,9 @@ class SYSUCDDataset(object):
         self.images2_root = f"{self.root}/{split}/time2/"
         self.masks_root = f"{self.root}/{split}/label/"
         self.masks_paths = utils.dictionary_contents(path=self.masks_root, types=['*.png'])
-    
+
     def __getitem__(self, idx):
-        negative_idx = random.choice([i for i in range(0, self.__len__()) if i!=idx])
+        negative_idx = random.choice([i for i in range(0, self.__len__()) if i != idx])
 
         mask_path = self.masks_paths[idx]
         negative_image_name = self.masks_paths[negative_idx].split('/')[-1].split('.')[0]
@@ -99,8 +99,8 @@ class SYSUCDDataset(object):
         new_mask = FT.to_tensor(mask)
 
         outputs = {}
-        outputs['visuals'] = {'image1': new_image1, 'image2':new_image2, 'mask': new_mask, 'image_name': image_name}
-        outputs['inputs'] = {'image1': new_image1, 'image2':new_image2, 'negative_image': new_negative_image ,'mask': new_mask}
+        outputs['visuals'] = {'image1': new_image1, 'image2': new_image2, 'mask': new_mask, 'image_name': image_name}
+        outputs['inputs'] = {'image1': new_image1, 'image2': new_image2, 'negative_image': new_negative_image , 'mask': new_mask}
 
         return outputs
 

@@ -99,7 +99,7 @@ def _get_to_padded_index(poly_slice, node_count, padding):
     assert len(poly_slice.shape) == 2, "poly_slice should have shape (poly_count, 2), not {}".format(poly_slice.shape)
     poly_count = poly_slice.shape[0]
     range_tensor = torch.arange(node_count, device=poly_slice.device)
-    to_padded_index = torch.empty((node_count + (padding[0] + padding[1])*poly_count, ), dtype=torch.long, device=poly_slice.device)
+    to_padded_index = torch.empty((node_count + (padding[0] + padding[1]) * poly_count, ), dtype=torch.long, device=poly_slice.device)
     to_unpadded_poly_slice = torch.empty_like(poly_slice)
     start = 0
     for poly_i in range(poly_count):

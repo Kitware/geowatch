@@ -7,4 +7,4 @@ This must be run from the repo directory.
 Requirements:
     -r ./requirements/linting.txt
 "
-python dev/lint.py watch --mode=lint
+WATCH_LINT_DEFAULT_MODE=lint WATCH_LINT_DEFAULT_DPATH=watch python dev/lint.py "$@"

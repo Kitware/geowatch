@@ -158,6 +158,7 @@ class ICTNetBackbone(nn.Module):
     """
     ICTNet model: https://theictlab.org/lp/2019ICTNet.
     """
+
     def __init__(self, preset_model='FC-DenseNet56', in_channels=3, out_channels=2, n_filters_first_conv=48, n_pool=5, growth_rate=12, n_layers_per_block=4, dropout_2d=0.2, efficient=False):
         super().__init__()
 

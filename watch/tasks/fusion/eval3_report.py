@@ -728,7 +728,7 @@ def plot_pixel_ap_verus_auc(merged_df, human_mapping, iarpa_metric_lut, pixel_me
         ax = humanized_scatterplot(human_mapping, data=group, ax=ax, **plotkw)
         nice_type = human_mapping.get(type, type)
         ax.set_title(f'Pixelwise metrics - {nice_type} - {dataset_code}\n{corr_lbl}')
-        fig.set_size_inches(16.85,  8.82)
+        fig.set_size_inches(16.85, 8.82)
         fname = f'{dataset_code}_{type}_{plot_name}.png'
         fpath = plot_dpath / fname
         fig.savefig(fpath)
@@ -921,7 +921,7 @@ def plot_viterbii_analysis(merged_df, human_mapping, iarpa_metric_lut, pixel_met
     pts1 = []
     pts2 = []
     for obs in scored_obs:
-        ab_row = obs.melt(['trk_use_viterbi']).pivot(['variable'], ['trk_use_viterbi'],  'value').reset_index(drop=True)
+        ab_row = obs.melt(['trk_use_viterbi']).pivot(['variable'], ['trk_use_viterbi'], 'value').reset_index(drop=True)
         if (~ab_row.isnull()).values.sum() > 1:
 
             # hack

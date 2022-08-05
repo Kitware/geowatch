@@ -66,9 +66,9 @@ def _dvc_registry_list():
     """
     # Hard coded fallback candidate DVC paths
     hardcoded_paths = [
-        {'path': ub.Path('/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc'),  'name': 'namek', 'hardware': 'hdd'},
-        {'path': ub.Path('/media/joncrall/raid/dvc-repos/smart_watch_dvc'),  'name': 'ooo', 'hardware': 'hdd'},
-        {'path': ub.Path("/media/native/data/data/smart_watch_dvc"),  'name': 'rutgers', 'hardware': None},
+        {'path': ub.Path('/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc'), 'name': 'namek', 'hardware': 'hdd'},
+        {'path': ub.Path('/media/joncrall/raid/dvc-repos/smart_watch_dvc'), 'name': 'ooo', 'hardware': 'hdd'},
+        {'path': ub.Path("/media/native/data/data/smart_watch_dvc"), 'name': 'rutgers', 'hardware': None},
         {'path': ub.Path("/localdisk0/SCRATCH/watch/ben/smart_watch_dvc"), 'name': 'uky', 'hardware': None},
         {'path': ub.Path("/data4/datasets/smart_watch_dvc/").expand(), 'name': 'purri', 'hardware': None},
 

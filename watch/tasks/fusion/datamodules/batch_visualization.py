@@ -512,7 +512,7 @@ class BatchVisualizationBuilder:
             vertical_stack.append(pred_part)
 
         key = 'saliency_probs'
-        if item_output and  key in item_output and builder.requested_tasks['saliency']:
+        if item_output and key in item_output and builder.requested_tasks['saliency']:
             if builder.overlay_on_image:
                 norm_signal = chan_rows[0]['norm_signal']
             else:
@@ -536,7 +536,7 @@ class BatchVisualizationBuilder:
 
         key = 'change_probs'
         overlay_index = 1
-        if item_output and  key in item_output and builder.requested_tasks['change']:
+        if item_output and key in item_output and builder.requested_tasks['change']:
             # Make a probability heatmap we can either display
             # independently or overlay on a rendered channel
             if frame_idx == 0:

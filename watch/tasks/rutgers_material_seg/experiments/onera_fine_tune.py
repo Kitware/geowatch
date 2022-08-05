@@ -91,7 +91,7 @@ class Trainer(object):
         self.kmeans = KMeans(n_clusters=self.k, mode='euclidean', verbose=0, minibatch=None)
         self.max_label = 5
         self.all_crops_params = [tuple([i, j, config['data']['window_size'], config['data']['window_size']]) for i in range(config['data']['window_size'], config['data']
-                                                                                                                            ['image_size']-config['data']['window_size']) for j in range(config['data']['window_size'], config['data']['image_size']-config['data']['window_size'])]
+                                                                                                                            ['image_size'] - config['data']['window_size']) for j in range(config['data']['window_size'], config['data']['image_size'] - config['data']['window_size'])]
         self.inference_all_crops_params = [tuple([i, j, config['evaluation']['inference_window'], config['evaluation']['inference_window']]) for i in range(0, config['data']['image_size']) for j in range(0, config['data']['image_size'])]
         self.all_crops_params_np = np.array(self.all_crops_params)
         self.change_threshold = 0.2
@@ -161,7 +161,7 @@ class Trainer(object):
 
         filtered_features = (features > features_max).type_as(features)
         filtered_features = filtered_features.view(
-            bs, c, h, w)*features.view(bs, c, h, w)
+            bs, c, h, w) * features.view(bs, c, h, w)
         return filtered_features
 
     def train(self, epoch: int, cometml_experiemnt: object) -> float:
@@ -206,7 +206,7 @@ class Trainer(object):
             mask1 = mask[:, 0, :, :]
             mask1[mask1 == -1] = 0
 
-            class_to_show = max(0, torch.unique(mask)[-1]-1)
+            class_to_show = max(0, torch.unique(mask)[-1] - 1)
             image1 = image1.to(device)
             image2 = image2.to(device)
             mask1 = mask1.to(device)
@@ -214,15 +214,15 @@ class Trainer(object):
             image1 = utils.stad_image(image1)
             image2 = utils.stad_image(image2)
 
-            # image1 = F.normalize(image1, dim=1, p=1) 
-            # image2 = F.normalize(image2, dim=1, p=1) 
+            # image1 = F.normalize(image1, dim=1, p=1)
+            # image2 = F.normalize(image2, dim=1, p=1)
 
             if config['training']['model_single_input']:
                 output1, features1 = self.model(image1)  # [B,22,150,150]
                 output2, features2 = self.model(image2)
 
                 outputs_positive = torch.cat([output1, output2], dim=1)
-                loss = 50*F.cross_entropy(outputs_positive,
+                loss = 50 * F.cross_entropy(outputs_positive,
                                         mask1,
                                         # weight=torch.Tensor((0.1,1.15)).float().cuda(),
                                         ignore_index=-100,
@@ -233,12 +233,11 @@ class Trainer(object):
                 else:
                     images = torch.cat([image1, image2], dim=1)
                     output = self.model(images)
-                loss = 50*F.cross_entropy(output,
+                loss = 50 * F.cross_entropy(output,
                                       mask1,
                                       weight=self.class_weights,
                                     #   ignore_index=0,
                                       reduction="mean")
-
 
             start = time.time()
             self.optimizer.zero_grad()
@@ -249,27 +248,26 @@ class Trainer(object):
             backprop_time = time.time() - start
 
             if config['training']['model_single_input']:
-                output = torch.sqrt(torch.pow(output1 - output2, 2))#.view(bs,h,w)
+                output = torch.sqrt(torch.pow(output1 - output2, 2))  # .view(bs,h,w)
                 output = FT.gaussian_blur(output, kernel_size=config['evaluation']['inference_window'])
                 masks = F.softmax(output, dim=1)
-
 
                 inference_otsu_coeff = 1.0
                 hist_inference_otsu_coeff = 1.0
 
                 # l1 region-wise inference raw features
-                l1_patched_diff_change_features = torch.abs((output1 - output2).sum(axis=1))#.view(bs,h,w)
+                l1_patched_diff_change_features = torch.abs((output1 - output2).sum(axis=1))  # .view(bs,h,w)
                 l1_patched_diff_change_features = FT.gaussian_blur(l1_patched_diff_change_features, kernel_size=config['evaluation']['inference_window'])
                 l1_dist_change_feats_pred = torch.zeros_like(l1_patched_diff_change_features)
-                l1_inference_otsu_threshold = inference_otsu_coeff*otsu(l1_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
+                l1_inference_otsu_threshold = inference_otsu_coeff * otsu(l1_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
                 l1_dist_change_feats_pred[l1_patched_diff_change_features > l1_inference_otsu_threshold] = 1
                 l1_dist_change_feats_pred = l1_dist_change_feats_pred.cpu().detach().type(torch.uint8)
 
                 # # l2 region-wise inference raw features
-                l2_patched_diff_change_features = torch.sqrt(torch.pow(output1 - output2, 2).sum(axis=1))#.view(bs,h,w)
+                l2_patched_diff_change_features = torch.sqrt(torch.pow(output1 - output2, 2).sum(axis=1))  # .view(bs,h,w)
                 l2_patched_diff_change_features = FT.gaussian_blur(l2_patched_diff_change_features, kernel_size=config['evaluation']['inference_window'])
                 l2_dist_change_feats_pred = torch.zeros_like(l2_patched_diff_change_features)
-                l2_inference_otsu_threshold = inference_otsu_coeff*otsu(l2_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
+                l2_inference_otsu_threshold = inference_otsu_coeff * otsu(l2_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
                 l2_dist_change_feats_pred[l2_patched_diff_change_features > l2_inference_otsu_threshold] = 1
                 l2_dist_change_feats_pred = l2_dist_change_feats_pred.cpu().detach().type(torch.uint8)
 
@@ -283,7 +281,6 @@ class Trainer(object):
                 # pred2 = masks2.max(1)[1].cpu().detach()  # .numpy()
                 # change_detection_prediction = l2_dist_change_feats_pred
 
-                
                 # histogram_distance.append(histc_int_change_feats_pred)
                 l1_dist.append(l1_dist_change_feats_pred)
                 l2_dist.append(l2_dist_change_feats_pred)
@@ -327,7 +324,7 @@ class Trainer(object):
 
                         image_show1 = (image_show1 - image_show1.min()) / (image_show1.max() - image_show1.min())
                         image_show2 = (image_show2 - image_show2.min()) / (image_show2.max() - image_show2.min())
-                        negative_image1_show = (negative_image1_show - negative_image1_show.min())/(negative_image1_show.max() - negative_image1_show.min())
+                        negative_image1_show = (negative_image1_show - negative_image1_show.min()) / (negative_image1_show.max() - negative_image1_show.min())
                         gt_mask_show1 = mask1.cpu().detach()[batch_index_to_show, :, :].numpy().squeeze()
 
                         # histograms_intersection_show = (histograms_intersection_show - histograms_intersection_show.min())/(histograms_intersection_show.max() - histograms_intersection_show.min())
@@ -336,8 +333,7 @@ class Trainer(object):
                         # pred2_show = masks2.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
 
                         # histc_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*histc_int_change_feats_pred_show)
-                        pred1_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*pred1_show)
-
+                        pred1_fp_tp_fn_prediction_mask = gt_mask_show1 + (2 * pred1_show)
 
                         classes_in_gt = np.unique(gt_mask_show1)
                         ax1.imshow(image_show1)
@@ -359,20 +355,19 @@ class Trainer(object):
                             l2_patched_diff_change_features_show = l2_patched_diff_change_features.cpu().detach().numpy()[batch_index_to_show, :, :]
                             # histograms_intersection_show = histograms_intersection_features.cpu().detach().numpy()[batch_index_to_show, :, :]
 
-                            l1_patched_diff_change_features_show = (l1_patched_diff_change_features_show - l1_patched_diff_change_features_show.min())/(l1_patched_diff_change_features_show.max() - l1_patched_diff_change_features_show.min())
-                            l2_patched_diff_change_features_show = (l2_patched_diff_change_features_show - l2_patched_diff_change_features_show.min())/(l2_patched_diff_change_features_show.max() - l2_patched_diff_change_features_show.min())
-                            l1_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*l1_dist_change_feats_pred_show)
-                            l2_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*l2_dist_change_feats_pred_show)
+                            l1_patched_diff_change_features_show = (l1_patched_diff_change_features_show - l1_patched_diff_change_features_show.min()) / (l1_patched_diff_change_features_show.max() - l1_patched_diff_change_features_show.min())
+                            l2_patched_diff_change_features_show = (l2_patched_diff_change_features_show - l2_patched_diff_change_features_show.min()) / (l2_patched_diff_change_features_show.max() - l2_patched_diff_change_features_show.min())
+                            l1_fp_tp_fn_prediction_mask = gt_mask_show1 + (2 * l1_dist_change_feats_pred_show)
+                            l2_fp_tp_fn_prediction_mask = gt_mask_show1 + (2 * l2_dist_change_feats_pred_show)
                             ax5.imshow(l1_patched_diff_change_features_show)
 
                             ax6.imshow(l2_patched_diff_change_features_show)
-
 
                             ax7.imshow(l1_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
                             ax8.imshow(l2_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label)
                         else:
-                            masks_show = masks.cpu().detach().numpy()[batch_index_to_show,1,:,:]
+                            masks_show = masks.cpu().detach().numpy()[batch_index_to_show, 1, :, :]
                             ax5.imshow(masks_show)
 
                         ax9.imshow(pred1_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label)
@@ -426,7 +421,7 @@ class Trainer(object):
             #     f"(timing, secs) crop_collection: {crop_collection_time:0.3f}, run_network: {run_network_time:0.3f}, clustering: {clustering_time:0.3f}, backprob: {backprop_time:0.3f}, log: {logging_time:0.3f}")
 
         mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=2)
-        
+
         hist_mean_iou, hist_precision, hist_recall = eval_utils.compute_jaccard(histogram_distance, targets, num_classes=2)
         l1_mean_iou, l1_precision, l1_recall = eval_utils.compute_jaccard(l1_dist, targets, num_classes=2)
         l2_mean_iou, l2_precision, l2_recall = eval_utils.compute_jaccard(l2_dist, targets, num_classes=2)
@@ -459,30 +454,30 @@ class Trainer(object):
         # print(f"Training class-wise Recall value: \n{recall} \noverall Recall: {mean_recall}")
         # print(f"Training overall F1 Score: {mean_f1_score}")
 
-        cometml_experiemnt.log_metric("Training Loss", total_loss, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Segmentation Loss", total_loss_seg, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Training mIoU", overall_miou, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Training mean_f1_score", mean_f1_score, epoch=epoch+1)
+        cometml_experiemnt.log_metric("Training Loss", total_loss, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Segmentation Loss", total_loss_seg, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Training mIoU", overall_miou, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Training mean_f1_score", mean_f1_score, epoch=epoch + 1)
 
         # cometml_experiemnt.log_metrics({f"Training Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch+1)
         # cometml_experiemnt.log_metrics({f"Training Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
         # cometml_experiemnt.log_metrics({f"Training F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
 
-        cometml_experiemnt.log_metrics({f"L1 Training Recall class {str(x)}": l1_recall[x] for x in range(len(l1_recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L1 Training Precision class {str(x)}": l1_precision[x] for x in range(len(l1_precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L1 Training F1_score class {str(x)}": l1_f1[x] for x in range(len(l1_f1))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"L1 Training Recall class {str(x)}": l1_recall[x] for x in range(len(l1_recall))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L1 Training Precision class {str(x)}": l1_precision[x] for x in range(len(l1_precision))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L1 Training F1_score class {str(x)}": l1_f1[x] for x in range(len(l1_f1))}, epoch=epoch + 1)
 
-        cometml_experiemnt.log_metrics({f"L2 Training Recall class {str(x)}": l2_recall[x] for x in range(len(l2_recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L2 Training Precision class {str(x)}": l2_precision[x] for x in range(len(l2_precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L2 Training F1_score class {str(x)}": l2_f1[x] for x in range(len(l2_f1))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"L2 Training Recall class {str(x)}": l2_recall[x] for x in range(len(l2_recall))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L2 Training Precision class {str(x)}": l2_precision[x] for x in range(len(l2_precision))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L2 Training F1_score class {str(x)}": l2_f1[x] for x in range(len(l2_f1))}, epoch=epoch + 1)
 
-        cometml_experiemnt.log_metrics({f"Concat Training Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Concat Training Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Concat Training F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"Concat Training Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"Concat Training Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"Concat Training F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch + 1)
 
-        print("Training Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/self.train_loader.__len__()))
+        print("Training Epoch {0:2d} average loss: {1:1.2f}".format(epoch + 1, total_loss / self.train_loader.__len__()))
 
-        return total_loss/self.train_loader.__len__()
+        return total_loss / self.train_loader.__len__()
 
     def validate(self, epoch: int, cometml_experiemnt: object, save_individual_plots_specific: bool = False) -> tuple:
         """validating single epoch
@@ -516,7 +511,6 @@ class Trainer(object):
                 outputs = batch
                 images, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
                 # original_width, original_height = outputs['tr'].data[0][batch_index_to_show]['space_dims']
-                
 
                 mask = torch.stack(mask)
                 mask = mask.long().squeeze(1)
@@ -534,8 +528,8 @@ class Trainer(object):
 
                 image1 = utils.stad_image(image1_raw)
                 image2 = utils.stad_image(image2_raw)
-                # image1 = F.normalize(image1, dim=1, p=1) 
-                # image2 = F.normalize(image2, dim=1, p=1) 
+                # image1 = F.normalize(image1, dim=1, p=1)
+                # image2 = F.normalize(image2, dim=1, p=1)
 
                 if config['training']['model_single_input']:
                     output1, features1 = self.model(image1)  # [B,22,150,150]
@@ -545,7 +539,7 @@ class Trainer(object):
                     masks1 = F.softmax(output1, dim=1)  # .detach()
                     masks2 = F.softmax(output2, dim=1)  # .detach()
 
-                    output = torch.sqrt(torch.pow(output1 - output2, 2))#.view(bs,h,w)
+                    output = torch.sqrt(torch.pow(output1 - output2, 2))  # .view(bs,h,w)
                     output = FT.gaussian_blur(output, kernel_size=config['evaluation']['inference_window'])
                     masks = F.softmax(output, dim=1)
 
@@ -553,18 +547,18 @@ class Trainer(object):
                     inference_otsu_coeff = 1.0
 
                     # l1 region-wise inference raw features
-                    l1_patched_diff_change_features = torch.abs((output1 - output2).sum(axis=1))#.view(bs,h,w)
+                    l1_patched_diff_change_features = torch.abs((output1 - output2).sum(axis=1))  # .view(bs,h,w)
                     l1_patched_diff_change_features = FT.gaussian_blur(l1_patched_diff_change_features, kernel_size=config['evaluation']['inference_window'])
                     l1_dist_change_feats_pred = torch.zeros_like(l1_patched_diff_change_features)
-                    l1_inference_otsu_threshold = inference_otsu_coeff*otsu(l1_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
+                    l1_inference_otsu_threshold = inference_otsu_coeff * otsu(l1_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
                     l1_dist_change_feats_pred[l1_patched_diff_change_features > l1_inference_otsu_threshold] = 1
                     l1_dist_change_feats_pred = l1_dist_change_feats_pred.cpu().detach().type(torch.uint8)
 
                     # l2 region-wise inference raw features
-                    l2_patched_diff_change_features = torch.sqrt(torch.pow(output1 - output2, 2).sum(axis=1))#.view(bs,h,w)
+                    l2_patched_diff_change_features = torch.sqrt(torch.pow(output1 - output2, 2).sum(axis=1))  # .view(bs,h,w)
                     l2_patched_diff_change_features = FT.gaussian_blur(l2_patched_diff_change_features, kernel_size=config['evaluation']['inference_window'])
                     l2_dist_change_feats_pred = torch.zeros_like(l2_patched_diff_change_features)
-                    l2_inference_otsu_threshold = inference_otsu_coeff*otsu(l2_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
+                    l2_inference_otsu_threshold = inference_otsu_coeff * otsu(l2_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
                     l2_dist_change_feats_pred[l2_patched_diff_change_features > l2_inference_otsu_threshold] = 1
                     l2_dist_change_feats_pred = l2_dist_change_feats_pred.cpu().detach().type(torch.uint8)
 
@@ -639,20 +633,18 @@ class Trainer(object):
                                 image_show2 = np.transpose(image2.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, :3]
                                 image_show2 = np.flip(image_show2, axis=2)
 
-
                                 image_show1 = (image_show1 - image_show1.min()) / (image_show1.max() - image_show1.min())
                                 image_show2 = (image_show2 - image_show2.min()) / (image_show2.max() - image_show2.min())
                                 gt_mask_show1 = mask1.cpu().detach()[batch_index_to_show, :, :].numpy().squeeze()
 
-
-                                masks_show = masks.cpu().detach().numpy()[batch_index_to_show,1,:,:]
+                                masks_show = masks.cpu().detach().numpy()[batch_index_to_show, 1, :, :]
                                 # masks_refined1_show = masks_refined1.cpu().detach().numpy()[batch_index_to_show,1,:,:]
                                 # masks_refined2_show = masks_refined2.cpu().detach().numpy()[batch_index_to_show,1,:,:]
                                 pred1_show = masks.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
                                 # pred_refined1_show = masks_refined1.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
                                 # pred_refined2_show = masks_refined2.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
 
-                                pred_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*pred1_show)
+                                pred_fp_tp_fn_prediction_mask = gt_mask_show1 + (2 * pred1_show)
                                 # pred_refined1_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*pred_refined1_show)
                                 # pred_refined2_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*pred_refined2_show)
 
@@ -678,7 +670,6 @@ class Trainer(object):
                                 # ax8.imshow(pred_refined2_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label, alpha=config['visualization']['fg_alpha'])
 
                                 ax9.imshow(pred_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label, alpha=config['visualization']['fg_alpha'])
-
 
                                 ax1.axis('off')
                                 ax2.axis('off')
@@ -706,7 +697,7 @@ class Trainer(object):
                                 figure.tight_layout()
                                 if config['visualization']['val_imshow']:
                                     plt.show()
-                                
+
                                 if (config['visualization']['save_individual_plots'] or save_individual_plots_specific):
 
                                     plots_path_save = f"{config['visualization']['save_individual_plots_path']}"
@@ -771,10 +762,10 @@ class Trainer(object):
         mean_f1_score = classwise_f1_score.mean()
 
         # print("Validation Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/loader.__len__()))
-        cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation precision", mean_precision, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation recall", mean_recall, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation mean f1_score", mean_f1_score, epoch=epoch+1)
+        cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Validation precision", mean_precision, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Validation recall", mean_recall, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Validation mean f1_score", mean_f1_score, epoch=epoch + 1)
         print({f"Recall class {str(x)}": recall[x] for x in range(len(recall))})
         print({f"Precision class {str(x)}": precision[x] for x in range(len(precision))})
         print({f"F1 class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))})
@@ -783,21 +774,21 @@ class Trainer(object):
         # cometml_experiemnt.log_metrics({f"Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
         # cometml_experiemnt.log_metrics({f"F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
 
-        cometml_experiemnt.log_metrics({f"L1 Validation Recall class {str(x)}": l1_recall[x] for x in range(len(l1_recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L1 Validation Precision class {str(x)}": l1_precision[x] for x in range(len(l1_precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L1 Validation F1_score class {str(x)}": l1_f1[x] for x in range(len(l1_f1))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"L1 Validation Recall class {str(x)}": l1_recall[x] for x in range(len(l1_recall))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L1 Validation Precision class {str(x)}": l1_precision[x] for x in range(len(l1_precision))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L1 Validation F1_score class {str(x)}": l1_f1[x] for x in range(len(l1_f1))}, epoch=epoch + 1)
 
-        cometml_experiemnt.log_metrics({f"L2 Validation Recall class {str(x)}": l2_recall[x] for x in range(len(l2_recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L2 Validation Precision class {str(x)}": l2_precision[x] for x in range(len(l2_precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L2 Validation F1_score class {str(x)}": l2_f1[x] for x in range(len(l2_f1))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"L2 Validation Recall class {str(x)}": l2_recall[x] for x in range(len(l2_recall))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L2 Validation Precision class {str(x)}": l2_precision[x] for x in range(len(l2_precision))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L2 Validation F1_score class {str(x)}": l2_f1[x] for x in range(len(l2_f1))}, epoch=epoch + 1)
 
-        cometml_experiemnt.log_metrics({f"Concat Validation Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Concat Validation Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Concat Validation F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"Concat Validation Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"Concat Validation Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"Concat Validation F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch + 1)
 
-        cometml_experiemnt.log_metric("Validation Average Loss", total_loss/loader.__len__(), epoch=epoch+1)
+        cometml_experiemnt.log_metric("Validation Average Loss", total_loss / loader.__len__(), epoch=epoch + 1)
 
-        return total_loss/loader.__len__(), classwise_f1_score
+        return total_loss / loader.__len__(), classwise_f1_score
 
     def forward(self, cometml_experiment: object, world_size: int = 8) -> tuple:
         """forward pass for all epochs
@@ -831,8 +822,6 @@ class Trainer(object):
                     val_change_f1 = val_cw_f1[1]
             self.scheduler.step()
 
-            
-
             if (train_loss <= best_train_loss) or (val_mean_f1 >= best_val_mean_f1) or (val_change_f1 >= best_val_change_f1):
 
                 if train_loss <= best_train_loss:
@@ -848,7 +837,7 @@ class Trainer(object):
                     config['val_change_f1'] = str(val_change_f1)
                     config['val_mean_f1'] = str(val_mean_f1)
                     config['train_loss'] = str(train_loss)
-                    with open(model_save_dir+"config.yaml", 'w') as file:
+                    with open(model_save_dir + "config.yaml", 'w') as file:
                         yaml.dump(config, file)
 
                     torch.save({'epoch': epoch,
@@ -856,7 +845,7 @@ class Trainer(object):
                                 'optimizer': self.optimizer.state_dict(),
                                 'scheduler': self.scheduler.state_dict(),
                                 'loss': train_loss},
-                               model_save_dir+model_save_name)
+                               model_save_dir + model_save_name)
                 else:
                     exit()
                 if config['visualization']['save_individual_plots']:
@@ -882,7 +871,6 @@ if __name__ == "__main__":
     config['start_time'] = datetime.datetime.today().strftime(
         '%Y-%m-%d-%H:%M:%S')
 
-
     # _{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}"
     project_name = f"{current_path[-3]}_{current_path[-1]}_{config['dataset']}"
     experiment_name = f"attention_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}"
@@ -892,7 +880,7 @@ if __name__ == "__main__":
                                      display_summary_level=0)
 
     config['experiment_url'] = str(experiment.url)
-    
+
     experiment.set_name(experiment_name)
 
     torch.manual_seed(config['seed'])
@@ -932,7 +920,6 @@ if __name__ == "__main__":
         config['data']['num_classes'] = pretrain_config['data']['num_classes']
         config['training']['model_feats_channels'] = pretrain_config['training']['model_feats_channels']
 
-
     if config['data']['name'] == 'watch' or config['data']['name'] == 'onera':
         coco_fpath = ub.expandpath(config['data'][config['location']]['train_coco_json'])
         dset = kwcoco.CocoDataset(coco_fpath)
@@ -955,15 +942,15 @@ if __name__ == "__main__":
         test_dataset = SequenceDataset(test_sampler, window_dims, input_dims, channels)
         test_dataloader = test_dataset.make_loader(batch_size=config['evaluation']['batch_size'])
     else:
-        train_dataloader = build_dataset(dataset_name=config['data']['name'], 
-                                        root=config['data'][config['location']]['train_dir'], 
+        train_dataloader = build_dataset(dataset_name=config['data']['name'],
+                                        root=config['data'][config['location']]['train_dir'],
                                         batch_size=config['training']['batch_size'],
-                                        num_workers=config['training']['num_workers'], 
+                                        num_workers=config['training']['num_workers'],
                                         split='train',
                                         crop_size=config['data']['image_size'],
                                         channels=config['data']['channels'],
                                         )
-        
+
         channels = config['data']['channels']
         num_channels = len(channels.split('|'))
         config['training']['num_channels'] = num_channels
@@ -978,7 +965,7 @@ if __name__ == "__main__":
         test_dataloader = test_dataset.make_loader(batch_size=config['evaluation']['batch_size'])
 
     if not config['training']['model_single_input'] and not config['training']['model_diff_input']:
-        config['training']['num_channels'] = 2*config['training']['num_channels']
+        config['training']['num_channels'] = 2 * config['training']['num_channels']
 
     model = build_model(model_name=config['training']['model_name'],
                         backbone=config['training']['backbone'],

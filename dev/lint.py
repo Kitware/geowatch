@@ -1,7 +1,10 @@
 # import pycodestyle
 import ubelt as ub
+import os
 
 VERBOSE = 3
+DEFAULT_MODE = os.environ.get('WATCH_LINT_DEFAULT_MODE', 'lint')
+DEFAULT_DPATH = os.environ.get('WATCH_LINT_DEFAULT_DPATH', '.')
 
 
 def exec_flake8(dpaths, select=None, ignore=None, max_line_length=79):
@@ -40,6 +43,7 @@ def exec_autopep8(dpaths, autofix, mode='diff'):
         print('autofix = {!r}'.format(autofix))
 
     args_list = ['--select', ','.join(autofix), '--recursive']
+    # args_list += ['--ignore '
     if mode == 'diff':
         args_list += ['--diff']
     elif mode == 'apply':
@@ -71,7 +75,7 @@ def exec_autopep8(dpaths, autofix, mode='diff'):
     return info['ret']
 
 
-def custom_lint(dpath : str = '.', mode : str = 'lint', index=None, interact=None):
+def custom_lint(mode : str = DEFAULT_MODE, dpath : str = DEFAULT_DPATH, index=None, interact=None):
     """
     Runs our custom "watch" linting rules on a specific directory and
     optionally "fixes" them.
@@ -85,7 +89,8 @@ def custom_lint(dpath : str = '.', mode : str = 'lint', index=None, interact=Non
                 * "lint": display all linting results
                 * "show": display autofixable linting results (sort of works)
                 * "diff": show the autopep8 diff that would autofix some errors
-                * "apply": apply the autopep8 diff that would autofix some errors
+                * "fix": apply the autopep8 diff that would autofix some errors
+                * "ask": show the diff and then choose to apply or not
 
         index(int, default=None):
             if given only does one error at a time for autopep8
@@ -227,11 +232,22 @@ def custom_lint(dpath : str = '.', mode : str = 'lint', index=None, interact=Non
             'E251': 'Remove whitespace around parameter "=" sign.',
             'E252': 'Missing whitespace around parameter equals.',
 
-            'E26 ': 'Fix spacing after comment hash for inline comments.',
-            'E265': 'Fix spacing after comment hash for block comments.',
-            'E266': 'Fix too many leading # for block comments.',
+            'E261': 'Fix spacing after comment hash for inline comments.',
+            # 'E265': 'Fix spacing after comment hash for block comments.',
+            # 'E266': 'Fix too many leading # for block comments.',
 
-            'E27' : 'Fix extraneous whitespace around keywords.',
+            'E271' : 'Fix extraneous whitespace around keywords.',
+            'E272' : 'Fix extraneous whitespace around keywords.',
+            'E273' : 'Fix extraneous whitespace around keywords.',
+            'E274' : 'Fix extraneous whitespace around keywords.',
+
+            # autopep8_ignore = {
+            # 'E112': Fix under-indented comments.
+            # 'E115': Fix under-indented comments.
+            # 'E116': Fix over-indented comments.
+            # 'E261': Fix spacing after comment hash.
+            # 'E262': Fix spacing after comment hash.
+            # 'E265': Format block comments.
         })
     if modifiers['newlines']:
         autofix.update({
@@ -265,13 +281,20 @@ def custom_lint(dpath : str = '.', mode : str = 'lint', index=None, interact=Non
 
     if VERBOSE > 1:
         print('mode = {!r}'.format(mode))
-    if mode in {'diff', 'apply'}:
+
+    if mode in {'ask', 'interact'}:
+        interact = True
+
+    if interact:
+        mode = 'diff'
+
+    if mode in {'diff', 'apply', 'fix'}:
         if VERBOSE > 1:
             print('autofix = {!r}'.format(autofix))
         ret = exec_autopep8(dpaths, autofix, mode=mode)
         if interact:
-            ans = input('Accept? (y/yes or no) \n')
-            if ans.lower().startswith('y'):
+            from rich import prompt
+            if prompt.Confirm.ask('Apply this diff?'):
                 mode = 'apply'
                 ret = exec_autopep8(dpaths, autofix, mode=mode)
     elif mode == 'show':

@@ -244,7 +244,7 @@ class attention_unet(nn.Module):
                     x5 = x5 + positional_encode
             ###
 
-        x6 = self.drop(self.up1(x5, x4)) #### make sure the right residual connections connect
+        x6 = self.drop(self.up1(x5, x4))  # make sure the right residual connections connect
 
         ## 6
         if 6 in self.attention_layers:

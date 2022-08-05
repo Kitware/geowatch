@@ -251,6 +251,7 @@ def main(cmdline=1, **kwargs):
     else:
         print(text)
 
+
 if __name__ == '__main__':
     """
     CommandLine:

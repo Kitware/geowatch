@@ -90,6 +90,7 @@ class gridded_dataset(torch.utils.data.Dataset):
     L8_channel_names = [
         'coastal', 'lwir11', 'lwir12', 'blue', 'green', 'red', 'nir', 'swir16', 'swir22', 'pan', 'cirrus'
     ]
+
     def __init__(self, coco_dset, sensor=['S2', 'L8'], bands=['shared'],
                  segmentation=False, patch_size=128, num_images=2,
                  mode='train', patch_overlap=.25, bas=True, rng=None):
@@ -677,6 +678,7 @@ class kwcoco_dataset(Dataset):
 
 class Onera(Dataset):
     """Change Detection dataset class, used for both training and test data."""
+
     def __init__(self,
                  data_folder='/localdisk0/SCRATCH/watch/onera/',
                  train=True,
@@ -834,6 +836,7 @@ class Onera(Dataset):
 
 class SpaceNet7(Dataset):
     normalize_params = [[0.16198677, 0.22665408, 0.1745371], [0.06108317, 0.06515977, 0.04128775]]
+
     def __init__(self,
                     patch_size=[128, 128],
                     splits='satellite_sort/data/spacenet/splits_unmasked/',  # ### unmasked images

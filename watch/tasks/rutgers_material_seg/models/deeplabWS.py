@@ -141,6 +141,7 @@ class Bottleneck(nn.Module):
 
         return out
 
+
 class DoubleConv(nn.Module):
     """(convolution => [BN] => ReLU) * 2"""
 
@@ -158,6 +159,8 @@ class DoubleConv(nn.Module):
 
     def forward(self, x):
         return self.double_conv(x)
+
+
 class Up(nn.Module):
     """Upscaling then double conv"""
 
@@ -189,12 +192,14 @@ class Up(nn.Module):
         x = torch.cat([x2, x1], dim=1)
         return self.conv(x)
 
+
 class ResNet(nn.Module):
 
     def __init__(self, block, layers, num_classes, num_groups=None,
-                 weight_std=True, beta=False, num_channels=3 ,feats=None, out_dim=None):
+                 weight_std=True, beta=False, num_channels=3 , feats=None, out_dim=None):
         self.inplanes = 64
         feats = [256, 512, 1024, 2048, 256]
+
         def _norm(planes, momentum=0.05):
             if num_groups is None:
                 return nn.BatchNorm2d(planes, momentum=momentum)
@@ -216,10 +221,10 @@ class ResNet(nn.Module):
         self.bn1 = self.norm(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
-        self.layer1 = self._make_layer(block, feats[0]//block.expansion, layers[0])
-        self.layer2 = self._make_layer(block, feats[1]//block.expansion, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, feats[2]//block.expansion, layers[2], stride=2)
-        self.layer4 = self._make_layer(block, feats[3]//block.expansion, layers[3], stride=2, dilation=2)
+        self.layer1 = self._make_layer(block, feats[0] // block.expansion, layers[0])
+        self.layer2 = self._make_layer(block, feats[1] // block.expansion, layers[1], stride=2)
+        self.layer3 = self._make_layer(block, feats[2] // block.expansion, layers[2], stride=2)
+        self.layer4 = self._make_layer(block, feats[3] // block.expansion, layers[3], stride=2, dilation=2)
         # self.aspp = ASPP(512 * block.expansion, 256, num_classes, conv=self.conv, norm=self.norm)
         self.aspp = ASPP(feats[3], 256, 256, conv=self.conv, norm=self.norm)
 
@@ -339,6 +344,7 @@ def resnet50(pretrained=False, **kwargs):
         model.load_state_dict(model_dict)
     return model
 
+
 def resnet34(pretrained=False, **kwargs):
     """Constructs a ResNet-34 model.
 
@@ -364,6 +370,7 @@ def resnet34(pretrained=False, **kwargs):
     exit()
     return model
 
+
 def resnet18(pretrained=False, **kwargs):
     """Constructs a ResNet-50 model.
 
@@ -381,6 +388,7 @@ def resnet18(pretrained=False, **kwargs):
         model_dict.update(overlap_dict)
         model.load_state_dict(model_dict)
     return model
+
 
 def resnet101(pretrained=False, num_groups=None, weight_std=False, **kwargs):
     """Constructs a ResNet-101 model.
@@ -408,7 +416,7 @@ def resnet101(pretrained=False, num_groups=None, weight_std=False, **kwargs):
         else:
             raise ValueError('Currently only support BN or GN+WS')
         model_dict.update(overlap_dict)
-        model.load_state_dict(model_dict, strict= False)
+        model.load_state_dict(model_dict, strict=False)
     return model
 
 

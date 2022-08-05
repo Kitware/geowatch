@@ -92,13 +92,13 @@ class HRSCDDataset(object):
         image_name = mask_path.split('/')[-1].split('.')[0]
         # img_path = f"{self.images_root}/{image_name}.png"
 
-        img = tifffile.imread(img_path).astype(np.float32)        
+        img = tifffile.imread(img_path).astype(np.float32)
         mask = tifffile.imread(mask_path).astype(np.float32)
 
         # img, mask = self.randomcrop_transform(img, mask)
 
         new_image = self.transforms(img)
-        new_mask = FT.to_tensor(mask) #* 255
+        new_mask = FT.to_tensor(mask)  # * 255
 
         crop_params = self.randomcrop_transform.get_params(new_image, output_size=(self.crop_size, self.crop_size))
         new_image = FT.crop(new_image, *crop_params)

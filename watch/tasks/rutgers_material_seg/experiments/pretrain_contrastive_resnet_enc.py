@@ -84,7 +84,7 @@ class Trainer(object):
         self._aff = TeRN(num_iter=10, dilations=[1, 2, 4, 8, 12, 24]).to(device)
         self.max_label = 10
         # self.all_crops_params = [tuple([i,j,config['data']['window_size'], config['data']['window_size']]) for i in range(config['data']['window_size'],config['data']['image_size']-config['data']['window_size']) for j in range(config['data']['window_size'],config['data']['image_size']-config['data']['window_size'])]
-        self.all_crops_params = [tuple([i,j,config['data']['window_size'], config['data']['window_size']]) for i in range(0,config['data']['image_size']) for j in range(0,config['data']['image_size'])]
+        self.all_crops_params = [tuple([i, j, config['data']['window_size'], config['data']['window_size']]) for i in range(0, config['data']['image_size']) for j in range(0, config['data']['image_size'])]
         self.inference_all_crops_params = [tuple([i, j, config['evaluation']['inference_window'], config['evaluation']['inference_window']]) for i in range(0, config['data']['image_size']) for j in range(0, config['data']['image_size'])]
         if test_loader is not None:
             self.test_loader = test_loader
@@ -198,21 +198,21 @@ class Trainer(object):
 
             image1 = image1.to(device)
             negative_image1 = negative_image1.to(device)
-            
+
             # image1 = utils.stad_image(image1).float()
             image2 = utils.stad_image(image1).float()
             negative_image1 = utils.stad_image(negative_image1).float()
-        
+
             sampled_crops = random.sample(self.all_crops_params, config['training']['n_samples'])
-            patched_image1 = torch.stack([transforms.functional.crop(image1, *params) for params in sampled_crops],dim=1)
-            patched_image2 = torch.stack([transforms.functional.crop(image2, *params) for params in sampled_crops],dim=1)
-            patched_negative_image1 = torch.stack([transforms.functional.crop(negative_image1, *params) for params in sampled_crops],dim=1)
+            patched_image1 = torch.stack([transforms.functional.crop(image1, *params) for params in sampled_crops], dim=1)
+            patched_image2 = torch.stack([transforms.functional.crop(image2, *params) for params in sampled_crops], dim=1)
+            patched_negative_image1 = torch.stack([transforms.functional.crop(negative_image1, *params) for params in sampled_crops], dim=1)
 
             bs, ps, c, h, w = patched_image1.shape
-            patched_image1 = patched_image1.view(bs*ps,c,h,w)
-            patched_image2 = patched_image2.view(bs*ps,c,h,w)
-            patched_negative_image1 = patched_negative_image1.view(bs*ps,c,h,w)
-            
+            patched_image1 = patched_image1.view(bs * ps, c, h, w)
+            patched_image2 = patched_image2.view(bs * ps, c, h, w)
+            patched_negative_image1 = patched_negative_image1.view(bs * ps, c, h, w)
+
             output1 = self.model(patched_image1, image1, sampled_crops)  ## [B,22,150,150]
             output2 = self.model(patched_image2, image2, sampled_crops)  ## [B,22,150,150]
             negative_output1 = self.model(patched_negative_image1, negative_image1, sampled_crops)  ## [B,22,150,150]
@@ -225,13 +225,13 @@ class Trainer(object):
             # output1, quant1 = self.model(patched_image1)  ## [B,22,150,150]
             # output2, quant2 = self.model(patched_image2)  ## [B,22,150,150]
             # negative_output1, neg_quant1 = self.model(patched_negative_image1)  ## [B,22,150,150]
-            
+
             # print(features1.shape)
 
             # patched_output1 = torch.stack([transforms.functional.crop(output1, *params) for params in self.all_crops_params],dim=1)
             # patched_output2 = torch.stack([transforms.functional.crop(output2, *params) for params in self.all_crops_params],dim=1)
             # patched_negative_output1 = torch.stack([transforms.functional.crop(negative_output1, *params) for params in self.all_crops_params],dim=1)
-            
+
             # bs, ps, c, ph, pw = patched_output1.shape
             # patched_output1 = patched_output1.view(bs*ps,c,ph,pw)
             # patched_output2 = patched_output2.view(bs*ps,c,ph,pw)
@@ -252,8 +252,8 @@ class Trainer(object):
 
             # pre-text: Augmentation
             # loss = 5*self.contrastive_loss(features)
-            # loss = 30*F.triplet_margin_loss(output1,#.unsqueeze(0), 
-            #                                 output2,#.unsqueeze(0), 
+            # loss = 30*F.triplet_margin_loss(output1,#.unsqueeze(0),
+            #                                 output2,#.unsqueeze(0),
             #                                 negative_output1,
             #                                 swap=True,
             #                                 p=1,
@@ -261,15 +261,15 @@ class Trainer(object):
             #                                 )
             targets_positive = torch.zeros(output1.shape[0], dtype=torch.long).to(device)
             targets_negative = torch.ones(output1.shape[0], dtype=torch.long).to(device)
-            outputs_positive = torch.cat([output1, output2], dim=1) 
+            outputs_positive = torch.cat([output1, output2], dim=1)
             outputs_negative = torch.cat([output1, negative_output1], dim=1)
             # outputs_negative2 = torch.cat([output2, negative_output1], dim=1)
 
             loss = F.cross_entropy(outputs_positive.float(), targets_positive.long(), reduction='mean')
             loss += F.cross_entropy(outputs_negative.float(), targets_negative.long(), reduction='mean')
             # loss += F.cross_entropy(outputs_negative2.float(), targets_negative.long(), reduction='mean')
-            # loss += 30*F.triplet_margin_loss(features1,#.unsqueeze(0), 
-            #                                 features2,#.unsqueeze(0), 
+            # loss += 30*F.triplet_margin_loss(features1,#.unsqueeze(0),
+            #                                 features2,#.unsqueeze(0),
             #                                 negative_features1
             #                                 )
             # print(loss)
@@ -294,7 +294,6 @@ class Trainer(object):
             # labels = torch.stack([torch.Tensor(labels), torch.Tensor(labels)],dim=0).view(-1).to(device).long()
             # loss += F.cross_entropy(patch_class_head, labels)
             # relative_distances = torch.sqrt(torch.pow(inds1 - inds2, 2).sum(axis=1))
-            
 
             self.optimizer.zero_grad()
             loss.backward()
@@ -313,43 +312,43 @@ class Trainer(object):
                 hist_inference_otsu_coeff = 1.0
                 topk = 45
 
-                pad_amount = (config['evaluation']['inference_window']-1)//2
-                padded_output1 = F.pad(input=output1, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
-                padded_output2 = F.pad(input=output2, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
+                pad_amount = (config['evaluation']['inference_window'] - 1) // 2
+                padded_output1 = F.pad(input=output1, pad=(pad_amount, pad_amount, pad_amount, pad_amount), mode='replicate')
+                padded_output2 = F.pad(input=output2, pad=(pad_amount, pad_amount, pad_amount, pad_amount), mode='replicate')
                 #those are [bs, n_patches, k, window_size, window_size], where each patch is represented by a histogram of k,window_size,window_size
-                patched_padded_output1 = torch.stack([transforms.functional.crop(padded_output1, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1) 
-                patched_padded_output2 = torch.stack([transforms.functional.crop(padded_output2, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
+                patched_padded_output1 = torch.stack([transforms.functional.crop(padded_output1, *params) for params in self.inference_all_crops_params], dim=1)  # .flatten(-3,-1)
+                patched_padded_output2 = torch.stack([transforms.functional.crop(padded_output2, *params) for params in self.inference_all_crops_params], dim=1)  # .flatten(-3,-1)
 
-                padded_mask1 = F.pad(input=masks1, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
-                padded_mask2 = F.pad(input=masks2, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
-                patched_padded_mask1 = torch.stack([transforms.functional.crop(padded_mask1, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
-                patched_padded_mask2 = torch.stack([transforms.functional.crop(padded_mask2, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
+                padded_mask1 = F.pad(input=masks1, pad=(pad_amount, pad_amount, pad_amount, pad_amount), mode='replicate')
+                padded_mask2 = F.pad(input=masks2, pad=(pad_amount, pad_amount, pad_amount, pad_amount), mode='replicate')
+                patched_padded_mask1 = torch.stack([transforms.functional.crop(padded_mask1, *params) for params in self.inference_all_crops_params], dim=1)  # .flatten(-3,-1)
+                patched_padded_mask2 = torch.stack([transforms.functional.crop(padded_mask2, *params) for params in self.inference_all_crops_params], dim=1)  # .flatten(-3,-1)
 
                 # here we sum all vectors to make a 1,k vector for each patch
-                patched_padded_output1_distributions = patched_padded_output1.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
-                patched_padded_output2_distributions = patched_padded_output2.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
-                patched_padded_mask1_distributions = patched_padded_mask1.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
-                patched_padded_mask2_distributions = patched_padded_mask2.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
+                patched_padded_output1_distributions = patched_padded_output1.flatten(-2, -1)  # .sum(axis=3) #[bs, n_patches, k]
+                patched_padded_output2_distributions = patched_padded_output2.flatten(-2, -1)  # .sum(axis=3) #[bs, n_patches, k]
+                patched_padded_mask1_distributions = patched_padded_mask1.flatten(-2, -1)  # .sum(axis=3) #[bs, n_patches, k]
+                patched_padded_mask2_distributions = patched_padded_mask2.flatten(-2, -1)  # .sum(axis=3) #[bs, n_patches, k]
 
                 patched_padded_output1_distributions = patched_padded_output1_distributions.sum(axis=3)
                 patched_padded_output2_distributions = patched_padded_output2_distributions.sum(axis=3)
-                patched_padded_mask1_distributions = patched_padded_mask1_distributions.sum(axis=3) #[bs, n_patches, k]
-                patched_padded_mask2_distributions = patched_padded_mask2_distributions.sum(axis=3) #[bs, n_patches, k]
+                patched_padded_mask1_distributions = patched_padded_mask1_distributions.sum(axis=3)  # [bs, n_patches, k]
+                patched_padded_mask2_distributions = patched_padded_mask2_distributions.sum(axis=3)  # [bs, n_patches, k]
 
                 topk_patched_mask1_post_distributions, largest_elements_post_inds = torch.topk(patched_padded_mask1_distributions, k=topk, sorted=False, dim=2)
                 topk_patched_mask2_post_distributions = torch.gather(patched_padded_mask2_distributions, dim=2, index=largest_elements_post_inds)
 
                 # normalize those vectors to 0-1
-                normalized_patched_padded_mask1_distributions = (patched_padded_mask1_distributions - patched_padded_mask1_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_mask1_distributions.max(dim=2, keepdim=True)[0] - patched_padded_mask1_distributions.min(dim=2, keepdim=True)[0])
-                normalized_patched_padded_mask2_distributions = (patched_padded_mask2_distributions - patched_padded_mask2_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_mask2_distributions.max(dim=2, keepdim=True)[0] - patched_padded_mask2_distributions.min(dim=2, keepdim=True)[0])            
+                normalized_patched_padded_mask1_distributions = (patched_padded_mask1_distributions - patched_padded_mask1_distributions.min(dim=2, keepdim=True)[0]) / (patched_padded_mask1_distributions.max(dim=2, keepdim=True)[0] - patched_padded_mask1_distributions.min(dim=2, keepdim=True)[0])
+                normalized_patched_padded_mask2_distributions = (patched_padded_mask2_distributions - patched_padded_mask2_distributions.min(dim=2, keepdim=True)[0]) / (patched_padded_mask2_distributions.max(dim=2, keepdim=True)[0] - patched_padded_mask2_distributions.min(dim=2, keepdim=True)[0])
 
                 # histogram intersection raw features
                 # normalized_patched_padded_output1_distributions = (patched_padded_output1_distributions - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output1_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])
                 # normalized_patched_padded_output2_distributions = (patched_padded_output2_distributions - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output2_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])
                 minima = torch.minimum(topk_patched_mask1_post_distributions, topk_patched_mask2_post_distributions)
-                histograms_intersection_features = torch.true_divide(minima.sum(axis=2), topk_patched_mask2_post_distributions.sum(axis=2)).view(bs,h,w)
+                histograms_intersection_features = torch.true_divide(minima.sum(axis=2), topk_patched_mask2_post_distributions.sum(axis=2)).view(bs, h, w)
                 histc_int_change_feats_pred = torch.zeros_like(histograms_intersection_features)
-                histc_int_inference_otsu_threshold = hist_inference_otsu_coeff*otsu(histograms_intersection_features.cpu().detach().numpy(), nbins=128)
+                histc_int_inference_otsu_threshold = hist_inference_otsu_coeff * otsu(histograms_intersection_features.cpu().detach().numpy(), nbins=128)
                 histc_int_change_feats_pred[histograms_intersection_features < histc_int_inference_otsu_threshold] = 1
                 histc_int_change_feats_pred = histc_int_change_feats_pred.cpu().detach().type(torch.uint8)
 
@@ -366,16 +365,16 @@ class Trainer(object):
                 # patched_diff_change_residuals_distribution = kl_div_distance.view(bs,h,w)
 
                 # l1 region-wise inference raw features
-                l1_patched_diff_change_features = torch.abs((patched_padded_output1_distributions - patched_padded_output2_distributions).sum(axis=2)).view(bs,h,w)
+                l1_patched_diff_change_features = torch.abs((patched_padded_output1_distributions - patched_padded_output2_distributions).sum(axis=2)).view(bs, h, w)
                 l1_dist_change_feats_pred = torch.zeros_like(l1_patched_diff_change_features)
-                l1_inference_otsu_threshold = inference_otsu_coeff*otsu(l1_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
+                l1_inference_otsu_threshold = inference_otsu_coeff * otsu(l1_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
                 l1_dist_change_feats_pred[l1_patched_diff_change_features > l1_inference_otsu_threshold] = 1
                 l1_dist_change_feats_pred = l1_dist_change_feats_pred.cpu().detach().type(torch.uint8)
 
                 # l2 region-wise inference raw features
-                l2_patched_diff_change_features = torch.sqrt(torch.pow(patched_padded_output1_distributions - patched_padded_output2_distributions, 2).sum(axis=2)).view(bs,h,w)
+                l2_patched_diff_change_features = torch.sqrt(torch.pow(patched_padded_output1_distributions - patched_padded_output2_distributions, 2).sum(axis=2)).view(bs, h, w)
                 l2_dist_change_feats_pred = torch.zeros_like(l2_patched_diff_change_features)
-                l2_inference_otsu_threshold = inference_otsu_coeff*otsu(l2_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
+                l2_inference_otsu_threshold = inference_otsu_coeff * otsu(l2_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
                 l2_dist_change_feats_pred[l2_patched_diff_change_features > l2_inference_otsu_threshold] = 1
                 l2_dist_change_feats_pred = l2_dist_change_feats_pred.cpu().detach().type(torch.uint8)
 
@@ -391,14 +390,14 @@ class Trainer(object):
                 mask1[mask1 == -1] = 0
                 preds.append(l2_dist_change_feats_pred)
                 targets.append(mask1.cpu())  # .numpy())
-                
+
                 histogram_distance.append(histc_int_change_feats_pred)
                 l1_dist.append(l1_dist_change_feats_pred)
                 l2_dist.append(l2_dist_change_feats_pred)
 
         if 'mask1' in vars(__builtins__):
             mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=2)
-        
+
             hist_mean_iou, hist_precision, hist_recall = eval_utils.compute_jaccard(histogram_distance, targets, num_classes=2)
             l1_mean_iou, l1_precision, l1_recall = eval_utils.compute_jaccard(l1_dist, targets, num_classes=2)
             l2_mean_iou, l2_precision, l2_recall = eval_utils.compute_jaccard(l2_dist, targets, num_classes=2)
@@ -431,27 +430,26 @@ class Trainer(object):
             # print(f"Training class-wise Recall value: \n{recall} \noverall Recall: {mean_recall}")
             # print(f"Training overall F1 Score: {mean_f1_score}")
 
-            cometml_experiemnt.log_metric("Training Loss", total_loss, epoch=epoch+1)
-            cometml_experiemnt.log_metric("Segmentation Loss", total_loss_seg, epoch=epoch+1)
-            cometml_experiemnt.log_metric("Training mIoU", overall_miou, epoch=epoch+1)
-            cometml_experiemnt.log_metric("Training mean_f1_score", mean_f1_score, epoch=epoch+1)
+            cometml_experiemnt.log_metric("Training Loss", total_loss, epoch=epoch + 1)
+            cometml_experiemnt.log_metric("Segmentation Loss", total_loss_seg, epoch=epoch + 1)
+            cometml_experiemnt.log_metric("Training mIoU", overall_miou, epoch=epoch + 1)
+            cometml_experiemnt.log_metric("Training mean_f1_score", mean_f1_score, epoch=epoch + 1)
 
             # cometml_experiemnt.log_metrics({f"Training Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch+1)
             # cometml_experiemnt.log_metrics({f"Training Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
             # cometml_experiemnt.log_metrics({f"Training F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
 
-            cometml_experiemnt.log_metrics({f"L1 Training Recall class {str(x)}": l1_recall[x] for x in range(len(l1_recall))}, epoch=epoch+1)
-            cometml_experiemnt.log_metrics({f"L1 Training Precision class {str(x)}": l1_precision[x] for x in range(len(l1_precision))}, epoch=epoch+1)
-            cometml_experiemnt.log_metrics({f"L1 Training F1_score class {str(x)}": l1_f1[x] for x in range(len(l1_f1))}, epoch=epoch+1)
+            cometml_experiemnt.log_metrics({f"L1 Training Recall class {str(x)}": l1_recall[x] for x in range(len(l1_recall))}, epoch=epoch + 1)
+            cometml_experiemnt.log_metrics({f"L1 Training Precision class {str(x)}": l1_precision[x] for x in range(len(l1_precision))}, epoch=epoch + 1)
+            cometml_experiemnt.log_metrics({f"L1 Training F1_score class {str(x)}": l1_f1[x] for x in range(len(l1_f1))}, epoch=epoch + 1)
 
-            cometml_experiemnt.log_metrics({f"L2 Training Recall class {str(x)}": l2_recall[x] for x in range(len(l2_recall))}, epoch=epoch+1)
-            cometml_experiemnt.log_metrics({f"L2 Training Precision class {str(x)}": l2_precision[x] for x in range(len(l2_precision))}, epoch=epoch+1)
-            cometml_experiemnt.log_metrics({f"L2 Training F1_score class {str(x)}": l2_f1[x] for x in range(len(l2_f1))}, epoch=epoch+1)
+            cometml_experiemnt.log_metrics({f"L2 Training Recall class {str(x)}": l2_recall[x] for x in range(len(l2_recall))}, epoch=epoch + 1)
+            cometml_experiemnt.log_metrics({f"L2 Training Precision class {str(x)}": l2_precision[x] for x in range(len(l2_precision))}, epoch=epoch + 1)
+            cometml_experiemnt.log_metrics({f"L2 Training F1_score class {str(x)}": l2_f1[x] for x in range(len(l2_f1))}, epoch=epoch + 1)
 
-            cometml_experiemnt.log_metrics({f"Histogram Distance Training Recall class {str(x)}": hist_recall[x] for x in range(len(hist_recall))}, epoch=epoch+1)
-            cometml_experiemnt.log_metrics({f"Histogram Distance Training Precision class {str(x)}": hist_precision[x] for x in range(len(hist_precision))}, epoch=epoch+1)
-            cometml_experiemnt.log_metrics({f"Histogram Distance Training F1_score class {str(x)}": hist_f1[x] for x in range(len(hist_f1))}, epoch=epoch+1)
-
+            cometml_experiemnt.log_metrics({f"Histogram Distance Training Recall class {str(x)}": hist_recall[x] for x in range(len(hist_recall))}, epoch=epoch + 1)
+            cometml_experiemnt.log_metrics({f"Histogram Distance Training Precision class {str(x)}": hist_precision[x] for x in range(len(hist_precision))}, epoch=epoch + 1)
+            cometml_experiemnt.log_metrics({f"Histogram Distance Training F1_score class {str(x)}": hist_f1[x] for x in range(len(hist_f1))}, epoch=epoch + 1)
 
         print("Training Epoch {0:2d} average loss: {1:1.2f}".format(epoch + 1, total_loss / self.train_loader.__len__()))
 
@@ -515,25 +513,25 @@ class Trainer(object):
                 image2 = utils.stad_image(image2)
 
                 # sampled_crops = random.sample(self.all_crops_params, 1000)
-                pad_amount = (config['evaluation']['inference_window']-1)//2
-                padded_image1 = F.pad(input=image1, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
-                padded_image2 = F.pad(input=image2, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
+                pad_amount = (config['evaluation']['inference_window'] - 1) // 2
+                padded_image1 = F.pad(input=image1, pad=(pad_amount, pad_amount, pad_amount, pad_amount), mode='replicate')
+                padded_image2 = F.pad(input=image2, pad=(pad_amount, pad_amount, pad_amount, pad_amount), mode='replicate')
 
                 start = time.time()
-                patched_image1 = torch.stack([transforms.functional.crop(padded_image1, *params) for params in self.inference_all_crops_params],dim=1)
-                patched_image2 = torch.stack([transforms.functional.crop(padded_image2, *params) for params in self.inference_all_crops_params],dim=1)
+                patched_image1 = torch.stack([transforms.functional.crop(padded_image1, *params) for params in self.inference_all_crops_params], dim=1)
+                patched_image2 = torch.stack([transforms.functional.crop(padded_image2, *params) for params in self.inference_all_crops_params], dim=1)
 
                 bs, ps, c, ph, pw = patched_image1.shape
-                patched_image1 = patched_image1.view(bs*ps,c,ph,pw)
-                patched_image2 = patched_image2.view(bs*ps,c,ph,pw)
-                
+                patched_image1 = patched_image1.view(bs * ps, c, ph, pw)
+                patched_image2 = patched_image2.view(bs * ps, c, ph, pw)
+
                 crop_collection_time = time.time() - start
 
                 start = time.time()
 
                 output1 = self.model(patched_image1, image1, self.inference_all_crops_params)  ## [B,22,150,150]
                 output2 = self.model(patched_image2, image2, self.inference_all_crops_params)  ## [B,22,150,150]
-                
+
                 # output1, quant1 = self.model(patched_image1)  # [B,22,150,150]
                 # output2, quant2 = self.model(patched_image2)
 
@@ -575,20 +573,20 @@ class Trainer(object):
                 # patched_padded_output1_distributions = patched_padded_output1_distributions.sum(axis=3)
                 # patched_padded_output2_distributions = patched_padded_output2_distributions.sum(axis=3)
                 # patched_padded_mask1_distributions = patched_padded_mask1_distributions.sum(axis=3) #[bs, n_patches, k]
-                # patched_padded_mask2_distributions = patched_padded_mask2_distributions.sum(axis=3) #[bs, n_patches, k]     
+                # patched_padded_mask2_distributions = patched_padded_mask2_distributions.sum(axis=3) #[bs, n_patches, k]
 
                 # topk_patched_output1_post_distributions, largest_elements_post_inds = torch.topk(masks1, k=topk, sorted=False, dim=2)
                 # topk_patched_output2_post_distributions = torch.gather(masks2, dim=2, index=largest_elements_post_inds)
 
                 # normalized_patched_padded_output1_distributions = (patched_padded_output1_distributions - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output1_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])
-                # normalized_patched_padded_output2_distributions = (patched_padded_output2_distributions - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output2_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])            
+                # normalized_patched_padded_output2_distributions = (patched_padded_output2_distributions - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output2_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])
 
                 # histogram intersection raw features
                 minima = torch.minimum(masks1, masks2)
-                histograms_intersection_features = torch.true_divide(minima.sum(axis=2), masks2.sum(axis=2)).view(bs,h,w)
+                histograms_intersection_features = torch.true_divide(minima.sum(axis=2), masks2.sum(axis=2)).view(bs, h, w)
                 histograms_intersection_features = FT.gaussian_blur(histograms_intersection_features, kernel_size=config['evaluation']['inference_window'])
                 histc_int_change_feats_pred = torch.zeros_like(histograms_intersection_features)
-                histc_int_inference_otsu_threshold = hist_inference_otsu_coeff*otsu(histograms_intersection_features.cpu().detach().numpy(), nbins=256)
+                histc_int_inference_otsu_threshold = hist_inference_otsu_coeff * otsu(histograms_intersection_features.cpu().detach().numpy(), nbins=256)
                 histc_int_change_feats_pred[histograms_intersection_features < histc_int_inference_otsu_threshold] = 1
                 histc_int_change_feats_pred = histc_int_change_feats_pred.cpu().detach().type(torch.uint8)
 
@@ -600,21 +598,20 @@ class Trainer(object):
                 # histc_int_change_feats_pred = histc_int_change_feats_pred.cpu().detach().type(torch.uint8)
 
                 # l1 region-wise inference raw features
-                l1_patched_diff_change_features = torch.abs((output1 - output2).sum(axis=2)).view(bs,h,w)
+                l1_patched_diff_change_features = torch.abs((output1 - output2).sum(axis=2)).view(bs, h, w)
                 l1_patched_diff_change_features = FT.gaussian_blur(l1_patched_diff_change_features, kernel_size=config['evaluation']['inference_window'])
                 l1_dist_change_feats_pred = torch.zeros_like(l1_patched_diff_change_features)
-                l1_inference_otsu_threshold = inference_otsu_coeff*otsu(l1_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
+                l1_inference_otsu_threshold = inference_otsu_coeff * otsu(l1_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
                 l1_dist_change_feats_pred[l1_patched_diff_change_features > l1_inference_otsu_threshold] = 1
                 l1_dist_change_feats_pred = l1_dist_change_feats_pred.cpu().detach().type(torch.uint8)
 
                 # l2 region-wise inference raw features
-                l2_patched_diff_change_features = torch.sqrt(torch.pow(output1 - output2, 2).sum(axis=2)).view(bs,h,w)
+                l2_patched_diff_change_features = torch.sqrt(torch.pow(output1 - output2, 2).sum(axis=2)).view(bs, h, w)
                 l2_patched_diff_change_features = FT.gaussian_blur(l2_patched_diff_change_features, kernel_size=config['evaluation']['inference_window'])
                 l2_dist_change_feats_pred = torch.zeros_like(l2_patched_diff_change_features)
-                l2_inference_otsu_threshold = inference_otsu_coeff*otsu(l2_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
+                l2_inference_otsu_threshold = inference_otsu_coeff * otsu(l2_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
                 l2_dist_change_feats_pred[l2_patched_diff_change_features > l2_inference_otsu_threshold] = 1
                 l2_dist_change_feats_pred = l2_dist_change_feats_pred.cpu().detach().type(torch.uint8)
-
 
                 # patched_diff_change_features = torch.sqrt(torch.pow(patched_padded_output1_distributions - patched_padded_output2_distributions, 2).sum(axis=2)).view(bs,h,w)
 
@@ -664,7 +661,6 @@ class Trainer(object):
                             image_show2 = np.transpose(image2.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, :3]
                             image_show2 = np.flip(image_show2, axis=2)
 
-
                             image_show1 = (image_show1 - image_show1.min()) / (image_show1.max() - image_show1.min())
                             image_show2 = (image_show2 - image_show2.min()) / (image_show2.max() - image_show2.min())
                             gt_mask_show1 = mask1.cpu().detach()[batch_index_to_show, :, :].numpy().squeeze()
@@ -677,16 +673,16 @@ class Trainer(object):
                             l2_patched_diff_change_features_show = l2_patched_diff_change_features.cpu().detach().numpy()[batch_index_to_show, :, :]
                             histograms_intersection_show = histograms_intersection_features.cpu().detach().numpy()[batch_index_to_show, :, :]
 
-                            l1_patched_diff_change_features_show = (l1_patched_diff_change_features_show - l1_patched_diff_change_features_show.min())/(l1_patched_diff_change_features_show.max() - l1_patched_diff_change_features_show.min())
-                            l2_patched_diff_change_features_show = (l2_patched_diff_change_features_show - l2_patched_diff_change_features_show.min())/(l2_patched_diff_change_features_show.max() - l2_patched_diff_change_features_show.min())
-                            histograms_intersection_show = (histograms_intersection_show - histograms_intersection_show.min())/(histograms_intersection_show.max() - histograms_intersection_show.min())
+                            l1_patched_diff_change_features_show = (l1_patched_diff_change_features_show - l1_patched_diff_change_features_show.min()) / (l1_patched_diff_change_features_show.max() - l1_patched_diff_change_features_show.min())
+                            l2_patched_diff_change_features_show = (l2_patched_diff_change_features_show - l2_patched_diff_change_features_show.min()) / (l2_patched_diff_change_features_show.max() - l2_patched_diff_change_features_show.min())
+                            histograms_intersection_show = (histograms_intersection_show - histograms_intersection_show.min()) / (histograms_intersection_show.max() - histograms_intersection_show.min())
 
                             # pred1_show = masks1.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
                             # pred2_show = masks2.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
 
-                            l1_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*l1_dist_change_feats_pred_show)
-                            l2_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*l2_dist_change_feats_pred_show)
-                            histc_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*histc_int_change_feats_pred_show)
+                            l1_fp_tp_fn_prediction_mask = gt_mask_show1 + (2 * l1_dist_change_feats_pred_show)
+                            l2_fp_tp_fn_prediction_mask = gt_mask_show1 + (2 * l2_dist_change_feats_pred_show)
+                            histc_fp_tp_fn_prediction_mask = gt_mask_show1 + (2 * histc_int_change_feats_pred_show)
 
                             # vca_pseudomask_show = image_change_magnitude_binary.cpu().detach()[batch_index_to_show, :, :].numpy()
                             # vca_pseudomask_crop_show = cm_binary_crop.cpu().detach()[batch_index_to_show,:,:].numpy()
@@ -701,7 +697,6 @@ class Trainer(object):
 
                             ax3.imshow(image_show1)
                             ax3.imshow(gt_mask_show1, cmap=self.cmap, vmin=0, vmax=self.max_label, alpha=config['visualization']['fg_alpha'])
-
 
                             ax4.imshow(l1_patched_diff_change_features_show, cmap=cmap_gradients)
 
@@ -781,13 +776,12 @@ class Trainer(object):
         overall_miou = mean_iou.mean()
         classwise_f1_score = 2 * (precision * recall) / (precision + recall)
         mean_f1_score = classwise_f1_score.mean()
-        
 
         # print("Validation Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/loader.__len__()))
-        cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation precision", mean_precision, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation recall", mean_recall, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation mean f1_score", mean_f1_score, epoch=epoch+1)
+        cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Validation precision", mean_precision, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Validation recall", mean_recall, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Validation mean f1_score", mean_f1_score, epoch=epoch + 1)
         print({f"Recall class {str(x)}": recall[x] for x in range(len(recall))})
         print({f"Precision class {str(x)}": precision[x] for x in range(len(precision))})
         print({f"F1 class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))})
@@ -796,22 +790,22 @@ class Trainer(object):
         # cometml_experiemnt.log_metrics({f"Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
         # cometml_experiemnt.log_metrics({f"F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
 
-        cometml_experiemnt.log_metrics({f"L1 Training Recall class {str(x)}": l1_recall[x] for x in range(len(l1_recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L1 Training Precision class {str(x)}": l1_precision[x] for x in range(len(l1_precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L1 Training F1_score class {str(x)}": l1_f1[x] for x in range(len(l1_f1))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"L1 Training Recall class {str(x)}": l1_recall[x] for x in range(len(l1_recall))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L1 Training Precision class {str(x)}": l1_precision[x] for x in range(len(l1_precision))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L1 Training F1_score class {str(x)}": l1_f1[x] for x in range(len(l1_f1))}, epoch=epoch + 1)
 
-        cometml_experiemnt.log_metrics({f"L2 Training Recall class {str(x)}": l2_recall[x] for x in range(len(l2_recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L2 Training Precision class {str(x)}": l2_precision[x] for x in range(len(l2_precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L2 Training F1_score class {str(x)}": l2_f1[x] for x in range(len(l2_f1))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"L2 Training Recall class {str(x)}": l2_recall[x] for x in range(len(l2_recall))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L2 Training Precision class {str(x)}": l2_precision[x] for x in range(len(l2_precision))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L2 Training F1_score class {str(x)}": l2_f1[x] for x in range(len(l2_f1))}, epoch=epoch + 1)
 
-        cometml_experiemnt.log_metrics({f"Histogram Distance Training Recall class {str(x)}": hist_recall[x] for x in range(len(hist_recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Histogram Distance Training Precision class {str(x)}": hist_precision[x] for x in range(len(hist_precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Histogram Distance Training F1_score class {str(x)}": hist_f1[x] for x in range(len(hist_f1))}, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation Average Loss", total_loss/loader.__len__(), epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"Histogram Distance Training Recall class {str(x)}": hist_recall[x] for x in range(len(hist_recall))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"Histogram Distance Training Precision class {str(x)}": hist_precision[x] for x in range(len(hist_precision))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"Histogram Distance Training F1_score class {str(x)}": hist_f1[x] for x in range(len(hist_f1))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Validation Average Loss", total_loss / loader.__len__(), epoch=epoch + 1)
 
-        return total_loss/loader.__len__(), classwise_f1_score
+        return total_loss / loader.__len__(), classwise_f1_score
 
-    def forward(self, cometml_experiment: object, world_size: int =8) -> tuple:
+    def forward(self, cometml_experiment: object, world_size: int = 8) -> tuple:
         """forward pass for all epochs
 
         Args:
@@ -822,7 +816,7 @@ class Trainer(object):
             tuple: (train losses, validation losses, mIoU)
         """
         train_losses, val_losses = [], []
-        mean_ious_val,mean_ious_val_list,count_metrics_list = [], [], []
+        mean_ious_val, mean_ious_val_list, count_metrics_list = [], [], []
         best_val_loss, best_train_loss = np.infty, np.infty
         best_val_mean_f1, val_mean_f1 = 0, 0
         best_val_change_f1, val_change_f1 = 0, 0
@@ -848,7 +842,7 @@ class Trainer(object):
                     best_val_mean_f1 = val_mean_f1
                 if val_change_f1 >= best_val_change_f1:
                     best_val_change_f1 = val_change_f1
-                
+
                 model_save_name = f"{current_path[-1]}_epoch_{epoch}_loss_{train_loss}_valmF1_{val_mean_f1}_valChangeF1_{val_change_f1}_time_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}.pth"
 
                 if config['procedures']['train']:
@@ -923,7 +917,6 @@ if __name__ == "__main__":
     dset = kwcoco.CocoDataset(coco_fpath)
     sampler = ndsampler.CocoSampler(dset)
 
-
     if config['training']['resume'] != False:
         base_path = '/'.join(config['training']['resume'].split('/')[:-1])
         pretrain_config_path = f"{base_path}/config.yaml"
@@ -936,7 +929,6 @@ if __name__ == "__main__":
         # config['training']['model_feats_channels'] = pretrain_config_path['training']['model_feats_channels']
         config['data']['num_classes'] = pretrain_config['data']['num_classes']
         config['training']['model_feats_channels'] = pretrain_config['training']['model_feats_channels']
-
 
     # window_dims = (config['data']['time_steps'], config['data']['image_size'], config['data']['image_size'])  # [t,h,w]
     # input_dims = (config['data']['image_size'], config['data']['image_size'])
@@ -973,29 +965,27 @@ if __name__ == "__main__":
         test_dataset = SequenceDataset(test_sampler, window_dims, input_dims, channels)
         test_dataloader = test_dataset.make_loader(batch_size=config['evaluation']['batch_size'])
     else:
-        train_dataloader = build_dataset(dataset_name=config['data']['name'], 
-                                        root=config['data'][config['location']]['train_dir'], 
+        train_dataloader = build_dataset(dataset_name=config['data']['name'],
+                                        root=config['data'][config['location']]['train_dir'],
                                         batch_size=config['training']['batch_size'],
-                                        num_workers=config['training']['num_workers'], 
+                                        num_workers=config['training']['num_workers'],
                                         split='train',
                                         crop_size=config['data']['image_size'],
                                         channels=config['data']['channels'],
                                         )
-        
+
         channels = config['data']['channels']
         num_channels = len(channels.split('|'))
         config['training']['num_channels'] = num_channels
         window_dims = (config['data']['time_steps'], config['data']['image_size'], config['data']['image_size'])  # [t,h,w]
         input_dims = (config['data']['image_size'], config['data']['image_size'])
 
-        
         test_coco_fpath = ub.expandpath(config['data'][config['location']]['test_coco_json'])
         test_dset = kwcoco.CocoDataset(test_coco_fpath)
         test_sampler = ndsampler.CocoSampler(test_dset)
 
         test_dataset = SequenceDataset(test_sampler, window_dims, input_dims, channels)
         test_dataloader = test_dataset.make_loader(batch_size=config['evaluation']['batch_size'])
-                
 
     model = build_model(model_name=config['training']['model_name'],
                         backbone=config['training']['backbone'],
@@ -1033,7 +1023,7 @@ if __name__ == "__main__":
         if os.path.isfile(config['training']['resume']):
             checkpoint = torch.load(config['training']['resume'])
             start_epoch = checkpoint['epoch']
-            model.load_state_dict(checkpoint['model'], strict= False)
+            model.load_state_dict(checkpoint['model'], strict=False)
             # optimizer.load_state_dict(checkpoint['optimizer'])
             scheduler.load_state_dict(checkpoint['scheduler'])
             print(f"loaded model from {config['training']['resume']}")

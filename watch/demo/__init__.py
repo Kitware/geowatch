@@ -87,6 +87,7 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
+
 __all__ = ['DEFAULT_KEY', 'coerce_kwcoco', 'demo', 'demo_kwcoco_multisensor',
            'demo_kwcoco_with_heatmaps', 'demo_smart_aligned_kwcoco',
            'demo_smart_raw_kwcoco', 'dummy_demodata',

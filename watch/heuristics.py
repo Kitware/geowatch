@@ -246,6 +246,7 @@ def hack_track_categories(track_catnames, task):
         #     raise NotImplementedError(op)
     return new_catnames
 
+
 # Backwards compat (remove if nothing uses them)
 CATEGORIES_SCORED = [c for c in CATEGORIES if c.get('scored', False)]
 CATEGORIES_UNSCORED = [c for c in CATEGORIES if not c.get('scored', False)]

@@ -6,7 +6,7 @@ import math
 import datetime
 from dateutil import parser
 from watch.utils import util_kwarray
-from watch.utils.util_time import  coerce_timedelta
+from watch.utils.util_time import coerce_timedelta
 
 
 class TimeSampleError(IndexError):
@@ -36,6 +36,7 @@ class MultiTimeWindowSampler:
         >>> kwplot.autosns()
         >>> self.show_summary(10)
     """
+
     def __init__(self, unixtimes, sensors, time_window, affinity_type='hard',
                  update_rule='distribute', determenistic=False, gamma=1,
                  time_spans=['2y', '1y', '5m'], name='?'):
@@ -1569,6 +1570,7 @@ def _dev_1darray_sample():
     # The idea is that we are given cluttered datetimes
     from watch.utils.util_time import coerce_timedelta, coerce_datetime
     # Generate a "clumpy" sample
+
     def demo_clumpy_data(N, rng):
         uniform = np.linspace(0, 1, N)
         noise = rng.randn(N) / N

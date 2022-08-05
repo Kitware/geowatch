@@ -354,6 +354,7 @@ def expand_site_models_with_site_summaries(sites, regions):
             error1 = common1[any_error_flag]
             error2 = common2[any_error_flag]
             columns = ['site_id', 'version', 'mgrs', 'start_date', 'end_date', 'status', 'originator', 'score', 'model_content', 'validated']
+
             def reorder_columns(df, columns):
                 remain = df.columns.difference(columns)
                 return df.reindex(columns=(columns + list(remain)))

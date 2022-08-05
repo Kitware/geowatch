@@ -1048,6 +1048,7 @@ class MultimodalTransformer(pl.LightningModule):
         """
         import kwarray
         from kwarray import distributions
+
         def _specific_coerce(val, rng=None):
             # Coerce for what we want to do here,
             import numbers

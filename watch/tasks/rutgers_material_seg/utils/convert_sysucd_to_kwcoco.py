@@ -12,6 +12,7 @@ import tarfile
 import zipfile
 from os.path import relpath
 
+
 def convert_sysucd_to_kwcoco(extract_dpath, coco_fpath, type):
     """
     Converts the raw SpaceNet7 dataset to kwcoco
@@ -78,7 +79,7 @@ def convert_sysucd_to_kwcoco(extract_dpath, coco_fpath, type):
                 # date_captured=timestamp.isoformat(),
                 channels='r|g|b',
             )
-        
+
         gid = coco_dset.index.name_to_img[f"{tile_name}_{frame_index}"]['id']
         c_mask = kwimage.imread(str(label_dpath))
         c_mask[c_mask == 255] = 1
@@ -92,7 +93,6 @@ def convert_sysucd_to_kwcoco(extract_dpath, coco_fpath, type):
             'segmentation': poly.to_coco(style='new')
         }
         coco_dset.add_annotation(**ann)
-
 
     coco_dset._ensure_imgsize()
 
@@ -108,7 +108,6 @@ def convert_sysucd_to_kwcoco(extract_dpath, coco_fpath, type):
     #                                 for hole in interiors])
     #     self = kwimage.Polygon(data=poly_data)
     #     return self
-
 
     # all_udm_fpaths = sorted(extract_dpath.glob('train/*/UDM_masks/*'))
     # for udm_fpath in ub.ProgIter(all_udm_fpaths, desc='add ignore masks'):

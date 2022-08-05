@@ -425,6 +425,7 @@ def main(cmdline=True, **kwargs):
         # TODO: develop this idea more
         # Try to parse out an animation config
         import scriptconfig as scfg
+
         @scfg.dataconf
         class AnimateConfig:
             # TODO: should be able to load from an alias

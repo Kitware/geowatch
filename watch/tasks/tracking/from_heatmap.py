@@ -493,7 +493,7 @@ def _heatmaps_to_polys_moving_window(heatmaps, bounds, agg_fn, thresh, morph_ker
 
     polys_final = list(size_filter(polys_final))
 
-    return  polys_final
+    return polys_final
 
 
 def _heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
@@ -508,7 +508,7 @@ def _heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
     polygons = list(mask_to_polygons(aggregated, thresh,
                                      thresh_hysteresis=thresh_hysteresis,
                                      bounds=bounds))
-    return  polygons
+    return polygons
 
 
 POLY_FN_REGISTRY = {

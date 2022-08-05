@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from watch.tasks.rutgers_material_seg.models.tex_refine import TeRN
 
+
 class ASPP(nn.Module):
 
     def __init__(self, C, depth, num_classes, conv=nn.Conv2d,
@@ -70,6 +71,7 @@ class ASPP(nn.Module):
 
         return x
 
+
 class DoubleConv(nn.Module):
     """(convolution => [BN] => ReLU) * 2"""
 
@@ -87,6 +89,7 @@ class DoubleConv(nn.Module):
 
     def forward(self, x):
         return self.double_conv(x)
+
 
 class Up(nn.Module):
     """Upscaling then double conv"""
@@ -118,6 +121,7 @@ class Up(nn.Module):
 
         x = torch.cat([x2, x1], dim=1)
         return self.conv(x)
+
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -183,7 +187,7 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, block, num_blocks, num_channels=3, zero_init_residual=False, 
+    def __init__(self, block, num_blocks, num_channels=3, zero_init_residual=False,
                 pretrained=False, num_classes=None, beta=False, weight_std=False,
                 num_groups=32, out_dim=128, feats=[64, 128, 256, 512, 256]):
         super(ResNet, self).__init__()
@@ -208,7 +212,7 @@ class ResNet(nn.Module):
         # self.norm = _norm
         # self.conv = nn.Conv2d
         self.aspp = ASPP(feats[3], 256, 256)
-        self._aff = TeRN(num_iter=10, dilations=[1,1,2,4,6,8])
+        self._aff = TeRN(num_iter=10, dilations=[1, 1, 2, 4, 6, 8])
 
         self.up1 = Up(feats[4] + feats[3], feats[3], bilinear=True)
         self.up2 = Up(feats[2] + feats[3], feats[2], bilinear=True)
@@ -242,7 +246,7 @@ class ResNet(nn.Module):
             layers.append(block(self.in_planes, planes, stride))
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
-    
+
     def forward(self, img1, img2, layer=100):
         x1_1 = F.relu(self.bn1(self.conv1_diff(img1)))
         x1_2 = F.relu(self.bn1(self.conv1_diff(img2)))
@@ -250,7 +254,7 @@ class ResNet(nn.Module):
         x11_1 = self.layer1(x1_1)
         x11_2 = self.layer1(x1_2)
         x1_cont = torch.abs(x11_1 - x11_2)
-        
+
         # x2 = self.layer2(x1)
         x2_1 = self.layer2(x11_1)
         x2_2 = self.layer2(x11_2)
@@ -274,12 +278,12 @@ class ResNet(nn.Module):
         x = self.outconv(x)
         # classifer = self.fc(x)
 
-        return x#, x_feats
+        return x  # , x_feats
 
     # def forward(self, x, layer=100):
     #     # x1 = F.relu(self.bn1(self.conv1(x)))
     #     x1 = F.relu(self.bn1(self.conv1_cat(x)))
-        
+
     #     # x1 = self._aff(x, x1)
 
     #     x1 = self.layer1(x1)
@@ -315,7 +319,7 @@ def resnet34(pretrained=False, **kwargs):
     if pretrained:
         model_dict = model.state_dict()
         # /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-10-18-13:27/experiments_epoch_0_loss_11.28138166103723_valmF1_0.6866047574166068_valChangeF1_0.49019877611815305_time_2021-10-18-14:15:27.pth
-# 
+#
         # pretrained_path = "/home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-10-07-10:23/experiments_epoch_8_loss_3394.9326448260613_valmIoU_0.5388350590429163_time_2021-10-07-22:05:00.pth"
         pretrained_path = "/home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-10-18-13:27/experiments_epoch_0_loss_11.28138166103723_valmF1_0.6866047574166068_valChangeF1_0.49019877611815305_time_2021-10-18-14:15:27.pth"
         pretrained_dict = torch.load(pretrained_path)['model']
@@ -344,4 +348,3 @@ model_dict = {
     'resnet50': [resnet50, 2048],
     'resnet101': [resnet101, 2048],
 }
-
