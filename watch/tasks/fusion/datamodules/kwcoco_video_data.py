@@ -97,7 +97,7 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             comma delimited list of sensors to avoid, such as S2 or L8
             ''')),
 
-        'ignore_dilate': scfg.Value(11, help='Dilation applied to ignore masks.'),
+        'ignore_dilate': scfg.Value(0, help='Dilation applied to ignore masks.'),
 
         'match_histograms': scfg.Value(False, help='undocumented - ignored'),
 
@@ -162,7 +162,7 @@ class KWCocoVideoDatasetConfig(scfg.Config):
 
         'use_conditional_classes': scfg.Value(True, help=ub.paragraph(
             '''
-            Include no-activity, post-construction in predictions when
+            Deprecated, not used anymore. Include no-activity, post-construction in predictions when
             their conditions are met.
             ''')),
 
@@ -316,7 +316,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>>     chip_size=chip_size,
         >>>     neg_to_pos_ratio=0,
         >>>     min_spacetime_weight=0.5,
-        >>>     use_conditional_classes=1,
         >>> )
         >>> datamodule.setup('fit')
         >>> dl = datamodule.train_dataloader()
@@ -869,13 +868,6 @@ class KWCocoVideoDataset(data.Dataset):
         # both.
         self.__dict__.update(self.config.to_dict())
         self.sampler = sampler
-        # TODO: the set of "valid" background classnames should be defined
-        # by the inputs, not hard-coded in the dataloader. This can either be a
-        # list of names provided to the training config, or something baked
-        # into the kwcoco spec marking a class as some type of "background"
-        # if not self.use_conditional_classes:
-        #     # TODO: CONDITIONAL
-        #     raise NotImplementedError
 
         # Add extra categories if we need to and construct a new classes object
         graph = self.sampler.classes.graph
@@ -893,11 +885,21 @@ class KWCocoVideoDataset(data.Dataset):
             if exists_flag:
                 graph.nodes[name].update(**_catinfo)
 
+        self.classes = kwcoco.CategoryTree(graph)
         self.background_classes = set(heuristics.BACKGROUND_CLASSES) & set(graph.nodes)
         self.negative_classes = set(heuristics.NEGATIVE_CLASSES) & set(graph.nodes)
         self.ignore_classes = set(heuristics.IGNORE_CLASSNAMES) & set(graph.nodes)
         self.undistinguished_classes = set(heuristics.UNDISTINGUISHED_CLASSES) & set(graph.nodes)
-        self.classes = kwcoco.CategoryTree(graph)
+
+        # construct composite classes
+        # the idea is that these specific definitions will be configurable in the future
+        self.non_salient_classes = self.background_classes | self.negative_classes
+        self.salient_ignore_classes = self.ignore_classes
+        # should we remove the ignore classes from salient_classes in the future?
+        self.salient_classes = set(self.classes) - self.non_salient_classes
+
+        # define foreground classes for the class activity head
+        self.class_foreground_classes = set(self.classes) - self.background_classes - self.ignore_classes - self.undistinguished_classes
 
         channels = config['channels']
         time_sampling = config['time_sampling']
@@ -2384,6 +2386,7 @@ class KWCocoVideoDataset(data.Dataset):
                 'class_weights': None,
                 'saliency_weights': None,
                 'target_dims': frame_target_dsize[::-1],  # the size we want to predict
+                'ann_aids': None,
             }
 
             if not self.inference_only:
@@ -2446,6 +2449,7 @@ class KWCocoVideoDataset(data.Dataset):
                 ann_aids = dets.data['aids']
                 ann_cids = dets.data['cids']
                 ann_tids = dets.data['tids']
+                frame_item['ann_aids'] = ann_aids
 
                 frame_poly_weights = np.ones(space_shape, dtype=np.float32)
 
@@ -2454,50 +2458,28 @@ class KWCocoVideoDataset(data.Dataset):
                 # TODO: layer ordering? Multiclass prediction?
                 for poly, aid, cid, tid in zip(ann_polys, ann_aids, ann_cids, ann_tids):  # NOQA
 
-                    if self.use_conditional_classes:
-                        # VERY HACKY, NEEDS REWRITE
-
-                        if self.requested_tasks['saliency']:
-                            # orig_cname = self.classes.id_to_node[cid]
-                            new_salient_catname = task_tid_to_cnames['saliency'][tid][time_idx]
-                            if new_salient_catname not in self.background_classes:
-                                poly.fill(frame_saliency, value=1)
-                            if new_salient_catname in self.ignore_classes:
-                                poly.fill(saliency_ignore, value=1)
-
-                        if self.requested_tasks['class']:
-                            new_class_catname = task_tid_to_cnames['class'][tid][time_idx]
-                            new_class_cidx = self.classes.node_to_idx[new_class_catname]
-                            orig_cidx = self.classes.id_to_idx[cid]
-                            if new_class_catname in self.ignore_classes:
-                                poly.fill(frame_class_ignore, value=1)
-                                poly.fill(frame_class_ohe[orig_cidx], value=1)
-                            elif new_class_catname not in self.background_classes:
-                                poly.fill(frame_class_ohe[new_class_cidx], value=1)
-                    else:
-                        cidx = self.classes.id_to_idx[cid]
-                        catname = self.classes.id_to_node[cid]
-
-                        if catname in self.background_classes:
-                            pass
-                        elif catname in self.ignore_classes:
+                    flag_poly_filled = False
+                    if self.requested_tasks['saliency']:
+                        # orig_cname = self.classes.id_to_node[cid]
+                        new_salient_catname = task_tid_to_cnames['saliency'][tid][time_idx]
+                        if new_salient_catname in self.salient_classes:
+                            poly.fill(frame_saliency, value=1)
+                            flag_poly_filled = True
+                        if new_salient_catname in self.salient_ignore_classes:
                             poly.fill(saliency_ignore, value=1)
-                            poly.fill(frame_class_ignore, value=1)
-                            # weights should allow us to distinguish ignore from
-                            # background. It shouldn't be learned on in any case.
-                            poly.fill(frame_class_ohe[cidx], value=1)
-                            poly.fill(frame_saliency, value=1)
-                        else:
-                            # Indistinguishable classes should be ignored
-                            # for classification, but not saliency
-                            if catname in self.undistinguished_classes:
-                                poly.fill(frame_class_ignore, value=1)
-                                # poly.fill(frame_class_ohe[cidx], value=0)
-                                # poly.fill(frame_class_ohe[cidx], value=0)
-                            poly.fill(frame_class_ohe[cidx], value=1)
-                            poly.fill(frame_saliency, value=1)
 
-                    if self.dist_weights:
+                    if self.requested_tasks['class']:
+                        new_class_catname = task_tid_to_cnames['class'][tid][time_idx]
+                        new_class_cidx = self.classes.node_to_idx[new_class_catname]
+                        orig_cidx = self.classes.id_to_idx[cid]
+                        if new_class_catname in self.ignore_classes:
+                            poly.fill(frame_class_ignore, value=1)
+                            poly.fill(frame_class_ohe[orig_cidx], value=1)
+                        elif new_class_catname in self.class_foreground_classes:
+                            poly.fill(frame_class_ohe[new_class_cidx], value=1)
+                            flag_poly_filled = True
+
+                    if self.dist_weights and flag_poly_filled:
                         # New feature where we encode that we care much more about
                         # segmenting the inside of the object than the outside.
                         # Effectively boundaries become uncertain.
@@ -2526,11 +2508,12 @@ class KWCocoVideoDataset(data.Dataset):
                             weight_mask = dist_weight + (1 - poly_mask)
                             frame_poly_weights = frame_poly_weights * weight_mask
 
+                    # import xdev; xdev.embed()
                 frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
 
                 # Postprocess (Dilate?) the truth map
                 for cidx, class_map in enumerate(frame_class_ohe):
-                    # class_map = util_kwimage.morphology(class_map, 'dilate', kernel=5)
+                    # class_map = kwimage.morphology(class_map, 'dilate', kernel=5)
                     frame_cidxs[class_map > 0] = cidx
 
                 if self.upweight_centers:
@@ -2561,9 +2544,10 @@ class KWCocoVideoDataset(data.Dataset):
                     frame_weights = frame_weights * nodata_weight
 
                 # Dilate ignore masks (dont care about the surrounding area # either)
-                # frame_saliency = util_kwimage.morphology(frame_saliency, 'dilate', kernel=ignore_dilate)
-                saliency_ignore = util_kwimage.morphology(saliency_ignore, 'dilate', kernel=self.ignore_dilate)
-                frame_class_ignore = util_kwimage.morphology(frame_class_ignore, 'dilate', kernel=self.ignore_dilate)
+                # frame_saliency = kwimage.morphology(frame_saliency, 'dilate', kernel=ignore_dilate)
+                if self.ignore_dilate > 0:
+                    saliency_ignore = kwimage.morphology(saliency_ignore, 'dilate', kernel=self.ignore_dilate)
+                    frame_class_ignore = kwimage.morphology(frame_class_ignore, 'dilate', kernel=self.ignore_dilate)
 
                 saliency_weights = frame_weights * (1 - saliency_ignore)
                 class_weights = frame_weights * (1 - frame_class_ignore)
@@ -2607,7 +2591,8 @@ class KWCocoVideoDataset(data.Dataset):
                     frame1 = frame_items[0]
                 for frame1, frame2 in ub.iter_window(frame_items, 2):
                     frame_change = (frame1['class_idxs'] != frame2['class_idxs']).astype(np.uint8)
-                    frame_change = util_kwimage.morphology(frame_change, 'open', kernel=3)
+                    # ToDO: configure kernel size here
+                    frame_change = kwimage.morphology(frame_change, 'open', kernel=3)
                     change_weights = frame1['class_weights'] * frame2['class_weights']
                     frame2['change'] = frame_change
                     frame2['change_weights'] = change_weights.clip(0, 1)

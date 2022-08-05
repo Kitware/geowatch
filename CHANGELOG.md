@@ -15,10 +15,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Data loader now returns the size it would like the output predicted at via `target_dims`.
 * The nir08 sensor for L8 is now aliased to nir for consistency.
 * Add support for lightning 1.7
+* Changed defaults of ignore_dilate to 0
 
 ### Fixed
 * Issue where augmentation might shave a pixel off of the sample box causing an
   unexpected shape.
+* Fixed issue with negative was being marked as salient
 
 
 ## Version 0.3.3 - Unreleased
