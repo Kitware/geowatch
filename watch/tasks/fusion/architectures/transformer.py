@@ -576,8 +576,20 @@ class DeiTEncoder(nn.Module):
         outputs = einops.rearrange(x, 'b (t m h w) f -> b t m h w f', t=T, m=M, h=H, w=W)
         return outputs
       
-      
+
 class PerceiverEncoder(nn.Module):
+    """
+    https://github.com/lucidrains/perceiver-pytorch/blob/main/perceiver_pytorch/perceiver_io.py
+    
+    Example:
+        >>> from watch.tasks.fusion.architectures.transformer import PerceiverEncoder  # NOQA
+        >>> import torch
+        >>> B, T, M, H, W, F = 1, 2, 3, 5, 8, 13
+        >>> self = PerceiverEncoder(F)
+        >>> inputs = torch.rand(B, T, M, H, W, F)
+        >>> outputs = self(inputs)
+        >>> assert outputs.shape == (B, T, M, H, W, F)
+    """
   
     def __init__(self, in_features):
         super().__init__()
