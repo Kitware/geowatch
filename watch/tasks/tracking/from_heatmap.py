@@ -1,5 +1,4 @@
 from watch.utils import kwcoco_extensions
-from watch.utils import util_kwimage
 from watch.heuristics import SITE_SUMMARY_CNAME, CNAMES_DCT
 import kwarray
 import kwimage
@@ -39,8 +38,7 @@ def _norm(heatmaps, norm_ord):
 def probs(heatmaps, norm_ord, morph_kernel, thresh):
     probs = _norm(heatmaps, norm_ord)
 
-    hard_probs = util_kwimage.morphology(probs > thresh, 'dilate',
-                                         morph_kernel)
+    hard_probs = kwimage.morphology(probs > thresh, 'dilate', morph_kernel)
     modulated_probs = probs * hard_probs
 
     return modulated_probs
@@ -62,7 +60,7 @@ def mean_normalized(heatmaps, norm_ord=1, morph_kernel=1, thresh=None):
     print('scale_factor', scale_factor)
     print('After scaling, max:', np.max(average))
 
-    average = util_kwimage.morphology(average, 'dilate', morph_kernel)
+    average = kwimage.morphology(average, 'dilate', morph_kernel)
 
     return average
 
@@ -84,8 +82,8 @@ def frequency_weighted_mean(heatmaps, thresh, norm_ord=0, morph_kernel=3):
     # divide by number of samples for every pixel
     aggregated_probs /= pixel_wise_samples
 
-    aggregated_probs = util_kwimage.morphology(aggregated_probs, 'dilate',
-                                               morph_kernel)
+    aggregated_probs = kwimage.morphology(aggregated_probs, 'dilate',
+                                          morph_kernel)
 
     return aggregated_probs
 
