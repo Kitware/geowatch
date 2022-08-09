@@ -43,7 +43,7 @@ class PrepareSplitsConfig(scfg.Config):
             Command to start the appropriate virtual environment if your bashrc
             does not start it by default.''')),
         'run': scfg.Value(True, help='if True execute the pipeline'),
-        'cache': scfg.Value(True, help='if True skip completed results'),
+        'cache': scfg.Value(0, help='if True skip completed results'),
         'backend': scfg.Value('tmux', help=None),
         'verbose': scfg.Value(1, help=''),
     }

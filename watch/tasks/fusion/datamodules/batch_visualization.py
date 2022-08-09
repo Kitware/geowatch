@@ -353,7 +353,10 @@ class BatchVisualizationBuilder:
 
         sample_gsd = builder.item.get('sample_gsd', None)
         if sample_gsd is not None:
-            vid_text = vid_text + ' @ {:0.2f} GSD'.format(sample_gsd)
+            if isinstance(sample_gsd, float):
+                vid_text = vid_text + ' @ {:0.2f} GSD'.format(sample_gsd)
+            else:
+                vid_text = vid_text + ' @ {} GSD'.format(sample_gsd)
 
         vid_header = kwimage.draw_text_on_image(
             {'width': width}, vid_text, org=(width // 2, 3), valign='top',
@@ -607,7 +610,7 @@ class BatchVisualizationBuilder:
             layers.append(row['norm_signal'])
             row_canvas = kwimage.overlay_alpha_layers(layers)[..., 0:3]
 
-            row_canvas = kwimage.imresize(row_canvas, **resizekw).clip(0, 1)
+            # row_canvas = kwimage.imresize(row_canvas, **resizekw).clip(0, 1)
             row_canvas = kwimage.ensure_uint255(row_canvas)
             row_canvas = kwimage.draw_text_on_image(
                 row_canvas, row['signal_text'], (1, 1), valign='top',

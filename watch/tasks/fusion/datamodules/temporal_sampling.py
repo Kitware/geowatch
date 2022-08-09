@@ -468,13 +468,13 @@ class TimeWindowSampler:
             >>> import kwcoco
             >>> # xdoctest: +REQUIRES(--show)
             >>> dvc_dpath = find_smart_dvc_dpath()
-            >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
+            >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_vali.kwcoco.json'
             >>> dset = kwcoco.CocoDataset(coco_fpath)
             >>> video_ids = list(ub.sorted_vals(dset.index.vidid_to_gids, key=len).keys())
             >>> vidid = video_ids[2]
             >>> # Demo behavior over a grid of parameters
             >>> grid = list(ub.named_product({
-            >>>     'affinity_type': ['hard', 'soft2', 'hardish3', 'hardish2'][2:3],
+            >>>     'affinity_type': ['hard', 'soft2', 'hardish3', 'hardish2'],
             >>>     'update_rule': ['distribute', 'pairwise+distribute'][0:1],
             >>>     #'determenistic': [False, True],
             >>>     'determenistic': [False],

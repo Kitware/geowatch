@@ -1555,20 +1555,13 @@ class KWCocoVideoDataset(data.Dataset):
         # These are specs
         # https://smartgitlab.com/TE/standards/-/wikis/Data-Output-Specifications#quality-band
         # TODO: this could be a specially handled frame like ASI.
-        # Bits
-        # 0 T&E binary mask
-        # 1 Dilated Cloud
-        # 2 Cirrus
-        # 3 Cloud
-        # 4 Cloud Shadow
-        # 5 Snow
-        # 6 Clear
-        # 7 Water
         quality_aliases = ['quality', 'cloudmask']
         for quality_chan_name in quality_aliases:
             if quality_chan_name in coco_img.channels:
                 break
         if quality_chan_name in coco_img.channels:
+            import operator as op
+            import functools
             tr_cloud = tr_frame.copy()
             tr_cloud['channels'] = quality_chan_name
             # tr_cloud['channels'] = 'red|green|blue'
@@ -1578,11 +1571,16 @@ class KWCocoVideoDataset(data.Dataset):
             cloud_sample = sampler.load_sample(
                 tr_cloud, with_annots=None,
                 padkw={'constant_values': 255},
-                dtype=np.float32
+                # dtype=np.float32
             )
             cloud_im = cloud_sample['im']
-            cloud_bits = 1 << np.array([1, 2, 3])
-            is_cloud_iffy = np.logical_or.reduce([cloud_im == b for b in cloud_bits])
+            # if tr_cloud.get('use_native_scale', None):
+            # cloud_im = cloud_im[0][0]
+
+            iffy_bits = functools.reduce(
+                op.or_, ub.take(heuristics.QUALITY_BITS,
+                                ['dilated_cloud', 'cirrus', 'cloud']))
+            is_cloud_iffy = (cloud_im & iffy_bits) > 0
         else:
             is_cloud_iffy = None
         return is_cloud_iffy
@@ -1632,6 +1630,24 @@ class KWCocoVideoDataset(data.Dataset):
                 padkw={'constant_values': np.nan},
                 dtype=np.float32
             )
+            print(sample['im'].shape)
+
+            if 0:
+                gid = 4410
+                coco_img = sampler.dset.coco_image(gid)
+                delayed = coco_img.delay()
+                delayed.write_network_text()
+
+                # sampler.load_sample(
+                #     tr_frame | {'channels': 'red,blue|nir|swir16,swir22'}, with_annots=first_with_annot,
+                #     nodata='float',
+                #     padkw={'constant_values': np.nan},
+                #     dtype=np.float32
+                # )
+                if tr_frame.get('use_native_scale'):
+                    native_list = sample['im'][0]
+                    for hwc in native_list:
+                        print(hwc.shape)
 
             # from watch.utils import util_kwimage
             if REPLACE_SAMECOLOR_REGIONS_WITH_NAN:
@@ -1939,7 +1955,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_vali.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=(3, 256, 256), channels='red|green|blue|swir16', normalize_perframe=False, space_scale="10gsd")
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=(3, 256, 256), channels='(S2,L8):(red|green|blue,swir16)', normalize_perframe=False, space_scale="10gsd")
             >>> self.requested_tasks['change'] = False
             >>> self.requested_tasks['class'] = False
             >>> self.requested_tasks['saliency'] = False
@@ -1957,7 +1973,35 @@ class KWCocoVideoDataset(data.Dataset):
             >>>     item = self[tr]
             >>>     canvas = self.draw_item(item, draw_weights=False)
             >>>     canvas_list.append(canvas)
-            >>> canvas = kwimage.stack_images_grid(canvas_list, axis=0, pad=30)
+            >>> canvas = kwimage.stack_images_grid(canvas_list, axis=0, pad=30, chunksize=3)
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas, doclf=1)
+            >>> kwplot.show_if_requested()
+
+        Example:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+            >>> import ndsampler
+            >>> import kwcoco
+            >>> import watch
+            >>> # Demo NATIVE GSD
+            >>> dvc_dpath = watch.find_smart_dvc_dpath()
+            >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_vali.kwcoco.json'
+            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 256, 256), channels='(L8,S2):(red|green|blue|nir,swir16,swir22)', normalize_perframe=False, space_scale='native')
+            >>> self.requested_tasks['change'] = False
+            >>> self.requested_tasks['class'] = False
+            >>> self.requested_tasks['saliency'] = False
+            >>> self.disable_augmenter = True
+            >>> index = 300
+            >>> # Grab a random target
+            >>> item = self[index]
+            >>> print(ub.repr2(self.summarize_item(item), nl=-1))
+            >>> tr = item['tr']
+            >>> canvas = self.draw_item(item, draw_weights=False)
             >>> # xdoctest: +REQUIRES(--show)
             >>> import kwplot
             >>> kwplot.autompl()
@@ -2104,13 +2148,17 @@ class KWCocoVideoDataset(data.Dataset):
         else:
             tr_['space_scale'] = space_scale
 
+        # Resolve spatial scale code
         scale = 1
         request_gsd = None
         vidspace_gsd = video.get('target_gsd', None)
         sample_gsd = None
         if space_scale is not None:
             if isinstance(space_scale, str):
-                if space_scale.lower().endswith('gsd'):
+                if space_scale == 'native':
+                    request_gsd = 'native'
+                    scale = 'native'
+                elif space_scale.lower().endswith('gsd'):
                     request_gsd = float(space_scale[:-3].strip())
                     scale = vidspace_gsd / request_gsd
                     # Should we also change the window size somewhere else?
@@ -2122,8 +2170,16 @@ class KWCocoVideoDataset(data.Dataset):
                 scale = space_scale
         if scale != 1:
             tr_['scale'] = scale
-        if vidspace_gsd is not None:
-            sample_gsd = vidspace_gsd / scale
+
+        if isinstance(scale, str) and scale == 'native':
+            tr_.pop('scale')
+            # native scales will only work in late-fused modes
+            tr_['use_native_scale'] = True
+            tr_['realign_native'] = 'largest'
+            sample_gsd = 'native'
+        else:
+            if vidspace_gsd is not None:
+                sample_gsd = vidspace_gsd / scale
 
         allow_augment = tr_.get('allow_augment', True)
         if allow_augment:
@@ -2534,9 +2590,11 @@ class KWCocoVideoDataset(data.Dataset):
                             nodata_total += 0
                         else:
                             if len(mask.shape) == 3:
-                                nodata_total += ((mask.sum(axis=2) / mask.shape[2])).astype(float)
+                                mask_ = ((mask.sum(axis=2) / mask.shape[2])).astype(float)
                             else:
-                                nodata_total += mask.astype(float)
+                                mask_ = mask.astype(float)
+                            mask_ = kwimage.imresize(mask_, dsize=frame_target_dsize)
+                            nodata_total += mask_
                     # nodata_total = np.add.reduce([0 if mask is None else mask.sum(axis=2) / mask.shape[2] for mask in mode_to_invalid_mask.values()])
                     total_bands = len(mode_to_invalid_mask)
                     nodata_frac = nodata_total / total_bands

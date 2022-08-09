@@ -217,6 +217,10 @@ def main(cmdline=False, **kwargs):
     environ['GDAL_DISABLE_READDIR_ON_OPEN'] = 'EMPTY_DIR'
     if api_key.startswith('env:'):
         import os
+        # NOTE!!!
+        # THIS WILL LOG YOUR SECRET KEY IN PLAINTEXT!!!
+        # TODO: figure out how to pass the in-environment secret key
+        # to the tmux sessions.
         api_key_name = api_key[4:]
         api_key_val = os.environ[api_key_name]
         environ[api_key_name] = api_key_val
