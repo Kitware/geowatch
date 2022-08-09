@@ -575,7 +575,7 @@ class DeiTEncoder(nn.Module):
         x = self.blocks(x)
         outputs = einops.rearrange(x, 'b (t m h w) f -> b t m h w f', t=T, m=M, h=H, w=W)
         return outputs
-      
+
 
 class PerceiverEncoder(nn.Module):
     """
@@ -590,7 +590,7 @@ class PerceiverEncoder(nn.Module):
         >>> outputs = self(inputs)
         >>> assert outputs.shape == (B, T, M, H, W, F)
     """
-  
+
     def __init__(self, in_features):
         super().__init__()
         import perceiver_pytorch as perceiver
@@ -598,15 +598,15 @@ class PerceiverEncoder(nn.Module):
             depth=4,
             dim=in_features,
             queries_dim=in_features,
-            num_latents = 512,
-            latent_dim = 256,
-            cross_heads = 1,
-            latent_heads = 8,
-            cross_dim_head = 64,
-            latent_dim_head = 64,
-            weight_tie_layers = False,
-            decoder_ff = False,
-            logits_dim = None,
+            num_latents=512,
+            latent_dim=256,
+            cross_heads=1,
+            latent_heads=8,
+            cross_dim_head=64,
+            latent_dim_head=64,
+            weight_tie_layers=False,
+            decoder_ff=False,
+            logits_dim=None,
         )
         self.in_features = in_features
         self.out_features = in_features
