@@ -577,6 +577,48 @@ class DeiTEncoder(nn.Module):
         return outputs
 
 
+class PerceiverEncoder(nn.Module):
+    """
+    https://github.com/lucidrains/perceiver-pytorch/blob/main/perceiver_pytorch/perceiver_io.py
+    
+    Example:
+        >>> from watch.tasks.fusion.architectures.transformer import PerceiverEncoder  # NOQA
+        >>> import torch
+        >>> B, T, M, H, W, F = 1, 2, 3, 5, 8, 13
+        >>> self = PerceiverEncoder(F)
+        >>> inputs = torch.rand(B, T, M, H, W, F)
+        >>> outputs = self(inputs)
+        >>> assert outputs.shape == (B, T, M, H, W, F)
+    """
+
+    def __init__(self, in_features):
+        super().__init__()
+        import perceiver_pytorch as perceiver
+        self.perceiver = perceiver.PerceiverIO(
+            depth=4,
+            dim=in_features,
+            queries_dim=in_features,
+            num_latents=512,
+            latent_dim=256,
+            cross_heads=1,
+            latent_heads=8,
+            cross_dim_head=64,
+            latent_dim_head=64,
+            weight_tie_layers=False,
+            decoder_ff=False,
+            logits_dim=None,
+        )
+        self.in_features = in_features
+        self.out_features = in_features
+
+    def forward(self, inputs):
+        B, T, M, H, W, F = inputs.shape
+        x = einops.rearrange(inputs, 'b t m h w f -> b (t m h w) f')
+        x = self.perceiver(x, queries=x)
+        outputs = einops.rearrange(x, 'b (t m h w) f -> b t m h w f', t=T, m=M, h=H, w=W)
+        return outputs
+
+
 class FusionEncoder(nn.Module):
     """
     Primary entry point to create a feature transformer
