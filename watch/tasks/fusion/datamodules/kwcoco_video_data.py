@@ -1987,7 +1987,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import kwcoco
             >>> import watch
             >>> # Demo NATIVE GSD
-            >>> dvc_dpath = watch.find_smart_dvc_dpath()
+            >>> dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
             >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_vali.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)

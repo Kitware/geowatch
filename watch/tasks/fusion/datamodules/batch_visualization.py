@@ -258,14 +258,6 @@ class BatchVisualizationBuilder:
                     all_weight_overlays.append(overlay_row)
 
             for weight_key, group in ub.group_items(all_weight_overlays, lambda x: x['weight_key']).items():
-                # print('weight_key = {!r}'.format(weight_key))
-                # maxval = -float('inf')
-                # minval = float('inf')
-                # for cell in group:
-                #     maxval = max(maxval, cell['raw'].max())
-                #     minval = min(minval, cell['raw'].min())
-                # print('maxval = {!r}'.format(maxval))
-                # print('minval = {!r}'.format(minval))
                 for cell in group:
                     weight_data = cell['raw']
                     if weight_data is None:
@@ -277,8 +269,6 @@ class BatchVisualizationBuilder:
                         weight_overlay = kwimage.ensure_float01(weight_overlay)
                     else:
                         weight_overlay = kwimage.atleast_3channels(weight_data)
-                    # weight_overlay = kwimage.ensure_alpha_channel(weight_overlay)
-                    # weight_overlay[:, 3] = 0.5
                     cell['overlay'] = weight_overlay
 
         # Normalize raw signal into visualizable range
@@ -315,13 +305,9 @@ class BatchVisualizationBuilder:
                     if needs_norm:
                         mask = (raw_signal != 0) & np.isfinite(raw_signal)
                         norm_signal = kwimage.normalize_intensity(raw_signal, mask=mask).copy()
-                        # try:
-                        # except Exception:
-                        #     norm_signal = raw_signal.copy()
                     else:
                         norm_signal = raw_signal.copy()
                     norm_signal = kwimage.fill_nans_with_checkers(norm_signal)
-                    # norm_signal = np.nan_to_num(norm_signal)
                     from watch.utils import util_kwimage
                     norm_signal = util_kwimage.ensure_false_color(norm_signal)
                     norm_signal = kwimage.atleast_3channels(norm_signal)
