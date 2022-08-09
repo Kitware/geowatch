@@ -297,6 +297,24 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
         _ = xdev.profile_now(sample_video_spacetime_targets)(dset, window_dims, window_overlap)
 
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> import ndsampler
+        >>> import kwcoco
+        >>> dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=30)
+        >>> window_overlap = 0.0
+        >>> window_dims = (3, 256, 256)
+        >>> keepbound = False
+        >>> time_sampling = 'soft2+distribute'
+        >>> sample_grid1 = sample_video_spacetime_targets(
+        >>>     dset, window_dims, window_overlap,
+        >>>     time_sampling='soft2+distribute')
+        >>> boxes = [kwimage.Boxes.from_slice(target['space_slice'], clip=False).to_xywh() for target in sample_grid1['targets']]
+        >>> all_boxes = kwimage.Boxes.concatenate(boxes)
+        >>> assert np.all(all_boxes.height == window_dims[1])
+        >>> assert np.all(all_boxes.width == window_dims[2])
+
     Example:
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> import ndsampler
@@ -429,7 +447,8 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
             time_sampling,
             time_span, use_annot_info,
             use_grid_positives,
-            use_centered_positives
+            use_centered_positives,
+            'cache_v2',
         ]
         cacher = ub.Cacher('sliding-window-cache', appname='watch',
                            depends=depends)
@@ -576,14 +595,18 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                 # FIXME: This code is too slow
                 # in addition to the sliding window sample, add positive samples
                 # centered around each annotation.
+                window_width = window_space_dims[1]
+                window_height = window_space_dims[0]
                 for tid, infos in ub.ProgIter(list(tid_to_infos.items()), desc='Centered annots'):
                     # existing_gids = [info['gid'] for info in infos]
                     for info in infos:
                         main_gid = info['gid']
                         ann_box = kwimage.Boxes([info['vidspace_box']], 'tlbr').to_cxywh()
-                        ann_box.data[:, 2] = window_space_dims[1]
-                        ann_box.data[:, 3] = window_space_dims[0]
-                        kw_space_region = ann_box.to_tlbr().quantize()
+                        ann_box.data[:, 2] = window_width
+                        ann_box.data[:, 3] = window_height
+                        kw_space_region = ann_box.to_tlbr()
+                        kw_space_region = kw_space_region.quantize()
+                        kw_space_region = kw_space_region.resize(width=window_width, height=window_height)
                         space_region = kw_space_region.to_slices()[0]
                         #  FIXME, this code is ugly
                         # TODO: we could make frames where the phase transitions
