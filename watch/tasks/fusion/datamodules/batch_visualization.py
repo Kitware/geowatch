@@ -71,8 +71,9 @@ class BatchVisualizationBuilder:
         >>> target = native_target = self.new_sample_grid['targets'][index].copy()
         >>> #target['space_slice'] = (slice(224, 448), slice(224, 448))
         >>> target['space_slice'] = (slice(196, 196 + 148), slice(32, 128))
-        >>> target['space_slice'] = (slice(0, 196 + 148), slice(0, 128))
-        >>> target['space_slice'] = (slice(-70, 196 + 148), slice(-128, 128))
+        >>> #target['space_slice'] = (slice(0, 196 + 148), slice(0, 128))
+        >>> target['space_slice'] = (slice(16, 196 + 148), slice(16, 128))
+        >>> #target['space_slice'] = (slice(-70, 196 + 148), slice(-128, 128))
         >>> native_target.pop('fliprot_params', None)
         >>> native_target['allow_augment'] = 0
         >>> native_item = self[native_target]
@@ -81,7 +82,7 @@ class BatchVisualizationBuilder:
         >>> rescaled_target.pop('fliprot_params', None)
         >>> rescaled_target['space_scale'] = 1
         >>> rescaled_target['allow_augment'] = 0
-        >>> rescale = 0
+        >>> rescale = 1
         >>> rescaled_item = self[rescaled_target]
         >>> print(ub.repr2(self.summarize_item(native_item), nl=-1, sort=0))
         >>> native_item_output = BatchVisualizationBuilder.populate_demo_output(native_item, sampler.classes, rng=0)

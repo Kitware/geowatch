@@ -849,25 +849,30 @@ def specialized_index_bands2(delayed=None):
         >>> from watch.utils.util_data import find_smart_dvc_dpath
         >>> import kwcoco
         >>> dvc_dpath = find_smart_dvc_dpath()
-        >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
+        >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_vali.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
-        >>> from watch.utils import kwcoco_extensions
-        >>> gid = ub.peek(dset.index.imgs.keys())
+        >>> #from watch.utils import kwcoco_extensions
+        >>> gid = dset.images().compress([s == 'L8' for s in dset.images().get('sensor_coarse')]).objs[200]['id']
+        >>> #gid = ub.peek(dset.index.imgs.keys())
         >>> coco_img = dset.coco_image(gid)
-        >>> print('coco_img.channels = {!r}'.format(coco_img.channels))
-        >>> delayed = coco_img.delay()
+        >>> #print('coco_img.channels = {!r}'.format(coco_img.channels))
+        >>> delayed = coco_img.delay(space='video', nodata_method='float')
         >>> symbolic = False
         >>> indexes = specialized_index_bands2(delayed)
         >>> import kwarray
-        >>> print(ub.repr2(ub.map_vals(kwarray.stats_dict, indexes), nl=1))
-        >>> import pandas as pd
-        >>> print(pd.DataFrame(ub.map_vals(kwarray.stats_dict, indexes)))
+        >>> #print(ub.repr2(ub.map_vals(kwarray.stats_dict, indexes), nl=1))
+        >>> #import pandas as pd
+        >>> #print(pd.DataFrame(ub.map_vals(kwarray.stats_dict, indexes)))
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> import kwimage
         >>> kwplot.autompl()
-        >>> pnum_ = kwplot.PlotNums(nSubplots=len(indexes))
+        >>> pnum_ = kwplot.PlotNums(nSubplots=len(indexes) + 1)
         >>> kwplot.figure(fnum=3)
+        >>> kwplot.imshow(value, title=key, pnum=pnum_(), cmap=None if key == 'MaskValid' else 'viridis', data_colorbar=True)
+        >>> rgb = delayed.take_channels('red|green|blue').finalize()
+        >>> rgb_canvas = kwimage.normalize_intensity(rgb)
+        >>> kwplot.imshow(rgb_canvas, title='rgb', pnum=pnum_())
         >>> indexes['MaskValid'] = indexes['MaskValid'].astype(np.float32)
         >>> for key, value in indexes.items():
         >>>     value = value.astype(np.float32)
@@ -935,6 +940,20 @@ def specialized_index_bands2(delayed=None):
     # else:
     rgbir123 = delayed.take_channels('blue|green|red|swir16|swir22|nir')
     chw = rgbir123.finalize().transpose(2, 0, 1).astype(np.float32)
+
+    # Artificial Surface Index (ASI) is designed based the surface reflectance imagery of Landsat 8.
+    # The data value range of Landsat surface reflectance [0, 1] is
+    # transformed to [0, 1*Scale].
+    # Scale = 10000
+    Scale = 15000
+
+    hack_norm = 0
+    if hack_norm:
+        # How do we apply this to S2?
+        import kwimage
+        chw = kwimage.normalize_intensity(chw)
+        Scale = 1
+
     Blue, Green, Red, SWIR1, SWIR2, NIR = chw
 
     def hist_cut(band, fill_value=0, k=3, minmax='std'):
@@ -957,12 +976,6 @@ def specialized_index_bands2(delayed=None):
             scaled = shifted / extent
             band[mask] = scaled[mask]
         return band
-
-    # Artificial Surface Index (ASI) is designed based the surface reflectance imagery of Landsat 8.
-    # The data value range of Landsat surface reflectance [0, 1] is
-    # transformed to [0, 1*Scale].
-    # Scale = 10000
-    Scale = 15000
 
     fillV = 0
 
