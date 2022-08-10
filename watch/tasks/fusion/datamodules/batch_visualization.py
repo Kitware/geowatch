@@ -18,8 +18,8 @@ class BatchVisualizationBuilder:
         xdoctest -m watch.tasks.fusion.datamodules.batch_visualization BatchVisualizationBuilder
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> from watch.tasks.fusion.datamodules.batch_visualization import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import KWCocoVideoDataset
         >>> import ndsampler
         >>> import watch
         >>> coco_dset = watch.coerce_kwcoco('vidshapes2-watch', num_frames=5)
@@ -28,53 +28,19 @@ class BatchVisualizationBuilder:
         >>> combinable_extra = [['B10', 'B8', 'B8a']]  # special behavior
         >>> # combinable_extra = None  # uncomment for raw behavior
         >>> self = KWCocoVideoDataset(
-        >>>     sampler, sample_shape=(5, 530, 610), channels=channels,
+        >>>     sampler, sample_shape=(5, 224, 256), channels=channels,
         >>>     use_centered_positives=True, neg_to_pos_ratio=0)
         >>> index = len(self) // 4
         >>> item = self[index]
-        >>> # Calculate the probability of change for each frame
-        >>> item_output = {}
-        >>> change_prob_list = []
-        >>> fliprot_params = item['tr'].get('fliprot_params', None)
-        >>> for frame in item['frames'][1:]:
-        >>>     change_prob = kwimage.Heatmap.random(
-        >>>         dims=frame['target_dims'], classes=1).data['class_probs'][0]
-        >>>     if fliprot_params:
-        >>>         change_prob = fliprot(change_prob, **fliprot_params)
-        >>>     change_prob_list += [change_prob]
-        >>> change_probs = np.stack(change_prob_list)
-        >>> item_output['change_probs'] = change_probs  # first frame does not have change
-        >>> #
-        >>> # Probability of each class for each frame
-        >>> class_prob_list = []
-        >>> for frame in item['frames']:
-        >>>     class_prob = kwimage.Heatmap.random(
-        >>>         dims=frame['target_dims'], classes=list(sampler.classes)).data['class_probs']
-        >>>     class_prob = einops.rearrange(class_prob, 'c h w -> h w c')
-        >>>     if fliprot_params:
-        >>>         class_prob = fliprot(class_prob, **fliprot_params)
-        >>>     class_prob_list += [class_prob]
-        >>> class_probs = np.stack(class_prob_list)
-        >>> item_output['class_probs'] = class_probs  # first frame does not have change
-        >>> #
-        >>> # Probability of "saliency" (i.e. non-background) for each frame
-        >>> saliency_prob_list = []
-        >>> for frame in item['frames']:
-        >>>     saliency_prob = kwimage.Heatmap.random(
-        >>>         dims=frame['target_dims'], classes=1).data['class_probs']
-        >>>     saliency_prob = einops.rearrange(saliency_prob, 'c h w -> h w c')
-        >>>     if fliprot_params:
-        >>>         saliency_prob = fliprot(saliency_prob, **fliprot_params)
-        >>>     saliency_prob_list += [saliency_prob]
-        >>> saliency_probs = np.stack(saliency_prob_list)
-        >>> item_output['saliency_probs'] = saliency_probs
+        >>> item_output = BatchVisualizationBuilder.populate_demo_output(item, sampler.classes)
         >>> #binprobs[0][:] = 0  # first change prob should be all zeros
+        >>> requested_tasks = self.requested_tasks
         >>> builder = BatchVisualizationBuilder(
-        >>>     item, item_output, classes=self.classes, requested_tasks=self.requested_tasks,
+        >>>     item, item_output, classes=self.classes, requested_tasks=requested_tasks,
         >>>     default_combinable_channels=self.default_combinable_channels, combinable_extra=combinable_extra)
         >>> #builder.overlay_on_image = 1
         >>> #canvas = builder.build()
-        >>> builder.max_channels = 3
+        >>> builder.max_channels = 4
         >>> builder.overlay_on_image = 0
         >>> canvas2 = builder.build()
         >>> # xdoctest: +REQUIRES(--show)
@@ -84,13 +50,85 @@ class BatchVisualizationBuilder:
         >>> #kwplot.imshow(canvas2, fnum=1, pnum=(1, 2, 2))
         >>> kwplot.imshow(canvas2, fnum=1, doclf=True)
         >>> kwplot.show_if_requested()
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.batch_visualization import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import KWCocoVideoDataset
+        >>> import ndsampler
+        >>> import watch
+        >>> coco_dset = watch.coerce_kwcoco('vidshapes2-watch', num_frames=5)
+        >>> channels = 'r|g|b,B10|B8a|B1|B8|B11,X.2|Y.2'
+        >>> #coco_dset = watch.coerce_kwcoco('vidshapes2', num_frames=5)
+        >>> #channels = None
+        >>> sampler = ndsampler.CocoSampler(coco_dset)
+        >>> combinable_extra = [['B10', 'B8', 'B8a']]  # special behavior
+        >>> # combinable_extra = None  # uncomment for raw behavior
+        >>> self = KWCocoVideoDataset(
+        >>>     sampler, sample_shape=(5, 128, 165), channels=channels,
+        >>>     use_centered_positives=True, neg_to_pos_ratio=0, space_scale='native')
+        >>> index = len(self) // 4
+        >>> index = 0
+        >>> target = native_target = self.new_sample_grid['targets'][index].copy()
+        >>> #target['space_slice'] = (slice(224, 448), slice(224, 448))
+        >>> target['space_slice'] = (slice(196, 196 + 148), slice(32, 128))
+        >>> target['space_slice'] = (slice(0, 196 + 148), slice(0, 128))
+        >>> target['space_slice'] = (slice(-70, 196 + 148), slice(-128, 128))
+        >>> native_target.pop('fliprot_params', None)
+        >>> native_target['allow_augment'] = 0
+        >>> native_item = self[native_target]
+        >>> # Resample the same item, but without native scale sampling for comparison
+        >>> rescaled_target = native_item['tr'].copy()
+        >>> rescaled_target.pop('fliprot_params', None)
+        >>> rescaled_target['space_scale'] = 1
+        >>> rescaled_target['allow_augment'] = 0
+        >>> rescale = 0
+        >>> rescaled_item = self[rescaled_target]
+        >>> print(ub.repr2(self.summarize_item(native_item), nl=-1, sort=0))
+        >>> native_item_output = BatchVisualizationBuilder.populate_demo_output(native_item, sampler.classes, rng=0)
+        >>> rescaled_item_output = BatchVisualizationBuilder.populate_demo_output(rescaled_item, sampler.classes, rng=0)
+        >>> #rescaled_item_output = None
+        >>> #rescaled_item_output = None
+        >>> #binprobs[0][:] = 0  # first change prob should be all zeros
+        >>> requested_tasks = self.requested_tasks
+        >>> builder = BatchVisualizationBuilder(
+        >>>     native_item, native_item_output, classes=self.classes,
+        >>>     requested_tasks=requested_tasks,
+        >>>     default_combinable_channels=self.default_combinable_channels,
+        >>>     combinable_extra=combinable_extra, rescale=rescale)
+        >>> builder.max_channels = 4
+        >>> builder.overlay_on_image = 0
+        >>> native_canvas = builder.build()
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> plt = kwplot.autoplt()
+        >>> #kwplot.imshow(canvas, fnum=1, pnum=(1, 2, 1))
+        >>> #kwplot.imshow(canvas2, fnum=1, pnum=(1, 2, 2))
+        >>> kwplot.imshow(native_canvas, fnum=1, doclf=True, figtitle='Naitive Sampling')
+        >>> plt.gcf().tight_layout()
+        >>> ######
+        >>> # Resample the same item, but without native sampling for comparison
+        >>> print(ub.repr2(self.summarize_item(rescaled_item), nl=-1, sort=0))
+        >>> builder = BatchVisualizationBuilder(
+        >>>     rescaled_item, rescaled_item_output, classes=self.classes,
+        >>>     requested_tasks=requested_tasks,
+        >>>     default_combinable_channels=self.default_combinable_channels,
+        >>>     combinable_extra=combinable_extra, rescale=rescale)
+        >>> builder.max_channels = 4
+        >>> builder.overlay_on_image = 0
+        >>> rescaled_canvas = builder.build()
+        >>> kwplot.imshow(rescaled_canvas, fnum=2, doclf=True, figtitle='Rescaled Sampling')
+        >>> plt.gcf().tight_layout()
+        >>> ######
+        >>> from watch.tasks.fusion.datamodules.batch_visualization import _debug_sample_in_context
+        >>> _debug_sample_in_context(self, target)
+        >>> kwplot.show_if_requested()
     """
 
     def __init__(builder, item, item_output=None, combinable_extra=None,
                  max_channels=5, max_dim=224, norm_over_time=0,
                  overlay_on_image=False, draw_weights=True, classes=None,
                  default_combinable_channels=None,
-                 requested_tasks=None):
+                 requested_tasks=None, rescale=1):
         builder.max_channels = max_channels
         builder.max_dim = max_dim
         builder.norm_over_time = norm_over_time
@@ -109,7 +147,53 @@ class BatchVisualizationBuilder:
             combinable_channels = combinable_channels.copy()
             combinable_channels += list(map(ub.oset, combinable_extra))
         builder.combinable_channels = combinable_channels
-        # print('builder.combinable_channels = {}'.format(ub.repr2(builder.combinable_channels, nl=1)))
+        builder.rescale = rescale
+
+    @classmethod
+    def populate_demo_output(cls, item, classes, rng=None):
+        """
+        Make dummy output for a batch item for testing
+        """
+        # Calculate the probability of change for each frame
+        from watch.tasks.fusion.datamodules.kwcoco_video_data import fliprot
+        import kwarray
+        item_output = {}
+        change_prob_list = []
+        rng = kwarray.ensure_rng(rng)
+        fliprot_params = item['tr'].get('fliprot_params', None)
+        for frame in item['frames'][1:]:
+            change_prob = kwimage.Heatmap.random(
+                dims=frame['target_dims'], classes=1, rng=rng).data['class_probs'][0]
+            if fliprot_params:
+                change_prob = fliprot(change_prob, **fliprot_params)
+            change_prob_list += [change_prob]
+        change_probs = change_prob_list
+        item_output['change_probs'] = change_probs  # first frame does not have change
+        #
+        # Probability of each class for each frame
+        class_prob_list = []
+        for frame in item['frames']:
+            class_prob = kwimage.Heatmap.random(
+                dims=frame['target_dims'], classes=list(classes), rng=rng).data['class_probs']
+            class_prob = einops.rearrange(class_prob, 'c h w -> h w c')
+            if fliprot_params:
+                class_prob = fliprot(class_prob, **fliprot_params)
+            class_prob_list += [class_prob]
+        class_probs = class_prob_list
+        item_output['class_probs'] = class_probs  # first frame does not have change
+        #
+        # Probability of "saliency" (i.e. non-background) for each frame
+        saliency_prob_list = []
+        for frame in item['frames']:
+            saliency_prob = kwimage.Heatmap.random(
+                dims=frame['target_dims'], classes=1, rng=rng).data['class_probs']
+            saliency_prob = einops.rearrange(saliency_prob, 'c h w -> h w c')
+            if fliprot_params:
+                saliency_prob = fliprot(saliency_prob, **fliprot_params)
+            saliency_prob_list += [saliency_prob]
+        saliency_probs = saliency_prob_list
+        item_output['saliency_probs'] = saliency_probs
+        return item_output
 
     def build(builder):
         frame_metas = builder._prepare_frame_metadata()
@@ -301,7 +385,11 @@ class BatchVisualizationBuilder:
                     import warnings
                     with warnings.catch_warnings():
                         warnings.filterwarnings('ignore', message='All-NaN slice')
-                        needs_norm = np.nanmin(raw_signal) < 0 or np.nanmax(raw_signal) > 1
+                        if raw_signal.dtype.kind == 'u' and raw_signal.dtype.itemsize == 1:
+                            raw_signal = kwimage.ensure_float01(raw_signal)
+                            needs_norm = False
+                        else:
+                            needs_norm = np.nanmin(raw_signal) < 0 or np.nanmax(raw_signal) > 1
                     if needs_norm:
                         mask = (raw_signal != 0) & np.isfinite(raw_signal)
                         norm_signal = kwimage.normalize_intensity(raw_signal, mask=mask).copy()
@@ -324,12 +412,35 @@ class BatchVisualizationBuilder:
         truth_overlay_keys = set(ub.flatten([m['frame_truth'] for m in frame_metas]))
         weight_overlay_keys = set(ub.flatten([m['frame_weight'] for m in frame_metas]))
 
+        vertical_stacks = []
         for frame_meta in frame_metas:
-            frame_canvas = builder._build_frame(
+            vertical_stack = builder._build_frame_vertical_stack(
                 frame_meta, truth_overlay_keys, weight_overlay_keys)
+            vertical_stacks.append(vertical_stack)
+
+        # Make the headers the same height in each stack
+        for row_stack in zip(*vertical_stacks):
+            if all(r['type'] == 'header' for r in row_stack) :
+                heights = [r['im'].shape[0] for r in row_stack]
+                if not ub.allsame(heights):
+                    max_h = max(heights)
+                    for r in row_stack:
+                        h, w = r['im'].shape[0:2]
+                        if h != max_h:
+                            r['im'] = kwimage.imresize(r['im'], dsize=(w, max_h), letterbox=True)
+
+        if 0:
+            stack_shape_texts = []
+            for vertical_stack in vertical_stacks:
+                text = '\n'.join([str(r['im'].shape) for r in vertical_stack])
+                stack_shape_texts.append(text)
+            print(ub.hzcat(stack_shape_texts))
+
+        for vertical_stack in vertical_stacks:
+            frame_canvas = kwimage.stack_images([r['im'] for r in vertical_stack], pad=3, bg_value='kitware_darkgreen')
             horizontal_stack.append(frame_canvas)
 
-        body_canvas = kwimage.stack_images(horizontal_stack, axis=1, pad=5)
+        body_canvas = kwimage.stack_images(horizontal_stack, axis=1, pad=5, bg_value='kitware_darkblue')
         body_canvas = body_canvas[..., 0:3]  # drop alpha
         body_canvas = kwimage.ensure_uint255(body_canvas)  # convert to uint8
 
@@ -348,7 +459,7 @@ class BatchVisualizationBuilder:
             {'width': width}, vid_text, org=(width // 2, 3), valign='top',
             halign='center', color='pink')
 
-        canvas = kwimage.stack_images([vid_header, body_canvas], axis=0, pad=3)
+        canvas = kwimage.stack_images([vid_header, body_canvas], axis=0, pad=3, bg_value='kitware_darkblue')
         return canvas
 
     def _build_frame_header(builder, frame_meta):
@@ -366,24 +477,33 @@ class BatchVisualizationBuilder:
         header_part = kwimage.draw_header_text(
             image=header_dims, fit=False,
             text=f't={frame_idx} gid={gid}', color='salmon')
-        header_stack.append(header_part)
+        header_stack.append({
+            'im': header_part,
+            'type': 'header',
+        })
 
         sensor = frame_item.get('sensor', '*')
         if sensor != '*':
             header_part = kwimage.draw_header_text(
                 image=header_dims, fit=False, text=f'{sensor}',
                 color='salmon')
-            header_stack.append(header_part)
+            header_stack.append({
+                'im': header_part,
+                'type': 'header',
+            })
 
         date_captured = frame_item.get('date_captured', '')
         if date_captured:
             header_part = kwimage.draw_header_text(
                 header_dims, fit='shrink', text=f'{date_captured}',
                 color='salmon')
-            header_stack.append(header_part)
+            header_stack.append({
+                'im': header_part,
+                'type': 'header',
+            })
         return header_stack
 
-    def _build_frame(builder, frame_meta, truth_overlay_keys, weight_overlay_keys):
+    def _build_frame_vertical_stack(builder, frame_meta, truth_overlay_keys, weight_overlay_keys):
         """
         Build a vertical stack for a single frame
         """
@@ -476,6 +596,7 @@ class BatchVisualizationBuilder:
             # 'letterbox': False,
             'letterbox': True,
             'interpolation': 'nearest',
+            'border_value': 'kitware_darkgray',
             # 'interpolation': 'linear',
         }
 
@@ -483,30 +604,40 @@ class BatchVisualizationBuilder:
         key = 'class_probs'
         overlay_index = 0
         if item_output and key in item_output and builder.requested_tasks['class']:
+            x = item_output[key][frame_idx]
+            x_shape = x.shape[0:2]
             if builder.overlay_on_image:
                 norm_signal = chan_rows[overlay_index]['norm_signal']
+                norm_signal = kwimage.imresize(norm_signal, dsize=x_shape[::-1])
             else:
-                norm_signal = np.zeros_like(chan_rows[min(overlay_index, len(chan_rows) - 1)]['norm_signal'])
-            x = item_output[key][frame_idx]
+                norm_signal = np.zeros(x_shape + (3,), dtype=np.float32)
             class_probs = einops.rearrange(x, 'h w c -> c h w')
             class_heatmap = kwimage.Heatmap(class_probs=class_probs, classes=classes)
             pred_part = class_heatmap.draw_on(norm_signal, with_alpha=0.7)
             # TODO: we might want to overlay the prediction on one or
             # all of the channels
-            pred_part = kwimage.imresize(pred_part, **resizekw).clip(0, 1)
+
+            if builder.rescale:
+                pred_part = kwimage.imresize(pred_part, **resizekw).clip(0, 1)
+
             pred_text = f'pred class t={frame_idx}'
             pred_part = kwimage.draw_text_on_image(
                 pred_part, pred_text, (1, 1), valign='top',
                 color='dodgerblue', border=3)
-            vertical_stack.append(pred_part)
+            vertical_stack.append({
+                'im': pred_part,
+                'type': 'data',
+            })
 
         key = 'saliency_probs'
         if item_output and key in item_output and builder.requested_tasks['saliency']:
+            x = item_output[key][frame_idx]
+            x_shape = x.shape[0:2]
             if builder.overlay_on_image:
                 norm_signal = chan_rows[0]['norm_signal']
+                norm_signal = kwimage.imresize(norm_signal, dsize=x_shape[::-1])
             else:
-                norm_signal = np.zeros_like(chan_rows[min(overlay_index, len(chan_rows) - 1)]['norm_signal'])
-            x = item_output[key][frame_idx]
+                norm_signal = np.zeros(x_shape + (3,), dtype=np.float32)
             saliency_probs = einops.rearrange(x, 'h w c -> c h w')
             # Hard coded index, dont like
             is_salient_probs = saliency_probs[1]
@@ -516,12 +647,18 @@ class BatchVisualizationBuilder:
             pred_part[..., 3] = 0.7
             # TODO: we might want to overlay the prediction on one or
             # all of the channels
-            pred_part = kwimage.imresize(pred_part, **resizekw).clip(0, 1)
+
+            if builder.rescale:
+                pred_part = kwimage.imresize(pred_part, **resizekw).clip(0, 1)
+
             pred_text = f'pred saliency t={frame_idx}'
             pred_part = kwimage.draw_text_on_image(
                 pred_part, pred_text, (1, 1), valign='top',
                 color='dodgerblue', border=3)
-            vertical_stack.append(pred_part)
+            vertical_stack.append({
+                'im': pred_part,
+                'type': 'data',
+            })
 
         key = 'change_probs'
         overlay_index = 1
@@ -538,24 +675,32 @@ class BatchVisualizationBuilder:
                     color='red')
                 pred_part = pred_mask
             else:
-                pred_raw = item_output[key][frame_idx - 1]
+                x = item_output[key][frame_idx - 1]
+                x_shape = x.shape[0:2]
                 # Draw predictions on the first item
-                pred_mask = kwimage.make_heatmask(pred_raw, cmap='viridis')
+                pred_mask = kwimage.make_heatmask(x, cmap='viridis')
                 norm_signal = chan_rows[min(overlay_index, len(chan_rows) - 1)]['norm_signal']
                 if builder.overlay_on_image:
                     norm_signal = norm_signal
+                    norm_signal = kwimage.imresize(norm_signal, dsize=x_shape[::-1])
                 else:
-                    norm_signal = np.zeros_like(norm_signal)
+                    norm_signal = np.zeros(x_shape + (3,), dtype=np.float32)
                 pred_layers = [pred_mask, norm_signal]
                 pred_part = kwimage.overlay_alpha_layers(pred_layers)
                 # TODO: we might want to overlay the prediction on one or
                 # all of the channels
-                pred_part = kwimage.imresize(pred_part, **resizekw).clip(0, 1)
+
+                if builder.rescale:
+                    pred_part = kwimage.imresize(pred_part, **resizekw).clip(0, 1)
+
                 pred_text = f'pred change t={frame_idx}'
                 pred_part = kwimage.draw_text_on_image(
                     pred_part, pred_text, (1, 1), valign='top',
                     color='dodgerblue', border=3)
-            vertical_stack.append(pred_part)
+            vertical_stack.append({
+                'im': pred_part,
+                'type': 'data',
+            })
 
         if not builder.overlay_on_image:
             # FIXME: might be broken
@@ -563,25 +708,37 @@ class BatchVisualizationBuilder:
             for overlay_info in overlay_items:
                 label_text = overlay_info['label_text']
                 row_canvas = overlay_info['overlay'][..., 0:3]
-                row_canvas = kwimage.imresize(row_canvas, **resizekw).clip(0, 1)
+
+                if builder.rescale:
+                    row_canvas = kwimage.imresize(row_canvas, **resizekw).clip(0, 1)
+
                 signal_bottom_y = 1  # hack: hardcoded
                 row_canvas = kwimage.ensure_uint255(row_canvas)
                 row_canvas = kwimage.draw_text_on_image(
                     row_canvas, label_text, (1, signal_bottom_y + 1),
                     valign='top', color='lime', border=3)
-                vertical_stack.append(row_canvas)
+                vertical_stack.append({
+                    'im': row_canvas,
+                    'type': 'data',
+                })
 
         for overlay_info in weight_items:
             label_text = overlay_info['label_text']
             row_canvas = overlay_info['overlay'][..., 0:3]
             row_canvas = row_canvas.copy()
-            row_canvas = kwimage.imresize(row_canvas, **resizekw).clip(0, 1)
+
+            if builder.rescale:
+                row_canvas = kwimage.imresize(row_canvas, **resizekw).clip(0, 1)
+
             signal_bottom_y = 1  # hack: hardcoded
             row_canvas = kwimage.ensure_uint255(row_canvas)
             row_canvas = kwimage.draw_text_on_image(
                 row_canvas, label_text, (1, signal_bottom_y + 1),
                 valign='top', color='lime', border=3)
-            vertical_stack.append(row_canvas)
+            vertical_stack.append({
+                'im': row_canvas,
+                'type': 'data',
+            })
 
         for iterx, row in enumerate(chan_rows):
             layers = []
@@ -596,7 +753,9 @@ class BatchVisualizationBuilder:
             layers.append(row['norm_signal'])
             row_canvas = kwimage.overlay_alpha_layers(layers)[..., 0:3]
 
-            # row_canvas = kwimage.imresize(row_canvas, **resizekw).clip(0, 1)
+            if builder.rescale:
+                row_canvas = kwimage.imresize(row_canvas, **resizekw).clip(0, 1)
+
             row_canvas = kwimage.ensure_uint255(row_canvas)
             row_canvas = kwimage.draw_text_on_image(
                 row_canvas, row['signal_text'], (1, 1), valign='top',
@@ -609,8 +768,64 @@ class BatchVisualizationBuilder:
                 row_canvas = kwimage.draw_text_on_image(
                     row_canvas, label_text, (1, signal_bottom_y + 1),
                     valign='top', color='lime', border=3)
-            vertical_stack.append(row_canvas)
+            vertical_stack.append({
+                'im': row_canvas,
+                'type': 'data',
+            })
 
-        vertical_stack = [kwimage.ensure_uint255(p) for p in vertical_stack]
-        frame_canvas = kwimage.stack_images(vertical_stack, overlap=-3)
-        return frame_canvas
+        for row in vertical_stack:
+            row['im'] = kwimage.ensure_uint255(row['im'])
+        return vertical_stack
+
+
+def _debug_sample_in_context(self, target):
+    """
+    Draw the sampled images in videospace and draw the sample box on top of it
+    so we can check to ensure the sampled data corresponds.
+
+    This would be a nice helper for ndsampler itself (or at least the dataset).
+    """
+
+    coco_dset = self.sampler.dset
+    coco_images = coco_dset.images(target['gids']).coco_images
+
+    import kwplot
+    plt = kwplot.autoplt()
+
+    canvas_sequence = []
+    vidspace_boxes = []
+
+    for coco_img in coco_images:
+        sensor = coco_img.img.get('sensor_coarse', '*')
+        img_channels = self.input_sensorchan.matching_sensor(sensor).chans
+        three_chans = img_channels.fuse().to_list()[0:3]
+        if len(three_chans) == 2:
+            three_chans = three_chans[0:1]
+        delayed = coco_img.delay(channels=three_chans, space='video')
+        vidspace_img = delayed.finalize()
+        if vidspace_img.dtype.kind == 'u' and vidspace_img.dtype.itemsize == 1:
+            vispace_canvas = kwimage.ensure_float01(vidspace_img.copy())
+        else:
+            vispace_canvas = kwimage.normalize_intensity(vidspace_img, axis=2)
+        # vispace_canvas = np.ascontiguousarray(vispace_canvas)
+
+        imgspace_frame_dets = coco_dset.annots(gid=coco_img.img['id']).detections
+        vidspace_frame_dets = imgspace_frame_dets.warp(coco_img.warp_vid_from_img)
+
+        sample_box = kwimage.Boxes.from_slice(target['space_slice'], clip=False, wrap=False)
+        vispace_canvas = vidspace_frame_dets.draw_on(vispace_canvas)
+        # vispace_canvas = sample_box.draw_on(vispace_canvas, color='kitware_orange', thickness=10)
+        vidspace_boxes.append(sample_box)
+        canvas_sequence.append(vispace_canvas)
+
+    sequence_canvas, info = kwimage.stack_images(canvas_sequence, axis=1, pad=50, return_info=True)
+
+    # kwimage
+    kwplot.imshow(sequence_canvas, fnum=3, doclf=1)
+    ax = plt.gca()
+    ax.set_clip_on(False)
+
+    for box, tf in zip(vidspace_boxes, info):
+        box = box.warp(tf)
+        print(f'box={box}')
+        box.draw(color='kitware_orange', lw=4, alpha=0.5, ax=ax)

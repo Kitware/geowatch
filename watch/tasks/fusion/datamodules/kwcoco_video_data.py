@@ -1489,7 +1489,7 @@ class KWCocoVideoDataset(data.Dataset):
                     rng.randint(-h // 2.7, h // 2.7)))
                 space_box = space_box.warp(aff).quantize()
                 # Keep the original box size
-                _box_resize(space_box, width=w, height=h)
+                space_box = space_box.resize(width=w, height=h)
 
                 # prevent shifting the target off the edge of the video
                 snap_target = kwimage.Boxes([[0, 0, vid_width, vid_height]], 'ltrb')
@@ -1630,9 +1630,9 @@ class KWCocoVideoDataset(data.Dataset):
                 padkw={'constant_values': np.nan},
                 dtype=np.float32
             )
-            print(sample['im'].shape)
 
             if 0:
+                # print(sample['im'].shape)
                 gid = 4410
                 coco_img = sampler.dset.coco_image(gid)
                 delayed = coco_img.delay()
@@ -1783,24 +1783,23 @@ class KWCocoVideoDataset(data.Dataset):
             dict : a summary of the item
         """
         item_summary = {}
-        item_summary['frame_shapes'] = []
+        item_summary['frame_summaries'] = []
         timestamps = []
         for frame in item['frames']:
-            shapes = {}
+            frame_summary = {}
             for mode_key, im_mode in frame['modes'].items():
-                shapes[frame['sensor'] + ':' + mode_key] = im_mode.shape
+                frame_summary[frame['sensor'] + ':' + mode_key] = im_mode.shape
             label_keys = [
                 'class_idxs', 'saliency', 'change'
                 'class_weights', 'saliency_weights', 'change_weights'
             ]
             for key in label_keys:
                 if frame.get(key, None) is not None:
-                    shapes[key] = frame[key].shape
-            item_summary['frame_shapes'].append(shapes)
+                    frame_summary[key] = frame[key].shape
+            item_summary['frame_summaries'].append(frame_summary)
             if frame['date_captured']:
                 timestamps.append(ub.timeparse(frame['date_captured']))
-
-            frame['class_idxs']
+            frame_summary['num_annots'] = len(frame['ann_aids'])
 
         item_summary['video_name'] = item['video_name']
         if timestamps:
@@ -1987,13 +1986,16 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import kwcoco
             >>> import watch
             >>> # Demo NATIVE GSD
-            >>> dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
+            >>> dvc_dpath = watch.find_smart_dvc_dpath()
             >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_vali.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 256, 256), channels='(L8,S2):(red|green|blue|nir,swir16,swir22)', normalize_perframe=False, space_scale='native')
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 256, 256),
+            >>>                           channels='(L8,S2):(red|green|blue|nir,swir16,swir22)',
+            >>>                           normalize_perframe=False,
+            >>>                           space_scale='native', dist_weights=True)
             >>> self.requested_tasks['change'] = False
-            >>> self.requested_tasks['class'] = False
+            >>> self.requested_tasks['class'] = True
             >>> self.requested_tasks['saliency'] = False
             >>> self.disable_augmenter = True
             >>> index = 300
@@ -2001,7 +2003,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> item = self[index]
             >>> print(ub.repr2(self.summarize_item(item), nl=-1))
             >>> tr = item['tr']
-            >>> canvas = self.draw_item(item, draw_weights=False)
+            >>> canvas = self.draw_item(item, draw_weights=1)
             >>> # xdoctest: +REQUIRES(--show)
             >>> import kwplot
             >>> kwplot.autompl()
@@ -2130,6 +2132,8 @@ class KWCocoVideoDataset(data.Dataset):
         coco_dset = self.sampler.dset
         tr_['as_xarray'] = False
         tr_['use_experimental_loader'] = 1
+        tr_['legacy_annots'] = False
+        tr_['legacy_targets'] = True
 
         if 'video_id' not in tr_:
             _gid = ub.peek(tr_['gids'])
@@ -2454,8 +2458,11 @@ class KWCocoVideoDataset(data.Dataset):
                 # lets us assume the corners of each window are in
                 # correspondence)
                 _target_dsize = np.array(frame_target_dsize)
+                print(f'gid_to_det_window_dsize={gid_to_det_window_dsize}')
+                print(f'_target_dsize={_target_dsize}')
                 _dets_dsize = np.array(gid_to_det_window_dsize[gid])
-                dets_scale = _target_dsize / _dets_dsize
+                dets_scale = (_target_dsize / _dets_dsize)[::-1]
+                print(f'dets_scale={dets_scale}')
 
                 frame_dets = gid_to_dets[gid]
                 if frame_dets is None:
@@ -2648,10 +2655,21 @@ class KWCocoVideoDataset(data.Dataset):
                 if frame_items:
                     frame1 = frame_items[0]
                 for frame1, frame2 in ub.iter_window(frame_items, 2):
-                    frame_change = (frame1['class_idxs'] != frame2['class_idxs']).astype(np.uint8)
+                    class_weights1 = frame1['class_weights']
+                    class_weights2 = frame2['class_weights']
+                    class_idxs1 = frame1['class_idxs']
+                    class_idxs2 = frame2['class_idxs']
+                    if class_idxs2.shape != class_idxs1.shape:
+                        class_idxs1 = kwimage.imresize(
+                            class_idxs1, dsize=class_idxs2.shape[0:2][::-1],
+                            interpolation='nearest')
+                        class_weights1 = kwimage.imresize(
+                            class_weights1, dsize=class_weights2.shape[0:2][::-1],
+                            interpolation='nearest')
+                    frame_change = (class_idxs1 != class_idxs2).astype(np.uint8)
                     # ToDO: configure kernel size here
                     frame_change = kwimage.morphology(frame_change, 'open', kernel=3)
-                    change_weights = frame1['class_weights'] * frame2['class_weights']
+                    change_weights = class_weights1 * class_weights2
                     frame2['change'] = frame_change
                     frame2['change_weights'] = change_weights.clip(0, 1)
 
@@ -2740,7 +2758,7 @@ class KWCocoVideoDataset(data.Dataset):
                 scaled_time_offset = abslog_scaling(time_offset)
                 positional_arrays['time_offset'] = scaled_time_offset
             else:
-                print(list(permode_datas.keys()))
+                print('NONE TIME OFFSET: {}'.format(list(permode_datas.keys())))
 
             # This is flattened for each frame for each mode.
             # A bit hacky, not in love with it.
@@ -3355,17 +3373,3 @@ class FailedSample(Exception):
     Error for when we fail to sample the requested region
     """
     ...
-
-
-def _box_resize(self, width=None, height=None):
-    """
-    Will exist in kwimage soon in 0.9.5. Use Boxes.resize when that is
-    released.
-    """
-    new = self.to_xywh(copy=True)
-    if width is not None:
-        new.data[..., 2] = width
-    if height is not None:
-        new.data[..., 3] = height
-    new = new.toformat(self.format, copy=False)
-    return new

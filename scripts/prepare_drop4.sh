@@ -136,6 +136,46 @@ build_drop4_v2_BAS(){
 }
 
 
+build_drop4_v2_SC(){
+    source "$HOME"/code/watch/secrets/secrets
+    SENSORS=TA1-WV-PD-ACC
+    DVC_DPATH=$HOME/data/dvc-repos/smart_data_dvc
+    #DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+
+    DATASET_SUFFIX=Drop4-2022-08-08-$SENSORS
+    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*.geojson"
+    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
+
+    # Construct the TA2-ready dataset
+    python -m watch.cli.prepare_ta2_dataset \
+        --dataset_suffix=$DATASET_SUFFIX \
+        --stac_query_mode=auto \
+        --cloud_cover=40 \
+        --sensors="$SENSORS" \
+        --api_key=env:SMART_STAC_API_KEY \
+        --collated True \
+        --dvc_dpath="$DVC_DPATH" \
+        --aws_profile=iarpa \
+        --region_globstr="$REGION_GLOBSTR" \
+        --site_globstr="$SITE_GLOBSTR" \
+        --requester_pays=False \
+        --fields_workers=20 \
+        --convert_workers=8 \
+        --max_queue_size=12 \
+        --align_workers=12 \
+        --ignore_duplicates=1 \
+        --separate_region_queues=1 \
+        --separate_align_jobs=1 \
+        --visualize=1 \
+        --target_gsd=30 \
+        --force_nodata=-9999 \
+        --cache=0 \
+        --align_keep=none \
+        --backend=tmux --run=1
+}
+
+
+
 #mkdir -p "$DEMO_DPATH"
 ## Create the search json wrt the sensors and processing level we want
 #python -m watch.cli.stac_search_build \
