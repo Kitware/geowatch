@@ -138,12 +138,12 @@ build_drop4_v2_BAS(){
 
 build_drop4_v2_SC(){
     source "$HOME"/code/watch/secrets/secrets
-    SENSORS=TA1-WV-PD-ACC
+    SENSORS=TA1-S2-WV-PD-ACC
     DVC_DPATH=$HOME/data/dvc-repos/smart_data_dvc
     #DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
 
     DATASET_SUFFIX=Drop4-2022-08-08-$SENSORS
-    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*.geojson"
+    REGION_GLOBSTR="$DVC_DPATH/subregions/*.geojson"
     SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
@@ -167,7 +167,7 @@ build_drop4_v2_SC(){
         --separate_region_queues=1 \
         --separate_align_jobs=1 \
         --visualize=1 \
-        --target_gsd=30 \
+        --target_gsd=4 \
         --force_nodata=-9999 \
         --cache=0 \
         --align_keep=none \
