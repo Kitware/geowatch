@@ -258,6 +258,7 @@ def main(args):
                                             check_val_every_n_epoch=args.check_val_every_n_epoch)
     trainer.fit(model)
 
+
 if __name__ == '__main__':
 
     parser = ArgumentParser()

@@ -46,7 +46,7 @@ class kwcoco_dataset(Dataset):
         # handle if there are multiple sensors
         image_sensors = self.images.lookup('sensor_coarse', default=None)
         avail_sensors = set(image_sensors)
-        flags = [x in requested_sensors for x in  image_sensors]
+        flags = [x in requested_sensors for x in image_sensors]
         self.images = self.images.compress(flags)
 
         # if 'sensor_coarse' in self.images._id_to_obj[self.images._ids[0]].keys():
@@ -337,6 +337,7 @@ class kwcoco_dataset(Dataset):
 class SpaceNet7(Dataset):
     '''TO DO: Return segmentation labels for SpaceNet 7'''
     normalize_params = [[0.16198677, 0.22665408, 0.1745371], [0.06108317, 0.06515977, 0.04128775]]
+
     def __init__(self,
                     patch_size=128,
                     splits='satellite_sort/data/spacenet/splits_unmasked/',  # ### unmasked images

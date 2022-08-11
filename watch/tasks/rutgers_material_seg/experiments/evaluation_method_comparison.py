@@ -86,7 +86,6 @@ class Evaluator(object):
         filtered_features = filtered_features.view(bs, c, h, w) * features.view(bs, c, h, w)
         return filtered_features
 
-
     def eval(self, cometml_experiemnt) -> tuple:
         """evaluate a single epoch
 
@@ -142,7 +141,6 @@ class Evaluator(object):
                                                      cutoff_top=self.config['high_confidence_threshold']['val_cutoff'],
                                                      cutoff_low=self.config['high_confidence_threshold']['val_low_cutoff'])
 
-
                 pred1 = masks1.max(1)[1].cpu().detach()  # .numpy()
                 pred2 = masks2.max(1)[1].cpu().detach()  # .numpy()
 
@@ -150,82 +148,82 @@ class Evaluator(object):
 
                 inference_otsu_coeff = 1.5
                 hist_inference_otsu_coeff = 0.95
-                pad_amount = (self.config['evaluation']['inference_window']-1)//2
+                pad_amount = (self.config['evaluation']['inference_window'] - 1) // 2
                 topk = 13
 
-                padded_output1 = F.pad(input=output1, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
-                padded_output2 = F.pad(input=output2, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
-                patched_padded_output1 = torch.stack([transforms.functional.crop(padded_output1, *params) for params in self.inference_all_crops_params], dim=1) #.flatten(-3,-1)
-                patched_padded_output2 = torch.stack([transforms.functional.crop(padded_output2, *params) for params in self.inference_all_crops_params], dim=1) #.flatten(-3,-1)
+                padded_output1 = F.pad(input=output1, pad=(pad_amount, pad_amount, pad_amount, pad_amount), mode='replicate')
+                padded_output2 = F.pad(input=output2, pad=(pad_amount, pad_amount, pad_amount, pad_amount), mode='replicate')
+                patched_padded_output1 = torch.stack([transforms.functional.crop(padded_output1, *params) for params in self.inference_all_crops_params], dim=1)  # .flatten(-3,-1)
+                patched_padded_output2 = torch.stack([transforms.functional.crop(padded_output2, *params) for params in self.inference_all_crops_params], dim=1)  # .flatten(-3,-1)
 
-                padded_mask1 = F.pad(input=masks1, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
-                padded_mask2 = F.pad(input=masks2, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
-                patched_padded_mask1 = torch.stack([transforms.functional.crop(padded_mask1, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
-                patched_padded_mask2 = torch.stack([transforms.functional.crop(padded_mask2, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
+                padded_mask1 = F.pad(input=masks1, pad=(pad_amount, pad_amount, pad_amount, pad_amount), mode='replicate')
+                padded_mask2 = F.pad(input=masks2, pad=(pad_amount, pad_amount, pad_amount, pad_amount), mode='replicate')
+                patched_padded_mask1 = torch.stack([transforms.functional.crop(padded_mask1, *params) for params in self.inference_all_crops_params], dim=1)  # .flatten(-3,-1)
+                patched_padded_mask2 = torch.stack([transforms.functional.crop(padded_mask2, *params) for params in self.inference_all_crops_params], dim=1)  # .flatten(-3,-1)
 
-                patched_padded_output1_distributions = patched_padded_output1.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
-                patched_padded_output2_distributions = patched_padded_output2.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
-                patched_padded_mask1_distributions = patched_padded_mask1.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
-                patched_padded_mask2_distributions = patched_padded_mask2.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
+                patched_padded_output1_distributions = patched_padded_output1.flatten(-2, -1)  # .sum(axis=3) #[bs, n_patches, k]
+                patched_padded_output2_distributions = patched_padded_output2.flatten(-2, -1)  # .sum(axis=3) #[bs, n_patches, k]
+                patched_padded_mask1_distributions = patched_padded_mask1.flatten(-2, -1)  # .sum(axis=3) #[bs, n_patches, k]
+                patched_padded_mask2_distributions = patched_padded_mask2.flatten(-2, -1)  # .sum(axis=3) #[bs, n_patches, k]
 
                 topk_patched_output1_pre_distributions, largest_elements_pre_inds = torch.topk(patched_padded_output1_distributions, k=topk, sorted=False, dim=3)
                 topk_patched_output2_pre_distributions = torch.gather(patched_padded_output2_distributions, dim=3, index=largest_elements_pre_inds)
 
-                patched_padded_output1_distributions = patched_padded_output1_distributions.sum(axis=3) #[bs, n_patches, k]
-                patched_padded_output2_distributions = patched_padded_output2_distributions.sum(axis=3) #[bs, n_patches, k]
-                topk_patched_padded_output1_pre_distributions = topk_patched_output1_pre_distributions.sum(axis=3) #[bs, n_patches, k]
-                topk_patched_padded_output2_pre_distributions = topk_patched_output2_pre_distributions.sum(axis=3) #[bs, n_patches, k]
+                patched_padded_output1_distributions = patched_padded_output1_distributions.sum(axis=3)  # [bs, n_patches, k]
+                patched_padded_output2_distributions = patched_padded_output2_distributions.sum(axis=3)  # [bs, n_patches, k]
+                topk_patched_padded_output1_pre_distributions = topk_patched_output1_pre_distributions.sum(axis=3)  # [bs, n_patches, k]
+                topk_patched_padded_output2_pre_distributions = topk_patched_output2_pre_distributions.sum(axis=3)  # [bs, n_patches, k]
 
-                patched_padded_mask1_distributions = patched_padded_mask1_distributions.sum(axis=3) #[bs, n_patches, k]
-                patched_padded_mask2_distributions = patched_padded_mask2_distributions.sum(axis=3) #[bs, n_patches, k]
+                patched_padded_mask1_distributions = patched_padded_mask1_distributions.sum(axis=3)  # [bs, n_patches, k]
+                patched_padded_mask2_distributions = patched_padded_mask2_distributions.sum(axis=3)  # [bs, n_patches, k]
 
                 topk_patched_output1_post_distributions, largest_elements_post_inds = torch.topk(patched_padded_output1_distributions, k=topk, sorted=False, dim=2)
                 topk_patched_output2_post_distributions = torch.gather(patched_padded_output2_distributions, dim=2, index=largest_elements_post_inds)
 
-                normalized_topk_patched_output1_pre_distributions = (topk_patched_output1_pre_distributions - topk_patched_output1_pre_distributions.min(dim=2, keepdim=True)[0])/(topk_patched_output1_pre_distributions.max(dim=2, keepdim=True)[0] - topk_patched_output1_pre_distributions.min(dim=2, keepdim=True)[0])
-                normalized_topk_patched_output2_pre_distributions = (topk_patched_output2_pre_distributions - topk_patched_output2_pre_distributions.min(dim=2, keepdim=True)[0])/(topk_patched_output2_pre_distributions.max(dim=2, keepdim=True)[0] - topk_patched_output2_pre_distributions.min(dim=2, keepdim=True)[0])
-                normalized_topk_patched_output1_post_distributions = (topk_patched_output1_post_distributions - topk_patched_output1_post_distributions.min(dim=2, keepdim=True)[0])/(topk_patched_output1_post_distributions.max(dim=2, keepdim=True)[0] - topk_patched_output1_post_distributions.min(dim=2, keepdim=True)[0])
-                normalized_topk_patched_output2_post_distributions = (topk_patched_output2_post_distributions - topk_patched_output2_post_distributions.min(dim=2, keepdim=True)[0])/(topk_patched_output2_post_distributions.max(dim=2, keepdim=True)[0] - topk_patched_output2_post_distributions.min(dim=2, keepdim=True)[0])
+                normalized_topk_patched_output1_pre_distributions = (topk_patched_output1_pre_distributions - topk_patched_output1_pre_distributions.min(dim=2, keepdim=True)[0]) / (topk_patched_output1_pre_distributions.max(dim=2, keepdim=True)[0] - topk_patched_output1_pre_distributions.min(dim=2, keepdim=True)[0])
+                normalized_topk_patched_output2_pre_distributions = (topk_patched_output2_pre_distributions - topk_patched_output2_pre_distributions.min(dim=2, keepdim=True)[0]) / (topk_patched_output2_pre_distributions.max(dim=2, keepdim=True)[0] - topk_patched_output2_pre_distributions.min(dim=2, keepdim=True)[0])
+                normalized_topk_patched_output1_post_distributions = (topk_patched_output1_post_distributions - topk_patched_output1_post_distributions.min(dim=2, keepdim=True)[0]) / (topk_patched_output1_post_distributions.max(dim=2, keepdim=True)[0] - topk_patched_output1_post_distributions.min(dim=2, keepdim=True)[0])
+                normalized_topk_patched_output2_post_distributions = (topk_patched_output2_post_distributions - topk_patched_output2_post_distributions.min(dim=2, keepdim=True)[0]) / (topk_patched_output2_post_distributions.max(dim=2, keepdim=True)[0] - topk_patched_output2_post_distributions.min(dim=2, keepdim=True)[0])
 
                 # l1 region-wise inference raw features
-                l1_patched_diff_change_features = torch.abs((patched_padded_output1_distributions - patched_padded_output2_distributions).sum(axis=2)).view(bs,h,w)
+                l1_patched_diff_change_features = torch.abs((patched_padded_output1_distributions - patched_padded_output2_distributions).sum(axis=2)).view(bs, h, w)
                 l1_dist_change_feats_pred = torch.zeros_like(l1_patched_diff_change_features)
-                l1_inference_otsu_threshold = inference_otsu_coeff*otsu(l1_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
+                l1_inference_otsu_threshold = inference_otsu_coeff * otsu(l1_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
                 l1_dist_change_feats_pred[l1_patched_diff_change_features > l1_inference_otsu_threshold] = 1
                 l1_dist_change_feats_pred = l1_dist_change_feats_pred.cpu().detach().type(torch.uint8)
 
                 # l1 region-wise inference pre topk
-                l1_patched_diff_change_pre_topk = torch.abs((topk_patched_padded_output1_pre_distributions - topk_patched_padded_output2_pre_distributions).sum(axis=2)).view(bs,h,w)
+                l1_patched_diff_change_pre_topk = torch.abs((topk_patched_padded_output1_pre_distributions - topk_patched_padded_output2_pre_distributions).sum(axis=2)).view(bs, h, w)
                 l1_dist_change_feats_pred_pre_topk = torch.zeros_like(l1_patched_diff_change_pre_topk)
-                l1_inference_otsu_threshold = inference_otsu_coeff*otsu(l1_patched_diff_change_pre_topk.cpu().detach().numpy(), nbins=256)
+                l1_inference_otsu_threshold = inference_otsu_coeff * otsu(l1_patched_diff_change_pre_topk.cpu().detach().numpy(), nbins=256)
                 l1_dist_change_feats_pred_pre_topk[l1_patched_diff_change_pre_topk > l1_inference_otsu_threshold] = 1
                 l1_dist_change_feats_pred_pre_topk = l1_dist_change_feats_pred_pre_topk.cpu().detach().type(torch.uint8)
 
                 # l1 region-wise inference post topk
-                l1_patched_diff_change_post_topk = torch.abs((topk_patched_output1_post_distributions - topk_patched_output2_post_distributions).sum(axis=2)).view(bs,h,w)
+                l1_patched_diff_change_post_topk = torch.abs((topk_patched_output1_post_distributions - topk_patched_output2_post_distributions).sum(axis=2)).view(bs, h, w)
                 l1_dist_change_feats_pred_post_topk = torch.zeros_like(l1_patched_diff_change_post_topk)
-                l1_inference_otsu_threshold = inference_otsu_coeff*otsu(l1_patched_diff_change_post_topk.cpu().detach().numpy(), nbins=256)
+                l1_inference_otsu_threshold = inference_otsu_coeff * otsu(l1_patched_diff_change_post_topk.cpu().detach().numpy(), nbins=256)
                 l1_dist_change_feats_pred_post_topk[l1_patched_diff_change_post_topk > l1_inference_otsu_threshold] = 1
                 l1_dist_change_feats_pred_post_topk = l1_dist_change_feats_pred_post_topk.cpu().detach().type(torch.uint8)
 
                 # l2 region-wise inference raw features
-                l2_patched_diff_change_features = torch.sqrt(torch.pow(patched_padded_output1_distributions - patched_padded_output2_distributions, 2).sum(axis=2)).view(bs,h,w)
+                l2_patched_diff_change_features = torch.sqrt(torch.pow(patched_padded_output1_distributions - patched_padded_output2_distributions, 2).sum(axis=2)).view(bs, h, w)
                 l2_dist_change_feats_pred = torch.zeros_like(l2_patched_diff_change_features)
-                l2_inference_otsu_threshold = inference_otsu_coeff*otsu(l2_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
+                l2_inference_otsu_threshold = inference_otsu_coeff * otsu(l2_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
                 l2_dist_change_feats_pred[l2_patched_diff_change_features > l2_inference_otsu_threshold] = 1
                 l2_dist_change_feats_pred = l2_dist_change_feats_pred.cpu().detach().type(torch.uint8)
 
                 # l2 region-wise inference pre topk
-                l2_patched_diff_change_pre_topk = torch.sqrt(torch.pow(topk_patched_padded_output1_pre_distributions - topk_patched_padded_output2_pre_distributions, 2).sum(axis=2)).view(bs,h,w)
+                l2_patched_diff_change_pre_topk = torch.sqrt(torch.pow(topk_patched_padded_output1_pre_distributions - topk_patched_padded_output2_pre_distributions, 2).sum(axis=2)).view(bs, h, w)
                 l2_dist_change_feats_pred_pre_topk = torch.zeros_like(l2_patched_diff_change_pre_topk)
-                l2_inference_otsu_threshold = inference_otsu_coeff*otsu(l2_patched_diff_change_pre_topk.cpu().detach().numpy(), nbins=256)
+                l2_inference_otsu_threshold = inference_otsu_coeff * otsu(l2_patched_diff_change_pre_topk.cpu().detach().numpy(), nbins=256)
                 l2_dist_change_feats_pred_pre_topk[l2_patched_diff_change_pre_topk > l2_inference_otsu_threshold] = 1
                 l2_dist_change_feats_pred_pre_topk = l2_dist_change_feats_pred_pre_topk.cpu().detach().type(torch.uint8)
 
                 # l2 region-wise inference  post topk
-                l2_patched_diff_change_post_topk = torch.sqrt(torch.pow(patched_padded_output1_distributions - patched_padded_output2_distributions, 2).sum(axis=2)).view(bs,h,w)
+                l2_patched_diff_change_post_topk = torch.sqrt(torch.pow(patched_padded_output1_distributions - patched_padded_output2_distributions, 2).sum(axis=2)).view(bs, h, w)
                 l2_dist_change_feats_pred_post_topk = torch.zeros_like(l2_patched_diff_change_post_topk)
-                l2_inference_otsu_threshold = inference_otsu_coeff*otsu(l2_patched_diff_change_post_topk.cpu().detach().numpy(), nbins=256)
+                l2_inference_otsu_threshold = inference_otsu_coeff * otsu(l2_patched_diff_change_post_topk.cpu().detach().numpy(), nbins=256)
                 l2_dist_change_feats_pred_post_topk[l2_patched_diff_change_post_topk > l2_inference_otsu_threshold] = 1
                 l2_dist_change_feats_pred_post_topk = l2_dist_change_feats_pred_post_topk.cpu().detach().type(torch.uint8)
 
@@ -234,10 +232,10 @@ class Evaluator(object):
                 # normalized_patched_padded_output2_distributions = (patched_padded_output2_distributions - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output2_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])
                 minima = torch.minimum(patched_padded_mask1_distributions, patched_padded_mask2_distributions)
                 # minima = torch.minimum(masks1, masks2)
-                histograms_intersection_features = torch.true_divide(minima.sum(axis=2), patched_padded_mask2_distributions.sum(axis=2)).view(bs,h,w)
+                histograms_intersection_features = torch.true_divide(minima.sum(axis=2), patched_padded_mask2_distributions.sum(axis=2)).view(bs, h, w)
 
                 histc_int_change_feats_pred = torch.zeros_like(histograms_intersection_features)
-                histc_int_inference_otsu_threshold = hist_inference_otsu_coeff*otsu(histograms_intersection_features.cpu().detach().numpy(), nbins=256)
+                histc_int_inference_otsu_threshold = hist_inference_otsu_coeff * otsu(histograms_intersection_features.cpu().detach().numpy(), nbins=256)
                 histc_int_change_feats_pred[histograms_intersection_features < histc_int_inference_otsu_threshold] = 1
                 histc_int_change_feats_pred = histc_int_change_feats_pred.cpu().detach().type(torch.uint8)
 
@@ -255,12 +253,12 @@ class Evaluator(object):
                 # histc_int_change_feats_pred_pre_topk = histc_int_change_feats_pred_pre_topk.cpu().detach().type(torch.uint8)
 
                 # histogram intersection post topk
-                normalized_topk_patched_output1_post_distributions = (topk_patched_output1_post_distributions - topk_patched_output1_post_distributions.min(dim=2, keepdim=True)[0])/(topk_patched_output1_post_distributions.max(dim=2, keepdim=True)[0] - topk_patched_output1_post_distributions.min(dim=2, keepdim=True)[0])
-                normalized_topk_patched_output2_post_distributions = (topk_patched_output2_post_distributions - topk_patched_output2_post_distributions.min(dim=2, keepdim=True)[0])/(topk_patched_output2_post_distributions.max(dim=2, keepdim=True)[0] - topk_patched_output2_post_distributions.min(dim=2, keepdim=True)[0])
+                normalized_topk_patched_output1_post_distributions = (topk_patched_output1_post_distributions - topk_patched_output1_post_distributions.min(dim=2, keepdim=True)[0]) / (topk_patched_output1_post_distributions.max(dim=2, keepdim=True)[0] - topk_patched_output1_post_distributions.min(dim=2, keepdim=True)[0])
+                normalized_topk_patched_output2_post_distributions = (topk_patched_output2_post_distributions - topk_patched_output2_post_distributions.min(dim=2, keepdim=True)[0]) / (topk_patched_output2_post_distributions.max(dim=2, keepdim=True)[0] - topk_patched_output2_post_distributions.min(dim=2, keepdim=True)[0])
                 minima_post_topk = torch.minimum(normalized_topk_patched_output1_post_distributions, normalized_topk_patched_output2_post_distributions)
-                histograms_intersection_post_topk = torch.true_divide(minima_post_topk.sum(axis=2), topk_patched_output2_post_distributions.sum(axis=2)).view(bs,h,w)
+                histograms_intersection_post_topk = torch.true_divide(minima_post_topk.sum(axis=2), topk_patched_output2_post_distributions.sum(axis=2)).view(bs, h, w)
                 histc_int_change_feats_pred_post_topk = torch.zeros_like(histograms_intersection_post_topk)
-                histc_int_inference_otsu_threshold = hist_inference_otsu_coeff*otsu(histograms_intersection_post_topk.cpu().detach().numpy(), nbins=256)
+                histc_int_inference_otsu_threshold = hist_inference_otsu_coeff * otsu(histograms_intersection_post_topk.cpu().detach().numpy(), nbins=256)
                 histc_int_change_feats_pred_post_topk[histograms_intersection_post_topk < histc_int_inference_otsu_threshold] = 1
                 histc_int_change_feats_pred_post_topk = histc_int_change_feats_pred_post_topk.cpu().detach().type(torch.uint8)
 
@@ -283,7 +281,7 @@ class Evaluator(object):
 
                 if self.config['visualization']['val_visualizer']:
 
-                    batch_index_to_show=0
+                    batch_index_to_show = 0
                     figure = plt.figure(figsize=(
                         self.config['visualization']['fig_size'], self.config['visualization']['fig_size']))
                     ax1 = figure.add_subplot(3, 4, 1)
@@ -307,8 +305,8 @@ class Evaluator(object):
                     image_show2 = np.transpose(image2.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, :3]
                     image_show2 = np.flip(image_show2, axis=2)
 
-                    image_show1 = (image_show1 - image_show1.min())/(image_show1.max() - image_show1.min())
-                    image_show2 = (image_show2 - image_show2.min())/(image_show2.max() - image_show2.min())
+                    image_show1 = (image_show1 - image_show1.min()) / (image_show1.max() - image_show1.min())
+                    image_show2 = (image_show2 - image_show2.min()) / (image_show2.max() - image_show2.min())
 
                     gt_mask_show1 = mask1.cpu().detach()[batch_index_to_show, :, :].numpy().squeeze()
 
@@ -321,17 +319,17 @@ class Evaluator(object):
                     l2_patched_diff_change_features_show = l2_patched_diff_change_features.cpu().detach().numpy()[batch_index_to_show, :, :]
                     histograms_intersection_show = histograms_intersection_features.cpu().detach().numpy()[batch_index_to_show, :, :]
 
-                    l1_patched_diff_change_features_show = (l1_patched_diff_change_features_show - l1_patched_diff_change_features_show.min())/(l1_patched_diff_change_features_show.max() - l1_patched_diff_change_features_show.min())
-                    l2_patched_diff_change_features_show = (l2_patched_diff_change_features_show - l2_patched_diff_change_features_show.min())/(l2_patched_diff_change_features_show.max() - l2_patched_diff_change_features_show.min())
-                    histograms_intersection_show = (histograms_intersection_show - histograms_intersection_show.min())/(histograms_intersection_show.max() - histograms_intersection_show.min())
+                    l1_patched_diff_change_features_show = (l1_patched_diff_change_features_show - l1_patched_diff_change_features_show.min()) / (l1_patched_diff_change_features_show.max() - l1_patched_diff_change_features_show.min())
+                    l2_patched_diff_change_features_show = (l2_patched_diff_change_features_show - l2_patched_diff_change_features_show.min()) / (l2_patched_diff_change_features_show.max() - l2_patched_diff_change_features_show.min())
+                    histograms_intersection_show = (histograms_intersection_show - histograms_intersection_show.min()) / (histograms_intersection_show.max() - histograms_intersection_show.min())
 
                     pred1_show = masks1.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
                     pred2_show = masks2.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
 
-                    l1_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*l1_dist_change_feats_pred_show)
-                    l2_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*l2_dist_change_feats_pred_show)
-                    histc_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*histc_int_change_feats_pred_show)
-                    vw_dis_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*vw_disagreement_pred_show)
+                    l1_fp_tp_fn_prediction_mask = gt_mask_show1 + (2 * l1_dist_change_feats_pred_show)
+                    l2_fp_tp_fn_prediction_mask = gt_mask_show1 + (2 * l2_dist_change_feats_pred_show)
+                    histc_fp_tp_fn_prediction_mask = gt_mask_show1 + (2 * histc_int_change_feats_pred_show)
+                    vw_dis_fp_tp_fn_prediction_mask = gt_mask_show1 + (2 * vw_disagreement_pred_show)
 
                     pred1_show[pred1_show == -1] = 0
                     pred2_show[pred2_show == -1] = 0
@@ -409,8 +407,6 @@ class Evaluator(object):
         # hist_mean_iou_pre_topk, hist_precision_pre_topk, hist_recall_pre_topk = eval_utils.compute_jaccard(topk_pre_histogram_distance, targets, num_classes=2)
         hist_mean_iou_post_topk, hist_precision_post_topk, hist_recall_post_topk = eval_utils.compute_jaccard(topk_post_histogram_distance, targets, num_classes=2)
 
-
-        
         l1_precision = np.array(l1_precision)
         l1_recall = np.array(l1_recall)
         l1_f1 = 2 * (l1_precision * l1_recall) / (l1_precision + l1_recall)
@@ -518,7 +514,6 @@ class Evaluator(object):
         return
 
 
-
 def main(cmdline=True, **kwargs):
     """
     Ignore:
@@ -579,7 +574,6 @@ def main(cmdline=True, **kwargs):
     dset = kwcoco.CocoDataset(coco_fpath)
     sampler = ndsampler.CocoSampler(dset)
 
-
     if config['training']['resume'] != False:
         base_path = '/'.join(config['training']['resume'].split('/')[:-1])
         pretrain_config_path = f"{base_path}/config.yaml"
@@ -627,7 +621,7 @@ def main(cmdline=True, **kwargs):
 
         if os.path.isfile(config['training']['resume']):
             checkpoint = torch.load(config['training']['resume'])
-            model.load_state_dict(checkpoint['model'], strict= False)
+            model.load_state_dict(checkpoint['model'], strict=False)
             print(f"loaded model from {config['training']['resume']}")
         else:
             print("no checkpoint found at {}".format(config['training']['resume']))

@@ -83,7 +83,6 @@ class DeepGlobeDataset(object):
                              29: 5,   # 29, water
                              255: 6}  # 255, barren land, mountain, rock, dessert
 
-
     def __getitem__(self, idx):
 
         mask_path = self.masks_paths[idx]
@@ -98,9 +97,9 @@ class DeepGlobeDataset(object):
         # import matplotlib.pyplot as plt
         # plt.imshow(mask)
         # plt.show()
-        
+
         new_mask = FT.to_tensor(mask) * 255
-        
+
         # total_pixels = new_mask.shape[2] * new_mask.shape[1]
         # label_inds, label_counts = torch.unique(new_mask, return_counts=True)
         # label_inds = label_inds.long()

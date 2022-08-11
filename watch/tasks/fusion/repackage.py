@@ -175,6 +175,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
 
         import re
         # Discard the -v2, -v3, etc... paths if a different one exists
+
         def remove_v_suffix(x):
             return re.sub(r'-v[0-9]+$', '', x.stem, flags=re.MULTILINE)
         checkpoint_fpaths = list(ub.unique(
@@ -282,7 +283,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
             raise Exception('No data gathered')
         print(f'storage_dpath={storage_dpath}')
         for is_loose, subgroup in df.groupby('is_loose'):
-            header = ['was_packaged', 'needs_repackage', 'was_copied',  'needs_copy', 'needs_dvc_add', 'is_loose', 'broken_link']
+            header = ['was_packaged', 'needs_repackage', 'was_copied', 'needs_copy', 'needs_dvc_add', 'is_loose', 'broken_link']
             needy_header = ['needs_repackage', 'needs_copy', 'needs_dvc_add']
             if is_loose:
                 # dont print extra loose stuff
@@ -318,7 +319,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         rich.print('[blue] Repackaged')
         for is_loose, subgroup in df.groupby('is_loose'):
             if len(subgroup):
-                print(subgroup.groupby('expt_name')[['was_packaged', 'needs_repackage', 'repackage_failed', 'repackage_passed', 'was_copied',  'needs_copy', 'needs_dvc_add']].sum())
+                print(subgroup.groupby('expt_name')[['was_packaged', 'needs_repackage', 'repackage_failed', 'repackage_passed', 'was_copied', 'needs_copy', 'needs_dvc_add']].sum())
 
     if mode == 'repackage':
         return

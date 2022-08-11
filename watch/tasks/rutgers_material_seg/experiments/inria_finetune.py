@@ -89,7 +89,7 @@ class Trainer(object):
         self.kmeans = KMeans(n_clusters=self.k, mode='euclidean', verbose=0, minibatch=None)
         self.max_label = config['data']['num_classes']
         self.all_crops_params = [tuple([i, j, config['data']['window_size'], config['data']['window_size']]) for i in range(config['data']['window_size'], config['data']
-                                                                                                                            ['image_size']-config['data']['window_size']) for j in range(config['data']['window_size'], config['data']['image_size']-config['data']['window_size'])]
+                                                                                                                            ['image_size'] - config['data']['window_size']) for j in range(config['data']['window_size'], config['data']['image_size'] - config['data']['window_size'])]
         self.inference_all_crops_params = [tuple([i, j, config['evaluation']['inference_window'], config['evaluation']['inference_window']]) for i in range(0, config['data']['image_size']) for j in range(0, config['data']['image_size'])]
         self.all_crops_params_np = np.array(self.all_crops_params)
         self.change_threshold = 0.2
@@ -140,7 +140,7 @@ class Trainer(object):
 
         filtered_features = (features > features_max).type_as(features)
         filtered_features = filtered_features.view(
-            bs, c, h, w)*features.view(bs, c, h, w)
+            bs, c, h, w) * features.view(bs, c, h, w)
         return filtered_features
 
     def train(self, epoch: int, cometml_experiemnt: object) -> float:
@@ -181,7 +181,7 @@ class Trainer(object):
 
             mask[mask == -1] = 0
 
-            class_to_show = max(0, torch.unique(mask)[-1]-1)
+            class_to_show = max(0, torch.unique(mask)[-1] - 1)
             image1 = image1.to(device)
             mask = mask.to(device)
 
@@ -190,17 +190,16 @@ class Trainer(object):
             # print(f"mask uniques: {torch.unique(mask)}")
             image1 = utils.stad_image(image1)
 
-            # image1 = F.normalize(image1, dim=1, p=1) 
-            # image2 = F.normalize(image2, dim=1, p=1) 
+            # image1 = F.normalize(image1, dim=1, p=1)
+            # image2 = F.normalize(image2, dim=1, p=1)
 
             output = self.model(image1)
 
-            loss = 50*F.cross_entropy(output,
+            loss = 50 * F.cross_entropy(output,
                                     mask,
                                     # weight=self.class_weights,
                                     ignore_index=-100,
                                     reduction="mean")
-
 
             start = time.time()
             self.optimizer.zero_grad()
@@ -250,8 +249,6 @@ class Trainer(object):
                         pred1_show = masks.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
                         # pred2_show = masks2.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
 
-
-
                         classes_in_gt = np.unique(gt_mask_show1)
                         ax1.imshow(image_show1)
 
@@ -260,7 +257,7 @@ class Trainer(object):
 
                         # ax4.imshow(negative_image1_show)
 
-                        masks_show = masks.cpu().detach().numpy()[batch_index_to_show,1,:,:]
+                        masks_show = masks.cpu().detach().numpy()[batch_index_to_show, 1, :, :]
                         ax3.imshow(masks_show, cmap=cmap_gradients)
 
                         ax4.imshow(pred1_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
@@ -313,7 +310,7 @@ class Trainer(object):
             #     f"(timing, secs) crop_collection: {crop_collection_time:0.3f}, run_network: {run_network_time:0.3f}, clustering: {clustering_time:0.3f}, backprob: {backprop_time:0.3f}, log: {logging_time:0.3f}")
 
         mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=config['data']['num_classes'])
-        
+
         hist_mean_iou, hist_precision, hist_recall = eval_utils.compute_jaccard(histogram_distance, targets, num_classes=config['data']['num_classes'])
         l1_mean_iou, l1_precision, l1_recall = eval_utils.compute_jaccard(l1_dist, targets, num_classes=config['data']['num_classes'])
         l2_mean_iou, l2_precision, l2_recall = eval_utils.compute_jaccard(l2_dist, targets, num_classes=config['data']['num_classes'])
@@ -346,30 +343,30 @@ class Trainer(object):
         # print(f"Training class-wise Recall value: \n{recall} \noverall Recall: {mean_recall}")
         # print(f"Training overall F1 Score: {mean_f1_score}")
 
-        cometml_experiemnt.log_metric("Training Loss", total_loss, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Segmentation Loss", total_loss_seg, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Training mIoU", overall_miou, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Training mean_f1_score", mean_f1_score, epoch=epoch+1)
+        cometml_experiemnt.log_metric("Training Loss", total_loss, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Segmentation Loss", total_loss_seg, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Training mIoU", overall_miou, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Training mean_f1_score", mean_f1_score, epoch=epoch + 1)
 
         # cometml_experiemnt.log_metrics({f"Training Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch+1)
         # cometml_experiemnt.log_metrics({f"Training Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
         # cometml_experiemnt.log_metrics({f"Training F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
 
-        cometml_experiemnt.log_metrics({f"L1 Training Recall class {str(x)}": l1_recall[x] for x in range(len(l1_recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L1 Training Precision class {str(x)}": l1_precision[x] for x in range(len(l1_precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L1 Training F1_score class {str(x)}": l1_f1[x] for x in range(len(l1_f1))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"L1 Training Recall class {str(x)}": l1_recall[x] for x in range(len(l1_recall))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L1 Training Precision class {str(x)}": l1_precision[x] for x in range(len(l1_precision))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L1 Training F1_score class {str(x)}": l1_f1[x] for x in range(len(l1_f1))}, epoch=epoch + 1)
 
-        cometml_experiemnt.log_metrics({f"L2 Training Recall class {str(x)}": l2_recall[x] for x in range(len(l2_recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L2 Training Precision class {str(x)}": l2_precision[x] for x in range(len(l2_precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L2 Training F1_score class {str(x)}": l2_f1[x] for x in range(len(l2_f1))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"L2 Training Recall class {str(x)}": l2_recall[x] for x in range(len(l2_recall))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L2 Training Precision class {str(x)}": l2_precision[x] for x in range(len(l2_precision))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L2 Training F1_score class {str(x)}": l2_f1[x] for x in range(len(l2_f1))}, epoch=epoch + 1)
 
-        cometml_experiemnt.log_metrics({f"Concat Training Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Concat Training Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Concat Training F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"Concat Training Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"Concat Training Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"Concat Training F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch + 1)
 
-        print("Training Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/self.train_loader.__len__()))
+        print("Training Epoch {0:2d} average loss: {1:1.2f}".format(epoch + 1, total_loss / self.train_loader.__len__()))
 
-        return total_loss/self.train_loader.__len__()
+        return total_loss / self.train_loader.__len__()
 
     def validate(self, epoch: int, cometml_experiemnt: object, save_individual_plots_specific: bool = False) -> tuple:
         """validating single epoch
@@ -408,13 +405,12 @@ class Trainer(object):
 
                 mask[mask == -1] = 0
 
-                class_to_show = max(0, torch.unique(mask)[-1]-1)
+                class_to_show = max(0, torch.unique(mask)[-1] - 1)
                 image1 = image1.to(device)
                 mask = mask.to(device)
 
                 image1 = utils.stad_image(image1)
-                # image1 = F.normalize(image1, dim=1, p=1) 
-
+                # image1 = F.normalize(image1, dim=1, p=1)
 
                 output = self.model(image1)
 
@@ -452,8 +448,7 @@ class Trainer(object):
                             # histograms_intersection_show = (histograms_intersection_show - histograms_intersection_show.min())/(histograms_intersection_show.max() - histograms_intersection_show.min())
 
                             pred1_show = masks.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
-                            pred_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*pred1_show)
-
+                            pred_fp_tp_fn_prediction_mask = gt_mask_show1 + (2 * pred1_show)
 
                             classes_in_gt = np.unique(gt_mask_show1)
                             ax1.imshow(image_show1)
@@ -463,12 +458,10 @@ class Trainer(object):
                             ax2.imshow(image_show1)
                             ax2.imshow(gt_mask_show1, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
-                            masks_show = masks.cpu().detach().numpy()[batch_index_to_show,1,:,:]
+                            masks_show = masks.cpu().detach().numpy()[batch_index_to_show, 1, :, :]
                             ax3.imshow(masks_show, cmap=cmap_gradients)
 
                             ax4.imshow(pred1_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
-
-
 
                             # ax1.axis('off')
                             # ax2.axis('off')
@@ -496,7 +489,7 @@ class Trainer(object):
                             figure.tight_layout()
                             if config['visualization']['val_imshow']:
                                 plt.show()
-                            
+
                             if (config['visualization']['save_individual_plots'] and save_individual_plots_specific):
 
                                 plots_path_save = f"{config['visualization']['save_individual_plots_path']}{config['dataset']}/"
@@ -554,10 +547,10 @@ class Trainer(object):
         mean_f1_score = classwise_f1_score.mean()
 
         # print("Validation Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/loader.__len__()))
-        cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation precision", mean_precision, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation recall", mean_recall, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation mean f1_score", mean_f1_score, epoch=epoch+1)
+        cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Validation precision", mean_precision, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Validation recall", mean_recall, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Validation mean f1_score", mean_f1_score, epoch=epoch + 1)
         print({f"Recall class {str(x)}": recall[x] for x in range(len(recall))})
         print({f"Precision class {str(x)}": precision[x] for x in range(len(precision))})
         print({f"F1 class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))})
@@ -566,21 +559,21 @@ class Trainer(object):
         # cometml_experiemnt.log_metrics({f"Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
         # cometml_experiemnt.log_metrics({f"F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
 
-        cometml_experiemnt.log_metrics({f"L1 Validation Recall class {str(x)}": l1_recall[x] for x in range(len(l1_recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L1 Validation Precision class {str(x)}": l1_precision[x] for x in range(len(l1_precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L1 Validation F1_score class {str(x)}": l1_f1[x] for x in range(len(l1_f1))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"L1 Validation Recall class {str(x)}": l1_recall[x] for x in range(len(l1_recall))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L1 Validation Precision class {str(x)}": l1_precision[x] for x in range(len(l1_precision))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L1 Validation F1_score class {str(x)}": l1_f1[x] for x in range(len(l1_f1))}, epoch=epoch + 1)
 
-        cometml_experiemnt.log_metrics({f"L2 Validation Recall class {str(x)}": l2_recall[x] for x in range(len(l2_recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L2 Validation Precision class {str(x)}": l2_precision[x] for x in range(len(l2_precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"L2 Validation F1_score class {str(x)}": l2_f1[x] for x in range(len(l2_f1))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"L2 Validation Recall class {str(x)}": l2_recall[x] for x in range(len(l2_recall))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L2 Validation Precision class {str(x)}": l2_precision[x] for x in range(len(l2_precision))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"L2 Validation F1_score class {str(x)}": l2_f1[x] for x in range(len(l2_f1))}, epoch=epoch + 1)
 
-        cometml_experiemnt.log_metrics({f"Concat Validation Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Concat Validation Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Concat Validation F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"Concat Validation Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"Concat Validation Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"Concat Validation F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch + 1)
 
-        cometml_experiemnt.log_metric("Validation Average Loss", total_loss/loader.__len__(), epoch=epoch+1)
+        cometml_experiemnt.log_metric("Validation Average Loss", total_loss / loader.__len__(), epoch=epoch + 1)
 
-        return total_loss/loader.__len__(), classwise_f1_score
+        return total_loss / loader.__len__(), classwise_f1_score
 
     def forward(self, cometml_experiment: object, world_size: int = 8) -> tuple:
         """forward pass for all epochs
@@ -628,7 +621,7 @@ class Trainer(object):
                     config['val_change_f1'] = str(val_change_f1)
                     config['val_mean_f1'] = str(val_mean_f1)
                     config['train_loss'] = str(train_loss)
-                    with open(model_save_dir+"config.yaml", 'w') as file:
+                    with open(model_save_dir + "config.yaml", 'w') as file:
                         yaml.dump(config, file)
 
                     torch.save({'epoch': epoch,
@@ -636,7 +629,7 @@ class Trainer(object):
                                 'optimizer': self.optimizer.state_dict(),
                                 'scheduler': self.scheduler.state_dict(),
                                 'loss': train_loss},
-                               model_save_dir+model_save_name)
+                               model_save_dir + model_save_name)
                 if config['visualization']['save_individual_plots']:
                     _, _ = self.validate(
                         epoch, cometml_experiment, save_individual_plots_specific=True)
@@ -660,7 +653,6 @@ if __name__ == "__main__":
     config['start_time'] = datetime.datetime.today().strftime(
         '%Y-%m-%d-%H:%M:%S')
 
-
     # _{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}"
     project_name = f"{current_path[-3]}_{current_path[-1]}_{config['dataset']}"
     experiment_name = f"attention_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}"
@@ -670,7 +662,7 @@ if __name__ == "__main__":
                                      display_summary_level=0)
 
     config['experiment_url'] = str(experiment.url)
-    
+
     experiment.set_name(experiment_name)
 
     torch.manual_seed(config['seed'])
@@ -732,27 +724,26 @@ if __name__ == "__main__":
         test_dataset = SequenceDataset(test_sampler, window_dims, input_dims, channels)
         test_dataloader = test_dataset.make_loader(batch_size=config['evaluation']['batch_size'])
     else:
-        train_dataloader = build_dataset(dataset_name=config['data']['name'], 
-                                        root=config['data'][config['location']]['train_dir'], 
+        train_dataloader = build_dataset(dataset_name=config['data']['name'],
+                                        root=config['data'][config['location']]['train_dir'],
                                         batch_size=config['training']['batch_size'],
-                                        num_workers=config['training']['num_workers'], 
+                                        num_workers=config['training']['num_workers'],
                                         split='train',
                                         crop_size=config['data']['image_size'],
                                         channels=config['data']['channels'],
                                         )
 
-        test_dataloader = build_dataset(dataset_name=config['data']['name'], 
-                                        root=config['data'][config['location']]['train_dir'], 
+        test_dataloader = build_dataset(dataset_name=config['data']['name'],
+                                        root=config['data'][config['location']]['train_dir'],
                                         batch_size=config['evaluation']['batch_size'],
-                                        num_workers=config['training']['num_workers'], 
+                                        num_workers=config['training']['num_workers'],
                                         split='val',
                                         crop_size=config['data']['image_size'],
                                         channels=config['data']['channels'],
                                         )
-        
 
     if not config['training']['model_diff_input']:
-        config['training']['num_channels'] = 2*config['training']['num_channels']
+        config['training']['num_channels'] = 2 * config['training']['num_channels']
 
     model = build_model(model_name=config['training']['model_name'],
                         backbone=config['training']['backbone'],

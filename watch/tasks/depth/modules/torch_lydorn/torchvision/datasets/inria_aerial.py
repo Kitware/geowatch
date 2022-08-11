@@ -496,8 +496,10 @@ def main():
         "mask_only": config["dataset_params"]["mask_only"],
     }
     train_val_split_point = config["dataset_params"]["train_fraction"] * 36
+
     def train_tile_filter(tile):
         return tile["number"] <= train_val_split_point
+
     def val_tile_filter(tile):
         return train_val_split_point < tile["number"]
     # --- --- #

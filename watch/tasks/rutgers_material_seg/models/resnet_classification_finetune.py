@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from watch.tasks.rutgers_material_seg.models.encoding import Encoding
 from watch.tasks.rutgers_material_seg.models.tex_refine import TeRN
 
+
 class ASPP(nn.Module):
 
     def __init__(self, C, depth, num_classes, conv=nn.Conv2d,
@@ -70,6 +71,7 @@ class ASPP(nn.Module):
         x = self.conv3(x)
 
         return x
+
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -135,15 +137,15 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, block, num_blocks, num_channels=3, zero_init_residual=False, 
+    def __init__(self, block, num_blocks, num_channels=3, zero_init_residual=False,
                 pretrained=False, num_classes=None, beta=False, weight_std=False,
                 num_groups=32, out_dim=128, feats=[64, 64, 128, 256, 512]):
         super(ResNet, self).__init__()
         self.in_planes = 64
         self.num_codewords = 64
-        self.conv1_ft = nn.Conv2d(num_channels, 64, kernel_size=3, stride=1, 
+        self.conv1_ft = nn.Conv2d(num_channels, 64, kernel_size=3, stride=1,
                                padding=1, bias=False)
-        # self.conv1 = nn.Conv2d(num_channels, 64, kernel_size=3, stride=1, 
+        # self.conv1 = nn.Conv2d(num_channels, 64, kernel_size=3, stride=1,
         #                        padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
@@ -154,8 +156,8 @@ class ResNet(nn.Module):
         # self.out = nn.Conv2d(512, num_classes, kernel_size=1, stride=1, bias=False)
         self.aspp_ft = ASPP(512, 256, num_classes)
         self.fc = nn.Linear(256, num_classes)
-        
-        self._aff = TeRN(num_iter=10, dilations=[1,1,2,4,6,8])
+
+        self._aff = TeRN(num_iter=10, dilations=[1, 1, 2, 4, 6, 8])
 
         self.encoding = nn.Sequential(
             Encoding(channels=num_classes, num_codes=self.num_codewords),
@@ -203,7 +205,7 @@ class ResNet(nn.Module):
         # classifer = torch.flatten(classifer, 1)
         out = torch.flatten(out, 1)
         # out = self.fc(out)
-        return out#, classifer
+        return out  # , classifer
 
 
 def resnet18(**kwargs):
@@ -223,7 +225,7 @@ def resnet34(pretrained=False, **kwargs):
         overlap_dict = {k[7:]: v for k, v in pretrained_dict.items()
                         if k[7:] in model_dict}
         for k, v in overlap_dict.items():
-            v.requires_grad=False
+            v.requires_grad = False
         model_dict.update(overlap_dict)
         model.load_state_dict(model_dict)
         print(f"loaded {len(overlap_dict)}/{len(pretrained_dict)} layers")
@@ -250,6 +252,7 @@ model_dict = {
 
 class LinearBatchNorm(nn.Module):
     """Implements BatchNorm1d by BatchNorm2d, for SyncBN purpose"""
+
     def __init__(self, dim, affine=True):
         super(LinearBatchNorm, self).__init__()
         self.dim = dim
@@ -264,6 +267,7 @@ class LinearBatchNorm(nn.Module):
 
 class SupConResNet(nn.Module):
     """backbone + projection head"""
+
     def __init__(self, name='resnet50', head='mlp', feat_dim=128):
         super(SupConResNet, self).__init__()
         model_fun, dim_in = model_dict[name]
@@ -288,6 +292,7 @@ class SupConResNet(nn.Module):
 
 class SupCEResNet(nn.Module):
     """encoder + classifier"""
+
     def __init__(self, name='resnet50', num_classes=10):
         super(SupCEResNet, self).__init__()
         model_fun, dim_in = model_dict[name]
@@ -300,6 +305,7 @@ class SupCEResNet(nn.Module):
 
 class LinearClassifier(nn.Module):
     """Linear classifier"""
+
     def __init__(self, name='resnet50', num_classes=10):
         super(LinearClassifier, self).__init__()
         _, feat_dim = model_dict[name]

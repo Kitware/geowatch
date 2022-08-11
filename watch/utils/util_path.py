@@ -338,6 +338,7 @@ class ChDir:
         >>>         assert ub.Path.cwd() == dir1
         >>>     assert ub.Path.cwd() == dpath
     """
+
     def __init__(self, dpath):
         self.context_dpath = dpath
         self.orig_dpath = None

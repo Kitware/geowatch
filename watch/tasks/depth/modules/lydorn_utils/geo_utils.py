@@ -335,6 +335,7 @@ def save_shapefile_from_shapely_polygons(polygons, image_filepath, output_shapef
     # shp_srs = Proj(shp_crs)
     raster = rasterio.open(image_filepath)
     # raster_srs = Proj(raster.crs)
+
     def raster_proj(x, y):
         return raster.transform * (x, y)
     # shp_proj = functools.partial(transform, raster_srs, shp_srs)

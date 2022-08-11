@@ -89,7 +89,7 @@ class Trainer(object):
         self.kmeans = KMeans(n_clusters=self.k, mode='euclidean', verbose=0, minibatch=None)
         self.max_label = config['data']['num_classes']
         self.all_crops_params = [tuple([i, j, config['data']['window_size'], config['data']['window_size']]) for i in range(config['data']['window_size'], config['data']
-                                                                                                                            ['image_size']-config['data']['window_size']) for j in range(config['data']['window_size'], config['data']['image_size']-config['data']['window_size'])]
+                                                                                                                            ['image_size'] - config['data']['window_size']) for j in range(config['data']['window_size'], config['data']['image_size'] - config['data']['window_size'])]
         self.inference_all_crops_params = [tuple([i, j, config['evaluation']['inference_window'], config['evaluation']['inference_window']]) for i in range(0, config['data']['image_size']) for j in range(0, config['data']['image_size'])]
         self.all_crops_params_np = np.array(self.all_crops_params)
         self.change_threshold = 0.2
@@ -125,9 +125,9 @@ class Trainer(object):
         total_loss_seg = 0
         preds, targets = [], []
 
-        max_run_network_time=0
-        max_backprop_time=0
-        max_logging_time=0
+        max_run_network_time = 0
+        max_backprop_time = 0
+        max_logging_time = 0
 
         self.model.train()
         print(f"starting epoch {epoch}")
@@ -152,27 +152,26 @@ class Trainer(object):
             # print(torch.unique(mask))
 
             bs, c, t, h, w = image.shape
-            
-            class_to_show = max(0, torch.unique(mask)[-1]-1)
+
+            class_to_show = max(0, torch.unique(mask)[-1] - 1)
             image = image.to(device).squeeze(2)
             mask = mask.to(device)
 
             # image = utils.stad_image(image)
             # image2 = utils.stad_image(image2)
-            image = F.normalize(image, dim=1, p=1) 
-            
-            
+            image = F.normalize(image, dim=1, p=1)
+
             output = self.model(image)  # [B,22,150,150]
             # print(output.shape)
             # exit()
-            loss = 50*F.cross_entropy(output,
+            loss = 50 * F.cross_entropy(output,
                                     mask,
                                     weight=self.class_weights,
                                     # ignore_index=0,
                                     reduction="mean")
 
             run_network_time = time.time() - start
-            
+
             start = time.time()
             self.optimizer.zero_grad()
             loss.backward()
@@ -185,9 +184,9 @@ class Trainer(object):
             pred1 = masks.max(1)[1].cpu().detach()  # .numpy()
 
             total_loss += loss.item()
-            
+
             start = time.time()
-            
+
             preds.append(pred1)
             targets.append(mask.cpu())  # .numpy())
 
@@ -223,7 +222,7 @@ class Trainer(object):
                         # pred2_show = masks2.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
 
                         # histc_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*histc_int_change_feats_pred_show)
-                        pred1_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*pred1_show)
+                        pred1_fp_tp_fn_prediction_mask = gt_mask_show1 + (2 * pred1_show)
 
                         uniques_str = f"unique in preds: {np.unique(pred1_show)}, masks: {np.unique(gt_mask_show1)}"
 
@@ -233,7 +232,7 @@ class Trainer(object):
                         ax2.imshow(image_show1)
                         ax2.imshow(gt_mask_show1, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
-                        masks_show = masks.cpu().detach().numpy()[batch_index_to_show,2,:,:]
+                        masks_show = masks.cpu().detach().numpy()[batch_index_to_show, 2, :, :]
                         ax3.imshow(masks_show)
 
                         ax4.imshow(pred1_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
@@ -285,12 +284,12 @@ class Trainer(object):
                 max_backprop_time = backprop_time
             if logging_time > max_logging_time:
                 max_logging_time = logging_time
-            
+
             pbar.set_description(
                 f"(timing, secs) run_network: {run_network_time:0.3f}({max_run_network_time:0.3f}), backprob: {backprop_time:0.3f}({max_backprop_time:0.3f}), log: {logging_time:0.3f}({max_logging_time:0.3f})")
 
         mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=config['data']['num_classes'])
-        
+
         # hist_mean_iou, hist_precision, hist_recall = eval_utils.compute_jaccard(histogram_distance, targets, num_classes=2)
         # l1_mean_iou, l1_precision, l1_recall = eval_utils.compute_jaccard(l1_dist, targets, num_classes=2)
         # l2_mean_iou, l2_precision, l2_recall = eval_utils.compute_jaccard(l2_dist, targets, num_classes=2)
@@ -327,10 +326,10 @@ class Trainer(object):
         # cometml_experiemnt.log_metric("Training Loss", total_loss, epoch=epoch+1)
         # cometml_experiemnt.log_metric("Segmentation Loss", total_loss_seg, epoch=epoch+1)
         # cometml_experiemnt.log_metric("Training mIoU", overall_miou, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Training mean f1_score_rp", mean_f1_score_from_r_p, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Training mean_f1_score", mean_f1_score, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Training mean_precision", mean_precision, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Training mean_recall", mean_recall, epoch=epoch+1)
+        cometml_experiemnt.log_metric("Training mean f1_score_rp", mean_f1_score_from_r_p, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Training mean_f1_score", mean_f1_score, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Training mean_precision", mean_precision, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Training mean_recall", mean_recall, epoch=epoch + 1)
 
         # cometml_experiemnt.log_metrics({f"Training Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch+1)
         # cometml_experiemnt.log_metrics({f"Training Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
@@ -344,13 +343,13 @@ class Trainer(object):
         # cometml_experiemnt.log_metrics({f"L2 Training Precision class {str(x)}": l2_precision[x] for x in range(len(l2_precision))}, epoch=epoch+1)
         # cometml_experiemnt.log_metrics({f"L2 Training F1_score class {str(x)}": l2_f1[x] for x in range(len(l2_f1))}, epoch=epoch+1)
 
-        cometml_experiemnt.log_metrics({f"Concat Training Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Concat Training Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Concat Training F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"Concat Training Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"Concat Training Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"Concat Training F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch + 1)
 
-        print("Training Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/self.train_loader.__len__()))
+        print("Training Epoch {0:2d} average loss: {1:1.2f}".format(epoch + 1, total_loss / self.train_loader.__len__()))
 
-        return total_loss/self.train_loader.__len__()
+        return total_loss / self.train_loader.__len__()
 
     def validate(self, epoch: int, cometml_experiemnt: object, save_individual_plots_specific: bool = False) -> tuple:
         """validating single epoch
@@ -392,14 +391,14 @@ class Trainer(object):
                 mask[mask > 4] = 0
 
                 bs, c, t, h, w = image.shape
-            
-                class_to_show = max(0, torch.unique(mask)[-1]-1)
+
+                class_to_show = max(0, torch.unique(mask)[-1] - 1)
                 image = image.to(device).squeeze(2)
                 mask = mask.to(device)
 
                 # image1 = utils.stad_image(image1)
                 # image2 = utils.stad_image(image2)
-                image = F.normalize(image, dim=1, p=1) 
+                image = F.normalize(image, dim=1, p=1)
 
                 output = self.model(image)
                 masks = F.softmax(output, dim=1)
@@ -437,8 +436,7 @@ class Trainer(object):
                             # histograms_intersection_show = (histograms_intersection_show - histograms_intersection_show.min())/(histograms_intersection_show.max() - histograms_intersection_show.min())
 
                             pred1_show = masks.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
-                            pred_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*pred1_show)
-
+                            pred_fp_tp_fn_prediction_mask = gt_mask_show1 + (2 * pred1_show)
 
                             classes_in_gt = np.unique(gt_mask_show1)
                             ax1.imshow(image_show1)
@@ -446,12 +444,10 @@ class Trainer(object):
                             ax2.imshow(image_show1)
                             ax2.imshow(gt_mask_show1, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
-
-                            masks_show = masks.cpu().detach().numpy()[batch_index_to_show,2,:,:]
+                            masks_show = masks.cpu().detach().numpy()[batch_index_to_show, 2, :, :]
                             ax3.imshow(masks_show)
 
                             ax4.imshow(pred1_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
-
 
                             # ax1.axis('off')
                             # ax2.axis('off')
@@ -479,7 +475,7 @@ class Trainer(object):
                             figure.tight_layout()
                             if config['visualization']['val_imshow']:
                                 plt.show()
-                            
+
                             if (config['visualization']['save_individual_plots'] and save_individual_plots_specific):
 
                                 plots_path_save = f"{config['visualization']['save_individual_plots_path']}{config['dataset']}/"
@@ -539,11 +535,11 @@ class Trainer(object):
 
         # print("Validation Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/loader.__len__()))
         # cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation mean precision", mean_precision, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation mean recall", mean_recall, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation mean f1_score", mean_f1_score, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation mean f1_score_rp", mean_f1_score_from_r_p, epoch=epoch+1)
-        
+        cometml_experiemnt.log_metric("Validation mean precision", mean_precision, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Validation mean recall", mean_recall, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Validation mean f1_score", mean_f1_score, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Validation mean f1_score_rp", mean_f1_score_from_r_p, epoch=epoch + 1)
+
         print({f"Recall class {x}": str(np.float64(recall[x])) for x in range(len(recall))})
         print({f"Precision class {x}": str(np.float64(precision[x])) for x in range(len(precision))})
         print({f"F1 class {x}": str(np.float64(classwise_f1_score[x])) for x in range(len(classwise_f1_score))})
@@ -552,7 +548,7 @@ class Trainer(object):
         print(f"Mean F1 score from average recall and precision: {mean_f1_score_from_r_p}")
         print(f"Mean Recall: {mean_recall}")
         print(f"Mean Precision: {mean_precision}")
-        
+
         # cometml_experiemnt.log_metrics({f"Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch+1)
         # cometml_experiemnt.log_metrics({f"Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
         # cometml_experiemnt.log_metrics({f"F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
@@ -565,13 +561,13 @@ class Trainer(object):
         # cometml_experiemnt.log_metrics({f"L2 Validation Precision class {str(x)}": l2_precision[x] for x in range(len(l2_precision))}, epoch=epoch+1)
         # cometml_experiemnt.log_metrics({f"L2 Validation F1_score class {str(x)}": l2_f1[x] for x in range(len(l2_f1))}, epoch=epoch+1)
 
-        cometml_experiemnt.log_metrics({f"Concat Validation Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Concat Validation Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Concat Validation F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"Concat Validation Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"Concat Validation Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"Concat Validation F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch + 1)
 
-        cometml_experiemnt.log_metric("Validation Average Loss", total_loss/loader.__len__(), epoch=epoch+1)
+        cometml_experiemnt.log_metric("Validation Average Loss", total_loss / loader.__len__(), epoch=epoch + 1)
 
-        return total_loss/loader.__len__(), classwise_f1_score
+        return total_loss / loader.__len__(), classwise_f1_score
 
     def forward(self, cometml_experiment: object, world_size: int = 8) -> tuple:
         """forward pass for all epochs
@@ -619,7 +615,7 @@ class Trainer(object):
                     config['val_change_f1'] = str(val_change_f1)
                     config['val_mean_f1'] = str(val_mean_f1)
                     config['train_loss'] = str(train_loss)
-                    with open(model_save_dir+"config.yaml", 'w') as file:
+                    with open(model_save_dir + "config.yaml", 'w') as file:
                         yaml.dump(config, file)
 
                     torch.save({'epoch': epoch,
@@ -627,7 +623,7 @@ class Trainer(object):
                                 'optimizer': self.optimizer.state_dict(),
                                 'scheduler': self.scheduler.state_dict(),
                                 'loss': train_loss},
-                               model_save_dir+model_save_name)
+                               model_save_dir + model_save_name)
                 if config['visualization']['save_individual_plots']:
                     _, _ = self.validate(
                         epoch, cometml_experiment, save_individual_plots_specific=True)
@@ -651,7 +647,6 @@ if __name__ == "__main__":
     config['start_time'] = datetime.datetime.today().strftime(
         '%Y-%m-%d-%H:%M:%S')
 
-
     # _{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}"
     project_name = f"{current_path[-3]}_{current_path[-1]}_{config['dataset']}"
     experiment_name = f"attention_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}"
@@ -661,7 +656,7 @@ if __name__ == "__main__":
                                      display_summary_level=0)
 
     config['experiment_url'] = str(experiment.url)
-    
+
     experiment.set_name(experiment_name)
 
     torch.manual_seed(config['seed'])
@@ -701,7 +696,6 @@ if __name__ == "__main__":
         config['data']['num_classes'] = pretrain_config['data']['num_classes']
         config['training']['model_feats_channels'] = pretrain_config['training']['model_feats_channels']
 
-
     if config['data']['name'] == 'watch' or config['data']['name'] == 'onera':
         coco_fpath = ub.expandpath(config['data'][config['location']]['train_coco_json'])
         dset = kwcoco.CocoDataset(coco_fpath)
@@ -725,15 +719,15 @@ if __name__ == "__main__":
         test_dataset = SequenceDataset(test_sampler, window_dims, input_dims, channels)
         test_dataloader = test_dataset.make_loader(batch_size=config['evaluation']['batch_size'])
     else:
-        train_dataloader = build_dataset(dataset_name=config['data']['name'], 
-                                        root=config['data'][config['location']]['train_dir'], 
+        train_dataloader = build_dataset(dataset_name=config['data']['name'],
+                                        root=config['data'][config['location']]['train_dir'],
                                         batch_size=config['training']['batch_size'],
-                                        num_workers=config['training']['num_workers'], 
+                                        num_workers=config['training']['num_workers'],
                                         split='train',
                                         crop_size=config['data']['image_size'],
                                         channels=config['data']['channels'],
                                         )
-        
+
         channels = config['data']['channels']
         num_channels = len(channels.split('|'))
         config['training']['num_channels'] = num_channels

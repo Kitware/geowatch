@@ -417,7 +417,7 @@ def _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info, info):
     # Find best per-region bas row
     best_ids = candidate_bas_concat_df.groupby('region_id')['F1'].idxmax()
     best_per_region = candidate_bas_concat_df.loc[best_ids]
-    best_bas_row_ = pd.concat({'merged':  best_bas_row}, names=['region_id'])
+    best_bas_row_ = pd.concat({'merged': best_bas_row}, names=['region_id'])
     # Get a best row for each region and the "merged" region
     best_bas_rows = pd.concat([best_per_region, best_bas_row_])
     concise_best_bas_rows = best_bas_rows.rename(

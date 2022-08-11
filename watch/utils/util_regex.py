@@ -77,6 +77,7 @@ class PythonRegexBuilder(_AbstractRegexBuilder):
         >>> print(pat.search('fdsfdsv321fdsfsd'))
         None
     """
+
     def __init__(self):
         self.constructs = {}
         self.constructs['positive_lookahead'] = r'(?={pat})'

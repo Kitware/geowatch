@@ -126,4 +126,4 @@ def _test_coerce_is_sane():
         assert coerce_devices(2) == [torch.device(0), torch.device(1)]
         assert coerce_devices([0 , 1]) == [torch.device(0), torch.device(1)]
         assert coerce_devices('0, 1') == [torch.device(0), torch.device(1)]
-        assert coerce_devices('auto:2') == [torch.device(0),  torch.device(1)]
+        assert coerce_devices('auto:2') == [torch.device(0), torch.device(1)]

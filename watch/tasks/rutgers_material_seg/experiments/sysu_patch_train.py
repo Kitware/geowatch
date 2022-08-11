@@ -80,7 +80,7 @@ class Trainer(object):
         self.kmeans = KMeans(n_clusters=self.k, mode='euclidean', verbose=0, minibatch=None)
         self.max_label = self.k
         self.all_crops_params = [tuple([i, j, config['data']['window_size'], config['data']['window_size']]) for i in range(config['data']['window_size'], config['data']
-                                                                                                                            ['image_size']-config['data']['window_size']) for j in range(config['data']['window_size'], config['data']['image_size']-config['data']['window_size'])]
+                                                                                                                            ['image_size'] - config['data']['window_size']) for j in range(config['data']['window_size'], config['data']['image_size'] - config['data']['window_size'])]
         self.all_crops_params_np = np.array(self.all_crops_params)
         self.change_threshold = 0.2
         # print(self.all_crops_params_np)
@@ -130,7 +130,7 @@ class Trainer(object):
 
         filtered_features = (features > features_max).type_as(features)
         filtered_features = filtered_features.view(
-            bs, c, h, w)*features.view(bs, c, h, w)
+            bs, c, h, w) * features.view(bs, c, h, w)
         return filtered_features
 
     def train(self, epoch: int, cometml_experiemnt: object) -> float:
@@ -166,7 +166,7 @@ class Trainer(object):
                 mask1 = outputs['inputs']['mask']
                 mask1 = mask1.long().squeeze(1)
 
-            class_to_show=1
+            class_to_show = 1
             bs, c, h, w = image1.shape
             image1 = image1.to(device)
             image2 = image2.to(device)
@@ -180,8 +180,8 @@ class Trainer(object):
             # image1 = F.normalize(utils.stad_image(image1), dim=1)
             # image2 = F.normalize(utils.stad_image(image2), dim=1)
             # negative_image1 = F.normalize(utils.stad_image(negative_image1), dim=1)
-            image_diff = image1-image2
-            image_change_magnitude = torch.sqrt(image_diff*image_diff)
+            image_diff = image1 - image2
+            image_change_magnitude = torch.sqrt(image_diff * image_diff)
             image_change_magnitude = torch.mean(image_change_magnitude, dim=1, keepdims=False)
 
             max_ratio_coef, otsu_coef, edge_threshold = 1.0, 1.0, 15  # best: 0.81, 1.0
@@ -206,7 +206,7 @@ class Trainer(object):
             crops_indices = (patched_change_magnitude_binary == 1).any(dim=2).nonzero()
             params_list = np.delete(self.all_crops_params_np, crops_indices[:, 1].tolist(), axis=0)
             print(len(params_list))
-            if params_list.shape[0]==0:
+            if params_list.shape[0] == 0:
                 continue
             crop_collection_time = time.time() - start
 
@@ -249,9 +249,9 @@ class Trainer(object):
 
             cropped_bs, cropped_ps, cropped_c, cropped_h, cropped_w = cropped_features1.shape
             patch_max = 6000
-            cropped_features1 = cropped_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w)  # [bs*ps, c*h*w]
-            cropped_features2 = cropped_features2.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w)
-            cropped_negative_features1 = cropped_negative_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w)
+            cropped_features1 = cropped_features1.view(cropped_bs * cropped_ps, cropped_c * cropped_h * cropped_w)  # [bs*ps, c*h*w]
+            cropped_features2 = cropped_features2.view(cropped_bs * cropped_ps, cropped_c * cropped_h * cropped_w)
+            cropped_negative_features1 = cropped_negative_features1.view(cropped_bs * cropped_ps, cropped_c * cropped_h * cropped_w)
             # cropped_features1 = F.normalize(cropped_features1,dim=1,p=1) #[bs*ps, c*h*w]
             # cropped_features2 = F.normalize(cropped_features2,dim=1,p=1)
             features = torch.cat([cropped_features1.unsqueeze(1), cropped_features2.unsqueeze(1)], dim=1)[:patch_max, :, :]
@@ -349,7 +349,7 @@ class Trainer(object):
             #                           reduction="mean")
 
             # loss = loss1 + loss2
-            loss = 5*F.triplet_margin_loss(cropped_features1,  # .unsqueeze(0),
+            loss = 5 * F.triplet_margin_loss(cropped_features1,  # .unsqueeze(0),
                                            cropped_features2,  # .unsqueeze(0),
                                            cropped_negative_features1
                                            )
@@ -375,7 +375,7 @@ class Trainer(object):
             #                                      cutoff_top=config['high_confidence_threshold']['train_cutoff'],
             #                                      cutoff_low=config['high_confidence_threshold']['train_low_cutoff'])
 
-            diff_change_features = torch.abs(masks1-masks2).sum(axis=1)
+            diff_change_features = torch.abs(masks1 - masks2).sum(axis=1)
 
             # print(f"Distances, max:{diff_change_features.max()}, min:{diff_change_features.min()}")
 
@@ -435,9 +435,9 @@ class Trainer(object):
 
                         image_show1 = (image_show1 - image_show1.min()) / (image_show1.max() - image_show1.min())
                         image_show2 = (image_show2 - image_show2.min()) / (image_show2.max() - image_show2.min())
-                        negative_image1_show = (negative_image1_show - negative_image1_show.min())/(negative_image1_show.max() - negative_image1_show.min())
-                        cropped_image1_show = (cropped_image1_show - cropped_image1_show.min())/(cropped_image1_show.max() - cropped_image1_show.min())
-                        cropped_image2_show = (cropped_image2_show - cropped_image2_show.min())/(cropped_image2_show.max() - cropped_image2_show.min())
+                        negative_image1_show = (negative_image1_show - negative_image1_show.min()) / (negative_image1_show.max() - negative_image1_show.min())
+                        cropped_image1_show = (cropped_image1_show - cropped_image1_show.min()) / (cropped_image1_show.max() - cropped_image1_show.min())
+                        cropped_image2_show = (cropped_image2_show - cropped_image2_show.min()) / (cropped_image2_show.max() - cropped_image2_show.min())
 
                         # print(f"min: {image_show.min()}, max: {image_show.max()}")
                         # image_show = np.transpose(outputs['visuals']['image'][batch_index_to_show,:,:,:].numpy(),(1,2,0))
@@ -456,9 +456,9 @@ class Trainer(object):
                         dictionary2_show = dictionary1_post_assignment.cpu().detach()[batch_index_to_show, :, :].numpy()
                         """
                         distances_show = diff_change_features.cpu().detach()[batch_index_to_show, :, :].numpy()
-                        distances_show = (distances_show - distances_show.min())/(distances_show.max() - distances_show.min())
+                        distances_show = (distances_show - distances_show.min()) / (distances_show.max() - distances_show.min())
 
-                        fp_tp_fn_prediction_mask = gt_mask_show1 + (2*change_detection_show)
+                        fp_tp_fn_prediction_mask = gt_mask_show1 + (2 * change_detection_show)
 
                         logits_show1[logits_show1 == -1] = 0
                         logits_show2[logits_show2 == -1] = 0
@@ -608,7 +608,7 @@ class Trainer(object):
         mean_precision = precision.mean()
         mean_recall = recall.mean()
         overall_miou = mean_iou.mean()
-        classwise_f1_score = 2*(precision*recall)/(precision+recall)
+        classwise_f1_score = 2 * (precision * recall) / (precision + recall)
         mean_f1_score = classwise_f1_score.mean()
 
         # overall_miou = sum(mean_iou)/len(mean_iou)
@@ -617,18 +617,18 @@ class Trainer(object):
         # print(f"Training class-wise Recall value: \n{recall} \noverall Recall: {mean_recall}")
         # print(f"Training overall F1 Score: {mean_f1_score}")
 
-        cometml_experiemnt.log_metric("Training Loss", total_loss, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Segmentation Loss", total_loss_seg, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Training mIoU", overall_miou, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Training mean_f1_score", mean_f1_score, epoch=epoch+1)
+        cometml_experiemnt.log_metric("Training Loss", total_loss, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Segmentation Loss", total_loss_seg, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Training mIoU", overall_miou, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Training mean_f1_score", mean_f1_score, epoch=epoch + 1)
 
-        cometml_experiemnt.log_metrics({f"Training Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Training Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Training F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"Training Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"Training Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"Training F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch + 1)
 
-        print("Training Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/self.train_loader.__len__()))
+        print("Training Epoch {0:2d} average loss: {1:1.2f}".format(epoch + 1, total_loss / self.train_loader.__len__()))
 
-        return total_loss/self.train_loader.__len__()
+        return total_loss / self.train_loader.__len__()
 
     def validate(self, epoch: int, cometml_experiemnt: object, save_individual_plots_specific: bool = False) -> tuple:
         """validating single epoch
@@ -688,7 +688,7 @@ class Trainer(object):
                 #                                      cutoff_top=config['high_confidence_threshold']['val_cutoff'],
                 #                                      cutoff_low=config['high_confidence_threshold']['val_low_cutoff'])
 
-                diff_change_features = torch.abs(masks1-masks2).sum(axis=1)
+                diff_change_features = torch.abs(masks1 - masks2).sum(axis=1)
                 diff_change_thresholded = diff_change_features.clone()
                 diff_change_thresholded[diff_change_thresholded > self.change_threshold] = 1
 
@@ -724,8 +724,8 @@ class Trainer(object):
                             image_show2 = np.transpose(image2.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, :3]
                             image_show2 = np.flip(image_show2, axis=2)
 
-                            image_show1 = (image_show1 - image_show1.min())/(image_show1.max() - image_show1.min())
-                            image_show2 = (image_show2 - image_show2.min())/(image_show2.max() - image_show2.min())
+                            image_show1 = (image_show1 - image_show1.min()) / (image_show1.max() - image_show1.min())
+                            image_show2 = (image_show2 - image_show2.min()) / (image_show2.max() - image_show2.min())
                             # print(f"min: {image_show.min()}, max: {image_show.max()}")
                             # image_show = np.transpose(outputs['visuals']['image'][batch_index_to_show,:,:,:].numpy(),(1,2,0))
                             logits_show1 = masks1.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
@@ -735,9 +735,9 @@ class Trainer(object):
                             gt_mask_show1 = mask1.cpu().detach()[batch_index_to_show, :, :].numpy().squeeze()
                             # gt_mask_show2 = mask2.cpu().detach()[batch_index_to_show,:,:].numpy().squeeze()
                             distances_show = diff_change_features.cpu().detach()[batch_index_to_show, :, :].numpy()
-                            distances_show = (distances_show - distances_show.min())/(distances_show.max() - distances_show.min())
+                            distances_show = (distances_show - distances_show.min()) / (distances_show.max() - distances_show.min())
 
-                            fp_tp_fn_prediction_mask = gt_mask_show1 + (2*change_detection_show)
+                            fp_tp_fn_prediction_mask = gt_mask_show1 + (2 * change_detection_show)
 
                             logits_show1[logits_show1 == -1] = 0
                             logits_show2[logits_show2 == -1] = 0
@@ -829,23 +829,23 @@ class Trainer(object):
         mean_precision = precision.mean()
         mean_recall = recall.mean()
         overall_miou = mean_iou.mean()
-        classwise_f1_score = 2*(precision*recall)/(precision+recall)
+        classwise_f1_score = 2 * (precision * recall) / (precision + recall)
         mean_f1_score = classwise_f1_score.mean()
 
         # print("Validation Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/loader.__len__()))
-        cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation precision", mean_precision, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation recall", mean_recall, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation mean f1_score", mean_f1_score, epoch=epoch+1)
+        cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Validation precision", mean_precision, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Validation recall", mean_recall, epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Validation mean f1_score", mean_f1_score, epoch=epoch + 1)
         print({f"Recall class {str(x)}": recall[x] for x in range(len(recall))})
         print({f"Precision class {str(x)}": precision[x] for x in range(len(precision))})
-        cometml_experiemnt.log_metrics({f"Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch + 1)
+        cometml_experiemnt.log_metrics({f"F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch + 1)
 
-        cometml_experiemnt.log_metric("Validation Average Loss", total_loss/loader.__len__(), epoch=epoch+1)
+        cometml_experiemnt.log_metric("Validation Average Loss", total_loss / loader.__len__(), epoch=epoch + 1)
 
-        return total_loss/loader.__len__(), overall_miou
+        return total_loss / loader.__len__(), overall_miou
 
     def forward(self, cometml_experiment: object, world_size: int = 8) -> tuple:
         """forward pass for all epochs
@@ -885,7 +885,7 @@ class Trainer(object):
                 model_save_name = f"{current_path[-1]}_epoch_{epoch}_loss_{train_loss}_valmIoU_{val_mean_iou}_time_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}.pth"
 
                 if config['procedures']['train']:
-                    with open(model_save_dir+"config.yaml", 'w') as file:
+                    with open(model_save_dir + "config.yaml", 'w') as file:
                         yaml.dump(config, file)
 
                     torch.save({'epoch': epoch,
@@ -893,7 +893,7 @@ class Trainer(object):
                                 'optimizer': self.optimizer.state_dict(),
                                 'scheduler': self.scheduler.state_dict(),
                                 'loss': train_loss},
-                               model_save_dir+model_save_name)
+                               model_save_dir + model_save_name)
                 if config['visualization']['save_individual_plots']:
                     _, _ = self.validate(
                         epoch, cometml_experiment, save_individual_plots_specific=True)
@@ -948,8 +948,6 @@ if __name__ == "__main__":
     experiment.log_parameters(config['evaluation'])
     experiment.log_parameters(config['visualization'])
 
-
-
     channels = config['data']['channels']
     num_channels = len(channels.split('|'))
     config['training']['num_channels'] = num_channels
@@ -965,10 +963,10 @@ if __name__ == "__main__":
         print(dataset.__len__())
         train_dataloader = dataset.make_loader(batch_size=config['training']['batch_size'])
     else:
-        train_dataloader = build_dataset(dataset_name=config['data']['name'], 
-                                        root=config['data'][config['location']]['train_dir'], 
+        train_dataloader = build_dataset(dataset_name=config['data']['name'],
+                                        root=config['data'][config['location']]['train_dir'],
                                         batch_size=config['training']['batch_size'],
-                                        num_workers=config['training']['num_workers'], 
+                                        num_workers=config['training']['num_workers'],
                                         split='train',
                                         )
 

@@ -97,6 +97,85 @@ build_drop4_BAS(){
 }
 
 
+build_drop4_v2_BAS(){
+    source "$HOME"/code/watch/secrets/secrets
+    SENSORS=TA1-S2-L8-ACC
+    DVC_DPATH=$HOME/data/dvc-repos/smart_data_dvc
+    #DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+
+    DATASET_SUFFIX=Drop4-2022-08-08-$SENSORS
+    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*.geojson"
+    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
+
+    # Construct the TA2-ready dataset
+    python -m watch.cli.prepare_ta2_dataset \
+        --dataset_suffix=$DATASET_SUFFIX \
+        --stac_query_mode=auto \
+        --cloud_cover=40 \
+        --sensors="$SENSORS" \
+        --api_key=env:SMART_STAC_API_KEY \
+        --collated True \
+        --dvc_dpath="$DVC_DPATH" \
+        --aws_profile=iarpa \
+        --region_globstr="$REGION_GLOBSTR" \
+        --site_globstr="$SITE_GLOBSTR" \
+        --requester_pays=False \
+        --fields_workers=20 \
+        --convert_workers=8 \
+        --max_queue_size=12 \
+        --align_workers=12 \
+        --ignore_duplicates=1 \
+        --separate_region_queues=1 \
+        --separate_align_jobs=1 \
+        --visualize=1 \
+        --target_gsd=30 \
+        --force_nodata=-9999 \
+        --cache=0 \
+        --align_keep=none \
+        --backend=tmux --run=1
+}
+
+
+build_drop4_v2_SC(){
+    source "$HOME"/code/watch/secrets/secrets
+    SENSORS=TA1-S2-WV-PD-ACC
+    DVC_DPATH=$HOME/data/dvc-repos/smart_data_dvc
+    #DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+
+    DATASET_SUFFIX=Drop4-2022-08-08-$SENSORS
+    REGION_GLOBSTR="$DVC_DPATH/subregions/*.geojson"
+    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
+
+    # Construct the TA2-ready dataset
+    python -m watch.cli.prepare_ta2_dataset \
+        --dataset_suffix=$DATASET_SUFFIX \
+        --stac_query_mode=auto \
+        --cloud_cover=40 \
+        --sensors="$SENSORS" \
+        --api_key=env:SMART_STAC_API_KEY \
+        --collated True \
+        --dvc_dpath="$DVC_DPATH" \
+        --aws_profile=iarpa \
+        --region_globstr="$REGION_GLOBSTR" \
+        --site_globstr="$SITE_GLOBSTR" \
+        --requester_pays=False \
+        --fields_workers=20 \
+        --convert_workers=8 \
+        --max_queue_size=12 \
+        --align_workers=12 \
+        --ignore_duplicates=1 \
+        --separate_region_queues=1 \
+        --separate_align_jobs=1 \
+        --visualize=1 \
+        --target_gsd=4 \
+        --force_nodata=-9999 \
+        --cache=0 \
+        --align_keep=none \
+        --backend=tmux --run=1
+}
+
+
+
 #mkdir -p "$DEMO_DPATH"
 ## Create the search json wrt the sensors and processing level we want
 #python -m watch.cli.stac_search_build \
@@ -334,11 +413,12 @@ _Debugging(){
 
 
 dvc_add(){
-    cd Aligned-Drop4-2022-07-25-c30-TA1-S2-L8-ACC
+    cd Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC
 
     dvc unprotect -- */L8 */S2 *.zip viz512_anns
 
-    python -m watch.cli.prepare_splits data.kwcoco.json --run=1
+    python -m watch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
+    #--backend=serial
 
     mkdir -p viz512_anns
     cp _viz512/*/*ann*.gif ./viz512_anns
@@ -350,9 +430,18 @@ dvc_add(){
     ls -- */S2
     ls -- */*.json
 
-    dvc add -- */L8 */S2 *.zip viz512_anns && dvc push -r aws -R .
-    git commit -am "Add Drop4" && git push 
+    dvc add -- */L8 */S2 *.zip viz512_anns && dvc push -r aws -R . && git commit -am "Add Drop4" && git push 
+    dvc add -- */L8 */S2 && dvc push -r aws -R . && git commit -am "Add Drop4" && git push 
 
     #dvc add data_*nowv*.kwcoco.json
-    
+}
+
+
+update_local(){
+    DVC_DPATH=$(smartwatch_dvc --hardware=hdd)
+    cd "$DVC_DPATH"/Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC
+    git pull
+    dvc pull -r aws splits.zip.dvc
+    7z x splits.zip -y
+
 }

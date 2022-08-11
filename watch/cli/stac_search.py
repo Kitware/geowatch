@@ -64,11 +64,7 @@ CommandLine:
     DATASET_SUFFIX=DemoKHQ-2022-06-10-V3
     DEMO_DPATH=$HOME/.cache/watch/demo/datasets
     REGION_FPATH="$HOME/.cache/watch/demo/annotations/KHQ_R001.geojson"
-    SITE_GLOBSTR="$HOME/.cache/watch/demo/annotations/KHQ_R001_sites/*.geojson"
-    START_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.start_date' "$REGION_FPATH")
-    END_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.end_date' "$REGION_FPATH")
     REGION_ID=$(jq -r '.features[] | select(.properties.type=="region") | .properties.region_id' "$REGION_FPATH")
-    SEARCH_FPATH=$DEMO_DPATH/stac_search.json
     RESULT_FPATH=$DEMO_DPATH/all_sensors_kit/${REGION_ID}.input
 
     mkdir -p "$DEMO_DPATH"

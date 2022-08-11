@@ -43,6 +43,7 @@ class RandomBool(object):
     Args:
         p (float): probability
     """
+
     def __init__(self, p=0.5):
         self.p = p
 

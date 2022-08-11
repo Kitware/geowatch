@@ -55,6 +55,7 @@ class predict(object):
         >>> self = predict(args)
         >>> self.forward(args)
     """
+
     def __init__(self, args):
 
         # TODO: Add a cache flag. If cache==1, Determine what images we have
@@ -161,7 +162,7 @@ class predict(object):
         save_path = self._build_img_fpath(gid)
         save_path = self.output_feat_dpath / f'invariants_{gid}.tif'
         save_path = os.fspath(save_path)
-        kwimage.imwrite(save_path, quant_recon,  space=None,
+        kwimage.imwrite(save_path, quant_recon, space=None,
                         nodata=quantization['nodata'], **self.imwrite_kw)
 
         aux_height, aux_width = recon.shape[0:2]

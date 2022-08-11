@@ -11,6 +11,7 @@ def torchmetrics_compat_hack():
     if not hasattr(torchmetrics.classification.f_beta, 'FBetaScore'):
         f_beta.FBetaScore = f_beta.FBeta
 
+
 torchmetrics_compat_hack()
 
 

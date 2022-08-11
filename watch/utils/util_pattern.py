@@ -81,6 +81,7 @@ class Pattern(PatternBase, ub.NiceRepr):
         >>> match = repat.search('baz-biz-foobar')
         >>> match = repat.match('baz-biz-foobar')
     """
+
     def __init__(self, pattern, backend):
         if isinstance(pattern, pathlib.Path):
             pattern = os.fspath(pattern)
@@ -208,6 +209,7 @@ class MultiPattern(PatternBase, ub.NiceRepr):
         >>> pat = MultiPattern.coerce(['*.txt', '**/*.txt', '**/*.dat'], 'glob')
         >>> print(list(pat.paths(cwd=dpath)))
     """
+
     def __init__(self, patterns, predicate):
         self.predicate = predicate
         self.patterns = patterns

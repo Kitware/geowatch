@@ -6,7 +6,7 @@ import math
 import datetime
 from dateutil import parser
 from watch.utils import util_kwarray
-from watch.utils.util_time import  coerce_timedelta
+from watch.utils.util_time import coerce_timedelta
 
 
 class TimeSampleError(IndexError):
@@ -36,6 +36,7 @@ class MultiTimeWindowSampler:
         >>> kwplot.autosns()
         >>> self.show_summary(10)
     """
+
     def __init__(self, unixtimes, sensors, time_window, affinity_type='hard',
                  update_rule='distribute', determenistic=False, gamma=1,
                  time_spans=['2y', '1y', '5m'], name='?'):
@@ -467,13 +468,13 @@ class TimeWindowSampler:
             >>> import kwcoco
             >>> # xdoctest: +REQUIRES(--show)
             >>> dvc_dpath = find_smart_dvc_dpath()
-            >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
+            >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_vali.kwcoco.json'
             >>> dset = kwcoco.CocoDataset(coco_fpath)
             >>> video_ids = list(ub.sorted_vals(dset.index.vidid_to_gids, key=len).keys())
             >>> vidid = video_ids[2]
             >>> # Demo behavior over a grid of parameters
             >>> grid = list(ub.named_product({
-            >>>     'affinity_type': ['hard', 'soft2', 'hardish3', 'hardish2'][2:3],
+            >>>     'affinity_type': ['hard', 'soft2', 'hardish3', 'hardish2'],
             >>>     'update_rule': ['distribute', 'pairwise+distribute'][0:1],
             >>>     #'determenistic': [False, True],
             >>>     'determenistic': [False],
@@ -1569,6 +1570,7 @@ def _dev_1darray_sample():
     # The idea is that we are given cluttered datetimes
     from watch.utils.util_time import coerce_timedelta, coerce_datetime
     # Generate a "clumpy" sample
+
     def demo_clumpy_data(N, rng):
         uniform = np.linspace(0, 1, N)
         noise = rng.randn(N) / N

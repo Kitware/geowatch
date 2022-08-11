@@ -246,6 +246,7 @@ def hack_track_categories(track_catnames, task):
         #     raise NotImplementedError(op)
     return new_catnames
 
+
 # Backwards compat (remove if nothing uses them)
 CATEGORIES_SCORED = [c for c in CATEGORIES if c.get('scored', False)]
 CATEGORIES_UNSCORED = [c for c in CATEGORIES if not c.get('scored', False)]
@@ -522,3 +523,31 @@ def build_image_header_text(**kwargs):
         if header_line:
             header_lines.append(header_line)
     return header_lines
+
+
+# NOTES ON QUALITY / CLOUDMASK
+# https://github.com/GERSL/Fmask#46-version
+# The cloudmask band is a class-idx based raster with labels
+# 0 => clear land pixel
+# 1 => clear water pixel
+# 2 => cloud shadow
+# 3 => snow
+# 4 => cloud
+# 255 => no observation
+
+# However, in my data I seem to see:
+# Unique values   8,  16,  65, 128
+
+# These are specs
+# https://smartgitlab.com/TE/standards/-/wikis/Data-Output-Specifications#quality-band
+# TODO: this could be a specially handled frame like ASI.
+QUALITY_BITS = ub.udict({
+    'TnE'           : 1 << 0,  # T&E binary mask
+    'dilated_cloud' : 1 << 1,
+    'cirrus'        : 1 << 2,
+    'cloud'         : 1 << 3,
+    'cloud_shadow'  : 1 << 4,
+    'snow'          : 1 << 5,
+    'clear'         : 1 << 6,
+    'water'         : 1 << 7,
+})

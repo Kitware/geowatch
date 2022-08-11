@@ -283,7 +283,7 @@ def shapely_flip_xy(geom):
     return ops.transform(_flip, geom)
 
 
-def project_gdf_to_local_utm(gdf_crs84):
+def project_gdf_to_local_utm(gdf_crs84, max_utm_zones=1):
     """
     Find the local UTM zone for a geo data frame and project to it.
 
@@ -294,6 +294,10 @@ def project_gdf_to_local_utm(gdf_crs84):
     Args:
         gdf_crs84 (geopandas.GeoDataFrame):
             The data with CRS-84 geometry to project into a local UTM
+
+        max_utm_zones (int):
+            If the data spans more than this many UTM zones, error.
+            Otherwise, we take the first one.
 
     Returns:
         geopandas.GeoDataFrame
@@ -361,12 +365,14 @@ def project_gdf_to_local_utm(gdf_crs84):
         epsg_zones.append(epsg_zone)
     if not ub.allsame(epsg_zones):
         unique_utm = set(epsg_zones)
-        raise ValueError(ub.paragraph(
-            '''
-            Input data spanned multiple UTM zones.
-            This is currently not allowed. {}
-            '''
-        ).format(unique_utm))
+        if len(unique_utm) > max_utm_zones:
+            raise ValueError(ub.paragraph(
+                '''
+                Input data spanned multiple UTM zones.
+                This is currently not allowed. {}
+                '''
+            ).format(unique_utm))
+    # TODO: if there are more than one is there a way to get "the best one?"
     epsg_zone = epsg_zones[0]
     gdf_utm = gdf_crs84.to_crs(epsg_zone)
     return gdf_utm
@@ -431,6 +437,7 @@ class UTM_TransformContext:
         >>> print(f'final_result={final_result}')
         >>> print(f'naive_result={naive_result}')
     """
+
     def __init__(self, data_crs84):
         """
         Args:

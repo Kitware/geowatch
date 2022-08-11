@@ -162,6 +162,7 @@ class MaskTransformerDecoder(nn.Module):
         >>> assert y.shape[0:2] == x.shape[0:2], 'only in case where x is token size'
         >>> assert y.shape[2] == self.n_cls, 'should always be true'
     """
+
     def __init__(
         self,
         n_cls,

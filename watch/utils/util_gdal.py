@@ -179,6 +179,7 @@ class GDalCommandBuilder:
         >>> print(command)
 
     """
+
     def __init__(self, command_name):
         self.command_name = command_name
 
@@ -903,6 +904,7 @@ class GdalSupressWarnings(object):
     This currently will suppress warnings entirely. We could build this into
     something a big nicer.
     """
+
     def __init__(self):
         from osgeo import gdal
         self.err_level = gdal.CE_None

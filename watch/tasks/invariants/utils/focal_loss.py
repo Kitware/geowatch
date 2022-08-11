@@ -47,10 +47,11 @@ class BinaryFocalLoss(nn.Module):
         self.gamma = gamma
         self.reduction = reduction
         self.alpha = alpha
+
     def forward(self, inputs, targets):
         inputs = inputs.float()
         targets = targets.float()
         BCE_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction=self.reduction)
-        pt = torch.exp(-BCE_loss) # prevents nans when probability 0
+        pt = torch.exp(-BCE_loss)  # prevents nans when probability 0
         F_loss = self.alpha * (1 - pt) ** self.gamma * BCE_loss
         return F_loss.mean()

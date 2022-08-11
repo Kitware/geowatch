@@ -13,6 +13,8 @@ from watch.tasks.rutgers_material_seg.models.encoding import Encoding
 from watch.tasks.rutgers_material_seg.models.quantizer import Quantizer
 from watch.tasks.rutgers_material_seg.models.tex_refine import TeRN
 from torchvision import transforms
+
+
 class ASPP(nn.Module):
 
     def __init__(self, C, depth, num_classes, conv=nn.Conv2d,
@@ -72,6 +74,7 @@ class ASPP(nn.Module):
 
         return x
 
+
 class BasicBlock(nn.Module):
     expansion = 1
 
@@ -100,6 +103,7 @@ class BasicBlock(nn.Module):
             return out, preact
         else:
             return out
+
 
 class Bottleneck(nn.Module):
     expansion = 4
@@ -135,17 +139,17 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, block, num_blocks, num_channels=3, zero_init_residual=False, 
+    def __init__(self, block, num_blocks, num_channels=3, zero_init_residual=False,
                 pretrained=False, num_classes=None, beta=False, weight_std=False,
                 num_groups=32, out_dim=128, feats=[64, 64, 128, 256, 512]):
         super(ResNet, self).__init__()
         self.in_planes = 64
         self.num_codewords = 64
-        
+
         self.pre_conv1 = nn.Conv2d(num_channels, 64, kernel_size=3, stride=1, padding=1,
                                bias=False)
         self.pre_bn1 = nn.BatchNorm2d(64)
-        self.conv1 = nn.Conv2d(64+num_channels, 64, kernel_size=3, stride=1, padding=1,
+        self.conv1 = nn.Conv2d(64 + num_channels, 64, kernel_size=3, stride=1, padding=1,
                                bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
@@ -164,8 +168,8 @@ class ResNet(nn.Module):
             nn.LeakyReLU(-0.2))
         # self.fc = nn.Sequential(nn.Linear(256, 256), nn.Sigmoid())
 
-        self._aff = TeRN(num_iter=10, dilations=[1,1,2,4,6,8])
-        
+        self._aff = TeRN(num_iter=10, dilations=[1, 1, 2, 4, 6, 8])
+
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -195,7 +199,7 @@ class ResNet(nn.Module):
 
     def uncrop(self, cropped_image, params, H, W):
         bs, n_crops, c, h, w = cropped_image.shape
-        uncrop = torch.zeros((bs,c,H,W), device=torch.device('cuda'))
+        uncrop = torch.zeros((bs, c, H, W), device=torch.device('cuda'))
         # uncrop_test = cropped_image.clone()
         # uncrop_test = uncrop_test.expand(-1,10,-1,-1,-1)
         # uncrop_test = torch.cat([uncrop_test, torch.zeros((bs,H*W-n_crops,c,h,w), device=torch.device('cuda'))], dim=1)
@@ -210,13 +214,13 @@ class ResNet(nn.Module):
                 f_right = f_left + width
                 f_bottom = f_top + height
 
-                if left < 0: 
+                if left < 0:
                     f_left = left - W
                     left = 0
                     # continue
                 if top < 0:
                     f_top = top - H
-                    top = 0 
+                    top = 0
                     # continue
                 if right > W:
                     f_right = W - left
@@ -232,10 +236,9 @@ class ResNet(nn.Module):
                 # print(f"f_left: {f_left}, f_top:{f_top}, f_right: {f_right}, f_bottom: {f_bottom} ")
                 # features = cropped_image[b,crop,:,f_top:f_bottom, f_left:f_right]
                 # print(features.shape)
-                uncrop[b,:,top:bottom, left:right] += cropped_image[b,crop,:,f_top:f_bottom, f_left:f_right]
+                uncrop[b, :, top:bottom, left:right] += cropped_image[b, crop, :, f_top:f_bottom, f_left:f_right]
         # print(f"uncrop: {uncrop.dtype}")
         return uncrop
-
 
     def forward(self, x, original_image, sampled_crops):
         N, C, H, W = x.shape
@@ -291,7 +294,7 @@ class ResNet(nn.Module):
         #     # extent = ax.get_window_extent().transformed(figure.dpi_scale_trans.inverted())
         #     extent = ax.get_tightbbox(fig.canvas.get_renderer()).transformed(fig.dpi_scale_trans.inverted())
         #     fig.savefig(file_path, bbox_inches=extent)
-        
+
         # fig.clear()
         # plt.cla()
         # plt.clf()
@@ -300,7 +303,7 @@ class ResNet(nn.Module):
 
         out = torch.stack([transforms.functional.crop(refined_out, *params) for params in sampled_crops], dim=1)
         bs, ps, pc, ph, pw = out.shape
-        out = out.view(bs*ps,pc,ph,pw)
+        out = out.view(bs * ps, pc, ph, pw)
 
         # print(f"out: {out.shape}")
         # print(f"x: {x.shape}")
@@ -320,7 +323,7 @@ class ResNet(nn.Module):
         # # print(f"cropped_out: {cropped_out.shape}")
         # bs, ps, pc, ph, pw = cropped_out.shape
         # cropped_out = cropped_out.view(bs*ps,pc,ph,pw)
-        
+
         # print(cropped_out.requires_grad)
             # print(f"out: {out.shape}")
         # cropped_out.grad = out.grad
@@ -332,7 +335,7 @@ class ResNet(nn.Module):
         # print(f"cropped_image: {cropped_image.shape}")
 
         # print(f"out: {out.shape}")
-        
+
         # out[:,:,:,:] = cropped_out.data
 
         # print(f"out: {out.shape}")
@@ -361,7 +364,7 @@ class ResNet(nn.Module):
         # print(f"residuals: {residuals.shape}")
         # quant =  torch.tensor([torch.histc(residuals[i], bins=self.num_codewords).tolist() for i in range(N)], device=torch.device('cuda'), requires_grad=True)
 
-        return out#, out
+        return out  # , out
 
     # def forward(self, x, layer=100):
     #     N, C, H, W = x.shape
@@ -425,6 +428,7 @@ model_dict = {
 
 class LinearBatchNorm(nn.Module):
     """Implements BatchNorm1d by BatchNorm2d, for SyncBN purpose"""
+
     def __init__(self, dim, affine=True):
         super(LinearBatchNorm, self).__init__()
         self.dim = dim
@@ -439,6 +443,7 @@ class LinearBatchNorm(nn.Module):
 
 class SupConResNet(nn.Module):
     """backbone + projection head"""
+
     def __init__(self, name='resnet50', head='mlp', feat_dim=128):
         super(SupConResNet, self).__init__()
         model_fun, dim_in = model_dict[name]
@@ -463,6 +468,7 @@ class SupConResNet(nn.Module):
 
 class SupCEResNet(nn.Module):
     """encoder + classifier"""
+
     def __init__(self, name='resnet50', num_classes=10):
         super(SupCEResNet, self).__init__()
         model_fun, dim_in = model_dict[name]
@@ -475,6 +481,7 @@ class SupCEResNet(nn.Module):
 
 class LinearClassifier(nn.Module):
     """Linear classifier"""
+
     def __init__(self, name='resnet50', num_classes=10):
         super(LinearClassifier, self).__init__()
         _, feat_dim = model_dict[name]

@@ -6,9 +6,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 def SoftCE(predicted, target):
-    logprobs = torch.nn.functional.log_softmax(predicted, dim = 1)
-    return  -(target * logprobs).sum() / predicted.shape[0]
+    logprobs = torch.nn.functional.log_softmax(predicted, dim=1)
+    return -(target * logprobs).sum() / predicted.shape[0]
+
 
 class CrossEntropyLabelSmooth(nn.Module):
     """Cross entropy loss with label smoothing regularizer.
@@ -207,6 +209,7 @@ class SupConLoss(nn.Module):
 class SoftSupConLoss(nn.Module):
     """Supervised Contrastive Learning: https://arxiv.org/pdf/2004.11362.pdf.
     It also supports the unsupervised contrastive loss in SimCLR"""
+
     def __init__(self, temperature=0.07, contrast_mode='all',
                  base_temperature=0.07):
         super(SupConLoss, self).__init__()

@@ -46,6 +46,8 @@ if ub.argflag('--warntb'):
 __WATCH_PREIMPORT = os.environ.get('WATCH_PREIMPORT', 'auto')
 WATCH_HACK_IMPORT_ORDER = os.environ.get('WATCH_HACK_IMPORT_ORDER', __WATCH_PREIMPORT)
 
+foo = 3
+
 
 def _imoprt_hack(modname):
     if modname == 'gdal':
@@ -178,6 +180,7 @@ __getattr__ = lazy_import(
 
 def __dir__():
     return __all__
+
 
 __all__ = ['cli', 'coerce_kwcoco', 'datacube', 'demo',
            'find_smart_dvc_dpath', 'gis', 'heuristics', 'rc',

@@ -66,6 +66,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         >>> for frame in frames_:
         >>>     kwplot.imshow(frame, pnum=pnum_())
     """
+
     def __init__(self, sampler, window_dims, input_dims=None, channels=None,
                  rng=None, training=True, window_overlap=0.0,
                  inference_only=False):

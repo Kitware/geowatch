@@ -110,6 +110,7 @@ class PolygonFilter(collections.abc.Callable):
 
     So, do this by hand instead.
     '''
+
     def __call__(self, obj):
         if isinstance(obj, Track):
             return self.on_track(obj)
@@ -332,6 +333,7 @@ class NoOpTrackFunction(TrackFunction):
     '''
     Use existing tracks.
     '''
+
     def __init__(self, **kwargs):
         self.kwargs = kwargs  # Unused
 
@@ -344,6 +346,7 @@ class NewTrackFunction(TrackFunction):
     Specialization of TrackFunction to create polygons that do not yet exist
     in coco_dset, and add them as new annotations
     '''
+
     def __call__(self, sub_dset):
         tracks = self.create_tracks(sub_dset)
         sub_dset = self.add_tracks_to_dset(sub_dset, tracks)

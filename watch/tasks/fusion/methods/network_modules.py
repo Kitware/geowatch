@@ -112,6 +112,7 @@ class OurDepthwiseSeparableConv(nn.Module):
             OurDepthwiseSeparableConv(in_modes * 4, in_modes * 8, kernel_size=3, stride=2, padding=1, residual=0),
         ])
     """
+
     def __init__(
             self, in_chs, out_chs, kernel_size=3, stride=1, dilation=1,
             padding=0, residual=False, pw_kernel_size=1, norm='group',
@@ -174,6 +175,7 @@ class DWCNNTokenizer(nh.layers.Sequential):
     inputs = torch.rand(2, 13, 16, 16)
     self(inputs)
     """
+
     def __init__(self, in_chn, out_chn, norm='auto'):
         super().__init__()
         if norm == 'none':
@@ -195,6 +197,7 @@ class LinearConvTokenizer(nh.layers.Sequential):
         >>> from watch.tasks.fusion.methods.network_modules import *  # NOQA
         >>> LinearConvTokenizer(1, 512)
     """
+
     def __init__(self, in_channels, out_channels):
         # import math
         c1 = in_channels * 1
@@ -314,6 +317,7 @@ class ConvTokenizer(nn.Module):
 
 
     """
+
     def __init__(self, in_chn, out_chn, norm=None):
         super().__init__()
         self.down = nh.layers.ConvNormNd(
@@ -344,6 +348,7 @@ class RearrangeTokenizer(nn.Module):
 
     Not quite a pure rearrange, but is this way for backwards compat
     """
+
     def __init__(self, in_channels, agree, window_size):
         super().__init__()
         self.window_size = window_size

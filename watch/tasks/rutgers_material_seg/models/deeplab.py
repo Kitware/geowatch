@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from watch.tasks.rutgers_material_seg.models.tex_refine import TeRN
 from watch.tasks.rutgers_material_seg.models.encoding import Encoding
 
+
 class ASPP(nn.Module):
 
     def __init__(self, C, depth, num_classes, conv=nn.Conv2d,
@@ -71,6 +72,7 @@ class ASPP(nn.Module):
 
         return x
 
+
 class DoubleConv(nn.Module):
     """(convolution => [BN] => ReLU) * 2"""
 
@@ -88,6 +90,7 @@ class DoubleConv(nn.Module):
 
     def forward(self, x):
         return self.double_conv(x)
+
 
 class Up(nn.Module):
     """Upscaling then double conv"""
@@ -119,6 +122,7 @@ class Up(nn.Module):
 
         x = torch.cat([x2, x1], dim=1)
         return self.conv(x)
+
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -184,7 +188,7 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, block, num_blocks, num_channels=3, zero_init_residual=False, 
+    def __init__(self, block, num_blocks, num_channels=3, zero_init_residual=False,
                 pretrained=False, num_classes=None, beta=False, weight_std=False,
                 num_groups=32, out_dim=128, feats=[64, 128, 256, 512, 256]):
         super(ResNet, self).__init__()
@@ -208,7 +212,7 @@ class ResNet(nn.Module):
         # self.norm = _norm
         # self.conv = nn.Conv2d
         self.aspp = ASPP(feats[3], feats[4], feats[4])
-        self._aff = TeRN(num_iter=10, dilations=[1,1,2,4,6,8])
+        self._aff = TeRN(num_iter=10, dilations=[1, 1, 2, 4, 6, 8])
 
         self.encoding = nn.Sequential(
             Encoding(channels=feats[0], num_codes=self.num_codewords),
@@ -225,7 +229,7 @@ class ResNet(nn.Module):
         # self.up2 = Up(feats[1]*num_blocks[1], feats[2], bilinear=True)
         # self.up3 = Up(feats[1] + feats[2], feats[1], bilinear=True)
         # self.up4 = Up(feats[0] + feats[1], feats[0], bilinear=True)
-        
+
         self.outconv = nn.Conv2d(feats[0], num_classes, kernel_size=1, stride=1, bias=False)
 
         for m in self.modules():
@@ -259,7 +263,7 @@ class ResNet(nn.Module):
         # x1 = F.relu(self.bn1(self.conv1(x)))
         outputs = {}
         x1 = F.relu(self.bn1(self.conv1_cat(x)))
-        
+
         # x1 = self._aff(x, x1)
 
         x2 = self.layer1(x1)
@@ -281,9 +285,8 @@ class ResNet(nn.Module):
         outputs['up5'] = x
         x = self.outconv(x)
         # classifer = self.fc(x)
-        
 
-        return x, outputs#, x_feats
+        return x, outputs  # , x_feats
 
 
 def resnet18(**kwargs):
@@ -330,4 +333,3 @@ model_dict = {
     'resnet50': [resnet50, 2048],
     'resnet101': [resnet101, 2048],
 }
-

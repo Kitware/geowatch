@@ -1048,6 +1048,7 @@ class MultimodalTransformer(pl.LightningModule):
         """
         import kwarray
         from kwarray import distributions
+
         def _specific_coerce(val, rng=None):
             # Coerce for what we want to do here,
             import numbers
@@ -1139,7 +1140,7 @@ class MultimodalTransformer(pl.LightningModule):
                 'time_index': torch.rand(T, 8),
                 'time_offset': torch.rand(T, 1),
             }
-            tr = {
+            target = {
                 'gids': list(range(T)),
                 'space_slice': [
                     slice(0, H0),
@@ -1151,7 +1152,7 @@ class MultimodalTransformer(pl.LightningModule):
                 'video_name': 'toy_video_3',
                 'frames': frames,
                 'positional_tensors': positional_tensors,
-                'tr': tr,
+                'target': target,
             }
             batch.append(item)
         return batch
@@ -1846,7 +1847,7 @@ class MultimodalTransformer(pl.LightningModule):
 
             >>> datamodule = datamodules.kwcoco_video_data.KWCocoVideoDataModule(
             >>>     train_dataset='special:vidshapes8-multispectral-multisensor', chip_size=32,
-            >>>     batch_size=1, time_steps=2, num_workers=3, normalize_inputs=False)
+            >>>     batch_size=1, time_steps=2, num_workers=0, normalize_inputs=False)
             >>> datamodule.setup('fit')
             >>> dataset_stats = datamodule.torch_datasets['train'].cached_dataset_stats(num=3)
             >>> classes = datamodule.torch_datasets['train'].classes
