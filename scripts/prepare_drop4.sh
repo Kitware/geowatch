@@ -169,8 +169,8 @@ build_drop4_v2_SC(){
         --visualize=1 \
         --target_gsd=4 \
         --force_nodata=-9999 \
-        --cache=0 \
-        --align_keep=none \
+        --cache=1 \
+        --align_keep=img \
         --backend=tmux --run=1
 }
 

@@ -256,7 +256,7 @@ def main(cmdline=False, **kwargs):
         pass
     elif not ub.iterable(cache):
         if cache:
-            cache = list(stages.keys())
+            cache = list(stages.nodes)
         else:
             cache = []
     else:
