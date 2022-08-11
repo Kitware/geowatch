@@ -3,6 +3,9 @@ r"""
 Performs the stac search to create the .input file needed for
 prepare_ta2_dataset
 
+SeeAlso:
+    ../stac/stac_search_builder.py
+
 CommandLine:
     # Create a demo region file
     xdoctest watch.demo.demo_region demo_khq_region_fpath
@@ -174,33 +177,6 @@ class StacSearchConfig(scfg.Config):
         'sensors': scfg.Value("L2", help='(only used if search_json is "auto")'),
         'api_key': scfg.Value('env:SMART_STAC_API_KEY', help='The API key or where to get it (only used if search_json is "auto")'),
     }
-
-
-# DEPRECATE FOR ITEMS IN STAC_BUILDER (which maybe moves somewhere else?)
-DEFAULT_STAC_CONFIG = {
-    #"Landsat 8": {
-    #    "provider": "https://api.smart-stac.com",
-    #    "collections": ["landsat-c2l1"],
-    #    "headers": {
-    #        "x-api-key": smart_stac_api_key
-    #    },
-    #    "query": {}
-    #},
-    "Landsat 8": {
-        "provider": "https://landsatlook.usgs.gov/stac-server/",
-        "collections": ["landsat-c2l1"],
-        "headers": {},
-        "query": {}
-    },
-    "Sentinel-2": {
-        "provider": "https://earth-search.aws.element84.com/v0",
-        "collections": ["sentinel-s2-l1c"],
-        "query": {},
-        "headers": {}
-    }
-}
-
-stac_config = DEFAULT_STAC_CONFIG
 
 
 def create_working_dir():
@@ -478,6 +454,31 @@ def area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config,
 
 def id_query(searcher, logger, dest_path, temp_dir, args):
     raise NotImplementedError('This doesnt have the right stac endpoints setup for it.')
+    # DEPRECATE FOR ITEMS IN STAC_BUILDER (which maybe moves somewhere else?)
+    DEFAULT_STAC_CONFIG = {
+        #"Landsat 8": {
+        #    "provider": "https://api.smart-stac.com",
+        #    "collections": ["landsat-c2l1"],
+        #    "headers": {
+        #        "x-api-key": smart_stac_api_key
+        #    },
+        #    "query": {}
+        #},
+        "Landsat 8": {
+            "provider": "https://landsatlook.usgs.gov/stac-server/",
+            "collections": ["landsat-c2l1"],
+            "headers": {},
+            "query": {}
+        },
+        "Sentinel-2": {
+            "provider": "https://earth-search.aws.element84.com/v0",
+            "collections": ["sentinel-s2-l1c"],
+            "query": {},
+            "headers": {}
+        }
+    }
+
+    stac_config = DEFAULT_STAC_CONFIG
     if args.site_file.startswith('s3://'):
         s_file_loc = get_file_from_s3(args.site_file, temp_dir)
     else:

@@ -13,43 +13,28 @@ __author_email__ = 'kitware@kitware.com, jon.crall@kitware.com'
 __url__ = 'https://gitlab.kitware.com/watch/watch'
 
 
-__devnotes__ = """
-
-# Command to autogenerate lazy imports for this file
-mkinit -m watch --lazy --diff
-mkinit -m watch --lazy -w
-
-# Debug import time
-python -X importtime -c "import watch"
-WATCH_HACK_IMPORT_ORDER=variant3 python -X importtime -c "import watch"
-WATCH_HACK_IMPORT_ORDER=variant1 python -X importtime -c "import watch"
-"""
-
-if 1:
-    # hack for sanity
-    os.environ['KWIMAGE_DISABLE_TRANSFORM_WARNINGS'] = 'True'
-    # os.environ['PROJ_DEBUG'] = '3'
-
-WATCH_AUTOHACK_IMPORT_VARIANTS = {
+WATCH_PREIMPORT_VARIANTS = {
     'variant1': ['geopandas', 'pyproj', 'gdal'],  # align-crs on horologic
-    'variant2': ['pyproj', 'gdal'],   # CI machine
-    'variant3': ['geopandas', 'pyproj'],   # delay gdal import
-    'none': [],   # no pre-imports
-    '0': [],   # no pre-imports
+    'variant2': ['pyproj', 'gdal'],               # CI machine
+    'variant3': ['geopandas', 'pyproj'],          # delay gdal import
+    'none': [],                                   # no pre-imports
+    '0': [],                                      # no pre-imports
 }
 
-if ub.argflag('--warntb'):
-    import xdev
-    xdev.make_warnings_print_tracebacks()
 
-# Shorter alias because we are using it now
-__WATCH_PREIMPORT = os.environ.get('WATCH_PREIMPORT', 'auto')
-WATCH_HACK_IMPORT_ORDER = os.environ.get('WATCH_HACK_IMPORT_ORDER', __WATCH_PREIMPORT)
+def _handle_hidden_commands():
+    """
+    Hidden developer features
+    """
+    if ub.argflag('--warntb'):
+        import xdev
+        xdev.make_warnings_print_tracebacks()
 
-foo = 3
 
-
-def _imoprt_hack(modname):
+def _import_troublesome_module(modname):
+    """
+    Defines exactly how to import each troublesome (binary) module
+    """
     if modname == 'gdal':
         from osgeo import gdal as module
     elif modname == 'pyproj':
@@ -76,38 +61,80 @@ def _imoprt_hack(modname):
     return module
 
 
-def _execute_import_order_hacks(WATCH_HACK_IMPORT_ORDER):
-    if WATCH_HACK_IMPORT_ORDER == 'auto':
-        # import sys
-        # There is crazy sys.argv behavior with -m
-        # https://stackoverflow.com/questions/42076706/sys-argv-behavior-with-python-m
+def _is_running_a_fast_cli_tool():
+    """
+    Determine if we are running a fast-cli tool.
 
-        # TODO:
-        # Figure out some want to make this not trigger for certain main
-        # modules. We can do it for installed modules
-        import sys
-        if sys.argv and 'smartwatch_dvc' in sys.argv[0]:
-            watch_hack_import_order = None
+    This is used to short circuit the pre-imports for certain command line
+    tools so we don't incur the import time, which can be multiple seconds.
+
+    TODO:
+        Is there a better way to prevent certain entry points from executing
+        the pre-imports?
+
+    Notes:
+        There is crazy sys.argv behavior with -m [SO42076706]_.
+
+    References:
+        .. [SO42076706] https://stackoverflow.com/questions/42076706/sys-argv-behavior-with-python-m
+    """
+    import sys
+    if sys.argv and 'smartwatch_dvc' in sys.argv[0]:
+        return True
+    return False
+
+
+def _execute_ordered_preimports():
+    """
+    The order in which certain modules with binary libraries are imported can
+    impact runtime stability and can even cause crashes if a specific order
+    isnt used.
+
+    There are several known good configurations registered in the
+    ``WATCH_PREIMPORT_VARIANTS`` dictionary and the setting is
+    controlled by the ``WATCH_PREIMPORT`` environment variable.
+    """
+
+    # Shorter alias because we are using it now
+    WATCH_PREIMPORT = os.environ.get('WATCH_PREIMPORT', 'auto')
+    WATCH_PREIMPORT = os.environ.get('WATCH_HACK_IMPORT_ORDER', WATCH_PREIMPORT)
+
+    if not WATCH_PREIMPORT:
+        return
+
+    if WATCH_PREIMPORT == 'auto':
+        if _is_running_a_fast_cli_tool():
+            watch_preimport = None
         else:
-            # Some imports need to happen in a specific order, otherwise we get crashes
-            # This is very annoying
             # This is the "known" best order for importing
-            # watch_hack_import_order = None
-            watch_hack_import_order = WATCH_AUTOHACK_IMPORT_VARIANTS['variant1']
-    elif WATCH_HACK_IMPORT_ORDER in WATCH_AUTOHACK_IMPORT_VARIANTS:
-        watch_hack_import_order = WATCH_AUTOHACK_IMPORT_VARIANTS[WATCH_HACK_IMPORT_ORDER]
-    elif WATCH_HACK_IMPORT_ORDER.lower() in {'0', 'false', 'no', ''}:
-        watch_hack_import_order = None
+            watch_preimport = WATCH_PREIMPORT_VARIANTS['variant1']
+    elif WATCH_PREIMPORT in WATCH_PREIMPORT_VARIANTS:
+        watch_preimport = WATCH_PREIMPORT_VARIANTS[WATCH_PREIMPORT]
+    elif WATCH_PREIMPORT.lower() in {'0', 'false', 'no', ''}:
+        watch_preimport = None
     else:
-        watch_hack_import_order = WATCH_HACK_IMPORT_ORDER.split(',')
+        watch_preimport = WATCH_PREIMPORT.split(',')
 
-    if watch_hack_import_order is not None:
-        for modname in watch_hack_import_order:
-            _imoprt_hack(modname)
+    if watch_preimport is not None:
+        for modname in watch_preimport:
+            _import_troublesome_module(modname)
 
 
-if WATCH_HACK_IMPORT_ORDER:
-    _execute_import_order_hacks(WATCH_HACK_IMPORT_ORDER)
+_handle_hidden_commands()
+_execute_ordered_preimports()
+
+
+__devnotes__ = """
+
+# Command to autogenerate lazy imports for this file
+mkinit -m watch --lazy --diff
+mkinit -m watch --lazy -w
+
+# Debug import time
+python -X importtime -c "import watch"
+WATCH_HACK_IMPORT_ORDER=variant3 python -X importtime -c "import watch"
+WATCH_HACK_IMPORT_ORDER=variant1 python -X importtime -c "import watch"
+"""
 
 
 # Choose which submodules (and which submodule attributes) to expose
@@ -116,6 +143,9 @@ __submodules__ = {
     'demo': ['coerce_kwcoco'],
     'utils': ['find_smart_dvc_dpath']
 }
+
+
+#### AUTOGENERATED LAZY IMPORTS
 
 
 def lazy_import(module_name, submodules, submod_attrs):
@@ -147,7 +177,7 @@ def lazy_import(module_name, submodules, submod_attrs):
         return attr
 
     if os.environ.get('EAGER_IMPORT', ''):
-        for name in name_to_submod.values():
+        for name in submodules:
             __getattr__(name)
 
         for attrs in submod_attrs.values():
@@ -161,9 +191,11 @@ __getattr__ = lazy_import(
     submodules={
         'cli',
         'demo',
+        'exceptions',
         'gis',
         'heuristics',
         'rc',
+        'stac',
         'tasks',
         'utils',
     },
@@ -181,7 +213,6 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
-
-__all__ = ['cli', 'coerce_kwcoco', 'datacube', 'demo',
-           'find_smart_dvc_dpath', 'gis', 'heuristics', 'rc',
-           'sequencing', 'tasks', 'utils']
+__all__ = ['WATCH_PREIMPORT_VARIANTS', 'cli', 'coerce_kwcoco', 'demo',
+           'exceptions', 'find_smart_dvc_dpath', 'gis', 'heuristics', 'rc',
+           'stac', 'tasks', 'utils']

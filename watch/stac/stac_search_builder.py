@@ -5,7 +5,7 @@ This does contain a command line interface, for legacy reasons, but
 is not intended to be a fully supported part of the WATCH CLI.
 
 SeeAlso:
-    ~/code/watch/watch/cli/stac_search.py
+    ../cli/stac_search.py
 """
 import os
 import ubelt as ub
@@ -195,9 +195,36 @@ CONVINIENCE_SENSOR_GROUPS = {
 
 
 def build_search_json(start_date, end_date, sensors, api_key, cloud_cover):
+    """
+    Construct the json that can be used for a stac search
+
+    Example:
+        >>> from watch.stac.stac_search_builder import build_search_json
+        >>> start_date = '2017-01-01'
+        >>> end_date = '2020-01-01'
+        >>> sensors = 'L2-S2'
+        >>> api_key = None
+        >>> cloud_cover = 20
+        >>> search_json = build_search_json(start_date, end_date, sensors, api_key, cloud_cover)
+        >>> print('search_json = {}'.format(ub.repr2(search_json, nl=-1)))
+        search_json = {
+            'stac_search': [
+                {
+                    'collections': ['sentinel-s2-l2a-cogs'],
+                    'end_date': '2020-01-01',
+                    'endpoint': 'https://earth-search.aws.element84.com/v0',
+                    'headers': {},
+                    'query': {
+                        'eo:cloud_cover': {'lt': 20}
+                    },
+                    'start_date': '2017-01-01'
+                }
+            ]
+        }
+    """
     from watch.utils import util_time
 
-    if api_key.startswith('env:'):
+    if api_key is not None and api_key.startswith('env:'):
         api_environ_key = api_key.split(':')[1]
         api_key = os.environ.get(api_environ_key, None)
 
@@ -207,9 +234,10 @@ def build_search_json(start_date, end_date, sensors, api_key, cloud_cover):
         else:
             sensors = CONVINIENCE_SENSOR_GROUPS[sensors]
 
-    headers = {
-            "x-api-key": api_key,
-    }
+    headers = {}
+    if api_key is not None:
+        headers['x-api-key'] = api_key
+
     start_date = util_time.coerce_datetime(start_date, default_timezone='utc')
     end_date = util_time.coerce_datetime(end_date, default_timezone='utc')
 
@@ -239,7 +267,7 @@ def main(cmdline=1, **kwargs):
     """
     Example:
         >>> # xdoctest: +SKIP
-        >>> from watch.cli.stac_search_build import main
+        >>> from watch.stac.stac_search_builder import main
         >>> cmdline = 0
         >>> kwargs = {
         >>>     'start_date': '2017-01-01',

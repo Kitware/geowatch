@@ -11,7 +11,7 @@ import shutil
 # Deprecate?
 import pystac
 
-from watch.utils.util_stac import parallel_map_items, maps
+from watch.stac.util_stac import parallel_map_items, maps
 
 # from s2angs.cli import generate_anglebands
 generate_anglebands = None

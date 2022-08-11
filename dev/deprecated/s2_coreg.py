@@ -14,7 +14,7 @@ from watch.datacube.registration.s2_coreg_l1c import (
 from watch.datacube.registration.l8_coreg_l1 import (
     l8_coregister)
 from watch.gis.sensors.sentinel2 import s2_grid_tiles_for_geometry
-from watch.utils.util_stac import parallel_map_items, maps
+from watch.stac.util_stac import parallel_map_items, maps
 from watch.gis.geotiff import geotiff_metadata
 
 

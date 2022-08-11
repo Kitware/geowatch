@@ -2,7 +2,7 @@ import os
 import pystac
 
 from watch.datacube.registration.planet_to_s2 import planet_to_s2_coregister
-from watch.utils.util_stac import maps
+from watch.stac.util_stac import maps
 
 
 def _s2_b04_band_from_baseline_scene_dir(baseline_scene_dir):

@@ -11,7 +11,7 @@ import pystac
 from osgeo_utils.gdal_pansharpen import gdal_pansharpen
 
 import watch
-from watch.utils.util_stac import parallel_map_items, maps, associate_msi_pan
+from watch.stac.util_stac import parallel_map_items, maps, associate_msi_pan
 from watch.utils.util_gdal import gdal_single_warp
 
 

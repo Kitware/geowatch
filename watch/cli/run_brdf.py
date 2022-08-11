@@ -10,7 +10,7 @@ import re
 import pystac
 
 from watch.utils.util_gdal import GdalOpen
-from watch.utils.util_stac import parallel_map_items
+from watch.stac.util_stac import parallel_map_items
 
 
 SUPPORTED_S2_PLATFORMS = {'S2A',
