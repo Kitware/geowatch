@@ -238,7 +238,15 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
         try:
             img = job.result()
         except RuntimeError as ex:
-            if remove_broken and "404" in repr(ex):
+            # Check for known error messages that might cause errors grabbing
+            # data
+            has_404 = remove_broken and "404" in repr(ex)
+            has_acc_problem = "not recognized as a supported file format" in repr(ex)
+            known_errors = [
+                has_404,
+                has_acc_problem,
+            ]
+            if any(known_errors):
                 broken_image_ids.append(gid)
                 print(f'ex={ex!r}')
                 print(f'ex={ex}')

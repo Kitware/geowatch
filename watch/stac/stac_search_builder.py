@@ -72,33 +72,6 @@ _ACCENTURE_PHASE2_TA1_PRODUCTS = {
     },
 }
 
-### Available smartstac collections:
-# <CollectionClient id=landsat-c2l2-sr>,
-# <CollectionClient id=ta1-s2-ara>,
-# <CollectionClient id=ta1-pd-ara>,
-# <CollectionClient id=ssh-wv-acc>,
-# <CollectionClient id=ssh-ls-acc>,
-# <CollectionClient id=ta1-wv-ara>,
-# <CollectionClient id=ta1-ls-ara>,
-# <CollectionClient id=ta1-s2-acc>,
-# <CollectionClient id=worldview-nitf>,
-# <CollectionClient id=ta1-wv-str>,
-# <CollectionClient id=landsat-c2l1>,
-# <CollectionClient id=ta1-ls-str>,
-# <CollectionClient id=ta1-pd-str>,
-# <CollectionClient id=ta1-pd-kit>,
-# <CollectionClient id=planet-dove>,
-# <CollectionClient id=ta1-ls-kit>,
-# <CollectionClient id=ta1-wv-acc>,
-# <CollectionClient id=ta1-dsm-ara>,
-# <CollectionClient id=ssh-pd-acc>,
-# <CollectionClient id=ssh-s2-acc>,
-# <CollectionClient id=ta1-s2-kit>,
-# <CollectionClient id=ta1-wv-kit>,
-# <CollectionClient id=ta1-pd-acc>,
-# <CollectionClient id=ta1-ls-acc>,
-# <CollectionClient id=ta1-s2-str>,
-
 
 _PUBLIC_L1_PRODUCTS = {
     # https://landsatlook.usgs.gov/stac-server/
@@ -138,6 +111,107 @@ _PUBLIC_L2_PRODUCTS = {
         }
     },
 }
+
+
+def _devcheck_providers_exist():
+    """
+    develoepr logic to test to see if providers are working
+
+    """
+    # from watch.stac.stac_search_builder import _ACCENTURE_PHASE2_TA1_PRODUCTS
+    # provider = _ACCENTURE_PHASE2_TA1_PRODUCTS['ta1-pd-acc']['endpoint']
+    import pystac_client
+    headers = {
+        'x-api-key': os.environ['SMART_STAC_API_KEY']
+    }
+    provider = "https://api.smart-stac.com"
+    catalog = pystac_client.Client.open(provider, headers=headers)
+    list(catalog.get_collections())
+
+    ta1-pd-str
+    ta1-pd-ara
+
+    import watch
+    dvc_dpath = watch.find_smart_dvc_dpath()
+    region_dpath = (dvc_dpath / 'annotations/region_models')
+
+    item_search = catalog.search(collections=["ta1-pd-acc"])
+    item_search = catalog.search(collections=["ta1-pd-ara"])
+    item_search = catalog.search(collections=["ta1-pd-str"])
+
+
+def _mwe_check_planet_processed():
+    import json
+    import pystac_client
+    import pathlib
+    from datetime import datetime as datetime_cls
+
+    # MODIFY AS NEEDED
+    headers = {
+        'x-api-key': os.environ['SMART_STAC_API_KEY']
+    }
+    region_dpath = pathlib.Path('~/data/dvc-repos/smart_watch_dvc/annotations/region_models').expanduser()
+
+    provider = "https://api.smart-stac.com"
+    catalog = pystac_client.Client.open(provider, headers=headers)
+    region_fpaths = list(region_dpath.glob('*.geojson'))
+
+    # Check that planet items exist
+    for collection in ['planet-dove', 'ta1-pd-acc', 'ta1-pd-ara', 'ta1-pd-str']:
+        # Check that planet items exist in our regions
+        region_to_results = {}
+        for region_fpath in region_fpaths:
+            with open(region_fpath) as file:
+                region_data = json.load(file)
+            region_row = [f for f in region_data['features'] if f['properties']['type'] == 'region'][0]
+            region_id = region_row['properties']['region_id']
+            geom = region_row['geometry']
+            start = region_row['properties']['start_date']
+            end = region_row['properties']['end_date']
+            if end is None:
+                # end = datetime_cls.utcnow().date()
+                end = datetime_cls.now().date().isoformat()
+
+            item_search = catalog.search(
+                collections=[collection],
+                datetime=(start, end),
+                intersects=geom,
+                max_items=1
+            )
+            results = list(item_search.items())
+            region_to_results[region_id] = results
+            # print(f'region_id={region_id}')
+            # print(f'results={results}')
+        print(f'collection={collection}')
+        print('region_to_results = {}'.format(ub.repr2(region_to_results, nl=1)))
+
+
+### Available smartstac collections:
+# <CollectionClient id=landsat-c2l2-sr>,
+# <CollectionClient id=ta1-s2-ara>,
+# <CollectionClient id=ta1-pd-ara>,
+# <CollectionClient id=ssh-wv-acc>,
+# <CollectionClient id=ssh-ls-acc>,
+# <CollectionClient id=ta1-wv-ara>,
+# <CollectionClient id=ta1-ls-ara>,
+# <CollectionClient id=ta1-s2-acc>,
+# <CollectionClient id=worldview-nitf>,
+# <CollectionClient id=ta1-wv-str>,
+# <CollectionClient id=landsat-c2l1>,
+# <CollectionClient id=ta1-ls-str>,
+# <CollectionClient id=ta1-pd-str>,
+# <CollectionClient id=ta1-pd-kit>,
+# <CollectionClient id=planet-dove>,
+# <CollectionClient id=ta1-ls-kit>,
+# <CollectionClient id=ta1-wv-acc>,
+# <collectionclient id=ta1-dsm-ara>,
+# <CollectionClient id=ssh-pd-acc>,
+# <CollectionClient id=ssh-s2-acc>,
+# <CollectionClient id=ta1-s2-kit>,
+# <CollectionClient id=ta1-wv-kit>,
+# <CollectionClient id=ta1-pd-acc>,
+# <CollectionClient id=ta1-ls-acc>,
+# <CollectionClient id=ta1-s2-str>,
 
 
 SENSOR_TO_DEFAULTS = ub.dict_union(

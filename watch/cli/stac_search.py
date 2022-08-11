@@ -112,12 +112,11 @@ CommandLine:
         --outfile "./result.input"
 """
 import json
-import os
-import subprocess
-import uuid
+import tempfile
 import pystac_client
-from shapely.geometry import shape
+from shapely.geometry import shape as geom_shape
 from watch.utils import util_logging
+from watch.utils import util_s3
 import ubelt as ub
 import scriptconfig as scfg
 
@@ -179,37 +178,36 @@ class StacSearchConfig(scfg.Config):
     }
 
 
-def create_working_dir():
-    rand_id = uuid.uuid4().hex
-    temp_dir = os.path.join('/tmp', rand_id)
-    os.makedirs(temp_dir, exist_ok=True)
-    return temp_dir
-
-
-def get_file_from_s3(uri, path):
-    dst_path = os.path.join(path, os.path.basename(uri))
-    try:
-        subprocess.check_call(
-            ['aws', 's3', 'cp', '--quiet', uri, dst_path]
-        )
-    except Exception:
-        raise OSError('Error getting file from s3URI: ' + uri)
-
-    return dst_path
-
-
-def send_file_to_s3(path, uri):
-    try:
-        subprocess.check_call(
-            ['aws', 's3', 'cp', '--quiet', path, uri]
-        )
-    except Exception:
-        raise OSError('Error sending file to s3URI: ' + uri)
-    return uri
-
-
 class StacSearcher:
-    def __init__(self, logger):
+    r"""
+    Example:
+        >>> # xdoctest: +REQUIRES(env:WATCH_ENABLE_NETWORK_TESTS)
+        >>> from watch.cli.stac_search import *  # NOQA
+        >>> import tempfile
+        >>> provider = "https://earth-search.aws.element84.com/v0"
+        >>> geom = {'type': 'Polygon',
+        >>>         'coordinates': [[[54.960669, 24.782276],
+        >>>                          [54.960669, 25.03516],
+        >>>                          [55.268326, 25.03516],
+        >>>                          [55.268326, 24.782276],
+        >>>                          [54.960669, 24.782276]]]}
+        >>> collections = ["sentinel-s2-l2a-cogs"]
+        >>> start = '2020-03-14'
+        >>> end = '2020-05-04'
+        >>> query = {}
+        >>> headers = {}
+        >>> outfile = ub.Path(tempfile.mktemp())
+        >>> self = StacSearcher()
+        >>> self.by_geometry(provider, geom, collections, start_date, end_date,
+        >>>                  outfile, query, headers)
+        >>> results_text = outfile.read_text()
+        >>> for result in [r for r in results_text.split('\n') if r]:
+        >>>     item = json.loads(result)
+        >>>     print('item = {}'.format(ub.repr2(item, nl=-1)))
+    """
+    def __init__(self, logger=None):
+        if logger is None:
+            logger = util_logging.PrintLogger(verbose=1)
         self.logger = logger
 
     def by_geometry(self, provider, geom, collections, start, end, outfile,
@@ -264,16 +262,16 @@ class StacSearcher:
             take_idxs = sampler.sample(rng=rng)
 
             features = list(ub.take(features, take_idxs))
-            self.logger.info('Filtered to %s items' % str(len(features)))
+            self.logger.info(f'Filtered to {len(features)} items')
 
         with open(outfile, 'a') as the_file:
             for item in features:
                 the_file.write(json.dumps(item) + '\n')
-        self.logger.info('Saved STAC results to: ' + outfile)
+        self.logger.info(f'Saved STAC results to: {outfile}')
 
     def by_id(self, provider, collections, stac_id, outfile, query, headers):
         raise NotImplementedError
-        self.logger.info('Processing ' + stac_id)
+        self.logger.info(f'Processing {stac_id}')
         catalog = pystac_client.Client.open(provider, headers=headers)
         if stac_id[-4:] == '_TCI':
             stac_id = stac_id[0:-4]
@@ -285,7 +283,7 @@ class StacSearcher:
         for item in items:
             with open(outfile, 'a') as the_file:
                 the_file.write(json.dumps(item.to_dict()) + '\n')
-        self.logger.info('Saved STAC result to: ' + outfile)
+        self.logger.info(f'Saved STAC result to: {outfile}')
 
 
 def main(cmdline=True, **kwargs):
@@ -331,23 +329,21 @@ def main(cmdline=True, **kwargs):
         >>>     print(item['properties']['datetime'])
     """
     config = StacSearchConfig(cmdline=cmdline, data=kwargs)
-    import ubelt as ub
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
     args = config.namespace
 
     logger = util_logging.get_logger(verbose=args.verbose)
     searcher = StacSearcher(logger)
 
-    outdir = os.path.dirname(args.outfile)
+    dest_path = ub.Path(args.outfile)
+    outdir = dest_path.parent
 
-    temp_dir = create_working_dir()
-    logger.info('Created temp folder: ' + temp_dir)
-
-    if outdir == '':
-        dest_path = os.path.join(temp_dir, args.outfile)
+    temp_dir = ub.Path(tempfile.mkdtemp(prefix='stac_search'))
+    logger.info(f'Created temp folder: {temp_dir}')
+    if str(outdir) == '':
+        dest_path = temp_dir / args.outfile
     else:
-        os.makedirs(outdir, exist_ok=True)
-        dest_path = args.outfile
+        outdir.ensuredir()
 
     ub.Path(dest_path).parent.ensuredir()
 
@@ -375,42 +371,47 @@ def main(cmdline=True, **kwargs):
 
     if args.s3_dest is not None:
         logger.info('Saving output to S3')
-        send_file_to_s3(dest_path, args.s3_dest)
+        util_s3.send_file_to_s3(dest_path, args.s3_dest)
     else:
         logger.info('--s3_dest parameter not present; skipping S3 output')
 
     logger.info('Search complete')
 
 
+def _auto_search_params_from_region(r_file_loc, config):
+    from watch.utils import util_gis
+    from watch.utils import util_time
+    from watch.stac.stac_search_builder import build_search_json
+    region_df = util_gis.read_geojson(r_file_loc)
+    region_row = region_df[region_df['type'] == 'region'].iloc[0]
+    end_date = util_time.coerce_datetime(region_row['end_date'])
+    start_date = util_time.coerce_datetime(region_row['start_date'])
+    if end_date is None:
+        end_date = util_time.coerce_datetime('now').date()
+    if start_date is None:
+        start_date = util_time.coerce_datetime('2010-01-01').date()
+    # Hack to avoid pre-constructing the search json
+    cloud_cover = config['cloud_cover']  # TODO parametarize this
+    sensors = config['sensors']
+    api_key = config['api_key']
+    search_params = build_search_json(
+        start_date=start_date, end_date=end_date,
+        sensors=sensors, api_key=api_key,
+        cloud_cover=cloud_cover)
+    return search_params
+
+
 def area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config, logger):
-    logger.info('Query region file: {}'.format(region_fpath))
+    logger.info(f'Query region file: {region_fpath}')
 
     if str(region_fpath).startswith('s3://'):
-        r_file_loc = get_file_from_s3(region_fpath, temp_dir)
+        r_file_loc = util_s3.get_file_from_s3(region_fpath, temp_dir)
     else:
         r_file_loc = region_fpath
 
     if search_json == 'auto':
         # hack to construct the search params here.
-        from watch.utils import util_gis
-        from watch.utils import util_time
-        from watch.stac.stac_search_builder import build_search_json
-        region_df = util_gis.read_geojson(r_file_loc)
-        region_row = region_df[region_df['type'] == 'region'].iloc[0]
-        end_date = util_time.coerce_datetime(region_row['end_date'])
-        start_date = util_time.coerce_datetime(region_row['start_date'])
-        if end_date is None:
-            end_date = util_time.coerce_datetime('now').date()
-        if start_date is None:
-            start_date = util_time.coerce_datetime('2010-01-01').date()
-        # Hack to avoid pre-constructing the search json
-        cloud_cover = config['cloud_cover']  # TODO parametarize this
-        sensors = config['sensors']
-        api_key = config['api_key']
-        search_params = build_search_json(
-            start_date=start_date, end_date=end_date,
-            sensors=sensors, api_key=api_key,
-            cloud_cover=cloud_cover)
+        search_params = _auto_search_params_from_region(r_file_loc, config)
     else:
         # Assume it is a path
         try:
@@ -433,7 +434,7 @@ def area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config,
 
     max_products_per_region = config['max_products_per_region']
     # assume only 1 region per region model file
-    geom = shape(regions[0]['geometry'])
+    geom = geom_shape(regions[0]['geometry'])
 
     searches = search_params['stac_search']
     logger.info(f'Performing {len(searches)} geometry stac searches')
@@ -453,6 +454,7 @@ def area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config,
 
 
 def id_query(searcher, logger, dest_path, temp_dir, args):
+    # FIXME
     raise NotImplementedError('This doesnt have the right stac endpoints setup for it.')
     # DEPRECATE FOR ITEMS IN STAC_BUILDER (which maybe moves somewhere else?)
     DEFAULT_STAC_CONFIG = {
@@ -480,7 +482,7 @@ def id_query(searcher, logger, dest_path, temp_dir, args):
 
     stac_config = DEFAULT_STAC_CONFIG
     if args.site_file.startswith('s3://'):
-        s_file_loc = get_file_from_s3(args.site_file, temp_dir)
+        s_file_loc = util_s3.get_file_from_s3(args.site_file, temp_dir)
     else:
         s_file_loc = args.site_file
 
