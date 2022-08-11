@@ -167,9 +167,10 @@ build_drop4_v2_SC(){
         --separate_region_queues=1 \
         --separate_align_jobs=1 \
         --visualize=1 \
+        --visualize_only_boxes=False \
         --target_gsd=4 \
         --force_nodata=-9999 \
-        --cache=1 \
+        --cache=0 \
         --align_keep=img \
         --backend=tmux --run=1
 }
