@@ -79,7 +79,7 @@ class BatchVisualizationBuilder:
         >>> native_target['allow_augment'] = 0
         >>> native_item = self[native_target]
         >>> # Resample the same item, but without native scale sampling for comparison
-        >>> rescaled_target = native_item['tr'].copy()
+        >>> rescaled_target = native_item['target'].copy()
         >>> rescaled_target.pop('fliprot_params', None)
         >>> rescaled_target['space_scale'] = 1
         >>> rescaled_target['allow_augment'] = 0
@@ -163,7 +163,7 @@ class BatchVisualizationBuilder:
         item_output = {}
         change_prob_list = []
         rng = kwarray.ensure_rng(rng)
-        fliprot_params = item['tr'].get('fliprot_params', None)
+        fliprot_params = item['target'].get('fliprot_params', None)
         for frame in item['frames'][1:]:
             change_prob = kwimage.Heatmap.random(
                 dims=frame['target_dims'], classes=1, rng=rng).data['class_probs'][0]

@@ -598,9 +598,9 @@ def predict(cmdline=False, **kwargs):
 
         seen_gids = set()
         primary_gids = set()
-        for tr in test_dataloader.dataset.new_sample_grid['targets']:
-            primary_gids.add(tr['main_gid'])
-            seen_gids.update(tr['gids'])
+        for target in test_dataloader.dataset.new_sample_grid['targets']:
+            primary_gids.add(target['main_gid'])
+            seen_gids.update(target['gids'])
         all_gids = list(test_dataloader.dataset.sampler.dset.images())
         from xdev import set_overlaps
         img_overlaps = set_overlaps(all_gids, seen_gids)
@@ -624,9 +624,9 @@ def predict(cmdline=False, **kwargs):
                 item = item.copy()
                 batch_gids = [frame['gid'] for frame in item['frames']]
                 batch_trs.append({
-                    'space_slice': tuple(item['tr']['space_slice']),
+                    'space_slice': tuple(item['target']['space_slice']),
                     'gids': batch_gids,
-                    'fliprot_params': item['tr'].get('fliprot_params', None)
+                    'fliprot_params': item['target'].get('fliprot_params', None)
                 })
                 position_tensors = item.get('positional_tensors', None)
                 if position_tensors is not None:
@@ -700,17 +700,17 @@ def predict(cmdline=False, **kwargs):
                 num_batches = len(batch_trs)
 
                 for bx in range(num_batches):
-                    tr: dict = batch_trs[bx]
+                    target: dict = batch_trs[bx]
                     item_head_probs: torch.Tensor = head_probs[bx]
                     # Keep only the channels we want to write to disk
                     item_head_relevant_probs = item_head_probs[..., chan_keep_idxs]
                     bin_probs = item_head_relevant_probs.detach().cpu().numpy()
 
                     # Get the spatio-temporal subregion this prediction belongs to
-                    out_gids: list[int] = tr['gids'][predicted_frame_slice]
-                    space_slice: tuple[slice, slice] = tr['space_slice']
+                    out_gids: list[int] = target['gids'][predicted_frame_slice]
+                    space_slice: tuple[slice, slice] = target['space_slice']
 
-                    fliprot_params: dict = tr['fliprot_params']
+                    fliprot_params: dict = target['fliprot_params']
                     # Update the stitcher with this windowed prediction
                     for gid, probs in zip(out_gids, bin_probs):
                         if fliprot_params is not None:
