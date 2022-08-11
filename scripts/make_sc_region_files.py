@@ -52,8 +52,8 @@ def main():
     # for region_id, geoms in list(region_id_to_geoms.items()):
     items = [(k, v) for k, v in list(region_id_to_geoms.items()) if not k.endswith('xxx')]
 
-    # site_meters_min = 2048
-    site_meters_min = 384
+    site_meters_min = 2048
+    # site_meters_min = 384
     total_area = {}
     # kwplot.multi_plot(xdata=list(total_area.keys()), ydata=list(total_area.values()), fnum=2)
     # for site_meters_min in np.arange(1, 8) * 384:

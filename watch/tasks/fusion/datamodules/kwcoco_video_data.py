@@ -1990,7 +1990,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_vali.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 256, 256),
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=(10, 128, 128),
             >>>                           channels='(L8,S2):(red|green|blue|nir,swir16,swir22)',
             >>>                           normalize_perframe=False,
             >>>                           space_scale='native', dist_weights=True)
@@ -2301,10 +2301,14 @@ class KWCocoVideoDataset(data.Dataset):
                         {tr_=!r}
                         '''
                     ))
-                # The detections live in the space of their sample.  Eventually
-                # ndsampler will return the window explicitly, but for now,
-                # this should work correctly.
-                dets_dsize = mode_sample['im'].shape[1:3][::-1]
+                # The detections live in the space of their sample (i.e. video
+                # or image space).  We can grab that info from ndsampler
+                # (the naming could be better though)
+                sample_tlbr = mode_sample['params']['sample_tlbr']
+                dets_dsize = (
+                    sample_tlbr.width.ravel()[0],
+                    sample_tlbr.height.ravel()[0]
+                )
                 gid_to_det_window_dsize[gid] = dets_dsize
                 gid_to_dets[gid] = frame_dets
 
@@ -2422,6 +2426,8 @@ class KWCocoVideoDataset(data.Dataset):
             # dimensions, but it makes sense to pin it to the input data
             # in most cases.
             frame_target_dsize = max(mode_to_dsize.values(), key=np.prod)
+            target_dims = frame_target_dsize[::-1]  # the size we want to predict
+            # frame_target_dsize = (180, 180)
 
             dt_captured = img.get('date_captured', None)
             if dt_captured:
@@ -2445,7 +2451,7 @@ class KWCocoVideoDataset(data.Dataset):
                 'change_weights': None,
                 'class_weights': None,
                 'saliency_weights': None,
-                'target_dims': frame_target_dsize[::-1],  # the size we want to predict
+                'target_dims': target_dims,
                 'ann_aids': None,
             }
 
@@ -2458,11 +2464,8 @@ class KWCocoVideoDataset(data.Dataset):
                 # lets us assume the corners of each window are in
                 # correspondence)
                 _target_dsize = np.array(frame_target_dsize)
-                print(f'gid_to_det_window_dsize={gid_to_det_window_dsize}')
-                print(f'_target_dsize={_target_dsize}')
                 _dets_dsize = np.array(gid_to_det_window_dsize[gid])
-                dets_scale = (_target_dsize / _dets_dsize)[::-1]
-                print(f'dets_scale={dets_scale}')
+                dets_scale = (_target_dsize / _dets_dsize)
 
                 frame_dets = gid_to_dets[gid]
                 if frame_dets is None:
@@ -3059,7 +3062,7 @@ class KWCocoVideoDataset(data.Dataset):
     @profile
     def draw_item(self, item, item_output=None, combinable_extra=None,
                   max_channels=5, max_dim=224, norm_over_time=0,
-                  overlay_on_image=False, draw_weights=True):
+                  overlay_on_image=False, draw_weights=True, rescale=0):
         """
         Visualize an item produced by this DataSet.
 
@@ -3202,7 +3205,8 @@ class KWCocoVideoDataset(data.Dataset):
             norm_over_time=norm_over_time, max_dim=max_dim,
             max_channels=max_channels, overlay_on_image=overlay_on_image,
             draw_weights=draw_weights, combinable_extra=combinable_extra,
-            classes=self.classes, requested_tasks=self.requested_tasks)
+            classes=self.classes, requested_tasks=self.requested_tasks,
+            rescale=rescale)
         canvas = builder.build()
         return canvas
 

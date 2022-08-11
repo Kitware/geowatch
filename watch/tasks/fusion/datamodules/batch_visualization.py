@@ -72,7 +72,8 @@ class BatchVisualizationBuilder:
         >>> #target['space_slice'] = (slice(224, 448), slice(224, 448))
         >>> target['space_slice'] = (slice(196, 196 + 148), slice(32, 128))
         >>> #target['space_slice'] = (slice(0, 196 + 148), slice(0, 128))
-        >>> target['space_slice'] = (slice(16, 196 + 148), slice(16, 128))
+        >>> target['gids'] = target['gids']
+        >>> #target['space_slice'] = (slice(16, 196 + 148), slice(16, 198))
         >>> #target['space_slice'] = (slice(-70, 196 + 148), slice(-128, 128))
         >>> native_target.pop('fliprot_params', None)
         >>> native_target['allow_augment'] = 0
@@ -82,7 +83,8 @@ class BatchVisualizationBuilder:
         >>> rescaled_target.pop('fliprot_params', None)
         >>> rescaled_target['space_scale'] = 1
         >>> rescaled_target['allow_augment'] = 0
-        >>> rescale = 1
+        >>> rescale = 0
+        >>> draw_weights = 1
         >>> rescaled_item = self[rescaled_target]
         >>> print(ub.repr2(self.summarize_item(native_item), nl=-1, sort=0))
         >>> native_item_output = BatchVisualizationBuilder.populate_demo_output(native_item, sampler.classes, rng=0)
@@ -95,7 +97,7 @@ class BatchVisualizationBuilder:
         >>>     native_item, native_item_output, classes=self.classes,
         >>>     requested_tasks=requested_tasks,
         >>>     default_combinable_channels=self.default_combinable_channels,
-        >>>     combinable_extra=combinable_extra, rescale=rescale)
+        >>>     combinable_extra=combinable_extra, rescale=rescale, draw_weights=draw_weights)
         >>> builder.max_channels = 4
         >>> builder.overlay_on_image = 0
         >>> native_canvas = builder.build()
@@ -113,7 +115,7 @@ class BatchVisualizationBuilder:
         >>>     rescaled_item, rescaled_item_output, classes=self.classes,
         >>>     requested_tasks=requested_tasks,
         >>>     default_combinable_channels=self.default_combinable_channels,
-        >>>     combinable_extra=combinable_extra, rescale=rescale)
+        >>>     combinable_extra=combinable_extra, rescale=rescale, draw_weights=draw_weights)
         >>> builder.max_channels = 4
         >>> builder.overlay_on_image = 0
         >>> rescaled_canvas = builder.build()
@@ -711,8 +713,9 @@ class BatchVisualizationBuilder:
                 row_canvas = overlay_info['overlay'][..., 0:3]
 
                 if builder.rescale:
-                    row_canvas = kwimage.imresize(row_canvas, **resizekw).clip(0, 1)
+                    row_canvas = kwimage.imresize(row_canvas, **resizekw)
 
+                row_canvas = row_canvas.clip(0, 1)
                 signal_bottom_y = 1  # hack: hardcoded
                 row_canvas = kwimage.ensure_uint255(row_canvas)
                 row_canvas = kwimage.draw_text_on_image(
@@ -729,8 +732,9 @@ class BatchVisualizationBuilder:
             row_canvas = row_canvas.copy()
 
             if builder.rescale:
-                row_canvas = kwimage.imresize(row_canvas, **resizekw).clip(0, 1)
+                row_canvas = kwimage.imresize(row_canvas, **resizekw)
 
+            row_canvas = row_canvas.clip(0, 1)
             signal_bottom_y = 1  # hack: hardcoded
             row_canvas = kwimage.ensure_uint255(row_canvas)
             row_canvas = kwimage.draw_text_on_image(
@@ -755,8 +759,9 @@ class BatchVisualizationBuilder:
             row_canvas = kwimage.overlay_alpha_layers(layers)[..., 0:3]
 
             if builder.rescale:
-                row_canvas = kwimage.imresize(row_canvas, **resizekw).clip(0, 1)
+                row_canvas = kwimage.imresize(row_canvas, **resizekw)
 
+            row_canvas = row_canvas.clip(0, 1)
             row_canvas = kwimage.ensure_uint255(row_canvas)
             row_canvas = kwimage.draw_text_on_image(
                 row_canvas, row['signal_text'], (1, 1), valign='top',
@@ -829,4 +834,5 @@ def _debug_sample_in_context(self, target):
     for box, tf in zip(vidspace_boxes, info):
         box = box.warp(tf)
         print(f'box={box}')
-        box.draw(color='kitware_orange', lw=4, alpha=0.5, ax=ax)
+        box.draw(color='kitware_orange', lw=4, alpha=0.8, ax=ax)
+    ax.set_title('Sample Window in Video Space')
