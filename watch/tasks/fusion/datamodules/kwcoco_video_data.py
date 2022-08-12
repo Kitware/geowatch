@@ -550,8 +550,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         visualizations cleaner).
         """
         if model is not None:
-            requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
             assert requested_tasks is None
+            requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
+        print(f'datamodule notified: requested_tasks={requested_tasks}')
         if requested_tasks is not None:
             self.requested_tasks = requested_tasks
             for dataset in self.torch_datasets.values():
@@ -1214,9 +1215,9 @@ class KWCocoVideoDataset(data.Dataset):
         if model is not None:
             assert requested_tasks is None
             requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
+        print(f'dataset notified: requested_tasks={requested_tasks}')
         assert requested_tasks is not None
         self.requested_tasks = requested_tasks
-        print(f'self.requested_tasks={self.requested_tasks}')
 
     # def _make_augmenter():
     #     # TODO: how to make this work with kwimage polygons?
