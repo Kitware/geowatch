@@ -141,7 +141,7 @@ WATCH_HACK_IMPORT_ORDER=variant1 python -X importtime -c "import watch"
 __submodules__ = {
     '*': [],  # include all modules, but don't expose attributes
     'demo': ['coerce_kwcoco'],
-    'utils': ['find_smart_dvc_dpath']
+    'utils': ['find_smart_dvc_dpath', 'find_dvc_dpath']
 }
 
 
@@ -205,6 +205,7 @@ __getattr__ = lazy_import(
         ],
         'utils': [
             'find_smart_dvc_dpath',
+            'find_dvc_dpath',
         ],
     },
 )
@@ -214,5 +215,5 @@ def __dir__():
     return __all__
 
 __all__ = ['WATCH_PREIMPORT_VARIANTS', 'cli', 'coerce_kwcoco', 'demo',
-           'exceptions', 'find_smart_dvc_dpath', 'gis', 'heuristics', 'rc',
-           'stac', 'tasks', 'utils']
+           'exceptions', 'find_smart_dvc_dpath', 'find_dvc_dpath',
+           'gis', 'heuristics', 'rc', 'stac', 'tasks', 'utils']

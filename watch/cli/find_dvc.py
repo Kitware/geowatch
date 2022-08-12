@@ -8,12 +8,12 @@ TODO:
 Example Usage:
 
     # List default directories (hard coded ones that exist)
-    python -m watch.cli.find_dvc --mode=list
+    python -m watch.cli.find_dvc --command=list
 
-    python -m watch.cli.find_dvc --mode=add --name=test --path=$HOME --hardware=hdd
+    python -m watch.cli.find_dvc --command=add --name=test --path=$HOME --hardware=hdd
 
     # List after adding
-    python -m watch.cli.find_dvc --mode=list
+    python -m watch.cli.find_dvc list
 
     # Now get one
     python -m watch.cli.find_dvc
@@ -22,13 +22,19 @@ Example Usage:
     python -m watch.cli.find_dvc --name=test
 
     # Remove the test dir
-    python -m watch.cli.find_dvc --mode=remove --name=test
+    python -m watch.cli.find_dvc --command=remove --name=test
 
     # Final list
-    python -m watch.cli.find_dvc --mode=list
+    python -m watch.cli.find_dvc --command=list
 
     python -m watch.cli.find_dvc --hardware=ssd
     python -m watch.cli.find_dvc --hardware=hdd
+
+Example Usage:
+    # For Drop4
+    smartwatch_dvc add --name=smart_data --path=$HOME/data/dvc-repos/smart_data_dvc --hardware=hdd --priority=100 --tags=phase2
+    smartwatch_dvc list
+    smartwatch_dvc get smart_data
 
 """
 import scriptconfig as scfg
@@ -39,47 +45,49 @@ class FindDVCConfig(scfg.Config):
     Command line helper to find the path to the watch DVC repo
     """
     default = {
-        'hardware': scfg.Value(None, help='can specify hdd or sdd if those are registered'),
+        'command': scfg.Value('get', help='can be get, set, add, list, or remove', position=1),
 
-        'name': scfg.Value(None, help='specify a name to query or store or remove'),
+        'name': scfg.Value(None, help='specify a name to query or store or remove', position=2),
 
-        'path': scfg.Value(None, help='only used in add mode'),
+        'hardware': scfg.Value(None, help='Specify hdd, ssd, etc..., Setable and getable property'),
 
-        'mode': scfg.Value('get', help='can be get, add, list, or remove'),
+        'priority': scfg.Value(None, help='Higher is more likely. Setable and getable property'),
 
-        # 'register': scfg.Value(False, help='if specified, registers this path as a new DVC directory in ~/.config/watch'),
-        # 'list': scfg.Value(False, help='if True, lists registered DVC directories'),
+        'tags': scfg.Value(None, help='User note. Setable and queryable property'),
+
+        'path': scfg.Value(None, help='The path to the dvc repo. Setable and queryable property'),
+
+        'verbose': scfg.Value(1, help='verbosity mode'),
     }
 
     @staticmethod
     def main(cmdline=True, **kwargs):
         from watch.utils import util_data
-        config = FindDVCConfig(default=kwargs, cmdline=cmdline)  # NOQA
+        import ubelt as ub
 
-        if config['mode'] == 'list':
-            import pandas as pd
-            candiates = util_data._dvc_registry_list()
-            candiates = pd.DataFrame(candiates)
-            print(candiates.to_string())
-        elif config['mode'] == 'add':
-            util_data._dvc_registry_add(
-                name=config['name'], path=config['path'],
-                hardware=config['hardware'])
-            import pandas as pd
-            candiates = util_data._register_list_smart_dvc_path()
-            candiates = pd.DataFrame(candiates)
-            print(candiates.to_string())
-        elif config['mode'] == 'remove':
-            util_data._dvc_registry_remove(name=config['name'])
-        elif config['mode'] == 'get':
-            dpath = util_data.find_smart_dvc_dpath(
-                hardware=config['hardware'],
-                name=config['name'],
-                on_error='raise',
-            )
+        cli_config = FindDVCConfig(default=kwargs, cmdline=cmdline)
+        config = dict(cli_config)
+
+        command = config.pop('command')
+        verbose = config.pop('verbose')
+
+        if verbose > 1:
+            print('config = {}'.format(ub.repr2(cli_config, nl=1)))
+
+        registry = util_data.DataRegistry()
+        if command == 'list':
+            print(registry.pandas(**config))
+        elif command == 'add':
+            registry.add(**config)
+        elif command == 'remove':
+            registry.remove(name=config['name'])
+        elif command == 'set':
+            registry.set(**config)
+        elif command == 'get':
+            dpath = registry.find(**config)
             print(dpath)
         else:
-            raise KeyError(config['mode'])
+            raise KeyError(command)
         return 0
 
 

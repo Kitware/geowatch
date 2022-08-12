@@ -173,10 +173,45 @@ build_drop4_v2_SC(){
         --cache=1 \
         --align_keep=img \
         --backend=tmux --run=1
+
 }
 
 
 dvc_add_SC(){
+    __hack__="
+    import kwcoco
+    dset = kwcoco.CocoDataset('data.kwcoco.json')
+
+    ignore_regions = {
+        'CN_C001',
+    }
+    vali_regions = {
+        'KR_R001',
+        'KR_R002',
+        'US_R007',
+    }
+
+    videos = dset.videos()
+    is_vali_flag = [any(n.startswith(r) for r in vali_regions) and not any(n.startswith(r) for r in ignore_regions) for n in videos.lookup('name')]
+    is_train_flag = [not any(n.startswith(r) for r in vali_regions) and not any(n.startswith(r) for r in ignore_regions) for n in videos.lookup('name')]
+
+    vali_gids = list(ub.flatten(videos.compress(is_vali_flag).images))
+    train_gids = list(ub.flatten(videos.compress(is_train_flag).images))
+
+    vali_dset = dset.subset(vali_gids)
+    train_dset = dset.subset(train_gids)
+
+    vali_dset.fpath = 'data_vali.kwcoco.json'
+    vali_dset.dump(vali_dset.fpath)
+
+    train_dset.fpath = 'data_train.kwcoco.json'
+    train_dset.dump(train_dset.fpath)
+    "
+
+    #python -m kwcoco subset \
+    #--src imgonly-BR_R004_0020_box.kwcoco.json \
+    #--dst foo.kwcoco.json \
+    #--select_videos '(.name | startswith("KR_R002")) or (.name | startswith("KR_R001")) or (.name | startswith("US_R007"))'
 
     DVC_DPATH=$HOME/data/dvc-repos/smart_data_dvc
     cd "$DVC_DPATH"/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC
@@ -185,7 +220,16 @@ dvc_add_SC(){
 
     python -m watch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
 
+    __hack__="
+    import shutil
+    d = ub.Path('viz512_anns')
+    paths = list(ub.Path('_viz512').glob('*/_anns/red_green_blue'))
+    for p in ub.ProgIter(paths):
+        dst_dpath = d / p.parent.parent.name
+        shutil.copytree(p, dst_dpath)
+    "
     mkdir -p viz512_anns
+    cp _viz512/*/*ann*.gif ./viz512_anns
     cp _viz512/*/*ann*.gif ./viz512_anns
 
     7z a splits.zip data*.kwcoco.json
@@ -195,8 +239,9 @@ dvc_add_SC(){
     ls -- */S2
     ls -- */*.json
 
-    dvc add -- */L8 */S2 *.zip viz512_anns && dvc push -r aws -R . && git commit -am "Add Drop4" && git push 
-    dvc add -- */L8 */S2 && dvc push -r aws -R . && git commit -am "Add Drop4" && git push 
+    dvc add -- */PD */WV */S2 viz512_anns && dvc push -r aws -R . && git commit -am "Add Drop4 SC Images" && git push  && \
+    dvc add -- *.zip && dvc push -r aws -R . && git commit -am "Add Drop4 SC Annots" && git push 
+    #dvc add -- */L8 */S2 && dvc push -r aws -R . && git commit -am "Add Drop4" && git push 
 
     #dvc add data_*nowv*.kwcoco.json
 }

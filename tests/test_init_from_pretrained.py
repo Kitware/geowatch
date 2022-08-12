@@ -54,6 +54,12 @@ def test_init_from_pretrained_state():
     fit_model(**fit_kwargs2)
 
 
+def test_init_from_phase1_models():
+    import watch
+    watch.fin
+    pass
+
+
 if __name__ == '__main__':
     """
     CommandLine:
