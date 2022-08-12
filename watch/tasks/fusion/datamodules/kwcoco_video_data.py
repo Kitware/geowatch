@@ -1215,6 +1215,7 @@ class KWCocoVideoDataset(data.Dataset):
             requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
         assert requested_tasks is not None
         self.requested_tasks = requested_tasks
+        print(f'self.requested_tasks={self.requested_tasks}')
 
     # def _make_augmenter():
     #     # TODO: how to make this work with kwimage polygons?
