@@ -517,6 +517,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             ub.inject_method(self, lambda self: self._make_dataloader('test', shuffle=False), 'test_dataloader')
 
         print('self.torch_datasets = {}'.format(ub.repr2(self.torch_datasets, nl=1)))
+        self._notify_about_tasks(self.requested_tasks)
 
     @property
     def train_dataset(self):
@@ -549,12 +550,12 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         visualizations cleaner).
         """
         if model is not None:
-            assert requested_tasks is None
             requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
-        assert requested_tasks is not None
-        self.requested_tasks = requested_tasks
-        for dataset in self.torch_datasets.values():
-            dataset._notify_about_tasks(requested_tasks)
+            assert requested_tasks is None
+        if requested_tasks is not None:
+            self.requested_tasks = requested_tasks
+            for dataset in self.torch_datasets.values():
+                dataset._notify_about_tasks(requested_tasks)
 
     @classmethod
     def add_argparse_args(cls, parent_parser):
