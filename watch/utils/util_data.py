@@ -129,11 +129,12 @@ class DataRegistry:
             {'path': ub.Path("/localdisk0/SCRATCH/watch/ben/smart_watch_dvc"), 'name': 'uky', 'hardware': None, 'tags': 'phase1'},
             {'path': ub.Path("/data4/datasets/smart_watch_dvc/").expand(), 'name': 'purri', 'hardware': None, 'tags': 'phase1'},
 
-            {'path': ub.Path("$HOME/data/dvc-repos/smart_watch_dvc-ssd").expand(), 'name': 'crall-ssd', 'hardware': 'ssd', 'tags': 'phase1'},
-            {'path': ub.Path("$HOME/data/dvc-repos/smart_watch_dvc-hdd").expand(), 'name': 'crall-hdd', 'hardware': 'hdd', 'tags': 'phase1'},
-            {'path': ub.Path("$HOME/data/dvc-repos/smart_watch_dvc").expand(), 'name': 'standard', 'hardware': None, 'tags': 'phase1'},
+            {'path': ub.Path("$HOME/data/dvc-repos/smart_watch_dvc-ssd").expand(), 'name': 'crall-ssd', 'hardware': 'ssd', 'tags': 'phase1_data'},
+            {'path': ub.Path("$HOME/data/dvc-repos/smart_watch_dvc-hdd").expand(), 'name': 'crall-hdd', 'hardware': 'hdd', 'tags': 'phase1_data'},
+            {'path': ub.Path("$HOME/data/dvc-repos/smart_watch_dvc").expand(), 'name': 'standard', 'hardware': None, 'tags': 'phase1_data'},
 
-            {'path': ub.Path("$HOME/data/dvc-repos/smart_data_dvc").expand(), 'name': 'drop4_standard', 'hardware': 'hdd', 'tags': 'phase2'},
+            {'path': ub.Path("$HOME/data/dvc-repos/smart_data_dvc").expand(), 'name': 'drop4_standard', 'hardware': 'hdd', 'tags': 'phase2_data'},
+            {'path': ub.Path("$HOME/data/dvc-repos/smart_expt_dvc").expand(), 'name': 'drop4_standard', 'hardware': 'hdd', 'tags': 'phase2_expt'},
         ]
 
         registry_rows = [row for row in hardcoded_paths if row['path'].exists()]
