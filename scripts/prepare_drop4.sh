@@ -174,6 +174,31 @@ build_drop4_v2_SC(){
         --align_keep=img \
         --backend=tmux --run=1
 }
+dvc_add_SC(){
+    DVC_DPATH=$HOME/data/dvc-repos/smart_data_dvc
+    cd $DVC_DPATH/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC
+
+    dvc unprotect -- */L8 */S2 *.zip viz512_anns
+
+    python -m watch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
+    #--backend=serial
+
+    mkdir -p viz512_anns
+    cp _viz512/*/*ann*.gif ./viz512_anns
+
+    7z a splits.zip data*.kwcoco.json
+
+    # Cd into the bundle we want to add
+    ls -- */L8
+    ls -- */S2
+    ls -- */*.json
+
+    dvc add -- */L8 */S2 *.zip viz512_anns && dvc push -r aws -R . && git commit -am "Add Drop4" && git push 
+    dvc add -- */L8 */S2 && dvc push -r aws -R . && git commit -am "Add Drop4" && git push 
+
+    #dvc add data_*nowv*.kwcoco.json
+}
+
 
 
 
@@ -446,3 +471,5 @@ update_local(){
     7z x splits.zip -y
 
 }
+
+
