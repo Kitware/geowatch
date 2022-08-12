@@ -81,6 +81,7 @@ __getattr__ = lazy_import(
     submod_attrs={
         'util_data': [
             'find_smart_dvc_dpath',
+            'find_dvc_dpath',
         ],
     },
 )

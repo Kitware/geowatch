@@ -18,11 +18,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * The nir08 sensor for L8 is now aliased to nir for consistency.
 * Add support for lightning 1.7
 * Changed defaults of ignore_dilate to 0
+* Improved the `smartwatch_dvc` registry system.
 
 ### Fixed
 * Issue where augmentation might shave a pixel off of the sample box causing an
   unexpected shape.
 * Fixed issue with negative was being marked as salient
+* Issue where initializer was not working correctly
 
 
 ## Version 0.3.3 - Unreleased

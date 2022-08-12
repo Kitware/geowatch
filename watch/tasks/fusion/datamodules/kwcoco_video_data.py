@@ -380,7 +380,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.save_hyperparameters(cfgdict)
         # Backwards compatibility. Previous iterations had the
         # config saved directly as datamodule arguments
-        print('cfgdict = {}'.format(ub.repr2(cfgdict, nl=1)))
+        # print('cfgdict = {}'.format(ub.repr2(cfgdict, nl=1)))
         self.__dict__.update(cfgdict)
         self.train_kwcoco = self.config['train_dataset']
         self.vali_kwcoco = self.config['vali_dataset']

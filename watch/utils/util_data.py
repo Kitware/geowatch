@@ -200,8 +200,7 @@ def find_dvc_dpath(name=None, on_error="raise", **kwargs):
         python -m watch.cli.find_dvc --hardware=ssd
     """
     registry = DataRegistry()
-    existing = registry.find(name=name, on_error=on_error, **kwargs)
-    return existing[0]
+    return registry.find(name=name, on_error=on_error, **kwargs)
 
 
 find_smart_dvc_dpath = find_dvc_dpath

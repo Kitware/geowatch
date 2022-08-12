@@ -223,22 +223,13 @@ def make_fit_config(cmdline=False, **kwargs):
             ''')
     )
 
-    # import netharn as nh
-    # xpu = nh.XPU.coerce('auto')
-    # auto_device = xpu.device.index
-    # import netharn as nh
-    # has_gpu = nh.XPU.coerce('auto').device.type == 'cpu'
-
     # Get subcomponents
     method_class = getattr(methods, modal.method)
     datamodule_class = getattr(datamodules, modal.datamodule)
 
     # Extend the parser based on the chosen dataset / method modes
     datamodule_class.add_argparse_args(parser)
-    # method_parser = parser.add_argument_group("Method")
     method_class.add_argparse_args(parser)
-    # from watch.utils import util_globals
-    # import watch.utils
 
     pl.Trainer.add_argparse_args(parser)
 
@@ -300,6 +291,58 @@ def make_fit_config(cmdline=False, **kwargs):
     return args, parser
 
 
+def coerce_initializer(init):
+    import os
+    from watch.tasks.fusion import monkey
+    monkey.torchmetrics_compat_hack()
+
+    initializer = None
+
+    maybe_packaged_model = False
+    if isinstance(init, (str, os.PathLike)):
+        if ub.Path(init).exists():
+            maybe_packaged_model = True
+
+    if maybe_packaged_model:
+        try:
+            from watch.tasks.fusion import utils
+            other_model = utils.load_model_from_package(init)
+            monkey.fix_gelu_issue(other_model)
+        except Exception:
+            print('Not a packaged model')
+        else:
+            from torch_liberator.initializer import Pretrained
+            import torch
+            import tempfile
+            tfile = tempfile.NamedTemporaryFile(prefix='pretrained_state', suffix='.pt')
+            state_dict = other_model.state_dict()
+            # HACK:
+            # Remove the normalization keys, we don't want to transfer them
+            # in this step. They will be set correctly depending on if
+            # normalize_inputs=transfer or not.
+            ignore_keys = [key for key in state_dict if 'input_norms' in key]
+            for k in ignore_keys:
+                state_dict.pop(k)
+            print('Hacking a packaged model for init')
+            # print(ub.repr2(sorted(state_dict.keys())))
+            weights_fpath = tfile.name
+            torch.save(state_dict, weights_fpath)
+            init_cls = Pretrained
+            init_kw = {'fpath': tfile.name}
+            initializer = init_cls(**init_kw)
+            # keep the temporary file alive as long as the initializer is
+            initializer._tfile = tfile
+            initializer.other_model = other_model
+
+    if initializer is None:
+        # Try a netharn method (todo: port to watch to remove netharn deps)
+        import netharn as nh
+        init_cls, init_kw = nh.api.Initializer.coerce(init=init)
+        initializer = init_cls(**init_kw)
+
+    return initializer
+
+
 @profile
 def make_lightning_modules(args=None, cmdline=False, **kwargs):
     """
@@ -323,7 +366,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
 
     args_dict = args.__dict__
     print('{train_name}\n===================='.format(**args_dict))
-    print('args_dict = {}'.format(ub.repr2(args_dict, nl=1, sort=1)))
+    print('[fusion.fit] args_dict = {}'.format(ub.repr2(args_dict, nl=1, sort=1)))
 
     ub.Path(args.workdir).ensuredir()
 
@@ -345,42 +388,11 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
 
     method_var_dict = method_class.compatible(method_var_dict)
 
-    _needs_transfer = False
+    # _needs_transfer = False
     if args.resume_from_checkpoint is None:
-        _needs_transfer = True
-        import netharn as nh
-        init_cls, init_kw = nh.api.Initializer.coerce(init=args.init)
-        other_model = None
-        if 'fpath' in init_kw:
-            # Hack: try and add support for torch.package
-            # from torch import package
-            try:
-                from watch.tasks.fusion import utils
-                other_model = utils.load_model_from_package(init_kw['fpath'])
-            except Exception:
-                pass
-            else:
-                import torch
-                import tempfile
-                tfile = tempfile.NamedTemporaryFile()
-
-                state_dict = other_model.state_dict()
-
-                # HACK:
-                # Remove the normalization keys, we don't want to transfer them
-                # in this step. They will be set correctly depending on if
-                # normalize_inputs=transfer or not.
-                bad_keys = [key for key in state_dict if 'input_norms' in key]
-                for k in bad_keys:
-                    state_dict.pop(k)
-                print(ub.repr2(sorted(state_dict.keys())))
-
-                torch.save(state_dict, tfile.name)
-                init_kw['fpath'] = tfile.name
-        initializer = init_cls(**init_kw)
+        initializer = coerce_initializer(args.init)
 
     if hasattr(datamodule, 'dataset_stats'):
-
         # TODO: Allow manual override of any of the dataset stats or allow them
         # to be combined with a prior with some level of confidence.
 
@@ -391,6 +403,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         # method_var_dict['input_channels'] = datamodule.input_channels
         method_var_dict['input_sensorchan'] = datamodule.input_sensorchan
 
+        other_model = getattr(initializer, 'other_model')
         if args.normalize_inputs == 'transfer':
             assert other_model is not None
             method_var_dict['dataset_stats'] = other_model.dataset_stats
@@ -409,73 +422,76 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     # for.
     datamodule._notify_about_tasks(model=model)
 
-    if _needs_transfer:
-        # Execute transfer
-        # NOTE: This will overwrite any new dataset mean/std
-        # TODO: allow the user to specify if they want to use new stats or old
-        # stats when training this model.
-        info = initializer(model)  # NOQA
+    # if _needs_transfer:
+    # Execute transfer
+    # NOTE: This may overwrite any new dataset mean/std?
+    # TODO: allow the user to specify if they want to use new stats or old
+    # stats when training this model.
+    # TODO: add the ability to ignore param patterns in the initailizer itself
+
+    print('Initializing weights')
+    old_state = model.state_dict()
+    from watch.utils.util_pattern import Pattern
+    ignore_pattern = Pattern.coerce('*input_norms*', hint='glob')
+    ignore_keys = [key for key in old_state.keys() if ignore_pattern.match(key)]
+    print('Finding keys to not initializer')
+    to_preserve = ub.udict(old_state).subdict(ignore_keys).map_values(lambda v: v.clone())
+    # ignore_keys = [key for key in state_dict if 'input_norms' in key]
+    # for k in ignore_keys:
+    #     state_dict.pop(k)
+    print(f'initializer={initializer}')
+    initializer = coerce_initializer('noop')
+    info = initializer.forward(model)  # NOQA
+    print('Finalize initialization')
+    updated = model.state_dict() | to_preserve
+    model.load_state_dict(updated)
 
     # init trainer from args
-    if 1:
-        # OLD:
-        #     ('S2', 'blue|green|red'): {
-        #         'mean': np.array([[[311.356341]],[[523.429458]],[[690.607918]]], dtype=np.float64),
-        #         'std': np.array([[[2129.805325]],[[2222.820243]],[[2348.7701  ]]], dtype=np.float64),
-        #     },
-        #     ('L8', 'blue|green|red'): {
-        #         'mean': np.array([[[ 949.545103]],[[1397.652219]],[[1568.746219]]], dtype=np.float64),
-        #         'std': np.array([[[ 817.128624]],[[ 986.585357]],[[1210.746754]]], dtype=np.float64),
-        #     },
-        # },
-        #
-        callbacks = [
-            # pl_ext.callbacks.AutoResumer(),
-            # pl_ext.callbacks.StateLogger(),
-            pl_ext.callbacks.TextLogger(args),
-            pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
-            pl_ext.callbacks.BatchPlotter(
-                num_draw=args.num_draw,
-                draw_interval=args.draw_interval
-            ),
-            pl_ext.callbacks.TensorboardPlotter(),
-            pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
-            pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
+    callbacks = [
+        # pl_ext.callbacks.AutoResumer(),
+        # pl_ext.callbacks.StateLogger(),
+        pl_ext.callbacks.TextLogger(args),
+        pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
+        pl_ext.callbacks.BatchPlotter(
+            num_draw=args.num_draw,
+            draw_interval=args.draw_interval
+        ),
+        pl_ext.callbacks.TensorboardPlotter(),
+        pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
+        pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
 
-            pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),
-            # pl.callbacks.GPUStatsMonitor(),  # enabling this breaks CPU tests
+        pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),
+        # pl.callbacks.GPUStatsMonitor(),  # enabling this breaks CPU tests
+    ]
+    if args.vali_dataset is not None:
+        callbacks += [
+            pl.callbacks.EarlyStopping(
+                monitor='val_loss', mode='min', patience=args.patience,
+                verbose=True, strict=False),
+            pl.callbacks.ModelCheckpoint(
+                monitor='val_loss', mode='min', save_top_k=8),
+            pl.callbacks.ModelCheckpoint(every_n_epochs=10),
         ]
-        if args.vali_dataset is not None:
+
+        if datamodule.requested_tasks['change']:
             callbacks += [
-                pl.callbacks.EarlyStopping(
-                    monitor='val_loss', mode='min', patience=args.patience,
-                    verbose=True, strict=False),
                 pl.callbacks.ModelCheckpoint(
-                    monitor='val_loss', mode='min', save_top_k=8),
-                pl.callbacks.ModelCheckpoint(every_n_epochs=10),
+                    monitor='val_change_f1', mode='max', save_top_k=4),
             ]
 
-            if datamodule.requested_tasks['change']:
-                callbacks += [
-                    pl.callbacks.ModelCheckpoint(
-                        monitor='val_change_f1', mode='max', save_top_k=4),
-                ]
+        if datamodule.requested_tasks['saliency']:
+            callbacks += [
+                pl.callbacks.ModelCheckpoint(
+                    monitor='val_saliency_f1', mode='max', save_top_k=4),
+            ]
 
-            if datamodule.requested_tasks['saliency']:
-                callbacks += [
-                    pl.callbacks.ModelCheckpoint(
-                        monitor='val_saliency_f1', mode='max', save_top_k=4),
-                ]
-
-            if datamodule.requested_tasks['class']:
-                callbacks += [
-                    pl.callbacks.ModelCheckpoint(
-                        monitor='val_class_f1_micro', mode='max', save_top_k=4),
-                    pl.callbacks.ModelCheckpoint(
-                        monitor='val_class_f1_macro', mode='max', save_top_k=4),
-                ]
-    else:
-        callbacks = []
+        if datamodule.requested_tasks['class']:
+            callbacks += [
+                pl.callbacks.ModelCheckpoint(
+                    monitor='val_class_f1_micro', mode='max', save_top_k=4),
+                pl.callbacks.ModelCheckpoint(
+                    monitor='val_class_f1_macro', mode='max', save_top_k=4),
+            ]
 
     # TODO: explititly initialize the tensorboard logger?
     # logger = [
@@ -492,7 +508,9 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     print('trainer.logger.log_dir = {!r}'.format(trainer.logger.log_dir))
     # hack, this should be a callback, but it is not easy to pass the right
     # vars along without using lambdas, had issues with pickling objects
-    if 1:
+
+    DUMP_CONFIG_IN_TRAIN_DPATH = 1
+    if DUMP_CONFIG_IN_TRAIN_DPATH:
         import os
         import pathlib
         for k in dir(args):
