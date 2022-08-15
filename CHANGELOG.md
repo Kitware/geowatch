@@ -7,10 +7,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## Version 0.3.4 - Unreleased
 
 ### Added
-* New "space_scale" parameter to Dataset such that a specific GSD can be given on the fly
+* New "space_scale" parameter to Dataset such that a specific DATA GSD can be given on the fly
 * New samecolor heuristic to remove invalid regions in data sampling.
 * Can now force nodata values in prep ta2 and align script.
 * Perceiver backbone
+* New "window_space_scale" parameter to Dataset that allows a WINDOW GSD to be given on the fly.
 
 ### Changed
 * Data loader now returns the size it would like the output predicted at via `target_dims`.

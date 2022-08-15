@@ -449,12 +449,13 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
         ignore_cid = coco_dset.ensure_category('ignore')
 
         for coco_img in coco_dset.images().coco_images:
-            dsize = coco_img.dsize
+            dsize = np.array(coco_img.dsize)
             if rng.rand() > 0.8:
                 n = min(rng.randint(0, 3), rng.randint(0, 3)) + 1
                 for _ in range(n):
                     cid = ignore_cid if rng.rand() > 0.5 else neg_cid
-                    poly = kwimage.Polygon.random().scale(dsize)
+                    poly = kwimage.Polygon.random(rng=rng).scale(dsize)
+                    poly = poly.scale(1 / 4, about='centroid')
                     new_ann = {
                         'image_id': coco_img.img['id'],
                         'category_id': cid,

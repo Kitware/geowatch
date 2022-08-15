@@ -75,7 +75,6 @@ __getattr__ = lazy_import(
         'util_raster',
         'util_regex',
         'util_rgdc',
-        'util_stac',
         'util_time',
     },
     submod_attrs={
@@ -97,4 +96,4 @@ __all__ = ['configargparse_ext', 'ext_monai', 'find_smart_dvc_dpath',
            'util_hardware', 'util_iter', 'util_kwarray', 'util_kwimage',
            'util_kwplot', 'util_logging', 'util_norm', 'util_parallel',
            'util_path', 'util_pattern', 'util_raster', 'util_regex',
-           'util_rgdc', 'util_stac', 'util_time']
+           'util_rgdc', 'util_time']

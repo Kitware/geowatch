@@ -60,20 +60,44 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             spatial height/width per batch. If given as a single number, used
             as both width and height. Default is currently taken from
             deprecated chip_size, but in the future will be 128.
+            '''), alias=['window_space_dims']),
+
+        'window_space_scale': scfg.Value(None, help=ub.paragraph(
+            '''
+            Change the "scale" or resolution of the video space used by the
+            sliding window.
+            Note: this modifies the GSD BEFORE the sample window has been
+            selected, so the extent and resolution of the data changes.
+
+            If specified as a numeric value then this is applied to as a scale
+            factor. (E.g.  setting this to 2 is equivalent to scaling video
+            space by 2). For geospatial data where each video has a
+            "target_gsd", then this can be set to as an absolute by including
+            the "GSD" suffix. (e.g. If this is set to "10GSD", then video space
+            will be scaled to match).
             ''')),
 
         'space_scale': scfg.Value(None, help=ub.paragraph(
             '''
-            Change the "scale" or resolution of video space.  If specified as a
+            Change the "scale" or resolution of the sampled video space.
+            Note: this modifies the GSD AFTER the sample window has been
+            selected, so the extend of the data does NOT change, but the resolution does.
+
+            If specified as a
             numeric value then this is applied to as a scale factor. (E.g.
             setting this to 2 is equivalent to scaling video space by 2). For
             geospatial data where each video has a "target_gsd", then this can
             be set to as an absolute by including the "GSD" suffix. (e.g. If
             this is set to "10GSD", then video space will be scaled to match).
+
+            This can also be set to "native" to use heterogeneous sampling.
             ''')),
 
         # 'time_overlap': scfg.Value(0.0, help='fraction of time steps to overlap'),
-        'chip_overlap': scfg.Value(0.0, help='fraction of space steps to overlap'),
+        'chip_overlap': scfg.Value(
+            0.0, help='fraction of space steps to overlap',
+            alias=['window_space_overlap'],
+        ),
 
         'channels': scfg.Value(None, type=str, help=ub.paragraph(
             '''
@@ -142,11 +166,11 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             how long a time window should roughly span by default
             ''')),
 
-        'true_multimodal': scfg.Value(True, help=ub.paragraph(
-            '''
-            DEPRECATED. DOES NOT DO ANYTHING ANYMORE. WE ALWAYS ARE
-            TRUE MULTIMODAL NOW.
-            ''')),
+        # 'true_multimodal': scfg.Value(True, help=ub.paragraph(
+        #     '''
+        #     DEPRECATED. DOES NOT DO ANYTHING ANYMORE. WE ALWAYS ARE
+        #     TRUE MULTIMODAL NOW.
+        #     ''')),
 
         'use_centered_positives': scfg.Value(False, help=ub.paragraph(
             '''
@@ -284,7 +308,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> import watch
         >>> import kwcoco
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> dvc_dpath = watch.find_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/combo_ILM.kwcoco.json'
         >>> #coco_fpath = dvc_dpath / 'Aligned-Drop2-TA1-2022-03-07/combo_DILM.kwcoco.json'
         >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/combo_DILM.kwcoco.json'
@@ -792,7 +816,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>> import ndsampler
         >>> import kwcoco
         >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> dvc_dpath = watch.find_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
         >>> sampler = ndsampler.CocoSampler(coco_dset)
@@ -815,9 +839,9 @@ class KWCocoVideoDataset(data.Dataset):
         >>> import ndsampler
         >>> import kwcoco
         >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
+        >>> dvc_dpath = watch.find_dvc_dpath(hardware='hdd', tags='phase2_data')
         >>> #coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data_nowv_vali.kwcoco.json'
-        >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_vali.kwcoco.json'
+        >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_vali.kwcoco.json'
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> self = KWCocoVideoDataset(
@@ -845,9 +869,12 @@ class KWCocoVideoDataset(data.Dataset):
         >>>     kwplot.imshow(canvas)
         >>>     xdev.InteractiveIter.draw()
     """
-    # TODO: add torchvision.transforms or albumentations
+    # TODO: add torchvision.transforms or albumentations or some better
+    # augment library
 
-    def __init__(self, sampler, sample_shape=None, window_overlap=None, mode='fit', **kwargs):
+    def __init__(self, sampler, sample_shape=None, window_overlap=None,
+                 mode='fit', **kwargs):
+
         config = KWCocoVideoDatasetConfig(cmdline=0, data=kwargs)
         BACKWARDS_COMPATIBILITY = True
         if BACKWARDS_COMPATIBILITY:
@@ -866,16 +893,12 @@ class KWCocoVideoDataset(data.Dataset):
 
         self.window_dims = window_dims
         self.config = config
-        # TODO: either maintain instance variables or items in the config, not
-        # both.
+        # TODO: maintain instance variables xor items in the config, not both.
         self.__dict__.update(self.config.to_dict())
         self.sampler = sampler
 
         # Add extra categories if we need to and construct a new classes object
         graph = self.sampler.classes.graph
-        if 0:
-            import networkx as nx
-            print(nx.forest_str(graph, with_labels=True))
 
         # Update with heuristics
         # HACK: Overwrite kwcoco data
@@ -912,6 +935,7 @@ class KWCocoVideoDataset(data.Dataset):
         time_span = config['time_span']
         neg_to_pos_ratio = config['neg_to_pos_ratio']
         max_epoch_length = config['max_epoch_length']
+        window_space_scale = self.config['window_space_scale']
 
         if time_sampling == 'auto':
             time_sampling = 'hard+distribute'
@@ -930,6 +954,7 @@ class KWCocoVideoDataset(data.Dataset):
                 exclude_sensors=exclude_sensors,
                 time_sampling=time_sampling,
                 time_span=time_span,
+                window_space_scale=window_space_scale,
                 set_cover_algo=set_cover_algo,
             )
             self.length = len(new_sample_grid['targets'])
@@ -947,6 +972,7 @@ class KWCocoVideoDataset(data.Dataset):
                 time_span=time_span,
                 use_centered_positives=use_centered_positives,
                 use_grid_positives=use_grid_positives,
+                window_space_scale=window_space_scale,
                 set_cover_algo=set_cover_algo,
             )
 
@@ -1182,7 +1208,6 @@ class KWCocoVideoDataset(data.Dataset):
 
         self.mode = mode
 
-        self.true_multimodal = config['true_multimodal']
         self.disable_augmenter = False
 
         # hidden option for now (todo: expose this)
@@ -1244,7 +1269,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import watch
             >>> import ndsampler
             >>> import kwcoco
-            >>> dvc_dpath = watch.find_smart_dvc_dpath()
+            >>> dvc_dpath = watch.find_dvc_dpath()
             >>> coco_fpath = dvc_dpath / 'Cropped-Drop3-TA1-2022-03-10/data_nowv_train.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
@@ -1830,7 +1855,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import watch
             >>> import ndsampler
             >>> import kwcoco
-            >>> dvc_dpath = watch.find_smart_dvc_dpath()
+            >>> dvc_dpath = watch.find_dvc_dpath()
             >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
             >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data_nowv_train.kwcoco.json'
             >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/data_nowv_vali.kwcoco.json'
@@ -1924,12 +1949,15 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import ndsampler
             >>> import kwcoco
             >>> import watch
-            >>> dvc_dpath = watch.find_smart_dvc_dpath()
+            >>> dvc_dpath = watch.find_dvc_dpath()
             >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1/vali_data_nowv.kwcoco.json'
             >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_vali.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 256, 256), channels='red|green|blue|swir16', normalize_perframe=False, space_scale="30gsd")
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 256, 256),
+            >>>                           channels='red|green|blue|swir16',
+            >>>                           normalize_perframe=False,
+            >>>                           space_scale="30gsd")
             >>> self.requested_tasks['change'] = False
             >>> self.disable_augmenter = True
             >>> index = 300
@@ -1953,11 +1981,14 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import kwcoco
             >>> import watch
             >>> # Demo on the fly GSD
-            >>> dvc_dpath = watch.find_smart_dvc_dpath()
+            >>> dvc_dpath = watch.find_dvc_dpath()
             >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_vali.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=(3, 256, 256), channels='(S2,L8):(red|green|blue,swir16)', normalize_perframe=False, space_scale="10gsd")
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=(3, 256, 256),
+            >>>                           channels='(S2,L8):(red|green|blue,swir16)',
+            >>>                           normalize_perframe=False,
+            >>>                           space_scale="10gsd")
             >>> self.requested_tasks['change'] = False
             >>> self.requested_tasks['class'] = False
             >>> self.requested_tasks['saliency'] = False
@@ -1989,7 +2020,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import kwcoco
             >>> import watch
             >>> # Demo NATIVE GSD
-            >>> dvc_dpath = watch.find_smart_dvc_dpath()
+            >>> dvc_dpath = watch.find_dvc_dpath()
             >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_vali.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
@@ -2147,7 +2178,6 @@ class KWCocoVideoDataset(data.Dataset):
         # Compute scale if we are doing that
         # This should live somewhere else, but lets just get it hooked up
         space_scale = self.config['space_scale']
-
         if target_.get('space_scale', None) is not None:
             # The target is allowed to overload the spatial scale
             space_scale = target_['space_scale']
@@ -2155,37 +2185,18 @@ class KWCocoVideoDataset(data.Dataset):
             target_['space_scale'] = space_scale
 
         # Resolve spatial scale code
-        scale = 1
-        request_gsd = None
         vidspace_gsd = video.get('target_gsd', None)
-        sample_gsd = None
-        if space_scale is not None:
-            if isinstance(space_scale, str):
-                if space_scale == 'native':
-                    request_gsd = 'native'
-                    scale = 'native'
-                elif space_scale.lower().endswith('gsd'):
-                    request_gsd = float(space_scale[:-3].strip())
-                    scale = vidspace_gsd / request_gsd
-                    # Should we also change the window size somewhere else?
-                    # Probably not... at least in the heterogeneous case we
-                    # definately should not.
-                else:
-                    scale = float(space_scale)
-            elif isinstance(space_scale, (int, float)):
-                scale = space_scale
-        if scale != 1:
-            target_['scale'] = scale
+        from watch.tasks.fusion.datamodules import data_utils
+        resolved_scale = data_utils.resolve_scale_request(
+            request=space_scale, data_gsd=vidspace_gsd)
+        sample_scale = resolved_scale['scale']
+        sample_gsd = resolved_scale['gsd']
 
-        if isinstance(scale, str) and scale == 'native':
+        if isinstance(sample_scale, str) and sample_scale == 'native':
             target_.pop('scale')
             # native scales will only work in late-fused modes
             target_['use_native_scale'] = True
             target_['realign_native'] = 'largest'
-            sample_gsd = 'native'
-        else:
-            if vidspace_gsd is not None:
-                sample_gsd = vidspace_gsd / scale
 
         allow_augment = target_.get('allow_augment', True)
         if allow_augment:
@@ -2585,7 +2596,36 @@ class KWCocoVideoDataset(data.Dataset):
                     frame_cidxs[class_map > 0] = cidx
 
                 if self.upweight_centers:
-                    space_weights = util_kwimage.upweight_center_mask(space_shape)
+                    """
+                    import kwimage
+                    import kwplot
+                    kwplot.autompl()
+                    from watch.utils import util_kwimage
+                    space_shape = (380, 380)
+                    weights1 = util_kwimage.upweight_center_mask(space_shape)
+                    weights2 = kwimage.normalize(kwimage.gaussian_patch(space_shape))
+                    sigma3 = 4.8 * ((space_shape[0] - 1) * 0.5 - 1) + 0.8
+                    weights3 = kwimage.normalize(kwimage.gaussian_patch(space_shape, sigma=sigma3))
+
+                    min_spacetime_weight = 0.5
+
+                    weights1 = np.maximum(weights1, min_spacetime_weight)
+                    weights2 = np.maximum(weights2, min_spacetime_weight)
+                    weights3 = np.maximum(weights3, min_spacetime_weight)
+
+                    # Hack so color bar goes to 0
+                    weights3[0, 0] = 0
+                    weights2[0, 0] = 0
+                    weights1[0, 0] = 0
+
+                    kwplot.imshow(weights1, pnum=(1, 3, 1), title='current', cmap='viridis', data_colorbar=1)
+                    kwplot.imshow(weights2, pnum=(1, 3, 2), title='variant1', cmap='viridis', data_colorbar=1)
+                    kwplot.imshow(weights3, pnum=(1, 3, 3), title='variant2', cmap='viridis', data_colorbar=1)
+                    """
+                    sigma1 = 4.8 * ((space_shape[0] - 1) * 0.5 - 1) + 0.8
+                    sigma2 = 4.8 * ((space_shape[1] - 1) * 0.5 - 1) + 0.8
+                    space_weights = kwimage.normalize(kwimage.gaussian_patch(space_shape, sigma=(sigma1, sigma2)))
+                    # space_weights = util_kwimage.upweight_center_mask(space_shape)
                     space_weights = np.maximum(space_weights, self.min_spacetime_weight)
                     frame_weights = space_weights * time_weights[time_idx] * frame_poly_weights
                 else:
@@ -2860,7 +2900,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import ndsampler
             >>> import kwcoco
             >>> import watch
-            >>> dvc_dpath = watch.find_smart_dvc_dpath()
+            >>> dvc_dpath = watch.find_dvc_dpath()
             >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
@@ -2905,7 +2945,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import ndsampler
             >>> import kwcoco
             >>> import watch
-            >>> dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
+            >>> dvc_dpath = watch.find_dvc_dpath(hardware='hdd')
             >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_train.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
@@ -3153,7 +3193,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import ndsampler
             >>> import kwcoco
             >>> import watch
-            >>> dvc_dpath = watch.find_smart_dvc_dpath()
+            >>> dvc_dpath = watch.find_dvc_dpath()
             >>> #coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/combo_data.kwcoco.json'
             >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1/vali_data_nowv.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)

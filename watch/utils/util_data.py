@@ -52,10 +52,21 @@ class DataRegistry:
             'hardware': None,
             'tags': None,
         })
+        # TODO: just use default and filter NoParams
+        self._expected_attrs = {
+            'name': ub.NoParam,
+            'path': ub.NoParam,
+        } | self._default_attributes
 
     def pandas(self, **kwargs):
         import pandas as pd
-        return pd.DataFrame(self.query(**kwargs))
+        df = pd.DataFrame(self.query(**kwargs))
+        if len(df):
+            df['exists'] = df['path'].apply(lambda p: ub.Path(p).exists())
+        return df
+
+    def list(self, **kwargs):
+        print(self.pandas(**kwargs).to_string())
 
     def _open(self):
         import shelve
@@ -123,21 +134,23 @@ class DataRegistry:
         """
         # Hard coded fallback candidate DVC paths
         hardcoded_paths = [
-            {'path': ub.Path('/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc'), 'name': 'namek', 'hardware': 'hdd', 'tags': 'phase1'},
-            {'path': ub.Path('/media/joncrall/raid/dvc-repos/smart_watch_dvc'), 'name': 'ooo', 'hardware': 'hdd', 'tags': 'phase1'},
-            {'path': ub.Path("/media/native/data/data/smart_watch_dvc"), 'name': 'rutgers', 'hardware': None, 'tags': 'phase1'},
-            {'path': ub.Path("/localdisk0/SCRATCH/watch/ben/smart_watch_dvc"), 'name': 'uky', 'hardware': None, 'tags': 'phase1'},
-            {'path': ub.Path("/data4/datasets/smart_watch_dvc/").expand(), 'name': 'purri', 'hardware': None, 'tags': 'phase1'},
+            {'name': 'namek',           'hardware': 'hdd', 'tags': 'phase1', 'path': ub.Path('/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc')},
+            {'name': 'ooo',             'hardware': 'hdd', 'tags': 'phase1', 'path': ub.Path('/media/joncrall/raid/dvc-repos/smart_watch_dvc')},
+            {'name': 'rutgers',         'hardware': None,  'tags': 'phase1', 'path': ub.Path('/media/native/data/data/smart_watch_dvc')},
+            {'name': 'uky',             'hardware': None,  'tags': 'phase1', 'path': ub.Path('/localdisk0/SCRATCH/watch/ben/smart_watch_dvc')},
+            {'name': 'purri',           'hardware': None,  'tags': 'phase1', 'path': ub.Path('/data4/datasets/smart_watch_dvc')},
+            {'name': 'crall-ssd',       'hardware': 'ssd', 'tags': 'phase1_data', 'path': ub.Path('~/data/dvc-repos/smart_watch_dvc-ssd').expand()},
+            {'name': 'crall-hdd',       'hardware': 'hdd', 'tags': 'phase1_data', 'path': ub.Path('~/data/dvc-repos/smart_watch_dvc-hdd').expand()},
+            {'name': 'phase1_standard',  'hardware': None,  'tags': 'phase1_data', 'path': ub.Path('~/data/dvc-repos/smart_watch_dvc').expand()},
 
-            {'path': ub.Path("$HOME/data/dvc-repos/smart_watch_dvc-ssd").expand(), 'name': 'crall-ssd', 'hardware': 'ssd', 'tags': 'phase1_data'},
-            {'path': ub.Path("$HOME/data/dvc-repos/smart_watch_dvc-hdd").expand(), 'name': 'crall-hdd', 'hardware': 'hdd', 'tags': 'phase1_data'},
-            {'path': ub.Path("$HOME/data/dvc-repos/smart_watch_dvc").expand(), 'name': 'standard', 'hardware': None, 'tags': 'phase1_data'},
-
-            {'path': ub.Path("$HOME/data/dvc-repos/smart_data_dvc").expand(), 'name': 'drop4_standard', 'hardware': 'hdd', 'tags': 'phase2_data'},
-            {'path': ub.Path("$HOME/data/dvc-repos/smart_expt_dvc").expand(), 'name': 'drop4_standard', 'hardware': 'hdd', 'tags': 'phase2_expt'},
+            {'name': 'drop4_data_hdd',  'hardware': 'hdd', 'tags': 'phase2_data', 'path': ub.Path('~/data/dvc-repos/smart_data_dvc').expand()},
+            {'name': 'drop4_expt_hdd',  'hardware': 'hdd', 'tags': 'phase2_expt', 'path': ub.Path('~/data/dvc-repos/smart_expt_dvc').expand()},
+            {'name': 'drop4_data_ssd',  'hardware': 'ssd', 'tags': 'phase2_data', 'path': ub.Path('~/data/dvc-repos/smart_data_dvc-ssd').expand()},
+            {'name': 'drop4_expt_ssd',  'hardware': 'ssd', 'tags': 'phase2_expt', 'path': ub.Path('~/data/dvc-repos/smart_expt_dvc-ssd').expand()},
         ]
 
-        registry_rows = [row for row in hardcoded_paths if row['path'].exists()]
+        # registry_rows = [row for row in hardcoded_paths if row['path'].exists()]
+        registry_rows = hardcoded_paths.copy()
 
         shelf = self._open()
         try:
@@ -155,7 +168,14 @@ class DataRegistry:
                 -float('inf'))[::-1]
         return registry_rows
 
-    def query(self, **kwargs):
+    def query(self, must_exist=False, **kwargs):
+        unexepcted = kwargs - self._expected_attrs
+        if unexepcted:
+            raise ValueError(
+                'Unexpected query keywords: {}. Valid keywords are {}'.format(
+                    ub.repr2(list(unexepcted.keys()), nl=0),
+                    ub.repr2(list(self._expected_attrs.keys()), nl=0),
+                ))
         query = ub.udict({k: v for k, v in kwargs.items() if v is not None})
         results = []
         candidate_rows = self.read()
@@ -165,6 +185,9 @@ class DataRegistry:
                 flag = relevant == query
             else:
                 flag = True
+            if must_exist:
+                if not ub.Path(row['path']).exists():
+                    flag = False
             if flag:
                 results.append(row)
         return results
@@ -177,17 +200,30 @@ class DataRegistry:
         else:
             results = [ub.Path(r['path']) for r in self.query(**kwargs)]
         if not results:
-            raise Exception('dvc_dpath not found')
-        existing = [found for found in results if found.exists()]
-        if not existing:
+            print('Error in DataRegistry.find. Listing existing data...')
+            print(self.list())
+            print('Error in DataRegistry.find. Listing query results...')
+            print(self.list(**kwargs))
+            print('... for query kwargs = {}'.format(ub.repr2(kwargs, nl=1)))
+            raise Exception('No suitable data directory found')
+
+        if kwargs.get('must_exist', True):
+            results = [found for found in results if found.exists()]
+
+        if not results:
             if on_error == "raise":
-                raise Exception
+                print('Error in DataRegistry.find. Listing existing data...')
+                print(self.list())
+                print('Error in DataRegistry.find. Listing query results...')
+                print(self.list(**kwargs))
+                print('... for query kwargs = {}'.format(ub.repr2(kwargs, nl=1)))
+                raise Exception('No existing data directory found')
             else:
                 return None
-        return existing[0]
+        return results[0]
 
 
-def find_dvc_dpath(name=None, on_error="raise", **kwargs):
+def find_dvc_dpath(name=ub.NoParam, on_error="raise", **kwargs):
     """
     Return the location of the SMART WATCH DVC Data path if it exists and is in
     a "standard" location.
@@ -201,7 +237,9 @@ def find_dvc_dpath(name=None, on_error="raise", **kwargs):
         python -m watch.cli.find_dvc --hardware=ssd
     """
     registry = DataRegistry()
-    return registry.find(name=name, on_error=on_error, **kwargs)
+    if name is not ub.NoParam:
+        kwargs['name'] = name
+    return registry.find(on_error=on_error, **kwargs)
 
 
 find_smart_dvc_dpath = find_dvc_dpath

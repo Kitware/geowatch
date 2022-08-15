@@ -32,9 +32,9 @@ Example Usage:
 
 Example Usage:
     # For Drop4
-    smartwatch_dvc add --name=smart_data --path=$HOME/data/dvc-repos/smart_data_dvc --hardware=hdd --priority=100 --tags=phase2
+    smartwatch_dvc add --name=smart_data_hdd --path=$HOME/data/dvc-repos/smart_data_dvc --hardware=hdd --priority=100 --tags=phase2_data
     smartwatch_dvc list
-    smartwatch_dvc get smart_data
+    smartwatch_dvc get smart_data_hdd
 
 """
 import scriptconfig as scfg
@@ -45,7 +45,7 @@ class FindDVCConfig(scfg.Config):
     Command line helper to find the path to the watch DVC repo
     """
     default = {
-        'command': scfg.Value('get', help='can be get, set, add, list, or remove', position=1),
+        'command': scfg.Value('find', help='can be find, set, add, list, or remove', position=1),
 
         'name': scfg.Value(None, help='specify a name to query or store or remove', position=2),
 
@@ -58,6 +58,8 @@ class FindDVCConfig(scfg.Config):
         'path': scfg.Value(None, help='The path to the dvc repo. Setable and queryable property'),
 
         'verbose': scfg.Value(1, help='verbosity mode'),
+
+        'must_exist': scfg.Value('auto', help='if True, filter to only directories that exist. Defaults to false except on "find", which is True.')
     }
 
     @staticmethod
@@ -70,21 +72,24 @@ class FindDVCConfig(scfg.Config):
 
         command = config.pop('command')
         verbose = config.pop('verbose')
+        must_exist = config.pop('must_exist')
+        if must_exist == 'auto':
+            must_exist = command == 'find'
 
         if verbose > 1:
             print('config = {}'.format(ub.repr2(cli_config, nl=1)))
 
         registry = util_data.DataRegistry()
         if command == 'list':
-            print(registry.pandas(**config))
+            print(registry.list(**config, must_exist=must_exist))
         elif command == 'add':
             registry.add(**config)
         elif command == 'remove':
             registry.remove(name=config['name'])
         elif command == 'set':
             registry.set(**config)
-        elif command == 'get':
-            dpath = registry.find(**config)
+        elif command == 'find':
+            dpath = registry.find(**config, must_exist=must_exist)
             print(dpath)
         else:
             raise KeyError(command)
