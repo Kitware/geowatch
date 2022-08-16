@@ -1560,7 +1560,8 @@ class MultimodalTransformer(pl.LightningModule):
             perframe_logits = ub.ddict(list)
             for frame_feature in perframe_stackable_encodings:
                 for head_key in ['class', 'saliency']:
-                    perframe_logits[head_key].append(self.heads[head_key](frame_feature))
+                    if head_key in self.heads:
+                        perframe_logits[head_key].append(self.heads[head_key](frame_feature))
             # For change, frames are dependant, so we have to do some resampling
             if 'change' in self.heads and num_frames > 1:
                 resampled_frame_feats = [

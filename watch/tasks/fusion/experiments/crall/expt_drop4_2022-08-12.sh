@@ -42,7 +42,7 @@ python -m watch.tasks.fusion.fit \
     --neg_to_pos_ratio=0.25 \
     --saliency_loss='focal' \
     --class_loss='focal' \
-    --num_workers=8 \
+    --num_workers=4 \
     --accelerator="gpu" \
     --devices "0," \
     --batch_size=1 \
@@ -197,20 +197,15 @@ python -m watch.tasks.fusion.fit \
     --init="$INITIAL_STATE" \
     --arch_name=smt_it_stm_p8 \
     --channels="blue|green|red" \
-    --accelerator="gpu" \
-    --devices "0," \
-    --num_workers=4 \
-    --dist_weights=1 \
     --window_space_scale="10GSD" \
     --chip_dims=380,380 \
     --time_steps=11 \
-    --batch_size=1 \
     --accumulate_grad_batches=4 \
     --max_epochs=160 \
     --patience=160
 
 #### Continue training on 15GSD From V001 with dicefocal
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware='ssd')
 PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
@@ -236,12 +231,9 @@ python -m watch.tasks.fusion.fit \
     --arch_name=smt_it_stm_p8 \
     --channels="blue|green|red" \
     --saliency_loss='dicefocal' \
-    --accelerator="gpu" \
-    --devices "0," \
-    --num_workers=4 \
-    --dist_weights=1 \
     --window_space_scale="15GSD" \
     --chip_dims=320,320 \
+    --max_epoch_length=16384 \
     --time_steps=11 \
     --batch_size=1 \
     --accumulate_grad_batches=4 \
@@ -250,7 +242,7 @@ python -m watch.tasks.fusion.fit \
 
 
 #### Continue training on 10GSD From V002
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=2
 PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware='ssd')
 PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
@@ -275,20 +267,17 @@ python -m watch.tasks.fusion.fit \
     --init="$INITIAL_STATE" \
     --arch_name=smt_it_stm_p8 \
     --channels="blue|green|red|nir|swir16|swir22" \
-    --accelerator="gpu" \
-    --devices "0," \
-    --num_workers=4 \
     --window_space_scale="10GSD" \
+    --max_epoch_length=4096 \
     --chip_dims=380,380 \
     --time_steps=11 \
     --batch_size=1 \
-    --dist_weights=0 \
     --accumulate_grad_batches=4 \
     --max_epochs=160 \
     --patience=160 
 
 #### Start from scratch at 10GSD
-export CUDA_VISIBLE_DEVICES=2
+export CUDA_VISIBLE_DEVICES=3
 PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware='ssd')
 PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
 #ls -altr $PHASE2_EXPT_DPATH/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_Retrain_V001/lightning_logs/version_3/checkpoints/
@@ -314,14 +303,11 @@ python -m watch.tasks.fusion.fit \
     --init="$INITIAL_STATE" \
     --arch_name=smt_it_stm_p8 \
     --channels="blue|green|red" \
-    --accelerator="gpu" \
-    --devices "0," \
-    --num_workers=4 \
-    --dist_weights=1 \
     --window_space_scale="10GSD" \
     --chip_dims=380,380 \
     --time_steps=11 \
     --batch_size=1 \
+    --max_epoch_length=4096 \
     --accumulate_grad_batches=4 \
     --max_epochs=160 \
     --patience=160
@@ -352,18 +338,15 @@ python -m watch.tasks.fusion.fit \
     --vali_dataset="$VALI_FPATH" \
     --test_dataset="$TEST_FPATH" \
     --init="$INITIAL_STATE" \
-    --arch_name=smt_it_stm_p8 \
+    --arch_name=smt_it_joint_p8 \
     --channels="blue|green|red" \
-    --accelerator="gpu" \
-    --devices "0," \
-    --num_workers=4 \
     --dist_weights=0 \
     --space_scale="native" \
     --window_space_scale="10GSD" \
-    --chip_dims=256,256 \
-    --time_steps=11 \
-    --batch_size=1 \
+    --chip_dims=128,128 \
+    --time_steps=5 \
+    --batch_size=8 \
     --accumulate_grad_batches=1 \
     --max_epochs=160 \
     --patience=160 \
-    --decouple_resolution=0
+    --decouple_resolution=1

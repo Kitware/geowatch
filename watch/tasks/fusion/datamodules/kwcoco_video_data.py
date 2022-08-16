@@ -2932,19 +2932,31 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import ndsampler
             >>> import kwcoco
             >>> import watch
-            >>> dvc_dpath = watch.find_dvc_dpath(hardware='hdd')
-            >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC/data_train.kwcoco.json'
+            >>> dvc_dpath = watch.find_dvc_dpath(hardware='ssd', tags='phase2_data')
+            >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_vali.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (6, 256, 256)
             >>> channels = '(L8,S2):(blue|green|red|nir|swir16),S2:red|green|blue'
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, neg_to_pos_ratio=1.0)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, neg_to_pos_ratio=1.0, space_scale='native')
             >>> item = self[100]
             >>> #self.compute_dataset_stats(num=10)
             >>> num_workers = 0
             >>> num = 100
             >>> batch_size = 6
             >>> self.compute_dataset_stats(num=num, num_workers=num_workers, batch_size=batch_size, with_vidid=True)
+
+        Notes:
+            'input_stats': {
+                ('L8', 'blue|green|red'): {
+                    'mean': np.array([[[1039.648272]],[[1486.082184]],[[1676.850214]]], dtype=np.float64),
+                    'std': np.array([[[ 972.412875]],[[1114.496947]],[[1343.448496]]], dtype=np.float64),
+                },
+                ('S2', 'blue|green|red'): {
+                    'mean': np.array([[[1147.831648]],[[1487.309399]],[[1776.500215]]], dtype=np.float64),
+                    'std': np.array([[[1019.241019]],[[1111.456623]],[[1318.724512]]], dtype=np.float64),
+                },
+            },
         """
         num = num if isinstance(num, int) and num is not True else 1000
         if not with_class and not with_intensity:
@@ -2990,6 +3002,47 @@ class KWCocoVideoDataset(data.Dataset):
             (s.sensor.spec, s.chans.spec)
             for s in self.input_sensorchan.streams())
 
+        is_native = self.config['space_scale'] == 'native'
+
+        def update_many(run, data, weights=1):
+            """
+            # Will be added to kwarray
+            Assumes first data axis represents multiple observations
+            """
+            data = np.asarray(data)
+            if run.nan_behavior == 'ignore':
+                weights = weights * (~np.isnan(data)).astype(float)
+            elif run.nan_behavior == 'propogate':
+                ...
+            else:
+                raise AssertionError('should not be here')
+            has_ignore_items = False
+            if ub.iterable(weights):
+                ignore_flags = (weights == 0)
+                has_ignore_items = np.any(ignore_flags)
+
+            if has_ignore_items:
+                data = data.copy()
+                # Replace the bad value with somehting sensible for each operation.
+                data[ignore_flags] = 0
+
+                # Multiply data by weights
+                w_data = data * weights
+
+                run.raw_total += w_data.sum(axis=0)
+                run.raw_squares += (w_data ** 2).sum(axis=0)
+                data[ignore_flags] = -np.inf
+                run.raw_max = np.maximum(run.raw_max, data.max(axis=0))
+                data[ignore_flags] = +np.inf
+                run.raw_min = np.minimum(run.raw_min, data.min(axis=0))
+            else:
+                w_data = data * weights
+                run.raw_total += w_data.sum(axis=0)
+                run.raw_squares += (w_data ** 2).sum(axis=0)
+                run.raw_max = np.maximum(run.raw_max, data.max(axis=0))
+                run.raw_min = np.minimum(run.raw_min, data.min(axis=0))
+            run.n += weights.sum(axis=0)
+
         print('unique_sensor_modes = {}'.format(ub.repr2(unique_sensor_modes, nl=1)))
         # TODO: we can compute the intensity histogram much more efficiently by
         # only doing it for unique channels (which might be duplicated)
@@ -3024,7 +3077,13 @@ class KWCocoVideoDataset(data.Dataset):
                             val = mode_val.numpy().astype(dtype)
                             weights = np.isfinite(val).astype(dtype)
                             # kwarray can handle nans now
-                            running.update(val, weights=weights)
+                            if is_native:
+                                # Put channels last so we can update multiple at once
+                                flat_vals = val.transpose(1, 2, 0).reshape(-1, val.shape[0])
+                                flat_weights = weights.transpose(1, 2, 0).reshape(-1, weights.shape[0])
+                                update_many(running, flat_vals, weights=flat_weights)
+                            else:
+                                running.update(val, weights=weights)
 
             if timer.first or timer.toc() > 5:
                 from watch.utils.slugify_ext import smart_truncate
@@ -3036,8 +3095,9 @@ class KWCocoVideoDataset(data.Dataset):
                     intermediate_text = ''
 
                 if with_intensity:
-                    curr = ub.dict_isect(running.summarize(keepdims=False), {'mean', 'std', 'max', 'min'})
-                    curr = ub.map_vals(float, curr)
+                    curr = ub.udict(running.summarize(keepdims=False))
+                    curr = curr & {'mean', 'std', 'max', 'min'}
+                    curr = curr.map_values(float)
                     text = ub.repr2(curr, compact=1, precision=1, nl=0) + ' ' + intermediate_text
                 else:
                     text = intermediate_text
@@ -3058,9 +3118,15 @@ class KWCocoVideoDataset(data.Dataset):
             input_stats = {}
             for sensor, submodes in channel_stats.items():
                 for chan_key, running in submodes.items():
-                    perchan_stats = running.summarize(axis=(1, 2))
-                    chan_mean = perchan_stats['mean']
-                    chan_std = perchan_stats['std']
+                    if is_native:
+                        # ensure we have the expected shape
+                        perchan_stats = running.summarize(axis=ub.NoParam, keepdims=True)
+                        chan_mean = perchan_stats['mean'][:, None, None]
+                        chan_std = perchan_stats['std'][:, None, None]
+                    else:
+                        perchan_stats = running.summarize(axis=(1, 2))
+                        chan_mean = perchan_stats['mean']
+                        chan_std = perchan_stats['std']
 
                     # For nans, set the mean to zero and set the std to a huge
                     # number if we dont have any data on it. That will prevent
