@@ -78,7 +78,7 @@ class DataRegistry:
             raise ValueError('Must specify a name')
         if path is None:
             raise ValueError('Must specify a path')
-        unknown = kwargs - self._default_attributes
+        unknown = ub.udict(kwargs) - self._default_attributes
         if unknown:
             raise ValueError(f'Unknown kwargs={unknown}')
         row = ub.udict({'name': name, 'path': path}) | self._default_attributes
@@ -95,7 +95,7 @@ class DataRegistry:
         """
         if name is None:
             raise ValueError('Must specify a name')
-        unknown = kwargs - self._default_attributes
+        unknown = ub.udict(kwargs) - self._default_attributes
         if unknown:
             raise ValueError(f'Unknown kwargs={unknown}')
         row = ub.udict({'name': name, 'path': path}) | self._default_attributes
@@ -169,7 +169,7 @@ class DataRegistry:
         return registry_rows
 
     def query(self, must_exist=False, **kwargs):
-        unexepcted = kwargs - self._expected_attrs
+        unexepcted = ub.udict(kwargs) - self._expected_attrs
         if unexepcted:
             raise ValueError(
                 'Unexpected query keywords: {}. Valid keywords are {}'.format(
