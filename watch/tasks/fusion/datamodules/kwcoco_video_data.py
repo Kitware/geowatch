@@ -2589,7 +2589,7 @@ class KWCocoVideoDataset(data.Dataset):
                         # New feature where we encode that we care much more about
                         # segmenting the inside of the object than the outside.
                         # Effectively boundaries become uncertain.
-                        shape = frame_class_ohe[0]
+                        shape = frame_class_ohe[0].shape
                         dtype = frame_class_ohe[0].dtype
                         dist, poly_mask = util_kwimage.polygon_distance_transform(
                             poly, shape=shape, dtype=dtype)
