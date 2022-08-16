@@ -597,7 +597,9 @@ class ExperimentState(ub.NiceRepr):
         versioned_df = self.versioned_table()
 
         if len(staging_df) and len(versioned_df):
-            spkg_was_copied = kwarray.isect_flags(staging_df['model'], versioned_df['model'])
+            import xdev
+            with xdev.embed_on_exception_context:
+                spkg_was_copied = kwarray.isect_flags(staging_df['model'], versioned_df['model'])
             staging_df['is_copied'] = spkg_was_copied
             num_need_repackage = (~staging_df['is_packaged']).sum()
             print(f'num_need_repackage={num_need_repackage}')
