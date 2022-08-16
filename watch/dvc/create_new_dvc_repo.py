@@ -86,6 +86,8 @@ def create_experiment_dvc_repo():
             set -x
             dvc remote add aws s3://kitware-smart-watch-data/dvc
             dvc remote modify aws profile iarpa
+
+            dvc remote add horologic ssh://horologic.kitware.com/data/dvc-caches/smart_watch_dvc
             '''), cwd=repo_dpath)
 
         __note__ = """
