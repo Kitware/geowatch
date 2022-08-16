@@ -199,6 +199,8 @@ class DVCExptManager(ub.NiceRepr):
         self._build_states()
 
     def summarize(self):
+        for state in self.states:
+            state.summarize()
         versioned_df = self.versioned_table()
         summarize_versioned_df(versioned_df)
 
@@ -736,9 +738,10 @@ class ExperimentState(ub.NiceRepr):
             DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
             cd $DVC_EXPT_DPATH
             git pull
-            dvc pull -r aws --recursive models/fusion/{rel_storage_dpath}
+            dvc pull -r aws --recursive models/fusion/{self.dataset_code}
 
-            python -m tasks.fusion.schedule_inference schedule_evaluation --gpus=auto --run=True
+            # setup right params
+            # python -m tasks.fusion.schedule_inference schedule_evaluation --gpus=auto --run=True
             """))
 
 
