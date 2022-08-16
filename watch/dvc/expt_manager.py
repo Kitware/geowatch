@@ -567,7 +567,7 @@ class ExperimentState(ub.NiceRepr):
         staging_df = pd.DataFrame(staging_rows)
 
         if len(staging_df) == 0:
-            staging_df[['ckpt_exists', 'is_packaged', 'is_staged', 'needs_package', 'needs_stage']] = 0
+            staging_df[['ckpt_exists', 'is_packaged', 'is_copied', 'needs_package', 'needs_copy']] = 0
         return staging_df
 
     def versioned_table(self, **kw):
@@ -629,11 +629,11 @@ class ExperimentState(ub.NiceRepr):
             staging_df = pd.concat(deduped)
 
             # Add info from staging into the versioned table
-            versioned_has_staged = kwarray.isect_flags(versioned_df['model'], staging_df['model'])
-            versioned_df['has_staged'] = versioned_has_staged
+            versioned_has_orig = kwarray.isect_flags(versioned_df['model'], staging_df['model'])
+            versioned_df['has_orig'] = versioned_has_orig
         else:
             staging_df['is_copied'] = False
-            versioned_df['has_staged'] = False
+            versioned_df['has_orig'] = False
         return staging_df, versioned_df
 
     def summarize(self):
@@ -649,7 +649,13 @@ class ExperimentState(ub.NiceRepr):
             >>> self.summarize()
         """
         staging_df, versioned_df = self.cross_referenced_tables()
-        summarize_staging_df(staging_df)
+        print('Staging summary')
+        if len(staging_df):
+            staging_df['needs_copy'] = (~staging_df['is_copied'])
+            staging_df['needs_package'] = (~staging_df['is_packaged'])
+            print(staging_df[['ckpt_exists', 'is_packaged', 'is_copied', 'needs_package', 'needs_copy']].sum().to_frame().T)
+        else:
+            print('There are no unversioned staging items')
         summarize_versioned_df(versioned_df)
 
     def push_packages(self):
@@ -746,21 +752,14 @@ class ExperimentState(ub.NiceRepr):
 
 
 def summarize_versioned_df(versioned_df):
-    import numpy as np
+    # import numpy as np
     print('Versioned summary')
-    if 'has_staged' not in versioned_df.columns:
-        versioned_df['has_staged'] = np.nan
-
-    version_bitcols = ['has_raw', 'has_dvc', 'is_link', 'is_broken', 'needs_pull', 'needs_push', 'has_staged']
+    # if 'has_orig' not in versioned_df.columns:
+    #     versioned_df['has_orig'] = np.nan
+    # version_bitcols = ['has_raw', 'has_dvc', 'is_link', 'is_broken', 'needs_pull', 'needs_push', 'has_orig']
+    version_bitcols = ['has_raw', 'has_dvc', 'is_link', 'is_broken', 'needs_pull', 'needs_push']
     needy = versioned_df.groupby(['dataset_code', 'type'])[version_bitcols].sum()
     print(needy)
-
-
-def summarize_staging_df(staging_df):
-    print('Staging summary')
-    staging_df['needs_stage'] = (~staging_df['is_staged'])
-    staging_df['needs_package'] = (~staging_df['is_packaged'])
-    print(staging_df[['ckpt_exists', 'is_packaged', 'is_staged', 'needs_package', 'needs_stage']].sum().to_frame().T)
 
 
 def checkpoint_filepath_info(fname):
