@@ -300,6 +300,12 @@ class MultimodalTransformer(pl.LightningModule):
         config = MultimodalTransformerConfig(**kwargs)
         self.config = config
         cfgdict = self.config.to_dict()
+        # Note:
+        # it is important that the non-kwargs are saved as hyperparams:
+        cfgdict['classes'] = classes
+        cfgdict['dataset_stats'] = dataset_stats
+        cfgdict['input_sensorchan'] = input_sensorchan
+        cfgdict['input_channels'] = input_channels
         self.save_hyperparameters(cfgdict)
         # Backwards compatibility. Previous iterations had the
         # config saved directly as datamodule arguments

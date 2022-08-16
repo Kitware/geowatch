@@ -1,16 +1,15 @@
 """
 Synchronize DVC states across the machine.
 
-This is a Proof-of-Concept that is frozen for Phase1 and will not be developed.
-
-The New work on Phase 2 will be continued in
-~/code/watch/watch/dvc/sync_manager.py
+This is a new Phase2 Variant of this script.
+The original proof of concept is in
+~/code/watch/watch/tasks/fusion/dvc_sync_manager.py
 
 Example:
-    python -m watch.tasks.fusion.dvc_sync_manager "list"
-    python -m watch.tasks.fusion.dvc_sync_manager "pull evals"
-    python -m watch.tasks.fusion.dvc_sync_manager "push evals"
-    python -m watch.tasks.fusion.dvc_sync_manager "push packages evals"
+    python -m watch.dvc.expt_manager "list"
+    python -m watch.dvc.expt_manager "pull evals"
+    python -m watch.dvc.expt_manager "push evals"
+    python -m watch.dvc.expt_manager "push packages evals"
 """
 import warnings
 import parse
@@ -25,19 +24,11 @@ from watch.utils import util_path
 
 # TODO: replace globals with a global config if necessary
 DATASET_CODES = [
-    'Cropped-Drop3-TA1-2022-03-10',
-    'Aligned-Drop3-TA1-2022-03-10',
-    'Aligned-Drop3-L1',
+    'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC',
 ]
 
-# hack for old scheme
-STORAGE_REPL = {
-    'Aligned-Drop3-TA1-2022-03-10': 'eval3_candidates',
-    'Cropped-Drop3-TA1-2022-03-10': 'eval3_sc_candidates',
-}
 
-
-class SyncMachineConfig(scfg.Config):
+class ExptManagerConfig(scfg.Config):
     """
     Certain parts of these names have special nomenclature to make them easier
     to work with in Python and Bash.
@@ -46,11 +37,12 @@ class SyncMachineConfig(scfg.Config):
     machine with the "watch" environment, the watch DVC repo is accessed as
     follows:
 
-        DVC_DPATH=$(smartwatch_dvc)
+        EXPT_DVC_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+        DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
 
     The workdir is where a user on a machine puts all of their experiments.
 
-        WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+        WORKDIR=$EXPT_DVC_DPATH/training/$HOSTNAME/$USER
 
     Before we start an experment, we must choose a dataset. Lets use an
     example:
@@ -62,7 +54,7 @@ class SyncMachineConfig(scfg.Config):
     -- views can have different GSD or be bundle subsets). The directory
     of this bundle should be:
 
-        KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+        KWCOCO_BUNDLE_DPATH=$DATA_DVC_DPATH/$DATASET_CODE
 
     and it should be the case that, there is a kwcoco manifest that describes
     the entire bundle called:
@@ -84,7 +76,7 @@ class SyncMachineConfig(scfg.Config):
 
     The packaging part of this script works with
 
-        $DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/$EXPT_MODEL_GLOBNAME/*.pt
+        $EXPT_DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/$EXPT_MODEL_GLOBNAME/*.pt
     """
     default = {
         'command': scfg.Value(None, help='if specified, will overload other options', position=1),
@@ -106,24 +98,24 @@ class SyncMachineConfig(scfg.Config):
             Namely:
 
                 # Training runs go here go here.
-                <dvc_dpath>/training/*/*/<dataset_code>/runs/<expt_name>/lightning_logs
+                <expt_dvc_dpath>/training/*/*/<dataset_code>/runs/<expt_name>/lightning_logs
 
                 # Packages go here.
-                <dvc_dpath>/models/fusion/<dataset_code>/packages
+                <expt_dvc_dpath>/models/fusion/<dataset_code>/packages
 
                 # Evaluations go here.
-                <dvc_dpath>/models/fusion/<dataset_code>/eval
+                <expt_dvc_dpath>/models/fusion/<dataset_code>/eval
             ''')),
     }
 
 
 def main(cmdline=True, **kwargs):
     """
-    from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
+    from watch.dvc.expt_manager import *  # NOQA
     """
     import watch
 
-    config = SyncMachineConfig(cmdline=cmdline, data=kwargs)
+    config = ExptManagerConfig(cmdline=cmdline, data=kwargs)
     command = config['command']
     dolist = 0
     if command is not None:
@@ -154,28 +146,9 @@ def main(cmdline=True, **kwargs):
     else:
         raise Exception('must be defualt for now')
 
-    # If we have an SSD, and it has stuff, push it, but don't pull to SSD
-    try:
-        dvc_ssd_dpath = watch.find_smart_dvc_dpath(hardware='ssd')
-    except Exception:
-        ssd_manager = None
-    else:
-        ssd_manager = DVCSyncManager(
-            dvc_ssd_dpath, dvc_remote=dvc_remote, dataset_codes=dataset_codes)
-    if ssd_manager is not None:
-        synckw = ub.compatible(config, ssd_manager.sync)
-        synckw['pull'] = False
-        ssd_manager.sync(**synckw)
-        if dolist:
-            ssd_manager.summarize()
-
-    # Do everything to the HDD.
-    try:
-        dvc_hdd_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
-    except Exception:
-        dvc_hdd_dpath = watch.find_smart_dvc_dpath()
-    hdd_manager = DVCSyncManager(
-        dvc_hdd_dpath, dvc_remote=dvc_remote, dataset_codes=dataset_codes)
+    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
+    hdd_manager = DVCExptManager(
+        expt_dvc_dpath, dvc_remote=dvc_remote, dataset_codes=dataset_codes)
     synckw = ub.compatible(config, hdd_manager.sync)
     hdd_manager.sync(**synckw)
 
@@ -183,38 +156,32 @@ def main(cmdline=True, **kwargs):
         hdd_manager.summarize()
 
 
-class DVCSyncManager(ub.NiceRepr):
+class DVCExptManager(ub.NiceRepr):
     """
     Implements an API around our DVC structure, which can be described as
     follows.
 
-    <dvc_dpath>
+    <data_dvc_dpath>
         * [<dataset_code>, ...]
 
+    <expt_dvc_dpath>
         * training
             * <hostname>/<user>/<dataset_code>/runs/<expt_name>/lightning_logs/...
 
         * models
             * <task>
-            * fusion/<storage_code>/packages/<expt_name>/<model_name.pt>
-            * fusion/<storage_code>/pred/<expt_name>/pred_<model_name.pt>/***
-            * fusion/<storage_code>/eval/<expt_name>/pred_<model_name.pt>/***
-
-    Note:
-        moving forward dataset_code and storage_code should always be the same.
-        so storage_code=dataset_code. But we have a weird case that we still
-        support ATM.
+            * fusion/<dataset_code>/packages/<expt_name>/<model_name.pt>
+            * fusion/<dataset_code>/pred/<expt_name>/<model_name.pt>/***
+            * fusion/<dataset_code>/eval/<expt_name>/<model_name.pt>/***
 
     A breakdown of the packages dir is:
         packages/<expt_name>/<model_name.pt>
 
     Example:
-        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
-        >>> # Default config is used if not provided
-        >>> self = DVCSyncManager.coerce(watch.find_smart_dvc_dpath(hardware='hdd'))
-        >>> #df = self.versioned_table()
-        >>> #print(df)
+        >>> # xdoctest: +REQUIRES(env:EXPT_DVC_DPATH)
+        >>> from watch.dvc.expt_manager import *  # NOQA
+        >>> import watch
+        >>> self = DVCExptManager.coerce(watch.find_dvc_dpath(tags='phase2_expt'))
         >>> self.summarize()
 
     Ignore:
@@ -224,11 +191,11 @@ class DVCSyncManager(ub.NiceRepr):
     def __nice__(self):
         return str(self.dvc)
 
-    def __init__(self, dvc_dpath, dvc_remote='aws', dataset_codes=None):
-        self.dvc_dpath = dvc_dpath
+    def __init__(self, expt_dvc_dpath, dvc_remote='aws', dataset_codes=None):
+        self.expt_dvc_dpath = expt_dvc_dpath
         self.dvc_remote = dvc_remote
         self.dataset_codes = dataset_codes
-        self.dvc = simple_dvc.SimpleDVC.coerce(dvc_dpath, remote=dvc_remote)
+        self.dvc = simple_dvc.SimpleDVC.coerce(expt_dvc_dpath, remote=dvc_remote)
         self._build_states()
 
     def summarize(self):
@@ -236,20 +203,21 @@ class DVCSyncManager(ub.NiceRepr):
         summarize_versioned_df(versioned_df)
 
     @classmethod
-    def coerce(cls, dvc_dpath=None):
+    def coerce(cls, expt_dvc_dpath=None):
         import watch
-        if dvc_dpath is None:
-            dvc_dpath = watch.find_smart_dvc_dpath()
+        if expt_dvc_dpath is None:
+            expt_dvc_dpath = watch.find_smart_dvc_dpath()
         dvc_remote = 'aws'
         dataset_codes = DATASET_CODES
-        self = cls(dvc_dpath=dvc_dpath, dvc_remote=dvc_remote,
+        self = cls(expt_dvc_dpath=expt_dvc_dpath, dvc_remote=dvc_remote,
                    dataset_codes=dataset_codes)
         return self
 
     def _build_states(self):
         states = []
         for dataset_code in self.dataset_codes:
-            state = ExperimentState(self.dvc_dpath, dataset_code)
+            state = ExperimentState(
+                self.expt_dvc_dpath, dataset_code, dvc_remote=self.dvc_remote)
             states.append(state)
         self.states = states
 
@@ -294,7 +262,7 @@ class DVCSyncManager(ub.NiceRepr):
         summarize_versioned_df(eval_df)
 
         # self.summarize()
-        print(f'self.dvc_dpath={self.dvc_dpath}')
+        print(f'self.expt_dvc_dpath={self.expt_dvc_dpath}')
         print(len(eval_df))
         # import xdev
         # xdev.embed()
@@ -312,26 +280,27 @@ class DVCSyncManager(ub.NiceRepr):
         self.dvc.pull(pull_fpaths)
 
     def push_packages(self):
-        from watch.tasks.fusion import repackage
-        mode = 'commit'
+        # from watch.tasks.fusion import repackage
+        # mode = 'commit'
         for state in self.states:
-            # TODO: use the "state" staging table instead
-            if 0:
-                import kwarray
-                state_df = state.versioned_table()
-                stage_df = state.staging_table()
-                spkg_was_copied = kwarray.isect_flags(stage_df['model'], state_df['model'])
-                stage_df['spkg_was_copied'] = spkg_was_copied
-                num_need_repackage = (~stage_df['is_packaged']).sum()
-                print(f'num_need_repackage={num_need_repackage}')
-            else:
-                dataset_code = state.dataset_code
-                print(f'dataset_code={dataset_code}')
-                train_dpath = state.training_dpath / '*/*' / state.dataset_code / 'runs'
-                storage_dpath = state.storage_dpath / 'packages'
-                repackage.gather_checkpoints(
-                    dvc_dpath=state.dvc_dpath, storage_dpath=storage_dpath,
-                    train_dpath=train_dpath, dvc_remote=self.dvc_remote, mode=mode)
+            state.push_packages()
+            # # TODO: use the "state" staging table instead
+            # if 0:
+            #     import kwarray
+            #     state_df = state.versioned_table()
+            #     stage_df = state.staging_table()
+            #     spkg_was_copied = kwarray.isect_flags(stage_df['model'], state_df['model'])
+            #     stage_df['spkg_was_copied'] = spkg_was_copied
+            #     num_need_repackage = (~stage_df['is_packaged']).sum()
+            #     print(f'num_need_repackage={num_need_repackage}')
+            # else:
+            #     dataset_code = state.dataset_code
+            #     print(f'dataset_code={dataset_code}')
+            #     train_dpath = state.training_dpath / '*/*' / state.dataset_code / 'runs'
+            #     storage_dpath = state.storage_dpath / 'packages'
+            #     repackage.gather_checkpoints(
+            #         expt_dvc_dpath=state.expt_dvc_dpath, storage_dpath=storage_dpath,
+            #         train_dpath=train_dpath, dvc_remote=self.dvc_remote, mode=mode)
 
     def sync(self, push=True, pull=True, evals=True, packages=True):
         if push:
@@ -348,36 +317,33 @@ class DVCSyncManager(ub.NiceRepr):
 
 class ExperimentState(ub.NiceRepr):
     """
+
     Ignore:
-        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
+        >>> # xdoctest: +REQUIRES(env:EXPT_DVC_DPATH)
+        >>> from watch.dvc.expt_manager import *  # NOQA
         >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
-        >>> dataset_code = 'Aligned-Drop3-TA1-2022-03-10'
-        >>> self = ExperimentState(dvc_dpath, dataset_code)
-        >>> gen = self.versioned_rows(['eval_trk'])
-        >>> row = ub.peek(gen)
-        >>> table = self.versioned_table()
-        >>> print(table[['type', 'raw']])
+        >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
+        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+        >>> dataset_code = 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC'
+        >>> self = ExperimentState(expt_dvc_dpath, dataset_code, data_dvc_dpath)
+        >>> self.summarize()
 
     Ignore:
         table[table.type == 'pkg']['model'].unique()
     """
 
-    def __init__(self, dvc_dpath, dataset_code, storage_code=None):
-        self.dvc_dpath = dvc_dpath
+    def __init__(self, expt_dvc_dpath, dataset_code, dvc_remote=None):
+
+        self.expt_dvc_dpath = expt_dvc_dpath
         self.dataset_code = dataset_code
-        if storage_code is None:
-            storage_code = STORAGE_REPL.get(dataset_code, dataset_code)
-        self.storage_code = storage_code
-        self.storage_dpath = self.dvc_dpath / 'models/fusion' / storage_code
-        self.training_dpath = self.dvc_dpath / 'training'
+        self.dvc_remote = dvc_remote
+        self.storage_dpath = self.expt_dvc_dpath / 'models/fusion' / dataset_code
+        self.training_dpath = self.expt_dvc_dpath / 'training'
         self.patterns = {
             # General
             'expt': '*',
-            'dvc_dpath': dvc_dpath,
+            'expt_dvc_dpath': expt_dvc_dpath,
             'dataset_code': dataset_code,
-            'storage_code': storage_code,
             ### Versioned
             'test_dset': '*',
             'model': '*',  # hack, should have ext
@@ -392,8 +358,8 @@ class ExperimentState(ub.NiceRepr):
             'stage_model': '*',  # hack, should have ext
         }
 
-        self.staging_template_prefix = '{dvc_dpath}/training/{host}/{user}/{dataset_code}/'
-        self.storage_template_prefix = '{dvc_dpath}/models/fusion/{storage_code}/'
+        self.staging_template_prefix = '{expt_dvc_dpath}/training/{host}/{user}/{dataset_code}/'
+        self.storage_template_prefix = '{expt_dvc_dpath}/models/fusion/{dataset_code}/'
 
         self.staging_templates = {
             'ckpt': 'runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{checkpoint}.ckpt',
@@ -402,16 +368,16 @@ class ExperimentState(ub.NiceRepr):
 
         # Volitile (unused: todo incorporate)
         self.volitile_templates = {
-            'pred_pxl': 'pred/{expt}/pred_{model}/{test_dset}/{pred_cfg}/pred.kwcoco.json',
-            'pred_trk': 'pred/{expt}/pred_{model}/{test_dset}/{pred_cfg}/tracking/{trk_cfg}/tracks.json',
-            'pred_act': 'pred/{expt}/pred_{model}/{test_dset}/{pred_cfg}/actclf/{act_cfg}/activity_tracks.json',
+            'pred_pxl': 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/pred.kwcoco.json',
+            'pred_trk': 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/tracking/{trk_cfg}/tracks.json',
+            'pred_act': 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/actclf/{act_cfg}/activity_tracks.json',
         }
 
         self.versioned_templates = {
             'pkg': 'packages/{expt}/{model}.pt',
-            'eval_pxl': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/curves/measures2.json',
-            'eval_trk': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
-            'eval_act': 'eval/{expt}/pred_{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
+            'eval_pxl': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/curves/measures2.json',
+            'eval_trk': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
+            'eval_act': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
         }
 
         self.templates = {}
@@ -609,11 +575,10 @@ class ExperimentState(ub.NiceRepr):
         Information includes its real path if it exists, its dvc path if it exists
         and what sort of actions need to be done to synchronize it.
         """
-        # import numpy as np
         eval_rows = list(self.versioned_rows(**kw))
         eval_df = pd.DataFrame(eval_rows)
-        # print(eval_df.drop(['type', 'raw', 'dvc'], axis=1).sum().to_frame().T)
-        # print(eval_df.groupby('type').sum())
+        if len(eval_df) == 0:
+            eval_df[['type', 'has_dvc', 'has_raw', 'needs_pull', 'is_link', 'is_broken', 'is_unprotected', 'needs_push', 'dataset_code']] = 0
         return eval_df
 
     def evaluation_table(self):
@@ -631,7 +596,7 @@ class ExperimentState(ub.NiceRepr):
 
         if len(staging_df) and len(versioned_df):
             spkg_was_copied = kwarray.isect_flags(staging_df['model'], versioned_df['model'])
-            staging_df['is_staged'] = spkg_was_copied
+            staging_df['is_copied'] = spkg_was_copied
             num_need_repackage = (~staging_df['is_packaged']).sum()
             print(f'num_need_repackage={num_need_repackage}')
 
@@ -643,7 +608,7 @@ class ExperimentState(ub.NiceRepr):
             # Given duplicates, prioritize:
             # staged, packaged, higher lightning version, lower checkpoint version.
             priority = [
-                {'name': 'is_staged', 'ascending': 1},
+                {'name': 'is_copied', 'ascending': 1},
                 {'name': 'is_packaged', 'ascending': 1},
                 {'name': 'lightning_version', 'ascending': 1},
                 {'name': 'ckpt_ver', 'ascending': 1},
@@ -665,39 +630,116 @@ class ExperimentState(ub.NiceRepr):
             versioned_has_staged = kwarray.isect_flags(versioned_df['model'], staging_df['model'])
             versioned_df['has_staged'] = versioned_has_staged
         else:
-            staging_df['is_staged'] = False
-            staging_df['is_packaged'] = False
+            staging_df['is_copied'] = False
             versioned_df['has_staged'] = False
         return staging_df, versioned_df
 
     def summarize(self):
         """
         Ignore:
-            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-            >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
+            >>> # xdoctest: +REQUIRES(env:EXPT_DVC_DPATH)
+            >>> from watch.dvc.expt_manager import *  # NOQA
             >>> import watch
-            >>> dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
-            >>> #dvc_dpath = watch.find_smart_dvc_dpath(hardware='ssd')
+            >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
+            >>> #expt_dvc_dpath = watch.find_smart_dvc_dpath(hardware='ssd')
             >>> dataset_code = 'Cropped-Drop3-TA1-2022-03-10'
-            >>> self = ExperimentState(dvc_dpath, dataset_code)
+            >>> self = ExperimentState(expt_dvc_dpath, dataset_code)
             >>> self.summarize()
-
-            versioned_df = self.versioned_table()
-            flags = (versioned_df['model'] == 'CropDrop3_SC_s2wv_rgb_xver6_V019_epoch=119-step=30719')
-            versioned_df[flags]
-
-            flags = versioned_df['model'].apply(lambda x: 'V019_epoch=119-step=30719' in x)
-            flags.sum()
-
-            y = self.versioned_table(types=['pkg'])
-            y[y['expt'].apply(lambda x: 'V019' in x)]
-            flags = y['model'].apply(lambda x: '30719' in x)
-            flags.sum()
-            y[flags]
         """
         staging_df, versioned_df = self.cross_referenced_tables()
         summarize_staging_df(staging_df)
         summarize_versioned_df(versioned_df)
+
+    def push_packages(self):
+        """
+        This does what repackage used to do.
+        Repackages checkpoints as torch packages, copies them to the DVC repo,
+        and then adds them to DVC.
+
+        >>> # xdoctest: +REQUIRES(env:EXPT_DVC_DPATH)
+        >>> from watch.dvc.expt_manager import *  # NOQA
+        >>> import watch
+        >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
+        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+        >>> dataset_code = 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC'
+        >>> self = ExperimentState(expt_dvc_dpath, dataset_code, data_dvc_dpath)
+        >>> self.summarize()
+        """
+        from rich.prompt import Confirm
+
+        mode = 'all'
+
+        staging_df = self.staging_table()
+        needs_package = staging_df[~staging_df['is_packaged']]
+
+        print(f'There are {len(needs_package)} checkpoints that need to be repackaged')
+        if mode == 'interact':
+            flag = Confirm.ask('Do you want to repackage?')
+            if not flag:
+                raise UserAbort
+
+        from watch.tasks.fusion.repackage import repackage
+        to_repackage = needs_package['ckpt_path'].values.tolist()
+        print(to_repackage)
+        if to_repackage:
+            # NOTE: THIS RELIES ON KNOWING ABOUT THE SPECIFIC MODEL CODE.
+            # IT WOULD BE NICE IF WE DIDN'T NEED THAT HERE.
+            repackage(to_repackage)
+
+        # Rebuild the tables to ensure we are up to date
+        staging_df, versioned_df = self.cross_referenced_tables()
+        needs_copy = staging_df[~staging_df['is_copied']]
+        print(needs_copy)
+        print(f'There are {len(needs_copy)} packages that need to be copied')
+        if mode == 'interact':
+            flag = Confirm.ask('Do you want to copy?')
+            if not flag:
+                raise UserAbort
+
+        import shutil
+        for row in ub.ProgIter(needs_copy.to_dict('records'), desc='Copy packages to DVC dir'):
+            kw = ub.udict(row).subdict({'expt', 'model'})
+            kw['expt_dvc_dpath'] = self.expt_dvc_dpath
+            kw['dataset_code'] = self.dataset_code
+            pkg_fpath = ub.Path(self.templates['pkg'].format(**kw))
+            src, dst = (row['spkg_path'], pkg_fpath)
+            dst.parent.ensuredir()
+            shutil.copy(src, dst)
+
+        # Rebuild the tables to ensure we are up to date
+        staging_df, versioned_df = self.cross_referenced_tables()
+        needs_add_flags = (~versioned_df['has_dvc'] | versioned_df['unprotected'])
+        needs_dvc_add = versioned_df[needs_add_flags]
+        print(needs_dvc_add)
+        print(f'There are {len(needs_dvc_add)} packages that need DVC add/push')
+        if mode == 'interact':
+            flag = Confirm.ask('Do you want to run DVC add/push?')
+            if not flag:
+                raise UserAbort
+
+        if len(needs_dvc_add):
+            from watch.utils.simple_dvc import SimpleDVC
+            dvc_api = SimpleDVC(self.expt_dvc_dpath)
+            toadd_pkg_fpaths = needs_dvc_add['raw'].to_list()
+            dvc_api.add(toadd_pkg_fpaths)
+            push_jobs = 8
+            dvc_api.push(toadd_pkg_fpaths, remote=self.dvc_remote,
+                         jobs=push_jobs, recursive=True)
+
+            import platform
+            hostname = platform.node()
+            dvc_api.git_commitpush(f'new packaged models from {hostname}')
+
+        print(ub.codeblock(
+            f"""
+            # On the evaluation remote you need to run something like:
+            DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+            cd $DVC_EXPT_DPATH
+            git pull
+            dvc pull -r aws --recursive models/fusion/{rel_storage_dpath}
+
+            python -m tasks.fusion.schedule_inference schedule_evaluation --gpus=auto --run=True
+            """))
 
 
 def summarize_versioned_df(versioned_df):
@@ -709,51 +751,6 @@ def summarize_versioned_df(versioned_df):
     version_bitcols = ['has_raw', 'has_dvc', 'is_link', 'is_broken', 'needs_pull', 'needs_push', 'has_staged']
     needy = versioned_df.groupby(['dataset_code', 'type'])[version_bitcols].sum()
     print(needy)
-
-    # want_cols = [
-    #     'type', 'dataset_code', 'expt', 'model',
-    #     # 'test_dset',
-    #     'pred_cfg', 'act_cfg', 'trk_cfg']
-
-    # have_cols = versioned_df.columns.intersection(want_cols)
-    # config_rows = versioned_df[have_cols]
-    # if 0:
-    #     # Uniqueness Breakdown
-    #     print(config_rows.sort_values('expt').value_counts(dropna=False).to_string())
-    # # description = config_rows.describe()
-    # # print(description.to_string())
-    # # Description with more stuff (not sure if there is a way to get pandas
-    # # describe to do this.
-    # for dataset_code, group in versioned_df.groupby('dataset_code'):
-    #     desc2_parts = []
-    #     for col in have_cols:
-    #         col_vals = config_rows[col]
-    #         col_freq = col_vals.value_counts()
-    #         col_description = {'name': col}
-    #         col_description['count'] = (~col_vals.isnull()).sum()
-    #         col_description['unique'] = col_freq.size
-    #         # col_description['max_freq'] = col_freq.max()
-    #         # col_description['min_freq'] = col_freq.min()
-    #         # col_description['med_freq'] = int(col_freq.median())
-    #         desc2_parts.append(col_description)
-    #     description2 = pd.DataFrame(desc2_parts).set_index('name').T
-    #     description2.columns.name = None
-    #     print('')
-    #     print(f'dataset_code={dataset_code}')
-    #     print('Number of Unique Entries')
-    #     print(description2.to_string())
-    #     print('Number of Models & Evaluations')
-    #     print(group.groupby('type')[version_bitcols].sum())
-    # model_to_types = {}
-    # for model, group in versioned_df.groupby('model'):
-    #     model_to_types[model] = tuple(sorted(group['type'].unique()))
-    # types_to_models = ub.invert_dict(model_to_types, 0)
-    # model_eval_counts = pd.DataFrame([ub.map_vals(len, types_to_models)])
-    # print('Number of evals / package type for each model')
-    # # print('Ideally each model has a package, pixel eval, and either act or trk eval')
-    # # print('Models with evals, but no packages are a problem, probably a bug, maybe needs a git pull?')
-    # print(model_eval_counts)
-    # # print(types_to_models[('eval_pxl',)])
 
 
 def summarize_staging_df(staging_df):
@@ -775,7 +772,7 @@ def checkpoint_filepath_info(fname):
         parse.parse('{prefix}foo={bar}', 'afoao=3')
 
     Example:
-        >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
+        >>> from watch.dvc.expt_manager import *  # NOQA
         >>> fnames = [
         >>>     'epoch=1-step=10.foo',
         >>>     'epoch=1-step=10-v2.foo',
@@ -821,39 +818,17 @@ def checkpoint_filepath_info(fname):
     return info
 
 
-def pull_from_s3_notes():
-    """
-
-    aws s3 --profile iarpa ls s3://kitware-smart-watch-data/sync_root/
-    aws s3 --profile iarpa sync s3://kitware-smart-watch-data/sync_root/ $HOME/data/aws-sync/sync_root/
-
-    ls $HOME/data/aws-sync/sync_root/ta2-train*/*/Aligned-Drop3-L1/runs
-    ls $HOME/data/aws-sync/sync_root/ta2-train*/*/Aligned-Drop3-L1/runs
-
-    ls $HOME/data/aws-sync/sync_root/ta2-train*/*/Aligned-Drop3-L1/runs/*/lightning_logs/*/checkpoints
-
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
-    DATASET_CODE=Aligned-Drop3-L1
-    EXPT_GROUP_CODE=Aligned-Drop3-L1
-    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-    TRAIN_DPATH=$HOME/data/aws-sync/sync_root/*/*/$DATASET_CODE/runs/*/lightning_logs
-    python -m watch.tasks.fusion.repackage gather_checkpoints \
-        --dvc_dpath="$DVC_DPATH" \
-        --storage_dpath="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages" \
-        --train_dpath="$TRAIN_DPATH" \
-        --push_jobs=8 --dvc_remote=aws \
-        --mode=commit
-    """
+class UserAbort(Exception):
+    pass
 
 
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/tasks/fusion/dvc_sync_manager.py "pull all"
-        python -m watch.tasks.fusion.dvc_sync_manager "push all"
-        python -m watch.tasks.fusion.dvc_sync_manager "pull evals"
-        python -m watch.tasks.fusion.dvc_sync_manager "pull all"
-
-        python -m watch.tasks.fusion.dvc_sync_manager "pull packages"
+        python ~/code/watch/watch/dvc/expt_manager.py "pull all"
+        python -m watch.dvc.expt_manager "push all"
+        python -m watch.dvc.expt_manager "pull evals"
+        python -m watch.dvc.expt_manager "pull all"
+        python -m watch.dvc.expt_manager "pull packages"
     """
     main(cmdline=True)

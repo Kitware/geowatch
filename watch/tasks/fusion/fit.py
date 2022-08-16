@@ -49,9 +49,7 @@ Example:
     ...     #'channels': 'blue|green|red|nir',
     ...     #'channels': None,
     ...     'time_steps': 8,
-    ...     #'chip_size': 128,
-    ...     'chip_size': 192,
-    ...     #'chip_size': 256,
+    ...     'chip_dims': 192,
     ...     'batch_size': 1,
     ...     'accumulate_grad_batches': 12,
     ...     'arch_name': 'smt_it_stm_p8',
@@ -685,7 +683,7 @@ def main(**kwargs):
             --train_dataset=vidshapes8-multispectral \
             --batch_size=4 \
             --num_workers=4 \
-            --chip_size=96 \
+            --chip_dims=96 \
             --workdir=$HOME/work/watch/fit
     """
     # TODO: how to make this work in a distributed (ideally elastic train case)

@@ -59,7 +59,7 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             spatial height/width per batch. If given as a single number, used
             as both width and height. Default is currently taken from
             deprecated chip_size, but in the future will be 128.
-            '''), alias=['window_space_dims']),
+            '''), alias=['window_space_dims'], nargs='+'),
 
         'window_space_scale': scfg.Value(None, help=ub.paragraph(
             '''
@@ -243,7 +243,7 @@ class KWCocoVideoDataModuleConfig(scfg.Config):
 
     In the future this might be convertable to, or handled by omegaconfig
     """
-    default = ub.dict_union({
+    default = ub.udict({
         'train_dataset': scfg.Value(None, help='path to the train kwcoco file'),
         'vali_dataset': scfg.Value(None, help='path to the validation kwcoco file'),
         'test_dataset': scfg.Value(None, help='path to the test kwcoco file'),
@@ -273,7 +273,7 @@ class KWCocoVideoDataModuleConfig(scfg.Config):
             forkserver
             ''')),
         # Mixin the dataset config
-    }, KWCocoVideoDatasetConfig.default)
+    }) | KWCocoVideoDatasetConfig.default
 
     def normalize(self):
         # hack because we dont have proper inheritence
@@ -631,6 +631,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         parser = parent_parser.add_argument_group('kwcoco_video_data')
         config = KWCocoVideoDataModuleConfig(cmdline=0)
         config.argparse(parser)
+        print('parser._actions = {}'.format(ub.repr2(parser.__dict__['_actions'], nl=1)))
+        print('parser._group_actions = {}'.format(ub.repr2(parser.__dict__['_group_actions'], nl=1)))
+        print('parser._option_string_actions = {}'.format(ub.repr2(parser.__dict__['_option_string_actions'], nl=1)))
         return parent_parser
 
     @classmethod
