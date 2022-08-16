@@ -17,7 +17,6 @@ import pytorch_lightning as pl
 # import random  # NOQA
 import torch
 import ubelt as ub
-from kwcoco import channel_spec
 from torch.utils import data
 from typing import Dict, List  # NOQA
 from typing import Tuple
@@ -91,17 +90,21 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             this is set to "10GSD", then video space will be scaled to match).
 
             This can also be set to "native" to use heterogeneous sampling.
-            ''')),
+            '''), alias=['data_space_scale']),
 
         # 'time_overlap': scfg.Value(0.0, help='fraction of time steps to overlap'),
         'chip_overlap': scfg.Value(
-            0.0, help='fraction of space steps to overlap',
+            0.0, help=ub.paragraph(
+                '''
+                Fraction of the spatial sliding window that will overlap.
+                Only applies to training dataset when used in the data module.
+                '''),
             alias=['window_space_overlap'],
         ),
 
         'channels': scfg.Value(None, type=str, help=ub.paragraph(
             '''
-            channels to use should be ChannelSpec coercable
+            channels to use should be SensorChanSpec coercable
             ''')),
 
         'diff_inputs': scfg.Value(False, help=ub.paragraph(
@@ -175,24 +178,32 @@ class KWCocoVideoDatasetConfig(scfg.Config):
         'use_centered_positives': scfg.Value(False, help=ub.paragraph(
             '''
             Use centers of annotations as window centers
+            Only applies to training dataset when used in the data module.
+            Validation/test dataset defaults to False.
             ''')),
 
-        'upweight_centers': scfg.Value(True, help='undocumented'),
+        'upweight_centers': scfg.Value(True, help=ub.paragraph(
+            '''
+            Applies a weighting such that the center of the frame incurs more
+            loss.
+            ''')),
 
         'use_cloudmask': scfg.Value(1, type=int, help=ub.paragraph(
             '''
-            Allow the dataloader to use the cloud mask to skip frames
+            Allow the dataloader to use the quality band to skip frames.
             ''')),
 
-        'use_conditional_classes': scfg.Value(True, help=ub.paragraph(
-            '''
-            Deprecated, not used anymore. Include no-activity, post-construction in predictions when
-            their conditions are met.
-            ''')),
+        # 'use_conditional_classes': scfg.Value(True, help=ub.paragraph(
+        #     '''
+        #     DEPRECATED, not used anymore. Include no-activity, post-construction in predictions when
+        #     their conditions are met.
+        #     ''')),
 
         'use_grid_positives': scfg.Value(True, help=ub.paragraph(
             '''
-            Use annotation overlaps with grid as positives
+            Use annotation overlaps with grid as positives.
+            Only applies to training dataset when used in the data module.
+            Validation/test dataset defaults to True.
             ''')),
 
         # Overwritten for non-train
@@ -200,7 +211,9 @@ class KWCocoVideoDatasetConfig(scfg.Config):
         'neg_to_pos_ratio': scfg.Value(1.0, type=float, help=ub.paragraph(
             '''
             maximum ratio of samples with no annotations to samples with
-            annots
+            annots.
+            Only applies to training dataset when used in the data module.
+            Validation/test dataset defaults to zero.
             ''')),
     }
 
@@ -214,6 +227,9 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             self['chip_dims'] = [d, d]  # has to be a list not a tuple for yaml
 
         self['chip_size'] = None
+
+        if self['space_scale'] is None:
+            self['space_scale'] = self['window_space_scale']
 
 
 class KWCocoVideoDataModuleConfig(scfg.Config):
@@ -417,6 +433,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.vali_dataset_config = self.train_dataset_config.copy()
         self.vali_dataset_config['chip_overlap'] = 0.0
         self.vali_dataset_config['neg_to_pos_ratio'] = 0.0
+        self.vali_dataset_config['use_grid_positives'] = True
+        self.vali_dataset_config['use_centered_positives'] = False
+
         self.test_dataset_config = self.vali_dataset_config.copy()
 
         self.num_workers = util_globals.coerce_num_workers(cfgdict['num_workers'])
@@ -424,7 +443,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
         # will only correspond to train
         self.classes = None
-        self.input_channels = None
+        # self.input_channels = None
         self.input_sensorchan = None
 
         # Store train / test / vali
@@ -440,7 +459,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             print('self.test_kwcoco = {!r}'.format(self.test_kwcoco))
             print('self.time_steps = {!r}'.format(self.time_steps))
             print('self.chip_dims = {!r}'.format(self.chip_dims))
-            print('self.channels = {!r}'.format(self.channels))
+            print('self.sensorchan = {!r}'.format(self.sensorchan))
 
     def setup(self, stage):
         import watch
@@ -476,8 +495,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             self.torch_datasets['train'] = train_dataset
             ub.inject_method(self, lambda self: self._make_dataloader('train', shuffle=True), 'train_dataloader')
 
-            if self.input_channels is None:
-                self.input_channels = train_dataset.input_channels
+            # if self.input_channels is None:
+            #     self.input_channels = train_dataset.input_channels
 
             if self.input_sensorchan is None:
                 self.input_sensorchan = train_dataset.input_sensorchan
@@ -847,18 +866,23 @@ class KWCocoVideoDataset(data.Dataset):
         >>> self = KWCocoVideoDataset(
         >>>     sampler,
         >>>     sample_shape=(5, 128, 128),
+        >>>     window_space_scale='10GSD',
+        >>>     #data_space_scale='10GSD',
+        >>>     dist_weights=1,
         >>>     window_overlap=0,
+        >>>     use_centered_positives=1,
+        >>>     use_grid_positives=0,
         >>>     channels="blue|green|red|nir|swir16",
-        >>>     neg_to_pos_ratio=0, time_sampling='auto', diff_inputs=0, mode='fit', match_histograms=0,
+        >>>     neg_to_pos_ratio=0, time_sampling='auto', mode='fit',
         >>> )
         >>> item = self[0]
-        >>> canvas = self.draw_item(item)
-        >>> print(ub.repr2(item['target'], nl=-1))
+        >>> print(ub.repr2(self.summarize_item(item), nl=-1))
+        >>> #print(ub.repr2(item['target'], nl=-1))
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
         >>> canvas = self.draw_item(
-        >>>     item, max_channels=7, overlay_on_image=False)
+        >>>     item, max_channels=7, overlay_on_image=False, rescale=0)
         >>> kwplot.imshow(canvas)
         >>> import xdev
         >>> sample_indices = list(range(len(self)))
@@ -891,7 +915,6 @@ class KWCocoVideoDataset(data.Dataset):
         window_dims = (config['time_steps'], chip_h, chip_w)
         window_overlap = config['chip_overlap']
 
-        self.window_dims = window_dims
         self.config = config
         # TODO: maintain instance variables xor items in the config, not both.
         self.__dict__.update(self.config.to_dict())
@@ -956,6 +979,7 @@ class KWCocoVideoDataset(data.Dataset):
                 time_span=time_span,
                 window_space_scale=window_space_scale,
                 set_cover_algo=set_cover_algo,
+                workers='avail',  # could configure this
             )
             self.length = len(new_sample_grid['targets'])
         else:
@@ -974,6 +998,7 @@ class KWCocoVideoDataset(data.Dataset):
                 use_grid_positives=use_grid_positives,
                 window_space_scale=window_space_scale,
                 set_cover_algo=set_cover_algo,
+                workers='avail',   # could configure this
             )
 
             n_pos = len(new_sample_grid['positives_indexes'])
@@ -1130,64 +1155,64 @@ class KWCocoVideoDataset(data.Dataset):
             self.sensorchan = kwcoco.SensorChanSpec.coerce(','.join(list(ub.unique(expanded_input_sensorchan_streams)))).normalize()
 
         # Hack away sensors
-        print(f'self.sensorchan={self.sensorchan=!r}')
-        channels = ','.join(sorted(ub.unique([s.chans.spec for s in self.sensorchan.streams()])))
-        channels = channel_spec.ChannelSpec.coerce(channels).normalize()
-        self.channels = channels
+        # print(f'self.sensorchan={self.sensorchan=!r}')
+        # channels = ','.join(sorted(ub.unique([s.chans.spec for s in self.sensorchan.streams()])))
+        # channels = channel_spec.ChannelSpec.coerce(channels).normalize()
+        # self.channels = channels
 
-        NEW = 1
-        if NEW:
-            # TODO: Clean up this code.
-            _input_channels = []
-            _sample_channels = []
-            _input_sensorchans = []
-            _sample_sensorchans = []
-            for fused_sensorchan in self.sensorchan.streams():
-                sensor = fused_sensorchan.sensor
-                chans = fused_sensorchan.chans
-                _stream = chans.as_oset()
-                _sample_stream = _stream.copy()
-                special_bands = _stream & util_bands.SPECIALIZED_BANDS
-                if special_bands:
-                    raise NotImplementedError('This is broken ATM')
-                    # TODO: introspect which extra bands are needed for to compute
-                    # the sample, but hard code for now
-                    _sample_stream -= special_bands
-                    _sample_stream = _sample_stream | ub.oset('blue|green|red|nir|swir16|swir22'.split('|'))
-                    self.special_inputs[key] = special_bands
-                if self.diff_inputs:
-                    raise NotImplementedError('This is broken ATM')
-                    _stream = [s + p for p in _stream for s in ['', 'D']]
-                _input_sensorchans.append(sensor.spec + ':' + '|'.join(_stream))
-                _sample_sensorchans.append(sensor.spec + ':' + '|'.join(_sample_stream))
-                _input_channels.append('|'.join(_stream))
-                _sample_channels.append('|'.join(_sample_stream))
+        # NEW = 1
+        # if NEW:
+        # TODO: Clean up this code.
+        _input_channels = []
+        _sample_channels = []
+        _input_sensorchans = []
+        _sample_sensorchans = []
+        for fused_sensorchan in self.sensorchan.streams():
+            sensor = fused_sensorchan.sensor
+            chans = fused_sensorchan.chans
+            _stream = chans.as_oset()
+            _sample_stream = _stream.copy()
+            special_bands = _stream & util_bands.SPECIALIZED_BANDS
+            if special_bands:
+                raise NotImplementedError('This is broken ATM')
+                # TODO: introspect which extra bands are needed for to compute
+                # the sample, but hard code for now
+                _sample_stream -= special_bands
+                _sample_stream = _sample_stream | ub.oset('blue|green|red|nir|swir16|swir22'.split('|'))
+                self.special_inputs[key] = special_bands
+            if self.diff_inputs:
+                raise NotImplementedError('This is broken ATM')
+                _stream = [s + p for p in _stream for s in ['', 'D']]
+            _input_sensorchans.append(sensor.spec + ':' + '|'.join(_stream))
+            _sample_sensorchans.append(sensor.spec + ':' + '|'.join(_sample_stream))
+            _input_channels.append('|'.join(_stream))
+            _sample_channels.append('|'.join(_sample_stream))
 
-                #### New: input_sensorchan will replace input_channels
-                self.sample_sensorchan = kwcoco.SensorChanSpec(
-                    ','.join(_sample_sensorchans)
-                )
+            #### New: input_sensorchan will replace input_channels
+            self.sample_sensorchan = kwcoco.SensorChanSpec(
+                ','.join(_sample_sensorchans)
+            )
 
-                self.input_sensorchan = kwcoco.SensorChanSpec.coerce(
-                    ','.join(_input_sensorchans)
-                )
-        else:
-            _input_channels = []
-            _sample_channels = []
-            for key, stream in channels.parse().items():
-                _stream = stream.as_oset()
-                _sample_stream = _stream.copy()
-                special_bands = _stream & util_bands.SPECIALIZED_BANDS
-                if special_bands:
-                    # TODO: introspect which extra bands are needed for to compute
-                    # the sample, but hard code for now
-                    _sample_stream -= special_bands
-                    _sample_stream = _sample_stream | ub.oset('blue|green|red|nir|swir16|swir22'.split('|'))
-                    self.special_inputs[key] = special_bands
-                if self.diff_inputs:
-                    _stream = [s + p for p in _stream for s in ['', 'D']]
-                _input_channels.append('|'.join(_stream))
-                _sample_channels.append('|'.join(_sample_stream))
+            self.input_sensorchan = kwcoco.SensorChanSpec.coerce(
+                ','.join(_input_sensorchans)
+            )
+        # else:
+        #     _input_channels = []
+        #     _sample_channels = []
+        #     for key, stream in channels.parse().items():
+        #         _stream = stream.as_oset()
+        #         _sample_stream = _stream.copy()
+        #         special_bands = _stream & util_bands.SPECIALIZED_BANDS
+        #         if special_bands:
+        #             # TODO: introspect which extra bands are needed for to compute
+        #             # the sample, but hard code for now
+        #             _sample_stream -= special_bands
+        #             _sample_stream = _sample_stream | ub.oset('blue|green|red|nir|swir16|swir22'.split('|'))
+        #             self.special_inputs[key] = special_bands
+        #         if self.diff_inputs:
+        #             _stream = [s + p for p in _stream for s in ['', 'D']]
+        #         _input_channels.append('|'.join(_stream))
+        #         _sample_channels.append('|'.join(_sample_stream))
 
         # DEPRECATE channel only stuff. Use sensorchan everywhere
         # * sample_channels
@@ -1195,12 +1220,12 @@ class KWCocoVideoDataset(data.Dataset):
 
         # Some of the channels are computed on the fly.
         # This is the list of ones that are loaded from disk.
-        self.sample_channels = kwcoco.channel_spec.ChannelSpec(
-            ','.join(_sample_channels)
-        )
-        self.input_channels = kwcoco.channel_spec.ChannelSpec.coerce(
-            ','.join(_input_channels)
-        )
+        # self.sample_channels = kwcoco.channel_spec.ChannelSpec(
+        #     ','.join(_sample_channels)
+        # )
+        # self.input_channels = kwcoco.channel_spec.ChannelSpec.coerce(
+        #     ','.join(_input_channels)
+        # )
 
         # TODO:
         # We need to know all of the combinations of channels each data item
@@ -2191,6 +2216,7 @@ class KWCocoVideoDataset(data.Dataset):
             request=space_scale, data_gsd=vidspace_gsd)
         sample_scale = resolved_scale['scale']
         sample_gsd = resolved_scale['gsd']
+        target_['scale'] = sample_scale
 
         if isinstance(sample_scale, str) and sample_scale == 'native':
             target_.pop('scale')
@@ -2366,21 +2392,22 @@ class KWCocoVideoDataset(data.Dataset):
 
         # If true, we will force all spatial samples to be resized to the same
         # stackable input shape, otherwise we allow different resolutions for
-        # different frames / modes.
-        CONSTANT_SPATIAL_SIZE = False
-        if CONSTANT_SPATIAL_SIZE:
-            # input_dsize = ub.peek(gid_to_sample[final_gids[0]].values())['im'].shape[1:3][::-1]
-            # We should have already sampled at this size correctly
-            if self.window_dims is None:
-                # Do something better
-                input_dsize = ub.peek(gid_to_sample[final_gids[0]])['im'].shape[1:3][::-1]
-            else:
-                input_dsize = self.window_dims[-2:][::-1]
-                input_dsize = (
-                    int(np.ceil(input_dsize[0] * scale)),
-                    int(np.ceil(input_dsize[1] * scale)))
-        else:
-            input_dsize = None
+        # different frames / modes. This should not be needed if the samples are correct.
+        #
+        # CONSTANT_SPATIAL_SIZE = False
+        # if CONSTANT_SPATIAL_SIZE:
+        #     # input_dsize = ub.peek(gid_to_sample[final_gids[0]].values())['im'].shape[1:3][::-1]
+        #     # We should have already sampled at this size correctly
+        #     if self.window_dims is None:
+        #         # Do something better
+        #         input_dsize = ub.peek(gid_to_sample[final_gids[0]])['im'].shape[1:3][::-1]
+        #     else:
+        #         input_dsize = self.window_dims[-2:][::-1]
+        #         input_dsize = (
+        #             int(np.ceil(input_dsize[0] * scale)),
+        #             int(np.ceil(input_dsize[1] * scale)))
+        # else:
+        input_dsize = None
 
         # TODO: handle all augmentation before we construct any labels
         frame_items = []
@@ -2562,32 +2589,16 @@ class KWCocoVideoDataset(data.Dataset):
                         # New feature where we encode that we care much more about
                         # segmenting the inside of the object than the outside.
                         # Effectively boundaries become uncertain.
-                        """
-                        Example:
-                            import cv2
-                            import kwimage
-                            poly = kwimage.Polygon.random().scale(32)
-                            poly_mask = np.zeros((32, 32), dtype=np.uint8)
-                            poly_mask = poly.fill(poly_mask, value=1)
-                            dist = cv2.distanceTransform(poly_mask, cv2.DIST_L2, 3)
-                            ###
-                            import kwplot
-                            kwplot.autompl()
-                            kwplot.imshow(dist, cmap='viridis', doclf=1)
-                            poly.draw(fill=0, border=1)
-                        """
-                        import cv2
-                        poly_mask = np.zeros_like(frame_class_ohe[0])
-                        poly_mask = poly.fill(poly_mask, value=1)
-                        dist = cv2.distanceTransform(
-                            src=poly_mask, distanceType=cv2.DIST_L2, maskSize=3)
+                        shape = frame_class_ohe[0]
+                        dtype = frame_class_ohe[0].dtype
+                        dist, poly_mask = util_kwimage.polygon_distance_transform(
+                            poly, shape=shape, dtype=dtype)
                         max_dist = dist.max()
                         if max_dist > 0:
                             dist_weight = dist / max_dist
                             weight_mask = dist_weight + (1 - poly_mask)
                             frame_poly_weights = frame_poly_weights * weight_mask
 
-                    # import xdev; xdev.embed()
                 frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
 
                 # Postprocess (Dilate?) the truth map
@@ -2596,35 +2607,11 @@ class KWCocoVideoDataset(data.Dataset):
                     frame_cidxs[class_map > 0] = cidx
 
                 if self.upweight_centers:
-                    """
-                    import kwimage
-                    import kwplot
-                    kwplot.autompl()
-                    from watch.utils import util_kwimage
-                    space_shape = (380, 380)
-                    weights1 = util_kwimage.upweight_center_mask(space_shape)
-                    weights2 = kwimage.normalize(kwimage.gaussian_patch(space_shape))
-                    sigma3 = 4.8 * ((space_shape[0] - 1) * 0.5 - 1) + 0.8
-                    weights3 = kwimage.normalize(kwimage.gaussian_patch(space_shape, sigma=sigma3))
-
-                    min_spacetime_weight = 0.5
-
-                    weights1 = np.maximum(weights1, min_spacetime_weight)
-                    weights2 = np.maximum(weights2, min_spacetime_weight)
-                    weights3 = np.maximum(weights3, min_spacetime_weight)
-
-                    # Hack so color bar goes to 0
-                    weights3[0, 0] = 0
-                    weights2[0, 0] = 0
-                    weights1[0, 0] = 0
-
-                    kwplot.imshow(weights1, pnum=(1, 3, 1), title='current', cmap='viridis', data_colorbar=1)
-                    kwplot.imshow(weights2, pnum=(1, 3, 2), title='variant1', cmap='viridis', data_colorbar=1)
-                    kwplot.imshow(weights3, pnum=(1, 3, 3), title='variant2', cmap='viridis', data_colorbar=1)
-                    """
-                    sigma1 = 4.8 * ((space_shape[0] - 1) * 0.5 - 1) + 0.8
-                    sigma2 = 4.8 * ((space_shape[1] - 1) * 0.5 - 1) + 0.8
-                    space_weights = kwimage.normalize(kwimage.gaussian_patch(space_shape, sigma=(sigma1, sigma2)))
+                    sigma = (
+                        (4.8 * ((space_shape[1] - 1) * 0.5 - 1) + 0.8),
+                        (4.8 * ((space_shape[0] - 1) * 0.5 - 1) + 0.8),
+                    )
+                    space_weights = kwimage.normalize(kwimage.gaussian_patch(space_shape, sigma=sigma))
                     # space_weights = util_kwimage.upweight_center_mask(space_shape)
                     space_weights = np.maximum(space_weights, self.min_spacetime_weight)
                     frame_weights = space_weights * time_weights[time_idx] * frame_poly_weights
@@ -3104,7 +3091,7 @@ class KWCocoVideoDataset(data.Dataset):
     @profile
     def draw_item(self, item, item_output=None, combinable_extra=None,
                   max_channels=5, max_dim=224, norm_over_time=0,
-                  overlay_on_image=False, draw_weights=True, rescale=0):
+                  overlay_on_image=False, draw_weights=True, rescale='auto'):
         """
         Visualize an item produced by this DataSet.
 
@@ -3230,6 +3217,9 @@ class KWCocoVideoDataset(data.Dataset):
             import xdev
             globals().update(xdev.get_func_kwargs(KWCocoVideoDataset.draw_item))
         """
+        if rescale == 'auto':
+            rescale = self.config['space_scale'] != 'native'
+
         if item is None:
             # BIG RED X
             # h, w = vertical_stack[-1].shape[0:2]

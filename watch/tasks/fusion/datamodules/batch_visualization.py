@@ -334,9 +334,14 @@ class BatchVisualizationBuilder:
         if builder.draw_weights:
             # Normalize weights for visualization
             all_weight_overlays = []
+            weight_shapes = []
             for frame_meta in frame_metas:
                 frame_meta['weight_overlays'] = {}
                 for weight_key, weight_data in frame_meta['frame_weight'].items():
+
+                    if weight_data is not None:
+                        weight_shapes.append(weight_data.shape)
+
                     overlay_row = {
                         'weight_key': weight_key,
                         'raw': weight_data,
@@ -348,11 +353,14 @@ class BatchVisualizationBuilder:
                 for cell in group:
                     weight_data = cell['raw']
                     if weight_data is None:
-                        h = w = builder.max_dim
+                        if len(weight_shapes) == 0:
+                            h = w = builder.max_dim
+                        else:
+                            h, w = weight_shapes[0]
                         weight_overlay = kwimage.draw_text_on_image(
                             {'width': w, 'height': h}, 'X', org=(w // 2, h // 2),
                             valign='center', halign='center', fontScale=10,
-                            color='red')
+                            color='kw_red')
                         weight_overlay = kwimage.ensure_float01(weight_overlay)
                     else:
                         weight_overlay = kwimage.atleast_3channels(weight_data)

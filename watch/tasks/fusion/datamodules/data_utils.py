@@ -85,3 +85,26 @@ def resolve_scale_request(request=None, data_gsd=None):
         'data_gsd': data_gsd,
     }
     return resolved
+
+
+def polygon_distance_transform(poly, shape, dtype):
+    """
+    Example:
+        import cv2
+        import kwimage
+        poly = kwimage.Polygon.random().scale(32)
+        poly_mask = np.zeros((32, 32), dtype=np.uint8)
+        poly_mask = poly.fill(poly_mask, value=1)
+        dist = cv2.distanceTransform(poly_mask, cv2.DIST_L2, 3)
+        ###
+        import kwplot
+        kwplot.autompl()
+        kwplot.imshow(dist, cmap='viridis', doclf=1)
+        poly.draw(fill=0, border=1)
+    """
+    import cv2
+    poly_mask = np.zeros_like(frame_class_ohe[0])
+    poly_mask = poly.fill(poly_mask, value=1)
+    dist = cv2.distanceTransform(
+        src=poly_mask, distanceType=cv2.DIST_L2, maskSize=3)
+    return dist

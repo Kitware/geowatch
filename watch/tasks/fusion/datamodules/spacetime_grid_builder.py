@@ -468,10 +468,11 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     # Given an video
     all_vid_ids = list(dset.index.videos.keys())
 
+    from watch.utils.lightning_ext import util_globals
+    workers = util_globals.coerce_num_workers(workers)
     workers = min(len(all_vid_ids), workers)
     if workers == 1:
         workers = 0
-
     mode = 'process'
     jobs = ub.JobPool(mode=mode, max_workers=workers)
 
@@ -479,12 +480,14 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     # would help improve speed here. The dset itself is the biggest offender.
     verbose = 1 if workers == 0 else 0
     for video_id in ub.ProgIter(all_vid_ids, desc='Submit sample video regions'):
-        jobs.submit(_sample_single_video_spacetime_targets,
-                    dset, dset_hashid, video_id, winspace_time_dims, winspace_space_dims,
-                    window_dims, window_overlap, negative_classes, keepbound,
-                    exclude_sensors, affinity_type, update_rule, time_span,
-                    use_annot_info, use_grid_positives, use_centered_positives,
-                    window_space_scale, set_cover_algo, use_cache, verbose)
+        job = jobs.submit(
+            _sample_single_video_spacetime_targets, dset, dset_hashid,
+            video_id, winspace_time_dims, winspace_space_dims, window_dims,
+            window_overlap, negative_classes, keepbound, exclude_sensors,
+            affinity_type, update_rule, time_span, use_annot_info,
+            use_grid_positives, use_centered_positives, window_space_scale,
+            set_cover_algo, use_cache, verbose)
+        job.video_id = video_id
 
     targets = []
     positive_idxs = []
@@ -493,6 +496,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     vidid_to_valid_gids = {}
     for job in jobs.as_completed(desc='Collect region sample grids',
                                  progkw=dict(verbose=3)):
+        video_id = job.video_id
         _cached, time_sampler, video_gids = job.result()
         offset = len(targets)
         targets.extend(_cached['video_targets'])

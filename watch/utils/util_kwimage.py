@@ -784,3 +784,94 @@ def connected_components(image, connectivity=8, ltype=np.int32,
         info['label_centroids'] = kwimage.Points(xy=centroids)
 
     return labels, info
+
+
+def polygon_distance_transform(poly, shape, dtype=np.uint8):
+    """
+    The API needs work, but I think the idea could be useful
+
+    Example:
+        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> import cv2
+        >>> import kwimage
+        >>> poly = kwimage.Polygon.random().scale(32)
+        >>> dtype = np.uint8
+        >>> shape = (32, 32)
+        >>> dist, poly_mask = polygon_distance_transform(poly, shape, dtype)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(dist, cmap='viridis', doclf=1)
+        >>> poly.draw(fill=0, border=1)
+    """
+    import cv2
+    poly_mask = np.zeros(shape, dtype=dtype)
+    poly_mask = poly.fill(poly_mask, value=1)
+    dist = cv2.distanceTransform(
+        src=poly_mask, distanceType=cv2.DIST_L2, maskSize=3)
+    return dist, poly_mask
+
+
+def devcheck_frame_poly_weights(poly, shape, dtype=np.uint8):
+    """
+    import kwimage
+    import kwplot
+    kwplot.autompl()
+    from watch.utils import util_kwimage
+    space_shape = (380, 380)
+    weights1 = util_kwimage.upweight_center_mask(space_shape)
+    weights2 = kwimage.normalize(kwimage.gaussian_patch(space_shape))
+    sigma3 = 4.8 * ((space_shape[0] - 1) * 0.5 - 1) + 0.8
+    weights3 = kwimage.normalize(kwimage.gaussian_patch(space_shape, sigma=sigma3))
+
+    min_spacetime_weight = 0.5
+
+    weights1 = np.maximum(weights1, min_spacetime_weight)
+    weights2 = np.maximum(weights2, min_spacetime_weight)
+    weights3 = np.maximum(weights3, min_spacetime_weight)
+
+    # Hack so color bar goes to 0
+    weights3[0, 0] = 0
+    weights2[0, 0] = 0
+    weights1[0, 0] = 0
+
+    kwplot.imshow(weights1, pnum=(1, 3, 1), title='current', cmap='viridis', data_colorbar=1)
+    kwplot.imshow(weights2, pnum=(1, 3, 2), title='variant1', cmap='viridis', data_colorbar=1)
+    kwplot.imshow(weights3, pnum=(1, 3, 3), title='variant2', cmap='viridis', data_colorbar=1)
+    """
+    import kwimage
+    space_shape = (128, 128)
+    space_dsize = space_shape[::-1]
+    polys = [
+        kwimage.Polygon.random().scale(space_dsize).scale(0.25, about='center'),
+        kwimage.Polygon.random().scale(space_dsize).scale(0.25, about='center'),
+        kwimage.Polygon.random().scale(space_dsize).scale(0.25, about='center'),
+        kwimage.Polygon.random().scale(space_dsize).scale(0.25, about='center'),
+    ]
+
+    frame_poly_weights_v1 = np.ones(space_shape, dtype=np.float32)
+    frame_poly_weights_v2 = np.zeros(space_shape, dtype=np.float32)
+    for poly in polys:
+        dist, poly_mask = polygon_distance_transform(poly, space_shape)
+        max_dist = dist.max()
+        if max_dist > 0:
+            dist_weight = dist / max_dist
+            weight_mask = dist_weight + (1 - poly_mask)
+            frame_poly_weights_v1 = frame_poly_weights_v1 * weight_mask
+            frame_poly_weights_v2 = np.maximum(frame_poly_weights_v2, dist_weight)
+
+    sigma = (
+        (4.8 * ((space_shape[1] - 1) * 0.5 - 1) + 0.8),
+        (4.8 * ((space_shape[0] - 1) * 0.5 - 1) + 0.8),
+    )
+    min_spacetime_weight = 0.5
+    frame_poly_weights = frame_poly_weights_v2
+    frame_poly_weights = np.maximum(frame_poly_weights, min_spacetime_weight)
+    space_weights = kwimage.normalize(kwimage.gaussian_patch(space_shape, sigma=sigma))
+    import kwplot
+    kwplot.autompl()
+    kwplot.imshow(frame_poly_weights_v1, pnum=(1, 3, 1))
+    kwplot.imshow(frame_poly_weights, pnum=(1, 3, 2))
+    kwplot.imshow(np.maximum(frame_poly_weights, space_weights), pnum=(1, 3, 3))
