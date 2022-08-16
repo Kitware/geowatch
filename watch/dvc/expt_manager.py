@@ -496,11 +496,26 @@ class ExperimentState(ub.NiceRepr):
             row['is_packaged'] = True
             row.update(_attrs)
 
-        # Hack: making name assumptions
         for row in rows:
             fname = row['checkpoint']
+
+            if row.get('spkg_path', None) is None:
+                # HACK!!!
+                row['model'] = None
+            else:
+                row['model'] = ub.Path(row['spkg_path']).name
+
+            # Hack: making name assumptions
             info = checkpoint_filepath_info(fname)
             row.update(info)
+
+            # Where would we expect to put this file?
+            kw = ub.udict(row).subdict({'expt', 'model'})
+            kw['expt_dvc_dpath'] = self.expt_dvc_dpath
+            kw['dataset_code'] = self.dataset_code
+            row['pkg_path'] = ub.Path(self.templates['pkg'].format(**kw))
+            row['is_copied'] = row['pkg_path'].exists()
+
         return rows
 
     # TODO: add another variant for non-versioned prediction files
@@ -597,9 +612,9 @@ class ExperimentState(ub.NiceRepr):
         versioned_df = self.versioned_table()
 
         if len(staging_df) and len(versioned_df):
-            import xdev
-            with xdev.embed_on_exception_context:
-                spkg_was_copied = kwarray.isect_flags(staging_df['model'], versioned_df['model'])
+            # import xdev
+            # with xdev.embed_on_exception_context:
+            spkg_was_copied = kwarray.isect_flags(staging_df['model'], versioned_df['model'])
             staging_df['is_copied'] = spkg_was_copied
             num_need_repackage = (~staging_df['is_packaged']).sum()
             print(f'num_need_repackage={num_need_repackage}')
