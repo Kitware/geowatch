@@ -403,7 +403,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         # method_var_dict['input_channels'] = datamodule.input_channels
         method_var_dict['input_sensorchan'] = datamodule.input_sensorchan
 
-        other_model = getattr(initializer, 'other_model')
+        other_model = getattr(initializer, 'other_model', None)
         if args.normalize_inputs == 'transfer':
             assert other_model is not None
             method_var_dict['dataset_stats'] = other_model.dataset_stats

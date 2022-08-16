@@ -55,9 +55,11 @@ class TextLogger(pl.callbacks.Callback):
 
     def on_fit_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log.info('on_fit_start')
+        self._log.info(f'trainer.log_dir = {ub.Path(trainer.log_dir).shrinkuser()}')
 
     def on_fit_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log.info('on_fit_end')
+        self._log.info(f'trainer.log_dir = {ub.Path(trainer.log_dir).shrinkuser()}')
 
     if PL_VERSION < Version('1.6'):
         def on_load_checkpoint(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', callback_state: Dict[str, Any]) -> None:

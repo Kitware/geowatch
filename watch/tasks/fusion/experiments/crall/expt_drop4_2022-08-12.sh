@@ -355,11 +355,12 @@ python -m watch.tasks.fusion.fit \
     --devices "0," \
     --num_workers=4 \
     --dist_weights=0 \
-    --data_space_scale="native" \
+    --space_scale="native" \
     --window_space_scale="10GSD" \
     --window_space_dims=256,256 \
     --time_steps=11 \
     --batch_size=1 \
     --accumulate_grad_batches=1 \
     --max_epochs=160 \
-    --patience=160
+    --patience=160 \
+    --decouple_resolution=0
