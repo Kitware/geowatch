@@ -459,7 +459,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             print('self.test_kwcoco = {!r}'.format(self.test_kwcoco))
             print('self.time_steps = {!r}'.format(self.time_steps))
             print('self.chip_dims = {!r}'.format(self.chip_dims))
-            print('self.sensorchan = {!r}'.format(self.sensorchan))
+            print('self.input_sensorchan = {!r}'.format(self.input_sensorchan))
 
     def setup(self, stage):
         import watch
@@ -979,7 +979,7 @@ class KWCocoVideoDataset(data.Dataset):
                 time_span=time_span,
                 window_space_scale=window_space_scale,
                 set_cover_algo=set_cover_algo,
-                workers='avail',  # could configure this
+                # workers='max(avail, 8)',  # could configure this
             )
             self.length = len(new_sample_grid['targets'])
         else:
@@ -998,7 +998,7 @@ class KWCocoVideoDataset(data.Dataset):
                 use_grid_positives=use_grid_positives,
                 window_space_scale=window_space_scale,
                 set_cover_algo=set_cover_algo,
-                workers='avail',   # could configure this
+                # workers='max(avail, 8)',   # could configure this
             )
 
             n_pos = len(new_sample_grid['positives_indexes'])
