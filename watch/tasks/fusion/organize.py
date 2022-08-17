@@ -126,6 +126,8 @@ def _register_hashid_reverse_lookup(key, data, type='global'):
     Make a lookup table of hashes we've made, so we can refer to what the heck
     those directory names mean!
 
+    /home/joncrall/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/pred/Drop4_BAS_Continue_10GSD_BGR_V003/Drop4_BAS_Continue_10GSD_BGR_V003_epoch=93-step=48128.pt.pt/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_vali.kwcoco/predcfg_1c530993/pred.kwcoco.json
+
     Example:
         from watch.tasks.fusion.organize import *  # NOQA
         from watch.tasks.fusion.organize import _register_hashid_reverse_lookup

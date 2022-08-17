@@ -39,7 +39,7 @@ EXPT_DVC_DPATH=$(smartwatch_dvc --tags=phase2_expt)
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
-MODEL_NAME_PAT="Drop4_BAS_Retrain_V001_epoch=8*"
+MODEL_NAME_PAT="Drop4_BAS_Continue_10GSD_BGR_V003_epoch=5-step=3072-v1*"
 
 python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
         --devices="0,1" \
@@ -49,6 +49,8 @@ python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
         --backend=serial \
         --enable_pred=1 \
         --enable_eval=1 \
+        --enable_track=1 \
+        --enable_iarpa_eval=1 \
         --draw_heatmaps=False \
         --run=0
 
@@ -378,7 +380,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     pred_cfg_basis['tta_time'] = ensure_iterable(config['tta_time'])
     pred_cfg_basis['tta_fliprot'] = ensure_iterable(config['tta_fliprot'])
     pred_cfg_basis['chip_overlap'] = ensure_iterable(config['chip_overlap'])
-    pred_cfg_basis['set_cover_algo'] = [None, 'approx']
+    pred_cfg_basis['set_cover_algo'] = ensure_iterable(config['set_cover_algo'])
 
     HACK_HACKHACK = 0
 
