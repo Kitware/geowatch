@@ -45,7 +45,7 @@ def grab_sentinel2_product(index=0, overwrite=False):
     url = urls[index]
 
     # By default cache to the $XDG_CACHE_HOME/watch
-    dset_dpath = ub.ensure_app_cache_dir('watch')
+    dset_dpath = ub.Path.appdir('watch/demo/grab_s2').ensuredir()
 
     # Cache the scene using the same path used by google cloud storage
     tile_hierarchy = os.path.sep.join(url.split('tiles/')[1].split('/')[:3])

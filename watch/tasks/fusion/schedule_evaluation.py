@@ -33,6 +33,26 @@ python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
         --enable_eval=redo \
         --draw_heatmaps=False
 
+
+
+EXPT_DVC_DPATH=$(smartwatch_dvc --tags=phase2_expt)
+DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+MODEL_NAME_PAT="Drop4_BAS_Retrain_V001_epoch=8*"
+
+python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+        --devices="0,1" \
+        --model_globstr="$EXPT_DVC_DPATH/models/fusion/$DATASET_CODE/packages/*/$MODEL_NAME_PAT.pt" \
+        --test_dataset="$VALI_FPATH" \
+        --skip_existing=0 \
+        --backend=serial \
+        --enable_pred=1 \
+        --enable_eval=1 \
+        --draw_heatmaps=False \
+        --run=0
+
+
 """
 import ubelt as ub
 import scriptconfig as scfg
@@ -402,7 +422,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 if other_dset_pred_dpath.exists():
                     for other_pred_fpath in other_dset_pred_dpath.glob('*/pred.kwcoco.json'):
                         has_any_other = 1
-                        eval_dpath = ub.Path(*other_pred_fpath.parts[:-6], 'eval', *other_pred_fpath.parts[-5:-1], 'eval')
+                        eval_dpath = ub.Path(
+                            *other_pred_fpath.parts[:-6],
+                            'eval', *other_pred_fpath.parts[-5:-1], 'eval')
                         other_info = {
                             'package_fpath': package_fpath,
                             'pred_dataset': other_pred_fpath,

@@ -540,7 +540,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
         >>> from watch.tasks.fusion.fit import *  # NOQA
         >>> args = None
         >>> cmdline = False
-        >>> workdir = ub.ensure_app_cache_dir('watch', 'tests', 'fusion', 'fit')
+        >>> workdir = ub.Path.appdir('watch', 'tests', 'fusion', 'fit').ensuredir()
         >>> kwargs = {
         ...     'train_dataset': 'special:vidshapes2-multispectral',
         ...     'vali_dataset': 'special:vidshapes1-multispectral',
