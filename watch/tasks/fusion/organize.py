@@ -181,7 +181,6 @@ def _register_hashid_reverse_lookup(key, data, type='global'):
         if info['status'] != 'exists':
             # Convinience
             if FULL_TEXT:
-                full_shelf = dict(shelf)
                 full_text = ub.repr2(full_shelf, nl=3)
                 text_fpath.write_text(full_text)
 
