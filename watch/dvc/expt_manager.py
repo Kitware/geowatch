@@ -15,7 +15,7 @@ Example:
     python -m watch.dvc.expt_manager "pull packages"
 
     # Run evals on testing machine
-    python -m watch.dvc.expt_manager "schedule evals"
+    python -m watch.dvc.expt_manager "evaluate"
 
     # On testing machine
     python -m watch.dvc.expt_manager "push evals"
@@ -132,7 +132,7 @@ def main(cmdline=True, **kwargs):
     config = ExptManagerConfig(cmdline=cmdline, data=kwargs)
     command = config['command']
     dolist = 0
-    doschedule = 0
+    doevaluation = 0
     if command is not None:
         config['push'] = False
         config['pull'] = False
@@ -151,8 +151,8 @@ def main(cmdline=True, **kwargs):
             config['evals'] = True
         if 'packages' in command:
             config['packages'] = True
-        if 'schedule' in command:
-            doschedule = 1
+        if 'evaluate' in command:
+            doevaluation = 1
 
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
@@ -164,7 +164,7 @@ def main(cmdline=True, **kwargs):
         raise Exception('must be defualt for now')
 
     if config['expt_dvc_dpath'] == 'auto':
-        config['expt_dvc_dpath'] = watch.find_dvc_dpath(tags='phase2_expt')
+        config['expt_dvc_dpath'] = watch.find_dvc_dpath(tags='phase2_expt', envvar='EXPT_DVC_DPATH')
     expt_dvc_dpath = config['expt_dvc_dpath']
     hdd_manager = DVCExptManager(
         expt_dvc_dpath, dvc_remote=dvc_remote, dataset_codes=dataset_codes)
@@ -174,7 +174,7 @@ def main(cmdline=True, **kwargs):
     if dolist:
         hdd_manager.summarize()
 
-    if doschedule:
+    if doevaluation:
         import xdev
         xdev.embed()
 
@@ -773,7 +773,7 @@ class ExperimentState(ub.NiceRepr):
             dvc pull -r aws --recursive models/fusion/{self.dataset_code}
 
             python -m watch.dvc.expt_manager "pull packages" --dvc_dpath=$DVC_EXPT_DPATH
-            python -m watch.dvc.expt_manager "schedule evals"
+            python -m watch.dvc.expt_manager "evaluate" --dvc_dpath=$DVC_EXPT_DPATH
 
             # setup right params
             # python -m tasks.fusion.schedule_inference schedule_evaluation --gpus=auto --run=True
