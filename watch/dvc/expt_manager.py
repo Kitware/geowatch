@@ -189,17 +189,24 @@ def main(cmdline=True, **kwargs):
         manager.summarize()
 
     if doevaluation:
-        import xdev
-        xdev.embed()
-        from watch.tasks.fusion.schedule_evaluation import schedule_evaluation
-        eval_kw = {
-            'test_dataset': None,
-            'model_globstr': None,
-            'run': None,
-            # 'chip_overlap': 0.3,
-        }
-        table = manager.versioned_table()
-        schedule_evaluation(cmdline=False)
+        # import xdev
+        # xdev.embed()
+        self = manager
+        for state in self.states:
+            from watch.tasks.fusion.schedule_evaluation import schedule_evaluation
+            model_globstr = state.path_patterns['pkg']
+            test_kwcoco_fpath = state.data_dvc_dpath / state.dataset_code / 'data_vali.kwcoco.json'
+            # TODO: how do we make scriptconfig do modal CLIs easilly?
+            # need to configure
+            eval_kw = {
+                'test_dataset': test_kwcoco_fpath,
+                'model_globstr': model_globstr,
+                # 'run': None,
+                'run': 1,
+                'devices': [0, 1],
+            }
+            # table = manager.versioned_table()
+            schedule_evaluation(cmdline=False, **eval_kw)
 
 
 class DVCExptManager(ub.NiceRepr):
