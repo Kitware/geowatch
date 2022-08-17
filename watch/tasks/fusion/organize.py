@@ -62,8 +62,11 @@ def suggest_paths(test_dataset=None, package_fpath=None, workdir=None,
 
         pred_cfg_dname = 'predcfg_' + pred_cfgstr
 
+        # TODO: This should be handled by watch.dvc.expt_manager
+
         package_fpath = ub.Path(package_fpath)
-        pred_dname = 'pred_' + package_fpath.stem
+        # pred_dname = 'pred_' + package_fpath.stem
+        pred_dname = package_fpath.name
 
         if sidecar2:
             # Make assumptions about directory structure

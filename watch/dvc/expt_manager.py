@@ -6,6 +6,11 @@ The original proof of concept is in
 ~/code/watch/watch/tasks/fusion/dvc_sync_manager.py
 
 Example:
+
+    export DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
+    export DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+    cd $DVC_EXPT_DPATH
+
     python -m watch.dvc.expt_manager "list"
 
     # On training machine
@@ -13,6 +18,7 @@ Example:
 
     # On testing machine
     python -m watch.dvc.expt_manager "pull packages"
+    python -m watch.dvc.expt_manager "list"
 
     # Run evals on testing machine
     python -m watch.dvc.expt_manager "evaluate"
@@ -100,7 +106,8 @@ class ExptManagerConfig(scfg.Config):
 
         'dvc_remote': scfg.Value('aws', help='dvc remote to sync to/from'),
 
-        'expt_dvc_dpath': scfg.Value('auto', help='path to the experiment dpath'),
+        'expt_dvc_dpath': scfg.Value('auto', help='path to the experiment dvc dpath'),
+        'data_dvc_dpath': scfg.Value('auto', help='path to the data dvc dpath'),
 
         'dataset_codes': scfg.Value(None, help=ub.paragraph(
             '''
@@ -165,18 +172,34 @@ def main(cmdline=True, **kwargs):
 
     if config['expt_dvc_dpath'] == 'auto':
         config['expt_dvc_dpath'] = watch.find_dvc_dpath(tags='phase2_expt', envvar='EXPT_DVC_DPATH')
+
+    if config['data_dvc_dpath'] == 'auto':
+        config['data_dvc_dpath'] = watch.find_dvc_dpath(tags='phase2_data', envvar='DATA_DVC_DPATH')
+
     expt_dvc_dpath = config['expt_dvc_dpath']
-    hdd_manager = DVCExptManager(
-        expt_dvc_dpath, dvc_remote=dvc_remote, dataset_codes=dataset_codes)
-    synckw = ub.compatible(config, hdd_manager.sync)
-    hdd_manager.sync(**synckw)
+    data_dvc_dpath = config['data_dvc_dpath']
+
+    manager = DVCExptManager(
+        expt_dvc_dpath, dvc_remote=dvc_remote, dataset_codes=dataset_codes,
+        data_dvc_dpath=data_dvc_dpath)
+    synckw = ub.compatible(config, manager.sync)
+    manager.sync(**synckw)
 
     if dolist:
-        hdd_manager.summarize()
+        manager.summarize()
 
     if doevaluation:
         import xdev
         xdev.embed()
+        from watch.tasks.fusion.schedule_evaluation import schedule_evaluation
+        eval_kw = {
+            'test_dataset': None,
+            'model_globstr': None,
+            'run': None,
+            # 'chip_overlap': 0.3,
+        }
+        table = manager.versioned_table()
+        schedule_evaluation(cmdline=False)
 
 
 class DVCExptManager(ub.NiceRepr):
@@ -214,8 +237,9 @@ class DVCExptManager(ub.NiceRepr):
     def __nice__(self):
         return str(self.dvc)
 
-    def __init__(self, expt_dvc_dpath, dvc_remote='aws', dataset_codes=None):
+    def __init__(self, expt_dvc_dpath, dvc_remote='aws', dataset_codes=None, data_dvc_dpath=None):
         self.expt_dvc_dpath = expt_dvc_dpath
+        self.data_dvc_dpath = data_dvc_dpath
         self.dvc_remote = dvc_remote
         self.dataset_codes = dataset_codes
         self.dvc = simple_dvc.SimpleDVC.coerce(expt_dvc_dpath, remote=dvc_remote)
@@ -242,7 +266,8 @@ class DVCExptManager(ub.NiceRepr):
         states = []
         for dataset_code in self.dataset_codes:
             state = ExperimentState(
-                self.expt_dvc_dpath, dataset_code, dvc_remote=self.dvc_remote)
+                self.expt_dvc_dpath, dataset_code, dvc_remote=self.dvc_remote,
+                data_dvc_dpath=self.data_dvc_dpath)
             states.append(state)
         self.states = states
 
@@ -336,16 +361,18 @@ class ExperimentState(ub.NiceRepr):
         >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
         >>> dataset_code = 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC'
-        >>> self = ExperimentState(expt_dvc_dpath, dataset_code, data_dvc_dpath)
+        >>> dvc_remote = 'aws'
+        >>> self = ExperimentState(expt_dvc_dpath, dataset_code, dvc_remote, data_dvc_dpath)
         >>> self.summarize()
 
     Ignore:
         table[table.type == 'pkg']['model'].unique()
     """
 
-    def __init__(self, expt_dvc_dpath, dataset_code, dvc_remote=None):
-
+    def __init__(self, expt_dvc_dpath, dataset_code, dvc_remote=None,
+                 data_dvc_dpath=None):
         self.expt_dvc_dpath = expt_dvc_dpath
+        self.data_dvc_dpath = data_dvc_dpath
         self.dataset_code = dataset_code
         self.dvc_remote = dvc_remote
         self.storage_dpath = self.expt_dvc_dpath / 'models/fusion' / dataset_code
@@ -773,6 +800,7 @@ class ExperimentState(ub.NiceRepr):
             dvc pull -r aws --recursive models/fusion/{self.dataset_code}
 
             python -m watch.dvc.expt_manager "pull packages" --dvc_dpath=$DVC_EXPT_DPATH
+            python -m watch.dvc.expt_manager "list packages" --dvc_dpath=$DVC_EXPT_DPATH
             python -m watch.dvc.expt_manager "evaluate" --dvc_dpath=$DVC_EXPT_DPATH
 
             # setup right params
