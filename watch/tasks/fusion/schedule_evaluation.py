@@ -553,6 +553,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     --tta_fliprot={tta_fliprot} \
                     --set_cover_algo={set_cover_algo} \
                     --devices=0, \
+                    --accelerator=gpu \
                     --batch_size=1
                 ''').format(**suggestions, **predictkw)
 
