@@ -322,8 +322,6 @@ class DVCExptManager(ub.NiceRepr):
         # self.summarize()
         print(f'self.expt_dvc_dpath={self.expt_dvc_dpath}')
         print(len(eval_df))
-        # import xdev
-        # xdev.embed()
         eval_df = eval_df[~eval_df['is_broken']]
         pull_rows = eval_df[eval_df.needs_pull]
         pull_fpaths = pull_rows['dvc'].tolist()
@@ -908,6 +906,7 @@ if __name__ == '__main__':
     """
     CommandLine:
         python ~/code/watch/watch/dvc/expt_manager.py "pull all"
+        python -m watch.dvc.expt_manager "list"
         python -m watch.dvc.expt_manager "push all"
         python -m watch.dvc.expt_manager "pull evals"
         python -m watch.dvc.expt_manager "pull all"

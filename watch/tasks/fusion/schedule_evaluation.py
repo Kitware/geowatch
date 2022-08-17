@@ -827,12 +827,6 @@ def updates_dvc_measures():
     measures_fpaths = list(dpath.glob('*/*/*/eval/curves/measures2.json'))
 
     is_symlink = ub.memoize(os.path.islink)
-    # is_symlink = functools.cache(os.path.islink)
-    # import timerit
-    # ti = timerit.Timerit(100, bestof=10, verbose=2)
-    # for timer in ti.reset('time'):
-    #     with timer:
-    #         is_symlink(fpath))
 
     def check_if_contained_in_symlink(fpath, dvc_dpath):
         rel_fpath = fpath.relative_to(dvc_dpath)
@@ -936,10 +930,6 @@ if __name__ == '__main__':
 
 
         python ~/code/watch/watch/tasks/fusion/schedule_evaluation.py schedule_evaluation
-
-        python ~/code/watch/watch/tasks/fusion/organize.py make_nice_dirs
-        python ~/code/watch/watch/tasks/fusion/organize.py make_eval_symlinks
-        python ~/code/watch/watch/tasks/fusion/organize.py make_pred_symlinks
         python ~/code/watch/watch/tasks/fusion/schedule_evaluation.py
 
 
