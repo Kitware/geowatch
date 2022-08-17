@@ -652,6 +652,9 @@ def _sample_single_video_spacetime_targets(
             qtree, tid_to_infos = _build_vidspace_track_qtree(
                 dset, video_gids, negative_classes, vidspace_video_width,
                 vidspace_video_height, get_warp_vidspace_from_imgspace)
+        else:
+            qtree = None
+            tid_to_infos = None
 
         # Do a spatial sliding window (in video space) and handle all the
         # temporal stuff for that window in the internal function.
