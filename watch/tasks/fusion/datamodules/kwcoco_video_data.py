@@ -631,9 +631,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         parser = parent_parser.add_argument_group('kwcoco_video_data')
         config = KWCocoVideoDataModuleConfig(cmdline=0)
         config.argparse(parser)
-        print('parser._actions = {}'.format(ub.repr2(parser.__dict__['_actions'], nl=1)))
-        print('parser._group_actions = {}'.format(ub.repr2(parser.__dict__['_group_actions'], nl=1)))
-        print('parser._option_string_actions = {}'.format(ub.repr2(parser.__dict__['_option_string_actions'], nl=1)))
         return parent_parser
 
     @classmethod

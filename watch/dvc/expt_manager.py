@@ -7,9 +7,21 @@ The original proof of concept is in
 
 Example:
     python -m watch.dvc.expt_manager "list"
-    python -m watch.dvc.expt_manager "pull evals"
+
+    # On training machine
+    python -m watch.dvc.expt_manager "push packages"
+
+    # On testing machine
+    python -m watch.dvc.expt_manager "pull packages"
+
+    # Run evals on testing machine
+    python -m watch.dvc.expt_manager "schedule eval"
+
+    # On testing machine
     python -m watch.dvc.expt_manager "push evals"
-    python -m watch.dvc.expt_manager "push packages evals"
+
+    # On analysis machine
+    python -m watch.dvc.expt_manager "pull evals"
 """
 import warnings
 import parse
@@ -118,6 +130,7 @@ def main(cmdline=True, **kwargs):
     config = ExptManagerConfig(cmdline=cmdline, data=kwargs)
     command = config['command']
     dolist = 0
+    doschedule = 0
     if command is not None:
         config['push'] = False
         config['pull'] = False
@@ -136,6 +149,8 @@ def main(cmdline=True, **kwargs):
             config['evals'] = True
         if 'packages' in command:
             config['packages'] = True
+        if 'schedule' in command:
+            doschedule = 1
 
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
@@ -154,6 +169,10 @@ def main(cmdline=True, **kwargs):
 
     if dolist:
         hdd_manager.summarize()
+
+    if doschedule:
+        import xdev
+        xdev.embed()
 
 
 class DVCExptManager(ub.NiceRepr):
@@ -282,27 +301,13 @@ class DVCExptManager(ub.NiceRepr):
         self.dvc.pull(pull_fpaths)
 
     def push_packages(self):
+        """
+        TODO: break this up into smaller components.
+        """
         # from watch.tasks.fusion import repackage
         # mode = 'commit'
         for state in self.states:
             state.push_packages()
-            # # TODO: use the "state" staging table instead
-            # if 0:
-            #     import kwarray
-            #     state_df = state.versioned_table()
-            #     stage_df = state.staging_table()
-            #     spkg_was_copied = kwarray.isect_flags(stage_df['model'], state_df['model'])
-            #     stage_df['spkg_was_copied'] = spkg_was_copied
-            #     num_need_repackage = (~stage_df['is_packaged']).sum()
-            #     print(f'num_need_repackage={num_need_repackage}')
-            # else:
-            #     dataset_code = state.dataset_code
-            #     print(f'dataset_code={dataset_code}')
-            #     train_dpath = state.training_dpath / '*/*' / state.dataset_code / 'runs'
-            #     storage_dpath = state.storage_dpath / 'packages'
-            #     repackage.gather_checkpoints(
-            #         expt_dvc_dpath=state.expt_dvc_dpath, storage_dpath=storage_dpath,
-            #         train_dpath=train_dpath, dvc_remote=self.dvc_remote, mode=mode)
 
     def sync(self, push=True, pull=True, evals=True, packages=True):
         if push:
@@ -766,6 +771,20 @@ class ExperimentState(ub.NiceRepr):
             # setup right params
             # python -m tasks.fusion.schedule_inference schedule_evaluation --gpus=auto --run=True
             """))
+
+    def schedule_evaluation():
+        # python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+        #         --devices="0,1" \
+        #         --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/$EXPT_MODEL_GLOBNAME/*.pt" \
+        #         --test_dataset="$VALI_FPATH" \
+        #         --enable_pred=1 \
+        #         --enable_eval=1 \
+        #         --enable_actclf=1 \
+        #         --enable_actclf_eval=1 \
+        #         --draw_heatmaps=0 \
+        #         --without_alternatives \
+        #         --skip_existing=True --backend=slurm --run=0
+        pass
 
 
 def summarize_versioned_df(versioned_df):
