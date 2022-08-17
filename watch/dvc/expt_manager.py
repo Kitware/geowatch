@@ -15,7 +15,7 @@ Example:
     python -m watch.dvc.expt_manager "pull packages"
 
     # Run evals on testing machine
-    python -m watch.dvc.expt_manager "schedule eval"
+    python -m watch.dvc.expt_manager "schedule evals"
 
     # On testing machine
     python -m watch.dvc.expt_manager "push evals"
@@ -100,6 +100,8 @@ class ExptManagerConfig(scfg.Config):
 
         'dvc_remote': scfg.Value('aws', help='dvc remote to sync to/from'),
 
+        'expt_dvc_dpath': scfg.Value('auto', help='path to the experiment dpath'),
+
         'dataset_codes': scfg.Value(None, help=ub.paragraph(
             '''
             if unset, will use the defaults, otherwise this should be a list of
@@ -161,7 +163,9 @@ def main(cmdline=True, **kwargs):
     else:
         raise Exception('must be defualt for now')
 
-    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
+    if config['expt_dvc_dpath'] == 'auto':
+        config['expt_dvc_dpath'] = watch.find_dvc_dpath(tags='phase2_expt')
+    expt_dvc_dpath = config['expt_dvc_dpath']
     hdd_manager = DVCExptManager(
         expt_dvc_dpath, dvc_remote=dvc_remote, dataset_codes=dataset_codes)
     synckw = ub.compatible(config, hdd_manager.sync)
@@ -768,8 +772,12 @@ class ExperimentState(ub.NiceRepr):
             git pull
             dvc pull -r aws --recursive models/fusion/{self.dataset_code}
 
+            python -m watch.dvc.expt_manager "pull packages" --dvc_dpath=$DVC_EXPT_DPATH
+            python -m watch.dvc.expt_manager "schedule evals"
+
             # setup right params
             # python -m tasks.fusion.schedule_inference schedule_evaluation --gpus=auto --run=True
+
             """))
 
     def schedule_evaluation():
