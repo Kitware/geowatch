@@ -63,6 +63,10 @@ def coerce_devices(gpus):
             else:
                 gpus = int(parts[1])
         else:
+            try:
+                gpus = [int(p.strip()) for p in gpus.split(',') if p.strip()]
+            except Exception:
+                pass
             needs_gpu_coerce = True
 
     if auto_select_gpus:

@@ -368,7 +368,7 @@ def predict(cmdline=False, **kwargs):
     test_torch_dataset.inference_only = True
     test_dataloader = datamodule.test_dataloader()
 
-    T, H, W = test_torch_dataset.window_dims
+    # T, H, W = test_torch_dataset.window_dims
 
     # Create the results dataset as a copy of the test CocoDataset
     result_dataset: kwcoco.CocoDataset = test_coco_dataset.copy()

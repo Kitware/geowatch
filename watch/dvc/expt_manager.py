@@ -202,11 +202,12 @@ def main(cmdline=True, **kwargs):
                 'test_dataset': test_kwcoco_fpath,
                 'model_globstr': model_globstr,
                 # 'run': None,
-                'run': 1,
+                # 'run': 1,
                 'devices': [0, 1],
             }
             # table = manager.versioned_table()
-            schedule_evaluation(cmdline=False, **eval_kw)
+            # schedule_evaluation(cmdline=False, **eval_kw)
+            schedule_evaluation(cmdline=1, **eval_kw)
 
 
 class DVCExptManager(ub.NiceRepr):
