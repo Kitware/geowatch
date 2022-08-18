@@ -110,7 +110,7 @@ def main(cmdline=True, **kw):
     # TODO: need to make a nicer pattern for new CLI integration, but this
     # works for now
     kw = ns.__dict__
-    # print('ns = {!r}'.format(ns))
+    print('kw = {}'.format(ub.repr2(kw, nl=1)))
 
     if kw.pop('version'):
         import watch
@@ -124,7 +124,7 @@ def main(cmdline=True, **kw):
         return 1
 
     try:
-        ret = main(**kw)
+        ret = main(cmdline=0, **kw)
     except Exception as ex:
         print('ERROR ex = {!r}'.format(ex))
         raise

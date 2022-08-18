@@ -283,7 +283,10 @@ def tensorboard_inlier_ylim(ydata):
 
 def redraw_cli(train_dpath):
     """
-    train_dpath = '/home/joncrall/remote/horologic/smart_expt_dvc/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_Continue_15GSD_BGR_V004/lightning_logs/version_0/'
+        train_dpath = '/home/joncrall/remote/horologic/smart_expt_dvc/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_Continue_15GSD_BGR_V004/lightning_logs/version_0/'
+
+        python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter \
+            $HOME/remote/horologic/smart_expt_dvc/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_Continue_15GSD_BGR_V004/lightning_logs/version_0/
     """
     train_dpath = ub.Path(train_dpath)
     hparams_fpath = train_dpath / 'hparams.yaml'
@@ -310,10 +313,5 @@ def redraw_cli(train_dpath):
 
 
 if __name__ == '__main__':
-    """
-    CommandLine:
-        python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter \
-            $HOME/remote/horologic/smart_expt_dvc/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_Continue_15GSD_BGR_V004/lightning_logs/version_0/
-    """
     import fire
     fire.Fire(redraw_cli)
