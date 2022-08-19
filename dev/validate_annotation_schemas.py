@@ -4,6 +4,7 @@ CommandLine:
 
 Prereq:
 
+
     TEST_DPATH=$HOME/tmp/test_smart_schema
     mkdir -p $TEST_DPATH
     cd $TEST_DPATH
@@ -11,6 +12,13 @@ Prereq:
     git clone git@smartgitlab.com:infrastructure/docs.git
 
     pip install jsonschema ubelt -U
+
+
+Also:
+
+    python -m iarpa_smart_metrics.demo.generate_demodata --reset
+    python ~/code/watch/dev/validate_annotation_schemas.py
+
 
 References:
     https://smartgitlab.com/TE/annotations/-/issues/17
@@ -37,6 +45,8 @@ def main():
     # region_model_schema = json.loads(region_model_schema_fpath.read_text())
     site_schema = site_model_schema = watch.rc.registry.load_site_model_schema()
     region_schema  = region_model_schema = watch.rc.registry.load_region_model_schema()
+
+    annotations_dpath = ub.Path('~/.cache/iarpa/smart/ta2/demodata/truth').expand()
 
     site_model_dpath = annotations_dpath / 'site_models'
     region_model_dpath = annotations_dpath / 'region_models'

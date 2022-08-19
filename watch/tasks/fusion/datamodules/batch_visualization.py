@@ -575,6 +575,8 @@ class BatchVisualizationBuilder:
         # Create the true change label overlay
         overlay_key = 'change'
         if overlay_key in truth_overlay_keys and builder.requested_tasks['change']:
+            if overlay_shape is None:
+                overlay_shape = (32, 32)
             change_overlay = np.zeros(overlay_shape + (4,), dtype=np.float32)
             changes = frame_truth.get(overlay_key, None)
             if changes is not None:

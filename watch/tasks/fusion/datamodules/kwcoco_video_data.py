@@ -3246,13 +3246,13 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import ndsampler
             >>> import kwcoco
             >>> import watch
-            >>> dvc_dpath = watch.find_dvc_dpath()
+            >>> dvc_dpath = watch.find_dvc_dpath(hardware='hdd', tags='phase2_data')
             >>> #coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/combo_data.kwcoco.json'
-            >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1/vali_data_nowv.kwcoco.json'
+            >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/data_train.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (3, 128, 128)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels='swamp|red|green|blue|swir22|lwir12|pan|nir')
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels='(S2,WV,PD):red|green|blue', space_scale='1GSD', window_space_scale='1GSD')
             >>> vidid = self.sampler.dset.videos()[1]
             >>> from watch.cli.coco_visualize_videos import video_track_info
             >>> tid_to_info = video_track_info(coco_dset, vidid)

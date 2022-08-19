@@ -329,6 +329,7 @@ class DVCExptManager(ub.NiceRepr):
         dvc.pull(pull_fpaths)
 
     def pull_packages(self):
+        # TODO: git pull
         pkg_df = self.versioned_table(types=['pkg'])
         pull_df = pkg_df[pkg_df['needs_pull']]
 
