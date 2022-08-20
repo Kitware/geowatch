@@ -157,6 +157,11 @@ def make_fit_config(cmdline=False, **kwargs):
         packaged state.
         '''))
 
+    config_parser.add_argument('--auto_resume', action='store_true', default=False, help=ub.paragraph(
+        '''
+        If true, attempts to auto_resume training from the last checkpoint.
+        '''))
+
     callback_parser = parser.add_argument_group('Callbacks')
 
     # our extension callbacks have arg parsers
@@ -564,9 +569,9 @@ def fit_model(args=None, cmdline=False, **kwargs):
 
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', '.*GPU available but not used.*')
-        modules = make_lightning_modules(cmdline=cmdline, **kwargs)
+        modules = make_lightning_modules(args=args, cmdline=cmdline, **kwargs)
 
-    # args = modules['args']
+    args = modules['args']
     trainer = modules['trainer']
     datamodule = modules['datamodule']
     model = modules['model']
@@ -589,6 +594,21 @@ def fit_model(args=None, cmdline=False, **kwargs):
             kwplot.show_if_requested()
         print('tune_result = {}'.format(ub.repr2(tune_result, nl=1)))
 
+    fitkw = {}
+    if args.auto_resume:
+        # Handles attempting to resume from a previous state
+        log_dpath = ub.Path(trainer.log_dir)
+        last_version = int(log_dpath.name.split('_')[1])
+        while last_version > 0:
+            prev = 'version_{}'.format(last_version)
+            prev_checkpoint_dpath = (log_dpath.parent / prev / 'checkpoints')
+            if prev_checkpoint_dpath.exists():
+                candidates = sorted(prev_checkpoint_dpath.glob('*.ckpt'))
+                if candidates:
+                    fitkw['ckpt_path'] = candidates[-1]
+                    break
+            last_version -= 1
+
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', '.*is a deprecated alias for the builtin.*')
         warnings.filterwarnings('ignore', '.*GPU available but not used.*')
@@ -598,7 +618,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
 
         # fit the model
         print('Fit starting')
-        trainer.fit(model, datamodule)
+        trainer.fit(model, datamodule, **fitkw)
         print('Fit finished')
 
     # Hack: what is the best way to get at this info?

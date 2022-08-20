@@ -3251,7 +3251,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/data_train.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> sample_shape = (3, 128, 128)
+            >>> sample_shape = (7, 128, 128)
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels='(S2,WV,PD):red|green|blue', space_scale='1GSD', window_space_scale='1GSD')
             >>> vidid = self.sampler.dset.videos()[1]
             >>> from watch.cli.coco_visualize_videos import video_track_info
@@ -3272,6 +3272,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> combinable_extra = None
             >>> self.disable_augmenter = True
             >>> item = self.__getitem__(index)
+            >>> item = self[0]
             >>> canvas = self.draw_item(item, overlay_on_image=overlay_on_image, norm_over_time=norm_over_time)
             >>> # xdoctest: +REQUIRES(--show)
             >>> import kwplot

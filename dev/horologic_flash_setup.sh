@@ -1,5 +1,10 @@
 #!/bin/bash
 
+####
+## NOTE: flashfs inode usage is a bit constraining
+# https://github.com/archlinux/archinstall/issues/771
+
+
 # Install packages for the f2fs filesystem
 # F2FS (Flash-Friendly File System)
 # https://en.wikipedia.org/wiki/F2FS
@@ -14,7 +19,8 @@ lsblk | grep disk
 DEVICE_DPATH=/dev/nvme0n1
 MOUNT_NAME="flash"
 MOUNT_DPATH=/$MOUNT_NAME
-FS_FORMAT="f2fs"
+#FS_FORMAT="f2fs"
+FS_FORMAT="ext4"
 
 MOUNT_OWNER=root
 MOUNT_GROUP=smart

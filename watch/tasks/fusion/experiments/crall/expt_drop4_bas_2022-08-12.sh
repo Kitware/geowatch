@@ -350,4 +350,5 @@ python -m watch.tasks.fusion.fit \
     --accumulate_grad_batches=1 \
     --max_epochs=160 \
     --patience=160 \
-    --decouple_resolution=0
+    --decouple_resolution=0 \
+    --auto_resume
