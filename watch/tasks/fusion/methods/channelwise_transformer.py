@@ -143,6 +143,7 @@ class MultimodalTransformerConfig(scfg.DataConfig):
     arch_name = scfg.Value('smt_it_joint_p8', type=str, choices=available_encoders)
     decoder = scfg.Value('mlp', type=str, choices=['mlp', 'segmenter'])
     dropout = scfg.Value(0.1, type=float)
+    backbone_depth = scfg.Value(None, type=float, help='For supporting architectures, control the depth of the backbone. Default depends on arch_name')
     global_class_weight = scfg.Value(1.0, type=float)
     global_change_weight = scfg.Value(1.0, type=float)
     global_saliency_weight = scfg.Value(1.0, type=float)
@@ -579,8 +580,11 @@ class MultimodalTransformer(pl.LightningModule):
             dim=0, in_channels=16, hidden_channels=3, out_channels=8, residual=True, norm=None)
 
         # 'https://rwightman.github.io/pytorch-image-models/models/vision-transformer/'
+        backbone_depth = self.config['backbone_depth']
         if arch_name in transformer.encoder_configs:
             encoder_config = transformer.encoder_configs[arch_name]
+            if backbone_depth is None:
+                raise NotImplementedError('unsupported')
             encoder = transformer.FusionEncoder(
                 **encoder_config,
                 in_features=in_features,
@@ -589,6 +593,8 @@ class MultimodalTransformer(pl.LightningModule):
             )
             self.encoder = encoder
         elif arch_name.startswith('deit'):
+            if backbone_depth is None:
+                raise ValueError('unsupported')
             self.encoder = transformer.DeiTEncoder(
                 # **encoder_config,
                 in_features=in_features,
@@ -596,7 +602,10 @@ class MultimodalTransformer(pl.LightningModule):
                 # dropout=dropout,
             )
         elif arch_name.startswith('perceiver'):
+            if backbone_depth is None:
+                backbone_depth = 4
             self.encoder = transformer.PerceiverEncoder(
+                depth=backbone_depth,
                 # **encoder_config,
                 in_features=in_features,
                 # attention_impl=attention_impl,

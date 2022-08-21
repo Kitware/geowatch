@@ -350,5 +350,54 @@ python -m watch.tasks.fusion.fit \
     --accumulate_grad_batches=1 \
     --max_epochs=160 \
     --patience=160 \
-    --decouple_resolution=0 \
-    --auto_resume
+    --decouple_resolution=0
+
+
+#### On Horologic (Train a joint saliency + change + class network)
+export CUDA_VISIBLE_DEVICES=1
+PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware='ssd')
+PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+TRAIN_FNAME=data_train.kwcoco.json
+VALI_FNAME=data_vali.kwcoco.json
+TEST_FNAME=data_vali.kwcoco.json
+WORKDIR=$PHASE2_EXPT_DPATH/training/$HOSTNAME/$USER
+KWCOCO_BUNDLE_DPATH=$PHASE2_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/$TRAIN_FNAME
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/$VALI_FNAME
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
+INITIAL_STATE=noop
+EXPERIMENT_NAME=Drop4_BAS_BGR_15GSD_multihead_perceiver_V008
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --init="$INITIAL_STATE" \
+    --arch_name=perceiver \
+    --channels="blue|green|red" \
+    --num_workers=5 \
+    --global_change_weight=0.65 \
+    --global_class_weight=0.60 \
+    --global_saliency_weight=1.00 \
+    --saliency_loss='dicefocal' \
+    --class_loss='dicefocal' \
+    --change_loss='dicefocal' \
+    --dist_weights=0 \
+    --space_scale="15GSD" \
+    --window_space_scale="15GSD" \
+    --chip_dims=128,128 \
+    --time_steps=8 \
+    --batch_size=8 \
+    --change_head_hidden=4 \
+    --class_head_hidden=4 \
+    --stream_channels=32 \
+    --saliency_head_hidden=4 \
+    --accumulate_grad_batches=1 \
+    --max_epoch_length=8048 \
+    --max_epochs=240 \
+    --patience=240 \
+    --decouple_resolution=0

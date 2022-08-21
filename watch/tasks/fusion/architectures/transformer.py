@@ -580,22 +580,24 @@ class DeiTEncoder(nn.Module):
 class PerceiverEncoder(nn.Module):
     """
     https://github.com/lucidrains/perceiver-pytorch/blob/main/perceiver_pytorch/perceiver_io.py
-    
+
     Example:
         >>> from watch.tasks.fusion.architectures.transformer import PerceiverEncoder  # NOQA
         >>> import torch
         >>> B, T, M, H, W, F = 1, 2, 3, 5, 8, 13
-        >>> self = PerceiverEncoder(F)
+        >>> self = PerceiverEncoder(F, dropout=0.1)
         >>> inputs = torch.rand(B, T, M, H, W, F)
         >>> outputs = self(inputs)
         >>> assert outputs.shape == (B, T, M, H, W, F)
     """
 
-    def __init__(self, in_features):
+    def __init__(self, in_features, depth=4, dropout=0.0):
         super().__init__()
         import perceiver_pytorch as perceiver
+        # No dropout in perceiver? Perform it on input tokens.
+        self.dropout = nn.Dropout(dropout)
         self.perceiver = perceiver.PerceiverIO(
-            depth=4,
+            depth=depth,
             dim=in_features,
             queries_dim=in_features,
             num_latents=512,
@@ -614,6 +616,7 @@ class PerceiverEncoder(nn.Module):
     def forward(self, inputs):
         B, T, M, H, W, F = inputs.shape
         x = einops.rearrange(inputs, 'b t m h w f -> b (t m h w) f')
+        x = self.dropout(x)
         x = self.perceiver(x, queries=x)
         outputs = einops.rearrange(x, 'b (t m h w) f -> b t m h w f', t=T, m=M, h=H, w=W)
         return outputs
