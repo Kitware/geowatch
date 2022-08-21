@@ -400,4 +400,5 @@ python -m watch.tasks.fusion.fit \
     --max_epoch_length=8048 \
     --max_epochs=240 \
     --patience=240 \
+    --backbone_depth=8 \
     --decouple_resolution=0

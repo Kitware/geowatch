@@ -143,7 +143,7 @@ class MultimodalTransformerConfig(scfg.DataConfig):
     arch_name = scfg.Value('smt_it_joint_p8', type=str, choices=available_encoders)
     decoder = scfg.Value('mlp', type=str, choices=['mlp', 'segmenter'])
     dropout = scfg.Value(0.1, type=float)
-    backbone_depth = scfg.Value(None, type=float, help='For supporting architectures, control the depth of the backbone. Default depends on arch_name')
+    backbone_depth = scfg.Value(None, type=int, help='For supporting architectures, control the depth of the backbone. Default depends on arch_name')
     global_class_weight = scfg.Value(1.0, type=float)
     global_change_weight = scfg.Value(1.0, type=float)
     global_saliency_weight = scfg.Value(1.0, type=float)
@@ -163,15 +163,15 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         '''))
     change_head_hidden = scfg.Value(2, type=int, help=ub.paragraph(
         '''
-        number of hidden layers in the change head
+        number of hidden layers in the CHANGE head. I.e. the depth of the head.
         '''))
     class_head_hidden = scfg.Value(2, type=int, help=ub.paragraph(
         '''
-        number of hidden layers in the category head
+        number of hidden layers in the CLASS head. I.e. the depth of the head.
         '''))
     saliency_head_hidden = scfg.Value(2, type=int, help=ub.paragraph(
         '''
-        number of hidden layers in the saliency head
+        number of hidden layers in the SALIENCY head. I.e. the depth of the head.
         '''))
     window_size = scfg.Value(8, type=int)
     squash_modes = scfg.Value(False, help='deprecated doesnt do anything')
