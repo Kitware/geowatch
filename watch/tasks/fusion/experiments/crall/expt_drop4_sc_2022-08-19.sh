@@ -199,6 +199,9 @@ python -m watch.tasks.fusion.fit \
 
 
 
+
+
+
 export CUDA_VISIBLE_DEVICES=1
 PHASE1_DATA_DPATH=$(smartwatch_dvc --tags="phase1_data" --hardware="hdd")
 INITIAL_STATE_SC_V006="$PHASE1_DATA_DPATH"/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V006/CropDrop3_SC_V006_epoch=71-step=18431.pt
@@ -214,6 +217,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/$TRAIN_FNAME
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/$VALI_FNAME
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=/home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/runs/Drop4_SC_RGB_from_sc006_V003/lightning_logs/version_3/checkpoints/epoch=31-step=21472.ckpt
+#INITIAL_STATE=/home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/runs/Drop4_SC_RGB_from_sc006_V003_cont/lightning_logs/version_0/checkpoints/epoch=50-step=34221.ckpt
 EXPERIMENT_NAME=Drop4_SC_RGB_from_sc006_V003_cont
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion.fit \
@@ -239,4 +243,4 @@ python -m watch.tasks.fusion.fit \
     --num_workers=6 \
     --max_epochs=240 \
     --stream_channels=32 \
-    --patience=240 
+    --patience=240 --auto_resume

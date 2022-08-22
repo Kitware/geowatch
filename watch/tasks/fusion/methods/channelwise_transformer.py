@@ -583,7 +583,7 @@ class MultimodalTransformer(pl.LightningModule):
         backbone_depth = self.config['backbone_depth']
         if arch_name in transformer.encoder_configs:
             encoder_config = transformer.encoder_configs[arch_name]
-            if backbone_depth is None:
+            if backbone_depth is not None:
                 raise NotImplementedError('unsupported')
             encoder = transformer.FusionEncoder(
                 **encoder_config,
@@ -593,7 +593,7 @@ class MultimodalTransformer(pl.LightningModule):
             )
             self.encoder = encoder
         elif arch_name.startswith('deit'):
-            if backbone_depth is None:
+            if backbone_depth is not None:
                 raise ValueError('unsupported')
             self.encoder = transformer.DeiTEncoder(
                 # **encoder_config,

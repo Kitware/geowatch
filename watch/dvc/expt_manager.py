@@ -43,6 +43,7 @@ from watch.utils import util_path
 # TODO: replace globals with a global config if necessary
 DATASET_CODES = [
     'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC',
+    'Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC',
 ]
 
 
