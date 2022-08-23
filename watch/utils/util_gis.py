@@ -267,7 +267,7 @@ def read_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
 
 
 @ub.memoize
-def _get_crs84():
+def get_crs84():
     """
     Constructing the CRS84 is slow.
     This function memoizes it so it only happens once.
@@ -278,6 +278,8 @@ def _get_crs84():
     from pyproj import CRS
     crs84 = CRS.from_user_input('crs84')
     return crs84
+
+_get_crs84 = get_crs84
 
 
 def _flip(x, y):

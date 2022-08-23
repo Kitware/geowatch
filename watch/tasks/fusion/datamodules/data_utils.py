@@ -103,7 +103,7 @@ def polygon_distance_transform(poly, shape, dtype):
         poly.draw(fill=0, border=1)
     """
     import cv2
-    poly_mask = np.zeros_like(frame_class_ohe[0])
+    poly_mask = np.zeros_like(shape)
     poly_mask = poly.fill(poly_mask, value=1)
     dist = cv2.distanceTransform(
         src=poly_mask, distanceType=cv2.DIST_L2, maskSize=3)
