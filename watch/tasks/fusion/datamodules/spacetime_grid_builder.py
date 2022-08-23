@@ -463,60 +463,86 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     if negative_classes is None:
         negative_classes = heuristics.BACKGROUND_CLASSES
 
+    # import xdev
+    # xdev.embed()
     dset_hashid = dset._cached_hashid()
 
     # Given an video
     all_vid_ids = list(dset.index.videos.keys())
 
-    from watch.utils.lightning_ext import util_globals
-    workers = util_globals.coerce_num_workers(workers)
-    workers = min(len(all_vid_ids), workers)
-    if workers == 1:
-        workers = 0
-    mode = 'process'
-    jobs = ub.JobPool(mode=mode, max_workers=workers)
+    depends = [
+        dset_hashid,
+        negative_classes,
+        affinity_type,
+        update_rule,
+        window_dims,
+        window_overlap,
+        window_space_scale,
+        negative_classes, keepbound,
+        exclude_sensors,
+        affinity_type, update_rule,
+        time_span, use_annot_info,
+        set_cover_algo,
+        use_grid_positives,
+        use_centered_positives,
+        'cache_v4',
+    ]
+    # Higher level cacher (not sure if adding this secondary level of caching
+    # is faster or not).
+    cacher = ub.Cacher('sample_grid-dataset-cache', appname='watch/grid_cache',
+                       depends=depends, enabled=use_cache)
+    sample_grid = cacher.tryload()
+    if sample_grid is None:
+        from watch.utils.lightning_ext import util_globals
+        workers = util_globals.coerce_num_workers(workers)
+        workers = min(len(all_vid_ids), workers)
+        if workers == 1:
+            workers = 0
+        mode = 'process'
+        jobs = ub.JobPool(mode=mode, max_workers=workers)
 
-    # TODO: Reducing the information that needs to be passed to each worker
-    # would help improve speed here. The dset itself is the biggest offender.
-    verbose = 1 if workers == 0 else 0
-    for video_id in ub.ProgIter(all_vid_ids, desc='Submit sample video regions'):
-        job = jobs.submit(
-            _sample_single_video_spacetime_targets, dset, dset_hashid,
-            video_id, winspace_time_dims, winspace_space_dims, window_dims,
-            window_overlap, negative_classes, keepbound, exclude_sensors,
-            affinity_type, update_rule, time_span, use_annot_info,
-            use_grid_positives, use_centered_positives, window_space_scale,
-            set_cover_algo, use_cache, verbose)
-        job.video_id = video_id
+        # TODO: Reducing the information that needs to be passed to each worker
+        # would help improve speed here. The dset itself is the biggest offender.
+        verbose = 1 if workers == 0 else 0
+        for video_id in ub.ProgIter(all_vid_ids, desc='Submit sample video regions'):
+            job = jobs.submit(
+                _sample_single_video_spacetime_targets, dset, dset_hashid,
+                video_id, winspace_time_dims, winspace_space_dims, window_dims,
+                window_overlap, negative_classes, keepbound, exclude_sensors,
+                affinity_type, update_rule, time_span, use_annot_info,
+                use_grid_positives, use_centered_positives, window_space_scale,
+                set_cover_algo, use_cache, verbose)
+            job.video_id = video_id
 
-    targets = []
-    positive_idxs = []
-    negative_idxs = []
-    vidid_to_time_sampler = {}
-    vidid_to_valid_gids = {}
-    for job in jobs.as_completed(desc='Collect region sample grids',
-                                 progkw=dict(verbose=3)):
-        video_id = job.video_id
-        _cached, time_sampler, video_gids = job.result()
-        offset = len(targets)
-        targets.extend(_cached['video_targets'])
-        positive_idxs.extend([idx + offset for idx in _cached['video_positive_idxs']])
-        negative_idxs.extend([idx + offset for idx in _cached['video_negative_idxs']])
-        vidid_to_time_sampler[video_id] = time_sampler
-        vidid_to_valid_gids[video_id] = video_gids
+        targets = []
+        positive_idxs = []
+        negative_idxs = []
+        vidid_to_time_sampler = {}
+        vidid_to_valid_gids = {}
+        for job in jobs.as_completed(desc='Collect region sample grids',
+                                     progkw=dict(verbose=3)):
+            video_id = job.video_id
+            _cached, time_sampler, video_gids = job.result()
+            offset = len(targets)
+            targets.extend(_cached['video_targets'])
+            positive_idxs.extend([idx + offset for idx in _cached['video_positive_idxs']])
+            negative_idxs.extend([idx + offset for idx in _cached['video_negative_idxs']])
+            vidid_to_time_sampler[video_id] = time_sampler
+            vidid_to_valid_gids[video_id] = video_gids
 
-    print('Found {} targets'.format(len(targets)))
-    if use_annot_info:
-        print('Found {} positives'.format(len(positive_idxs)))
-        print('Found {} negatives'.format(len(negative_idxs)))
+        print('Found {} targets'.format(len(targets)))
+        if use_annot_info:
+            print('Found {} positives'.format(len(positive_idxs)))
+            print('Found {} negatives'.format(len(negative_idxs)))
 
-    sample_grid = {
-        'positives_indexes': positive_idxs,
-        'negatives_indexes': negative_idxs,
-        'targets': targets,
-        'vidid_to_valid_gids': vidid_to_valid_gids,
-        'vidid_to_time_sampler': vidid_to_time_sampler,
-    }
+        sample_grid = {
+            'positives_indexes': positive_idxs,
+            'negatives_indexes': negative_idxs,
+            'targets': targets,
+            'vidid_to_valid_gids': vidid_to_valid_gids,
+            'vidid_to_time_sampler': vidid_to_time_sampler,
+        }
+        cacher.save(sample_grid)
     return sample_grid
 
 
@@ -577,8 +603,10 @@ def _sample_single_video_spacetime_targets(
     # Create a box to represent the "window-space" extent, and determine how we
     # are going to slide a window over it.
     vidspace_gsd = video_info.get('target_gsd', None)
-    resolved_scale = data_utils.resolve_scale_request(
-        request=window_space_scale, data_gsd=vidspace_gsd)
+    import xdev
+    with xdev.embed_on_exception_context:
+        resolved_scale = data_utils.resolve_scale_request(
+            request=window_space_scale, data_gsd=vidspace_gsd)
     window_scale = resolved_scale['scale']
 
     all_video_gids = list(dset.index.vidid_to_gids[video_id])

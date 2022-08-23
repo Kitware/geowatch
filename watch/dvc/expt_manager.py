@@ -110,6 +110,8 @@ class ExptManagerConfig(scfg.Config):
         'expt_dvc_dpath': scfg.Value('auto', help='path to the experiment dvc dpath'),
         'data_dvc_dpath': scfg.Value('auto', help='path to the data dvc dpath'),
 
+        'model_pattern': scfg.Value('*', help='if specified restrict to models matching this name pattern'),
+
         'dataset_codes': scfg.Value(None, nargs='+', help=ub.paragraph(
             '''
             if unset, will use the defaults, otherwise this should be a list of
@@ -138,6 +140,7 @@ def main(cmdline=True, **kwargs):
     import watch
 
     config = ExptManagerConfig(cmdline=cmdline, data=kwargs)
+    print('ExptManagerConfig config = {}'.format(ub.repr2(dict(config), nl=1)))
     command = config['command']
     dolist = 0
     doevaluation = 0
@@ -182,7 +185,7 @@ def main(cmdline=True, **kwargs):
 
     manager = DVCExptManager(
         expt_dvc_dpath, dvc_remote=dvc_remote, dataset_codes=dataset_codes,
-        data_dvc_dpath=data_dvc_dpath)
+        data_dvc_dpath=data_dvc_dpath, model_pattern=config['model_pattern'])
     synckw = ub.compatible(config, manager.sync)
     manager.sync(**synckw)
 
@@ -232,7 +235,9 @@ class DVCExptManager(ub.NiceRepr):
     def __nice__(self):
         return str(self.dvc)
 
-    def __init__(self, expt_dvc_dpath, dvc_remote='aws', dataset_codes=None, data_dvc_dpath=None):
+    def __init__(self, expt_dvc_dpath, dvc_remote='aws', dataset_codes=None,
+                 data_dvc_dpath=None, model_pattern='*'):
+        self.model_pattern = model_pattern
         self.expt_dvc_dpath = expt_dvc_dpath
         self.data_dvc_dpath = data_dvc_dpath
         self.dvc_remote = dvc_remote
@@ -262,7 +267,8 @@ class DVCExptManager(ub.NiceRepr):
         for dataset_code in self.dataset_codes:
             state = ExperimentState(
                 self.expt_dvc_dpath, dataset_code, dvc_remote=self.dvc_remote,
-                data_dvc_dpath=self.data_dvc_dpath)
+                data_dvc_dpath=self.data_dvc_dpath,
+                model_pattern=self.model_pattern)
             states.append(state)
         self.states = states
 
@@ -364,7 +370,7 @@ class ExperimentState(ub.NiceRepr):
     """
 
     def __init__(self, expt_dvc_dpath, dataset_code, dvc_remote=None,
-                 data_dvc_dpath=None):
+                 data_dvc_dpath=None, model_pattern='*'):
         self.expt_dvc_dpath = expt_dvc_dpath
         self.data_dvc_dpath = data_dvc_dpath
         self.dataset_code = dataset_code
@@ -378,7 +384,7 @@ class ExperimentState(ub.NiceRepr):
             'dataset_code': dataset_code,
             ### Versioned
             'test_dset': '*',
-            'model': '*',  # hack, should have ext
+            'model': model_pattern,  # hack, should have ext
             'pred_cfg': '*',
             'trk_cfg': '*',
             'act_cfg': '*',

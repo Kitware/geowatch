@@ -263,14 +263,27 @@ class KWCocoVideoDataModuleConfig(scfg.Config):
 
         'torch_sharing_strategy': scfg.Value('default', help=ub.paragraph(
             '''
-            Torch multiprocessing sharing strategy. Can be default,
-            file_descriptor, file_system
+            Torch multiprocessing sharing strategy. Can be 'default',
+            "file_descriptor", "file_system". On linux, the default is
+            "file_descriptor".
+
+            See https://pytorch.org/docs/stable/multiprocessing.html#sharing-strategies
+            for descriptions of options.
+
+            When using sqlview=True, using "file_system" can help prevent the
+            "received 0 items of ancdata" Error. It is unclear why using
+            "file_descriptor" fails in this case for some datasets.
             ''')),
 
         'torch_start_method': scfg.Value('default', help=ub.paragraph(
             '''
-            Torch multiprocessing sharing strategy. Can be fork, spawn,
-            forkserver
+            Torch multiprocessing sharing strategy. Can be "default", "fork",
+            "spawn", "forkserver". The default method on Linux is "spawn".
+            ''')),
+
+        'sqlview': scfg.Value(False, help=ub.paragraph(
+            '''
+            If True, use SQL views when reading COCO datasets.
             ''')),
         # Mixin the dataset config
     }) | KWCocoVideoDatasetConfig.default
@@ -471,6 +484,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             'torch_sharing_strategy': self.torch_sharing_strategy,
             'torch_start_method': self.torch_start_method,
         })
+        sqlview = self.config['sqlview']
 
         if stage == 'fit' or stage is None:
             train_data = self.train_kwcoco
@@ -479,7 +493,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
             if self.verbose:
                 print('Build train kwcoco dataset')
-            train_coco_dset = watch.demo.coerce_kwcoco(train_data)
+            train_coco_dset = watch.demo.coerce_kwcoco(train_data,
+                                                       sqlview=sqlview)
             self.coco_datasets['train'] = train_coco_dset
 
             print('self.exclude_sensors', self.exclude_sensors)
@@ -538,7 +553,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                     vali_data = os.fspath(vali_data.expanduser())
                 if self.verbose:
                     print('Build validation kwcoco dataset')
-                kwcoco_ds = watch.demo.coerce_kwcoco(vali_data)
+                kwcoco_ds = watch.demo.coerce_kwcoco(vali_data,
+                                                     sqlview=sqlview)
                 vali_coco_sampler = ndsampler.CocoSampler(kwcoco_ds)
                 vali_dataset = KWCocoVideoDataset(
                     vali_coco_sampler, mode='vali', **self.vali_dataset_config)
@@ -551,7 +567,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 test_data = os.fspath(test_data.expanduser())
             if self.verbose:
                 print('Build test kwcoco dataset')
-            test_coco_dset = watch.demo.coerce_kwcoco(test_data)
+            test_coco_dset = watch.demo.coerce_kwcoco(test_data,
+                                                      sqlview=sqlview)
             test_coco_sampler = ndsampler.CocoSampler(test_coco_dset)
             self.coco_datasets['test'] = test_coco_dset
             self.torch_datasets['test'] = KWCocoVideoDataset(
@@ -1059,7 +1076,11 @@ class KWCocoVideoDataset(data.Dataset):
                         n_pos = len(group)
                         n_neg = len(other)
                         max_neg = min(int(max(1, (neg_to_pos_ratio * n_pos))), n_neg)
-                        print(f'restrict to {max_neg=} in {vidname=} with {n_pos=} and {n_neg=}')
+
+                        if 0:
+                            # TODO: dataloader logger
+                            print(f'restrict to {max_neg=} in {vidname=} with {n_pos=} and {n_neg=}')
+
                         # neg_vid_idxs = posneg_groups[False]['index'].values
                         neg_vid_pool_ = list(util_iter.chunks(neg_vid_idxs, nchunks=max_neg))
                         pos_vid_pool_ = list(util_iter.chunks(pos_vid_idxs, nchunks=n_pos))
@@ -2828,7 +2849,7 @@ class KWCocoVideoDataset(data.Dataset):
         # Get stats on the dataset (todo: nice way to disable augmentation temporarilly for this)
         depends = ub.odict([
             ('num', num),
-            ('hashid', self.sampler.dset._build_hashid()),
+            ('hashid', self.sampler.dset._cached_hashid()),
             ('sensorchan', self.input_sensorchan.concise().spec),
             ('normalize_perframe', self.normalize_perframe),
             ('with_intensity', with_intensity),
@@ -2845,7 +2866,8 @@ class KWCocoVideoDataset(data.Dataset):
         return dataset_stats
 
     def compute_dataset_stats(self, num=None, num_workers=0, batch_size=2,
-                              with_intensity=True, with_class=True, with_vidid=True):
+                              with_intensity=True, with_class=True,
+                              with_vidid=True):
         """
         Args:
             num (int | None): number of input items to compute stats for
@@ -2854,11 +2876,12 @@ class KWCocoVideoDataset(data.Dataset):
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> import ndsampler
             >>> import kwcoco
-            >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=3)
+            >>> dct_dset = coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=3)
+            >>> coco_dset = dct_dset.view_sql()  # test with an SQL view dataset
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (2, 256, 256)
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
-            >>> self.compute_dataset_stats()
+            >>> self.compute_dataset_stats(num_workers=2)
 
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA

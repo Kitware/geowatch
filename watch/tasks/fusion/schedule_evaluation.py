@@ -232,6 +232,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
     from watch.tasks.fusion import organize
 
     config = ScheduleEvaluationConfig(cmdline=cmdline, data=kwargs)
+    print('ScheduleEvaluationConfig config = {}'.format(ub.repr2(dict(config), nl=1)))
+
     model_globstr = config['model_globstr']
     test_dataset = config['test_dataset']
     draw_curves = config['draw_curves']
