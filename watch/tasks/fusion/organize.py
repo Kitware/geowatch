@@ -159,7 +159,7 @@ def _register_hashid_reverse_lookup(key, data, type='global'):
         with shelf:
             # full_shelf = dict(shelf)
             if key not in shelf:
-                shelf[key] = [row]
+                datas = shelf[key] = [row]
                 info['status'] = 'new'
             else:
                 datas = shelf[key]

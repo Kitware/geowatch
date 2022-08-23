@@ -11,17 +11,17 @@ Example:
     export DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
     cd $DVC_EXPT_DPATH
 
-    python -m watch.dvc.expt_manager "list"
+    python -m watch.dvc.expt_manager "list" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
 
     # On training machine
-    python -m watch.dvc.expt_manager "push packages"
+    python -m watch.dvc.expt_manager "push packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
 
     # On testing machine
     python -m watch.dvc.expt_manager "pull packages"
     python -m watch.dvc.expt_manager "list"
 
     # Run evals on testing machine
-    python -m watch.dvc.expt_manager "evaluate"
+    python -m watch.dvc.expt_manager "evaluate" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
 
     # On testing machine
     python -m watch.dvc.expt_manager "push evals"
@@ -110,7 +110,7 @@ class ExptManagerConfig(scfg.Config):
         'expt_dvc_dpath': scfg.Value('auto', help='path to the experiment dvc dpath'),
         'data_dvc_dpath': scfg.Value('auto', help='path to the data dvc dpath'),
 
-        'dataset_codes': scfg.Value(None, help=ub.paragraph(
+        'dataset_codes': scfg.Value(None, nargs='+', help=ub.paragraph(
             '''
             if unset, will use the defaults, otherwise this should be a list of
             the DVC dataset bundle names that we want to consider.  Note: we do
@@ -169,7 +169,7 @@ def main(cmdline=True, **kwargs):
     if config['dataset_codes'] is None:
         dataset_codes = DATASET_CODES
     else:
-        raise Exception('must be defualt for now')
+        dataset_codes = config['dataset_codes']
 
     if config['expt_dvc_dpath'] == 'auto':
         config['expt_dvc_dpath'] = watch.find_dvc_dpath(tags='phase2_expt', envvar='EXPT_DVC_DPATH')
@@ -194,21 +194,7 @@ def main(cmdline=True, **kwargs):
         # xdev.embed()
         self = manager
         for state in self.states:
-            from watch.tasks.fusion.schedule_evaluation import schedule_evaluation
-            model_globstr = state.path_patterns['pkg']
-            test_kwcoco_fpath = state.data_dvc_dpath / state.dataset_code / 'data_vali.kwcoco.json'
-            # TODO: how do we make scriptconfig do modal CLIs easilly?
-            # need to configure
-            eval_kw = {
-                'test_dataset': test_kwcoco_fpath,
-                'model_globstr': model_globstr,
-                # 'run': None,
-                # 'run': 1,
-                'devices': [0, 1],
-            }
-            # table = manager.versioned_table()
-            # schedule_evaluation(cmdline=False, **eval_kw)
-            schedule_evaluation(cmdline=1, **eval_kw)
+            state.schedule_evaluation()
 
 
 class DVCExptManager(ub.NiceRepr):
@@ -816,7 +802,7 @@ class ExperimentState(ub.NiceRepr):
 
             """))
 
-    def schedule_evaluation():
+    def schedule_evaluation(state):
         # python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
         #         --devices="0,1" \
         #         --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/$EXPT_MODEL_GLOBNAME/*.pt" \
@@ -828,7 +814,21 @@ class ExperimentState(ub.NiceRepr):
         #         --draw_heatmaps=0 \
         #         --without_alternatives \
         #         --skip_existing=True --backend=slurm --run=0
-        pass
+        from watch.tasks.fusion.schedule_evaluation import schedule_evaluation
+        model_globstr = state.path_patterns['pkg']
+        test_kwcoco_fpath = state.data_dvc_dpath / state.dataset_code / 'data_vali.kwcoco.json'
+        # TODO: how do we make scriptconfig do modal CLIs easilly?
+        # need to configure
+        eval_kw = {
+            'test_dataset': test_kwcoco_fpath,
+            'model_globstr': model_globstr,
+            # 'run': None,
+            # 'run': 1,
+            'devices': [0, 1],
+        }
+        # table = manager.versioned_table()
+        # schedule_evaluation(cmdline=False, **eval_kw)
+        schedule_evaluation(cmdline=1, **eval_kw)
 
 
 def summarize_versioned_df(versioned_df):
@@ -911,6 +911,9 @@ if __name__ == '__main__':
         python -m watch.dvc.expt_manager "list"
         python -m watch.dvc.expt_manager "push all"
         python -m watch.dvc.expt_manager "pull evals"
+
+        python -m watch.dvc.expt_manager "evaluate"
+
         python -m watch.dvc.expt_manager "pull all"
         python -m watch.dvc.expt_manager "pull packages"
     """
