@@ -827,7 +827,8 @@ def main(args):
             '--image_dir', image_dpath,
             '--output_dir', out_dir if args.out_dir else 'None',
             '--cache_dir', cache_dpath,
-            '--name', shlex.quote(name)
+            '--name', shlex.quote(name),
+            '--no-db',
         ]
         run_eval_command += viz_flags
         # run metrics framework
