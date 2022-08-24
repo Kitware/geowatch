@@ -2825,7 +2825,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import ndsampler
             >>> import kwcoco
             >>> dct_dset = coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=3)
-            >>> coco_dset = dct_dset.view_sql()  # test with an SQL view dataset
+            >>> #coco_dset = dct_dset.view_sql()  # test with an SQL view dataset
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (2, 256, 256)
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
