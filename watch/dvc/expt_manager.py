@@ -565,7 +565,10 @@ class ExperimentState(ub.NiceRepr):
             pat = self.path_patterns[key]
             found = util_path.coerce_patterned_paths(pat)
             for path in found:
-                row = {'path': path}
+                row = {
+                    'type': key,
+                    'raw': path,
+                }
                 _attrs = self._parse_pattern_attrs(key, path)
                 row.update(_attrs)
             yield row
@@ -618,6 +621,10 @@ class ExperimentState(ub.NiceRepr):
                     row['unprotected'] = row['has_dvc'] and not row['is_link']
                     row['needs_push'] = not row['has_dvc']
                 yield row
+
+    def volitile_table(self):
+        volitile_rows = list(self.volitile_rows())
+        volitile_df = pd.DataFrame(volitile_rows)
 
     def staging_table(self):
         # import numpy as np
