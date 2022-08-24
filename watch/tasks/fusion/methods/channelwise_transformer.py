@@ -831,7 +831,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     chip_size=128, batch_size=1, time_steps=3,
             >>>     channels=channels,
             >>>     normalize_inputs=1, neg_to_pos_ratio=0,
-            >>>     num_workers='avail/2', true_multimodal=True,
+            >>>     num_workers='avail/2',
             >>>     use_grid_positives=False, use_centered_positives=True,
             >>> )
             >>> datamodule.setup('fit')
@@ -1187,7 +1187,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> import watch
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='special:vidshapes-watch',
-            >>>     num_workers='avail / 2', chip_size=96, time_steps=4, true_multimodal=True,
+            >>>     num_workers='avail / 2', chip_size=96, time_steps=4,
             >>>     normalize_inputs=8, neg_to_pos_ratio=0, batch_size=1,
             >>> )
             >>> datamodule.setup('fit')

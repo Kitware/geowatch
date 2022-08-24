@@ -554,14 +554,21 @@ class ExperimentState(ub.NiceRepr):
 
         return rows
 
-    # TODO: add another variant for non-versioned prediction files
-
     def volitile_rows(self):
         """
         A volitile item is something that is derived from something versioned
         (so it is recomputable), but it is not versioned itself. These are
         raw prediction, tracking, and classification results.
         """
+        keys = ['pred_pxl', 'pred_trk', 'pred_act']
+        for key in keys:
+            pat = self.path_patterns[key]
+            found = util_path.coerce_patterned_paths(pat)
+            for path in found:
+                row = {'path': path}
+                _attrs = self._parse_pattern_attrs(key, path)
+                row.update(_attrs)
+            yield row
 
     def evaluation_rows(self, with_attrs=1, types=None, notypes=None):
         keys = ['eval_pxl', 'eval_act', 'eval_trk']
