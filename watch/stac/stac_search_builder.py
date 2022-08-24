@@ -128,16 +128,10 @@ def _devcheck_providers_exist():
     catalog = pystac_client.Client.open(provider, headers=headers)
     list(catalog.get_collections())
 
-    ta1-pd-str
-    ta1-pd-ara
-
-    import watch
-    dvc_dpath = watch.find_smart_dvc_dpath()
-    region_dpath = (dvc_dpath / 'annotations/region_models')
-
     item_search = catalog.search(collections=["ta1-pd-acc"])
     item_search = catalog.search(collections=["ta1-pd-ara"])
     item_search = catalog.search(collections=["ta1-pd-str"])
+    print(f'item_search={item_search}')
 
 
 def _mwe_check_planet_processed():
