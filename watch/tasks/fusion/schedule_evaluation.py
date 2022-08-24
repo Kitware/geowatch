@@ -246,32 +246,36 @@ def schedule_evaluation(cmdline=False, **kwargs):
     if str(model_globstr).endswith('.txt'):
         from watch.utils.simple_dvc import SimpleDVC
         print('model_globstr = {!r}'.format(model_globstr))
-        dvc_dpath = SimpleDVC.find_root(ub.Path(model_globstr))
+        dvc_expt_dpath = SimpleDVC.find_root(ub.Path(model_globstr))
+        dvc_data_dpath = dvc_expt_dpath
     else:
-        dvc_dpath = watch.find_smart_dvc_dpath()
-    print('dvc_dpath = {!r}'.format(dvc_dpath))
+        dvc_expt_dpath = watch.find_smart_dvc_dpath(tags='phase2_expt')
+        dvc_data_dpath = watch.find_smart_dvc_dpath(tags='phase2_data')
+
+    print(f'dvc_expt_dpath={dvc_expt_dpath}')
+    print(f'dvc_data_dpath={dvc_data_dpath}')
 
     HISTORICAL_MODELS_OF_INTEREST = [
         # 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_cs64_t5_perframe_rgb_v30/SC_smt_it_stm_p8_newanns_cs64_t5_perframe_rgb_v30_epoch=29-step=1284389.pt',
-        dvc_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_cs64_t5_perframe_rgb_v30/SC_smt_it_stm_p8_newanns_cs64_t5_perframe_rgb_v30_epoch=29-step=1284389.pt',
-        dvc_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v39/SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=52-step=2269088.pt',
-        dvc_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_centerannot_raw_v42/SC_smt_it_stm_p8_centerannot_raw_v42_epoch=5-step=89465.pt',
-        dvc_dpath / 'models/fusion/SC-20201117/BAS_smt_it_stm_p8_L1_raw_v53/BAS_smt_it_stm_p8_L1_raw_v53_epoch=15-step=340047.pt',
-        dvc_dpath / 'models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819.pt',
+        dvc_expt_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_cs64_t5_perframe_rgb_v30/SC_smt_it_stm_p8_newanns_cs64_t5_perframe_rgb_v30_epoch=29-step=1284389.pt',
+        dvc_expt_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v39/SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=52-step=2269088.pt',
+        dvc_expt_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_centerannot_raw_v42/SC_smt_it_stm_p8_centerannot_raw_v42_epoch=5-step=89465.pt',
+        dvc_expt_dpath / 'models/fusion/SC-20201117/BAS_smt_it_stm_p8_L1_raw_v53/BAS_smt_it_stm_p8_L1_raw_v53_epoch=15-step=340047.pt',
+        dvc_expt_dpath / 'models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819.pt',
     ]
 
     # REMOVE:
     HARDCODED = list(map(ub.Path, [
-        dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=1-step=17305.pt',
-        dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=4-step=43264.pt',
-        dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917.pt',
-        dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=30-step=268242.pt',
-        dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_KOREA_v083/BAS_TA1_KOREA_v083_epoch=3-step=7459.pt',
-        dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_KOREA_v083/BAS_TA1_KOREA_v083_epoch=4-step=9324.pt',
-        dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_KOREA_v083/BAS_TA1_KOREA_v083_epoch=5-step=11189.pt',
-        dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_c001_v076/BAS_TA1_c001_v076_epoch=90-step=186367.pt',
-        dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_c001_v076/BAS_TA1_c001_v076_epoch=12-step=26623.pt',
-        dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_c001_v082/BAS_TA1_c001_v082_epoch=42-step=88063.pt',
+        dvc_expt_dpath / 'models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=1-step=17305.pt',
+        dvc_expt_dpath / 'models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=4-step=43264.pt',
+        dvc_expt_dpath / 'models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917.pt',
+        dvc_expt_dpath / 'models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=30-step=268242.pt',
+        dvc_expt_dpath / 'models/fusion/SC-20201117/BAS_TA1_KOREA_v083/BAS_TA1_KOREA_v083_epoch=3-step=7459.pt',
+        dvc_expt_dpath / 'models/fusion/SC-20201117/BAS_TA1_KOREA_v083/BAS_TA1_KOREA_v083_epoch=4-step=9324.pt',
+        dvc_expt_dpath / 'models/fusion/SC-20201117/BAS_TA1_KOREA_v083/BAS_TA1_KOREA_v083_epoch=5-step=11189.pt',
+        dvc_expt_dpath / 'models/fusion/SC-20201117/BAS_TA1_c001_v076/BAS_TA1_c001_v076_epoch=90-step=186367.pt',
+        dvc_expt_dpath / 'models/fusion/SC-20201117/BAS_TA1_c001_v076/BAS_TA1_c001_v076_epoch=12-step=26623.pt',
+        dvc_expt_dpath / 'models/fusion/SC-20201117/BAS_TA1_c001_v082/BAS_TA1_c001_v082_epoch=42-step=88063.pt',
     ]))
 
     with_saliency = 'auto'
@@ -280,7 +284,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     workers_per_queue = config['pred_workers']
     recompute = False
 
-    region_model_dpath = dvc_dpath / 'annotations/region_models'
+    region_model_dpath = dvc_data_dpath / 'annotations/region_models'
 
     test_dataset_fpath = ub.Path(test_dataset)
     if not test_dataset_fpath.exists():
@@ -288,9 +292,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     annotations_dpath = config['annotations_dpath']
     if annotations_dpath is None:
-        annotations_dpath = dvc_dpath / 'annotations'
+        annotations_dpath = dvc_data_dpath / 'annotations'
 
-    def expand_model_list_file(model_lists_fpath, dvc_dpath=None):
+    def expand_model_list_file(model_lists_fpath, dvc_expt_dpath=None):
         """
         Given a file containing paths to models, expand it into individual
         paths.
@@ -299,8 +303,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
         lines = [line for line in ub.Path(model_globstr).read_text().split('\n') if line]
         missing = []
         for line in lines:
-            if dvc_dpath is not None:
-                package_fpath = ub.Path(dvc_dpath / line)
+            if dvc_expt_dpath is not None:
+                package_fpath = ub.Path(dvc_expt_dpath / line)
             else:
                 package_fpath = ub.Path(line)
             if package_fpath.is_file():
@@ -332,7 +336,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             if package_fpath.name.endswith('.txt'):
                 # HACK FOR PATH OF MODELS
                 model_lists_fpath = package_fpath
-                expanded_fpaths = expand_model_list_file(model_lists_fpath, dvc_dpath=dvc_dpath)
+                expanded_fpaths = expand_model_list_file(model_lists_fpath, dvc_expt_dpath=dvc_expt_dpath)
                 package_fpaths.extend(expanded_fpaths)
             else:
                 package_fpaths.append(package_fpath)
@@ -347,7 +351,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     print(f'{len(packages_to_eval)=}')
 
-    queue_dpath = dvc_dpath / '_cmd_queue_schedule'
+    queue_dpath = dvc_expt_dpath / '_cmd_queue_schedule'
     queue_dpath.mkdir(exist_ok=True)
 
     devices = config['devices']
@@ -366,7 +370,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     print('GPUS = {!r}'.format(GPUS))
     environ = {
-        # 'DVC_DPATH': dvc_dpath,
     }
 
     import cmd_queue
@@ -494,7 +497,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
         if needs_unprotect:
             from watch.utils.simple_dvc import SimpleDVC
-            simple_dvc = SimpleDVC(dvc_dpath)
+            simple_dvc = SimpleDVC(dvc_expt_dpath)
             simple_dvc.unprotect(needs_unprotect)
 
     if config['shuffle_jobs']:
@@ -524,8 +527,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
         suggestions['package_fpath'] = package_fpath
         suggestions['with_class'] = with_class
         suggestions['with_saliency'] = with_saliency
-        # suggestions = ub.map_vals(lambda x: str(x).replace(
-        #     str(dvc_dpath), '$DVC_DPATH'), suggestions)
         predictkw = {
             'workers_per_queue': workers_per_queue,
             **pred_cfg,
@@ -838,59 +839,6 @@ def _schedule_track_jobs(queue, manager, config, package_cfgstr, pred_cfgstr,
             )
             task_info['job'] = sc_eval_job
 
-
-def updates_dvc_measures():
-    """
-    DEPRECATE
-
-    Add results of pixel evaluations to DVC
-    """
-    import watch
-    # import functools
-    import os
-    dvc_dpath = watch.find_smart_dvc_dpath()
-    dpath = dvc_dpath / 'models/fusion/SC-20201117'
-    measures_fpaths = list(dpath.glob('*/*/*/eval/curves/measures2.json'))
-
-    is_symlink = ub.memoize(os.path.islink)
-
-    def check_if_contained_in_symlink(fpath, dvc_dpath):
-        rel_fpath = fpath.relative_to(dvc_dpath)
-        parts = rel_fpath.parts
-        curr = fpath.parent
-        for i in range(len(parts)):
-            if is_symlink(curr):
-                return True
-            curr = curr.parent
-
-    needs_add = []
-    for fpath in measures_fpaths:
-        dvc_fpath = ub.Path(str(fpath) + '.dvc')
-        if not dvc_fpath.exists():
-            if not fpath.is_symlink():
-                if not check_if_contained_in_symlink(fpath, dvc_dpath):
-                    rel_fpath = fpath.relative_to(dvc_dpath)
-                    needs_add.append(rel_fpath)
-
-    print(f'Need to add {len(needs_add)} summaries')
-    rel_fpaths = [str(p) for p in needs_add]
-
-    import os
-    import dvc.main
-    push_dpath = '/'.join(os.path.commonprefix([
-        ub.Path(p).parts for p in rel_fpaths]))
-    # from dvc import main
-    saved_cwd = os.getcwd()
-    try:
-        os.chdir(dvc_dpath)
-        dvc_command = ['add'] + rel_fpaths
-        dvc.main.main(dvc_command)
-
-        remote = 'horologic'
-        dvc_command = ['push', '-r', remote, '--recursive', str(push_dpath)]
-        dvc.main.main(dvc_command)
-    finally:
-        os.chdir(saved_cwd)
 
 
 def ensure_iterable(inputs):

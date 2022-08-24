@@ -864,6 +864,8 @@ def main(args):
             merge_fpath = merge_dpath / 'summary2.json'
         else:
             merge_fpath = ub.Path(args.merge_fpath)
+        import xdev
+        xdev.embed()
         merge_metrics_results(out_dirs, gt_dpath, merge_dpath, merge_fpath,
                               parent_info, info)
         print('merge_fpath = {!r}'.format(merge_fpath))

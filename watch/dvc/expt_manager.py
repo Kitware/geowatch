@@ -900,6 +900,7 @@ class ExperimentState(ub.NiceRepr):
         from watch.tasks.fusion.schedule_evaluation import schedule_evaluation
         model_globstr = state.path_patterns['pkg']
         test_kwcoco_fpath = state.data_dvc_dpath / state.dataset_code / 'data_vali.kwcoco.json'
+        annotations_dpath = state.data_dvc_dpath / 'annotations'
         # TODO: how do we make scriptconfig do modal CLIs easilly?
         # need to configure
         eval_kw = {
@@ -907,6 +908,7 @@ class ExperimentState(ub.NiceRepr):
             'model_globstr': model_globstr,
             # 'run': None,
             # 'run': 1,
+            'annotations_dpath': annotations_dpath,
             'devices': [0, 1],
         }
         # table = manager.versioned_table()
