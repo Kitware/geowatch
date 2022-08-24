@@ -1331,8 +1331,8 @@ def clean_loaded_data(big_rows):
                 g.add_edge(p, c)
 
     if 0:
-        from cmd_queue.util import graph_str
-        print(graph_str(g))
+        from cmd_queue.util.util_networkx import write_network_text
+        print(write_network_text(g))
 
     # Ensure we compute total epochs for earlier models first
     merged_df['total_steps'] = merged_df['step']
@@ -1357,11 +1357,13 @@ def clean_loaded_data(big_rows):
     star_flags = kwarray.isect_flags(merged_df['model'], stared_models)
     merged_df['in_production'] = star_flags
 
-    merged_df.loc[merged_df['trk_use_viterbi'].isnull(), 'trk_use_viterbi'] = 0
+    if 'trk_use_viterbi' in merged_df.columns:
+        merged_df.loc[merged_df['trk_use_viterbi'].isnull(), 'trk_use_viterbi'] = 0
 
-    merged_df['track_agg_fn'] = merged_df['trk_agg_fn'].fillna('probs')
-    flags = 1 - group['trk_thresh_hysteresis'].isnull()
-    merged_df['trk_thresh_hysteresis'] = merged_df['trk_thresh_hysteresis'].fillna(0) + (flags * merged_df['trk_thresh'])
+    if 'track_agg_fn' in merged_df.columns:
+        merged_df['track_agg_fn'] = merged_df['trk_agg_fn'].fillna('probs')
+        flags = 1 - group['trk_thresh_hysteresis'].isnull()
+        merged_df['trk_thresh_hysteresis'] = merged_df['trk_thresh_hysteresis'].fillna(0) + (flags * merged_df['trk_thresh'])
 
     actcfg_to_label = other['actcfg_to_label']
     predcfg_to_label = other['predcfg_to_label']
