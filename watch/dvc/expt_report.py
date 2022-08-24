@@ -56,16 +56,13 @@ def eval3_report():
     """
     MAIN FUNCTION
 
-    from watch.tasks.fusion.eval3_report import *  # NOQA
+    from watch.dvc.expt_report import *  # NOQA
     """
     import kwplot
     kwplot.autosns()
     import watch
-    try:
-        dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
-    except Exception:
-        dvc_dpath = watch.find_smart_dvc_dpath()
-    reporter = EvaluationReporter(dvc_dpath)
+    dvc_expt_dpath = watch.find_dvc_dpath(tags='phase2_expt')
+    reporter = EvaluationReporter(dvc_expt_dpath)
     reporter.load()
     reporter.summarize()
     plot_merged(reporter)
@@ -89,10 +86,10 @@ class EvaluationReporter:
     Manages handing the data off to experiment plotting functions.
     """
 
-    def __init__(self, dvc_dpath):
+    def __init__(self, dvc_expt_dpath):
         from watch.tasks.fusion import dvc_sync_manager
-        self.dvc_dpath = dvc_dpath
-        self.dvc_manager = dvc_sync_manager.DVCSyncManager.coerce(dvc_dpath)
+        self.dvc_expt_dpath = dvc_expt_dpath
+        self.dvc_manager = dvc_sync_manager.DVCSyncManager.coerce(dvc_expt_dpath)
         # dvc_sync_manager.main(command='pull evals')
         # dvc_sync_manager.main(command='pull packages')
 
@@ -100,14 +97,14 @@ class EvaluationReporter:
         self.filt_df = None
         self.comp_df = None
 
-        self.dpath = ub.Path.appdir('watch/report').ensuredir()
+        self.dpath = ub.Path.appdir('watch/expt-report').ensuredir()
 
     def summarize(self, table=None):
         if table is None:
             table = self.dvc_manager.evaluation_table()
         self.dvc_manager.summarize()
         if 0:
-            loaded_table = load_extended_data(table, self.dvc_dpath)
+            loaded_table = load_extended_data(table, self.dvc_expt_dpath)
             loaded_table = pd.DataFrame(loaded_table)
             # dataset_summary_tables(dpath)
             initial_summary(table, loaded_table, self.dpath)
@@ -154,7 +151,7 @@ class EvaluationReporter:
         """
         Load detailed data that might cross reference files
         """
-        self.big_rows = load_extended_data(self.comp_df, self.dvc_dpath)
+        self.big_rows = load_extended_data(self.comp_df, self.dvc_expt_dpath)
         set(r['expt'] for r in self.big_rows)
 
         orig_merged_df, other = clean_loaded_data(self.big_rows)
@@ -1018,7 +1015,7 @@ def unique_col_stats(df):
     return col_stats_df
 
 
-def load_extended_data(df, dvc_dpath):
+def load_extended_data(df, dvc_expt_dpath):
     from watch.tasks.fusion import aggregate_results as agr
     rows = df.to_dict('records')
     big_rows = []
@@ -1028,13 +1025,13 @@ def load_extended_data(df, dvc_dpath):
         fpath = row['raw']
         try:
             if row['type'] == 'eval_pxl':
-                pxl_info = agr.load_pxl_eval(fpath, dvc_dpath)
+                pxl_info = agr.load_pxl_eval(fpath, dvc_expt_dpath)
                 big_row['info'] = pxl_info
             elif row['type'] == 'eval_act':
-                sc_info = agr.load_sc_eval(fpath, dvc_dpath)
+                sc_info = agr.load_sc_eval(fpath, dvc_expt_dpath)
                 big_row['info'] = sc_info
             elif row['type'] == 'eval_trk':
-                bas_info = agr.load_bas_eval(fpath, dvc_dpath)
+                bas_info = agr.load_bas_eval(fpath, dvc_expt_dpath)
                 big_row['info'] = bas_info
             else:
                 raise KeyError(row['type'])
@@ -1650,7 +1647,7 @@ def dataset_summary_tables(dpath):
 
     memo_kwcoco_load = ub.memoize(kwcoco.CocoDataset)
 
-    dvc_dpath = watch.find_smart_dvc_dpath()
+    dvc_expt_dpath = watch.find_smart_dvc_dpath()
     rows = []
     DSET_CODE_TO_TASK = {
         'Aligned-Drop3-TA1-2022-03-10': 'bas',
@@ -1660,7 +1657,7 @@ def dataset_summary_tables(dpath):
     for bundle_name in DSET_CODE_TO_TASK.keys():
         task = DSET_CODE_TO_TASK[bundle_name]
         gsd = DSET_CODE_TO_GSD[bundle_name]
-        bundle_dpath = dvc_dpath / bundle_name
+        bundle_dpath = dvc_expt_dpath / bundle_name
         train_fpath = bundle_dpath / 'data_train.kwcoco.json'
         vali_fpath = bundle_dpath / 'data_vali.kwcoco.json'
 
