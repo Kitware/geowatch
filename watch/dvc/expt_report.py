@@ -1173,19 +1173,19 @@ def clean_loaded_data(big_rows):
         selected_fit_params = ub.dict_isect(fit_params, fit_param_keys2)
 
         param_type['fit']
-        act_cfg = row['act_cfg']
+        act_cfg = row.get('act_cfg', None)
         if not is_null(act_cfg):
             track_cfg = param_type.get('track', None)
             row.update(track_cfg)
             _actcfg_to_track_config[act_cfg].append(track_cfg)
 
-        trk_cfg = row['trk_cfg']
+        trk_cfg = row.get('trk_cfg', None)
         if not is_null(trk_cfg):
             track_cfg = param_type.get('track', None)
             row.update(track_cfg)
             _trkcfg_to_track_config[trk_cfg].append(track_cfg)
 
-        pred_cfg = row['pred_cfg']
+        pred_cfg = row.get('pred_cfg', None)
         if not is_null(trk_cfg):
             pred_config = param_type.get('pred', None)
             pred_config = ub.dict_isect(pred_config, pred_param_keys)
