@@ -756,17 +756,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             # - [ ] per-frame semenatic segmentation
             item_output = {}
             if outputs is not None:
-                # print('outputs = {!r}'.format(outputs))
                 item_output = ub.AutoDict()
-                # output_walker = ub.IndexableWalker(item_output)
-                # input_walker = ub.IndexableWalker(outputs)
-                # for p, v in input_walker:
-                #     if isinstance(v, torch.Tensor):
-                #         d = input_walker
-                #         for k in p[:-1]:
-                #             d = d[k]
-                #         d[p[-1]] = v.data.cpu().numpy()
-                # print('item_output = {!r}'.format(item_output))
                 for head_key in ['change_probs', 'class_probs', 'saliency_probs']:
                     if head_key in outputs:
                         item_output[head_key] = [f.data.cpu().numpy() for f in outputs[head_key][item_idx]]
@@ -1175,14 +1165,6 @@ class KWCocoVideoDataset(data.Dataset):
 
             self.sensorchan = kwcoco.SensorChanSpec.coerce(','.join(list(ub.unique(expanded_input_sensorchan_streams)))).normalize()
 
-        # Hack away sensors
-        # print(f'self.sensorchan={self.sensorchan=!r}')
-        # channels = ','.join(sorted(ub.unique([s.chans.spec for s in self.sensorchan.streams()])))
-        # channels = channel_spec.ChannelSpec.coerce(channels).normalize()
-        # self.channels = channels
-
-        # NEW = 1
-        # if NEW:
         # TODO: Clean up this code.
         _input_channels = []
         _sample_channels = []
@@ -1217,40 +1199,6 @@ class KWCocoVideoDataset(data.Dataset):
             self.input_sensorchan = kwcoco.SensorChanSpec.coerce(
                 ','.join(_input_sensorchans)
             )
-        # else:
-        #     _input_channels = []
-        #     _sample_channels = []
-        #     for key, stream in channels.parse().items():
-        #         _stream = stream.as_oset()
-        #         _sample_stream = _stream.copy()
-        #         special_bands = _stream & util_bands.SPECIALIZED_BANDS
-        #         if special_bands:
-        #             # TODO: introspect which extra bands are needed for to compute
-        #             # the sample, but hard code for now
-        #             _sample_stream -= special_bands
-        #             _sample_stream = _sample_stream | ub.oset('blue|green|red|nir|swir16|swir22'.split('|'))
-        #             self.special_inputs[key] = special_bands
-        #         if self.diff_inputs:
-        #             _stream = [s + p for p in _stream for s in ['', 'D']]
-        #         _input_channels.append('|'.join(_stream))
-        #         _sample_channels.append('|'.join(_sample_stream))
-
-        # DEPRECATE channel only stuff. Use sensorchan everywhere
-        # * sample_channels
-        # * input_channels
-
-        # Some of the channels are computed on the fly.
-        # This is the list of ones that are loaded from disk.
-        # self.sample_channels = kwcoco.channel_spec.ChannelSpec(
-        #     ','.join(_sample_channels)
-        # )
-        # self.input_channels = kwcoco.channel_spec.ChannelSpec.coerce(
-        #     ','.join(_input_channels)
-        # )
-
-        # TODO:
-        # We need to know all of the combinations of channels each data item
-        # could produce
 
         self.mode = mode
 

@@ -1,3 +1,7 @@
+"""
+I dont like the name of this file. I want to rename it, but it exists to keep
+the size of the datamodule down for now.
+"""
 import numpy as np
 import ubelt as ub
 import kwarray

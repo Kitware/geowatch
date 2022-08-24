@@ -10,8 +10,9 @@ def request_dvc_path(fpath):
         dvc_fpath = fpath.augment(stem=fpath.name, ext='.dvc')
         if dvc_fpath.exists():
             remote = 'aws'  # parametarize
-            ub.cmd(f'dvc pull -r {remote} {dvc_fpath.name}',
-                   cwd=dvc_fpath.parent, verbose=2, check=True)
+            from watch.utils.simple_dvc import SimpleDVC
+            dvc = SimpleDVC()
+            dvc.pull(dvc_fpath, remote=remote)
         raise Exception('File {} not exist in a DVC directory'.format(dvc_fpath))
 
 
@@ -26,10 +27,9 @@ def test_predict_old_fusion_model():
     import kwcoco
     import pytest
     from watch.utils import kwcoco_extensions
-    import ubelt as ub
 
     try:
-        dvc_dpath = watch.find_smart_dvc_dpath()
+        dvc_dpath = watch.find_smart_dvc_dpath(tags='phase1_data')
     except Exception:
         pytest.skip('dvc path does not exist')
 
@@ -39,7 +39,9 @@ def test_predict_old_fusion_model():
     # model_fpath = dvc_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v39/SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=53-step=2311901.pt'
     model_fpath = dvc_dpath / 'models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt'
 
-    request_dvc_path(model_fpath)
+    from watch.utils.simple_dvc import SimpleDVC
+    dvc = SimpleDVC()
+    dvc.request(model_fpath)
 
     # from watch.tasks.fusion import utils
     # method = utils.load_model_from_package(model_fpath)
@@ -51,7 +53,7 @@ def test_predict_old_fusion_model():
         pytest.skip('expected model does not exist')
 
     if not coco_fpath.exists():
-        pytest.skip('expected data does not exist')
+        pytest.skip('expected test data does not exist')
 
     dset = kwcoco.CocoDataset(coco_fpath)
 

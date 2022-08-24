@@ -22,7 +22,7 @@ from watch.tasks.tracking.utils import mask_to_polygons
 from watch.utils import util_path
 from watch.utils import util_parallel
 from watch.utils import util_kwimage
-from watch.tasks.fusion.datamodules.kwcoco_video_data import inv_fliprot
+from watch.tasks.fusion.datamodules import data_utils
 # APPLY Monkey Patches
 from watch.tasks.fusion import monkey  # NOQA
 
@@ -722,7 +722,7 @@ def predict(cmdline=False, **kwargs):
                     for gid, probs in zip(out_gids, bin_probs):
                         if fliprot_params is not None:
                             # Undo fliprot TTA
-                            probs = inv_fliprot(probs, **fliprot_params)
+                            probs = data_utils.inv_fliprot(probs, **fliprot_params)
                         head_stitcher.accumulate_image(gid, space_slice, probs)
 
                 # Free up space for any images that have been completed
