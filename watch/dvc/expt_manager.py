@@ -419,7 +419,6 @@ class ExperimentState(ub.NiceRepr):
             'spkg': 'runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{model}.pt',
         }
 
-        # Volitile (unused: todo incorporate)
         self.volitile_templates = {
             'pred_pxl': 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/pred.kwcoco.json',
             'pred_trk': 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/tracking/{trk_cfg}/tracks.json',
@@ -741,7 +740,7 @@ class ExperimentState(ub.NiceRepr):
         tables = ub.udict({
             'staging': staging_df,
             'versioned': versioned_df,
-            'volitile': versioned_df,
+            'volitile': volitile_df,
         })
         return tables
 
@@ -901,7 +900,7 @@ def summarize_tables(tables):
     versioned_df = tables.get('versioned', None)
 
     if staging_df is not None:
-        title = '[yellow] Staging summary'
+        title = '[yellow] Staging Summary'
 
         if len(staging_df):
             staging_df['needs_copy'] = (~staging_df['is_copied'])
@@ -913,7 +912,7 @@ def summarize_tables(tables):
         print(Panel(body, title=title))
 
     if volitile_df is not None:
-        title = ('[bright_blue] Volitile summary')
+        title = ('[bright_blue] Volitile Summary')
         if len(volitile_df):
             num_pred_types = volitile_df.groupby(['dataset_code', 'type']).nunique()
             body_df = num_pred_types
@@ -924,7 +923,7 @@ def summarize_tables(tables):
         print(Panel(body, title=title))
 
     if versioned_df is not None:
-        title = ('[bright_green] Versioned summary')
+        title = ('[bright_green] Versioned Summary')
         # if 'has_orig' not in versioned_df.columns:
         #     versioned_df['has_orig'] = np.nan
         # version_bitcols = ['has_raw', 'has_dvc', 'is_link', 'is_broken', 'needs_pull', 'needs_push', 'has_orig']
@@ -935,7 +934,6 @@ def summarize_tables(tables):
         else:
             body = console.highlighter('There are no versioned items')
         print(Panel(body, title=title))
-
 
 
 def checkpoint_filepath_info(fname):
