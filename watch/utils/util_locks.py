@@ -36,6 +36,7 @@ class Superlock:
         >>> lock2.release()
 
     Example:
+        >>> # xdoctest: +SKIP("process locks dont lock within a thread")
         >>> from watch.utils.util_locks import *  # NOQA
         >>> import ubelt as ub
         >>> lock1 = Superlock(thread_key=None)
