@@ -11,14 +11,15 @@ Example:
     export DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
     cd $DVC_EXPT_DPATH
 
-    python -m watch.dvc.expt_manager "list" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch.dvc.expt_manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch.dvc.expt_manager "summary" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
 
     # On training machine
     python -m watch.dvc.expt_manager "push packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
 
     # On testing machine
     python -m watch.dvc.expt_manager "pull packages"
-    python -m watch.dvc.expt_manager "list"
+    python -m watch.dvc.expt_manager "status"
 
     # Run evals on testing machine
     python -m watch.dvc.expt_manager "evaluate" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
@@ -98,12 +99,7 @@ class ExptManagerConfig(scfg.Config):
         $EXPT_DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/$EXPT_MODEL_GLOBNAME/*.pt
     """
     default = {
-        'command': scfg.Value(None, help='if specified, will overload other options', position=1),
-        'push': scfg.Value(True, help='if True, will push results to the dvc_remote'),
-        'pull': scfg.Value(True, help='if True, will pull results to the dvc_remote'),
-
-        'packages': scfg.Value(True, help='sync packages'),
-        'evals': scfg.Value(True, help='sync evaluations'),
+        'command': scfg.Value(None, nargs='*', help='if specified, will overload other options', position=1),
 
         'dvc_remote': scfg.Value('aws', help='dvc remote to sync to/from'),
 
@@ -142,29 +138,28 @@ def main(cmdline=True, **kwargs):
     config = ExptManagerConfig(cmdline=cmdline, data=kwargs)
     print('ExptManagerConfig config = {}'.format(ub.repr2(dict(config), nl=1)))
     command = config['command']
-    dolist = 0
-    doevaluation = 0
-    if command is not None:
-        config['push'] = False
-        config['pull'] = False
-        config['evals'] = False
-        config['packages'] = False
-        if 'list' in command:
-            dolist = True
-        if 'all' in command:
-            config['packages'] = True
-            config['evals'] = True
-        if 'pull' in command:
-            config['pull'] = True
-        if 'push' in command:
-            config['push'] = True
-        if 'evals' in command:
-            config['evals'] = True
-        if 'packages' in command:
-            config['packages'] = True
-        if 'evaluate' in command:
-            doevaluation = 1
 
+    available_actions = [
+        'status', 'evaluate', 'push', 'pull', 'list'
+    ]
+    available_targets = [
+        'packages', 'evals'
+    ]
+
+    actions = []
+    targets = []
+
+    if command is not None and command:
+        for c in command:
+            for a in available_actions:
+                if a in c:
+                    actions.append(a)
+            for t in available_targets:
+                if t in c:
+                    targets.append(t)
+
+    print(f'actions={actions}')
+    print(f'targets={targets}')
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
     dvc_remote = config['dvc_remote']
@@ -176,7 +171,6 @@ def main(cmdline=True, **kwargs):
 
     if config['expt_dvc_dpath'] == 'auto':
         config['expt_dvc_dpath'] = watch.find_dvc_dpath(tags='phase2_expt', envvar='EXPT_DVC_DPATH')
-
     if config['data_dvc_dpath'] == 'auto':
         config['data_dvc_dpath'] = watch.find_dvc_dpath(tags='phase2_data', envvar='DATA_DVC_DPATH')
 
@@ -186,15 +180,20 @@ def main(cmdline=True, **kwargs):
     manager = DVCExptManager(
         expt_dvc_dpath, dvc_remote=dvc_remote, dataset_codes=dataset_codes,
         data_dvc_dpath=data_dvc_dpath, model_pattern=config['model_pattern'])
-    synckw = ub.compatible(config, manager.sync)
-    manager.sync(**synckw)
 
-    if dolist:
+    if 'pull' in actions:
+        manager.pull(targets)
+
+    if 'push' in actions:
+        manager.push(targets)
+
+    if 'status' in actions:
         manager.summarize()
 
-    if doevaluation:
-        # import xdev
-        # xdev.embed()
+    if 'list' in actions:
+        manager.list()
+
+    if 'evaluate' in actions:
         self = manager
         for state in self.states:
             state.schedule_evaluation()
@@ -225,31 +224,57 @@ class DVCExptManager(ub.NiceRepr):
         >>> # xdoctest: +REQUIRES(env:EXPT_DVC_DPATH)
         >>> from watch.dvc.expt_manager import *  # NOQA
         >>> import watch
-        >>> self = DVCExptManager.coerce(watch.find_dvc_dpath(tags='phase2_expt'))
-        >>> self.summarize()
+        >>> manager = DVCExptManager.coerce(watch.find_dvc_dpath(tags='phase2_expt'))
+        >>> manager.summarize()
 
     Ignore:
         broke = df[df['is_broken']]
     """
 
-    def __nice__(self):
-        return str(self.dvc)
+    def __nice__(manager):
+        return str(manager.dvc)
 
-    def __init__(self, expt_dvc_dpath, dvc_remote='aws', dataset_codes=None,
+    def __init__(manager, expt_dvc_dpath, dvc_remote='aws', dataset_codes=None,
                  data_dvc_dpath=None, model_pattern='*'):
-        self.model_pattern = model_pattern
-        self.expt_dvc_dpath = expt_dvc_dpath
-        self.data_dvc_dpath = data_dvc_dpath
-        self.dvc_remote = dvc_remote
-        self.dataset_codes = dataset_codes
-        self.dvc = simple_dvc.SimpleDVC.coerce(expt_dvc_dpath, remote=dvc_remote)
-        self._build_states()
+        manager.model_pattern = model_pattern
+        manager.expt_dvc_dpath = expt_dvc_dpath
+        manager.data_dvc_dpath = data_dvc_dpath
+        manager.dvc_remote = dvc_remote
+        manager.dataset_codes = dataset_codes
+        manager.dvc = simple_dvc.SimpleDVC.coerce(expt_dvc_dpath, remote=dvc_remote)
+        manager._build_states()
 
-    def summarize(self):
-        # for state in self.states:
+    def summarize(manager):
+        # for state in manager.states:
         #     state.summarize()
-        tables = self.cross_referenced_tables()
+        tables = manager.cross_referenced_tables()
         summarize_tables(tables)
+
+    def list(manager):
+        tables = manager.cross_referenced_tables()
+
+        if 'staging' in tables:
+            todrop = ['expt_dvc_dpath', 'raw', 'ckpt_path', 'spkg_path', 'pkg_path', 'lightning_version', 'ckpt_exists']
+            df = tables['staging']
+            print(df.drop(ub.oset(todrop) & df.columns, axis=1).to_string())
+
+        if 'volitile' in tables:
+            volitile_drop = ['expt_dvc_dpath', 'raw', '']
+            todrop = volitile_drop
+            df = tables['volitile']
+            print(df.drop(ub.oset(todrop) & df.columns, axis=1).to_string())
+
+        if 'versioned' in tables:
+            volitile_drop = ['raw', 'dvc', 'expt_dvc_dpath', 'expt',
+                             'is_broken', 'is_link', 'has_raw', 'has_dvc',
+                             'unprotected', 'needs_pull', 'needs_push',
+                             'has_orig']
+            todrop = volitile_drop
+            df = tables['versioned']
+            type_to_versioned = dict(list(df.groupby('type')))
+            for type, subdf in type_to_versioned.items():
+                print(f'type={type}')
+                print(subdf.drop(ub.oset(todrop) & df.columns, axis=1).to_string())
 
     @classmethod
     def coerce(cls, expt_dvc_dpath=None):
@@ -258,48 +283,48 @@ class DVCExptManager(ub.NiceRepr):
             expt_dvc_dpath = watch.find_smart_dvc_dpath()
         dvc_remote = 'aws'
         dataset_codes = DATASET_CODES
-        self = cls(expt_dvc_dpath=expt_dvc_dpath, dvc_remote=dvc_remote,
-                   dataset_codes=dataset_codes)
-        return self
+        manager = cls(expt_dvc_dpath=expt_dvc_dpath, dvc_remote=dvc_remote,
+                      dataset_codes=dataset_codes)
+        return manager
 
-    def _build_states(self):
+    def _build_states(manager):
         states = []
-        for dataset_code in self.dataset_codes:
+        for dataset_code in manager.dataset_codes:
             state = ExperimentState(
-                self.expt_dvc_dpath, dataset_code, dvc_remote=self.dvc_remote,
-                data_dvc_dpath=self.data_dvc_dpath,
-                model_pattern=self.model_pattern)
+                manager.expt_dvc_dpath, dataset_code, dvc_remote=manager.dvc_remote,
+                data_dvc_dpath=manager.data_dvc_dpath,
+                model_pattern=manager.model_pattern)
             states.append(state)
-        self.states = states
+        manager.states = states
 
-    def versioned_table(self, **kw):
-        rows = list(ub.flatten(state.versioned_rows(**kw) for state in self.states))
+    def versioned_table(manager, **kw):
+        rows = list(ub.flatten(state.versioned_rows(**kw) for state in manager.states))
         df = pd.DataFrame(rows)
         return df
 
-    def volitile_table(self, **kw):
-        rows = list(ub.flatten(state.volitile_table(**kw) for state in self.states))
+    def volitile_table(manager, **kw):
+        rows = list(ub.flatten(state.volitile_table(**kw) for state in manager.states))
         df = pd.DataFrame(rows)
         return df
 
-    def evaluation_table(self):
-        rows = list(ub.flatten(state.evaluation_rows() for state in self.states))
+    def evaluation_table(manager):
+        rows = list(ub.flatten(state.evaluation_rows() for state in manager.states))
         df = pd.DataFrame(rows)
         return df
 
-    def cross_referenced_tables(self):
+    def cross_referenced_tables(manager):
         import pandas as pd
         table_accum = ub.ddict(list)
-        for state in self.states:
+        for state in manager.states:
             tables = state.cross_referenced_tables()
             for k, v in tables.items():
                 table_accum[k].append(v)
         combo_tables = ub.udict(table_accum).map_values(lambda vs: pd.concat(vs))
         return combo_tables
 
-    def push_evals(self):
-        dvc = self.dvc
-        eval_df = self.evaluation_table()
+    def push_evals(manager):
+        dvc = manager.dvc
+        eval_df = manager.evaluation_table()
         summarize_tables({'versioned': eval_df})
 
         is_weird = (eval_df.is_link & (~eval_df.has_dvc))
@@ -321,14 +346,14 @@ class DVCExptManager(ub.NiceRepr):
             dvc.git_commitpush(f'Sync evals from {platform.node()}')
             dvc.push(to_push_fpaths)
 
-    def pull_evals(self):
-        dvc = self.dvc
+    def pull_evals(manager):
+        dvc = manager.dvc
         dvc.git_pull()
-        eval_df = self.evaluation_table()
+        eval_df = manager.evaluation_table()
         summarize_tables({'versioned': eval_df})
 
-        # self.summarize()
-        print(f'self.expt_dvc_dpath={self.expt_dvc_dpath}')
+        # manager.summarize()
+        print(f'manager.expt_dvc_dpath={manager.expt_dvc_dpath}')
         print(len(eval_df))
         eval_df = eval_df[~eval_df['is_broken']]
         pull_rows = eval_df[eval_df.needs_pull]
@@ -336,34 +361,34 @@ class DVCExptManager(ub.NiceRepr):
         print(f'{len(pull_fpaths)=}')
         dvc.pull(pull_fpaths)
 
-    def pull_packages(self):
+    def pull_packages(manager):
         # TODO: git pull
-        pkg_df = self.versioned_table(types=['pkg'])
+        pkg_df = manager.versioned_table(types=['pkg'])
         pull_df = pkg_df[pkg_df['needs_pull']]
 
         pull_fpaths = pull_df['dvc'].tolist()
-        self.dvc.pull(pull_fpaths)
+        manager.dvc.pull(pull_fpaths)
 
-    def push_packages(self):
+    def push_packages(manager):
         """
         TODO: break this up into smaller components.
         """
         # from watch.tasks.fusion import repackage
         # mode = 'commit'
-        for state in self.states:
+        for state in manager.states:
             state.push_packages()
 
-    def sync(self, push=True, pull=True, evals=True, packages=True):
-        if push:
-            if packages:
-                self.push_packages()
-            if evals:
-                self.push_evals()
-        if pull:
-            if packages:
-                self.pull_packages()
-            if evals:
-                self.pull_evals()
+    def push(manager, targets):
+        if 'packages' in targets:
+            manager.push_packages()
+        if 'evals' in targets:
+            manager.push_evals()
+
+    def pull(manager, targets):
+        if 'packages' in targets:
+            manager.pull_packages()
+        if 'evals' in targets:
+            manager.pull_evals()
 
 
 class ExperimentState(ub.NiceRepr):
@@ -850,7 +875,7 @@ class ExperimentState(ub.NiceRepr):
             dvc pull -r aws --recursive models/fusion/{self.dataset_code}
 
             python -m watch.dvc.expt_manager "pull packages" --dvc_dpath=$DVC_EXPT_DPATH
-            python -m watch.dvc.expt_manager "list packages" --dvc_dpath=$DVC_EXPT_DPATH
+            python -m watch.dvc.expt_manager "status packages" --dvc_dpath=$DVC_EXPT_DPATH
             python -m watch.dvc.expt_manager "evaluate" --dvc_dpath=$DVC_EXPT_DPATH
 
             # setup right params
@@ -1002,7 +1027,7 @@ if __name__ == '__main__':
     """
     CommandLine:
         python ~/code/watch/watch/dvc/expt_manager.py "pull all"
-        python -m watch.dvc.expt_manager "list"
+        python -m watch.dvc.expt_manager "status"
         python -m watch.dvc.expt_manager "push all"
         python -m watch.dvc.expt_manager "pull evals"
 
