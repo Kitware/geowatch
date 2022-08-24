@@ -87,9 +87,9 @@ class EvaluationReporter:
     """
 
     def __init__(self, dvc_expt_dpath):
-        from watch.tasks.fusion import dvc_sync_manager
+        from watch.dvc import expt_manager
         self.dvc_expt_dpath = dvc_expt_dpath
-        self.dvc_manager = dvc_sync_manager.DVCSyncManager.coerce(dvc_expt_dpath)
+        self.dvc_manager = expt_manager.DVCExptManager.coerce(dvc_expt_dpath)
         # dvc_sync_manager.main(command='pull evals')
         # dvc_sync_manager.main(command='pull packages')
 

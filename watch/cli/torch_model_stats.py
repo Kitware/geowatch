@@ -157,12 +157,22 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
         if fit_config['global_saliency_weight']:
             heads.append('saliency')
 
-        spacetime_stats = {
-            'chip_size': fit_config['chip_size'],
-            'time_steps': fit_config['time_steps'],
-            'time_sampling': fit_config['time_sampling'],
-            'time_span': fit_config['time_span'],
-        }
+        spacetime_stats = ub.udict(fit_config) & [
+            'chip_size',
+            'time_steps',
+            'time_sampling',
+            'time_span',
+            'chip_dims',
+            'window_space_scale',
+            'space_scale',
+        ]
+
+        # spacetime_stats = {
+        #     'chip_size': fit_config['chip_size'],
+        #     'time_steps': fit_config['time_steps'],
+        #     'time_sampling': fit_config['time_sampling'],
+        #     'time_span': fit_config['time_span'],
+        # }
 
         model_stats['size'] = size_str
         model_stats['num_params'] = num_params
