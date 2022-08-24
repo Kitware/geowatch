@@ -516,6 +516,7 @@ def coerce_kwcoco(data='watch-msi', **kwargs):
     coerce with watch special datasets
     """
     if isinstance(data, str) and 'watch' in data.split('-'):
+        kwargs.pop('sqlview', None)
         return demo_kwcoco_multisensor(**kwargs)
     else:
         return kwcoco.CocoDataset.coerce(data, **kwargs)

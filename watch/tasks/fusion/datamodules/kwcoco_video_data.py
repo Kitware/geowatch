@@ -31,6 +31,7 @@ from watch.utils import util_kwimage
 from watch.utils import util_time
 from watch.utils.lightning_ext import util_globals
 from watch.tasks.fusion import utils
+from watch.tasks.fusion.datamodules import data_utils
 from watch.tasks.fusion.datamodules.spacetime_grid_builder import sample_video_spacetime_targets
 
 # __all__ = ['KWCocoVideoDataModule', 'KWCocoVideoDataset']
@@ -594,14 +595,13 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
     def _make_dataloader(self, stage, shuffle=False):
         # import nonechucks
         # nonechucks.SafeDataset
-        return data.DataLoader(
-            self.torch_datasets[stage],
+        loader = self.torch_datasets[stage].make_loader(
             batch_size=self.batch_size,
             num_workers=self.num_workers,
-            collate_fn=ub.identity,  # disable collation
             shuffle=shuffle,
             pin_memory=True,
         )
+        return loader
 
     def _notify_about_tasks(self, requested_tasks=None, model=None):
         """
@@ -1101,7 +1101,7 @@ class KWCocoVideoDataset(data.Dataset):
                     rechunked_video_pool = list(util_iter.chunks(vid_pool, nchunks=max_per_vid))
                     all_chunks.extend(rechunked_video_pool)
 
-                self.nested_pool = NestedPool(all_chunks)
+                self.nested_pool = data_utils.NestedPool(all_chunks)
 
             if 0:
                 import netharn as nh
@@ -1567,7 +1567,7 @@ class KWCocoVideoDataset(data.Dataset):
 
                 # prevent shifting the target off the edge of the video
                 snap_target = kwimage.Boxes([[0, 0, vid_width, vid_height]], 'ltrb')
-                space_box = _boxes_snap_to_edges(space_box, snap_target)
+                space_box = data_utils._boxes_snap_to_edges(space_box, snap_target)
 
                 target_['space_slice'] = space_box.astype(int).to_slices()[0]
 
@@ -2232,7 +2232,6 @@ class KWCocoVideoDataset(data.Dataset):
 
         # Resolve spatial scale code
         vidspace_gsd = video.get('target_gsd', None)
-        from watch.tasks.fusion.datamodules import data_utils
         resolved_scale = data_utils.resolve_scale_request(
             request=space_scale, data_gsd=vidspace_gsd)
         sample_scale = resolved_scale['scale']
@@ -2739,11 +2738,11 @@ class KWCocoVideoDataset(data.Dataset):
                 frame_modes = frame_item['modes']
                 for mode_key in list(frame_modes.keys()):
                     mode_data = frame_modes[mode_key]
-                    frame_modes[mode_key] = fliprot(mode_data, **fliprot_params, axes=[1, 2])
+                    frame_modes[mode_key] = data_utils.fliprot(mode_data, **fliprot_params, axes=[1, 2])
                 for key in truth_keys:
                     data = frame_item.get(key, None)
                     if data is not None:
-                        frame_item[key] = fliprot(data, **fliprot_params, axes=[-2, -1])
+                        frame_item[key] = data_utils.fliprot(data, **fliprot_params, axes=[-2, -1])
 
         # Convert data to torch
         for frame_item in frame_items:
@@ -2780,7 +2779,7 @@ class KWCocoVideoDataset(data.Dataset):
                     # Maybe this should be a model responsibility.
                     # I dont like defining the positional encoding in the
                     # dataset
-                    key_tensor = _string_to_hashvec(mode_code)
+                    key_tensor = data_utils._string_to_hashvec(mode_code)
                     permode_datas['mode_tensor'].append(key_tensor)
                     #
                     k = 'time_index'
@@ -2799,7 +2798,7 @@ class KWCocoVideoDataset(data.Dataset):
                     permode_datas['time_offset'].append(time_offset)
 
                     k = 'sensor'
-                    key_tensor = _string_to_hashvec(k)
+                    key_tensor = data_utils._string_to_hashvec(k)
                     permode_datas[k].append(key_tensor)
 
                 frame_item['time_offset'] = time_offset
@@ -2808,7 +2807,7 @@ class KWCocoVideoDataset(data.Dataset):
             positional_arrays = ub.map_vals(np.stack, permode_datas)
             time_offset = positional_arrays.pop('time_offset', None)
             if time_offset is not None:
-                scaled_time_offset = abslog_scaling(time_offset)
+                scaled_time_offset = data_utils.abslog_scaling(time_offset)
                 positional_arrays['time_offset'] = scaled_time_offset
             else:
                 print('NONE TIME OFFSET: {}'.format(list(permode_datas.keys())))
@@ -2990,10 +2989,8 @@ class KWCocoVideoDataset(data.Dataset):
         # Hack: disable augmentation if we are doing that
         self.disable_augmenter = True
 
-        loader = torch.utils.data.DataLoader(
-            stats_subset,
-            collate_fn=ub.identity, num_workers=num_workers, shuffle=True,
-            batch_size=batch_size)
+        loader = self.make_loader(subset=stats_subset, num_workers=num_workers,
+                                  shuffle=True, batch_size=batch_size)
 
         # Track moving average of each fused channel stream
         channel_stats = ub.AutoDict()
@@ -3332,9 +3329,16 @@ class KWCocoVideoDataset(data.Dataset):
         canvas = builder.build()
         return canvas
 
-    def make_loader(self, batch_size=1, num_workers=0, shuffle=False,
+    def make_loader(self, subset=None, batch_size=1, num_workers=0, shuffle=False,
                     pin_memory=False):
         """
+        Use this to make the dataloader so we ensure that we have the right
+        worker init function.
+
+        Args:
+            subset (None | Dataset): if specified, the loader is made for
+                this dataset instead of ``self``.
+
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> import ndsampler
@@ -3347,151 +3351,20 @@ class KWCocoVideoDataset(data.Dataset):
         """
         loader = torch.utils.data.DataLoader(
             self, batch_size=batch_size, num_workers=num_workers,
-            shuffle=shuffle, pin_memory=pin_memory, collate_fn=ub.identity)
+            shuffle=shuffle, pin_memory=pin_memory,
+            worker_init_fn=worker_init_fn,
+            collate_fn=ub.identity,  # disable collation
+        )
         return loader
 
 
-class NestedPool(list):
-    """
-    Example:
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-        >>> nested1 = NestedPool([[[1], [2, 3], [4, 5, 6], [7, 8, 9, 0]], [[11, 12, 13]]])
-        >>> print({nested1.sample() for i in range(100)})
-        >>> nested2 = NestedPool([[101], [102, 103], [104, 105, 106], [107, 8, 9, 0]])
-        >>> print({nested2.sample() for i in range(100)})
-        >>> nested3 = NestedPool([nested1, nested2, [4, 59, 9, [], []]])
-        >>> print({nested3.sample() for i in range(100)})
-        >>> print(ub.repr2(ub.dict_hist(nested3.sample() for i in range(100))))
-    """
-    def __init__(nested, pools, rng=None):
-        super().__init__(pools)
-        nested.rng = rng = kwarray.ensure_rng(rng)
-        nested.pools = pools
+def worker_init_fn(worker_id):
+    worker_info = torch.utils.data.get_worker_info()  # TODO
+    self = worker_info.dataset
 
-    def sample(nested):
-        # Hack for empty lists
-        chosen = nested
-        i = 0
-        while ub.iterable(chosen):
-            chosen = nested
-            i += 1
-            while ub.iterable(chosen):
-                i += 1
-                num = len(chosen)
-                if i > 100000:
-                    raise Exception('Too many samples. Bad balance?')
-                if not num:
-                    break
-                idx = nested.rng.randint(0, num)
-                chosen = chosen[idx]
-
-        return chosen
-
-
-def _boxes_snap_to_edges(given_box, snap_target):
-    """
-    Ignore:
-        given_box = space_box
-        , snap_target
-
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import _boxes_snap_to_edges
-        >>> snap_target = kwimage.Boxes([[0, 0, 10, 10]], 'ltrb')
-        >>> given_box = kwimage.Boxes([[-3, 5, 3, 13]], 'ltrb')
-        >>> adjusted_box = _boxes_snap_to_edges(given_box, snap_target)
-        >>> print('adjusted_box = {!r}'.format(adjusted_box))
-
-        _boxes_snap_to_edges(kwimage.Boxes([[-3, 3, 20, 13]], 'ltrb'), snap_target)
-        _boxes_snap_to_edges(kwimage.Boxes([[-3, -3, 3, 3]], 'ltrb'), snap_target)
-        _boxes_snap_to_edges(kwimage.Boxes([[7, 7, 15, 15]], 'ltrb'), snap_target)
-    """
-    s_x1, s_y1, s_x2, s_y2 = snap_target.components
-    g_x1, g_y1, g_x2, g_y2 = given_box.components
-
-    xoffset1 = -np.minimum((g_x1 - s_x1), 0)
-    yoffset1 = -np.minimum((g_y1 - s_y1), 0)
-
-    xoffset2 = np.minimum((s_x2 - g_x2), 0)
-    yoffset2 = np.minimum((s_y2 - g_y2), 0)
-
-    xoffset = (xoffset1 + xoffset2).ravel()[0]
-    yoffset = (yoffset1 + yoffset2).ravel()[0]
-
-    adjusted_box = given_box.translate((xoffset, yoffset))
-    return adjusted_box
-
-
-def fliprot(img, rot_k=0, flip_axis=None, axes=(0, 1)):
-    """
-    Args:
-        img (ndarray): H, W, C
-
-        rot_k (int): number of ccw rotations
-
-        flip_axis(Tuple[int, ...]):
-            either [], [0], [1], or [0, 1].
-            0 is the y axis and 1 is the x axis.
-
-        axes (Typle[int, int]): the location of the y and x axes
-
-    Example:
-        >>> img = np.arange(16).reshape(4, 4)
-        >>> unique_fliprots = [
-        >>>     {'rot_k': 0, 'flip_axis': None},
-        >>>     {'rot_k': 0, 'flip_axis': (0,)},
-        >>>     {'rot_k': 1, 'flip_axis': None},
-        >>>     {'rot_k': 1, 'flip_axis': (0,)},
-        >>>     {'rot_k': 2, 'flip_axis': None},
-        >>>     {'rot_k': 2, 'flip_axis': (0,)},
-        >>>     {'rot_k': 3, 'flip_axis': None},
-        >>>     {'rot_k': 3, 'flip_axis': (0,)},
-        >>> ]
-        >>> for params in unique_fliprots:
-        >>>     img_fw = fliprot(img, **params)
-        >>>     img_inv = inv_fliprot(img_fw, **params)
-        >>>     assert np.all(img == img_inv)
-    """
-    if rot_k != 0:
-        img = np.rot90(img, k=rot_k, axes=axes)
-    if flip_axis is not None:
-        _flip_axis = np.asarray(axes)[flip_axis]
-        img = np.flip(img, axis=_flip_axis)
-    return img
-
-
-def inv_fliprot(img, rot_k=0, flip_axis=None, axes=(0, 1)):
-    """
-    Undo a fliprot
-
-    Args:
-        img (ndarray): H, W, C
-    """
-    if flip_axis is not None:
-        _flip_axis = np.asarray(axes)[flip_axis]
-        img = np.flip(img, axis=_flip_axis)
-    if rot_k != 0:
-        img = np.rot90(img, k=-rot_k, axes=axes)
-    return img
-
-
-@ub.memoize
-def _string_to_hashvec(key):
-    """
-    Transform a string into a 16D float32 uniformly distributed random Tensor
-    based on the hash of the string.
-    """
-    key_hash = ub.hash_data(key, base=16, hasher='blake3').encode()
-    key_tensor = np.frombuffer(memoryview(key_hash), dtype=np.int32).astype(np.float32)
-    key_tensor = key_tensor / np.linalg.norm(key_tensor)
-    return key_tensor
-
-
-def abslog_scaling(arr):
-    orig_sign = np.nan_to_num(np.sign(arr))
-    shifted = np.abs(arr) + 1
-    shifted = np.log(shifted)
-    shifted[np.isnan(shifted)] = 0.1
-    return orig_sign * shifted
+    if hasattr(self.sampler.dset, 'connect'):
+        # Reconnect to the backend if we are using SQL
+        self.sampler.dset.connect(readonly=True)
 
 
 class FailedSample(Exception):
