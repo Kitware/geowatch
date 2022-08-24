@@ -246,10 +246,10 @@ class DVCExptManager(ub.NiceRepr):
         self._build_states()
 
     def summarize(self):
-        for state in self.states:
-            state.summarize()
-        versioned_df = self.versioned_table()
-        summarize_versioned_df(versioned_df)
+        # for state in self.states:
+        #     state.summarize()
+        tables = self.cross_referenced_tables()
+        summarize_tables(tables)
 
     @classmethod
     def coerce(cls, expt_dvc_dpath=None):
@@ -277,15 +277,30 @@ class DVCExptManager(ub.NiceRepr):
         df = pd.DataFrame(rows)
         return df
 
+    def volitile_table(self, **kw):
+        rows = list(ub.flatten(state.volitile_table(**kw) for state in self.states))
+        df = pd.DataFrame(rows)
+        return df
+
     def evaluation_table(self):
         rows = list(ub.flatten(state.evaluation_rows() for state in self.states))
         df = pd.DataFrame(rows)
         return df
 
+    def cross_referenced_tables(self):
+        import pandas as pd
+        table_accum = ub.ddict(list)
+        for state in self.states:
+            tables = state.cross_referenced_tables()
+            for k, v in tables.items():
+                table_accum[k].append(v)
+        combo_tables = ub.udict(table_accum).map_values(lambda vs: pd.concat(vs))
+        return combo_tables
+
     def push_evals(self):
         dvc = self.dvc
         eval_df = self.evaluation_table()
-        summarize_versioned_df(eval_df)
+        summarize_tables({'versioned': eval_df})
 
         is_weird = (eval_df.is_link & (~eval_df.has_dvc))
         weird_df = eval_df[is_weird]
@@ -310,7 +325,7 @@ class DVCExptManager(ub.NiceRepr):
         dvc = self.dvc
         dvc.git_pull()
         eval_df = self.evaluation_table()
-        summarize_versioned_df(eval_df)
+        summarize_tables({'versioned': eval_df})
 
         # self.summarize()
         print(f'self.expt_dvc_dpath={self.expt_dvc_dpath}')
@@ -571,7 +586,7 @@ class ExperimentState(ub.NiceRepr):
                 }
                 _attrs = self._parse_pattern_attrs(key, path)
                 row.update(_attrs)
-            yield row
+                yield row
 
     def evaluation_rows(self, with_attrs=1, types=None, notypes=None):
         keys = ['eval_pxl', 'eval_act', 'eval_trk']
@@ -625,6 +640,9 @@ class ExperimentState(ub.NiceRepr):
     def volitile_table(self):
         volitile_rows = list(self.volitile_rows())
         volitile_df = pd.DataFrame(volitile_rows)
+        if len(volitile_df) == 0:
+            volitile_df[['type', 'raw', 'expt_dvc_dpath', 'dataset_code', 'expt', 'model', 'test_dset', 'pred_cfg', 'trk_cfg']] = 0
+        return volitile_df
 
     def staging_table(self):
         # import numpy as np
@@ -660,14 +678,30 @@ class ExperimentState(ub.NiceRepr):
         # completed the staging process or not.
         staging_df = self.staging_table()
         versioned_df = self.versioned_table()
+        volitile_df = self.volitile_table()
+
+        if len(volitile_df) and len(versioned_df):
+            # Determine how many volitile items (i.e. predictions) we
+            # have on disk that correspond with our versioned data
+            # volitile_keys = ['pred_pxl', 'pred_trk', 'pred_act']
+            model_to_volitile = dict(list(volitile_df.groupby('model')))
+            if 0:
+                versioned_df.drop(['raw', 'dvc', 'dataset_code', 'expt_dvc_dpath'], axis=1)
+            model_to_versioned = dict(list(versioned_df.groupby(['type', 'model'])))
+            versioned_df.loc[:, ['n_pred_pxl', 'n_pred_trk', 'n_pred_act']] = 0
+            for (type, model), subdf in model_to_versioned.items():
+                associated = model_to_volitile.get(model, None)
+                if associated is not None:
+                    counts = associated.value_counts('type').rename(lambda x: 'n_' + x, axis=0)
+                    versioned_df.loc[subdf.index, counts.index] += counts
 
         if len(staging_df) and len(versioned_df):
             # import xdev
             # with xdev.embed_on_exception_context:
             spkg_was_copied = kwarray.isect_flags(staging_df['model'], versioned_df['model'])
             staging_df['is_copied'] = spkg_was_copied
-            num_need_repackage = (~staging_df['is_packaged']).sum()
-            print(f'num_need_repackage={num_need_repackage}')
+            # num_need_repackage = (~staging_df['is_packaged']).sum()
+            # print(f'num_need_repackage={num_need_repackage}')
 
             # Lightning might produce the same checkpoint multiple times.  I'm not
             # sure if these checkpoints are actually different. Either way if they
@@ -701,7 +735,15 @@ class ExperimentState(ub.NiceRepr):
         else:
             staging_df['is_copied'] = False
             versioned_df['has_orig'] = False
-        return staging_df, versioned_df
+
+        # TODO: cross reference the volitile table
+
+        tables = ub.udict({
+            'staging': staging_df,
+            'versioned': versioned_df,
+            'volitile': versioned_df,
+        })
+        return tables
 
     def summarize(self):
         """
@@ -715,15 +757,8 @@ class ExperimentState(ub.NiceRepr):
             >>> self = ExperimentState(expt_dvc_dpath, dataset_code)
             >>> self.summarize()
         """
-        staging_df, versioned_df = self.cross_referenced_tables()
-        print('Staging summary')
-        if len(staging_df):
-            staging_df['needs_copy'] = (~staging_df['is_copied'])
-            staging_df['needs_package'] = (~staging_df['is_packaged'])
-            print(staging_df[['ckpt_exists', 'is_packaged', 'is_copied', 'needs_package', 'needs_copy']].sum().to_frame().T)
-        else:
-            print('There are no unversioned staging items')
-        summarize_versioned_df(versioned_df)
+        tables = self.cross_referenced_tables()
+        summarize_tables(tables)
 
     def push_packages(self):
         """
@@ -762,7 +797,8 @@ class ExperimentState(ub.NiceRepr):
             repackage(to_repackage)
 
         # Rebuild the tables to ensure we are up to date
-        staging_df, versioned_df = self.cross_referenced_tables()
+        tables = self.cross_referenced_tables()
+        staging_df, versioned_df, volitile_df = tables.take(['staging', 'versioned', 'volitile'])
         needs_copy = staging_df[~staging_df['is_copied']]
         print(needs_copy)
         print(f'There are {len(needs_copy)} packages that need to be copied')
@@ -782,7 +818,8 @@ class ExperimentState(ub.NiceRepr):
             shutil.copy(src, dst)
 
         # Rebuild the tables to ensure we are up to date
-        staging_df, versioned_df = self.cross_referenced_tables()
+        tables = self.cross_referenced_tables()
+        staging_df, versioned_df, volitile_df = tables.take(['staging', 'versioned', 'volitile'])
         needs_add_flags = (~versioned_df['has_dvc'] | versioned_df['unprotected'])
         needs_dvc_add = versioned_df[needs_add_flags]
         print(needs_dvc_add)
@@ -851,15 +888,54 @@ class ExperimentState(ub.NiceRepr):
         schedule_evaluation(cmdline=1, **eval_kw)
 
 
-def summarize_versioned_df(versioned_df):
-    # import numpy as np
-    print('Versioned summary')
-    # if 'has_orig' not in versioned_df.columns:
-    #     versioned_df['has_orig'] = np.nan
-    # version_bitcols = ['has_raw', 'has_dvc', 'is_link', 'is_broken', 'needs_pull', 'needs_push', 'has_orig']
-    version_bitcols = ['has_raw', 'has_dvc', 'is_link', 'is_broken', 'needs_pull', 'needs_push']
-    needy = versioned_df.groupby(['dataset_code', 'type'])[version_bitcols].sum()
-    print(needy)
+def summarize_tables(tables):
+    """
+    pip install rich-dataframe
+    """
+    from rich import print
+    from rich.panel import Panel
+    import rich
+    console = rich.get_console()
+    staging_df = tables.get('staging', None)
+    volitile_df = tables.get('volitile', None)
+    versioned_df = tables.get('versioned', None)
+
+    if staging_df is not None:
+        title = '[yellow] Staging summary'
+
+        if len(staging_df):
+            staging_df['needs_copy'] = (~staging_df['is_copied'])
+            staging_df['needs_package'] = (~staging_df['is_packaged'])
+            body_df = staging_df[['ckpt_exists', 'is_packaged', 'is_copied', 'needs_package', 'needs_copy']].sum().to_frame().T
+            body = console.highlighter(str(body_df))
+        else:
+            body = console.highlighter('There are no unversioned staging items')
+        print(Panel(body, title=title))
+
+    if volitile_df is not None:
+        title = ('[bright_blue] Volitile summary')
+        if len(volitile_df):
+            num_pred_types = volitile_df.groupby(['dataset_code', 'type']).nunique()
+            body_df = num_pred_types
+            body = console.highlighter(str(body_df))
+        else:
+            body = console.highlighter('There are no volitile items')
+
+        print(Panel(body, title=title))
+
+    if versioned_df is not None:
+        title = ('[bright_green] Versioned summary')
+        # if 'has_orig' not in versioned_df.columns:
+        #     versioned_df['has_orig'] = np.nan
+        # version_bitcols = ['has_raw', 'has_dvc', 'is_link', 'is_broken', 'needs_pull', 'needs_push', 'has_orig']
+        version_bitcols = ['has_raw', 'has_dvc', 'is_link', 'is_broken', 'needs_pull', 'needs_push']
+        if len(versioned_df):
+            body_df = versioned_df.groupby(['dataset_code', 'type'])[version_bitcols].sum()
+            body = console.highlighter(str(body_df))
+        else:
+            body = console.highlighter('There are no versioned items')
+        print(Panel(body, title=title))
+
 
 
 def checkpoint_filepath_info(fname):
