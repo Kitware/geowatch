@@ -1,7 +1,5 @@
 """
 
-DEPRECATED FOR ~/code/watch/watch/dvc/expt_report.py
-
 python -m watch.tasks.fusion.dvc_sync_manager "list"
 python -m watch.tasks.fusion.dvc_sync_manager "push pull evals"
 python -m watch.tasks.fusion.dvc_sync_manager "pull evals"

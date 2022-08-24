@@ -12,7 +12,9 @@ Example:
     cd $DVC_EXPT_DPATH
 
     python -m watch.dvc.expt_manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
-    python -m watch.dvc.expt_manager "summary" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch.dvc.expt_manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+
+    python -m watch.dvc.expt_manager "list"
 
     # On training machine
     python -m watch.dvc.expt_manager "push packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
