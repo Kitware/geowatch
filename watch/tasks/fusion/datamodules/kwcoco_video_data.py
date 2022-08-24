@@ -3315,9 +3315,10 @@ def worker_init_fn(worker_id):
     worker_info = torch.utils.data.get_worker_info()  # TODO
     self = worker_info.dataset
 
-    if hasattr(self.sampler.dset, 'connect'):
-        # Reconnect to the backend if we are using SQL
-        self.sampler.dset.connect(readonly=True)
+    if hasattr(self, 'sampler'):
+        if hasattr(self.sampler.dset, 'connect'):
+            # Reconnect to the backend if we are using SQL
+            self.sampler.dset.connect(readonly=True)
 
 
 class FailedSample(Exception):
