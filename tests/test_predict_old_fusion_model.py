@@ -58,7 +58,7 @@ def test_predict_old_fusion_model():
     dset = kwcoco.CocoDataset(coco_fpath)
 
     vidid = dset.videos().peek()['id']
-    gids = list(dset.images(vidid=vidid))[0:3]
+    gids = list(dset.images(vidid=vidid))[0:11]
     subset = dset.subset(gids)
     if subset.missing_images(check_aux=True):
         pytest.skip('data has not been pulled down')
@@ -95,6 +95,7 @@ def test_predict_old_fusion_model():
         'chip_overlap': 0.0,
         'gpus': "auto:1",
         'num_workers': 0,
+        'set_cover_algo': 'approx',
     }
     kwargs = pred_kwargs  # NOQA
     predict.predict(**pred_kwargs)

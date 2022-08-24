@@ -545,6 +545,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             # Hack for now:
             # TODO: Note: also need for class weights
             if stats_params is not None:
+                print(f'stats_params={stats_params}')
                 self.dataset_stats = train_dataset.cached_dataset_stats(**stats_params)
 
             if self.vali_kwcoco is not None:
@@ -3297,8 +3298,12 @@ class KWCocoVideoDataset(data.Dataset):
             >>> loader = self.make_loader(batch_size=2)
             >>> batch = next(iter(loader))
         """
+        if subset is None:
+            dataset = self
+        else:
+            dataset = subset
         loader = torch.utils.data.DataLoader(
-            self, batch_size=batch_size, num_workers=num_workers,
+            dataset, batch_size=batch_size, num_workers=num_workers,
             shuffle=shuffle, pin_memory=pin_memory,
             worker_init_fn=worker_init_fn,
             collate_fn=ub.identity,  # disable collation
