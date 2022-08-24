@@ -60,12 +60,13 @@ def suggest_paths(test_dataset=None, package_fpath=None, workdir=None,
             else:
                 pred_cfgstr = ub.hash_data(pred_cfg)[0:8]
 
-        _register_hashid_reverse_lookup(pred_cfgstr, pred_cfg, type='pred_cfg')
+        from watch.utils.reverse_hashid import ReverseHashTable
+        rhash = ReverseHashTable(type='pred_cfg')
+        rhash.register(pred_cfgstr, pred_cfg)
 
         pred_cfg_dname = 'predcfg_' + pred_cfgstr
 
         # TODO: This should be handled by watch.dvc.expt_manager
-
         package_fpath = ub.Path(package_fpath)
         # pred_dname = 'pred_' + package_fpath.stem
         pred_dname = package_fpath.name
@@ -119,79 +120,6 @@ def suggest_paths(test_dataset=None, package_fpath=None, workdir=None,
         return suggestion_text
     else:
         return suggestions
-
-
-def _register_hashid_reverse_lookup(key, data, type='global'):
-    """
-    Make a lookup table of hashes we've made, so we can refer to what the heck
-    those directory names mean!
-
-    /home/joncrall/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/pred/Drop4_BAS_Continue_10GSD_BGR_V003/Drop4_BAS_Continue_10GSD_BGR_V003_epoch=93-step=48128.pt.pt/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_vali.kwcoco/predcfg_1c530993/pred.kwcoco.json
-
-    Example:
-        from watch.tasks.fusion.organize import *  # NOQA
-        from watch.tasks.fusion.organize import _register_hashid_reverse_lookup
-        data = {'test': 'data'}
-        key = ub.hash_data(data)[0:8]
-        _register_hashid_reverse_lookup(key, data)
-        _register_hashid_reverse_lookup('conflict', 'conflict1')
-        _register_hashid_reverse_lookup('conflict', 'conflict2')
-
-    """
-    import shelve
-    import os
-    from watch.utils.util_locks import Superlock
-
-    FULL_TEXT = 1
-    DPATH_TEXT = 1
-
-    rlut_dpath = ub.Path.appdir('watch/hash_rlut', type).ensuredir()
-    shelf_fpath = rlut_dpath / 'hash_rlut.shelf'
-    text_fpath = rlut_dpath / 'hash_rlut.txt'
-    file_dpath = (rlut_dpath / 'hash_rlut').ensuredir()
-    lock_fpath = rlut_dpath / 'flock.lock'
-    lock = Superlock(thread_key='hash_rlut', lock_fpath=lock_fpath)
-    blake3 = ub.hash_data(data, hasher='blake3')
-    row = {'data': data, 'blake3': blake3}
-    info = {}
-    with lock:
-        shelf = shelve.open(os.fspath(shelf_fpath))
-        with shelf:
-            # full_shelf = dict(shelf)
-            if key not in shelf:
-                datas = shelf[key] = [row]
-                info['status'] = 'new'
-            else:
-                datas = shelf[key]
-                found = False
-                for other in datas:
-                    if other['blake3'] == row['blake3']:
-                        found = True
-                        break
-                if not found:
-                    info['status'] = 'conflict'
-                    datas.append(row)
-                    shelf[key] = datas
-                else:
-                    info['status'] = 'exists'
-
-            if FULL_TEXT:
-                full_shelf = dict(shelf)
-            else:
-                full_shelf = None
-
-        if info['status'] != 'exists':
-            # Convinience
-            if FULL_TEXT:
-                full_text = ub.repr2(full_shelf, nl=3)
-                text_fpath.write_text(full_text)
-
-            if DPATH_TEXT:
-                fpath = file_dpath / key
-                datas_text = ub.repr2(datas, nl=3)
-                fpath.write_text(datas_text)
-
-    return info
 
 
 if __name__ == '__main__':
