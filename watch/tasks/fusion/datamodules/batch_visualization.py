@@ -158,7 +158,7 @@ class BatchVisualizationBuilder:
         Make dummy output for a batch item for testing
         """
         # Calculate the probability of change for each frame
-        from watch.tasks.fusion.datamodules.kwcoco_video_data import fliprot
+        from watch.tasks.fusion.datamodules import util_data
         import kwarray
         item_output = {}
         change_prob_list = []
@@ -168,7 +168,7 @@ class BatchVisualizationBuilder:
             change_prob = kwimage.Heatmap.random(
                 dims=frame['target_dims'], classes=1, rng=rng).data['class_probs'][0]
             if fliprot_params:
-                change_prob = fliprot(change_prob, **fliprot_params)
+                change_prob = util_data.fliprot(change_prob, **fliprot_params)
             change_prob_list += [change_prob]
         change_probs = change_prob_list
         item_output['change_probs'] = change_probs  # first frame does not have change
@@ -180,7 +180,7 @@ class BatchVisualizationBuilder:
                 dims=frame['target_dims'], classes=list(classes), rng=rng).data['class_probs']
             class_prob = einops.rearrange(class_prob, 'c h w -> h w c')
             if fliprot_params:
-                class_prob = fliprot(class_prob, **fliprot_params)
+                class_prob = util_data.fliprot(class_prob, **fliprot_params)
             class_prob_list += [class_prob]
         class_probs = class_prob_list
         item_output['class_probs'] = class_probs  # first frame does not have change
@@ -192,7 +192,7 @@ class BatchVisualizationBuilder:
                 dims=frame['target_dims'], classes=1, rng=rng).data['class_probs']
             saliency_prob = einops.rearrange(saliency_prob, 'c h w -> h w c')
             if fliprot_params:
-                saliency_prob = fliprot(saliency_prob, **fliprot_params)
+                saliency_prob = util_data.fliprot(saliency_prob, **fliprot_params)
             saliency_prob_list += [saliency_prob]
         saliency_probs = saliency_prob_list
         item_output['saliency_probs'] = saliency_probs

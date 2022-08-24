@@ -3226,7 +3226,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>>     change_prob = kwimage.Heatmap.random(
             >>>         dims=frame['target_dims'], classes=1).data['class_probs'][0]
             >>>     if fliprot_params:
-            >>>         change_prob = fliprot(change_prob, **fliprot_params)
+            >>>         change_prob = util_data.fliprot(change_prob, **fliprot_params)
             >>>     change_prob_list += [change_prob]
             >>> change_probs = np.stack(change_prob_list)
             >>> item_output['change_probs'] = change_probs  # first frame does not have change
@@ -3238,7 +3238,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>>         dims=frame['target_dims'], classes=list(sampler.classes)).data['class_probs']
             >>>     class_prob_ = einops.rearrange(class_prob, 'c h w -> h w c')
             >>>     if fliprot_params:
-            >>>         class_prob_ = fliprot(class_prob_, **fliprot_params)
+            >>>         class_prob_ = util_data.fliprot(class_prob_, **fliprot_params)
             >>>     class_prob_list += [class_prob_]
             >>> class_probs = np.stack(class_prob_list)
             >>> item_output['class_probs'] = class_probs  # first frame does not have change
