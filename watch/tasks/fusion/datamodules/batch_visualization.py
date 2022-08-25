@@ -158,7 +158,7 @@ class BatchVisualizationBuilder:
         Make dummy output for a batch item for testing
         """
         # Calculate the probability of change for each frame
-        from watch.tasks.fusion.datamodules.kwcoco_video_data import fliprot
+        from watch.tasks.fusion.datamodules import data_utils
         import kwarray
         item_output = {}
         change_prob_list = []
@@ -168,7 +168,7 @@ class BatchVisualizationBuilder:
             change_prob = kwimage.Heatmap.random(
                 dims=frame['target_dims'], classes=1, rng=rng).data['class_probs'][0]
             if fliprot_params:
-                change_prob = fliprot(change_prob, **fliprot_params)
+                change_prob = data_utils.fliprot(change_prob, **fliprot_params)
             change_prob_list += [change_prob]
         change_probs = change_prob_list
         item_output['change_probs'] = change_probs  # first frame does not have change
@@ -180,7 +180,7 @@ class BatchVisualizationBuilder:
                 dims=frame['target_dims'], classes=list(classes), rng=rng).data['class_probs']
             class_prob = einops.rearrange(class_prob, 'c h w -> h w c')
             if fliprot_params:
-                class_prob = fliprot(class_prob, **fliprot_params)
+                class_prob = data_utils.fliprot(class_prob, **fliprot_params)
             class_prob_list += [class_prob]
         class_probs = class_prob_list
         item_output['class_probs'] = class_probs  # first frame does not have change
@@ -192,7 +192,7 @@ class BatchVisualizationBuilder:
                 dims=frame['target_dims'], classes=1, rng=rng).data['class_probs']
             saliency_prob = einops.rearrange(saliency_prob, 'c h w -> h w c')
             if fliprot_params:
-                saliency_prob = fliprot(saliency_prob, **fliprot_params)
+                saliency_prob = data_utils.fliprot(saliency_prob, **fliprot_params)
             saliency_prob_list += [saliency_prob]
         saliency_probs = saliency_prob_list
         item_output['saliency_probs'] = saliency_probs
@@ -334,9 +334,14 @@ class BatchVisualizationBuilder:
         if builder.draw_weights:
             # Normalize weights for visualization
             all_weight_overlays = []
+            weight_shapes = []
             for frame_meta in frame_metas:
                 frame_meta['weight_overlays'] = {}
                 for weight_key, weight_data in frame_meta['frame_weight'].items():
+
+                    if weight_data is not None:
+                        weight_shapes.append(weight_data.shape)
+
                     overlay_row = {
                         'weight_key': weight_key,
                         'raw': weight_data,
@@ -348,11 +353,14 @@ class BatchVisualizationBuilder:
                 for cell in group:
                     weight_data = cell['raw']
                     if weight_data is None:
-                        h = w = builder.max_dim
+                        if len(weight_shapes) == 0:
+                            h = w = builder.max_dim
+                        else:
+                            h, w = weight_shapes[0]
                         weight_overlay = kwimage.draw_text_on_image(
                             {'width': w, 'height': h}, 'X', org=(w // 2, h // 2),
                             valign='center', halign='center', fontScale=10,
-                            color='red')
+                            color='kw_red')
                         weight_overlay = kwimage.ensure_float01(weight_overlay)
                     else:
                         weight_overlay = kwimage.atleast_3channels(weight_data)
@@ -567,6 +575,8 @@ class BatchVisualizationBuilder:
         # Create the true change label overlay
         overlay_key = 'change'
         if overlay_key in truth_overlay_keys and builder.requested_tasks['change']:
+            if overlay_shape is None:
+                overlay_shape = (32, 32)
             change_overlay = np.zeros(overlay_shape + (4,), dtype=np.float32)
             changes = frame_truth.get(overlay_key, None)
             if changes is not None:

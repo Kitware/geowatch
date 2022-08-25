@@ -7,10 +7,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## Version 0.3.4 - Unreleased
 
 ### Added
-* New "space_scale" parameter to Dataset such that a specific GSD can be given on the fly
+* New "space_scale" parameter to Dataset such that a specific DATA GSD can be given on the fly
 * New samecolor heuristic to remove invalid regions in data sampling.
 * Can now force nodata values in prep ta2 and align script.
 * Perceiver backbone
+* New "window_space_scale" parameter to Dataset that allows a WINDOW GSD to be given on the fly.
+* New "watch.dvc" module for phase2 dvc operations.
 
 ### Changed
 * Data loader now returns the size it would like the output predicted at via `target_dims`.
@@ -18,11 +20,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * The nir08 sensor for L8 is now aliased to nir for consistency.
 * Add support for lightning 1.7
 * Changed defaults of ignore_dilate to 0
+* Improved the `smartwatch_dvc` registry system.
 
 ### Fixed
 * Issue where augmentation might shave a pixel off of the sample box causing an
   unexpected shape.
 * Fixed issue with negative was being marked as salient
+* Issue where initializer was not working correctly
 
 
 ## Version 0.3.3 - Unreleased

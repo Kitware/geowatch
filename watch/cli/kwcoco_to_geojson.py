@@ -548,9 +548,17 @@ def add_site_summary_to_kwcoco(possible_summaries,
     """
     Add a site summary(s) to a kwcoco dataset as a set of polygon annotations.
     These annotations will have category "Site Boundary", 1 track per summary.
+
+    This function is mainly for SC. The "possible_summaries" indicate regions
+    flagged by BAS (which could also be truth data if we are evaluating SC
+    independently) that need SC processing. We need to associate these and
+    place them in the correct videos so we can process those areas.
     """
 
     # input validation
+    print(f'possible_summaries={possible_summaries}')
+    print(f'coco_dset={coco_dset}')
+    print(f'default_region_id={default_region_id}')
 
     if default_region_id is None:
         default_region_id = ub.peek(coco_dset.index.name_to_video)
@@ -569,59 +577,122 @@ def add_site_summary_to_kwcoco(possible_summaries,
     #     target = osr.SpatialReference()
     #     target.ImportFromEPSG(int(target_epsg_code))
     #     return osr.CoordinateTransformation(wgs84, target)
-
-    # write site summaries
-    print('warping site boundaries to pxl space...')
-    import watch
-    cid = coco_dset.ensure_category(watch.heuristics.SITE_SUMMARY_CNAME)
     # new_trackids = watch.utils.kwcoco_extensions.TrackidGenerator(coco_dset)
 
-    for region_id, site_summary in site_summaries:
-        # lookup possible places to put this site_summary
-        vidid = None
+    # write site summaries
+    import watch
+    cid = coco_dset.ensure_category(watch.heuristics.SITE_SUMMARY_CNAME)
+
+    print('Searching for assignment between requested site summaries and the kwcoco videos')
+
+    site_idx_to_vidid = []
+    unassigned_site_idxs = []
+
+    USE_GEO_ASSIGNMENT = 1
+    if USE_GEO_ASSIGNMENT:
+        from watch.utils import kwcoco_extensions
+        from watch.utils import util_gis
+        import geopandas as gpd
+        # video_gdf = kwcoco_extensions.covered_video_geo_regions(coco_dset)
+        image_gdf = kwcoco_extensions.covered_image_geo_regions(coco_dset)
+        video_rows = []
+        for video_id, img_gdf in image_gdf.groupby('video_id'):
+            row = {
+                'video_id': video_id,
+                'geometry': img_gdf['geometry'].unary_union,
+                'start_date': img_gdf.iloc[0]['date_captured'],
+                'end_date': img_gdf.iloc[-1]['date_captured'],
+            }
+            video_rows.append(row)
+        video_gdf = gpd.GeoDataFrame(video_rows, crs=util_gis._get_crs84())
+
+        sitesum_gdf = gpd.GeoDataFrame.from_features([t[1] for t in site_summaries], crs=util_gis._get_crs84())
+
+        site_idx_to_video_idx = util_gis.geopandas_pairwise_overlaps(sitesum_gdf, video_gdf)
+
+        assigned_idx_pairs = []
+        for site_idx, video_idxs in site_idx_to_video_idx.items():
+            if len(video_idxs) == 0:
+                unassigned_site_idxs.append(site_idx)
+            elif len(video_idxs) == 1:
+                assigned_idx_pairs.append((site_idx, video_idxs[0]))
+            else:
+                qshape = sitesum_gdf.iloc[site_idx]['geometry']
+                candidates = video_gdf.iloc[video_idxs]
+                overlaps = []
+                for dshape in candidates['geometry']:
+                    iarea = qshape.intersection(dshape).area
+                    uarea = qshape.area
+                    iofa = iarea / uarea
+                    overlaps.append(iofa)
+                idx = ub.argmax(overlaps)
+                assigned_idx_pairs.append((site_idx, video_idxs[idx]))
+
+        for site_idx, video_idx in assigned_idx_pairs:
+            video_id = video_gdf.iloc[video_idx]['video_id']
+            site_idx_to_vidid.append((site_idx, video_id, ))
+
+    else:
+
+        for region_id, site_summary in site_summaries:
+            # lookup possible places to put this site_summary
+            video_id = None
+            site_id = site_summary['properties']['site_id']
+            for _id, vid in coco_dset.index.videos.items():
+                # look for all possible places a region or site id could be
+                names = set(ub.dict_subset(vid, ['id', 'name', 'region_id', 'site_id'], None).values())
+                names |= set(ub.dict_subset(vid.get('properties', {}), ['region_id', 'site_id'], None).values())
+                if region_id in names or site_id in names:
+                    video_id = _id
+                    print(f'matched site_summary {site_id} to video {names}')
+                    site_idx_to_vidid.append((site_idx, video_id, ))
+                    break
+
+    assigned_vidids = set([t[1] for t in site_idx_to_vidid])
+    print('There were {} / {} assigned site summaries'.format(len(site_idx_to_vidid), len(site_summaries)))
+    print('There were {} / {} assigned videos'.format(len(assigned_vidids), coco_dset.n_videos))
+
+    if 0:
+        unassigned_vidids = set(coco_dset.videos()) - assigned_vidids
+        coco_dset.videos(unassigned_vidids).lookup('name')
+
+    print('warping site boundaries to pxl space...')
+    for site_idx, video_id in site_idx_to_vidid:
+
+        region_id, site_summary = site_summaries[site_idx]
         site_id = site_summary['properties']['site_id']
-        for _id, vid in coco_dset.index.videos.items():
-            # look for all possible places a region or site id could be
-            names = set(ub.dict_subset(vid, ['id', 'name', 'region_id', 'site_id'], None).values())
-            names |= set(ub.dict_subset(vid.get('properties', {}), ['region_id', 'site_id'], None).values())
-            if region_id in names or site_id in names:
-                vidid = _id
-                print(f'matched site_summary {site_id} to video {names}')
-                break
-        if vidid is None:
-            print(f'failed to match site_summary {site_id}')
-        else:
-            # track_id = next(new_trackids)
-            track_id = site_id
 
-            # get relevant images
-            images = coco_dset.images(vidid=vidid)
-            start_date = dateutil.parser.parse(
-                site_summary['properties']['start_date']).date()
-            end_date = dateutil.parser.parse(
-                site_summary['properties']['end_date']).date()
-            flags = [
-                start_date <= dateutil.parser.parse(date_str).date() <= end_date
-                for date_str in images.lookup('date_captured')
-            ]
-            images = images.compress(flags)
-            if track_id in images.get('track_id', None):
-                print(f'warning: site_summary {track_id} already in dset!')
+        # track_id = next(new_trackids)
+        track_id = site_id
 
-            # apply site boundary as polygons
-            poly_crs84_geojson = site_summary['geometry']
-            # geo_poly = kwimage.MultiPolygon.from_geojson()
-            for img in images.objs:
-                # Add annotations in CRS84 geo-space, we will project to pixel
-                # space in a later step
-                coco_dset.add_annotation(
-                    image_id=img['id'],
-                    category_id=cid,
-                    # bbox=bbox,
-                    # segmentation=img_poly,
-                    segmentation_geos=poly_crs84_geojson,
-                    track_id=track_id
-                )
+        # get relevant images
+        images = coco_dset.images(vidid=video_id)
+        start_date = dateutil.parser.parse(
+            site_summary['properties']['start_date']).date()
+        end_date = dateutil.parser.parse(
+            site_summary['properties']['end_date']).date()
+        flags = [
+            start_date <= dateutil.parser.parse(date_str).date() <= end_date
+            for date_str in images.lookup('date_captured')
+        ]
+        images = images.compress(flags)
+        if track_id in images.get('track_id', None):
+            print(f'warning: site_summary {track_id} already in dset!')
+
+        # apply site boundary as polygons
+        poly_crs84_geojson = site_summary['geometry']
+        # geo_poly = kwimage.MultiPolygon.from_geojson()
+        for img in images.objs:
+            # Add annotations in CRS84 geo-space, we will project to pixel
+            # space in a later step
+            coco_dset.add_annotation(
+                image_id=img['id'],
+                category_id=cid,
+                # bbox=bbox,
+                # segmentation=img_poly,
+                segmentation_geos=poly_crs84_geojson,
+                track_id=track_id
+            )
 
     # TODO: we can be more efficient if we already have the transform data
     # computed. We need to pass it in here, and prevent it from making

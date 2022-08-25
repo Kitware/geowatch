@@ -45,7 +45,7 @@ def parallel_map_items(catalog,
         pystac.Catalog: modified catalog
 
     Example:
-        >>> from watch.utils.util_stac import *  # NOQA
+        >>> from watch.stac.util_stac import *  # NOQA
         >>> from watch.demo import stac_demo
         >>> catalog_fpath = stac_demo.demo()
         >>> catalog = pystac.Catalog.from_file(catalog_fpath)

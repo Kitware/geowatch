@@ -34,6 +34,12 @@ class SimpleDVC(ub.NiceRepr):
     def __nice__(self):
         return str(self.dvc_root)
 
+    @property
+    def cache_dir(self):
+        info = ub.cmd('dvc cache dir', cwd=self.dvc_root, check=True)
+        cache_dpath = ub.Path(info['out'].strip())
+        return cache_dpath
+
     @classmethod
     def demo_dpath(cls, reset=False):
         dvc_dpath = ub.Path.appdir('simple_dvc/test/test_dvc_repo')
@@ -174,6 +180,35 @@ class SimpleDVC(ub.NiceRepr):
         with util_path.ChDir(dvc_root):
             dvc_command = ['pull'] + extra_args + [str(p.relative_to(dvc_root)) for p in paths]
             dvc_main.main(dvc_command)
+
+    def request(self, path, remote=None):
+        """
+        Requests to ensure that a specific file from DVC exists.
+
+        Any files that do not exist, check to see if there is an associated
+        .dvc sidecar file. If any sidecar files are missing, an error is
+        thrown.  Otherwise we attempt to pull the missing files.
+
+        Args:
+            path (Path | List[Path):
+                one or more file paths that should have an associated .dvc
+                sidecar file.
+        """
+        paths = list(map(ub.Path, _ensure_iterable(path)))
+        missing_data = [path for path in paths if not path.exists()]
+        to_pull = [
+            path.augment(stem=path.name, ext='.dvc')
+            for path in missing_data
+        ]
+        missing_sidecar = [
+            dvc_fpath for dvc_fpath in to_pull if not dvc_fpath.exists()
+        ]
+
+        if missing_sidecar:
+            raise Exception(f'There were {len(missing_sidecar)} / {len(paths)} missing sidecar files')
+
+        if to_pull:
+            self.pull(to_pull, remote=remote)
 
     def unprotect(self, path):
         from dvc import main as dvc_main

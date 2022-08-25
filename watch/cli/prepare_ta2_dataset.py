@@ -105,6 +105,7 @@ class PrepareTA2Config(scfg.Config):
         'ignore_duplicates': scfg.Value(1, help='workers for align script'),
 
         'visualize': scfg.Value(0, help='if True runs visualize'),
+        'visualize_only_boxes': scfg.Value(True, help='if False will draw full polygons'),
 
         'verbose': scfg.Value(0, help='help control verbosity (just align for now)'),
 
@@ -256,7 +257,7 @@ def main(cmdline=False, **kwargs):
         pass
     elif not ub.iterable(cache):
         if cache:
-            cache = list(stages.keys())
+            cache = list(stages.nodes)
         else:
             cache = []
     else:
@@ -653,7 +654,7 @@ def main(cmdline=False, **kwargs):
                     --channels="red|green|blue" \
                     --max_dim={viz_max_dim} \
                     --animate=True --workers=auto \
-                    --only_boxes=True
+                    --only_boxes={config["visualize_only_boxes"]}
                 '''), depends=[project_anns_job], name=f'viz-annots-{name}')
 
         align_info = info.copy()

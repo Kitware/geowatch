@@ -37,7 +37,7 @@ def lazy_import(module_name, submodules, submod_attrs):
         return attr
 
     if os.environ.get('EAGER_IMPORT', ''):
-        for name in name_to_submod.values():
+        for name in submodules:
             __getattr__(name)
 
         for attrs in submod_attrs.values():
@@ -53,29 +53,34 @@ __getattr__ = lazy_import(
         'ext_monai',
         'kwcoco_extensions',
         'lightning_ext',
+        'result_analysis',
+        'simple_dvc',
         'slugify_ext',
         'util_bands',
         'util_data',
+        'util_framework',
         'util_gdal',
         'util_girder',
         'util_gis',
+        'util_hardware',
         'util_iter',
         'util_kwarray',
         'util_kwimage',
         'util_kwplot',
+        'util_logging',
         'util_norm',
         'util_parallel',
         'util_path',
+        'util_pattern',
         'util_raster',
         'util_regex',
         'util_rgdc',
-        'util_stac',
         'util_time',
-        'util_framework',
     },
     submod_attrs={
         'util_data': [
             'find_smart_dvc_dpath',
+            'find_dvc_dpath',
         ],
     },
 )
@@ -86,8 +91,10 @@ def __dir__():
 
 
 __all__ = ['configargparse_ext', 'ext_monai', 'find_smart_dvc_dpath',
-           'kwcoco_extensions', 'lightning_ext', 'slugify_ext', 'util_bands',
-           'util_data', 'util_gdal', 'util_girder', 'util_gis', 'util_iter',
-           'util_kwarray', 'util_kwimage', 'util_kwplot', 'util_norm',
-           'util_parallel', 'util_path', 'util_raster', 'util_regex',
-           'util_rgdc', 'util_stac', 'util_time', 'util_framework']
+           'kwcoco_extensions', 'lightning_ext', 'result_analysis',
+           'simple_dvc', 'slugify_ext', 'util_bands', 'util_data',
+           'util_framework', 'util_gdal', 'util_girder', 'util_gis',
+           'util_hardware', 'util_iter', 'util_kwarray', 'util_kwimage',
+           'util_kwplot', 'util_logging', 'util_norm', 'util_parallel',
+           'util_path', 'util_pattern', 'util_raster', 'util_regex',
+           'util_rgdc', 'util_time']

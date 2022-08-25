@@ -1922,4 +1922,4 @@ python -m watch.tasks.fusion.fit \
     --normalize_inputs=2048 \
     --stream_channels=32 \
     --temporal_dropout=0.2 \
-    --init="$INIT_STATE_V028"
+    --init="$INIT_STATE_V028" 

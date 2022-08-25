@@ -7,7 +7,7 @@ from osgeo import gdal, osr
 from tempfile import NamedTemporaryFile
 import pystac
 
-from watch.utils.util_stac import parallel_map_items, maps
+from watch.stac.util_stac import parallel_map_items, maps
 from watch.datacube.registration.wv_to_s2 import (wv_to_s2_coregister,
                                                   gdal_translate_prefix,
                                                   gdalwarp_prefix)

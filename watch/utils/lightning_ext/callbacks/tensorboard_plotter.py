@@ -1,10 +1,11 @@
 """
+
 Derived from netharn/mixins.py for dumping tensorboard plots to disk
 """
 # from distutils.version import LooseVersion
+import os
 import ubelt as ub
 import numpy as np
-from os.path import join
 import pandas as pd
 import pytorch_lightning as pl
 from packaging.version import parse as Version
@@ -89,8 +90,6 @@ class TensorboardPlotter(pl.callbacks.Callback):
             else:
                 # Draw is already in progress
                 pass
-                # if 0:
-                #     harn.warn('NOT DOING MPL DRAW')
         else:
             func(*args)
 
@@ -111,27 +110,27 @@ class TensorboardPlotter(pl.callbacks.Callback):
 def read_tensorboard_scalars(train_dpath, verbose=1, cache=1):
     """
     Reads all tensorboard scalar events in a directory.
-    Caches them becuase reading events of interest from protobuf can be slow.
+    Caches them because reading events of interest from protobuf can be slow.
 
     Ignore:
         train_dpath = '/home/joncrall/.cache/lightning_ext/tests/TensorboardPlotter/lightning_logs/version_2'
         tb_data = read_tensorboard_scalars(train_dpath)
     """
-    import glob
-    from os.path import join
     try:
         from tensorboard.backend.event_processing import event_accumulator
     except ImportError:
         raise ImportError('tensorboard/tensorflow is not installed')
-    event_paths = sorted(glob.glob(join(train_dpath, 'events.out.tfevents*')))
+    train_dpath = ub.Path(train_dpath)
+    event_paths = sorted(train_dpath.glob('events.out.tfevents*'))
     # make a hash so we will re-read of we need to
     cfgstr = ub.hash_data(list(map(ub.hash_file, event_paths))) if cache else ''
     cacher = ub.Cacher('tb_scalars', depends=cfgstr, enabled=cache,
-                       dpath=join(train_dpath, '_cache'))
+                       dpath=train_dpath / '_cache')
     datas = cacher.tryload()
     if datas is None:
         datas = {}
         for p in ub.ProgIter(list(reversed(event_paths)), desc='read tensorboard', enabled=verbose):
+            p = os.fspath(p)
             ea = event_accumulator.EventAccumulator(p)
             ea.Reload()
             for key in ea.scalars.Keys():
@@ -153,14 +152,14 @@ def read_tensorboard_scalars(train_dpath, verbose=1, cache=1):
     return datas
 
 
-def _dump_measures(train_dpath, title='?name?', smoothing=0.0, ignore_outliers=True):
+def _dump_measures(train_dpath, title='?name?', smoothing=0.6, ignore_outliers=True, verbose=0):
     """
     This is its own function in case we need to modify formatting
     """
     import kwplot
     from kwplot.auto_backends import BackendContext
 
-    out_dpath = ub.ensuredir((train_dpath, 'monitor', 'tensorboard'))
+    out_dpath = ub.Path(train_dpath, 'monitor', 'tensorboard').ensuredir()
     tb_data = read_tensorboard_scalars(train_dpath, cache=0, verbose=0)
 
     with BackendContext('agg'):
@@ -173,12 +172,7 @@ def _dump_measures(train_dpath, title='?name?', smoothing=0.0, ignore_outliers=T
         fig.clf()
         ax = fig.gca()
 
-        mode = ''
         plot_keys = [k for k in tb_data.keys() if '/' not in k]
-        # plot_keys = [key for key in tb_data if
-        #              ('train_' + mode in key or
-        #               'val_' + mode in key or
-        #               'test_' + mode in key)]
         y01_measures = [
             '_acc', '_ap', '_mAP', '_auc', '_mcc', '_brier', '_mauc',
             '_f1', '_iou',
@@ -187,46 +181,51 @@ def _dump_measures(train_dpath, title='?name?', smoothing=0.0, ignore_outliers=T
 
         keys = set(tb_data.keys()).intersection(set(plot_keys))
 
-        def tag_grouper(k):
-            # parts = ['train_epoch', 'vali_epoch', 'test_epoch']
-            # parts = [p.replace('epoch', 'mode') for p in parts]
-            parts = [p + mode for p in ['train_', 'vali_', 'test_']]
-            for p in parts:
-                if p in k:
-                    return p.split('_')[0]
-            return 'unknown'
-
-        INDIVIDUAL_PLOTS = True
-
         HACK_NO_SMOOTH = {'lr', 'momentum', 'epoch'}
 
-        if INDIVIDUAL_PLOTS:
-            # print('keys = {!r}'.format(keys))
-            for key in keys:
-                d = tb_data[key]
-                df = pd.DataFrame({key: d['ydata'], 'step': d['xdata']})
-                if key not in HACK_NO_SMOOTH:
-                    df[key] = smooth_curve(df[key], smoothing)
+        # import kwimage
+        # color1 = kwimage.Color('kw_green').as01()
+        # color2 = kwimage.Color('kw_green').as01()
 
-                kw = {}
-                if any(m.lower() in key.lower() for m in y01_measures):
-                    kw['ymin'] = 0.0
-                    kw['ymax'] = 1.0
-                elif any(m.lower() in key.lower() for m in y0_measures):
-                    kw['ymin'] = min(0.0, df[key].min())
-                    if ignore_outliers:
-                        low, kw['ymax'] = inlier_ylim([df[key]])
+        for key in ub.ProgIter(keys, desc='dump plots', verbose=verbose):
+            snskw = {
+                'y': key,
+                'x': 'step',
+            }
 
-                # NOTE: this is actually pretty slow
-                ax.cla()
+            d = tb_data[key]
+            df_orig = pd.DataFrame({key: d['ydata'], 'step': d['xdata']})
+            df_orig['smoothing'] = 0.0
+            variants = [df_orig]
+            if key not in HACK_NO_SMOOTH and smoothing > 0:
+                df_smooth = df_orig.copy()
+                df_smooth[key] = smooth_curve(df_orig[key], smoothing)
+                df_smooth['smoothing'] = smoothing
+                variants.append(df_smooth)
+            if len(variants) == 1:
+                df = variants[0]
+            else:
+                df = pd.concat(variants).reset_index()
+                snskw['hue'] = 'smoothing'
 
-                sns.lineplot(data=df, x='step', y=key)
-                title = nice + '\n' + key
-                ax.set_title(title)
+            kw = {}
+            if any(m.lower() in key.lower() for m in y01_measures):
+                kw['ymin'] = 0.0
+                kw['ymax'] = 1.0
+            elif any(m.lower() in key.lower() for m in y0_measures):
+                kw['ymin'] = min(0.0, df[key].min())
+                if ignore_outliers:
+                    low, kw['ymax'] = tensorboard_inlier_ylim(df[key])
 
-                # png is smaller than jpg for this kind of plot
-                fpath = join(out_dpath, key + '.png')
-                ax.figure.savefig(fpath)
+            # NOTE: this is actually pretty slow
+            ax.cla()
+            sns.lineplot(data=df, **snskw)
+            title = nice + '\n' + key
+            ax.set_title(title)
+
+            # png is smaller than jpg for this kind of plot
+            fpath = out_dpath / (key + '.png')
+            ax.figure.savefig(fpath)
 
 
 def smooth_curve(ydata, beta):
@@ -240,34 +239,79 @@ def smooth_curve(ydata, beta):
     return ydata_smooth
 
 
-def inlier_ylim(ydatas):
+# def inlier_ylim(ydata):
+#     """
+#     outlier removal used by tensorboard
+#     """
+#     import kwarray
+#     normalizer = kwarray.find_robust_normalizers(ydata, {
+#         'low': 0.05,
+#         'high': 0.95,
+#     })
+#     low = normalizer['min_val']
+#     high = normalizer['max_val']
+#     return (low, high)
+
+
+def tensorboard_inlier_ylim(ydata):
     """
     outlier removal used by tensorboard
     """
-    low, high = None, None
-    for ydata in ydatas:
-        q1 = 0.05
-        q2 = 0.95
-        low_, high_ = np.quantile(ydata, [q1, q2])
+    q1 = 0.05
+    q2 = 0.95
+    low_, high_ = np.quantile(ydata, [q1, q2])
 
-        # Extrapolate how big the entire span should be based on inliers
-        inner_q = q2 - q1
-        inner_extent = high_ - low_
-        extrap_total_extent = inner_extent  / inner_q
+    # Extrapolate how big the entire span should be based on inliers
+    inner_q = q2 - q1
+    inner_extent = high_ - low_
+    extrap_total_extent = inner_extent  / inner_q
 
-        # amount of padding to add to either side
-        missing_p1 = q1
-        missing_p2 = 1 - q2
-        frac1 = missing_p1 / (missing_p2 + missing_p1)
-        frac2 = missing_p2 / (missing_p2 + missing_p1)
-        missing_extent = extrap_total_extent - inner_extent
+    # amount of padding to add to either side
+    missing_p1 = q1
+    missing_p2 = 1 - q2
+    frac1 = missing_p1 / (missing_p2 + missing_p1)
+    frac2 = missing_p2 / (missing_p2 + missing_p1)
+    missing_extent = extrap_total_extent - inner_extent
 
-        pad1 = missing_extent * frac1
-        pad2 = missing_extent * frac2
+    pad1 = missing_extent * frac1
+    pad2 = missing_extent * frac2
 
-        low_ = low_ - pad1
-        high_ = high_ + pad2
-
-        low = low_ if low is None else min(low_, low)
-        high = high_ if high is None else max(high_, high)
+    low = low_ - pad1
+    high = high_ + pad2
     return (low, high)
+
+
+def redraw_cli(train_dpath):
+    """
+        train_dpath = '/home/joncrall/remote/horologic/smart_expt_dvc/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_Continue_15GSD_BGR_V004/lightning_logs/version_0/'
+
+        python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter \
+            $HOME/remote/horologic/smart_expt_dvc/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_Continue_15GSD_BGR_V004/lightning_logs/version_0/
+    """
+    train_dpath = ub.Path(train_dpath)
+    hparams_fpath = train_dpath / 'hparams.yaml'
+    if hparams_fpath.exists():
+        import yaml
+        with open(hparams_fpath, 'r') as file:
+            hparams = yaml.load(file, yaml.Loader)
+        if 'name' in hparams:
+            title = hparams['name']
+        else:
+            from watch.utils.slugify_ext import smart_truncate
+            model_config = {
+                # 'type': str(model.__class__),
+                'hp': smart_truncate(ub.repr2(hparams, compact=1, nl=0), max_length=8),
+            }
+            model_cfgstr = smart_truncate(ub.repr2(
+                model_config, compact=1, nl=0), max_length=64)
+            title = model_cfgstr
+    else:
+        title = train_dpath.parent.parent.name
+
+    _dump_measures(train_dpath, title, verbose=1)
+    pass
+
+
+if __name__ == '__main__':
+    import fire
+    fire.Fire(redraw_cli)

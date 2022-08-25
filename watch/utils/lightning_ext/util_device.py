@@ -63,14 +63,27 @@ def coerce_devices(gpus):
             else:
                 gpus = int(parts[1])
         else:
+            try:
+                gpus = [int(p.strip()) for p in gpus.split(',') if p.strip()]
+            except Exception:
+                pass
             needs_gpu_coerce = True
 
+    print(f'gpus={gpus}')
+    print(f'auto_select_gpus={auto_select_gpus}')
     if auto_select_gpus:
         from pytorch_lightning.tuner import auto_gpu_select
         gpu_ids = auto_gpu_select.pick_multiple_gpus(gpus)
     elif needs_gpu_coerce:
-        from pytorch_lightning.utilities import device_parser
-        gpu_ids = device_parser.parse_gpu_ids(gpus)
+        try:
+            from pytorch_lightning.utilities import device_parser
+            gpu_ids = device_parser.parse_gpu_ids(gpus)
+        except Exception as ex:
+            print(f'WARNING. Ignoring ex={ex}')
+            gpu_ids = gpus
+            import ubelt as ub
+            if gpu_ids is not None and ub.iterable(gpu_ids):
+                assert all(isinstance(g, int) for g in gpu_ids)
 
     if gpu_ids is None:
         devices = [torch.device('cpu')]

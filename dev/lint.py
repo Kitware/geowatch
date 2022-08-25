@@ -46,7 +46,7 @@ def exec_autopep8(dpaths, autofix, mode='diff'):
     # args_list += ['--ignore '
     if mode == 'diff':
         args_list += ['--diff']
-    elif mode == 'apply':
+    elif mode in {'apply', 'fix'}:
         args_list += ['--in-place']
     else:
         raise AssertionError(mode)

@@ -8,7 +8,7 @@ import re
 import pystac
 
 from watch.datacube.cloud.fmask3 import cloudmask
-from watch.utils.util_stac import parallel_map_items
+from watch.stac.util_stac import parallel_map_items
 
 
 def main():

@@ -7,7 +7,7 @@ import subprocess
 
 import pystac
 
-from watch.utils.util_stac import parallel_map_items
+from watch.stac.util_stac import parallel_map_items
 
 
 def main():

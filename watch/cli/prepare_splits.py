@@ -79,8 +79,11 @@ def _submit_split_jobs(base_fpath, queue, depends=[]):
         'US_R007',
     }
 
-    train_region_selector = '(' + ' or '.join(['(.name ==  "{}")'.format(n) for n in (ignore_regions | vali_regions)]) + ') | not'
-    vali_region_selector = ' or '.join(['(.name ==  "{}")'.format(n) for n in (vali_regions)])
+    # train_region_selector = '(' + ' or '.join(['(.name ==  "{}")'.format(n) for n in (ignore_regions | vali_regions)]) + ') | not'
+    # vali_region_selector = ' or '.join(['(.name ==  "{}")'.format(n) for n in (vali_regions)])
+
+    train_region_selector = '(' + ' or '.join(['(.name | startswith("{}"))'.format(n) for n in (ignore_regions | vali_regions)]) + ') | not'
+    vali_region_selector = ' or '.join(['(.name | startswith("{}"))'.format(n) for n in (vali_regions)])
 
     split_jobs = {}
     # Perform train/validation splits with and without worldview
@@ -93,33 +96,6 @@ def _submit_split_jobs(base_fpath, queue, depends=[]):
         ''')
     split_jobs['train'] = queue.submit(command, begin=1, depends=depends)
 
-    # command = ub.codeblock(
-    #     fr'''
-    #     python -m kwcoco subset \
-    #         --src {splits['train']} \
-    #         --dst {splits['nowv_train']} \
-    #         --select_images '.sensor_coarse != "WV"'
-    #     ''')
-    # queue.submit(command, depends=[split_jobs['train']])
-
-    # command = ub.codeblock(
-    #     fr'''
-    #     python -m kwcoco subset \
-    #         --src {splits['train']} \
-    #         --dst {splits['wv_train']} \
-    #         --select_images '.sensor_coarse == "WV"'
-    #     ''')
-    # queue.submit(command, depends=[split_jobs['train']])
-
-    # command = ub.codeblock(
-    #     fr'''
-    #     python -m kwcoco subset \
-    #         --src {splits['train']} \
-    #         --dst {splits['s2_wv_train']} \
-    #         --select_images '.sensor_coarse == "WV" or .sensor_coarse == "S2"'
-    #     ''')
-    # queue.submit(command, depends=[split_jobs['train']])
-
     # Perform vali/validation splits with and without worldview
     command = ub.codeblock(
         fr'''
@@ -129,43 +105,6 @@ def _submit_split_jobs(base_fpath, queue, depends=[]):
             --select_videos '{vali_region_selector}'
         ''')
     split_jobs['vali'] = queue.submit(command, depends=depends)
-
-    # command = ub.codeblock(
-    #     fr'''
-    #     python -m kwcoco subset \
-    #         --src {splits['vali']} \
-    #         --dst {splits['nowv_vali']} \
-    #         --select_images '.sensor_coarse != "WV"'
-    #     ''')
-    # queue.submit(command, depends=[split_jobs['vali']])
-
-    # command = ub.codeblock(
-    #     fr'''
-    #     python -m kwcoco subset \
-    #         --src {splits['vali']} \
-    #         --dst {splits['s2_wv_vali']} \
-    #         --select_images '.sensor_coarse == "WV" or .sensor_coarse == "S2"'
-    #     ''')
-    # queue.submit(command, depends=[split_jobs['vali']])
-
-    # command = ub.codeblock(
-    #     fr'''
-    #     python -m kwcoco subset \
-    #         --src {splits['vali']} \
-    #         --dst {splits['wv_vali']} \
-    #         --select_images '.sensor_coarse == "WV"'
-    #     ''')
-    # queue.submit(command, depends=[split_jobs['vali']])
-
-    # # Add in additional no-worldview full dataset
-    # command = ub.codeblock(
-    #     fr'''
-    #     python -m kwcoco subset \
-    #         --src {base_fpath} \
-    #         --dst {splits['nowv']} \
-    #         --select_images '.sensor_coarse != "WV"'
-    #     ''')
-    # queue.submit(command, depends=depends)
     return queue
 
 

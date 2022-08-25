@@ -348,6 +348,12 @@ def time_aggregated_polys(sub_dset,
     key, bg_key = _validate_keys(key, bg_key)
     _all_keys = set(key + bg_key)
     has_requested_chans_list = []
+
+    coco_videos = sub_dset.videos()
+    assert len(coco_videos) == 1, 'we expect EXACTLY one video here'
+    video = coco_videos.objs[0]
+    vidname = video.get('name', None)
+
     for gid in sub_dset.imgs:
         coco_img = sub_dset.coco_image(gid)
         chan_codes = coco_img.channels.normalize().fuse().as_set()
@@ -358,10 +364,11 @@ def time_aggregated_polys(sub_dset,
         raise KeyError(f'no imgs in dset {sub_dset.tag} '
                        f'have keys {key} or {bg_key}.')
     if not all(has_requested_chans_list):
-        n_missing = (len(has_requested_chans_list) -
-                     sum(has_requested_chans_list))
-        print(f'warning: {n_missing} imgs in dset {sub_dset.tag} '
-              f'have no keys {key} or {bg_key}. Interpolating...')
+        n_total = len(has_requested_chans_list)
+        n_have = sum(has_requested_chans_list)
+        n_missing = (n_total - n_have)
+        print(f'warning: {n_missing} / {n_total} imgs in dset {sub_dset.tag} '
+              f'with video {vidname} have no keys {key} or {bg_key}. Interpolating...')
 
     if norm_ord in {'inf', None}:
         norm_ord = np.inf

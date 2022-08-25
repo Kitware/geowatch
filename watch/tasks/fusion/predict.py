@@ -4,6 +4,8 @@ Fusion prediction script.
 
 TODO:
     - [ ] Prediction caching?
+    - [ ] Reduce memory usage?
+    - [ ] Pseudo Live.
 """
 import torch  # NOQA
 # import pathlib
@@ -20,7 +22,7 @@ from watch.tasks.tracking.utils import mask_to_polygons
 from watch.utils import util_path
 from watch.utils import util_parallel
 from watch.utils import util_kwimage
-from watch.tasks.fusion.datamodules.kwcoco_video_data import inv_fliprot
+from watch.tasks.fusion.datamodules import data_utils
 # APPLY Monkey Patches
 from watch.tasks.fusion import monkey  # NOQA
 
@@ -338,14 +340,17 @@ def predict(cmdline=False, **kwargs):
     )
     # TODO: if TTA=True, disable determenistic time sampling
     datamodule.setup('test')
+    print('Finished dataset setup')
 
     if config['tta_time']:
+        print('Expanding time samples')
         # Expand targets to include time augmented samples
         n_time_expands = config['tta_time']
         test_torch_dset = datamodule.torch_datasets['test']
         test_torch_dset._expand_targets_time(n_time_expands)
 
     if config['tta_fliprot']:
+        print('Expanding fliprot samples')
         n_fliprot = config['tta_fliprot']
         test_torch_dset = datamodule.torch_datasets['test']
         test_torch_dset._expand_targets_fliprot(n_fliprot)
@@ -361,6 +366,7 @@ def predict(cmdline=False, **kwargs):
         time_sampler.show_summary()
         plt.show()
 
+    print('Construct dataloader')
     test_coco_dataset = datamodule.coco_datasets['test']
 
     test_torch_dataset = datamodule.torch_datasets['test']
@@ -368,9 +374,10 @@ def predict(cmdline=False, **kwargs):
     test_torch_dataset.inference_only = True
     test_dataloader = datamodule.test_dataloader()
 
-    T, H, W = test_torch_dataset.window_dims
+    # T, H, W = test_torch_dataset.window_dims
 
     # Create the results dataset as a copy of the test CocoDataset
+    print('Populate result dataset')
     result_dataset: kwcoco.CocoDataset = test_coco_dataset.copy()
     # Remove all annotations in the results copy
     result_dataset.clear_annotations()
@@ -715,7 +722,7 @@ def predict(cmdline=False, **kwargs):
                     for gid, probs in zip(out_gids, bin_probs):
                         if fliprot_params is not None:
                             # Undo fliprot TTA
-                            probs = inv_fliprot(probs, **fliprot_params)
+                            probs = data_utils.inv_fliprot(probs, **fliprot_params)
                         head_stitcher.accumulate_image(gid, space_slice, probs)
 
                 # Free up space for any images that have been completed
@@ -965,36 +972,6 @@ class CocoStitchingManager(object):
 
         self._stitcher_center_weighted_add(stitcher, space_slice, data)
 
-        # weights = util_kwimage.upweight_center_mask(data.shape[0:2])[..., None]
-        # if stitcher.shape[0] < space_slice[0].stop or stitcher.shape[1] < space_slice[1].stop:
-        #     # By embedding the space slice in the stitcher dimensions we can get a
-        #     # slice corresponding to the valid region in the stitcher, and the extra
-        #     # padding encode the valid region of the data we are trying to stitch into.
-        #     subslice, padding = kwarray.embed_slice(space_slice[0:2], stitcher.shape)
-        #     output_slice = (
-        #         slice(padding[0][0], data.shape[0] - padding[0][1]),
-        #         slice(padding[1][0], data.shape[1] - padding[1][1]),
-        #     )
-        #     subdata = data[output_slice]
-        #     subweights = weights[output_slice]
-
-        #     stitch_slice = subslice
-        #     stitch_data = subdata
-        #     stitch_weights = subweights
-        # else:
-        #     # Normal case
-        #     stitch_slice = space_slice
-        #     stitch_data = data
-        #     stitch_weights = weights
-
-        # # Handle stitching nan values
-        # invalid_output_mask = np.isnan(stitch_data)
-        # if np.any(invalid_output_mask):
-        #     spatial_valid_mask = (1 - invalid_output_mask.any(axis=2, keepdims=True))
-        #     stitch_weights = stitch_weights * spatial_valid_mask
-        #     stitch_data[invalid_output_mask] = 0
-        # stitcher.add(stitch_slice, stitch_data, weight=stitch_weights)
-
     @staticmethod
     def _stitcher_center_weighted_add(stitcher, space_slice, data):
         """
@@ -1012,7 +989,7 @@ class CocoStitchingManager(object):
             # By embedding the space slice in the stitcher dimensions we can get a
             # slice corresponding to the valid region in the stitcher, and the extra
             # padding encode the valid region of the data we are trying to stitch into.
-            subslice, padding = kwarray.embed_slice(space_slice[0:2], stitcher.shape)
+            subslice, padding = kwarray.embed_slice(space_slice[0:2], stitcher.shape[0:2])
             output_slice = (
                 slice(padding[0][0], data.shape[0] - padding[0][1]),
                 slice(padding[1][0], data.shape[1] - padding[1][1]),

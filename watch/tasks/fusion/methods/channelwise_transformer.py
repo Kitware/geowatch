@@ -143,6 +143,7 @@ class MultimodalTransformerConfig(scfg.DataConfig):
     arch_name = scfg.Value('smt_it_joint_p8', type=str, choices=available_encoders)
     decoder = scfg.Value('mlp', type=str, choices=['mlp', 'segmenter'])
     dropout = scfg.Value(0.1, type=float)
+    backbone_depth = scfg.Value(None, type=int, help='For supporting architectures, control the depth of the backbone. Default depends on arch_name')
     global_class_weight = scfg.Value(1.0, type=float)
     global_change_weight = scfg.Value(1.0, type=float)
     global_saliency_weight = scfg.Value(1.0, type=float)
@@ -162,15 +163,15 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         '''))
     change_head_hidden = scfg.Value(2, type=int, help=ub.paragraph(
         '''
-        number of hidden layers in the change head
+        number of hidden layers in the CHANGE head. I.e. the depth of the head.
         '''))
     class_head_hidden = scfg.Value(2, type=int, help=ub.paragraph(
         '''
-        number of hidden layers in the category head
+        number of hidden layers in the CLASS head. I.e. the depth of the head.
         '''))
     saliency_head_hidden = scfg.Value(2, type=int, help=ub.paragraph(
         '''
-        number of hidden layers in the saliency head
+        number of hidden layers in the SALIENCY head. I.e. the depth of the head.
         '''))
     window_size = scfg.Value(8, type=int)
     squash_modes = scfg.Value(False, help='deprecated doesnt do anything')
@@ -300,6 +301,12 @@ class MultimodalTransformer(pl.LightningModule):
         config = MultimodalTransformerConfig(**kwargs)
         self.config = config
         cfgdict = self.config.to_dict()
+        # Note:
+        # it is important that the non-kwargs are saved as hyperparams:
+        cfgdict['classes'] = classes
+        cfgdict['dataset_stats'] = dataset_stats
+        cfgdict['input_sensorchan'] = input_sensorchan
+        cfgdict['input_channels'] = input_channels
         self.save_hyperparameters(cfgdict)
         # Backwards compatibility. Previous iterations had the
         # config saved directly as datamodule arguments
@@ -573,8 +580,11 @@ class MultimodalTransformer(pl.LightningModule):
             dim=0, in_channels=16, hidden_channels=3, out_channels=8, residual=True, norm=None)
 
         # 'https://rwightman.github.io/pytorch-image-models/models/vision-transformer/'
+        backbone_depth = self.config['backbone_depth']
         if arch_name in transformer.encoder_configs:
             encoder_config = transformer.encoder_configs[arch_name]
+            if backbone_depth is not None:
+                raise NotImplementedError('unsupported')
             encoder = transformer.FusionEncoder(
                 **encoder_config,
                 in_features=in_features,
@@ -583,6 +593,8 @@ class MultimodalTransformer(pl.LightningModule):
             )
             self.encoder = encoder
         elif arch_name.startswith('deit'):
+            if backbone_depth is not None:
+                raise ValueError('unsupported')
             self.encoder = transformer.DeiTEncoder(
                 # **encoder_config,
                 in_features=in_features,
@@ -590,7 +602,10 @@ class MultimodalTransformer(pl.LightningModule):
                 # dropout=dropout,
             )
         elif arch_name.startswith('perceiver'):
+            if backbone_depth is None:
+                backbone_depth = 4
             self.encoder = transformer.PerceiverEncoder(
+                depth=backbone_depth,
                 # **encoder_config,
                 in_features=in_features,
                 # attention_impl=attention_impl,
@@ -816,7 +831,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     chip_size=128, batch_size=1, time_steps=3,
             >>>     channels=channels,
             >>>     normalize_inputs=1, neg_to_pos_ratio=0,
-            >>>     num_workers='avail/2', true_multimodal=True,
+            >>>     num_workers='avail/2',
             >>>     use_grid_positives=False, use_centered_positives=True,
             >>> )
             >>> datamodule.setup('fit')
@@ -1172,7 +1187,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> import watch
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='special:vidshapes-watch',
-            >>>     num_workers='avail / 2', chip_size=96, time_steps=4, true_multimodal=True,
+            >>>     num_workers='avail / 2', chip_size=96, time_steps=4,
             >>>     normalize_inputs=8, neg_to_pos_ratio=0, batch_size=1,
             >>> )
             >>> datamodule.setup('fit')
@@ -1560,7 +1575,8 @@ class MultimodalTransformer(pl.LightningModule):
             perframe_logits = ub.ddict(list)
             for frame_feature in perframe_stackable_encodings:
                 for head_key in ['class', 'saliency']:
-                    perframe_logits[head_key].append(self.heads[head_key](frame_feature))
+                    if head_key in self.heads:
+                        perframe_logits[head_key].append(self.heads[head_key](frame_feature))
             # For change, frames are dependant, so we have to do some resampling
             if 'change' in self.heads and num_frames > 1:
                 resampled_frame_feats = [
@@ -1847,7 +1863,7 @@ class MultimodalTransformer(pl.LightningModule):
 
             >>> datamodule = datamodules.kwcoco_video_data.KWCocoVideoDataModule(
             >>>     train_dataset='special:vidshapes8-multispectral-multisensor', chip_size=32,
-            >>>     batch_size=1, time_steps=2, num_workers=0, normalize_inputs=False)
+            >>>     batch_size=1, time_steps=2, num_workers=2, normalize_inputs=10)
             >>> datamodule.setup('fit')
             >>> dataset_stats = datamodule.torch_datasets['train'].cached_dataset_stats(num=3)
             >>> classes = datamodule.torch_datasets['train'].classes

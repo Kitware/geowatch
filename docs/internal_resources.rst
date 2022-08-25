@@ -9,7 +9,11 @@ you will not be able to access these resources.
 +----------------------------------------------------------+----------------------------------------------------------------+
 | The Internal SMART WATCH Python Module                   | https://gitlab.kitware.com/smart/watch/                        |
 +----------------------------------------------------------+----------------------------------------------------------------+
-| The Internal SMART WATCH DVC Repo                        | https://gitlab.kitware.com/smart/smart_watch_dvc/              |
+| The Phase 1 Internal SMART WATCH DVC Repo                | https://gitlab.kitware.com/smart/smart_watch_dvc/              |
++----------------------------------------------------------+----------------------------------------------------------------+
+| The Phase 2 Internal SMART WATCH DVC Data Repo           | https://gitlab.kitware.com/smart/smart_data_dvc/               |
++----------------------------------------------------------+----------------------------------------------------------------+
+| The Phase 2 Internal SMART WATCH DVC Experiment Repo     | https://gitlab.kitware.com/smart/smart_expt_dvc/               |
 +----------------------------------------------------------+----------------------------------------------------------------+
 | The Internal SMART WATCH Infastructure Docs (DEPRECATED) | https://gitlab.kitware.com/smart/watch-infrastructure          |
 +----------------------------------------------------------+----------------------------------------------------------------+

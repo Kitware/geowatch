@@ -79,7 +79,7 @@ PRODUCTION_MODELS = [
     },
 
     {
-        'name': 'Drop3_SpotCheck_V323_epoch=18-step=12976.pt ',
+        'name': 'Drop3_SpotCheck_V323_epoch=18-step=12976.pt',
         'file_name': 'models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt',
         'predictions': 'models/fusion/eval3_candidates/pred/Drop3_SpotCheck_V323/pred_Drop3_SpotCheck_V323_epoch=18-step=12976',
         'task': 'BAS',

@@ -1,5 +1,9 @@
 """
 Helper script for packaging a checkpoint into a torch package
+
+MOSTLY DEPRECATED IN FAVOR OF
+
+~/code/watch/watch/dvc/expt_manager.py
 """
 import os
 import ubelt as ub
@@ -47,6 +51,7 @@ def repackage(checkpoint_fpath, force=False, dry=False):
             if path_.parent.stem == 'checkpoints':
                 train_dpath_hint = path_.parent.parent
 
+        meta_fpath = None
         if train_dpath_hint is not None:
             # Look at the training config file to get info about this
             # experiment
@@ -75,15 +80,51 @@ def repackage(checkpoint_fpath, force=False, dry=False):
                 # checkpoint = torch.load(checkpoint_fpath)
                 print(list(checkpoint.keys()))
                 hparams = checkpoint['hyper_parameters']
+
+                if 'input_sensorchan' not in hparams:
+                    # HACK: we had old models that did not save their hparams
+                    # correctly. Try to fix them up here. The best we can do
+                    # is try to start a small training run with the exact same
+                    # settings and capture fixed model state from that.
+                    if meta_fpath is None:
+                        raise Exception('we cant do a fix without the meta fpath')
+
+                    hackfix_hparams_fpath = meta_fpath.augment(prefix='hackfix_')
+                    if not hackfix_hparams_fpath.exists():
+                        # Do this once per experiment group to save time.
+                        import tempfile
+                        tmp_dpath = ub.Path(tempfile.mkdtemp())
+                        tmp_root = (tmp_dpath / package_name)
+                        ub.cmd(f'python -m watch.tasks.fusion.fit '
+                               f'--config "{meta_fpath}" --default_root_dir "{tmp_root}" '
+                               f'--max_epochs=0 --max_epoch_length=1', system=1, verbose=3)
+                        tmp_llogs_dpaths = sorted((tmp_root / 'lightning_logs').glob('*'))
+                        assert tmp_llogs_dpaths, 'cannot fix this model'
+                        tmp_hparams_fpath = tmp_llogs_dpaths[-1] / 'hparams.yaml'
+                        import shutil
+                        shutil.copy(tmp_hparams_fpath, hackfix_hparams_fpath)
+
+                    import yaml
+                    with open(hackfix_hparams_fpath, 'r') as file:
+                        hacked_hparams = yaml.load(file, yaml.Loader)
+                    hacked_hparams = ub.udict(hacked_hparams)
+                    # Select the known problematic variables
+                    problem_hparams = hacked_hparams.subdict([
+                        'classes', 'dataset_stats', 'input_sensorchan',
+                        'input_channels'])
+                    hparams.update(problem_hparams)
+                    # hacked_hparams - hparams
+
                 if 'input_channels' in hparams:
-                    from kwcoco.channel_spec import ChannelSpec
+                    import kwcoco
                     # Hack for strange pickle issue
                     chan = hparams['input_channels']
-                    if not hasattr(chan, '_spec') and hasattr(chan, '_info'):
-                        chan = ChannelSpec.coerce(chan._info['spec'])
-                        hparams['input_channels'] = chan
-                    else:
-                        hparams['input_channels'] = ChannelSpec.coerce(chan.spec)
+                    if chan is not None:
+                        if not hasattr(chan, '_spec') and hasattr(chan, '_info'):
+                            chan = kwcoco.ChannelSpec.coerce(chan._info['spec'])
+                            hparams['input_channels'] = chan
+                        else:
+                            hparams['input_channels'] = kwcoco.ChannelSpec.coerce(chan.spec)
 
                 method = methods.MultimodalTransformer(**hparams)
                 state_dict = checkpoint['state_dict']
@@ -92,8 +133,8 @@ def repackage(checkpoint_fpath, force=False, dry=False):
                 if train_dpath_hint is not None:
                     method.train_dpath_hint = train_dpath_hint
 
-                method.save_package(str(package_fpath))
-        package_fpaths.append(str(package_fpath))
+                method.save_package(os.fspath(package_fpath))
+        package_fpaths.append(os.fspath(package_fpath))
     return package_fpaths
 
 
@@ -371,7 +412,6 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
 
     import platform
     hostname = platform.node()
-
     if toadd_expt_fpaths:
         dvc_api.git_commitpush(f'new models from {hostname}')
 

@@ -1,19 +1,19 @@
 #!/usr/bin/env python
-import argparse
-import sys
+# import argparse
+# import sys
 import os
 import json
-import parse
+# import parse
 import pandas as pd
 import numpy as np
 import shapely.geometry
 import shapely.ops
 from tempfile import TemporaryDirectory
 from dataclasses import dataclass
-from glob import glob
 from typing import List, Dict
 import ubelt as ub
 import subprocess
+import scriptconfig as scfg
 from packaging import version
 
 
@@ -26,22 +26,21 @@ class RegionResult:
     sc_dpath: ub.Path = None  # 'path/to/scores/latest/KR_R001/phase_activity/'
 
     @classmethod
-    def from_dpath_and_anns_root(cls, region_dpath, anns_root):
-        anns_root = ub.Path(anns_root)
+    def from_dpath_and_anns_root(cls, region_dpath, true_site_dpath, true_region_dpath):
         region_dpath = ub.Path(region_dpath)
         region_id = region_dpath.name
-        bas_dpath = region_dpath / 'bas'
+        bas_dpath = region_dpath / 'completed' / 'bas'
         bas_dpath = bas_dpath if bas_dpath.is_dir() else None
-        sc_dpath = region_dpath / 'phase_activity'
+        sc_dpath = region_dpath / 'completed' / 'phase_activity'
         sc_dpath = sc_dpath if sc_dpath.is_dir() else None
-        region_fpath = anns_root / 'region_models' / (region_id + '.geojson')
+        region_fpath = true_region_dpath / (region_id + '.geojson')
         with open(region_fpath, 'r') as f:
             region_model = json.load(f)
 
-        site_globstr = str(anns_root / 'site_models' / (f'{region_id}_*.geojson'))
+        site_fpaths = sorted(true_site_dpath.glob(f'{region_id}_*.geojson'))
         site_models = [
             json.loads(open(pth).read())
-            for pth in sorted(glob(site_globstr))
+            for pth in site_fpaths
         ]
         return cls(region_id, region_model, site_models, bas_dpath, sc_dpath)
 
@@ -67,8 +66,6 @@ def merge_bas_metrics_results(bas_results: List[RegionResult]):
         spatial FAR        float64
         temporal FAR       float64
         images FAR         float64
-
-    as in bas/scoreboard_rho=*.csv
     '''
 
     #
@@ -151,27 +148,41 @@ def merge_bas_metrics_results(bas_results: List[RegionResult]):
     #
 
     def to_df(bas_dpath, region_id):
-        scoreboard_fpaths = sorted(
-            glob(os.path.join(bas_dpath, 'scoreboard_rho=*.csv')))
+        # scoreboard_fpaths = sorted(
+        #     glob(os.path.join(bas_dpath, 'scoreboard_rho=*.csv')))
+        # bas_dpath / 'F1.csv'
+        scoreboard_fpath = (bas_dpath / 'scoreboard.csv')
+        scoreboard = pd.read_csv(scoreboard_fpath)
+        scoreboard = scoreboard.iloc[:, 1:].copy()
+        scoreboard['region_id'] = region_id
+        scoreboard = scoreboard.set_index(['region_id', 'rho', 'tau'])
+        # f1_csv_fpath = (bas_dpath / 'F1.csv')
+        # f1_csv = pd.read_csv(f1_csv_fpath)
+        # f1_csv = f1_csv.set_index('tau')
+        # f1_csv = f1_csv.rename(lambda x: x.split('rho=')[-1], axis=1)
+        # f1_csv.columns.name = 'rho'
+        # f1_csv = f1_csv.melt(ignore_index=False, value_name='F1').reset_index()
+        # f1_csv['region_id'] = region_id
+        return scoreboard
 
         # load each per-rho scoreboard and concat them
-        rho_parser = parse.Parser('scoreboard_rho={rho:f}.csv')
-        dfs = []
-        for pth in scoreboard_fpaths:
-            rho = rho_parser.parse(os.path.basename(pth)).named['rho']
-            df = pd.read_csv(pth)
-            df['rho'] = rho
-            df['region_id'] = region_id
-            # MultiIndex with rho, tau and region_id
-            df = df.set_index(['region_id', 'rho', 'tau'])
-            dfs.append(df)
-
-        return pd.concat(dfs)
+        # rho_parser = parse.Parser('scoreboard_rho={rho:f}.csv')
+        # dfs = []
+        # for pth in scoreboard_fpaths:
+        #     rho = rho_parser.parse(os.path.basename(pth)).named['rho']
+        #     df = pd.read_csv(pth)
+        #     df['rho'] = rho
+        #     df['region_id'] = region_id
+        #     # MultiIndex with rho, tau and region_id
+        #     df = df.set_index(['region_id', 'rho', 'tau'])
+        #     dfs.append(df)
+        # return pd.concat(dfs)
 
     dfs = [to_df(r.bas_dpath, r.region_id) for r in bas_results]
 
     concat_df = pd.concat(dfs)
-    result_df = pd.DataFrame(index=dfs[0].droplevel('region_id').index)
+    result_df = concat_df
+    # result_df = pd.DataFrame(index=dfs[0].droplevel('region_id').index)
 
     sum_cols = [
         'tp sites', 'fp sites', 'fn sites', 'truth sites', 'proposed sites',
@@ -179,17 +190,17 @@ def merge_bas_metrics_results(bas_results: List[RegionResult]):
     ]
     result_df[sum_cols] = concat_df.groupby(['rho', 'tau'])[sum_cols].sum()
 
-    # ref: metrics-and-test-framework.evaluation.Metric
-    (_, tp), (_, fp), (_, fn) = result_df[['tp sites', 'fp sites',
-                                           'fn sites']].iteritems()
-    result_df['precision'] = np.where(tp > 0, tp / (tp + fp), 0)
-    result_df['recall (PD)'] = np.where(tp > 0, tp / (tp + fn), 0)
-    result_df['F1'] = np.where(tp > 0, tp / (tp + 0.5 * (fp + fn)), 0)
+    # # ref: metrics-and-test-framework.evaluation.Metric
+    # (_, tp), (_, fp), (_, fn) = result_df[['tp sites', 'fp sites',
+    #                                        'fn sites']].iteritems()
+    # result_df['precision'] = np.where(tp > 0, tp / (tp + fp), 0)
+    # result_df['recall (PD)'] = np.where(tp > 0, tp / (tp + fn), 0)
+    # result_df['F1'] = np.where(tp > 0, tp / (tp + 0.5 * (fp + fn)), 0)
 
-    all_regions = [r.region_model for r in bas_results]
-    # ref: metrics-and-test-framework.evaluation.Evaluation.build_scoreboard
-    result_df['spatial FAR'] = fp.astype(float) / area(all_regions)
-    result_df['temporal FAR'] = fp.astype(float) / n_dates(all_regions)
+    # all_regions = [r.region_model for r in bas_results]
+    # # ref: metrics-and-test-framework.evaluation.Evaluation.build_scoreboard
+    # result_df['spatial FAR'] = fp.astype(float) / area(all_regions)
+    # result_df['temporal FAR'] = fp.astype(float) / n_dates(all_regions)
 
     # this is not actually how Images FAR is calculated!
     # https://smartgitlab.com/TE/metrics-and-test-framework/-/issues/23
@@ -200,9 +211,9 @@ def merge_bas_metrics_results(bas_results: List[RegionResult]):
     #
     # instead, images in multiple proposed site stacks are double-counted.
     # take advantage of this to merge this metric with a simple average.
-    n_images = (concat_df['fp sites'] /
-                concat_df['images FAR']).groupby('region_id').mean().sum()
-    result_df['images FAR'] = fp.astype(float) / n_images
+    # n_images = (concat_df['fp sites'] /
+    #             concat_df['images FAR']).groupby('region_id').mean().sum()
+    # result_df['images FAR'] = fp.astype(float) / n_images
 
     return result_df, concat_df
 
@@ -222,9 +233,13 @@ def _to_sc_df(sc_dpath, region_id):
     delim = ' vs. '
     sc_dpath = ub.Path(sc_dpath)
 
-    df = pd.read_csv(sc_dpath / 'activity_phase_table.csv')
+    df = pd.read_csv(sc_dpath / 'ac_phase_table.csv')
 
-    df['date'] = pd.to_datetime(df['date'])
+    # terr_df = pd.read_csv(sc_dpath / 'ac_temporal_error.csv')
+    # f1_df = pd.read_csv(sc_dpath / 'ac_f1_all_sites.csv')
+    # pd.read_csv(sc_dpath / 'ap_temporal_error.csv')
+
+    # df['date'] = pd.to_datetime(df['date'])
     df = df.set_index('date')
     df = df.fillna(pd.NA).astype('string')
 
@@ -232,16 +247,25 @@ def _to_sc_df(sc_dpath, region_id):
 
     df = df.applymap(lambda cell: delim.join((cell, cell))
                      if not pd.isna(cell) and delim not in cell else cell)
-    df = pd.concat(
-        [df[col].str.split(delim, expand=True) for col in site_names],
-        axis=1,
-        ignore_index=True)
+
+    parts = [df[col].str.split(delim, expand=True) for col in site_names]
+    df = pd.concat(parts, axis=1, ignore_index=True)
 
     df.columns = pd.MultiIndex.from_product(
         #  ([region_id], site_names, ['truth', 'proposed']),
         #  names=['region_id', 'site', 'type'])
-        (site_names, ['truth', 'proposed']),
+        (site_names, ['true', 'pred']),
         names=['site', 'type'])
+
+    def fix_cell(c):
+        if isinstance(c, str):
+            if c.startswith('{') and c.count(',') == 0:
+                return c.replace('{', '').replace('}', '')
+            if c == '[]':
+                return None
+        return c
+
+    df = df.applymap(fix_cell)
 
     return df
 
@@ -260,23 +284,54 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
     #     sc_dpath = r.sc_dpath
     #     region_id = r.region_id
     #     to_df(sc_dpath, region_id)
+    # if 0:
+    #     r = sc_results[0]
+    #     sc_dpath, region_id = r.sc_dpath, r.region_id
 
     dfs = [_to_sc_df(r.sc_dpath, r.region_id) for r in sc_results]
     df = pd.concat(dfs, axis=1).sort_values('date')
 
     # phase activity categories
     phase_classifications = [
-        # "No Activity",
+        "No Activity",
         "Site Preparation",
         "Active Construction",
         "Post Construction",
     ]
 
     sites = df.columns.levels[0]
-    phase_true = np.concatenate(
-        [df[site, 'truth'].dropna().to_numpy() for site in sites])
-    phase_pred = np.concatenate(
-        [df[site, 'proposed'].dropna().to_numpy() for site in sites])
+
+    # Not sure abou this
+    def propogate(labels):
+        import pandas as pd
+        prev = 'No Activity'
+        new = []
+        for item in labels:
+            if isinstance(item, str):
+                if item.lower() == 'nan':
+                    item = None
+            elif item is not None:
+                if pd.isnull(item):
+                    item = None
+            if item is None:
+                item = prev
+            item = item.replace("'", '')
+            item = item.replace('"', '')
+            new.append(item)
+            prev = item
+        return new
+
+    phase_true = []
+    phase_pred = []
+    for site in sites:
+        true = propogate(df[site, 'true'])
+        pred = propogate(df[site, 'pred'])
+        phase_pred.extend(pred)
+        phase_true.extend(true)
+
+    # Can't drop NA. Need to propogate
+    phase_true = np.array(phase_true)
+    phase_pred = np.array(phase_pred)
 
     f1 = f1_score(phase_true, phase_pred,
                   labels=phase_classifications,
@@ -285,7 +340,7 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
     # TIoU is only ever evaluated per-site, so we can safely average these
     # per-site and call it a new metric mTIoU.
     tious = pd.concat([
-        pd.read_csv(r.sc_dpath / 'activity_tiou_table.csv', index_col=0)
+        pd.read_csv(r.sc_dpath / 'ac_tiou.csv', index_col=0)
         for r in sc_results
     ], axis=1)
     mtiou = tious.mean(axis=1, skipna=True)
@@ -294,7 +349,7 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
     # these are averaged using the mean over sites for each phase.
     # So the correct average over regions is to weight by (sites/region)
     temporal_errs = [
-        pd.read_csv(r.sc_dpath / 'activity_prediction_table.csv').loc[0][1:].astype(float).values
+        pd.read_csv(r.sc_dpath / 'ac_temporal_error.csv').loc[0][1:].astype(float).values
         for r in sc_results
     ]
     n_sites = [df.shape[1] for df in dfs]
@@ -356,13 +411,15 @@ def _hack_remerge_data():
     for merge_fpath in ub.ProgIter(summary_metrics, desc='rewrite merge metrics'):
         region_dpaths = [p for p in list(merge_fpath.parent.parent.glob('*')) if p.name != 'merged']
         anns_root = dvc_dpath / 'annotations'
+        true_site_dpath = anns_root / 'site_models'
+        true_region_dpath = anns_root / 'region_models'
 
         # merge_dpath = merge_fpath.parent
 
         json_data = json.loads(merge_fpath.read_text())
         parent_info = json_data['parent_info']
 
-        bas_concat_df, bas_df, sc_df, sc_cm = _make_merge_metrics(region_dpaths, anns_root)
+        bas_concat_df, bas_df, sc_df, sc_cm = _make_merge_metrics(region_dpaths, true_site_dpath, true_region_dpath)
         new_json_data, *_ = _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info)
 
         with safer.open(merge_fpath, 'w', temp_file=True) as f:
@@ -373,9 +430,9 @@ def _hack_remerge_data():
     dvc.push(summary_metrics, remote='aws')
 
 
-def _make_merge_metrics(region_dpaths, anns_root):
+def _make_merge_metrics(region_dpaths, true_site_dpath, true_region_dpath):
     results = [
-        RegionResult.from_dpath_and_anns_root(pth, anns_root)
+        RegionResult.from_dpath_and_anns_root(pth, true_site_dpath, true_region_dpath)
         for pth in region_dpaths
     ]
 
@@ -443,7 +500,7 @@ def _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info, info):
     return json_data, concise_best_bas_rows, best_bas_row_
 
 
-def merge_metrics_results(region_dpaths, anns_root, merge_dpath, merge_fpath,
+def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath, merge_dpath, merge_fpath,
                           parent_info, info):
     '''
     Merge metrics results from multiple regions.
@@ -453,7 +510,7 @@ def merge_metrics_results(region_dpaths, anns_root, merge_dpath, merge_fpath,
             bas/
             phase_activity/ [optional]
             time_activity/ [TBD, not scored yet]
-        anns_root: Path to GT annotations repo
+        true_site_dpath, true_region_dpath: Path to GT annotations repo
         merge_dpath: Directory to save merged results.
             Existing contents will be removed.
 
@@ -463,12 +520,11 @@ def merge_metrics_results(region_dpaths, anns_root, merge_dpath, merge_fpath,
             {out_dpath}/(bas|sc)_scoreboard_df.pkl
     '''
     import safer
-    merge_dpath = ub.Path(merge_dpath)
+    merge_dpath = ub.Path(merge_dpath).ensuredir()
     # assert merge_dpath not in region_dpaths
     # merge_dpath.delete().ensuredir()
-    merge_dpath.ensuredir()
 
-    bas_concat_df, bas_df, sc_df, sc_cm = _make_merge_metrics(region_dpaths, anns_root)
+    bas_concat_df, bas_df, sc_df, sc_cm = _make_merge_metrics(region_dpaths, true_site_dpath, true_region_dpath)
     bas_df.to_pickle(merge_dpath / 'bas_scoreboard_df.pkl')
     sc_df.to_pickle(merge_dpath / 'sc_activity_df.pkl')
     sc_cm.to_pickle(merge_dpath / 'sc_confusion_df.pkl')
@@ -568,94 +624,217 @@ def ensure_thumbnails(image_root, region_id, sites):
             ub.symlink(img_path, link_path, verbose=0)
 
 
-def main(args):
-    import safer
-    parser = argparse.ArgumentParser(
-        description='Score IARPA site model GeoJSON files using IARPA\'s '
-        'metrics-and-test-framework')
-    parser.add_argument('sites',
-                        nargs='*',
-                        help='''
-        List of paths or serialized JSON strings containg v2 site models.
+class MetricsConfig(scfg.DataConfig):
+    """
+    Score IARPA site model GeoJSON files using IARPA's metrics-and-test-framework
+    """
+    pred_sites = scfg.Value(None, required=True, nargs='*', help=ub.paragraph(
+        '''
+        List of paths to predicted v2 site models. Or a path to a single text
+        file containing the a list of paths to predicted site models.
         All region_ids from these sites will be scored, and it will be assumed
         that there are no other sites in these regions.
-        ''')
-    parser.add_argument('--gt_dpath',
-                        help='''
+        '''))
+    gt_dpath = scfg.Value(None, help=ub.paragraph(
+        '''
         Path to a local copy of the ground truth annotations,
-        https://smartgitlab.com/TE/annotations.
-        If None, use the environment variable DVC_DPATH to find
-        $DVC_DPATH/annotations.
-        ''')
-    parser.add_argument('--metrics_dpath',
-                        help='''
+        https://smartgitlab.com/TE/annotations.  If None, use the
+        environment variable DVC_DATA_DPATH to find
+        $DVC_DATA_DPATH/annotations.
+        '''))
+
+    true_site_dpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        Directory containing true site models. Defaults to
+        gt_dpath / site_models
+        '''))
+
+    true_region_dpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        Directory containing true region models. Defaults to
+        gt_dpath / region_models
+        '''))
+
+    metrics_dpath = scfg.Value(None, help=ub.paragraph(
+        '''
         Path to a local copy of the metrics framework,
         https://smartgitlab.com/TE/metrics-and-test-framework.
         If None, use the environment variable METRICS_DPATH.
-        DEPRECATED. Simply ensure iarpa_smart_metrics is pip installed
-                    in your virutalenv.
-        ''')
-    # https://stackoverflow.com/a/49351471
-    parser.add_argument(
-        '--virtualenv_cmd',
-        default=['true'],  # no-op bash command
-        nargs='+',  # hack for spaces
-        help='''
-        Command to run before calling the metrics framework in a subshell.
-        The metrics framework should be installed in a different virtual env
-        from WATCH, using eg conda or pyenv.
-        ''')
-    parser.add_argument('--out_dir',
-                        help='''
-        Output directory where scores will be written. Each region will have
-        Defaults to ./output/
-        ''')
-    parser.add_argument('--merge',
-                        action='store_true',
-                        help='''
+        DEPRECATED. Simply ensure iarpa_smart_metrics is pip
+        installed                 in your virutalenv.
+        '''))
+    virtualenv_cmd = scfg.Value(['true'], nargs='+', help=ub.paragraph(
+        '''
+        Command to run before calling the metrics framework in
+        a subshell.     The metrics framework should be installed in
+        a different virtual env     from WATCH, using eg conda or
+        pyenv.
+        '''))
+    out_dir = scfg.Value(None, help=ub.paragraph(
+        '''
+        Output directory where scores will be written. Each
+        region will have     Defaults to ./output/
+        '''))
+    merge = scfg.Value(False, help=ub.paragraph(
+        '''
         Merge BAS and SC metrics from all regions and output to
         {out_dir}/merged/
-        ''')
-
-    parser.add_argument('--merge_fpath',
-                        help='''
-        Forces the merge summary to be written to a specific location.
-        ''')
-
-    parser.add_argument('--tmp_dir',
-                        help='''
-        If specified, will write temporary data here instead of using a
-        non-persistant directory
-        ''')
-
-    parser.add_argument('--enable_viz', default=False,
-                        help='''
+        '''))
+    merge_fpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        Forces the merge summary to be written to a specific
+        location.
+        '''))
+    tmp_dir = scfg.Value(None, help=ub.paragraph(
+        '''
+        If specified, will write temporary data here instead of
+        using a     non-persistant directory
+        '''))
+    enable_viz = scfg.Value(False, help=ub.paragraph(
+        '''
         If true, enables iarpa visualizations
-        ''')
+        '''))
+    name = scfg.Value('unknown', help=ub.paragraph(
+        '''
+        Short name for the algorithm used to generate the model
+        '''))
+    inputs_are_paths = scfg.Value(False, help=ub.paragraph(
+        '''
+        If given, the sites inputs will always be interpreted as
+        paths and not raw json text.
+        '''))
+    use_cache = scfg.Value(False, help=ub.paragraph(
+        '''
+        IARPA metrics code currently contains a cache bug, do not
+        enable the cache until this is fixed.
+        '''))
 
-    parser.add_argument('--name', default='unknown', help=(
-        'Short name for the algorithm used to generate the model'))
 
-    parser.add_argument(
-        '--inputs_are_paths', action='store_true', help=ub.paragraph(
-            '''
-            If given, the sites inputs will always be interpreted as paths
-            and not raw json text.
-            '''))
+def main(cmdline=True, **kwargs):
+    """
 
-    parser.add_argument(
-        '--use_cache', default=False, action='store_true', help=ub.paragraph(
-            '''
-            IARPA metrics code currently contains a cache bug, do not enable
-            the cache until this is fixed.
-            '''))
+    Example:
+        >>> # xdoctest: +REQUIRES(module:iarpa_smart_metrics)
+        >>> from watch.cli.run_metrics_framework import *  # NOQA
+        >>> from iarpa_smart_metrics.demo.generate_demodata import generate_demo_metrics_framework_data
+        >>> cmdline = 0
+        >>> demo_info = generate_demo_metrics_framework_data(
+        >>>     num_sites=5, num_observations=10, noise=2, p_observe=0.5,
+        >>>     p_transition=0.3, drop_noise=0.5, drop_limit=0.5)
+        >>> print('demo_info = {}'.format(ub.repr2(demo_info, nl=1)))
+        >>> dpath = ub.Path.appdir('watch', 'tests', 'test-iarpa-metrics2')
+        >>> out_dpath = dpath / 'region_metrics'
+        >>> merge_fpath = dpath / 'merged.json'
+        >>> out_dpath.delete()
+        >>> kwargs = {
+        >>>     'pred_sites': demo_info['pred_site_dpath'],
+        >>>     'true_region_dpath': demo_info['true_region_dpath'],
+        >>>     'true_site_dpath': demo_info['true_site_dpath'],
+        >>>     'merge': True,
+        >>>     'merge_fpath': merge_fpath,
+        >>>     'out_dir': out_dpath,
+        >>> }
+        >>> main(cmdline=False, **kwargs)
+        >>> # TODO: visualize
+    """
+    import safer
 
-    args, _ = parser.parse_known_args(args)
-    print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=2)))
+    # if 0:
+    #     parser = argparse.ArgumentParser(
+    #         description='Score IARPA site model GeoJSON files using IARPA\'s '
+    #         'metrics-and-test-framework')
+    #     parser.add_argument('sites',
+    #                         nargs='*',
+    #                         help='''
+    #         List of paths or serialized JSON strings containg v2 site models.
+    #         All region_ids from these sites will be scored, and it will be assumed
+    #         that there are no other sites in these regions.
+    #         ''')
+    #     parser.add_argument('--gt_dpath',
+    #                         help='''
+    #         Path to a local copy of the ground truth annotations,
+    #         https://smartgitlab.com/TE/annotations.
+    #         If None, use the environment variable DVC_DPATH to find
+    #         $DVC_DPATH/annotations.
+    #         ''')
+    #     parser.add_argument('--metrics_dpath',
+    #                         help='''
+    #         Path to a local copy of the metrics framework,
+    #         https://smartgitlab.com/TE/metrics-and-test-framework.
+    #         If None, use the environment variable METRICS_DPATH.
+    #         DEPRECATED. Simply ensure iarpa_smart_metrics is pip installed
+    #                     in your virutalenv.
+    #         ''')
+    #     # https://stackoverflow.com/a/49351471
+    #     parser.add_argument(
+    #         '--virtualenv_cmd',
+    #         default=['true'],  # no-op bash command
+    #         nargs='+',  # hack for spaces
+    #         help='''
+    #         Command to run before calling the metrics framework in a subshell.
+    #         The metrics framework should be installed in a different virtual env
+    #         from WATCH, using eg conda or pyenv.
+    #         ''')
+    #     parser.add_argument('--out_dir',
+    #                         help='''
+    #         Output directory where scores will be written. Each region will have
+    #         Defaults to ./output/
+    #         ''')
+    #     parser.add_argument('--merge',
+    #                         action='store_true',
+    #                         help='''
+    #         Merge BAS and SC metrics from all regions and output to
+    #         {out_dir}/merged/
+    #         ''')
 
-    # load sites
-    sites = []
-    if len(args.sites) == 0:
+    #     parser.add_argument('--merge_fpath',
+    #                         help='''
+    #         Forces the merge summary to be written to a specific location.
+    #         ''')
+
+    #     parser.add_argument('--tmp_dir',
+    #                         help='''
+    #         If specified, will write temporary data here instead of using a
+    #         non-persistant directory
+    #         ''')
+
+    #     parser.add_argument('--enable_viz', default=False,
+    #                         help='''
+    #         If true, enables iarpa visualizations
+    #         ''')
+
+    #     parser.add_argument('--name', default='unknown', help=(
+    #         'Short name for the algorithm used to generate the model'))
+
+    #     parser.add_argument(
+    #         '--inputs_are_paths', action='store_true', help=ub.paragraph(
+    #             '''
+    #             If given, the sites inputs will always be interpreted as paths
+    #             and not raw json text.
+    #             '''))
+
+    #     parser.add_argument(
+    #         '--use_cache', default=False, action='store_true', help=ub.paragraph(
+    #             '''
+    #             IARPA metrics code currently contains a cache bug, do not enable
+    #             the cache until this is fixed.
+    #             '''))
+    from watch.utils import util_path
+    # from watch.utils import util_pattern
+
+    config = MetricsConfig.legacy(cmdline=cmdline, data=kwargs)
+    args = config
+
+    config['pred_sites'] = util_path.coerce_patterned_paths(
+        config['pred_sites'], expected_extension='*.geojson')
+
+    # args, _ = parser.parse_known_args(args)
+    config_dict = config.asdict()
+    print('config = {}'.format(ub.repr2(config_dict, nl=2)))
+
+    # load pred_sites
+    pred_sites = []
+    if len(args.pred_sites) == 0:
         raise Exception('No input sites were given')
 
     try:
@@ -673,7 +852,7 @@ def main(args):
     from kwcoco.util import util_json
     import socket
     # Args will be serailized in kwcoco, so make sure it can be coerced to json
-    jsonified_args = util_json.ensure_json_serializable(args.__dict__)
+    jsonified_args = util_json.ensure_json_serializable(config_dict)
     walker = ub.IndexableWalker(jsonified_args)
     for problem in util_json.find_json_unserializable(jsonified_args):
         bad_data = problem['data']
@@ -693,9 +872,10 @@ def main(args):
     })
 
     parent_info = []
-    for site_data in args.sites:
+    for site_data in args.pred_sites:
+        in_fpath = ub.Path(site_data)
+
         if args.inputs_are_paths:
-            in_fpath = ub.Path(site_data)
             if not in_fpath.exists():
                 raise FileNotFoundError(str(in_fpath))
             with open(in_fpath, 'r') as file:
@@ -714,38 +894,49 @@ def main(args):
                 for site_fpath in track_result['files']:
                     with open(site_fpath, 'r') as file:
                         site = json.load(file)
-                    sites.append(site)
+                    pred_sites.append(site)
             else:
                 # It was just a site json file.
                 site = site_or_result
-                sites.append(site)
+                pred_sites.append(site)
         else:
             # TODO:
             # Deprecate passing raw json on the CLI, it has a limited length
             # What would be best is a single file that points to all of the
             # site jsons we care about, so we don't need to glob.
             try:
-                if os.path.isfile(site_data):
+                if in_fpath.is_file():
                     with open(site_data, 'r') as file:
                         site = json.load(file)
                 else:
+                    raise NotImplementedError('deprecated to pass json as str')
                     site = json.loads(site_data)
             except json.JSONDecodeError as e:  # TODO split out as decorator?
                 raise json.JSONDecodeError(e.msg + ' [cut for length]',
                                            e.doc[:100] + '...', e.pos)
-            sites.append(site)
+            pred_sites.append(site)
 
     name = args.name
+    true_site_dpath = args.true_site_dpath
+    true_region_dpath = args.true_region_dpath
 
-    # normalize paths
-    if args.gt_dpath is not None:
-        gt_dpath = ub.Path(args.gt_dpath).absolute()
-    else:
-        import watch
-        dvc_dpath = watch.find_smart_dvc_dpath()
-        gt_dpath = dvc_dpath / 'annotations'
-        print(f'gt_dpath unspecified, defaulting to {gt_dpath=}')
-    assert gt_dpath.is_dir(), gt_dpath
+    if true_region_dpath is None or true_site_dpath is None:
+        # normalize paths
+        if args.gt_dpath is not None:
+            gt_dpath = ub.Path(args.gt_dpath).absolute()
+        else:
+            import watch
+            dvc_dpath = watch.find_smart_dvc_dpath()
+            gt_dpath = dvc_dpath / 'annotations'
+            print(f'gt_dpath unspecified, defaulting to {gt_dpath=}')
+
+        if true_region_dpath is None:
+            assert gt_dpath.is_dir(), gt_dpath
+            true_region_dpath = gt_dpath / 'region_models'
+        if true_site_dpath is None:
+            assert gt_dpath.is_dir(), gt_dpath
+            true_site_dpath =  gt_dpath / 'site_models'
+
     if args.out_dir is not None:
         os.makedirs(args.out_dir, exist_ok=True)
 
@@ -762,11 +953,12 @@ def main(args):
     # split sites by region
     out_dirs = []
     grouped_sites = ub.group_items(
-        sites, lambda site: site['features'][0]['properties']['region_id'])
+        pred_sites, lambda site: site['features'][0]['properties']['region_id'])
 
-    main_out_dir = ub.Path(args.out_dir or '.')
+    main_out_dir = ub.Path(args.out_dir or './iarpa-metrics-output')
+    main_out_dir.ensuredir()
 
-    main_out_dir = ub.Path(args.out_dir or '.')
+    # TODO: use cmd_queue to fan these out on a single node.
 
     for region_id, region_sites in grouped_sites.items():
 
@@ -783,12 +975,12 @@ def main(args):
         out_dir = (main_out_dir / region_id).ensuredir()
 
         # doctor site_dpath for expected structure
-        site_sub_dpath = site_dpath / 'latest' / region_id
-        site_sub_dpath.ensuredir()
+        pred_site_sub_dpath = site_dpath / 'latest' / region_id
+        pred_site_sub_dpath.ensuredir()
 
         # copy site models to site_dpath
         for site in region_sites:
-            geojson_fpath = site_sub_dpath / (
+            geojson_fpath = pred_site_sub_dpath / (
                 site['features'][0]['properties']['site_id'] + '.geojson'
             )
             with safer.open(geojson_fpath, 'w', temp_file=True) as f:
@@ -821,13 +1013,14 @@ def main(args):
         run_eval_command = [
             'python', '-m', 'iarpa_smart_metrics.run_evaluation',
             '--roi', region_id,
-            '--gt_dir', gt_dpath / 'site_models',
-            '--rm_dir', gt_dpath / 'region_models',
-            '--sm_dir', site_sub_dpath,
+            '--gt_dir', true_site_dpath,
+            '--rm_dir', true_region_dpath,
+            '--sm_dir', pred_site_sub_dpath,
             '--image_dir', image_dpath,
             '--output_dir', out_dir if args.out_dir else 'None',
             '--cache_dir', cache_dpath,
-            '--name', shlex.quote(name)
+            '--name', shlex.quote(name),
+            '--no-db',
         ]
         run_eval_command += viz_flags
         # run metrics framework
@@ -838,7 +1031,7 @@ def main(args):
         #         --roi {region_id} \
         #         --gt_dir {gt_dpath / 'site_models'} \
         #         --rm_dir {gt_dpath / 'region_models'} \
-        #         --sm_dir {site_sub_dpath} \
+        #         --sm_dir {pred_site_sub_dpath} \
         #         --image_dir {image_dpath} \
         #         --output_dir {out_dir if args.out_dir else None} \
         #         --cache_dir {cache_dpath} \
@@ -863,11 +1056,18 @@ def main(args):
             merge_fpath = merge_dpath / 'summary2.json'
         else:
             merge_fpath = ub.Path(args.merge_fpath)
-        merge_metrics_results(out_dirs, gt_dpath, merge_dpath, merge_fpath,
-                              parent_info, info)
-        print('merge_fpath = {!r}'.format(merge_fpath))
-        # print('wrote {!r}'.format(summary_path2))
+        # import xdev
+        # xdev.embed()
+        region_dpaths = out_dirs
+
+        if 1:
+            merge_metrics_results(region_dpaths, true_site_dpath,
+                                  true_region_dpath, merge_dpath, merge_fpath,
+                                  parent_info, info)
+            print('merge_fpath = {!r}'.format(merge_fpath))
+        else:
+            print('TODO merge')
 
 
 if __name__ == '__main__':
-    sys.exit(main(sys.argv[1:]))
+    main()

@@ -8,7 +8,7 @@ import pystac
 
 from watch.cli.baseline_framework_egress import upload_output_stac_items
 from watch.cli.baseline_framework_ingress import load_input_stac_items
-from watch.utils.util_stac import associate_msi_pan
+from watch.stac.util_stac import associate_msi_pan
 
 
 def main():

@@ -10,7 +10,7 @@ PER_PROCESS_THREAD_LOCKS = {}
 
 
 def grabdata_girder(api_url, resource_id, name=None, dpath=None, hash_prefix=None,
-                    appname='watch', api_key=None,
+                    appname='watch/girder', api_key=None,
                     verbose=1):
     """
     Downloads and caches a file or folder from girder.
@@ -79,7 +79,7 @@ def grabdata_girder(api_url, resource_id, name=None, dpath=None, hash_prefix=Non
     name = None
     dpath = None
     if dpath is None:
-        dpath = ub.ensure_app_cache_dir(appname)
+        dpath = ub.Path.appdir(appname).ensuredir()
 
     get_info_methods = {
         'file': client.getFile,

@@ -238,7 +238,15 @@ def coco_populate_geo_heuristics(coco_dset: kwcoco.CocoDataset,
         try:
             img = job.result()
         except RuntimeError as ex:
-            if remove_broken and "404" in repr(ex):
+            # Check for known error messages that might cause errors grabbing
+            # data
+            has_404 = remove_broken and "404" in repr(ex)
+            has_acc_problem = "not recognized as a supported file format" in repr(ex)
+            known_errors = [
+                has_404,
+                has_acc_problem,
+            ]
+            if any(known_errors):
                 broken_image_ids.append(gid)
                 print(f'ex={ex!r}')
                 print(f'ex={ex}')
@@ -1905,7 +1913,7 @@ def warp_annot_segmentations_from_geos(coco_dset):
 #     """
 #     import geopandas as gpd
 #     df_input = []
-#     for gid, img in coco_dset.imgs.items():
+#     for gid, img in coco_dset.index.imgs.items():
 #         info  = img['geotiff_metadata']
 #         kw_img_poly = kwimage.Polygon(exterior=info['wgs84_corners'])
 #         sh_img_poly = kw_img_poly.to_shapely()
@@ -1982,12 +1990,15 @@ def covered_image_geo_regions(coco_dset, merge=False):
     Find the intersection of all image bounding boxes in world space
     to see what spatial regions are covered by the imagery.
 
+    Returns:
+        gpd.GeoDataFrame
+
     Example:
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
         >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
         >>> coco_dset = demo_kwcoco_with_heatmaps(num_frames=1, num_videos=1)
         >>> coco_populate_geo_heuristics(coco_dset, overwrite=True)
-        >>> img = coco_dset.imgs[1]
+        >>> img = coco_dset.index.imgs[1]
         >>> cov_image_gdf = covered_image_geo_regions(coco_dset)
     """
     import geopandas as gpd
@@ -1995,7 +2006,7 @@ def covered_image_geo_regions(coco_dset, merge=False):
     import shapely
     # import watch
     rows = []
-    for gid, img in coco_dset.imgs.items():
+    for gid, img in coco_dset.index.imgs.items():
         if 'geos_corners' in img:
             geos_corners = img['geos_corners']
         else:
@@ -2021,8 +2032,8 @@ def covered_image_geo_regions(coco_dset, merge=False):
     cov_poly_crs = 'crs84'
     if merge:
         # df_input = [
-        #     {'gid': gid, 'bounds': poly, 'name': coco_dset.imgs[gid].get('name', None),
-        #      'video_id': coco_dset.imgs[gid].get('video_id', None) }
+        #     {'gid': gid, 'bounds': poly, 'name': coco_dset.index.imgs[gid].get('name', None),
+        #      'video_id': coco_dset.index.imgs[gid].get('video_id', None) }
         #     for gid, poly in gid_to_poly.items()
         # ]
         # img_geos = gpd.GeoDataFrame(df_input, geometry='bounds', crs='epsg:4326')
@@ -2047,6 +2058,62 @@ def covered_image_geo_regions(coco_dset, merge=False):
     return cov_image_gdf
 
 
+def covered_video_geo_regions(coco_dset):
+    """
+    Compute CRS84 bounds for each video in the coco dataset.
+
+    Returns:
+        gpd.GeoDataFrame
+
+    Example:
+        >>> from watch.utils.kwcoco_extensions import *  # NOQA
+        >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
+        >>> coco_dset = demo_kwcoco_with_heatmaps(num_frames=1, num_videos=1)
+        >>> # coco_populate_geo_heuristics(coco_dset, overwrite=True)
+        >>> # video_gdf = covered_video_geo_regions(coco_dset)
+    """
+    import geopandas as gpd
+
+    # TODO: build this more efficiently if possible.
+
+    # if 0:
+    # import watch
+    rows = []
+    for vidid, video in coco_dset.index.videos.items():
+        vidspace_poly = kwimage.Boxes(
+            [[0, 0, video['width'], video['height']]], 'xywh').to_polygons()[0]
+        if 'warp_wld_to_vid' in video:
+            vid_from_wld = kwimage.Affine.coerce(video['warp_wld_to_vid'])
+            wld_form_vid = vid_from_wld.inv()
+            crs84_poly = vidspace_poly.warp(wld_form_vid)
+        else:
+            raise NotImplementedError('We dont have a way to get the geo bounds for a video')
+        gids = coco_dset.index.vidid_to_gids[vidid]
+        if gids:
+            start_gid = gids[0]
+            stop_gid = gids[-1]
+            start_img = coco_dset.coco_image(start_gid)
+            stop_img = coco_dset.coco_image(stop_gid)
+            start_date = start_img.img['date_captured']
+            end_date = stop_img.img['date_captured']
+        else:
+            raise Exception('video does not have any images')
+
+        row = {
+            'video_name': video['name'],
+            'video_id': video['id'],
+            'geometry': crs84_poly.to_shapely(),
+            'start_date': start_date,
+            'end_date': end_date,
+        }
+        rows.append(row)
+
+    from watch.utils import util_gis
+    crs84 = util_gis._get_crs84()
+    video_gdf = gpd.GeoDataFrame(rows, geometry='geometry', crs=crs84)
+    return video_gdf
+
+
 def covered_annot_geo_regions(coco_dset, merge=False):
     """
     Given a dataset find spatial regions of interest that contain annotations
@@ -2063,7 +2130,9 @@ def covered_annot_geo_regions(coco_dset, merge=False):
             aid_to_poly[aid] = sh_poly
 
     # annot_crs = 'epsg:4326'
-    annot_crs = 'crs84'
+    from watch.utils import util_gis
+    annot_crs = util_gis._get_crs84()
+    # annot_crs = 'crs84'
     if merge:
         gid_to_rois = {}
         for gid, aids in coco_dset.index.gid_to_aids.items():
