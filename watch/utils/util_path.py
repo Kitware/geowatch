@@ -81,12 +81,17 @@ def coerce_patterned_paths(data, expected_extension=None):
     Example:
         >>> # xdoctest: +SKIP
         >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
         >>> data = [dvc_dpath / 'annotations/region_models/*.geojson']
         >>> from watch.utils.util_path import *  # NOQA
         >>> print(coerce_patterned_paths(dvc_dpath / 'annotations/region_models'))
         >>> print(coerce_patterned_paths([dvc_dpath / 'annotations/region_models/*.geojson']))
         >>> print(coerce_patterned_paths('./'))
+
+        import watch
+        dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+        data = [ub.Path(dvc_dpath / 'annotations/region_models')]
+        expected_extension = ['*.geojson', '*.txt']
     """
     from os.path import isdir, join
     import glob
@@ -95,10 +100,12 @@ def coerce_patterned_paths(data, expected_extension=None):
     paths = []
     for data_ in datas:
         if expected_extension is not None and isdir(data_):
-            globpat = join(data, '*' + expected_extension)
+            exts = expected_extension if ub.iterable(expected_extension) else [expected_extension]
+            globpats = [join(data_, '*' + e) for e in exts]
         else:
-            globpat = data_
-        paths.extend(list(glob.glob(globpat, recursive=True)))
+            globpats = [data_]
+        for globpat in globpats:
+            paths.extend(list(glob.glob(globpat, recursive=True)))
     paths = [ub.Path(p) for p in paths]
     return paths
 
