@@ -305,7 +305,7 @@ def crop_sites_to_region(region_gdf_crs84, sites):
 
     # Take only the first row, ignore site-summaries
     assert region_gdf_crs84.iloc[0].type == 'region'
-    assert region_gdf_crs84.crs.name == 'WGS 84 (CRS84)'
+    assert region_gdf_crs84.crs.name.startswith('WGS 84')
 
     site_summary_rows = region_gdf_crs84.iloc[1:]
 
