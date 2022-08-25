@@ -54,7 +54,6 @@ python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
         --draw_heatmaps=False \
         --run=0
 
-
 """
 import ubelt as ub
 import scriptconfig as scfg
