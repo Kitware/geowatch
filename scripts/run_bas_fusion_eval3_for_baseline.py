@@ -228,6 +228,7 @@ def run_bas_fusion_for_baseline(
                     '--package_fpath', bas_fusion_model_path,
                     '--pred_dataset', bas_fusion_kwcoco_path,
                     '--num_workers', '0' if force_zero_num_workers else str(jobs),  # noqa: 501
+                    '--set_cover_algo', 'approx',
                     '--batch_size', '8',
                     '--tta_time', '1',
                     '--tta_fliprot', '0',
