@@ -17,6 +17,92 @@ import scriptconfig as scfg
 from packaging import version
 
 
+class MetricsConfig(scfg.DataConfig):
+    """
+    Score IARPA site model GeoJSON files using IARPA's metrics-and-test-framework
+    """
+    pred_sites = scfg.Value(None, required=True, nargs='*', help=ub.paragraph(
+        '''
+        List of paths to predicted v2 site models. Or a path to a single text
+        file containing the a list of paths to predicted site models.
+        All region_ids from these sites will be scored, and it will be assumed
+        that there are no other sites in these regions.
+        '''))
+    gt_dpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        Path to a local copy of the ground truth annotations,
+        https://smartgitlab.com/TE/annotations.  If None, use the
+        environment variable DVC_DATA_DPATH to find
+        $DVC_DATA_DPATH/annotations.
+        '''))
+
+    true_site_dpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        Directory containing true site models. Defaults to
+        gt_dpath / site_models
+        '''))
+
+    true_region_dpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        Directory containing true region models. Defaults to
+        gt_dpath / region_models
+        '''))
+
+    metrics_dpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        Path to a local copy of the metrics framework,
+        https://smartgitlab.com/TE/metrics-and-test-framework.
+        If None, use the environment variable METRICS_DPATH.
+        DEPRECATED. Simply ensure iarpa_smart_metrics is pip
+        installed                 in your virutalenv.
+        '''))
+    virtualenv_cmd = scfg.Value(['true'], nargs='+', help=ub.paragraph(
+        '''
+        Command to run before calling the metrics framework in
+        a subshell.     The metrics framework should be installed in
+        a different virtual env     from WATCH, using eg conda or
+        pyenv.
+        '''))
+    out_dir = scfg.Value(None, help=ub.paragraph(
+        '''
+        Output directory where scores will be written. Each
+        region will have     Defaults to ./output/
+        '''))
+    merge = scfg.Value(False, help=ub.paragraph(
+        '''
+        Merge BAS and SC metrics from all regions and output to
+        {out_dir}/merged/
+        '''))
+    merge_fpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        Forces the merge summary to be written to a specific
+        location.
+        '''))
+    tmp_dir = scfg.Value(None, help=ub.paragraph(
+        '''
+        If specified, will write temporary data here instead of
+        using a     non-persistant directory
+        '''))
+    enable_viz = scfg.Value(False, help=ub.paragraph(
+        '''
+        If true, enables iarpa visualizations
+        '''))
+    name = scfg.Value('unknown', help=ub.paragraph(
+        '''
+        Short name for the algorithm used to generate the model
+        '''))
+    inputs_are_paths = scfg.Value(False, help=ub.paragraph(
+        '''
+        If given, the sites inputs will always be interpreted as
+        paths and not raw json text.
+        '''))
+    use_cache = scfg.Value(False, help=ub.paragraph(
+        '''
+        IARPA metrics code currently contains a cache bug, do not
+        enable the cache until this is fixed.
+        '''))
+
+
 @dataclass(frozen=True)
 class RegionResult:
     region_id: str  # 'KR_R001'
@@ -622,92 +708,6 @@ def ensure_thumbnails(image_root, region_id, sites):
             link_path = (site_root / '_'.join(
                 (img_date.replace('-', ''), img_path.with_suffix('.tif').name)))
             ub.symlink(img_path, link_path, verbose=0)
-
-
-class MetricsConfig(scfg.DataConfig):
-    """
-    Score IARPA site model GeoJSON files using IARPA's metrics-and-test-framework
-    """
-    pred_sites = scfg.Value(None, required=True, nargs='*', help=ub.paragraph(
-        '''
-        List of paths to predicted v2 site models. Or a path to a single text
-        file containing the a list of paths to predicted site models.
-        All region_ids from these sites will be scored, and it will be assumed
-        that there are no other sites in these regions.
-        '''))
-    gt_dpath = scfg.Value(None, help=ub.paragraph(
-        '''
-        Path to a local copy of the ground truth annotations,
-        https://smartgitlab.com/TE/annotations.  If None, use the
-        environment variable DVC_DATA_DPATH to find
-        $DVC_DATA_DPATH/annotations.
-        '''))
-
-    true_site_dpath = scfg.Value(None, help=ub.paragraph(
-        '''
-        Directory containing true site models. Defaults to
-        gt_dpath / site_models
-        '''))
-
-    true_region_dpath = scfg.Value(None, help=ub.paragraph(
-        '''
-        Directory containing true region models. Defaults to
-        gt_dpath / region_models
-        '''))
-
-    metrics_dpath = scfg.Value(None, help=ub.paragraph(
-        '''
-        Path to a local copy of the metrics framework,
-        https://smartgitlab.com/TE/metrics-and-test-framework.
-        If None, use the environment variable METRICS_DPATH.
-        DEPRECATED. Simply ensure iarpa_smart_metrics is pip
-        installed                 in your virutalenv.
-        '''))
-    virtualenv_cmd = scfg.Value(['true'], nargs='+', help=ub.paragraph(
-        '''
-        Command to run before calling the metrics framework in
-        a subshell.     The metrics framework should be installed in
-        a different virtual env     from WATCH, using eg conda or
-        pyenv.
-        '''))
-    out_dir = scfg.Value(None, help=ub.paragraph(
-        '''
-        Output directory where scores will be written. Each
-        region will have     Defaults to ./output/
-        '''))
-    merge = scfg.Value(False, help=ub.paragraph(
-        '''
-        Merge BAS and SC metrics from all regions and output to
-        {out_dir}/merged/
-        '''))
-    merge_fpath = scfg.Value(None, help=ub.paragraph(
-        '''
-        Forces the merge summary to be written to a specific
-        location.
-        '''))
-    tmp_dir = scfg.Value(None, help=ub.paragraph(
-        '''
-        If specified, will write temporary data here instead of
-        using a     non-persistant directory
-        '''))
-    enable_viz = scfg.Value(False, help=ub.paragraph(
-        '''
-        If true, enables iarpa visualizations
-        '''))
-    name = scfg.Value('unknown', help=ub.paragraph(
-        '''
-        Short name for the algorithm used to generate the model
-        '''))
-    inputs_are_paths = scfg.Value(False, help=ub.paragraph(
-        '''
-        If given, the sites inputs will always be interpreted as
-        paths and not raw json text.
-        '''))
-    use_cache = scfg.Value(False, help=ub.paragraph(
-        '''
-        IARPA metrics code currently contains a cache bug, do not
-        enable the cache until this is fixed.
-        '''))
 
 
 def main(cmdline=True, **kwargs):

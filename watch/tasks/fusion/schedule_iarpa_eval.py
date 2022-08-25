@@ -75,12 +75,10 @@ def _build_bas_track_job(pred_fpath, bas_out_fpath, bas_track_cfg):
         pred_fpath (PathLike): path to predicted kwcoco file
     """
     import shlex
+    from watch.utils.lightning_ext import util_globals
     pred_fpath = ub.Path(pred_fpath)
 
     cfg = bas_track_cfg.copy()
-
-    from watch.utils.lightning_ext import util_globals
-
     if isinstance(cfg['thresh_hysteresis'], str):
         cfg['thresh_hysteresis'] = util_globals.restricted_eval(
             cfg['thresh_hysteresis'].format(**cfg))
@@ -114,43 +112,10 @@ def _build_sc_actclf_job(pred_fpath, region_model_dpath, act_out_fpath, actcfg):
 
     We use truth annotations so this can be scored independently of SC
 
-    Notes:
-        DVC_DPATH=$(smartwatch_dvc --hardware=hdd)
-        PRED_DATASET=$DVC_DPATH/models/fusion/eval3_sc_candidates/pred/CropDrop3_SC_V006/pred_CropDrop3_SC_V006_epoch=71-step=18431/Cropped-Drop3-TA1-2022-03-10_combo_DL_s2_wv_vali.kwcoco/predcfg_464eb52f/pred.kwcoco.json
-        SITE_SUMMARY_GLOB="$DVC_DPATH/annotations/region_models/KR_*.geojson"
-
-        ANNOTATIONS_DPATH=$DVC_DPATH/annotations
-        ls $ANNOTATIONS_DPATH
-
-        python -m watch.tasks.fusion.predict \
-                pass
-
-        python -m watch.cli.kwcoco_to_geojson \
-            "$PRED_DATASET" \
-            --default_track_fn class_heatmaps \
-            --site_summary "$SITE_SUMMARY_GLOB" \
-            --track_kwargs '{"boundaries_as": "polys"}' \
-            --out_dir ./tmp/site_models \
-            --out_fpath ./tmp/site_models_stamp.json
-
-        python -m watch.cli.run_metrics_framework \
-            --merge \
-            --gt_dpath "$ANNOTATIONS_DPATH" \
-            --tmp_dir "./tmp/iarpa/tmp" \
-            --out_dir "./tmp/iarpa/scores" \
-            --name "mytest" \
-            --merge_fpath "./tmp/iarpa/merged.json" \
-            --inputs_are_paths \
-            --enable_viz=True \
-            ./tmp/site_models_stamp.json
-
     Args:
         pred_fpath (PathLike): path to predicted kwcoco file
         region_model_dpath (PathLike): path to IARPA region file ($dvc/annotations/region_models)
     """
-
-    # SITE_SUMMARY_GLOB="$DVC_DPATH/annotations/region_models
-
     import shlex
     pred_fpath = ub.Path(pred_fpath)
 
@@ -185,25 +150,24 @@ def _build_iarpa_eval_job(track_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath,
     command = ub.codeblock(
         fr'''
         python -m watch.cli.run_metrics_framework \
-            --merge \
-            --gt_dpath "{annotations_dpath}" \
+            --merge=True \
+            --true_site_dpath "{annotations_dpath}/site_models" \
+            --true_region_dpath "{annotations_dpath}/region_models" \
             --tmp_dir "{tmp_dir}" \
             --out_dir "{out_dir}" \
             --name {shlex.quote(str(name))} \
             --merge_fpath "{iarpa_merge_fpath}" \
-            --inputs_are_paths \
-            {track_out_fpath}
+            --inputs_are_paths=True \
+            --pred_sites={track_out_fpath}
         ''')
     return command
 
 
 r"""
-# Note: change backend to tmux if slurm is not installed
 DVC_DPATH=$(smartwatch_dvc --hardware=hdd)
 DATASET_CODE=Aligned-Drop3-TA1-2022-03-10/
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_LM_nowv_vali.kwcoco.json
-
 
 python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
         --devices="0," \
@@ -216,55 +180,10 @@ python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
         --enable_iarpa_eval=1 \
         --backend=serial --run=0
 
-
-python -m watch.cli.kwcoco_to_geojson \
-    "$HOME/data/dvc-repos/smart_watch_dvc-hdd/models/fusion/eval3_candidates/pred/Drop3_SpotCheck_V323/pred_Drop3_SpotCheck_V323_epoch=18-step=12976/Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json" \
-        --default_track_fn saliency_heatmaps --track_kwargs '{"thresh": 0.1, "polygon_fn": "heatmaps_to_polys_moving_window"}' \
-    --clear_annots \
-    --out_dir   "./_tmp/_testbas2/tracks" \
-    --out_fpath "./_tmp/_testbas2/tracks/tracks.json"
-
-
-  python -m watch.cli.run_metrics_framework \
-    --merge \
-    --name testing \
-    --gt_dpath "$HOME/data/dvc-repos/smart_watch_dvc-hdd/annotations" \
-    --tmp_dir "./_tmp/_testbas2/iarpa_eval/tmp" \
-    --out_dir "./_tmp/_testbas2/iarpa_eval/scores" \
-    --merge_fpath "./_tmp/_testbas2/iarpa_eval/scores/merged/summary2.json" \
-    --inputs_are_paths \
-    "./_tmp/_testbas2/tracks/tracks.json"
-
-
-
-python -m watch.cli.kwcoco_to_geojson \
-    "$HOME/data/dvc-repos/smart_watch_dvc-hdd/models/fusion/eval3_candidates/pred/Drop3_SpotCheck_V323/pred_Drop3_SpotCheck_V323_epoch=18-step=12976/Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco/predcfg_abd043ec/pred.kwcoco.json" \
-        --default_track_fn saliency_heatmaps --track_kwargs '{"thresh": 0.1}' \
-    --clear_annots \
-    --out_dir   "./_tmp/_testbas/tracks" \
-    --out_fpath "./_tmp/_testbas/tracks/tracks.json"
-
-
-  python -m watch.cli.run_metrics_framework \
-    --merge \
-    --name testing \
-    --gt_dpath "$HOME/data/dvc-repos/smart_watch_dvc-hdd/annotations" \
-    --tmp_dir "./_tmp/_testbas/iarpa_eval/tmp" \
-    --out_dir "./_tmp/_testbas/iarpa_eval/scores" \
-    --merge_fpath "./_tmp/_testbas/iarpa_eval/scores/merged/summary2.json" \
-    --inputs_are_paths \
-    "./_tmp/_testbas/tracks/tracks.json"
-
-
-
-
-
-
 #### SC Notes:
 
 curl https://raw.githubusercontent.com/Erotemic/local/main/init/utils.sh -o utils.sh
 source utils.sh
-
 
 export DVC_DPATH=$(smartwatch_dvc --hardware=hdd)
 DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
@@ -304,7 +223,6 @@ PRED_PATH_PART=(
 PRED_DATASET=$(join_by "" "${PRED_PATH_PART[@]}")
 echo "PRED_DATASET = $PRED_DATASET"
 
-#SITE_SUMMARY_GLOB="$DVC_DPATH/annotations/region_models/KR_*.geojson"
 SITE_SUMMARY_GLOB="$DVC_DPATH/annotations/region_models/KR_R001.geojson"
 
 python -m watch.cli.kwcoco_to_geojson \
@@ -316,13 +234,13 @@ python -m watch.cli.kwcoco_to_geojson \
     --out_fpath ./tmp/site_models_stamp.json
 
 python -m watch.cli.run_metrics_framework \
-    --merge \
+    --merge=True \
     --gt_dpath "$DVC_DPATH/annotations" \
     --tmp_dir "./tmp/iarpa/tmp" \
     --out_dir "./tmp/iarpa/scores" \
     --name "mytest" \
     --merge_fpath "./tmp/iarpa/merged.json" \
-    --inputs_are_paths \
+    --inputs_are_paths=True \
     --enable_viz=True \
     ./tmp/site_models_stamp.json
 

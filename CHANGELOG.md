@@ -21,6 +21,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Add support for lightning 1.7
 * Changed defaults of ignore_dilate to 0
 * Improved the `smartwatch_dvc` registry system.
+* Using scriptconfig and key/value arguments for `run_metrics_framework`
+
+### Removed
+* Removed support for `score_args` from kwcoco-to-geojson
+
 
 ### Fixed
 * Issue where augmentation might shave a pixel off of the sample box causing an

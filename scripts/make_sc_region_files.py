@@ -205,6 +205,13 @@ def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim, m
 
     Then we will search for small boxes that can be merged, and iterate.
 
+    References:
+        https://aip.scitation.org/doi/pdf/10.1063/1.5090003?cookieSet=1
+        Mercantile - https://pypi.org/project/mercantile/0.4/
+        BingMapsTiling - XYZ Tiling for webmap services
+        https://mercantile.readthedocs.io/en/stable/api/mercantile.html#mercantile.bounding_tile
+        https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.713.6709&rep=rep1&type=pdf
+
     Ignore:
         >>> # Create random polygons as test data
         >>> import kwimage
