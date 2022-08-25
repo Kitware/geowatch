@@ -722,7 +722,7 @@ def main(cmdline=True, **kwargs):
         >>>     num_sites=5, num_observations=10, noise=2, p_observe=0.5,
         >>>     p_transition=0.3, drop_noise=0.5, drop_limit=0.5)
         >>> print('demo_info = {}'.format(ub.repr2(demo_info, nl=1)))
-        >>> dpath = ub.Path.appdir('watch', 'tests', 'test-iarpa-metrics')
+        >>> dpath = ub.Path.appdir('watch', 'tests', 'test-iarpa-metrics2')
         >>> out_dpath = dpath / 'region_metrics'
         >>> merge_fpath = dpath / 'merged.json'
         >>> out_dpath.delete()
