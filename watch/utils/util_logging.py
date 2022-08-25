@@ -121,6 +121,7 @@ class PrintLogger:
         hello
         world
     """
+
     def __init__(self, name='<print-logger>', level=None, verbose=1):
         self.name = name
         if level is None:

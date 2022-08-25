@@ -839,7 +839,6 @@ def _schedule_track_jobs(queue, manager, config, package_cfgstr, pred_cfgstr,
             task_info['job'] = sc_eval_job
 
 
-
 def ensure_iterable(inputs):
     return inputs if ub.iterable(inputs) else [inputs]
 

@@ -205,6 +205,7 @@ class StacSearcher:
         >>>     item = json.loads(result)
         >>>     print('item = {}'.format(ub.repr2(item, nl=-1)))
     """
+
     def __init__(self, logger=None):
         if logger is None:
             logger = util_logging.PrintLogger(verbose=1)
