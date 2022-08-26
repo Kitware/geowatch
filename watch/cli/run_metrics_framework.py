@@ -958,23 +958,23 @@ def main(cmdline=True, **kwargs):
         (out_dir / 'invocation.sh').write_text(region_invocation_text)
         commands.append(cmd)
 
-    # hack to only run merge logic
-    ONLY_MERGE = 1
-    if not ONLY_MERGE:
-        if 1:
-            import cmd_queue
-            queue = cmd_queue.Queue.create(backend='serial')
-            for cmd in commands:
-                queue.submit(cmd)
-                queue.run()
-        else:
-            # Original way to invoke
-            for cmd in commands:
-                try:
-                    ub.cmd(cmd, verbose=3, check=True, shell=True)
-                except subprocess.CalledProcessError:
-                    print('error in metrics framework, probably due to zero '
-                          'TP site matches.')
+    if 1:
+        import cmd_queue
+        queue = cmd_queue.Queue.create(backend='serial')
+        for cmd in commands:
+            queue.submit(cmd)
+            # TODO: make command queue stop on the first failure?
+            queue.run()
+        # if queue.read_state()['failed']:
+        #     raise Exception('jobs failed')
+    else:
+        # Original way to invoke
+        for cmd in commands:
+            try:
+                ub.cmd(cmd, verbose=3, check=True, shell=True)
+            except subprocess.CalledProcessError:
+                print('error in metrics framework, probably due to zero '
+                      'TP site matches.')
 
     print('out_dirs = {}'.format(ub.repr2(out_dirs, nl=1)))
     if args.merge and out_dirs:
