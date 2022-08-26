@@ -1,9 +1,7 @@
 #!/usr/bin/env python
-# import argparse
-# import sys
 import os
 import json
-# import parse
+import shlex
 import pandas as pd
 import numpy as np
 import shapely.geometry
@@ -418,25 +416,29 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
 
     # TIoU is only ever evaluated per-site, so we can safely average these
     # per-site and call it a new metric mTIoU.
-    tious = pd.concat([
-        pd.read_csv(r.sc_dpath / 'ac_tiou.csv', index_col=0)
-        for r in sc_results
-    ], axis=1)
-    mtiou = tious.mean(axis=1, skipna=True)
+    tiou_dfs = []
+    for r in sc_results:
+        table = pd.read_csv(r.sc_dpath / 'ac_tiou.csv', index_col=0)
+        missing = sorted(set(phase_classifications) - set(table.columns))
+        table.loc[:, missing] = np.nan
+        table = table.loc[:, phase_classifications]
+        tiou_dfs.append(table)
+
+    tious = pd.concat(tiou_dfs, axis=0)
+    mtiou = tious.mean(axis=0, skipna=True)
     mtiou_vals = [mtiou.get(c, default=np.nan) for c in phase_classifications]
 
     # these are averaged using the mean over sites for each phase.
     # So the correct average over regions is to weight by (sites/region)
-    temporal_errs = [
-        pd.read_csv(r.sc_dpath / 'ac_temporal_error.csv').loc[0][1:].astype(float).values
-        for r in sc_results
-    ]
+    temporal_errs = []
+    for r in sc_results:
+        tdf = pd.read_csv(r.sc_dpath / 'ac_temporal_error.csv')
+        missing = sorted(set(phase_classifications) - set(tdf.columns))
+        tdf.loc[:, missing] = np.nan
+        tdf = tdf.loc[tdf.index[0], phase_classifications]  # mean days (all detections)
+        temporal_errs.append(tdf.astype(float).values)
     n_sites = [df.shape[1] for df in dfs]
     try:
-        temporal_errs, n_sites = zip(*filter(
-            # TODO how to handle merging partial predictions?
-            lambda tn: len(tn[0]) == 3,
-            zip(temporal_errs, n_sites)))
         temporal_err = np.average(temporal_errs, weights=n_sites, axis=0)
     except ValueError:
         temporal_err = [np.nan] * len(phase_classifications)
@@ -850,8 +852,8 @@ def main(cmdline=True, **kwargs):
             assert gt_dpath.is_dir(), gt_dpath
             true_site_dpath =  gt_dpath / 'site_models'
 
-    if args.out_dir is not None:
-        os.makedirs(args.out_dir, exist_ok=True)
+    true_region_dpath = ub.Path(true_region_dpath)
+    true_site_dpath = ub.Path(true_site_dpath)
 
     if args.tmp_dir is not None:
         tmp_dpath = ub.Path(args.tmp_dir)
@@ -873,8 +875,6 @@ def main(cmdline=True, **kwargs):
 
     main_out_dir = ub.Path(args.out_dir or './iarpa-metrics-output')
     main_out_dir.ensuredir()
-    import xdev
-    xdev.embed()
 
     full_invocation_text = ub.codeblock(
         '''
@@ -886,9 +886,10 @@ def main(cmdline=True, **kwargs):
         ''') + chr(10) + shlex.join(sys.argv) + chr(10)
     (main_out_dir / 'invocation.sh').write_text(full_invocation_text)
 
-    # TODO: use cmd_queue to fan these out on a single node.
-
-    for region_id, region_sites in grouped_sites.items():
+    # First build up all of the commands and prepare necessary data for them.
+    commands = []
+    for region_id, region_sites in ub.ProgIter(list(grouped_sites.items()),
+                                               desc='prepare regions for eval'):
 
         site_dpath = (tmp_dpath / 'site' / region_id).ensuredir()
         image_dpath = (tmp_dpath / 'image').ensuredir()
@@ -896,11 +897,10 @@ def main(cmdline=True, **kwargs):
         if args.use_cache:
             cache_dpath = (tmp_dpath / 'cache' / region_id).ensuredir()
         else:
-            # Hack to disable cache by using a different directory each time
-            _cache_dir = TemporaryDirectory(suffix='iarpa-metrics-cache')
-            cache_dpath = ub.Path(_cache_dir.name)
+            cache_dpath = 'None'
 
         out_dir = (main_out_dir / region_id).ensuredir()
+        out_dirs.append(out_dir)
 
         # doctor site_dpath for expected structure
         pred_site_sub_dpath = site_dpath / 'latest' / region_id
@@ -916,12 +916,9 @@ def main(cmdline=True, **kwargs):
 
         ensure_thumbnails(image_dpath, region_id, region_sites)
 
-        if not args.use_cache:
-            cache_dpath = 'None'
-
-        from scriptconfig.smartcast import smartcast
-        enable_viz = smartcast(args.enable_viz)
-        if not enable_viz:
+        if args.enable_viz:
+            viz_flags = []
+        else:
             viz_flags = [
                 # '--no-viz-region',  # we do want this enabled
                 '--no-viz-slices',
@@ -930,29 +927,22 @@ def main(cmdline=True, **kwargs):
                 '--no-viz-associate-metrics',
                 '--no-viz-activity-metrics',
             ]
-        else:
-            if enable_viz is True or enable_viz == 1:
-                viz_flags = [
-                ]
-            else:
-                raise ValueError(enable_viz)
 
-        import shlex
         run_eval_command = [
             'python', '-m', 'iarpa_smart_metrics.run_evaluation',
             '--roi', region_id,
-            '--gt_dir', true_site_dpath,
-            '--rm_dir', true_region_dpath,
-            '--sm_dir', pred_site_sub_dpath,
-            '--image_dir', image_dpath,
-            '--output_dir', out_dir if args.out_dir else 'None',
-            '--cache_dir', cache_dpath,
-            '--name', shlex.quote(name),
+            '--gt_dir', os.fspath(true_site_dpath),
+            '--rm_dir', os.fspath(true_region_dpath),
+            '--sm_dir', os.fspath(pred_site_sub_dpath),
+            '--image_dir', os.fspath(image_dpath),
+            '--output_dir', os.fspath(out_dir),
+            '--cache_dir', os.fspath(cache_dpath),
+            '--name', name,
             '--no-db',
         ]
         run_eval_command += viz_flags
         # run metrics framework
-        cmd = f'{virtualenv_cmd} &&' + ' '.join(list(map(str, run_eval_command)))
+        cmd = f'{virtualenv_cmd} && ' + shlex.join(run_eval_command)
         region_invocation_text = ub.codeblock(
             '''
             #!/bin/bash
@@ -961,14 +951,25 @@ def main(cmdline=True, **kwargs):
             generate this evaluation of this particular region.
             "
             ''') + chr(10) + cmd + chr(10)
+        # Dump this command to disk for reference and debugging.
         (out_dir / 'invocation.sh').write_text(region_invocation_text)
+        commands.append(cmd)
 
-        try:
-            ub.cmd(cmd, verbose=3, check=True, shell=True)
-            out_dirs.append(out_dir)
-        except subprocess.CalledProcessError:
-            print('error in metrics framework, probably due to zero '
-                  'TP site matches.')
+   if 1:
+       import cmd_queue
+       queue = cmd_queue.Queue.create(backend='serial')
+       for cmd in commands:
+           queue.submit(cmd)
+       queue.run()
+
+   else:
+       # Original way to invoke
+       for cmd in commands:
+            try:
+                ub.cmd(cmd, verbose=3, check=True, shell=True)
+            except subprocess.CalledProcessError:
+                print('error in metrics framework, probably due to zero '
+                      'TP site matches.')
 
     print('out_dirs = {}'.format(ub.repr2(out_dirs, nl=1)))
 
@@ -979,17 +980,13 @@ def main(cmdline=True, **kwargs):
             merge_fpath = merge_dpath / 'summary2.json'
         else:
             merge_fpath = ub.Path(args.merge_fpath)
-        # import xdev
-        # xdev.embed()
+
         region_dpaths = out_dirs
 
-        if 1:
-            merge_metrics_results(region_dpaths, true_site_dpath,
-                                  true_region_dpath, merge_dpath, merge_fpath,
-                                  parent_info, info)
-            print('merge_fpath = {!r}'.format(merge_fpath))
-        else:
-            print('TODO merge')
+        merge_metrics_results(region_dpaths, true_site_dpath,
+                              true_region_dpath, merge_dpath, merge_fpath,
+                              parent_info, info)
+        print('merge_fpath = {!r}'.format(merge_fpath))
 
 
 if __name__ == '__main__':
