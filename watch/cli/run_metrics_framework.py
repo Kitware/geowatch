@@ -479,14 +479,14 @@ def _hack_remerge_data():
     ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json
     """
     import watch
-    dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
-    globstr = str(dvc_dpath / 'models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json')
+    data_dvc_dpath = watch.find_dvc_dpath(hardware='hdd')
+    globstr = str(data_dvc_dpath / 'models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json')
     from watch.utils import util_path
     from watch.utils import simple_dvc
     summary_metrics = util_path.coerce_patterned_paths(globstr)
     import json
     import safer
-    dvc = simple_dvc.SimpleDVC(dvc_dpath)
+    dvc = simple_dvc.SimpleDVC(data_dvc_dpath)
 
     # for merge_fpath in summary_metrics:
     #     if dvc.is_tracked(merge_fpath):
@@ -496,7 +496,7 @@ def _hack_remerge_data():
 
     for merge_fpath in ub.ProgIter(summary_metrics, desc='rewrite merge metrics'):
         region_dpaths = [p for p in list(merge_fpath.parent.parent.glob('*')) if p.name != 'merged']
-        anns_root = dvc_dpath / 'annotations'
+        anns_root = data_dvc_dpath / 'annotations'
         true_site_dpath = anns_root / 'site_models'
         true_region_dpath = anns_root / 'region_models'
 
@@ -926,8 +926,8 @@ def main(cmdline=True, **kwargs):
             gt_dpath = ub.Path(args.gt_dpath).absolute()
         else:
             import watch
-            dvc_dpath = watch.find_smart_dvc_dpath()
-            gt_dpath = dvc_dpath / 'annotations'
+            data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+            gt_dpath = data_dvc_dpath / 'annotations'
             print(f'gt_dpath unspecified, defaulting to {gt_dpath=}')
 
         if true_region_dpath is None:
@@ -948,7 +948,10 @@ def main(cmdline=True, **kwargs):
 
     # validate virtualenv command
     virtualenv_cmd = ' '.join(args.virtualenv_cmd)
-    ub.cmd(virtualenv_cmd, verbose=1, check=True, shell=True)
+    try:
+        info = ub.cmd(virtualenv_cmd, verbose=1, check=True, shell=True)
+    except Exception as ex:
+        raise ValueError('The given virtualenv command is invalid') from ex
 
     # split sites by region
     out_dirs = []
@@ -957,6 +960,16 @@ def main(cmdline=True, **kwargs):
 
     main_out_dir = ub.Path(args.out_dir or './iarpa-metrics-output')
     main_out_dir.ensuredir()
+
+    full_invocation_text = ub.codeblock(
+        '''
+        #!/bin/bash
+        __doc__="
+        This is an auto-generated file that records the command used to
+        generate this evaluation of multiple regions.
+        "
+        ''') + chr(10) + shlex.join(sys.argv) + chr(10)
+    (main_out_dir / 'invocation.sh').write_text(full_invocation_text)
 
     # TODO: use cmd_queue to fan these out on a single node.
 
@@ -1025,20 +1038,15 @@ def main(cmdline=True, **kwargs):
         run_eval_command += viz_flags
         # run metrics framework
         cmd = f'{virtualenv_cmd} &&' + ' '.join(list(map(str, run_eval_command)))
-        # ub.codeblock(fr'''
-        #     {virtualenv_cmd} &&
-        #     python -m iarpa_smart_metrics.run_evaluation \
-        #         --roi {region_id} \
-        #         --gt_dir {gt_dpath / 'site_models'} \
-        #         --rm_dir {gt_dpath / 'region_models'} \
-        #         --sm_dir {pred_site_sub_dpath} \
-        #         --image_dir {image_dpath} \
-        #         --output_dir {out_dir if args.out_dir else None} \
-        #         --cache_dir {cache_dpath} \
-        #         --name {shlex.quote(name)} \
-        #         {viz_flags}
-        #     ''')
-        (out_dir / 'invocation.sh').write_text(cmd)
+        region_invocation_text = ub.codeblock(
+            '''
+            #!/bin/bash
+            __doc__="
+            This is an auto-generated file that records the command used to
+            generate this evaluation of this particular region.
+            "
+            ''') + chr(10) + cmd + chr(10)
+        (out_dir / 'invocation.sh').write_text(region_invocation_text)
 
         try:
             ub.cmd(cmd, verbose=3, check=True, shell=True)
