@@ -251,7 +251,7 @@ def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim, m
         >>> kwplot.figure(fnum=1, doclf=1)
         >>> polygons.draw(color='pink')
         >>> # candidate_bbs.draw(color='blue', setlim=1)
-        >>> keep_bbs.draw(color='orange', setlim=1)
+        >>> keep_bbs.draw(color='orange', setlim='grow')
         >>> plt.gca().set_title('find_low_overlap_covering_boxes')
     """
     import kwimage
@@ -270,7 +270,6 @@ def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim, m
     initial_candiate_bbs = initial_candiate_bbs.to_cxywh()
     initial_candiate_bbs.data[..., 2] = np.maximum(initial_candiate_bbs.data[..., 2], min_box_dim)
     initial_candiate_bbs.data[..., 3] = np.maximum(initial_candiate_bbs.data[..., 3], min_box_dim)
-
     candidate_bbs = initial_candiate_bbs
 
     def refine_candidates(candidate_bbs, iter_idx):
