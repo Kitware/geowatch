@@ -48,25 +48,18 @@ class MetricsConfig(scfg.DataConfig):
         gt_dpath / region_models
         '''))
 
-    metrics_dpath = scfg.Value(None, help=ub.paragraph(
-        '''
-        Path to a local copy of the metrics framework,
-        https://smartgitlab.com/TE/metrics-and-test-framework.
-        If None, use the environment variable METRICS_DPATH.
-        DEPRECATED. Simply ensure iarpa_smart_metrics is pip
-        installed                 in your virutalenv.
-        '''))
     virtualenv_cmd = scfg.Value(['true'], nargs='+', help=ub.paragraph(
         '''
-        Command to run before calling the metrics framework in
-        a subshell.     The metrics framework should be installed in
-        a different virtual env     from WATCH, using eg conda or
-        pyenv.
+        Command to run before calling the metrics framework in a subshell.
+
+        Only necessary if the metrics framework is installed in a different
+        virtual env from the current one. (Or maybe if you don't auto start it?
+        Not sure. TODO: figure out if this inherits or not).
         '''))
     out_dir = scfg.Value(None, help=ub.paragraph(
         '''
         Output directory where scores will be written. Each
-        region will have     Defaults to ./output/
+        region will have. Defaults to ./iarpa-metrics-output/
         '''))
     merge = scfg.Value(False, help=ub.paragraph(
         '''
@@ -739,86 +732,6 @@ def main(cmdline=True, **kwargs):
     """
     import safer
 
-    # if 0:
-    #     parser = argparse.ArgumentParser(
-    #         description='Score IARPA site model GeoJSON files using IARPA\'s '
-    #         'metrics-and-test-framework')
-    #     parser.add_argument('sites',
-    #                         nargs='*',
-    #                         help='''
-    #         List of paths or serialized JSON strings containg v2 site models.
-    #         All region_ids from these sites will be scored, and it will be assumed
-    #         that there are no other sites in these regions.
-    #         ''')
-    #     parser.add_argument('--gt_dpath',
-    #                         help='''
-    #         Path to a local copy of the ground truth annotations,
-    #         https://smartgitlab.com/TE/annotations.
-    #         If None, use the environment variable DVC_DPATH to find
-    #         $DVC_DPATH/annotations.
-    #         ''')
-    #     parser.add_argument('--metrics_dpath',
-    #                         help='''
-    #         Path to a local copy of the metrics framework,
-    #         https://smartgitlab.com/TE/metrics-and-test-framework.
-    #         If None, use the environment variable METRICS_DPATH.
-    #         DEPRECATED. Simply ensure iarpa_smart_metrics is pip installed
-    #                     in your virutalenv.
-    #         ''')
-    #     # https://stackoverflow.com/a/49351471
-    #     parser.add_argument(
-    #         '--virtualenv_cmd',
-    #         default=['true'],  # no-op bash command
-    #         nargs='+',  # hack for spaces
-    #         help='''
-    #         Command to run before calling the metrics framework in a subshell.
-    #         The metrics framework should be installed in a different virtual env
-    #         from WATCH, using eg conda or pyenv.
-    #         ''')
-    #     parser.add_argument('--out_dir',
-    #                         help='''
-    #         Output directory where scores will be written. Each region will have
-    #         Defaults to ./output/
-    #         ''')
-    #     parser.add_argument('--merge',
-    #                         action='store_true',
-    #                         help='''
-    #         Merge BAS and SC metrics from all regions and output to
-    #         {out_dir}/merged/
-    #         ''')
-
-    #     parser.add_argument('--merge_fpath',
-    #                         help='''
-    #         Forces the merge summary to be written to a specific location.
-    #         ''')
-
-    #     parser.add_argument('--tmp_dir',
-    #                         help='''
-    #         If specified, will write temporary data here instead of using a
-    #         non-persistant directory
-    #         ''')
-
-    #     parser.add_argument('--enable_viz', default=False,
-    #                         help='''
-    #         If true, enables iarpa visualizations
-    #         ''')
-
-    #     parser.add_argument('--name', default='unknown', help=(
-    #         'Short name for the algorithm used to generate the model'))
-
-    #     parser.add_argument(
-    #         '--inputs_are_paths', action='store_true', help=ub.paragraph(
-    #             '''
-    #             If given, the sites inputs will always be interpreted as paths
-    #             and not raw json text.
-    #             '''))
-
-    #     parser.add_argument(
-    #         '--use_cache', default=False, action='store_true', help=ub.paragraph(
-    #             '''
-    #             IARPA metrics code currently contains a cache bug, do not enable
-    #             the cache until this is fixed.
-    #             '''))
     from watch.utils import util_path
     # from watch.utils import util_pattern
 
@@ -960,6 +873,8 @@ def main(cmdline=True, **kwargs):
 
     main_out_dir = ub.Path(args.out_dir or './iarpa-metrics-output')
     main_out_dir.ensuredir()
+    import xdev
+    xdev.embed()
 
     full_invocation_text = ub.codeblock(
         '''
