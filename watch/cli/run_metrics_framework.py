@@ -955,14 +955,14 @@ def main(cmdline=True, **kwargs):
         (out_dir / 'invocation.sh').write_text(region_invocation_text)
         commands.append(cmd)
 
-   if 1:
+    if 1:
        import cmd_queue
        queue = cmd_queue.Queue.create(backend='serial')
        for cmd in commands:
            queue.submit(cmd)
        queue.run()
 
-   else:
+    else:
        # Original way to invoke
        for cmd in commands:
             try:
