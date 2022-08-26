@@ -259,41 +259,42 @@ def merge_bas_metrics_results(bas_results: List[RegionResult]):
     dfs = [to_df(r.bas_dpath, r.region_id) for r in bas_results]
 
     concat_df = pd.concat(dfs)
-    result_df = concat_df
-    # result_df = pd.DataFrame(index=dfs[0].droplevel('region_id').index)
 
     sum_cols = [
         'tp sites', 'fp sites', 'fn sites', 'truth sites', 'proposed sites',
         'total sites', 'truth slices', 'proposed slices'
     ]
-    result_df[sum_cols] = concat_df.groupby(['rho', 'tau'])[sum_cols].sum()
+    merged_df = concat_df.groupby(['rho', 'tau'])[sum_cols].sum()
+    merged_df.loc[:, 'region_id'] = '__merged__'
+    merged_df = merged_df.reset_index().set_index(['region_id', 'rho', 'tau'])
 
     # # ref: metrics-and-test-framework.evaluation.Metric
-    # (_, tp), (_, fp), (_, fn) = result_df[['tp sites', 'fp sites',
-    #                                        'fn sites']].iteritems()
-    # result_df['precision'] = np.where(tp > 0, tp / (tp + fp), 0)
-    # result_df['recall (PD)'] = np.where(tp > 0, tp / (tp + fn), 0)
-    # result_df['F1'] = np.where(tp > 0, tp / (tp + 0.5 * (fp + fn)), 0)
+    (_, tp), (_, fp), (_, fn) = merged_df[['tp sites', 'fp sites',
+                                           'fn sites']].iteritems()
+    merged_df['precision'] = np.where(tp > 0, tp / (tp + fp), 0)
+    merged_df['recall (PD)'] = np.where(tp > 0, tp / (tp + fn), 0)
+    merged_df['F1'] = np.where(tp > 0, tp / (tp + 0.5 * (fp + fn)), 0)
 
-    # all_regions = [r.region_model for r in bas_results]
+    all_regions = [r.region_model for r in bas_results]
     # # ref: metrics-and-test-framework.evaluation.Evaluation.build_scoreboard
-    # result_df['spatial FAR'] = fp.astype(float) / area(all_regions)
-    # result_df['temporal FAR'] = fp.astype(float) / n_dates(all_regions)
+    merged_df['spatial FAR'] = fp.astype(float) / area(all_regions)
+    merged_df['temporal FAR'] = fp.astype(float) / n_dates(all_regions)
 
     # this is not actually how Images FAR is calculated!
     # https://smartgitlab.com/TE/metrics-and-test-framework/-/issues/23
     #
     # all_sites = list(itertools.chain.from_iterable([
     #     r.site_models for r in bas_results]))
-    # result_df['images FAR'] = fp.astype(float) / n_unique_images(all_sites)
+    # merged_df['images FAR'] = fp.astype(float) / n_unique_images(all_sites)
     #
     # instead, images in multiple proposed site stacks are double-counted.
     # take advantage of this to merge this metric with a simple average.
-    # n_images = (concat_df['fp sites'] /
-    #             concat_df['images FAR']).groupby('region_id').mean().sum()
-    # result_df['images FAR'] = fp.astype(float) / n_images
+    n_images = (concat_df['fp sites'] /
+                concat_df['images FAR']).groupby('region_id').mean().sum()
+    merged_df['images FAR'] = fp.astype(float) / n_images
 
-    return result_df, concat_df
+    bas_merged_df, bas_concat_df = merged_df, concat_df
+    return bas_merged_df, bas_concat_df
 
 
 def _to_sc_df(sc_dpath, region_id):
@@ -520,28 +521,28 @@ def _make_merge_metrics(region_dpaths, true_site_dpath, true_region_dpath):
 
     # merge BA
     bas_results = [r for r in results if r.bas_dpath]
-    bas_df, bas_concat_df = merge_bas_metrics_results(bas_results)
+    bas_merged_df, bas_concat_df = merge_bas_metrics_results(bas_results)
 
     # merge SC
     sc_results = [r for r in results if r.sc_dpath]
     sc_df, sc_cm = merge_sc_metrics_results(sc_results)
 
-    return bas_concat_df, bas_df, sc_df, sc_cm
+    return bas_concat_df, bas_merged_df, sc_df, sc_cm
 
 
-def _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info, info):
+def _make_summary_info(bas_concat_df, bas_merged_df, sc_cm, sc_df, parent_info, info):
     # Find best bas row in combined results
 
     min_rho, max_rho = 0.5, 0.5
     min_tau, max_tau = 0.2, 0.2
 
-    bas_df = bas_df.reset_index()
-    rho = bas_df['rho']
-    tau = bas_df['tau']
+    bas_merged_df = bas_merged_df.reset_index()
+    rho = bas_merged_df['rho']
+    tau = bas_merged_df['tau']
     rho_flags = (min_rho <= rho) & (rho <= max_rho)
     tau_flags = (min_tau <= tau) & (tau <= max_tau)
     flags = tau_flags & rho_flags
-    candidate_bas_df = bas_df[flags]
+    candidate_merged_bas_df = bas_merged_df[flags]
 
     bas_concat_df = bas_concat_df.reset_index()
     rho = bas_concat_df['rho']
@@ -552,13 +553,14 @@ def _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info, info):
     candidate_bas_concat_df = bas_concat_df[flags]
 
     # Find best merged bas row
-    best_bas_row = candidate_bas_df.loc[[candidate_bas_df['F1'].idxmax()]]
+    best_merged_row = candidate_merged_bas_df.loc[[candidate_merged_bas_df['F1'].idxmax()]]
     # Find best per-region bas row
     best_ids = candidate_bas_concat_df.groupby('region_id')['F1'].idxmax()
     best_per_region = candidate_bas_concat_df.loc[best_ids]
-    best_bas_row_ = pd.concat({'merged': best_bas_row}, names=['region_id'])
+    # best_bas_row_ = pd.concat({'__merged__': best_bas_row}, names=['region_id'])
+    # best_bas_row_.loc[:, 'region_id'] = '__merged__'
     # Get a best row for each region and the "merged" region
-    best_bas_rows = pd.concat([best_per_region, best_bas_row_])
+    best_bas_rows = pd.concat([best_per_region, best_merged_row])
     concise_best_bas_rows = best_bas_rows.rename(
         {'tp sites': 'tp',
          'fp sites': 'fp',
@@ -579,7 +581,7 @@ def _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info, info):
     json_data['sc_cm'] = json.loads(sc_cm.to_json(orient='table', indent=2))
     json_data['sc_df'] = json.loads(sc_df.to_json(orient='table', indent=2))
 
-    return json_data, concise_best_bas_rows, best_bas_row_
+    return json_data, concise_best_bas_rows, best_bas_rows
 
 
 def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath, merge_dpath, merge_fpath,
@@ -611,14 +613,14 @@ def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath, mer
     sc_df.to_pickle(merge_dpath / 'sc_activity_df.pkl')
     sc_cm.to_pickle(merge_dpath / 'sc_confusion_df.pkl')
 
-    json_data, concise_best_bas_rows, best_bas_row = _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info, info)
+    json_data, concise_best_bas_rows, best_bas_rows = _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info, info)
     print(concise_best_bas_rows.to_string())
 
     # write summary in readable form
     #
     summary_path = merge_dpath / 'summary.csv'
     with open(summary_path, 'w') as f:
-        best_bas_row.to_csv(f)
+        best_bas_rows.to_csv(f)
         f.write('\n')
         sc_df.to_csv(f)
         f.write('\n')
@@ -865,7 +867,7 @@ def main(cmdline=True, **kwargs):
     # validate virtualenv command
     virtualenv_cmd = ' '.join(args.virtualenv_cmd)
     try:
-        info = ub.cmd(virtualenv_cmd, verbose=1, check=True, shell=True)
+        ub.cmd(virtualenv_cmd, verbose=1, check=True, shell=True)
     except Exception as ex:
         raise ValueError('The given virtualenv command is invalid') from ex
 
@@ -956,26 +958,25 @@ def main(cmdline=True, **kwargs):
         (out_dir / 'invocation.sh').write_text(region_invocation_text)
         commands.append(cmd)
 
-    import xdev
-    xdev.embed()
-
-    if 1:
-        import cmd_queue
-        queue = cmd_queue.Queue.create(backend='serial')
-        for cmd in commands:
-            queue.submit(cmd)
-            queue.run()
-    else:
-        # Original way to invoke
-        for cmd in commands:
-            try:
-                ub.cmd(cmd, verbose=3, check=True, shell=True)
-            except subprocess.CalledProcessError:
-                print('error in metrics framework, probably due to zero '
-                      'TP site matches.')
+    # hack to only run merge logic
+    ONLY_MERGE = 1
+    if not ONLY_MERGE:
+        if 1:
+            import cmd_queue
+            queue = cmd_queue.Queue.create(backend='serial')
+            for cmd in commands:
+                queue.submit(cmd)
+                queue.run()
+        else:
+            # Original way to invoke
+            for cmd in commands:
+                try:
+                    ub.cmd(cmd, verbose=3, check=True, shell=True)
+                except subprocess.CalledProcessError:
+                    print('error in metrics framework, probably due to zero '
+                          'TP site matches.')
 
     print('out_dirs = {}'.format(ub.repr2(out_dirs, nl=1)))
-
     if args.merge and out_dirs:
         merge_dpath = main_out_dir / 'merged'
 
