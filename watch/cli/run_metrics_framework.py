@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import os
+import sys
 import json
 import shlex
 import pandas as pd
@@ -955,16 +956,18 @@ def main(cmdline=True, **kwargs):
         (out_dir / 'invocation.sh').write_text(region_invocation_text)
         commands.append(cmd)
 
-    if 1:
-       import cmd_queue
-       queue = cmd_queue.Queue.create(backend='serial')
-       for cmd in commands:
-           queue.submit(cmd)
-       queue.run()
+    import xdev
+    xdev.embed()
 
+    if 1:
+        import cmd_queue
+        queue = cmd_queue.Queue.create(backend='serial')
+        for cmd in commands:
+            queue.submit(cmd)
+            queue.run()
     else:
-       # Original way to invoke
-       for cmd in commands:
+        # Original way to invoke
+        for cmd in commands:
             try:
                 ub.cmd(cmd, verbose=3, check=True, shell=True)
             except subprocess.CalledProcessError:
