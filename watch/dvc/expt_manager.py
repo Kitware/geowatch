@@ -826,7 +826,10 @@ class ExperimentState(ub.NiceRepr):
                 raise UserAbort
 
         from watch.tasks.fusion.repackage import repackage
-        to_repackage = needs_package['ckpt_path'].values.tolist()
+        if 'ckpt_path' in needs_package:
+            to_repackage = needs_package['ckpt_path'].values.tolist()
+        else:
+            to_repackage = []
         print(to_repackage)
         if to_repackage:
             # NOTE: THIS RELIES ON KNOWING ABOUT THE SPECIFIC MODEL CODE.
