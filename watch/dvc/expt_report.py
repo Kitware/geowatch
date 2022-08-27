@@ -247,7 +247,7 @@ class EvaluationReporter:
         Load basic data
         """
         table = reporter.dvc_manager.evaluation_table()
-        reporter.status(table)
+        reporter.dvc_manager.summarize()
         evaluations = table[~table['raw'].isnull()]
         reporter.raw_df = raw_df = pd.DataFrame(evaluations)
 
