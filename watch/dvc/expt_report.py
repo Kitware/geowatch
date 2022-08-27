@@ -70,7 +70,7 @@ def evaluation_report():
     plot_merged(reporter)
 
     if 0:
-        merged_df = self.orig_merged_df.copy()
+        merged_df = reporter.orig_merged_df.copy()
         merged_df[merged_df.expt.str.contains('invar')]['mean_f1']
         merged_df[merged_df.in_production]['mean_f1']
 
@@ -128,6 +128,7 @@ class EvaluationReporter:
 
             {'name': 'total_steps', 'help': 'An estimate of the total number of steps the model associated with the row took over all training runs.'},
         ]
+        reporter.column_meanings = column_meanings
 
         # COLUMNS TO DOCUMENT
         # 'raw',
@@ -263,7 +264,7 @@ class EvaluationReporter:
 
         # Remove duplicate predictions on effectively the same dataset.
         # reporter.filt_df = filt_df = deduplicate_test_datasets(raw_df)
-        reporter.raw_df = raw_df
+        reporter.raw_df = filt_df = raw_df
 
         print('\nDeduplicated (over test dataset)')
         num_files_summary(filt_df)

@@ -383,18 +383,25 @@ def load_pxl_eval(fpath, dvc_dpath=None):
     return info
 
 
-def load_bas_eval(fpath, dvc_dpath):
+def load_bas_eval(fpath, dvc_expt_dpath):
     bas_info = _load_json(fpath)
 
     best_bas_rows = pd.read_json(io.StringIO(json.dumps(bas_info['best_bas_rows'])), orient='table')
-    try:
-        bas_row = best_bas_rows.loc['merged'].reset_index().iloc[0].to_dict()
-    except Exception:
-        bas_row = best_bas_rows[best_bas_rows['region_id'].isnull()].reset_index(drop=1).iloc[0].to_dict()
+
+    flags = best_bas_rows['region_id'] == '__merged__'
+
+    if np.any(flags):
+        bas_row = best_bas_rows[flags].iloc[0]
+    else:
+        # OLD Phase 1 code, can eventually remove
+        try:
+            bas_row = best_bas_rows.loc['merged'].reset_index().iloc[0].to_dict()
+        except Exception:
+            bas_row = best_bas_rows[best_bas_rows['region_id'].isnull()].reset_index(drop=1).iloc[0].to_dict()
 
     tracker_info = bas_info['parent_info']
     path_hint = fpath
-    param_types = parse_tracker_params(tracker_info, dvc_dpath, path_hint=path_hint)
+    param_types = parse_tracker_params(tracker_info, dvc_expt_dpath, path_hint=path_hint)
 
     metrics = {
         'BAS_F1': bas_row['F1'],
