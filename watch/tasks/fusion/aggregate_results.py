@@ -1299,6 +1299,7 @@ def shrink_channels(x):
             c = c.replace('matseg_', 'matseg.')
             fused_parts.append(c)
         fused = '|'.join(fused_parts)
+        fused = fused.replace('B|G|R|N', 'BGRN')
         fused = fused.replace('B|G|R|N|S|H', 'BGRNSH')
         fused = fused.replace('R|G|B', 'RGB')
         fused = fused.replace('B|G|R', 'BGR')

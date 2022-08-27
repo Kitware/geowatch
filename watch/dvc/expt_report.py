@@ -1211,6 +1211,7 @@ def clean_loaded_data(big_rows):
 
     passlist = {
         'BGR',
+        'BGRN',
         'RGB|near-ir1|near-ir2|red-edge|yellow',
         'BGR|near-ir1',
         'BGRNSH|land:8|matseg:4|mat_up5:64',
