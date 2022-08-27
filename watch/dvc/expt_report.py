@@ -46,13 +46,14 @@ act_param_keys = [
 ]
 
 DSET_CODE_TO_GSD = {
+    # DEPRECATE
     'Aligned-Drop3-L1': 10.0,
     'Aligned-Drop3-TA1-2022-03-10': 10.0,
     'Cropped-Drop3-TA1-2022-03-10': 1.0,
 }
 
 
-def eval3_report():
+def evaluation_report():
     """
     MAIN FUNCTION
 
@@ -950,8 +951,9 @@ def plot_viterbii_analysis(merged_df, human_mapping, iarpa_metric_lut, pixel_met
     kwplot.figure(fnum=1000)
     sns.violinplot(data=merged_df, x='temporal_dropout', y=pixel_metric)
 
-    kwplot.figure(fnum=1001)
-    sns.violinplot(data=merged_df, x='chip_size', y=pixel_metric)
+    # TODO: translate to chip_dims
+    # kwplot.figure(fnum=1001)
+    # sns.violinplot(data=merged_df, x='chip_size', y=pixel_metric)
 
     kwplot.figure(fnum=1002, doclf=True)
     sns.violinplot(data=merged_df, x='time_steps', y=pixel_metric)
@@ -1504,7 +1506,7 @@ def describe_varied(merged_df, dpath, human_mapping=None):
 
     human_mapping.update({
         'time_steps': 'Time Steps (frames)',
-        'chip_size': 'Chip Size (pxls)',
+        # 'chip_size': 'Chip Size (pxls)',  # TODO chip_dims
         'time_span': 'Time Span',
         'time_sampling': 'Temporal Sampling Method',
         'num_unique': 'Num Unique',
