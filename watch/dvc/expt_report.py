@@ -65,12 +65,11 @@ def evaluation_report():
     dvc_expt_dpath = watch.find_dvc_dpath(tags='phase2_expt')
     reporter = EvaluationReporter(dvc_expt_dpath)
     reporter.load()
-    reporter.summarize()
+    reporter.status()
+
     plot_merged(reporter)
-    self = reporter
 
     if 0:
-        self = reporter
         merged_df = self.orig_merged_df.copy()
         merged_df[merged_df.expt.str.contains('invar')]['mean_f1']
         merged_df[merged_df.in_production]['mean_f1']
@@ -87,37 +86,169 @@ class EvaluationReporter:
     Manages handing the data off to experiment plotting functions.
     """
 
-    def __init__(self, dvc_expt_dpath):
+    def __init__(reporter, dvc_expt_dpath):
         from watch.dvc import expt_manager
-        self.dvc_expt_dpath = dvc_expt_dpath
-        self.dvc_manager = expt_manager.DVCExptManager.coerce(dvc_expt_dpath)
+        reporter.dvc_expt_dpath = dvc_expt_dpath
+        reporter.dvc_manager = expt_manager.DVCExptManager.coerce(dvc_expt_dpath)
         # dvc_sync_manager.main(command='pull evals')
         # dvc_sync_manager.main(command='pull packages')
 
-        self.raw_df = None
-        self.filt_df = None
-        self.comp_df = None
+        reporter.raw_df = None
+        reporter.filt_df = None
+        reporter.comp_df = None
 
-        self.dpath = ub.Path.appdir('watch/expt-report').ensuredir()
+        reporter.dpath = ub.Path.appdir('watch/expt-report').ensuredir()
 
-    def summarize(self, table=None):
-        if table is None:
-            table = self.dvc_manager.evaluation_table()
-        self.dvc_manager.summarize()
-        if 0:
-            loaded_table = load_extended_data(table, self.dvc_expt_dpath)
-            loaded_table = pd.DataFrame(loaded_table)
-            # dataset_summary_tables(dpath)
-            initial_summary(table, loaded_table, self.dpath)
+        reporter.metric_registry = pd.DataFrame([
+            {'name': 'coi_mAP', 'tasks': ['sc'], 'human': 'Pixelwise mAP (classes of interest)'},
+            {'name': 'coi_mAUC', 'tasks': ['sc'], 'human': 'Pixelwise mAUC (classes of interest)'},
+            {'name': 'mean_f1', 'tasks': ['sc'], 'human': 'IARPA SC mean F1'},
 
-    def load1(self):
+            {'name': 'salient_AP', 'tasks': ['bas'], 'human': 'Pixelwise Salient AP'},
+            {'name': 'salient_AUC', 'tasks': ['bas'], 'human': 'Pixelwise Salient AUC'},
+            {'name': 'BAS_F1', 'tasks': ['bas'], 'human': 'IARPA BAS F1'},
+        ])
+        reporter.metric_registry['type'] = 'metric'
+
+        # TODO: add column types
+        column_meanings = [
+            {'name': 'raw', 'help': 'A full path to a file on disk that contains this info'},
+            {'name': 'dvc', 'help': 'A path to a DVC sidecar file if it exists.'},
+            {'name': 'type', 'help': 'The type of the row'},
+            {'name': 'step', 'help': 'The number of steps taken by the most recent training run associated with the row'},
+            {'name': 'total_steps', 'help': 'An estimate of the total number of steps the model associated with the row took over all training runs.'},
+            {'name': 'model', 'help': 'The name of the learned model associated with this row'},
+            {'name': 'test_dset', 'help': 'The name of the test dataset used to compute a metric associated with this row'},
+            {'name': 'expt', 'help': 'The name of the experiment, i.e. training session that might have made several models'},
+            {'name': 'dataset_code', 'help': 'The higher level dataset code associated with this row'},
+
+            {'name': 'pred_cfg', 'help': 'A hash of the configuration used for pixel heatmap prediction'},
+            {'name': 'trk_cfg', 'help': 'A hash of the configuration used for BAS tracking'},
+            {'name': 'act_cfg', 'help': 'A hash of the configuration used for SC classification'},
+
+            {'name': 'total_steps', 'help': 'An estimate of the total number of steps the model associated with the row took over all training runs.'},
+        ]
+
+        # COLUMNS TO DOCUMENT
+        # 'raw',
+        # 'dvc',
+        # 'type',
+        # 'has_dvc',
+        # 'has_raw',
+        # 'needs_pull',
+        # 'is_link',
+        # 'is_broken',
+        # 'unprotected',
+        # 'needs_push',
+        # 'dataset_code',
+        # 'expt_dvc_dpath',
+        # 'expt',
+        # 'model',
+        # 'test_dset',
+        # 'pred_cfg',
+        # 'trk_cfg',
+        # 'act_cfg': 'SC Tracking Config',
+
+        # 'has_teamfeat',
+        # 'model_fpath',
+        # 'pred_start_time',
+        # 'class_mAP',
+        # 'class_mAUC',
+        # 'class_mAPUC',
+        # 'coi_mAP',
+        # 'coi_mAUC',
+        # 'coi_mAPUC',
+        # 'salient_AP',
+        # 'salient_AUC',
+        # 'salient_APUC',
+        # 'co2_kg',
+        # 'vram_gb',
+
+        # 'total_hours',
+        # 'iters_per_second',
+        # 'cpu_name',
+        # 'gpu_name',
+
+        # 'disk_type',
+        # 'accumulate_grad_batches',
+        # 'arch_name',
+        # 'channels',
+        # 'chip_overlap',
+        # 'class_loss',
+        # 'decoder',
+        # 'init',
+        # 'learning_rate',
+        # 'modulate_class_weights',
+        # 'optimizer',
+        # 'saliency_loss',
+        # 'stream_channels',
+        # 'temporal_dropout',
+        # 'time_sampling',
+        # 'time_span',
+        # 'time_steps',
+        # 'tokenizer',
+        # 'upweight_centers',
+        # 'use_cloudmask',
+        # 'use_grid_positives',
+        # 'bad_channels',
+        # 'sensorchan',
+        # 'true_multimodal',
+        # 'hardware',
+        # 'epoch',
+        # 'step',
+        # 'total_steps',
+        # 'in_production',
+        # 'Processing',
+
+        # 'trk_use_viterbi': 'Viterbi Enabled',
+        # 'trk_thresh': 'SC Tracking Threshold',
+        # 'co2_kg': 'CO2 Emissions (kg)',
+        # 'total_hours': 'Time (hours)',
+        # 'sensorchan': 'Sensor/Channel',
+        # 'has_teamfeat': 'Has Team Features',
+        # 'eval_act+pxl': 'SC',
+        # 'eval_trk+pxl': 'BAS',
+        # ]
+
+    def status(reporter, table=None):
+        reporter.dvc_manager.summarize()
+        reporter.report_best()
+        # if 0:
+        #     if table is None:
+        #         table = reporter.dvc_manager.evaluation_table()
+        #     loaded_table = load_extended_data(table, reporter.dvc_expt_dpath)
+        #     loaded_table = pd.DataFrame(loaded_table)
+        #     # dataset_summary_tables(dpath)
+        #     initial_summary(table, loaded_table, reporter.dpath)
+
+    def report_best(reporter):
+        orig_merged_df = reporter.orig_merged_df
+        metric_names = reporter.metric_registry.name
+        id_names = ['model', 'pred_cfg', 'act_cfg', 'trk_cfg']
+        metric_cols = list(ub.oset(metric_names) & orig_merged_df.columns)
+        print('orig_merged_df.columns = {}'.format(ub.repr2(list(orig_merged_df.columns), nl=1)))
+        id_cols = list(ub.oset(id_names) & orig_merged_df.columns)
+        table = orig_merged_df[id_cols + metric_cols]
+
+        top_indexes = set()
+        for metric in metric_cols:
+            # TODO: maximize or minimize
+            best_rows = table[metric].sort_values()
+            top_indexes.update(best_rows.iloc[-2:].index)
+
+        idxs = sorted(top_indexes)
+        shortlist = table.loc[idxs]
+        shortlist = shortlist.sort_values(metric_cols)
+        print(shortlist.to_string())
+
+    def load1(reporter):
         """
         Load basic data
         """
-        table = self.dvc_manager.evaluation_table()
-        self.summarize(table)
+        table = reporter.dvc_manager.evaluation_table()
+        reporter.status(table)
         evaluations = table[~table['raw'].isnull()]
-        self.raw_df = raw_df = pd.DataFrame(evaluations)
+        reporter.raw_df = raw_df = pd.DataFrame(evaluations)
 
         if 0:
             col_stats_df = unique_col_stats(raw_df)
@@ -131,7 +262,8 @@ class EvaluationReporter:
         num_files_summary(raw_df)
 
         # Remove duplicate predictions on effectively the same dataset.
-        self.filt_df = filt_df = deduplicate_test_datasets(raw_df)
+        # reporter.filt_df = filt_df = deduplicate_test_datasets(raw_df)
+        reporter.raw_df = raw_df
 
         print('\nDeduplicated (over test dataset)')
         num_files_summary(filt_df)
@@ -143,22 +275,24 @@ class EvaluationReporter:
         print('Cross-Metric Comparable Locs')
         print(ub.repr2(ub.map_vals(len, eval_types_to_locs)))
         comparable_locs = list(ub.flatten(v for k, v in eval_types_to_locs.items() if len(k) > 0))
-        self.comp_df = comp_df = filt_df.loc[comparable_locs]
+        reporter.comp_df = comp_df = filt_df.loc[comparable_locs]
 
         print('\nCross-Metric Comparable')
         num_files_summary(comp_df)
 
-    def load2(self):
+    def load2(reporter):
         """
         Load detailed data that might cross reference files
         """
-        self.big_rows = load_extended_data(self.comp_df, self.dvc_expt_dpath)
-        set(r['expt'] for r in self.big_rows)
+        reporter.big_rows = load_extended_data(reporter.raw_df, reporter.dvc_expt_dpath)
+        # reporter.big_rows = load_extended_data(reporter.comp_df, reporter.dvc_expt_dpath)
+        set(r['expt'] for r in reporter.big_rows)
 
-        orig_merged_df, other = clean_loaded_data(self.big_rows)
-        self.orig_merged_df = orig_merged_df
-        self.other = other
+        orig_merged_df, other = clean_loaded_data(reporter.big_rows)
+        reporter.orig_merged_df = orig_merged_df
+        reporter.other = other
 
+        # hard coded values
         human_mapping = {
             'coi_mAP': 'Pixelwise mAP (classes of interest)',
             'coi_mAUC': 'Pixelwise mAUC (classes of interest)',
@@ -176,34 +310,34 @@ class EvaluationReporter:
             'eval_act+pxl': 'SC',
             'eval_trk+pxl': 'BAS',
         }
-        self.iarpa_metric_lut = {
+        reporter.human_mapping = human_mapping
+        reporter.iarpa_metric_lut = {
             'eval_act+pxl': 'mean_f1',
             'eval_trk+pxl': 'BAS_F1',
         }
-        self.pixel_metric_lut = {
+        reporter.pixel_metric_lut = {
             'eval_act+pxl': 'coi_mAP',
             'eval_trk+pxl': 'salient_AP',
         }
-        self.human_mapping = human_mapping
-        self.actcfg_to_label = other['actcfg_to_label']
-        self.predcfg_to_label = other['predcfg_to_label']
-        self.human_mapping.update(self.actcfg_to_label)
-        self.human_mapping.update(self.predcfg_to_label)
+        reporter.actcfg_to_label = other['actcfg_to_label']
+        reporter.predcfg_to_label = other['predcfg_to_label']
+        reporter.human_mapping.update(reporter.actcfg_to_label)
+        reporter.human_mapping.update(reporter.predcfg_to_label)
 
-    def load(self):
-        self.load1()
-        self.load2()
+    def load(reporter):
+        reporter.load1()
+        reporter.load2()
 
 
 def plot_merged(reporter):
-    self = reporter
-    dpath = self.dpath
-    orig_merged_df = self.orig_merged_df
-    iarpa_metric_lut = self.iarpa_metric_lut
-    pixel_metric_lut = self.pixel_metric_lut
-    predcfg_to_label = self.predcfg_to_label
-    actcfg_to_label = self.actcfg_to_label
-    human_mapping = self.human_mapping
+    reporter = reporter
+    dpath = reporter.dpath
+    orig_merged_df = reporter.orig_merged_df
+    iarpa_metric_lut = reporter.iarpa_metric_lut
+    pixel_metric_lut = reporter.pixel_metric_lut
+    predcfg_to_label = reporter.predcfg_to_label
+    actcfg_to_label = reporter.actcfg_to_label
+    human_mapping = reporter.human_mapping
 
     # ['trk_thresh',
     #  'trk_morph_kernel',
@@ -1616,33 +1750,33 @@ def describe_varied(merged_df, dpath, human_mapping=None):
         # print(ub.highlight_code(pprint.pformat(dict(varied), width=80)))
 
 
-def deduplicate_test_datasets(raw_df):
-    """
-    The same model might have been run on two variants of the dataset.
-    E.g. a RGB model might have run on data_vali.kwcoco.json and
-    combo_DILM.kwcoco.json. The system sees these as different datasets
-    even though the model will use the same subset of both. We define
-    a heuristic ordering and then take just one of them.
-    """
-    preference = {
-        'Cropped-Drop3-TA1-2022-03-10_combo_DLM_s2_wv_vali.kwcoco': 0,
-        'Cropped-Drop3-TA1-2022-03-10_combo_DL_s2_wv_vali.kwcoco': 1,
-        'Cropped-Drop3-TA1-2022-03-10_data_wv_vali.kwcoco': 2,
-        'Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco': 0,
-        'Aligned-Drop3-TA1-2022-03-10_combo_LM_vali.kwcoco': 1,
-    }
-    FILTER_DUPS = 1
-    if FILTER_DUPS:
-        keep_locs = []
-        for k, group in raw_df.groupby(['dataset_code', 'model', 'pred_cfg', 'type']):
-            prefs = group['test_dset'].apply(lambda x: preference.get(x, 0))
-            keep_flags = prefs == prefs.min()
-            keep_locs.extend(group[keep_flags].index)
-        print(f'Keep {len(keep_locs)} / {len(raw_df)} drop3 evals')
-        filt_df = raw_df.loc[keep_locs]
-    else:
-        filt_df = raw_df.copy()
-    return filt_df
+# def deduplicate_test_datasets(raw_df):
+#     """
+#     The same model might have been run on two variants of the dataset.
+#     E.g. a RGB model might have run on data_vali.kwcoco.json and
+#     combo_DILM.kwcoco.json. The system sees these as different datasets
+#     even though the model will use the same subset of both. We define
+#     a heuristic ordering and then take just one of them.
+#     """
+#     preference = {
+#         'Cropped-Drop3-TA1-2022-03-10_combo_DLM_s2_wv_vali.kwcoco': 0,
+#         'Cropped-Drop3-TA1-2022-03-10_combo_DL_s2_wv_vali.kwcoco': 1,
+#         'Cropped-Drop3-TA1-2022-03-10_data_wv_vali.kwcoco': 2,
+#         'Aligned-Drop3-TA1-2022-03-10_combo_LM_nowv_vali.kwcoco': 0,
+#         'Aligned-Drop3-TA1-2022-03-10_combo_LM_vali.kwcoco': 1,
+#     }
+#     FILTER_DUPS = 1
+#     if FILTER_DUPS:
+#         keep_locs = []
+#         for k, group in raw_df.groupby(['dataset_code', 'model', 'pred_cfg', 'type']):
+#             prefs = group['test_dset'].apply(lambda x: preference.get(x, 0))
+#             keep_flags = prefs == prefs.min()
+#             keep_locs.extend(group[keep_flags].index)
+#         print(f'Keep {len(keep_locs)} / {len(raw_df)} drop3 evals')
+#         filt_df = raw_df.loc[keep_locs]
+#     else:
+#         filt_df = raw_df.copy()
+#     return filt_df
 
 
 def dataset_summary_tables(dpath):

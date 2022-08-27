@@ -1939,7 +1939,9 @@ def main(cmdline=False, **kwargs):
         best_per_expt = pd.concat(bests)
         if shrink:
             best_per_expt = shrink_notations(best_per_expt, drop=1)
-            best_per_expt = best_per_expt.rename({'time_steps': 'time', 'chip_size': 'space'}, axis=1)
+            best_per_expt = best_per_expt.rename({
+                'time_steps': 'time',
+                'chip_size': 'space'}, axis=1)
         return best_per_expt
 
     print('\nBest Class Models')
