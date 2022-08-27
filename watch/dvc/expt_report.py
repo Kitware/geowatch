@@ -58,6 +58,17 @@ def evaluation_report():
     MAIN FUNCTION
 
     from watch.dvc.expt_report import *  # NOQA
+
+    row = reporter.orig_merged_df.loc[121]
+    print(ub.repr2(row.to_dict(), nl=1))
+    path = reporter.orig_merged_df.loc[121]['raw']
+
+    import platform
+    host = platform.node()
+    path.shrinkuser(home=f'$HOME/remote/{host}')
+
+
+    print(ub.repr2(row.to_dict(), nl=1))
     """
     import kwplot
     kwplot.autosns()
@@ -66,7 +77,6 @@ def evaluation_report():
     reporter = EvaluationReporter(dvc_expt_dpath)
     reporter.load()
     reporter.status()
-
     plot_merged(reporter)
 
     if 0:
@@ -241,6 +251,7 @@ class EvaluationReporter:
         shortlist = table.loc[idxs]
         shortlist = shortlist.sort_values(metric_cols)
         print(shortlist.to_string())
+        return shortlist
 
     def load1(reporter):
         """

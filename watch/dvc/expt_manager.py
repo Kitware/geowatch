@@ -13,6 +13,8 @@ Example:
 
     python -m watch.dvc.expt_manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
     python -m watch.dvc.expt_manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch.dvc.expt_manager "pull packages evals" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch.dvc.expt_manager "push packages evals"
 
     python -m watch.dvc.expt_manager "list"
 
@@ -31,6 +33,15 @@ Example:
 
     # On analysis machine
     python -m watch.dvc.expt_manager "pull evals"
+
+Ignore:
+    python -m watch.dvc.expt_manager "evaluate" \
+        --enable_pred=1 \
+        --enable_eval=1 \
+        --enable_track=1 \
+        --enable_iarpa_eval=1 \
+        --enable_actclf=1 \
+        --enable_actclf_eval=1
 """
 import warnings
 import parse
@@ -824,7 +835,7 @@ class ExperimentState(ub.NiceRepr):
 
         # Rebuild the tables to ensure we are up to date
         tables = self.cross_referenced_tables()
-        staging_df, versioned_df, volitile_df = tables.take(['staging', 'versioned', 'volitile'])
+        staging_df, versioned_df, volitile_df = ub.take(tables, ['staging', 'versioned', 'volitile'])
         needs_copy = staging_df[~staging_df['is_copied']]
         print(needs_copy)
         print(f'There are {len(needs_copy)} packages that need to be copied')
@@ -845,7 +856,7 @@ class ExperimentState(ub.NiceRepr):
 
         # Rebuild the tables to ensure we are up to date
         tables = self.cross_referenced_tables()
-        staging_df, versioned_df, volitile_df = tables.take(['staging', 'versioned', 'volitile'])
+        staging_df, versioned_df, volitile_df = ub.take(tables, ['staging', 'versioned', 'volitile'])
         needs_add_flags = (~versioned_df['has_dvc'] | versioned_df['unprotected'])
         needs_dvc_add = versioned_df[needs_add_flags]
         print(needs_dvc_add)
