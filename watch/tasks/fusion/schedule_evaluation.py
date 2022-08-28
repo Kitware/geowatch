@@ -102,7 +102,7 @@ class ScheduleEvaluationConfig(scfg.Config):
 
         'annotations_dpath': scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval'),
 
-        'bas_thresh': scfg.Value([0.1], help='grid of track thresholds'),
+        'bas_thresh': scfg.Value([0.01], help='grid of track thresholds'),
 
         'hack_bas_grid': scfg.Value(False, help='if True use hard coded BAS grid'),
         'hack_sc_grid': scfg.Value(False, help='if True use hard coded SC grid'),
@@ -399,7 +399,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
             # Hack for defaults so they keep the same hash
             # Can remove this once current phase is done
-            if 1:
+            if 0:
                 pred_cfg_hack = pred_cfg.copy()
                 if pred_cfg['tta_fliprot'] is None:
                     pred_cfg_hack.pop('tta_fliprot')
@@ -765,8 +765,8 @@ def _schedule_track_jobs(queue, manager, config, package_cfgstr, pred_cfgstr,
     act_param_basis = {
         # TODO viterbi or not
         # Not sure what SC thresh is
-        # 'thresh': ensure_iterable(config['bas_thresh']),
-        'thresh': [0.0],
+        'thresh': ensure_iterable(config['bas_thresh']),
+        # 'thresh': [0.0],
         'use_viterbi': [0],
     }
     if config['hack_sc_grid']:
