@@ -399,7 +399,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
             # Hack for defaults so they keep the same hash
             # Can remove this once current phase is done
-            if 0:
+            if 1:
                 pred_cfg_hack = pred_cfg.copy()
                 if pred_cfg['tta_fliprot'] is None:
                     pred_cfg_hack.pop('tta_fliprot')
