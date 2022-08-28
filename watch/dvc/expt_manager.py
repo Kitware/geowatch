@@ -44,7 +44,8 @@ Ignore:
         --devices="0,1,2,3" --run=1
 
     python -m watch.dvc.expt_manager "evaluate" \
-        --bas_thresh=0.01,0.1 \
+        --bas_thresh=0.0,0.01,0.1 \
+        --set_cover_algo=approx,exact \
         --enable_eval=1 \
         --enable_track=1 \
         --enable_iarpa_eval=1 \
