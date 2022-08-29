@@ -122,8 +122,10 @@ def main(cmdline=False, **kwargs):
                 cropped_site['observation_date'] = cropped_site['observation_date'].astype('string')
                 cropped_site['start_date'] = cropped_site['start_date'].astype('string')
                 cropped_site['end_date'] = cropped_site['end_date'].astype('string')
-                cropped_site['predicted_phase_transition_date'] =\
-                    cropped_site['predicted_phase_transition_date'].astype('string')
+                if 'predicted_phase_transition_date' in cropped_site:
+                    cropped_site['predicted_phase_transition_date'] =\
+                      cropped_site['predicted_phase_transition_date'].astype('string')
+
                 with safer.open(new_site_fpath, temp_file=True, mode='w') as file:
                     cropped_site_json = cropped_site.to_json(
                         na='drop', indent=2)
