@@ -351,6 +351,18 @@ def _to_sc_df(sc_dpath, region_id):
 
 def merge_sc_metrics_results(sc_results: List[RegionResult]):
     '''
+
+    Note:
+        Handled:
+        * ac_phase_table.csv
+        * ac_tiou.csv
+        * ac_temporal_error.csv
+
+        Not yet handled:
+        * ac_confusion_matrix_all_sites.csv
+        * ac_f1_all_sites.csv
+        * ap_temporal_error.csv
+
     Returns:
         a list of pd.DataFrames
         activity_table: F1 score, mean TIoU, temporal error
@@ -367,6 +379,7 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
     #     r = sc_results[0]
     #     sc_dpath, region_id = r.sc_dpath, r.region_id
 
+    # Handle ac_phase_table.csv
     dfs = [_to_sc_df(r.sc_dpath, r.region_id) for r in sc_results]
     df = pd.concat(dfs, axis=1).sort_values('date')
 
@@ -420,7 +433,8 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
     # per-site and call it a new metric mTIoU.
     tiou_dfs = []
     for r in sc_results:
-        table = pd.read_csv(r.sc_dpath / 'ac_tiou.csv', index_col=0)
+        ac_tiou_fpath = r.sc_dpath / 'ac_tiou.csv'
+        table = pd.read_csv(ac_tiou_fpath, index_col=0)
         missing = sorted(set(phase_classifications) - set(table.columns))
         table.loc[:, missing] = np.nan
         table = table.loc[:, phase_classifications]
@@ -434,11 +448,14 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
     # So the correct average over regions is to weight by (sites/region)
     temporal_errs = []
     for r in sc_results:
-        tdf = pd.read_csv(r.sc_dpath / 'ac_temporal_error.csv')
+        ac_temporal_err_fpath = r.sc_dpath / 'ac_temporal_error.csv'
+        tdf = pd.read_csv(ac_temporal_err_fpath)
         missing = sorted(set(phase_classifications) - set(tdf.columns))
         tdf.loc[:, missing] = np.nan
-        tdf = tdf.loc[tdf.index[0], phase_classifications]  # mean days (all detections)
+        if len(tdf) > 0:
+            tdf = tdf.loc[tdf.index[0], phase_classifications]  # mean days (all detections)
         temporal_errs.append(tdf.astype(float).values)
+
     n_sites = [df.shape[1] for df in dfs]
     try:
         temporal_err = np.average(temporal_errs, weights=n_sites, axis=0)
@@ -464,53 +481,6 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
     sc_cm = sc_cm.rename_axis("predicted phase", axis="columns")
 
     return sc_df, sc_cm
-
-
-def _hack_remerge_data():
-    """
-    Hack to redo the merge with a different F1 maximization criterion
-
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
-    cd "$DVC_DPATH"
-    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
-    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json
-    """
-    import watch
-    data_dvc_dpath = watch.find_dvc_dpath(hardware='hdd')
-    globstr = str(data_dvc_dpath / 'models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json')
-    from watch.utils import util_path
-    from watch.utils import simple_dvc
-    summary_metrics = util_path.coerce_patterned_paths(globstr)
-    import json
-    import safer
-    dvc = simple_dvc.SimpleDVC(data_dvc_dpath)
-
-    # for merge_fpath in summary_metrics:
-    #     if dvc.is_tracked(merge_fpath):
-    #     pass
-
-    dvc.unprotect(summary_metrics)
-
-    for merge_fpath in ub.ProgIter(summary_metrics, desc='rewrite merge metrics'):
-        region_dpaths = [p for p in list(merge_fpath.parent.parent.glob('*')) if p.name != 'merged']
-        anns_root = data_dvc_dpath / 'annotations'
-        true_site_dpath = anns_root / 'site_models'
-        true_region_dpath = anns_root / 'region_models'
-
-        # merge_dpath = merge_fpath.parent
-
-        json_data = json.loads(merge_fpath.read_text())
-        parent_info = json_data['parent_info']
-
-        bas_concat_df, bas_df, sc_df, sc_cm = _make_merge_metrics(region_dpaths, true_site_dpath, true_region_dpath)
-        new_json_data, *_ = _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info)
-
-        with safer.open(merge_fpath, 'w', temp_file=True) as f:
-            json.dump(new_json_data, f, indent=4)
-
-    dvc.add(summary_metrics)
-    dvc.git_commitpush('Fixup merged iarpa metrics')
-    dvc.push(summary_metrics, remote='aws')
 
 
 def _make_merge_metrics(region_dpaths, true_site_dpath, true_region_dpath):
@@ -710,24 +680,36 @@ def ensure_thumbnails(image_root, region_id, sites):
 
 def main(cmdline=True, **kwargs):
     """
-
     Example:
         >>> # xdoctest: +REQUIRES(module:iarpa_smart_metrics)
         >>> from watch.cli.run_metrics_framework import *  # NOQA
         >>> from iarpa_smart_metrics.demo.generate_demodata import generate_demo_metrics_framework_data
         >>> cmdline = 0
-        >>> demo_info = generate_demo_metrics_framework_data(
+        >>> base_dpath = ub.Path.appdir('watch', 'tests', 'test-iarpa-metrics2')
+        >>> data_dpath = base_dpath / 'inputs'
+        >>> dpath = base_dpath / 'outputs'
+        >>> demo_info1 = generate_demo_metrics_framework_data(
+        >>>     roi='DR_R001',
         >>>     num_sites=5, num_observations=10, noise=2, p_observe=0.5,
         >>>     p_transition=0.3, drop_noise=0.5, drop_limit=0.5)
-        >>> print('demo_info = {}'.format(ub.repr2(demo_info, nl=1)))
-        >>> dpath = ub.Path.appdir('watch', 'tests', 'test-iarpa-metrics2')
+        >>> demo_info2 = generate_demo_metrics_framework_data(
+        >>>     roi='DR_R002',
+        >>>     num_sites=7, num_observations=10, noise=1, p_observe=0.5,
+        >>>     p_transition=0.1, drop_noise=0.8, drop_limit=0.5)
+        >>> demo_info3 = generate_demo_metrics_framework_data(
+        >>>     roi='DR_R003',
+        >>>     num_sites=11, num_observations=10, noise=3, p_observe=0.5,
+        >>>     p_transition=0.2, drop_noise=0.3, drop_limit=0.5)
+        >>> print('demo_info1 = {}'.format(ub.repr2(demo_info1, nl=1)))
+        >>> print('demo_info2 = {}'.format(ub.repr2(demo_info2, nl=1)))
+        >>> print('demo_info3 = {}'.format(ub.repr2(demo_info3, nl=1)))
         >>> out_dpath = dpath / 'region_metrics'
         >>> merge_fpath = dpath / 'merged.json'
         >>> out_dpath.delete()
         >>> kwargs = {
-        >>>     'pred_sites': demo_info['pred_site_dpath'],
-        >>>     'true_region_dpath': demo_info['true_region_dpath'],
-        >>>     'true_site_dpath': demo_info['true_site_dpath'],
+        >>>     'pred_sites': demo_info1['pred_site_dpath'],
+        >>>     'true_region_dpath': demo_info1['true_region_dpath'],
+        >>>     'true_site_dpath': demo_info1['true_site_dpath'],
         >>>     'merge': True,
         >>>     'merge_fpath': merge_fpath,
         >>>     'out_dir': out_dpath,
@@ -991,6 +973,53 @@ def main(cmdline=True, **kwargs):
                               true_region_dpath, merge_dpath, merge_fpath,
                               parent_info, info)
         print('merge_fpath = {!r}'.format(merge_fpath))
+
+
+def _hack_remerge_data():
+    """
+    Hack to redo the merge with a different F1 maximization criterion
+
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
+    cd "$DVC_DPATH"
+    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
+    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json
+    """
+    import watch
+    data_dvc_dpath = watch.find_dvc_dpath(hardware='hdd')
+    globstr = str(data_dvc_dpath / 'models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json')
+    from watch.utils import util_path
+    from watch.utils import simple_dvc
+    summary_metrics = util_path.coerce_patterned_paths(globstr)
+    import json
+    import safer
+    dvc = simple_dvc.SimpleDVC(data_dvc_dpath)
+
+    # for merge_fpath in summary_metrics:
+    #     if dvc.is_tracked(merge_fpath):
+    #     pass
+
+    dvc.unprotect(summary_metrics)
+
+    for merge_fpath in ub.ProgIter(summary_metrics, desc='rewrite merge metrics'):
+        region_dpaths = [p for p in list(merge_fpath.parent.parent.glob('*')) if p.name != 'merged']
+        anns_root = data_dvc_dpath / 'annotations'
+        true_site_dpath = anns_root / 'site_models'
+        true_region_dpath = anns_root / 'region_models'
+
+        # merge_dpath = merge_fpath.parent
+
+        json_data = json.loads(merge_fpath.read_text())
+        parent_info = json_data['parent_info']
+
+        bas_concat_df, bas_df, sc_df, sc_cm = _make_merge_metrics(region_dpaths, true_site_dpath, true_region_dpath)
+        new_json_data, *_ = _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info)
+
+        with safer.open(merge_fpath, 'w', temp_file=True) as f:
+            json.dump(new_json_data, f, indent=4)
+
+    dvc.add(summary_metrics)
+    dvc.git_commitpush('Fixup merged iarpa metrics')
+    dvc.push(summary_metrics, remote='aws')
 
 
 if __name__ == '__main__':
