@@ -1264,9 +1264,11 @@ def clean_loaded_data(big_rows):
         sensorchan = request_sensorchan
 
         if 0:
+            # Hack for Phase1 Models with improper sensorchan.
+            # This can likely be removed as we move forward in Phase 2.
+
             # Dont trust what the model info says about channels, look
-            # at the model stats to be sure. This can likely be removed
-            # as we move forward in Phase 2.
+            # at the model stats to be sure.
             if model_fpath and model_fpath.exists():
                 stats = resolve_model_info(model_fpath)
                 real_chan_parts = ub.oset()
@@ -1315,6 +1317,8 @@ def clean_loaded_data(big_rows):
             # MANUAL HACK:
             if 1:
                 sensorchan = ','.join([p.spec for p in sensorchan.streams() if p.chans.spec not in blocklist])
+        else:
+            fit_params['bad_channels'] = False
 
         fit_params['sensorchan'] = sensorchan
         row['has_teamfeat'] = _is_teamfeat(sensorchan)
