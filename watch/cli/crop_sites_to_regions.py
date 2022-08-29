@@ -119,6 +119,11 @@ def main(cmdline=False, **kwargs):
                 num_valid += 1
                 old_site_fpath = cropped_site_info['fpath']
                 new_site_fpath = new_site_dpath / old_site_fpath.name
+                cropped_site['observation_date'] = cropped_site['observation_date'].astype('string')
+                cropped_site['start_date'] = cropped_site['start_date'].astype('string')
+                cropped_site['end_date'] = cropped_site['end_date'].astype('string')
+                cropped_site['predicted_phase_transition_date'] =\
+                    cropped_site['predicted_phase_transition_date'].astype('string')
                 with safer.open(new_site_fpath, temp_file=True, mode='w') as file:
                     cropped_site_json = cropped_site.to_json(
                         na='drop', indent=2)
