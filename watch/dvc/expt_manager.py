@@ -46,11 +46,13 @@ Ignore:
     python -m watch.dvc.expt_manager "evaluate" \
         --bas_thresh=0.0,0.01,0.1 \
         --set_cover_algo=approx,exact \
+        --enable_pred=0 \
         --enable_eval=1 \
         --enable_track=1 \
         --enable_iarpa_eval=1 \
         --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC" \
-        --devices="0,1" --run=1
+        --devices="0,1" --run=0 \
+        --skip_existing=True
 
         # --enable_track=1 \
         # --enable_iarpa_eval=1 \
