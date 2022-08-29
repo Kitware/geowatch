@@ -34,6 +34,49 @@ Example:
     # On analysis machine
     python -m watch.dvc.expt_manager "pull evals"
 
+
+TODO:
+    ### Make the Experiment Evaluation Reporter more robust and generalize to
+    ### more problems.
+
+    It should quickly show the best models for various metric and it should be
+    easy for the user to inspect them further.  For example say the best model
+    of interest was:
+
+    MODEL_OF_INTEREST="Drop4_BAS_Retrain_V002_epoch=45-step=23552"
+    MODEL_OF_INTEREST="Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584"
+
+    # TODO:
+    # There is a problem with multiple .pt suffixes, just dont use any
+
+    # You should be able to pull things wrt to that model
+
+    python -m watch.dvc.expt_manager "pull packages" --model_pattern="${MODEL_OF_INTEREST}*"
+    python -m watch.dvc.expt_manager "pull evals" --model_pattern="${MODEL_OF_INTEREST}*"
+
+    python -m watch.dvc.expt_manager "status" --model_pattern="${MODEL_OF_INTEREST}*"
+
+    MODEL_OF_INTEREST="Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584"
+    DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
+    DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+
+    # Evaluate on a subset of the training set
+    TRAIN_DATASET_SUBSET=$DATA_DVC_DPATH/$DATASET_CODE/data_train_subset.kwcoco.json
+    # TRAIN_DATASET_BIG=$DATA_DVC_DPATH/$DATASET_CODE/data_train.kwcoco.json
+    # kwcoco subset "$TRAIN_DATASET_BIG" "$TRAIN_DATASET_SUBSET" --select_videos '.name | test(".*_R.*")'
+
+    # Then you should be able to evaluate that model
+    python -m watch.dvc.expt_manager "evaluate" \
+        --model_pattern="${MODEL_OF_INTEREST}*" \
+        --dataset_codes "$DATASET_CODE" \
+        --test_dataset="$TRAIN_DATASET_SUBSET" \
+        --enable_track=1 \
+        --enable_iarpa_eval=1 \
+        --set_cover_algo=approx,exact \
+        --bas_thresh=0.0,0.01,0.1 \
+        --devices="0,1" --run=1
+
 Ignore:
     python -m watch.dvc.expt_manager "evaluate" \
         --enable_pred=1 \
@@ -327,11 +370,17 @@ class DVCExptManager(ub.NiceRepr):
     def versioned_table(manager, **kw):
         rows = list(ub.flatten(state.versioned_rows(**kw) for state in manager.states))
         df = pd.DataFrame(rows)
+        missing = ub.oset(ExperimentState.VERSIONED_COLUMNS) - df.columns
+        if len(missing):
+            df.loc[:, missing] = None
         return df
 
     def volitile_table(manager, **kw):
         rows = list(ub.flatten(state.volitile_table(**kw) for state in manager.states))
         df = pd.DataFrame(rows)
+        missing = ub.oset(ExperimentState.VOLITILE_COLUMNS) - df.columns
+        if len(missing):
+            df.loc[:, missing] = None
         return df
 
     def evaluation_table(manager):
@@ -391,8 +440,7 @@ class DVCExptManager(ub.NiceRepr):
     def pull_packages(manager):
         # TODO: git pull
         pkg_df = manager.versioned_table(types=['pkg'])
-        pull_df = pkg_df[pkg_df['needs_pull']]
-
+        pull_df = pkg_df[pkg_df['needs_pull'].astype(bool)]
         pull_fpaths = pull_df['dvc'].tolist()
         manager.dvc.pull(pull_fpaths)
 
@@ -500,6 +548,17 @@ class ExperimentState(ub.NiceRepr):
 
         self.path_patterns = {}
         self._build_path_patterns()
+
+    VERSIONED_COLUMNS = [
+        'type', 'has_dvc', 'has_raw', 'needs_pull', 'is_link', 'is_broken',
+        'unprotected', 'needs_push', 'raw', 'dvc', 'dataset_code']
+
+    VOLITILE_COLUMNS = [
+        'type', 'raw', 'model', 'dataset_code'
+    ]
+
+    STAGING_COLUMNS = [
+        'ckpt_exists', 'is_packaged', 'is_copied', 'needs_package', 'needs_copy']
 
     # def _check(self):
     #     from watch.utils import util_pattern
@@ -692,7 +751,7 @@ class ExperimentState(ub.NiceRepr):
         volitile_rows = list(self.volitile_rows())
         volitile_df = pd.DataFrame(volitile_rows)
         if len(volitile_df) == 0:
-            volitile_df[['type', 'raw', 'expt_dvc_dpath', 'dataset_code', 'expt', 'model', 'test_dset', 'pred_cfg', 'trk_cfg']] = 0
+            volitile_df[self.VOLITILE_COLUMNS] = 0
         return volitile_df
 
     def staging_table(self):
@@ -701,7 +760,7 @@ class ExperimentState(ub.NiceRepr):
         staging_df = pd.DataFrame(staging_rows)
 
         if len(staging_df) == 0:
-            staging_df[['ckpt_exists', 'is_packaged', 'is_copied', 'needs_package', 'needs_copy']] = 0
+            staging_df[self.STAGING_COLUMNS] = 0
         return staging_df
 
     def versioned_table(self, **kw):
@@ -714,7 +773,8 @@ class ExperimentState(ub.NiceRepr):
         eval_rows = list(self.versioned_rows(**kw))
         eval_df = pd.DataFrame(eval_rows)
         if len(eval_df) == 0:
-            eval_df[['type', 'has_dvc', 'has_raw', 'needs_pull', 'is_link', 'is_broken', 'is_unprotected', 'needs_push', 'dataset_code']] = 0
+            eval_df[self.VERSIONED_COLUMNS] = 0
+            # ['type', 'has_dvc', 'has_raw', 'needs_pull', 'is_link', 'is_broken', 'is_unprotected', 'needs_push', 'dataset_code']] = 0
         return eval_df
 
     def evaluation_table(self):

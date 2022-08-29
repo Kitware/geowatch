@@ -1292,9 +1292,11 @@ def shrink_channels(x):
     for idx, part in enumerate('forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field'.split('|')):
         aliases[part] =  'land.{}'.format(idx)
     stream_parts = []
-    for stream in kwcoco.ChannelSpec.coerce(x).streams():
+    sensorchan = kwcoco.SensorChanSpec.coerce(x)
+    # spec = kwcoco.ChannelSpec.coerce(x)
+    for stream in sensorchan.streams():
         fused_parts = []
-        for c in stream.as_list():
+        for c in stream.chans.as_list():
             c = aliases.get(c, c)
             c = c.replace('matseg_', 'matseg.')
             fused_parts.append(c)
@@ -1303,9 +1305,9 @@ def shrink_channels(x):
         fused = fused.replace('B|G|R|N|S|H', 'BGRNSH')
         fused = fused.replace('R|G|B', 'RGB')
         fused = fused.replace('B|G|R', 'BGR')
-        stream_parts.append(fused)
+        stream_parts.append(stream.sensor.spec + ':' + fused)
     new = ','.join(stream_parts)
-    x = kwcoco.ChannelSpec.coerce(new).concise().spec
+    x = kwcoco.SensorChanSpec.coerce(new).concise().spec
     return x
 
 

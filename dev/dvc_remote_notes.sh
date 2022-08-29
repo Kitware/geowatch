@@ -15,3 +15,6 @@ dvc remote add --local horologic ssh://horologic.kitware.com/data/dvc-caches/sma
 dvc remote add --local namek ssh://namek/media/joncrall/raid/home/joncrall/data/dvc-repos/smart_watch_dvc/.dvc/cache
 dvc remote add --local toothbrush ssh://toothbrush/data/joncrall/dvc-repos/smart_watch_dvc-hdd/.dvc/cache
 dvc remote add --local ooo ssh://ooo/media/joncrall/raid/dvc-repos/smart_watch_dvc/.dvc/cache
+
+
+dvc remote add --local toothbrush ssh://toothbrush/data/joncrall/dvc-repos/smart_expt_dvc/.dvc/cache
