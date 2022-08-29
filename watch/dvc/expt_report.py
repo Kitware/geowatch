@@ -300,7 +300,8 @@ class EvaluationReporter:
         # reporter.big_rows = load_extended_data(reporter.comp_df, reporter.dvc_expt_dpath)
         set(r['expt'] for r in reporter.big_rows)
 
-        orig_merged_df, other = clean_loaded_data(reporter.big_rows)
+        big_rows = reporter.big_rows
+        orig_merged_df, other = clean_loaded_data(big_rows)
         reporter.orig_merged_df = orig_merged_df
         reporter.other = other
 
@@ -1196,18 +1197,13 @@ def clean_loaded_data(big_rows):
     Also combine eval types together into a single row per model / config.
     """
     from watch.tasks.fusion import aggregate_results as agr
-    try:
-        from kwcoco._experimental.sensorchan import concise_sensor_chan, sensorchan_parts
-    except Exception:
-        # hack
-        def sensorchan_parts(x):
-            return x.split(',')
-        concise_sensor_chan = ub.identity
+    import kwcoco
 
-    def _is_teamfeat(x):
-        if isinstance(x, float) and math.isnan(x):
+    def _is_teamfeat(sensorchan):
+        unique_chans = sum([s.chans for s in sensorchan.streams()]).fuse().to_set()
+        if isinstance(unique_chans, float) and math.isnan(unique_chans):
             return False
-        return any([a in x for a in ['depth', 'invariant', 'invariants', 'matseg', 'land']])
+        return any([a in unique_chans for a in ['depth', 'invariant', 'invariants', 'matseg', 'land']])
 
     _actcfg_to_track_config = ub.ddict(list)
     _trkcfg_to_track_config = ub.ddict(list)
@@ -1261,59 +1257,64 @@ def clean_loaded_data(big_rows):
         pred_params = param_type['pred']
         model_fpath = pred_params['pred_model_fpath']
 
-        fit_params['channels'] = agr.shrink_channels(fit_params['channels'])
+        # Shrink and check the sensorchan spec
+        request_sensorchan = kwcoco.SensorChanSpec.coerce(
+            agr.shrink_channels(fit_params['channels']))
+        fit_params['channels'] = request_sensorchan.spec
+        sensorchan = request_sensorchan
 
-        # if 'invariants' in fit_params['channels']:
-        #     raise Exception
+        if 0:
+            # Dont trust what the model info says about channels, look
+            # at the model stats to be sure. This can likely be removed
+            # as we move forward in Phase 2.
+            if model_fpath and model_fpath.exists():
+                stats = resolve_model_info(model_fpath)
+                real_chan_parts = ub.oset()
+                senschan_parts = []
+                real_sensors = []
+                for input_row in stats['model_stats']['known_inputs']:
+                    known_sensorchan = agr.shrink_channels(input_row['sensor'] + ':' + input_row['channel'])
+                    known_sensorchan = kwcoco.SensorChanSpec.coerce(known_sensorchan)
+                    real_chan = known_sensorchan.chans.spec
+                    if real_chan not in chan_blocklist:
+                        if real_chan not in passlist:
+                            print(f'Unknown real_chan={real_chan}')
+                        real_chan_parts.add(real_chan)
+                        real_sensors.append(input_row['sensor'])
+                        senschan_parts.append('{}:{}'.format(input_row['sensor'], real_chan))
+                model_sensorchan = ','.join(sorted(set(senschan_parts)))
+                model_sensorchan = kwcoco.SensorChanSpec.coerce(model_sensorchan)
 
-        # Dont trust what the model info says about channels, look
-        # at the model stats to be sure.
-        if model_fpath and model_fpath.exists():
-            stats = resolve_model_info(model_fpath)
-            real_chan_parts = ub.oset()
-            senschan_parts = []
-            real_sensors = []
-            for input_row in stats['model_stats']['known_inputs']:
-                real_chan = agr.shrink_channels(input_row['channel'])
-                if real_chan not in chan_blocklist:
-                    if real_chan not in passlist:
-                        print(f'Unknown real_chan={real_chan}')
-                    real_chan_parts.add(real_chan)
-                    real_sensors.append(input_row['sensor'])
-                    senschan_parts.append('{}:{}'.format(input_row['sensor'], real_chan))
-            sensorchan = ','.join(sorted(set(senschan_parts)))
-            sensorchan = concise_sensor_chan(sensorchan)
-            request_chan_parts = set(fit_params['channels'].split(','))
-            if not request_chan_parts.issubset(real_chan_parts):
+                model_parts = model_sensorchan.normalize().spec.split(',')
+                request_parts = request_sensorchan.normalize().spec.split(',')
+                if not request_parts.issubset(model_parts):
+                    fit_params['bad_channels'] = True
+                else:
+                    fit_params['bad_channels'] = False
+            else:
+                missing_models.append(model_fpath)
+
+                if 'Cropped' in big_row['test_dset']:
+                    # Hack
+                    sensors = ['WV', 'S2']
+                elif 'Cropped' in big_row['test_dset']:
+                    sensors = ['S2', 'L8']
+                else:
+                    sensors = ['*']
+
+                channels = kwcoco.ChannelSpec.coerce(fit_params['channels'])
+                senschan_parts = []
+                for sensor in sensors:
+                    for chan in channels.streams():
+                        senschan_parts.append(f'{sensor}:{chan.spec}')
+
+                sensorchan = ','.join(sorted(senschan_parts))
+                sensorchan = kwcoco.SensorChanSpec.coerce(sensorchan)
                 fit_params['bad_channels'] = True
-            else:
-                fit_params['bad_channels'] = False
-        else:
-            missing_models.append(model_fpath)
 
-            if 'Cropped' in big_row['test_dset']:
-                # Hack
-                sensors = ['WV', 'S2']
-            elif 'Cropped' in big_row['test_dset']:
-                sensors = ['S2', 'L8']
-            else:
-                sensors = ['*']
-
-            import kwcoco
-            channels = kwcoco.ChannelSpec.coerce(fit_params['channels'])
-            senschan_parts = []
-            for sensor in sensors:
-                for chan in channels.streams():
-                    senschan_parts.append(f'{sensor}:{chan.spec}')
-
-            sensorchan = ','.join(sorted(senschan_parts))
-            sensorchan = concise_sensor_chan(sensorchan)
-            request_chan_parts = set(fit_params['channels'].split(','))
-            fit_params['bad_channels'] = True
-
-        # MANUAL HACK:
-        if 1:
-            sensorchan = ','.join([p for p in sensorchan_parts(sensorchan) if p not in blocklist])
+            # MANUAL HACK:
+            if 1:
+                sensorchan = ','.join([p.spec for p in sensorchan.streams() if p.chans.spec not in blocklist])
 
         fit_params['sensorchan'] = sensorchan
         row['has_teamfeat'] = _is_teamfeat(sensorchan)
