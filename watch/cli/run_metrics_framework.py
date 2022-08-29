@@ -586,6 +586,17 @@ def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath, mer
     json_data, concise_best_bas_rows, best_bas_rows = _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info, info)
     print(concise_best_bas_rows.to_string())
 
+    region_viz_dpath = (merge_dpath / 'region_viz_overall').ensuredir()
+
+    # Symlink to visualizations
+    for dpath in region_dpaths:
+        overall_dpath = dpath / 'overall'
+        viz_dpath = overall_dpath / 'bas' / 'region'
+
+        for viz_fpath in viz_dpath.iterdir():
+            viz_link = viz_fpath.augment(dpath=region_viz_dpath)
+            ub.symlink(viz_fpath, viz_link, verbose=1)
+
     # write summary in readable form
     #
     summary_path = merge_dpath / 'summary.csv'
