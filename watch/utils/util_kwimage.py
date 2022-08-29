@@ -1048,6 +1048,10 @@ def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim, m
 
 def find_low_overlap_covering_boxes_optimize(polygons, scale, min_box_dim, max_box_dim, merge_thresh=0.001, max_iters=100):
     """
+    A variant of the covering problem that doesn't work that well, but might in
+    the future with tweaks.
+
+    Ignore:
         >>> # Create random polygons as test data
         >>> import kwimage
         >>> import kwarray
@@ -1267,6 +1271,7 @@ def find_low_overlap_covering_boxes_optimize(polygons, scale, min_box_dim, max_b
             total_df = dict(list((df.groupby('part'))))['total']
             print(total_df)
             ax = sns.lineplot(data=total_df, x='step', y='val', hue='part')
+            ax
             # ax.set_ylim(0, df.groupby('part')['val'].median().max())
             # try:
             #     ax.set_yscale('logit')

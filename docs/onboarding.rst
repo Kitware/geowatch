@@ -18,3 +18,10 @@ We officially recommend using pyenv, but conda is also supported.
 To install pyenv, see the `pyenv installation instructions <docs/install_python_pyenv.rst>`_.
 
 To install conda, see the `conda installation instructions <docs/install_python_conda.rst>`_.
+
+
+
+More Resources
+##############
+
+https://gitlab.kitware.com/smart/watch/-/wikis/Resource-Clearinghouse

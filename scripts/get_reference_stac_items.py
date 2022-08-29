@@ -154,7 +154,6 @@ def convert_l1_input_to_l2(path=(
                 f.write(line)
                 f.write('\n')
     print(f'{n_missing_items=}')
-<<<<<<< HEAD
 
 
 def process_qfabric(

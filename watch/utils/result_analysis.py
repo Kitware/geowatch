@@ -559,7 +559,8 @@ class ResultAnalysis(ub.NiceRepr):
                 )
             )
             win_probs = skillboard.predict_win()
-        print(f"win_probs = {ub.repr2(win_probs, nl=1)}")
+            print(f"win_probs = {ub.repr2(win_probs, nl=1)}")
+
         for key, improves in score_improvements.items():
             k1, k2, metric_key = key
             improves = np.array(improves)
