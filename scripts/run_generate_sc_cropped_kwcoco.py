@@ -136,7 +136,7 @@ def run_generate_sc_cropped_kwcoco(input_path,
                     '--regions', bas_region_path,
                     '--force_nodata', '-9999',
                     '--include_channels', 'red|green|blue|cloudmask',
-                    '--site_summary', 'True'
+                    '--site_summary', 'True',
                     '--geo_preprop', 'auto',
                     '--keep', 'none',
                     '--target_gsd', '3',  # TODO: Expose as cli parameter
