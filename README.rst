@@ -35,23 +35,6 @@ For information on testing please see `running and writing watch tests <testing_
 Getting Started
 ---------------
 
-Install Python
-~~~~~~~~~~~~~~
-
-Python 3.8+ is required for watch. Python versions can be managed with either
-conda or pyenv. Working with conda is more beginner friendly, but pyenv has
-less commercial restrictions, but requires a compiler certain system libraries
-(e.g. openssl, sqlite3, readline, ffi, curses, bz2, etc..) to compile Python.
-If you are able to compile Python We recommend using pyenv.
-
-To install pyenv, see the `pyenv installation instructions <docs/install_python_pyenv.rst>`_.
-
-To install conda, see the `conda installation instructions <docs/install_python_conda.rst>`_.
-
-NOTE: If using conda, do NOT use ``conda install`` to install Python packages,
-we only use conda to install the Python binaries. We exclusively use pip to
-manage packages.
-
 
 Docker Image
 ~~~~~~~~~~~~
@@ -71,9 +54,32 @@ To build the pyenv Docker image:
 
 .. code:: bash
 
+    # Requires pulling this file for new docker-buildkit syntax
     docker login
     docker pull docker/dockerfile:1.3.0-labs
+
     DOCKER_BUILDKIT=1 docker build --progress=plain -t "watch_pyenv310" -f ./dockerfiles/pyenv.Dockerfile .
+
+
+We will eventually deprecate the usage of conda. Using pyenv is recommended.
+
+
+Install Python
+~~~~~~~~~~~~~~
+
+Python 3.8+ is required for watch. Python versions can be managed with either
+conda or pyenv. Working with conda is more beginner friendly, but pyenv has
+less commercial restrictions, but requires a compiler certain system libraries
+(e.g. openssl, sqlite3, readline, ffi, curses, bz2, etc..) to compile Python.
+If you are able to compile Python We recommend using pyenv.
+
+To install pyenv, see the `pyenv installation instructions <docs/install_python_pyenv.rst>`_.
+
+To install conda, see the `conda installation instructions <docs/install_python_conda.rst>`_.
+
+NOTE: If using conda, do NOT use ``conda install`` to install Python packages,
+we only use conda to install the Python binaries. We exclusively use pip to
+manage packages.
 
 
 Non-Python Requirements
