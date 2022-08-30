@@ -173,8 +173,6 @@ The current ``watch`` module struture is summarized as follows:
         │               └─╼ splits_unmasked {'.py': 2}
         └─╼ utils {'.py': 32}
             └─╼ lightning_ext {'.py': 5}
-                └─╼ callbacks {'.py': 7, '.txt': 1}
-
 
 
 

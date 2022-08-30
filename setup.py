@@ -245,7 +245,7 @@ if __name__ == '__main__':
                 'smartwatch_dvc= watch.cli.find_dvc:_CLI.main',
             ],
         },
-        # install_requires=REQUIREMENTS,
+        install_requires=REQUIREMENTS,
         extras_require=EXTRAS_REQUIRES,
         long_description_content_type='text/x-rst',
         long_description=README,
