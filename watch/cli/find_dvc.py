@@ -65,6 +65,7 @@ class FindDVCConfig(scfg.Config):
     @staticmethod
     def main(cmdline=True, **kwargs):
         from watch.utils import util_data
+        from rich import print
         import ubelt as ub
 
         cli_config = FindDVCConfig(default=kwargs, cmdline=cmdline)
