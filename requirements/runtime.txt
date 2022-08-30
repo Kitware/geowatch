@@ -1,8 +1,8 @@
 # Core dependencies needed at runtime that that should install without much issue
 
 ### Specialized Versions
-# These packages have different minimum versions between our original 3.8
-# target and # more recent python releases.
+# These packages have different minimum versions for wheels between our original 3.8
+# target and more recent python releases.
 
 numpy>=1.21.6    ;  python_version >= '3.10'    # Python 3.10+
 numpy>=1.20.0    ;  python_version <  '3.10'    # Python 3.8
@@ -24,6 +24,12 @@ scikit_learn>=0.24.2  ;  python_version <  '3.10'    # Python 3.8
 
 scikit_image>=0.19.3  ;  python_version >= '3.10'    # Python 3.10+ 
 scikit_image>=0.18.1  ;  python_version <  '3.10'    # Python 3.8
+
+jq>=1.2.2  ;  python_version >= '3.10'    # Python 3.10+ 
+jq>=1.2.1  ;  python_version <  '3.10'    # Python 3.8
+
+pyproj>=3.3.1  ;  python_version >= '3.10'    # Python 3.10+ 
+pyproj>=3.2.1  ;  python_version <  '3.10'    # Python 3.8
 
 
 # Numeric
@@ -54,7 +60,6 @@ Pygments>=2.6.0
 requests>=2.25.1
 fasteners>=0.16.3
 blake3>=0.2.1
-jq>=1.2.1
 more_itertools>=8.12.0
 pint >= 0.17
 retry>=0.9.2
@@ -94,7 +99,6 @@ seaborn>=0.11.1
 
 # GIS
 geopandas>=0.10.2
-pyproj>=3.2.1
 utm>=0.7.0
 rtree>=0.9.7
 pygeos>=0.10.2
