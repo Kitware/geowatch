@@ -4,7 +4,7 @@ Synchronize DVC states across the machine.
 This is a Proof-of-Concept that is frozen for Phase1 and will not be developed.
 
 The New work on Phase 2 will be continued in
-~/code/watch/watch/dvc/sync_manager.py
+~/code/watch/watch/mlops/sync_manager.py
 
 Example:
     python -m watch.tasks.fusion.dvc_sync_manager "list"

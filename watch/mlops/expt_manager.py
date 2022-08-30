@@ -11,28 +11,28 @@ Example:
     export DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
     cd $DVC_EXPT_DPATH
 
-    python -m watch.dvc.expt_manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
-    python -m watch.dvc.expt_manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
-    python -m watch.dvc.expt_manager "pull packages evals" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
-    python -m watch.dvc.expt_manager "push packages evals"
+    python -m watch.mlops.expt_manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch.mlops.expt_manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch.mlops.expt_manager "pull packages evals" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch.mlops.expt_manager "push packages evals"
 
-    python -m watch.dvc.expt_manager "list"
+    python -m watch.mlops.expt_manager "list"
 
     # On training machine
-    python -m watch.dvc.expt_manager "push packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch.mlops.expt_manager "push packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
 
     # On testing machine
-    python -m watch.dvc.expt_manager "pull packages"
-    python -m watch.dvc.expt_manager "status"
+    python -m watch.mlops.expt_manager "pull packages"
+    python -m watch.mlops.expt_manager "status"
 
     # Run evals on testing machine
-    python -m watch.dvc.expt_manager "evaluate" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch.mlops.expt_manager "evaluate" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
 
     # On testing machine
-    python -m watch.dvc.expt_manager "push evals"
+    python -m watch.mlops.expt_manager "push evals"
 
     # On analysis machine
-    python -m watch.dvc.expt_manager "pull evals"
+    python -m watch.mlops.expt_manager "pull evals"
 
 
 TODO:
@@ -51,10 +51,10 @@ TODO:
 
     # You should be able to pull things wrt to that model
 
-    python -m watch.dvc.expt_manager "pull packages" --model_pattern="${MODEL_OF_INTEREST}*"
-    python -m watch.dvc.expt_manager "pull evals" --model_pattern="${MODEL_OF_INTEREST}*"
+    python -m watch.mlops.expt_manager "pull packages" --model_pattern="${MODEL_OF_INTEREST}*"
+    python -m watch.mlops.expt_manager "pull evals" --model_pattern="${MODEL_OF_INTEREST}*"
 
-    python -m watch.dvc.expt_manager "status" --model_pattern="${MODEL_OF_INTEREST}*"
+    python -m watch.mlops.expt_manager "status" --model_pattern="${MODEL_OF_INTEREST}*"
 
     MODEL_OF_INTEREST="Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584"
     DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
@@ -67,7 +67,7 @@ TODO:
     # kwcoco subset "$TRAIN_DATASET_BIG" "$TRAIN_DATASET_SUBSET" --select_videos '.name | test(".*_R.*")'
 
     # Then you should be able to evaluate that model
-    python -m watch.dvc.expt_manager "evaluate" \
+    python -m watch.mlops.expt_manager "evaluate" \
         --model_pattern="${MODEL_OF_INTEREST}*" \
         --dataset_codes "$DATASET_CODE" \
         --test_dataset="$TRAIN_DATASET_SUBSET" \
@@ -78,7 +78,7 @@ TODO:
         --devices="0,1" --run=1
 
 Ignore:
-    python -m watch.dvc.expt_manager "evaluate" \
+    python -m watch.mlops.expt_manager "evaluate" \
         --enable_pred=1 \
         --enable_eval=1 \
         --enable_actclf=1 \
@@ -86,7 +86,7 @@ Ignore:
         --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC" \
         --devices="0,1,2,3" --run=1
 
-    python -m watch.dvc.expt_manager "evaluate" \
+    python -m watch.mlops.expt_manager "evaluate" \
         --bas_thresh=0.0,0.01,0.1 \
         --set_cover_algo=approx,exact \
         --enable_pred=0 \
@@ -201,7 +201,7 @@ class ExptManagerConfig(scfg.Config):
 
 def main(cmdline=True, **kwargs):
     """
-    from watch.dvc.expt_manager import *  # NOQA
+    from watch.mlops.expt_manager import *  # NOQA
     """
     import watch
 
@@ -292,7 +292,7 @@ class DVCExptManager(ub.NiceRepr):
 
     Example:
         >>> # xdoctest: +REQUIRES(env:EXPT_DVC_DPATH)
-        >>> from watch.dvc.expt_manager import *  # NOQA
+        >>> from watch.mlops.expt_manager import *  # NOQA
         >>> import watch
         >>> manager = DVCExptManager.coerce(watch.find_dvc_dpath(tags='phase2_expt'))
         >>> manager.summarize()
@@ -471,7 +471,7 @@ class ExperimentState(ub.NiceRepr):
 
     Ignore:
         >>> # xdoctest: +REQUIRES(env:EXPT_DVC_DPATH)
-        >>> from watch.dvc.expt_manager import *  # NOQA
+        >>> from watch.mlops.expt_manager import *  # NOQA
         >>> import watch
         >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
@@ -860,7 +860,7 @@ class ExperimentState(ub.NiceRepr):
         """
         Ignore:
             >>> # xdoctest: +REQUIRES(env:EXPT_DVC_DPATH)
-            >>> from watch.dvc.expt_manager import *  # NOQA
+            >>> from watch.mlops.expt_manager import *  # NOQA
             >>> import watch
             >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
             >>> #expt_dvc_dpath = watch.find_smart_dvc_dpath(hardware='ssd')
@@ -878,7 +878,7 @@ class ExperimentState(ub.NiceRepr):
         and then adds them to DVC.
 
         >>> # xdoctest: +REQUIRES(env:EXPT_DVC_DPATH)
-        >>> from watch.dvc.expt_manager import *  # NOQA
+        >>> from watch.mlops.expt_manager import *  # NOQA
         >>> import watch
         >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
@@ -964,9 +964,9 @@ class ExperimentState(ub.NiceRepr):
             git pull
             dvc pull -r aws --recursive models/fusion/{self.dataset_code}
 
-            python -m watch.dvc.expt_manager "pull packages" --dvc_dpath=$DVC_EXPT_DPATH
-            python -m watch.dvc.expt_manager "status packages" --dvc_dpath=$DVC_EXPT_DPATH
-            python -m watch.dvc.expt_manager "evaluate" --dvc_dpath=$DVC_EXPT_DPATH
+            python -m watch.mlops.expt_manager "pull packages" --dvc_dpath=$DVC_EXPT_DPATH
+            python -m watch.mlops.expt_manager "status packages" --dvc_dpath=$DVC_EXPT_DPATH
+            python -m watch.mlops.expt_manager "evaluate" --dvc_dpath=$DVC_EXPT_DPATH
 
             # setup right params
             # python -m tasks.fusion.schedule_inference schedule_evaluation --gpus=auto --run=True
@@ -1065,7 +1065,7 @@ def checkpoint_filepath_info(fname):
         parse.parse('{prefix}foo={bar}', 'afoao=3')
 
     Example:
-        >>> from watch.dvc.expt_manager import *  # NOQA
+        >>> from watch.mlops.expt_manager import *  # NOQA
         >>> fnames = [
         >>>     'epoch=1-step=10.foo',
         >>>     'epoch=1-step=10-v2.foo',
@@ -1118,14 +1118,14 @@ class UserAbort(Exception):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/dvc/expt_manager.py "pull all"
-        python -m watch.dvc.expt_manager "status"
-        python -m watch.dvc.expt_manager "push all"
-        python -m watch.dvc.expt_manager "pull evals"
+        python ~/code/watch/watch/mlops/expt_manager.py "pull all"
+        python -m watch.mlops.expt_manager "status"
+        python -m watch.mlops.expt_manager "push all"
+        python -m watch.mlops.expt_manager "pull evals"
 
-        python -m watch.dvc.expt_manager "evaluate"
+        python -m watch.mlops.expt_manager "evaluate"
 
-        python -m watch.dvc.expt_manager "pull all"
-        python -m watch.dvc.expt_manager "pull packages"
+        python -m watch.mlops.expt_manager "pull all"
+        python -m watch.mlops.expt_manager "pull packages"
     """
     main(cmdline=True)

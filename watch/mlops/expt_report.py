@@ -57,7 +57,7 @@ def evaluation_report():
     """
     MAIN FUNCTION
 
-    from watch.dvc.expt_report import *  # NOQA
+    from watch.mlops.expt_report import *  # NOQA
 
     row = reporter.orig_merged_df.loc[121]
     print(ub.repr2(row.to_dict(), nl=1))
@@ -97,7 +97,7 @@ class EvaluationReporter:
     """
 
     def __init__(reporter, dvc_expt_dpath):
-        from watch.dvc import expt_manager
+        from watch.mlops import expt_manager
         reporter.dvc_expt_dpath = dvc_expt_dpath
         reporter.dvc_manager = expt_manager.DVCExptManager.coerce(dvc_expt_dpath)
         # dvc_sync_manager.main(command='pull evals')
