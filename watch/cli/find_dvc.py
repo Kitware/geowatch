@@ -82,7 +82,7 @@ class FindDVCConfig(scfg.Config):
 
         registry = util_data.DataRegistry()
         if command == 'list':
-            print(registry.list(**config, must_exist=must_exist))
+            registry.list(**config, must_exist=must_exist)
         elif command == 'add':
             registry.add(**config)
         elif command == 'remove':
