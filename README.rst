@@ -78,17 +78,52 @@ This repository also includes a ``Dockerfile`` that can be used to
 build the WATCH Docker image.  The built Docker image will have the
 WATCH Conda environment and WATCH Python module pre-installed.
 
-To build the Docker image:
+To build the conda Docker image:
 
 .. code:: bash
 
    docker build .
 
 
+To build the pyenv Docker image:
+
+.. code:: bash
+
+    docker login
+    docker pull docker/dockerfile:1.3.0-labs
+    DOCKER_BUILDKIT=1 docker build --progress=plain -t "watch_pyenv310" -f ./dockerfiles/pyenv.Dockerfile --build-arg BUILD_STRICT=1 .
+
+
+Installing
+~~~~~~~~~~
+
+Assuming you have cloned this repo, and you are in a Python virtual
+environment, the watch repo can be setup as:
+
+.. code:: bash
+
+   # Update Python build tools
+   python -m pip install pip setuptools wheel build -U
+
+   # Install Kitware's gdal wheels
+   python -m pip install GDAL==3.4.1 --find-links https://girder.github.io/large_image_wheels -U
+
+   # Install linting tools
+   pip install -r requirements/linting.txt
+
+   # Install the main watch package with all development extras
+   pip install -e .[development,optional,headless]
+
+
 Internal Development
 --------------------
 
 For internal collaberators, please refer to the `internal docs <docs/internal_resources.rst>`_ 
+
+
+Also see:
+
+https://gitlab.kitware.com/smart/watch/-/wikis/Resource-Clearinghouse
 
 
 Module Structure

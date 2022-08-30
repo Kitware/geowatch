@@ -202,7 +202,6 @@ REQUIREMENTS = (
 EXTRAS_REQUIRES = {
     'all': parse_requirements('requirements.txt'),
     'development': parse_requirements('requirements/development.txt'),
-    'problematic': parse_requirements('requirements/problematic.txt'),
     'optional': parse_requirements('requirements/optional.txt'),
     # Really annoying that this is the best we can do
     # The user *must* choose either headless or graphics
@@ -212,7 +211,6 @@ EXTRAS_REQUIRES = {
     'all-strict': parse_requirements('requirements.txt', versions='strict'),
     'runtime-strict': parse_requirements('requirements/runtime.txt', versions='strict'),
     'development-strict': parse_requirements('requirements/development.txt', versions='strict'),
-    'problematic-strict': parse_requirements('requirements/problematic.txt', versions='strict'),
     'optional-strict': parse_requirements('requirements/optional.txt', versions='strict'),
     # Really annoying that this is the best we can do
     # The user *must* choose either headless or graphics

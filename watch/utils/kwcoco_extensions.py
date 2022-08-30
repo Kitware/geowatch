@@ -434,6 +434,9 @@ def _populate_valid_region(coco_img):
     bundle_dpath = coco_img.bundle_dpath
     img = coco_img.img
     primary_obj = coco_img.primary_asset()
+    if primary_obj is None:
+        warnings.warn('No primary asset found for img={}'.format(img))
+        return
     primary_fname = primary_obj.get('file_name', None)
 
     primary_fpath = join(bundle_dpath, primary_fname)

@@ -406,7 +406,7 @@ python -m watch.tasks.fusion.fit \
 
 #### On Ooo
 export CUDA_VISIBLE_DEVICES=1
-PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware='ssd')
+PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data")
 PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 TRAIN_FNAME=data_train.kwcoco.json
@@ -418,7 +418,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/$TRAIN_FNAME
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/$VALI_FNAME
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=noop
-EXPERIMENT_NAME=Drop4_BAS_BGR_15GSD_multihead_V009
+EXPERIMENT_NAME=Drop4_BAS_BGR_10GSD_multihead_V009
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
@@ -438,8 +438,8 @@ python -m watch.tasks.fusion.fit \
     --class_loss='dicefocal' \
     --change_loss='dicefocal' \
     --dist_weights=0 \
-    --space_scale="15GSD" \
-    --window_space_scale="15GSD" \
+    --space_scale="10GSD" \
+    --window_space_scale="10GSD" \
     --chip_dims=128,128 \
     --time_steps=8 \
     --batch_size=4 \
@@ -447,9 +447,8 @@ python -m watch.tasks.fusion.fit \
     --class_head_hidden=4 \
     --stream_channels=32 \
     --saliency_head_hidden=4 \
-    --accumulate_grad_batches=4 \
+    --accumulate_grad_batches=1 \
     --max_epoch_length=8048 \
     --max_epochs=240 \
     --patience=240 \
-    --backbone_depth=8 \
     --decouple_resolution=0
