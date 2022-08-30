@@ -53,24 +53,6 @@ we only use conda to install the Python binaries. We exclusively use pip to
 manage packages.
 
 
-Non-Python Requirements
-~~~~~~~~~~~~~~~~~~~~~~~
-
-There are several binary libraries that some components of the watch module
-might assume exist, but don't have Python distributions. These are:
-
-* ffmpeg - for making animated gifs
-* tmux - for the tmux queue (to be replaced by slurm)
-* jq - for special kwcoco json queries
-
-
-On Debian-based systems install these via:
-
-.. code:: bash
-
-   sudo apt install ffmpeg tmux jq
-
-
 Docker Image
 ~~~~~~~~~~~~
 
@@ -91,7 +73,25 @@ To build the pyenv Docker image:
 
     docker login
     docker pull docker/dockerfile:1.3.0-labs
-    DOCKER_BUILDKIT=1 docker build --progress=plain -t "watch_pyenv310" -f ./dockerfiles/pyenv.Dockerfile --build-arg BUILD_STRICT=1 .
+    DOCKER_BUILDKIT=1 docker build --progress=plain -t "watch_pyenv310" -f ./dockerfiles/pyenv.Dockerfile .
+
+
+Non-Python Requirements
+~~~~~~~~~~~~~~~~~~~~~~~
+
+There are several binary libraries that some components of the watch module
+might assume exist, but don't have Python distributions. These are:
+
+* ffmpeg - for making animated gifs
+* tmux - for the tmux queue (to be replaced by slurm)
+* jq - for special kwcoco json queries
+
+
+On Debian-based systems install these via:
+
+.. code:: bash
+
+   sudo apt install ffmpeg tmux jq
 
 
 Installing
@@ -103,10 +103,10 @@ environment, the watch repo can be setup as:
 .. code:: bash
 
    # Update Python build tools
-   python -m pip install pip setuptools wheel build -U
+   pip install pip setuptools wheel build -U
 
    # Install Kitware's gdal wheels
-   python -m pip install GDAL==3.4.1 --find-links https://girder.github.io/large_image_wheels -U
+   pip install -r requirements/gdal.txt
 
    # Install linting tools
    pip install -r requirements/linting.txt
@@ -119,11 +119,6 @@ Internal Development
 --------------------
 
 For internal collaberators, please refer to the `internal docs <docs/internal_resources.rst>`_ 
-
-
-Also see:
-
-https://gitlab.kitware.com/smart/watch/-/wikis/Resource-Clearinghouse
 
 
 Module Structure
@@ -224,7 +219,6 @@ Using ``--help`` shows the top level modal CLI:
             coco_extract_geo_bounds
                                 Extract bounds of geojson tiffs (in a kwcoco file) into a regions file
             geotiffs_to_kwcoco  Create a kwcoco manifest of a set of on-disk geotiffs
-            hello_world         opaque sub command
             watch_coco_stats (stats)
                                 Print watch-relevant information about a kwcoco dataset
             merge_region_models
@@ -243,6 +237,7 @@ Using ``--help`` shows the top level modal CLI:
                                 opaque sub command
             torch_model_stats (model_info)
                                 Print stats about a torch model.
+
 
         optional arguments:
           -h, --help            show this help message and exit
@@ -276,7 +271,6 @@ repository maintenence.
 
 
 .. _development environment: https://algorithm-toolkit.readthedocs.io/en/latest/dev-environment.html#
-.. _atk docs: https://algorithm-toolkit.readthedocs.io/en/latest/index.html
 
 .. |master-pipeline| image:: https://gitlab.kitware.com/smart/watch/badges/master/pipeline.svg
    :target: https://gitlab.kitware.com/smart/watch/-/pipelines/master/latest

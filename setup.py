@@ -218,6 +218,8 @@ EXTRAS_REQUIRES = {
     'headless-strict': parse_requirements('requirements/headless.txt', versions='strict'),
     'graphics-strict': parse_requirements('requirements/graphics.txt', versions='strict'),
 }
+# import ubelt as ub
+# print('EXTRAS_REQUIRES = {}'.format(ub.repr2(EXTRAS_REQUIRES, nl=2)))
 
 
 if __name__ == '__main__':
