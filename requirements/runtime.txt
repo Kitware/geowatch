@@ -31,6 +31,12 @@ jq>=1.2.1  ;  python_version <  '3.10'    # Python 3.8
 pyproj>=3.3.1  ;  python_version >= '3.10'    # Python 3.10+ 
 pyproj>=3.2.1  ;  python_version <  '3.10'    # Python 3.8
 
+pyproj>=0.13    ;  python_version >= '3.10'    # Python 3.10+ 
+pygeos>=0.10.2  ;  python_version <  '3.10'    # Python 3.8
+
+fiona>=1.8.21 ;  python_version >= '3.10'    # Python 3.10+ 
+fiona>=1.8.20 ;  python_version <  '3.10'    # Python 3.8
+
 
 # Numeric
 kwarray>=0.6.3
@@ -101,10 +107,8 @@ seaborn>=0.11.1
 geopandas>=0.10.2
 utm>=0.7.0
 rtree>=0.9.7
-pygeos>=0.10.2
 rgd_imagery_client>=0.2.7
 rgd_client>=0.2.7
-fiona>=1.8.20
 geojson>=2.5.0
 mgrs>=1.4.2
 
