@@ -535,7 +535,7 @@ class ExperimentState(ub.NiceRepr):
         self.versioned_templates = {
             # TODO: rename curves to pixel
             'pkg': 'packages/{expt}/{model}.pt',
-            'eval_pxl': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/curves/measures2.json',
+            'eval_pxl': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/eval_pxl/curves/measures2.json',
             'eval_trk': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
             'eval_act': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
         }
