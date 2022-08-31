@@ -192,7 +192,7 @@ The following is a list of the primary CLI commands:
 
 * ``smartwatch find_dvc --help`` - Helper to return the path the the WATCH DVC Repo (if it is a known location)
 
-* ``smartwatch watch_coco_stats --help`` - Print statistics about a kwcoco file with a focus on sensor / channel frequency and region information.
+* ``smartwatch stats --help`` - Print statistics about a kwcoco file with a focus on sensor / channel frequency and region information.
 
 * ``smartwatch coco_intensity_histograms --help`` - Show per-band / per-sensor histograms of pixel intensities. This is useful for acessing the harmonization between sensors. 
 

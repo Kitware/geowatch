@@ -8,34 +8,37 @@ output if you run this should end with something like
 source ~/code/watch/watch/tasks/fusion/experiments/crall/toy_experiments_msi.sh
 """
 
+# Define wherever you want to store results
+DVC_DATA_DPATH=$HOME/data/dvc-repos/toy_data_dvc
+DVC_EXPT_DPATH=$HOME/data/dvc-repos/toy_expt_dvc
+
 NUM_TOY_TRAIN_VIDS="${NUM_TOY_TRAIN_VIDS:-100}"  # If variable not set or null, use default.
 NUM_TOY_VALI_VIDS="${NUM_TOY_VALI_VIDS:-5}"  # If variable not set or null, use default.
 NUM_TOY_TEST_VIDS="${NUM_TOY_TEST_VIDS:-2}"  # If variable not set or null, use default.
 
 # Generate toy datasets
-TOY_DATA_DPATH=$HOME/data/work/toy_change
-TRAIN_FPATH=$TOY_DATA_DPATH/vidshapes_msi_train${NUM_TOY_TRAIN_VIDS}/data.kwcoco.json
-VALI_FPATH=$TOY_DATA_DPATH/vidshapes_msi_vali${NUM_TOY_VALI_VIDS}/data.kwcoco.json
-TEST_FPATH=$TOY_DATA_DPATH/vidshapes_msi_test${NUM_TOY_TEST_VIDS}/data.kwcoco.json 
+TRAIN_FPATH=$DVC_DATA_DPATH/vidshapes_msi_train${NUM_TOY_TRAIN_VIDS}/data.kwcoco.json
+VALI_FPATH=$DVC_DATA_DPATH/vidshapes_msi_vali${NUM_TOY_VALI_VIDS}/data.kwcoco.json
+TEST_FPATH=$DVC_DATA_DPATH/vidshapes_msi_test${NUM_TOY_TEST_VIDS}/data.kwcoco.json 
 
 generate_data(){
-    mkdir -p "$TOY_DATA_DPATH"
+    mkdir -p "$DVC_DATA_DPATH"
 
-    kwcoco toydata --key="vidshapes-videos${NUM_TOY_TRAIN_VIDS}-frames5-randgsize-speed0.2-msi-multisensor" \
-        --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_train${NUM_TOY_TRAIN_VIDS}" --verbose=0
+    kwcoco toydata --key="vidshapes${NUM_TOY_TRAIN_VIDS}-frames5-randgsize-speed0.2-msi-multisensor" \
+        --bundle_dpath "$DVC_DATA_DPATH/vidshapes_msi_train${NUM_TOY_TRAIN_VIDS}" --verbose=4
 
-    kwcoco toydata --key="vidshapes-videos${NUM_TOY_VALI_VIDS}-frames5-randgsize-speed0.2-msi-multisensor" \
-        --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_vali${NUM_TOY_VALI_VIDS}"  --verbose=0
+    kwcoco toydata --key="vidshapes${NUM_TOY_VALI_VIDS}-frames5-randgsize-speed0.2-msi-multisensor" \
+        --bundle_dpath "$DVC_DATA_DPATH/vidshapes_msi_vali${NUM_TOY_VALI_VIDS}"  --verbose=0
 
-    kwcoco toydata --key="vidshapes-videos${NUM_TOY_TEST_VIDS}-frames6-randgsize-speed0.2-msi-multisensor" \
-        --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_test${NUM_TOY_TEST_VIDS}" --verbose=0
+    kwcoco toydata --key="vidshapes${NUM_TOY_TEST_VIDS}-frames6-randgsize-speed0.2-msi-multisensor" \
+        --bundle_dpath "$DVC_DATA_DPATH/vidshapes_msi_test${NUM_TOY_TEST_VIDS}" --verbose=0
 }
 
 
 print_stats(){
     # Print stats
-    python -m kwcoco stats "$TRAIN_FPATH" "$VALI_FPATH" "$TEST_FPATH"
-    python -m watch stats "$TRAIN_FPATH" "$VALI_FPATH" "$TEST_FPATH"
+    kwcoco stats "$TRAIN_FPATH" "$VALI_FPATH" "$TEST_FPATH"
+    smartwatch stats "$TRAIN_FPATH" "$VALI_FPATH" "$TEST_FPATH"
 }
 
 if [[ ! -e "$TRAIN_FPATH" ]]; then
@@ -54,7 +57,7 @@ Should look like
 
 
 demo_visualize_toydata(){
-    kwcoco toydata --key=vidshapes-videos1-frames5-speed0.001-msi --bundle_dpath "$(realpath ./tmp)" --verbose=5 --use_cache=False
+    kwcoco toydata --key=vidshapes1-frames5-speed0.001-msi --bundle_dpath "$(realpath ./tmp)" --verbose=5 --use_cache=False
     python -m watch.cli.coco_visualize_videos \
         --src "$(realpath ./tmp/data.kwcoco.json)" \
         --channels="B1|B8|b" \
@@ -62,9 +65,9 @@ demo_visualize_toydata(){
         --animate=True
 
     python -m watch.cli.coco_visualize_videos \
-        --src "$TOY_DATA_DPATH/vidshapes_msi_train100/data.kwcoco.json" \
+        --src "$DVC_DATA_DPATH/vidshapes_msi_train100/data.kwcoco.json" \
         --channels="gauss|B11,r|g|b,B1|B8|B11" \
-        --viz_dpath="$TOY_DATA_DPATH/vidshapes_msi_train100/_viz" --animate=True
+        --viz_dpath="$DVC_DATA_DPATH/vidshapes_msi_train100/_viz" --animate=True
 }
 
 
@@ -77,8 +80,8 @@ function join_by {
 }
 
 
+# Define the arch and channels we want to use
 ARCH=smt_it_stm_p8
-
 STREAMS=(
     "disparity|gauss"
     "X.2|Y:2:6"
@@ -88,36 +91,13 @@ STREAMS=(
 CHANNELS=$(join_by , "${STREAMS[@]}")
 echo "CHANNELS = $CHANNELS"
 
-EXPERIMENT_NAME=ToyFusion_${ARCH}_v001
-DATASET_NAME=ToyDataMSI
 
-# Place training inside of our DVC directory
-echo "Query for train directory"
-DVC_DPATH=$(smartwatch_dvc)
-echo "Finished query for train directory"
+DATASET_CODE=ToyDataMSI
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 
-WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
-DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_NAME/runs/$EXPERIMENT_NAME
-
-# Specify the expected input / output files
-PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package.pt 
-
-SUGGESTIONS=$(
-    python -m watch.tasks.fusion.organize suggest_paths  \
-        --package_fpath="$PACKAGE_FPATH"  \
-        --test_dataset="$TEST_FPATH")
-
-PRED_FPATH="$(echo "$SUGGESTIONS" | jq -r .pred_dataset)"
-EVAL_DPATH="$(echo "$SUGGESTIONS" | jq -r .eval_dpath)"
-
-TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/train_$EXPERIMENT_NAME.yml 
-PRED_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/predict_$EXPERIMENT_NAME.yml 
-
-#export CUDA_VISIBLE_DEVICES="0"
-
-# Configure training hyperparameters
+# Configure training hyperparameters to a baseline config file
+TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/train_$EXPERIMENT_NAME.yml 
 python -m watch.tasks.fusion.fit \
-    --name="$EXPERIMENT_NAME" \
     --channels="$CHANNELS" \
     --method=MultimodalTransformer \
     --arch_name=$ARCH \
@@ -134,21 +114,18 @@ python -m watch.tasks.fusion.fit \
     --global_class_weight=1.0 \
     --time_sampling=soft2 \
     --time_span=1y \
-    --gpus=1 \
+    --devices='auto' \
     --accumulate_grad_batches=1 \
     --dump="$TRAIN_CONFIG_FPATH"
 
-# Configure prediction hyperparams
-python -m watch.tasks.fusion.predict \
-    --gpus=1 \
-    --write_preds=True \
-    --write_probs=True \
-    --dump="$PRED_CONFIG_FPATH"
-
-
 # Fit 
+# Specify the expected input / output files
+EXPERIMENT_NAME=ToyFusion_${ARCH}_v001
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package.pt 
 python -u -m watch.tasks.fusion.fit \
            --config="$TRAIN_CONFIG_FPATH" \
+    --name="$EXPERIMENT_NAME" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
        --package_fpath="$PACKAGE_FPATH" \
         --train_dataset="$TRAIN_FPATH" \
@@ -158,6 +135,8 @@ python -u -m watch.tasks.fusion.fit \
 
 
 demo_force_repackage(){
+    # TODO: the new watch.mlops tool will need to handle this soon.
+
     # NOTE: The above fit script might not produce the "best" checkpoint as the
     # final output package. To evaluate a different checkpoint it must first be
     # packaged.  (note this can be done while training is running so
@@ -176,9 +155,21 @@ demo_force_repackage(){
     echo "PACKAGE_FPATH = $PACKAGE_FPATH"
 }
 
+
+# TODO: update to the watch.mlops version of this 
+# The "suggest" tool will determine paths that will help keep experimental
+# results organized and separated from one another. 
+SUGGESTIONS=$(
+    python -m watch.tasks.fusion.organize suggest_paths  \
+        --package_fpath="$PACKAGE_FPATH"  \
+        --test_dataset="$TEST_FPATH")
+PRED_FPATH="$(echo "$SUGGESTIONS" | jq -r .pred_dataset)"
+EVAL_DPATH="$(echo "$SUGGESTIONS" | jq -r .eval_dpath)"
+
 # Predict using one of the packaged models
 python -m watch.tasks.fusion.predict \
-        --config="$PRED_CONFIG_FPATH" \
+        --write_preds=True \
+        --write_probs=True \
         --test_dataset="$TEST_FPATH" \
        --package_fpath="$PACKAGE_FPATH" \
         --pred_dataset="$PRED_FPATH" \
