@@ -152,6 +152,10 @@ def update_expt_ignores():
         models/fusion/*/eval/*/*/*/*/eval/eval_pxl/heatmaps
         models/fusion/*/eval/*/*/*/*/eval/tracking/*/iarpa_eval/tmp
         models/fusion/*/eval/*/*/*/*/eval/actclf/*/iarpa_sc_eval
+
+        # Hack for now
+        models/fusion/*/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/*_R0*
+        models/fusion/*/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/*.pkl
         ''')
 
     dvc_expt_dpath = watch.find_dvc_dpath(tags='phase2_expt')

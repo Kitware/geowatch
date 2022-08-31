@@ -267,7 +267,7 @@ def main(cmdline=True, **kw):
         >>>     'src': coco_dset,
         >>>     'dst': dst,
         >>>     'regions': 'annots',
-        >>>     'max_workers': 0,
+        >>>     'max_workers': 0
         >>>     'aux_workers': 0,
         >>> }
         >>> cmdline = False
@@ -278,18 +278,40 @@ def main(cmdline=True, **kw):
         >>> from watch.cli.coco_align_geotiffs import *  # NOQA
         >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
         >>> coco_dset = demo_kwcoco_with_heatmaps(num_videos=2, num_frames=2)
+        >>> dpath = ub.Path.appdir('watch/test/coco_align_geotiff2').ensuredir()
+        >>> dst = (dpath / 'align_bundle2').delete().ensuredir()
+        >>> # Create a dummy region file to crop to.
+        >>> first_img = coco_dset.images().take([0]).coco_images[0]
+        >>> from osgeo import gdal
+        >>> first_fpath = first_img.primary_image_filepath()
+        >>> geo_poly = kwimage.Polygon.coerce(gdal.Info(first_fpath, format='json')['wgs84Extent'])
+        >>> region_shape = kwimage.Polygon.random(n=8, convex=False, rng=3)
+        >>> geo_transform = kwimage.Affine.fit(region_shape.bounding_box().corners(), geo_poly.bounding_box().corners())
+        >>> region_poly = region_shape.warp(geo_transform)
+        >>> import geojson
+        >>> import json
+        >>> region_feature = geojson.Feature(
+        >>>     properties={
+        >>>         "type": "region",
+        >>>         "region_id": "DUMMY_R042",
+        >>>         "start_date": '1970-01-01',
+        >>>         "end_date":  '2970-01-01',
+        >>>     },
+        >>>     geometry=region_poly.to_geojson(),
+        >>> )
+        >>> region = geojson.FeatureCollection([region_feature])
+        >>> region_fpath = dst / 'dummy_region.geojson'
+        >>> region_fpath.write_text(json.dumps(region))
         >>> # Create arguments to the script
-        >>> dpath = ub.ensure_app_cache_dir('watch/test/coco_align_geotiff2')
-        >>> dst = ub.ensuredir((dpath, 'align_bundle2'))
-        >>> ub.delete(dst)
         >>> kw = {
         >>>     'src': coco_dset,
         >>>     'dst': dst,
-        >>>     'regions': 'annots',
+        >>>     'regions': region_fpath,
         >>>     'max_workers': 0,
         >>>     'aux_workers': 0,
         >>>     'visualize': 1,
         >>>     'debug_valid_regions': True,
+        >>>     'target_gsd': 0.7,
         >>> }
         >>> cmdline = False
         >>> new_dset = main(cmdline, **kw)
@@ -304,9 +326,10 @@ def main(cmdline=True, **kw):
 
         >>> # Test that the input dataset visualizes ok
         >>> from watch.cli import coco_visualize_videos
+        >>> viz_dpath = (dpath / 'viz_input_align_bundle2').ensuredir()
         >>> coco_visualize_videos.main(cmdline=False, **{
-        >>>     'src': coco_dset,
-        >>>     'viz_dpath': ub.ensuredir((dpath, 'viz_input_align_bundle2')),
+        >>>     'src': new_dset,
+        >>>     'viz_dpath': viz_dpath,
         >>> })
 
         print(ub.cmd(['gdalinfo', parent_fpath])['out'])
@@ -328,6 +351,9 @@ def main(cmdline=True, **kw):
         # If the dataset was given in memory we don't know the path and we cant
         # always serialize it, so we punt and mark it as such
         config_dict['src'] = ':memory:'
+
+    from kwcoco.util.util_json import ensure_json_serializable
+    config_dict = ensure_json_serializable(config_dict)
 
     process_info = {
         'type': 'process',
@@ -442,9 +468,10 @@ def main(cmdline=True, **kw):
     print('query region_df =\n{}'.format(region_df))
     print('cube.img_geos_df =\n{}'.format(cube.img_geos_df))
 
-    # Exapnd the ROI by the context factor and convert to a bounding box
-    region_df['geometry'] = region_df['geometry'].apply(shapely_bounding_box)
+    # Convert the ROI to a bounding box
+    # region_df['geometry'] = region_df['geometry'].apply(shapely_bounding_box)
     if context_factor != 1:
+        # Exapnd the ROI by the context factor
         region_df['geometry'] = region_df['geometry'].scale(
             xfact=context_factor, yfact=context_factor, origin='center')
 
@@ -459,9 +486,7 @@ def main(cmdline=True, **kw):
     ]
     to_extract = cube.query_image_overlaps(region_df)
 
-    # SUPER HACK TODO: We could remove channels we don't care about.
     for image_overlaps in ub.ProgIter(to_extract, desc='extract ROI videos', verbose=3):
-        # tracker.print_diff()
         video_name = image_overlaps['video_name']
         print('video_name = {!r}'.format(video_name))
 
@@ -899,8 +924,11 @@ class SimpleDataCube(object):
         latmin, lonmin, latmax, lonmax = space_box.data[0]
         datetimes = sorted(datetime_to_gids)
 
+        valid_region_geos = space_region.to_geojson()
+
         new_video = {
             'name': video_name,
+            'valid_region_geos': valid_region_geos,
             'properties': video_props,
         }
         new_video = ensure_json_serializable(new_video)
@@ -1213,7 +1241,10 @@ class SimpleDataCube(object):
         #     raise AssertionError('unserializable = {}'.format(ub.repr2(unserializable, nl=1)))
 
         if visualize:
-            for new_gid in ub.ProgIter(sub_new_gids, desc='visualizing'):
+            new_video = new_dset.index.videos[new_vidid]
+            local_max_frame = len(sub_new_gids)
+            valid_vidspace_region = new_video.get('valid_region', None)
+            for frame_idx, new_gid in enumerate(ub.ProgIter(sub_new_gids, desc='visualizing')):
                 new_img = new_dset.imgs[new_gid]
                 new_anns = new_dset.annots(gid=new_gid).objs
                 viz_dpath = ub.Path(sub_bundle_dpath) / '_viz'
@@ -1231,6 +1262,9 @@ class SimpleDataCube(object):
                     channels=channels_,
                     sub_dpath=viz_dpath, space='video',
                     request_grouped_bands=request_grouped_bands,
+                    local_frame_index=frame_idx,
+                    local_max_frame=local_max_frame,
+                    valid_vidspace_region=valid_vidspace_region,
                     # verbose=3
                 )
 

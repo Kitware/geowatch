@@ -22,6 +22,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Changed defaults of ignore_dilate to 0
 * Improved the `smartwatch_dvc` registry system.
 * Using scriptconfig and key/value arguments for `run_metrics_framework`
+* The coco align geotiff now populates the `valid_region` for each video based
+  on the query region in video space. The visualize video script will respect this.
 
 ### Removed
 * Removed support for `score_args` from kwcoco-to-geojson
