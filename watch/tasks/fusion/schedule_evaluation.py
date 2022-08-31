@@ -254,29 +254,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
     print(f'dvc_expt_dpath={dvc_expt_dpath}')
     print(f'dvc_data_dpath={dvc_data_dpath}')
 
-    HISTORICAL_MODELS_OF_INTEREST = [
-        # 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_cs64_t5_perframe_rgb_v30/SC_smt_it_stm_p8_newanns_cs64_t5_perframe_rgb_v30_epoch=29-step=1284389.pt',
-        dvc_expt_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_cs64_t5_perframe_rgb_v30/SC_smt_it_stm_p8_newanns_cs64_t5_perframe_rgb_v30_epoch=29-step=1284389.pt',
-        dvc_expt_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v39/SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=52-step=2269088.pt',
-        dvc_expt_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_centerannot_raw_v42/SC_smt_it_stm_p8_centerannot_raw_v42_epoch=5-step=89465.pt',
-        dvc_expt_dpath / 'models/fusion/SC-20201117/BAS_smt_it_stm_p8_L1_raw_v53/BAS_smt_it_stm_p8_L1_raw_v53_epoch=15-step=340047.pt',
-        dvc_expt_dpath / 'models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819.pt',
-    ]
-
-    # REMOVE:
-    HARDCODED = list(map(ub.Path, [
-        dvc_expt_dpath / 'models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=1-step=17305.pt',
-        dvc_expt_dpath / 'models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=4-step=43264.pt',
-        dvc_expt_dpath / 'models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917.pt',
-        dvc_expt_dpath / 'models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=30-step=268242.pt',
-        dvc_expt_dpath / 'models/fusion/SC-20201117/BAS_TA1_KOREA_v083/BAS_TA1_KOREA_v083_epoch=3-step=7459.pt',
-        dvc_expt_dpath / 'models/fusion/SC-20201117/BAS_TA1_KOREA_v083/BAS_TA1_KOREA_v083_epoch=4-step=9324.pt',
-        dvc_expt_dpath / 'models/fusion/SC-20201117/BAS_TA1_KOREA_v083/BAS_TA1_KOREA_v083_epoch=5-step=11189.pt',
-        dvc_expt_dpath / 'models/fusion/SC-20201117/BAS_TA1_c001_v076/BAS_TA1_c001_v076_epoch=90-step=186367.pt',
-        dvc_expt_dpath / 'models/fusion/SC-20201117/BAS_TA1_c001_v076/BAS_TA1_c001_v076_epoch=12-step=26623.pt',
-        dvc_expt_dpath / 'models/fusion/SC-20201117/BAS_TA1_c001_v082/BAS_TA1_c001_v082_epoch=42-step=88063.pt',
-    ]))
-
     with_saliency = 'auto'
     with_class = 'auto'
 
@@ -317,36 +294,25 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     packages_to_eval = []
     import glob
-    if model_globstr == 'special:HISTORY':
-        for package_fpath in HISTORICAL_MODELS_OF_INTEREST:
-            assert package_fpath.exists()
-            package_info = package_metadata(ub.Path(package_fpath))
-            packages_to_eval.append(package_info)
-    elif model_globstr == 'special:HARDCODED':
-        for package_fpath in HARDCODED:
-            assert package_fpath.exists(), f'{package_fpath}'
-            package_info = package_metadata(ub.Path(package_fpath))
-            packages_to_eval.append(package_info)
-    else:
-        print('model_globstr = {!r}'.format(model_globstr))
-        package_fpaths = []
-        for package_fpath in glob.glob(model_globstr, recursive=True):
-            package_fpath = ub.Path(package_fpath)
-            if package_fpath.name.endswith('.txt'):
-                # HACK FOR PATH OF MODELS
-                model_lists_fpath = package_fpath
-                expanded_fpaths = expand_model_list_file(model_lists_fpath, dvc_expt_dpath=dvc_expt_dpath)
-                package_fpaths.extend(expanded_fpaths)
-            else:
-                package_fpaths.append(package_fpath)
+    print('model_globstr = {!r}'.format(model_globstr))
+    package_fpaths = []
+    for package_fpath in glob.glob(model_globstr, recursive=True):
+        package_fpath = ub.Path(package_fpath)
+        if package_fpath.name.endswith('.txt'):
+            # HACK FOR PATH OF MODELS
+            model_lists_fpath = package_fpath
+            expanded_fpaths = expand_model_list_file(model_lists_fpath, dvc_expt_dpath=dvc_expt_dpath)
+            package_fpaths.extend(expanded_fpaths)
+        else:
+            package_fpaths.append(package_fpath)
 
-        for package_fpath in package_fpaths:
-            package_info = package_metadata(package_fpath)
-            packages_to_eval.append(package_info)
+    for package_fpath in package_fpaths:
+        package_info = package_metadata(package_fpath)
+        packages_to_eval.append(package_info)
 
-        if len(packages_to_eval) == 0:
-            if '*' not in str(model_globstr):
-                packages_to_eval.append(package_metadata(ub.Path(model_globstr)))
+    if len(packages_to_eval) == 0:
+        if '*' not in str(model_globstr):
+            packages_to_eval.append(package_metadata(ub.Path(model_globstr)))
 
     print(f'{len(packages_to_eval)=}')
 
@@ -356,22 +322,13 @@ def schedule_evaluation(cmdline=False, **kwargs):
     devices = config['devices']
     print('devices = {!r}'.format(devices))
     if devices == 'auto':
-        # Use all unused devices
-        import netharn as nh
-        GPUS = []
-        for gpu_idx, gpu_info in nh.device.gpu_info().items():
-            print('gpu_idx = {!r}'.format(gpu_idx))
-            print('gpu_info = {!r}'.format(gpu_info))
-            if len(gpu_info['procs']) == 0:
-                GPUS.append(gpu_idx)
+        GPUS = _auto_gpus()
     else:
         GPUS = None if devices is None else ensure_iterable(devices)
-
     print('GPUS = {!r}'.format(GPUS))
-    environ = {
-    }
 
     import cmd_queue
+    environ = {}
     queue = cmd_queue.Queue.create(config['backend'], name='schedule-eval',
                                    size=len(GPUS), environ=environ,
                                    dpath=queue_dpath, gres=GPUS)
@@ -386,11 +343,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
     pred_cfg_basis['chip_overlap'] = ensure_iterable(config['chip_overlap'])
     pred_cfg_basis['set_cover_algo'] = ensure_iterable(config['set_cover_algo'])
 
-    HACK_HACKHACK = 0
-
-    num_skiped_via_alternatives = 0
-
-    other_existing_pred_infos = []
     expanded_packages_to_eval = []
     for raw_info in packages_to_eval:
         for pred_cfg in ub.named_product(pred_cfg_basis):
@@ -418,43 +370,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             info['suggestions'] = suggestions
             info['pred_cfg'] = pred_cfg
 
-            if HACK_HACKHACK:
-                # The idea is we just want to schedule eval jobs
-                # for predictions that exist without having to remember
-                # the parent model / dataset.
-                pred_dpath = ub.Path(suggestions['pred_dpath'])
-                other_dset_pred_dpath = pred_dpath.parent
-                has_any_other = 0
-                if other_dset_pred_dpath.exists():
-                    for other_pred_fpath in other_dset_pred_dpath.glob('*/pred.kwcoco.json'):
-                        has_any_other = 1
-                        eval_dpath = ub.Path(
-                            *other_pred_fpath.parts[:-6],
-                            'eval', *other_pred_fpath.parts[-5:-1], 'eval')
-                        other_info = {
-                            'package_fpath': package_fpath,
-                            'pred_dataset': other_pred_fpath,
-                            'pred_cfgstr': other_pred_fpath.parent.name.split('_')[1],
-                            'package_cfgstr': suggestions['package_cfgstr'],
-                            'eval_dpath': eval_dpath,
-                        }
-                        other_existing_pred_infos.append(other_info)
-
-                if ub.argflag('--without_alternatives'):
-                    if has_any_other:
-                        num_skiped_via_alternatives += 1
-                        continue
-
             expanded_packages_to_eval.append(info)
-
-    if HACK_HACKHACK:
-        existing_expanded = []
-        for info in expanded_packages_to_eval:
-            pred_fpath = ub.Path(info['suggestions']['pred_dataset'])
-            if pred_fpath.exists():
-                existing_expanded.append(info)
-        print(f'{len(existing_expanded)=}')
-        print(f'{len(other_existing_pred_infos)=}')
 
     skip_existing = config['skip_existing']
 
@@ -517,8 +433,10 @@ def schedule_evaluation(cmdline=False, **kwargs):
         pred_cfg = info['pred_cfg']
         pred_dataset_fpath = ub.Path(suggestions['pred_dataset'])  # NOQA
         eval_dpath =  ub.Path(suggestions['eval_dpath'])
-        eval_metrics_fpath = eval_dpath / 'curves/measures2.json'
-        eval_metrics_dvc_fpath = ub.Path(suggestions['eval_dpath']) / 'curves/measures2.json.dvc'
+
+        eval_pxl_dpath = eval_dpath / 'eval_pxl'
+        eval_metrics_fpath = eval_pxl_dpath / 'curves/measures2.json'
+        eval_metrics_dvc_fpath = eval_metrics_fpath.augpath(tail='.dvc')
 
         suggestions['eval_metrics'] = eval_metrics_fpath
         suggestions['test_dataset'] = test_dataset_fpath
@@ -620,34 +538,11 @@ def schedule_evaluation(cmdline=False, **kwargs):
             annotations_dpath, common_submitkw, skip_existing,
             region_model_dpath)
 
-    if HACK_HACKHACK and not ub.argflag('--without_alternatives'):
-        for info in other_existing_pred_infos:
-            manager = {}
-            manager['pred'] = {'will_exist': True}
-            # info['package_fpath']
-            package_cfgstr = info['package_cfgstr']
-            pred_cfgstr = info['pred_cfgstr']
-            if pred_cfgstr in seen_predcfg:
-                print('Skip duplicate')
-                continue
-            pred_dataset_fpath = info['pred_dataset']
-            eval_dpath = info['eval_dpath']
-
-            _schedule_track_jobs(
-                queue, manager, config, package_cfgstr, pred_cfgstr,
-                pred_dataset_fpath, eval_dpath, pred_job, with_track,
-                recompute_track, with_iarpa_eval, recompute_iarpa_eval,
-                annotations_dpath, common_submitkw, skip_existing,
-                region_model_dpath)
-            pass
-
     print('queue = {!r}'.format(queue))
     # print(f'{len(queue)=}')
     with_status = 0
     with_rich = 0
     queue.rprint(with_status=with_status, with_rich=with_rich)
-
-    print(f'num_skiped_via_alternatives={num_skiped_via_alternatives}')
 
     # RUN
     if config['run']:
@@ -656,27 +551,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
     else:
         driver_fpath = queue.write()
         print('Wrote script: to run execute:\n{}'.format(driver_fpath))
-    # import xdev
-    # xdev.embed()
-
-    """
-    # Now postprocess script:
-
-    python ~/code/watch/watch/tasks/fusion/organize.py make_eval_symlinks
-
-    ls models/fusion/unevaluated-activity-2021-11-12/eval_links
-
-    cd /home/joncrall/remote/horologic/smart_watch_dvc
-
-    ARR=($(ls -a1 models/fusion/unevaluated-activity-2021-11-12/eval_links/*/curves/measures2.json))
-    for ARG in "${ARR[@]}"; do
-        echo "ARG = $ARG"
-        cat "$ARG" | jq '.ovr_measures[] | with_entries(select(.key | in({"node":1, "ap":1, "auc": 1})))'
-    done
-    print('MEASURE_FPATHS = {!r}'.format(MEASURE_FPATHS))
-    feh models/fusion/unevaluated-activity-2021-11-12/eval_links/*/curves/ovr_roc.png
-    feh models/fusion/unevaluated-activity-2021-11-12/eval_links/*/curves/ovr_ap.png
-    """
 
 
 def _schedule_track_jobs(queue, manager, config, package_cfgstr, pred_cfgstr,
@@ -770,6 +644,7 @@ def _schedule_track_jobs(queue, manager, config, package_cfgstr, pred_cfgstr,
         'use_viterbi': [0],
     }
     if config['hack_sc_grid']:
+        # TODO: remove
         grid = {
             'thresh': [0, 0.01, 0.1],
             # 'use_viterbi': [0],
@@ -841,6 +716,19 @@ def _schedule_track_jobs(queue, manager, config, package_cfgstr, pred_cfgstr,
 
 def ensure_iterable(inputs):
     return inputs if ub.iterable(inputs) else [inputs]
+
+
+def _auto_gpus():
+    # TODO: liberate the needed code from netharn
+    # Use all unused devices
+    import netharn as nh
+    GPUS = []
+    for gpu_idx, gpu_info in nh.device.gpu_info().items():
+        print('gpu_idx = {!r}'.format(gpu_idx))
+        print('gpu_info = {!r}'.format(gpu_info))
+        if len(gpu_info['procs']) == 0:
+            GPUS.append(gpu_idx)
+    return GPUS
 
 
 def package_metadata(package_fpath):

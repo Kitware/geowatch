@@ -145,7 +145,7 @@ def _build_sc_actclf_job(pred_fpath, region_model_dpath, act_out_fpath, actcfg):
 def _build_iarpa_eval_job(track_out_fpath, iarpa_merge_fpath, iarpa_eval_dpath,
                           annotations_dpath, name=None):
     import shlex
-    tmp_dir = iarpa_eval_dpath / 'tmp'
+    tmp_dir = iarpa_eval_dpath / '_tmp'
     out_dir = iarpa_eval_dpath / 'scores'
     command = ub.codeblock(
         fr'''

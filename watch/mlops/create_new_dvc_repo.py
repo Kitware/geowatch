@@ -126,6 +126,32 @@ def update_expt_ignores():
         '''
         training
         emissions.csv
+
+        # We don't track raw predictions.
+        models/fusion/*/pred
+
+        ####
+        # Reference:
+        #
+        # ML-OPS Eval templates look like this
+        #
+        # self.templates = {
+        #     'ckpt'     : '{expt_dvc_dpath}/training/{host}/{user}/{dataset_code}/runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{checkpoint}.ckpt',
+        #     'spkg'     : '{expt_dvc_dpath}/training/{host}/{user}/{dataset_code}/runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{model}.pt',
+        #     'eval_act' : '{expt_dvc_dpath}/models/fusion/{dataset_code}/eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
+        #     'eval_pxl' : '{expt_dvc_dpath}/models/fusion/{dataset_code}/eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/curves/measures2.json',
+        #     'eval_trk' : '{expt_dvc_dpath}/models/fusion/{dataset_code}/eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
+        #     'pkg'      : '{expt_dvc_dpath}/models/fusion/{dataset_code}/packages/{expt}/{model}.pt',
+        #     'pred_act' : '{expt_dvc_dpath}/models/fusion/{dataset_code}/pred/{expt}/{model}/{test_dset}/{pred_cfg}/actclf/{act_cfg}/activity_tracks.json',
+        #     'pred_pxl' : '{expt_dvc_dpath}/models/fusion/{dataset_code}/pred/{expt}/{model}/{test_dset}/{pred_cfg}/pred.kwcoco.json',
+        #     'pred_trk' : '{expt_dvc_dpath}/models/fusion/{dataset_code}/pred/{expt}/{model}/{test_dset}/{pred_cfg}/tracking/{trk_cfg}/tracks.json',
+        # }
+
+        # IARPA metrics will write a temp folder that we should not try to parse
+        models/fusion/*/eval/*/*/*/*/eval/eval_pxl/curves/*.png
+        models/fusion/*/eval/*/*/*/*/eval/eval_pxl/heatmaps
+        models/fusion/*/eval/*/*/*/*/eval/tracking/*/iarpa_eval/tmp
+        models/fusion/*/eval/*/*/*/*/eval/actclf/*/iarpa_sc_eval
         ''')
 
     dvc_expt_dpath = watch.find_dvc_dpath(tags='phase2_expt')
@@ -135,3 +161,9 @@ def update_expt_ignores():
     fpath2.write_text(ignore_text)
 
     ub.cmd(f'git add {fpath1} {fpath2}', cwd=dvc_expt_dpath)
+
+
+def __dvc_notes__():
+    """
+
+    """

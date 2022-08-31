@@ -16,6 +16,8 @@ Example:
     python -m watch.mlops.expt_manager "pull packages evals" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
     python -m watch.mlops.expt_manager "push packages evals"
 
+    python -m watch.mlops.expt_manager "status"
+
     python -m watch.mlops.expt_manager "list"
 
     # On training machine
@@ -481,16 +483,21 @@ class ExperimentState(ub.NiceRepr):
         >>> self.summarize()
 
     Ignore:
+        >>> # Just show patterns:
+        >>> from watch.mlops.expt_manager import *  # NOQA
+        >>> self = ExperimentState('<expt_dpath>', '<dset_code>')
+        >>> print('self.templates = {}'.format(ub.repr2(self.templates, nl=1, sort=0)))
+
+    Ignore:
         table[table.type == 'pkg']['model'].unique()
     """
 
     def __init__(self, expt_dvc_dpath, dataset_code, dvc_remote=None,
                  data_dvc_dpath=None, model_pattern='*'):
-        self.expt_dvc_dpath = expt_dvc_dpath
+        self.expt_dvc_dpath = ub.Path(expt_dvc_dpath)
         self.data_dvc_dpath = data_dvc_dpath
         self.dataset_code = dataset_code
         self.dvc_remote = dvc_remote
-        self.storage_dpath = self.expt_dvc_dpath / 'models/fusion' / dataset_code
         self.training_dpath = self.expt_dvc_dpath / 'training'
         self.patterns = {
             # General
@@ -526,6 +533,7 @@ class ExperimentState(ub.NiceRepr):
         }
 
         self.versioned_templates = {
+            # TODO: rename curves to pixel
             'pkg': 'packages/{expt}/{model}.pt',
             'eval_pxl': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/curves/measures2.json',
             'eval_trk': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
@@ -540,14 +548,16 @@ class ExperimentState(ub.NiceRepr):
         for k, v in self.versioned_templates.items():
             self.templates[k] = self.storage_template_prefix + v
 
-        ub.dict_union(
-            self.staging_templates,
-            self.volitile_templates,
-            self.versioned_templates,
-        )
-
         self.path_patterns = {}
         self._build_path_patterns()
+
+        # These are some locations that I used to know
+        self.legacy_versioned_templates = {
+            (self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/curves',
+             self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/eval_pxl/curves'),
+            (self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/heatmaps',
+             self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/eval_pxl/heatmaps'),
+        }
 
     VERSIONED_COLUMNS = [
         'type', 'has_dvc', 'has_raw', 'needs_pull', 'is_link', 'is_broken',

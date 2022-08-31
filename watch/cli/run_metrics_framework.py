@@ -990,6 +990,9 @@ def _hack_remerge_data():
     """
     Hack to redo the merge with a different F1 maximization criterion
 
+    TODO: it would be nice to have a variant of this script that only performed
+    merging.
+
     DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
     cd "$DVC_DPATH"
     ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json

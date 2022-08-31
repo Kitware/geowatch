@@ -430,7 +430,7 @@ python -m watch.tasks.fusion.fit \
     --init="$INITIAL_STATE" \
     --arch_name=smt_it_joint_p8 \
     --channels="blue|green|red" \
-    --num_workers=5 \
+    --num_workers=3 \
     --global_change_weight=0.75 \
     --global_class_weight=0.30 \
     --global_saliency_weight=1.00 \
