@@ -28,10 +28,10 @@ generate_data(){
         --bundle_dpath "$DVC_DATA_DPATH/vidshapes_msi_train${NUM_TOY_TRAIN_VIDS}" --verbose=4
 
     kwcoco toydata --key="vidshapes${NUM_TOY_VALI_VIDS}-frames5-randgsize-speed0.2-msi-multisensor" \
-        --bundle_dpath "$DVC_DATA_DPATH/vidshapes_msi_vali${NUM_TOY_VALI_VIDS}"  --verbose=0
+        --bundle_dpath "$DVC_DATA_DPATH/vidshapes_msi_vali${NUM_TOY_VALI_VIDS}"  --verbose=4
 
     kwcoco toydata --key="vidshapes${NUM_TOY_TEST_VIDS}-frames6-randgsize-speed0.2-msi-multisensor" \
-        --bundle_dpath "$DVC_DATA_DPATH/vidshapes_msi_test${NUM_TOY_TEST_VIDS}" --verbose=0
+        --bundle_dpath "$DVC_DATA_DPATH/vidshapes_msi_test${NUM_TOY_TEST_VIDS}" --verbose=4
 }
 
 
@@ -71,24 +71,33 @@ demo_visualize_toydata(){
 }
 
 
-function join_by {
-    # https://stackoverflow.com/questions/1527049/how-can-i-join-elements-of-an-array-in-bash
-    local d=${1-} f=${2-}
-    if shift 2; then
-      printf %s "$f" "${@/#/$d}"
-    fi
-}
+#function join_by {
+#    # https://stackoverflow.com/questions/1527049/how-can-i-join-elements-of-an-array-in-bash
+#    local d=${1-} f=${2-}
+#    if shift 2; then
+#      printf %s "$f" "${@/#/$d}"
+#    fi
+#}
+#STREAMS=(
+#    "disparity|gauss"
+#    "X.2|Y:2:6"
+#    "B1|B8a"
+#    "flowx|flowy|distri"
+#)
+#CHANNELS=$(join_by , "${STREAMS[@]}")
 
 
 # Define the arch and channels we want to use
 ARCH=smt_it_stm_p8
-STREAMS=(
-    "disparity|gauss"
-    "X.2|Y:2:6"
-    "B1|B8a"
-    "flowx|flowy|distri"
-)
-CHANNELS=$(join_by , "${STREAMS[@]}")
+# The sensors and channels are specified by the kwcoco SensorChanSpec 
+# in this example the data does not contain sensor metadata, so we 
+# use a "*" to indicate a generic sensor.
+# A colon ":" separates channels from the sensors.
+# A pipe "|" indicates channels are early fused
+# A "," indicates groups of early fused channels are late fused Multiple
+# sensors can be specified to the left of the channels and will distribute over
+# commas.
+CHANNELS="(*):(disparity|gauss,X.2|Y:2:6,B1|B8a,flowx|flowy|distri)"
 echo "CHANNELS = $CHANNELS"
 
 
@@ -115,6 +124,7 @@ python -m watch.tasks.fusion.fit \
     --time_sampling=soft2 \
     --time_span=1y \
     --devices='auto' \
+    --accelerator='auto' \
     --accumulate_grad_batches=1 \
     --dump="$TRAIN_CONFIG_FPATH"
 
@@ -130,7 +140,6 @@ python -u -m watch.tasks.fusion.fit \
        --package_fpath="$PACKAGE_FPATH" \
         --train_dataset="$TRAIN_FPATH" \
          --vali_dataset="$VALI_FPATH" \
-         --test_dataset="$TEST_FPATH" \
           --num_workers="2" || echo "Fit command failed with bad return code"
 
 
