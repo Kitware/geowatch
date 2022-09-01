@@ -522,6 +522,10 @@ class ExperimentState(ub.NiceRepr):
             'stage_model': '*',  # hack, should have ext
         }
 
+        # TODO: the name "fusion" should be a high level task or group not be hard coded.
+        # TODO: the name "models" should be configurable. It's the versioning place.
+        # We could move the pred out of the models subdir
+
         self.staging_template_prefix = '{expt_dvc_dpath}/training/{host}/{user}/{dataset_code}/'
         self.storage_template_prefix = '{expt_dvc_dpath}/models/fusion/{dataset_code}/'
 

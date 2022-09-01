@@ -679,46 +679,5 @@ def _auto_gpus():
     return GPUS
 
 
-def package_metadata(package_fpath):
-    # Hack for choosing one model from this "type"
-    try:
-        epoch_num = int(package_fpath.name.split('epoch=')[1].split('-')[0])
-        expt_name = package_fpath.name.split('_epoch')[0]
-    except Exception:
-        # Try to read package metadata
-        if package_fpath.exists():
-            try:
-                pkg_zip = ub.zopen(package_fpath, ext='.pt')
-                namelist = pkg_zip.namelist()
-            except Exception:
-                print(f'ERROR {package_fpath=} failed to open')
-                raise
-            found = None
-            for member in namelist:
-                # if member.endswith('model.pkl'):
-                if member.endswith('fit_config.yaml'):
-                    found = member
-                    break
-            if not found:
-                raise Exception(f'{package_fpath=} does not conform to name spec and does not seem to be a torch package with a package_header.json file')
-            else:
-                import yaml
-                config_file = ub.zopen(package_fpath / found, mode='r', ext='.pt')
-                config = yaml.safe_load(config_file)
-                expt_name = config['name']
-                # No way to introspect this (yet), so hack it
-                epoch_num = -1
-        else:
-            epoch_num = -1
-            expt_name = package_fpath.name
-
-    info = {
-        'name': expt_name,
-        'epoch': epoch_num,
-        'fpath': package_fpath,
-    }
-    return info
-
-
 if __name__ == '__main__':
     schedule_evaluation(cmdline=True)

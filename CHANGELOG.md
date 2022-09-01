@@ -7,6 +7,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## Version 0.3.5 - Target 2022-09-30
 
 
+### Removed
+* Removed original fusion schedule evaluation code.
+
 
 ## Version 0.3.4 - Finalized 2022-08-31
 
