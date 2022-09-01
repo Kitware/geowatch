@@ -569,7 +569,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                         --true_region_dpath "{true_region_dpath}" \
                         --tmp_dir "{trk_tmp_dpath}" \
                         --out_dir "{trk_score_dpath}" \
-                        --name {shlex.quote(str(name_suffix))} \
+                        --name "{name_suffix}" \
                         --merge_fpath "{trk_eval_fpath}" \
                         --inputs_are_paths=True \
                         --pred_sites={trk_pred_fpath}
@@ -641,7 +641,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                         --true_region_dpath "{true_region_dpath}" \
                         --tmp_dir "{act_tmp_dpath}" \
                         --out_dir "{act_score_dpath}" \
-                        --name {shlex.quote(str(name))} \
+                        --name "{name_suffix}" \
                         --merge_fpath "{act_eval_fpath}" \
                         --inputs_are_paths=True \
                         --pred_sites={track_out_fpath}
