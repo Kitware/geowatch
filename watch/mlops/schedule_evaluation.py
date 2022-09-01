@@ -383,7 +383,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
         # First compute children track, activity rows (todo: refactor to do
         # ealier)
-        trk_rows = []
+        candidate_trk_rows = []
         for trk_cfg in ub.named_product(trk_param_basis):
             pred_trk_row = pred_pxl_row.copy()
             pred_trk_row['condensed'] = condensed = pred_trk_row['condensed'].copy()
@@ -405,9 +405,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
             pred_trk_row['true_site_dpath'] = annotations_dpath / 'site_models'
             pred_trk_row['true_region_dpath'] = annotations_dpath / 'region_models'
             pred_trk_row['trk_cfg'] = trk_cfg
-            trk_rows.append(pred_trk_row)
+            candidate_trk_rows.append(pred_trk_row)
 
-        act_rows = []
+        candidate_act_rows = []
         for act_cfg in ub.named_product(act_param_basis):
             pred_act_row = pred_pxl_row.copy()
             pred_act_row['condensed'] = condensed = pred_act_row['condensed'].copy()
@@ -430,7 +430,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 condensed['pred_cfg'],
                 condensed['act_cfg'],
             ])
-            act_rows.append(pred_act_row)
+            candidate_act_rows.append(pred_act_row)
 
         # Really should make this a class
         manager = {}
@@ -506,7 +506,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 command, depends=pred_job, name=name, cpus=2,
                 **common_submitkw)
 
-        for pred_trk_row in trk_rows:
+        for pred_trk_row in candidate_trk_rows:
             manager['bas_track'] = Task(**{
                 'name': 'bas_track',
                 'requested': with_track,
@@ -548,7 +548,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                         --clear_annots \
                         --out_dir "{pred_tracks_dpath}" \
                         --out_fpath "{trk_pred_fpath}"
-                    ''').format(pred_trk_row)
+                    ''').format(**pred_trk_row)
 
                 command = task_info.prefix_command(command)
                 name = task_info['name'] + pred_trk_row['name_suffix']
@@ -573,7 +573,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                         --merge_fpath "{trk_eval_fpath}" \
                         --inputs_are_paths=True \
                         --pred_sites={trk_pred_fpath}
-                    ''').format(eval_trk_row)
+                    ''').format(**eval_trk_row)
 
                 command = task_info.prefix_command(command)
                 name = task_info['name'] + eval_trk_row['name_suffix']
@@ -582,7 +582,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     **common_submitkw)
                 task_info['job'] = bas_eval_job
 
-        for pred_act_row in act_rows:
+        for pred_act_row in candidate_act_rows:
 
             manager['actclf'] = Task(**{
                 'name': 'actclf',
