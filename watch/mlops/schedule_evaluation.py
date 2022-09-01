@@ -376,9 +376,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
         package_fpath = pred_pxl_row['package_fpath']
         pred_cfg = pred_pxl_row['pred_cfg']
         condensed = pred_pxl_row['condensed']
-        pred_dataset_fpath = ub.Path(pred_pxl_row['pred_dataset_fpath'])
-        eval_pxl_fpath = ub.Path(pred_pxl_row['eval_pxl_fpath'])
-        pred_pxl_row['name_suffix'] = pred_pxl_row['name_suffix'] = '-'.join([
+        pred_pxl_row['name_suffix'] = '-'.join([
             condensed['model'],
             condensed['pred_cfg'],
         ])
@@ -439,7 +437,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
         manager['pred'] = Task(**{
             'name': 'pred',
             'requested': with_pred,
-            'output': pred_dataset_fpath,
+            'output': pred_pxl_row['pred_dataset_fpath'],
             'requires': [],
             'recompute': recompute_pred,
         }, manager=manager, skip_existing=skip_existing)
@@ -447,7 +445,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
         manager['pxl_eval'] = Task(**{
             'name': 'pxl_eval',
             'requested': with_eval,
-            'output': eval_pxl_fpath,
+            'output': pred_pxl_row['eval_pxl_fpath'],
             'requires': ['pred'],
             'recompute': recompute_eval,
         }, manager=manager, skip_existing=skip_existing)
