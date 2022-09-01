@@ -907,16 +907,7 @@ def main(args):
         Clears all annotations before running tracking, so it starts
         from a clean slate.
         '''))
-    # call run_metrics_framework as an optional subcommand
-    # https://stackoverflow.com/a/4575792
-    subparsers = parser.add_subparsers(dest='subparser_name')
-    score_parser = subparsers.add_parser('score',
-                                         help=ub.paragraph('''
-        If set, all regions touched will be scored using the metrics framework.
-        Additional arguments to this script will be passed to:
-            python -m watch.cli.run_metrics_framework --help
-        '''))
-    score_parser.add_argument('score_args', nargs=argparse.REMAINDER)
+
     args = parser.parse_args(args)
 
     print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
@@ -1086,17 +1077,6 @@ def main(args):
             fpaths.append(os.fspath(site_fpath))
             with safer.open(site_fpath, 'w', temp_file=True) as f:
                 geojson.dump(site, f, indent=2)
-
-    if args.subparser_name == 'score':
-        if len(sites) > 0:
-            from watch.cli.run_metrics_framework import main
-            try:
-                args.score_args.remove('--')
-            except ValueError:
-                pass
-            main([json.dumps(site) for site in sites] + args.score_args)
-        else:
-            print('no sites to score!')
 
     # Measure how long tracking takes
     info.append({

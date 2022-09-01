@@ -12,4 +12,4 @@ mkdir -p requirements-strict
 sed 's/>=/==/g' requirements/runtime.txt > requirements-strict/runtime.txt
 sed 's/>=/==/g' requirements/development.txt > requirements-strict/development.txt
 sed 's/>=/==/g' requirements/optional.txt > requirements-strict/optional.txt
-sed 's/>=/==/g' requirements/problematic.txt > requirements-strict/problematic.txt
+sed 's/>=/==/g' requirements/gdal.txt > requirements-strict/gdal.txt

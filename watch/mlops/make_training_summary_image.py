@@ -73,10 +73,10 @@ def main(cmdline=1, **kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        python -m watch.dvc.make_training_summary_image /home/joncrall/remote/horologic/smart_expt_dvc/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/runs/Drop4_SC_RGB_frominvar30_V001/lightning_logs/version_1
+        python -m watch.mlops.make_training_summary_image /home/joncrall/remote/horologic/smart_expt_dvc/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/runs/Drop4_SC_RGB_frominvar30_V001/lightning_logs/version_1
 
-    python -m watch.dvc.make_training_summary_image /home/joncrall/remote/horologic/smart_expt_dvc/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/runs/Drop4_SC_RGB_scratch_V002/lightning_logs/version_0
+    python -m watch.mlops.make_training_summary_image /home/joncrall/remote/horologic/smart_expt_dvc/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/runs/Drop4_SC_RGB_scratch_V002/lightning_logs/version_0
 
-    python -m watch.dvc.make_training_summary_image /home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/runs/Drop4_SC_RGB_from_sc006_V003_cont/lightning_logs/version_2/
+    python -m watch.mlops.make_training_summary_image /home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/runs/Drop4_SC_RGB_from_sc006_V003_cont/lightning_logs/version_2/
     """
     main()

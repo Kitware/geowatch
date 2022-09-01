@@ -4,7 +4,14 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.3.4 - Unreleased
+## Version 0.3.5 - Target 2022-09-30
+
+
+### Removed
+* Removed original fusion schedule evaluation code.
+
+
+## Version 0.3.4 - Finalized 2022-08-31
 
 ### Added
 * New "space_scale" parameter to Dataset such that a specific DATA GSD can be given on the fly
@@ -12,7 +19,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Can now force nodata values in prep ta2 and align script.
 * Perceiver backbone
 * New "window_space_scale" parameter to Dataset that allows a WINDOW GSD to be given on the fly.
-* New "watch.dvc" module for phase2 dvc operations.
+* New "watch.mlops" module for phase2 dvc operations.
 
 ### Changed
 * Data loader now returns the size it would like the output predicted at via `target_dims`.
@@ -21,6 +28,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Add support for lightning 1.7
 * Changed defaults of ignore_dilate to 0
 * Improved the `smartwatch_dvc` registry system.
+* Using scriptconfig and key/value arguments for `run_metrics_framework`
+* The coco align geotiff now populates the `valid_region` for each video based
+  on the query region in video space. The visualize video script will respect this.
+
+### Removed
+* Removed support for `score_args` from kwcoco-to-geojson
+
 
 ### Fixed
 * Issue where augmentation might shave a pixel off of the sample box causing an

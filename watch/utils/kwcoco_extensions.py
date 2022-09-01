@@ -434,6 +434,9 @@ def _populate_valid_region(coco_img):
     bundle_dpath = coco_img.bundle_dpath
     img = coco_img.img
     primary_obj = coco_img.primary_asset()
+    if primary_obj is None:
+        warnings.warn('No primary asset found for img={}'.format(img))
+        return
     primary_fname = primary_obj.get('file_name', None)
 
     primary_fpath = join(bundle_dpath, primary_fname)
@@ -955,9 +958,6 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
     )
     scale = base_info['to_target_scale_factor']
     base_wld_crs_info = base_info['wld_crs_info']
-    # if base_wld_crs_info is None:
-    #     import xdev
-    #     xdev.embed()
 
     # Can add an extra transform here if the video is not exactly in
     # any specific image space
@@ -965,6 +965,18 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
     vid_from_wld = kwimage.Affine.scale(scale) @ baseimg_from_wld
     video['width'] = int(np.ceil(base_info['width'] * scale))
     video['height'] = int(np.ceil(base_info['height'] * scale))
+    video['wld_crs_info'] = base_wld_crs_info
+
+    if 'valid_region_geos' in video:
+        import geopandas as gpd
+        from watch.utils import util_gis
+        # Project the valid region onto video space
+        valid_region_crs84 = kwimage.Polygon.coerce(video['valid_region_geos'])
+        wld_crs = base_wld_crs_info['auth']
+        crs84 = util_gis._get_crs84()
+        wld_region_poly = gpd.GeoDataFrame({'geometry': [valid_region_crs84.to_shapely()]}, crs=crs84).to_crs(wld_crs)['geometry'].iloc[0]
+        valid_region = kwimage.Polygon.from_shapely(wld_region_poly).warp(vid_from_wld).to_geojson()
+        video['valid_region'] = valid_region
 
     # Store metadata in the video
     video['num_frames'] = len(gids)

@@ -1,9 +1,8 @@
 #!/usr/bin/env python
-# import argparse
-# import sys
 import os
+import sys
 import json
-# import parse
+import shlex
 import pandas as pd
 import numpy as np
 import shapely.geometry
@@ -15,6 +14,85 @@ import ubelt as ub
 import subprocess
 import scriptconfig as scfg
 from packaging import version
+
+
+class MetricsConfig(scfg.DataConfig):
+    """
+    Score IARPA site model GeoJSON files using IARPA's metrics-and-test-framework
+    """
+    pred_sites = scfg.Value(None, required=True, nargs='*', help=ub.paragraph(
+        '''
+        List of paths to predicted v2 site models. Or a path to a single text
+        file containing the a list of paths to predicted site models.
+        All region_ids from these sites will be scored, and it will be assumed
+        that there are no other sites in these regions.
+        '''))
+    gt_dpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        Path to a local copy of the ground truth annotations,
+        https://smartgitlab.com/TE/annotations.  If None, use the
+        environment variable DVC_DATA_DPATH to find
+        $DVC_DATA_DPATH/annotations.
+        '''))
+
+    true_site_dpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        Directory containing true site models. Defaults to
+        gt_dpath / site_models
+        '''))
+
+    true_region_dpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        Directory containing true region models. Defaults to
+        gt_dpath / region_models
+        '''))
+
+    virtualenv_cmd = scfg.Value(['true'], nargs='+', help=ub.paragraph(
+        '''
+        Command to run before calling the metrics framework in a subshell.
+
+        Only necessary if the metrics framework is installed in a different
+        virtual env from the current one. (Or maybe if you don't auto start it?
+        Not sure. TODO: figure out if this inherits or not).
+        '''))
+    out_dir = scfg.Value(None, help=ub.paragraph(
+        '''
+        Output directory where scores will be written. Each
+        region will have. Defaults to ./iarpa-metrics-output/
+        '''))
+    merge = scfg.Value(False, help=ub.paragraph(
+        '''
+        Merge BAS and SC metrics from all regions and output to
+        {out_dir}/merged/
+        '''))
+    merge_fpath = scfg.Value(None, help=ub.paragraph(
+        '''
+        Forces the merge summary to be written to a specific
+        location.
+        '''))
+    tmp_dir = scfg.Value(None, help=ub.paragraph(
+        '''
+        If specified, will write temporary data here instead of
+        using a     non-persistant directory
+        '''))
+    enable_viz = scfg.Value(False, help=ub.paragraph(
+        '''
+        If true, enables iarpa visualizations
+        '''))
+    name = scfg.Value('unknown', help=ub.paragraph(
+        '''
+        Short name for the algorithm used to generate the model
+        '''))
+    inputs_are_paths = scfg.Value(False, help=ub.paragraph(
+        '''
+        If given, the sites inputs will always be interpreted as
+        paths and not raw json text.
+        '''))
+    use_cache = scfg.Value(False, help=ub.paragraph(
+        '''
+        IARPA metrics code currently contains a cache bug, do not
+        enable the cache until this is fixed.
+        '''))
 
 
 @dataclass(frozen=True)
@@ -181,41 +259,42 @@ def merge_bas_metrics_results(bas_results: List[RegionResult]):
     dfs = [to_df(r.bas_dpath, r.region_id) for r in bas_results]
 
     concat_df = pd.concat(dfs)
-    result_df = concat_df
-    # result_df = pd.DataFrame(index=dfs[0].droplevel('region_id').index)
 
     sum_cols = [
         'tp sites', 'fp sites', 'fn sites', 'truth sites', 'proposed sites',
         'total sites', 'truth slices', 'proposed slices'
     ]
-    result_df[sum_cols] = concat_df.groupby(['rho', 'tau'])[sum_cols].sum()
+    merged_df = concat_df.groupby(['rho', 'tau'])[sum_cols].sum()
+    merged_df.loc[:, 'region_id'] = '__merged__'
+    merged_df = merged_df.reset_index().set_index(['region_id', 'rho', 'tau'])
 
     # # ref: metrics-and-test-framework.evaluation.Metric
-    # (_, tp), (_, fp), (_, fn) = result_df[['tp sites', 'fp sites',
-    #                                        'fn sites']].iteritems()
-    # result_df['precision'] = np.where(tp > 0, tp / (tp + fp), 0)
-    # result_df['recall (PD)'] = np.where(tp > 0, tp / (tp + fn), 0)
-    # result_df['F1'] = np.where(tp > 0, tp / (tp + 0.5 * (fp + fn)), 0)
+    (_, tp), (_, fp), (_, fn) = merged_df[['tp sites', 'fp sites',
+                                           'fn sites']].iteritems()
+    merged_df['precision'] = np.where(tp > 0, tp / (tp + fp), 0)
+    merged_df['recall (PD)'] = np.where(tp > 0, tp / (tp + fn), 0)
+    merged_df['F1'] = np.where(tp > 0, tp / (tp + 0.5 * (fp + fn)), 0)
 
-    # all_regions = [r.region_model for r in bas_results]
+    all_regions = [r.region_model for r in bas_results]
     # # ref: metrics-and-test-framework.evaluation.Evaluation.build_scoreboard
-    # result_df['spatial FAR'] = fp.astype(float) / area(all_regions)
-    # result_df['temporal FAR'] = fp.astype(float) / n_dates(all_regions)
+    merged_df['spatial FAR'] = fp.astype(float) / area(all_regions)
+    merged_df['temporal FAR'] = fp.astype(float) / n_dates(all_regions)
 
     # this is not actually how Images FAR is calculated!
     # https://smartgitlab.com/TE/metrics-and-test-framework/-/issues/23
     #
     # all_sites = list(itertools.chain.from_iterable([
     #     r.site_models for r in bas_results]))
-    # result_df['images FAR'] = fp.astype(float) / n_unique_images(all_sites)
+    # merged_df['images FAR'] = fp.astype(float) / n_unique_images(all_sites)
     #
     # instead, images in multiple proposed site stacks are double-counted.
     # take advantage of this to merge this metric with a simple average.
-    # n_images = (concat_df['fp sites'] /
-    #             concat_df['images FAR']).groupby('region_id').mean().sum()
-    # result_df['images FAR'] = fp.astype(float) / n_images
+    n_images = (concat_df['fp sites'] /
+                concat_df['images FAR']).groupby('region_id').mean().sum()
+    merged_df['images FAR'] = fp.astype(float) / n_images
 
-    return result_df, concat_df
+    bas_merged_df, bas_concat_df = merged_df, concat_df
+    return bas_merged_df, bas_concat_df
 
 
 def _to_sc_df(sc_dpath, region_id):
@@ -272,6 +351,18 @@ def _to_sc_df(sc_dpath, region_id):
 
 def merge_sc_metrics_results(sc_results: List[RegionResult]):
     '''
+
+    Note:
+        Handled:
+        * ac_phase_table.csv
+        * ac_tiou.csv
+        * ac_temporal_error.csv
+
+        Not yet handled:
+        * ac_confusion_matrix_all_sites.csv
+        * ac_f1_all_sites.csv
+        * ap_temporal_error.csv
+
     Returns:
         a list of pd.DataFrames
         activity_table: F1 score, mean TIoU, temporal error
@@ -288,6 +379,7 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
     #     r = sc_results[0]
     #     sc_dpath, region_id = r.sc_dpath, r.region_id
 
+    # Handle ac_phase_table.csv
     dfs = [_to_sc_df(r.sc_dpath, r.region_id) for r in sc_results]
     df = pd.concat(dfs, axis=1).sort_values('date')
 
@@ -339,25 +431,33 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
 
     # TIoU is only ever evaluated per-site, so we can safely average these
     # per-site and call it a new metric mTIoU.
-    tious = pd.concat([
-        pd.read_csv(r.sc_dpath / 'ac_tiou.csv', index_col=0)
-        for r in sc_results
-    ], axis=1)
-    mtiou = tious.mean(axis=1, skipna=True)
+    tiou_dfs = []
+    for r in sc_results:
+        ac_tiou_fpath = r.sc_dpath / 'ac_tiou.csv'
+        table = pd.read_csv(ac_tiou_fpath, index_col=0)
+        missing = sorted(set(phase_classifications) - set(table.columns))
+        table.loc[:, missing] = np.nan
+        table = table.loc[:, phase_classifications]
+        tiou_dfs.append(table)
+
+    tious = pd.concat(tiou_dfs, axis=0)
+    mtiou = tious.mean(axis=0, skipna=True)
     mtiou_vals = [mtiou.get(c, default=np.nan) for c in phase_classifications]
 
     # these are averaged using the mean over sites for each phase.
     # So the correct average over regions is to weight by (sites/region)
-    temporal_errs = [
-        pd.read_csv(r.sc_dpath / 'ac_temporal_error.csv').loc[0][1:].astype(float).values
-        for r in sc_results
-    ]
+    temporal_errs = []
+    for r in sc_results:
+        ac_temporal_err_fpath = r.sc_dpath / 'ac_temporal_error.csv'
+        tdf = pd.read_csv(ac_temporal_err_fpath)
+        missing = sorted(set(phase_classifications) - set(tdf.columns))
+        tdf.loc[:, missing] = np.nan
+        if len(tdf) > 0:
+            tdf = tdf.loc[tdf.index[0], phase_classifications]  # mean days (all detections)
+        temporal_errs.append(tdf.astype(float).values)
+
     n_sites = [df.shape[1] for df in dfs]
     try:
-        temporal_errs, n_sites = zip(*filter(
-            # TODO how to handle merging partial predictions?
-            lambda tn: len(tn[0]) == 3,
-            zip(temporal_errs, n_sites)))
         temporal_err = np.average(temporal_errs, weights=n_sites, axis=0)
     except ValueError:
         temporal_err = [np.nan] * len(phase_classifications)
@@ -383,53 +483,6 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
     return sc_df, sc_cm
 
 
-def _hack_remerge_data():
-    """
-    Hack to redo the merge with a different F1 maximization criterion
-
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
-    cd "$DVC_DPATH"
-    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
-    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json
-    """
-    import watch
-    dvc_dpath = watch.find_smart_dvc_dpath(hardware='hdd')
-    globstr = str(dvc_dpath / 'models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json')
-    from watch.utils import util_path
-    from watch.utils import simple_dvc
-    summary_metrics = util_path.coerce_patterned_paths(globstr)
-    import json
-    import safer
-    dvc = simple_dvc.SimpleDVC(dvc_dpath)
-
-    # for merge_fpath in summary_metrics:
-    #     if dvc.is_tracked(merge_fpath):
-    #     pass
-
-    dvc.unprotect(summary_metrics)
-
-    for merge_fpath in ub.ProgIter(summary_metrics, desc='rewrite merge metrics'):
-        region_dpaths = [p for p in list(merge_fpath.parent.parent.glob('*')) if p.name != 'merged']
-        anns_root = dvc_dpath / 'annotations'
-        true_site_dpath = anns_root / 'site_models'
-        true_region_dpath = anns_root / 'region_models'
-
-        # merge_dpath = merge_fpath.parent
-
-        json_data = json.loads(merge_fpath.read_text())
-        parent_info = json_data['parent_info']
-
-        bas_concat_df, bas_df, sc_df, sc_cm = _make_merge_metrics(region_dpaths, true_site_dpath, true_region_dpath)
-        new_json_data, *_ = _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info)
-
-        with safer.open(merge_fpath, 'w', temp_file=True) as f:
-            json.dump(new_json_data, f, indent=4)
-
-    dvc.add(summary_metrics)
-    dvc.git_commitpush('Fixup merged iarpa metrics')
-    dvc.push(summary_metrics, remote='aws')
-
-
 def _make_merge_metrics(region_dpaths, true_site_dpath, true_region_dpath):
     results = [
         RegionResult.from_dpath_and_anns_root(pth, true_site_dpath, true_region_dpath)
@@ -438,28 +491,28 @@ def _make_merge_metrics(region_dpaths, true_site_dpath, true_region_dpath):
 
     # merge BA
     bas_results = [r for r in results if r.bas_dpath]
-    bas_df, bas_concat_df = merge_bas_metrics_results(bas_results)
+    bas_merged_df, bas_concat_df = merge_bas_metrics_results(bas_results)
 
     # merge SC
     sc_results = [r for r in results if r.sc_dpath]
     sc_df, sc_cm = merge_sc_metrics_results(sc_results)
 
-    return bas_concat_df, bas_df, sc_df, sc_cm
+    return bas_concat_df, bas_merged_df, sc_df, sc_cm
 
 
-def _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info, info):
+def _make_summary_info(bas_concat_df, bas_merged_df, sc_cm, sc_df, parent_info, info):
     # Find best bas row in combined results
 
     min_rho, max_rho = 0.5, 0.5
     min_tau, max_tau = 0.2, 0.2
 
-    bas_df = bas_df.reset_index()
-    rho = bas_df['rho']
-    tau = bas_df['tau']
+    bas_merged_df = bas_merged_df.reset_index()
+    rho = bas_merged_df['rho']
+    tau = bas_merged_df['tau']
     rho_flags = (min_rho <= rho) & (rho <= max_rho)
     tau_flags = (min_tau <= tau) & (tau <= max_tau)
     flags = tau_flags & rho_flags
-    candidate_bas_df = bas_df[flags]
+    candidate_merged_bas_df = bas_merged_df[flags]
 
     bas_concat_df = bas_concat_df.reset_index()
     rho = bas_concat_df['rho']
@@ -470,13 +523,14 @@ def _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info, info):
     candidate_bas_concat_df = bas_concat_df[flags]
 
     # Find best merged bas row
-    best_bas_row = candidate_bas_df.loc[[candidate_bas_df['F1'].idxmax()]]
+    best_merged_row = candidate_merged_bas_df.loc[[candidate_merged_bas_df['F1'].idxmax()]]
     # Find best per-region bas row
     best_ids = candidate_bas_concat_df.groupby('region_id')['F1'].idxmax()
     best_per_region = candidate_bas_concat_df.loc[best_ids]
-    best_bas_row_ = pd.concat({'merged': best_bas_row}, names=['region_id'])
+    # best_bas_row_ = pd.concat({'__merged__': best_bas_row}, names=['region_id'])
+    # best_bas_row_.loc[:, 'region_id'] = '__merged__'
     # Get a best row for each region and the "merged" region
-    best_bas_rows = pd.concat([best_per_region, best_bas_row_])
+    best_bas_rows = pd.concat([best_per_region, best_merged_row])
     concise_best_bas_rows = best_bas_rows.rename(
         {'tp sites': 'tp',
          'fp sites': 'fp',
@@ -497,7 +551,7 @@ def _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info, info):
     json_data['sc_cm'] = json.loads(sc_cm.to_json(orient='table', indent=2))
     json_data['sc_df'] = json.loads(sc_df.to_json(orient='table', indent=2))
 
-    return json_data, concise_best_bas_rows, best_bas_row_
+    return json_data, concise_best_bas_rows, best_bas_rows
 
 
 def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath, merge_dpath, merge_fpath,
@@ -529,14 +583,25 @@ def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath, mer
     sc_df.to_pickle(merge_dpath / 'sc_activity_df.pkl')
     sc_cm.to_pickle(merge_dpath / 'sc_confusion_df.pkl')
 
-    json_data, concise_best_bas_rows, best_bas_row = _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info, info)
+    json_data, concise_best_bas_rows, best_bas_rows = _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info, info)
     print(concise_best_bas_rows.to_string())
+
+    region_viz_dpath = (merge_dpath / 'region_viz_overall').ensuredir()
+
+    # Symlink to visualizations
+    for dpath in region_dpaths:
+        overall_dpath = dpath / 'overall'
+        viz_dpath = overall_dpath / 'bas' / 'region'
+
+        for viz_fpath in viz_dpath.iterdir():
+            viz_link = viz_fpath.augment(dpath=region_viz_dpath)
+            ub.symlink(viz_fpath, viz_link, verbose=1)
 
     # write summary in readable form
     #
     summary_path = merge_dpath / 'summary.csv'
     with open(summary_path, 'w') as f:
-        best_bas_row.to_csv(f)
+        best_bas_rows.to_csv(f)
         f.write('\n')
         sc_df.to_csv(f)
         f.write('\n')
@@ -624,112 +689,38 @@ def ensure_thumbnails(image_root, region_id, sites):
             ub.symlink(img_path, link_path, verbose=0)
 
 
-class MetricsConfig(scfg.DataConfig):
-    """
-    Score IARPA site model GeoJSON files using IARPA's metrics-and-test-framework
-    """
-    pred_sites = scfg.Value(None, required=True, nargs='*', help=ub.paragraph(
-        '''
-        List of paths to predicted v2 site models. Or a path to a single text
-        file containing the a list of paths to predicted site models.
-        All region_ids from these sites will be scored, and it will be assumed
-        that there are no other sites in these regions.
-        '''))
-    gt_dpath = scfg.Value(None, help=ub.paragraph(
-        '''
-        Path to a local copy of the ground truth annotations,
-        https://smartgitlab.com/TE/annotations.  If None, use the
-        environment variable DVC_DATA_DPATH to find
-        $DVC_DATA_DPATH/annotations.
-        '''))
-
-    true_site_dpath = scfg.Value(None, help=ub.paragraph(
-        '''
-        Directory containing true site models. Defaults to
-        gt_dpath / site_models
-        '''))
-
-    true_region_dpath = scfg.Value(None, help=ub.paragraph(
-        '''
-        Directory containing true region models. Defaults to
-        gt_dpath / region_models
-        '''))
-
-    metrics_dpath = scfg.Value(None, help=ub.paragraph(
-        '''
-        Path to a local copy of the metrics framework,
-        https://smartgitlab.com/TE/metrics-and-test-framework.
-        If None, use the environment variable METRICS_DPATH.
-        DEPRECATED. Simply ensure iarpa_smart_metrics is pip
-        installed                 in your virutalenv.
-        '''))
-    virtualenv_cmd = scfg.Value(['true'], nargs='+', help=ub.paragraph(
-        '''
-        Command to run before calling the metrics framework in
-        a subshell.     The metrics framework should be installed in
-        a different virtual env     from WATCH, using eg conda or
-        pyenv.
-        '''))
-    out_dir = scfg.Value(None, help=ub.paragraph(
-        '''
-        Output directory where scores will be written. Each
-        region will have     Defaults to ./output/
-        '''))
-    merge = scfg.Value(False, help=ub.paragraph(
-        '''
-        Merge BAS and SC metrics from all regions and output to
-        {out_dir}/merged/
-        '''))
-    merge_fpath = scfg.Value(None, help=ub.paragraph(
-        '''
-        Forces the merge summary to be written to a specific
-        location.
-        '''))
-    tmp_dir = scfg.Value(None, help=ub.paragraph(
-        '''
-        If specified, will write temporary data here instead of
-        using a     non-persistant directory
-        '''))
-    enable_viz = scfg.Value(False, help=ub.paragraph(
-        '''
-        If true, enables iarpa visualizations
-        '''))
-    name = scfg.Value('unknown', help=ub.paragraph(
-        '''
-        Short name for the algorithm used to generate the model
-        '''))
-    inputs_are_paths = scfg.Value(False, help=ub.paragraph(
-        '''
-        If given, the sites inputs will always be interpreted as
-        paths and not raw json text.
-        '''))
-    use_cache = scfg.Value(False, help=ub.paragraph(
-        '''
-        IARPA metrics code currently contains a cache bug, do not
-        enable the cache until this is fixed.
-        '''))
-
-
 def main(cmdline=True, **kwargs):
     """
-
     Example:
         >>> # xdoctest: +REQUIRES(module:iarpa_smart_metrics)
         >>> from watch.cli.run_metrics_framework import *  # NOQA
         >>> from iarpa_smart_metrics.demo.generate_demodata import generate_demo_metrics_framework_data
         >>> cmdline = 0
-        >>> demo_info = generate_demo_metrics_framework_data(
+        >>> base_dpath = ub.Path.appdir('watch', 'tests', 'test-iarpa-metrics2')
+        >>> data_dpath = base_dpath / 'inputs'
+        >>> dpath = base_dpath / 'outputs'
+        >>> demo_info1 = generate_demo_metrics_framework_data(
+        >>>     roi='DR_R001',
         >>>     num_sites=5, num_observations=10, noise=2, p_observe=0.5,
         >>>     p_transition=0.3, drop_noise=0.5, drop_limit=0.5)
-        >>> print('demo_info = {}'.format(ub.repr2(demo_info, nl=1)))
-        >>> dpath = ub.Path.appdir('watch', 'tests', 'test-iarpa-metrics2')
+        >>> demo_info2 = generate_demo_metrics_framework_data(
+        >>>     roi='DR_R002',
+        >>>     num_sites=7, num_observations=10, noise=1, p_observe=0.5,
+        >>>     p_transition=0.1, drop_noise=0.8, drop_limit=0.5)
+        >>> demo_info3 = generate_demo_metrics_framework_data(
+        >>>     roi='DR_R003',
+        >>>     num_sites=11, num_observations=10, noise=3, p_observe=0.5,
+        >>>     p_transition=0.2, drop_noise=0.3, drop_limit=0.5)
+        >>> print('demo_info1 = {}'.format(ub.repr2(demo_info1, nl=1)))
+        >>> print('demo_info2 = {}'.format(ub.repr2(demo_info2, nl=1)))
+        >>> print('demo_info3 = {}'.format(ub.repr2(demo_info3, nl=1)))
         >>> out_dpath = dpath / 'region_metrics'
         >>> merge_fpath = dpath / 'merged.json'
         >>> out_dpath.delete()
         >>> kwargs = {
-        >>>     'pred_sites': demo_info['pred_site_dpath'],
-        >>>     'true_region_dpath': demo_info['true_region_dpath'],
-        >>>     'true_site_dpath': demo_info['true_site_dpath'],
+        >>>     'pred_sites': demo_info1['pred_site_dpath'],
+        >>>     'true_region_dpath': demo_info1['true_region_dpath'],
+        >>>     'true_site_dpath': demo_info1['true_site_dpath'],
         >>>     'merge': True,
         >>>     'merge_fpath': merge_fpath,
         >>>     'out_dir': out_dpath,
@@ -739,86 +730,6 @@ def main(cmdline=True, **kwargs):
     """
     import safer
 
-    # if 0:
-    #     parser = argparse.ArgumentParser(
-    #         description='Score IARPA site model GeoJSON files using IARPA\'s '
-    #         'metrics-and-test-framework')
-    #     parser.add_argument('sites',
-    #                         nargs='*',
-    #                         help='''
-    #         List of paths or serialized JSON strings containg v2 site models.
-    #         All region_ids from these sites will be scored, and it will be assumed
-    #         that there are no other sites in these regions.
-    #         ''')
-    #     parser.add_argument('--gt_dpath',
-    #                         help='''
-    #         Path to a local copy of the ground truth annotations,
-    #         https://smartgitlab.com/TE/annotations.
-    #         If None, use the environment variable DVC_DPATH to find
-    #         $DVC_DPATH/annotations.
-    #         ''')
-    #     parser.add_argument('--metrics_dpath',
-    #                         help='''
-    #         Path to a local copy of the metrics framework,
-    #         https://smartgitlab.com/TE/metrics-and-test-framework.
-    #         If None, use the environment variable METRICS_DPATH.
-    #         DEPRECATED. Simply ensure iarpa_smart_metrics is pip installed
-    #                     in your virutalenv.
-    #         ''')
-    #     # https://stackoverflow.com/a/49351471
-    #     parser.add_argument(
-    #         '--virtualenv_cmd',
-    #         default=['true'],  # no-op bash command
-    #         nargs='+',  # hack for spaces
-    #         help='''
-    #         Command to run before calling the metrics framework in a subshell.
-    #         The metrics framework should be installed in a different virtual env
-    #         from WATCH, using eg conda or pyenv.
-    #         ''')
-    #     parser.add_argument('--out_dir',
-    #                         help='''
-    #         Output directory where scores will be written. Each region will have
-    #         Defaults to ./output/
-    #         ''')
-    #     parser.add_argument('--merge',
-    #                         action='store_true',
-    #                         help='''
-    #         Merge BAS and SC metrics from all regions and output to
-    #         {out_dir}/merged/
-    #         ''')
-
-    #     parser.add_argument('--merge_fpath',
-    #                         help='''
-    #         Forces the merge summary to be written to a specific location.
-    #         ''')
-
-    #     parser.add_argument('--tmp_dir',
-    #                         help='''
-    #         If specified, will write temporary data here instead of using a
-    #         non-persistant directory
-    #         ''')
-
-    #     parser.add_argument('--enable_viz', default=False,
-    #                         help='''
-    #         If true, enables iarpa visualizations
-    #         ''')
-
-    #     parser.add_argument('--name', default='unknown', help=(
-    #         'Short name for the algorithm used to generate the model'))
-
-    #     parser.add_argument(
-    #         '--inputs_are_paths', action='store_true', help=ub.paragraph(
-    #             '''
-    #             If given, the sites inputs will always be interpreted as paths
-    #             and not raw json text.
-    #             '''))
-
-    #     parser.add_argument(
-    #         '--use_cache', default=False, action='store_true', help=ub.paragraph(
-    #             '''
-    #             IARPA metrics code currently contains a cache bug, do not enable
-    #             the cache until this is fixed.
-    #             '''))
     from watch.utils import util_path
     # from watch.utils import util_pattern
 
@@ -926,8 +837,8 @@ def main(cmdline=True, **kwargs):
             gt_dpath = ub.Path(args.gt_dpath).absolute()
         else:
             import watch
-            dvc_dpath = watch.find_smart_dvc_dpath()
-            gt_dpath = dvc_dpath / 'annotations'
+            data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+            gt_dpath = data_dvc_dpath / 'annotations'
             print(f'gt_dpath unspecified, defaulting to {gt_dpath=}')
 
         if true_region_dpath is None:
@@ -937,8 +848,8 @@ def main(cmdline=True, **kwargs):
             assert gt_dpath.is_dir(), gt_dpath
             true_site_dpath =  gt_dpath / 'site_models'
 
-    if args.out_dir is not None:
-        os.makedirs(args.out_dir, exist_ok=True)
+    true_region_dpath = ub.Path(true_region_dpath)
+    true_site_dpath = ub.Path(true_site_dpath)
 
     if args.tmp_dir is not None:
         tmp_dpath = ub.Path(args.tmp_dir)
@@ -948,7 +859,10 @@ def main(cmdline=True, **kwargs):
 
     # validate virtualenv command
     virtualenv_cmd = ' '.join(args.virtualenv_cmd)
-    ub.cmd(virtualenv_cmd, verbose=1, check=True, shell=True)
+    try:
+        ub.cmd(virtualenv_cmd, verbose=1, check=True, shell=True)
+    except Exception as ex:
+        raise ValueError('The given virtualenv command is invalid') from ex
 
     # split sites by region
     out_dirs = []
@@ -958,9 +872,20 @@ def main(cmdline=True, **kwargs):
     main_out_dir = ub.Path(args.out_dir or './iarpa-metrics-output')
     main_out_dir.ensuredir()
 
-    # TODO: use cmd_queue to fan these out on a single node.
+    full_invocation_text = ub.codeblock(
+        '''
+        #!/bin/bash
+        __doc__="
+        This is an auto-generated file that records the command used to
+        generate this evaluation of multiple regions.
+        "
+        ''') + chr(10) + shlex.join(sys.argv) + chr(10)
+    (main_out_dir / 'invocation.sh').write_text(full_invocation_text)
 
-    for region_id, region_sites in grouped_sites.items():
+    # First build up all of the commands and prepare necessary data for them.
+    commands = []
+    for region_id, region_sites in ub.ProgIter(list(grouped_sites.items()),
+                                               desc='prepare regions for eval'):
 
         site_dpath = (tmp_dpath / 'site' / region_id).ensuredir()
         image_dpath = (tmp_dpath / 'image').ensuredir()
@@ -968,11 +893,10 @@ def main(cmdline=True, **kwargs):
         if args.use_cache:
             cache_dpath = (tmp_dpath / 'cache' / region_id).ensuredir()
         else:
-            # Hack to disable cache by using a different directory each time
-            _cache_dir = TemporaryDirectory(suffix='iarpa-metrics-cache')
-            cache_dpath = ub.Path(_cache_dir.name)
+            cache_dpath = 'None'
 
         out_dir = (main_out_dir / region_id).ensuredir()
+        out_dirs.append(out_dir)
 
         # doctor site_dpath for expected structure
         pred_site_sub_dpath = site_dpath / 'latest' / region_id
@@ -988,12 +912,9 @@ def main(cmdline=True, **kwargs):
 
         ensure_thumbnails(image_dpath, region_id, region_sites)
 
-        if not args.use_cache:
-            cache_dpath = 'None'
-
-        from scriptconfig.smartcast import smartcast
-        enable_viz = smartcast(args.enable_viz)
-        if not enable_viz:
+        if args.enable_viz:
+            viz_flags = []
+        else:
             viz_flags = [
                 # '--no-viz-region',  # we do want this enabled
                 '--no-viz-slices',
@@ -1002,53 +923,53 @@ def main(cmdline=True, **kwargs):
                 '--no-viz-associate-metrics',
                 '--no-viz-activity-metrics',
             ]
-        else:
-            if enable_viz is True or enable_viz == 1:
-                viz_flags = [
-                ]
-            else:
-                raise ValueError(enable_viz)
 
-        import shlex
         run_eval_command = [
             'python', '-m', 'iarpa_smart_metrics.run_evaluation',
             '--roi', region_id,
-            '--gt_dir', true_site_dpath,
-            '--rm_dir', true_region_dpath,
-            '--sm_dir', pred_site_sub_dpath,
-            '--image_dir', image_dpath,
-            '--output_dir', out_dir if args.out_dir else 'None',
-            '--cache_dir', cache_dpath,
-            '--name', shlex.quote(name),
+            '--gt_dir', os.fspath(true_site_dpath),
+            '--rm_dir', os.fspath(true_region_dpath),
+            '--sm_dir', os.fspath(pred_site_sub_dpath),
+            '--image_dir', os.fspath(image_dpath),
+            '--output_dir', os.fspath(out_dir),
+            '--cache_dir', os.fspath(cache_dpath),
+            '--name', name,
             '--no-db',
         ]
         run_eval_command += viz_flags
         # run metrics framework
-        cmd = f'{virtualenv_cmd} &&' + ' '.join(list(map(str, run_eval_command)))
-        # ub.codeblock(fr'''
-        #     {virtualenv_cmd} &&
-        #     python -m iarpa_smart_metrics.run_evaluation \
-        #         --roi {region_id} \
-        #         --gt_dir {gt_dpath / 'site_models'} \
-        #         --rm_dir {gt_dpath / 'region_models'} \
-        #         --sm_dir {pred_site_sub_dpath} \
-        #         --image_dir {image_dpath} \
-        #         --output_dir {out_dir if args.out_dir else None} \
-        #         --cache_dir {cache_dpath} \
-        #         --name {shlex.quote(name)} \
-        #         {viz_flags}
-        #     ''')
-        (out_dir / 'invocation.sh').write_text(cmd)
+        cmd = f'{virtualenv_cmd} && ' + shlex.join(run_eval_command)
+        region_invocation_text = ub.codeblock(
+            '''
+            #!/bin/bash
+            __doc__="
+            This is an auto-generated file that records the command used to
+            generate this evaluation of this particular region.
+            "
+            ''') + chr(10) + cmd + chr(10)
+        # Dump this command to disk for reference and debugging.
+        (out_dir / 'invocation.sh').write_text(region_invocation_text)
+        commands.append(cmd)
 
-        try:
-            ub.cmd(cmd, verbose=3, check=True, shell=True)
-            out_dirs.append(out_dir)
-        except subprocess.CalledProcessError:
-            print('error in metrics framework, probably due to zero '
-                  'TP site matches.')
+    if 1:
+        import cmd_queue
+        queue = cmd_queue.Queue.create(backend='serial')
+        for cmd in commands:
+            queue.submit(cmd)
+            # TODO: make command queue stop on the first failure?
+            queue.run()
+        # if queue.read_state()['failed']:
+        #     raise Exception('jobs failed')
+    else:
+        # Original way to invoke
+        for cmd in commands:
+            try:
+                ub.cmd(cmd, verbose=3, check=True, shell=True)
+            except subprocess.CalledProcessError:
+                print('error in metrics framework, probably due to zero '
+                      'TP site matches.')
 
     print('out_dirs = {}'.format(ub.repr2(out_dirs, nl=1)))
-
     if args.merge and out_dirs:
         merge_dpath = main_out_dir / 'merged'
 
@@ -1056,17 +977,63 @@ def main(cmdline=True, **kwargs):
             merge_fpath = merge_dpath / 'summary2.json'
         else:
             merge_fpath = ub.Path(args.merge_fpath)
-        # import xdev
-        # xdev.embed()
+
         region_dpaths = out_dirs
 
-        if 1:
-            merge_metrics_results(region_dpaths, true_site_dpath,
-                                  true_region_dpath, merge_dpath, merge_fpath,
-                                  parent_info, info)
-            print('merge_fpath = {!r}'.format(merge_fpath))
-        else:
-            print('TODO merge')
+        merge_metrics_results(region_dpaths, true_site_dpath,
+                              true_region_dpath, merge_dpath, merge_fpath,
+                              parent_info, info)
+        print('merge_fpath = {!r}'.format(merge_fpath))
+
+
+def _hack_remerge_data():
+    """
+    Hack to redo the merge with a different F1 maximization criterion
+
+    TODO: it would be nice to have a variant of this script that only performed
+    merging.
+
+    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
+    cd "$DVC_DPATH"
+    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
+    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json
+    """
+    import watch
+    data_dvc_dpath = watch.find_dvc_dpath(hardware='hdd')
+    globstr = str(data_dvc_dpath / 'models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json')
+    from watch.utils import util_path
+    from watch.utils import simple_dvc
+    summary_metrics = util_path.coerce_patterned_paths(globstr)
+    import json
+    import safer
+    dvc = simple_dvc.SimpleDVC(data_dvc_dpath)
+
+    # for merge_fpath in summary_metrics:
+    #     if dvc.is_tracked(merge_fpath):
+    #     pass
+
+    dvc.unprotect(summary_metrics)
+
+    for merge_fpath in ub.ProgIter(summary_metrics, desc='rewrite merge metrics'):
+        region_dpaths = [p for p in list(merge_fpath.parent.parent.glob('*')) if p.name != 'merged']
+        anns_root = data_dvc_dpath / 'annotations'
+        true_site_dpath = anns_root / 'site_models'
+        true_region_dpath = anns_root / 'region_models'
+
+        # merge_dpath = merge_fpath.parent
+
+        json_data = json.loads(merge_fpath.read_text())
+        parent_info = json_data['parent_info']
+
+        bas_concat_df, bas_df, sc_df, sc_cm = _make_merge_metrics(region_dpaths, true_site_dpath, true_region_dpath)
+        new_json_data, *_ = _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info)
+
+        with safer.open(merge_fpath, 'w', temp_file=True) as f:
+            json.dump(new_json_data, f, indent=4)
+
+    dvc.add(summary_metrics)
+    dvc.git_commitpush('Fixup merged iarpa metrics')
+    dvc.push(summary_metrics, remote='aws')
 
 
 if __name__ == '__main__':

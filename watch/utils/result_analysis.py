@@ -1,3 +1,99 @@
+"""
+This utility provides a method to define a table of hyperparameter key/values
+and associated metric key/values. Given this table, and information about if
+metrics are better when they are higher / lower, the ResultAnalysis class uses
+several statistical methods to estimate parameter importance.
+
+Example:
+    >>> # Given a list of experiments, configs, and results
+    >>> from watch.utils.result_analysis import ResultAnalysis
+    >>> # Given a table of experiments with parameters, and metrics
+    >>> table = [
+    >>>     Result('expt0', {'param1': 2, 'param2': 'b'}, {'f1': 0.75, 'loss': 0.5}),
+    >>>     Result('expt1', {'param1': 0, 'param2': 'c'}, {'f1': 0.92, 'loss': 0.4}),
+    >>>     Result('expt2', {'param1': 1, 'param2': 'b'}, {'f1': 0.77, 'loss': 0.3}),
+    >>>     Result('expt3', {'param1': 1, 'param2': 'a'}, {'f1': 0.67, 'loss': 0.2}),
+    >>> ]
+    >>> # Create a ResultAnalysis object and tell it what metrics should be maximized / minimized
+    >>> analysis = ResultAnalysis(table, metric_objectives={'f1': 'max', 'loss': 'min'})
+    >>> # An overall analysis can be obtained as follows
+    >>> analysis.analysis()  # xdoctest: +IGNORE_WANT
+    PARAMETER: param2 - METRIC: f1
+    ==============================
+    f1      count  mean       std   min    25%   50%    75%   max
+    param2
+    c         1.0  0.92       NaN  0.92  0.920  0.92  0.920  0.92
+    b         2.0  0.76  0.014142  0.75  0.755  0.76  0.765  0.77
+    a         1.0  0.67       NaN  0.67  0.670  0.67  0.670  0.67
+    ...
+    ANOVA: If p is low, the param 'param2' might have an effect
+      Rank-ANOVA: p=0.25924026
+      Mean-ANOVA: p=0.07823610
+    ...
+    Pairwise T-Tests
+      If p is low, param2=c may outperform param2=b.
+        ttest_ind:  p=nan
+      If p is low, param2=b may outperform param2=a.
+        ttest_ind:  p=nan
+        ttest_rel:  p=nan, n_pairs=1
+    ...
+    PARAMETER: param1 - METRIC: loss
+    ================================
+    loss    count  mean       std  min    25%   50%    75%  max
+    param1
+    1         2.0  0.25  0.070711  0.2  0.225  0.25  0.275  0.3
+    0         1.0  0.40       NaN  0.4  0.400  0.40  0.400  0.4
+    2         1.0  0.50       NaN  0.5  0.500  0.50  0.500  0.5
+    ...
+    ANOVA: If p is low, the param 'param1' might have an effect
+      Rank-ANOVA: p=0.25924026
+      Mean-ANOVA: p=0.31622777
+    ...
+    Pairwise T-Tests
+      If p is low, param1=1 may outperform param1=0.
+        ttest_ind:  p=nan
+      If p is low, param1=0 may outperform param1=2.
+        ttest_ind:  p=nan
+      param_name metric  anova_rank_H  anova_rank_p  anova_mean_F  anova_mean_p
+    0     param2     f1           2.7       0.25924       81.1875      0.078236
+    3     param1   loss           2.7       0.25924        4.5000      0.316228
+    1     param2   loss           1.8       0.40657        0.7500      0.632456
+    2     param1     f1           1.8       0.40657        2.7675      0.391181
+
+    >>> # But specific parameters or groups of parameters can be inspected
+    >>> # individually
+    >>> analysis.build()
+    >>> analysis.abalate(['param1'], metrics=['f1'])  # xdoctest: +IGNORE_WANT
+    skillboard.ratings = {
+        (0,): Rating(mu=25, sigma=8.333333333333334),
+        (1,): Rating(mu=27.63523138347365, sigma=8.065506316323548),
+        (2,): Rating(mu=22.36476861652635, sigma=8.065506316323548),
+    }
+    win_probs = {
+        (0,): 0.3333333333333333,
+        (1,): 0.3445959888771101,
+        (2,): 0.32207067778955656,
+    }
+    ...
+    When config(param1=1) is better than config(param1=2), the improvement in f1 is
+       count  mean  std   min   25%   50%   75%   max
+    0    1.0  0.02  NaN  0.02  0.02  0.02  0.02  0.02
+    ...
+    When config(param1=2) is better than config(param1=1), the improvement in f1 is
+       count  mean  std  min  25%  50%  75%  max
+    0    0.0   NaN  NaN  NaN  NaN  NaN  NaN  NaN
+
+
+This seems related to [RijnHutter2018]_. Need to look more closely to determine
+its exact relation and what we can learn from it (or what we do better /
+worse). Also see followup [Probst2019]_.
+
+References:
+    .. [RijnHutter2018] Hyperparameter Importance Across Datasets - https://arxiv.org/pdf/1710.04725.pdf
+
+    .. [Probst2019] https://www.jmlr.org/papers/volume20/18-444/18-444.pdf
+
+"""
 import itertools as it
 import math
 import warnings
@@ -358,7 +454,7 @@ class ResultAnalysis(ub.NiceRepr):
         ascending = objective == "min"
         return ascending
 
-    def abalate(self, param_group):
+    def abalate(self, param_group, metrics=None, use_openskill='auto'):
         """
         TODO:
             rectify with test-group
@@ -392,11 +488,35 @@ class ResultAnalysis(ub.NiceRepr):
         # param_unique_vals = {p: self.table[p].unique().tolist() for p in param_group}
         score_improvements = ub.ddict(list)
         scored_obs = []
-        skillboard = SkillTracker(param_unique_vals)
+        if use_openskill == 'auto':
+            try:
+                import openskill  # NOQA
+            except ImportError:
+                print('warning: openskill is not installed')
+                use_openskill = False
+            else:
+                use_openskill = True
+
+        if use_openskill:
+            skillboard = SkillTracker(param_unique_vals)
+        else:
+            skillboard = None
+
         groups = self.abalation_groups(param_group, k=2)
 
+        if metrics is None:
+            metrics = self.metrics
+
+        if metrics is None:
+            avail_metrics = set.intersection(
+                *[set(r.metrics.keys()) for r in self.results]
+            )
+            metrics_of_interest = sorted(avail_metrics - set(self.ignore_metrics))
+        else:
+            metrics_of_interest = metrics
+
         for group in groups:
-            for metric_key in self.metrics:
+            for metric_key in metrics_of_interest:
                 ascending = self._objective_is_ascending(metric_key)
 
                 group = group.sort_values(metric_key, ascending=ascending)
@@ -426,18 +546,21 @@ class ResultAnalysis(ub.NiceRepr):
                     drop=True
                 )
                 scored_obs.append(scored_ranking)
-                ranking = [
-                    gd(**d) for d in scored_ranking[param_group].to_dict("records")
-                ]
-                skillboard.observe(ranking)
+                if skillboard is not None:
+                    ranking = [
+                        gd(**d) for d in scored_ranking[param_group].to_dict("records")
+                    ]
+                    skillboard.observe(ranking)
 
-        print(
-            "skillboard.ratings = {}".format(
-                ub.repr2(skillboard.ratings, nl=1, align=":")
+        if skillboard is not None:
+            print(
+                "skillboard.ratings = {}".format(
+                    ub.repr2(skillboard.ratings, nl=1, align=":")
+                )
             )
-        )
-        win_probs = skillboard.predict_win()
-        print(f"win_probs = {ub.repr2(win_probs, nl=1)}")
+            win_probs = skillboard.predict_win()
+            print(f"win_probs = {ub.repr2(win_probs, nl=1)}")
+
         for key, improves in score_improvements.items():
             k1, k2, metric_key = key
             improves = np.array(improves)

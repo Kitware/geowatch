@@ -11,26 +11,96 @@ Example:
     export DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
     cd $DVC_EXPT_DPATH
 
-    python -m watch.dvc.expt_manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
-    python -m watch.dvc.expt_manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch.mlops.expt_manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch.mlops.expt_manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch.mlops.expt_manager "pull packages evals" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch.mlops.expt_manager "push packages evals"
 
-    python -m watch.dvc.expt_manager "list"
+    python -m watch.mlops.expt_manager "status"
+
+    python -m watch.mlops.expt_manager "list"
 
     # On training machine
-    python -m watch.dvc.expt_manager "push packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch.mlops.expt_manager "push packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
 
     # On testing machine
-    python -m watch.dvc.expt_manager "pull packages"
-    python -m watch.dvc.expt_manager "status"
+    python -m watch.mlops.expt_manager "pull packages"
+    python -m watch.mlops.expt_manager "status"
 
     # Run evals on testing machine
-    python -m watch.dvc.expt_manager "evaluate" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch.mlops.expt_manager "evaluate" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
 
     # On testing machine
-    python -m watch.dvc.expt_manager "push evals"
+    python -m watch.mlops.expt_manager "push evals"
 
     # On analysis machine
-    python -m watch.dvc.expt_manager "pull evals"
+    python -m watch.mlops.expt_manager "pull evals"
+
+
+TODO:
+    ### Make the Experiment Evaluation Reporter more robust and generalize to
+    ### more problems.
+
+    It should quickly show the best models for various metric and it should be
+    easy for the user to inspect them further.  For example say the best model
+    of interest was:
+
+    MODEL_OF_INTEREST="Drop4_BAS_Retrain_V002_epoch=45-step=23552"
+    MODEL_OF_INTEREST="Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584"
+
+    # TODO:
+    # There is a problem with multiple .pt suffixes, just dont use any
+
+    # You should be able to pull things wrt to that model
+
+    python -m watch.mlops.expt_manager "pull packages" --model_pattern="${MODEL_OF_INTEREST}*"
+    python -m watch.mlops.expt_manager "pull evals" --model_pattern="${MODEL_OF_INTEREST}*"
+
+    python -m watch.mlops.expt_manager "status" --model_pattern="${MODEL_OF_INTEREST}*"
+
+    MODEL_OF_INTEREST="Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584"
+    DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
+    DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+
+    # Evaluate on a subset of the training set
+    TRAIN_DATASET_SUBSET=$DATA_DVC_DPATH/$DATASET_CODE/data_train_subset.kwcoco.json
+    # TRAIN_DATASET_BIG=$DATA_DVC_DPATH/$DATASET_CODE/data_train.kwcoco.json
+    # kwcoco subset "$TRAIN_DATASET_BIG" "$TRAIN_DATASET_SUBSET" --select_videos '.name | test(".*_R.*")'
+
+    # Then you should be able to evaluate that model
+    python -m watch.mlops.expt_manager "evaluate" \
+        --model_pattern="${MODEL_OF_INTEREST}*" \
+        --dataset_codes "$DATASET_CODE" \
+        --test_dataset="$TRAIN_DATASET_SUBSET" \
+        --enable_track=1 \
+        --enable_iarpa_eval=1 \
+        --set_cover_algo=approx,exact \
+        --bas_thresh=0.0,0.01,0.1 \
+        --devices="0,1" --run=1
+
+Ignore:
+    python -m watch.mlops.expt_manager "evaluate" \
+        --enable_pred=1 \
+        --enable_eval=1 \
+        --enable_actclf=1 \
+        --enable_actclf_eval=1 \
+        --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC" \
+        --devices="0,1,2,3" --run=1
+
+    python -m watch.mlops.expt_manager "evaluate" \
+        --bas_thresh=0.0,0.01,0.1 \
+        --set_cover_algo=approx,exact \
+        --enable_pred=1 \
+        --enable_eval=1 \
+        --enable_track=1 \
+        --enable_iarpa_eval=1 \
+        --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC" \
+        --devices="0,1" --run=0 \
+        --skip_existing=True
+
+        # --enable_track=1 \
+        # --enable_iarpa_eval=1 \
 """
 import warnings
 import parse
@@ -133,7 +203,7 @@ class ExptManagerConfig(scfg.Config):
 
 def main(cmdline=True, **kwargs):
     """
-    from watch.dvc.expt_manager import *  # NOQA
+    from watch.mlops.expt_manager import *  # NOQA
     """
     import watch
 
@@ -224,7 +294,7 @@ class DVCExptManager(ub.NiceRepr):
 
     Example:
         >>> # xdoctest: +REQUIRES(env:EXPT_DVC_DPATH)
-        >>> from watch.dvc.expt_manager import *  # NOQA
+        >>> from watch.mlops.expt_manager import *  # NOQA
         >>> import watch
         >>> manager = DVCExptManager.coerce(watch.find_dvc_dpath(tags='phase2_expt'))
         >>> manager.summarize()
@@ -302,11 +372,17 @@ class DVCExptManager(ub.NiceRepr):
     def versioned_table(manager, **kw):
         rows = list(ub.flatten(state.versioned_rows(**kw) for state in manager.states))
         df = pd.DataFrame(rows)
+        missing = ub.oset(ExperimentState.VERSIONED_COLUMNS) - df.columns
+        if len(missing):
+            df.loc[:, missing] = None
         return df
 
     def volitile_table(manager, **kw):
         rows = list(ub.flatten(state.volitile_table(**kw) for state in manager.states))
         df = pd.DataFrame(rows)
+        missing = ub.oset(ExperimentState.VOLITILE_COLUMNS) - df.columns
+        if len(missing):
+            df.loc[:, missing] = None
         return df
 
     def evaluation_table(manager):
@@ -366,8 +442,7 @@ class DVCExptManager(ub.NiceRepr):
     def pull_packages(manager):
         # TODO: git pull
         pkg_df = manager.versioned_table(types=['pkg'])
-        pull_df = pkg_df[pkg_df['needs_pull']]
-
+        pull_df = pkg_df[pkg_df['needs_pull'].astype(bool)]
         pull_fpaths = pull_df['dvc'].tolist()
         manager.dvc.pull(pull_fpaths)
 
@@ -398,7 +473,7 @@ class ExperimentState(ub.NiceRepr):
 
     Ignore:
         >>> # xdoctest: +REQUIRES(env:EXPT_DVC_DPATH)
-        >>> from watch.dvc.expt_manager import *  # NOQA
+        >>> from watch.mlops.expt_manager import *  # NOQA
         >>> import watch
         >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
@@ -408,16 +483,28 @@ class ExperimentState(ub.NiceRepr):
         >>> self.summarize()
 
     Ignore:
+        >>> # Just show patterns:
+        >>> from watch.mlops.expt_manager import *  # NOQA
+        >>> self = ExperimentState('<expt_dpath>', '<dset_code>')
+        >>> print('self.templates = {}'.format(ub.repr2(self.templates, nl=1, sort=0)))
+
+    Ignore:
         table[table.type == 'pkg']['model'].unique()
     """
 
     def __init__(self, expt_dvc_dpath, dataset_code, dvc_remote=None,
                  data_dvc_dpath=None, model_pattern='*'):
-        self.expt_dvc_dpath = expt_dvc_dpath
+        self.expt_dvc_dpath = ub.Path(expt_dvc_dpath)
+
+        if data_dvc_dpath is None:
+            import watch
+            try:
+                data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', envvar='DATA_DVC_DPATH')
+            except Exception:
+                pass
         self.data_dvc_dpath = data_dvc_dpath
         self.dataset_code = dataset_code
         self.dvc_remote = dvc_remote
-        self.storage_dpath = self.expt_dvc_dpath / 'models/fusion' / dataset_code
         self.training_dpath = self.expt_dvc_dpath / 'training'
         self.patterns = {
             # General
@@ -438,6 +525,10 @@ class ExperimentState(ub.NiceRepr):
             'stage_model': '*',  # hack, should have ext
         }
 
+        # TODO: the name "fusion" should be a high level task or group not be hard coded.
+        # TODO: the name "models" should be configurable. It's the versioning place.
+        # We could move the pred out of the models subdir
+
         self.staging_template_prefix = '{expt_dvc_dpath}/training/{host}/{user}/{dataset_code}/'
         self.storage_template_prefix = '{expt_dvc_dpath}/models/fusion/{dataset_code}/'
 
@@ -453,8 +544,9 @@ class ExperimentState(ub.NiceRepr):
         }
 
         self.versioned_templates = {
+            # TODO: rename curves to pixel
             'pkg': 'packages/{expt}/{model}.pt',
-            'eval_pxl': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/curves/measures2.json',
+            'eval_pxl': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/eval_pxl/curves/measures2.json',
             'eval_trk': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
             'eval_act': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
         }
@@ -467,14 +559,27 @@ class ExperimentState(ub.NiceRepr):
         for k, v in self.versioned_templates.items():
             self.templates[k] = self.storage_template_prefix + v
 
-        ub.dict_union(
-            self.staging_templates,
-            self.volitile_templates,
-            self.versioned_templates,
-        )
-
         self.path_patterns = {}
         self._build_path_patterns()
+
+        # These are some locations that I used to know
+        self.legacy_versioned_templates = {
+            (self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/curves',
+             self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/eval_pxl/curves'),
+            (self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/heatmaps',
+             self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/eval_pxl/heatmaps'),
+        }
+
+    VERSIONED_COLUMNS = [
+        'type', 'has_dvc', 'has_raw', 'needs_pull', 'is_link', 'is_broken',
+        'unprotected', 'needs_push', 'raw', 'dvc', 'dataset_code']
+
+    VOLITILE_COLUMNS = [
+        'type', 'raw', 'model', 'dataset_code'
+    ]
+
+    STAGING_COLUMNS = [
+        'ckpt_exists', 'is_packaged', 'is_copied', 'needs_package', 'needs_copy']
 
     # def _check(self):
     #     from watch.utils import util_pattern
@@ -667,7 +772,7 @@ class ExperimentState(ub.NiceRepr):
         volitile_rows = list(self.volitile_rows())
         volitile_df = pd.DataFrame(volitile_rows)
         if len(volitile_df) == 0:
-            volitile_df[['type', 'raw', 'expt_dvc_dpath', 'dataset_code', 'expt', 'model', 'test_dset', 'pred_cfg', 'trk_cfg']] = 0
+            volitile_df[self.VOLITILE_COLUMNS] = 0
         return volitile_df
 
     def staging_table(self):
@@ -676,7 +781,7 @@ class ExperimentState(ub.NiceRepr):
         staging_df = pd.DataFrame(staging_rows)
 
         if len(staging_df) == 0:
-            staging_df[['ckpt_exists', 'is_packaged', 'is_copied', 'needs_package', 'needs_copy']] = 0
+            staging_df[self.STAGING_COLUMNS] = 0
         return staging_df
 
     def versioned_table(self, **kw):
@@ -689,7 +794,8 @@ class ExperimentState(ub.NiceRepr):
         eval_rows = list(self.versioned_rows(**kw))
         eval_df = pd.DataFrame(eval_rows)
         if len(eval_df) == 0:
-            eval_df[['type', 'has_dvc', 'has_raw', 'needs_pull', 'is_link', 'is_broken', 'is_unprotected', 'needs_push', 'dataset_code']] = 0
+            eval_df[self.VERSIONED_COLUMNS] = 0
+            # ['type', 'has_dvc', 'has_raw', 'needs_pull', 'is_link', 'is_broken', 'is_unprotected', 'needs_push', 'dataset_code']] = 0
         return eval_df
 
     def evaluation_table(self):
@@ -775,7 +881,7 @@ class ExperimentState(ub.NiceRepr):
         """
         Ignore:
             >>> # xdoctest: +REQUIRES(env:EXPT_DVC_DPATH)
-            >>> from watch.dvc.expt_manager import *  # NOQA
+            >>> from watch.mlops.expt_manager import *  # NOQA
             >>> import watch
             >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
             >>> #expt_dvc_dpath = watch.find_smart_dvc_dpath(hardware='ssd')
@@ -793,7 +899,7 @@ class ExperimentState(ub.NiceRepr):
         and then adds them to DVC.
 
         >>> # xdoctest: +REQUIRES(env:EXPT_DVC_DPATH)
-        >>> from watch.dvc.expt_manager import *  # NOQA
+        >>> from watch.mlops.expt_manager import *  # NOQA
         >>> import watch
         >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
@@ -815,7 +921,10 @@ class ExperimentState(ub.NiceRepr):
                 raise UserAbort
 
         from watch.tasks.fusion.repackage import repackage
-        to_repackage = needs_package['ckpt_path'].values.tolist()
+        if 'ckpt_path' in needs_package:
+            to_repackage = needs_package['ckpt_path'].values.tolist()
+        else:
+            to_repackage = []
         print(to_repackage)
         if to_repackage:
             # NOTE: THIS RELIES ON KNOWING ABOUT THE SPECIFIC MODEL CODE.
@@ -824,7 +933,7 @@ class ExperimentState(ub.NiceRepr):
 
         # Rebuild the tables to ensure we are up to date
         tables = self.cross_referenced_tables()
-        staging_df, versioned_df, volitile_df = tables.take(['staging', 'versioned', 'volitile'])
+        staging_df, versioned_df, volitile_df = ub.take(tables, ['staging', 'versioned', 'volitile'])
         needs_copy = staging_df[~staging_df['is_copied']]
         print(needs_copy)
         print(f'There are {len(needs_copy)} packages that need to be copied')
@@ -845,7 +954,7 @@ class ExperimentState(ub.NiceRepr):
 
         # Rebuild the tables to ensure we are up to date
         tables = self.cross_referenced_tables()
-        staging_df, versioned_df, volitile_df = tables.take(['staging', 'versioned', 'volitile'])
+        staging_df, versioned_df, volitile_df = ub.take(tables, ['staging', 'versioned', 'volitile'])
         needs_add_flags = (~versioned_df['has_dvc'] | versioned_df['unprotected'])
         needs_dvc_add = versioned_df[needs_add_flags]
         print(needs_dvc_add)
@@ -876,9 +985,9 @@ class ExperimentState(ub.NiceRepr):
             git pull
             dvc pull -r aws --recursive models/fusion/{self.dataset_code}
 
-            python -m watch.dvc.expt_manager "pull packages" --dvc_dpath=$DVC_EXPT_DPATH
-            python -m watch.dvc.expt_manager "status packages" --dvc_dpath=$DVC_EXPT_DPATH
-            python -m watch.dvc.expt_manager "evaluate" --dvc_dpath=$DVC_EXPT_DPATH
+            python -m watch.mlops.expt_manager "pull packages" --dvc_dpath=$DVC_EXPT_DPATH
+            python -m watch.mlops.expt_manager "status packages" --dvc_dpath=$DVC_EXPT_DPATH
+            python -m watch.mlops.expt_manager "evaluate" --dvc_dpath=$DVC_EXPT_DPATH
 
             # setup right params
             # python -m tasks.fusion.schedule_inference schedule_evaluation --gpus=auto --run=True
@@ -897,7 +1006,8 @@ class ExperimentState(ub.NiceRepr):
         #         --draw_heatmaps=0 \
         #         --without_alternatives \
         #         --skip_existing=True --backend=slurm --run=0
-        from watch.tasks.fusion.schedule_evaluation import schedule_evaluation
+        # from watch.tasks.fusion.schedule_evaluation import schedule_evaluation
+        from watch.mlops.schedule_evaluation import schedule_evaluation
         model_globstr = state.path_patterns['pkg']
         test_kwcoco_fpath = state.data_dvc_dpath / state.dataset_code / 'data_vali.kwcoco.json'
         annotations_dpath = state.data_dvc_dpath / 'annotations'
@@ -914,6 +1024,74 @@ class ExperimentState(ub.NiceRepr):
         # table = manager.versioned_table()
         # schedule_evaluation(cmdline=False, **eval_kw)
         schedule_evaluation(cmdline=1, **eval_kw)
+
+    def _condense_test_dset(self, test_dataset):
+        """
+        This does what "organize" used to do.
+        """
+        if test_dataset is None:
+            test_dset_name = 'unknown_test_dset'
+        else:
+            test_dataset = ub.Path(test_dataset)
+            test_dset_name = '_'.join((list(test_dataset.parts[-2:-1]) + [test_dataset.stem]))
+
+        # Register our condensed named.
+        from watch.utils.reverse_hashid import ReverseHashTable
+        rhash = ReverseHashTable(type='test_dset')
+        rhash.register(test_dset_name, test_dataset)
+
+        return test_dset_name
+
+    def _condense_pred_cfg(self, pred_cfg):
+        """
+        This does what "organize" used to do.
+        """
+        # Register our condensed named.
+        if pred_cfg is None:
+            pred_cfgstr = 'unknown'
+        else:
+            pred_cfgstr = ub.hash_data(pred_cfg)[0:8]
+        pred_cfg_dname  = 'predcfg_' + pred_cfgstr
+        from watch.utils.reverse_hashid import ReverseHashTable
+        rhash = ReverseHashTable(type='pred_cfg')
+        rhash.register(pred_cfg_dname, pred_cfg)
+        return pred_cfg_dname
+
+    def _condense_trk_cfg(self, bas_track_cfg):
+        """
+        This does what "organize" used to do.
+        """
+        human_opts = ub.dict_isect(bas_track_cfg, {})
+        other_opts = ub.dict_diff(bas_track_cfg, human_opts)
+        if len(human_opts):
+            human_part = ub.repr2(human_opts, compact=1) + '_'
+        else:
+            human_part = ''
+        cfgstr = human_part + ub.hash_data(other_opts)[0:8]
+        # pred_bundle_dpath = pred_fpath.parent
+        trk_cfg_dname = f'trackcfg_{cfgstr}'
+
+        from watch.utils.reverse_hashid import ReverseHashTable
+        rhash = ReverseHashTable(type='pred_cfg')
+        rhash.register(trk_cfg_dname, bas_track_cfg)
+        return trk_cfg_dname
+
+    def _condense_act_cfg(self, act_cfg):
+        """
+        This does what "organize" used to do.
+        """
+        human_opts = ub.dict_isect(act_cfg, {})
+        other_opts = ub.dict_diff(act_cfg, human_opts)
+        if len(human_opts):
+            human_part = ub.repr2(human_opts, compact=1) + '_'
+        else:
+            human_part = ''
+        cfgstr = human_part + ub.hash_data(other_opts)[0:8]
+        acf_cfg_dname = f'actcfg_{cfgstr}'
+        from watch.utils.reverse_hashid import ReverseHashTable
+        rhash = ReverseHashTable(type='pred_cfg')
+        rhash.register(acf_cfg_dname, act_cfg)
+        return acf_cfg_dname
 
 
 def summarize_tables(tables):
@@ -977,7 +1155,7 @@ def checkpoint_filepath_info(fname):
         parse.parse('{prefix}foo={bar}', 'afoao=3')
 
     Example:
-        >>> from watch.dvc.expt_manager import *  # NOQA
+        >>> from watch.mlops.expt_manager import *  # NOQA
         >>> fnames = [
         >>>     'epoch=1-step=10.foo',
         >>>     'epoch=1-step=10-v2.foo',
@@ -1030,14 +1208,14 @@ class UserAbort(Exception):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/dvc/expt_manager.py "pull all"
-        python -m watch.dvc.expt_manager "status"
-        python -m watch.dvc.expt_manager "push all"
-        python -m watch.dvc.expt_manager "pull evals"
+        python ~/code/watch/watch/mlops/expt_manager.py "pull all"
+        python -m watch.mlops.expt_manager "status"
+        python -m watch.mlops.expt_manager "push all"
+        python -m watch.mlops.expt_manager "pull evals"
 
-        python -m watch.dvc.expt_manager "evaluate"
+        python -m watch.mlops.expt_manager "evaluate"
 
-        python -m watch.dvc.expt_manager "pull all"
-        python -m watch.dvc.expt_manager "pull packages"
+        python -m watch.mlops.expt_manager "pull all"
+        python -m watch.mlops.expt_manager "pull packages"
     """
     main(cmdline=True)

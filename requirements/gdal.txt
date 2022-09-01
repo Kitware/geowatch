@@ -1,0 +1,3 @@
+# The wheels for GDAL are on our server
+--find-links https://girder.github.io/large_image_wheels
+GDAL>=3.4.1

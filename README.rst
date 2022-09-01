@@ -35,6 +35,35 @@ For information on testing please see `running and writing watch tests <testing_
 Getting Started
 ---------------
 
+
+Docker Image
+~~~~~~~~~~~~
+
+This repository also includes a ``Dockerfile`` that can be used to
+build the WATCH Docker image.  The built Docker image will have the
+WATCH Conda environment and WATCH Python module pre-installed.
+
+To build the conda Docker image:
+
+.. code:: bash
+
+   docker build .
+
+
+To build the pyenv Docker image:
+
+.. code:: bash
+
+    # Requires pulling this file for new docker-buildkit syntax
+    docker login
+    docker pull docker/dockerfile:1.3.0-labs
+
+    DOCKER_BUILDKIT=1 docker build --progress=plain -t "watch_pyenv310" -f ./dockerfiles/pyenv.Dockerfile .
+
+
+We will eventually deprecate the usage of conda. Using pyenv is recommended.
+
+
 Install Python
 ~~~~~~~~~~~~~~
 
@@ -71,18 +100,25 @@ On Debian-based systems install these via:
    sudo apt install ffmpeg tmux jq
 
 
-Docker Image
-~~~~~~~~~~~~
+Installing
+~~~~~~~~~~
 
-This repository also includes a ``Dockerfile`` that can be used to
-build the WATCH Docker image.  The built Docker image will have the
-WATCH Conda environment and WATCH Python module pre-installed.
-
-To build the Docker image:
+Assuming you have cloned this repo, and you are in a Python virtual
+environment, the watch repo can be setup as:
 
 .. code:: bash
 
-   docker build .
+   # Update Python build tools
+   pip install pip setuptools wheel build -U
+
+   # Install Kitware's gdal wheels
+   pip install -r requirements/gdal.txt
+
+   # Install linting tools
+   pip install -r requirements/linting.txt
+
+   # Install the main watch package with all development extras
+   pip install -e .[development,optional,headless]
 
 
 Internal Development
@@ -137,8 +173,6 @@ The current ``watch`` module struture is summarized as follows:
         │               └─╼ splits_unmasked {'.py': 2}
         └─╼ utils {'.py': 32}
             └─╼ lightning_ext {'.py': 5}
-                └─╼ callbacks {'.py': 7, '.txt': 1}
-
 
 
 
@@ -158,7 +192,7 @@ The following is a list of the primary CLI commands:
 
 * ``smartwatch find_dvc --help`` - Helper to return the path the the WATCH DVC Repo (if it is a known location)
 
-* ``smartwatch watch_coco_stats --help`` - Print statistics about a kwcoco file with a focus on sensor / channel frequency and region information.
+* ``smartwatch stats --help`` - Print statistics about a kwcoco file with a focus on sensor / channel frequency and region information.
 
 * ``smartwatch coco_intensity_histograms --help`` - Show per-band / per-sensor histograms of pixel intensities. This is useful for acessing the harmonization between sensors. 
 
@@ -189,7 +223,6 @@ Using ``--help`` shows the top level modal CLI:
             coco_extract_geo_bounds
                                 Extract bounds of geojson tiffs (in a kwcoco file) into a regions file
             geotiffs_to_kwcoco  Create a kwcoco manifest of a set of on-disk geotiffs
-            hello_world         opaque sub command
             watch_coco_stats (stats)
                                 Print watch-relevant information about a kwcoco dataset
             merge_region_models
@@ -208,6 +241,7 @@ Using ``--help`` shows the top level modal CLI:
                                 opaque sub command
             torch_model_stats (model_info)
                                 Print stats about a torch model.
+
 
         optional arguments:
           -h, --help            show this help message and exit
@@ -241,7 +275,6 @@ repository maintenence.
 
 
 .. _development environment: https://algorithm-toolkit.readthedocs.io/en/latest/dev-environment.html#
-.. _atk docs: https://algorithm-toolkit.readthedocs.io/en/latest/index.html
 
 .. |master-pipeline| image:: https://gitlab.kitware.com/smart/watch/badges/master/pipeline.svg
    :target: https://gitlab.kitware.com/smart/watch/-/pipelines/master/latest

@@ -383,18 +383,25 @@ def load_pxl_eval(fpath, dvc_dpath=None):
     return info
 
 
-def load_bas_eval(fpath, dvc_dpath):
+def load_bas_eval(fpath, dvc_expt_dpath):
     bas_info = _load_json(fpath)
 
     best_bas_rows = pd.read_json(io.StringIO(json.dumps(bas_info['best_bas_rows'])), orient='table')
-    try:
-        bas_row = best_bas_rows.loc['merged'].reset_index().iloc[0].to_dict()
-    except Exception:
-        bas_row = best_bas_rows[best_bas_rows['region_id'].isnull()].reset_index(drop=1).iloc[0].to_dict()
+
+    flags = best_bas_rows['region_id'] == '__merged__'
+
+    if np.any(flags):
+        bas_row = best_bas_rows[flags].iloc[0]
+    else:
+        # OLD Phase 1 code, can eventually remove
+        try:
+            bas_row = best_bas_rows.loc['merged'].reset_index().iloc[0].to_dict()
+        except Exception:
+            bas_row = best_bas_rows[best_bas_rows['region_id'].isnull()].reset_index(drop=1).iloc[0].to_dict()
 
     tracker_info = bas_info['parent_info']
     path_hint = fpath
-    param_types = parse_tracker_params(tracker_info, dvc_dpath, path_hint=path_hint)
+    param_types = parse_tracker_params(tracker_info, dvc_expt_dpath, path_hint=path_hint)
 
     metrics = {
         'BAS_F1': bas_row['F1'],
@@ -1285,19 +1292,22 @@ def shrink_channels(x):
     for idx, part in enumerate('forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field'.split('|')):
         aliases[part] =  'land.{}'.format(idx)
     stream_parts = []
-    for stream in kwcoco.ChannelSpec.coerce(x).streams():
+    sensorchan = kwcoco.SensorChanSpec.coerce(x)
+    # spec = kwcoco.ChannelSpec.coerce(x)
+    for stream in sensorchan.streams():
         fused_parts = []
-        for c in stream.as_list():
+        for c in stream.chans.as_list():
             c = aliases.get(c, c)
             c = c.replace('matseg_', 'matseg.')
             fused_parts.append(c)
         fused = '|'.join(fused_parts)
+        fused = fused.replace('B|G|R|N', 'BGRN')
         fused = fused.replace('B|G|R|N|S|H', 'BGRNSH')
         fused = fused.replace('R|G|B', 'RGB')
         fused = fused.replace('B|G|R', 'BGR')
-        stream_parts.append(fused)
+        stream_parts.append(stream.sensor.spec + ':' + fused)
     new = ','.join(stream_parts)
-    x = kwcoco.ChannelSpec.coerce(new).concise().spec
+    x = kwcoco.SensorChanSpec.coerce(new).concise().spec
     return x
 
 
@@ -1939,7 +1949,9 @@ def main(cmdline=False, **kwargs):
         best_per_expt = pd.concat(bests)
         if shrink:
             best_per_expt = shrink_notations(best_per_expt, drop=1)
-            best_per_expt = best_per_expt.rename({'time_steps': 'time', 'chip_size': 'space'}, axis=1)
+            best_per_expt = best_per_expt.rename({
+                'time_steps': 'time',
+                'chip_size': 'space'}, axis=1)
         return best_per_expt
 
     print('\nBest Class Models')

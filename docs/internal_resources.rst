@@ -19,3 +19,6 @@ you will not be able to access these resources.
 +----------------------------------------------------------+----------------------------------------------------------------+
 | The Internal SMART WATCH Girder Collection (DEPRECATED)  | https://data.kitware.com/#collection/602457272fa25629b95d1718  |
 +----------------------------------------------------------+----------------------------------------------------------------+
+
+
+Also see: https://gitlab.kitware.com/smart/watch/-/wikis/Resource-Clearinghouse

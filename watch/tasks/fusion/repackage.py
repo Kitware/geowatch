@@ -3,7 +3,7 @@ Helper script for packaging a checkpoint into a torch package
 
 MOSTLY DEPRECATED IN FAVOR OF
 
-~/code/watch/watch/dvc/expt_manager.py
+~/code/watch/watch/mlops/expt_manager.py
 """
 import os
 import ubelt as ub

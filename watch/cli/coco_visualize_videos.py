@@ -334,6 +334,8 @@ def main(cmdline=True, **kwargs):
                 chan_to_normalizer[chan] = normalizer
             print('chan_to_normalizer = {}'.format(ub.repr2(chan_to_normalizer, nl=1)))
 
+        valid_vidspace_region = video.get('valid_region', None)
+
         if config['zoom_to_tracks']:
             assert space == 'video'
             tid_to_info = video_track_info(coco_dset, vidid)
@@ -405,6 +407,7 @@ def main(cmdline=True, **kwargs):
                             min_dim=config['min_dim'],
                             local_frame_index=local_frame_index,
                             local_max_frame=local_max_frame,
+                            valid_vidspace_region=valid_vidspace_region,
                             skip_missing=config['skip_missing'])
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
@@ -566,6 +569,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                min_dim=None,
                                local_frame_index=None,
                                local_max_frame=None,
+                               valid_vidspace_region=None,
                                verbose=0):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
@@ -581,7 +585,12 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
     # Ensure names are differentiated between frames.
     import math
-    num_digits = int(math.log10(max(local_max_frame, 1))) + 1
+    if local_max_frame is None:
+        num_digits = 8
+    else:
+        num_digits = int(math.log10(max(local_max_frame, 1))) + 1
+    if local_frame_index is None:
+        local_frame_index = -1
     frame_id = f'{local_frame_index:0{num_digits}d}'
     # frame_index = img.get('frame_index', None)
     # timestamp = img.get('timestamp', None)
@@ -734,12 +743,24 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         delayed = delayed.crop(crop_box.to_slices()[0])
 
     valid_region = img.get('valid_region', None)
-    valid_poly = None
+    valid_image_poly = None
+    valid_video_poly = None
+    vid_from_img = None
     if valid_region:
-        valid_poly: kwimage.MultiPolygon = kwimage.MultiPolygon.coerce(valid_region)
+        valid_image_poly: kwimage.MultiPolygon = kwimage.MultiPolygon.coerce(valid_region)
         if space == 'video':
             vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
-            valid_poly = valid_poly.warp(vid_from_img)
+            valid_image_poly = valid_image_poly.warp(vid_from_img)
+
+    if valid_vidspace_region is not None:
+        valid_vidspace_region = kwimage.MultiPolygon.coerce(valid_vidspace_region)
+        if space == 'image':
+            if vid_from_img is None:
+                vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
+            img_from_vid = vid_from_img.inv()
+            valid_video_poly = valid_vidspace_region.warp(img_from_vid)
+        else:
+            valid_video_poly = valid_vidspace_region
 
     # Determine if we need to scale the image for visualization
     viz_scale_factor = 1.0
@@ -757,8 +778,10 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         viz_warp = kwimage.Affine.scale(viz_scale_factor)
         delayed = delayed.warp(viz_warp)
         dets = dets.warp(viz_warp)
-        if valid_poly is not None:
-            valid_poly = valid_poly.warp(viz_warp)
+        if valid_image_poly is not None:
+            valid_image_poly = valid_image_poly.warp(viz_warp)
+        if valid_video_poly is not None:
+            valid_video_poly = valid_video_poly.warp(viz_warp)
 
     for chan_row in chan_groups:
         chan_pname = chan_row['pname']
@@ -868,11 +891,18 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         chan_header_lines.append(chan_group)
         header_text = '\n'.join(chan_header_lines)
 
-        if valid_poly is not None:
+        if valid_image_poly is not None:
+            # Draw the valid region specified at the image level
             with ub.Timer('valid region', verbose=verbose > 2):
-                if any([p.data['exterior'].data.size for p in valid_poly.data]):
-                    canvas = valid_poly.draw_on(canvas, color='green',
-                                                fill=False, border=True)
+                if any([p.data['exterior'].data.size for p in valid_image_poly.data]):
+                    canvas = valid_image_poly.draw_on(canvas, color='kitware_green',
+                                                      fill=False, border=True)
+
+        if valid_video_poly is not None:
+            # Draw the valid region specified at the video level
+            if any([p.data['exterior'].data.size for p in valid_video_poly.data]):
+                canvas = valid_video_poly.draw_on(canvas, color='lawngreen',
+                                                  fill=False, border=True)
 
         if draw_imgs:
             with ub.Timer('prep img_canvas', verbose=verbose):

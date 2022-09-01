@@ -135,8 +135,14 @@ PRODUCTION_MODELS = [
         }
     },
 
-
 ]
+
+###
+## Shortlist for August 1 Eval
+# 37   Drop4_BAS_Continue_15GSD_BGR_V004_epoch=38-step=159744.pt.pt  predcfg_1c530993  trackcfg_be1118c1      NaN       NaN    0.053464     0.852666  0.276596
+# 43   Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt.pt  predcfg_1c530993  trackcfg_be1118c1      NaN       NaN    0.055105     0.856778  0.216216
+# 70               Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt  predcfg_1c530993  trackcfg_be1118c1      NaN       NaN    0.077961     0.798761  0.390625
+# 75               Drop4_BAS_Retrain_V002_epoch=45-step=23552.pt.pt  predcfg_1c530993  trackcfg_be1118c1      NaN       NaN    0.080237     0.804716  0.385965
 
 
 # TODO Investigate v53 epoch 3. It might have a really good recall

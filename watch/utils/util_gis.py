@@ -592,11 +592,22 @@ def find_local_meter_epsg_crs(geom_crs84):
         >>> geom_crs84 = kwimage.Polygon.random().translate(-0.5).scale((180, 90)).to_shapely()
         >>> epsg_zone = find_local_meter_epsg_crs(geom_crs84)
 
+    SeeAlso:
+        GeoDataFrame.estimate_utm_crs
+
     TODO:
         - [ ] Albers?
         - [ ] Better UTM zone intersection
         - [ ] Fix edge cases
     """
+
+    if 0:
+        # TODO: probably can do this via: GeoDataFrame.estimate_utm_crs
+        # But ours is faster. Not sure if its more correct though.
+        import geopandas as gpd
+        utm_crs = gpd.array.from_shapely([geom_crs84], 'crs84').estimate_utm_crs()
+        epsg_zone = utm_crs.to_epsg()
+
     lonmin, latmin, lonmax, latmax = geom_crs84.bounds
     # Hack: this doesnt work on boundries (or for larger regions)
     # correct way of doing this would be lookup candiate CRS zones,

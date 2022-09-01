@@ -875,3 +875,424 @@ def devcheck_frame_poly_weights(poly, shape, dtype=np.uint8):
     kwplot.imshow(frame_poly_weights_v1, pnum=(1, 3, 1))
     kwplot.imshow(frame_poly_weights, pnum=(1, 3, 2))
     kwplot.imshow(np.maximum(frame_poly_weights, space_weights), pnum=(1, 3, 3))
+
+
+def find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim, merge_thresh=0.001, max_iters=100):
+    """
+    Given a set of polygons we want to find a small set of boxes that
+    completely cover all of those polygons.
+
+    We are going to do some set-cover shenanigans by making a bunch of
+    candidate boxes based on some hueristics and find a set cover of those.
+
+    Then we will search for small boxes that can be merged, and iterate.
+
+    References:
+        https://aip.scitation.org/doi/pdf/10.1063/1.5090003?cookieSet=1
+        Mercantile - https://pypi.org/project/mercantile/0.4/
+        BingMapsTiling - XYZ Tiling for webmap services
+        https://mercantile.readthedocs.io/en/stable/api/mercantile.html#mercantile.bounding_tile
+        https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.713.6709&rep=rep1&type=pdf
+
+    Ignore:
+        >>> # Create random polygons as test data
+        >>> import kwimage
+        >>> import kwarray
+        >>> from kwarray import distributions
+        >>> rng = kwarray.ensure_rng(934602708841)
+        >>> num = 200
+        >>> #
+        >>> canvas_width = 2000
+        >>> offset_distri = distributions.Uniform(canvas_width, rng=rng)
+        >>> scale_distri = distributions.Uniform(10, 150, rng=rng)
+        >>> #
+        >>> polygons = []
+        >>> for _ in range(num):
+        >>>     poly = kwimage.Polygon.random(rng=rng)
+        >>>     poly = poly.scale(scale_distri.sample())
+        >>>     poly = poly.translate(offset_distri.sample(2))
+        >>>     polygons.append(poly)
+        >>> polygons = kwimage.PolygonList(polygons)
+        >>> #
+        >>> import kwplot
+        >>> plt = kwplot.autoplt()
+        >>> kwplot.figure(doclf=1)
+        >>> plt.gca().set_xlim(0, canvas_width)
+        >>> plt.gca().set_ylim(0, canvas_width)
+        >>> _ = polygons.draw(fill=0, border=1, color='pink')
+        >>> #
+        >>> scale = 1.0
+        >>> min_box_dim = 240
+        >>> max_box_dim = 500
+        >>> #
+        >>> keep_bbs, overlap_idxs = find_low_overlap_covering_boxes(polygons, scale, min_box_dim, max_box_dim)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> #
+        >>> import kwplot
+        >>> plt = kwplot.autoplt()
+        >>> kwplot.figure(fnum=1, doclf=1)
+        >>> polygons.draw(color='pink')
+        >>> # candidate_bbs.draw(color='blue', setlim=1)
+        >>> keep_bbs.draw(color='orange', setlim=1)
+        >>> plt.gca().set_title('find_low_overlap_covering_boxes')
+    """
+    import kwimage
+    import kwarray
+    import numpy as np
+    import geopandas as gpd
+    import ubelt as ub
+    from watch.utils import util_gis
+    import networkx as nx
+
+    polygons_sh = [p.to_shapely() for p in polygons]
+    polygons_gdf = gpd.GeoDataFrame(geometry=polygons_sh)
+
+    polybbs = kwimage.Boxes.concatenate([p.to_boxes() for p in polygons])
+    initial_candiate_bbs = polybbs.scale(scale, about='center')
+    initial_candiate_bbs = initial_candiate_bbs.to_cxywh()
+    initial_candiate_bbs.data[..., 2] = np.maximum(initial_candiate_bbs.data[..., 2], min_box_dim)
+    initial_candiate_bbs.data[..., 3] = np.maximum(initial_candiate_bbs.data[..., 3], min_box_dim)
+
+    candidate_bbs = initial_candiate_bbs
+
+    def refine_candidates(candidate_bbs, iter_idx):
+        # Add some translated boxes to the mix to see if they do any better
+        extras = [
+            candidate_bbs.translate((-min_box_dim / 10, 0)),
+            candidate_bbs.translate((+min_box_dim / 10, 0)),
+            candidate_bbs.translate((0, -min_box_dim / 10)),
+            candidate_bbs.translate((0, +min_box_dim / 10)),
+            candidate_bbs.translate((-min_box_dim / 3, 0)),
+            candidate_bbs.translate((+min_box_dim / 3, 0)),
+            candidate_bbs.translate((0, -min_box_dim / 3)),
+            candidate_bbs.translate((0, +min_box_dim / 3)),
+        ]
+        candidate_bbs = kwimage.Boxes.concatenate([candidate_bbs] + extras)
+
+        # Find the minimum boxes that cover all of the regions
+        # xs, ys = centroids.T
+        # ws = hs = np.full(len(xs), fill_value=site_meters)
+        # utm_boxes = kwimage.Boxes(np.stack([xs, ys, ws, hs], axis=1), 'cxywh').to_xywh()
+
+        boxes_gdf = gpd.GeoDataFrame(geometry=candidate_bbs.to_shapley(), crs=polygons_gdf.crs)
+        box_poly_overlap = util_gis.geopandas_pairwise_overlaps(boxes_gdf, polygons_gdf, predicate='contains')
+        cover_idxs = list(kwarray.setcover(box_poly_overlap).keys())
+        keep_bbs = candidate_bbs.take(cover_idxs)
+        box_ious = keep_bbs.ious(keep_bbs)
+
+        if iter_idx > 0:
+            # Dont do it on the first iter to compare to old algo
+            laplace = box_ious - np.diag(np.diag(box_ious))
+            mergable = laplace > merge_thresh
+            g = nx.Graph()
+            g.add_edges_from(list(zip(*np.where(mergable))))
+            cliques = sorted(nx.find_cliques(g), key=len)[::-1]
+
+            used = set()
+            merged_boxes = []
+            for clique in cliques:
+                if used & set(clique):
+                    continue
+
+                new_box = keep_bbs.take(clique).bounding_box()
+                w = new_box.width.ravel()[0]
+                h = new_box.height.ravel()[0]
+                if w < max_box_dim and h < max_box_dim:
+                    merged_boxes.append(new_box)
+                    used.update(clique)
+
+            unused = sorted(set(range(len(keep_bbs))) - used)
+            post_merge_bbs = kwimage.Boxes.concatenate([keep_bbs.take(unused)] + merged_boxes)
+
+            boxes_gdf = gpd.GeoDataFrame(geometry=post_merge_bbs.to_shapley(), crs=polygons_gdf.crs)
+            box_poly_overlap = util_gis.geopandas_pairwise_overlaps(boxes_gdf, polygons_gdf, predicate='contains')
+            cover_idxs = list(kwarray.setcover(box_poly_overlap).keys())
+            new_cand_bbs = post_merge_bbs.take(cover_idxs)
+        else:
+            new_cand_bbs = keep_bbs
+
+        new_cand_overlaps = list(ub.take(box_poly_overlap, cover_idxs))
+        return new_cand_bbs, new_cand_overlaps
+
+    new_cand_overlaps = None
+
+    for iter_idx in range(max_iters):
+        old_candidate_bbs = candidate_bbs
+        candidate_bbs, new_cand_overlaps = refine_candidates(candidate_bbs, iter_idx)
+        num_old = len(old_candidate_bbs)
+        num_new = len(candidate_bbs)
+        if num_old == num_new:
+            residual = (old_candidate_bbs.data - candidate_bbs.data).max()
+            if residual > 0:
+                print('improving residual = {}'.format(ub.repr2(residual, nl=1)))
+            else:
+                print('converged')
+                break
+        else:
+            print(f'improving: {num_old} -> {num_new}')
+    else:
+        print('did not converge')
+    keep_bbs = candidate_bbs
+    overlap_idxs = new_cand_overlaps
+
+    if 0:
+        import kwplot
+        kwplot.autoplt()
+        kwplot.figure(fnum=1, doclf=1)
+        polygons.draw(color='pink')
+        # candidate_bbs.draw(color='blue', setlim=1)
+        keep_bbs.draw(color='orange', setlim=1)
+
+    return keep_bbs, overlap_idxs
+
+
+def find_low_overlap_covering_boxes_optimize(polygons, scale, min_box_dim, max_box_dim, merge_thresh=0.001, max_iters=100):
+    """
+    A variant of the covering problem that doesn't work that well, but might in
+    the future with tweaks.
+
+    Ignore:
+        >>> # Create random polygons as test data
+        >>> import kwimage
+        >>> import kwarray
+        >>> from kwarray import distributions
+        >>> rng = kwarray.ensure_rng(934602708841)
+        >>> num = 200
+        >>> #
+        >>> canvas_width = 2000
+        >>> offset_distri = distributions.Uniform(canvas_width, rng=rng)
+        >>> scale_distri = distributions.Uniform(10, 150, rng=rng)
+        >>> #
+        >>> polygons = []
+        >>> for _ in range(num):
+        >>>     poly = kwimage.Polygon.random(rng=rng)
+        >>>     poly = poly.scale(scale_distri.sample())
+        >>>     poly = poly.translate(offset_distri.sample(2))
+        >>>     polygons.append(poly)
+        >>> polygons = kwimage.PolygonList(polygons)
+        >>> #
+        >>> import kwplot
+        >>> plt = kwplot.autoplt()
+        >>> kwplot.figure(doclf=1)
+        >>> plt.gca().set_xlim(0, canvas_width)
+        >>> plt.gca().set_ylim(0, canvas_width)
+        >>> _ = polygons.draw(fill=0, border=1, color='pink')
+        >>> #
+        >>> scale = 1.0
+        >>> min_box_dim = 240
+        >>> max_box_dim = 500
+        >>> #
+
+    """
+    import kwimage
+    # import kwarray
+
+    start_scale = 2.0
+    polygon_boxes = kwimage.Boxes.concatenate([p.to_boxes() for p in polygons]).to_ltrb()
+    candidate_bbs = polygon_boxes.scale(start_scale, about='center').to_ltrb()
+    orig_candidates = candidate_bbs.copy()
+    import torch
+
+    device = 'cpu'
+    # device = 0
+    polygon_ltrb = polygon_boxes.tensor().data.float().to(device)
+    candidate_ltrb = torch.nn.Parameter(candidate_bbs.tensor().data.float().to(device))
+
+    # These will be soft bits that will indicate 1 or 0, and we will try to
+    # force into an integer solution via rounding.
+    indicator_logits = torch.nn.Parameter(
+        torch.rand(len(candidate_ltrb), dtype=torch.float, device=candidate_ltrb.device) * 0.2 + 0.8
+    )
+
+    parameters = [
+        candidate_ltrb,
+        indicator_logits,
+    ]
+    import torch_optimizer as optim
+    optimizer = optim.RangerQH(parameters, lr=1e-2)
+    # from torch.optim import SGD
+    # optimizer = SGD(parameters, lr=1-1, weight_decay=1e-7)
+    # from torch.optim import AdamW
+    # optimizer = AdamW(parameters, lr=1e-3, weight_decay=1e-6)
+
+    target_boxes = kwimage.Boxes(polygon_ltrb, 'ltrb')
+    cover_boxes = kwimage.Boxes(candidate_ltrb, 'ltrb')
+
+    # ltrb1 = target_boxes.data
+    # ltrb2 = cover_boxes.data
+    # _impl = target_boxes._impl
+
+    # num_targets = len(target_boxes)
+    target_area = target_boxes.area.sum()
+    # eps = kwarray.dtype_info(target_area.dtype).eps
+
+    denom = target_area
+
+    disatisfaction_penalty = 100
+
+    def forward():
+        # TODO: restrict what boxes can cover what objects via grouping to
+        # reduce computational complexity here.
+        iooa = target_boxes.iooas(cover_boxes)
+
+        areas = target_boxes.area
+        self_ious = target_boxes.ious(target_boxes, impl='py')
+
+        indicator_bits = indicator_logits.sigmoid()
+        chosen_area = (indicator_bits * (areas / denom)).sum()
+        chosen_self_overlap = (indicator_bits * self_ious).sum()
+
+        # We want to minimize...
+        objective = (
+            # Total chosen area covered
+            chosen_area +
+            # Overlap of the chosen boxes
+            chosen_self_overlap
+        )
+
+        # Subject to the constraint (which we relax for optimization)
+        relaxed_iooa = iooa * indicator_bits[:, None]
+
+        # TODO: Getting this loss right is the key to this problem.
+        # The current version doesn't work that well. But a more numerically
+        # stable version might do better.
+
+        # All of the polygons must be completely covered by at least one box
+        sat_critical = relaxed_iooa.max(dim=0)[0].min()
+        sat_overall = relaxed_iooa.max(dim=0)[0].mean()
+        satisfaction = (sat_critical + sat_overall) / 2
+
+        bottom_line_loss = disatisfaction_penalty * (1 - sat_critical)
+        overall_sat_loss = disatisfaction_penalty * (1 - sat_overall)
+        loss = objective / (satisfaction + 0.01) + bottom_line_loss + overall_sat_loss
+        # loss = bottom_line_loss + overall_sat_loss
+
+        outputs = {
+            'item_losses': {
+                'chosen_area': chosen_area[None, None, ...],
+                'chosen_self_overlap': chosen_self_overlap[None, None, ...],
+                'sat_critical': sat_critical[None, None, ...],
+                'sat_overall': sat_overall[None, None, ...],
+                'satisfaction': satisfaction[None, None, ...],
+                'total': loss[None, None, ...],
+            },
+            'loss': loss,
+        }
+        return outputs
+
+    if 1:
+        prog = ub.ProgIter(range(100000))
+        for i in prog:
+            optimizer.zero_grad()
+            outputs = forward()
+            loss = outputs['loss']
+            loss.backward()
+            total_grad = candidate_ltrb.grad.sum()
+            mean_grad = total_grad / candidate_ltrb.numel()
+            drift = (candidate_ltrb.data - orig_candidates.data).abs().max().item()
+            sat_overall = outputs['item_losses']['sat_overall'].sum().item()
+            sat_critical = outputs['item_losses']['sat_critical'].sum().item()
+            prog.set_extra(f'{loss=} {total_grad=} {mean_grad=} {drift=} {sat_critical=} {sat_overall=}')
+            optimizer.step()
+
+    else:
+
+        def draw_batch():
+            import kwarray
+            indicator_bits = kwarray.ArrayAPI.numpy(indicator_logits.sigmoid())
+            orig_candidates.draw(color='red', linewidth=6)
+            cover_boxes.numpy().draw(color='blue', setlim=1, alpha=indicator_bits, u=3)
+            target_boxes.numpy().draw(color='orange', setlim='grow', linwidth=2)
+
+        import kwplot
+        sns = kwplot.autosns()
+        plt = kwplot.autoplt()
+        kwplot.figure(fnum=1, doclf=1)
+        draw_batch()
+        plt.gca().set_title('find_low_overlap_covering_boxes')
+
+        import xdev
+        fnum = 2
+        fig = kwplot.figure(fnum=fnum, doclf=True)
+        fig.set_size_inches(15, 6)
+        fig.subplots_adjust(left=0.05, top=0.9)
+        prev = None
+        _frame_idx = 0
+
+        loss_records = []
+        loss_records = [g[0] for g in ub.group_items(loss_records, lambda x: x['step']).values()]
+        step = 0
+        _frame_idx = 0
+
+        for _frame_idx in xdev.InteractiveIter(list(range(_frame_idx + 1, 1000))):
+            # for _frame_idx in list(range(_frame_idx, 1000)):
+            num_steps = 100
+            ex = None
+            prog = ub.ProgIter(range(num_steps), desc='optimize')
+            for _i in prog:
+                optimizer.zero_grad()
+                outputs = forward()
+                loss = outputs['loss'].sum()
+                if torch.any(torch.isnan(loss)):
+                    print('NAN OUTPUT!!!')
+                    print('loss = {!r}'.format(loss))
+                    print('prev = {!r}'.format(prev))
+                    ex = Exception('prev = {!r}'.format(prev))
+                    break
+                # elif loss > 1e4:
+                #     # Turn down the learning rate when loss gets huge
+                #     scale = (loss / 1e4).detach()
+                #     loss /= scale
+                prev = loss
+                # import netharn as nh
+                # item_losses_ = nh.data.collate.default_collate(outputs['item_losses'])
+                item_losses_ = outputs['item_losses']
+                item_losses = ub.map_vals(lambda x: sum(x).item(), item_losses_)
+                loss_records.extend([{'part': key, 'val': val, 'step': step} for key, val in item_losses.items()])
+                loss.backward()
+                total_grad = candidate_ltrb.grad.sum()
+                mean_grad = total_grad / candidate_ltrb.numel()
+                drift = (candidate_ltrb.data - orig_candidates.data).abs().max().item()
+                sat_overall = outputs['item_losses']['sat_overall'].sum().item()
+                sat_critical = outputs['item_losses']['sat_critical'].sum().item()
+                prog.set_extra(f'{loss=} {total_grad=} {mean_grad=} {drift=} {sat_critical=} {sat_overall=}')
+                optimizer.step()
+                step += 1
+
+            draw_batch()
+
+            kwplot.figure(pnum=(1, 2, 1), fnum=fnum, docla=1)
+            draw_batch()
+
+            fig = kwplot.figure(fnum=fnum, pnum=(1, 2, 2))
+            #kwplot.imshow(canvas, pnum=(1, 2, 1))
+            import pandas as pd
+            df = pd.DataFrame(loss_records)
+            total_df = dict(list((df.groupby('part'))))['total']
+            print(total_df)
+            ax = sns.lineplot(data=total_df, x='step', y='val', hue='part')
+            ax
+            # ax.set_ylim(0, df.groupby('part')['val'].median().max())
+            # try:
+            #     ax.set_yscale('logit')
+            # except Exception:
+            #     ...
+            # from watch.utils.slugify_ext import smart_truncate
+            # from kwplot.mpl_make import render_figure_to_image
+            # fig.suptitle(smart_truncate(str(optimizer).replace('\n', ''), max_length=64))
+            # img = render_figure_to_image(fig)
+            # img = kwimage.convert_colorspace(img, src_space='bgr', dst_space='rgb')
+            # fpath = join(dpath, 'frame_{:04d}.png'.format(_frame_idx))
+            #kwimage.imwrite(fpath, img)
+            xdev.InteractiveIter.draw()
+            if ex:
+                raise ex
+
+    # polygon_boxes.tensor()
+    # boxes_gdf = gpd.GeoDataFrame(geometry=candidate_bbs.to_shapley(), crs=polygons_gdf.crs)
+    # box_poly_overlap = util_gis.geopandas_pairwise_overlaps(boxes_gdf, polygons_gdf, predicate='contains')
+    # cover_idxs = list(kwarray.setcover(box_poly_overlap).keys())
+    # keep_bbs = candidate_bbs.take(cover_idxs)
+    # box_ious = keep_bbs.ious(keep_bbs)
+    # import pulp
+    # prob = pulp.LpProblem("Set Cover", pulp.LpMinimize)

@@ -65,6 +65,7 @@ class FindDVCConfig(scfg.Config):
     @staticmethod
     def main(cmdline=True, **kwargs):
         from watch.utils import util_data
+        from rich import print
         import ubelt as ub
 
         cli_config = FindDVCConfig(default=kwargs, cmdline=cmdline)
@@ -81,7 +82,7 @@ class FindDVCConfig(scfg.Config):
 
         registry = util_data.DataRegistry()
         if command == 'list':
-            print(registry.list(**config, must_exist=must_exist))
+            registry.list(**config, must_exist=must_exist)
         elif command == 'add':
             registry.add(**config)
         elif command == 'remove':

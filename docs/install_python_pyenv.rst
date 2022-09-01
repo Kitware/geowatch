@@ -6,6 +6,8 @@ On ubuntu this can be setup as follows:
 
 .. code:: bash
 
+   ### Based on code in https://github.com/Erotemic/local/blob/main/tools/pyenv_ext/pyenv_ext_commands.sh
+
     # Install requirements for building Python (apt-specific command, might be different for other distros)
     sudo apt-get install -y \
         make build-essential libssl-dev zlib1g-dev \
@@ -31,21 +33,11 @@ On ubuntu this can be setup as follows:
     # https://github.com/docker-library/python/issues/160#issuecomment-509426916
     # https://gist.github.com/nszceta/ec6efc9b5e54df70deeec7bceead0a1d
     # https://clearlinux.org/news-blogs/boosting-python-profile-guided-platform-specific-optimizations
-    CHOSEN_PYTHON_VERSION=3.8.5
+    CHOSEN_PYTHON_VERSION=3.10.5
 
-    PROFILE_TASK="-m test.regrtest 
-        --pgo test_array test_base64 test_binascii test_binhex test_binop
-        test_c_locale_coercion test_csv test_json test_hashlib test_unicode
-        test_codecs test_traceback test_decimal test_math test_compile
-        test_threading test_time test_fstring test_re test_float test_class
-        test_cmath test_complex test_iter test_struct test_slice test_set
-        test_dict test_long test_bytes test_memoryview test_io test_pickle"
+    PROFILE_TASK="-m test.regrtest --pgo test_array test_base64 test_binascii test_binhex test_binop test_c_locale_coercion test_csv test_json test_hashlib test_unicode test_codecs test_traceback test_decimal test_math test_compile test_threading test_time test_fstring test_re test_float test_class test_cmath test_complex test_iter test_struct test_slice test_set test_dict test_long test_bytes test_memoryview test_io test_pickle"
 
-    PYTHON_CONFIGURE_OPTS="
-        --enable-shared 
-        --enable-optimizations 
-        --with-computed-gotos
-        --with-lto"
+    PYTHON_CONFIGURE_OPTS="--enable-shared --enable-optimizations --with-computed-gotos --with-lto"
 
     PYTHON_CFLAGS="-march=native -O2 -pipe" 
 
@@ -67,7 +59,7 @@ On ubuntu this can be setup as follows:
 
     #### START BASHRC PART ###
     echo "#### ADD THIS TO YOUR BASH RC ####"
-    BASHRC_CONTENTS=$(codeblock '
+    BASHRC_CONTENTS='
 
     # Add the pyenv command to our environment if it exists
     export PYENV_ROOT="$HOME/.pyenv"
@@ -79,13 +71,13 @@ On ubuntu this can be setup as follows:
     fi
 
     # Optionally auto-activate the chosen pyenv pyenv environment
-    CHOSEN_PYTHON_VERSION=3.8.5
+    CHOSEN_PYTHON_VERSION=3.10.5
     if [ -d "$PYENV_PREFIX/envs/pyenv$CHOSEN_PYTHON_VERSION" ]; then
         source $PYENV_PREFIX/envs/pyenv$CHOSEN_PYTHON_VERSION/bin/activate
     fi
-    ')
+    '
     echo "#### ADD THE ABOVE TO YOUR BASH RC ####"
-    echo $BASHRC_CONTENTS
+    echo "$BASHRC_CONTENTS"
     #### END BASHRC PART ####
 
 
@@ -97,12 +89,12 @@ with conda as well).
 
 If using `pyenv installation instructions <docs/pyenv_alternative.rst>`_, then
 a virtual environment can be created with the standard ``venv`` module.
-Assuming you have installed Python 3.8.5 with pyenv the following will create a
+Assuming you have installed Python with pyenv the following will create a
 virtual environment.
 
 .. code:: bash
 
-    CHOSEN_PYTHON_VERSION=3.8.5
+    CHOSEN_PYTHON_VERSION=3.10.5
     # Set your shell to use this pyenv shim
     pyenv shell $CHOSEN_PYTHON_VERSION
 
@@ -116,7 +108,7 @@ virtual environment.
 Once you are in a virtual environment (managed by either conda or pyenv), the
 WATCH Python module can then be installed with ``pip`` via the following
 command, where ``/path/to/watch-repo`` is the absolute path to the directory
-containing this README.md file.
+containing to WATCH repo.
 
 NOTE: It is important you install the module with the editable (``-e``) flag,
 otherwise changes you make to the module, will not be reflected when you run

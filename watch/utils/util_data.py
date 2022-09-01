@@ -67,6 +67,7 @@ class DataRegistry:
         return df
 
     def list(self, **kwargs):
+        from rich import print
         print(self.pandas(**kwargs).to_string())
 
     def _open(self):
