@@ -644,7 +644,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                         --name "{name_suffix}" \
                         --merge_fpath "{act_eval_fpath}" \
                         --inputs_are_paths=True \
-                        --pred_sites={track_out_fpath}
+                        --pred_sites={act_pred_fpath}
                     ''').format(**eval_act_row)
 
                 command = task_info.prefix_command(command)
