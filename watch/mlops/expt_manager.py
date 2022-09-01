@@ -91,7 +91,7 @@ Ignore:
     python -m watch.mlops.expt_manager "evaluate" \
         --bas_thresh=0.0,0.01,0.1 \
         --set_cover_algo=approx,exact \
-        --enable_pred=0 \
+        --enable_pred=1 \
         --enable_eval=1 \
         --enable_track=1 \
         --enable_iarpa_eval=1 \
@@ -498,7 +498,10 @@ class ExperimentState(ub.NiceRepr):
 
         if data_dvc_dpath is None:
             import watch
-            data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', envvar='DATA_DVC_DPATH')
+            try:
+                data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', envvar='DATA_DVC_DPATH')
+            except Exception:
+                pass
         self.data_dvc_dpath = data_dvc_dpath
         self.dataset_code = dataset_code
         self.dvc_remote = dvc_remote
