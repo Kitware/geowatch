@@ -1,18 +1,5 @@
 """
 Helper for scheduling a set of prediction + evaluation jobs
-
-python -m watch.tasks.fusion.schedule_evaluation
-
-DVC_DPATH=$(smartwatch_dvc)
-DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
-KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-EXPT_PATTERN="*"
-VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_nowv_vali.kwcoco.json
-python -m watch.tasks.fusion.schedule_evaluation \
-        --devices="0,1" \
-        --model_globstr="$DVC_DPATH/models/fusion/eval3_candidates/packages/${EXPT_PATTERN}/*.pt" \
-        --test_dataset="$VALI_FPATH" \
-        --run=0 --skip_existing=True
 """
 import ubelt as ub
 import scriptconfig as scfg
@@ -407,6 +394,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             pred_trk_row['trk_cfg'] = trk_cfg
             candidate_trk_rows.append(pred_trk_row)
 
+        # TODO: refactor to depend on a non-truth set of predicted sites.
         candidate_act_rows = []
         for act_cfg in ub.named_product(act_param_basis):
             pred_act_row = pred_pxl_row.copy()
