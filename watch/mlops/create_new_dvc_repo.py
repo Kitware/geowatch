@@ -170,4 +170,6 @@ def update_expt_ignores():
 def __dvc_notes__():
     """
 
+    dvc remote add horologic ssh://horologic.kitware.com/data/dvc-caches/smart_watch_dvc
+
     """

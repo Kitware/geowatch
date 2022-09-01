@@ -183,6 +183,8 @@ The SMART WATCH module comes with a command line interface (CLI). This can be in
 via ``python -m watch --help`` (note: if the module has been pip installed
 ``python -m watch`` can be replaced with ``smartwatch`` for primary CLI commands).
 
+More information can be found in the `watch cli docs <docs/watch_cli.rst>`_.
+
 In these examples we use the ``smartwatch`` invocation to be concise, but you
 can simply replace them with ``python -m smartwatch`` if your shell does not
 support the entrypoint.
