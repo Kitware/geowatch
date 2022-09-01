@@ -495,6 +495,10 @@ class ExperimentState(ub.NiceRepr):
     def __init__(self, expt_dvc_dpath, dataset_code, dvc_remote=None,
                  data_dvc_dpath=None, model_pattern='*'):
         self.expt_dvc_dpath = ub.Path(expt_dvc_dpath)
+
+        if data_dvc_dpath is None:
+            import watch
+            data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', envvar='DATA_DVC_DPATH')
         self.data_dvc_dpath = data_dvc_dpath
         self.dataset_code = dataset_code
         self.dvc_remote = dvc_remote
@@ -995,7 +999,8 @@ class ExperimentState(ub.NiceRepr):
         #         --draw_heatmaps=0 \
         #         --without_alternatives \
         #         --skip_existing=True --backend=slurm --run=0
-        from watch.tasks.fusion.schedule_evaluation import schedule_evaluation
+        # from watch.tasks.fusion.schedule_evaluation import schedule_evaluation
+        from watch.mlops.schedule_evaluation import schedule_evaluation
         model_globstr = state.path_patterns['pkg']
         test_kwcoco_fpath = state.data_dvc_dpath / state.dataset_code / 'data_vali.kwcoco.json'
         annotations_dpath = state.data_dvc_dpath / 'annotations'
@@ -1012,6 +1017,74 @@ class ExperimentState(ub.NiceRepr):
         # table = manager.versioned_table()
         # schedule_evaluation(cmdline=False, **eval_kw)
         schedule_evaluation(cmdline=1, **eval_kw)
+
+    def _condense_test_dset(self, test_dataset):
+        """
+        This does what "organize" used to do.
+        """
+        if test_dataset is None:
+            test_dset_name = 'unknown_test_dset'
+        else:
+            test_dataset = ub.Path(test_dataset)
+            test_dset_name = '_'.join((list(test_dataset.parts[-2:-1]) + [test_dataset.stem]))
+
+        # Register our condensed named.
+        from watch.utils.reverse_hashid import ReverseHashTable
+        rhash = ReverseHashTable(type='test_dset')
+        rhash.register(test_dset_name, test_dataset)
+
+        return test_dset_name
+
+    def _condense_pred_cfg(self, pred_cfg):
+        """
+        This does what "organize" used to do.
+        """
+        # Register our condensed named.
+        if pred_cfg is None:
+            pred_cfgstr = 'unknown'
+        else:
+            pred_cfgstr = ub.hash_data(pred_cfg)[0:8]
+        pred_cfg_dname  = 'predcfg_' + pred_cfgstr
+        from watch.utils.reverse_hashid import ReverseHashTable
+        rhash = ReverseHashTable(type='pred_cfg')
+        rhash.register(pred_cfg_dname, pred_cfg)
+        return pred_cfg_dname
+
+    def _condense_trk_cfg(self, bas_track_cfg):
+        """
+        This does what "organize" used to do.
+        """
+        human_opts = ub.dict_isect(bas_track_cfg, {})
+        other_opts = ub.dict_diff(bas_track_cfg, human_opts)
+        if len(human_opts):
+            human_part = ub.repr2(human_opts, compact=1) + '_'
+        else:
+            human_part = ''
+        cfgstr = human_part + ub.hash_data(other_opts)[0:8]
+        # pred_bundle_dpath = pred_fpath.parent
+        trk_cfg_dname = f'trackcfg_{cfgstr}'
+
+        from watch.utils.reverse_hashid import ReverseHashTable
+        rhash = ReverseHashTable(type='pred_cfg')
+        rhash.register(trk_cfg_dname, bas_track_cfg)
+        return trk_cfg_dname
+
+    def _condense_act_cfg(self, act_cfg):
+        """
+        This does what "organize" used to do.
+        """
+        human_opts = ub.dict_isect(act_cfg, {})
+        other_opts = ub.dict_diff(act_cfg, human_opts)
+        if len(human_opts):
+            human_part = ub.repr2(human_opts, compact=1) + '_'
+        else:
+            human_part = ''
+        cfgstr = human_part + ub.hash_data(other_opts)[0:8]
+        acf_cfg_dname = f'actcfg_{cfgstr}'
+        from watch.utils.reverse_hashid import ReverseHashTable
+        rhash = ReverseHashTable(type='pred_cfg')
+        rhash.register(acf_cfg_dname, act_cfg)
+        return acf_cfg_dname
 
 
 def summarize_tables(tables):

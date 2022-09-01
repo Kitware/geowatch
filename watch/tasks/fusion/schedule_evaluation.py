@@ -6,6 +6,8 @@ Helper for scheduling a set of prediction + evaluation jobs
 
 python -m watch.tasks.fusion.schedule_evaluation
 
+This is being rewriteen in watch/mlops/schedule_evaluation.py
+
 
 DVC_DPATH=$(smartwatch_dvc)
 DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
