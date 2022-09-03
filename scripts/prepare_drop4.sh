@@ -524,7 +524,7 @@ update_local(){
 prepare_qfabric(){
     source "$HOME"/code/watch/secrets/secrets
 
-    DATA_DVC_DPATH=$(smartwatch_dvc --hardware="hdd")/public
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="hdd")/public
     SENSORS=TA1-S2-WV-PD-ACC
     DATASET_SUFFIX=QFabric-c30-$SENSORS
     REGION_GLOBSTR="$DATA_DVC_DPATH/annotations-qfabric/orig/region_models/*.geojson"
@@ -555,9 +555,8 @@ prepare_qfabric(){
         --ignore_duplicates=1 \
         --separate_region_queues=1 \
         --separate_align_jobs=1 \
-        --include_channels="blue|green|red|nir|swir16|swir22" \
         --visualize=0 \
         --target_gsd=30 \
-        --backend=tmux --run=1
+        --backend=tmux --run=0
         
 }
