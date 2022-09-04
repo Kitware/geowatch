@@ -77,7 +77,7 @@ def __oneoff():
     #         print('bad')
 
     import glob
-    curve_paths = glob.glob(str(ub.Path(self.path_patterns['eval_pxl']).parent))
+    curve_paths = list(glob.glob(str(ub.Path(self.path_patterns['eval_pxl']).parent)))
     for dpath in curve_paths:
         dpath = ub.Path(dpath)
         whoops = (dpath / 'curves')

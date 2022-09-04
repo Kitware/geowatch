@@ -73,6 +73,25 @@ _ACCENTURE_PHASE2_TA1_PRODUCTS = {
 }
 
 
+_SMARTSTAC_PRODUCTS = {
+    # Non public, but non-performer products
+    'planet-dove': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['planet-dove'],
+    },
+    'worldview-nitf': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['worldview-nitf'],
+        "query": {
+            "nitf:imd": {
+                "eq": "true"
+            },
+        }
+    },
+
+}
+
+
 _PUBLIC_L1_PRODUCTS = {
     # https://landsatlook.usgs.gov/stac-server/
     # Public L1 Products
@@ -126,7 +145,7 @@ def _devcheck_providers_exist():
     }
     provider = "https://api.smart-stac.com"
     catalog = pystac_client.Client.open(provider, headers=headers)
-    list(catalog.get_collections())
+    print(list(catalog.get_collections()))
 
     item_search = catalog.search(collections=["ta1-pd-acc"])
     item_search = catalog.search(collections=["ta1-pd-ara"])
@@ -213,6 +232,7 @@ SENSOR_TO_DEFAULTS = ub.dict_union(
     _ACCENTURE_PHASE2_TA1_PRODUCTS,
     _PUBLIC_L1_PRODUCTS,
     _PUBLIC_L2_PRODUCTS,
+    _SMARTSTAC_PRODUCTS,
 )
 
 
