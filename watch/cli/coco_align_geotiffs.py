@@ -133,7 +133,8 @@ class CocoAlignGeotiffConfig(scfg.Config):
         'rpc_align_method': scfg.Value('orthorectify', help=ub.paragraph(
             '''
             Can be one of:
-                (1) orthorectify - which uses gdalwarp with -rpc,
+                (1) orthorectify - which uses gdalwarp with -rpc if available
+                    otherwise falls back to affine transform,
                 (2) pixel_crop - which warps annotations onto pixel with RPCs
                     but only crops the original image without distortion,
                 (3) affine_warp - which ignores RPCs and uses the affine
@@ -960,7 +961,10 @@ class SimpleDataCube(object):
         sh_space_region_local = space_region_local.geometry.iloc[0]
 
         frame_count = 0
-        for datetime_ in ub.ProgIter(datetimes, desc='submit extract jobs', verbose=1):
+        prog = ub.ProgIter(datetimes, desc='submit extract jobs', verbose=1)
+        import xdev
+        xdev.embed()
+        for datetime_ in prog:
 
             if max_frames is not None:
                 if frame_count > max_frames:
@@ -981,7 +985,6 @@ class SimpleDataCube(object):
                 conflict_imges = coco_dset.images(gids)
                 sensors = list(conflict_imges.lookup('sensor_coarse', None))
                 for sensor_coarse, sensor_gids in ub.group_items(conflict_imges, sensors).items():
-                    # sensor_images = coco_dset.images(sensor_gids)
                     rows = []
                     for gid in sensor_gids:
                         coco_img = coco_dset.coco_image(gid)
@@ -1033,6 +1036,7 @@ class SimpleDataCube(object):
                     # only if we have that info
                     can_vis_geos = any(row['geometry'] is not None for row in rows)
                     if debug_valid_regions:
+                        prog.ensure_newline()
                         print('debug_valid_regions = {!r}'.format(debug_valid_regions))
                         print('can_vis_geos = {!r}'.format(can_vis_geos))
                     if debug_valid_regions and can_vis_geos:

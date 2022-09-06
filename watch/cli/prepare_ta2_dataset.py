@@ -129,7 +129,17 @@ class PrepareTA2Config(scfg.Config):
         'remove_broken': scfg.Value(True, help='if True, will remove any image that fails population (e.g. caused by a 404)'),
         'force_nodata': scfg.Value(None, help='if specified, forces nodata to this value'),
 
-        'align_keep': scfg.Value('img', choices=['img', 'img-roi', 'none', None], help='if the coco align script caches or recomputes images / rois')
+        'align_keep': scfg.Value('img', choices=['img', 'img-roi', 'none', None], help='if the coco align script caches or recomputes images / rois'),
+
+        'rpc_align_method': scfg.Value('orthorectify', help=ub.paragraph(
+            '''
+            Can be one of:
+                (1) orthorectify - which uses gdalwarp with -rpc if available
+                    otherwise falls back to affine transform,
+                (2) affine_warp - which ignores RPCs and uses the affine
+                    transform in the geotiff metadata.
+            '''
+        )),
     }
 
 
@@ -594,7 +604,7 @@ def main(cmdline=False, **kwargs):
                 --exclude_channels="{exclude_channels}" \
                 --visualize={align_visualize} \
                 --debug_valid_regions={debug_valid_regions} \
-                --rpc_align_method affine_warp \
+                --rpc_align_method {config['rpc_align_method']} \
                 --verbose={config['verbose']} \
                 --aux_workers={config['align_aux_workers']} \
                 --target_gsd={config['target_gsd']} \
