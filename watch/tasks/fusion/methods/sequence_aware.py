@@ -592,21 +592,29 @@ class SequenceAwareModel(pl.LightningModule):
         else:
             FBetaScore = torchmetrics.FBeta
 
-        self.head_metrics = nn.ModuleDict()
-        self.head_metrics['class'] = torchmetrics.MetricCollection({
+        head_metrics = dict()
+        head_metrics['class'] = torchmetrics.MetricCollection({
             "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
             'f1_micro': FBetaScore(beta=1.0, threshold=0.5, average='micro'),
             'f1_macro': FBetaScore(beta=1.0, threshold=0.5, average='macro', num_classes=self.num_classes),
         })
-        self.head_metrics['change'] = torchmetrics.MetricCollection({
+        head_metrics['change'] = torchmetrics.MetricCollection({
             "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
             'f1': FBetaScore(beta=1.0),
         })
-        self.head_metrics['saliency'] = torchmetrics.MetricCollection({
+        head_metrics['saliency'] = torchmetrics.MetricCollection({
             'f1': FBetaScore(beta=1.0),
         })
+        
+        self.head_metrics = {
+            stage: {
+                key: collection.clone(prefix=f"{stage}_")
+                for key, collection in head_metrics.items()
+            }
+            for stage in ["train", "val", "test"]
+        }
 
     @property
     def has_trainer(self):
@@ -741,7 +749,7 @@ class SequenceAwareModel(pl.LightningModule):
             
         return outputs
     
-    def training_step(self, batch, batch_idx=None):
+    def shared_step(self, batch, batch_idx=None, stage="train"):
         losses = []
         metrics = {}
         
@@ -803,7 +811,7 @@ class SequenceAwareModel(pl.LightningModule):
             )
             losses.append(task_loss.mean())
 
-            task_metric = self.head_metrics[task_name](
+            task_metric = self.head_metrics[stage][task_name](
                 logits[task_mask],
                 labels[task_mask],
             )
@@ -814,6 +822,21 @@ class SequenceAwareModel(pl.LightningModule):
         self.log_dict(metrics, prog_bar=True, sync_dist=True)
         self.log("loss", loss, prog_bar=True, sync_dist=True)
         return loss
+
+    @profile
+    def training_step(self, batch, batch_idx=None):
+        outputs = self.shared_step(batch, batch_idx=batch_idx, stage='train')
+        return outputs
+
+    @profile
+    def validation_step(self, batch, batch_idx=None):
+        outputs = self.shared_step(batch, batch_idx=batch_idx, stage='val')
+        return outputs
+
+    @profile
+    def test_step(self, batch, batch_idx=None):
+        outputs = self.shared_step(batch, batch_idx=batch_idx, stage='test')
+        return outputs
 
     def configure_optimizers(self):
         """
