@@ -466,7 +466,7 @@ class SequenceAwareModel(pl.LightningModule):
         self.perceiver = perceiver.PerceiverIO(
             depth = 4,
             dim = in_features,
-            queries_dim = in_features,
+            queries_dim = in_features_pos,
             num_latents = 512,
             latent_dim = 128,
             cross_heads = 1,
@@ -477,7 +477,7 @@ class SequenceAwareModel(pl.LightningModule):
             decoder_ff = True,
             logits_dim = in_features,
         )
-        feat_dim = in_features
+        feat_dim = in_features_pos
         
         self.change_head_hidden = change_head_hidden
         self.class_head_hidden = class_head_hidden
@@ -627,7 +627,8 @@ class SequenceAwareModel(pl.LightningModule):
                 for frame in example["frames"]
             ]
             weights = torch.concat([einops.rearrange(x, "h w -> (h w)") for x in weights], dim=0)
-                        
+            
+            if task_name == "class_idxs": task_name = "class"
             pos_enc = self.encode_query_position(example, task_name, inputs.dtype, inputs.device)
             pos_enc = torch.concat([einops.rearrange(x, "c h w -> (h w) c") for x in pos_enc], dim=0)
             
@@ -676,6 +677,7 @@ class SequenceAwareModel(pl.LightningModule):
             task_tokens = self.perceiver.decoder_cross_attn(
                 queries[task_name], 
                 context = context)
+            print(context.shape, queries[task_name].shape, task_tokens.shape)
             task_logits = self.heads[task_name](task_tokens)
             task_logits = einops.rearrange(task_logits, "batch seq chan -> batch chan seq")
             outputs[task_name] = task_logits
