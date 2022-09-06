@@ -202,6 +202,8 @@ def main(cmdline=False, **kwargs):
     if config['clear_existing']:
         coco_dset.clear_annotations()
 
+    import xdev
+    xdev.embed()
     region_id_to_sites = expand_site_models_with_site_summaries(sites, regions)
 
     propogate = config['propogate']
@@ -576,10 +578,12 @@ def validate_site_dataframe(site_df):
         if not all(valid_obs_dates):
             # null_obs_sites.append(first[['site_id', 'status']].to_dict())
             pass
-        import xdev
-        with xdev.embed_on_exception_context:
-            valid_deltas = np.array([d.total_seconds() for d in np.diff(valid_obs_dates)])
-            assert (valid_deltas >= 0).all(), 'observations must be sorted temporally'
+        # import xdev
+        # with xdev.embed_on_exception_context:
+        valid_deltas = np.array([d.total_seconds() for d in np.diff(valid_obs_dates)])
+        if not (valid_deltas >= 0).all():
+            raise AssertionError('observations are not sorted temporally')
+            # warnings.warn('observations are not sorted temporally')
     except AssertionError as ex:
         print('ex = {!r}'.format(ex))
         print(site_df)
