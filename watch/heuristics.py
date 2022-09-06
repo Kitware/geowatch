@@ -39,6 +39,7 @@ HUERISTIC_STATUS_DATA = [
     {'name': 'positive_excluded', 'color': 'gray'},
     {'name': 'negative', 'color': 'gray'},
     {'name': 'negative_unbounded', 'color': 'gray'},
+    # TODO? Add alias of pending for "positive_pending"? For QFabric?
 ]
 
 
