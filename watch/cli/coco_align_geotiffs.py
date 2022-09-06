@@ -486,6 +486,8 @@ def main(cmdline=True, **kw):
     new_dset.dataset['info'] = [
         process_info,
     ]
+    import xdev
+    xdev.embed()
     to_extract = cube.query_image_overlaps(region_df)
 
     for image_overlaps in ub.ProgIter(to_extract, desc='extract ROI videos', verbose=3):
