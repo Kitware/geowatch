@@ -162,8 +162,19 @@ def main(cmdline=False, **kwargs):
 
     # Read the external CRS84 annotations from the site models
     sites = []
+
+    HACK_HANDLE_DUPLICATE_SITE_ROWS = True
+
     for fpath in ub.ProgIter(site_geojson_fpaths, desc='load geojson site-models'):
         gdf = util_gis.read_geojson(fpath)
+        is_site = gdf['type'] == 'site'
+        if HACK_HANDLE_DUPLICATE_SITE_ROWS:
+            if is_site.sum() > 1:
+                # There are some site models that contain duplicate site rows.
+                # Fix them here.
+                site_rows = gdf[is_site]
+                assert ub.allsame(site_rows['site_id'])
+                gdf = gdf.drop(site_rows.iloc[1:].index, axis=0)
         sites.append(gdf)
 
     regions = []
