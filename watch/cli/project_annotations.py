@@ -256,14 +256,16 @@ def expand_site_models_with_site_summaries(sites, regions):
         for site_df in ub.ProgIter(sites, desc='checking site assumptions'):
             first = site_df.iloc[0]
             rest = site_df.iloc[1:]
-            assert first['type'] == 'site', (
-                f'first row must have type of site, got {first["type"]}')
-            assert first['region_id'] is not None, (
-                f'first row must have a region id. Got {first["region_id"]}')
-            assert rest['type'].apply(lambda x: x == 'observation').all(), (
-                f'rest of row must have type observation. Instead got: {rest["type"].unique()}')
-            assert rest['region_id'].apply(lambda x: x is None).all(), (
-                f'rest of row must have region_id=None. Instead got {rest["region_id"].unique()}')
+            import xdev
+            with xdev.embed_on_exception_context:
+                assert first['type'] == 'site', (
+                    f'first row must have type of site, got {first["type"]}')
+                assert first['region_id'] is not None, (
+                    f'first row must have a region id. Got {first["region_id"]}')
+                assert rest['type'].apply(lambda x: x == 'observation').all(), (
+                    f'rest of row must have type observation. Instead got: {rest["type"].unique()}')
+                assert rest['region_id'].apply(lambda x: x is None).all(), (
+                    f'rest of row must have region_id=None. Instead got {rest["region_id"].unique()}')
 
     region_id_to_site_summaries = {}
     region_id_region_row = {}
