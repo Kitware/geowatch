@@ -750,7 +750,7 @@ class SimpleDataCube(object):
                         crs=utm_epsg_zone_v2)
                     fixed_geom_crs84 = fixed_geom_utm.to_crs(region_df.crs)
                     region_row = region_row.copy()
-                    region_row['geometry'] = fixed_geom_crs84
+                    region_row['geometry'] = fixed_geom_crs84['geometry'].iloc[0]
 
             space_region = kwimage.Polygon.from_shapely(region_row.geometry)
             space_box = space_region.bounding_box().to_ltrb()
