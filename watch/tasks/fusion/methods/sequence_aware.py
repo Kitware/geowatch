@@ -159,6 +159,56 @@ class SequenceAwareModelConfig(scfg.DataConfig):
 
 class SequenceAwareModel(pl.LightningModule):
     
+    _HANDLES_NANS = True
+
+    @classmethod
+    def add_argparse_args(cls, parent_parser):
+        """
+        Example:
+            >>> from watch.tasks.fusion.methods.sequence_aware import *  # NOQA
+            >>> from watch.utils.configargparse_ext import ArgumentParser
+            >>> cls = SequenceAwareModel
+            >>> parent_parser = ArgumentParser(formatter_class='defaults')
+            >>> cls.add_argparse_args(parent_parser)
+            >>> parent_parser.print_help()
+            >>> parent_parser.parse_known_args()
+
+            print(scfg.Config.port_argparse(parent_parser, style='dataconf'))
+        """
+        parser = parent_parser.add_argument_group('kwcoco_video_data')
+        config = SequenceAwareModelConfig()
+        config.argparse(parser)
+        return parent_parser
+
+    @classmethod
+    def compatible(cls, cfgdict):
+        """
+        Given keyword arguments, find the subset that is compatible with this
+        constructor. This is somewhat hacked because of usage of scriptconfig,
+        but could be made nicer by future updates.
+        """
+        # init_kwargs = ub.compatible(config, cls.__init__)
+        import inspect
+        nameable_kinds = {inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                          inspect.Parameter.KEYWORD_ONLY}
+        cls_sig = inspect.signature(cls)
+        explicit_argnames = [
+            argname for argname, argtype in cls_sig.parameters.items()
+            if argtype.kind in nameable_kinds
+        ]
+        valid_argnames = explicit_argnames + list(MultimodalTransformerConfig.__default__.keys())
+        clsvars = ub.dict_isect(cfgdict, valid_argnames)
+        return clsvars
+
+    def get_cfgstr(self):
+        cfgstr = f'{self.name}_{self.arch_name}_SA'
+        return cfgstr
+
+    def reset_weights(self):
+        for name, mod in self.named_modules():
+            if hasattr(mod, 'reset_parameters'):
+                mod.reset_parameters()
+    
 
     def __init__(self, *, classes=10, dataset_stats=None,
                  input_sensorchan=None, input_channels=None, **kwargs):
@@ -851,3 +901,199 @@ class SequenceAwareModel(pl.LightningModule):
         scheduler = lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=max_epochs)
         return [optimizer], [scheduler]
+
+    @classmethod
+    def load_package(cls, package_path, verbose=1):
+        """
+        DEPRECATE IN FAVOR OF watch.tasks.fusion.utils.load_model_from_package
+
+        TODO:
+            - [ ] Make the logic that defines the save_package and load_package
+                methods with appropriate package header data a lightning
+                abstraction.
+        """
+        # NOTE: there is no gaurentee that this loads an instance of THIS
+        # model, the model is defined by the package and the tool that loads it
+        # is agnostic to the model contained in said package.
+        # This classmethod existing is a convinience more than anything else
+        from watch.tasks.fusion.utils import load_model_from_package
+        self = load_model_from_package(package_path)
+        return self
+
+    def save_package(self, package_path, verbose=1):
+        """
+
+        CommandLine:
+            xdoctest -m watch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer.save_package
+
+        Example:
+            >>> # Test without datamodule
+            >>> import ubelt as ub
+            >>> from os.path import join
+            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> dpath = ub.Path.appdir('watch/tests/package').ensuredir()
+            >>> package_path = join(dpath, 'my_package.pt')
+
+            >>> # Use one of our fusion.architectures in a test
+            >>> from watch.tasks.fusion import methods
+            >>> from watch.tasks.fusion import datamodules
+            >>> model = self = methods.MultimodalTransformer(
+            >>>     arch_name="smt_it_joint_p2", input_sensorchan=5,
+            >>>     change_head_hidden=0, saliency_head_hidden=0,
+            >>>     class_head_hidden=0)
+
+            >>> # Save the model (TODO: need to save datamodule as well)
+            >>> model.save_package(package_path)
+
+            >>> # Test that the package can be reloaded
+            >>> recon = methods.MultimodalTransformer.load_package(package_path)
+            >>> # Check consistency and data is actually different
+            >>> recon_state = recon.state_dict()
+            >>> model_state = model.state_dict()
+            >>> assert recon is not model
+            >>> assert set(recon_state) == set(recon_state)
+            >>> for key in recon_state.keys():
+            >>>     assert (model_state[key] == recon_state[key]).all()
+            >>>     assert model_state[key] is not recon_state[key]
+
+        Example:
+            >>> # Test with datamodule
+            >>> import ubelt as ub
+            >>> from os.path import join
+            >>> from watch.tasks.fusion import datamodules
+            >>> from watch.tasks.fusion import methods
+            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> dpath = ub.Path.appdir('watch/tests/package').ensuredir()
+            >>> package_path = dpath / 'my_package.pt'
+
+            >>> datamodule = datamodules.kwcoco_video_data.KWCocoVideoDataModule(
+            >>>     train_dataset='special:vidshapes8-multispectral-multisensor', chip_size=32,
+            >>>     batch_size=1, time_steps=2, num_workers=2, normalize_inputs=10)
+            >>> datamodule.setup('fit')
+            >>> dataset_stats = datamodule.torch_datasets['train'].cached_dataset_stats(num=3)
+            >>> classes = datamodule.torch_datasets['train'].classes
+
+            >>> # Use one of our fusion.architectures in a test
+            >>> self = methods.MultimodalTransformer(
+            >>>     arch_name="smt_it_joint_p2", classes=classes,
+            >>>     dataset_stats=dataset_stats, input_sensorchan=datamodule.input_sensorchan,
+            >>>     learning_rate=1e-8, optimizer='sgd',
+            >>>     change_head_hidden=0, saliency_head_hidden=0,
+            >>>     class_head_hidden=0)
+
+            >>> # We have to run an input through the module because it is lazy
+            >>> batch = ub.peek(iter(datamodule.train_dataloader()))
+            >>> outputs = self.training_step(batch)
+
+            >>> trainer = pl.Trainer(max_steps=1)
+            >>> trainer.fit(model=self, datamodule=datamodule)
+
+            >>> # Save the self
+            >>> self.save_package(package_path)
+
+            >>> # Test that the package can be reloaded
+            >>> recon = methods.MultimodalTransformer.load_package(package_path)
+
+            >>> # Check consistency and data is actually different
+            >>> recon_state = recon.state_dict()
+            >>> model_state = self.state_dict()
+            >>> assert recon is not self
+            >>> assert set(recon_state) == set(recon_state)
+            >>> for key in recon_state.keys():
+            >>>     v1 = model_state[key]
+            >>>     v2 = recon_state[key]
+            >>>     if not (v1 == v2).all():
+            >>>         print('v1 = {}'.format(ub.repr2(v1, nl=1)))
+            >>>         print('v2 = {}'.format(ub.repr2(v2, nl=1)))
+            >>>         raise AssertionError(f'Difference in key={key}')
+            >>>     assert v1 is not v2, 'should be distinct copies'
+
+        Ignore:
+            7z l $HOME/.cache/watch/tests/package/my_package.pt
+        """
+        # import copy
+        import json
+        import torch.package
+
+        # Fix an issue on 3.10 with torch 1.12
+        from watch.utils.lightning_ext.callbacks.packager import _torch_package_monkeypatch
+        _torch_package_monkeypatch()
+
+        # shallow copy of self, to apply attribute hacks to
+        # model = copy.copy(self)
+        model = self
+
+        backup_attributes = {}
+        # Remove attributes we don't want to pickle before we serialize
+        # then restore them
+        unsaved_attributes = [
+            'trainer',
+            'train_dataloader',
+            'val_dataloader',
+            'test_dataloader',
+            '_load_state_dict_pre_hooks',  # lightning 1.5
+            '_trainer',  # lightning 1.7
+        ]
+        for key in unsaved_attributes:
+            try:
+                val = getattr(model, key, None)
+            except Exception:
+                val = None
+            if val is not None:
+                backup_attributes[key] = val
+
+        train_dpath_hint = getattr(model, 'train_dpath_hint', None)
+        if model.has_trainer:
+            if train_dpath_hint is None:
+                train_dpath_hint = model.trainer.log_dir
+            datamodule = model.trainer.datamodule
+            if datamodule is not None:
+                model.datamodule_hparams = datamodule.hparams
+
+        metadata_fpaths = []
+        if train_dpath_hint is not None:
+            train_dpath_hint = ub.Path(train_dpath_hint)
+            metadata_fpaths += list(train_dpath_hint.glob('hparams.yaml'))
+            metadata_fpaths += list(train_dpath_hint.glob('fit_config.yaml'))
+
+        try:
+            for key in backup_attributes.keys():
+                setattr(model, key, None)
+            arch_name = 'model.pkl'
+            module_name = 'watch_tasks_fusion'
+            """
+            exp = torch.package.PackageExporter(package_path, verbose=True)
+            """
+            with torch.package.PackageExporter(package_path) as exp:
+                # TODO: this is not a problem yet, but some package types (mainly
+                # binaries) will need to be excluded and added as mocks
+                exp.extern('**', exclude=['watch.tasks.fusion.**'])
+                exp.intern('watch.tasks.fusion.**', allow_empty=False)
+
+                # Attempt to standardize some form of package metadata that can
+                # allow for model importing with fewer hard-coding requirements
+
+                # TODO:
+                # Add information about how this was trained, and what epoch it
+                # was saved at.
+                package_header = {
+                    'version': '0.1.0',
+                    'arch_name': arch_name,
+                    'module_name': module_name,
+                }
+
+                exp.save_text(
+                    'package_header', 'package_header.json',
+                    json.dumps(package_header)
+                )
+                exp.save_pickle(module_name, arch_name, model)
+
+                # Save metadata
+                for meta_fpath in metadata_fpaths:
+                    with open(meta_fpath, 'r') as file:
+                        text = file.read()
+                    exp.save_text('package_header', meta_fpath.name, text)
+        finally:
+            # restore attributes
+            for key, val in backup_attributes.items():
+                setattr(model, key, val)
