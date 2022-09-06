@@ -382,7 +382,7 @@ def expand_site_models_with_site_summaries(sites, regions):
             print('Disagree rows for site models')
             print(error1.drop(['type', 'region_id', 'misc_info'], axis=1))
             print('Disagree rows for region models')
-            print(error2.drop(['type', 'region_id', 'validate'], axis=1))
+            print(error2.drop(['type', 'region_id', 'validated'], axis=1))
 
         # Find sites that only have a site-summary
         summary_only_site_ids = sorted(set(site_df2['site_id']) - set(site_df1['site_id']))
