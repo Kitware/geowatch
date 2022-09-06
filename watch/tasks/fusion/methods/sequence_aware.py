@@ -677,7 +677,6 @@ class SequenceAwareModel(pl.LightningModule):
             task_tokens = self.perceiver.decoder_cross_attn(
                 queries[task_name], 
                 context = context)
-            print(context.shape, queries[task_name].shape, task_tokens.shape)
             task_logits = self.heads[task_name](task_tokens)
             task_logits = einops.rearrange(task_logits, "batch seq chan -> batch chan seq")
             outputs[task_name] = task_logits
@@ -723,29 +722,34 @@ class SequenceAwareModel(pl.LightningModule):
         
         for task_name in task_logits.keys():
             
-            try:
-                logits = einops.rearrange(task_logits[task_name], "batch chan seq -> (batch seq) chan")
-                labels = einops.rearrange(stacked_labels[task_name], "batch seq -> (batch seq)")
-                weights = einops.rearrange(stacked_weights[task_name], "batch seq -> (batch seq)")
-                
-                # task_mask = (labels != -1)
-                task_mask = (weights > 0.0)
-                
-                task_loss = weights[task_mask] * self.criterions[task_name](
-                    logits[task_mask],
-                    labels[task_mask],
-                )
-                losses.append(task_loss.mean())
+            logits = einops.rearrange(task_logits[task_name], "batch chan seq -> (batch seq) chan")
+            labels = einops.rearrange(stacked_labels[task_name], "batch seq -> (batch seq)")
+            weights = einops.rearrange(stacked_weights[task_name], "batch seq -> (batch seq)")
 
-                task_metric = self.head_metrics[task_name](
-                    logits[task_mask],
-                    labels[task_mask],
-                )
-                metrics[task_name] = task_metric
+            # task_mask = (labels != -1)
+            task_mask = (weights > 0.0)
+                       
+            criterion = self.criterions[task_name]
+            if criterion.target_encoding == 'index':
+                loss_labels = labels.long()
+            elif criterion.target_encoding == 'onehot':
+                # Note: 1HE is much easier to work with
+                loss_labels = kwarray.one_hot_embedding(labels.long(), criterion.in_channels, dim=-1)
+                weights = weights[...,None]
+            else:
+                raise KeyError(criterion.target_encoding)
                 
-            except:
-                print(f"failed on {task_name}")
-                raise
+            task_loss = weights[task_mask] * criterion(
+                logits[task_mask],
+                loss_labels[task_mask],
+            )
+            losses.append(task_loss.mean())
+
+            task_metric = self.head_metrics[task_name](
+                logits[task_mask],
+                labels[task_mask],
+            )
+            metrics[task_name] = task_metric
         
         loss = sum(losses) / len(losses)
         
