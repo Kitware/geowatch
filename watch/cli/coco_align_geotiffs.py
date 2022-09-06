@@ -963,8 +963,6 @@ class SimpleDataCube(object):
         frame_count = 0
         prog = ub.ProgIter(datetimes, desc='submit extract jobs', verbose=1)
         dtiter = iter(prog)
-        import xdev
-        xdev.embed()
         for datetime_ in dtiter:
 
             if max_frames is not None:
