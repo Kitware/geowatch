@@ -739,8 +739,6 @@ class SimpleDataCube(object):
                 if np.all(new_extent == np.array(obox.extent)):
                     ...
                 else:
-                    import xdev
-                    xdev.embed()
                     ubox = kwimage.Boxes([[0, 0, 1, 1]], 'cxywh').to_polygons()[0]
                     # S = kwimage.Affine.affine(scale=obox.extent)
                     S = kwimage.Affine.affine(scale=new_extent)
