@@ -729,8 +729,8 @@ class SimpleDataCube(object):
                 from collections import namedtuple
                 import numpy as np
                 OrientedBBox = namedtuple('OrientedBBox', ('center', 'extent', 'theta'))
-                hull = kwimage.Polygon.coerce(region_utm_geom.convex_hull)
-                c, e, a = cv2.minAreaRect(hull.exterior.data.astype(np.float32))
+                hull_utm = kwimage.Polygon.coerce(region_utm_geom.convex_hull)
+                c, e, a = cv2.minAreaRect(hull_utm.exterior.data.astype(np.float32))
                 t = np.deg2rad(a)
                 obox = OrientedBBox(c, e, t)
                 # HACK:
@@ -746,8 +746,12 @@ class SimpleDataCube(object):
                     S = kwimage.Affine.affine(scale=new_extent)
                     R = kwimage.Affine.affine(theta=obox.theta)
                     T = kwimage.Affine.affine(offset=obox.center)
-                    hull = ubox.warp(T @ R @ S)
-                    fixed_geom_crs84 = gpd.GeoDataFrame({'geometry': [hull.to_shapely()]}, crs=utm_epsg_zone_v2).to_crs(region_df.crs)
+                    new_hull_utm = ubox.warp(T @ R @ S)
+                    fixed_geom_utm = gpd.GeoDataFrame({
+                        'geometry': [new_hull_utm.to_shapely()]},
+                        crs=utm_epsg_zone_v2)
+                    fixed_geom_crs84 = fixed_geom_utm.to_crs(region_df.crs)
+                    region_row = region_row.copy()
                     region_row['geometry'] = fixed_geom_crs84
 
             space_region = kwimage.Polygon.from_shapely(region_row.geometry)
