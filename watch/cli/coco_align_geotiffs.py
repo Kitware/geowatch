@@ -542,12 +542,14 @@ class SimpleDataCube(object):
         expxected_geos_crs_info = {
             'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
             'auth': ('EPSG', '4326')
-        }
+        }  # This is CRS84
+        crs84 = util_gis._get_crs84()
         expxected_geos_crs_info = ensure_json_serializable(expxected_geos_crs_info)
         gids = coco_dset.images(gids)._ids
 
-        # new way: put data in the cube into a geopandas data frame
-        df_input = []
+        # put data in the cube into a geopandas data frame
+        columns = ['gid', 'name', 'video_id', 'geometry', 'properties']
+        df_rows = []
         for gid in gids:
             img = coco_dset.index.imgs[gid]
             sh_img_poly = shapely.geometry.shape(img['geos_corners'])
@@ -562,7 +564,7 @@ class SimpleDataCube(object):
                         ''').format(crs_info, expxected_geos_crs_info))
 
             # Create a data frame with space-time regions
-            df_input.append({
+            df_rows.append({
                 'gid': gid,
                 'name': img.get('name', None),
                 'video_id': img.get('video_id', None),
@@ -570,8 +572,8 @@ class SimpleDataCube(object):
                 'properties': properties,
             })
 
-        img_geos_df = gpd.GeoDataFrame(df_input, geometry='geometry',
-                                       crs='EPSG:4326')
+        img_geos_df = gpd.GeoDataFrame(df_rows, geometry='geometry',
+                                       columns=columns, crs=crs84)
         img_geos_df = img_geos_df.set_index('gid', drop=False)
         cube.coco_dset = coco_dset
         cube.img_geos_df = img_geos_df
