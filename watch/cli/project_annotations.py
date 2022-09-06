@@ -202,8 +202,6 @@ def main(cmdline=False, **kwargs):
     if config['clear_existing']:
         coco_dset.clear_annotations()
 
-    import xdev
-    xdev.embed()
     region_id_to_sites = expand_site_models_with_site_summaries(sites, regions)
 
     propogate = config['propogate']
@@ -509,6 +507,23 @@ def expand_site_models_with_site_summaries(sites, regions):
 
         region_id_to_num_sites = ub.map_vals(len, region_id_to_sites)
         print('AFTER (sitesummary) region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1)))
+
+    # Fix out of order observations
+    FIX_OBS_ORDER = True
+    if FIX_OBS_ORDER:
+        new_region_id_to_sites = {}
+        for region_id, region_sites in region_id_to_sites.items():
+            _sites = []
+            for site_gdf in region_sites:
+                site_gdf['observation_date'].argsort()
+                is_obs = site_gdf['type'] == 'observation'
+                obs_rows = site_gdf[is_obs]
+                site_rows = site_gdf[~is_obs]
+                obs_rows = obs_rows.iloc[obs_rows['observation_date'].argsort()]
+                site_gdf = pd.concat([site_rows.reset_index(), obs_rows.reset_index()], axis=0).reset_index()
+                _sites.append(site_gdf)
+            new_region_id_to_sites[region_id] = _sites
+        region_id_to_sites = new_region_id_to_sites
 
     if 0:
         site_high_level_summaries = []
