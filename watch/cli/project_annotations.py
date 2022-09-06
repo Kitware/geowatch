@@ -310,10 +310,13 @@ def expand_site_models_with_site_summaries(sites, regions):
 
     region_id_to_sites = ub.group_items(sites, lambda x: x.iloc[0]['region_id'])
 
+    VERYVERBOSE = 0
+
     region_id_to_num_sitesumms = ub.map_vals(len, region_id_to_site_summaries)
     region_id_to_num_sites = ub.map_vals(len, region_id_to_sites)
     print('region_id_to_num_sitesumms = {}'.format(ub.repr2(region_id_to_num_sitesumms, nl=1, sort=0)))
-    print('region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1, sort=0)))
+    if VERYVERBOSE:
+        print('regio:n_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1, sort=0)))
 
     if 1:
         site_rows1 = []
@@ -388,8 +391,9 @@ def expand_site_models_with_site_summaries(sites, regions):
         summary_only_site_ids = sorted(set(site_df2['site_id']) - set(site_df1['site_id']))
         region_id_to_only_site_summaries = dict(list(site_df2.loc[summary_only_site_ids].groupby('region_id')))
 
-        region_id_to_num_only_sitesumms = ub.map_vals(len, region_id_to_only_site_summaries)
-        print('region_id_to_num_only_sitesumms = {}'.format(ub.repr2(region_id_to_num_only_sitesumms, nl=1, sort=0)))
+        if VERYVERBOSE:
+            region_id_to_num_only_sitesumms = ub.map_vals(len, region_id_to_only_site_summaries)
+            print('region_id_to_num_only_sitesumms = {}'.format(ub.repr2(region_id_to_num_only_sitesumms, nl=1, sort=0)))
 
         # Transform site-summaries without corresponding sites into pseudo-site
         # observations
@@ -423,7 +427,7 @@ def expand_site_models_with_site_summaries(sites, regions):
         # site_model_schema[
 
         region_id_to_num_sites = ub.map_vals(len, region_id_to_sites)
-        print('BEFORE region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1)))
+        # print('BEFORE region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1)))
 
         for region_id, sitesummaries in region_id_to_only_site_summaries.items():
             region_row = region_id_region_row[region_id]
@@ -506,7 +510,8 @@ def expand_site_models_with_site_summaries(sites, regions):
                 #     ret = jsonschema.validate(psudo_site_model, schema=site_model_schema)
 
         region_id_to_num_sites = ub.map_vals(len, region_id_to_sites)
-        print('AFTER (sitesummary) region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1)))
+        if VERYVERBOSE:
+            print('AFTER (sitesummary) region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1)))
 
     # Fix out of order observations
     FIX_OBS_ORDER = True
