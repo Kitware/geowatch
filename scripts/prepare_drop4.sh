@@ -526,7 +526,8 @@ prepare_qfabric(){
 
     DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="hdd")/public
     SENSORS=worldview-nitf
-    DATASET_SUFFIX=QFabric-c30-$SENSORS
+    #DATASET_SUFFIX=QFabric-c30-$SENSORS
+    DATASET_SUFFIX=QFabric-c80-$SENSORS
     REGION_GLOBSTR="$DATA_DVC_DPATH/annotations-qfabric/orig/region_models/*.geojson"
     SITE_GLOBSTR="$DATA_DVC_DPATH/annotations-qfabric/orig/site_models/*.geojson"
 
@@ -538,7 +539,7 @@ prepare_qfabric(){
     python -m watch.cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
         --stac_query_mode=auto \
-        --cloud_cover=30 \
+        --cloud_cover=80 \
         --sensors="$SENSORS" \
         --api_key=env:SMART_STAC_API_KEY \
         --collated True \
@@ -551,12 +552,13 @@ prepare_qfabric(){
         --convert_workers=8 \
         --max_queue_size=12 \
         --align_workers=12 \
-        --cache=0 \
+        --cache=1 \
         --ignore_duplicates=1 \
+        --rpc_align_method=orthorectify \
         --separate_region_queues=1 \
         --separate_align_jobs=1 \
         --visualize=0 \
         --target_gsd=2 \
-        --backend=tmux --run=0
+        --backend=tmux --run=1
         
 }
