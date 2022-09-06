@@ -439,9 +439,10 @@ def main(cmdline=True, **kw):
         warnings.warn('skip_geo_preprop is deprecated', DeprecationWarning)
         geo_preprop = False
     if geo_preprop == 'auto':
-        coco_img = coco_dset.coco_image(ub.peek(valid_gids))
-        geo_preprop = not any('geos_corners' in obj for obj in coco_img.iter_asset_objs())
-        print('auto-choose geo_preprop = {!r}'.format(geo_preprop))
+        if len(valid_gids):
+            coco_img = coco_dset.coco_image(ub.peek(valid_gids))
+            geo_preprop = not any('geos_corners' in obj for obj in coco_img.iter_asset_objs())
+            print('auto-choose geo_preprop = {!r}'.format(geo_preprop))
 
     if geo_preprop:
         kwcoco_extensions.coco_populate_geo_heuristics(
@@ -1699,17 +1700,7 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
         # print('!!WARNING!! duplicates = {}'.format(ub.repr2(duplicates, nl=1)))
         input_gpaths = list(ub.oset(input_gpaths))
 
-    if 1:
-        nodata = force_nodata
-    else:
-        # DONT USE THIS ANYMORE
-        nodata_cand = {obj.get('default_nodata', None) for obj in obj_group} - {None}
-        if len(nodata_cand) > 1:
-            raise AssertionError('Did not expect heterogeneous nodata values')
-        elif len(nodata_cand) == 0:
-            nodata = None
-        else:
-            nodata = ub.peek(nodata_cand)
+    nodata = force_nodata
 
     # When trying to get a gdalmerge to take multiple inputs I got a Attempt to
     # create 0x0 dataset is illegal,sizes must be larger than zero.  This new
@@ -1724,6 +1715,7 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
 
     error_logfile = None
     # Uncomment to suppress warnings for debug purposes
+    #
     # error_logfile = '/dev/null'
 
     # Note: these methods take care of retries and checking that the
