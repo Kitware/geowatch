@@ -576,8 +576,10 @@ def validate_site_dataframe(site_df):
         if not all(valid_obs_dates):
             # null_obs_sites.append(first[['site_id', 'status']].to_dict())
             pass
-        valid_deltas = np.array([d.total_seconds() for d in np.diff(valid_obs_dates)])
-        assert (valid_deltas >= 0).all(), 'observations must be sorted temporally'
+        import xdev
+        with xdev.embed_on_exception_context:
+            valid_deltas = np.array([d.total_seconds() for d in np.diff(valid_obs_dates)])
+            assert (valid_deltas >= 0).all(), 'observations must be sorted temporally'
     except AssertionError as ex:
         print('ex = {!r}'.format(ex))
         print(site_df)
