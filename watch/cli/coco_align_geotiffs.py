@@ -486,8 +486,6 @@ def main(cmdline=True, **kw):
     new_dset.dataset['info'] = [
         process_info,
     ]
-    import xdev
-    xdev.embed()
     to_extract = cube.query_image_overlaps(region_df)
 
     for image_overlaps in ub.ProgIter(to_extract, desc='extract ROI videos', verbose=3):
@@ -713,12 +711,44 @@ class SimpleDataCube(object):
         for ridx, gidxs in ridx_to_gidsx.items():
             region_row = region_df.iloc[ridx]
 
-            crs = gpd.GeoDataFrame([region_row], crs=region_df.crs).estimate_utm_crs()
+            _region_row_df = gpd.GeoDataFrame([region_row], crs=region_df.crs)
+            crs = _region_row_df.estimate_utm_crs()
             utm_epsg_zone_v1 = crs.to_epsg()
             geom_crs84 = region_row.geometry
             utm_epsg_zone_v2 = util_gis.find_local_meter_epsg_crs(geom_crs84)
             assert utm_epsg_zone_v2 == utm_epsg_zone_v1, 'consistency'
             local_epsg = utm_epsg_zone_v2
+
+            CHECK_THIN_REGIONS = True
+            if CHECK_THIN_REGIONS:
+                # Try and detect thin regions and then add context
+                region_row_df_utm = _region_row_df.to_crs(utm_epsg_zone_v2)
+                region_utm_geom = region_row_df_utm['geometry'].iloc[0]
+                # poly = kwimage.Polygon.coerce(region_utm_geom)
+                import cv2
+                from collections import namedtuple
+                import numpy as np
+                OrientedBBox = namedtuple('OrientedBBox', ('center', 'extent', 'theta'))
+                hull = kwimage.Polygon.coerce(region_utm_geom.convex_hull)
+                c, e, a = cv2.minAreaRect(hull.exterior.data.astype(np.float32))
+                t = np.deg2rad(a)
+                obox = OrientedBBox(c, e, t)
+                # HACK:
+                # Expand extent to ensure minimum thickness
+                new_extent = np.maximum(obox.extent, 100)
+                if np.all(new_extent == np.array(obox.extent)):
+                    ...
+                else:
+                    import xdev
+                    xdev.embed()
+                    ubox = kwimage.Boxes([[0, 0, 1, 1]], 'cxywh').to_polygons()[0]
+                    # S = kwimage.Affine.affine(scale=obox.extent)
+                    S = kwimage.Affine.affine(scale=new_extent)
+                    R = kwimage.Affine.affine(theta=obox.theta)
+                    T = kwimage.Affine.affine(offset=obox.center)
+                    hull = ubox.warp(T @ R @ S)
+                    fixed_geom_crs84 = gpd.GeoDataFrame({'geometry': [hull.to_shapely()]}, crs=utm_epsg_zone_v2).to_crs(region_df.crs)
+                    region_row['geometry'] = fixed_geom_crs84
 
             space_region = kwimage.Polygon.from_shapely(region_row.geometry)
             space_box = space_region.bounding_box().to_ltrb()
