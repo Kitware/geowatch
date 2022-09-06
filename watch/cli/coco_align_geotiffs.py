@@ -962,9 +962,10 @@ class SimpleDataCube(object):
 
         frame_count = 0
         prog = ub.ProgIter(datetimes, desc='submit extract jobs', verbose=1)
+        dtiter = iter(prog)
         import xdev
         xdev.embed()
-        for datetime_ in prog:
+        for datetime_ in dtiter:
 
             if max_frames is not None:
                 if frame_count > max_frames:
@@ -1010,8 +1011,21 @@ class SimpleDataCube(object):
                             other_area = sh_space_region_local.area
                             valid_iooa = isect_area / other_area
                         else:
-                            sh_valid_region_local = None
-                            valid_iooa = -1
+                            # If the valid_utm region does not exist, do we at
+                            # least have corners?
+                            utm_corners = coco_img.img.get('utm_corners', None)
+                            if utm_corners is not None:
+                                this_utm_crs = coco_img.img['utm_crs_info']['auth']
+                                sh_valid_region_utm = kwimage.Polygon(exterior=utm_corners).to_shapely()
+                                valid_region_utm = gpd.GeoDataFrame({'geometry': [sh_valid_region_utm]}, crs=this_utm_crs)
+                                valid_region_local = valid_region_utm.to_crs(local_epsg)
+                                sh_valid_region_local = valid_region_local.geometry.iloc[0]
+                                isect_area = sh_valid_region_local.intersection(sh_space_region_local).area
+                                other_area = sh_space_region_local.area
+                                valid_iooa = isect_area / other_area
+                            else:
+                                sh_valid_region_local = None
+                                valid_iooa = -1
 
                         score = valid_iooa
                         rows.append({
