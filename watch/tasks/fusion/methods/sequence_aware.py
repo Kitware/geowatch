@@ -557,6 +557,14 @@ class SequenceAwareModel(pl.LightningModule):
         self.head_metrics['saliency'] = torchmetrics.MetricCollection({
             'f1': FBetaScore(beta=1.0),
         })
+
+    @property
+    def has_trainer(self):
+        try:
+            # Lightning 1.7 raises an attribute error if not attached
+            return self.trainer is not None
+        except RuntimeError:
+            return False
     
     def stem_process_example(self, example):
         modes = []
@@ -756,3 +764,90 @@ class SequenceAwareModel(pl.LightningModule):
         self.log_dict(metrics, prog_bar=True, sync_dist=True)
         self.log("loss", loss, prog_bar=True, sync_dist=True)
         return loss
+
+    def configure_optimizers(self):
+        """
+        TODO:
+            - [ ] Enable use of other optimization algorithms on the CLI
+            - [ ] Enable use of other scheduler algorithms on the CLI
+
+        References:
+            https://pytorch-optimizer.readthedocs.io/en/latest/index.html
+            https://pytorch-lightning.readthedocs.io/en/stable/common/optimization.html
+
+        Example:
+            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # noqa
+            >>> self = MultimodalTransformer(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b')
+            >>> max_epochs = 80
+            >>> self.trainer = pl.Trainer(max_epochs=max_epochs)
+            >>> [opt], [sched] = self.configure_optimizers()
+            >>> rows = []
+            >>> # Insepct what the LR curve will look like
+            >>> for _ in range(max_epochs):
+            ...     sched.last_epoch += 1
+            ...     lr = sched.get_lr()[0]
+            ...     rows.append({'lr': lr, 'last_epoch': sched.last_epoch})
+            >>> # xdoctest +REQUIRES(--show)
+            >>> import kwplot
+            >>> import pandas as pd
+            >>> data = pd.DataFrame(rows)
+            >>> sns = kwplot.autosns()
+            >>> sns.lineplot(data=data, y='lr', x='last_epoch')
+
+        Example:
+            >>> # Verify lr and decay is set correctly
+            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> my_lr = 2.3e-5
+            >>> my_decay = 2.3e-5
+            >>> kw = dict(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b', learning_rate=my_lr, weight_decay=my_decay)
+            >>> self = MultimodalTransformer(**kw)
+            >>> [opt], [sched] = self.configure_optimizers()
+            >>> assert opt.param_groups[0]['lr'] == my_lr
+            >>> assert opt.param_groups[0]['weight_decay'] == my_decay
+            >>> #
+            >>> self = MultimodalTransformer(**kw, optimizer='sgd')
+            >>> [opt], [sched] = self.configure_optimizers()
+            >>> assert opt.param_groups[0]['lr'] == my_lr
+            >>> assert opt.param_groups[0]['weight_decay'] == my_decay
+            >>> #
+            >>> self = MultimodalTransformer(**kw, optimizer='AdamW')
+            >>> [opt], [sched] = self.configure_optimizers()
+            >>> assert opt.param_groups[0]['lr'] == my_lr
+            >>> assert opt.param_groups[0]['weight_decay'] == my_decay
+            >>> #
+            >>> # self = MultimodalTransformer(**kw, optimizer='MADGRAD')
+            >>> # [opt], [sched] = self.configure_optimizers()
+            >>> # assert opt.param_groups[0]['lr'] == my_lr
+            >>> # assert opt.param_groups[0]['weight_decay'] == my_decay
+        """
+        import netharn as nh
+
+        # Netharn api will convert a string code into a type/class and
+        # keyword-arguments to create an instance.
+        optim_cls, optim_kw = nh.api.Optimizer.coerce(
+            optimizer=self.hparams.optimizer,
+            # learning_rate=self.hparams.learning_rate,
+            lr=self.hparams.learning_rate,  # netharn bug?, some optimizers dont accept learning_rate and only lr
+            weight_decay=self.hparams.weight_decay)
+        if self.hparams.optimizer == 'RAdam':
+            optim_kw['betas'] = (0.9, 0.99)  # backwards compat
+
+        # Hack to fix a netharn bug where weight decay is not set for AdamW
+        optim_kw.update(ub.compatible(
+            {'weight_decay': self.hparams.weight_decay}, optim_cls))
+
+        optim_kw['params'] = self.parameters()
+        print('optim_cls = {}'.format(ub.repr2(optim_cls, nl=1)))
+        print('optim_kw = {}'.format(ub.repr2(optim_kw, nl=1)))
+        optimizer = optim_cls(**optim_kw)
+
+        # TODO:
+        # - coerce schedulers
+        if self.has_trainer:
+            max_epochs = self.trainer.max_epochs
+        else:
+            max_epochs = 20
+
+        scheduler = lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=max_epochs)
+        return [optimizer], [scheduler]
