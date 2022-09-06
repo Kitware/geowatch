@@ -119,9 +119,23 @@ _PUBLIC_L2_PRODUCTS = {
     },
 
     # https://stacindex.org/catalogs/usgs-landsat-collection-2-api#/
+    # Surface Reflectance
     'landsat-c2ard-sr': {
         # Note: AWS_REQUEST_PAYER='requester' is required to grab the data
         "collections": ["landsat-c2ard-sr"],
+        "endpoint": "https://landsatlook.usgs.gov/stac-server/",
+        "query": {
+            "platform": {
+                "eq": "LANDSAT_8"
+            }
+        }
+    },
+
+    # https://stacindex.org/catalogs/usgs-landsat-collection-2-api#/
+    # Brightness Temperature
+    'landsat-c2ard-bt': {
+        # Note: AWS_REQUEST_PAYER='requester' is required to grab the data
+        "collections": ["landsat-c2ard-bt"],
         "endpoint": "https://landsatlook.usgs.gov/stac-server/",
         "query": {
             "platform": {

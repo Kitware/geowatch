@@ -216,7 +216,7 @@ def main(cmdline=False, **kwargs):
     environ = {}
     # https://trac.osgeo.org/gdal/wiki/ConfigOptions#GDAL_DISABLE_READDIR_ON_OPEN
     environ['GDAL_DISABLE_READDIR_ON_OPEN'] = 'EMPTY_DIR'
-    if api_key.startswith('env:'):
+    if api_key is not None and api_key.startswith('env:'):
         import os
         # NOTE!!!
         # THIS WILL LOG YOUR SECRET KEY IN PLAINTEXT!!!
