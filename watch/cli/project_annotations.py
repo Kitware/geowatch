@@ -635,7 +635,11 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
         video_gdf['geometry'].iloc[0] = combined
         video_gdfs.append(video_gdf)
         vidid_to_imgdf[vidid] = subdf
-    videos_gdf = pd.concat(video_gdfs, ignore_index=True)
+
+    if len(video_gdfs) > 0:
+        videos_gdf = pd.concat(video_gdfs, ignore_index=True)
+    else:
+        videos_gdf = None
 
     PROJECT_ENDSTATE = True
 
