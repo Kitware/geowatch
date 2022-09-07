@@ -338,19 +338,23 @@ def expand_site_models_with_site_summaries(sites, regions):
 
         if site_rows1:
             site_df1 = pd.concat(site_rows1).reset_index()
-            assert len(set(site_df1['site_id'])) == len(site_df1), 'site ids must be unique'
-            site_df1 = site_df1.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
-            if 'misc_info' not in site_df1.columns:
-                site_df1['misc_info'] = None
+            import xdev
+            with xdev.embed_on_exception_context:
+                assert len(set(site_df1['site_id'])) == len(site_df1), 'site ids must be unique'
+                site_df1 = site_df1.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
+                if 'misc_info' not in site_df1.columns:
+                    site_df1['misc_info'] = None
         else:
             site_df1 = pd.DataFrame([], columns=expected_keys)
 
         if site_rows2:
             site_df2 = pd.concat(site_rows2).reset_index()
-            assert len(set(site_df2['site_id'])) == len(site_df2), 'site ids must be unique'
-            site_df2 = site_df2.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
-            if 'misc_info' not in site_df2.columns:
-                site_df2['misc_info'] = None
+            import xdev
+            with xdev.embed_on_exception_context:
+                assert len(set(site_df2['site_id'])) == len(site_df2), 'site ids must be unique'
+                site_df2 = site_df2.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
+                if 'misc_info' not in site_df2.columns:
+                    site_df2['misc_info'] = None
         else:
             site_df2 = pd.DataFrame([], columns=expected_keys)
 
