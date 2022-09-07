@@ -714,7 +714,9 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
             try:
                 video = coco_dset.index.name_to_video[region_id]
             except KeyError:
-                print('No region-id match for region_id={}'.format(region_id))
+                VERYVERBOSE = 0
+                if VERYVERBOSE:
+                    print('No region-id match for region_id={}'.format(region_id))
                 continue
             video_id = video['id']
             video_id_to_region_id[video_id] = region_id
