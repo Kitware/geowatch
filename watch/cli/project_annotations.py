@@ -316,7 +316,7 @@ def expand_site_models_with_site_summaries(sites, regions):
     region_id_to_num_sites = ub.map_vals(len, region_id_to_sites)
     print('region_id_to_num_sitesumms = {}'.format(ub.repr2(region_id_to_num_sitesumms, nl=1, sort=0)))
     if VERYVERBOSE:
-        print('regio:n_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1, sort=0)))
+        print('region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1, sort=0)))
 
     if 1:
         site_rows1 = []
@@ -349,12 +349,18 @@ def expand_site_models_with_site_summaries(sites, regions):
 
         if site_rows2:
             site_df2 = pd.concat(site_rows2).reset_index()
-            import xdev
-            with xdev.embed_on_exception_context:
-                assert len(set(site_df2['site_id'])) == len(site_df2), 'site ids must be unique'
-                site_df2 = site_df2.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
-                if 'misc_info' not in site_df2.columns:
-                    site_df2['misc_info'] = None
+            if len(set(site_df2['site_id'])) != len(site_df2):
+                counts = site_df2['site_id'].value_counts()
+                duplicates = counts[counts > 1]
+                warnings.warn('Site summaries contain duplicate site_ids:\n{}'.format(duplicates))
+                # Filter to unique sites
+                unique_idx = np.unique(site_df2['site_id'], return_index=True)[1]
+                site_df2 = site_df2.iloc[unique_idx]
+
+            site_df2 = site_df2.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
+
+            if 'misc_info' not in site_df2.columns:
+                site_df2['misc_info'] = None
         else:
             site_df2 = pd.DataFrame([], columns=expected_keys)
 
