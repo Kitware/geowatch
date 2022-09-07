@@ -729,8 +729,10 @@ class SimpleDataCube(object):
                 from collections import namedtuple
                 import numpy as np
                 OrientedBBox = namedtuple('OrientedBBox', ('center', 'extent', 'theta'))
-                hull_utm = kwimage.Polygon.coerce(region_utm_geom.convex_hull)
-                c, e, a = cv2.minAreaRect(hull_utm.exterior.data.astype(np.float32))
+                import xdev
+                with xdev.embed_on_exception_context:
+                    hull_utm = kwimage.Polygon.coerce(region_utm_geom.convex_hull)
+                    c, e, a = cv2.minAreaRect(hull_utm.exterior.data.astype(np.float32))
                 t = np.deg2rad(a)
                 obox = OrientedBBox(c, e, t)
                 # HACK:
