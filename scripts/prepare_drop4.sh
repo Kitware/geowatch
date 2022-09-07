@@ -562,3 +562,47 @@ prepare_qfabric(){
         --backend=tmux --run=1
         
 }
+
+
+prepare_qfabric_horologic(){
+    source "$HOME"/code/watch/secrets/secrets
+
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="hdd")/public
+    SENSORS=worldview-nitf,smart-landsat-c2l2-sr,sentinel-s2-l2a-cogs
+    #DATASET_SUFFIX=QFabric-c30-$SENSORS
+    DATASET_SUFFIX=QFabric-wvs2l8-c80
+    REGION_GLOBSTR="$DATA_DVC_DPATH/annotations-qfabric/wvs2l8/region_models/*.geojson"
+    SITE_GLOBSTR="$DATA_DVC_DPATH/annotations-qfabric/wvs2l8/site_models/*.geojson"
+
+    #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
+    #REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/NZ_R001.*"
+    #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
+
+    # Construct the TA2-ready dataset
+    python -m watch.cli.prepare_ta2_dataset \
+        --dataset_suffix=$DATASET_SUFFIX \
+        --stac_query_mode=auto \
+        --cloud_cover=80 \
+        --sensors="$SENSORS" \
+        --api_key=env:SMART_STAC_API_KEY \
+        --collated True \
+        --dvc_dpath="$DATA_DVC_DPATH" \
+        --aws_profile=iarpa \
+        --region_globstr="$REGION_GLOBSTR" \
+        --site_globstr="$SITE_GLOBSTR" \
+        --requester_pays=False \
+        --fields_workers=20 \
+        --convert_workers=8 \
+        --max_queue_size=12 \
+        --align_workers=12 \
+        --context_factor=2 \
+        --cache=1 \
+        --ignore_duplicates=1 \
+        --rpc_align_method=orthorectify \
+        --separate_region_queues=1 \
+        --separate_align_jobs=1 \
+        --visualize=0 \
+        --target_gsd=2 \
+        --backend=tmux --run=1
+        
+}
