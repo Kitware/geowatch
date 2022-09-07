@@ -11,6 +11,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Removed original fusion schedule evaluation code.
 * Removed old CLI scripts. 
 
+### Fixed
+* Fixed various bugs where `project_annotations`, and `coco_align_geotiffs`
+  would fail when a video was empty.
+
 
 ## Version 0.3.4 - Finalized 2022-08-31
 

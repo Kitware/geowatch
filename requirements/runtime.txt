@@ -111,7 +111,7 @@ lark_cython >= 0.0.12
 # Imaging
 distinctipy>=1.2.1
 kwimage>=0.9.7
-kwcoco>=0.4.1
+kwcoco>=0.4.2
 albumentations>=1.0.0
 ndsampler>=0.7.0
 tifffile>=2021.4.8

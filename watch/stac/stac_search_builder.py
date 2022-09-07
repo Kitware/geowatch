@@ -89,6 +89,26 @@ _SMARTSTAC_PRODUCTS = {
         }
     },
 
+    'smart-landsat-c2l1': {
+        "collections": ["landsat-c2l1"],
+        'endpoint': "https://api.smart-stac.com",
+        "query": {
+            "platform": {
+                "eq": "LANDSAT_8"
+            }
+        }
+    },
+
+    'smart-landsat-c2l2-sr': {
+        "collections": ["landsat-c2l2-sr"],
+        'endpoint': "https://api.smart-stac.com",
+        "query": {
+            "platform": {
+                "eq": "LANDSAT_8"
+            }
+        }
+    },
+
 }
 
 
@@ -119,9 +139,23 @@ _PUBLIC_L2_PRODUCTS = {
     },
 
     # https://stacindex.org/catalogs/usgs-landsat-collection-2-api#/
+    # Surface Reflectance
     'landsat-c2ard-sr': {
         # Note: AWS_REQUEST_PAYER='requester' is required to grab the data
         "collections": ["landsat-c2ard-sr"],
+        "endpoint": "https://landsatlook.usgs.gov/stac-server/",
+        "query": {
+            "platform": {
+                "eq": "LANDSAT_8"
+            }
+        }
+    },
+
+    # https://stacindex.org/catalogs/usgs-landsat-collection-2-api#/
+    # Brightness Temperature
+    'landsat-c2ard-bt': {
+        # Note: AWS_REQUEST_PAYER='requester' is required to grab the data
+        "collections": ["landsat-c2ard-bt"],
         "endpoint": "https://landsatlook.usgs.gov/stac-server/",
         "query": {
             "platform": {
@@ -140,12 +174,13 @@ def _devcheck_providers_exist():
     # from watch.stac.stac_search_builder import _ACCENTURE_PHASE2_TA1_PRODUCTS
     # provider = _ACCENTURE_PHASE2_TA1_PRODUCTS['ta1-pd-acc']['endpoint']
     import pystac_client
+
     headers = {
         'x-api-key': os.environ['SMART_STAC_API_KEY']
     }
     provider = "https://api.smart-stac.com"
     catalog = pystac_client.Client.open(provider, headers=headers)
-    print(list(catalog.get_collections()))
+    print(ub.repr2(list(catalog.get_collections())))
 
     item_search = catalog.search(collections=["ta1-pd-acc"])
     item_search = catalog.search(collections=["ta1-pd-ara"])

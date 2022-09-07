@@ -133,7 +133,8 @@ class CocoAlignGeotiffConfig(scfg.Config):
         'rpc_align_method': scfg.Value('orthorectify', help=ub.paragraph(
             '''
             Can be one of:
-                (1) orthorectify - which uses gdalwarp with -rpc,
+                (1) orthorectify - which uses gdalwarp with -rpc if available
+                    otherwise falls back to affine transform,
                 (2) pixel_crop - which warps annotations onto pixel with RPCs
                     but only crops the original image without distortion,
                 (3) affine_warp - which ignores RPCs and uses the affine
@@ -439,9 +440,10 @@ def main(cmdline=True, **kw):
         warnings.warn('skip_geo_preprop is deprecated', DeprecationWarning)
         geo_preprop = False
     if geo_preprop == 'auto':
-        coco_img = coco_dset.coco_image(ub.peek(valid_gids))
-        geo_preprop = not any('geos_corners' in obj for obj in coco_img.iter_asset_objs())
-        print('auto-choose geo_preprop = {!r}'.format(geo_preprop))
+        if len(valid_gids):
+            coco_img = coco_dset.coco_image(ub.peek(valid_gids))
+            geo_preprop = not any('geos_corners' in obj for obj in coco_img.iter_asset_objs())
+            print('auto-choose geo_preprop = {!r}'.format(geo_preprop))
 
     if geo_preprop:
         kwcoco_extensions.coco_populate_geo_heuristics(
@@ -541,12 +543,14 @@ class SimpleDataCube(object):
         expxected_geos_crs_info = {
             'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
             'auth': ('EPSG', '4326')
-        }
+        }  # This is CRS84
+        crs84 = util_gis._get_crs84()
         expxected_geos_crs_info = ensure_json_serializable(expxected_geos_crs_info)
         gids = coco_dset.images(gids)._ids
 
-        # new way: put data in the cube into a geopandas data frame
-        df_input = []
+        # put data in the cube into a geopandas data frame
+        columns = ['gid', 'name', 'video_id', 'geometry', 'properties']
+        df_rows = []
         for gid in gids:
             img = coco_dset.index.imgs[gid]
             sh_img_poly = shapely.geometry.shape(img['geos_corners'])
@@ -561,7 +565,7 @@ class SimpleDataCube(object):
                         ''').format(crs_info, expxected_geos_crs_info))
 
             # Create a data frame with space-time regions
-            df_input.append({
+            df_rows.append({
                 'gid': gid,
                 'name': img.get('name', None),
                 'video_id': img.get('video_id', None),
@@ -569,8 +573,8 @@ class SimpleDataCube(object):
                 'properties': properties,
             })
 
-        img_geos_df = gpd.GeoDataFrame(df_input, geometry='geometry',
-                                       crs='EPSG:4326')
+        img_geos_df = gpd.GeoDataFrame(df_rows, geometry='geometry',
+                                       columns=columns, crs=crs84)
         img_geos_df = img_geos_df.set_index('gid', drop=False)
         cube.coco_dset = coco_dset
         cube.img_geos_df = img_geos_df
@@ -707,12 +711,51 @@ class SimpleDataCube(object):
         for ridx, gidxs in ridx_to_gidsx.items():
             region_row = region_df.iloc[ridx]
 
-            crs = gpd.GeoDataFrame([region_row], crs=region_df.crs).estimate_utm_crs()
+            _region_row_df = gpd.GeoDataFrame([region_row], crs=region_df.crs)
+            crs = _region_row_df.estimate_utm_crs()
             utm_epsg_zone_v1 = crs.to_epsg()
             geom_crs84 = region_row.geometry
             utm_epsg_zone_v2 = util_gis.find_local_meter_epsg_crs(geom_crs84)
             assert utm_epsg_zone_v2 == utm_epsg_zone_v1, 'consistency'
             local_epsg = utm_epsg_zone_v2
+
+            CHECK_THIN_REGIONS = True
+            if CHECK_THIN_REGIONS:
+                # Try and detect thin regions and then add context
+                region_row_df_utm = _region_row_df.to_crs(utm_epsg_zone_v2)
+                region_utm_geom = region_row_df_utm['geometry'].iloc[0]
+                # poly = kwimage.Polygon.coerce(region_utm_geom)
+                import cv2
+                from collections import namedtuple
+                import numpy as np
+                OrientedBBox = namedtuple('OrientedBBox', ('center', 'extent', 'theta'))
+                from shapely import validation
+                if not region_utm_geom.is_valid:
+                    warnings.warn('Region query is invalid: ' + str(validation.explain_validity(region_utm_geom)))
+                    continue
+                hull_utm = kwimage.Polygon.coerce(region_utm_geom.convex_hull)
+                c, e, a = cv2.minAreaRect(hull_utm.exterior.data.astype(np.float32))
+                t = np.deg2rad(a)
+                obox = OrientedBBox(c, e, t)
+                # HACK:
+                # Expand extent to ensure minimum thickness
+                min_meter_extent = 100
+                new_extent = np.maximum(obox.extent, min_meter_extent)
+                if np.all(new_extent == np.array(obox.extent)):
+                    ...
+                else:
+                    ubox = kwimage.Boxes([[0, 0, 1, 1]], 'cxywh').to_polygons()[0]
+                    # S = kwimage.Affine.affine(scale=obox.extent)
+                    S = kwimage.Affine.affine(scale=new_extent)
+                    R = kwimage.Affine.affine(theta=obox.theta)
+                    T = kwimage.Affine.affine(offset=obox.center)
+                    new_hull_utm = ubox.warp(T @ R @ S)
+                    fixed_geom_utm = gpd.GeoDataFrame({
+                        'geometry': [new_hull_utm.to_shapely()]},
+                        crs=utm_epsg_zone_v2)
+                    fixed_geom_crs84 = fixed_geom_utm.to_crs(region_df.crs)
+                    region_row = region_row.copy()
+                    region_row['geometry'] = fixed_geom_crs84['geometry'].iloc[0]
 
             space_region = kwimage.Polygon.from_shapely(region_row.geometry)
             space_box = space_region.bounding_box().to_ltrb()
@@ -957,7 +1000,9 @@ class SimpleDataCube(object):
         sh_space_region_local = space_region_local.geometry.iloc[0]
 
         frame_count = 0
-        for datetime_ in ub.ProgIter(datetimes, desc='submit extract jobs', verbose=1):
+        prog = ub.ProgIter(datetimes, desc='submit extract jobs', verbose=1)
+        dtiter = iter(prog)
+        for datetime_ in dtiter:
 
             if max_frames is not None:
                 if frame_count > max_frames:
@@ -978,7 +1023,6 @@ class SimpleDataCube(object):
                 conflict_imges = coco_dset.images(gids)
                 sensors = list(conflict_imges.lookup('sensor_coarse', None))
                 for sensor_coarse, sensor_gids in ub.group_items(conflict_imges, sensors).items():
-                    # sensor_images = coco_dset.images(sensor_gids)
                     rows = []
                     for gid in sensor_gids:
                         coco_img = coco_dset.coco_image(gid)
@@ -1004,8 +1048,21 @@ class SimpleDataCube(object):
                             other_area = sh_space_region_local.area
                             valid_iooa = isect_area / other_area
                         else:
-                            sh_valid_region_local = None
-                            valid_iooa = -1
+                            # If the valid_utm region does not exist, do we at
+                            # least have corners?
+                            utm_corners = coco_img.img.get('utm_corners', None)
+                            if utm_corners is not None:
+                                this_utm_crs = coco_img.img['utm_crs_info']['auth']
+                                sh_valid_region_utm = kwimage.Polygon(exterior=utm_corners).to_shapely()
+                                valid_region_utm = gpd.GeoDataFrame({'geometry': [sh_valid_region_utm]}, crs=this_utm_crs)
+                                valid_region_local = valid_region_utm.to_crs(local_epsg)
+                                sh_valid_region_local = valid_region_local.geometry.iloc[0]
+                                isect_area = sh_valid_region_local.intersection(sh_space_region_local).area
+                                other_area = sh_space_region_local.area
+                                valid_iooa = isect_area / other_area
+                            else:
+                                sh_valid_region_local = None
+                                valid_iooa = -1
 
                         score = valid_iooa
                         rows.append({
@@ -1030,6 +1087,7 @@ class SimpleDataCube(object):
                     # only if we have that info
                     can_vis_geos = any(row['geometry'] is not None for row in rows)
                     if debug_valid_regions:
+                        prog.ensure_newline()
                         print('debug_valid_regions = {!r}'.format(debug_valid_regions))
                         print('can_vis_geos = {!r}'.format(can_vis_geos))
                     if debug_valid_regions and can_vis_geos:
@@ -1699,17 +1757,7 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
         # print('!!WARNING!! duplicates = {}'.format(ub.repr2(duplicates, nl=1)))
         input_gpaths = list(ub.oset(input_gpaths))
 
-    if 1:
-        nodata = force_nodata
-    else:
-        # DONT USE THIS ANYMORE
-        nodata_cand = {obj.get('default_nodata', None) for obj in obj_group} - {None}
-        if len(nodata_cand) > 1:
-            raise AssertionError('Did not expect heterogeneous nodata values')
-        elif len(nodata_cand) == 0:
-            nodata = None
-        else:
-            nodata = ub.peek(nodata_cand)
+    nodata = force_nodata
 
     # When trying to get a gdalmerge to take multiple inputs I got a Attempt to
     # create 0x0 dataset is illegal,sizes must be larger than zero.  This new
@@ -1724,6 +1772,7 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
 
     error_logfile = None
     # Uncomment to suppress warnings for debug purposes
+    #
     # error_logfile = '/dev/null'
 
     # Note: these methods take care of retries and checking that the

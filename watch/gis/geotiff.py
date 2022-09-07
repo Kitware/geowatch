@@ -1023,6 +1023,12 @@ def parse_landsat_product_id(product_id):
         >>> assert info['suffix'] == 'B1'
         >>> assert info['band_num'] == 1
 
+
+        >>> from watch.gis.geotiff import *  # NOQA
+        >>> gpath = 'LC08_CU_029005_20181208_20210503_02_QA_LINEAGE.TIF'
+        >>> info = parse_landsat_product_id(gpath)
+        >>> print('info = {}'.format(ub.repr2(info, nl=1)))
+
     Example:
         >>> # xdoctest: +REQUIRES(--network)
         >>> # Test on real landsat data
@@ -1043,6 +1049,8 @@ def parse_landsat_product_id(product_id):
         .. [LandSatSuffixFormat] https://prd-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/atoms/files/LSDS-750_Landsat8_Level-0-Reformatted_DataFormatControlBook-v15.pdf (page 26 / 99)
         .. [LandsatProcLevels] https://www.usgs.gov/core-science-systems/nli/landsat/landsat-levels-processing
         .. [LandsatL2Names] https://www.usgs.gov/faqs/what-naming-convention-landsat-collection-2-level-1-and-level-2-scenes?qt-news_science_products=0#qt-news_science_products
+
+        .. [LandSatARDDocs] https://d9-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/s3fs-public/atoms/files/LSDS-1873_US-Landsat%20C1-ARD-DFCB-v7.pdf
     """
     # Landsat filename pattern. See [LanSatName]_
     # LXSS_LLLL_PPPRRR_YYYYMMDD_yyyymmdd_CC_TX
@@ -1068,6 +1076,7 @@ def parse_landsat_product_id(product_id):
             'L2SP': 'Science Package',
             'L2SR': 'Surface Reflectance',
             'L2ST': 'Surface Temperature',  # this is a guess
+            'CU': 'CU?',  # No idea what this is. Seen in quality ands.
         }
 
         # use util_bands for this
@@ -1110,14 +1119,21 @@ def parse_landsat_product_id(product_id):
         if len(trailing) > 1:
             suffix = '_'.join(trailing[1:])
             ls_meta['suffix'] = suffix
-            ls_meta['band'] = suffix
-            ls_meta['channels'] = l8_channel_alias.get(suffix, suffix)
 
-            if suffix == 'ANC':
+            name_suffix = suffix
+            removable_exts = ['.tif', '.tiff']
+            for s in removable_exts:
+                if name_suffix.lower().endswith(s):
+                    name_suffix = name_suffix[:-len(s)]
+
+            ls_meta['band'] = name_suffix
+            ls_meta['channels'] = l8_channel_alias.get(name_suffix, name_suffix)
+
+            if name_suffix == 'ANC':
                 ls_meta['is_ancillary'] = True
-            elif suffix == 'MTA':
+            elif name_suffix == 'MTA':
                 ls_meta['is_metadata'] = True
-            elif suffix == 'MD5':
+            elif name_suffix == 'MD5':
                 ls_meta['is_checksum'] = True
             else:
                 # The suffix might represent something about band
@@ -1125,7 +1141,7 @@ def parse_landsat_product_id(product_id):
                 # See [LandSatSuffixFormat]_.
                 band_suffix_pat = 'B{band_num:d}'
                 band_suffix_parser = _parser_lut(band_suffix_pat)
-                band_result = band_suffix_parser.parse(suffix)
+                band_result = band_suffix_parser.parse(name_suffix)
                 if band_result is not None:
                     ls_meta['band_num'] = band_result.named['band_num']
         return ls_meta
