@@ -729,15 +729,18 @@ class SimpleDataCube(object):
                 from collections import namedtuple
                 import numpy as np
                 OrientedBBox = namedtuple('OrientedBBox', ('center', 'extent', 'theta'))
-                import xdev
-                with xdev.embed_on_exception_context:
-                    hull_utm = kwimage.Polygon.coerce(region_utm_geom.convex_hull)
-                    c, e, a = cv2.minAreaRect(hull_utm.exterior.data.astype(np.float32))
+                from shapely import validation
+                if not region_utm_geom.is_valid:
+                    warnings.warn('Region query is invalid: ' + str(validation.explain_validity(region_utm_geom)))
+                    continue
+                hull_utm = kwimage.Polygon.coerce(region_utm_geom.convex_hull)
+                c, e, a = cv2.minAreaRect(hull_utm.exterior.data.astype(np.float32))
                 t = np.deg2rad(a)
                 obox = OrientedBBox(c, e, t)
                 # HACK:
                 # Expand extent to ensure minimum thickness
-                new_extent = np.maximum(obox.extent, 100)
+                min_meter_extent = 100
+                new_extent = np.maximum(obox.extent, min_meter_extent)
                 if np.all(new_extent == np.array(obox.extent)):
                     ...
                 else:
