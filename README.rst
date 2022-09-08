@@ -61,7 +61,7 @@ Test everything is working by running
 
    ./run_tests.py
 
-For more details see the `installing watch for development guide <docs/installing_watch.rst.rst>`_.
+For more details see the `installing watch for development guide <docs/installing_watch.rst>`_.
 
 
 Development
