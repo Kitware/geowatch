@@ -786,18 +786,18 @@ class SequenceAwareModel(pl.LightningModule):
             FBetaScore = torchmetrics.FBeta
 
         class_metrics = torchmetrics.MetricCollection({
-            "acc": torchmetrics.Accuracy(),
-            # "iou": torchmetrics.IoU(2),
-            'f1_micro': FBetaScore(beta=1.0, threshold=0.5, average='micro'),
-            'f1_macro': FBetaScore(beta=1.0, threshold=0.5, average='macro', num_classes=self.num_classes),
+            "class_acc": torchmetrics.Accuracy(),
+            # "class_iou": torchmetrics.IoU(2),
+            'class_f1_micro': FBetaScore(beta=1.0, threshold=0.5, average='micro'),
+            'class_f1_macro': FBetaScore(beta=1.0, threshold=0.5, average='macro', num_classes=self.num_classes),
         })
         change_metrics = torchmetrics.MetricCollection({
-            "acc": torchmetrics.Accuracy(),
+            "change_acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
-            'f1': FBetaScore(beta=1.0),
+            'change_f1': FBetaScore(beta=1.0),
         })
         saliency_metrics = torchmetrics.MetricCollection({
-            'f1': FBetaScore(beta=1.0),
+            'saliency_f1': FBetaScore(beta=1.0),
         })
         
         self.head_metrics = nn.ModuleDict({
@@ -944,7 +944,6 @@ class SequenceAwareModel(pl.LightningModule):
     
     def shared_step(self, batch, batch_idx=None, stage="train"):
         losses = []
-        metrics = {}
         
         inputs, outputs = zip(*[
             self.process_example(example)
@@ -1008,11 +1007,10 @@ class SequenceAwareModel(pl.LightningModule):
                 logits[task_mask],
                 labels[task_mask],
             )
-            metrics[task_name] = task_metric
+            self.log_dict(task_metric, prog_bar=True, sync_dist=True)
         
         loss = sum(losses) / len(losses)
         
-        self.log_dict(metrics, prog_bar=True, sync_dist=True)
         self.log("loss", loss, prog_bar=True, sync_dist=True)
         return loss
 
