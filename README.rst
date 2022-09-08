@@ -37,10 +37,21 @@ The following table provides links to relevant resources for the SMART WATCH pro
 Getting Started
 ---------------
 
-To quickly get started locally, clone the watch repo and run:
+To quickly get started locally, clone the watch repo:
+
 
 .. code:: bash
 
+   # Create a directory for CODE
+   mkdir -p $HOME/code
+   git clone https://gitlab.kitware.com/smart/watch/  $HOME/code/watch
+
+
+Then run:
+
+.. code:: bash
+
+   cd $HOME/code/watch
    ./run_developer_setup.py
  
 
