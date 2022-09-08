@@ -196,7 +196,7 @@ class SequenceAwareModel(pl.LightningModule):
             argname for argname, argtype in cls_sig.parameters.items()
             if argtype.kind in nameable_kinds
         ]
-        valid_argnames = explicit_argnames + list(MultimodalTransformerConfig.__default__.keys())
+        valid_argnames = explicit_argnames + list(SequenceAwareModelConfig.__default__.keys())
         clsvars = ub.dict_isect(cfgdict, valid_argnames)
         return clsvars
 
@@ -208,6 +208,181 @@ class SequenceAwareModel(pl.LightningModule):
         for name, mod in self.named_modules():
             if hasattr(mod, 'reset_parameters'):
                 mod.reset_parameters()
+                
+    @classmethod
+    def demo_dataset_stats(cls):
+        channels = kwcoco.ChannelSpec.coerce('pan,red|green|blue,nir|swir16|swir22')
+        unique_sensor_modes = {
+            ('sensor1', 'pan'),
+            ('sensor1', 'red|green|blue'),
+            ('sensor1', 'nir|swir16|swir22'),
+        }
+        input_stats = {k: {
+            'mean': np.random.rand(len(k[1].split('|')), 1, 1),
+            'std': np.random.rand(len(k[1].split('|')), 1, 1),
+        } for k in unique_sensor_modes}
+
+        classes = kwcoco.CategoryTree.coerce(3)
+        dataset_stats = {
+            'unique_sensor_modes': unique_sensor_modes,
+            'input_stats': input_stats,
+            'class_freq': {c: np.random.randint(0, 10000) for c in classes},
+        }
+        # 'sensor_mode_hist': {('sensor3', 'B10|B11|r|g|b|flowx|flowy|distri'): 1,
+        #  ('sensor2', 'B8|B11|r|g|b|disparity|gauss'): 2,
+        #  ('sensor0', 'B1|B8|B8a|B10|B11'): 1},
+        # 'class_freq': {'star': 0,
+        #  'superstar': 5822,
+        #  'eff': 0,
+        #  'negative': 0,
+        #  'ignore': 9216,
+        #  'background': 21826}}
+        return channels, classes, dataset_stats
+
+    def demo_batch(self, batch_size=1, num_timesteps=3, width=8, height=8, nans=0, rng=None):
+        """
+        Example:
+            >>> from watch.tasks.fusion.methods.sequence_aware import *  # NOQA
+            >>> channels, clases, dataset_stats = SequenceAwareModel.demo_dataset_stats()
+            >>> self = SequenceAwareModel(
+            >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
+            >>>     decoder='mlp', classes=clases, global_saliency_weight=1,
+            >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
+            >>> batch = self.demo_batch()
+            >>> if 1:
+            >>>   print(nh.data.collate._debug_inbatch_shapes(batch))
+            >>> result = self.forward_step(batch)
+            >>> if 1:
+            >>>   print(nh.data.collate._debug_inbatch_shapes(result))
+
+        Example:
+            >>> # With nans
+            >>> from watch.tasks.fusion.methods.sequence_aware import *  # NOQA
+            >>> channels, clases, dataset_stats = SequenceAwareModel.demo_dataset_stats()
+            >>> self = SequenceAwareModel(
+            >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
+            >>>     decoder='mlp', classes=clases, global_saliency_weight=1,
+            >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
+            >>> batch = self.demo_batch(nans=0.5, num_timesteps=2)
+            >>> item = batch[0]
+            >>> if 1:
+            >>>   print(nh.data.collate._debug_inbatch_shapes(batch))
+            >>> result1 = self.forward_step(batch)
+            >>> result2 = self.forward_step(batch, with_loss=0)
+            >>> if 1:
+            >>>   print(nh.data.collate._debug_inbatch_shapes(result1))
+            >>>   print(nh.data.collate._debug_inbatch_shapes(result2))
+        """
+        import kwarray
+        from kwarray import distributions
+
+        def _specific_coerce(val, rng=None):
+            # Coerce for what we want to do here,
+            import numbers
+            if isinstance(val, numbers.Integral):
+                distri = distributions.Constant(val, rng=rng)
+            elif isinstance(val, (tuple, list)) and len(val) == 2:
+                low, high = val
+                distri = distributions.DiscreteUniform(low, high, rng=rng)
+            else:
+                raise TypeError(val)
+            return distri
+
+        rng = kwarray.ensure_rng(rng)
+
+        B = batch_size
+        C = len(self.classes)
+        T = num_timesteps
+        batch = []
+
+        width_distri = _specific_coerce(width, rng=rng)
+        height_distri = _specific_coerce(height, rng=rng)
+
+        for bx in range(B):
+            modes = []
+            frames = []
+            for time_index in range(T):
+
+                # Sample output target shape
+                H0 = height_distri.sample()
+                W0 = width_distri.sample()
+
+                # Sample input shapes
+                H1 = height_distri.sample()
+                W1 = width_distri.sample()
+
+                H2 = height_distri.sample()
+                W2 = width_distri.sample()
+
+                modes = {
+                    'pan': rng.rand(1, H0, W0),
+                    'red|green|blue': rng.rand(3, H1, W1),
+                    'nir|swir16|swir22': rng.rand(3, H2, W2),
+                }
+                frame = {}
+                if time_index == 0:
+                    frame['change'] = None
+                    frame['change_weights'] = None
+                else:
+                    frame['change'] = rng.randint(low=0, high=1, size=(H0, W0))
+                    frame['change_weights'] = rng.rand(H0, W0)
+
+                frame['class_idxs'] = rng.randint(low=0, high=C - 1, size=(H0, W0))
+                frame['class_weights'] = rng.rand(H0, W0)
+
+                frame['saliency'] = rng.randint(low=0, high=1, size=(H0, W0))
+                frame['saliency_weights'] = rng.rand(H0, W0)
+
+                frame['date_captured'] = '',
+                frame['gid'] = bx
+                frame['sensor'] = 'sensor1'
+                frame['time_index'] = bx
+                frame['time_offset'] = np.array([1]),
+                frame['timestamp'] = 1
+                frame['modes'] = modes
+                # specify the desired predicted output size for this frame
+                # frame['output_wh'] = (H0, W0)
+
+                if nans:
+                    for v in modes.values():
+                        flags = rng.rand(*v.shape) < nans
+                        v[flags] = float('nan')
+
+                for k in ['change', 'change_weights', 'class_idxs',
+                          'class_weights', 'saliency', 'saliency_weights']:
+                    v = frame[k]
+                    if v is not None:
+                        frame[k] = torch.from_numpy(v)
+
+                for k in modes.keys():
+                    v = modes[k]
+                    if v is not None:
+                        modes[k] = torch.from_numpy(v)
+
+                frames.append(frame)
+
+            positional_tensors = {
+                'mode_tensor': torch.rand(T, 16),
+                'sensor': torch.rand(T, 16),
+                'time_index': torch.rand(T, 8),
+                'time_offset': torch.rand(T, 1),
+            }
+            target = {
+                'gids': list(range(T)),
+                'space_slice': [
+                    slice(0, H0),
+                    slice(0, W0),
+                ]
+            }
+            item = {
+                'video_id': 3,
+                'video_name': 'toy_video_3',
+                'frames': frames,
+                'positional_tensors': positional_tensors,
+                'target': target,
+            }
+            batch.append(item)
+        return batch
     
 
     def __init__(self, *, classes=10, dataset_stats=None,
@@ -380,7 +555,7 @@ class SequenceAwareModel(pl.LightningModule):
         # criterion and metrics
         # TODO: parametarize loss criterions
         # For loss function experiments, see and work in
-        # ~/code/watch/watch/tasks/fusion/methods/channelwise_transformer.py
+        # ~/code/watch/watch/tasks/fusion/methods/sequence_aware.py
         # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
         if isinstance(class_weights, str):
             if class_weights == 'auto':
@@ -592,29 +767,29 @@ class SequenceAwareModel(pl.LightningModule):
         else:
             FBetaScore = torchmetrics.FBeta
 
-        head_metrics = dict()
-        head_metrics['class'] = torchmetrics.MetricCollection({
+        class_metrics = torchmetrics.MetricCollection({
             "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
             'f1_micro': FBetaScore(beta=1.0, threshold=0.5, average='micro'),
             'f1_macro': FBetaScore(beta=1.0, threshold=0.5, average='macro', num_classes=self.num_classes),
         })
-        head_metrics['change'] = torchmetrics.MetricCollection({
+        change_metrics = torchmetrics.MetricCollection({
             "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
             'f1': FBetaScore(beta=1.0),
         })
-        head_metrics['saliency'] = torchmetrics.MetricCollection({
+        saliency_metrics = torchmetrics.MetricCollection({
             'f1': FBetaScore(beta=1.0),
         })
         
-        self.head_metrics = {
-            stage: {
-                key: collection.clone(prefix=f"{stage}_")
-                for key, collection in head_metrics.items()
-            }
+        self.head_metrics = nn.ModuleDict({
+            f"{stage}_stage": nn.ModuleDict({
+                "class": class_metrics.clone(prefix=f"{stage}_"),
+                "change": change_metrics.clone(prefix=f"{stage}_"),
+                "saliency": saliency_metrics.clone(prefix=f"{stage}_"),
+            })
             for stage in ["train", "val", "test"]
-        }
+        })
 
     @property
     def has_trainer(self):
@@ -811,7 +986,7 @@ class SequenceAwareModel(pl.LightningModule):
             )
             losses.append(task_loss.mean())
 
-            task_metric = self.head_metrics[stage][task_name](
+            task_metric = self.head_metrics[f"{stage}_stage"][task_name](
                 logits[task_mask],
                 labels[task_mask],
             )
@@ -849,8 +1024,8 @@ class SequenceAwareModel(pl.LightningModule):
             https://pytorch-lightning.readthedocs.io/en/stable/common/optimization.html
 
         Example:
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # noqa
-            >>> self = MultimodalTransformer(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b')
+            >>> from watch.tasks.fusion.methods.sequence_aware import *  # noqa
+            >>> self = SequenceAwareModel(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b')
             >>> max_epochs = 80
             >>> self.trainer = pl.Trainer(max_epochs=max_epochs)
             >>> [opt], [sched] = self.configure_optimizers()
@@ -869,26 +1044,26 @@ class SequenceAwareModel(pl.LightningModule):
 
         Example:
             >>> # Verify lr and decay is set correctly
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from watch.tasks.fusion.methods.sequence_aware import *  # NOQA
             >>> my_lr = 2.3e-5
             >>> my_decay = 2.3e-5
             >>> kw = dict(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b', learning_rate=my_lr, weight_decay=my_decay)
-            >>> self = MultimodalTransformer(**kw)
+            >>> self = SequenceAwareModel(**kw)
             >>> [opt], [sched] = self.configure_optimizers()
             >>> assert opt.param_groups[0]['lr'] == my_lr
             >>> assert opt.param_groups[0]['weight_decay'] == my_decay
             >>> #
-            >>> self = MultimodalTransformer(**kw, optimizer='sgd')
+            >>> self = SequenceAwareModel(**kw, optimizer='sgd')
             >>> [opt], [sched] = self.configure_optimizers()
             >>> assert opt.param_groups[0]['lr'] == my_lr
             >>> assert opt.param_groups[0]['weight_decay'] == my_decay
             >>> #
-            >>> self = MultimodalTransformer(**kw, optimizer='AdamW')
+            >>> self = SequenceAwareModel(**kw, optimizer='AdamW')
             >>> [opt], [sched] = self.configure_optimizers()
             >>> assert opt.param_groups[0]['lr'] == my_lr
             >>> assert opt.param_groups[0]['weight_decay'] == my_decay
             >>> #
-            >>> # self = MultimodalTransformer(**kw, optimizer='MADGRAD')
+            >>> # self = SequenceAwareModel(**kw, optimizer='MADGRAD')
             >>> # [opt], [sched] = self.configure_optimizers()
             >>> # assert opt.param_groups[0]['lr'] == my_lr
             >>> # assert opt.param_groups[0]['weight_decay'] == my_decay
@@ -925,6 +1100,218 @@ class SequenceAwareModel(pl.LightningModule):
             optimizer, T_max=max_epochs)
         return [optimizer], [scheduler]
 
+    def overfit(self, batch):
+        """
+        Overfit script and demo
+
+        CommandLine:
+            python -m xdoctest -m watch.tasks.fusion.methods.sequence_aware SequenceAwareModel.overfit --overfit-demo
+
+        Example:
+            >>> # xdoctest: +REQUIRES(--overfit-demo)
+            >>> # ============
+            >>> # DEMO OVERFIT:
+            >>> # ============
+            >>> from watch.tasks.fusion.methods.sequence_aware import *  # NOQA
+            >>> from watch.tasks.fusion import methods
+            >>> from watch.tasks.fusion import datamodules
+            >>> from watch.utils.util_data import find_smart_dvc_dpath
+            >>> import kwcoco
+            >>> from os.path import join
+            >>> import os
+            >>> if 1:
+            >>>     '''
+            >>>     # Generate toy datasets
+            >>>     DATA_DPATH=$HOME/data/work/toy_change
+            >>>     TRAIN_FPATH=$DATA_DPATH/vidshapes_msi_train/data.kwcoco.json
+            >>>     mkdir -p "$DATA_DPATH"
+            >>>     kwcoco toydata --key=vidshapes-videos8-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_train" --verbose=5
+            >>>     '''
+            >>>     coco_fpath = ub.expandpath('$HOME/data/work/toy_change/vidshapes_msi_train/data.kwcoco.json')
+            >>>     coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
+            >>>     channels="B11,r|g|b,B1|B8|B11"
+            >>> if 0:
+            >>>     dvc_dpath = find_smart_dvc_dpath()
+            >>>     coco_dset = join(dvc_dpath, 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json')
+            >>>     channels='swir16|swir22|blue|green|red|nir'
+            >>> if 0:
+            >>>     import watch
+            >>>     coco_dset = watch.demo.demo_kwcoco_multisensor(max_speed=0.5)
+            >>>     # coco_dset = 'special:vidshapes8-frames9-speed0.5-multispectral'
+            >>>     #channels='B1|B11|B8|r|g|b|gauss'
+            >>>     channels='X.2|Y:2:6,B1|B8|B8a|B10|B11,r|g|b,disparity|gauss,flowx|flowy|distri'
+            >>> coco_dset = kwcoco.CocoDataset.coerce(coco_dset)
+            >>> datamodule = datamodules.KWCocoVideoDataModule(
+            >>>     train_dataset=coco_dset,
+            >>>     chip_size=128, batch_size=1, time_steps=3,
+            >>>     channels=channels,
+            >>>     normalize_inputs=1, neg_to_pos_ratio=0,
+            >>>     num_workers='avail/2',
+            >>>     use_grid_positives=False, use_centered_positives=True,
+            >>> )
+            >>> datamodule.setup('fit')
+            >>> dataset = torch_dset = datamodule.torch_datasets['train']
+            >>> torch_dset.disable_augmenter = True
+            >>> dataset_stats = datamodule.dataset_stats
+            >>> input_sensorchan = datamodule.input_sensorchan
+            >>> classes = datamodule.classes
+            >>> print('dataset_stats = {}'.format(ub.repr2(dataset_stats, nl=3)))
+            >>> print('input_sensorchan = {}'.format(input_sensorchan))
+            >>> print('classes = {}'.format(classes))
+            >>> # Choose subclass to test this with (does not cover all cases)
+            >>> self = methods.SequenceAwareModel(
+            >>>     # ===========
+            >>>     # Backbone
+            >>>     #arch_name='smt_it_joint_p2',
+            >>>     #arch_name='smt_it_stm_p8',
+            >>>     #arch_name='deit',
+            >>>     optimizer='AdamW',
+            >>>     learning_rate=1e-5,
+            >>>     #attention_impl='performer',
+            >>>     attention_impl='exact',
+            >>>     #decoder='segmenter',
+            >>>     #saliency_head_hidden=4,
+            >>>     decoder='mlp',
+            >>>     change_loss='dicefocal',
+            >>>     #class_loss='cce',
+            >>>     class_loss='dicefocal',
+            >>>     saliency_loss='dicefocal',
+            >>>     # ===========
+            >>>     # Change Loss
+            >>>     global_change_weight=1.00,
+            >>>     positive_change_weight=1.0,
+            >>>     negative_change_weight=0.5,
+            >>>     # ===========
+            >>>     # Class Loss
+            >>>     global_class_weight=1.00,
+            >>>     class_weights='auto',
+            >>>     # ===========
+            >>>     # Saliency Loss
+            >>>     global_saliency_weight=1.00,
+            >>>     # ===========
+            >>>     # Domain Metadata (Look Ma, not hard coded!)
+            >>>     dataset_stats=dataset_stats,
+            >>>     classes=classes,
+            >>>     input_sensorchan=input_sensorchan,
+            >>>     #tokenizer='dwcnn',
+            >>>     tokenizer='linconv',
+            >>>     #tokenizer='rearrange',
+            >>>     # normalize_perframe=True,
+            >>>     window_size=8,
+            >>>     )
+            >>> self.datamodule = datamodule
+            >>> datamodule._notify_about_tasks(model=self)
+            >>> # Run one visualization
+            >>> loader = datamodule.train_dataloader()
+            >>> # Load one batch and show it before we do anything
+            >>> batch = next(iter(loader))
+            >>> import kwplot
+            >>> plt = kwplot.autoplt(force='Qt5Agg')
+            >>> plt.ion()
+            >>> canvas = datamodule.draw_batch(batch, max_channels=5, overlay_on_image=0)
+            >>> kwplot.imshow(canvas, fnum=1)
+            >>> # Run overfit
+            >>> device = 0
+            >>> self.overfit(batch)
+
+        nh.initializers.KaimingNormal()(self)
+        nh.initializers.Orthogonal()(self)
+        """
+        import kwplot
+        # import torch_optimizer
+        import xdev
+        import kwimage
+        import pandas as pd
+        from watch.utils.slugify_ext import smart_truncate
+        from kwplot.mpl_make import render_figure_to_image
+
+        sns = kwplot.autosns()
+        datamodule = self.datamodule
+        device = 0
+        self = self.to(device)
+        # loader = datamodule.train_dataloader()
+        # batch = next(iter(loader))
+        walker = ub.IndexableWalker(batch)
+        for path, val in walker:
+            if isinstance(val, torch.Tensor):
+                walker[path] = val.to(device)
+        outputs = self.training_step(batch)
+        max_channels = 3
+        canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=max_channels, overlay_on_image=0)
+        kwplot.imshow(canvas)
+
+        loss_records = []
+        loss_records = [g[0] for g in ub.group_items(loss_records, lambda x: x['step']).values()]
+        step = 0
+        _frame_idx = 0
+        # dpath = ub.ensuredir('_overfit_viz09')
+
+        # optim_cls, optim_kw = nh.api.Optimizer.coerce(
+        #     optim='RAdam', lr=1e-3, weight_decay=0,
+        #     params=self.parameters())
+        #optim = torch.optim.SGD(self.parameters(), lr=1e-4)
+        #optim = torch.optim.AdamW(self.parameters(), lr=1e-4)
+        [optim], [sched] = self.configure_optimizers()
+        # optim = torch_optimizer.RAdam(self.parameters(), lr=self.learning_rate, weight_decay=1e-5)
+
+        fnum = 2
+        fig = kwplot.figure(fnum=fnum, doclf=True)
+        fig.set_size_inches(15, 6)
+        fig.subplots_adjust(left=0.05, top=0.9)
+        prev = None
+        for _frame_idx in xdev.InteractiveIter(list(range(_frame_idx + 1, 1000))):
+            # for _frame_idx in list(range(_frame_idx, 1000)):
+            num_steps = 20
+            ex = None
+            for _i in ub.ProgIter(range(num_steps), desc='overfit'):
+                optim.zero_grad()
+                outputs = self.training_step(batch)
+                outputs['item_losses']
+                loss = outputs['loss']
+                if torch.any(torch.isnan(loss)):
+                    print('NAN OUTPUT!!!')
+                    print('loss = {!r}'.format(loss))
+                    print('prev = {!r}'.format(prev))
+                    ex = Exception('prev = {!r}'.format(prev))
+                    break
+                # elif loss > 1e4:
+                #     # Turn down the learning rate when loss gets huge
+                #     scale = (loss / 1e4).detach()
+                #     loss /= scale
+                prev = loss
+                item_losses_ = nh.data.collate.default_collate(outputs['item_losses'])
+                item_losses = ub.map_vals(lambda x: sum(x).item(), item_losses_)
+                loss_records.extend([{'part': key, 'val': val, 'step': step} for key, val in item_losses.items()])
+                loss.backward()
+                optim.step()
+                step += 1
+            canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=max_channels, overlay_on_image=0, max_items=4)
+            kwplot.imshow(canvas, pnum=(1, 2, 1), fnum=fnum)
+            fig = kwplot.figure(fnum=fnum, pnum=(1, 2, 2))
+            #kwplot.imshow(canvas, pnum=(1, 2, 1))
+            ax = sns.lineplot(data=pd.DataFrame(loss_records), x='step', y='val', hue='part')
+            try:
+                ax.set_yscale('logit')
+            except Exception:
+                ...
+            fig.suptitle(smart_truncate(str(optim).replace('\n', ''), max_length=64))
+            img = render_figure_to_image(fig)
+            img = kwimage.convert_colorspace(img, src_space='bgr', dst_space='rgb')
+            # fpath = join(dpath, 'frame_{:04d}.png'.format(_frame_idx))
+            #kwimage.imwrite(fpath, img)
+            xdev.InteractiveIter.draw()
+            if ex:
+                raise ex
+        # TODO: can we get this batch to update in real time?
+        # TODO: start a server process that listens for new images
+        # as it gets new images, it starts playing through the animation
+        # looping as needed
+
+    def reset_weights(self):
+        for name, mod in self.named_modules():
+            if hasattr(mod, 'reset_parameters'):
+                mod.reset_parameters()
+
     @classmethod
     def load_package(cls, package_path, verbose=1):
         """
@@ -947,20 +1334,20 @@ class SequenceAwareModel(pl.LightningModule):
         """
 
         CommandLine:
-            xdoctest -m watch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer.save_package
+            xdoctest -m watch.tasks.fusion.methods.sequence_aware SequenceAwareModel.save_package
 
         Example:
             >>> # Test without datamodule
             >>> import ubelt as ub
             >>> from os.path import join
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from watch.tasks.fusion.methods.sequence_aware import *  # NOQA
             >>> dpath = ub.Path.appdir('watch/tests/package').ensuredir()
             >>> package_path = join(dpath, 'my_package.pt')
 
             >>> # Use one of our fusion.architectures in a test
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
-            >>> model = self = methods.MultimodalTransformer(
+            >>> model = self = methods.SequenceAwareModel(
             >>>     arch_name="smt_it_joint_p2", input_sensorchan=5,
             >>>     change_head_hidden=0, saliency_head_hidden=0,
             >>>     class_head_hidden=0)
@@ -969,7 +1356,7 @@ class SequenceAwareModel(pl.LightningModule):
             >>> model.save_package(package_path)
 
             >>> # Test that the package can be reloaded
-            >>> recon = methods.MultimodalTransformer.load_package(package_path)
+            >>> recon = methods.SequenceAwareModel.load_package(package_path)
             >>> # Check consistency and data is actually different
             >>> recon_state = recon.state_dict()
             >>> model_state = model.state_dict()
@@ -985,7 +1372,7 @@ class SequenceAwareModel(pl.LightningModule):
             >>> from os.path import join
             >>> from watch.tasks.fusion import datamodules
             >>> from watch.tasks.fusion import methods
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from watch.tasks.fusion.methods.sequence_aware import *  # NOQA
             >>> dpath = ub.Path.appdir('watch/tests/package').ensuredir()
             >>> package_path = dpath / 'my_package.pt'
 
@@ -997,7 +1384,7 @@ class SequenceAwareModel(pl.LightningModule):
             >>> classes = datamodule.torch_datasets['train'].classes
 
             >>> # Use one of our fusion.architectures in a test
-            >>> self = methods.MultimodalTransformer(
+            >>> self = methods.SequenceAwareModel(
             >>>     arch_name="smt_it_joint_p2", classes=classes,
             >>>     dataset_stats=dataset_stats, input_sensorchan=datamodule.input_sensorchan,
             >>>     learning_rate=1e-8, optimizer='sgd',
@@ -1015,7 +1402,7 @@ class SequenceAwareModel(pl.LightningModule):
             >>> self.save_package(package_path)
 
             >>> # Test that the package can be reloaded
-            >>> recon = methods.MultimodalTransformer.load_package(package_path)
+            >>> recon = methods.SequenceAwareModel.load_package(package_path)
 
             >>> # Check consistency and data is actually different
             >>> recon_state = recon.state_dict()
