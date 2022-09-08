@@ -76,7 +76,7 @@ The Watch CLI
 -------------
 
 The watch module comes with a set of command line tools. 
-Using ``--help`` shows the top level modal CLI:
+Using ``python -m watch --help`` or ``smartwatch --help`` shows the top level modal CLI:
 
 .. code:: 
 
