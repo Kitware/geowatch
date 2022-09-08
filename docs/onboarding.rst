@@ -8,66 +8,144 @@ usage of the WATCH system.
 This document assumes you are proficient with Python and have an understanding
 of virtual environments.
 
-See the README for how to install on to a local machine. This will guide you
-through:
 
-* Installing non-Python requirements
-* Installing Pyenv and settting up a virtual environment
-* Installing the watch package.
+For internal collaberators you will want to clone this watch Python repo, and
+the two DVC repos one for data and the other for experimental results. We
+recommend the following directory structure:
+
+.. code:: bash
+
+   # Create a directory for CODE
+   mkdir -p $HOME/code
+
+   # Create a directory for DATA
+   # Either:
+   mkdir -p $HOME/data  
+   
+   # XOR: create a symlink to a drive that has space on it.
+   ln -s /data $HOME/data  
+
+   # Clone the code repos
+   git clone https://gitlab.kitware.com/smart/watch/  $HOME/code/watch
+
+   # Clone the data repos
+   git clone https://gitlab.kitware.com/smart/smart_data_dvc/  $HOME/data/smart_data_dvc
+   git clone https://gitlab.kitware.com/smart/smart_expt_dvc/  $HOME/data/smart_expt_dvc
+
+
+For details on installing the watch system in development mode see 
+`installing watch for development guide <../docs/installing_watch.rst.rst>`_.
+
+
+
+This onboarding document is a work in progress. While things are are still
+being organized, here is a list of current documentation files:
+
+
+For quick reference, a list of current documentation files is:
+
+* `Onboarding Docs <docs/onboarding.rst>`_
+
+* `Internal Resources <docs/internal_resources.rst>`_
+
+* `The WATCH CLI <docs/watch_cli.rst>`_
+
+* Contribution:
+
+  + `Contribution Instructions <docs/contribution_instructions.rst>`_
+
+  + `Rebasing Procedure <docs/rebasing_procedure.md>`_
+
+  + `Testing Practices <docs/testing_practices.md>`_
+
+* Installing: 
+
+  + `Installing WATCH <docs/installing_watch.rst>`_
+
+  + `Installing Python via Conda <docs/install_python_conda.rst>`_
+
+  + `Installing Python via PyEnv <docs/install_python_pyenv.rst>`_
+
+* Fusion Related Docs:
+
+  + `TA2 Fusion Overview <docs/fusion_overview.rst>`_
+
+  + `TA2 Deep Dive Info <docs/ta2_deep_dive_info.md>`_
+
+  + `TA2 Feature Integration <docs/ta2_feature_integration.md>`_
+
+* Older Design Docs:
+
+  + `Structure Proposal <docs/structure_proposal.md>`_
+
+* Tutorials:
+
+  + Tutorial 1: `Toy RGB Fusion Model Example <../watch/tasks/fusion/experiments/crall/toy_experiments_rgb.sh>`_ 
+
+  + Tutorial 2: `Toy MSI Fusion Model Example <../watch/tasks/fusion/experiments/crall/toy_experiments_msi.sh>`_ 
+
+
+.. ..To contribute, please read the `contribution instructions <docs/contribution_instructions.rst>`_.
+.. ..For information on testing please see `running and writing watch tests <docs/testing_practices.rst>`_.
 
 
 Tutorials
-=========
+---------
 
-See watch/tasks/fusion/experiments/crall/toy_experiments_rgb.sh
-
-
-The "smartwatch_dvc" command
-============================
-
-We provide a utility to help manage data paths called "smartwatch_dvc".  It
-comes preconfigured with common paths for core-developer machines You can see
-what paths are available by using the "list" command
-
-.. code:: bash
-
-    smartwatch_dvc list
-
-which outputs something like this:
+The following tutorials detail how to train simple fusion models
 
 
-.. code::
+* Tutorial 1: `Toy RGB Experiment <../watch/tasks/fusion/experiments/crall/toy_experiments_rgb.sh>`_ 
 
-                   name hardware         tags                                                               path  exists
-    0    drop4_expt_ssd      ssd  phase2_expt                            /root/data/dvc-repos/smart_expt_dvc-ssd   False
-    1    drop4_data_ssd      ssd  phase2_data                            /root/data/dvc-repos/smart_data_dvc-ssd   False
-    2    drop4_expt_hdd      hdd  phase2_expt                                /root/data/dvc-repos/smart_expt_dvc   False
-    3    drop4_data_hdd      hdd  phase2_data                                /root/data/dvc-repos/smart_data_dvc   False
+* Tutorial 2: `Toy MSI Experiment <../watch/tasks/fusion/experiments/crall/toy_experiments_msi.sh>`_ 
+
+* Tutorial 3: TODO: tutorial about kwcoco (See docs for `kwcoco <https://gitlab.kitware.com/computer-vision/kwcoco>`_)
+
+* Tutorial 4: TODO: tutorial about watch.mlops
 
 
-To see full help use `smartwatch_dvc --help`
+Module Structure
+-----------------
+
+The current ``watch`` module struture is summarized as follows:
+
+.. Generated via: python ~/code/watch/dev/repo_structure_for_readme.py
 
 .. code:: bash
 
-    usage: FindDVCConfig 
-
-    Command line helper to find the path to the watch DVC repo
-
-    positional arguments:
-      command               can be find, set, add, list, or remove
-      name                  specify a name to query or store or remove
-
-    options:
-      -h, --help            show this help message and exit
-      --command COMMAND     can be find, set, add, list, or remove (default: find)
-      --name NAME           specify a name to query or store or remove (default: None)
-      --hardware HARDWARE   Specify hdd, ssd, etc..., Setable and getable property (default: None)
-      --priority PRIORITY   Higher is more likely. Setable and getable property (default: None)
-      --tags TAGS           User note. Setable and queryable property (default: None)
-      --path PATH           The path to the dvc repo. Setable and queryable property (default: None)
-      --verbose VERBOSE     verbosity mode (default: 1)
-      --must_exist MUST_EXIST
-                            if True, filter to only directories that exist. Defaults to false except on "find", which is True. (default: auto)
-      --config CONFIG       special scriptconfig option that accepts the path to a on-disk configuration file, and loads that into this 'FindDVCConfig' object. (default: None)
-      --dump DUMP           If specified, dump this config to disk. (default: None)
-      --dumps               If specified, dump this config stdout (default: False)
+    ╙── watch {'.py': 4}
+        ├─╼ cli {'.py': 33}
+        ├─╼ demo {'.py': 8}
+        ├─╼ mlops {'.py': 7}
+        ├─╼ stac {'.py': 3}
+        ├─╼ gis {'.py': 5}
+        │   └─╼ sensors {'.py': 2}
+        ├─╼ rc {'.gtx': 1, '.json': 3, '.py': 2, '.xml': 1}
+        ├─╼ utils {'.py': 30}
+        │   └─╼ lightning_ext {'.py': 5}
+        │       └─╼ callbacks {'.py': 7, '.txt': 1}
+        └─╼ tasks {'.py': 1}
+            ├─╼ fusion {'.md': 1, '.py': 14}
+            │   ├─╼ datamodules {'.py': 7, '.pyx': 1}
+            │   ├─╼ methods {'.py': 3}
+            │   └─╼ architectures {'.py': 4}
+            ├─╼ depth {'.json': 1, '.md': 1, '.py': 9}
+            ├─╼ rutgers_material_seg {'.py': 5}
+            │   ├─╼ datasets {'.py': 13}
+            │   ├─╼ experiments {'.py': 31}
+            │   ├─╼ models {'.py': 21}
+            │   ├─╼ utils {'.py': 6}
+            │   └─╼ scripts {'.py': 3}
+            ├─╼ invariants {'': 1, '.md': 1, '.py': 9}
+            │   └─╼ data {'.py': 3}
+            ├─╼ rutgers_material_change_detection {'.md': 1, '.py': 4}
+            │   ├─╼ datasets {'.py': 5}
+            │   ├─╼ models {'.py': 23, '.tmp': 1}
+            │   └─╼ utils {'.py': 6}
+            ├─╼ landcover {'.md': 1, '.py': 9}
+            ├─╼ uky_temporal_prediction {'': 1, '.md': 1, '.py': 7, '.yml': 1}
+            │   ├─╼ spacenet {'.py': 2}
+            │   │   └─╼ data {'.py': 2}
+            │   │       └─╼ splits_unmasked {'.py': 2}
+            │   └─╼ models {'.py': 4}
+            └─╼ tracking {'.py': 7}

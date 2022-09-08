@@ -182,8 +182,6 @@ class RPCTransform(object):
 
             for iter_num in range(max_iters):
                 lons, lats = _rpc_transform(xs, ys, zs, transform_direction)
-                print(f'lats={lats}')
-                print(f'lons={lons}')
                 new_zs = self.elevation.query(lats, lons)
 
                 if np.all(new_zs == zs):

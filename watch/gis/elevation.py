@@ -254,7 +254,6 @@ class DEM_Collection(ElevationDatabase):
             >>> lons = [1, 2, 3]
             >>> dems.query(lats, lons)
         """
-        print('Building elevation map')
         gtop_dpath = ensure_girder_gtop30_elevation_maps()
 
         dem_paths = []
@@ -290,7 +289,6 @@ def ensure_iterable_latlons(lats, lons):
 
 @ub.memoize
 def girder_gtop30_elevation_dem():
-    print('Building elevation map')
     dems = DEM_Collection.gtop30()
     return dems
 
@@ -305,6 +303,7 @@ def ensure_girder_gtop30_elevation_maps():
         https://data.kitware.com/#collection/59eb64168d777f31ac6477e7/folder/59fb784d8d777f31ac6480fb
         https://www.google.com/url?sa=j&url=https%3A%2F%2Fwww.usgs.gov%2Fcenters%2Feros%2Fscience%2Fusgs-eros-archive-digital-elevation-global-30-arc-second-elevation-gtopo30%3Fqt-science_center_objects%3D0%23qt-science_center_objects&uct=1599876275&usg=jBvv8w64RCBJd2SyQA3kUtKhMQ4.&source=chat
     """
+    print('Building elevation map')
     from watch.utils import util_girder
     api_url = 'https://data.kitware.com/api/v1'
     resource_id = '59fb784d8d777f31ac6480fb'

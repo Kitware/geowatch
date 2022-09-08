@@ -206,6 +206,8 @@ def coco_watch_stats(dset):
     # fpath = coco_img.primary_image_filepath()
     # _ = ub.cmd('gdalinfo {}'.format(fpath), verbose=3)
 
+    print(coco_sensorchan_gsd_stats(dset))
+
     sensor_hist = ub.dict_hist(all_sensor_entries)
     print('Sensor Histogram = {}'.format(ub.repr2(sensor_hist, nl=1)))
 
@@ -224,6 +226,31 @@ def coco_watch_stats(dset):
         'video_summary_rows': video_summary_rows,
     }
     return stat_info
+
+
+def coco_sensorchan_gsd_stats(coco_dset):
+    """
+    Checks the GSD of each band.
+    """
+    import pandas as pd
+    longform_rows = []
+    for image_id in coco_dset.images():
+        coco_img = coco_dset.coco_image(image_id)
+
+        for asset in coco_img.iter_asset_objs():
+            gsd = asset.get('approx_meter_gsd', float('nan'))
+            sensor = asset.get('sensor_coarse', '*')
+            channels = asset.get('channels', '?')
+            longform_rows.append({
+                'sensor': sensor,
+                'channels': channels,
+                'gsd': gsd,
+            })
+
+    gsd_table = pd.DataFrame(longform_rows)
+    groups = gsd_table.groupby(['sensor', 'channels'])
+    sensorchan_gsd_stats = groups.describe()
+    return sensorchan_gsd_stats
 
 
 _SubConfig = WatchCocoStats

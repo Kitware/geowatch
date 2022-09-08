@@ -162,8 +162,19 @@ def main(cmdline=False, **kwargs):
 
     # Read the external CRS84 annotations from the site models
     sites = []
+
+    HACK_HANDLE_DUPLICATE_SITE_ROWS = True
+
     for fpath in ub.ProgIter(site_geojson_fpaths, desc='load geojson site-models'):
         gdf = util_gis.read_geojson(fpath)
+        is_site = gdf['type'] == 'site'
+        if HACK_HANDLE_DUPLICATE_SITE_ROWS:
+            if is_site.sum() > 1:
+                # There are some site models that contain duplicate site rows.
+                # Fix them here.
+                site_rows = gdf[is_site]
+                assert ub.allsame(site_rows['site_id'])
+                gdf = gdf.drop(site_rows.iloc[1:].index, axis=0)
         sites.append(gdf)
 
     regions = []
@@ -256,12 +267,16 @@ def expand_site_models_with_site_summaries(sites, regions):
         for site_df in ub.ProgIter(sites, desc='checking site assumptions'):
             first = site_df.iloc[0]
             rest = site_df.iloc[1:]
-            assert first['type'] == 'site', 'first row must have type of site'
-            assert first['region_id'] is not None, 'first row must have a region id'
+            # import xdev
+            # with xdev.embed_on_exception_context:
+            assert first['type'] == 'site', (
+                f'first row must have type of site, got {first["type"]}')
+            assert first['region_id'] is not None, (
+                f'first row must have a region id. Got {first["region_id"]}')
             assert rest['type'].apply(lambda x: x == 'observation').all(), (
-                'rest of row must have type observation')
+                f'rest of row must have type observation. Instead got: {rest["type"].unique()}')
             assert rest['region_id'].apply(lambda x: x is None).all(), (
-                'rest of row must have region_id=None')
+                f'rest of row must have region_id=None. Instead got {rest["region_id"].unique()}')
 
     region_id_to_site_summaries = {}
     region_id_region_row = {}
@@ -295,10 +310,13 @@ def expand_site_models_with_site_summaries(sites, regions):
 
     region_id_to_sites = ub.group_items(sites, lambda x: x.iloc[0]['region_id'])
 
+    VERYVERBOSE = 0
+
     region_id_to_num_sitesumms = ub.map_vals(len, region_id_to_site_summaries)
     region_id_to_num_sites = ub.map_vals(len, region_id_to_sites)
     print('region_id_to_num_sitesumms = {}'.format(ub.repr2(region_id_to_num_sitesumms, nl=1, sort=0)))
-    print('region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1, sort=0)))
+    if VERYVERBOSE:
+        print('region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1, sort=0)))
 
     if 1:
         site_rows1 = []
@@ -316,19 +334,33 @@ def expand_site_models_with_site_summaries(sites, regions):
                          'current_phase', 'is_occluded', 'is_site_boundary', 'region_id',
                          'site_id', 'version', 'status', 'mgrs', 'score', 'start_date',
                          'end_date', 'model_content', 'originator', 'validated', 'geometry',
-                         'misc_info']
+                         'misc_info' ]
 
         if site_rows1:
             site_df1 = pd.concat(site_rows1).reset_index()
-            assert len(set(site_df1['site_id'])) == len(site_df1), 'site ids must be unique'
-            site_df1 = site_df1.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
+            import xdev
+            with xdev.embed_on_exception_context:
+                assert len(set(site_df1['site_id'])) == len(site_df1), 'site ids must be unique'
+                site_df1 = site_df1.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
+                if 'misc_info' not in site_df1.columns:
+                    site_df1['misc_info'] = None
         else:
             site_df1 = pd.DataFrame([], columns=expected_keys)
 
         if site_rows2:
             site_df2 = pd.concat(site_rows2).reset_index()
-            assert len(set(site_df2['site_id'])) == len(site_df2), 'site ids must be unique'
+            if len(set(site_df2['site_id'])) != len(site_df2):
+                counts = site_df2['site_id'].value_counts()
+                duplicates = counts[counts > 1]
+                warnings.warn('Site summaries contain duplicate site_ids:\n{}'.format(duplicates))
+                # Filter to unique sites
+                unique_idx = np.unique(site_df2['site_id'], return_index=True)[1]
+                site_df2 = site_df2.iloc[unique_idx]
+
             site_df2 = site_df2.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
+
+            if 'misc_info' not in site_df2.columns:
+                site_df2['misc_info'] = None
         else:
             site_df2 = pd.DataFrame([], columns=expected_keys)
 
@@ -363,14 +395,15 @@ def expand_site_models_with_site_summaries(sites, regions):
             print('Disagree rows for site models')
             print(error1.drop(['type', 'region_id', 'misc_info'], axis=1))
             print('Disagree rows for region models')
-            print(error2.drop(['type', 'region_id', 'validate'], axis=1))
+            print(error2.drop(['type', 'region_id', 'validated'], axis=1))
 
         # Find sites that only have a site-summary
         summary_only_site_ids = sorted(set(site_df2['site_id']) - set(site_df1['site_id']))
         region_id_to_only_site_summaries = dict(list(site_df2.loc[summary_only_site_ids].groupby('region_id')))
 
-        region_id_to_num_only_sitesumms = ub.map_vals(len, region_id_to_only_site_summaries)
-        print('region_id_to_num_only_sitesumms = {}'.format(ub.repr2(region_id_to_num_only_sitesumms, nl=1, sort=0)))
+        if VERYVERBOSE:
+            region_id_to_num_only_sitesumms = ub.map_vals(len, region_id_to_only_site_summaries)
+            print('region_id_to_num_only_sitesumms = {}'.format(ub.repr2(region_id_to_num_only_sitesumms, nl=1, sort=0)))
 
         # Transform site-summaries without corresponding sites into pseudo-site
         # observations
@@ -404,7 +437,7 @@ def expand_site_models_with_site_summaries(sites, regions):
         # site_model_schema[
 
         region_id_to_num_sites = ub.map_vals(len, region_id_to_sites)
-        print('BEFORE region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1)))
+        # print('BEFORE region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1)))
 
         for region_id, sitesummaries in region_id_to_only_site_summaries.items():
             region_row = region_id_region_row[region_id]
@@ -487,7 +520,25 @@ def expand_site_models_with_site_summaries(sites, regions):
                 #     ret = jsonschema.validate(psudo_site_model, schema=site_model_schema)
 
         region_id_to_num_sites = ub.map_vals(len, region_id_to_sites)
-        print('AFTER (sitesummary) region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1)))
+        if VERYVERBOSE:
+            print('AFTER (sitesummary) region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1)))
+
+    # Fix out of order observations
+    FIX_OBS_ORDER = True
+    if FIX_OBS_ORDER:
+        new_region_id_to_sites = {}
+        for region_id, region_sites in region_id_to_sites.items():
+            _sites = []
+            for site_gdf in region_sites:
+                site_gdf['observation_date'].argsort()
+                is_obs = site_gdf['type'] == 'observation'
+                obs_rows = site_gdf[is_obs]
+                site_rows = site_gdf[~is_obs]
+                obs_rows = obs_rows.iloc[obs_rows['observation_date'].argsort()]
+                site_gdf = pd.concat([site_rows.reset_index(), obs_rows.reset_index()], axis=0).reset_index()
+                _sites.append(site_gdf)
+            new_region_id_to_sites[region_id] = _sites
+        region_id_to_sites = new_region_id_to_sites
 
     if 0:
         site_high_level_summaries = []
@@ -557,8 +608,12 @@ def validate_site_dataframe(site_df):
         if not all(valid_obs_dates):
             # null_obs_sites.append(first[['site_id', 'status']].to_dict())
             pass
+        # import xdev
+        # with xdev.embed_on_exception_context:
         valid_deltas = np.array([d.total_seconds() for d in np.diff(valid_obs_dates)])
-        assert (valid_deltas >= 0).all(), 'observations must be sorted temporally'
+        if not (valid_deltas >= 0).all():
+            raise AssertionError('observations are not sorted temporally')
+            # warnings.warn('observations are not sorted temporally')
     except AssertionError as ex:
         print('ex = {!r}'.format(ex))
         print(site_df)
@@ -590,7 +645,11 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
         video_gdf['geometry'].iloc[0] = combined
         video_gdfs.append(video_gdf)
         vidid_to_imgdf[vidid] = subdf
-    videos_gdf = pd.concat(video_gdfs, ignore_index=True)
+
+    if len(video_gdfs) > 0:
+        videos_gdf = pd.concat(video_gdfs, ignore_index=True)
+    else:
+        videos_gdf = None
 
     PROJECT_ENDSTATE = True
 
@@ -665,7 +724,9 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
             try:
                 video = coco_dset.index.name_to_video[region_id]
             except KeyError:
-                print('No region-id match for region_id={}'.format(region_id))
+                VERYVERBOSE = 0
+                if VERYVERBOSE:
+                    print('No region-id match for region_id={}'.format(region_id))
                 continue
             video_id = video['id']
             video_id_to_region_id[video_id] = region_id
@@ -717,6 +778,10 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
             site_rows = site_gdf.iloc[1:]
             track_id = site_summary_row['site_id']
             status = site_summary_row['status']
+
+            if status == 'pending':
+                # hack for QFabric
+                status = 'positive_pending'
 
             start_date = coerce_datetime2(site_summary_row['start_date'])
             end_date = coerce_datetime2(site_summary_row['end_date'])

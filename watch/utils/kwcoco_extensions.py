@@ -2012,12 +2012,24 @@ def covered_image_geo_regions(coco_dset, merge=False):
         >>> coco_populate_geo_heuristics(coco_dset, overwrite=True)
         >>> img = coco_dset.index.imgs[1]
         >>> cov_image_gdf = covered_image_geo_regions(coco_dset)
+
+    Example:
+        >>> # Check it works with empty data frame
+        >>> from watch.utils.kwcoco_extensions import *  # NOQA
+        >>> coco_dset = kwcoco.CocoDataset()
+        >>> cov_image_gdf1 = covered_image_geo_regions(coco_dset, merge=False)
+        >>> cov_image_gdf2 = covered_image_geo_regions(coco_dset, merge=True)
+        >>> assert len(cov_image_gdf1) == 0
+        >>> assert len(cov_image_gdf2) == 0
     """
     import geopandas as gpd
     from shapely import ops
     import shapely
     # import watch
     rows = []
+    columns = [
+        'geometry', 'date_captured', 'name', 'height', 'width', 'video_id',
+        'image_id', 'frame_index']
     for gid, img in coco_dset.index.imgs.items():
         if 'geos_corners' in img:
             geos_corners = img['geos_corners']
@@ -2041,7 +2053,8 @@ def covered_image_geo_regions(coco_dset, merge=False):
             'frame_index': img.get('frame_index', None),
         })
 
-    cov_poly_crs = 'crs84'
+    from watch.utils import util_gis
+    cov_poly_crs = util_gis._get_crs84()
     if merge:
         # df_input = [
         #     {'gid': gid, 'bounds': poly, 'name': coco_dset.index.imgs[gid].get('name', None),
@@ -2065,7 +2078,7 @@ def covered_image_geo_regions(coco_dset, merge=False):
             geometry='geometry', crs=cov_poly_crs)
     else:
         cov_image_gdf = gpd.GeoDataFrame(rows, geometry='geometry',
-                                         crs=cov_poly_crs)
+                                         columns=columns, crs=cov_poly_crs)
 
     return cov_image_gdf
 

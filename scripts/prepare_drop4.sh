@@ -9,7 +9,7 @@ See Also:
 
 ## Create a demo region file
 #xdoctest watch.demo.demo_region demo_khq_region_fpath
-#ROOT_DPATH="$DVC_DPATH"
+#ROOT_DPATH="$DATA_DVC_DPATH"
 
 
 
@@ -19,17 +19,17 @@ See Also:
 # TODO: add a resource for this?
 source "$HOME"/code/watch/secrets/secrets
 
-DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+DATA_DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
 SENSORS=TA1-S2-L8-ACC
 #SENSORS=TA1-S2-ACC
 #SENSORS=L2-S2-L8
 DATASET_SUFFIX=Drop4-2022-07-25-c30-$SENSORS
-REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*.geojson"
-SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
+REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/*.geojson"
+SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
 #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
-#REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/NZ_R001.*"
-#SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
+#REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/NZ_R001.*"
+#SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
 # Construct the TA2-ready dataset
 python -m watch.cli.prepare_ta2_dataset \
@@ -39,7 +39,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --sensors="$SENSORS" \
     --api_key=env:SMART_STAC_API_KEY \
     --collated True \
-    --dvc_dpath="$DVC_DPATH" \
+    --dvc_dpath="$DATA_DVC_DPATH" \
     --aws_profile=iarpa \
     --region_globstr="$REGION_GLOBSTR" \
     --site_globstr="$SITE_GLOBSTR" \
@@ -62,10 +62,10 @@ python -m watch.cli.prepare_ta2_dataset \
 build_drop4_BAS(){
     source "$HOME"/code/watch/secrets/secrets
     SENSORS=TA1-S2-L8-ACC
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DATA_DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     DATASET_SUFFIX=Drop4-2022-07-28-c20-$SENSORS
-    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*.geojson"
-    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
+    REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/*.geojson"
+    SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
     python -m watch.cli.prepare_ta2_dataset \
@@ -75,7 +75,7 @@ build_drop4_BAS(){
         --sensors="$SENSORS" \
         --api_key=env:SMART_STAC_API_KEY \
         --collated True \
-        --dvc_dpath="$DVC_DPATH" \
+        --dvc_dpath="$DATA_DVC_DPATH" \
         --aws_profile=iarpa \
         --region_globstr="$REGION_GLOBSTR" \
         --site_globstr="$SITE_GLOBSTR" \
@@ -100,12 +100,12 @@ build_drop4_BAS(){
 build_drop4_v2_BAS(){
     source "$HOME"/code/watch/secrets/secrets
     SENSORS=TA1-S2-L8-ACC
-    DVC_DPATH=$HOME/data/dvc-repos/smart_data_dvc
-    #DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DATA_DVC_DPATH=$HOME/data/dvc-repos/smart_data_dvc
+    #DATA_DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
 
     DATASET_SUFFIX=Drop4-2022-08-08-$SENSORS
-    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*.geojson"
-    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
+    REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/*.geojson"
+    SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
     python -m watch.cli.prepare_ta2_dataset \
@@ -115,7 +115,7 @@ build_drop4_v2_BAS(){
         --sensors="$SENSORS" \
         --api_key=env:SMART_STAC_API_KEY \
         --collated True \
-        --dvc_dpath="$DVC_DPATH" \
+        --dvc_dpath="$DATA_DVC_DPATH" \
         --aws_profile=iarpa \
         --region_globstr="$REGION_GLOBSTR" \
         --site_globstr="$SITE_GLOBSTR" \
@@ -139,12 +139,12 @@ build_drop4_v2_BAS(){
 build_drop4_v2_SC(){
     source "$HOME"/code/watch/secrets/secrets
     SENSORS=TA1-S2-WV-PD-ACC
-    DVC_DPATH=$HOME/data/dvc-repos/smart_data_dvc
-    #DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DATA_DVC_DPATH=$HOME/data/dvc-repos/smart_data_dvc
+    #DATA_DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
 
     DATASET_SUFFIX=Drop4-2022-08-08-$SENSORS
-    REGION_GLOBSTR="$DVC_DPATH/subregions/*.geojson"
-    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
+    REGION_GLOBSTR="$DATA_DVC_DPATH/subregions/*.geojson"
+    SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
     python -m watch.cli.prepare_ta2_dataset \
@@ -154,7 +154,7 @@ build_drop4_v2_SC(){
         --sensors="$SENSORS" \
         --api_key=env:SMART_STAC_API_KEY \
         --collated True \
-        --dvc_dpath="$DVC_DPATH" \
+        --dvc_dpath="$DATA_DVC_DPATH" \
         --aws_profile=iarpa \
         --region_globstr="$REGION_GLOBSTR" \
         --site_globstr="$SITE_GLOBSTR" \
@@ -213,8 +213,8 @@ dvc_add_SC(){
     #--dst foo.kwcoco.json \
     #--select_videos '(.name | startswith("KR_R002")) or (.name | startswith("KR_R001")) or (.name | startswith("US_R007"))'
 
-    DVC_DPATH=$HOME/data/dvc-repos/smart_data_dvc
-    cd "$DVC_DPATH"/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC
+    DATA_DVC_DPATH=$HOME/data/dvc-repos/smart_data_dvc
+    cd "$DATA_DVC_DPATH"/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC
 
     dvc unprotect -- */L8 */S2 *.zip viz512_anns
 
@@ -280,17 +280,17 @@ dvc_add_SC(){
 rgb_medium_drop4_only(){
     source "$HOME"/code/watch/secrets/secrets
 
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DATA_DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     SENSORS=TA1-S2-L8-ACC
     #SENSORS=TA1-S2-ACC
     #SENSORS=L2-S2-L8
     DATASET_SUFFIX=Drop4-2022-07-24-c10-rgb-$SENSORS
-    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*.geojson"
-    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
+    REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/*.geojson"
+    SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
-    #REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/NZ_R001.*"
-    #SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
+    #REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/NZ_R001.*"
+    #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
     python -m watch.cli.prepare_ta2_dataset \
@@ -300,7 +300,7 @@ rgb_medium_drop4_only(){
         --sensors="$SENSORS" \
         --api_key=env:SMART_STAC_API_KEY \
         --collated True \
-        --dvc_dpath="$DVC_DPATH" \
+        --dvc_dpath="$DATA_DVC_DPATH" \
         --aws_profile=iarpa \
         --region_globstr="$REGION_GLOBSTR" \
         --site_globstr="$SITE_GLOBSTR" \
@@ -321,7 +321,7 @@ rgb_medium_drop4_only(){
 
 
 small_onesite(){
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DATA_DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     source ~/code/watch/secrets/secrets
     SENSORS=TA1-S2-L8-WV-PD-ACC
     #SENSORS=L2-S2
@@ -329,14 +329,14 @@ small_onesite(){
     #SENSORS=TA1-S2-ACC
     #SENSORS=TA1-L8-ACC
     #SENSORS=L2-S2-L8
-    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/BR_R001.geojson"
-    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/BR_R001*.geojson"
+    REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/BR_R001.geojson"
+    SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/BR_R001*.geojson"
     DATASET_SUFFIX=Drop4-2022-07-28-$SENSORS-onesite
 
     # Test credentials
     #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
-    #REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/NZ_R001.*"
-    #SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
+    #REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/NZ_R001.*"
+    #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
     python -m watch.cli.prepare_ta2_dataset \
@@ -346,7 +346,7 @@ small_onesite(){
         --sensors="$SENSORS" \
         --api_key=env:SMART_STAC_API_KEY \
         --collated True \
-        --dvc_dpath="$DVC_DPATH" \
+        --dvc_dpath="$DATA_DVC_DPATH" \
         --aws_profile=iarpa \
         --requester_pays=False \
         --region_globstr="$REGION_GLOBSTR" \
@@ -366,17 +366,17 @@ small_onesite(){
 }
 
 small_teregions(){
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DATA_DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     SENSORS=L2-S2
     DATASET_SUFFIX=Drop4-2022-07-18-$SENSORS-small-teregion
-    #REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*_R*.geojson"
-    #SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*_R*.geojson"
-    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/BR_R001.geojson"
-    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/BR_R001_*.geojson"
+    #REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/*_R*.geojson"
+    #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*_R*.geojson"
+    REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/BR_R001.geojson"
+    SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/BR_R001_*.geojson"
 
     #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
-    #REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/NZ_R001.*"
-    #SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
+    #REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/NZ_R001.*"
+    #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
     python -m watch.cli.prepare_ta2_dataset \
@@ -386,7 +386,7 @@ small_teregions(){
         --sensors="$SENSORS" \
         --api_key=env:SMART_STAC_API_KEY \
         --collated False \
-        --dvc_dpath="$DVC_DPATH" \
+        --dvc_dpath="$DATA_DVC_DPATH" \
         --aws_profile=iarpa \
         --region_globstr="$REGION_GLOBSTR" \
         --site_globstr="$SITE_GLOBSTR" \
@@ -402,14 +402,14 @@ small_teregions(){
 }
 
 small_allsites(){
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DATA_DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     DATASET_SUFFIX=Drop4-S2-L2A-2022-07-15-demo8
-    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*.geojson"
-    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
+    REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/*.geojson"
+    SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
-    #REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/NZ_R001.*"
-    #SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
+    #REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/NZ_R001.*"
+    #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
     # Construct the TA2-ready dataset
     python -m watch.cli.prepare_ta2_dataset \
@@ -419,7 +419,7 @@ small_allsites(){
         --sensors=L2 \
         --api_key=env:SMART_STAC_API_KEY \
         --collated False \
-        --dvc_dpath="$DVC_DPATH" \
+        --dvc_dpath="$DATA_DVC_DPATH" \
         --aws_profile=iarpa \
         --region_globstr="$REGION_GLOBSTR" \
         --site_globstr="$SITE_GLOBSTR" \
@@ -437,13 +437,13 @@ small_allsites(){
         --backend=tmux --run=1
 
 
-    DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
+    DATA_DVC_DPATH=$(smartwatch_dvc --hardware="hdd")
     DATASET_SUFFIX=Drop4-S2-L2A-2022-07-16-c40
-    REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/*.geojson"
-    SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
+    REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/*.geojson"
+    SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
     #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
-    #REGION_GLOBSTR="$DVC_DPATH/annotations/region_models/NZ_R001.*"
-    #SITE_GLOBSTR="$DVC_DPATH/annotations/site_models/*.geojson"
+    #REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/NZ_R001.*"
+    #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
     # Construct the TA2-ready dataset
     python -m watch.cli.prepare_ta2_dataset \
         --dataset_suffix=$DATASET_SUFFIX \
@@ -452,7 +452,7 @@ small_allsites(){
         --sensors=L2 \
         --api_key=env:SMART_STAC_API_KEY \
         --collated False \
-        --dvc_dpath="$DVC_DPATH" \
+        --dvc_dpath="$DATA_DVC_DPATH" \
         --aws_profile=iarpa \
         --region_globstr="$REGION_GLOBSTR" \
         --site_globstr="$SITE_GLOBSTR" \
@@ -511,8 +511,8 @@ dvc_add(){
 
 
 update_local(){
-    DVC_DPATH=$(smartwatch_dvc --hardware=hdd)
-    cd "$DVC_DPATH"/Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC
+    DATA_DVC_DPATH=$(smartwatch_dvc --hardware=hdd)
+    cd "$DATA_DVC_DPATH"/Aligned-Drop4-2022-07-28-c20-TA1-S2-L8-ACC
     git pull
     dvc pull -r aws splits.zip.dvc
     7z x splits.zip -y
@@ -520,3 +520,89 @@ update_local(){
 }
 
 
+
+prepare_qfabric(){
+    source "$HOME"/code/watch/secrets/secrets
+
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="hdd")/public
+    SENSORS=worldview-nitf
+    #DATASET_SUFFIX=QFabric-c30-$SENSORS
+    DATASET_SUFFIX=QFabric-c80-$SENSORS
+    REGION_GLOBSTR="$DATA_DVC_DPATH/annotations-qfabric/orig/region_models/*.geojson"
+    SITE_GLOBSTR="$DATA_DVC_DPATH/annotations-qfabric/orig/site_models/*.geojson"
+
+    #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
+    #REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/NZ_R001.*"
+    #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
+
+    # Construct the TA2-ready dataset
+    python -m watch.cli.prepare_ta2_dataset \
+        --dataset_suffix=$DATASET_SUFFIX \
+        --stac_query_mode=auto \
+        --cloud_cover=80 \
+        --sensors="$SENSORS" \
+        --api_key=env:SMART_STAC_API_KEY \
+        --collated True \
+        --dvc_dpath="$DATA_DVC_DPATH" \
+        --aws_profile=iarpa \
+        --region_globstr="$REGION_GLOBSTR" \
+        --site_globstr="$SITE_GLOBSTR" \
+        --requester_pays=False \
+        --fields_workers=20 \
+        --convert_workers=8 \
+        --max_queue_size=12 \
+        --align_workers=12 \
+        --cache=1 \
+        --ignore_duplicates=1 \
+        --rpc_align_method=orthorectify \
+        --separate_region_queues=1 \
+        --separate_align_jobs=1 \
+        --visualize=0 \
+        --target_gsd=2 \
+        --backend=tmux --run=1
+        
+}
+
+
+prepare_qfabric_horologic(){
+    source "$HOME"/code/watch/secrets/secrets
+
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="hdd")/public
+    SENSORS=worldview-nitf,smart-landsat-c2l2-sr,sentinel-s2-l2a-cogs
+    #DATASET_SUFFIX=QFabric-c30-$SENSORS
+    DATASET_SUFFIX=QFabric-wvs2l8-c80
+    REGION_GLOBSTR="$DATA_DVC_DPATH/annotations-qfabric/wvs2l8/region_models/*.geojson"
+    SITE_GLOBSTR="$DATA_DVC_DPATH/annotations-qfabric/wvs2l8/site_models/*.geojson"
+
+    #DATASET_SUFFIX=Test-Drop4-L2-2022-07-06
+    #REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/NZ_R001.*"
+    #SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
+
+    # Construct the TA2-ready dataset
+    python -m watch.cli.prepare_ta2_dataset \
+        --dataset_suffix=$DATASET_SUFFIX \
+        --stac_query_mode=auto \
+        --cloud_cover=80 \
+        --sensors="$SENSORS" \
+        --api_key=env:SMART_STAC_API_KEY \
+        --collated True \
+        --dvc_dpath="$DATA_DVC_DPATH" \
+        --aws_profile=iarpa \
+        --region_globstr="$REGION_GLOBSTR" \
+        --site_globstr="$SITE_GLOBSTR" \
+        --requester_pays=False \
+        --fields_workers=20 \
+        --convert_workers=8 \
+        --max_queue_size=12 \
+        --align_workers=12 \
+        --context_factor=2 \
+        --cache=1 \
+        --ignore_duplicates=1 \
+        --rpc_align_method=orthorectify \
+        --separate_region_queues=1 \
+        --separate_align_jobs=1 \
+        --visualize=0 \
+        --target_gsd=2 \
+        --backend=tmux --run=1
+        
+}

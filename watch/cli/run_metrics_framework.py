@@ -691,6 +691,9 @@ def ensure_thumbnails(image_root, region_id, sites):
 
 def main(cmdline=True, **kwargs):
     """
+    Note currently depends on:
+        https://smartgitlab.com/jon.crall/metrics-and-test-framework/-/tree/autogen-on-te
+
     Example:
         >>> # xdoctest: +REQUIRES(module:iarpa_smart_metrics)
         >>> from watch.cli.run_metrics_framework import *  # NOQA

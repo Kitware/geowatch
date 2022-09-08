@@ -128,7 +128,8 @@ def _determine_channels_collated(asset_name, asset_dict, platform):
     if len(eo_band_names) > 0:
         return '|'.join(eo_band_names)
     elif asset_name == 'quality':
-        return 'cloudmask'
+        return 'quality'
+        # return 'cloudmask'
 
 
 def _determine_s2_channels(asset_name, asset_dict):
