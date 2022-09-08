@@ -111,26 +111,44 @@ Documentation
 For quick reference, a list of current documentation files is:
 
 * `Onboarding Docs <docs/onboarding.rst>`_
+
 * `Internal Resources <docs/internal_resources.rst>`_
+
 * `The WATCH CLI <docs/watch_cli.rst>`_
 
 * Contribution:
+
   + `Contribution Instructions <docs/contribution_instructions.rst>`_
+
   + `Rebasing Procedure <docs/rebasing_procedure.md>`_
+
   + `Testing Practices <docs/testing_practices.md>`_
 
 * Installing: 
+
   + `Installing WATCH <docs/installing_watch.rst>`_
+
   + `Installing Python via Conda <docs/install_python_conda.rst>`_
+
   + `Installing Python via PyEnv <docs/install_python_pyenv.rst>`_
 
 * Fusion Related Docs:
+
   + `TA2 Fusion Overview <docs/fusion_overview.rst>`_
+
   + `TA2 Deep Dive Info <docs/ta2_deep_dive_info.md>`_
+
   + `TA2 Feature Integration <docs/ta2_feature_integration.md>`_
 
 * Older Design Docs:
+
   + `Structure Proposal <docs/structure_proposal.md>`_
+
+* Tutorials:
+
+  + Tutorial 1: `Toy RGB Fusion Model Example <../watch/tasks/fusion/experiments/crall/toy_experiments_rgb.sh>`_ 
+
+  + Tutorial 2: `Toy MSI Fusion Model Example <../watch/tasks/fusion/experiments/crall/toy_experiments_msi.sh>`_ 
 
 
 .. |master-pipeline| image:: https://gitlab.kitware.com/smart/watch/badges/master/pipeline.svg
