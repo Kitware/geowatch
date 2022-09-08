@@ -19,9 +19,15 @@ space.
 
 The following table provides links to relevant resources for the SMART WATCH project:
 
-+------------------------------------+----------------------------------------------------------------+
-| The SMART WATCH Python Module      | https://gitlab.kitware.com/watch/watch/                        |
-+------------------------------------+----------------------------------------------------------------+
++----------------------------------------------------------+----------------------------------------------------------------+
+| The Public SMART WATCH Python Module                     | https://gitlab.kitware.com/watch/watch/                        |
++----------------------------------------------------------+----------------------------------------------------------------+
+| The Internal SMART WATCH Python Module                   | https://gitlab.kitware.com/smart/watch/                        |
++----------------------------------------------------------+----------------------------------------------------------------+
+| The Phase 2 Internal SMART WATCH DVC Data Repo           | https://gitlab.kitware.com/smart/smart_data_dvc/               |
++----------------------------------------------------------+----------------------------------------------------------------+
+| The Phase 2 Internal SMART WATCH DVC Experiment Repo     | https://gitlab.kitware.com/smart/smart_expt_dvc/               |
++----------------------------------------------------------+----------------------------------------------------------------+
 
 .. .. Under construction
 .. .. | The SMART WATCH DVC Repo           | https://gitlab.kitware.com/watch/smart_watch_dvc/              |
