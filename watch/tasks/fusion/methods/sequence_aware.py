@@ -156,6 +156,19 @@ class SequenceAwareModelConfig(scfg.DataConfig):
         operation used to combine multiple modes from the same timestep
         '''))
     
+    perceiver_depth = scfg.Value(4, help=ub.paragraph(
+        '''
+        How many layers used by the perceiver model.
+        '''))
+    perceiver_latents = scfg.Value(512, help=ub.paragraph(
+        '''
+        How many latents used by the perceiver model.
+        '''))
+    training_limit_queries = scfg.Value(1024, help=ub.paragraph(
+        '''
+        How many queries to use during training step. Set arbitrarily high to ensure all are used.
+        '''))
+    
 
 class SequenceAwareModel(pl.LightningModule):
     
@@ -433,6 +446,11 @@ class SequenceAwareModel(pl.LightningModule):
         global_class_weight = config['global_class_weight']
         global_change_weight = config['global_change_weight']
         global_saliency_weight = config['global_saliency_weight']
+        
+        perceiver_depth = config['perceiver_depth']
+        perceiver_latents = config['perceiver_latents']
+        
+        self.training_limit_queries = config['training_limit_queries']
 
         # Moving towards sensror-channels everywhere so we always know what
         # sensor we are dealing with.
@@ -689,10 +707,10 @@ class SequenceAwareModel(pl.LightningModule):
         })
         
         self.perceiver = perceiver.PerceiverIO(
-            depth = 4,
+            depth = perceiver_depth,
             dim = in_features,
             queries_dim = in_features_pos,
-            num_latents = 512,
+            num_latents = perceiver_latents,
             latent_dim = 128,
             cross_heads = 1,
             latent_heads = 8,
@@ -884,7 +902,7 @@ class SequenceAwareModel(pl.LightningModule):
             weights = weights[valid_mask]
             
             if self.training:
-                keep_inds = torch.randperm(weights.shape[0])[:200]
+                keep_inds = torch.randperm(weights.shape[0])[:self.training_limit_queries]
                 pos_enc = pos_enc[keep_inds]
                 labels = labels[keep_inds]
                 weights = weights[keep_inds]
