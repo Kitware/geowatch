@@ -236,7 +236,8 @@ def coco_sensorchan_gsd_stats(coco_dset):
     longform_rows = []
     for image_id in coco_dset.images():
         coco_img = coco_dset.coco_image(image_id)
-        for asset in coco_img.img['auxiliary']:
+
+        for asset in coco_img.iter_asset_objs():
             gsd = asset.get('approx_meter_gsd', float('nan'))
             sensor = asset.get('sensor_coarse', '*')
             channels = asset.get('channels', '?')

@@ -19,7 +19,16 @@ through:
 Tutorials
 =========
 
-See watch/tasks/fusion/experiments/crall/toy_experiments_rgb.sh
+The following tutorials detail how to train simple fusion models
+
+
+* Tutorial 1: `Toy RGB Experiment <../watch/tasks/fusion/experiments/crall/toy_experiments_rgb.sh>`_ 
+
+* Tutorial 2: `Toy MSI Experiment <../watch/tasks/fusion/experiments/crall/toy_experiments_msi.sh>`_ 
+
+* Tutorial 3: TODO: tutorial about kwcoco (See docs for `kwcoco <https://gitlab.kitware.com/computer-vision/kwcoco>`_)
+
+* Tutorial 4: TODO: tutorial about watch.mlops
 
 
 The "smartwatch_dvc" command
