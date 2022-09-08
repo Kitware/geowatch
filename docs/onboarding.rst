@@ -9,6 +9,30 @@ This document assumes you are proficient with Python and have an understanding
 of virtual environments.
 
 
+For internal collaberators you will want to clone this watch Python repo, and
+the two DVC repos one for data and the other for experimental results. We
+recommend the following directory structure:
+
+.. code:: bash
+
+   # Create a directory for CODE
+   mkdir -p $HOME/code
+
+   # Create a directory for DATA
+   # Either:
+   mkdir -p $HOME/data  
+   
+   # XOR: create a symlink to a drive that has space on it.
+   ln -s /data $HOME/data  
+
+   # Clone the code repos
+   git clone https://gitlab.kitware.com/smart/watch/  $HOME/code/watch
+
+   # Clone the data repos
+   git clone https://gitlab.kitware.com/smart/smart_data_dvc/  $HOME/data/smart_data_dvc
+   git clone https://gitlab.kitware.com/smart/smart_expt_dvc/  $HOME/data/smart_expt_dvc
+
+
 For details on installing the watch system in development mode see 
 `installing watch for development guide <../docs/installing_watch.rst.rst>`_.
 
