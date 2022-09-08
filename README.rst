@@ -118,6 +118,21 @@ Using ``--help`` shows the top level modal CLI:
           --version             show version number and exit (default: False)
 
 
+As a researcher / developer / user the most important commands for you to know are:
+
+* ``smartwatch stats <kwcoco_file>`` - Get watch-relevant statistics about data in a kwcoco file
+
+* ``smartwatch visualize <kwcoco_file>`` - Visualize the image / videos / annotations in a kwcoco file.
+
+* ``smartwatch intensity_histograms <kwcoco_file>`` - Look at the distribution of intensity values per band / per sensor in a kwcoco file.
+
+* ``smartwatch torch_model_stats <fusion_model_file>`` - Get stats / info about a trained fusion model.
+
+* ``smartwatch_dvc`` - Helper to register / retreive your DVC paths so scripts can be written agnostic to filesystem layouts.
+
+* ``smartwatch geotiffs_to_kwcoco`` - Create a kwcoco file from a set of on-disk geotiffs.
+
+
 For more details about the WATCH CLI and other CLI tools included in this package see:
 `the WATCH CLI docs <docs/watch_cli.rst>`_ 
 
