@@ -681,7 +681,7 @@ python -m watch.tasks.fusion.fit \
     --accelerator="gpu" \
     --devices "0," \
     --num_workers=4 \
-    --chip_dims=380,380 \
+    --chip_dims=256,256 \
     --saliency_loss='dicefocal' \
     --global_change_weight=0.75 \
     --global_class_weight=0.30 \
@@ -690,9 +690,9 @@ python -m watch.tasks.fusion.fit \
     --class_head_hidden=4 \
     --saliency_head_hidden=4 \
     --time_steps=7 \
-    --batch_size=8 \
+    --batch_size=4 \
     --dist_weights=1 \
-    --accumulate_grad_batches=4 \
+    --accumulate_grad_batches=1 \
     --max_epoch_length=16384 \
     --max_epochs=1600 \
     --patience=1600 
