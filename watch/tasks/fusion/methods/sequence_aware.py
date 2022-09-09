@@ -46,159 +46,12 @@ class FourierPositionalEncoding(nn.Module):
         return torch.concat([x.sin(), x.cos(), orig_x], dim=0)
 
 
-@scfg.dataconf
-class SequenceAwareModelConfig(scfg.DataConfig):
-    """
-    Arguments accepted by the SequenceAwareModel
-
-    The scriptconfig class is not used directly as it normally would be here.
-    Instead we use it as a convinience to minimize lightning boilerplate needed
-    for the __init__ and add_argparse_args methods.
-
-    Note, this does not entirely define the `__init__` method, just the
-    parameters that are exposed on the command line. An update to
-    scriptconfig could allow that to be combined, but I'm not sure if its a
-    good idea. The arguments not specified here are usually ones that the
-    dataset must provide at definition time.
-    """
-    name = scfg.Value('unnamed_model', help=ub.paragraph(
-        '''
-        Specify a name for the experiment. (Unsure if the Model is
-        the place for this)
-        '''))
-    optimizer = scfg.Value('RAdam', type=str, help=ub.paragraph(
-        '''
-        Optimizer name supported by the netharn API
-        '''))
-    learning_rate = scfg.Value(0.001, type=float)
-    weight_decay = scfg.Value(0.0, type=float)
-    positive_change_weight = scfg.Value(1.0, type=float)
-    negative_change_weight = scfg.Value(1.0, type=float)
-    class_weights = scfg.Value('auto', type=str, help='class weighting strategy')
-    saliency_weights = scfg.Value('auto', type=str, help='class weighting strategy')
-    stream_channels = scfg.Value(8, type=int, help=ub.paragraph(
-        '''
-        number of channels to normalize each project stream to
-        '''))
-    tokenizer = scfg.Value('rearrange', type=str, choices=[
-        'dwcnn', 'rearrange', 'conv7', 'linconv'], help=ub.paragraph(
-        '''
-        How image patches are broken into tokens. rearrange is a 1x1
-        MLP and grouping of pixel grids. dwcnn is a is a mobile
-        convolutional stem. conv7 is a simple 1x1x7x7 convolutional
-        stem. linconv is a stack of 3x3 grouped convolutions without
-        any nonlinearity
-        '''))
-    token_norm = scfg.Value('none', type=str, choices=['none', 'auto', 'group', 'batch'])
-    decoder = scfg.Value('mlp', type=str, choices=['mlp', 'segmenter'])
-    dropout = scfg.Value(0.1, type=float)
-    backbone_depth = scfg.Value(None, type=int, help='For supporting architectures, control the depth of the backbone. Default depends on arch_name')
-    global_class_weight = scfg.Value(1.0, type=float)
-    global_change_weight = scfg.Value(1.0, type=float)
-    global_saliency_weight = scfg.Value(1.0, type=float)
-    modulate_class_weights = scfg.Value('', type=str, help=ub.paragraph(
-        '''
-        a special syntax that lets the user modulate automatically
-        computed class weights. Should be a comma separated list of
-        name*weight or name*weight+offset. E.g.
-        `negative*0,background*0.001,No Activity*0.1+1`
-        '''))
-    change_loss = scfg.Value('cce')
-    class_loss = scfg.Value('focal')
-    saliency_loss = scfg.Value('focal', help=ub.paragraph(
-        '''
-        saliency is trained to match any
-        "positive/foreground/salient" class
-        '''))
-    change_head_hidden = scfg.Value(2, type=int, help=ub.paragraph(
-        '''
-        number of hidden layers in the CHANGE head. I.e. the depth of the head.
-        '''))
-    class_head_hidden = scfg.Value(2, type=int, help=ub.paragraph(
-        '''
-        number of hidden layers in the CLASS head. I.e. the depth of the head.
-        '''))
-    saliency_head_hidden = scfg.Value(2, type=int, help=ub.paragraph(
-        '''
-        number of hidden layers in the SALIENCY head. I.e. the depth of the head.
-        '''))
-    window_size = scfg.Value(8, type=int)
-    squash_modes = scfg.Value(False, help='deprecated doesnt do anything')
-    decouple_resolution = scfg.Value(False, help=ub.paragraph(
-        '''
-        this turns on logic to decouple input and output
-        resolutions. Probably very slow
-        '''))
-    attention_impl = scfg.Value('exact', type=str, help=ub.paragraph(
-        '''
-        Implementation for attention computation. Can be: 'exact' -
-        the original O(n^2) method. 'performer' - a linear
-        approximation. 'reformer' - a LSH approximation.
-        '''))
-    multimodal_reduce = scfg.Value('max', help=ub.paragraph(
-        '''
-        operation used to combine multiple modes from the same timestep
-        '''))
-
-    perceiver_depth = scfg.Value(4, help=ub.paragraph(
-        '''
-        How many layers used by the perceiver model.
-        '''))
-    perceiver_latents = scfg.Value(512, help=ub.paragraph(
-        '''
-        How many latents used by the perceiver model.
-        '''))
-    training_limit_queries = scfg.Value(1024, help=ub.paragraph(
-        '''
-        How many queries to use during training step. Set arbitrarily high to ensure all are used.
-        '''))
-
-
 class SequenceAwareModel(pl.LightningModule):
 
     _HANDLES_NANS = True
 
-    @classmethod
-    def add_argparse_args(cls, parent_parser):
-        """
-        Example:
-            >>> from watch.tasks.fusion.methods.sequence_aware import *  # NOQA
-            >>> from watch.utils.configargparse_ext import ArgumentParser
-            >>> cls = SequenceAwareModel
-            >>> parent_parser = ArgumentParser(formatter_class='defaults')
-            >>> cls.add_argparse_args(parent_parser)
-            >>> parent_parser.print_help()
-            >>> parent_parser.parse_known_args()
-
-            print(scfg.Config.port_argparse(parent_parser, style='dataconf'))
-        """
-        parser = parent_parser.add_argument_group('kwcoco_video_data')
-        config = SequenceAwareModelConfig()
-        config.argparse(parser)
-        return parent_parser
-
-    @classmethod
-    def compatible(cls, cfgdict):
-        """
-        Given keyword arguments, find the subset that is compatible with this
-        constructor. This is somewhat hacked because of usage of scriptconfig,
-        but could be made nicer by future updates.
-        """
-        # init_kwargs = ub.compatible(config, cls.__init__)
-        import inspect
-        nameable_kinds = {inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                          inspect.Parameter.KEYWORD_ONLY}
-        cls_sig = inspect.signature(cls)
-        explicit_argnames = [
-            argname for argname, argtype in cls_sig.parameters.items()
-            if argtype.kind in nameable_kinds
-        ]
-        valid_argnames = explicit_argnames + list(SequenceAwareModelConfig.__default__.keys())
-        clsvars = ub.dict_isect(cfgdict, valid_argnames)
-        return clsvars
-
     def get_cfgstr(self):
-        cfgstr = f'{self.name}_SA'
+        cfgstr = f'{self.hparams.name}_SA'
         return cfgstr
 
     def reset_weights(self):
@@ -251,6 +104,7 @@ class SequenceAwareModel(pl.LightningModule):
             >>> result = self.process_example(batch[0])
             >>> if 1:
             >>>   print(nh.data.collate._debug_inbatch_shapes(result))
+            >>> result = self.shared_step(batch)
 
         Example:
             >>> # With nans
@@ -261,12 +115,7 @@ class SequenceAwareModel(pl.LightningModule):
             >>>     decoder='mlp', classes=clases, global_saliency_weight=1,
             >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
             >>> batch = self.demo_batch(nans=0.5, num_timesteps=2)
-            >>> item = batch[0]
-            >>> if 1:
-            >>>   print(nh.data.collate._debug_inbatch_shapes(batch))
-            >>> result1 = self.process_example(batch[0])
-            >>> if 1:
-            >>>   print(nh.data.collate._debug_inbatch_shapes(result1))
+            >>> result = self.shared_step(batch)
         """
         import kwarray
         from kwarray import distributions
@@ -286,7 +135,7 @@ class SequenceAwareModel(pl.LightningModule):
         rng = kwarray.ensure_rng(rng)
 
         B = batch_size
-        C = len(self.classes)
+        C = len(self.hparams.classes)
         T = num_timesteps
         batch = []
 
@@ -337,7 +186,7 @@ class SequenceAwareModel(pl.LightningModule):
                 frame['modes'] = modes
                 frame['output_dims'] = (H0, W0)
                 # specify the desired predicted output size for this frame
-                # frame['output_wh'] = (H0, W0)
+                frame['target_dims'] = (H0, W0)
 
                 if nans:
                     for v in modes.values():
@@ -380,68 +229,97 @@ class SequenceAwareModel(pl.LightningModule):
             batch.append(item)
         return batch
 
-    def __init__(self, *, classes=10, dataset_stats=None,
-                 input_sensorchan=None, input_channels=None, **kwargs):
+    def __init__(
+        self,
+        classes=10,
+        dataset_stats=None,
+        input_sensorchan=None,
+        name: str = "unnamed_model",
+        optimizer: str = "RAdam", # TODO: remove and push to the cli
+        learning_rate: float = 0.001, # TODO: remove and push to the cli
+        weight_decay: float = 0.0, # TODO: remove and push to the cli
+        positive_change_weight: float = 1.0,
+        negative_change_weight: float = 1.0,
+        class_weights: str = "auto",
+        saliency_weights: str = "auto",
+        stream_channels: int = 8,
+        tokenizer: str = "rearrange", # TODO: replace control string with a module, possibly a subclass
+        token_norm: str = "none",
+        decoder: str = "mlp", # TODO: replace control string with a module, possibly a subclass
+        dropout: float = 0.1,
+        global_class_weight: float = 1.0,
+        global_change_weight: float = 1.0,
+        global_saliency_weight: float = 1.0,
+        modulate_class_weights: str = "",
+        change_loss: float = "cce", # TODO: replace control string with a module, possibly a subclass
+        class_loss: float = "focal", # TODO: replace control string with a module, possibly a subclass
+        saliency_loss: float = "focal", # TODO: replace control string with a module, possibly a subclass
+        change_head_hidden: int = 2,
+        class_head_hidden: int = 2,
+        saliency_head_hidden: int = 2,
+        window_size: int = 8, # TODO: remove with replacement of tokenizer
+        # squash_modes: bool = False,
+        decouple_resolution: bool = False,
+        attention_impl: str = "exact", # TODO: remove with replacement of hardcoded perceiver
+        multimodal_reduce: str = "max", # TODO: remove with replacement of hardcoded perceiver
+        perceiver_depth: int = 4, # TODO: remove with replacement of hardcoded perceiver
+        perceiver_latents: int = 512, # TODO: remove with replacement of hardcoded perceiver
+        training_limit_queries: int = 1024, # TODO: remove with replacement of hardcoded perceiver
+
+    ):
+        """
+        Args:
+            name: Specify a name for the experiment. (Unsure if the Model is the place for this)
+            optimizer: Optimizer name supported by the netharn API.
+            class_weights: Class weighting strategy.
+            saliency_weights: Class weighting strategy.
+            stream_channels: Number of channels to normalize each project stream to.
+            tokenizer:
+                How image patches are broken into tokens. rearrange is a 1x1
+                MLP and grouping of pixel grids. dwcnn is a is a mobile
+                convolutional stem. conv7 is a simple 1x1x7x7 convolutional
+                stem. linconv is a stack of 3x3 grouped convolutions without
+                any nonlinearity
+            modulate_class_weights:
+                S special syntax that lets the user modulate automatically
+                computed class weights. Should be a comma separated list of
+                name*weight or name*weight+offset. E.g.
+                `negative*0,background*0.001,No Activity*0.1+1`
+            saliency_loss: Saliency is trained to match any "positive/foreground/salient" class
+            change_head_hidden: Number of hidden layers in the CHANGE head. I.e. the depth of the head.
+            class_head_hidden: Number of hidden layers in the CLASS head. I.e. the depth of the head.
+            saliency_head_hidden: Number of hidden layers in the SALIENCY head. I.e. the depth of the head.
+            decouple_resolution: This turns on logic to decouple input and output resolutions. Probably very slow.
+            attention_impl:
+                Implementation for attention computation. Can be:
+                'exact' - the original O(n^2) method.
+                'performer' - a linear approximation.
+                'reformer' - a LSH approximation.
+            multimodal_reduce: operation used to combine multiple modes from the same timestep
+            perceiver_depth: How many layers used by the perceiver model.
+            perceiver_latents: How many latents used by the perceiver model.
+            training_limit_queries: How many queries to use during training step. Set arbitrarily high to ensure all are used.
+
+        Example:
+            >>> # Note: it is important that the non-kwargs are saved as hyperparams
+            >>> from watch.tasks.fusion.methods.sequence_aware import SequenceAwareModel
+            >>> model = SequenceAwareModel(input_sensorchan='r|g|b')
+            >>> assert "classes" in model.hparams
+            >>> assert "dataset_stats" in model.hparams
+            >>> assert "input_sensorchan" in model.hparams
+        """
+
+        assert tokenizer in ['dwcnn', 'rearrange', 'conv7', 'linconv']
+        assert token_norm in ['none', 'auto', 'group', 'batch']
+        assert decoder in ['mlp', 'segmenter']
+        assert attention_impl in ["exact", "performer", "reformer"]
 
         # =================================================================================
         # =================================================================================
         # START IMPORT FROM MULTIMODAL-TRANSFORMER
 
         super().__init__()
-        config = SequenceAwareModelConfig(**kwargs)
-        self.config = config
-        cfgdict = self.config.to_dict()
-        # Note:
-        # it is important that the non-kwargs are saved as hyperparams:
-        cfgdict['classes'] = classes
-        cfgdict['dataset_stats'] = dataset_stats
-        cfgdict['input_sensorchan'] = input_sensorchan
-        cfgdict['input_channels'] = input_channels
-        self.save_hyperparameters(cfgdict)
-        # Backwards compatibility. Previous iterations had the
-        # config saved directly as datamodule arguments
-        self.__dict__.update(cfgdict)
-
-        #####
-        ## TODO: ALL OF THESE CONFIGURATIONS VARS SHOULD BE
-        ## CONSOLIDATED. REMOVE DUPLICATES BETWEEN INSTANCE VARS
-        ## HPARAMS, CONFIG.... It is unclear what the single source of truth
-        ## is, and what needs to be modified if making changes.
-
-        # We are explicitly unpacking the config here to make
-        # transition to a scriptconfig style init easier. This
-        # code can be consolidated later.
-        saliency_weights = config['saliency_weights']
-        class_weights = config['class_weights']
-        tokenizer = config['tokenizer']
-        token_norm = config['token_norm']
-        change_head_hidden = config['change_head_hidden']
-        class_head_hidden = config['class_head_hidden']
-        saliency_head_hidden = config['saliency_head_hidden']
-        class_loss = config['class_loss']
-        change_loss = config['change_loss']
-        saliency_loss = config['saliency_loss']
-        global_class_weight = config['global_class_weight']
-        global_change_weight = config['global_change_weight']
-        global_saliency_weight = config['global_saliency_weight']
-
-        perceiver_depth = config['perceiver_depth']
-        perceiver_latents = config['perceiver_latents']
-
-        self.training_limit_queries = config['training_limit_queries']
-
-        # Moving towards sensror-channels everywhere so we always know what
-        # sensor we are dealing with.
-        if input_channels is not None:
-            ub.schedule_deprecation(
-                'watch', name='input_channels', type='model param',
-                deprecate='0.3.3', migration='user input_sensorchan instead'
-            )
-            if input_sensorchan is None:
-                input_sensorchan = input_channels
-            else:
-                raise AssertionError(
-                    'cant specify both input_channels and input_sensorchan')
+        self.save_hyperparameters()
 
         if dataset_stats is not None:
             input_stats = dataset_stats['input_stats']
@@ -486,9 +364,6 @@ class SequenceAwareModel(pl.LightningModule):
             'change': global_change_weight,
             'saliency': global_saliency_weight,
         }
-
-        self.positive_change_weight = config['positive_change_weight']
-        self.negative_change_weight = config['negative_change_weight']
 
         # TODO: this data should be introspectable via the kwcoco file
         hueristic_background_keys = heuristics.BACKGROUND_CLASSES
@@ -557,9 +432,9 @@ class SequenceAwareModel(pl.LightningModule):
                 using_class_weights = ub.dzip(self.classes, class_weights)
 
                 # Add in user-specific modulation of the weights
-                if self.modulate_class_weights:
+                if self.hparams.modulate_class_weights:
                     import re
-                    parts = [p.strip() for p in self.modulate_class_weights.split(',')]
+                    parts = [p.strip() for p in self.hparams.modulate_class_weights.split(',')]
                     parts = [p for p in parts if p]
                     for part in parts:
                         toks = re.split('([+*])', part)
@@ -591,11 +466,11 @@ class SequenceAwareModel(pl.LightningModule):
         self.saliency_weights = saliency_weights
         self.class_weights = class_weights
         self.change_weights = torch.FloatTensor([
-            self.negative_change_weight,
-            self.positive_change_weight
+            self.hparams.negative_change_weight,
+            self.hparams.positive_change_weight
         ])
 
-        MODAL_AGREEMENT_CHANS = self.stream_channels
+        MODAL_AGREEMENT_CHANS = self.hparams.stream_channels
         self.tokenizer = tokenizer
         self.sensor_channel_tokenizers = RobustModuleDict()
 
@@ -643,8 +518,14 @@ class SequenceAwareModel(pl.LightningModule):
 
             # self.sensor_channel_tokenizers[s][c] = tokenize
             key = sanitize_key(str((s, c)))
+            try:
+                sensor_chan_input_norm = self.input_norms[s][c]
+            except (KeyError, TypeError) as e:
+                print(e)
+                sensor_chan_input_norm = nn.Identity()
+
             self.sensor_channel_tokenizers[key] = nn.Sequential(
-                input_norm,
+                sensor_chan_input_norm,
                 tokenize,
             )
             in_features_raw = tokenize.out_channels
@@ -671,7 +552,7 @@ class SequenceAwareModel(pl.LightningModule):
                     1,
                 ),
             )
-            for key in list(sensor_modes) + ["change", "saliency", "class"]
+            for key in list(self.unique_sensor_modes) + ["change", "saliency", "class"]
         })
 
         self.perceiver = perceiver.PerceiverIO(
@@ -730,7 +611,7 @@ class SequenceAwareModel(pl.LightningModule):
             global_weight = self.global_head_weights[head_name]
             if global_weight > 0:
                 self.criterions[head_name] = coerce_criterion(prop['loss'], prop['weights'])
-                if self.decoder == 'mlp':
+                if self.hparams.decoder == 'mlp':
                     self.heads[head_name] = nh.layers.MultiLayerPerceptronNd(
                         dim=0,
                         in_channels=feat_dim,
@@ -738,7 +619,7 @@ class SequenceAwareModel(pl.LightningModule):
                         out_channels=prop['channels'],
                         norm=None
                     )
-                elif self.decoder == 'segmenter':
+                elif self.hparams.decoder == 'segmenter':
                     from watch.tasks.fusion.architectures import segmenter_decoder
                     self.heads[head_name] = segmenter_decoder.MaskTransformerDecoder(
                         d_model=feat_dim,
@@ -746,7 +627,7 @@ class SequenceAwareModel(pl.LightningModule):
                         n_cls=prop['channels'],
                     )
                 else:
-                    raise KeyError(self.decoder)
+                    raise KeyError(self.hparams.decoder)
 
         if hasattr(torchmetrics, 'FBetaScore'):
             FBetaScore = torchmetrics.FBetaScore
@@ -793,10 +674,10 @@ class SequenceAwareModel(pl.LightningModule):
                 sensor_mode_key = sanitize_key(str((frame["sensor"], mode_key)))
 
                 stemmed_mode = self.sensor_channel_tokenizers[sensor_mode_key](
-                    torch.nan_to_num(mode_image, 0)[None].float()
+                    mode_image.nan_to_num(0.0)[None].float()
                 )[0]
-                dtype = stemmed_mode.dtype
-                device = stemmed_mode.device
+                dtype=stemmed_mode.dtype
+                device=stemmed_mode.device
 
                 position = self.positional_encoders[sensor_mode_key](
                     torch.stack(
@@ -873,7 +754,7 @@ class SequenceAwareModel(pl.LightningModule):
             weights = weights[valid_mask]
 
             if self.training:
-                keep_inds = torch.randperm(weights.shape[0])[:self.training_limit_queries]
+                keep_inds = torch.randperm(weights.shape[0])[:self.hparams.training_limit_queries]
                 pos_enc = pos_enc[keep_inds]
                 labels = labels[keep_inds]
                 weights = weights[keep_inds]
