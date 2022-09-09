@@ -57,36 +57,11 @@ def test_predict_old_fusion_model():
 
     dset = kwcoco.CocoDataset(coco_fpath)
 
-    vidid = dset.videos().peek()['id']
-    gids = list(dset.images(vidid=vidid))[0:11]
-    subset = dset.subset(gids)
-    if subset.missing_images(check_aux=True):
-        pytest.skip('data has not been pulled down')
-
-    output_dpath = ub.Path(ub.ensure_app_cache_dir('watch/tests/pred/oldmodel'))
-    # output_dpath.delete().ensuredir()
-
-    subset.reroot(absolute=True)
-    subset.fpath = str(output_dpath / 'test_input.kwcoco.json')
-
-    walker = ub.IndexableWalker(subset.dataset['images'])
-    tofix = []
-    for path, value in walker:
-        # Hack for my sanity
-        if path[-1] == 'shear':
-            transform_dict = walker[path[:-1]]
-            tofix.append(transform_dict)
-    import kwimage
-    for transform_dict in tofix:
-        fixed = kwimage.Affine.coerce(transform_dict).concise()
-        transform_dict.clear()
-        transform_dict.update(fixed)
-
-    stats = kwcoco_extensions.coco_channel_stats(subset)
-    print('stats = {}'.format(ub.repr2(stats, nl=2)))
-    subset.dump(subset.fpath, newlines=True)
-
+    output_dpath = ub.Path.appdir('watch/tests/pred/oldmodel').ensuredir()
     pred_fpath = output_dpath / 'pred_bundle/pred.kwcoco.json'
+
+    subset = make_small_kwcoco_subset(dset, output_dpath)
+
     from watch.tasks.fusion import predict
     pred_kwargs = {
         'test_dataset': subset.fpath,
@@ -111,6 +86,34 @@ def test_predict_old_fusion_model():
 
     smartwatch visualize /home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-L1-2022-01/data.kwcoco.json --viz_dpath=./orig_viz_check
     """
+
+
+def make_small_kwcoco_subset(dset, output_dpath):
+    import pytest
+    from watch.utils import kwcoco_extensions
+    vidid = dset.videos().peek()['id']
+    gids = list(dset.images(vidid=vidid))[0:11]
+    subset = dset.subset(gids)
+    if subset.missing_images(check_aux=True):
+        pytest.skip('data has not been pulled down')
+    subset.reroot(absolute=True)
+    subset.fpath = str(output_dpath / 'test_input.kwcoco.json')
+    walker = ub.IndexableWalker(subset.dataset['images'])
+    tofix = []
+    for path, value in walker:
+        # Hack for my sanity
+        if path[-1] == 'shear':
+            transform_dict = walker[path[:-1]]
+            tofix.append(transform_dict)
+    import kwimage
+    for transform_dict in tofix:
+        fixed = kwimage.Affine.coerce(transform_dict).concise()
+        transform_dict.clear()
+        transform_dict.update(fixed)
+    stats = kwcoco_extensions.coco_channel_stats(subset)
+    print('stats = {}'.format(ub.repr2(stats, nl=2)))
+    subset.dump(subset.fpath, newlines=True)
+    return subset
 
 
 if __name__ == '__main__':

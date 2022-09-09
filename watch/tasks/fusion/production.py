@@ -134,6 +134,18 @@ PRODUCTION_MODELS = [
             'thresh': 0.001,
         }
     },
+    {
+        'name': 'Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt.pt',
+        'tags': 'phase2_expt',
+        'file_name': 'models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Continue_15GSD_BGR_V004/Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt.pt',
+        'task': 'BAS',
+    },
+    # {
+    #     'name': 'Drop4_BAS_Retrain_V002_epoch=45-step=23552.pt.pt',
+    #     'tags': 'phase2_expt',
+    #     'file_name': 'models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt.pt',
+    #     'task': 'BAS',
+    # },
 
 ]
 

@@ -1123,6 +1123,7 @@ class CocoStitchingManager(object):
                 quant_probs, quantization = quantize_float01(final_probs)
                 aux['quantization'] = quantization
 
+                # TODO: add geo-referencing when appropriate
                 kwimage.imwrite(
                     str(new_fpath), quant_probs, space=None, backend='gdal',
                     compress=self.prob_compress, blocksize=128,
