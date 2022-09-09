@@ -271,7 +271,7 @@ class MultimodalTransformer(pl.LightningModule):
         class_weights: str = "auto",
         saliency_weights: str = "auto",
         stream_channels: int = 8,
-        tokenizer: str = "rearrange", # TODO: replace control string with a module, possibly a subclass
+        tokenizer: str = "linconv", # TODO: replace control string with a module, possibly a subclass
         token_norm: str = "none",
         arch_name: str = "smt_it_joint_p8", # TODO: replace control string with a module, possibly a subclass
         decoder: str = "mlp", # TODO: replace control string with a module, possibly a subclass
@@ -281,9 +281,9 @@ class MultimodalTransformer(pl.LightningModule):
         global_change_weight: float = 1.0,
         global_saliency_weight: float = 1.0,
         modulate_class_weights: str = "",
-        change_loss: float = "cce", # TODO: replace control string with a module, possibly a subclass
-        class_loss: float = "focal", # TODO: replace control string with a module, possibly a subclass
-        saliency_loss: float = "focal", # TODO: replace control string with a module, possibly a subclass
+        change_loss: str = "cce", # TODO: replace control string with a module, possibly a subclass
+        class_loss: str = "focal", # TODO: replace control string with a module, possibly a subclass
+        saliency_loss: str = "focal", # TODO: replace control string with a module, possibly a subclass
         change_head_hidden: int = 2,
         class_head_hidden: int = 2,
         saliency_head_hidden: int = 2,

@@ -4,7 +4,7 @@ from watch.tasks.fusion.methods import SequenceAwareModel
 import pathlib
 
 """
-The two Wrapped classes below are examples of why we should eventually factor out the current configuraiton system. LightningCLI interogates the __init__ methods belonging to LightningModule and LightningDataModule to decide which parameters can be configured.
+The Wrapped class below are examples of why we should eventually factor out the current configuraiton system. LightningCLI interogates the __init__ methods belonging to LightningModule and LightningDataModule to decide which parameters can be configured.
 """
 
 
@@ -94,6 +94,7 @@ class WrappedSequenceAwareModel(SequenceAwareModel):
 
 def main():
     from pytorch_lightning.cli import LightningCLI
+    import pytorch_lightning as pl
 
     import yaml
     from jsonargparse import set_loader, set_dumper
@@ -116,8 +117,9 @@ def main():
                 apply_on="instantiate")
 
     cli = MyLightningCLI(
-        WrappedSequenceAwareModel,
+        SequenceAwareModel,
         WrappedKWCocoDataModule,
+        subclass_mode_model=True,
         parser_kwargs=dict(parser_mode='yaml_unsafe_for_tuples'),
     )
     cli
@@ -125,6 +127,8 @@ def main():
 
 if __name__ == '__main__':
     """
-    Example invocation: python fit_lightning.py fit --data.train_dataset=$SMART_DVC/extern/onera_2018/onera_train.kwcoco.json --trainer.accelerator="gpu" --trainer.devices=0, --trainer.precision=16 --trainer.fast_dev_run=5
+    CommandLine:
+        python fit_lightning.py fit --data.train_dataset=special:vidshapes8-frames9-speed0.5-multispectral --trainer.accelerator=gpu --trainer.devices=0, --trainer.precision=16 --trainer.fast_dev_run=5 --model=MultimodalTransformer --model.tokenizer=linconv
+        python fit_lightning.py fit --data.train_dataset=special:vidshapes8-frames9-speed0.5-multispectral --trainer.accelerator=gpu --trainer.devices=0, --trainer.precision=16 --trainer.fast_dev_run=5 --model=SequenceAwareModel --model.tokenizer=linconv
     """
     main()
