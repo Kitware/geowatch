@@ -98,7 +98,7 @@ def main():
     from watch.utils import lightning_ext as pl_ext
 
     import yaml
-    from jsonargparse import set_loader, set_dumper
+    from jsonargparse import set_loader, set_dumper, lazy_instance
 
     # Not very safe, but needed to parse tuples e.g. datamodule.dataset_stats
     # TODO: yaml.SafeLoader + tuple parsing
@@ -111,7 +111,12 @@ def main():
     set_dumper('yaml_unsafe_for_tuples', custom_yaml_dump)
 
     class MyLightningCLI(LightningCLI):
+        
+        # TODO: import initialization code from fit.py
+        
         def add_arguments_to_parser(self, parser):
+            
+            # pass dataset stats to model after initialization datamodule
             parser.link_arguments(
                 "data.dataset_stats",
                 "model.dataset_stats",
