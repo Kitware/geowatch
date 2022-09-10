@@ -95,6 +95,7 @@ class WrappedSequenceAwareModel(SequenceAwareModel):
 def main():
     from pytorch_lightning.cli import LightningCLI
     import pytorch_lightning as pl
+    from watch.utils import lightning_ext as pl_ext
 
     import yaml
     from jsonargparse import set_loader, set_dumper
@@ -121,6 +122,36 @@ def main():
         WrappedKWCocoDataModule,
         subclass_mode_model=True,
         parser_kwargs=dict(parser_mode='yaml_unsafe_for_tuples'),
+        trainer_defaults=dict(
+            # The following works, but it might be better to move some of these callbacks into the cli
+            # (https://pytorch-lightning.readthedocs.io/en/latest/cli/lightning_cli_expert.html#configure-forced-callbacks)
+            # Another option is to have a base_config.yaml that includes these, which would make them fully configurable
+            # without modifying source code.
+            callbacks=[
+                # pl_ext.callbacks.AutoResumer(),
+                # pl_ext.callbacks.StateLogger(),
+                # pl_ext.callbacks.TextLogger(args),
+                # pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
+                pl_ext.callbacks.BatchPlotter(
+                    num_draw=2,#args.num_draw,
+                    draw_interval=1,#args.draw_interval
+                ),
+                pl_ext.callbacks.TensorboardPlotter(),
+                pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
+                pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
+
+                pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),
+                # pl.callbacks.GPUStatsMonitor(),  # enabling this breaks CPU tests
+                pl.callbacks.ModelCheckpoint(
+                    monitor='val_change_f1', mode='max', save_top_k=4),
+                pl.callbacks.ModelCheckpoint(
+                    monitor='val_saliency_f1', mode='max', save_top_k=4),
+                pl.callbacks.ModelCheckpoint(
+                    monitor='val_class_f1_micro', mode='max', save_top_k=4),
+                pl.callbacks.ModelCheckpoint(
+                    monitor='val_class_f1_macro', mode='max', save_top_k=4),
+            ]
+        ),
     )
     cli
 
