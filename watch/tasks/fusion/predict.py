@@ -1068,7 +1068,8 @@ class CocoStitchingManager(object):
         # Get the final stitched feature for this image
         final_probs = stitcher.finalize()
         final_probs = kwarray.atleast_nd(final_probs, 3)
-        final_probs = np.nan_to_num(final_probs)
+        # is_nodata = np.isnan(final_probs)
+        # final_probs = np.nan_to_num(final_probs)
 
         final_weights = kwarray.atleast_nd(stitcher.weights, 3)
         is_predicted_pixel = final_weights.any(axis=2).astype('uint8')
@@ -1104,19 +1105,41 @@ class CocoStitchingManager(object):
             new_fname = img.get('name', str(img['id'])) + f'_{self.suffix_code}.tif'  # FIXME
             new_fpath = join(self.prob_dpath, new_fname)
             assert final_probs.shape[2] == (self.chan_code.count('|') + 1)
+            img_from_asset = img_from_vid
             aux = {
                 'file_name': relpath(new_fpath, bundle_dpath),
                 'channels': self.chan_code,
                 'height': final_probs.shape[0],
                 'width': final_probs.shape[1],
                 'num_bands': final_probs.shape[2],
-                'warp_aux_to_img': img_from_vid.concise(),
+                'warp_aux_to_img': img_from_asset.concise(),
             }
             auxiliary = img.setdefault('auxiliary', [])
             auxiliary.append(aux)
 
             # Save the prediction to disk
             total_prob += np.nansum(final_probs)
+
+            write_kwargs = {}
+            write_kwargs['blocksize'] = 128
+            write_kwargs['compress'] = self.prob_compress
+
+            if 'wld_crs_info' in img:
+                from osgeo import osr
+                # TODO: would be nice to have an easy to use mechanism to get
+                # the gdal crs, probably one exists in pyproj.
+                auth = img['wld_crs_info']['auth']
+                assert auth[0] == 'EPSG', 'unhandled auth'
+                epsg = auth[1]
+                axis_strat = getattr(osr, img['wld_crs_info']['axis_mapping'])
+                srs = osr.SpatialReference()
+                srs.ImportFromEPSG(int(epsg))
+                srs.SetAxisMappingStrategy(axis_strat)
+                img_from_wld = kwimage.Affine.coerce(img['wld_to_pxl'])
+                wld_from_img = img_from_wld.inv()
+                wld_from_asset = wld_from_img @ img_from_asset
+                write_kwargs['crs'] = srs.ExportToWkt()
+                write_kwargs['transform'] = wld_from_asset
 
             if self.quantize:
                 # Quantize
@@ -1126,13 +1149,12 @@ class CocoStitchingManager(object):
                 # TODO: add geo-referencing when appropriate
                 kwimage.imwrite(
                     str(new_fpath), quant_probs, space=None, backend='gdal',
-                    compress=self.prob_compress, blocksize=128,
-                    nodata=quantization['nodata']
+                    nodata=quantization['nodata'], **write_kwargs,
                 )
             else:
                 kwimage.imwrite(
                     str(new_fpath), final_probs, space=None, backend='gdal',
-                    compress=self.prob_compress, blocksize=128,
+                    **write_kwargs,
                 )
 
         if self.write_preds:
