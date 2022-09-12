@@ -1,5 +1,6 @@
 from watch.tasks.fusion.datamodules.kwcoco_video_data import KWCocoVideoDataModule  # NOQA
 from watch.tasks.fusion.methods import SequenceAwareModel
+# from watch.tasks.fusion.methods import *
 
 import pathlib
 
@@ -98,7 +99,8 @@ def main():
     from watch.utils import lightning_ext as pl_ext
 
     import yaml
-    from jsonargparse import set_loader, set_dumper, lazy_instance
+    from jsonargparse import set_loader, set_dumper
+    # , lazy_instance
 
     # Not very safe, but needed to parse tuples e.g. datamodule.dataset_stats
     # TODO: yaml.SafeLoader + tuple parsing
@@ -111,11 +113,11 @@ def main():
     set_dumper('yaml_unsafe_for_tuples', custom_yaml_dump)
 
     class MyLightningCLI(LightningCLI):
-        
+
         # TODO: import initialization code from fit.py
-        
+
         def add_arguments_to_parser(self, parser):
-            
+
             # pass dataset stats to model after initialization datamodule
             parser.link_arguments(
                 "data.dataset_stats",
@@ -138,8 +140,8 @@ def main():
                 # pl_ext.callbacks.TextLogger(args),
                 # pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
                 pl_ext.callbacks.BatchPlotter(
-                    num_draw=2,#args.num_draw,
-                    draw_interval=1,#args.draw_interval
+                    num_draw=2,  # args.num_draw,
+                    draw_interval=1,  # args.draw_interval
                 ),
                 pl_ext.callbacks.TensorboardPlotter(),
                 pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),

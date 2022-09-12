@@ -21,7 +21,7 @@ from watch.tasks.fusion.methods.network_modules import ConvTokenizer
 from watch.tasks.fusion.methods.network_modules import LinearConvTokenizer
 from watch.tasks.fusion.methods.network_modules import DWCNNTokenizer
 
-import scriptconfig as scfg
+# import scriptconfig as scfg
 
 try:
     import xdev
@@ -235,36 +235,36 @@ class SequenceAwareModel(pl.LightningModule):
         dataset_stats=None,
         input_sensorchan=None,
         name: str = "unnamed_model",
-        optimizer: str = "RAdam", # TODO: remove and push to the cli
-        learning_rate: float = 0.001, # TODO: remove and push to the cli
-        weight_decay: float = 0.0, # TODO: remove and push to the cli
+        optimizer: str = "RAdam",  # TODO: remove and push to the cli
+        learning_rate: float = 0.001,  # TODO: remove and push to the cli
+        weight_decay: float = 0.0,  # TODO: remove and push to the cli
         positive_change_weight: float = 1.0,
         negative_change_weight: float = 1.0,
         class_weights: str = "auto",
         saliency_weights: str = "auto",
         stream_channels: int = 8,
-        tokenizer: str = "rearrange", # TODO: replace control string with a module, possibly a subclass
+        tokenizer: str = "rearrange",  # TODO: replace control string with a module, possibly a subclass
         token_norm: str = "none",
-        decoder: str = "mlp", # TODO: replace control string with a module, possibly a subclass
+        decoder: str = "mlp",  # TODO: replace control string with a module, possibly a subclass
         dropout: float = 0.1,
         global_class_weight: float = 1.0,
         global_change_weight: float = 1.0,
         global_saliency_weight: float = 1.0,
         modulate_class_weights: str = "",
-        change_loss: str = "cce", # TODO: replace control string with a module, possibly a subclass
-        class_loss: str = "focal", # TODO: replace control string with a module, possibly a subclass
-        saliency_loss: str = "focal", # TODO: replace control string with a module, possibly a subclass
+        change_loss: str = "cce",  # TODO: replace control string with a module, possibly a subclass
+        class_loss: str = "focal",  # TODO: replace control string with a module, possibly a subclass
+        saliency_loss: str = "focal",  # TODO: replace control string with a module, possibly a subclass
         change_head_hidden: int = 2,
         class_head_hidden: int = 2,
         saliency_head_hidden: int = 2,
-        window_size: int = 8, # TODO: remove with replacement of tokenizer
+        window_size: int = 8,  # TODO: remove with replacement of tokenizer
         # squash_modes: bool = False,
         decouple_resolution: bool = False,
-        attention_impl: str = "exact", # TODO: remove with replacement of hardcoded perceiver
-        multimodal_reduce: str = "max", # TODO: remove with replacement of hardcoded perceiver
-        perceiver_depth: int = 4, # TODO: remove with replacement of hardcoded perceiver
-        perceiver_latents: int = 512, # TODO: remove with replacement of hardcoded perceiver
-        training_limit_queries: int = 1024, # TODO: remove with replacement of hardcoded perceiver
+        attention_impl: str = "exact",  # TODO: remove with replacement of hardcoded perceiver
+        multimodal_reduce: str = "max",  # TODO: remove with replacement of hardcoded perceiver
+        perceiver_depth: int = 4,  # TODO: remove with replacement of hardcoded perceiver
+        perceiver_latents: int = 512,  # TODO: remove with replacement of hardcoded perceiver
+        training_limit_queries: int = 1024,  # TODO: remove with replacement of hardcoded perceiver
 
     ):
         """
@@ -676,8 +676,8 @@ class SequenceAwareModel(pl.LightningModule):
                 stemmed_mode = self.sensor_channel_tokenizers[sensor_mode_key](
                     mode_image.nan_to_num(0.0)[None].float()
                 )[0]
-                dtype=stemmed_mode.dtype
-                device=stemmed_mode.device
+                dtype = stemmed_mode.dtype
+                device = stemmed_mode.device
 
                 position = self.positional_encoders[sensor_mode_key](
                     torch.stack(
