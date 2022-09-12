@@ -9,31 +9,35 @@ impact of the smaller class.
 
 import torchmetrics
 
+
 class BinaryF1Score(torchmetrics.StatScores):
     def compute(self):
         tp, fp, tn, fn = self._get_final_stats()
         tp, fp, tn, fn = tp[1], fp[1], tn[1], fn[1]
-        return (2*tp) / ((2*tp) + fp + fn)
-    
+        return (2 * tp) / ((2 * tp) + fp + fn)
+
+
 class BinaryOverallAccuracy(torchmetrics.StatScores):
     def compute(self):
         tp, fp, tn, fn = self._get_final_stats()
         tp, fp, tn, fn = tp[1], fp[1], tn[1], fn[1]
         return (tp + tn) / (tp + fp + tn + fn)
-    
+
+
 class BinaryBalancedAccuracy(torchmetrics.StatScores):
     def compute(self):
         tp, fp, tn, fn = self._get_final_stats()
         tp, fp, tn, fn = tp[1], fp[1], tn[1], fn[1]
-        
+
         tpr = tp / (tp + fn)
         tnr = tn / (tn + fp)
-        
+
         return (tpr + tnr) / 2
-    
+
+
 class BinaryTruePositiveRate(torchmetrics.StatScores):
     def compute(self):
         tp, fp, tn, fn = self._get_final_stats()
         tp, fp, tn, fn = tp[1], fp[1], tn[1], fn[1]
-        
+
         return tp / (tp + fn)
