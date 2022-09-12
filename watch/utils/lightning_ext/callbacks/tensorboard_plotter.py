@@ -47,7 +47,12 @@ class TensorboardPlotter(pl.callbacks.Callback):
         # process.
         serial = False
 
-        train_dpath = trainer.logger.log_dir
+        # train_dpath = trainer.logger.log_dir
+        train_dpath = trainer.log_dir
+        if train_dpath is None:
+            import warnings
+            warnings.warn('The trainer logdir is not set. Cannot dump a batch plot')
+            return
 
         func = _dump_measures
 

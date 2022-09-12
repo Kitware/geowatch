@@ -163,10 +163,27 @@ def main():
     cli
 
 
-if __name__ == '__main__':
-    """
+if __name__ == "__main__":
+    r"""
     CommandLine:
-        python fit_lightning.py fit --data.train_dataset=special:vidshapes8-frames9-speed0.5-multispectral --trainer.accelerator=gpu --trainer.devices=0, --trainer.precision=16 --trainer.fast_dev_run=5 --model=MultimodalTransformer --model.tokenizer=linconv
-        python fit_lightning.py fit --data.train_dataset=special:vidshapes8-frames9-speed0.5-multispectral --trainer.accelerator=gpu --trainer.devices=0, --trainer.precision=16 --trainer.fast_dev_run=5 --model=SequenceAwareModel --model.tokenizer=linconv
+        python -m watch.tasks.fusion.fit_lightning fit \
+            --data.train_dataset=special:vidshapes8-frames9-speed0.5-multispectral \
+            --trainer.accelerator=gpu --trainer.devices=0, \
+            --trainer.precision=16  \
+            --model=MultimodalTransformer \
+            --model.tokenizer=linconv  \
+            --trainer.fast_dev_run=5 \
+            --trainer.default_root_dir ./demo_train
+
+        # Note: setting fast_dev_run seems to disable directory output.
+
+        python -m watch.tasks.fusion.fit_lightning fit \
+            --data.train_dataset=special:vidshapes8-frames9-speed0.5-multispectral \
+            --trainer.accelerator=gpu \
+            --trainer.devices=0, \
+            --trainer.precision=16 \
+            --trainer.fast_dev_run=5 \
+            --model=SequenceAwareModel \
+            --model.tokenizer=linconv
     """
     main()
