@@ -432,10 +432,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             >>> parent_parser = argparse.ArgumentParser()
             >>> cls.add_argparse_args(parent_parser)
             >>> parent_parser.print_help()
-            >>> args, _ = parent_parser.parse_known_args(['--diff_inputs=True'])
-            >>> assert args.diff_inputs
-            >>> args, _ = parent_parser.parse_known_args(['--diff_inputs=False'])
-            >>> assert not args.diff_inputs
+            >>> args, _ = parent_parser.parse_known_args(['--use_grid_positives=True'])
+            >>> assert args.use_grid_positives
+            >>> args, _ = parent_parser.parse_known_args(['--use_grid_positives=False'])
+            >>> assert not args.use_grid_positives
             >>> args, _ = parent_parser.parse_known_args(['--exclude_sensors=l8,f3'])
             >>> assert args.exclude_sensors == 'l8,f3'
             >>> args, _ = parent_parser.parse_known_args(['--exclude_sensors=l8'])
