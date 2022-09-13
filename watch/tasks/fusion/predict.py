@@ -70,6 +70,8 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument('--tta_fliprot', type=smartcast, default=0, help='number of times to flip/rotate the frame, can be in [0,7]')
     parser.add_argument('--tta_time', type=smartcast, default=0, help='number of times to expand the temporal sample for a frame'),
 
+    parser.add_argument('--clear_annots', type=smartcast, default=1, help='Clear existing annotations in output file. Otherwise keep them')
+
     # TODO:
     # parser.add_argument('--cache', type=smartcast, default=0, help='if True, dont rerun prediction on images where predictions exist'),
 
@@ -106,10 +108,13 @@ def make_predict_config(cmdline=False, **kwargs):
     # may want to modify behavior to only expose non-training params)
     overloadable_datamodule_keys = [
         'chip_size',
+        'chip_dims',
         'time_steps',
         'channels',
         'time_sampling',
         'time_span',
+        'space_scale',
+        'window_space_scale',
     ]
     parser = datamodule_class.add_argparse_args(parser)
     datamodule_defaults = {k: parser.get_default(k) for k in overloadable_datamodule_keys}
@@ -204,6 +209,7 @@ def predict(cmdline=False, **kwargs):
     """
     args = make_predict_config(cmdline=cmdline, **kwargs)
     config = args.__dict__
+    print('kwargs = {}'.format(ub.repr2(kwargs, nl=1)))
     print('config = {}'.format(ub.repr2(config, nl=2)))
 
     package_fpath = ub.Path(args.package_fpath)
@@ -278,11 +284,18 @@ def predict(cmdline=False, **kwargs):
     print('unable_to_infer = {}'.format(ub.repr2(unable_to_infer, nl=1)))
     print('overloads = {}'.format(ub.repr2(overloads, nl=1)))
 
-    deviation = ub.varied_values([
-        ub.dict_isect(traintime_params, datamodule_vars),
-        ub.dict_isect(datamodule_vars, traintime_params),
-    ], min_variations=1)
-    print('deviation from fit->predict settings = {}'.format(ub.repr2(deviation, nl=1)))
+    # Look at the difference between predict and train time settings
+    print('deviation from fit->predict settings:')
+    for key in (traintime_params.keys() & datamodule_vars.keys()):
+        f_val = traintime_params[key]  # fit-time value
+        p_val = datamodule_vars[key]  # pred-time value
+        if f_val != p_val:
+            print(f'    {key!r}: {f_val!r} -> {p_val!r}')
+
+    # deviation = ub.varied_values([
+    #     ub.dict_isect(traintime_params, datamodule_vars),
+    #     ub.dict_isect(datamodule_vars, traintime_params),
+    # ], min_variations=1)
 
     HACK_FIX_MODELS_WITH_BAD_CHANNEL_SPEC = True
     if HACK_FIX_MODELS_WITH_BAD_CHANNEL_SPEC:
@@ -379,8 +392,11 @@ def predict(cmdline=False, **kwargs):
     # Create the results dataset as a copy of the test CocoDataset
     print('Populate result dataset')
     result_dataset: kwcoco.CocoDataset = test_coco_dataset.copy()
+
     # Remove all annotations in the results copy
-    result_dataset.clear_annotations()
+    if config['clear_annots']:
+        result_dataset.clear_annotations()
+
     # Change all paths to be absolute paths
     result_dataset.reroot(absolute=True)
     # Set the filepath for the prediction coco file
@@ -615,6 +631,12 @@ def predict(cmdline=False, **kwargs):
         print('img_overlaps = {}'.format(ub.repr2(img_overlaps, nl=1)))
         print('primary_img_overlaps = {}'.format(ub.repr2(primary_img_overlaps, nl=1)))
 
+    if 0:
+        item = test_dataloader.dataset[0]
+        item['target']
+        frame = item['frames'][0]
+        ub.peek(frame['modes'].values()).shape
+
     with torch.set_grad_enabled(False):
         # FIXME: that data loader should not be producing incorrect sensor/mode
         # pairs in the first place!
@@ -632,6 +654,7 @@ def predict(cmdline=False, **kwargs):
                 batch_gids = [frame['gid'] for frame in item['frames']]
                 batch_trs.append({
                     'space_slice': tuple(item['target']['space_slice']),
+                    'scale': item['target']['scale'],
                     'gids': batch_gids,
                     'fliprot_params': item['target'].get('fliprot_params', None)
                 })
@@ -1140,6 +1163,7 @@ class CocoStitchingManager(object):
                 wld_from_asset = wld_from_img @ img_from_asset
                 write_kwargs['crs'] = srs.ExportToWkt()
                 write_kwargs['transform'] = wld_from_asset
+                write_kwargs['overviews'] = 2
 
             if self.quantize:
                 # Quantize

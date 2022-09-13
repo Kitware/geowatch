@@ -15,6 +15,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Fixed various bugs where `project_annotations`, and `coco_align_geotiffs`
   would fail when a video was empty.
 * fusion predict now writes nodata correctly and georeferences predictions.
+* Fixed issue where `chip_dims` was not set correctly at predict time.
+* NOT FIXED: Model GSD is not respected by fusion.predict
 
 
 ## Version 0.3.4 - Finalized 2022-08-31
