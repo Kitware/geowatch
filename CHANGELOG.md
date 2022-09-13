@@ -58,7 +58,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Fixes to sensorchan integration with the model and dataset (training with new settings is now verified)
 * Fixes to handling of nan data
 * Fixes to lightning modules
-* Fixed issue where learning_rate was not respected by some optimizers (RADam, but AdamW seemed ok)
+* Fixed issue where learning_rate was not respected by some optimizers (RAdam, but AdamW seemed ok)
 * Fixed issue where weight_decay was not respected by AdamW.
 * One-off scripts for fixing models.
 * Better handling of gdal warp / translate / mosaic failures.
