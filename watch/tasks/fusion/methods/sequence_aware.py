@@ -105,7 +105,6 @@ class SequenceAwareModelConfig(scfg.DataConfig):
         any nonlinearity
         '''))
     token_norm = scfg.Value('none', type=str, choices=['none', 'auto', 'group', 'batch'])
-    # arch_name = scfg.Value('smt_it_joint_p8', type=str, choices=available_encoders)
     decoder = scfg.Value('mlp', type=str, choices=['mlp', 'segmenter'])
     dropout = scfg.Value(0.1, type=float)
     backbone_depth = scfg.Value(None, type=int, help='For supporting architectures, control the depth of the backbone. Default depends on arch_name')
@@ -214,7 +213,7 @@ class SequenceAwareModel(pl.LightningModule):
         return clsvars
 
     def get_cfgstr(self):
-        cfgstr = f'{self.name}_{self.arch_name}_SA'
+        cfgstr = f'{self.name}_SA'
         return cfgstr
 
     def reset_weights(self):
@@ -258,13 +257,13 @@ class SequenceAwareModel(pl.LightningModule):
             >>> from watch.tasks.fusion.methods.sequence_aware import *  # NOQA
             >>> channels, clases, dataset_stats = SequenceAwareModel.demo_dataset_stats()
             >>> self = SequenceAwareModel(
-            >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
+            >>>     tokenizer='linconv',
             >>>     decoder='mlp', classes=clases, global_saliency_weight=1,
             >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
             >>> batch = self.demo_batch()
             >>> if 1:
             >>>   print(nh.data.collate._debug_inbatch_shapes(batch))
-            >>> result = self.forward_step(batch)
+            >>> result = self.process_example(batch[0])
             >>> if 1:
             >>>   print(nh.data.collate._debug_inbatch_shapes(result))
 
@@ -273,18 +272,16 @@ class SequenceAwareModel(pl.LightningModule):
             >>> from watch.tasks.fusion.methods.sequence_aware import *  # NOQA
             >>> channels, clases, dataset_stats = SequenceAwareModel.demo_dataset_stats()
             >>> self = SequenceAwareModel(
-            >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
+            >>>     tokenizer='linconv',
             >>>     decoder='mlp', classes=clases, global_saliency_weight=1,
             >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
             >>> batch = self.demo_batch(nans=0.5, num_timesteps=2)
             >>> item = batch[0]
             >>> if 1:
             >>>   print(nh.data.collate._debug_inbatch_shapes(batch))
-            >>> result1 = self.forward_step(batch)
-            >>> result2 = self.forward_step(batch, with_loss=0)
+            >>> result1 = self.process_example(batch[0])
             >>> if 1:
             >>>   print(nh.data.collate._debug_inbatch_shapes(result1))
-            >>>   print(nh.data.collate._debug_inbatch_shapes(result2))
         """
         import kwarray
         from kwarray import distributions
@@ -353,6 +350,7 @@ class SequenceAwareModel(pl.LightningModule):
                 frame['time_offset'] = np.array([1]),
                 frame['timestamp'] = 1
                 frame['modes'] = modes
+                frame['target_dims'] = (H0, W0)
                 # specify the desired predicted output size for this frame
                 # frame['output_wh'] = (H0, W0)
 
@@ -440,7 +438,6 @@ class SequenceAwareModel(pl.LightningModule):
         class_loss = config['class_loss']
         change_loss = config['change_loss']
         saliency_loss = config['saliency_loss']
-        # arch_name = config['arch_name']
         dropout = config['dropout']
         attention_impl = config['attention_impl']
         global_class_weight = config['global_class_weight']
@@ -496,25 +493,6 @@ class SequenceAwareModel(pl.LightningModule):
             }
         else:
             self.unique_sensor_modes = self.dataset_stats['unique_sensor_modes']
-
-        input_norms = None
-        if input_stats is not None:
-            input_norms = RobustModuleDict()
-            for s, c in self.unique_sensor_modes:
-                if s not in input_norms:
-                    input_norms[s] = RobustModuleDict()
-                stats = input_stats.get((s, c), None)
-                if stats is None:
-                    input_norms[s][c] = nh.layers.InputNorm()
-                else:
-                    input_norms[s][c] = nh.layers.InputNorm(**stats)
-
-            for (s, c), stats in input_stats.items():
-                if s not in input_norms:
-                    input_norms[s] = RobustModuleDict()
-                input_norms[s][c] = nh.layers.InputNorm(**stats)
-
-        self.input_norms = input_norms
 
         self.classes = kwcoco.CategoryTree.coerce(classes)
         self.num_classes = len(self.classes)
@@ -647,6 +625,7 @@ class SequenceAwareModel(pl.LightningModule):
             sensor_modes = set(self.unique_sensor_modes) | set(input_stats.keys())
         else:
             sensor_modes = set(self.unique_sensor_modes)
+
             
         for s, c in sensor_modes:
             mode_code = kwcoco.FusedChannelSpec.coerce(c)
@@ -672,11 +651,20 @@ class SequenceAwareModel(pl.LightningModule):
                 tokenize = DWCNNTokenizer(in_chan, in_features_raw, norm=token_norm)
             else:
                 raise KeyError(tokenizer)
+                
+            if input_stats is None:
+                input_norm = nh.layers.InputNorm()
+            else:
+                stats = input_stats.get((s, c), None)
+                if stats is None:
+                    input_norm = nh.layers.InputNorm()
+                else:
+                    input_norm = nh.layers.InputNorm(**stats)
 
             # self.sensor_channel_tokenizers[s][c] = tokenize
             key = sanitize_key(str((s, c)))
             self.sensor_channel_tokenizers[key] = nn.Sequential(
-                self.input_norms[s][c],
+                input_norm,
                 tokenize,
             )
             in_features_raw = tokenize.out_channels
@@ -703,7 +691,7 @@ class SequenceAwareModel(pl.LightningModule):
                     1,
                 ),
             )
-            for key in list(dataset_stats["unique_sensor_modes"]) + ["change", "saliency", "class"]
+            for key in list(sensor_modes) + ["change", "saliency", "class"]
         })
         
         self.perceiver = perceiver.PerceiverIO(
@@ -823,10 +811,12 @@ class SequenceAwareModel(pl.LightningModule):
             for mode_key, mode_image in frame["modes"].items():
                 
                 sensor_mode_key = sanitize_key(str((frame["sensor"], mode_key)))
-                dtype=mode_image.dtype
-                device=mode_image.device
                 
-                stemmed_mode = self.sensor_channel_tokenizers[sensor_mode_key](torch.nan_to_num(mode_image, 0)[None])[0]
+                stemmed_mode = self.sensor_channel_tokenizers[sensor_mode_key](
+                    torch.nan_to_num(mode_image, 0)[None].float()
+                )[0]
+                dtype=stemmed_mode.dtype
+                device=stemmed_mode.device
                 
                 position = self.positional_encoders[sensor_mode_key](
                     torch.stack(
@@ -1041,7 +1031,7 @@ class SequenceAwareModel(pl.LightningModule):
 
         Example:
             >>> from watch.tasks.fusion.methods.sequence_aware import *  # noqa
-            >>> self = SequenceAwareModel(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b')
+            >>> self = SequenceAwareModel(input_sensorchan='r|g|b')
             >>> max_epochs = 80
             >>> self.trainer = pl.Trainer(max_epochs=max_epochs)
             >>> [opt], [sched] = self.configure_optimizers()
@@ -1063,7 +1053,7 @@ class SequenceAwareModel(pl.LightningModule):
             >>> from watch.tasks.fusion.methods.sequence_aware import *  # NOQA
             >>> my_lr = 2.3e-5
             >>> my_decay = 2.3e-5
-            >>> kw = dict(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b', learning_rate=my_lr, weight_decay=my_decay)
+            >>> kw = dict(input_sensorchan='r|g|b', learning_rate=my_lr, weight_decay=my_decay)
             >>> self = SequenceAwareModel(**kw)
             >>> [opt], [sched] = self.configure_optimizers()
             >>> assert opt.param_groups[0]['lr'] == my_lr
@@ -1178,9 +1168,6 @@ class SequenceAwareModel(pl.LightningModule):
             >>> self = methods.SequenceAwareModel(
             >>>     # ===========
             >>>     # Backbone
-            >>>     #arch_name='smt_it_joint_p2',
-            >>>     #arch_name='smt_it_stm_p8',
-            >>>     #arch_name='deit',
             >>>     optimizer='AdamW',
             >>>     learning_rate=1e-5,
             >>>     #attention_impl='performer',
@@ -1364,7 +1351,7 @@ class SequenceAwareModel(pl.LightningModule):
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
             >>> model = self = methods.SequenceAwareModel(
-            >>>     arch_name="smt_it_joint_p2", input_sensorchan=5,
+            >>>     input_sensorchan=5,
             >>>     change_head_hidden=0, saliency_head_hidden=0,
             >>>     class_head_hidden=0)
 
@@ -1401,7 +1388,7 @@ class SequenceAwareModel(pl.LightningModule):
 
             >>> # Use one of our fusion.architectures in a test
             >>> self = methods.SequenceAwareModel(
-            >>>     arch_name="smt_it_joint_p2", classes=classes,
+            >>>     classes=classes,
             >>>     dataset_stats=dataset_stats, input_sensorchan=datamodule.input_sensorchan,
             >>>     learning_rate=1e-8, optimizer='sgd',
             >>>     change_head_hidden=0, saliency_head_hidden=0,
