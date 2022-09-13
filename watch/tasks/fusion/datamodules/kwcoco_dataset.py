@@ -591,10 +591,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             if force_bad:
                 break
             tr_frame['channels'] = stream
+            tr_frame['padkw' ] = {'constant_values': np.nan}
+            tr_frame['nodata' ] = 'float'
             sample = sampler.load_sample(
                 tr_frame, with_annots=first_with_annot,
-                nodata='float',
-                padkw={'constant_values': np.nan},
                 dtype=np.float32
             )
 
