@@ -10,7 +10,6 @@ import kwimage
 import ndsampler
 import pathlib
 import pytorch_lightning as pl
-# import random  # NOQA
 import ubelt as ub
 from typing import Dict, List  # NOQA
 import scriptconfig as scfg
@@ -19,8 +18,6 @@ import scriptconfig as scfg
 from watch.utils.lightning_ext import util_globals
 from watch.tasks.fusion import utils
 from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDatasetConfig, KWCocoVideoDataset
-
-# __all__ = ['KWCocoVideoDataModule', 'KWCocoVideoDataset']
 
 try:
     import xdev

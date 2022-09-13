@@ -292,11 +292,6 @@ def predict(cmdline=False, **kwargs):
         if f_val != p_val:
             print(f'    {key!r}: {f_val!r} -> {p_val!r}')
 
-    # deviation = ub.varied_values([
-    #     ub.dict_isect(traintime_params, datamodule_vars),
-    #     ub.dict_isect(datamodule_vars, traintime_params),
-    # ], min_variations=1)
-
     HACK_FIX_MODELS_WITH_BAD_CHANNEL_SPEC = True
     if HACK_FIX_MODELS_WITH_BAD_CHANNEL_SPEC:
         # There was an issue where we trained models and specified
@@ -416,8 +411,6 @@ def predict(cmdline=False, **kwargs):
     info = result_dataset.dataset.get('info', [])
 
     from kwcoco.util import util_json
-    import os
-    import socket
     jsonified_args = util_json.ensure_json_serializable(args.__dict__)
     # This will be serailized in kwcoco, so make sure it can be coerced to json
     walker = ub.IndexableWalker(jsonified_args)
@@ -431,20 +424,17 @@ def predict(cmdline=False, **kwargs):
                 walker[problem['loc']] = '<IN_MEMORY_DATASET: {}>'.format(
                     bad_data._build_hashid())
 
-    start_timestamp = ub.timestamp()
-
-    info.append({
-        'type': 'process',
-        'properties': {
-            'name': 'watch.tasks.fusion.predict',
-            'args': jsonified_args,
-            'hostname': socket.gethostname(),
-            'cwd': os.getcwd(),
-            'user': ub.Path(ub.userhome()).name,
-            'timestamp': start_timestamp,
-            'fit_config': traintime_params,
-        }
-    })
+    from watch.utils import process_context
+    proc_context = process_context.ProcessContext(
+        name='watch.tasks.fusion.predict',
+        type='process',
+        args=jsonified_args,
+        track_emissions=True,
+        extra={'fit_config': traintime_params}
+    )
+    info.append(proc_context.obj)
+    proc_context.start()
+    proc_context.add_disk_info(test_coco_dataset.fpath)
 
     from watch.utils.lightning_ext import util_device
     print('args.devices = {!r}'.format(args.devices))
@@ -598,22 +588,6 @@ def predict(cmdline=False, **kwargs):
     result_fpath.parent.ensuredir()
     print('result_fpath = {!r}'.format(result_fpath))
 
-    try:
-        if args.track_emissions:
-            import codecarbon
-            codecarbon.core.util.logger.setLevel('ERROR')
-            from codecarbon import EmissionsTracker
-            emissions_tracker = EmissionsTracker()
-            codecarbon.core.util.logger.setLevel('ERROR')
-            emissions_tracker.start()
-            codecarbon.core.util.logger.setLevel('ERROR')
-        else:
-            emissions_tracker = None
-    except Exception as ex:
-        if args.track_emissions:
-            print('ex = {!r}'.format(ex))
-        emissions_tracker = None
-
     CHECK_GRID = 0
     if CHECK_GRID:
         # Check to see if the grid will cover all images
@@ -761,73 +735,8 @@ def predict(cmdline=False, **kwargs):
                 writer_queue.submit(head_stitcher.finalize_image, gid)
         writer_queue.wait_until_finished()
 
-    try:
-        device_info = {
-            'device_index': device.index,
-            'device_type': device.type,
-        }
-        try:
-            device_props = torch.cuda.get_device_properties(device)
-            capabilities = (device_props.multi_processor_count, device_props.minor)
-            device_info.update({
-                'device_name': device_props.name,
-                'total_vram': device_props.total_memory,
-                'reserved_vram': torch.cuda.memory_reserved(device),
-                'allocated_vram': torch.cuda.memory_allocated(device),
-                'device_capabilities': capabilities,
-                'device_multi_processor_count': device_props.multi_processor_count,
-            })
-        except Exception:
-            pass
-    except Exception as ex:
-        print('ex = {!r}'.format(ex))
-        device_info = str(ex)
-
-    try:
-        from watch.utils import util_hardware
-        system_info = util_hardware.get_cpu_mem_info()
-        try:
-            # Get information about disk used in this process
-            disk_info = util_hardware.disk_info_of_path(test_coco_dataset.fpath)
-            system_info['disk_info'] = disk_info
-        except Exception as ex:
-            print('ex = {!r}'.format(ex))
-    except Exception as ex:
-        print('ex = {!r}'.format(ex))
-        system_info = str(ex)
-
-    if emissions_tracker is not None:
-        co2_kg = emissions_tracker.stop()
-        emissions = {
-            'co2_kg': co2_kg,
-        }
-        try:
-            import pint
-        except Exception as ex:
-            print('ex = {!r}'.format(ex))
-        else:
-            reg = pint.UnitRegistry()
-            if co2_kg is None:
-                co2_kg = np.nan
-            co2_ton = (co2_kg * reg.kg).to(reg.metric_ton)
-            dollar_per_ton = 15 / reg.metric_ton  # cotap rate
-            emissions['co2_ton'] = co2_ton.m
-            emissions['est_dollar_to_offset'] = (co2_ton * dollar_per_ton).m
-        print('emissions = {}'.format(ub.repr2(emissions, nl=1)))
-    else:
-        emissions = None
-
-    info.append({
-        'type': 'measure',
-        'properties': {
-            'iters_per_second': prog._iters_per_second,
-            'start_timestamp': start_timestamp,
-            'end_timestamp': ub.timestamp(),
-            'device_info': device_info,
-            'system_info': system_info,
-            'emissions': emissions,
-        }
-    })
+    proc_context.add_device_info(device)
+    proc_context.stop()
 
     # validate and save results
     print(result_dataset.validate())

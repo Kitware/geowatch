@@ -764,26 +764,22 @@ def main(cmdline=True, **kwargs):
     # Record information about this process
     info = []
     from kwcoco.util import util_json
-    import socket
+    from watch.utils import process_context
+
     # Args will be serailized in kwcoco, so make sure it can be coerced to json
     jsonified_args = util_json.ensure_json_serializable(config_dict)
     walker = ub.IndexableWalker(jsonified_args)
     for problem in util_json.find_json_unserializable(jsonified_args):
         bad_data = problem['data']
         walker[problem['loc']] = str(bad_data)
-    start_timestamp = ub.timestamp()
-    info.append({
-        'type': 'process',
-        'properties': {
-            'name': 'watch.cli.run_metrics_framework',
-            'args': jsonified_args,
-            'hostname': socket.gethostname(),
-            'cwd': os.getcwd(),
-            'userhome': ub.userhome(),
-            'iarpa_smart_metrics_version': iarpa_smart_metrics.__version__,
-            'timestamp': start_timestamp,
-        }
-    })
+
+    proc_context = process_context.ProcessContext(
+        type='process',
+        name='watch.cli.run_metrics_framework',
+        args=jsonified_args,
+        extra={'iarpa_smart_metrics_version': iarpa_smart_metrics.__version__},
+    )
+    proc_context.start()
 
     parent_info = []
     for site_data in args.pred_sites:
@@ -982,6 +978,8 @@ def main(cmdline=True, **kwargs):
             merge_fpath = ub.Path(args.merge_fpath)
 
         region_dpaths = out_dirs
+
+        info.append(proc_context.stop())
 
         merge_metrics_results(region_dpaths, true_site_dpath,
                               true_region_dpath, merge_dpath, merge_fpath,
