@@ -903,6 +903,46 @@ class SequenceAwareModel(pl.LightningModule):
         return inputs, outputs
 
     def reconstruct_output(self, output, mask, shapes):
+        """
+        Example:
+            >>> from watch.tasks.fusion.methods.sequence_aware import *  # NOQA
+            >>> channels, classes, dataset_stats = SequenceAwareModel.demo_dataset_stats()
+            >>> self = SequenceAwareModel(
+            >>>     tokenizer='linconv',
+            >>>     decoder='segmenter', classes=classes, global_saliency_weight=1,
+            >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
+            >>> self.eval()
+            >>> batch = self.demo_batch(width=64, height=65)
+            >>> inputs, outputs = zip(*[
+            >>>     self.process_example(example)
+            >>>     for example in batch
+            >>> ])
+            >>> stacked_queries = {
+            >>>     task_name: nn.utils.rnn.pad_sequence([
+            >>>         example[task_name]["pos_enc"]
+            >>>         for example in outputs
+            >>>     ], batch_first=True, padding_value=0.0)
+            >>>     for task_name in list(["saliency",])
+            >>> }
+            >>> stacked_weights = {
+            >>>     task_name: nn.utils.rnn.pad_sequence([
+            >>>         example[task_name]["weights"]
+            >>>         for example in outputs
+            >>>     ], batch_first=True, padding_value=0.0)
+            >>>     for task_name in list(["saliency",])
+            >>> }
+            >>> padded_inputs = nn.utils.rnn.pad_sequence(inputs, batch_first=True, padding_value=-1000.0)
+            >>> padded_valids = (padded_inputs[..., 0] > -1000.0).bool()
+            >>> padded_inputs[~padded_valids] = 0.0
+            >>> logits = self.forward(padded_inputs, stacked_queries, input_mask=padded_valids)
+            >>> logits = einops.rearrange(logits["saliency"], "batch chan seq -> batch seq chan")
+            >>> shapes = [list(frame["target_dims"]) for frame in batch[0]["frames"]]
+            >>> recon = self.reconstruct_output(logits[0], stacked_weights["saliency"][0] > 0., shapes)
+            >>> print('batch')
+            >>> print(nh.data.collate._debug_inbatch_shapes(batch))
+            >>> print('recon')
+            >>> print(nh.data.collate._debug_inbatch_shapes(recon))
+        """
         big_canvas = torch.nan * torch.zeros(mask.shape[0], output.shape[-1], dtype=output.dtype, device=output.device)
         big_canvas[mask] = output[:mask.sum()]
 
