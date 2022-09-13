@@ -1,6 +1,3 @@
-import watch
-watch.__version__
-
 import itertools as it
 from types import MethodType
 from functools import partial
@@ -44,23 +41,24 @@ try:
     profile = xdev.profile
 except Exception:
     profile = ub.identity
-    
-        
+
+
 def sanitize_key(key):
     return key.replace(".", "-")
-        
+
+
 class FourierPositionalEncoding(nn.Module):
     def __init__(self, num_steps, max_freq=10.0):
         super().__init__()
         self.scales = nn.Parameter(torch.pi * torch.linspace(1., max_freq, num_steps), requires_grad=False)
-    
+
     def forward(self, x):
         orig_x = x
         x = torch.einsum("xhw,s->xshw", x, self.scales.type_as(x))
         x = einops.rearrange(x, "x s h w -> (x s) h w")
         return torch.concat([x.sin(), x.cos(), orig_x], dim=0)
-    
-    
+
+
 @scfg.dataconf
 class SequenceAwareModelConfig(scfg.DataConfig):
     """
@@ -154,7 +152,7 @@ class SequenceAwareModelConfig(scfg.DataConfig):
         '''
         operation used to combine multiple modes from the same timestep
         '''))
-    
+
     perceiver_depth = scfg.Value(4, help=ub.paragraph(
         '''
         How many layers used by the perceiver model.
@@ -167,10 +165,10 @@ class SequenceAwareModelConfig(scfg.DataConfig):
         '''
         How many queries to use during training step. Set arbitrarily high to ensure all are used.
         '''))
-    
+
 
 class SequenceAwareModel(pl.LightningModule):
-    
+
     _HANDLES_NANS = True
 
     @classmethod
@@ -220,7 +218,7 @@ class SequenceAwareModel(pl.LightningModule):
         for name, mod in self.named_modules():
             if hasattr(mod, 'reset_parameters'):
                 mod.reset_parameters()
-                
+
     @classmethod
     def demo_dataset_stats(cls):
         channels = kwcoco.ChannelSpec.coerce('pan,red|green|blue,nir|swir16|swir22')
@@ -394,15 +392,14 @@ class SequenceAwareModel(pl.LightningModule):
             }
             batch.append(item)
         return batch
-    
 
     def __init__(self, *, classes=10, dataset_stats=None,
                  input_sensorchan=None, input_channels=None, **kwargs):
-        
+
         # =================================================================================
         # =================================================================================
         # START IMPORT FROM MULTIMODAL-TRANSFORMER
-        
+
         super().__init__()
         config = SequenceAwareModelConfig(**kwargs)
         self.config = config
@@ -417,7 +414,6 @@ class SequenceAwareModel(pl.LightningModule):
         # Backwards compatibility. Previous iterations had the
         # config saved directly as datamodule arguments
         self.__dict__.update(cfgdict)
-        
 
         #####
         ## TODO: ALL OF THESE CONFIGURATIONS VARS SHOULD BE
@@ -443,10 +439,10 @@ class SequenceAwareModel(pl.LightningModule):
         global_class_weight = config['global_class_weight']
         global_change_weight = config['global_change_weight']
         global_saliency_weight = config['global_saliency_weight']
-        
+
         perceiver_depth = config['perceiver_depth']
         perceiver_latents = config['perceiver_latents']
-        
+
         self.training_limit_queries = config['training_limit_queries']
 
         # Moving towards sensror-channels everywhere so we always know what
@@ -626,7 +622,6 @@ class SequenceAwareModel(pl.LightningModule):
         else:
             sensor_modes = set(self.unique_sensor_modes)
 
-            
         for s, c in sensor_modes:
             mode_code = kwcoco.FusedChannelSpec.coerce(c)
             # For each mode make a network that should learn to tokenize
@@ -651,7 +646,7 @@ class SequenceAwareModel(pl.LightningModule):
                 tokenize = DWCNNTokenizer(in_chan, in_features_raw, norm=token_norm)
             else:
                 raise KeyError(tokenizer)
-                
+
             if input_stats is None:
                 input_norm = nh.layers.InputNorm()
             else:
@@ -672,44 +667,44 @@ class SequenceAwareModel(pl.LightningModule):
         # for (s, c), stats in input_stats.items():
         #     self.sensor_channel_tokenizers[s][c] = tokenize
 
-        in_features_pos = 64 # 6 * 8   # 6 positional features with 8 dims each (TODO: be robust)
+        in_features_pos = 64  # 6 * 8   # 6 positional features with 8 dims each (TODO: be robust)
         in_features = in_features_pos + in_features_raw
         self.in_features = in_features
         self.in_features_pos = in_features_pos
         self.in_features_raw = in_features_raw
-        
+
         # END IMPORT FROM MULTIMODAL-TRANSFORMER
         # =================================================================================
         # =================================================================================
-        
+
         self.positional_encoders = nn.ModuleDict({
             sanitize_key(str(key)): nn.Sequential(
                 FourierPositionalEncoding(64, 60),
                 nn.Conv2d(
-                    3 + (3*64*2),
-                    in_features_pos, 
+                    3 + (3 * 64 * 2),
+                    in_features_pos,
                     1,
                 ),
             )
             for key in list(sensor_modes) + ["change", "saliency", "class"]
         })
-        
+
         self.perceiver = perceiver.PerceiverIO(
-            depth = perceiver_depth,
-            dim = in_features,
-            queries_dim = in_features_pos,
-            num_latents = perceiver_latents,
-            latent_dim = 128,
-            cross_heads = 1,
-            latent_heads = 8,
-            cross_dim_head = 64,
-            latent_dim_head = 64,
-            weight_tie_layers = True,
-            decoder_ff = True,
-            logits_dim = in_features,
+            depth=perceiver_depth,
+            dim=in_features,
+            queries_dim=in_features_pos,
+            num_latents=perceiver_latents,
+            latent_dim=128,
+            cross_heads=1,
+            latent_heads=8,
+            cross_dim_head=64,
+            latent_dim_head=64,
+            weight_tie_layers=True,
+            decoder_ff=True,
+            logits_dim=in_features,
         )
         feat_dim = in_features_pos
-        
+
         self.change_head_hidden = change_head_hidden
         self.class_head_hidden = class_head_hidden
         self.saliency_head_hidden = saliency_head_hidden
@@ -787,7 +782,7 @@ class SequenceAwareModel(pl.LightningModule):
         saliency_metrics = torchmetrics.MetricCollection({
             'saliency_f1': FBetaScore(beta=1.0),
         })
-        
+
         self.head_metrics = nn.ModuleDict({
             f"{stage}_stage": nn.ModuleDict({
                 "class": class_metrics.clone(prefix=f"{stage}_"),
@@ -804,20 +799,20 @@ class SequenceAwareModel(pl.LightningModule):
             return self.trainer is not None
         except RuntimeError:
             return False
-    
+
     def stem_process_example(self, example):
         modes = []
         for frame in example["frames"]:
             for mode_key, mode_image in frame["modes"].items():
-                
+
                 sensor_mode_key = sanitize_key(str((frame["sensor"], mode_key)))
-                
+
                 stemmed_mode = self.sensor_channel_tokenizers[sensor_mode_key](
                     torch.nan_to_num(mode_image, 0)[None].float()
                 )[0]
-                dtype=stemmed_mode.dtype
-                device=stemmed_mode.device
-                
+                dtype = stemmed_mode.dtype
+                device = stemmed_mode.device
+
                 position = self.positional_encoders[sensor_mode_key](
                     torch.stack(
                         (frame["time_index"] * torch.ones(*stemmed_mode.shape[1:], dtype=dtype, device=device),) +
@@ -826,12 +821,12 @@ class SequenceAwareModel(pl.LightningModule):
                             torch.linspace(-1, 1, stemmed_mode.shape[2], dtype=dtype, device=device),
                         ),
                     ))
-                
+
                 # modes.append(stemmed_mode + position)
                 modes.append(torch.concat([stemmed_mode, position], dim=0))
-                
+
         return modes
-    
+
     def encode_query_position(self, example, task_name, dtype, device):
         return [
             self.positional_encoders[task_name](torch.stack(
@@ -843,13 +838,13 @@ class SequenceAwareModel(pl.LightningModule):
             ))
             for frame in example["frames"]
         ]
-    
+
     def process_example(self, example, force_dropout=False):
-                
+
         # process and stem frames and positions
         inputs = self.stem_process_example(example)
         inputs = torch.concat([einops.rearrange(x, "c h w -> (h w) c") for x in inputs], dim=0)
-        
+
         outputs = {}
         task_defs = [
             ("change", "change_weights"),
@@ -857,9 +852,9 @@ class SequenceAwareModel(pl.LightningModule):
             ("class_idxs", "class_weights"),
         ]
         for task_name, weights_name in task_defs:
-            
+
             labels = [
-                frame[task_name] if (frame[task_name] != None) 
+                frame[task_name] if (frame[task_name] is not None)
                 else torch.zeros(
                     frame["target_dims"],
                     dtype=torch.int32,
@@ -868,7 +863,7 @@ class SequenceAwareModel(pl.LightningModule):
             ]
             labels = torch.concat([einops.rearrange(x, "h w -> (h w)") for x in labels], dim=0)
             weights = [
-                frame[weights_name] if (frame[weights_name] != None) 
+                frame[weights_name] if (frame[weights_name] is not None)
                 else torch.zeros(
                     frame["target_dims"],
                     dtype=inputs.dtype,
@@ -876,74 +871,74 @@ class SequenceAwareModel(pl.LightningModule):
                 for frame in example["frames"]
             ]
             weights = torch.concat([einops.rearrange(x, "h w -> (h w)") for x in weights], dim=0)
-            
+
             if task_name == "class_idxs": task_name = "class"
             pos_enc = self.encode_query_position(example, task_name, inputs.dtype, inputs.device)
             pos_enc = torch.concat([einops.rearrange(x, "c h w -> (h w) c") for x in pos_enc], dim=0)
-            
+
             # determine valid label locations
             valid_mask = weights > 0.0
-            
+
             # TODO: if training, augment mask to dropout querys and labels following some strategy
-            
+
             # produce model outputs for task
             pos_enc = pos_enc[valid_mask]
             labels = labels[valid_mask]
             weights = weights[valid_mask]
-            
+
             if self.training:
                 keep_inds = torch.randperm(weights.shape[0])[:self.training_limit_queries]
                 pos_enc = pos_enc[keep_inds]
                 labels = labels[keep_inds]
                 weights = weights[keep_inds]
-            
+
             outputs[task_name] = {
-                "labels": labels, 
-                "weights": weights, 
-                "pos_enc": pos_enc, 
-                "mask": valid_mask, 
+                "labels": labels,
+                "weights": weights,
+                "pos_enc": pos_enc,
+                "mask": valid_mask,
                 "shape": [frame["target_dims"] for frame in example["frames"]],
             }
-        
+
         return inputs, outputs
-    
+
     def reconstruct_output(self, output, mask, shapes):
         big_canvas = torch.nan * torch.zeros(mask.shape[0], output.shape[-1], dtype=output.dtype, device=output.device)
         big_canvas[mask] = output[:mask.sum()]
 
         canvases = []
-        for canvas, shape in zip(torch.split(big_canvas, [w*h for w,h in shapes]), shapes):
-            canvas = canvas.reshape(shape+[output.shape[-1],])
+        for canvas, shape in zip(torch.split(big_canvas, [w * h for w, h in shapes]), shapes):
+            canvas = canvas.reshape(shape + [output.shape[-1], ])
             canvases.append(canvas)
         return canvases
-    
+
     def forward(self, inputs, queries, input_mask=None):
         context = self.perceiver(inputs, mask=input_mask)
         # print("context", context)
-        
+
         outputs = {}
         for task_name in queries.keys():
             task_tokens = self.perceiver.decoder_cross_attn(
-                queries[task_name], 
-                context = context)
+                queries[task_name],
+                context=context)
             task_logits = self.heads[task_name](task_tokens)
             task_logits = einops.rearrange(task_logits, "batch seq chan -> batch chan seq")
             outputs[task_name] = task_logits
-            
+
         return outputs
-    
+
     def shared_step(self, batch, batch_idx=None, stage="train"):
         losses = []
-        
+
         inputs, outputs = zip(*[
             self.process_example(example)
             for example in batch
         ])
-        
+
         padded_inputs = nn.utils.rnn.pad_sequence(inputs, batch_first=True, padding_value=-1000.0)
-        padded_valids = (padded_inputs[...,0] > -1000.0).bool()
+        padded_valids = (padded_inputs[..., 0] > -1000.0).bool()
         padded_inputs[~padded_valids] = 0.0
-        
+
         stacked_queries = {
             task_name: nn.utils.rnn.pad_sequence([
                 example[task_name]["pos_enc"]
@@ -965,28 +960,28 @@ class SequenceAwareModel(pl.LightningModule):
             ], batch_first=True, padding_value=0).long()
             for task_name in list(["change", "saliency", "class"])
         }
-        
+
         task_logits = self.forward(padded_inputs, queries=stacked_queries, input_mask=padded_valids)
-        
+
         for task_name in task_logits.keys():
-            
+
             logits = einops.rearrange(task_logits[task_name], "batch chan seq -> (batch seq) chan")
             labels = einops.rearrange(stacked_labels[task_name], "batch seq -> (batch seq)")
             weights = einops.rearrange(stacked_weights[task_name], "batch seq -> (batch seq)")
 
             # task_mask = (labels != -1)
             task_mask = (weights > 0.0)
-                       
+
             criterion = self.criterions[task_name]
             if criterion.target_encoding == 'index':
                 loss_labels = labels.long()
             elif criterion.target_encoding == 'onehot':
                 # Note: 1HE is much easier to work with
                 loss_labels = kwarray.one_hot_embedding(labels.long(), criterion.in_channels, dim=-1)
-                weights = weights[...,None]
+                weights = weights[..., None]
             else:
                 raise KeyError(criterion.target_encoding)
-                
+
             task_loss = weights[task_mask] * criterion(
                 logits[task_mask],
                 loss_labels[task_mask],
@@ -998,9 +993,9 @@ class SequenceAwareModel(pl.LightningModule):
                 labels[task_mask],
             )
             self.log_dict(task_metric, prog_bar=True, sync_dist=True)
-        
+
         loss = sum(losses) / len(losses)
-        
+
         self.log("loss", loss, prog_bar=True, sync_dist=True)
         return loss
 
@@ -1343,7 +1338,7 @@ class SequenceAwareModel(pl.LightningModule):
             >>> # Test without datamodule
             >>> import ubelt as ub
             >>> from os.path import join
-            >>> from watch.tasks.fusion.methods.sequence_aware import *  # NOQA
+            >>> #from watch.tasks.fusion.methods.sequence_aware import *  # NOQA
             >>> dpath = ub.Path.appdir('watch/tests/package').ensuredir()
             >>> package_path = join(dpath, 'my_package.pt')
 
@@ -1359,7 +1354,9 @@ class SequenceAwareModel(pl.LightningModule):
             >>> model.save_package(package_path)
 
             >>> # Test that the package can be reloaded
-            >>> recon = methods.SequenceAwareModel.load_package(package_path)
+            >>> #recon = methods.SequenceAwareModel.load_package(package_path)
+            >>> from watch.tasks.fusion.utils import load_model_from_package
+            >>> recon = load_model_from_package(package_path)
             >>> # Check consistency and data is actually different
             >>> recon_state = recon.state_dict()
             >>> model_state = model.state_dict()

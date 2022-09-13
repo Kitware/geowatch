@@ -7,6 +7,7 @@ import pathlib
 The two Wrapped classes below are examples of why we should eventually factor out the current configuraiton system. LightningCLI interogates the __init__ methods belonging to LightningModule and LightningDataModule to decide which parameters can be configured.
 """
 
+
 class WrappedKWCocoDataModule(KWCocoVideoDataModule):
     def __init__(
         self,
@@ -16,13 +17,13 @@ class WrappedKWCocoDataModule(KWCocoVideoDataModule):
         channels=None,
         batch_size=4,
         space_scale="native",
-        num_workers="avail/2", 
+        num_workers="avail/2",
         time_steps=2,
         chip_size=128,
         neg_to_pos_ratio=0,
         chip_overlap=0,
     ):
-        
+
         super().__init__(
             train_dataset=pathlib.Path(train_dataset) if (train_dataset != None) else None,
             vali_dataset=pathlib.Path(vali_dataset) if (vali_dataset != None) else None,
@@ -30,7 +31,7 @@ class WrappedKWCocoDataModule(KWCocoVideoDataModule):
             batch_size=batch_size,
             channels=channels,
             space_scale=space_scale,
-            num_workers=num_workers, 
+            num_workers=num_workers,
             time_steps=time_steps,
             chip_size=chip_size,
             neg_to_pos_ratio=neg_to_pos_ratio,
@@ -65,7 +66,7 @@ class WrappedSequenceAwareModel(SequenceAwareModel):
         perceiver_latents=512,
         training_limit_queries=1024,
     ):
-        
+
         super().__init__(
             dataset_stats=dataset_stats,
             optimizer=optimizer,
@@ -105,20 +106,20 @@ if __name__ == "__main__":
     def custom_yaml_load(stream):
         return yaml.load(stream, Loader=yaml.FullLoader)
     set_loader('yaml_unsafe_for_tuples', custom_yaml_load)
-    
+
     def custom_yaml_dump(data):
         return yaml.dump(data, Dumper=yaml.Dumper)
     set_dumper('yaml_unsafe_for_tuples', custom_yaml_dump)
-     
+
     class MyLightningCLI(LightningCLI):
         def add_arguments_to_parser(self, parser):
             parser.link_arguments(
-                "data.dataset_stats", 
-                "model.dataset_stats", 
+                "data.dataset_stats",
+                "model.dataset_stats",
                 apply_on="instantiate")
 
     cli = MyLightningCLI(
-        WrappedSequenceAwareModel, 
+        WrappedSequenceAwareModel,
         WrappedKWCocoDataModule,
         parser_kwargs=dict(parser_mode='yaml_unsafe_for_tuples'),
     )
