@@ -913,6 +913,64 @@ class SequenceAwareModel(pl.LightningModule):
         return canvases
 
     def forward(self, inputs, queries, input_mask=None):
+        """
+        Example:
+            >>> from watch.tasks.fusion.methods.sequence_aware import *  # NOQA
+            >>> channels, classes, dataset_stats = SequenceAwareModel.demo_dataset_stats()
+            >>> self = SequenceAwareModel(
+            >>>     tokenizer='linconv',
+            >>>     decoder='segmenter', classes=classes, global_saliency_weight=1,
+            >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
+            >>> batch = self.demo_batch(width=64, height=65)
+            >>> inputs, outputs = zip(*[
+            >>>     self.process_example(example)
+            >>>     for example in batch
+            >>> ])
+            >>> stacked_queries = {
+            >>>     task_name: nn.utils.rnn.pad_sequence([
+            >>>         example[task_name]["pos_enc"]
+            >>>         for example in outputs
+            >>>     ], batch_first=True, padding_value=0.0)
+            >>>     for task_name in list(["change", "saliency", "class"])
+            >>> }
+            >>> padded_inputs = nn.utils.rnn.pad_sequence(inputs, batch_first=True, padding_value=-1000.0)
+            >>> padded_valids = (padded_inputs[..., 0] > -1000.0).bool()
+            >>> padded_inputs[~padded_valids] = 0.0
+            >>> logits = self.forward(padded_inputs, stacked_queries, input_mask=padded_valids)
+            >>> print('batch')
+            >>> print(nh.data.collate._debug_inbatch_shapes(batch))
+            >>> print('logits')
+            >>> print(nh.data.collate._debug_inbatch_shapes(logits))
+
+        Example:
+            >>> # Decoupled resolutions
+            >>> from watch.tasks.fusion.methods.sequence_aware import *  # NOQA
+            >>> channels, classes, dataset_stats = SequenceAwareModel.demo_dataset_stats()
+            >>> self = SequenceAwareModel(
+            >>>     tokenizer='linconv',
+            >>>     decoder='segmenter', classes=classes, global_saliency_weight=1,
+            >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
+            >>> batch = self.demo_batch(width=(11, 21), height=(16, 64), num_timesteps=3)
+            >>> inputs, outputs = zip(*[
+            >>>     self.process_example(example)
+            >>>     for example in batch
+            >>> ])
+            >>> stacked_queries = {
+            >>>     task_name: nn.utils.rnn.pad_sequence([
+            >>>         example[task_name]["pos_enc"]
+            >>>         for example in outputs
+            >>>     ], batch_first=True, padding_value=0.0)
+            >>>     for task_name in list(["change", "saliency", "class"])
+            >>> }
+            >>> padded_inputs = nn.utils.rnn.pad_sequence(inputs, batch_first=True, padding_value=-1000.0)
+            >>> padded_valids = (padded_inputs[..., 0] > -1000.0).bool()
+            >>> padded_inputs[~padded_valids] = 0.0
+            >>> logits = self.forward(padded_inputs, stacked_queries, input_mask=padded_valids)
+            >>> print('batch')
+            >>> print(nh.data.collate._debug_inbatch_shapes(batch))
+            >>> print('logits')
+            >>> print(nh.data.collate._debug_inbatch_shapes(logits))
+        """
         context = self.perceiver(inputs, mask=input_mask)
         # print("context", context)
 
