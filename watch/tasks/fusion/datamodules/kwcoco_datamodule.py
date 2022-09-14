@@ -421,6 +421,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         method is roughly the same as it used to be given that scriptconfig
         objects can be transformed into argparse objects.
 
+        CommandLine:
+            xdoctest -m /home/joncrall/code/watch/watch/tasks/fusion/datamodules/kwcoco_datamodule.py add_argparse_args
+
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_datamodule import *  # NOQA
             >>> cls = KWCocoVideoDataModule

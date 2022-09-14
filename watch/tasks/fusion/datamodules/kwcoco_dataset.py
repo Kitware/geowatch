@@ -88,6 +88,13 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             This can also be set to "native" to use heterogeneous sampling.
             '''), alias=['data_space_scale']),
 
+        'output_space_scale': scfg.Value(None, help=ub.paragraph(
+            '''
+            Change the "scale" or resolution of the desired target resolution.
+
+            Follows other GSD / scale semantics.
+            ''')),
+
         # 'time_overlap': scfg.Value(0.0, help='fraction of time steps to overlap'),
         'chip_overlap': scfg.Value(
             0.0, help=ub.paragraph(
@@ -656,47 +663,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         gid_to_isbad[gid] = force_bad
         gid_to_sample[gid] = sample_streams
 
-    def summarize_item(self, item):
-        """
-        Return debugging stats about the item
-
-        Args:
-            item (dict): an item returned by __getitem__
-
-        Returns:
-            dict : a summary of the item
-        """
-        item_summary = {}
-        item_summary['frame_summaries'] = []
-        timestamps = []
-        for frame in item['frames']:
-            frame_summary = {}
-            for mode_key, im_mode in frame['modes'].items():
-                frame_summary[frame['sensor'] + ':' + mode_key] = im_mode.shape
-            label_keys = [
-                'class_idxs', 'saliency', 'change'
-                'class_weights', 'saliency_weights', 'change_weights'
-            ]
-            for key in label_keys:
-                if frame.get(key, None) is not None:
-                    frame_summary[key] = frame[key].shape
-            item_summary['frame_summaries'].append(frame_summary)
-            if frame['date_captured']:
-                timestamps.append(ub.timeparse(frame['date_captured']))
-            frame_summary['num_annots'] = len(frame['ann_aids'])
-
-        item_summary['video_name'] = item['video_name']
-        if timestamps:
-            deltas = np.diff(timestamps)
-            deltas = [d.total_seconds() for d in deltas]
-            item_summary['min_time'] = ub.timestamp(min(timestamps))
-            item_summary['max_time'] = ub.timestamp(max(timestamps))
-            item_summary['min_delta'] = min(deltas)
-            item_summary['max_delta'] = max(deltas)
-            item_summary['mean_delta'] = np.mean(deltas)
-        item_summary['sample_gsd'] = item['sample_gsd']
-        return item_summary
-
     @profile
     def __getitem__(self, index):
         """
@@ -1033,11 +999,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             if not self.inference_only:
 
                 # The frame detections will be in a scaled videos space the
-                # constant scale case.  TODO: will need special handling for
-                # "native" resolutions on a per-mode / frame basis, we will
-                # need the concept of an annotation window (where ndsampler
-                # lets us assume the corners of each window are in
-                # correspondence)
+                # constant scale case.
+                # TODO: will need special handling for "native" resolutions on
+                # a per-mode / frame basis, we will need the concept of an
+                # annotation window (where ndsampler lets us assume the corners
+                # of each window are in correspondence)
                 _target_dsize = np.array(frame_target_dsize)
                 _dets_dsize = np.array(gid_to_det_window_dsize[gid])
                 dets_scale = (_target_dsize / _dets_dsize)
@@ -1688,6 +1654,47 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             rescale=rescale)
         canvas = builder.build()
         return canvas
+
+    def summarize_item(self, item):
+        """
+        Return debugging stats about the item
+
+        Args:
+            item (dict): an item returned by __getitem__
+
+        Returns:
+            dict : a summary of the item
+        """
+        item_summary = {}
+        item_summary['frame_summaries'] = []
+        timestamps = []
+        for frame in item['frames']:
+            frame_summary = {}
+            for mode_key, im_mode in frame['modes'].items():
+                frame_summary[frame['sensor'] + ':' + mode_key] = im_mode.shape
+            label_keys = [
+                'class_idxs', 'saliency', 'change'
+                'class_weights', 'saliency_weights', 'change_weights'
+            ]
+            for key in label_keys:
+                if frame.get(key, None) is not None:
+                    frame_summary[key] = frame[key].shape
+            item_summary['frame_summaries'].append(frame_summary)
+            if frame['date_captured']:
+                timestamps.append(ub.timeparse(frame['date_captured']))
+            frame_summary['num_annots'] = len(frame['ann_aids'])
+
+        item_summary['video_name'] = item['video_name']
+        if timestamps:
+            deltas = np.diff(timestamps)
+            deltas = [d.total_seconds() for d in deltas]
+            item_summary['min_time'] = ub.timestamp(min(timestamps))
+            item_summary['max_time'] = ub.timestamp(max(timestamps))
+            item_summary['min_delta'] = min(deltas)
+            item_summary['max_delta'] = max(deltas)
+            item_summary['mean_delta'] = np.mean(deltas)
+        item_summary['sample_gsd'] = item['sample_gsd']
+        return item_summary
 
     def make_loader(self, subset=None, batch_size=1, num_workers=0, shuffle=False,
                     pin_memory=False):
