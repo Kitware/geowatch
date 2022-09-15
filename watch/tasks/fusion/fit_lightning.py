@@ -117,6 +117,15 @@ def main():
         # TODO: import initialization code from fit.py
 
         def add_arguments_to_parser(self, parser):
+            
+            parser.add_argument(
+                '--profile', 
+                action='store_true', 
+                help=ub.paragraph(
+                    '''
+                    Fit does nothing with this flag. This just allows for `@xdev.profile`
+                    profiling which checks sys.argv separately.
+                    '''))
 
             # pass dataset stats to model after initialization datamodule
             parser.link_arguments(
@@ -170,9 +179,10 @@ if __name__ == "__main__":
             --data.train_dataset=special:vidshapes8-frames9-speed0.5-multispectral \
             --trainer.accelerator=gpu --trainer.devices=0, \
             --trainer.precision=16  \
+            --trainer.fast_dev_run=5 \
+            --profile \
             --model=MultimodalTransformer \
             --model.tokenizer=linconv  \
-            --trainer.fast_dev_run=5 \
             --trainer.default_root_dir ./demo_train
 
         # Note: setting fast_dev_run seems to disable directory output.
@@ -183,6 +193,7 @@ if __name__ == "__main__":
             --trainer.devices=0, \
             --trainer.precision=16 \
             --trainer.fast_dev_run=5 \
+            --profile \
             --model=SequenceAwareModel \
             --model.tokenizer=linconv
     """
