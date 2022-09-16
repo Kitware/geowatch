@@ -332,7 +332,6 @@ class MultimodalTransformer(pl.LightningModule):
             >>> assert "dataset_stats" in model.hparams
             >>> assert "input_sensorchan" in model.hparams
         """
-
         assert tokenizer in ['dwcnn', 'rearrange', 'conv7', 'linconv']
         assert token_norm in ['none', 'auto', 'group', 'batch']
         assert arch_name in available_encoders

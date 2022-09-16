@@ -299,7 +299,6 @@ class SequenceAwareModel(pl.LightningModule):
             perceiver_depth: How many layers used by the perceiver model.
             perceiver_latents: How many latents used by the perceiver model.
             training_limit_queries: How many queries to use during training step. Set arbitrarily high to ensure all are used.
-
         Example:
             >>> # Note: it is important that the non-kwargs are saved as hyperparams
             >>> from watch.tasks.fusion.methods.sequence_aware import SequenceAwareModel
@@ -308,12 +307,10 @@ class SequenceAwareModel(pl.LightningModule):
             >>> assert "dataset_stats" in model.hparams
             >>> assert "input_sensorchan" in model.hparams
         """
-
         assert tokenizer in ['dwcnn', 'rearrange', 'conv7', 'linconv']
         assert token_norm in ['none', 'auto', 'group', 'batch']
         assert decoder in ['mlp', 'segmenter']
         assert attention_impl in ["exact", "performer", "reformer"]
-
         # =================================================================================
         # =================================================================================
         # START IMPORT FROM MULTIMODAL-TRANSFORMER
@@ -523,7 +520,15 @@ class SequenceAwareModel(pl.LightningModule):
             except (KeyError, TypeError) as e:
                 print(e)
                 sensor_chan_input_norm = nn.Identity()
+<<<<<<< HEAD
+<<<<<<< HEAD
 
+=======
+
+>>>>>>> 1a063f16 (factor out config for sequence aware model)
+=======
+
+>>>>>>> ccf690c9 (Linting and basic cleanup)
             self.sensor_channel_tokenizers[key] = nn.Sequential(
                 sensor_chan_input_norm,
                 tokenize,
@@ -676,8 +681,13 @@ class SequenceAwareModel(pl.LightningModule):
                 stemmed_mode = self.sensor_channel_tokenizers[sensor_mode_key](
                     mode_image.nan_to_num(0.0)[None].float()
                 )[0]
+<<<<<<< HEAD
+                dtype=stemmed_mode.dtype
+                device=stemmed_mode.device
+=======
                 dtype = stemmed_mode.dtype
                 device = stemmed_mode.device
+>>>>>>> ccf690c9 (Linting and basic cleanup)
 
                 position = self.positional_encoders[sensor_mode_key](
                     torch.stack(
@@ -720,7 +730,7 @@ class SequenceAwareModel(pl.LightningModule):
         for task_name, weights_name in task_defs:
 
             labels = [
-                frame[task_name] if (frame[task_name] is not None)
+                frame[task_name] if (frame[task_name] != None)
                 else torch.zeros(
                     frame["output_dims"],
                     dtype=torch.int32,
@@ -729,7 +739,7 @@ class SequenceAwareModel(pl.LightningModule):
             ]
             labels = torch.concat([einops.rearrange(x, "h w -> (h w)") for x in labels], dim=0)
             weights = [
-                frame[weights_name] if (frame[weights_name] is not None)
+                frame[weights_name] if (frame[weights_name] != None)
                 else torch.zeros(
                     frame["output_dims"],
                     dtype=inputs.dtype,

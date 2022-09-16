@@ -23,6 +23,16 @@ class WrappedKWCocoDataModule(KWCocoVideoDataModule):
         chip_size=128,
         neg_to_pos_ratio=0,
         chip_overlap=0,
+        window_space_scale="3GSD",
+        chip_dims=128,
+        time_sampling="soft2+distribute",
+        time_span="6m",
+        normalize_inputs=1024,
+        use_centered_positives=False,
+        temporal_dropout=0.5,
+        set_cover_algo="approx",
+        resample_invalid_frames=0,
+        use_cloudmask=0,
     ):
 
         super().__init__(
@@ -37,6 +47,16 @@ class WrappedKWCocoDataModule(KWCocoVideoDataModule):
             chip_size=chip_size,
             neg_to_pos_ratio=neg_to_pos_ratio,
             chip_overlap=chip_overlap,
+            window_space_scale=window_space_scale,
+            chip_dims=chip_dims,
+            time_sampling=time_sampling,
+            time_span=time_span,
+            normalize_inputs=normalize_inputs,
+            use_centered_positives=use_centered_positives,
+            temporal_dropout=temporal_dropout,
+            set_cover_algo=set_cover_algo,
+            resample_invalid_frames=resample_invalid_frames,
+            use_cloudmask=use_cloudmask,
         )
 
         self.setup("fit")
@@ -97,6 +117,7 @@ def main():
     from pytorch_lightning.cli import LightningCLI
     import pytorch_lightning as pl
     from watch.utils import lightning_ext as pl_ext
+    import ubelt as ub
 
     import yaml
     from jsonargparse import set_loader, set_dumper
@@ -127,10 +148,19 @@ def main():
                     profiling which checks sys.argv separately.
                     '''))
 
+            parser.add_argument(
+                '--profile',
+                action='store_true',
+                help=ub.paragraph(
+                    '''
+                    Fit does nothing with this flag. This just allows for `@xdev.profile`
+                    profiling which checks sys.argv separately.
+                    '''))
+
             # pass dataset stats to model after initialization datamodule
             parser.link_arguments(
                 "data.dataset_stats",
-                "model.dataset_stats",
+                "model.init_args.dataset_stats",
                 apply_on="instantiate")
 
     cli = MyLightningCLI(
@@ -150,7 +180,7 @@ def main():
                 # pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
                 pl_ext.callbacks.BatchPlotter(
                     num_draw=2,  # args.num_draw,
-                    draw_interval=1,  # args.draw_interval
+                    draw_interval="5min",  # args.draw_interval
                 ),
                 pl_ext.callbacks.TensorboardPlotter(),
                 pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
