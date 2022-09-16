@@ -684,8 +684,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             is_cloud_iffy = self._interpret_quality_mask(
                 sampler, coco_img, tr_frame)
             if is_cloud_iffy is not None:
+                cloud_threshold = 0.8  # TODO: parametarize
                 cloud_frac = is_cloud_iffy.mean()
-                if cloud_frac > 0.5:
+                if cloud_frac > cloud_threshold:
                     force_bad = 'too cloudy'
 
         if sensor_channels.numel() == 0:
