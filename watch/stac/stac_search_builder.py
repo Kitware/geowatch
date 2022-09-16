@@ -283,10 +283,12 @@ CONVINIENCE_SENSOR_GROUPS = {
     ],
     'L2-L8': [
         'landsat-c2ard-sr',
+        'landsat-c2ard-bt',
     ],
     'L2-S2-L8': [
         'sentinel-s2-l2a-cogs',
         'landsat-c2ard-sr',
+        'landsat-c2ard-bt',
     ],
 
     'TA1-S2-L8-ACC': [

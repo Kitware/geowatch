@@ -29,7 +29,7 @@ def demo_smart_raw_kwcoco():
         >>> raw_coco_dset = demo_smart_raw_kwcoco()
         >>> print('raw_coco_dset = {!r}'.format(raw_coco_dset))
     """
-    cache_dpath = ub.ensure_app_cache_dir('watch/demo/kwcoco')
+    cache_dpath = ub.Path.appdir('watch/demo/kwcoco').ensuredir()
     raw_coco_fpath = join(cache_dpath, 'demo_smart_raw.kwcoco.json')
     stamp = ub.CacheStamp('raw_stamp', dpath=cache_dpath, depends=['v4'],
                           product=raw_coco_fpath)
@@ -505,8 +505,15 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
                 demo_valid_region = kwimage.Polygon.from_shapely(outer.difference(inner))
                 coco_img.img['valid_region'] = demo_valid_region.to_coco('new')
 
-        # kwcoco_extensions.populate_watch_fields(
-        #     coco_dset, enable_valid_region=True)
+        kwcoco_extensions.populate_watch_fields(
+            coco_dset, target_gsd=0.3, enable_valid_region=True,
+            overwrite=True)
+
+    # Dump the file to disk to ensure it can be read
+    hacked_msi_dpath = ub.Path(coco_dset.bundle_dpath).augment('_hacked_watch_msi').ensuredir()
+    coco_dset.reroot(absolute=True)
+    coco_dset.fpath = hacked_msi_dpath / 'data.kwcoco.json'
+    coco_dset.dump(coco_dset.fpath)
 
     return coco_dset
 

@@ -77,7 +77,7 @@ class PrepareTA2Config(scfg.Config):
     default = {
         'dataset_suffix': scfg.Value(None, help=''),
 
-        'stac_query_mode': scfg.Value(None, help='if set to auto we try to make the .input files (ignored if s3_fpath given)'),
+        'stac_query_mode': scfg.Value(None, help='if set to auto we try to make the .input files. Mutex with s3_fpath'),
         'cloud_cover': scfg.Value(10, help='maximum cloud cover percentage (ignored if s3_fpath given)'),
         'sensors': scfg.Value("L2", help='(ignored if s3_fpath given)'),
         'max_products_per_region': scfg.Value(None, help='does uniform affinity sampling over time to filter down to this many results per region'),
@@ -86,7 +86,7 @@ class PrepareTA2Config(scfg.Config):
         'separate_region_queues': scfg.Value(True, help='if True, create jobs for each region separately'),
         'separate_align_jobs': scfg.Value(True, help='if True, perform alignment for each region in its own job'),
 
-        's3_fpath': scfg.Value(None, nargs='+', help='A list of .input files which were the results of an existing stac query. Mutex with stac_query_* args'),
+        's3_fpath': scfg.Value(None, nargs='+', help='A list of .input files which were the results of an existing stac query. Mutex with stac_query_* args. Mutex with sensors.'),
         'dvc_dpath': scfg.Value('auto', help=''),
         'run': scfg.Value('0', help='if True execute the pipeline'),
         'collated': scfg.Value([True], nargs='+', help='set to false if the input data is not collated'),

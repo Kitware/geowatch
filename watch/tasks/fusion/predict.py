@@ -113,8 +113,9 @@ def make_predict_config(cmdline=False, **kwargs):
         'channels',
         'time_sampling',
         'time_span',
-        'space_scale',
+        'input_space_scale',
         'window_space_scale',
+        'output_space_scale',
     ]
     parser = datamodule_class.add_argparse_args(parser)
     datamodule_defaults = {k: parser.get_default(k) for k in overloadable_datamodule_keys}

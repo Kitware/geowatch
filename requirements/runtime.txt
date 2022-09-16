@@ -113,7 +113,7 @@ distinctipy>=1.2.1
 kwimage>=0.9.7
 kwcoco>=0.4.2
 albumentations>=1.0.0
-ndsampler>=0.7.0
+ndsampler>=0.7.1
 tifffile>=2021.4.8
 medpy>=0.4.0
 

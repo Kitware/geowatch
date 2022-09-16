@@ -603,10 +603,10 @@ def _sample_single_video_spacetime_targets(
     # Create a box to represent the "window-space" extent, and determine how we
     # are going to slide a window over it.
     vidspace_gsd = video_info.get('target_gsd', None)
-    import xdev
-    with xdev.embed_on_exception_context:
-        resolved_scale = data_utils.resolve_scale_request(
-            request=window_space_scale, data_gsd=vidspace_gsd)
+
+    resolved_scale = data_utils.resolve_scale_request(
+        request=window_space_scale, data_gsd=vidspace_gsd)
+    print('resolved_scale = {}'.format(ub.repr2(resolved_scale, nl=1)))
     window_scale = resolved_scale['scale']
 
     all_video_gids = list(dset.index.vidid_to_gids[video_id])
