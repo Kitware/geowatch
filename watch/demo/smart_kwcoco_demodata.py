@@ -422,8 +422,10 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
         >>> geodata=True
         >>> heatmap=True
         >>> kwargs = {}
-        >>> coco_dset = demo_kwcoco_multisensor(dates=True, geodata=True, heatmap=True)
+        >>> coco_dset = demo_kwcoco_multisensor(dates=dates, geodata=geodata, heatmap=heatmap)
     """
+    dpath = ub.Path.appdir('watch', 'demo_kwcoco_bundles').ensuredir()
+
     demo_kwargs = {
         'num_frames': num_frames,
         'num_videos': num_videos,
@@ -435,7 +437,29 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
     rng = kwarray.ensure_rng(demo_kwargs['rng'])
     demo_kwargs['rng' ] = rng
     demo_kwargs.update(kwargs)
-    coco_dset = kwcoco.CocoDataset.demo('vidshapes', **demo_kwargs)
+
+    stamp_dpath = (dpath / '_stamps').ensuredir()
+
+    depends = {
+        'demo_kwargs': demo_kwargs,
+        'dates': dates,
+        'geodata': geodata,
+        'heatmap': heatmap,
+    }
+
+    bundle_name = 'watch_vidshapes_' + ub.hash_data(depends)[0:8]
+    bundle_dpath = dpath / bundle_name
+    coco_fpath = bundle_dpath / 'data.kwcoco.json'
+    stamp = ub.CacheStamp('demo_kwcoco_multisensor', depends=depends,
+                          dpath=stamp_dpath, product=[coco_fpath],
+                          hasher='sha512')
+
+    if not stamp.expired():
+        coco_dset = kwcoco.CocoDataset(coco_fpath)
+        return coco_dset
+
+    coco_dset = kwcoco.CocoDataset.demo(
+        'vidshapes', fpath=coco_fpath, **demo_kwargs)
     # Hack in sensor_coarse
     images = coco_dset.images()
     groups = ub.sorted_keys(ub.group_items(images.coco_images, lambda x: x.channels.spec))
@@ -509,11 +533,9 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
             coco_dset, target_gsd=0.3, enable_valid_region=True,
             overwrite=True)
 
-    # Dump the file to disk to ensure it can be read
-    hacked_msi_dpath = ub.Path(coco_dset.bundle_dpath).augment('_hacked_watch_msi').ensuredir()
-    coco_dset.reroot(absolute=True)
-    coco_dset.fpath = hacked_msi_dpath / 'data.kwcoco.json'
+    # Rewrite the file so it contains our changes.
     coco_dset.dump(coco_dset.fpath)
+    stamp.renew()
 
     return coco_dset
 
