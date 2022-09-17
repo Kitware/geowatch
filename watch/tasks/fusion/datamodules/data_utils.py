@@ -224,7 +224,7 @@ def _boxes_snap_to_edges(given_box, snap_target):
 class NestedPool(list):
     """
     Example:
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.data_utils import *  # NOQA
         >>> nested1 = NestedPool([[[1], [2, 3], [4, 5, 6], [7, 8, 9, 0]], [[11, 12, 13]]])
         >>> print({nested1.sample() for i in range(100)})
         >>> nested2 = NestedPool([[101], [102, 103], [104, 105, 106], [107, 8, 9, 0]])

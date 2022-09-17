@@ -156,6 +156,10 @@ For quick reference, a list of current documentation files is:
 
   + `Testing Practices <docs/testing_practices.md>`_
 
+  + `Supporting Projects <docs/supporting_projects.rst>`_
+
+  + `Coding Oddities <docs/coding_oddities.rst>`_
+
 * Installing: 
 
   + `Installing WATCH <docs/installing_watch.rst>`_

@@ -19,7 +19,7 @@ class BatchVisualizationBuilder:
 
     Example:
         >>> from watch.tasks.fusion.datamodules.batch_visualization import *  # NOQA
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import KWCocoVideoDataset
+        >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
         >>> import ndsampler
         >>> import watch
         >>> coco_dset = watch.coerce_kwcoco('vidshapes2-watch', num_frames=5)
@@ -53,7 +53,7 @@ class BatchVisualizationBuilder:
 
     Example:
         >>> from watch.tasks.fusion.datamodules.batch_visualization import *  # NOQA
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import KWCocoVideoDataset
+        >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
         >>> import ndsampler
         >>> import watch
         >>> coco_dset = watch.coerce_kwcoco('vidshapes2-watch', num_frames=5)
@@ -82,6 +82,7 @@ class BatchVisualizationBuilder:
         >>> rescaled_target = native_item['target'].copy()
         >>> rescaled_target.pop('fliprot_params', None)
         >>> rescaled_target['input_space_scale'] = 1
+        >>> rescaled_target['output_space_scale'] = 1
         >>> rescaled_target['allow_augment'] = 0
         >>> rescale = 0
         >>> draw_weights = 1
@@ -166,7 +167,7 @@ class BatchVisualizationBuilder:
         fliprot_params = item['target'].get('fliprot_params', None)
         for frame in item['frames'][1:]:
             change_prob = kwimage.Heatmap.random(
-                dims=frame['target_dims'], classes=1, rng=rng).data['class_probs'][0]
+                dims=frame['output_dims'], classes=1, rng=rng).data['class_probs'][0]
             if fliprot_params:
                 change_prob = data_utils.fliprot(change_prob, **fliprot_params)
             change_prob_list += [change_prob]
@@ -177,7 +178,7 @@ class BatchVisualizationBuilder:
         class_prob_list = []
         for frame in item['frames']:
             class_prob = kwimage.Heatmap.random(
-                dims=frame['target_dims'], classes=list(classes), rng=rng).data['class_probs']
+                dims=frame['output_dims'], classes=list(classes), rng=rng).data['class_probs']
             class_prob = einops.rearrange(class_prob, 'c h w -> h w c')
             if fliprot_params:
                 class_prob = data_utils.fliprot(class_prob, **fliprot_params)
@@ -189,7 +190,7 @@ class BatchVisualizationBuilder:
         saliency_prob_list = []
         for frame in item['frames']:
             saliency_prob = kwimage.Heatmap.random(
-                dims=frame['target_dims'], classes=1, rng=rng).data['class_probs']
+                dims=frame['output_dims'], classes=1, rng=rng).data['class_probs']
             saliency_prob = einops.rearrange(saliency_prob, 'c h w -> h w c')
             if fliprot_params:
                 saliency_prob = data_utils.fliprot(saliency_prob, **fliprot_params)

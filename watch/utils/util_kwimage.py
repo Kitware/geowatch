@@ -1367,6 +1367,18 @@ class Box(ub.NiceRepr):
         self = Box(boxes)
         return self
 
+    @classmethod
+    def from_dsize(self, dsize):
+        width, height = dsize
+        import kwimage
+        boxes = kwimage.Boxes([[0, 0, width, height]], 'ltrb')
+        self = Box(boxes)
+        return self
+
+    @property
+    def dsize(self):
+        return (int(self.width), int(self.height))
+
     def translate(self, *args, **kwargs):
         new_boxes = self.boxes.translate(*args, **kwargs)
         new = self.__class__(new_boxes)

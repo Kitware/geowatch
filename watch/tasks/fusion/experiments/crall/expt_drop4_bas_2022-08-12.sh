@@ -812,7 +812,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/$TRAIN_FNAME
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/$VALI_FNAME
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=noop
-EXPERIMENT_NAME=Drop4_BAS_BGR_10GSD_V015_continue
+EXPERIMENT_NAME=Drop4_BAS_BGR_10GSD_V015_continue_v2
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
@@ -824,7 +824,7 @@ python -m watch.tasks.fusion.fit \
     --init="$INITIAL_STATE" \
     --arch_name=smt_it_stm_p8 \
     --channels="blue|green|red" \
-    --num_workers=8 \
+    --num_workers=6 \
     --global_saliency_weight=1.00 \
     --saliency_loss='dicefocal' \
     --class_loss='dicefocal' \
@@ -835,7 +835,7 @@ python -m watch.tasks.fusion.fit \
     --output_space_scale="10GSD" \
     --chip_dims=128,128 \
     --time_steps=8 \
-    --batch_size=64 \
+    --batch_size=48 \
     --change_head_hidden=4 \
     --class_head_hidden=4 \
     --saliency_head_hidden=4 \

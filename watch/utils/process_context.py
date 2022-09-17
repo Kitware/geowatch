@@ -118,7 +118,8 @@ class ProcessContext:
 
     def stop(self):
         self.properties["stop_timestamp"] = self._timestamp()
-        self._stop_emissions_tracker()
+        if self.emissions_tracker is not None:
+            self._stop_emissions_tracker()
         return self.obj
 
     def __enter__(self):
@@ -140,6 +141,9 @@ class ProcessContext:
             self.emissions_tracker = emissions_tracker
 
     def _stop_emissions_tracker(self):
+        if self.emissions_tracker is None:
+            self.properties['emissions'] = None
+            return
         self.emissions_tracker.stop()
         summary = self.emissions_tracker.final_emissions_data
         co2_kg = summary.emissions

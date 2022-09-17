@@ -27,6 +27,9 @@ def get_production_model_test_info(task):
     return model_fpath
 
 
+DEBUGGING_NOW = 0
+
+
 def test_predict_latest_bas_model():
     """
     Test the predict step with the latest and greatest
@@ -46,7 +49,7 @@ def test_predict_latest_bas_model():
     dset = kwcoco.CocoDataset(vali_fpath)
     subset = make_small_kwcoco_subset(dset, output_dpath)
 
-    from watch.tasks.fusion import predict
+    from watch.tasks.fusion import predict as predict_mod
     pred_kwargs = {
         'test_dataset': subset.fpath,
         'pred_dataset': pred_fpath,
@@ -60,11 +63,13 @@ def test_predict_latest_bas_model():
         'set_cover_algo': 'approx',
         'space_scale': '15GSD',
         'window_space_scale': '15GSD',
+        'use_cloudmask': False,
+        'resample_invalid_frames': False,
     }
     kwargs = pred_kwargs  # NOQA
-    predict.predict(cmdline=0, **pred_kwargs)
+    predict_mod.predict(cmdline=0, **pred_kwargs)
 
-    if 0:
+    if DEBUGGING_NOW:
         import xdev
         xdev.view_directory(pred_fpath.parent)
 
@@ -89,7 +94,7 @@ def test_predict_latest_sc_model():
     dset = kwcoco.CocoDataset(vali_fpath)
     subset = make_small_kwcoco_subset(dset, output_dpath)
 
-    from watch.tasks.fusion import predict
+    from watch.tasks.fusion import predict as predict_mod
     pred_kwargs = {
         'test_dataset': subset.fpath,
         'pred_dataset': pred_fpath,
@@ -102,12 +107,15 @@ def test_predict_latest_sc_model():
         'with_change': False,
         'write_preds': False,
         'clear_annots': False,
+        'use_cloudmask': False,
+        'resample_invalid_frames': False,
         'set_cover_algo': 'approx',
     }
     kwargs = pred_kwargs  # NOQA
-    predict.predict(cmdline=False, **pred_kwargs)
+    cmdline = False
+    predict_mod.predict(cmdline=cmdline, **pred_kwargs)
 
-    if 0:
+    if DEBUGGING_NOW:
         import xdev
         xdev.view_directory(pred_fpath.parent)
 

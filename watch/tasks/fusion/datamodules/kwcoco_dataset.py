@@ -37,32 +37,8 @@ try:
 except Exception:
     profile = ub.identity
 
-__space_notes__ = """
-There are several 'spaces' here and that can get confusing.
-
-Native Space - The space of the data on disk
-
-Video Space - The space a sequence is geo-aligned in.
-    This is the space we generally want to be thinking in.
-    It is hard coded wrt to the kwcoco dataset.
-
-Window Space - GSD the sliding window is expressed in.
-   Defaults to video space.
-   Computes a integer-sized box as the 'space_slice' in video space.
-   Effectively this space is only used to compute the size of the box
-   in the underlying video space. It does nothing else.
-   Alias: Grid Space
-
-Input Space - GSD of the input to the network
-   Computes a scale factor relative to video space.
-   Alias: Sample Space
-   Alias: Data Space
-
-Output Space - GSD of the output of the network
-   Scale factor is wrt to video space.
-   Alias: Prediction Space
-"""
-__space_notes__
+# See ~/code/watch/docs/coding_oddities.rst
+# For notes on Spaces
 
 
 class KWCocoVideoDatasetConfig(scfg.Config):
@@ -892,26 +868,31 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         resolved_output_scale = data_utils.resolve_scale_request(
             request=target_['output_space_scale'], data_gsd=vidspace_gsd)
 
-        input_scale = resolved_input_scale['scale']
-        output_scale = resolved_output_scale['scale']
-        target_['scale'] = input_scale
+        common_input_scale = resolved_input_scale['scale']
+        common_output_scale = resolved_output_scale['scale']
+        target_['scale'] = common_input_scale
 
-        if isinstance(input_scale, str) and input_scale == 'native':
+        # Put the target slice in video space.
+        vidspace_box = util_kwimage.Box.from_slice(target_['space_slice'])
+        vidspace_dsize = np.array([vidspace_box.width, vidspace_box.height])
+
+        # Size of the video the target is embedded in.
+        video_dsize = np.array([video['width'], video['height']])
+
+        if isinstance(common_input_scale, str) and common_input_scale == 'native':
             target_.pop('scale')
             # native scales will only work in late-fused modes
             target_['use_native_scale'] = True
             target_['realign_native'] = 'largest'
-            outspace_box = None
+            common_outspace_box = None
         else:
-            if isinstance(output_scale, str) and output_scale == 'native':
+            if isinstance(common_output_scale, str) and common_output_scale == 'native':
                 raise Exception(
                     'output scale can only be native when input scale is native')
-            # Put the target slice in video space.
-            vidspace_box = kwimage.Boxes.from_slice(target_['space_slice'])
             # Compute where this output chip should live in its output space canvas.
-            output_scale = resolved_output_scale['scale']
-            outspace_box = vidspace_box.scale(output_scale)
-            outspace_box = outspace_box.quantize()
+            common_output_scale = resolved_output_scale['scale']
+            common_outspace_box = vidspace_box.scale(common_output_scale)
+            common_outspace_box = common_outspace_box.quantize()
 
         allow_augment = target_.get('allow_augment', True)
         if allow_augment:
@@ -1001,16 +982,19 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             # gridspace_box = util_kwimage.Box(sample_tlbr)
             # gridspace_dsize = np.array([gridspace_box.width, gridspace_box.height])
 
-            if outspace_box is None:
+            if common_outspace_box is None:
                 # In the native case, we use the size of the largest mode for
                 # each frame.
-                frame_target_dsize = max(mode_to_dsize.values(), key=np.prod)
+                max_mode_dsize = np.array(max(mode_to_dsize.values(), key=np.prod))
+                # Compute the scale factor for this frame wrt video space
+                scale_inspace_from_vid = max_mode_dsize / vidspace_dsize
+                frame_outspace_box = vidspace_box.scale(scale_inspace_from_vid)
             else:
-                frame_target_dsize = (
-                    outspace_box.width.ravel()[0],
-                    outspace_box.height.ravel()[0])
+                frame_outspace_box = common_outspace_box
 
-            target_dims = frame_target_dsize[::-1]  # the size we want to predict
+            output_dsize = (frame_outspace_box.width, frame_outspace_box.height)
+            scale_outspace_from_vid = output_dsize / vidspace_dsize
+            output_dims = output_dsize[::-1]  # the size we want to predict
 
             dt_captured = img.get('date_captured', None)
             if dt_captured:
@@ -1020,6 +1004,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 timestamp = np.nan
 
             sensor = img.get('sensor_coarse', '*')
+
+            # The size of the larger image this output is expected to be
+            # embedded in.
+            outimg_dsize = video_dsize * scale_outspace_from_vid
+            outimg_box = util_kwimage.Box.from_dsize(outimg_dsize).quantize()
 
             frame_item = {
                 'gid': gid,
@@ -1034,16 +1023,18 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 'change_weights': None,
                 'class_weights': None,
                 'saliency_weights': None,
-                'target_dims': target_dims,
+                'output_dims': output_dims,
+                'output_space_slice': frame_outspace_box.to_slice(),
+                'output_image_dsize': outimg_box.dsize,
                 'ann_aids': None,
             }
 
             if not self.inference_only:
                 self._populate_frame_labels(
-                    frame_item, gid, frame_target_dsize,
+                    frame_item, gid, output_dsize,
                     gid_to_det_window_dsize, task_tid_to_cnames, time_idx,
                     gid_to_dets, time_weights, mode_to_invalid_mask,
-                    input_scale, output_scale)
+                    common_input_scale, common_output_scale)
 
             frame_items.append(frame_item)
 
@@ -1187,9 +1178,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # multiprocessing makes a new file descriptor for every Python object
         # or something like that)
         tr_subset = ub.dict_isect(target_, {
-            'gids', 'space_slice', 'video_id', 'fliprot_params', 'scale',
-            'main_idx',
+            'gids', 'space_slice', 'video_id', 'fliprot_params',
+            'main_idx', 'scale',
         })
+
         if main_skip_reason:
             tr_subset['main_skip_reason'] = main_skip_reason
         # dont allow augmenting on resample by default
@@ -1326,11 +1318,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             time_weights,
         )
 
-    def _populate_frame_labels(self, frame_item, gid, frame_target_dsize,
+    def _populate_frame_labels(self, frame_item, gid, output_dsize,
                                gid_to_det_window_dsize, task_tid_to_cnames,
                                time_idx, gid_to_dets, time_weights,
-                               mode_to_invalid_mask, input_scale,
-                               output_scale):
+                               mode_to_invalid_mask, common_input_scale,
+                               common_output_scale):
         """
         Helper function to populate truth labels for a frame in a video
         sequence. This was factored out of the original getitem, and
@@ -1344,49 +1336,22 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # annotation window (where ndsampler lets us assume the corners
         # of each window are in correspondence)
 
-        is_native = (isinstance(input_scale, str) and input_scale == 'native')
+        is_native = (isinstance(common_input_scale, str) and common_input_scale == 'native')
 
         frame_dets = gid_to_dets[gid]
         if frame_dets is None:
             raise AssertionError('frame_dets = {!r}'.format(frame_dets))
 
+        # As of ndsampler >= 0.7.1 the dets are sampled in the input space
         if not is_native:
-
-            # NOTE:
-            # As of ndsampler >= 0.7.1 the dets are sampled in the input space
-            # Most of the commented section no longer holds
-            dets_scale = output_scale / input_scale
+            dets_scale = common_output_scale / common_input_scale
             dets = frame_dets.scale(dets_scale)
-
-            # _target_dsize = np.array(frame_target_dsize)
-            # # Dets dsize isn't intuitive. It is sample_tlbr, which scale does not
-            # # seem to modify in ndsampler, so it is just video space.  But the dets
-            # # are returned in "input space", so we need to include that to get a
-            # # real number.
-            # _dets_dsize = np.array(gid_to_det_window_dsize[gid]) * input_scale
-            # dets_scale = (_target_dsize / _dets_dsize)
-
-            # # Remember to apply any transform to the dets as well
-            # # TODO: the info scale is on a per-mode basis, need to
-            # # normalize it first or compute a mode-to-truth transform.
-
-            # # Annotations are returned relative to the requested input space.
-            # # This might not be the same as the final target space.
-            # # Rescale the annotations to put them into the final target output space.
-            # print(f'dets_scale={dets_scale}')
-            # dets = frame_dets.scale(dets_scale)
         else:
-            # As of ndsampler >= 0.7.1 the dets are sampled in the input space
             dets = frame_dets.copy()
-            # dets = frame_dets.scale(output_scale)
-
-        # TODO: if we ever letterbox, we may need a translation factor
-        # right now we can ignore this.
-        # dets = dets.translate(_resize_info['offset'])
 
         # Create truth masks
         bg_idx = self.bg_idx
-        frame_target_shape = frame_target_dsize[::-1]
+        frame_target_shape = output_dsize[::-1]
         space_shape = frame_target_shape
         frame_cidxs = np.full(space_shape, dtype=np.int32,
                               fill_value=bg_idx)
@@ -1492,7 +1457,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                         mask_ = ((mask.sum(axis=2) / mask.shape[2])).astype(float)
                     else:
                         mask_ = mask.astype(float)
-                    mask_ = kwimage.imresize(mask_, dsize=frame_target_dsize)
+                    mask_ = kwimage.imresize(mask_, dsize=output_dsize)
                     nodata_total += mask_
             # nodata_total = np.add.reduce([0 if mask is None else mask.sum(axis=2) / mask.shape[2] for mask in mode_to_invalid_mask.values()])
             total_bands = len(mode_to_invalid_mask)
@@ -1801,7 +1766,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> change_prob_list = []
             >>> for frame in item['frames'][1:]:
             >>>     change_prob = kwimage.Heatmap.random(
-            >>>         dims=frame['target_dims'], classes=1).data['class_probs'][0]
+            >>>         dims=frame['output_dims'], classes=1).data['class_probs'][0]
             >>>     if fliprot_params:
             >>>         change_prob = data_utils.fliprot(change_prob, **fliprot_params)
             >>>     change_prob_list += [change_prob]
@@ -1812,7 +1777,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> class_prob_list = []
             >>> for frame in item['frames']:
             >>>     class_prob = kwimage.Heatmap.random(
-            >>>         dims=frame['target_dims'], classes=list(sampler.classes)).data['class_probs']
+            >>>         dims=frame['output_dims'], classes=list(sampler.classes)).data['class_probs']
             >>>     class_prob_ = einops.rearrange(class_prob, 'c h w -> h w c')
             >>>     if fliprot_params:
             >>>         class_prob_ = data_utils.fliprot(class_prob_, **fliprot_params)

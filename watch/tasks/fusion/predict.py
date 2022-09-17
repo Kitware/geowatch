@@ -606,18 +606,20 @@ def predict(cmdline=False, **kwargs):
         print('img_overlaps = {}'.format(ub.repr2(img_overlaps, nl=1)))
         print('primary_img_overlaps = {}'.format(ub.repr2(primary_img_overlaps, nl=1)))
 
-    if 0:
-        item = test_dataloader.dataset[0]
-        item['target']
-        frame = item['frames'][0]
-        ub.peek(frame['modes'].values()).shape
-
     with torch.set_grad_enabled(False):
         # FIXME: that data loader should not be producing incorrect sensor/mode
         # pairs in the first place!
         EMERGENCY_INPUT_AGREEMENT_HACK = 1
         # prog.set_extra(' <will populate stats after first video>')
         _batch_iter = iter(prog)
+        if 0:
+            item = test_dataloader.dataset[0]
+
+            orig_batch = next(_batch_iter)
+            item = orig_batch[0]
+            item['target']
+            frame = item['frames'][0]
+            ub.peek(frame['modes'].values()).shape
         for orig_batch in _batch_iter:
             batch_trs = []
             # Move data onto the prediction device, grab spacetime region info
@@ -627,10 +629,16 @@ def predict(cmdline=False, **kwargs):
                     continue
                 item = item.copy()
                 batch_gids = [frame['gid'] for frame in item['frames']]
+                outspace_info = [ub.udict(f) & {
+                    'gid',
+                    'output_space_slice',
+                    'output_image_dsize',
+                } for f in item['frames']]
                 batch_trs.append({
                     'space_slice': tuple(item['target']['space_slice']),
                     'scale': item['target']['scale'],
                     'gids': batch_gids,
+                    'outspace_info': outspace_info,
                     'fliprot_params': item['target'].get('fliprot_params', None)
                 })
                 position_tensors = item.get('positional_tensors', None)
@@ -668,10 +676,6 @@ def predict(cmdline=False, **kwargs):
             if 0:
                 import netharn as nh
                 print(nh.data.collate._debug_inbatch_shapes(batch))
-
-            # self = method
-            # with_loss = 0
-            # item = batch[0]
 
             # Predict on the batch
             outputs = method.forward_step(batch, with_loss=False)
@@ -712,16 +716,23 @@ def predict(cmdline=False, **kwargs):
                     bin_probs = item_head_relevant_probs.detach().cpu().numpy()
 
                     # Get the spatio-temporal subregion this prediction belongs to
-                    out_gids: list[int] = target['gids'][predicted_frame_slice]
-                    space_slice: tuple[slice, slice] = target['space_slice']
+                    # out_gids: list[int] = target['gids'][predicted_frame_slice]
+                    # space_slice: tuple[slice, slice] = target['space_slice']
+                    outspace_info: list[dict] = target['outspace_info'][predicted_frame_slice]
 
                     fliprot_params: dict = target['fliprot_params']
                     # Update the stitcher with this windowed prediction
-                    for gid, probs in zip(out_gids, bin_probs):
+                    for probs, outspace_slice in zip(bin_probs, outspace_info):
                         if fliprot_params is not None:
                             # Undo fliprot TTA
                             probs = data_utils.inv_fliprot(probs, **fliprot_params)
-                        head_stitcher.accumulate_image(gid, space_slice, probs)
+
+                        gid = outspace_slice['gid']
+                        output_image_dsize = outspace_slice['output_image_dsize']
+                        output_space_slice = outspace_slice['output_space_slice']
+
+                        head_stitcher.accumulate_image(
+                            gid, output_space_slice, probs, dsize=output_image_dsize)
 
                 # Free up space for any images that have been completed
                 for gid in head_stitcher.ready_image_ids():
@@ -855,7 +866,7 @@ class CocoStitchingManager(object):
             self.prob_dpath = join(bundle_dpath, prob_subdir)
             ub.ensuredir(self.prob_dpath)
 
-    def accumulate_image(self, gid, space_slice, data):
+    def accumulate_image(self, gid, space_slice, data, dsize=None):
         """
         Stitches a result into the appropriate image stitcher.
 
@@ -867,6 +878,8 @@ class CocoStitchingManager(object):
                 the slice (in "stitching-space") the data corresponds to.
 
             data (ndarray | Tensor): the feature or probability data
+
+            dsize (Tuple): the w/h i
         """
         data = kwarray.atleast_nd(data, 3)
         dset = self.result_dataset
@@ -874,14 +887,17 @@ class CocoStitchingManager(object):
             vidid = dset.index.imgs[gid]['video_id']
             # Create the stitcher if it does not exist
             if gid not in self.image_stitchers:
-                video = dset.index.videos[vidid]
+                if dsize is None:
+                    video = dset.index.videos[vidid]
+                    height, width = video['height'], video['width']
+                else:
+                    width, height = dsize
                 if self.num_bands == 'auto':
                     if len(data.shape) == 3:
                         self.num_bands = data.shape[2]
                     else:
                         raise NotImplementedError
-                stitch_dims = (video['height'], video['width'], self.num_bands)
-
+                stitch_dims = (width, height, self.num_bands)
                 self.image_stitchers[gid] = kwarray.Stitcher(
                     stitch_dims, device=self.device)
 
@@ -949,7 +965,18 @@ class CocoStitchingManager(object):
                 spatial_valid_mask = (1 - invalid_output_mask)
             stitch_weights = stitch_weights * spatial_valid_mask
             stitch_data[invalid_output_mask] = 0
-        stitcher.add(stitch_slice, stitch_data, weight=stitch_weights)
+
+        stitch_slice = fix_slice(stitch_slice)
+
+        try:
+            stitcher.add(stitch_slice, stitch_data, weight=stitch_weights)
+        except IndexError:
+            import xdev
+            xdev.embed()
+            print(f'stitch_slice={stitch_slice}')
+            print(f'stitch_weights.shape={stitch_weights.shape}')
+            print(f'stitch_data.shape={stitch_data.shape}')
+            raise
 
     def managed_image_ids(self):
         """
@@ -1207,6 +1234,27 @@ def quantize_float01(imdata, old_min=0, old_max=1, quantize_dtype=np.int16):
 
 def main(cmdline=True, **kwargs):
     predict(cmdline=cmdline, **kwargs)
+
+
+def _fix_int(d):
+    return None if d is None else int(d)
+
+
+def _fix_slice(d):
+    return slice(_fix_int(d.start), _fix_int(d.stop), _fix_int(d.step))
+
+
+def _fix_slice_tup(sl):
+    return tuple(map(_fix_slice, sl))
+
+
+def fix_slice(sl):
+    if isinstance(sl, slice):
+        return _fix_slice(sl)
+    elif isinstance(sl, (tuple, list)) and isinstance(ub.peek(sl), slice):
+        return _fix_slice_tup(sl)
+    else:
+        raise TypeError(repr(sl))
 
 
 if __name__ == '__main__':
