@@ -144,3 +144,5 @@ segmentation-models-pytorch>=0.2.0
 
 ujson>=5.2.0 
 kwimage_ext >= 0.2.0
+
+py-cpuinfo>=8.0.0

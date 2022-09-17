@@ -821,7 +821,6 @@ python -m watch.tasks.fusion.fit \
     --train_dataset="$TRAIN_FPATH" \
     --vali_dataset="$VALI_FPATH" \
     --test_dataset="$TEST_FPATH" \
-    --init="$INITIAL_STATE" \
     --arch_name=smt_it_stm_p8 \
     --channels="blue|green|red" \
     --num_workers=6 \
@@ -842,10 +841,13 @@ python -m watch.tasks.fusion.fit \
     --stream_channels=32 \
     --in_features_pos=128 \
     --learning_rate=3e-4 \
-    --max_epoch_length=8048 \
+    --max_epoch_length=16384 \
     --resample_invalid_frames=0 \
+    --limit_val_batches=0 \
     --use_cloudmask=0 \
     --max_epochs=640 \
     --patience=340 \
     --decouple_resolution=0 \
+    --draw_interval=1year \
+    --num_draw=0 \
     --init=/home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_BGR_10GSD_V015/lightning_logs/version_0/checkpoints/epoch=43-step=2772.ckpt 

@@ -938,9 +938,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         if not self.inference_only:
             _tup = self._prepare_truth_info(final_gids, gid_to_sample,
                                             num_frames, target, target_)
-            (gid_to_det_window_dsize,
-             task_tid_to_cnames,
-             gid_to_dets, time_weights) = _tup
+            (task_tid_to_cnames, gid_to_dets, time_weights) = _tup
 
         # TODO: handle all augmentation before we construct any labels
         frame_items = []
@@ -988,7 +986,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 max_mode_dsize = np.array(max(mode_to_dsize.values(), key=np.prod))
                 # Compute the scale factor for this frame wrt video space
                 scale_inspace_from_vid = max_mode_dsize / vidspace_dsize
-                frame_outspace_box = vidspace_box.scale(scale_inspace_from_vid)
+                frame_outspace_box = vidspace_box.scale(scale_inspace_from_vid).quantize()
             else:
                 frame_outspace_box = common_outspace_box
 
@@ -1032,7 +1030,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             if not self.inference_only:
                 self._populate_frame_labels(
                     frame_item, gid, output_dsize,
-                    gid_to_det_window_dsize, task_tid_to_cnames, time_idx,
+                    task_tid_to_cnames, time_idx,
                     gid_to_dets, time_weights, mode_to_invalid_mask,
                     common_input_scale, common_output_scale)
 
@@ -1241,7 +1239,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # build up info about the tracks
         dset = self.sampler.dset
         gid_to_dets: Dict[int, kwimage.Detections] = {}
-        gid_to_det_window_dsize: Dict[int, Tuple[int, int]] = {}
         tid_to_aids = ub.ddict(list)
         tid_to_cids = ub.ddict(list)
         # tid_to_catnames = ub.ddict(list)
@@ -1271,7 +1268,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 sample_tlbr.width.ravel()[0],
                 sample_tlbr.height.ravel()[0]
             )
-            gid_to_det_window_dsize[gid] = dets_dsize
             gid_to_dets[gid] = frame_dets
 
         for gid, frame_dets in gid_to_dets.items():
@@ -1314,12 +1310,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             time_weights = np.maximum(time_weights, self.min_spacetime_weight)
 
         return (
-            gid_to_det_window_dsize, task_tid_to_cnames, gid_to_dets,
+            task_tid_to_cnames, gid_to_dets,
             time_weights,
         )
 
     def _populate_frame_labels(self, frame_item, gid, output_dsize,
-                               gid_to_det_window_dsize, task_tid_to_cnames,
+                               task_tid_to_cnames,
                                time_idx, gid_to_dets, time_weights,
                                mode_to_invalid_mask, common_input_scale,
                                common_output_scale):

@@ -6,7 +6,7 @@ WATCH - Wide Area Terrestrial Change Hypercube
    :height: 100px
    :align: left
 
-|master-pipeline| |master-coverage|
+|main-pipeline| |main-coverage|
 
 
 This repository addresses the algorithmic challenges of the 
@@ -187,7 +187,7 @@ For quick reference, a list of current documentation files is:
   + Tutorial 2: `Toy MSI Fusion Model Example <../watch/tasks/fusion/experiments/crall/toy_experiments_msi.sh>`_ 
 
 
-.. |master-pipeline| image:: https://gitlab.kitware.com/smart/watch/badges/master/pipeline.svg
-   :target: https://gitlab.kitware.com/smart/watch/-/pipelines/master/latest
-.. |master-coverage| image:: https://gitlab.kitware.com/smart/watch/badges/master/coverage.svg
-   :target: https://gitlab.kitware.com/smart/watch/badges/master/coverage.svg
+.. |main-pipeline| image:: https://gitlab.kitware.com/smart/watch/badges/main/pipeline.svg
+   :target: https://gitlab.kitware.com/smart/watch/-/pipelines/main/latest
+.. |main-coverage| image:: https://gitlab.kitware.com/smart/watch/badges/main/coverage.svg
+   :target: https://gitlab.kitware.com/smart/watch/badges/main/coverage.svg
