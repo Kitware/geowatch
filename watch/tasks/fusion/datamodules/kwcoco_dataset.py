@@ -15,7 +15,6 @@ import torch
 import ubelt as ub
 from torch.utils import data
 from typing import Dict
-from typing import Tuple
 import scriptconfig as scfg
 
 
@@ -974,12 +973,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             # We could choose this to be arbitrary or independent of the input
             # dimensions, but it makes sense to pin it to the input data
             # in most cases.
-
-            # sample_tlbr = mode_sample['params']['sample_tlbr']
-            # Should be the same as the vidspace_box
-            # gridspace_box = util_kwimage.Box(sample_tlbr)
-            # gridspace_dsize = np.array([gridspace_box.width, gridspace_box.height])
-
             if common_outspace_box is None:
                 # In the native case, we use the size of the largest mode for
                 # each frame.
@@ -1260,14 +1253,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     {target_=!r}
                     '''
                 ))
-            # The detections live in the space of their sample (i.e. video
-            # or image space).  We can grab that info from ndsampler
-            # (the naming could be better though)
-            sample_tlbr = mode_sample['params']['sample_tlbr']
-            dets_dsize = (
-                sample_tlbr.width.ravel()[0],
-                sample_tlbr.height.ravel()[0]
-            )
+            # The returne detections will live in the "input/data" space
             gid_to_dets[gid] = frame_dets
 
         for gid, frame_dets in gid_to_dets.items():
