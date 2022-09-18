@@ -6,6 +6,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.3.5 - Target 2022-09-30
 
+### Added
+* dataloader can now specify `output_space_scale` as native or in GSD. (requires ndsampler 0.7.1)
+
 
 ### Removed
 * Removed original fusion schedule evaluation code.
@@ -14,6 +17,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Fixed
 * Fixed various bugs where `project_annotations`, and `coco_align_geotiffs`
   would fail when a video was empty.
+* fusion predict now writes nodata correctly and georeferences predictions.
+* Fixed issue where `chip_dims` was not set correctly at predict time.
+* NOT FIXED: Model GSD is not respected by fusion.predict
+
+
+### Changed
+* Speedup in dataloading by doing the samecolor check in a downsampled image.
+* Changed main name of data loader parameter from `space_scale` to `input_space_scale`. Old alias still exists.
 
 
 ## Version 0.3.4 - Finalized 2022-08-31
@@ -55,7 +66,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Fixes to sensorchan integration with the model and dataset (training with new settings is now verified)
 * Fixes to handling of nan data
 * Fixes to lightning modules
-* Fixed issue where learning_rate was not respected by some optimizers (RADam, but AdamW seemed ok)
+* Fixed issue where learning_rate was not respected by some optimizers (RAdam, but AdamW seemed ok)
 * Fixed issue where weight_decay was not respected by AdamW.
 * One-off scripts for fixing models.
 * Better handling of gdal warp / translate / mosaic failures.

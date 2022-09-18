@@ -681,7 +681,7 @@ python -m watch.tasks.fusion.fit \
     --accelerator="gpu" \
     --devices "0," \
     --num_workers=4 \
-    --chip_dims=380,380 \
+    --chip_dims=256,256 \
     --saliency_loss='dicefocal' \
     --global_change_weight=0.75 \
     --global_class_weight=0.30 \
@@ -690,9 +690,164 @@ python -m watch.tasks.fusion.fit \
     --class_head_hidden=4 \
     --saliency_head_hidden=4 \
     --time_steps=7 \
-    --batch_size=8 \
+    --batch_size=4 \
     --dist_weights=1 \
-    --accumulate_grad_batches=4 \
+    --accumulate_grad_batches=1 \
     --max_epoch_length=16384 \
     --max_epochs=1600 \
     --patience=1600 
+
+## On Toothbrush
+export CUDA_VISIBLE_DEVICES=1
+PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
+PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+TRAIN_FNAME=data_train.kwcoco.json
+VALI_FNAME=data_vali.kwcoco.json
+TEST_FNAME=data_vali.kwcoco.json
+WORKDIR=$PHASE2_EXPT_DPATH/training/$HOSTNAME/$USER
+KWCOCO_BUNDLE_DPATH=$PHASE2_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/$TRAIN_FNAME
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/$VALI_FNAME
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
+INITIAL_STATE=noop
+EXPERIMENT_NAME=Drop4_BAS_BGR_10GSD_V014
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --init="$INITIAL_STATE" \
+    --arch_name=smt_it_stm_p8 \
+    --channels="blue|green|red" \
+    --num_workers=8 \
+    --global_saliency_weight=1.00 \
+    --saliency_loss='dicefocal' \
+    --class_loss='dicefocal' \
+    --change_loss='dicefocal' \
+    --dist_weights=0 \
+    --input_space_scale="10GSD" \
+    --window_space_scale="10GSD" \
+    --output_space_scale="10GSD" \
+    --chip_dims=128,128 \
+    --time_steps=8 \
+    --batch_size=64 \
+    --change_head_hidden=4 \
+    --class_head_hidden=4 \
+    --saliency_head_hidden=4 \
+    --stream_channels=32 \
+    --in_features_pos=128 \
+    --learning_rate=3e-4 \
+    --max_epoch_length=8048 \
+    --resample_invalid_frames=0 \
+    --use_cloudmask=0 \
+    --max_epochs=640 \
+    --patience=340 \
+    --decouple_resolution=0 --help
+
+
+export CUDA_VISIBLE_DEVICES=0
+PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
+PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+TRAIN_FNAME=data_train.kwcoco.json
+VALI_FNAME=data_vali.kwcoco.json
+TEST_FNAME=data_vali.kwcoco.json
+WORKDIR=$PHASE2_EXPT_DPATH/training/$HOSTNAME/$USER
+KWCOCO_BUNDLE_DPATH=$PHASE2_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/$TRAIN_FNAME
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/$VALI_FNAME
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
+INITIAL_STATE=noop
+EXPERIMENT_NAME=Drop4_BAS_BGR_10GSD_V015
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --init="$INITIAL_STATE" \
+    --arch_name=smt_it_stm_p8 \
+    --channels="blue|green|red" \
+    --num_workers=8 \
+    --global_saliency_weight=1.00 \
+    --saliency_loss='dicefocal' \
+    --class_loss='dicefocal' \
+    --change_loss='dicefocal' \
+    --dist_weights=0 \
+    --input_space_scale="10GSD" \
+    --window_space_scale="10GSD" \
+    --output_space_scale="10GSD" \
+    --chip_dims=128,128 \
+    --time_steps=10 \
+    --batch_size=32 \
+    --change_head_hidden=4 \
+    --class_head_hidden=4 \
+    --saliency_head_hidden=4 \
+    --stream_channels=32 \
+    --in_features_pos=128 \
+    --learning_rate=3e-4 \
+    --max_epoch_length=8048 \
+    --resample_invalid_frames=0 \
+    --use_cloudmask=0 \
+    --max_epochs=640 \
+    --patience=340 \
+    --decouple_resolution=0
+
+export CUDA_VISIBLE_DEVICES=1
+PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
+PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+TRAIN_FNAME=data_train.kwcoco.json
+VALI_FNAME=data_vali.kwcoco.json
+TEST_FNAME=data_vali.kwcoco.json
+WORKDIR=$PHASE2_EXPT_DPATH/training/$HOSTNAME/$USER
+KWCOCO_BUNDLE_DPATH=$PHASE2_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/$TRAIN_FNAME
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/$VALI_FNAME
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
+INITIAL_STATE=noop
+EXPERIMENT_NAME=Drop4_BAS_BGR_10GSD_V015_continue_v2
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --arch_name=smt_it_stm_p8 \
+    --channels="blue|green|red" \
+    --num_workers=6 \
+    --global_saliency_weight=1.00 \
+    --saliency_loss='dicefocal' \
+    --class_loss='dicefocal' \
+    --change_loss='dicefocal' \
+    --dist_weights=0 \
+    --input_space_scale="10GSD" \
+    --window_space_scale="10GSD" \
+    --output_space_scale="10GSD" \
+    --chip_dims=128,128 \
+    --time_steps=8 \
+    --batch_size=48 \
+    --change_head_hidden=4 \
+    --class_head_hidden=4 \
+    --saliency_head_hidden=4 \
+    --stream_channels=32 \
+    --in_features_pos=128 \
+    --learning_rate=3e-4 \
+    --max_epoch_length=16384 \
+    --resample_invalid_frames=0 \
+    --limit_val_batches=0 \
+    --use_cloudmask=0 \
+    --max_epochs=640 \
+    --patience=340 \
+    --decouple_resolution=0 \
+    --draw_interval=1year \
+    --num_draw=0 \
+    --init=/home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_BGR_10GSD_V015/lightning_logs/version_0/checkpoints/epoch=43-step=2772.ckpt 

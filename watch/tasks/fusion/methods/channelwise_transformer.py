@@ -144,6 +144,7 @@ class MultimodalTransformerConfig(scfg.DataConfig):
     decoder = scfg.Value('mlp', type=str, choices=['mlp', 'segmenter'])
     dropout = scfg.Value(0.1, type=float)
     backbone_depth = scfg.Value(None, type=int, help='For supporting architectures, control the depth of the backbone. Default depends on arch_name')
+    positional_dims = scfg.Value(6 * 8, type=int, help='positional feature dims')
     global_class_weight = scfg.Value(1.0, type=float)
     global_change_weight = scfg.Value(1.0, type=float)
     global_saliency_weight = scfg.Value(1.0, type=float)
@@ -564,7 +565,9 @@ class MultimodalTransformer(pl.LightningModule):
         # for (s, c), stats in input_stats.items():
         #     self.sensor_channel_tokenizers[s][c] = tokenize
 
-        in_features_pos = 6 * 8   # 6 positional features with 8 dims each (TODO: be robust)
+        # in_features_pos = 6 * 8   # 6 positional features with 8 dims each (TODO: be robust)
+        in_features_pos = self.config['positional_dims']
+        # 6 * 8   # 6 positional features with 8 dims each (TODO: be robust)
         in_features = in_features_pos + in_features_raw
         self.in_features = in_features
         self.in_features_pos = in_features_pos

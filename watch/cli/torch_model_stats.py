@@ -164,7 +164,7 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
             'time_span',
             'chip_dims',
             'window_space_scale',
-            'space_scale',
+            'input_space_scale',
         ]
 
         # spacetime_stats = {

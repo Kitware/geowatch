@@ -1,5 +1,85 @@
 """
 Demodata for a simple region and site model
+
+See Also:
+    ../cli/stac_search.py
+    ../stac/stac_search_builder.py
+
+
+CommandLine:
+
+    ###
+    # Create the demo dataset
+    ###
+
+    # Create a demo region file
+    xdoctest watch.demo.demo_region demo_khq_region_fpath
+
+    DATASET_SUFFIX=DemoKHQ-2022-09-15-V6
+    DEMO_DPATH=$HOME/.cache/watch/demo/datasets
+    REGION_FPATH="$HOME/.cache/watch/demo/annotations/KHQ_R001.geojson"
+    SITE_GLOBSTR="$HOME/.cache/watch/demo/annotations/KHQ_R001_sites/*.geojson"
+    REGION_ID=$(jq -r '.features[] | select(.properties.type=="region") | .properties.region_id' "$REGION_FPATH")
+    RESULT_FPATH=$DEMO_DPATH/all_sensors_kit/${REGION_ID}.input
+
+    mkdir -p "$DEMO_DPATH"
+
+    # Define SMART_STAC_API_KEY
+    source "$HOME"/code/watch/secrets/secrets
+
+    # Delete this to prevent duplicates
+    rm -f "$RESULT_FPATH"
+
+    # Construct the TA2-ready dataset
+    python -m watch.cli.prepare_ta2_dataset \
+        --dataset_suffix=$DATASET_SUFFIX \
+        --cloud_cover=100 \
+        --stac_query_mode=auto \
+        --sensors "L2-L8" \
+        --api_key=env:SMART_STAC_API_KEY \
+        --collated True \
+        --requester_pays=True \
+        --dvc_dpath="$DEMO_DPATH" \
+        --aws_profile=iarpa \
+        --region_globstr="$REGION_FPATH" \
+        --site_globstr="$SITE_GLOBSTR" \
+        --fields_workers=8 \
+        --convert_workers=8 \
+        --align_workers=26 \
+        --cache=0 \
+        --ignore_duplicates=1 \
+        --separate_region_queues=1 \
+        --separate_align_jobs=1 \
+        --target_gsd=30 \
+        --visualize=True \
+        --serial=True --run=1
+
+    # Package up for release on IPFS
+    DATASET_DPATH=$DEMO_DPATH/Aligned-$DATASET_SUFFIX
+
+    rm $DATASET_DPATH/img*kwcoco.json
+    rm -rf $DATASET_DPATH/_viz512
+    rm -rf $DATASET_DPATH/_cache
+
+    7z a $DATASET_DPATH.zip  $DATASET_DPATH
+
+    # Pin the data to IPFS
+    DATASET_CID=$(ipfs add -Q -w $DATASET_DPATH.zip --cid-version=1 -s size-1048576)
+    echo "On Remote machines run: "
+    echo "ipfs pin add $DATASET_CID"
+
+    # Look at the contents of the underlying folder to build scripts.
+    echo "DATASET_CID = $DATASET_CID"
+    ipfs ls "$DATASET_CID"
+
+
+    # Pin on a remote service
+    ipfs pin remote add --service=web3.storage.erotemic $DATASET_CID --background
+    ipfs pin remote ls --service=web3.storage.erotemic --cid=$DATASET_CID --status=queued,pinning,pinned,failed
+
+    DATASET_CID=bafybeigm5wlzpvjtcyuvjaxjnnjmga6blspmwb77c4syg3jyfcc4bdypd4
+    ipfs pin remote ls --service=web3.storage.erotemic --cid=$DATASET_CID --status=queued,pinning,pinned,failed
+
 """
 
 
@@ -197,10 +277,10 @@ def demo_khq_annots():
             [[-73.77379417419434, 42.86254939745846],
              [-73.76715302467346, 42.86361104246733],
              [-73.76901984214783, 42.86713400027327],
-             [ -73.77529621124268, 42.865978051904726],
-             [ -73.7755537033081, 42.86542759269259],
-             [ -73.7750494480133, 42.862525805139775],
-             [ -73.77379417419434, 42.86254939745846]]
+             [-73.77529621124268, 42.865978051904726],
+             [-73.7755537033081, 42.86542759269259],
+             [-73.7750494480133, 42.862525805139775],
+             [-73.77379417419434, 42.86254939745846]]
         ]
     }).to_shapely()
     site_geoms.append(khq_region_geom)
@@ -214,7 +294,7 @@ def demo_khq_annots():
     khq_region_poly = context.final_geoms_crs84.iloc[0]
     khq_region_geom = kwimage.Polygon.coerce(khq_region_poly).to_geojson()
 
-    delta_pad = util_time.coerce_timedelta('14days')
+    delta_pad = util_time.coerce_timedelta('1460days')
 
     khq_region_start_time = min(site_start_dates) - delta_pad
     khq_region_end_time = max(site_end_dates) + delta_pad

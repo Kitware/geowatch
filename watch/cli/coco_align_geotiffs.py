@@ -268,7 +268,7 @@ def main(cmdline=True, **kw):
         >>>     'src': coco_dset,
         >>>     'dst': dst,
         >>>     'regions': 'annots',
-        >>>     'max_workers': 0
+        >>>     'max_workers': 0,
         >>>     'aux_workers': 0,
         >>> }
         >>> cmdline = False

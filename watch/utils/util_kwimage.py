@@ -480,7 +480,7 @@ def find_lowvariance_regions(image, kernel=7):
 
 
 def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
-                           connectivity=8):
+                           connectivity=8, scale=1.0):
     """
     Alternative approach to find_samecolor_regions, but the idea is we check a
     set of seed points and perform a flood fill.
@@ -496,6 +496,12 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
         seed_method (str): can be grid or variance
 
         connectivity (int): cc connectivity. Either 4 or 8.
+
+        scale (float): scale at which the computation is done.
+            Should be a value between 0 and 1. The default is 1.  Setting to
+            less than 1 will resize the image, perform the computation, and
+            then upsample the output. This can cause a significant speed
+            increase at the cost of some accuracy.
 
     References:
         https://docs.opencv.org/3.4/d7/d1b/group__imgproc__misc.html#ga366aae45a6c1289b341d140839f18717
@@ -562,17 +568,36 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
 
         import timerit
         ti = timerit.Timerit(30, bestof=3, verbose=2)
-        for timer in ti.reset('time'):
+        for timer in ti.reset('find_lowvariance_regions'):
             with timer:
                 find_lowvariance_regions(image)
 
         ti = timerit.Timerit(30, bestof=3, verbose=2)
-        for timer in ti.reset('time'):
+        for timer in ti.reset('find_samecolor_regions'):
             with timer:
-                find_samecolor_regions(image)
+                labels = find_samecolor_regions(image)
+
+
+        # Test to see the overhead compared to different levels of downscale / upscale
+        ti = timerit.Timerit(30, bestof=3, verbose=2)
+        for timer in ti.reset('find_samecolor_regions + resize'):
+            with timer:
+                labels = find_samecolor_regions(image, scale=0.5)
+
+        # Test to see the overhead compared to different levels of downscale / upscale
+        ti = timerit.Timerit(30, bestof=3, verbose=2)
+        for timer in ti.reset('find_samecolor_regions + resize'):
+            with timer:
+                labels = find_samecolor_regions(image, scale=0.25)
     """
     import cv2
     import kwimage
+
+    if scale != 1.0:
+        assert 0 < scale <= 1, 'scale should be in the range (0, 1]'
+        orig_dsize = image.shape[0:2][::-1]
+        image = kwimage.imresize(image, scale=scale, interpolation='nearest')
+
     h, w = image.shape[0:2]
 
     if not image.flags['C_CONTIGUOUS'] or not image.flags['OWNDATA']:
@@ -651,6 +676,10 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
     # is_labeled = final_labels
     # Make labeles start at 1 instead of 2.
     # final_labels[is_labeled] = final_labels[is_labeled] - 1
+
+    if scale != 1.0:
+        final_labels = kwimage.imresize(
+            final_labels, dsize=orig_dsize, interpolation='nearest')
     return final_labels
 
 
@@ -1296,3 +1325,105 @@ def find_low_overlap_covering_boxes_optimize(polygons, scale, min_box_dim, max_b
     # box_ious = keep_bbs.ious(keep_bbs)
     # import pulp
     # prob = pulp.LpProblem("Set Cover", pulp.LpMinimize)
+
+
+class Box(ub.NiceRepr):
+    """
+    Like kwimage.Boxes, but only one of them.
+
+    Currently implemented by storing a Boxes object with one item and indexing
+    into it. Could be done more efficiently
+    """
+
+    def __init__(self, boxes):
+        self.boxes = boxes
+
+    @property
+    def format(self):
+        return self.boxes.format
+
+    @property
+    def data(self):
+        return self.boxes.data[0]
+
+    def __nice__(self):
+        data_repr = repr(self.data)
+        if '\n' in data_repr:
+            data_repr = ub.indent('\n' + data_repr.lstrip('\n'), '    ')
+        nice = '{}, {}'.format(self.format, data_repr)
+        return nice
+
+    @classmethod
+    def from_slice(self, slice_):
+        import kwimage
+        boxes = kwimage.Boxes.from_slice(slice_)
+        self = Box(boxes)
+        return self
+
+    @classmethod
+    def from_shapely(self, geom):
+        import kwimage
+        boxes = kwimage.Boxes.from_shapely(geom)
+        self = Box(boxes)
+        return self
+
+    @classmethod
+    def from_dsize(self, dsize):
+        width, height = dsize
+        import kwimage
+        boxes = kwimage.Boxes([[0, 0, width, height]], 'ltrb')
+        self = Box(boxes)
+        return self
+
+    @property
+    def dsize(self):
+        return (int(self.width), int(self.height))
+
+    def translate(self, *args, **kwargs):
+        new_boxes = self.boxes.translate(*args, **kwargs)
+        new = self.__class__(new_boxes)
+        return new
+
+    def warp(self, *args, **kwargs):
+        new_boxes = self.boxes.warp(*args, **kwargs)
+        new = self.__class__(new_boxes)
+        return new
+
+    def scale(self, *args, **kwargs):
+        new_boxes = self.boxes.scale(*args, **kwargs)
+        new = self.__class__(new_boxes)
+        return new
+
+    def clip(self, *args, **kwargs):
+        new_boxes = self.boxes.clip(*args, **kwargs)
+        new = self.__class__(new_boxes)
+        return new
+
+    def quantize(self, *args, **kwargs):
+        new_boxes = self.boxes.quantize(*args, **kwargs)
+        new = self.__class__(new_boxes)
+        return new
+
+    @property
+    def width(self):
+        return self.boxes.width.ravel()[0]
+
+    @property
+    def height(self):
+        return self.boxes.width.ravel()[0]
+
+    @property
+    def area(self):
+        return self.boxes.area.ravel()[0]
+
+    def to_slice(self, endpoint=True):
+        return self.boxes.to_slices(endpoint=endpoint)[0]
+
+    def to_shapely(self):
+        return self.boxes.to_shapely()[0]
+
+    def to_polygon(self):
+        return self.boxes.to_polygons()[0]
+
+    def to_coco(self):
+        return self.boxes.to_coco()[0]

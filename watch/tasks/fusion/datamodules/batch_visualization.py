@@ -19,7 +19,7 @@ class BatchVisualizationBuilder:
 
     Example:
         >>> from watch.tasks.fusion.datamodules.batch_visualization import *  # NOQA
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import KWCocoVideoDataset
+        >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
         >>> import ndsampler
         >>> import watch
         >>> coco_dset = watch.coerce_kwcoco('vidshapes2-watch', num_frames=5)
@@ -53,7 +53,7 @@ class BatchVisualizationBuilder:
 
     Example:
         >>> from watch.tasks.fusion.datamodules.batch_visualization import *  # NOQA
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import KWCocoVideoDataset
+        >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
         >>> import ndsampler
         >>> import watch
         >>> coco_dset = watch.coerce_kwcoco('vidshapes2-watch', num_frames=5)
@@ -65,7 +65,7 @@ class BatchVisualizationBuilder:
         >>> # combinable_extra = None  # uncomment for raw behavior
         >>> self = KWCocoVideoDataset(
         >>>     sampler, sample_shape=(5, 128, 165), channels=channels,
-        >>>     use_centered_positives=True, neg_to_pos_ratio=0, space_scale='native')
+        >>>     use_centered_positives=True, neg_to_pos_ratio=0, input_space_scale='native')
         >>> index = len(self) // 4
         >>> index = 0
         >>> target = native_target = self.new_sample_grid['targets'][index].copy()
@@ -81,7 +81,8 @@ class BatchVisualizationBuilder:
         >>> # Resample the same item, but without native scale sampling for comparison
         >>> rescaled_target = native_item['target'].copy()
         >>> rescaled_target.pop('fliprot_params', None)
-        >>> rescaled_target['space_scale'] = 1
+        >>> rescaled_target['input_space_scale'] = 1
+        >>> rescaled_target['output_space_scale'] = 1
         >>> rescaled_target['allow_augment'] = 0
         >>> rescale = 0
         >>> draw_weights = 1
@@ -166,7 +167,7 @@ class BatchVisualizationBuilder:
         fliprot_params = item['target'].get('fliprot_params', None)
         for frame in item['frames'][1:]:
             change_prob = kwimage.Heatmap.random(
-                dims=frame['target_dims'], classes=1, rng=rng).data['class_probs'][0]
+                dims=frame['output_dims'], classes=1, rng=rng).data['class_probs'][0]
             if fliprot_params:
                 change_prob = data_utils.fliprot(change_prob, **fliprot_params)
             change_prob_list += [change_prob]
@@ -177,7 +178,7 @@ class BatchVisualizationBuilder:
         class_prob_list = []
         for frame in item['frames']:
             class_prob = kwimage.Heatmap.random(
-                dims=frame['target_dims'], classes=list(classes), rng=rng).data['class_probs']
+                dims=frame['output_dims'], classes=list(classes), rng=rng).data['class_probs']
             class_prob = einops.rearrange(class_prob, 'c h w -> h w c')
             if fliprot_params:
                 class_prob = data_utils.fliprot(class_prob, **fliprot_params)
@@ -189,7 +190,7 @@ class BatchVisualizationBuilder:
         saliency_prob_list = []
         for frame in item['frames']:
             saliency_prob = kwimage.Heatmap.random(
-                dims=frame['target_dims'], classes=1, rng=rng).data['class_probs']
+                dims=frame['output_dims'], classes=1, rng=rng).data['class_probs']
             saliency_prob = einops.rearrange(saliency_prob, 'c h w -> h w c')
             if fliprot_params:
                 saliency_prob = data_utils.fliprot(saliency_prob, **fliprot_params)
@@ -758,14 +759,18 @@ class BatchVisualizationBuilder:
         for iterx, row in enumerate(chan_rows):
             layers = []
             label_text = None
+            norm_signal = row['norm_signal']
             if builder.overlay_on_image:
                 # Draw truth on the image itself
                 if iterx < len(overlay_items):
                     overlay_info = overlay_items[iterx]
-                    layers.append(overlay_info['overlay'])
+                    overlay = overlay_info['overlay']
+                    overlay = kwimage.imresize(
+                        overlay, dsize=norm_signal.shape[0:2][::-1])
+                    layers.append(overlay)
                     label_text = overlay_info['label_text']
 
-            layers.append(row['norm_signal'])
+            layers.append(norm_signal)
             row_canvas = kwimage.overlay_alpha_layers(layers)[..., 0:3]
 
             if builder.rescale:

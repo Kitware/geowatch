@@ -27,7 +27,6 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
           so they may visually be near an annotation.
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
         >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_multisensor
         >>> dset = coco_dset = demo_kwcoco_multisensor(num_frames=3, dates=True, geodata=True, heatmap=True, rng=10)
@@ -77,7 +76,7 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
         >>> import watch
         >>> # dset = coco_dset = demo_kwcoco_multisensor(dates=True, geodata=True, heatmap=True)
         >>> dvc_dpath = watch.find_dvc_dpath(hardware='ssd', tags='phase2_data')
@@ -333,7 +332,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> import os
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
         >>> import watch
         >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
         >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_train.kwcoco.json'
@@ -348,7 +347,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         _ = xdev.profile_now(sample_video_spacetime_targets)(dset, window_dims)
 
         >>> import os
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
         >>> import watch
         >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
         >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_vali.kwcoco.json'
@@ -376,7 +375,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> import os
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
         >>> import watch
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'Aligned-Drop3-TA1-2022-03-10/combo_LM_nowv_vali.kwcoco.json'
@@ -393,7 +392,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
 
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
         >>> import ndsampler
         >>> import kwcoco
         >>> dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=30)
@@ -410,7 +409,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> assert np.all(all_boxes.width == window_dims[2])
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
         >>> import ndsampler
         >>> import kwcoco
         >>> dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=30)
@@ -433,7 +432,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         globals().update(xdev.get_func_kwargs(sample_video_spacetime_targets))
 
     Ignore:
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
         >>> import watch
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-TA1-2022-01/data.kwcoco.json'
@@ -603,10 +602,10 @@ def _sample_single_video_spacetime_targets(
     # Create a box to represent the "window-space" extent, and determine how we
     # are going to slide a window over it.
     vidspace_gsd = video_info.get('target_gsd', None)
-    import xdev
-    with xdev.embed_on_exception_context:
-        resolved_scale = data_utils.resolve_scale_request(
-            request=window_space_scale, data_gsd=vidspace_gsd)
+
+    resolved_scale = data_utils.resolve_scale_request(
+        request=window_space_scale, data_gsd=vidspace_gsd)
+    print('resolved_scale = {}'.format(ub.repr2(resolved_scale, nl=1)))
     window_scale = resolved_scale['scale']
 
     all_video_gids = list(dset.index.vidid_to_gids[video_id])
@@ -999,7 +998,7 @@ def make_track_based_spatial_samples(coco_dset):
     Ignore:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> import os
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
         >>> import watch
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1/data.kwcoco.json'

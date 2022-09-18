@@ -192,11 +192,10 @@ def _string_to_hashvec(key):
 def _boxes_snap_to_edges(given_box, snap_target):
     """
     Ignore:
-        given_box = space_box
-        , snap_target
-
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import _boxes_snap_to_edges
+        >>> from watch.tasks.fusion.datamodules.data_utils import *  # NOQA
+        >>> import kwimage
+        >>> from watch.tasks.fusion.datamodules.data_utils import _string_to_hashvec, _boxes_snap_to_edges
+        >>> from watch.tasks.fusion.datamodules.data_utils import _boxes_snap_to_edges
         >>> snap_target = kwimage.Boxes([[0, 0, 10, 10]], 'ltrb')
         >>> given_box = kwimage.Boxes([[-3, 5, 3, 13]], 'ltrb')
         >>> adjusted_box = _boxes_snap_to_edges(given_box, snap_target)
@@ -225,7 +224,7 @@ def _boxes_snap_to_edges(given_box, snap_target):
 class NestedPool(list):
     """
     Example:
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.data_utils import *  # NOQA
         >>> nested1 = NestedPool([[[1], [2, 3], [4, 5, 6], [7, 8, 9, 0]], [[11, 12, 13]]])
         >>> print({nested1.sample() for i in range(100)})
         >>> nested2 = NestedPool([[101], [102, 103], [104, 105, 106], [107, 8, 9, 0]])
@@ -257,3 +256,43 @@ class NestedPool(list):
                 chosen = chosen[idx]
 
         return chosen
+
+
+def update_many(run, data, weights=1):
+    """
+    # Will be added to kwarray
+    Assumes first data axis represents multiple observations
+    """
+    data = np.asarray(data)
+    if run.nan_behavior == 'ignore':
+        weights = weights * (~np.isnan(data)).astype(float)
+    elif run.nan_behavior == 'propogate':
+        ...
+    else:
+        raise AssertionError('should not be here')
+    has_ignore_items = False
+    if ub.iterable(weights):
+        ignore_flags = (weights == 0)
+        has_ignore_items = np.any(ignore_flags)
+
+    if has_ignore_items:
+        data = data.copy()
+        # Replace the bad value with somehting sensible for each operation.
+        data[ignore_flags] = 0
+
+        # Multiply data by weights
+        w_data = data * weights
+
+        run.raw_total += w_data.sum(axis=0)
+        run.raw_squares += (w_data ** 2).sum(axis=0)
+        data[ignore_flags] = -np.inf
+        run.raw_max = np.maximum(run.raw_max, data.max(axis=0))
+        data[ignore_flags] = +np.inf
+        run.raw_min = np.minimum(run.raw_min, data.min(axis=0))
+    else:
+        w_data = data * weights
+        run.raw_total += w_data.sum(axis=0)
+        run.raw_squares += (w_data ** 2).sum(axis=0)
+        run.raw_max = np.maximum(run.raw_max, data.max(axis=0))
+        run.raw_min = np.minimum(run.raw_min, data.min(axis=0))
+    run.n += weights.sum(axis=0)

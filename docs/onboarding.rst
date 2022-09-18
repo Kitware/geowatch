@@ -42,15 +42,10 @@ This onboarding document is a work in progress. While things are are still
 being organized, here is a list of current documentation files:
 
 
-For quick reference, a list of current documentation files is:
+For quick reference, review the list of current documentation files in the `README <../README.rst>`_
 
-* `Onboarding Docs <docs/onboarding.rst>`_
 
-* `Internal Resources <docs/internal_resources.rst>`_
-
-* `The WATCH CLI <docs/watch_cli.rst>`_
-
-* Contribution:
+Please ensure you review :
 
   + `Contribution Instructions <docs/contribution_instructions.rst>`_
 
@@ -58,31 +53,12 @@ For quick reference, a list of current documentation files is:
 
   + `Testing Practices <docs/testing_practices.md>`_
 
-* Installing: 
+  + `Coding Oddities <docs/coding_oddities.rst>`_
 
-  + `Installing WATCH <docs/installing_watch.rst>`_
+  + `Supporting Projects <docs/supporting_projects.rst>`_
 
-  + `Installing Python via Conda <docs/install_python_conda.rst>`_
 
-  + `Installing Python via PyEnv <docs/install_python_pyenv.rst>`_
-
-* Fusion Related Docs:
-
-  + `TA2 Fusion Overview <docs/fusion_overview.rst>`_
-
-  + `TA2 Deep Dive Info <docs/ta2_deep_dive_info.md>`_
-
-  + `TA2 Feature Integration <docs/ta2_feature_integration.md>`_
-
-* Older Design Docs:
-
-  + `Structure Proposal <docs/structure_proposal.md>`_
-
-* Tutorials:
-
-  + Tutorial 1: `Toy RGB Fusion Model Example <../watch/tasks/fusion/experiments/crall/toy_experiments_rgb.sh>`_ 
-
-  + Tutorial 2: `Toy MSI Fusion Model Example <../watch/tasks/fusion/experiments/crall/toy_experiments_msi.sh>`_ 
+TODO: Point to the FAQ examples in kwcoco and other projects with them
 
 
 .. ..To contribute, please read the `contribution instructions <docs/contribution_instructions.rst>`_.

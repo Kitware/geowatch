@@ -11,7 +11,7 @@ def demo_visualize_tokenization():
     Helper for slides
     """
     import watch
-    from watch.tasks.fusion.datamodules.kwcoco_video_data import KWCocoVideoDataset
+    from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
     dvc_dpath = watch.find_smart_dvc_dpath()
     coco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/combo_DILM_train.kwcoco.json'
     coco_dset = kwcoco.CocoDataset(coco_fpath)
@@ -117,7 +117,7 @@ def demo_visualize_heterogeneous_inputs():
     import watch
     import ubelt as ub
     from watch.utils import kwcoco_extensions
-    from watch.tasks.fusion.datamodules.kwcoco_video_data import KWCocoVideoDataModule
+    from watch.tasks.fusion.datamodules.kwcoco_datamodule import KWCocoVideoDataModule
     import kwcoco
     import kwplot
     kwplot.autompl()

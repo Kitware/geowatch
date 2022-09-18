@@ -70,6 +70,8 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument('--tta_fliprot', type=smartcast, default=0, help='number of times to flip/rotate the frame, can be in [0,7]')
     parser.add_argument('--tta_time', type=smartcast, default=0, help='number of times to expand the temporal sample for a frame'),
 
+    parser.add_argument('--clear_annots', type=smartcast, default=1, help='Clear existing annotations in output file. Otherwise keep them')
+
     # TODO:
     # parser.add_argument('--cache', type=smartcast, default=0, help='if True, dont rerun prediction on images where predictions exist'),
 
@@ -106,10 +108,14 @@ def make_predict_config(cmdline=False, **kwargs):
     # may want to modify behavior to only expose non-training params)
     overloadable_datamodule_keys = [
         'chip_size',
+        'chip_dims',
         'time_steps',
         'channels',
         'time_sampling',
         'time_span',
+        'input_space_scale',
+        'window_space_scale',
+        'output_space_scale',
     ]
     parser = datamodule_class.add_argparse_args(parser)
     datamodule_defaults = {k: parser.get_default(k) for k in overloadable_datamodule_keys}
@@ -204,6 +210,7 @@ def predict(cmdline=False, **kwargs):
     """
     args = make_predict_config(cmdline=cmdline, **kwargs)
     config = args.__dict__
+    print('kwargs = {}'.format(ub.repr2(kwargs, nl=1)))
     print('config = {}'.format(ub.repr2(config, nl=2)))
 
     package_fpath = ub.Path(args.package_fpath)
@@ -278,11 +285,13 @@ def predict(cmdline=False, **kwargs):
     print('unable_to_infer = {}'.format(ub.repr2(unable_to_infer, nl=1)))
     print('overloads = {}'.format(ub.repr2(overloads, nl=1)))
 
-    deviation = ub.varied_values([
-        ub.dict_isect(traintime_params, datamodule_vars),
-        ub.dict_isect(datamodule_vars, traintime_params),
-    ], min_variations=1)
-    print('deviation from fit->predict settings = {}'.format(ub.repr2(deviation, nl=1)))
+    # Look at the difference between predict and train time settings
+    print('deviation from fit->predict settings:')
+    for key in (traintime_params.keys() & datamodule_vars.keys()):
+        f_val = traintime_params[key]  # fit-time value
+        p_val = datamodule_vars[key]  # pred-time value
+        if f_val != p_val:
+            print(f'    {key!r}: {f_val!r} -> {p_val!r}')
 
     HACK_FIX_MODELS_WITH_BAD_CHANNEL_SPEC = True
     if HACK_FIX_MODELS_WITH_BAD_CHANNEL_SPEC:
@@ -379,8 +388,11 @@ def predict(cmdline=False, **kwargs):
     # Create the results dataset as a copy of the test CocoDataset
     print('Populate result dataset')
     result_dataset: kwcoco.CocoDataset = test_coco_dataset.copy()
+
     # Remove all annotations in the results copy
-    result_dataset.clear_annotations()
+    if config['clear_annots']:
+        result_dataset.clear_annotations()
+
     # Change all paths to be absolute paths
     result_dataset.reroot(absolute=True)
     # Set the filepath for the prediction coco file
@@ -400,8 +412,6 @@ def predict(cmdline=False, **kwargs):
     info = result_dataset.dataset.get('info', [])
 
     from kwcoco.util import util_json
-    import os
-    import socket
     jsonified_args = util_json.ensure_json_serializable(args.__dict__)
     # This will be serailized in kwcoco, so make sure it can be coerced to json
     walker = ub.IndexableWalker(jsonified_args)
@@ -415,20 +425,17 @@ def predict(cmdline=False, **kwargs):
                 walker[problem['loc']] = '<IN_MEMORY_DATASET: {}>'.format(
                     bad_data._build_hashid())
 
-    start_timestamp = ub.timestamp()
-
-    info.append({
-        'type': 'process',
-        'properties': {
-            'name': 'watch.tasks.fusion.predict',
-            'args': jsonified_args,
-            'hostname': socket.gethostname(),
-            'cwd': os.getcwd(),
-            'user': ub.Path(ub.userhome()).name,
-            'timestamp': start_timestamp,
-            'fit_config': traintime_params,
-        }
-    })
+    from watch.utils import process_context
+    proc_context = process_context.ProcessContext(
+        name='watch.tasks.fusion.predict',
+        type='process',
+        args=jsonified_args,
+        track_emissions=True,
+        extra={'fit_config': traintime_params}
+    )
+    info.append(proc_context.obj)
+    proc_context.start()
+    proc_context.add_disk_info(test_coco_dataset.fpath)
 
     from watch.utils.lightning_ext import util_device
     print('args.devices = {!r}'.format(args.devices))
@@ -582,22 +589,6 @@ def predict(cmdline=False, **kwargs):
     result_fpath.parent.ensuredir()
     print('result_fpath = {!r}'.format(result_fpath))
 
-    try:
-        if args.track_emissions:
-            import codecarbon
-            codecarbon.core.util.logger.setLevel('ERROR')
-            from codecarbon import EmissionsTracker
-            emissions_tracker = EmissionsTracker()
-            codecarbon.core.util.logger.setLevel('ERROR')
-            emissions_tracker.start()
-            codecarbon.core.util.logger.setLevel('ERROR')
-        else:
-            emissions_tracker = None
-    except Exception as ex:
-        if args.track_emissions:
-            print('ex = {!r}'.format(ex))
-        emissions_tracker = None
-
     CHECK_GRID = 0
     if CHECK_GRID:
         # Check to see if the grid will cover all images
@@ -621,6 +612,14 @@ def predict(cmdline=False, **kwargs):
         EMERGENCY_INPUT_AGREEMENT_HACK = 1
         # prog.set_extra(' <will populate stats after first video>')
         _batch_iter = iter(prog)
+        if 0:
+            item = test_dataloader.dataset[0]
+
+            orig_batch = next(_batch_iter)
+            item = orig_batch[0]
+            item['target']
+            frame = item['frames'][0]
+            ub.peek(frame['modes'].values()).shape
         for orig_batch in _batch_iter:
             batch_trs = []
             # Move data onto the prediction device, grab spacetime region info
@@ -630,9 +629,16 @@ def predict(cmdline=False, **kwargs):
                     continue
                 item = item.copy()
                 batch_gids = [frame['gid'] for frame in item['frames']]
+                outspace_info = [ub.udict(f) & {
+                    'gid',
+                    'output_space_slice',
+                    'output_image_dsize',
+                } for f in item['frames']]
                 batch_trs.append({
                     'space_slice': tuple(item['target']['space_slice']),
+                    'scale': item['target']['scale'],
                     'gids': batch_gids,
+                    'outspace_info': outspace_info,
                     'fliprot_params': item['target'].get('fliprot_params', None)
                 })
                 position_tensors = item.get('positional_tensors', None)
@@ -670,10 +676,6 @@ def predict(cmdline=False, **kwargs):
             if 0:
                 import netharn as nh
                 print(nh.data.collate._debug_inbatch_shapes(batch))
-
-            # self = method
-            # with_loss = 0
-            # item = batch[0]
 
             # Predict on the batch
             outputs = method.forward_step(batch, with_loss=False)
@@ -714,16 +716,23 @@ def predict(cmdline=False, **kwargs):
                     bin_probs = item_head_relevant_probs.detach().cpu().numpy()
 
                     # Get the spatio-temporal subregion this prediction belongs to
-                    out_gids: list[int] = target['gids'][predicted_frame_slice]
-                    space_slice: tuple[slice, slice] = target['space_slice']
+                    # out_gids: list[int] = target['gids'][predicted_frame_slice]
+                    # space_slice: tuple[slice, slice] = target['space_slice']
+                    outspace_info: list[dict] = target['outspace_info'][predicted_frame_slice]
 
                     fliprot_params: dict = target['fliprot_params']
                     # Update the stitcher with this windowed prediction
-                    for gid, probs in zip(out_gids, bin_probs):
+                    for probs, outspace_slice in zip(bin_probs, outspace_info):
                         if fliprot_params is not None:
                             # Undo fliprot TTA
                             probs = data_utils.inv_fliprot(probs, **fliprot_params)
-                        head_stitcher.accumulate_image(gid, space_slice, probs)
+
+                        gid = outspace_slice['gid']
+                        output_image_dsize = outspace_slice['output_image_dsize']
+                        output_space_slice = outspace_slice['output_space_slice']
+
+                        head_stitcher.accumulate_image(
+                            gid, output_space_slice, probs, dsize=output_image_dsize)
 
                 # Free up space for any images that have been completed
                 for gid in head_stitcher.ready_image_ids():
@@ -738,73 +747,8 @@ def predict(cmdline=False, **kwargs):
                 writer_queue.submit(head_stitcher.finalize_image, gid)
         writer_queue.wait_until_finished()
 
-    try:
-        device_info = {
-            'device_index': device.index,
-            'device_type': device.type,
-        }
-        try:
-            device_props = torch.cuda.get_device_properties(device)
-            capabilities = (device_props.multi_processor_count, device_props.minor)
-            device_info.update({
-                'device_name': device_props.name,
-                'total_vram': device_props.total_memory,
-                'reserved_vram': torch.cuda.memory_reserved(device),
-                'allocated_vram': torch.cuda.memory_allocated(device),
-                'device_capabilities': capabilities,
-                'device_multi_processor_count': device_props.multi_processor_count,
-            })
-        except Exception:
-            pass
-    except Exception as ex:
-        print('ex = {!r}'.format(ex))
-        device_info = str(ex)
-
-    try:
-        from watch.utils import util_hardware
-        system_info = util_hardware.get_cpu_mem_info()
-        try:
-            # Get information about disk used in this process
-            disk_info = util_hardware.disk_info_of_path(test_coco_dataset.fpath)
-            system_info['disk_info'] = disk_info
-        except Exception as ex:
-            print('ex = {!r}'.format(ex))
-    except Exception as ex:
-        print('ex = {!r}'.format(ex))
-        system_info = str(ex)
-
-    if emissions_tracker is not None:
-        co2_kg = emissions_tracker.stop()
-        emissions = {
-            'co2_kg': co2_kg,
-        }
-        try:
-            import pint
-        except Exception as ex:
-            print('ex = {!r}'.format(ex))
-        else:
-            reg = pint.UnitRegistry()
-            if co2_kg is None:
-                co2_kg = np.nan
-            co2_ton = (co2_kg * reg.kg).to(reg.metric_ton)
-            dollar_per_ton = 15 / reg.metric_ton  # cotap rate
-            emissions['co2_ton'] = co2_ton.m
-            emissions['est_dollar_to_offset'] = (co2_ton * dollar_per_ton).m
-        print('emissions = {}'.format(ub.repr2(emissions, nl=1)))
-    else:
-        emissions = None
-
-    info.append({
-        'type': 'measure',
-        'properties': {
-            'iters_per_second': prog._iters_per_second,
-            'start_timestamp': start_timestamp,
-            'end_timestamp': ub.timestamp(),
-            'device_info': device_info,
-            'system_info': system_info,
-            'emissions': emissions,
-        }
-    })
+    proc_context.add_device_info(device)
+    proc_context.stop()
 
     # validate and save results
     print(result_dataset.validate())
@@ -922,7 +866,7 @@ class CocoStitchingManager(object):
             self.prob_dpath = join(bundle_dpath, prob_subdir)
             ub.ensuredir(self.prob_dpath)
 
-    def accumulate_image(self, gid, space_slice, data):
+    def accumulate_image(self, gid, space_slice, data, dsize=None):
         """
         Stitches a result into the appropriate image stitcher.
 
@@ -934,6 +878,8 @@ class CocoStitchingManager(object):
                 the slice (in "stitching-space") the data corresponds to.
 
             data (ndarray | Tensor): the feature or probability data
+
+            dsize (Tuple): the w/h i
         """
         data = kwarray.atleast_nd(data, 3)
         dset = self.result_dataset
@@ -941,14 +887,17 @@ class CocoStitchingManager(object):
             vidid = dset.index.imgs[gid]['video_id']
             # Create the stitcher if it does not exist
             if gid not in self.image_stitchers:
-                video = dset.index.videos[vidid]
+                if dsize is None:
+                    video = dset.index.videos[vidid]
+                    height, width = video['height'], video['width']
+                else:
+                    width, height = dsize
                 if self.num_bands == 'auto':
                     if len(data.shape) == 3:
                         self.num_bands = data.shape[2]
                     else:
                         raise NotImplementedError
-                stitch_dims = (video['height'], video['width'], self.num_bands)
-
+                stitch_dims = (width, height, self.num_bands)
                 self.image_stitchers[gid] = kwarray.Stitcher(
                     stitch_dims, device=self.device)
 
@@ -1016,7 +965,18 @@ class CocoStitchingManager(object):
                 spatial_valid_mask = (1 - invalid_output_mask)
             stitch_weights = stitch_weights * spatial_valid_mask
             stitch_data[invalid_output_mask] = 0
-        stitcher.add(stitch_slice, stitch_data, weight=stitch_weights)
+
+        stitch_slice = fix_slice(stitch_slice)
+
+        try:
+            stitcher.add(stitch_slice, stitch_data, weight=stitch_weights)
+        except IndexError:
+            import xdev
+            xdev.embed()
+            print(f'stitch_slice={stitch_slice}')
+            print(f'stitch_weights.shape={stitch_weights.shape}')
+            print(f'stitch_data.shape={stitch_data.shape}')
+            raise
 
     def managed_image_ids(self):
         """
@@ -1068,7 +1028,8 @@ class CocoStitchingManager(object):
         # Get the final stitched feature for this image
         final_probs = stitcher.finalize()
         final_probs = kwarray.atleast_nd(final_probs, 3)
-        final_probs = np.nan_to_num(final_probs)
+        # is_nodata = np.isnan(final_probs)
+        # final_probs = np.nan_to_num(final_probs)
 
         final_weights = kwarray.atleast_nd(stitcher.weights, 3)
         is_predicted_pixel = final_weights.any(axis=2).astype('uint8')
@@ -1104,13 +1065,14 @@ class CocoStitchingManager(object):
             new_fname = img.get('name', str(img['id'])) + f'_{self.suffix_code}.tif'  # FIXME
             new_fpath = join(self.prob_dpath, new_fname)
             assert final_probs.shape[2] == (self.chan_code.count('|') + 1)
+            img_from_asset = img_from_vid
             aux = {
                 'file_name': relpath(new_fpath, bundle_dpath),
                 'channels': self.chan_code,
                 'height': final_probs.shape[0],
                 'width': final_probs.shape[1],
                 'num_bands': final_probs.shape[2],
-                'warp_aux_to_img': img_from_vid.concise(),
+                'warp_aux_to_img': img_from_asset.concise(),
             }
             auxiliary = img.setdefault('auxiliary', [])
             auxiliary.append(aux)
@@ -1118,20 +1080,42 @@ class CocoStitchingManager(object):
             # Save the prediction to disk
             total_prob += np.nansum(final_probs)
 
+            write_kwargs = {}
+            write_kwargs['blocksize'] = 128
+            write_kwargs['compress'] = self.prob_compress
+
+            if 'wld_crs_info' in img:
+                from osgeo import osr
+                # TODO: would be nice to have an easy to use mechanism to get
+                # the gdal crs, probably one exists in pyproj.
+                auth = img['wld_crs_info']['auth']
+                assert auth[0] == 'EPSG', 'unhandled auth'
+                epsg = auth[1]
+                axis_strat = getattr(osr, img['wld_crs_info']['axis_mapping'])
+                srs = osr.SpatialReference()
+                srs.ImportFromEPSG(int(epsg))
+                srs.SetAxisMappingStrategy(axis_strat)
+                img_from_wld = kwimage.Affine.coerce(img['wld_to_pxl'])
+                wld_from_img = img_from_wld.inv()
+                wld_from_asset = wld_from_img @ img_from_asset
+                write_kwargs['crs'] = srs.ExportToWkt()
+                write_kwargs['transform'] = wld_from_asset
+                write_kwargs['overviews'] = 2
+
             if self.quantize:
                 # Quantize
                 quant_probs, quantization = quantize_float01(final_probs)
                 aux['quantization'] = quantization
 
+                # TODO: add geo-referencing when appropriate
                 kwimage.imwrite(
                     str(new_fpath), quant_probs, space=None, backend='gdal',
-                    compress=self.prob_compress, blocksize=128,
-                    nodata=quantization['nodata']
+                    nodata=quantization['nodata'], **write_kwargs,
                 )
             else:
                 kwimage.imwrite(
                     str(new_fpath), final_probs, space=None, backend='gdal',
-                    compress=self.prob_compress, blocksize=128,
+                    **write_kwargs,
                 )
 
         if self.write_preds:
@@ -1250,6 +1234,27 @@ def quantize_float01(imdata, old_min=0, old_max=1, quantize_dtype=np.int16):
 
 def main(cmdline=True, **kwargs):
     predict(cmdline=cmdline, **kwargs)
+
+
+def _fix_int(d):
+    return None if d is None else int(d)
+
+
+def _fix_slice(d):
+    return slice(_fix_int(d.start), _fix_int(d.stop), _fix_int(d.step))
+
+
+def _fix_slice_tup(sl):
+    return tuple(map(_fix_slice, sl))
+
+
+def fix_slice(sl):
+    if isinstance(sl, slice):
+        return _fix_slice(sl)
+    elif isinstance(sl, (tuple, list)) and isinstance(ub.peek(sl), slice):
+        return _fix_slice_tup(sl)
+    else:
+        raise TypeError(repr(sl))
 
 
 if __name__ == '__main__':
