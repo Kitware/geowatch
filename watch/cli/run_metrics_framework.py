@@ -60,7 +60,7 @@ class MetricsConfig(scfg.DataConfig):
         Output directory where scores will be written. Each
         region will have. Defaults to ./iarpa-metrics-output/
         '''))
-    merge = scfg.Value(False, help=ub.paragraph(
+    merge = scfg.Value(False, isflag=1, help=ub.paragraph(
         '''
         Merge BAS and SC metrics from all regions and output to
         {out_dir}/merged/
@@ -75,7 +75,7 @@ class MetricsConfig(scfg.DataConfig):
         If specified, will write temporary data here instead of
         using a     non-persistant directory
         '''))
-    enable_viz = scfg.Value(False, help=ub.paragraph(
+    enable_viz = scfg.Value(False,  isflag=1, help=ub.paragraph(
         '''
         If true, enables iarpa visualizations
         '''))
@@ -83,12 +83,12 @@ class MetricsConfig(scfg.DataConfig):
         '''
         Short name for the algorithm used to generate the model
         '''))
-    inputs_are_paths = scfg.Value(False, help=ub.paragraph(
+    inputs_are_paths = scfg.Value(False,  isflag=1, help=ub.paragraph(
         '''
         If given, the sites inputs will always be interpreted as
         paths and not raw json text.
         '''))
-    use_cache = scfg.Value(False, help=ub.paragraph(
+    use_cache = scfg.Value(False,  isflag=1, help=ub.paragraph(
         '''
         IARPA metrics code currently contains a cache bug, do not
         enable the cache until this is fixed.

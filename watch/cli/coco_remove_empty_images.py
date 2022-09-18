@@ -24,7 +24,7 @@ class RemoveEmptyImagesConfig(scfg.Config):
 
         'delete_assets': scfg.Value('auto', help='if True actually deletes the assets. If auto and interactive, will ask the user to choose'),
 
-        'interactive': scfg.Value(True, help='if true, ask the user to confirm deletion'),
+        'interactive': scfg.Value(True, isflag=1, help='if true, ask the user to confirm deletion'),
 
         'overview': scfg.Value(-1, help='set to -1 for fastest method, and 0 for most accurate method'),
     }
