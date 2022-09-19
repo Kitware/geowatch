@@ -61,24 +61,31 @@ TODO:
 
     MODEL_OF_INTEREST="Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584"
     DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
+    # DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
     DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
 
     # Evaluate on a subset of the training set
-    TRAIN_DATASET_SUBSET=$DATA_DVC_DPATH/$DATASET_CODE/data_train_subset.kwcoco.json
-    # TRAIN_DATASET_BIG=$DATA_DVC_DPATH/$DATASET_CODE/data_train.kwcoco.json
-    # kwcoco subset "$TRAIN_DATASET_BIG" "$TRAIN_DATASET_SUBSET" --select_videos '.name | test(".*_R.*")'
+    VALI_DATASET_SUBSET=$DATA_DVC_DPATH/$DATASET_CODE/data_train_subset.kwcoco.json
+    VALI_DATASET_BIG=$DATA_DVC_DPATH/$DATASET_CODE/data_vali.kwcoco.json
+    kwcoco subset "$VALI_DATASET_BIG" "$VALI_DATASET_SUBSET" --select_videos '.name | test("KR_R001")'
 
     # Then you should be able to evaluate that model
     python -m watch.mlops.expt_manager "evaluate" \
-        --model_pattern="${MODEL_OF_INTEREST}*" \
         --dataset_codes "$DATASET_CODE" \
-        --test_dataset="$TRAIN_DATASET_SUBSET" \
+        --test_dataset="$VALI_DATASET_SUBSET" \
         --enable_track=1 \
         --enable_iarpa_eval=1 \
         --set_cover_algo=approx,exact \
         --bas_thresh=0.0,0.01,0.1 \
+        --chip_overlap=0.3,0.0 \
         --devices="0,1" --run=1
+
+    # --model_pattern="${MODEL_OF_INTEREST}*" \
+    # --test_dataset="$TRAIN_DATASET_SUBSET" \
+    # TRAIN_DATASET_SUBSET=$DATA_DVC_DPATH/$DATASET_CODE/data_train_subset.kwcoco.json
+    # TRAIN_DATASET_BIG=$DATA_DVC_DPATH/$DATASET_CODE/data_train.kwcoco.json
+    # kwcoco subset "$TRAIN_DATASET_BIG" "$TRAIN_DATASET_SUBSET" --select_videos '.name | test(".*_R.*")'
 
 Ignore:
     python -m watch.mlops.expt_manager "evaluate" \

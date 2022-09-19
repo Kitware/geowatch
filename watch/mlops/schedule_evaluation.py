@@ -263,6 +263,13 @@ def schedule_evaluation(cmdline=False, **kwargs):
     pred_cfg_basis['chip_overlap'] = ensure_iterable(config['chip_overlap'])
     pred_cfg_basis['set_cover_algo'] = ensure_iterable(config['set_cover_algo'])
 
+    if 1:
+        # pred_cfg_basis['input_space_scale'] = ensure_iterable(config['input_space_scale'])
+        pred_cfg_basis['input_space_scale'] = ['10GSD', '15SGD']
+        pred_cfg_basis['use_cloudmask'] = [0, 1]  # HACK
+        pred_cfg_basis['resample_invalid_frames'] = [0, 1]  # HACK
+        # TODO: allow for "auto"
+
     trk_defaults = {
         'thresh': [0.1],
         'morph_kernel': [3],
