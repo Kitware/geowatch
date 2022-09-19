@@ -1,5 +1,5 @@
-from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-from watch.tasks.fusion.methods import *
+from watch.tasks.fusion.datamodules.kwcoco_video_data import KWCocoVideoDataModule  # NOQA
+from watch.tasks.fusion.methods import SequenceAwareModel
 
 import pathlib
 
@@ -25,9 +25,9 @@ class WrappedKWCocoDataModule(KWCocoVideoDataModule):
     ):
 
         super().__init__(
-            train_dataset=pathlib.Path(train_dataset) if (train_dataset != None) else None,
-            vali_dataset=pathlib.Path(vali_dataset) if (vali_dataset != None) else None,
-            test_dataset=pathlib.Path(test_dataset) if (test_dataset != None) else None,
+            train_dataset=pathlib.Path(train_dataset) if (train_dataset is not None) else None,
+            vali_dataset=pathlib.Path(vali_dataset) if (vali_dataset is not None) else None,
+            test_dataset=pathlib.Path(test_dataset) if (test_dataset is not None) else None,
             batch_size=batch_size,
             channels=channels,
             space_scale=space_scale,

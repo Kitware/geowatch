@@ -1,7 +1,7 @@
-import itertools as it
-from types import MethodType
-from functools import partial
-import pathlib
+# import itertools as it
+# from types import MethodType
+# from functools import partial
+# import pathlib
 
 import einops
 import kwarray
@@ -9,7 +9,7 @@ import kwcoco
 import ubelt as ub
 import torch
 import torchmetrics
-import torch_optimizer
+# import torch_optimizer
 # import math
 
 import numpy as np
@@ -19,13 +19,13 @@ import perceiver_pytorch as perceiver
 
 # import torch_optimizer as optim
 from torch import nn
-from einops.layers.torch import Rearrange
-from torchvision import transforms
+# from einops.layers.torch import Rearrange
+# from torchvision import transforms
 from torch.optim import lr_scheduler
 from watch import heuristics
-from watch.tasks.fusion import utils
-from watch.tasks.fusion.architectures import transformer
-from watch.tasks.fusion.methods.network_modules import _torch_meshgrid
+# from watch.tasks.fusion import utils
+# from watch.tasks.fusion.architectures import transformer
+# from watch.tasks.fusion.methods.network_modules import _torch_meshgrid
 from watch.tasks.fusion.methods.network_modules import _class_weights_from_freq
 from watch.tasks.fusion.methods.network_modules import coerce_criterion
 from watch.tasks.fusion.methods.network_modules import RobustModuleDict
@@ -434,8 +434,6 @@ class SequenceAwareModel(pl.LightningModule):
         class_loss = config['class_loss']
         change_loss = config['change_loss']
         saliency_loss = config['saliency_loss']
-        dropout = config['dropout']
-        attention_impl = config['attention_impl']
         global_class_weight = config['global_class_weight']
         global_change_weight = config['global_change_weight']
         global_saliency_weight = config['global_saliency_weight']
@@ -872,7 +870,8 @@ class SequenceAwareModel(pl.LightningModule):
             ]
             weights = torch.concat([einops.rearrange(x, "h w -> (h w)") for x in weights], dim=0)
 
-            if task_name == "class_idxs": task_name = "class"
+            if task_name == "class_idxs":
+                task_name = "class"
             pos_enc = self.encode_query_position(example, task_name, inputs.dtype, inputs.device)
             pos_enc = torch.concat([einops.rearrange(x, "c h w -> (h w) c") for x in pos_enc], dim=0)
 
@@ -1402,11 +1401,6 @@ class SequenceAwareModel(pl.LightningModule):
         # TODO: start a server process that listens for new images
         # as it gets new images, it starts playing through the animation
         # looping as needed
-
-    def reset_weights(self):
-        for name, mod in self.named_modules():
-            if hasattr(mod, 'reset_parameters'):
-                mod.reset_parameters()
 
     @classmethod
     def load_package(cls, package_path, verbose=1):
