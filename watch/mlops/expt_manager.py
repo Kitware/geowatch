@@ -67,8 +67,8 @@ TODO:
 
     # Evaluate on a subset of the training set
     VALI_DATASET_SUBSET=$DATA_DVC_DPATH/$DATASET_CODE/data_train_subset.kwcoco.json
-    VALI_DATASET_BIG=$DATA_DVC_DPATH/$DATASET_CODE/data_vali.kwcoco.json
-    kwcoco subset "$VALI_DATASET_BIG" "$VALI_DATASET_SUBSET" --select_videos '.name | test("KR_R001")'
+    # VALI_DATASET_BIG=$DATA_DVC_DPATH/$DATASET_CODE/data_vali.kwcoco.json
+    # kwcoco subset "$VALI_DATASET_BIG" "$VALI_DATASET_SUBSET" --select_videos '.name | test("KR_R001")'
 
     # Then you should be able to evaluate that model
     python -m watch.mlops.expt_manager "evaluate" \
@@ -76,10 +76,10 @@ TODO:
         --test_dataset="$VALI_DATASET_SUBSET" \
         --enable_track=1 \
         --enable_iarpa_eval=1 \
-        --set_cover_algo=approx,exact \
+        --set_cover_algo=approx,none \
         --bas_thresh=0.0,0.01,0.1 \
         --chip_overlap=0.3,0.0 \
-        --devices="0,1" --run=1
+        --devices="1,2,3" --run=1
 
     # --model_pattern="${MODEL_OF_INTEREST}*" \
     # --test_dataset="$TRAIN_DATASET_SUBSET" \

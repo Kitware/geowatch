@@ -1,4 +1,4 @@
-"""
+r"""
 Demodata for a simple region and site model
 
 See Also:
@@ -13,9 +13,9 @@ CommandLine:
     ###
 
     # Create a demo region file
-    xdoctest watch.demo.demo_region demo_khq_region_fpath
+    xdoctest -m watch.demo.demo_region demo_khq_region_fpath
 
-    DATASET_SUFFIX=DemoKHQ-2022-09-15-V6
+    DATASET_SUFFIX=DemoKHQ-2022-09-19-V7
     DEMO_DPATH=$HOME/.cache/watch/demo/datasets
     REGION_FPATH="$HOME/.cache/watch/demo/annotations/KHQ_R001.geojson"
     SITE_GLOBSTR="$HOME/.cache/watch/demo/annotations/KHQ_R001_sites/*.geojson"
@@ -37,7 +37,7 @@ CommandLine:
         --stac_query_mode=auto \
         --sensors "L2-L8" \
         --api_key=env:SMART_STAC_API_KEY \
-        --collated True \
+        --collated False \
         --requester_pays=True \
         --dvc_dpath="$DEMO_DPATH" \
         --aws_profile=iarpa \
@@ -70,14 +70,15 @@ CommandLine:
 
     # Look at the contents of the underlying folder to build scripts.
     echo "DATASET_CID = $DATASET_CID"
+    echo "DATASET_SUFFIX=$DATASET_SUFFIX"
     ipfs ls "$DATASET_CID"
 
 
     # Pin on a remote service
-    ipfs pin remote add --service=web3.storage.erotemic $DATASET_CID --background
+    ipfs pin remote add --service=web3.storage.erotemic --name="$DATASET_SUFFIX" $DATASET_CID --background
     ipfs pin remote ls --service=web3.storage.erotemic --cid=$DATASET_CID --status=queued,pinning,pinned,failed
 
-    DATASET_CID=bafybeigm5wlzpvjtcyuvjaxjnnjmga6blspmwb77c4syg3jyfcc4bdypd4
+    DATASET_CID=bafybeigdkhphpa3n3rdv33w7g6tukmprdnch7g4bp4hc6ebmcr76y6yhwu
     ipfs pin remote ls --service=web3.storage.erotemic --cid=$DATASET_CID --status=queued,pinning,pinned,failed
 
 """

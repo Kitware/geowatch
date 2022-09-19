@@ -34,6 +34,10 @@ Variable abbreviations:
 
 * ``shape`` - This is going to be the row-major shape of an array usually. Often (h, w, channel) or just (h, w)
 
+* ``fpath`` - a "file" path. This is used to store a string of ``Path`` object representing a path that points to a file (i.e. not a directory).
+
+* ``dpath`` - a "directory" path. This is used to store a string of ``Path`` object representing a path that points to a directory (i.e. not a file).
+
 
 Notes on row-vs-column major coordinate axes:
 

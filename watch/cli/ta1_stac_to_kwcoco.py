@@ -24,6 +24,8 @@ except Exception:
 
 
 def main():
+    from scriptconfig.smartcast import smartcast
+
     parser = argparse.ArgumentParser(
         description="Convert a STAC catalog to a KWCOCO manifest")
 
@@ -51,6 +53,10 @@ def main():
                         action='store_true',
                         default=False,
                         help="Populate video / watch fields")
+    parser.add_argument("--verbose",
+                        type=smartcast,
+                        default=1,
+                        help="verbosity")
     parser.add_argument("-j", "--jobs",
                         type=str,
                         default=1,
@@ -247,7 +253,7 @@ def _determine_l8_channels(asset_name, asset_dict):
         return '|'.join(mapped_names)
     elif re.search(r'cloudmask\.(tiff?|jp2)$', asset_href, re.I):
         return 'cloudmask'
-    elif m := re.search(r'(QA_PIXEL|QA_RADSAT|SR_QA_AEROSOL)\.(tiff?|jp2)$',  # NOQA
+    elif m := re.search(r'(QA_PIXEL|QA_RADSAT|QA_LINEAGE|SR_QA_AEROSOL)\.(tiff?|jp2)$',  # NOQA
                         asset_href, re.I):
         return m.group(1).lower()
     elif m := re.search(r'(B\w{1,2})\.(tiff?|jp2)$', asset_href, re.I):  # NOQA
@@ -317,7 +323,8 @@ def make_coco_aux_from_stac_asset(asset_name,
                                   force_affine=True,
                                   assume_relative=False,
                                   from_collated=False,
-                                  populate_watch_fields=True):
+                                  populate_watch_fields=True,
+                                  verbose=0):
     """
     Converts a single STAC asset into an "auxiliary" item / asset that will
     belong to a kwcoco image.
@@ -329,27 +336,48 @@ def make_coco_aux_from_stac_asset(asset_name,
     asset_href = asset_dict['href']
 
     # Skip assets with metadata or thumbnail extensions
-    if re.search(r'\.(txt|csv|json|xml|vrt|jpe?g)$', asset_href, re.I):
+    if re.search(r'\.(txt|csv|json|xml)$', asset_href, re.I):
+        if verbose:
+            print(f'SKIP META asset: {asset_href}')
+        return None
+
+    if re.search(r'\.(vrt|jpe?g)$', asset_href, re.I):
+        if verbose:
+            print(f'SKIP THUMB asset: {asset_href}')
         return None
 
     if re.search(r'\.(img|hdr|hdf|imd)$', asset_href, re.I):
+        if verbose:
+            print(f'SKIP asset: {asset_href}')
         return None
 
     # HACK Skip common TCI (true color images) and PVI (preview images)
     # naming schemes
     if re.search(r'TCI\.jp2$', asset_href, re.I):
+        if verbose:
+            print(f'SKIP TCI asset: {asset_href}')
         return None
     if re.search(r'_PVI\.tif$', asset_href, re.I):
+        if verbose:
+            print(f'SKIP PVI asset: {asset_href}')
         return None
 
     if from_collated and platform in SUPPORTED_PLATFORMS:
+        if verbose:
+            print('Detected collated channels')
         channels = _determine_channels_collated(asset_name, asset_dict,
                                                 platform)
     elif platform in SUPPORTED_COARSE_PLATFORMS['S2']:
+        if verbose:
+            print('Detected S2 channels')
         channels = _determine_s2_channels(asset_name, asset_dict)
     elif platform in SUPPORTED_COARSE_PLATFORMS['L8']:
+        if verbose:
+            print('Detected L8 channels')
         channels = _determine_l8_channels(asset_name, asset_dict)
     elif platform in SUPPORTED_COARSE_PLATFORMS['WV']:
+        if verbose:
+            print('Detected WV channels')
         channels = _determine_wv_channels(asset_name, asset_dict)
     else:
         raise NotImplementedError(
@@ -368,6 +396,8 @@ def make_coco_aux_from_stac_asset(asset_name,
     ]
     if channels is not None:
         if channels in ignore_channels:
+            if verbose:
+                print(f'SKIP ignored asset: {asset_href}')
             return None
 
     if channels is None:
@@ -383,7 +413,12 @@ def make_coco_aux_from_stac_asset(asset_name,
         if not from_collated:
             print("* Warning * Couldn't determine channels for asset "
                   "at: '{}'. Asset will be ignored.".format(asset_href))
+        elif verbose:
+            print(f'SKIP Unknown asset: {asset_href}')
         return None
+
+    if verbose:
+        print(f'ADD asset: {asset_href}')
 
     if assume_relative:
         file_name = join(basename(dirname(asset_href)), basename(asset_href))
@@ -447,7 +482,8 @@ def make_coco_aux_from_stac_asset(asset_name,
 def _stac_item_to_kwcoco_image(stac_item,
                                assume_relative=False,
                                from_collated=False,
-                               populate_watch_fields=True):
+                               populate_watch_fields=True,
+                               verbose=0):
     stac_item_dict = stac_item.to_dict()
 
     platform = stac_item_dict['properties']['platform']
@@ -474,7 +510,8 @@ def _stac_item_to_kwcoco_image(stac_item,
             force_affine=True,
             assume_relative=assume_relative,
             from_collated=from_collated,
-            populate_watch_fields=populate_watch_fields
+            populate_watch_fields=populate_watch_fields,
+            verbose=verbose,
         )
         if aux is not None:
             auxiliary.append(aux)
@@ -492,9 +529,9 @@ def _stac_item_to_kwcoco_image(stac_item,
                                  {'utm_corners', 'wld_crs_info', 'utm_crs_info'}))
 
         for aux in auxiliary:
-            aux.pop('utm_corners')
-            aux.pop('utm_crs_info')
-            aux.pop('wld_crs_info')
+            aux.pop('utm_corners', None)
+            aux.pop('utm_crs_info', None)
+            aux.pop('wld_crs_info', None)
             aux['warp_to_wld'] = aux['warp_pxl_to_wld'].concise()
             warp_aux_to_img = warp_wld_to_img @ aux.pop('warp_pxl_to_wld')
             aux['warp_aux_to_img'] = warp_aux_to_img.concise()
@@ -524,7 +561,8 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
                        populate_watch_fields=False,
                        jobs=1,
                        from_collated=False,
-                       ignore_duplicates=False):
+                       ignore_duplicates=False,
+                       verbose=1):
 
     from watch.utils.lightning_ext import util_globals
     jobs = util_globals.coerce_num_workers(jobs)
@@ -584,13 +622,14 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
         executor.submit(_stac_item_to_kwcoco_image, stac_item,
                         assume_relative=assume_relative,
                         from_collated=from_collated,
-                        populate_watch_fields=populate_watch_fields)
+                        populate_watch_fields=populate_watch_fields,
+                        verbose=verbose > 1)
 
     output_dset = kwcoco.CocoDataset()
     output_dset.fpath = outpath
 
     # TODO: Should make this name the MGRS tile
-    for job in executor.as_completed(desc='collect jobs'):
+    for job in executor.as_completed(desc='collect jobs', progkw={'verbose': verbose}):
         kwcoco_img = job.result()
         if kwcoco_img is not None:
             # Ignore iamges with 0 auxiliary items
