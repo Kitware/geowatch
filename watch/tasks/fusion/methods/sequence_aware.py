@@ -1,31 +1,18 @@
-# import itertools as it
-# from types import MethodType
-# from functools import partial
-# import pathlib
-
 import einops
 import kwarray
 import kwcoco
 import ubelt as ub
 import torch
 import torchmetrics
-# import torch_optimizer
-# import math
 
 import numpy as np
 import netharn as nh
 import pytorch_lightning as pl
 import perceiver_pytorch as perceiver
 
-# import torch_optimizer as optim
 from torch import nn
-# from einops.layers.torch import Rearrange
-# from torchvision import transforms
 from torch.optim import lr_scheduler
 from watch import heuristics
-# from watch.tasks.fusion import utils
-# from watch.tasks.fusion.architectures import transformer
-# from watch.tasks.fusion.methods.network_modules import _torch_meshgrid
 from watch.tasks.fusion.methods.network_modules import _class_weights_from_freq
 from watch.tasks.fusion.methods.network_modules import coerce_criterion
 from watch.tasks.fusion.methods.network_modules import RobustModuleDict
@@ -348,7 +335,7 @@ class SequenceAwareModel(pl.LightningModule):
                 frame['time_offset'] = np.array([1]),
                 frame['timestamp'] = 1
                 frame['modes'] = modes
-                frame['target_dims'] = (H0, W0)
+                frame['output_dims'] = (H0, W0)
                 # specify the desired predicted output size for this frame
                 # frame['output_wh'] = (H0, W0)
 
@@ -828,10 +815,10 @@ class SequenceAwareModel(pl.LightningModule):
     def encode_query_position(self, example, task_name, dtype, device):
         return [
             self.positional_encoders[task_name](torch.stack(
-                (frame["time_index"] * torch.ones(*frame["target_dims"], dtype=dtype, device=device),) +
+                (frame["time_index"] * torch.ones(*frame["output_dims"], dtype=dtype, device=device),) +
                 torch.meshgrid(
-                    torch.linspace(-1, 1, frame["target_dims"][0], dtype=dtype, device=device),
-                    torch.linspace(-1, 1, frame["target_dims"][1], dtype=dtype, device=device),
+                    torch.linspace(-1, 1, frame["output_dims"][0], dtype=dtype, device=device),
+                    torch.linspace(-1, 1, frame["output_dims"][1], dtype=dtype, device=device),
                 ),
             ))
             for frame in example["frames"]
@@ -854,7 +841,7 @@ class SequenceAwareModel(pl.LightningModule):
             labels = [
                 frame[task_name] if (frame[task_name] is not None)
                 else torch.zeros(
-                    frame["target_dims"],
+                    frame["output_dims"],
                     dtype=torch.int32,
                     device=inputs.device)
                 for frame in example["frames"]
@@ -863,7 +850,7 @@ class SequenceAwareModel(pl.LightningModule):
             weights = [
                 frame[weights_name] if (frame[weights_name] is not None)
                 else torch.zeros(
-                    frame["target_dims"],
+                    frame["output_dims"],
                     dtype=inputs.dtype,
                     device=inputs.device)
                 for frame in example["frames"]
@@ -896,7 +883,7 @@ class SequenceAwareModel(pl.LightningModule):
                 "weights": weights,
                 "pos_enc": pos_enc,
                 "mask": valid_mask,
-                "shape": [frame["target_dims"] for frame in example["frames"]],
+                "shape": [frame["output_dims"] for frame in example["frames"]],
             }
 
         return inputs, outputs
@@ -935,7 +922,7 @@ class SequenceAwareModel(pl.LightningModule):
             >>> padded_inputs[~padded_valids] = 0.0
             >>> logits = self.forward(padded_inputs, stacked_queries, input_mask=padded_valids)
             >>> logits = einops.rearrange(logits["saliency"], "batch chan seq -> batch seq chan")
-            >>> shapes = [list(frame["target_dims"]) for frame in batch[0]["frames"]]
+            >>> shapes = [list(frame["output_dims"]) for frame in batch[0]["frames"]]
             >>> recon = self.reconstruct_output(logits[0], stacked_weights["saliency"][0] > 0., shapes)
             >>> print('batch')
             >>> print(nh.data.collate._debug_inbatch_shapes(batch))
