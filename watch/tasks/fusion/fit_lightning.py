@@ -92,10 +92,7 @@ class WrappedSequenceAwareModel(SequenceAwareModel):
         )
 
 
-if __name__ == "__main__":
-    """
-    Example invocation: python fit_lightning.py fit --data.train_dataset=$SMART_DVC/extern/onera_2018/onera_train.kwcoco.json --trainer.accelerator="gpu" --trainer.devices=0, --trainer.precision=16 --trainer.fast_dev_run=5
-    """
+def main():
     from pytorch_lightning.cli import LightningCLI
 
     import yaml
@@ -123,3 +120,11 @@ if __name__ == "__main__":
         WrappedKWCocoDataModule,
         parser_kwargs=dict(parser_mode='yaml_unsafe_for_tuples'),
     )
+    cli
+
+
+if __name__ == '__main__':
+    """
+    Example invocation: python fit_lightning.py fit --data.train_dataset=$SMART_DVC/extern/onera_2018/onera_train.kwcoco.json --trainer.accelerator="gpu" --trainer.devices=0, --trainer.precision=16 --trainer.fast_dev_run=5
+    """
+    main()
