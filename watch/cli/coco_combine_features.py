@@ -22,7 +22,7 @@ class CocoCombineFeatures(scfg.Config):
 
         'dst': scfg.Value(None, help='dataset to write to'),
 
-        'absolute': scfg.Value(False, help='if True, use absolute paths'),
+        'absolute': scfg.Value(False, isflag=True, help='if True, use absolute paths'),
     }
 
 

@@ -21,6 +21,7 @@ Example:
     python -m watch.mlops.expt_manager "list"
 
     # On training machine
+    python -m watch.mlops.expt_manager "push packages"
     python -m watch.mlops.expt_manager "push packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
 
     # On testing machine
