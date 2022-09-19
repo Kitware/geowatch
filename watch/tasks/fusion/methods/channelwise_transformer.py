@@ -96,7 +96,6 @@ except Exception:
 available_encoders = list(transformer.encoder_configs.keys()) + ['deit', "perceiver"]
 
 
-# Readding the old approach
 @scfg.dataconf
 class MultimodalTransformerConfig(scfg.DataConfig):
     """
@@ -332,6 +331,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> assert "dataset_stats" in model.hparams
             >>> assert "input_sensorchan" in model.hparams
         """
+
         assert tokenizer in ['dwcnn', 'rearrange', 'conv7', 'linconv']
         assert token_norm in ['none', 'auto', 'group', 'batch']
         assert arch_name in available_encoders
@@ -551,9 +551,7 @@ class MultimodalTransformer(pl.LightningModule):
         # for (s, c), stats in input_stats.items():
         #     self.sensor_channel_tokenizers[s][c] = tokenize
 
-        # in_features_pos = 6 * 8   # 6 positional features with 8 dims each (TODO: be robust)
-        in_features_pos = self.config['positional_dims']
-        # 6 * 8   # 6 positional features with 8 dims each (TODO: be robust)
+        in_features_pos = 6 * 8   # 6 positional features with 8 dims each (TODO: be robust)
         in_features = in_features_pos + in_features_raw
         self.in_features = in_features
         self.in_features_pos = in_features_pos

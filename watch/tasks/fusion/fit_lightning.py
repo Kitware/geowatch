@@ -1,6 +1,8 @@
-from watch.tasks.fusion.datamodules.kwcoco_video_data import KWCocoVideoDataModule  # NOQA
-from watch.tasks.fusion.methods import SequenceAwareModel
-# from watch.tasks.fusion.methods import *
+from watch.tasks.fusion.datamodules.kwcoco_video_data import KWCocoVideoDataModule
+
+# Import models for the CLI registry
+# from watch.tasks.fusion.methods import SequenceAwareModel  # NOQA
+# from watch.tasks.fusion.methods import MultimodalTransformer  # NOQA
 
 import pathlib
 
@@ -62,57 +64,6 @@ class WrappedKWCocoDataModule(KWCocoVideoDataModule):
         self.setup("fit")
 
 
-class WrappedSequenceAwareModel(SequenceAwareModel):
-    def __init__(
-        self,
-        dataset_stats,
-        optimizer="RAdam",
-        learning_rate=0.001,
-        weight_decay=0.0,
-        positive_change_weight=1.0,
-        negative_change_weight=1.0,
-        class_weights="auto",
-        saliency_weights="auto",
-        tokenizer="linconv",
-        token_norm="none",
-        decoder="mlp",
-        global_class_weight=1.0,
-        global_change_weight=1.0,
-        global_saliency_weight=1.0,
-        change_loss="cce",
-        class_loss="focal",
-        saliency_loss="focal",
-        window_size=8,
-        perceiver_depth=4,
-        perceiver_latents=512,
-        training_limit_queries=1024,
-    ):
-
-        super().__init__(
-            dataset_stats=dataset_stats,
-            optimizer=optimizer,
-            learning_rate=learning_rate,
-            weight_decay=weight_decay,
-            positive_change_weight=positive_change_weight,
-            negative_change_weight=negative_change_weight,
-            class_weights=class_weights,
-            saliency_weights=saliency_weights,
-            tokenizer=tokenizer,
-            token_norm=token_norm,
-            decoder=decoder,
-            global_class_weight=global_class_weight,
-            global_change_weight=global_change_weight,
-            global_saliency_weight=global_saliency_weight,
-            change_loss=change_loss,
-            class_loss=class_loss,
-            saliency_loss=saliency_loss,
-            window_size=window_size,
-            perceiver_depth=perceiver_depth,
-            perceiver_latents=perceiver_latents,
-            training_limit_queries=training_limit_queries,
-        )
-
-
 def main():
     from pytorch_lightning.cli import LightningCLI
     import pytorch_lightning as pl
@@ -138,15 +89,6 @@ def main():
         # TODO: import initialization code from fit.py
 
         def add_arguments_to_parser(self, parser):
-            
-            parser.add_argument(
-                '--profile', 
-                action='store_true', 
-                help=ub.paragraph(
-                    '''
-                    Fit does nothing with this flag. This just allows for `@xdev.profile`
-                    profiling which checks sys.argv separately.
-                    '''))
 
             parser.add_argument(
                 '--profile',
@@ -163,8 +105,9 @@ def main():
                 "model.init_args.dataset_stats",
                 apply_on="instantiate")
 
-    cli = MyLightningCLI(
-        SequenceAwareModel,
+    MyLightningCLI(
+        # SequenceAwareModel,
+        pl.LightningModule,  # TODO: factor out common components of the two models and put them in base class models inherit from
         WrappedKWCocoDataModule,
         subclass_mode_model=True,
         parser_kwargs=dict(parser_mode='yaml_unsafe_for_tuples'),
@@ -199,7 +142,6 @@ def main():
             ]
         ),
     )
-    cli
 
 
 if __name__ == "__main__":

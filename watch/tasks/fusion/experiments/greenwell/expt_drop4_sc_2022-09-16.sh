@@ -23,12 +23,12 @@ python -m watch.tasks.fusion.fit_lightning fit \
     --data.vali_dataset="$VALI_FPATH" \
     --data.test_dataset="$TEST_FPATH" \
     --data.channels="$CHANNELS" \
-    --model.init_args.global_change_weight=0.00 \
-    --model.init_args.global_class_weight=1.00 \
-    --model.init_args.global_saliency_weight=0.00 \
+    --model.global_change_weight=0.00 \
+    --model.global_class_weight=1.00 \
+    --model.global_saliency_weight=0.00 \
     --data.neg_to_pos_ratio=0.25 \
-    --model.init_args.saliency_loss='focal' \
-    --model.init_args.class_loss='dicefocal' \
+    --model.saliency_loss='focal' \
+    --model.class_loss='dicefocal' \
     --data.num_workers=4 \
     --trainer.accelerator="gpu" \
     --trainer.devices "0," \
