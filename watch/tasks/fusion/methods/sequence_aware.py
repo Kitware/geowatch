@@ -715,7 +715,7 @@ class SequenceAwareModel(pl.LightningModule):
         for task_name, weights_name in task_defs:
 
             labels = [
-                frame[task_name] if (frame[task_name] != None)
+                frame[task_name] if (frame[task_name] is not None)
                 else torch.zeros(
                     frame["output_dims"],
                     dtype=torch.int32,
@@ -724,7 +724,7 @@ class SequenceAwareModel(pl.LightningModule):
             ]
             labels = torch.concat([einops.rearrange(x, "h w -> (h w)") for x in labels], dim=0)
             weights = [
-                frame[weights_name] if (frame[weights_name] != None)
+                frame[weights_name] if (frame[weights_name] is not None)
                 else torch.zeros(
                     frame["output_dims"],
                     dtype=inputs.dtype,
