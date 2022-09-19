@@ -516,7 +516,7 @@ class SequenceAwareModel(pl.LightningModule):
             # self.sensor_channel_tokenizers[s][c] = tokenize
             key = sanitize_key(str((s, c)))
             try:
-                sensor_chan_input_norm = self.input_norms[s][c]
+                sensor_chan_input_norm = input_norm #self.input_norms[s][c]
             except (KeyError, TypeError) as e:
                 print(e)
                 sensor_chan_input_norm = nn.Identity()
