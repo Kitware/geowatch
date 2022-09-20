@@ -75,8 +75,8 @@ def evaluation_report():
     from watch import heuristics
     from watch.mlops import expt_manager
     dvc_expt_dpath = heuristics.auto_expt_dvc()
-    dvc_manager = expt_manager.DVCExptManager.coerce(dvc_expt_dpath)
-    reporter = EvaluationReporter(dvc_manager)
+    manager = expt_manager.DVCExptManager.coerce(dvc_expt_dpath)
+    reporter = EvaluationReporter(manager)
     reporter.load()
     reporter.status()
     reporter.plot()
@@ -98,9 +98,9 @@ class EvaluationReporter:
     Manages handing the data off to experiment plotting functions.
     """
 
-    def __init__(reporter, dvc_manager):
-        reporter.dvc_manager = dvc_manager
-        reporter.dvc_expt_dpath = dvc_manager.expt_dvc_dpath
+    def __init__(reporter, manager):
+        reporter.manager = manager
+        reporter.dvc_expt_dpath = manager.expt_dvc_dpath
 
         reporter.raw_df = None
         reporter.filt_df = None
@@ -221,11 +221,11 @@ class EvaluationReporter:
         # ]
 
     def status(reporter, table=None):
-        reporter.dvc_manager.summarize()
+        reporter.manager.summarize()
         reporter.report_best()
         # if 0:
         #     if table is None:
-        #         table = reporter.dvc_manager.evaluation_table()
+        #         table = reporter.manager.evaluation_table()
         #     loaded_table = load_extended_data(table, reporter.dvc_expt_dpath)
         #     loaded_table = pd.DataFrame(loaded_table)
         #     # dataset_summary_tables(dpath)
@@ -256,8 +256,8 @@ class EvaluationReporter:
         """
         Load basic data
         """
-        table = reporter.dvc_manager.evaluation_table()
-        reporter.dvc_manager.summarize()
+        table = reporter.manager.evaluation_table()
+        reporter.manager.summarize()
         evaluations = table[~table['raw'].isnull()]
         reporter.raw_df = raw_df = pd.DataFrame(evaluations)
 

@@ -476,6 +476,11 @@ class DVCExptManager(ub.NiceRepr):
         if 'evals' in targets:
             manager.pull_evals()
 
+    def reverse_hash_lookup(manager, key):
+        # This probably doesn't belong here
+        from watch.utils.reverse_hashid import ReverseHashTable
+        ReverseHashTable.query(key, verbose=1)
+
 
 class ExperimentState(ub.NiceRepr):
     """
@@ -1101,13 +1106,6 @@ class ExperimentState(ub.NiceRepr):
         rhash = ReverseHashTable(type='pred_cfg')
         rhash.register(acf_cfg_dname, act_cfg)
         return acf_cfg_dname
-
-    def reverse_hash_lookup(manager, key):
-        from watch.utils.reverse_hashid import ReverseHashTable
-        candidates = ReverseHashTable.query(key)
-        print(f'Found {len(candidates)} entries for key={key}')
-        if candidates:
-            print('candidates = {}'.format(ub.repr2(candidates, nl=1)))
 
 
 def summarize_tables(tables):

@@ -91,7 +91,7 @@ class ReverseHashTable:
         return info
 
     @classmethod
-    def query(cls, key):
+    def query(cls, key, verbose=1):
         """
         If the type of the hash is unknown, we can search in a few different
         locations for it.
@@ -99,11 +99,15 @@ class ReverseHashTable:
         rlut_root = ub.Path.appdir('watch/hash_rlut')
         dpaths = [path for path in rlut_root.iterdir() if path.is_dir()]
         candidates = []
-        for dpath in ub.ProgIter(dpaths, desc='rlut is searching', verbose=3):
+        for dpath in ub.ProgIter(dpaths, desc='rlut is searching', verbose=verbose):
             type = dpath.name
             rlut_type = cls(type)
             full_shelf = rlut_type.load()
             # print('full_shelf = {}'.format(ub.repr2(full_shelf, nl=1, sort=1)))
             if key in full_shelf:
                 candidates.append({'found': full_shelf[key], 'type': type, 'key': key})
+
+        if verbose:
+            print(f'Found {len(candidates)} entries for key={key}')
+            print('candidates = {}'.format(ub.repr2(candidates, nl=5)))
         return candidates
