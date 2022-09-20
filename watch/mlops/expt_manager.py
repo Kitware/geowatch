@@ -212,7 +212,7 @@ def main(cmdline=True, **kwargs):
     command = config['command']
 
     available_actions = [
-        'status', 'evaluate', 'push', 'pull', 'list'
+        'status', 'evaluate', 'push', 'pull', 'list', 'report',
     ]
     available_targets = [
         'packages', 'evals'
@@ -269,6 +269,15 @@ def main(cmdline=True, **kwargs):
         self = manager
         for state in self.states:
             state.schedule_evaluation()
+
+    if 'report' in actions:
+        self = manager
+        from watch.mlops import expt_report
+        dvc_manager = manager
+        reporter = expt_report.EvaluationReporter(dvc_manager)
+        reporter.load()
+        reporter.status()
+        reporter.plot()
 
 
 class DVCExptManager(ub.NiceRepr):
@@ -1092,6 +1101,13 @@ class ExperimentState(ub.NiceRepr):
         rhash = ReverseHashTable(type='pred_cfg')
         rhash.register(acf_cfg_dname, act_cfg)
         return acf_cfg_dname
+
+    def reverse_hash_lookup(manager, key):
+        from watch.utils.reverse_hashid import ReverseHashTable
+        candidates = ReverseHashTable.query(key)
+        print(f'Found {len(candidates)} entries for key={key}')
+        if candidates:
+            print('candidates = {}'.format(ub.repr2(candidates, nl=1)))
 
 
 def summarize_tables(tables):

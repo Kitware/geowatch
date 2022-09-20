@@ -72,12 +72,14 @@ def evaluation_report():
     """
     import kwplot
     kwplot.autosns()
-    import watch
-    dvc_expt_dpath = watch.find_dvc_dpath(tags='phase2_expt')
-    reporter = EvaluationReporter(dvc_expt_dpath)
+    from watch import heuristics
+    from watch.mlops import expt_manager
+    dvc_expt_dpath = heuristics.auto_expt_dvc()
+    dvc_manager = expt_manager.DVCExptManager.coerce(dvc_expt_dpath)
+    reporter = EvaluationReporter(dvc_manager)
     reporter.load()
     reporter.status()
-    plot_merged(reporter)
+    reporter.plot()
 
     if 0:
         merged_df = reporter.orig_merged_df.copy()
@@ -96,12 +98,9 @@ class EvaluationReporter:
     Manages handing the data off to experiment plotting functions.
     """
 
-    def __init__(reporter, dvc_expt_dpath):
-        from watch.mlops import expt_manager
-        reporter.dvc_expt_dpath = dvc_expt_dpath
-        reporter.dvc_manager = expt_manager.DVCExptManager.coerce(dvc_expt_dpath)
-        # dvc_sync_manager.main(command='pull evals')
-        # dvc_sync_manager.main(command='pull packages')
+    def __init__(reporter, dvc_manager):
+        reporter.dvc_manager = dvc_manager
+        reporter.dvc_expt_dpath = dvc_manager.expt_dvc_dpath
 
         reporter.raw_df = None
         reporter.filt_df = None
@@ -237,7 +236,7 @@ class EvaluationReporter:
         metric_names = reporter.metric_registry.name
         id_names = ['model', 'pred_cfg', 'act_cfg', 'trk_cfg']
         metric_cols = list(ub.oset(metric_names) & orig_merged_df.columns)
-        print('orig_merged_df.columns = {}'.format(ub.repr2(list(orig_merged_df.columns), nl=1)))
+        # print('orig_merged_df.columns = {}'.format(ub.repr2(list(orig_merged_df.columns), nl=1)))
         id_cols = list(ub.oset(id_names) & orig_merged_df.columns)
         table = orig_merged_df[id_cols + metric_cols]
 
@@ -340,6 +339,9 @@ class EvaluationReporter:
     def load(reporter):
         reporter.load1()
         reporter.load2()
+
+    def plot(reporter):
+        plot_merged(reporter)
 
 
 def plot_merged(reporter):
