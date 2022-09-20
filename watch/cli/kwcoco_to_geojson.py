@@ -33,12 +33,192 @@ import numpy as np
 import shapely
 import shapely.ops
 import ubelt as ub
+import scriptconfig as scfg
 # import colored_traceback.auto  # noqa
 
 try:
     from xdev import profile
 except Exception:
     profile = ub.identity
+
+
+### Note: This config only exists for the purposes of the WATCH CLI.
+### The argparse CLI is still in primary use. Eventually we may port to
+### pure scriptconfig, but currently it is not exactly 1-to-1.
+class KWCocoToGeoJSONConfig(scfg.DataConfig):
+    """
+    Convert KWCOCO to IARPA GeoJSON
+    """
+    in_file = scfg.Value(None, required=True, help='Input KWCOCO to convert')
+    out_dir = scfg.Value(None, help=ub.paragraph(
+            '''
+            Output directory where GeoJSON files will be written.
+            Default: $(dirname in_file)/(regions if --bas_mode else
+            sites)/ NOTE: in --bas_mode, writing to a region is not
+            idempotent. To regenerate a region, delete or edit the
+            region file before rerunning this script.
+            '''))
+    out_fpath = scfg.Value(None, help=ub.paragraph(
+            '''
+            If specified, this will write a json file containing a
+            reference to all of the site files written to the "out_dir".
+            This file serves as "proof" the tracks have been computed.
+            '''))
+    in_file_gt = scfg.Value(None, help=ub.paragraph(
+            '''
+            If available, ground truth KWCOCO to visualize
+            '''))
+    region_id = scfg.Value(None, help=ub.paragraph(
+            '''
+            ID for region that sites belong to. If None, try to infer
+            from kwcoco file.
+            '''))
+    write_in_file = scfg.Value(False, isflag=True, help=ub.paragraph(
+            '''
+            If set, write the normalized and tracked kwcoco in_file back
+            to disk so you can skip the --track_fn next time this is run
+            on it.
+            '''))
+    track_fn = scfg.Value(None, help=ub.paragraph(
+            '''
+            Function to add tracks. If None, use existing tracks.
+            Example:
+            'watch.tasks.tracking.from_heatmap.TimeAggregatedBAS'
+            '''))
+    default_track_fn = scfg.Value(None, help=ub.paragraph(
+            '''
+            String code to pick a sensible track_fn based on the
+            contents of in_file. Supported codes are
+            ['saliency_heatmaps', 'saliency_polys', 'class_heatmaps',
+            'class_polys']. Any other string will be interpreted as the
+            image channel to use for 'saliency_heatmaps' (default:
+            'salient'). Supported classes are ['Site Preparation',
+            'Active Construction', 'Post Construction', 'No Activity'].
+            For class_heatmaps, these should be image channels; for
+            class_polys, they should be annotation categories.
+            '''))
+    track_kwargs = scfg.Value('{}', help=ub.paragraph(
+            '''
+            JSON string or path to file containing keyword arguments for
+            the chosen TrackFunction. Examples include: coco_dset_gt,
+            coco_dset_sc, thresh, key. Any file paths will be loaded as
+            CocoDatasets if possible.
+            '''))
+    bas_mode = scfg.Value(False, isflag=True, help=ub.paragraph(
+            '''
+            In BAS mode, output will be site summaries instead of sites.
+            Region files will be searched for in out_dir, or generated
+            from in_file if not found, and site summaries will be
+            appended to them.
+            '''))
+    site_summary = scfg.Value(None, help=ub.paragraph(
+            '''
+            A filepath glob or json blob containing either a
+            site_summary or a region_model that includes site summaries.
+            Each summary found will be added to in_file as 'Site
+            Boundary' annotations.
+            '''))
+    clear_annots = scfg.Value(False, isflag=True, help=ub.paragraph(
+            '''
+            Clears all annotations before running tracking, so it starts
+            from a clean slate.
+            '''))
+
+
+__config__ = KWCocoToGeoJSONConfig
+
+
+def _argparse_cli():
+    parser = argparse.ArgumentParser(
+        description='Convert KWCOCO to IARPA GeoJSON')
+    required_args = parser.add_argument_group('required')
+    required_args.add_argument('in_file', help='Input KWCOCO to convert')
+    required_args.add_argument('--out_dir',
+                               help=ub.paragraph('''
+        Output directory where GeoJSON files will be written.
+        Default: $(dirname in_file)/(regions if --bas_mode else sites)/
+        NOTE: in --bas_mode, writing to a region is not idempotent.
+        To regenerate a region, delete or edit the region file before
+        rerunning this script.
+        '''))
+    required_args.add_argument('--out_fpath',
+                               help=ub.paragraph('''
+        If specified, this will write a json file containing a reference
+        to all of the site files written to the "out_dir". This file
+        serves as "proof" the tracks have been computed.
+        '''))
+    convenience_args = parser.add_argument_group('convenience')
+    convenience_args.add_argument(
+        '--in_file_gt', help='If available, ground truth KWCOCO to visualize')
+    convenience_args.add_argument('--region_id',
+                                  help=ub.paragraph('''
+        ID for region that sites belong to.
+        If None, try to infer from kwcoco file.
+        '''))
+    convenience_args.add_argument('--write_in_file',
+                                  action='store_true',
+                                  help=ub.paragraph('''
+        If set, write the normalized and tracked kwcoco in_file back to disk
+        so you can skip the --track_fn next time this is run on it.
+        '''))
+    # convenience_args.add_argument('--polygon_fn',
+    #                               default='heatmaps_to_polys',
+    #                               help=ub.paragraph('''
+    #     Function to convert heatmaps to polygons. Default is 'heatmaps_to_polys' which
+    #     aggregates all heatmaps. Use 'heatmaps_to_polys_moving_window' to use a moving window
+    #     aggregation.
+    #     '''))
+    track_args = parser.add_argument_group(
+        'track', '--track_fn and --default_track_fn are mutually exclusive.')
+    track = track_args.add_mutually_exclusive_group()
+    track.add_argument('--track_fn',
+                       help=ub.paragraph('''
+        Function to add tracks. If None, use existing tracks.
+        Example: 'watch.tasks.tracking.from_heatmap.TimeAggregatedBAS'
+        '''))
+    track.add_argument('--default_track_fn',
+                       help=ub.paragraph('''
+        String code to pick a sensible track_fn based on the contents
+        of in_file. Supported codes are ['saliency_heatmaps', 'saliency_polys',
+        'class_heatmaps', 'class_polys']. Any other string will be interpreted
+        as the image channel to use for 'saliency_heatmaps' (default:
+        'salient'). Supported classes are ['Site Preparation',
+        'Active Construction', 'Post Construction', 'No Activity']. For
+        class_heatmaps, these should be image channels; for class_polys, they
+        should be annotation categories.
+        '''))
+    track_args.add_argument('--track_kwargs',
+                            default='{}',
+                            help=ub.paragraph('''
+        JSON string or path to file containing keyword arguments for the
+        chosen TrackFunction. Examples include: coco_dset_gt, coco_dset_sc,
+        thresh, key.
+        Any file paths will be loaded as CocoDatasets if possible.
+        '''))
+    behavior_args = parser.add_argument_group(
+        'behavior',
+        '--bas_mode is mutually exclusive with other behavior args.')
+    behavior_args.add_argument('--bas_mode',
+                               action='store_true',
+                               help=ub.paragraph('''
+        In BAS mode, output will be site summaries instead of sites.
+        Region files will be searched for in out_dir, or generated from
+        in_file if not found, and site summaries will be appended to them.
+        '''))
+    behavior_args.add_argument('--site_summary',
+                               default=None,
+                               help=ub.paragraph('''
+        A filepath glob or json blob containing either a site_summary
+        or a region_model that includes site summaries. Each summary found will
+        be added to in_file as 'Site Boundary' annotations.
+        '''))
+    behavior_args.add_argument('--clear_annots',
+                               action='store_true',
+                               help=ub.paragraph('''
+        Clears all annotations before running tracking, so it starts
+        from a clean slate.
+        '''))
+    return parser
 
 
 def _single_geometry(geom):
@@ -818,96 +998,7 @@ def main(args):
         >>> demo(coco_dset, regions_dir, coco_dset_sc, sites_dir, cleanup=True)
 
     """
-    parser = argparse.ArgumentParser(
-        description='Convert KWCOCO to IARPA GeoJSON')
-    required_args = parser.add_argument_group('required')
-    required_args.add_argument('in_file', help='Input KWCOCO to convert')
-    required_args.add_argument('--out_dir',
-                               help=ub.paragraph('''
-        Output directory where GeoJSON files will be written.
-        Default: $(dirname in_file)/(regions if --bas_mode else sites)/
-        NOTE: in --bas_mode, writing to a region is not idempotent.
-        To regenerate a region, delete or edit the region file before
-        rerunning this script.
-        '''))
-    required_args.add_argument('--out_fpath',
-                               help=ub.paragraph('''
-        If specified, this will write a json file containing a reference
-        to all of the site files written to the "out_dir". This file
-        serves as "proof" the tracks have been computed.
-        '''))
-    convenience_args = parser.add_argument_group('convenience')
-    convenience_args.add_argument(
-        '--in_file_gt', help='If available, ground truth KWCOCO to visualize')
-    convenience_args.add_argument('--region_id',
-                                  help=ub.paragraph('''
-        ID for region that sites belong to.
-        If None, try to infer from kwcoco file.
-        '''))
-    convenience_args.add_argument('--write_in_file',
-                                  action='store_true',
-                                  help=ub.paragraph('''
-        If set, write the normalized and tracked kwcoco in_file back to disk
-        so you can skip the --track_fn next time this is run on it.
-        '''))
-    # convenience_args.add_argument('--polygon_fn',
-    #                               default='heatmaps_to_polys',
-    #                               help=ub.paragraph('''
-    #     Function to convert heatmaps to polygons. Default is 'heatmaps_to_polys' which
-    #     aggregates all heatmaps. Use 'heatmaps_to_polys_moving_window' to use a moving window
-    #     aggregation.
-    #     '''))
-    track_args = parser.add_argument_group(
-        'track', '--track_fn and --default_track_fn are mutually exclusive.')
-    track = track_args.add_mutually_exclusive_group()
-    track.add_argument('--track_fn',
-                       help=ub.paragraph('''
-        Function to add tracks. If None, use existing tracks.
-        Example: 'watch.tasks.tracking.from_heatmap.TimeAggregatedBAS'
-        '''))
-    track.add_argument('--default_track_fn',
-                       help=ub.paragraph('''
-        String code to pick a sensible track_fn based on the contents
-        of in_file. Supported codes are ['saliency_heatmaps', 'saliency_polys',
-        'class_heatmaps', 'class_polys']. Any other string will be interpreted
-        as the image channel to use for 'saliency_heatmaps' (default:
-        'salient'). Supported classes are ['Site Preparation',
-        'Active Construction', 'Post Construction', 'No Activity']. For
-        class_heatmaps, these should be image channels; for class_polys, they
-        should be annotation categories.
-        '''))
-    track_args.add_argument('--track_kwargs',
-                            default='{}',
-                            help=ub.paragraph('''
-        JSON string or path to file containing keyword arguments for the
-        chosen TrackFunction. Examples include: coco_dset_gt, coco_dset_sc,
-        thresh, key.
-        Any file paths will be loaded as CocoDatasets if possible.
-        '''))
-    behavior_args = parser.add_argument_group(
-        'behavior',
-        '--bas_mode is mutually exclusive with other behavior args.')
-    behavior_args.add_argument('--bas_mode',
-                               action='store_true',
-                               help=ub.paragraph('''
-        In BAS mode, output will be site summaries instead of sites.
-        Region files will be searched for in out_dir, or generated from
-        in_file if not found, and site summaries will be appended to them.
-        '''))
-    behavior_args.add_argument('--site_summary',
-                               default=None,
-                               help=ub.paragraph('''
-        A filepath glob or json blob containing either a site_summary
-        or a region_model that includes site summaries. Each summary found will
-        be added to in_file as 'Site Boundary' annotations.
-        '''))
-    behavior_args.add_argument('--clear_annots',
-                               action='store_true',
-                               help=ub.paragraph('''
-        Clears all annotations before running tracking, so it starts
-        from a clean slate.
-        '''))
-
+    parser = _argparse_cli()
     args = parser.parse_args(args)
 
     print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
