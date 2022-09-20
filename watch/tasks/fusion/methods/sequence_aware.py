@@ -524,6 +524,15 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         ]
 
     def process_example(self, example, force_dropout=False):
+        """
+        TODO: documentation about what this step is
+
+        Example is a single item from a batch, and this pushes that example
+        through the input stems and constructs the token sequence for that
+        batch item as well as information about how to produce outputs for that
+        sequence.
+
+        """
 
         # process and stem frames and positions
         inputs = self.stem_process_example(example)
@@ -561,17 +570,28 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             pos_enc = self.encode_query_position(example, task_name, inputs.dtype, inputs.device)
             pos_enc = torch.concat([einops.rearrange(x, "c h w -> (h w) c") for x in pos_enc], dim=0)
 
+            # TODO:
+            # Instead of masking by dropping out locations, we need a strategy
+            # that simply zeros their weight. Again the modivating factor is
+            # intermediate visualization. However, the efficiency of the
+            # dropout strategy is something we should retain, but the
+            # implementation should have an end-to-end forward pass that
+            # maintains input shapes up to rearangements.
+
             # determine valid label locations
             valid_mask = weights > 0.0
+            if self.hparams.training_limit_queries is not None:
+                # TODO: if training, augment mask to dropout querys and labels following some strategy
+                # produce model outputs for task
+                pos_enc = pos_enc[valid_mask]
+                labels = labels[valid_mask]
+                weights = weights[valid_mask]
+            else:
+                valid_mask[:] = 1  # hack
 
-            # TODO: if training, augment mask to dropout querys and labels following some strategy
-
-            # produce model outputs for task
-            pos_enc = pos_enc[valid_mask]
-            labels = labels[valid_mask]
-            weights = weights[valid_mask]
-
-            if self.training:
+            if self.training and self.hparams.training_limit_queries is not None:
+                # JONC: This is an interesting and perhaps questionable decision
+                # it means we can't visualize this batch, but that could be ok.
                 keep_inds = torch.randperm(weights.shape[0])[:self.hparams.training_limit_queries]
                 pos_enc = pos_enc[keep_inds]
                 labels = labels[keep_inds]
@@ -633,7 +653,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
 
         canvases = []
         for canvas, shape in zip(torch.split(big_canvas, [w * h for w, h in shapes]), shapes):
-            canvas = canvas.reshape(shape + [output.shape[-1], ])
+            canvas = canvas.reshape(list(shape) + [output.shape[-1], ])
             canvases.append(canvas)
         return canvases
 
@@ -711,8 +731,24 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         return outputs
 
     def shared_step(self, batch, batch_idx=None, stage="train"):
-        losses = []
+        """
+        Example:
+            >>> from watch.tasks.fusion.methods.sequence_aware import *  # NOQA
+            >>> channels, classes, dataset_stats = SequenceAwareModel.demo_dataset_stats()
+            >>> self = SequenceAwareModel(
+            >>>     tokenizer='linconv',
+            >>>     classes=classes, global_saliency_weight=1,
+            >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
+            >>> batch = self.demo_batch(width=64, height=65, batch_size=7)
+            >>> self.hparams.training_limit_queries = None  # hack
+            >>> batch_output = self.shared_step(batch)
+            >>> assert 'change_probs' in batch_output
+            >>> assert 'saliency_probs' in batch_output
+            >>> assert 'class_probs' in batch_output
+            >>> assert 'loss' in batch_output
+        """
 
+        # FIXME: This will break at test-time when labels are not provided
         inputs, outputs = zip(*[
             self.process_example(example)
             for example in batch
@@ -722,30 +758,33 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         padded_valids = (padded_inputs[..., 0] > -1000.0).bool()
         padded_inputs[~padded_valids] = 0.0
 
+        model_tasks = list(self.heads.keys())
+
         stacked_queries = {
             task_name: nn.utils.rnn.pad_sequence([
                 example[task_name]["pos_enc"]
                 for example in outputs
             ], batch_first=True, padding_value=0.0)
-            for task_name in list(["change", "saliency", "class"])
+            for task_name in model_tasks
         }
         stacked_weights = {
             task_name: nn.utils.rnn.pad_sequence([
                 example[task_name]["weights"]
                 for example in outputs
             ], batch_first=True, padding_value=0.0)
-            for task_name in list(["change", "saliency", "class"])
+            for task_name in model_tasks
         }
         stacked_labels = {
             task_name: nn.utils.rnn.pad_sequence([
                 example[task_name]["labels"]
                 for example in outputs
             ], batch_first=True, padding_value=0).long()
-            for task_name in list(["change", "saliency", "class"])
+            for task_name in model_tasks
         }
 
         task_logits = self.forward(padded_inputs, queries=stacked_queries, input_mask=padded_valids)
-
+        task_losses = {}
+        task_probs = {}
         for task_name in task_logits.keys():
 
             logits = einops.rearrange(task_logits[task_name], "batch chan seq -> (batch seq) chan")
@@ -769,7 +808,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
                 logits[task_mask],
                 loss_labels[task_mask],
             )
-            losses.append(task_loss.mean())
+            task_losses[task_name] = task_loss.mean()
 
             task_metric = self.head_metrics[f"{stage}_stage"][task_name](
                 logits[task_mask],
@@ -777,10 +816,36 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             )
             self.log_dict(task_metric, prog_bar=True, sync_dist=True)
 
-        loss = sum(losses) / len(losses)
+            # Need to output probabilities here for consumers of the model
+            # TODO: only enable if requested, at train time we can discard this
+            # for the majority of the iterations (unless we need to visualize
+            # the batch)
+            NEED_OUTPUTS = True
+            if NEED_OUTPUTS:
+                item_probs = []
+                for item_index in range(len(batch)):
+                    item_logit = task_logits[task_name][item_index].transpose(1, 0).detach()
+                    item_mask = (stacked_weights[task_name][item_index] > 0)
+                    item_shapes = outputs[item_index][task_name]['shape']
+                    # if task_name == 'change':
+                    #     item_shapes = item_shapes[1:]  # hack for change
+                    recon = self.reconstruct_output(item_logit, item_mask, item_shapes)
+                    probs = [p.sigmoid() for p in recon]
+                    item_probs.append(probs)
+                task_probs[task_name] = item_probs
+
+        loss = sum(task_losses.values()) / len(task_losses)
 
         self.log("loss", loss, prog_bar=True, sync_dist=True)
-        return loss
+
+        # These need to be returned so the caller is able to introspect them
+        # calling "log" is great, but it denies the caller access to this
+        # information.
+        batch_outputs = {}
+        batch_outputs['loss'] = loss
+        batch_outputs['task_losses'] = task_losses
+        batch_outputs.update({k + '_probs': v for k, v in task_probs.items()})
+        return batch_outputs
 
     @profile
     def training_step(self, batch, batch_idx=None):
@@ -959,7 +1024,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             >>>     saliency_loss='dicefocal',
             >>>     # ===========
             >>>     # Change Loss
-            >>>     global_change_weight=1.00,
+            >>>     global_change_weight=0.00,
             >>>     positive_change_weight=1.0,
             >>>     negative_change_weight=0.5,
             >>>     # ===========
@@ -980,6 +1045,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             >>>     # normalize_perframe=True,
             >>>     window_size=8,
             >>>     )
+            >>> self.hparams.training_limit_queries = None  # hack
             >>> self.datamodule = datamodule
             >>> datamodule._notify_about_tasks(model=self)
             >>> # Run one visualization
@@ -1016,6 +1082,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         for path, val in walker:
             if isinstance(val, torch.Tensor):
                 walker[path] = val.to(device)
+
         outputs = self.training_step(batch)
         max_channels = 3
         canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=max_channels, overlay_on_image=0)
@@ -1047,7 +1114,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             for _i in ub.ProgIter(range(num_steps), desc='overfit'):
                 optim.zero_grad()
                 outputs = self.training_step(batch)
-                outputs['item_losses']
+                outputs['task_losses']
                 loss = outputs['loss']
                 if torch.any(torch.isnan(loss)):
                     print('NAN OUTPUT!!!')
@@ -1060,9 +1127,10 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
                 #     scale = (loss / 1e4).detach()
                 #     loss /= scale
                 prev = loss
-                item_losses_ = nh.data.collate.default_collate(outputs['item_losses'])
-                item_losses = ub.map_vals(lambda x: sum(x).item(), item_losses_)
-                loss_records.extend([{'part': key, 'val': val, 'step': step} for key, val in item_losses.items()])
+                # task_losses_ = nh.data.collate.default_collate(outputs['task_losses'])
+                task_losses = ub.udict(outputs['task_losses']).map_values(lambda x: x.item())
+                # task_losses = ub.map_vals(lambda x: sum(x).item(), task_losses_)
+                loss_records.extend([{'part': key, 'val': val, 'step': step} for key, val in task_losses.items()])
                 loss.backward()
                 optim.step()
                 step += 1

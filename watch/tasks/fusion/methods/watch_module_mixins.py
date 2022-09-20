@@ -145,7 +145,7 @@ class WatchModuleMixins:
                 frame['timestamp'] = 1
                 frame['modes'] = modes
                 # specify the desired predicted output size for this frame
-                # frame['output_wh'] = (H0, W0)
+                frame['output_dims'] = (H0, W0)
 
                 if nans:
                     for v in modes.values():
