@@ -552,3 +552,24 @@ QUALITY_BITS = ub.udict({
     'clear'         : 1 << 6,
     'water'         : 1 << 7,
 })
+
+
+# The main dataset codes currently in use.
+DATASET_CODES = [
+    'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC',
+    'Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC',
+]
+
+
+DVC_FIND_EXPT_KWARGS = {'tags': 'phase2_expt', 'envvar': 'EXPT_DVC_DPATH'}
+DVC_FIND_DATA_KWARGS = {'tags': 'phase2_data', 'envvar': 'DATA_DVC_DPATH'}
+
+
+def auto_expt_dvc():
+    import watch
+    return watch.find_dvc_dpath(**DVC_FIND_EXPT_KWARGS)
+
+
+def auto_data_dvc():
+    import watch
+    return watch.find_dvc_dpath(**DVC_FIND_DATA_KWARGS)

@@ -112,7 +112,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
     import shlex
     import json
     from watch.utils.lightning_ext import util_globals
-    import glob
     import kwarray
     import cmd_queue
 
@@ -129,19 +128,15 @@ def schedule_evaluation(cmdline=False, **kwargs):
     if model_globstr is None and test_dataset_fpath is None:
         raise ValueError('model_globstr and test_dataset are required')
 
-    # HACK FOR DVC PTH FIXME:
-    if str(model_globstr).endswith('.txt'):
-        from watch.utils.simple_dvc import SimpleDVC
-        print('model_globstr = {!r}'.format(model_globstr))
-        if dvc_expt_dpath is None:
-            dvc_expt_dpath = SimpleDVC.find_root(ub.Path(model_globstr))
-
     if dvc_expt_dpath is None:
         dvc_expt_dpath = watch.find_smart_dvc_dpath(tags='phase2_expt')
     if dvc_data_dpath is None:
         dvc_data_dpath = watch.find_smart_dvc_dpath(tags='phase2_data')
     dvc_data_dpath = ub.Path(dvc_data_dpath)
     dvc_expt_dpath = ub.Path(dvc_expt_dpath)
+
+    # Gather the appropriate requested models
+    package_fpaths = resolve_package_paths(model_globstr, dvc_expt_dpath)
 
     print(f'dvc_expt_dpath={dvc_expt_dpath}')
     print(f'dvc_data_dpath={dvc_data_dpath}')
@@ -163,7 +158,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     recompute_track = check_recompute(with_track, [with_pred])
     recompute_iarpa_eval = check_recompute(with_iarpa_eval, [with_pred, recompute_track])
     print('with_pred = {!r}'.format(with_pred))
-    print('with_pred = {!r}'.format(with_pred))
+    print('with_eval = {!r}'.format(with_eval))
     print('with_track = {!r}'.format(with_track))
     print('with_iarpa_eval = {!r}'.format(with_iarpa_eval))
 
@@ -183,44 +178,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
         annotations_dpath = dvc_data_dpath / 'annotations'
     annotations_dpath = ub.Path(annotations_dpath)
     region_model_dpath = annotations_dpath / 'region_models'
-
-    def expand_model_list_file(model_lists_fpath, dvc_expt_dpath=None):
-        """
-        Given a file containing paths to models, expand it into individual
-        paths.
-        """
-        expanded_fpaths = []
-        lines = [line for line in ub.Path(model_globstr).read_text().split('\n') if line]
-        missing = []
-        for line in lines:
-            if dvc_expt_dpath is not None:
-                package_fpath = ub.Path(dvc_expt_dpath / line)
-            else:
-                package_fpath = ub.Path(line)
-            if package_fpath.is_file():
-                expanded_fpaths.append(package_fpath)
-            else:
-                missing.append(line)
-        if missing:
-            print('WARNING: missing = {}'.format(ub.repr2(missing, nl=1)))
-            print(f'WARNING: specified a models-of-interest.txt and {len(missing)} / {len(lines)} models were missing')
-        return expanded_fpaths
-
-    print('model_globstr = {!r}'.format(model_globstr))
-    package_fpaths = []
-    for package_fpath in glob.glob(model_globstr, recursive=True):
-        package_fpath = ub.Path(package_fpath)
-        if package_fpath.name.endswith('.txt'):
-            # HACK FOR PATH OF MODELS
-            model_lists_fpath = package_fpath
-            expanded_fpaths = expand_model_list_file(model_lists_fpath, dvc_expt_dpath=dvc_expt_dpath)
-            package_fpaths.extend(expanded_fpaths)
-        else:
-            package_fpaths.append(package_fpath)
-
-    if len(package_fpaths) == 0:
-        if '*' not in str(model_globstr):
-            package_fpaths = [ub.Path(model_globstr)]
 
     from watch.mlops.expt_manager import ExperimentState
     # start using the experiment state logic as the path and metadata
@@ -313,7 +270,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # Build the info we need to submit every prediction job of interest
     candidate_pred_rows = []
     test_dset = state._condense_test_dset(test_dataset_fpath)
-    for pkg_row in candidate_pkg_rows:
+    for pkg_row in ub.ProgIter(candidate_pkg_rows, desc='build pred rows'):
         for pred_cfg in ub.named_product(pred_cfg_basis):
             pred_pxl_row = pkg_row.copy()
             condensed  = pred_pxl_row['condensed'].copy()
@@ -366,7 +323,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
         mem=config['mem']
     )
 
-    for pred_pxl_row in candidate_pred_rows:
+    for pred_pxl_row in ub.ProgIter(candidate_pred_rows, desc='build track rows'):
         package_fpath = pred_pxl_row['package_fpath']
         pred_cfg = pred_pxl_row['pred_cfg']
         condensed = pred_pxl_row['condensed']
@@ -684,6 +641,73 @@ def _auto_gpus():
         if len(gpu_info['procs']) == 0:
             GPUS.append(gpu_idx)
     return GPUS
+
+
+def resolve_package_paths(model_globstr, dvc_expt_dpath):
+    import rich
+    import glob
+
+    # HACK FOR DVC PTH FIXME:
+    # if str(model_globstr).endswith('.txt'):
+    #     from watch.utils.simple_dvc import SimpleDVC
+    #     print('model_globstr = {!r}'.format(model_globstr))
+    #     # if dvc_expt_dpath is None:
+    #     #     dvc_expt_dpath = SimpleDVC.find_root(ub.Path(model_globstr))
+
+    def expand_model_list_file(model_lists_fpath, dvc_expt_dpath=None):
+        """
+        Given a file containing paths to models, expand it into individual
+        paths.
+        """
+        expanded_fpaths = []
+        lines = [line for line in ub.Path(model_globstr).read_text().split('\n') if line]
+        missing = []
+        for line in lines:
+            if dvc_expt_dpath is not None:
+                package_fpath = ub.Path(dvc_expt_dpath / line)
+            else:
+                package_fpath = ub.Path(line)
+            if package_fpath.is_file():
+                expanded_fpaths.append(package_fpath)
+            else:
+                missing.append(line)
+        if missing:
+            rich.print('[yellow] WARNING: missing = {}'.format(ub.repr2(missing, nl=1)))
+            rich.print(f'[yellow] WARNING: specified a models-of-interest.txt and {len(missing)} / {len(lines)} models were missing')
+        return expanded_fpaths
+
+    print('model_globstr = {!r}'.format(model_globstr))
+    package_fpaths = []
+    for package_fpath in glob.glob(model_globstr, recursive=True):
+        package_fpath = ub.Path(package_fpath)
+        if package_fpath.name.endswith('.txt'):
+            # HACK FOR PATH OF MODELS
+            model_lists_fpath = package_fpath
+            expanded_fpaths = expand_model_list_file(model_lists_fpath, dvc_expt_dpath=dvc_expt_dpath)
+            package_fpaths.extend(expanded_fpaths)
+        else:
+            package_fpaths.append(package_fpath)
+
+    if len(package_fpaths) == 0:
+        if '*' not in str(model_globstr):
+            package_fpaths = [ub.Path(model_globstr)]
+        elif not ub.iterable(model_globstr):
+            # Warn the user if they gave a bad model globstr (this is just one
+            # of the many potential ways things could go wrong)
+            glob_path = ub.Path(model_globstr)
+            def _concrete_glob_part(path):
+                " Find the resolved part of the glob path "
+                concrete_parts = []
+                for p in path.parts:
+                    if '*' in p:
+                        break
+                    concrete_parts.append(p)
+                return ub.Path(*concrete_parts)
+            concrete = _concrete_glob_part(glob_path)
+            if not concrete.exists():
+                rich.print('[yellow] WARNING: part of the model_globstr does not exist: {}'.format(concrete))
+
+    return package_fpaths
 
 
 if __name__ == '__main__':

@@ -79,7 +79,7 @@ TODO:
         --set_cover_algo=approx,none \
         --bas_thresh=0.0,0.01,0.1 \
         --chip_overlap=0.3,0.0 \
-        --devices="1,2,3" --run=1
+        --devices="0,1" --enable_pred=0 --run=0
 
     # --model_pattern="${MODEL_OF_INTEREST}*" \
     # --test_dataset="$TRAIN_DATASET_SUBSET" \
@@ -119,13 +119,7 @@ import scriptconfig as scfg
 from watch.utils import simple_dvc
 from watch.utils import util_pattern
 from watch.utils import util_path
-
-
-# TODO: replace globals with a global config if necessary
-DATASET_CODES = [
-    'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC',
-    'Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC',
-]
+from watch import heuristics
 
 
 class ExptManagerConfig(scfg.Config):
@@ -213,8 +207,6 @@ def main(cmdline=True, **kwargs):
     """
     from watch.mlops.expt_manager import *  # NOQA
     """
-    import watch
-
     config = ExptManagerConfig(cmdline=cmdline, data=kwargs)
     print('ExptManagerConfig config = {}'.format(ub.repr2(dict(config), nl=1)))
     command = config['command']
@@ -238,21 +230,21 @@ def main(cmdline=True, **kwargs):
                 if t in c:
                     targets.append(t)
 
-    print(f'actions={actions}')
-    print(f'targets={targets}')
-    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+    # print(f'actions={actions}')
+    # print(f'targets={targets}')
+    # print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
     dvc_remote = config['dvc_remote']
 
     if config['dataset_codes'] is None:
-        dataset_codes = DATASET_CODES
+        dataset_codes = heuristics.DATASET_CODES
     else:
         dataset_codes = config['dataset_codes']
 
     if config['expt_dvc_dpath'] == 'auto':
-        config['expt_dvc_dpath'] = watch.find_dvc_dpath(tags='phase2_expt', envvar='EXPT_DVC_DPATH')
+        config['expt_dvc_dpath'] = heuristics.auto_expt_dvc()
     if config['data_dvc_dpath'] == 'auto':
-        config['data_dvc_dpath'] = watch.find_dvc_dpath(tags='phase2_data', envvar='DATA_DVC_DPATH')
+        config['data_dvc_dpath'] = heuristics.auto_data_dvc()
 
     expt_dvc_dpath = config['expt_dvc_dpath']
     data_dvc_dpath = config['data_dvc_dpath']
@@ -362,7 +354,7 @@ class DVCExptManager(ub.NiceRepr):
         if expt_dvc_dpath is None:
             expt_dvc_dpath = watch.find_smart_dvc_dpath()
         dvc_remote = 'aws'
-        dataset_codes = DATASET_CODES
+        dataset_codes = heuristics.DATASET_CODES
         manager = cls(expt_dvc_dpath=expt_dvc_dpath, dvc_remote=dvc_remote,
                       dataset_codes=dataset_codes)
         return manager
@@ -1115,7 +1107,7 @@ def summarize_tables(tables):
     versioned_df = tables.get('versioned', None)
 
     if staging_df is not None:
-        title = '[yellow] Staging Summary'
+        title = '[yellow] Staging Summary (Training)'
 
         if len(staging_df):
             staging_df['needs_copy'] = (~staging_df['is_copied'])
@@ -1127,7 +1119,7 @@ def summarize_tables(tables):
         print(Panel(body, title=title))
 
     if volitile_df is not None:
-        title = ('[bright_blue] Volitile Summary')
+        title = ('[bright_blue] Volitile Summary (Predictions)')
         if len(volitile_df):
             num_pred_types = volitile_df.groupby(['dataset_code', 'type']).nunique()
             body_df = num_pred_types
@@ -1138,7 +1130,7 @@ def summarize_tables(tables):
         print(Panel(body, title=title))
 
     if versioned_df is not None:
-        title = ('[bright_green] Versioned Summary')
+        title = ('[bright_green] Versioned Summary (Models and Evaluations)')
         # if 'has_orig' not in versioned_df.columns:
         #     versioned_df['has_orig'] = np.nan
         # version_bitcols = ['has_raw', 'has_dvc', 'is_link', 'is_broken', 'needs_pull', 'needs_push', 'has_orig']
@@ -1211,6 +1203,9 @@ def checkpoint_filepath_info(fname):
 
 class UserAbort(Exception):
     pass
+
+
+__config__ = ExptManagerConfig
 
 
 if __name__ == '__main__':

@@ -120,7 +120,7 @@ def main(cmdline=True, **kw):
     # TODO: need to make a nicer pattern for new CLI integration, but this
     # works for now
     kw = ns.__dict__
-    print('kw = {}'.format(ub.repr2(kw, nl=1)))
+    # print('kw = {}'.format(ub.repr2(kw, nl=1)))
 
     if kw.pop('version'):
         import watch
