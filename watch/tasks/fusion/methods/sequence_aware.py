@@ -21,6 +21,7 @@ from watch.tasks.fusion.methods.network_modules import ConvTokenizer
 from watch.tasks.fusion.methods.network_modules import LinearConvTokenizer
 from watch.tasks.fusion.methods.network_modules import DWCNNTokenizer
 from watch.tasks.fusion.methods.watch_module_mixins import WatchModuleMixins
+from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
 
 # import scriptconfig as scfg
 
@@ -52,7 +53,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
     _HANDLES_NANS = True
 
     def get_cfgstr(self):
-        cfgstr = f'{self.hparams.name}_SA'
+        cfgstr = f'{self.hparams.name}_{self.hparams.arch_name}_SA'
         return cfgstr
 
     def __init__(
@@ -61,6 +62,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         dataset_stats=None,
         input_sensorchan=None,
         name: str = "unnamed_model",
+        arch_name: str = "transformer",
         optimizer: str = "RAdam",  # TODO: remove and push to the cli
         learning_rate: float = 0.001,  # TODO: remove and push to the cli
         weight_decay: float = 0.0,  # TODO: remove and push to the cli
@@ -95,6 +97,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         """
         Args:
             name: Specify a name for the experiment. (Unsure if the Model is the place for this)
+            arch_name: Specify the backbone architecture.
             optimizer: Optimizer name supported by the netharn API.
             class_weights: Class weighting strategy.
             saliency_weights: Class weighting strategy.
@@ -133,6 +136,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             >>> assert "input_sensorchan" in model.hparams
         """
 
+        assert arch_name in ['transformer', 'perceiver']
         assert tokenizer in ['dwcnn', 'rearrange', 'conv7', 'linconv']
         assert token_norm in ['none', 'auto', 'group', 'batch']
         assert decoder in ['mlp', 'segmenter']
@@ -379,20 +383,38 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             for key in list(self.unique_sensor_modes) + ["change", "saliency", "class"]
         })
 
-        self.perceiver = perceiver.PerceiverIO(
-            depth=perceiver_depth,
-            dim=in_features,
-            queries_dim=in_features_pos,
-            num_latents=perceiver_latents,
-            latent_dim=128,
-            cross_heads=1,
-            latent_heads=8,
-            cross_dim_head=64,
-            latent_dim_head=64,
-            weight_tie_layers=True,
-            decoder_ff=True,
-            logits_dim=in_features,
-        )
+        if self.hparams.arch_name == "perciever":
+            self.backbone = perceiver.PerceiverIO(
+                depth=perceiver_depth,
+                dim=in_features,
+                queries_dim=in_features_pos,
+                num_latents=perceiver_latents,
+                latent_dim=128,
+                cross_heads=1,
+                latent_heads=8,
+                cross_dim_head=64,
+                latent_dim_head=64,
+                weight_tie_layers=True,
+                decoder_ff=True,
+                logits_dim=in_features,
+            )
+        elif self.hparams.arch_name == "transformer":
+            self.backbone = TransformerEncoderDecoder(
+                depth=perceiver_depth,
+                dim=in_features,
+                queries_dim=in_features_pos,
+                cross_heads=1,
+                latent_heads=8,
+                cross_dim_head=64,
+                latent_dim_head=64,
+                weight_tie_layers=True,
+                decoder_ff=True,
+                logits_dim=in_features,
+            )
+        else:
+            raise KeyError(arch_name)
+            
+            
         feat_dim = in_features_pos
 
         self.change_head_hidden = change_head_hidden
@@ -701,12 +723,12 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             >>> print('logits')
             >>> print(nh.data.collate._debug_inbatch_shapes(logits))
         """
-        context = self.perceiver(inputs, mask=input_mask)
+        context = self.backbone(inputs, mask=input_mask)
         # print("context", context)
 
         outputs = {}
         for task_name in queries.keys():
-            task_tokens = self.perceiver.decoder_cross_attn(
+            task_tokens = self.backbone.decoder_cross_attn(
                 queries[task_name],
                 context=context)
             task_logits = self.heads[task_name](task_tokens)
