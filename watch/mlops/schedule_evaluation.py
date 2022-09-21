@@ -48,6 +48,8 @@ class ScheduleEvaluationConfig(scfg.Config):
 
         'bas_thresh': scfg.Value([0.01], help='grid of track thresholds'),
 
+        'json_grid_pred_pxl': scfg.Value(None, type=str, help='a json grid/matrix of prediction params'),
+
         'hack_bas_grid': scfg.Value(False, help='if True use hard coded BAS grid'),
         'hack_sc_grid': scfg.Value(False, help='if True use hard coded SC grid'),
         'dvc_expt_dpath': None,
@@ -220,12 +222,23 @@ def schedule_evaluation(cmdline=False, **kwargs):
     pred_cfg_basis['chip_overlap'] = ensure_iterable(config['chip_overlap'])
     pred_cfg_basis['set_cover_algo'] = ensure_iterable(config['set_cover_algo'])
 
-    if 1:
-        # pred_cfg_basis['input_space_scale'] = ensure_iterable(config['input_space_scale'])
-        pred_cfg_basis['input_space_scale'] = ['10GSD', '15SGD']
-        pred_cfg_basis['use_cloudmask'] = [0, 1]  # HACK
-        pred_cfg_basis['resample_invalid_frames'] = [0, 1]  # HACK
-        # TODO: allow for "auto"
+    # TODO: not using a consisent basis means that the hash might be different
+    # for the same effective pred config. Not sure how big of a problem this
+    # is.
+
+    if config['json_grid_pred_pxl']:
+        pred_cfg_basis.update(
+            json.loads(config['json_grid_pred_pxl'])
+        )
+
+    print('pred_cfg_basis = {}'.format(ub.repr2(pred_cfg_basis, nl=2)))
+
+    # if 1:
+    #     # pred_cfg_basis['input_space_scale'] = ensure_iterable(config['input_space_scale'])
+    #     pred_cfg_basis['input_space_scale'] = ['10GSD', '15SGD']
+    #     pred_cfg_basis['use_cloudmask'] = [0, 1]  # HACK
+    #     pred_cfg_basis['resample_invalid_frames'] = [0, 1]  # HACK
+    #     # TODO: allow for "auto"
 
     trk_defaults = {
         'thresh': [0.1],

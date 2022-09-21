@@ -312,7 +312,11 @@ def _to_sc_df(sc_dpath, region_id):
     delim = ' vs. '
     sc_dpath = ub.Path(sc_dpath)
 
-    df = pd.read_csv(sc_dpath / 'ac_phase_table.csv')
+    phase_table_fpath = sc_dpath / 'ac_phase_table.csv'
+    if not phase_table_fpath.exists():
+        return None
+
+    df = pd.read_csv(phase_table_fpath)
 
     # terr_df = pd.read_csv(sc_dpath / 'ac_temporal_error.csv')
     # f1_df = pd.read_csv(sc_dpath / 'ac_f1_all_sites.csv')
@@ -381,7 +385,13 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
 
     # Handle ac_phase_table.csv
     dfs = [_to_sc_df(r.sc_dpath, r.region_id) for r in sc_results]
-    df = pd.concat(dfs, axis=1).sort_values('date')
+    dfs = [d for d in dfs if d is not None]
+    if len(dfs):
+        df = pd.concat(dfs, axis=1).sort_values('date')
+        sites = df.columns.levels[0]
+    else:
+        df = pd.DataFrame()
+        sites = []
 
     # phase activity categories
     phase_classifications = [
@@ -390,8 +400,6 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
         "Active Construction",
         "Post Construction",
     ]
-
-    sites = df.columns.levels[0]
 
     # Not sure abou this
     def propogate(labels):
@@ -425,41 +433,50 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
     phase_true = np.array(phase_true)
     phase_pred = np.array(phase_pred)
 
-    f1 = f1_score(phase_true, phase_pred,
-                  labels=phase_classifications,
-                  average=None)
+    if len(phase_true) == 0:
+        f1 = [np.nan] * len(phase_classifications)
+    else:
+        f1 = f1_score(phase_true, phase_pred,
+                      labels=phase_classifications,
+                      average=None)
 
     # TIoU is only ever evaluated per-site, so we can safely average these
     # per-site and call it a new metric mTIoU.
     tiou_dfs = []
     for r in sc_results:
         ac_tiou_fpath = r.sc_dpath / 'ac_tiou.csv'
-        table = pd.read_csv(ac_tiou_fpath, index_col=0)
-        missing = sorted(set(phase_classifications) - set(table.columns))
-        table.loc[:, missing] = np.nan
-        table = table.loc[:, phase_classifications]
-        tiou_dfs.append(table)
+        if ac_tiou_fpath.exists():
+            table = pd.read_csv(ac_tiou_fpath, index_col=0)
+            missing = sorted(set(phase_classifications) - set(table.columns))
+            table.loc[:, missing] = np.nan
+            table = table.loc[:, phase_classifications]
+            tiou_dfs.append(table)
 
-    tious = pd.concat(tiou_dfs, axis=0)
-    mtiou = tious.mean(axis=0, skipna=True)
-    mtiou_vals = [mtiou.get(c, default=np.nan) for c in phase_classifications]
+    if tiou_dfs:
+        tious = pd.concat(tiou_dfs, axis=0)
+        mtiou = tious.mean(axis=0, skipna=True)
+        mtiou_vals = [mtiou.get(c, default=np.nan) for c in phase_classifications]
+    else:
+        mtiou = np.nan
+        mtiou_vals = [np.nan] * len(phase_classifications)
 
     # these are averaged using the mean over sites for each phase.
     # So the correct average over regions is to weight by (sites/region)
     temporal_errs = []
     for r in sc_results:
         ac_temporal_err_fpath = r.sc_dpath / 'ac_temporal_error.csv'
-        tdf = pd.read_csv(ac_temporal_err_fpath)
-        missing = sorted(set(phase_classifications) - set(tdf.columns))
-        tdf.loc[:, missing] = np.nan
-        if len(tdf) > 0:
-            tdf = tdf.loc[tdf.index[0], phase_classifications]  # mean days (all detections)
-        temporal_errs.append(tdf.astype(float).values)
+        if ac_temporal_err_fpath.exists():
+            tdf = pd.read_csv(ac_temporal_err_fpath)
+            missing = sorted(set(phase_classifications) - set(tdf.columns))
+            tdf.loc[:, missing] = np.nan
+            if len(tdf) > 0:
+                tdf = tdf.loc[tdf.index[0], phase_classifications]  # mean days (all detections)
+            temporal_errs.append(tdf.astype(float).values)
 
     n_sites = [df.shape[1] for df in dfs]
     try:
         temporal_err = np.average(temporal_errs, weights=n_sites, axis=0)
-    except ValueError:
+    except (ValueError, ZeroDivisionError):
         temporal_err = [np.nan] * len(phase_classifications)
 
     sc_df = pd.DataFrame(

@@ -11,31 +11,31 @@ Example:
     export DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
     cd $DVC_EXPT_DPATH
 
-    python -m watch.mlops.expt_manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
-    python -m watch.mlops.expt_manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
-    python -m watch.mlops.expt_manager "pull packages evals" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
-    python -m watch.mlops.expt_manager "push packages evals"
+    python -m watch mlops "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch mlops "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch mlops "pull packages evals" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch mlops "push packages evals"
 
-    python -m watch.mlops.expt_manager "status"
+    python -m watch mlops "status"
 
-    python -m watch.mlops.expt_manager "list"
+    python -m watch mlops "list"
 
     # On training machine
-    python -m watch.mlops.expt_manager "push packages"
-    python -m watch.mlops.expt_manager "push packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch mlops "push packages"
+    python -m watch mlops "push packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
 
     # On testing machine
-    python -m watch.mlops.expt_manager "pull packages"
-    python -m watch.mlops.expt_manager "status"
+    python -m watch mlops "pull packages"
+    python -m watch mlops "status"
 
     # Run evals on testing machine
-    python -m watch.mlops.expt_manager "evaluate" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch mlops "evaluate" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
 
     # On testing machine
-    python -m watch.mlops.expt_manager "push evals"
+    python -m watch mlops "push evals"
 
     # On analysis machine
-    python -m watch.mlops.expt_manager "pull evals"
+    python -m watch mlops "pull evals"
 
 
 TODO:
@@ -54,12 +54,12 @@ TODO:
 
     # You should be able to pull things wrt to that model
 
-    python -m watch.mlops.expt_manager "pull packages" --model_pattern="${MODEL_OF_INTEREST}*"
-    python -m watch.mlops.expt_manager "pull evals" --model_pattern="${MODEL_OF_INTEREST}*"
-    python -m watch.mlops.expt_manager "status" --model_pattern="${MODEL_OF_INTEREST}*"
+    python -m watch mlops "pull packages" --model_pattern="${MODEL_OF_INTEREST}*"
+    python -m watch mlops "pull evals" --model_pattern="${MODEL_OF_INTEREST}*"
+    python -m watch mlops "status" --model_pattern="${MODEL_OF_INTEREST}*"
 
 Ignore:
-    python -m watch.mlops.expt_manager "evaluate" \
+    python -m watch mlops "evaluate" \
         --enable_pred=1 \
         --enable_eval=1 \
         --enable_actclf=1 \
@@ -67,7 +67,7 @@ Ignore:
         --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC" \
         --devices="0,1,2,3" --run=1
 
-    python -m watch.mlops.expt_manager "evaluate" \
+    python -m watch mlops "evaluate" \
         --bas_thresh=0.0,0.01,0.1 \
         --set_cover_algo=approx,exact \
         --enable_pred=1 \
@@ -426,6 +426,8 @@ class DVCExptManager(ub.NiceRepr):
         pull_rows = eval_df[eval_df.needs_pull]
         pull_fpaths = pull_rows['dvc'].tolist()
         print(f'{len(pull_fpaths)=}')
+        for p in pull_fpaths:
+            assert p.exists()
         dvc.pull(pull_fpaths)
 
     def pull_packages(manager):

@@ -377,9 +377,15 @@ def geojson_feature(anns, coco_dset, with_properties=True):
             properties[key] = str(values[0])
 
         # take area-weighted average score
-        properties['score'] = np.average(
-            list(map(float, properties_list['score'])),
-            weights=[geom.area for geom in geometry_list])
+        weights = np.array([geom.area for geom in geometry_list])
+        scores = np.array([float(s) for s in properties_list['score']])
+        mask = np.isnan(scores)
+        scores[mask] = 0
+        weights[mask] = 0
+        if weights.sum() == 0:
+            properties['score'] = 0
+        else:
+            properties['score'] = np.average(scores, weights=weights)
 
         properties['misc_info'] = defaultdict(list)
         for misc_info in properties_list['misc_info']:
