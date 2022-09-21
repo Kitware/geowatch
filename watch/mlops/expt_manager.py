@@ -409,7 +409,7 @@ class DVCExptManager(ub.NiceRepr):
         to_push_fpaths = to_push['raw'].tolist()
         print(f'to_push=\n{to_push}')
         if len(to_push_fpaths):
-            dvc.add(to_push_fpaths)
+            # dvc.add(to_push_fpaths)
             dvc.git_commitpush(f'Sync evals from {platform.node()}')
             dvc.push(to_push_fpaths)
 
@@ -462,31 +462,31 @@ class DVCExptManager(ub.NiceRepr):
         ReverseHashTable.query(key, verbose=1)
 
 
-def _check_ignore_tables(paths, dvc):
-    import os
-    dvc_root = dvc.dvc_root
-
-    @ub.memoize
-    def make_gitignore_pattern(root):
-        from watch.utils import util_pattern
-        ignore_fpath = (root / '.gitignore')
-        if ignore_fpath.exists():
-            ignore_lines = [p.strip() for p in ignore_fpath.read_text().split('\n')
-                            if not p.startswith('#')]
-            ignore_pats = [str(p) for p in ignore_lines if p]
-            pat = util_pattern.MultiPattern.coerce(ignore_pats, hint='glob')
-            return pat
-
-    for path in ub.ProgIter(paths):
-        rel_path = path.relative_to(dvc_root).parent
-        for i in reversed(range(len(rel_path.parts))):
-            rel_root = dvc_root / ub.Path(*rel_path.parts[0:i])
-            rel_pat = make_gitignore_pattern(rel_root)
-            if rel_pat is not None:
-                print(f'rel_root={rel_root}')
-                suffix_path = os.fspath(path.relative_to(rel_root))
-                if rel_pat.match(suffix_path):
-                    raise Exception
+# TODO: can we hook into DVC more efficiently to query this?
+# def _check_ignore_tables(paths, dvc):
+#     import os
+#     dvc_root = dvc.dvc_root
+#     @ub.memoize
+#     def make_gitignore_pattern(root):
+#         from watch.utils import util_pattern
+#         # ignore_fpath = (root / '.gitignore')
+#         ignore_fpath = (root / '.dvcignore')
+#         if ignore_fpath.exists():
+#             ignore_lines = [p.strip() for p in ignore_fpath.read_text().split('\n')
+#                             if not p.startswith('#')]
+#             ignore_pats = [str(p) for p in ignore_lines if p]
+#             pat = util_pattern.MultiPattern.coerce(ignore_pats, hint='glob')
+#             return pat
+#     for path in ub.ProgIter(paths):
+#         rel_path = path.relative_to(dvc_root).parent
+#         for i in reversed(range(len(rel_path.parts))):
+#             rel_root = dvc_root / ub.Path(*rel_path.parts[0:i])
+#             rel_pat = make_gitignore_pattern(rel_root)
+#             if rel_pat is not None:
+#                 print(f'rel_root={rel_root}')
+#                 suffix_path = os.fspath(path.relative_to(rel_root))
+#                 if rel_pat.match(suffix_path):
+#                     raise Exception
 
 
 class ExperimentState(ub.NiceRepr):
