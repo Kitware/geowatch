@@ -90,7 +90,6 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         multimodal_reduce: str = "max",  # TODO: remove with replacement of hardcoded perceiver
         perceiver_depth: int = 4,  # TODO: remove with replacement of hardcoded perceiver
         perceiver_latents: int = 512,  # TODO: remove with replacement of hardcoded perceiver
-        training_limit_queries: int = 1024,  # TODO: remove with replacement of hardcoded perceiver
 
     ):
         """
@@ -124,7 +123,6 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             multimodal_reduce: operation used to combine multiple modes from the same timestep
             perceiver_depth: How many layers used by the perceiver model.
             perceiver_latents: How many latents used by the perceiver model.
-            training_limit_queries: How many queries to use during training step. Set arbitrarily high to ensure all are used.
 
         Example:
             >>> # Note: it is important that the non-kwargs are saved as hyperparams
@@ -578,24 +576,11 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             # implementation should have an end-to-end forward pass that
             # maintains input shapes up to rearangements.
 
-            # determine valid label locations
+            # determine valid label locations                
             valid_mask = weights > 0.0
-            if self.hparams.training_limit_queries is not None:
-                # TODO: if training, augment mask to dropout querys and labels following some strategy
-                # produce model outputs for task
-                pos_enc = pos_enc[valid_mask]
-                labels = labels[valid_mask]
-                weights = weights[valid_mask]
-            else:
-                valid_mask[:] = 1  # hack
-
-            if self.training and self.hparams.training_limit_queries is not None:
-                # JONC: This is an interesting and perhaps questionable decision
-                # it means we can't visualize this batch, but that could be ok.
-                keep_inds = torch.randperm(weights.shape[0])[:self.hparams.training_limit_queries]
-                pos_enc = pos_enc[keep_inds]
-                labels = labels[keep_inds]
-                weights = weights[keep_inds]
+            pos_enc = pos_enc[valid_mask]
+            labels = labels[valid_mask]
+            weights = weights[valid_mask]
 
             outputs[task_name] = {
                 "labels": labels,
@@ -740,7 +725,6 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             >>>     classes=classes, global_saliency_weight=1,
             >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
             >>> batch = self.demo_batch(width=64, height=65, batch_size=7)
-            >>> self.hparams.training_limit_queries = None  # hack
             >>> batch_output = self.shared_step(batch)
             >>> assert 'change_probs' in batch_output
             >>> assert 'saliency_probs' in batch_output
@@ -779,6 +763,13 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
                 example[task_name]["labels"]
                 for example in outputs
             ], batch_first=True, padding_value=0).long()
+            for task_name in model_tasks
+        }
+        stacked_masks = {
+            task_name: nn.utils.rnn.pad_sequence([
+                example[task_name]["mask"]
+                for example in outputs
+            ], batch_first=True, padding_value=0)
             for task_name in model_tasks
         }
 
@@ -824,11 +815,11 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             if NEED_OUTPUTS:
                 item_probs = []
                 for item_index in range(len(batch)):
-                    item_logit = task_logits[task_name][item_index].transpose(1, 0).detach()
-                    item_mask = (stacked_weights[task_name][item_index] > 0)
-                    item_shapes = outputs[item_index][task_name]['shape']
-                    # if task_name == 'change':
-                    #     item_shapes = item_shapes[1:]  # hack for change
+                    item_logit = einops.rearrange(task_logits[task_name][item_index].detach(), "chan seq -> seq chan")
+                    item_mask = stacked_masks[task_name][item_index]
+                    item_shapes = [list(frame["output_dims"]) for frame in batch[item_index]["frames"]]
+                    # # if task_name == 'change':
+                    # #     item_shapes = item_shapes[1:]  # hack for change
                     recon = self.reconstruct_output(item_logit, item_mask, item_shapes)
                     probs = [p.sigmoid() for p in recon]
                     item_probs.append(probs)
@@ -1045,7 +1036,6 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             >>>     # normalize_perframe=True,
             >>>     window_size=8,
             >>>     )
-            >>> self.hparams.training_limit_queries = None  # hack
             >>> self.datamodule = datamodule
             >>> datamodule._notify_about_tasks(model=self)
             >>> # Run one visualization
