@@ -1,4 +1,4 @@
-"""
+r"""
 Synchronize DVC states across the machine.
 
 This is a new Phase2 Variant of this script.
@@ -56,36 +56,7 @@ TODO:
 
     python -m watch.mlops.expt_manager "pull packages" --model_pattern="${MODEL_OF_INTEREST}*"
     python -m watch.mlops.expt_manager "pull evals" --model_pattern="${MODEL_OF_INTEREST}*"
-
     python -m watch.mlops.expt_manager "status" --model_pattern="${MODEL_OF_INTEREST}*"
-
-    MODEL_OF_INTEREST="Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584"
-    DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
-    # DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
-    DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
-
-    # Evaluate on a subset of the training set
-    VALI_DATASET_SUBSET=$DATA_DVC_DPATH/$DATASET_CODE/data_train_subset.kwcoco.json
-    # VALI_DATASET_BIG=$DATA_DVC_DPATH/$DATASET_CODE/data_vali.kwcoco.json
-    # kwcoco subset "$VALI_DATASET_BIG" "$VALI_DATASET_SUBSET" --select_videos '.name | test("KR_R001")'
-
-    # Then you should be able to evaluate that model
-    python -m watch.mlops.expt_manager "evaluate" \
-        --dataset_codes "$DATASET_CODE" \
-        --test_dataset="$VALI_DATASET_SUBSET" \
-        --enable_track=1 \
-        --enable_iarpa_eval=1 \
-        --set_cover_algo=approx,none \
-        --bas_thresh=0.0,0.01,0.1 \
-        --chip_overlap=0.3,0.0 \
-        --devices="0,1" --enable_pred=0 --run=0
-
-    # --model_pattern="${MODEL_OF_INTEREST}*" \
-    # --test_dataset="$TRAIN_DATASET_SUBSET" \
-    # TRAIN_DATASET_SUBSET=$DATA_DVC_DPATH/$DATASET_CODE/data_train_subset.kwcoco.json
-    # TRAIN_DATASET_BIG=$DATA_DVC_DPATH/$DATASET_CODE/data_train.kwcoco.json
-    # kwcoco subset "$TRAIN_DATASET_BIG" "$TRAIN_DATASET_SUBSET" --select_videos '.name | test(".*_R.*")'
 
 Ignore:
     python -m watch.mlops.expt_manager "evaluate" \
@@ -280,6 +251,7 @@ def main(cmdline=True, **kwargs):
         reporter.plot()
 
 
+# TODO: rename to DVCMultiStateManager and DVCStateManager
 class DVCExptManager(ub.NiceRepr):
     """
     Implements an API around our DVC structure, which can be described as
@@ -419,6 +391,14 @@ class DVCExptManager(ub.NiceRepr):
         if len(weird_df):
             print(f'weird_df=\n{weird_df}')
 
+        # Determine what evaluations need to be added to DVC
+        to_add = eval_df[~eval_df['has_dvc']]
+        if len(to_add):
+            to_add_paths = to_add['raw']
+            # paths = to_add_paths
+            dvc.add(to_add_paths)
+            ...
+
         to_push = eval_df[eval_df.needs_push == True]  # NOQA
         assert not to_push['has_dvc'].any()
 
@@ -480,6 +460,33 @@ class DVCExptManager(ub.NiceRepr):
         # This probably doesn't belong here
         from watch.utils.reverse_hashid import ReverseHashTable
         ReverseHashTable.query(key, verbose=1)
+
+
+def _check_ignore_tables(paths, dvc):
+    import os
+    dvc_root = dvc.dvc_root
+
+    @ub.memoize
+    def make_gitignore_pattern(root):
+        from watch.utils import util_pattern
+        ignore_fpath = (root / '.gitignore')
+        if ignore_fpath.exists():
+            ignore_lines = [p.strip() for p in ignore_fpath.read_text().split('\n')
+                            if not p.startswith('#')]
+            ignore_pats = [str(p) for p in ignore_lines if p]
+            pat = util_pattern.MultiPattern.coerce(ignore_pats, hint='glob')
+            return pat
+
+    for path in ub.ProgIter(paths):
+        rel_path = path.relative_to(dvc_root).parent
+        for i in reversed(range(len(rel_path.parts))):
+            rel_root = dvc_root / ub.Path(*rel_path.parts[0:i])
+            rel_pat = make_gitignore_pattern(rel_root)
+            if rel_pat is not None:
+                print(f'rel_root={rel_root}')
+                suffix_path = os.fspath(path.relative_to(rel_root))
+                if rel_pat.match(suffix_path):
+                    raise Exception
 
 
 class ExperimentState(ub.NiceRepr):
@@ -565,6 +572,17 @@ class ExperimentState(ub.NiceRepr):
             'eval_act': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
         }
 
+        # User specified config mapping a formatstr variable to a set of items
+        # that will cause a row to be ignored if it has one of those values
+        # when a table is being built.
+        self.blocklists = {
+            k: set() for k in self.patterns.keys()
+        }
+
+        # Denote which of the keys represent hashed information that could be
+        # looked up via the rlut.
+        self.hashed_cfgkeys = ['pred_cfg', 'act_cfg', 'trk_cfg']
+
         self.templates = {}
         for k, v in self.staging_templates.items():
             self.templates[k] = self.staging_template_prefix + v
@@ -631,6 +649,23 @@ class ExperimentState(ub.NiceRepr):
         else:
             warnings.warn('warning: bad attrs')
         return row
+
+    def relevant_reverse_hashes(self):
+        raise NotImplementedError
+
+    def _block_non_existing_rhashes(self):
+        # TODO: helper, could be refactored
+        state = self
+        state._build_path_patterns()
+        orig_eval_table = state.evaluation_table()
+        for cfgkey in state.hashed_cfgkeys:
+            if cfgkey in orig_eval_table:
+                unique_keys = orig_eval_table[cfgkey].dropna().unique()
+                for key in unique_keys:
+                    from watch.utils.reverse_hashid import ReverseHashTable
+                    candidates = ReverseHashTable.query(key, verbose=0)
+                    if not candidates:
+                        state.blocklists[cfgkey].add(key)
 
     def staging_rows(self):
         """
@@ -772,6 +807,16 @@ class ExperimentState(ub.NiceRepr):
                         path = row['dvc'].augment(ext='')
                     row['dataset_code'] = self.dataset_code
                     _attrs = self._parse_pattern_attrs(key, path)
+
+                    if self.blocklists is not None:
+                        blocked = False
+                        for k, v in _attrs.items():
+                            if k in self.blocklists:
+                                if v in self.blocklists[k]:
+                                    blocked = True
+                        if blocked:
+                            continue
+
                     row.update(_attrs)
 
                 if row['has_raw']:
