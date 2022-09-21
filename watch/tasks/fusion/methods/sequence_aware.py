@@ -37,15 +37,26 @@ def sanitize_key(key):
 
 
 class FourierPositionalEncoding(nn.Module):
-    def __init__(self, num_steps, max_freq=10.0):
+    def __init__(self, in_dims, num_steps, max_freq=10.0):
         super().__init__()
         self.scales = nn.Parameter(torch.pi * torch.linspace(1., max_freq, num_steps), requires_grad=False)
+        self.output_dim = in_dims + (in_dims * num_steps * 2)
 
     def forward(self, x):
         orig_x = x
         x = torch.einsum("xhw,s->xshw", x, self.scales.type_as(x))
         x = einops.rearrange(x, "x s h w -> (x s) h w")
         return torch.concat([x.sin(), x.cos(), orig_x], dim=0)
+        
+class RandomFourierPositionalEncoding(nn.Module):
+    def __init__(self, in_dims, half_out_dims):
+        super().__init__()
+        self.weight = nn.Parameter(torch.randn(in_dims, half_out_dims).float(), requires_grad=False)
+        self.output_dim = 2*half_out_dims
+        
+    def forward(self, x):
+        x = 2 * torch.pi * torch.einsum("xy,x...->y...", self.weight, x)
+        return torch.concat([x.sin(), x.cos()], dim=0)
 
 
 class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
@@ -63,6 +74,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         input_sensorchan=None,
         name: str = "unnamed_model",
         arch_name: str = "transformer",
+        positional_encoder: str = "random",
         optimizer: str = "RAdam",  # TODO: remove and push to the cli
         learning_rate: float = 0.001,  # TODO: remove and push to the cli
         weight_decay: float = 0.0,  # TODO: remove and push to the cli
@@ -130,13 +142,26 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         Example:
             >>> # Note: it is important that the non-kwargs are saved as hyperparams
             >>> from watch.tasks.fusion.methods.sequence_aware import SequenceAwareModel
-            >>> model = SequenceAwareModel(input_sensorchan='r|g|b')
+            >>> model = SequenceAwareModel(input_sensorchan='r|g|b', positional_encoder="random")
+            >>> assert "arch_name" in model.hparams
+            >>> assert "positional_encoder" in model.hparams
+            >>> assert "classes" in model.hparams
+            >>> assert "dataset_stats" in model.hparams
+            >>> assert "input_sensorchan" in model.hparams
+            
+        Example:
+            >>> # Note: it is important that the non-kwargs are saved as hyperparams
+            >>> from watch.tasks.fusion.methods.sequence_aware import SequenceAwareModel
+            >>> model = SequenceAwareModel(input_sensorchan='r|g|b', positional_encoder="fourier")
+            >>> assert "arch_name" in model.hparams
+            >>> assert "positional_encoder" in model.hparams
             >>> assert "classes" in model.hparams
             >>> assert "dataset_stats" in model.hparams
             >>> assert "input_sensorchan" in model.hparams
         """
 
         assert arch_name in ['transformer', 'perceiver']
+        assert positional_encoder in ['random', 'fourier']
         assert tokenizer in ['dwcnn', 'rearrange', 'conv7', 'linconv']
         assert token_norm in ['none', 'auto', 'group', 'batch']
         assert decoder in ['mlp', 'segmenter']
@@ -371,11 +396,18 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         # =================================================================================
         # =================================================================================
 
+        if self.hparams.positional_encoder == "fourier":
+            base_positional_encoder = FourierPositionalEncoding(3, 64, 60)
+        elif self.hparams.positional_encoder == "random":
+            base_positional_encoder = RandomFourierPositionalEncoding(3, 64)
+        else:
+            raise KeyError(positional_encoder)
+        
         self.positional_encoders = nn.ModuleDict({
             sanitize_key(str(key)): nn.Sequential(
-                FourierPositionalEncoding(64, 60),
+                base_positional_encoder,
                 nn.Conv2d(
-                    3 + (3 * 64 * 2),
+                    base_positional_encoder.output_dim,
                     in_features_pos,
                     1,
                 ),
@@ -505,6 +537,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         })
 
     def stem_process_example(self, example):
+        """Deprecated. Functionality folded into `SequenceAwareModel.process_inputs(...)`."""
         modes = []
         for frame in example["frames"]:
             for mode_key, mode_image in frame["modes"].items():
@@ -543,7 +576,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             for frame in example["frames"]
         ]
 
-    def process_example(self, example, force_dropout=False):
+    def process_inputs(self, example):
         """
         TODO: documentation about what this step is
 
@@ -555,23 +588,57 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         """
 
         # process and stem frames and positions
-        inputs = self.stem_process_example(example)
-        inputs = torch.concat([einops.rearrange(x, "c h w -> (h w) c") for x in inputs], dim=0)
+        # inputs = self.stem_process_example(example)
+        inputs = []
+        for frame in example["frames"]:
+            for mode_key, mode_image in frame["modes"].items():
 
+                sensor_mode_key = sanitize_key(str((frame["sensor"], mode_key)))
+
+                stemmed_mode = self.sensor_channel_tokenizers[sensor_mode_key](
+                    mode_image.nan_to_num(0.0)[None].float()
+                )[0]
+                dtype = stemmed_mode.dtype
+                device = stemmed_mode.device
+
+                position = self.positional_encoders[sensor_mode_key](
+                    torch.stack(
+                        (frame["time_index"] * torch.ones(*stemmed_mode.shape[1:], dtype=dtype, device=device),) +
+                        torch.meshgrid(
+                            torch.linspace(-1, 1, stemmed_mode.shape[1], dtype=dtype, device=device),
+                            torch.linspace(-1, 1, stemmed_mode.shape[2], dtype=dtype, device=device),
+                        ),
+                    ))
+
+                # modes.append(stemmed_mode + position)
+                inputs.append(torch.concat([stemmed_mode, position], dim=0))
+        inputs = torch.concat([einops.rearrange(x, "c h w -> (h w) c") for x in inputs], dim=0)
+        return inputs
+
+    def process_outputs(self, example, force_dropout=False, dtype="float32", device="cpu"):
+        """
+        TODO: documentation about what this step is
+
+        Example is a single item from a batch, and this pushes that example
+        through the input stems and constructs the token sequence for that
+        batch item as well as information about how to produce outputs for that
+        sequence.
+
+        """
         outputs = {}
         task_defs = [
-            ("change", "change_weights"),
-            ("saliency", "saliency_weights"),
-            ("class_idxs", "class_weights"),
+            ("change", "change", "change_weights"),
+            ("saliency", "saliency", "saliency_weights"),
+            ("class", "class_idxs", "class_weights"),
         ]
-        for task_name, weights_name in task_defs:
+        for task_name, labels_name, weights_name in task_defs:
 
             labels = [
-                frame[task_name] if (frame[task_name] is not None)
+                frame[labels_name] if (frame[labels_name] is not None)
                 else torch.zeros(
                     frame["output_dims"],
                     dtype=torch.int32,
-                    device=inputs.device)
+                    device=device)
                 for frame in example["frames"]
             ]
             labels = torch.concat([einops.rearrange(x, "h w -> (h w)") for x in labels], dim=0)
@@ -579,15 +646,13 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
                 frame[weights_name] if (frame[weights_name] is not None)
                 else torch.zeros(
                     frame["output_dims"],
-                    dtype=inputs.dtype,
-                    device=inputs.device)
+                    dtype=dtype,
+                    device=device)
                 for frame in example["frames"]
             ]
             weights = torch.concat([einops.rearrange(x, "h w -> (h w)") for x in weights], dim=0)
 
-            if task_name == "class_idxs":
-                task_name = "class"
-            pos_enc = self.encode_query_position(example, task_name, inputs.dtype, inputs.device)
+            pos_enc = self.encode_query_position(example, task_name, dtype, device)
             pos_enc = torch.concat([einops.rearrange(x, "c h w -> (h w) c") for x in pos_enc], dim=0)
 
             # TODO:
@@ -612,7 +677,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
                 "shape": [frame["output_dims"] for frame in example["frames"]],
             }
 
-        return inputs, outputs
+        return outputs
 
     def reconstruct_output(self, output, mask, shapes):
         """
@@ -625,10 +690,8 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
             >>> self.eval()
             >>> batch = self.demo_batch(width=64, height=65)
-            >>> inputs, outputs = zip(*[
-            >>>     self.process_example(example)
-            >>>     for example in batch
-            >>> ])
+            >>> inputs = list(map(self.process_inputs, batch))
+            >>> outputs = [self.process_outputs(example, dtype=inputs[0].dtype, device=inputs[0].device) for example in batch]
             >>> stacked_queries = {
             >>>     task_name: nn.utils.rnn.pad_sequence([
             >>>         example[task_name]["pos_enc"]
@@ -674,10 +737,8 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             >>>     decoder='segmenter', classes=classes, global_saliency_weight=1,
             >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
             >>> batch = self.demo_batch(width=64, height=65)
-            >>> inputs, outputs = zip(*[
-            >>>     self.process_example(example)
-            >>>     for example in batch
-            >>> ])
+            >>> inputs = list(map(self.process_inputs, batch))
+            >>> outputs = [self.process_outputs(example, dtype=inputs[0].dtype, device=inputs[0].device) for example in batch]
             >>> stacked_queries = {
             >>>     task_name: nn.utils.rnn.pad_sequence([
             >>>         example[task_name]["pos_enc"]
@@ -703,10 +764,8 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             >>>     decoder='segmenter', classes=classes, global_saliency_weight=1,
             >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
             >>> batch = self.demo_batch(width=(11, 21), height=(16, 64), num_timesteps=3)
-            >>> inputs, outputs = zip(*[
-            >>>     self.process_example(example)
-            >>>     for example in batch
-            >>> ])
+            >>> inputs = list(map(self.process_inputs, batch))
+            >>> outputs = [self.process_outputs(example, dtype=inputs[0].dtype, device=inputs[0].device) for example in batch]
             >>> stacked_queries = {
             >>>     task_name: nn.utils.rnn.pad_sequence([
             >>>         example[task_name]["pos_enc"]
@@ -755,10 +814,8 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         """
 
         # FIXME: This will break at test-time when labels are not provided
-        inputs, outputs = zip(*[
-            self.process_example(example)
-            for example in batch
-        ])
+        inputs = list(map(self.process_inputs, batch))
+        outputs = [self.process_outputs(example, dtype=inputs[0].dtype, device=inputs[0].device) for example in batch]
 
         padded_inputs = nn.utils.rnn.pad_sequence(inputs, batch_first=True, padding_value=-1000.0)
         padded_valids = (padded_inputs[..., 0] > -1000.0).bool()
