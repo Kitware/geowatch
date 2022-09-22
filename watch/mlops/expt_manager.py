@@ -637,9 +637,8 @@ class ExperimentState(ub.NiceRepr):
     def __nice__(self):
         return self.dataset_code
 
-    def _parse_pattern_attrs(self, key, path):
+    def _parse_pattern_attrs(self, template, path):
         row = {}
-        template = self.templates[key]
         parser = parse.Parser(str(template))
         results = parser.parse(str(path))
         if results is None:
@@ -697,7 +696,7 @@ class ExperimentState(ub.NiceRepr):
             row['is_packaged'] = False
             row['ckpt_exists'] = True
 
-            _attrs = self._parse_pattern_attrs(key, ckpt_path)
+            _attrs = self._parse_pattern_attrs(self.templates[key], ckpt_path)
             row.update(_attrs)
             rows.append(row)
             _id_to_row[ckpt_path] = row
@@ -708,7 +707,7 @@ class ExperimentState(ub.NiceRepr):
         mpat = util_pattern.Pattern.coerce(pat)
         for spkg_path in list(mpat.paths()):
             # Does this correspond to an existing checkpoint?
-            _attrs = self._parse_pattern_attrs(key, spkg_path)
+            _attrs = self._parse_pattern_attrs(self.templates[key], spkg_path)
 
             # Hack: making assumption about naming pattern
             spkg_stem = spkg_path.stem
@@ -766,7 +765,7 @@ class ExperimentState(ub.NiceRepr):
                     'type': key,
                     'raw': path,
                 }
-                _attrs = self._parse_pattern_attrs(key, path)
+                _attrs = self._parse_pattern_attrs(self.templates[key], path)
                 row.update(_attrs)
                 yield row
 
@@ -808,7 +807,7 @@ class ExperimentState(ub.NiceRepr):
                     else:
                         path = row['dvc'].augment(ext='')
                     row['dataset_code'] = self.dataset_code
-                    _attrs = self._parse_pattern_attrs(key, path)
+                    _attrs = self._parse_pattern_attrs(self.templates[key], path)
 
                     if self.blocklists is not None:
                         blocked = False
@@ -937,6 +936,24 @@ class ExperimentState(ub.NiceRepr):
             'volitile': volitile_df,
         })
         return tables
+
+    def _make_cross_links(self):
+        # Link from evals to predictions
+        eval_rows = list(self.evaluation_rows())
+        num_links = 0
+        for row in ub.ProgIter(eval_rows, desc='linking evals and preds'):
+            if row['has_raw']:
+                eval_fpath = ub.Path(row['raw'])
+                eval_dpath = eval_fpath.parent.parent.parent
+                pred_type = row['type'].replace('eval', 'pred')
+                pred_fpath = ub.Path(self.templates[pred_type].format(**row))
+                pred_dpath = pred_fpath.parent
+
+                if eval_dpath.exists() and pred_dpath.exists():
+                    pred_lpath = eval_dpath / '_pred_link'
+                    ub.symlink(pred_dpath, pred_lpath)
+                    num_links += 1
+        print(f'made {num_links} links')
 
     def summarize(self):
         """

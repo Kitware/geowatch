@@ -14,6 +14,12 @@ References:
     .. [1] https://gitlab.kitware.com/computer-vision/kwcoco
     .. [2] https://infrastructure.smartgitlab.com/docs/pages/api/
     .. [3] https://smartgitlab.com/TE/annotations
+
+
+DESIGN TODO:
+    - [ ] Separate out into two processes:
+        1) given a kwcoco file, does tracking and produces another kwcoco file with predicted "tracked" annotations.
+        2) given a kwcoco file with predicted "tracked" annotations, convert that back to geojson
 """
 import argparse
 import datetime
@@ -45,6 +51,13 @@ except Exception:
 ### Note: This config only exists for the purposes of the WATCH CLI.
 ### The argparse CLI is still in primary use. Eventually we may port to
 ### pure scriptconfig, but currently it is not exactly 1-to-1.
+"""
+from watch.cli.kwcoco_to_geojson import *  # NOQA
+from watch.cli.kwcoco_to_geojson import _argparse_cli
+print(scfg.Config.port_argparse(_argparse_cli(), style='dataconf'))
+"""
+
+
 class KWCocoToGeoJSONConfig(scfg.DataConfig):
     """
     Convert KWCOCO to IARPA GeoJSON
@@ -64,6 +77,11 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
             reference to all of the site files written to the "out_dir".
             This file serves as "proof" the tracks have been computed.
             '''))
+    out_kwcoco = scfg.Value(None, help=ub.paragraph(
+            '''
+            This is the placeholder argument for a additional kwcoco
+            file that contains all of the "tracked" information.
+            '''))
     in_file_gt = scfg.Value(None, help=ub.paragraph(
             '''
             If available, ground truth KWCOCO to visualize
@@ -77,7 +95,8 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
             '''
             If set, write the normalized and tracked kwcoco in_file back
             to disk so you can skip the --track_fn next time this is run
-            on it.
+            on it. DEPRECATE. Use out_kwcoco for now, but eventually split this
+            up.
             '''))
     track_fn = scfg.Value(None, help=ub.paragraph(
             '''
@@ -160,6 +179,13 @@ def _argparse_cli():
                                   help=ub.paragraph('''
         If set, write the normalized and tracked kwcoco in_file back to disk
         so you can skip the --track_fn next time this is run on it.
+        DEPRECATE.  Use out_kwcoco for now, but eventually split this up.
+        '''))
+    convenience_args.add_argument('--out_kwcoco', help=ub.paragraph(
+        '''
+        This is the placeholder argument for a additional kwcoco
+        file that contains all of the "tracked" information.
+        Should be separated into watch.tracking.track
         '''))
     # convenience_args.add_argument('--polygon_fn',
     #                               default='heatmaps_to_polys',
@@ -1131,8 +1157,14 @@ def main(args):
                                                          gt_dset=gt_dset,
                                                          **track_kwargs)
 
+    out_kwcoco = args.out_kwcoco
+
     if args.write_in_file:
-        coco_dset.dump(coco_fpath, indent=2)
+        out_kwcoco = coco_fpath
+
+    coco_dset.fpath = out_kwcoco
+    coco_dset.dump(out_kwcoco, indent=2)
+
     # Convert kwcoco to sites
     sites = convert_kwcoco_to_iarpa(coco_dset,
                                     args.region_id,
