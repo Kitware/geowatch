@@ -84,6 +84,9 @@ def main(cmdline=True, **kwargs):
             'score_space': 'video',
         }
         cmdline = False
+
+        argv = '/home/joncrall/code/watch/watch/tasks/fusion/evaluate.py --true_dataset=/home/joncrall/data/dvc-repos/smart_data_dvc/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_train_subset.kwcoco.json --pred_dataset=/home/joncrall/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/pred/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=43-step=22528.pt/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_train_subset.kwcoco/predcfg_480dba90/pred.kwcoco.json --eval_dpath=/home/joncrall/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/eval/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=43-step=22528.pt/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_train_subset.kwcoco/predcfg_480dba90/eval/eval_pxl --score_space=video --draw_curves=1 --draw_heatmaps=1 --workers=2'
+        kwargs = dict(SegmentationEvalConfig(cmdline=argv))
     """
 
     # args = make_evaluate_config(cmdline=cmdline, **kwargs)
@@ -666,6 +669,7 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
             try:
                 real_image = true_coco_img.delay(chosen_viz_channs, space=score_space, nodata_method='float').finalize()[:]
                 real_image_norm = kwimage.normalize_intensity(real_image)
+                real_image_norm = kwimage.fill_nans_with_checkers(real_image_norm)
                 real_image_int = kwimage.ensure_uint255(real_image_norm)
             except Exception as ex:
                 print('ex = {!r}'.format(ex))
@@ -887,7 +891,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             #!/bin/bash
             {command}
             '''))
-
+        # TODO: use the process tracker
         jsonified_args = util_json.ensure_json_serializable(sys.argv)
         eval_process_info_item = {
             'type': 'process',
@@ -929,7 +933,6 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     # Prepare job pools
     print('workers = {!r}'.format(workers))
     print('draw_workers = {!r}'.format(draw_workers))
-    workers = 10
     metrics_executor = ub.Executor(mode='process', max_workers=workers)
     draw_executor = ub.Executor(mode='process', max_workers=draw_workers)
 

@@ -835,8 +835,9 @@ def clean_loaded_data(big_rows):
     from watch.tasks.fusion import production
     import kwarray
     production_models = [row['name'].replace('.pt', '') for row in production.PRODUCTION_MODELS]
-    stared_models = set(merged_df['model'].unique()) & set(production_models)
-    star_flags = kwarray.isect_flags(merged_df['model'], stared_models)
+    model_names = np.array([n.replace('.pt', '') for n in merged_df['model']])
+    stared_models = set(model_names) & set(production_models)
+    star_flags = kwarray.isect_flags(model_names, stared_models)
     merged_df['in_production'] = star_flags
 
     if 'trk_use_viterbi' in merged_df.columns:
