@@ -1165,7 +1165,9 @@ def main(args):
         coco_dset = coco_dset.reroot(absolute=True)
         coco_dset.fpath = out_kwcoco
         print(f'write to coco_dset.fpath={coco_dset.fpath}')
-        coco_dset.dump(out_kwcoco, indent=2)
+        import xdev
+        with xdev.embed_on_exception_context:
+            coco_dset.dump(out_kwcoco, indent=2)
 
     # Convert kwcoco to sites
     sites = convert_kwcoco_to_iarpa(coco_dset,
