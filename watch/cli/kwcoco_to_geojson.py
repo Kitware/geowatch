@@ -62,7 +62,7 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
     """
     Convert KWCOCO to IARPA GeoJSON
     """
-    in_file = scfg.Value(None, required=True, help='Input KWCOCO to convert')
+    in_file = scfg.Value(None, required=True, help='Input KWCOCO to convert', position=1)
     out_dir = scfg.Value(None, help=ub.paragraph(
             '''
             Output directory where GeoJSON files will be written.
@@ -1162,8 +1162,8 @@ def main(args):
         out_kwcoco = coco_fpath
 
     if out_kwcoco is not None:
-        coco_dset.fpath = out_kwcoco
         coco_dset = coco_dset.reroot(absolute=True)
+        coco_dset.fpath = out_kwcoco
         coco_dset.dump(out_kwcoco, indent=2)
 
     # Convert kwcoco to sites
