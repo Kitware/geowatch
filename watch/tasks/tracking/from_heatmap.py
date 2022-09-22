@@ -264,11 +264,6 @@ def add_tracks_to_dset(sub_dset,
                        score=this_score,
                        track_id=track_id)
 
-        if __debug__:
-            import json
-            import xdev
-            with xdev.embed_on_exception_context:
-                json.dumps(new_ann)
         return new_ann
 
     new_trackids = kwcoco_extensions.TrackidGenerator(sub_dset)

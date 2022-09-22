@@ -416,8 +416,6 @@ def normalize_phases(coco_dset,
     from watch.heuristics import CATEGORIES, CNAMES_DCT, SITE_SUMMARY_CNAME
     from watch.tasks.tracking import phase
     from collections import Counter
-    import xdev
-    xdev.embed()
 
     for cat in CATEGORIES:
         coco_dset.ensure_category(**cat)

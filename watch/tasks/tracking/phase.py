@@ -368,6 +368,7 @@ def baseline(coco_dset,
         cids = np.where([g in gids_first_half for g in gids], siteprep_cid,
                         active_cid)
         cids = np.where(gids == gids_second_half[-1], post_cid, cids)
+        cids = [int(c) for c in cids]
         annots.set('category_id', cids)
 
     return coco_dset
@@ -452,11 +453,6 @@ def ensure_post(coco_dset,
                          category_id=post_cid,
                          segmentation=seg,
                          bbox=bbox))
-                if __debug__:
-                    import json
-                    import xdev
-                    with xdev.embed_on_exception_context:
-                        json.dumps(post_ann)
                 coco_dset.add_annotation(**post_ann)
                 print(f'ensure_post {track_id=}: duplicating {ann["id"]=} '
                       f'from {last_gid=} to {next_gid=}')
