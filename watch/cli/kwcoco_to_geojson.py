@@ -1158,12 +1158,13 @@ def main(args):
                                                          **track_kwargs)
 
     out_kwcoco = args.out_kwcoco
-
     if args.write_in_file:
         out_kwcoco = coco_fpath
 
-    coco_dset.fpath = out_kwcoco
-    coco_dset.dump(out_kwcoco, indent=2)
+    if out_kwcoco is not None:
+        coco_dset.fpath = out_kwcoco
+        coco_dset = coco_dset.reroot(absolute=True)
+        coco_dset.dump(out_kwcoco, indent=2)
 
     # Convert kwcoco to sites
     sites = convert_kwcoco_to_iarpa(coco_dset,
