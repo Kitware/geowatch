@@ -116,6 +116,9 @@ def make_predict_config(cmdline=False, **kwargs):
         'input_space_scale',
         'window_space_scale',
         'output_space_scale',
+        'use_cloudmask',
+        'resample_invalid_frames',
+        'set_cover_algo',
     ]
     parser = datamodule_class.add_argparse_args(parser)
     datamodule_defaults = {k: parser.get_default(k) for k in overloadable_datamodule_keys}

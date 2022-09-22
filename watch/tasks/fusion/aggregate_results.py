@@ -607,6 +607,9 @@ def relevant_pred_config(pred_args, dvc_dpath):
     pred_config['time_sampling'] = pred_args.get('time_sampling', None)
     pred_config['time_steps'] = pred_args.get('time_steps', None)
     pred_config['chip_dims'] = pred_args.get('chip_dims', None)
+    pred_config['set_cover_algo'] = pred_args.get('set_cover_algo', None)
+    pred_config['resample_invalid_frames'] = pred_args.get('resample_invalid_frames', None)
+    pred_config['use_cloudmask'] = pred_args.get('use_cloudmask', None)
     package_fpath = pred_args['package_fpath']
     test_dataset = pred_args['test_dataset']
     if dvc_dpath is not None:
