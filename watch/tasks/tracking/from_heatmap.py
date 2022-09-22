@@ -256,13 +256,6 @@ def add_tracks_to_dset(sub_dset,
         bbox = list(poly.bounding_box().to_coco())[0]
         segmentation = poly.to_coco(style='new')
 
-        if __debug__:
-            import json
-            import xdev
-            with xdev.embed_on_exception_context:
-                json.dumps(segmentation)
-                json.dumps(cid)
-
         # Add the polygon as an annotation on the image
         new_ann = dict(image_id=gid,
                        category_id=cid,
@@ -270,6 +263,12 @@ def add_tracks_to_dset(sub_dset,
                        segmentation=segmentation,
                        score=this_score,
                        track_id=track_id)
+
+        if __debug__:
+            import json
+            import xdev
+            with xdev.embed_on_exception_context:
+                json.dumps(new_ann)
         return new_ann
 
     new_trackids = kwcoco_extensions.TrackidGenerator(sub_dset)
