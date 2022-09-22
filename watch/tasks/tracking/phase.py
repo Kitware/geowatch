@@ -452,6 +452,11 @@ def ensure_post(coco_dset,
                          category_id=post_cid,
                          segmentation=seg,
                          bbox=bbox))
+                if __debug__:
+                    import json
+                    import xdev
+                    with xdev.embed_on_exception_context:
+                        json.dumps(post_ann)
                 coco_dset.add_annotation(**post_ann)
                 print(f'ensure_post {track_id=}: duplicating {ann["id"]=} '
                       f'from {last_gid=} to {next_gid=}')
