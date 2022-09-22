@@ -425,6 +425,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 **pred_cfg,
                 **pred_pxl_row,
             }
+            predictkw['pred_cfg_argstr'] = chr(10).join(
+                [f'    --{k}={v} \\' for k, v in pred_cfg.items()]).lstrip()
             command = ub.codeblock(
                 r'''
                 python -m watch.tasks.fusion.predict \
@@ -437,10 +439,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     --pred_dataset={pred_dataset_fpath} \
                     --test_dataset={test_dataset_fpath} \
                     --num_workers={workers_per_queue} \
-                    --chip_overlap={chip_overlap} \
-                    --tta_time={tta_time} \
-                    --tta_fliprot={tta_fliprot} \
-                    --set_cover_algo={set_cover_algo} \
+                    {pred_cfg_argstr}
                     --devices=0, \
                     --accelerator=gpu \
                     --batch_size=1

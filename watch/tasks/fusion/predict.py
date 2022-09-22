@@ -36,6 +36,7 @@ def make_predict_config(cmdline=False, **kwargs):
     """
     Configuration for fusion prediction
     """
+    # TODO: switch to jsonargparse
     from watch.utils import configargparse_ext
     from scriptconfig.smartcast import smartcast
 
@@ -253,8 +254,8 @@ def predict(cmdline=False, **kwargs):
     datamodule_class = getattr(datamodules, args.datamodule)
     datamodule_vars = datamodule_class.compatible(vars(args))
 
-    parsetime_vals = ub.dict_isect(datamodule_vars, args.datamodule_defaults)
-    need_infer = {k: v for k, v in parsetime_vals.items() if v == 'auto'}
+    parsetime_vals = ub.udict(datamodule_vars) & args.datamodule_defaults
+    need_infer = ub.udict({k: v for k, v in parsetime_vals.items() if v == 'auto'})
     # Try and infer what data we were given at train time
     if hasattr(method, 'fit_config'):
         traintime_params = method.fit_config
@@ -273,16 +274,16 @@ def predict(cmdline=False, **kwargs):
                 traintime_params['channels'] = list(method.input_norms.keys())[0]
 
     # FIXME: Some of the inferred args seem to not have the right type here.
-    able_to_infer = ub.dict_isect(traintime_params, need_infer)
+    able_to_infer = traintime_params & need_infer
     if able_to_infer.get('channels', None) is not None:
         # do this before smartcast breaks the spec
         able_to_infer['channels'] = kwcoco.SensorChanSpec.coerce(able_to_infer['channels'])
     from scriptconfig.smartcast import smartcast
-    able_to_infer = ub.map_vals(smartcast, able_to_infer)
-    unable_to_infer = ub.dict_diff(need_infer, traintime_params)
+    able_to_infer = ub.udict(able_to_infer).map_values(smartcast)
+    unable_to_infer = need_infer - traintime_params
     # Use defaults when we can't infer
     overloads = able_to_infer.copy()
-    overloads.update(ub.dict_isect(args.datamodule_defaults, unable_to_infer))
+    overloads.update(args.datamodule_defaults & unable_to_infer)
     datamodule_vars.update(overloads)
     print('able_to_infer = {}'.format(ub.repr2(able_to_infer, nl=1)))
     print('unable_to_infer = {}'.format(ub.repr2(unable_to_infer, nl=1)))
