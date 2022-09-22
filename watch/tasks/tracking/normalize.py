@@ -680,10 +680,22 @@ def normalize(
         coco_dset = _normalize_annots(coco_dset, overwrite)
     coco_dset = ensure_videos(coco_dset)
 
+    import xdev
+    with xdev.embed_on_exception_context:
+        x = 7
+        import json
+        json.dumps(coco_dset.dataset['annotations'])
+
     # apply tracks
     assert issubclass(track_fn, TrackFunction), 'must supply a valid track_fn!'
     tracker: TrackFunction = track_fn(polygon_fn=polygon_fn, **track_kwargs)
     out_dset = tracker.apply_per_video(coco_dset)
+
+    import xdev
+    with xdev.embed_on_exception_context:
+        x = 6
+        import json
+        json.dumps(out_dset.dataset['annotations'])
 
     # normalize and add geo segmentations
     out_dset = _normalize_annots(out_dset, overwrite=False)
@@ -692,7 +704,20 @@ def normalize(
           set(out_dset.annots().get('track_id', None)))
 
     out_dset = dedupe_tracks(out_dset)
+
+    import xdev
+    with xdev.embed_on_exception_context:
+        x = 5
+        import json
+        json.dumps(out_dset.dataset['annotations'])
+
     out_dset = add_track_index(out_dset)
+
+    import xdev
+    with xdev.embed_on_exception_context:
+        x = 4
+        import json
+        json.dumps(out_dset.dataset['annotations'])
 
     if viz_sc_bounds:
         from watch.tasks.tracking.visualize import keys_to_score_sc, viz_track_scores
@@ -716,9 +741,27 @@ def normalize(
     )
     if 'key' in track_kwargs:  # assume this is a baseline (saliency) key
         phase_kw['baseline_keys'] = set(track_kwargs['key'])
+    import xdev
+    with xdev.embed_on_exception_context:
+        x = 3
+        import json
+        json.dumps(out_dset.dataset['annotations'])
+
     out_dset = normalize_phases(out_dset, **phase_kw)
 
+    import xdev
+    with xdev.embed_on_exception_context:
+        x = 1
+        import json
+        json.dumps(out_dset.dataset['annotations'])
+
     out_dset = normalize_sensors(out_dset)
+
+    import xdev
+    with xdev.embed_on_exception_context:
+        x = 2
+        import json
+        json.dumps(out_dset.dataset['annotations'])
 
     # HACK, ensure out_dset.index is up to date
     out_dset._build_index()
