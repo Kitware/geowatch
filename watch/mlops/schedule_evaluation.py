@@ -54,6 +54,8 @@ class ScheduleEvaluationConfig(scfg.Config):
         'hack_sc_grid': scfg.Value(False, help='if True use hard coded SC grid'),
         'dvc_expt_dpath': None,
         'dvc_data_dpath': None,
+
+        'check_other_sessions': scfg.Value('auto', help='if True, will ask to kill other sessions that might exist')
     }
 
 
@@ -187,7 +189,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     state = ExperimentState('*', '*')
     candidate_pkg_rows = []
     for package_fpath in package_fpaths:
-        condensed = state._parse_pattern_attrs('pkg', package_fpath)
+        condensed = state._parse_pattern_attrs(state.templates['pkg'], package_fpath)
         package_info = {}
         package_info['package_fpath'] = package_fpath
         package_info['condensed'] = condensed
@@ -633,7 +635,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # RUN
     if config['run']:
         # ub.cmd('bash ' + str(driver_fpath), verbose=3, check=True)
-        queue.run(block=True)
+        queue.run(block=True, check_other_sessions=config['check_other_sessions'])
     else:
         driver_fpath = queue.write()
         print('Wrote script: to run execute:\n{}'.format(driver_fpath))

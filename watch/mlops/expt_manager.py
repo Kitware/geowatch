@@ -642,7 +642,7 @@ class ExperimentState(ub.NiceRepr):
         parser = parse.Parser(str(template))
         results = parser.parse(str(path))
         if results is None:
-            raise AssertionError(path)
+            raise AssertionError(f'Failed to match path={path} to template={template}')
             parser = parse.Parser(str(template)[:-4])
             results = parser.parse(str(path))
         if results is not None:
@@ -938,7 +938,7 @@ class ExperimentState(ub.NiceRepr):
         return tables
 
     def _make_cross_links(self):
-        # Link from evals to predictions
+        # Link between evals and predictions
         eval_rows = list(self.evaluation_rows())
         num_links = 0
         for row in ub.ProgIter(eval_rows, desc='linking evals and preds'):

@@ -600,6 +600,13 @@ def relevant_pred_config(pred_args, dvc_dpath):
     pred_config['tta_fliprot'] = pred_args.get('tta_fliprot', 0)
     pred_config['tta_time'] = pred_args.get('tta_time', 0)
     pred_config['chip_overlap'] = pred_args['chip_overlap']
+    pred_config['input_space_scale'] = pred_args.get('input_space_scale', None)
+    pred_config['window_space_scale'] = pred_args.get('window_space_scale', None)
+    pred_config['output_space_scale'] = pred_args.get('output_space_scale', None)
+    pred_config['time_span'] = pred_args.get('time_span', None)
+    pred_config['time_sampling'] = pred_args.get('time_sampling', None)
+    pred_config['time_steps'] = pred_args.get('time_steps', None)
+    pred_config['chip_dims'] = pred_args.get('chip_dims', None)
     package_fpath = pred_args['package_fpath']
     test_dataset = pred_args['test_dataset']
     if dvc_dpath is not None:

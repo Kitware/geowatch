@@ -206,14 +206,18 @@ class EvaluationReporter:
         #     # dataset_summary_tables(dpath)
         #     initial_summary(table, loaded_table, reporter.dpath)
 
-    def report_best(reporter, show_configs=True):
+    def report_best(reporter, show_configs=0):
         import rich
         orig_merged_df = reporter.orig_merged_df
         metric_names = reporter.metric_registry.name
         cfg_names = ['pred_cfg', 'act_cfg', 'trk_cfg']
         id_names = ['model'] + cfg_names
 
-        metric_cols = list(ub.oset(metric_names) & orig_merged_df.columns)
+        top_k = 4
+
+        metric_cols = (ub.oset(metric_names) & orig_merged_df.columns)
+        primary_metrics = (ub.oset(['mean_f1', 'BAS_F1']) & metric_cols)
+        metric_cols = list((metric_cols & primary_metrics) | (metric_cols - primary_metrics))
         # print('orig_merged_df.columns = {}'.format(ub.repr2(list(orig_merged_df.columns), nl=1)))
         id_cols = list(ub.oset(id_names) & orig_merged_df.columns)
 
@@ -231,11 +235,11 @@ class EvaluationReporter:
             for metric in metric_cols:
                 # TODO: maximize or minimize
                 best_rows = table[metric].sort_values()
-                top_indexes.update(best_rows.iloc[-2:].index)
+                top_indexes.update(best_rows.iloc[-top_k:].index)
 
             idxs = sorted(top_indexes)
             shortlist = table.loc[idxs]
-            shortlist = shortlist.sort_values(metric_cols)
+            shortlist = shortlist.sort_values(metric_cols, na_position='first')
 
             show_configs = show_configs
             if show_configs:
@@ -583,6 +587,8 @@ def clean_loaded_data(big_rows):
         pred_params = param_type['pred']
         model_fpath = pred_params['pred_model_fpath']
 
+        track_params = info['param_types'].get('track', {})
+
         # Shrink and check the sensorchan spec
         request_sensorchan = kwcoco.SensorChanSpec.coerce(
             agr.shrink_channels(fit_params['channels']))
@@ -652,7 +658,6 @@ def clean_loaded_data(big_rows):
         fit_param_keys2 = list(fit_param_keys) + ['bad_channels', 'channels']
         selected_fit_params = ub.dict_isect(fit_params, fit_param_keys2)
 
-        param_type['fit']
         act_cfg = row.get('act_cfg', None)
         if not is_null(act_cfg):
             track_cfg = param_type.get('track', None)
@@ -682,6 +687,9 @@ def clean_loaded_data(big_rows):
         row.update(info['metrics'])
         row.update(resource)
         row.update(selected_fit_params)
+        row['pred_params'] = pred_params
+        row['track_params'] = track_params
+        row['fit_params'] = fit_params
         simple_rows.append(row)
 
     simple_df = pd.DataFrame(simple_rows)
