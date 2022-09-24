@@ -21,7 +21,6 @@ def dedupe_annots(coco_dset):
     Check for annotations with different aids that are the same geometry
     '''
     annots = coco_dset.annots()
-
     # NOTE: Using segmentations to dedup with segmentation data is fragile
     eq_keys = ['image_id', 'category_id', 'track_id', 'segmentation']
     eq_vals = annots.lookup(eq_keys, None)

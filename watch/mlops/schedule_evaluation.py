@@ -29,8 +29,8 @@ class ScheduleEvaluationConfig(scfg.Config):
         'partition': scfg.Value(None, help='specify slurm partition (slurm backend only)'),
         'mem': scfg.Value(None, help='specify slurm memory per task (slurm backend only)'),
 
-        'tta_fliprot': scfg.Value(None, help='grid of flip test-time-augmentation to test'),
-        'tta_time': scfg.Value(None, help='grid of temporal test-time-augmentation to test'),
+        'tta_fliprot': scfg.Value(0, help='grid of flip test-time-augmentation to test'),
+        'tta_time': scfg.Value(0, help='grid of temporal test-time-augmentation to test'),
         'chip_overlap': scfg.Value(0.3, help='grid of chip overlaps test'),
         'set_cover_algo': scfg.Value(['approx'], help='grid of set_cover_algo to test'),
 

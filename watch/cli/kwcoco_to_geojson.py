@@ -54,7 +54,7 @@ except Exception:
 """
 from watch.cli.kwcoco_to_geojson import *  # NOQA
 from watch.cli.kwcoco_to_geojson import _argparse_cli
-print(scfg.Config.port_argparse(_argparse_cli(), style='dataconf'))
+print(scfg.Config.port_argparse(_argparse_cli(), name='KWCocoToGeoJSONConfig', style='dataconf'))
 """
 
 
@@ -1077,16 +1077,25 @@ def main(args):
         'files': [],
     }
     from kwcoco.util import util_json
-    import socket
     # Args will be serailized in kwcoco, so make sure it can be coerced to json
     jsonified_args = util_json.ensure_json_serializable(args.__dict__)
     walker = ub.IndexableWalker(jsonified_args)
     for problem in util_json.find_json_unserializable(jsonified_args):
         bad_data = problem['data']
         walker[problem['loc']] = str(bad_data)
+
+    # TODO: use process context instead
+    # from watch.utils.process_context import ProcessContext
+    # proc_context = ProcessContext(
+    #     name='watch.cli.kwcoco_to_geojson', type='process',
+    #     args=jsonified_args, extra={'pred_info': pred_info},
+    # )
+    # proc_context.start()
+    # info.append(proc_context.obj())
+    import socket
     start_timestamp = ub.timestamp()
     info = tracking_output['info']
-    info.append({
+    proc_repr = {
         'type': 'process',
         'properties': {
             'name': 'watch.cli.kwcoco_to_geojson',
@@ -1095,10 +1104,12 @@ def main(args):
             'cwd': os.getcwd(),
             'userhome': ub.userhome(),
             'timestamp': start_timestamp,
+            'start_timestamp': start_timestamp,
             'pred_info': pred_info,
             # TODO: could pass the info in from the input kwcoco file as well
         }
-    })
+    }
+    info.append(proc_repr)
     fpaths = tracking_output['files']
 
     # Pick a track_fn
@@ -1210,13 +1221,9 @@ def main(args):
                 geojson.dump(site, f, indent=2)
 
     # Measure how long tracking takes
-    info.append({
-        'type': 'measure',
-        'properties': {
-            'start_timestamp': start_timestamp,
-            'end_timestamp': ub.timestamp(),
-        }
-    })
+    proc_repr['end_timestamp'] = ub.timestamp()
+    # TODO:
+    # proc_context.stop()
 
     out_dir = ub.Path(out_dir)
     if args.out_fpath is not None:

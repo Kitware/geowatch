@@ -951,7 +951,9 @@ class ExperimentState(ub.NiceRepr):
 
                 if eval_dpath.exists() and pred_dpath.exists():
                     pred_lpath = eval_dpath / '_pred_link'
-                    ub.symlink(pred_dpath, pred_lpath)
+                    eval_lpath = pred_dpath / '_eval_link'
+                    ub.symlink(pred_dpath, pred_lpath, verbose=1)
+                    ub.symlink(eval_dpath, eval_lpath, verbose=1)
                     num_links += 1
         print(f'made {num_links} links')
 

@@ -1017,6 +1017,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 'output_dims': output_dims,
                 'output_space_slice': frame_outspace_box.to_slice(),
                 'output_image_dsize': outimg_box.dsize,
+                'scale_outspace_from_vid': scale_outspace_from_vid,
                 'ann_aids': None,
             }
 

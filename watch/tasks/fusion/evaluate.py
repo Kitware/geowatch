@@ -333,6 +333,7 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
             # TODO: consolidate this with above class-specific code
             salient_delay = pred_coco_img.delay(salient_class, space=score_space)
             salient_prob = salient_delay.finalize(nodata='float')[..., 0]
+            salient_prob_orig = salient_prob.copy()
             invalid_mask = np.isnan(salient_prob)
             salient_prob[invalid_mask] = 0
             saliency_weights[invalid_mask] = 0
@@ -359,7 +360,7 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
 
             info.update({
                 'salient_measures': salient_measures,
-                'salient_prob': salient_prob,
+                'salient_prob': salient_prob_orig,
                 'true_saliency': true_saliency,
             })
 
@@ -680,8 +681,11 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
             salient_prob = info.get('salient_prob', None)
             # invalid_mask = info.get('invalid_mask', None)
             if salient_prob is not None:
+                invalid_mask = np.isnan(salient_prob)
                 heatmap = kwimage.make_heatmask(
                     salient_prob, with_alpha=0.5, cmap='plasma')
+                heatmap[invalid_mask] = np.nan
+                heatmap = kwimage.fill_nans_with_checkers(heatmap)
                 # heatmap[invalid_mask] = 0
                 heatmap_int = kwimage.ensure_uint255(heatmap[..., 0:3])
                 heatmap_int = kwimage.draw_text_on_image(

@@ -1410,7 +1410,7 @@ class Box(ub.NiceRepr):
 
     @property
     def height(self):
-        return self.boxes.width.ravel()[0]
+        return self.boxes.height.ravel()[0]
 
     @property
     def area(self):
