@@ -517,6 +517,17 @@ class ExperimentState(ub.NiceRepr):
 
     def __init__(self, expt_dvc_dpath, dataset_code, dvc_remote=None,
                  data_dvc_dpath=None, model_pattern='*'):
+
+        if isinstance(model_pattern, str) and model_pattern.endswith('.txt') and ub.Path(model_pattern).exists():
+            model_pattern = [
+                p.strip()
+                for p in ub.Path(model_pattern).read_text().split('\n')
+                if p.strip()]
+
+        # from watch.mlops.schedule_evaluation import schedule_evaluation
+        # from watch.utils import util_pattern
+        # model_pattern = util_pattern.MultiPattern.coerce(model_pattern, hint='glob')
+
         self.expt_dvc_dpath = ub.Path(expt_dvc_dpath)
 
         if data_dvc_dpath is None:
@@ -593,7 +604,7 @@ class ExperimentState(ub.NiceRepr):
         for k, v in self.versioned_templates.items():
             self.templates[k] = self.storage_template_prefix + v
 
-        self.path_patterns = {}
+        self.path_patterns_matrix = {}
         self._build_path_patterns()
 
         # These are some locations that I used to know
@@ -615,24 +626,19 @@ class ExperimentState(ub.NiceRepr):
     STAGING_COLUMNS = [
         'ckpt_exists', 'is_packaged', 'is_copied', 'needs_package', 'needs_copy']
 
-    # def _check(self):
-    #     from watch.utils import util_pattern
-    #     pat = self.path_patterns['pkg']
-    #     # pat = self.path_patterns['eval_act']
-    #     p1 = [p for p in list(util_pattern.Pattern.coerce(pat).paths()) if not p.name.endswith('.dvc')]
-    #     p2 = list(util_pattern.Pattern.coerce(pat + '.dvc').paths())
-    #     for p in p2:
-    #         if not p.augment(ext='').exists():
-    #             break
-    #     print(len(p1))
-    #     print(len(p2))
-    # self.
-    # pass
-
     def _build_path_patterns(self):
-        self.path_patterns = {
-            k: v.format(**self.patterns)
-            for k, v in self.templates.items()}
+        _patterns = ub.udict(self.patterns).map_values(
+            lambda x: x if ub.iterable(x) else [x])
+        self._pattern_matrix = list(ub.named_product(_patterns))
+
+        self.path_patterns_matrix = [
+            {
+                k: v.format(**patterns)
+                for k, v in self.templates.items()
+            }
+            for patterns in self._pattern_matrix
+        ]
+        print('self.path_patterns_matrix = {}'.format(ub.repr2(self.path_patterns_matrix, nl=1)))
 
     def __nice__(self):
         return self.dataset_code
@@ -682,51 +688,51 @@ class ExperimentState(ub.NiceRepr):
         default = {'ckpt_path': None, 'spkg_path': None}
         _id_to_row = ub.ddict(default.copy)
 
-        key = 'ckpt'
-        pat = self.path_patterns[key]
-        mpat = util_pattern.Pattern.coerce(pat)
-        # Find all checkpoints
         rows = []
-        for ckpt_path in list(mpat.paths()):
-            if ckpt_path.suffix != '.ckpt':
-                continue
-            row = default.copy()
-            row['ckpt_path'] = ckpt_path
-            row['type'] = 'ckpt'
-            row['is_packaged'] = False
-            row['ckpt_exists'] = True
+        key = 'ckpt'
+        for pat in [p[key] for p in self.path_patterns_matrix]:
+            mpat = util_pattern.Pattern.coerce(pat)
+            # Find all checkpoints
+            for ckpt_path in list(mpat.paths()):
+                if ckpt_path.suffix != '.ckpt':
+                    continue
+                row = default.copy()
+                row['ckpt_path'] = ckpt_path
+                row['type'] = 'ckpt'
+                row['is_packaged'] = False
+                row['ckpt_exists'] = True
 
-            _attrs = self._parse_pattern_attrs(self.templates[key], ckpt_path)
-            row.update(_attrs)
-            rows.append(row)
-            _id_to_row[ckpt_path] = row
+                _attrs = self._parse_pattern_attrs(self.templates[key], ckpt_path)
+                row.update(_attrs)
+                rows.append(row)
+                _id_to_row[ckpt_path] = row
 
         # Find repackaged checkpoints
         key = 'spkg'  # stands for staged package
-        pat = self.path_patterns[key]
-        mpat = util_pattern.Pattern.coerce(pat)
-        for spkg_path in list(mpat.paths()):
-            # Does this correspond to an existing checkpoint?
-            _attrs = self._parse_pattern_attrs(self.templates[key], spkg_path)
+        for pat in [p[key] for p in self.path_patterns_matrix]:
+            mpat = util_pattern.Pattern.coerce(pat)
+            for spkg_path in list(mpat.paths()):
+                # Does this correspond to an existing checkpoint?
+                _attrs = self._parse_pattern_attrs(self.templates[key], spkg_path)
 
-            # Hack: making assumption about naming pattern
-            spkg_stem = spkg_path.stem
-            ckpt_stem = ''.join(spkg_stem.partition('_epoch')[-2:])[1:]
-            ckpt_path = spkg_path.parent / (ckpt_stem + '.ckpt')
+                # Hack: making assumption about naming pattern
+                spkg_stem = spkg_path.stem
+                ckpt_stem = ''.join(spkg_stem.partition('_epoch')[-2:])[1:]
+                ckpt_path = spkg_path.parent / (ckpt_stem + '.ckpt')
 
-            if ckpt_path.exists():
-                # Modify existing row
-                row = _id_to_row[ckpt_path]
-            else:
-                # Add new row
-                row = default.copy()
-                row['checkpoint'] = ckpt_stem
-                row['ckpt_exists'] = False
-                row['type'] = 'ckpt'
-                rows.append(row)
-            row['spkg_path'] = spkg_path
-            row['is_packaged'] = True
-            row.update(_attrs)
+                if ckpt_path.exists():
+                    # Modify existing row
+                    row = _id_to_row[ckpt_path]
+                else:
+                    # Add new row
+                    row = default.copy()
+                    row['checkpoint'] = ckpt_stem
+                    row['ckpt_exists'] = False
+                    row['type'] = 'ckpt'
+                    rows.append(row)
+                row['spkg_path'] = spkg_path
+                row['is_packaged'] = True
+                row.update(_attrs)
 
         for row in rows:
             fname = row['checkpoint']
@@ -758,16 +764,16 @@ class ExperimentState(ub.NiceRepr):
         """
         keys = ['pred_pxl', 'pred_trk', 'pred_act']
         for key in keys:
-            pat = self.path_patterns[key]
-            found = util_path.coerce_patterned_paths(pat)
-            for path in found:
-                row = {
-                    'type': key,
-                    'raw': path,
-                }
-                _attrs = self._parse_pattern_attrs(self.templates[key], path)
-                row.update(_attrs)
-                yield row
+            for pat in [p[key] for p in self.path_patterns_matrix]:
+                found = util_path.coerce_patterned_paths(pat)
+                for path in found:
+                    row = {
+                        'type': key,
+                        'raw': path,
+                    }
+                    _attrs = self._parse_pattern_attrs(self.templates[key], path)
+                    row.update(_attrs)
+                    yield row
 
     def evaluation_rows(self, with_attrs=1, types=None, notypes=None):
         keys = ['eval_pxl', 'eval_act', 'eval_trk']
@@ -789,44 +795,44 @@ class ExperimentState(ub.NiceRepr):
         if notypes is not None:
             keys = list(ub.oset(keys) - set(notypes))
         for key in keys:
-            pat = self.path_patterns[key]
-            found = list(util_path.sidecar_glob(
-                pat, sidecar_ext='.dvc', sidecar_key='dvc', main_key='raw'))
-            for row in found:
-                row['type'] = key
-                row['has_dvc'] = (row['dvc'] is not None)
-                row['has_raw'] = (row['raw'] is not None)
-                row['needs_pull'] = row['has_dvc'] and not row['has_raw']
-                row['is_link'] = False
-                row['is_broken'] = False
-                row['unprotected'] = False
-                row['needs_push'] = False
-                if with_attrs:
-                    if row['raw']:
-                        path = row['raw']
-                    else:
-                        path = row['dvc'].augment(ext='')
-                    row['dataset_code'] = self.dataset_code
-                    _attrs = self._parse_pattern_attrs(self.templates[key], path)
+            for pat in [p[key] for p in self.path_patterns_matrix]:
+                found = list(util_path.sidecar_glob(
+                    pat, sidecar_ext='.dvc', sidecar_key='dvc', main_key='raw'))
+                for row in found:
+                    row['type'] = key
+                    row['has_dvc'] = (row['dvc'] is not None)
+                    row['has_raw'] = (row['raw'] is not None)
+                    row['needs_pull'] = row['has_dvc'] and not row['has_raw']
+                    row['is_link'] = False
+                    row['is_broken'] = False
+                    row['unprotected'] = False
+                    row['needs_push'] = False
+                    if with_attrs:
+                        if row['raw']:
+                            path = row['raw']
+                        else:
+                            path = row['dvc'].augment(ext='')
+                        row['dataset_code'] = self.dataset_code
+                        _attrs = self._parse_pattern_attrs(self.templates[key], path)
 
-                    if self.blocklists is not None:
-                        blocked = False
-                        for k, v in _attrs.items():
-                            if k in self.blocklists:
-                                if v in self.blocklists[k]:
-                                    blocked = True
-                        if blocked:
-                            continue
+                        if self.blocklists is not None:
+                            blocked = False
+                            for k, v in _attrs.items():
+                                if k in self.blocklists:
+                                    if v in self.blocklists[k]:
+                                        blocked = True
+                            if blocked:
+                                continue
 
-                    row.update(_attrs)
+                        row.update(_attrs)
 
-                if row['has_raw']:
-                    p = ub.Path(row['raw'])
-                    row['is_link'] = p.is_symlink()
-                    row['is_broken'] = row['is_link'] and not p.exists()
-                    row['unprotected'] = row['has_dvc'] and not row['is_link']
-                    row['needs_push'] = not row['has_dvc']
-                yield row
+                    if row['has_raw']:
+                        p = ub.Path(row['raw'])
+                        row['is_link'] = p.is_symlink()
+                        row['is_broken'] = row['is_link'] and not p.exists()
+                        row['unprotected'] = row['has_dvc'] and not row['is_link']
+                        row['needs_push'] = not row['has_dvc']
+                    yield row
 
     def volitile_table(self):
         volitile_rows = list(self.volitile_rows())
@@ -1088,7 +1094,10 @@ class ExperimentState(ub.NiceRepr):
         #         --skip_existing=True --backend=slurm --run=0
         # from watch.tasks.fusion.schedule_evaluation import schedule_evaluation
         from watch.mlops.schedule_evaluation import schedule_evaluation
-        model_globstr = state.path_patterns['pkg']
+        model_globstr = [p['pkg'] for p in state.path_patterns_matrix]
+
+        # NOTE: this should more often be specified as a cmdline arg maybe
+        # jsonargparse can help with getting this nested correctly.
         test_kwcoco_fpath = state.data_dvc_dpath / state.dataset_code / 'data_vali.kwcoco.json'
         annotations_dpath = state.data_dvc_dpath / 'annotations'
         # TODO: how do we make scriptconfig do modal CLIs easilly?

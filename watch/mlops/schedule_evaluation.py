@@ -659,7 +659,8 @@ def _auto_gpus():
 
 def resolve_package_paths(model_globstr, dvc_expt_dpath):
     import rich
-    import glob
+    # import glob
+    from watch.utils import util_pattern
 
     # HACK FOR DVC PTH FIXME:
     # if str(model_globstr).endswith('.txt'):
@@ -691,8 +692,10 @@ def resolve_package_paths(model_globstr, dvc_expt_dpath):
         return expanded_fpaths
 
     print('model_globstr = {!r}'.format(model_globstr))
+    model_globstr = util_pattern.MultiPattern.coerce(model_globstr)
     package_fpaths = []
-    for package_fpath in glob.glob(model_globstr, recursive=True):
+    # for package_fpath in glob.glob(model_globstr, recursive=True):
+    for package_fpath in model_globstr.paths(recursive=True):
         package_fpath = ub.Path(package_fpath)
         if package_fpath.name.endswith('.txt'):
             # HACK FOR PATH OF MODELS
@@ -703,9 +706,10 @@ def resolve_package_paths(model_globstr, dvc_expt_dpath):
             package_fpaths.append(package_fpath)
 
     if len(package_fpaths) == 0:
+        import pathlib
         if '*' not in str(model_globstr):
             package_fpaths = [ub.Path(model_globstr)]
-        elif not ub.iterable(model_globstr):
+        elif isinstance(model_globstr, (str, pathlib.Path)):
             # Warn the user if they gave a bad model globstr (this is just one
             # of the many potential ways things could go wrong)
             glob_path = ub.Path(model_globstr)
