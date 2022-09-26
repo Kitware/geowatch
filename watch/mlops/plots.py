@@ -291,7 +291,7 @@ class Plotter:
                 nice_type = plotter.human_mapping.get(type, type)
                 nice_param_name = plotter.human_mapping.get(param_name, param_name)
                 ax.set_title(f'Varied {nice_param_name} - {nice_type}\n{test_dset}\nn={n}')
-                fig.set_size_inches(16.85, 8.82)
+                fig.set_size_inches(12.85, 8.82)
                 fig.tight_layout()
             return make_fig
 
