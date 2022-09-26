@@ -638,7 +638,7 @@ class ExperimentState(ub.NiceRepr):
             }
             for patterns in self._pattern_matrix
         ]
-        print('self.path_patterns_matrix = {}'.format(ub.repr2(self.path_patterns_matrix, nl=1)))
+        # print('self.path_patterns_matrix = {}'.format(ub.repr2(self.path_patterns_matrix, nl=1)))
 
     def __nice__(self):
         return self.dataset_code
