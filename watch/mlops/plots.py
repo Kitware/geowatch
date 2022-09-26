@@ -257,11 +257,17 @@ class Plotter:
                 # sns.violinplot(data=expanded, x='expt', y=metrics[0], hue=param_name, split=True)
                 # sns.boxplot(data=expanded, x='expt', y=metrics[0], hue=param_name, notch=True)
                 sns.boxplot(data=expanded, x=x, y=metrics[0], hue=param_name,
-                            medianprops={"color": "coral"})
+                            medianprops={"color": "coral"}, legend=legend)
+                humanize_axes(ax, plotter.human_mapping)
+
+                for label in ax.get_xticklabels():
+                    label.set_rotation(90)
 
                 nice_type = plotter.human_mapping.get(type, type)
                 nice_param_name = plotter.human_mapping.get(param_name, param_name)
-                ax.set_title(f'Varied {nice_param_name} - {nice_type} - {test_dset}\nn={n}')
+                ax.set_title(f'Varied {nice_param_name} - {nice_type}\n{test_dset}\nn={n}')
+                fig.set_size_inches(16.85, 8.82)
+                fig.tight_layout()
             return make_fig
 
         import kwplot
@@ -390,6 +396,16 @@ def humanize_legend(legend, human_mapping):
         leg_lbl.set_text(new_text)
 
 
+def humanize_axes(ax, human_mapping):
+    xkey = ax.get_xlabel()
+    ykey = ax.get_ylabel()
+    ax.set_xlabel(human_mapping.get(xkey, xkey))
+    ax.set_ylabel(human_mapping.get(ykey, ykey))
+    legend = ax.get_legend()
+    if legend is not None:
+        humanize_legend(legend, human_mapping)
+
+
 def humanized_scatterplot(human_mapping, data, ax, plot_type='scatter', mesh=None, connect=None, star=None, starkw=None, **plotkw):
     """
     Example:
@@ -441,11 +457,7 @@ def humanized_scatterplot(human_mapping, data, ax, plot_type='scatter', mesh=Non
     else:
         ax = sns.lineplot(data=data, ax=ax, **plotkw)
 
-    ax.set_xlabel(human_mapping.get(xkey, xkey))
-    ax.set_ylabel(human_mapping.get(ykey, ykey))
-    legend = ax.get_legend()
-    if legend is not None:
-        humanize_legend(legend, human_mapping)
+    humanize_axes(ax, human_mapping)
 
     if connect:
         import scipy

@@ -355,6 +355,7 @@ class EvaluationReporter:
             'has_teamfeat': 'Has Team Features',
             'eval_act+pxl': 'SC',
             'eval_trk+pxl': 'BAS',
+            'pred_input_space_scale': 'Input Scale',
         }
         reporter.human_mapping = human_mapping
         reporter.iarpa_metric_lut = {
