@@ -155,8 +155,6 @@ def main():
 
     reporter = reporter
     orig_merged_df = reporter.orig_merged_df
-    iarpa_metric_lut = reporter.iarpa_metric_lut
-    pixel_metric_lut = reporter.pixel_metric_lut
     # predcfg_to_label = reporter.predcfg_to_label
     # actcfg_to_label = reporter.actcfg_to_label
     human_mapping = reporter.human_mapping
@@ -200,10 +198,6 @@ def main():
     plotter.plot_groups('plot_pixel_ap_verus_auc', huevar='expt')
 
     plotter.plot_groups('plot_resource_versus_metric', huevar='expt')
-
-    # plot_ta1_vs_l1(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath)
-
-    # plot_viterbii_analysis(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath)
 
     import xdev
     xdev.view_directory(dpath)

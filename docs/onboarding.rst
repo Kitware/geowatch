@@ -20,17 +20,23 @@ recommend the following directory structure:
 
    # Create a directory for DATA
    # Either:
-   mkdir -p $HOME/data  
+   mkdir -p $HOME/data/
    
    # XOR: create a symlink to a drive that has space on it.
-   ln -s /data $HOME/data  
+   ln -s /data $HOME/data
 
    # Clone the code repos
    git clone https://gitlab.kitware.com/smart/watch/  $HOME/code/watch
 
    # Clone the data repos
-   git clone https://gitlab.kitware.com/smart/smart_data_dvc/  $HOME/data/smart_data_dvc
-   git clone https://gitlab.kitware.com/smart/smart_expt_dvc/  $HOME/data/smart_expt_dvc
+   mkdir -p $HOME/data/dvc-repos 
+   git clone https://gitlab.kitware.com/smart/smart_data_dvc/ $HOME/data/dvc-repos/smart_data_dvc
+   git clone https://gitlab.kitware.com/smart/smart_expt_dvc/ $HOME/data/dvc-repos/smart_expt_dvc
+
+   # Or if you have credentials
+
+   git clone git@gitlab.kitware.com:smart/smart_data_dvc.git $HOME/data/dvc-repos/smart_data_dvc
+   git clone git@gitlab.kitware.com:smart/smart_expt_dvc.git $HOME/data/dvc-repos/smart_expt_dvc
 
 
 For details on installing the watch system in development mode see 

@@ -11,3 +11,5 @@ mkinit >= 0.3.3
 
 timerit >= 0.3.0
 codecarbon >= 2.0.0
+
+humanize >= 4.4.0
