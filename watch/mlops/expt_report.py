@@ -263,7 +263,7 @@ class EvaluationReporter:
 
         return grouped_shortlists
 
-    def _build_cfg_rlut(keys):
+    def _build_cfg_rlut(reporter, keys):
         from watch.utils.reverse_hashid import ReverseHashTable
         if keys is None:
             candidates = ReverseHashTable.query(verbose=0)

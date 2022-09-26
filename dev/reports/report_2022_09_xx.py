@@ -161,6 +161,9 @@ def main():
     # Dump details out about the best models
     best_models_dpath = (dpath / 'best_models' / ub.timestamp()).ensuredir()
     test_dset_to_shortlist = reporter.report_best(show_configs=True)
+
+    rlut = reporter._build_cfg_rlut(None)
+
     for test_dset, shortlist in test_dset_to_shortlist.items():
         _dpath = (best_models_dpath / test_dset).ensuredir()
 
