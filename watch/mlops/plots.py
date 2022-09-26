@@ -102,8 +102,11 @@ class Plotter:
             import kwplot
             fig = kwplot.figure(fnum=fnum, doclf=True)
             ax = fig.gca()
-            humanized_scatterplot(plotter.human_mapping, plot_type='line', data=melted, ax=ax, legend=0, **plotkw)
-            humanized_scatterplot(plotter.human_mapping, plot_type='scatter', data=melted, ax=ax, legend=legend,  s=80, **plotkw)
+            humanized_scatterplot(plotter.human_mapping, plot_type='line',
+                                  data=melted, ax=ax, legend=0, **plotkw)
+            humanized_scatterplot(plotter.human_mapping, plot_type='scatter',
+                                  data=melted, ax=ax, legend=legend,  s=80,
+                                  **plotkw)
             if len(metrics) == 1:
                 ax.set_ylabel(metrics[0])
             nice_type = plotter.human_mapping.get(type, type)
@@ -150,7 +153,8 @@ class Plotter:
             fig = kwplot.figure(fnum=fnum, doclf=True)
             ax = fig.gca()
             n = len(data)
-            ax = humanized_scatterplot(plotter.human_mapping, data=data, ax=ax, legend=legend, **plotkw)
+            ax = humanized_scatterplot(plotter.human_mapping, data=data, ax=ax,
+                                       legend=legend, **plotkw)
             nice_type = plotter.human_mapping.get(type, type)
             ax.set_title(f'Pixelwise Vs IARPA metrics - {nice_type} - {test_dset}\n{corr_lbl}, n={n}')
 
@@ -198,7 +202,8 @@ class Plotter:
         def make_fig(fnum, legend=True):
             fig = kwplot.figure(fnum=fnum)
             ax = fig.gca()
-            ax = humanized_scatterplot(plotter.human_mapping, data=group, ax=ax, **plotkw)
+            ax = humanized_scatterplot(plotter.human_mapping, data=group,
+                                       ax=ax, legend=legend, **plotkw)
             nice_type = plotter.human_mapping.get(type, type)
             ax.set_title(f'Pixelwise metrics - {nice_type} - {test_dset}\n{corr_lbl}')
             fig.set_size_inches(16.85, 8.82)
@@ -257,8 +262,11 @@ class Plotter:
                 # sns.violinplot(data=expanded, x='expt', y=metrics[0], hue=param_name, split=True)
                 # sns.boxplot(data=expanded, x='expt', y=metrics[0], hue=param_name, notch=True)
                 sns.boxplot(data=expanded, x=x, y=metrics[0], hue=param_name,
-                            medianprops={"color": "coral"}, legend=legend)
+                            medianprops={"color": "coral"})
                 humanize_axes(ax, plotter.human_mapping)
+
+                if not legend:
+                    ax.get_legend().remove()
 
                 for label in ax.get_xticklabels():
                     label.set_rotation(90)
