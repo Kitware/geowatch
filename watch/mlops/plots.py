@@ -322,7 +322,8 @@ class Plotter:
             relabels = additional['relabels']
             param_name = additional['param_name']
             df = pd.DataFrame([{'orig': k, 'relabel': v} for k, v in relabels.items()])
-            df2_style = humanize_dataframe(df, title='relabing')
+            df = df.set_index('orig')
+            df2_style = humanize_dataframe(df, title='Relabling')
 
             # Hack, write the new figure to the parts dir. We have to be sure
             # to reconstruct it correctly.
