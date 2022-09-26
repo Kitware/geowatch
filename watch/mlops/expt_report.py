@@ -197,7 +197,7 @@ class EvaluationReporter:
 
     def status(reporter, table=None):
         reporter.state.summarize()
-        reporter.report_best()
+        reporter.report_best(verbose=1)
         # if 0:
         #     if table is None:
         #         table = reporter.state.evaluation_table()
@@ -206,7 +206,7 @@ class EvaluationReporter:
         #     # dataset_summary_tables(dpath)
         #     initial_summary(table, loaded_table, reporter.dpath)
 
-    def report_best(reporter, show_configs=0):
+    def report_best(reporter, show_configs=0, verbose=0):
         import rich
         orig_merged_df = reporter.orig_merged_df
         metric_names = reporter.metric_registry.name
@@ -222,23 +222,25 @@ class EvaluationReporter:
         id_cols = list(ub.oset(id_names) & orig_merged_df.columns)
 
         test_datasets = orig_merged_df['test_dset'].dropna().unique().tolist()
-        rich.print('[orange1]-- REPORTING BEST --')
-        print('test_datasets = {}'.format(ub.repr2(test_datasets, nl=1)))
+
+        if verbose:
+            rich.print('[orange1]-- REPORTING BEST --')
+            print('test_datasets = {}'.format(ub.repr2(test_datasets, nl=1)))
+
+        test_dset_to_shortlist = {}
 
         for test_dset, subdf in orig_merged_df.groupby('test_dset'):
             print('')
             rich.print(f'[orange1] -- <BEST ON: {test_dset}> --')
 
-            table = subdf[id_cols + metric_cols]
-
             top_indexes = set()
             for metric in metric_cols:
                 # TODO: maximize or minimize
-                best_rows = table[metric].sort_values()
+                best_rows = subdf[metric].sort_values()
                 top_indexes.update(best_rows.iloc[-top_k:].index)
 
             idxs = sorted(top_indexes)
-            shortlist = table.loc[idxs]
+            shortlist = subdf.loc[idxs]
             shortlist = shortlist.sort_values(metric_cols, na_position='first')
 
             show_configs = show_configs
@@ -250,14 +252,29 @@ class EvaluationReporter:
                         keys = shortlist[cfg_name].dropna().unique()
                         for key in keys:
                             candidates += ReverseHashTable.query(key, verbose=0)
-                rich.print('candidates = {}'.format(ub.repr2(candidates, nl=-1)))
 
-            rich.print(shortlist.to_string())
-            print('')
-            rich.print(f'[orange1] -- </BEST ON: {test_dset}> --')
-            print('')
+                resolved = ub.ddict(list)
+                for cand in candidates:
+                    resolved[cand['key']].extend(
+                        [f['data'] for f in cand['found']])
+                for k in resolved.keys():
+                    if len(resolved[k]) == 1:
+                        resolved[k] = resolved[k][0]
 
-        return shortlist
+                if verbose and show_configs:
+                    rich.print('resolved = {}'.format(ub.repr2(resolved, nl=2)))
+                    # rich.print('candidates = {}'.format(ub.repr2(candidates, nl=-1)))
+
+            # test_dset_to_best[test_dset] =
+            if verbose:
+                shortlist_small = shortlist[id_cols + metric_cols]
+                rich.print(shortlist_small.to_string())
+                print('')
+                rich.print(f'[orange1] -- </BEST ON: {test_dset}> --')
+                print('')
+            test_dset_to_shortlist[test_dset] = shortlist
+
+        return test_dset_to_shortlist
 
     def load1(reporter):
         """

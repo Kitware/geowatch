@@ -143,15 +143,21 @@ def main():
     self = state  # NOQA
 
     # state.patterns['test_dset'] = 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_train_subset.kwcoco'
-    state.patterns['test_dset'] = 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_vali_10GSD_KR_R001.kwcoco'
+    state.patterns['test_dset'] = (
+        'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_vali_10GSD_KR_R001.kwcoco')
     state._build_path_patterns()
     state._make_cross_links()
     # state._block_non_existing_rhashes()
 
     reporter = expt_report.EvaluationReporter(state)
     reporter.load()
-    reporter.status()
-    # reporter.plot()
+
+    reporter.state.summarize()
+
+    test_dset_to_shortlist = reporter.report_best(show_configs=True)
+    for test_dset, shortlist in test_dset_to_shortlist.items():
+        for _, row in best_rows[::-1].iterrows():
+            break
 
     reporter = reporter
     orig_merged_df = reporter.orig_merged_df
@@ -180,7 +186,8 @@ def main():
     import ubelt as ub
     dpath = ub.Path.appdir('watch/expt-report/2022-09-xx').ensuredir()
 
-    plotter = plots.Plotter.from_reporter(reporter, common_plotkw=common_plotkw, dpath=dpath)
+    plotter = plots.Plotter.from_reporter(
+        reporter, common_plotkw=common_plotkw, dpath=dpath)
 
     # Takes a long time to load these
     # plots.dataset_summary_tables(dpath)
@@ -191,7 +198,8 @@ def main():
 
     tracked_metrics = ['salient_AP', 'BAS_F1']
     for metrics in tracked_metrics:
-        plotter.plot_groups('metric_over_training_time', metrics=metrics, huevar='expt')
+        plotter.plot_groups(
+            'metric_over_training_time', metrics=metrics, huevar='expt')
 
     plotter.plot_groups('plot_pixel_ap_verus_iarpa', huevar='expt')
 
@@ -201,7 +209,7 @@ def main():
 
     import xdev
     xdev.view_directory(dpath)
-    model = shortlist()[0]
+    model = shortlist_models()[0]
 
 
 def single_model_analysis(reporter, model):
@@ -250,7 +258,7 @@ def single_model_analysis(reporter, model):
     print(new_df)
 
 
-def shortlist():
+def shortlist_models():
     return [
         'Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584',
         'Drop4_BAS_Retrain_V001_epoch=54-step=28160.pt',

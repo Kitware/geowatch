@@ -1,10 +1,11 @@
+#!/bin/bash
 __doc__="
 Tries to ensures development version of Jon's libs are installed.
 This makes the assumption the repos are already checked out.
 "
 
 mylibs=(
-ubelt 
+ubelt
 mkinit
 xdoctest
 scriptconfig
@@ -17,6 +18,18 @@ kwplot
 kwcoco
 ndsampler
 )
+
+
+for name in "${mylibs[@]}" 
+do
+    echo "name = $name"
+    dpath=$HOME/code/$name
+    if [[ -d "$dpath" ]]; then
+        (cd "$dpath" && gup)
+    else
+        echo "does not exist dpath = $dpath"
+    fi
+done
 
 for name in "${mylibs[@]}" 
 do
@@ -38,16 +51,6 @@ do
 done
 
 
-
-#for name in "${mylibs[@]}" 
-#do
-#    echo "name = $name"
-#    dpath=$HOME/code/$name
-#    if [[ -d $dpath ]]; then
-#        gup
-#        echo "does not exist dpath = $dpath"
-#    fi
-#done
 
 for name in "${mylibs[@]}" 
 do
