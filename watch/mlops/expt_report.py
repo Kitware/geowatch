@@ -265,9 +265,12 @@ class EvaluationReporter:
 
     def _build_cfg_rlut(keys):
         from watch.utils.reverse_hashid import ReverseHashTable
-        candidates = []
-        for key in keys:
-            candidates += ReverseHashTable.query(key, verbose=0)
+        if keys is None:
+            candidates = ReverseHashTable.query(verbose=0)
+        else:
+            candidates = []
+            for key in keys:
+                candidates += ReverseHashTable.query(key, verbose=0)
         resolved = ub.ddict(list)
         for cand in candidates:
             resolved[cand['key']].extend(
