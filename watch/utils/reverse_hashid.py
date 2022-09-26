@@ -105,8 +105,8 @@ class ReverseHashTable:
             full_shelf = rlut_type.load()
             # print('full_shelf = {}'.format(ub.repr2(full_shelf, nl=1, sort=1)))
             if key is None:
-                for key, value in full_shelf.items():
-                    candidates.append({'found': value, 'type': type, 'key': key})
+                for k, v in full_shelf.items():
+                    candidates.append({'found': v, 'type': type, 'key': k})
             elif key in full_shelf:
                 candidates.append({'found': full_shelf[key], 'type': type, 'key': key})
 
