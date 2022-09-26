@@ -250,6 +250,8 @@ class Plotter:
 
         x = 'model'
 
+        additional_needed_legends = []
+
         def make_make_fig(expanded, param_name):
             def make_fig(fnum, legend=True):
                 fig = kwplot.figure(fnum=fnum, doclf=True)
@@ -269,14 +271,21 @@ class Plotter:
 
                 # Relabel if it's too big to fit.
                 relabels = {}
+                needs_relabel = False
                 from itertools import count
                 counter = count(1)
                 for label in ax.get_xticklabels():
                     text = label.get_text()
                     if len(text) > 10:
+                        needs_relabel = True
                         relabels[text] = str(next(counter))
 
-                if relabels:
+                if needs_relabel:
+                    additional = {
+                        'relabels': relabels,
+                        'param_name': param_name,
+                    }
+                    additional_needed_legends.append(additional)
                     new_labels = []
                     for label in ax.get_xticklabels():
                         text = label.get_text()
@@ -306,6 +315,21 @@ class Plotter:
             run_make_fig(make_fig, fnum, dpath, plotter.human_mapping, plot_name + param_name, prefix)
             # sns.violinplot(data=expanded, x=x, y=metrics[0], hue=param_name,
             #                medianprops={"color": "coral"})
+
+        # In the case we needed to relabel an axis, we also need to write a
+        # figure indicating what that relabel was.
+        for additional in additional_needed_legends:
+            relabels = additional['relabels']
+            param_name = additional['param_name']
+            df = pd.DataFrame([{'orig': k, 'relabel': v} for k, v in relabels.items()])
+            df2_style = humanize_dataframe(df, title='relabing')
+
+            # Hack, write the new figure to the parts dir. We have to be sure
+            # to reconstruct it correctly.
+
+            plot_dpath_parts = (dpath / (plot_name + param_name + '_parts')).ensuredir()
+            fpath = plot_dpath_parts / prefix + 'relabel.png'
+            dfi_table(df2_style, fpath, fontsize=32, show=False)
 
     def plot_resource_versus_metric(plotter, code_type, group, huevar='sensorchan'):
         import kwplot
@@ -367,32 +391,34 @@ class Plotter:
                 run_make_fig(make_fig, fnum, plotter.dpath, plotter.human_mapping, plot_name, prefix)
 
 
-def humanize_dataframe(df, col_formats, human_labels=None, index_format=None,
+def humanize_dataframe(df, col_formats=None, human_labels=None, index_format=None,
                        title=None):
     import humanize
     df2 = df.copy()
-    for col, fmt in col_formats.items():
-        if fmt == 'intcomma':
-            df2[col] = df[col].apply(humanize.intcomma)
-        if fmt == 'concice_si_display':
-            from kwcoco.metrics.drawing import concice_si_display
-            for row in df2.index:
-                val = df2.loc[row, col]
-                if isinstance(val, float):
-                    val = concice_si_display(val)
-                    df2.loc[row, col] = val
-            df2[col] = df[col].apply(humanize.intcomma)
-        if callable(fmt):
-            df2[col] = df[col].apply(fmt)
+    if col_formats is not None:
+        for col, fmt in col_formats.items():
+            if fmt == 'intcomma':
+                df2[col] = df[col].apply(humanize.intcomma)
+            if fmt == 'concice_si_display':
+                from kwcoco.metrics.drawing import concice_si_display
+                for row in df2.index:
+                    val = df2.loc[row, col]
+                    if isinstance(val, float):
+                        val = concice_si_display(val)
+                        df2.loc[row, col] = val
+                df2[col] = df[col].apply(humanize.intcomma)
+            if callable(fmt):
+                df2[col] = df[col].apply(fmt)
     if human_labels:
         df2 = df2.rename(human_labels, axis=1)
 
     indexes = [df2.index, df2.columns]
-    for index in indexes:
-        if index.name is not None:
-            index.name = human_labels.get(index.name, index.name)
-        if index.names:
-            index.names = [human_labels.get(n, n) for n in index.names]
+    if human_labels:
+        for index in indexes:
+            if index.name is not None:
+                index.name = human_labels.get(index.name, index.name)
+            if index.names:
+                index.names = [human_labels.get(n, n) for n in index.names]
 
     if index_format == 'capcase':
         def capcase(x):
