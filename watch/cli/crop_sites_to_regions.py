@@ -119,6 +119,13 @@ def main(cmdline=False, **kwargs):
                 num_valid += 1
                 old_site_fpath = cropped_site_info['fpath']
                 new_site_fpath = new_site_dpath / old_site_fpath.name
+                cropped_site['observation_date'] = cropped_site['observation_date'].astype('string')
+                cropped_site['start_date'] = cropped_site['start_date'].astype('string')
+                cropped_site['end_date'] = cropped_site['end_date'].astype('string')
+                if 'predicted_phase_transition_date' in cropped_site:
+                    cropped_site['predicted_phase_transition_date'] =\
+                        cropped_site['predicted_phase_transition_date'].astype('string')
+
                 with safer.open(new_site_fpath, temp_file=True, mode='w') as file:
                     cropped_site_json = cropped_site.to_json(
                         na='drop', indent=2)
@@ -305,7 +312,7 @@ def crop_sites_to_region(region_gdf_crs84, sites):
 
     # Take only the first row, ignore site-summaries
     assert region_gdf_crs84.iloc[0].type == 'region'
-    assert region_gdf_crs84.crs.name == 'WGS 84 (CRS84)'
+    assert region_gdf_crs84.crs.name.startswith('WGS 84')
 
     site_summary_rows = region_gdf_crs84.iloc[1:]
 

@@ -218,7 +218,7 @@ def run_bas_fusion_for_baseline(
         ingress_dir, 'bas_fusion_kwcoco.json')
 
     subprocess.run(['python', '-m', 'watch.tasks.fusion.predict',
-                    '--gpus', '0',
+                    '--devices', '0,',
                     '--write_preds', 'False',
                     '--write_probs', 'True',
                     '--with_change', 'False',
@@ -228,6 +228,7 @@ def run_bas_fusion_for_baseline(
                     '--package_fpath', bas_fusion_model_path,
                     '--pred_dataset', bas_fusion_kwcoco_path,
                     '--num_workers', '0' if force_zero_num_workers else str(jobs),  # noqa: 501
+                    '--set_cover_algo', 'approx',
                     '--batch_size', '8',
                     '--tta_time', '1',
                     '--tta_fliprot', '0',

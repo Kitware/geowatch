@@ -134,12 +134,15 @@ def run_generate_sc_cropped_kwcoco(input_path,
                     '--src', ta1_sc_kwcoco_path,
                     '--dst', ta1_sc_cropped_kwcoco_path,
                     '--regions', bas_region_path,
-                    '--site_summary', 'True'
+                    '--force_nodata', '-9999',
+                    '--include_channels', 'red|green|blue|cloudmask',
+                    '--site_summary', 'True',
                     '--geo_preprop', 'auto',
                     '--keep', 'none',
-                    '--target_gsd', '1',  # TODO: Expose as cli parameter
+                    '--target_gsd', '3',  # TODO: Expose as cli parameter
                     '--context_factor', '1.5',  # TODO: Expose as cli parameter
                     '--workers', '1' if force_one_job_for_cropping else str(jobs),  # noqa: 501
+                    '--aux_workers', '4',
                     '--rpc_align_method', 'affine_warp'], check=True)
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;

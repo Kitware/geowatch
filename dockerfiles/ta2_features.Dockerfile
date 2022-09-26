@@ -2,6 +2,9 @@ FROM nvidia/cuda:10.2-cudnn8-devel-ubuntu18.04
 
 ARG BUILD_STRICT=0
 
+RUN echo "trying to fix nvidia stuff" && \
+    rm /etc/apt/sources.list.d/cuda.list /etc/apt/sources.list.d/nvidia-ml.list && apt-get clean 
+
 RUN apt-get update -q && \
     apt-get install -q -y --no-install-recommends \
         bzip2 \

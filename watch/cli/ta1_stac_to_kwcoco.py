@@ -479,6 +479,11 @@ def _stac_item_to_kwcoco_image(stac_item,
         if aux is not None:
             auxiliary.append(aux)
 
+    if len(auxiliary) == 0:
+        print("* Warning * Empty auxiliary assets for "
+              "STAC Item '{}', skipping!".format(stac_item.id))
+        return None
+
     # Choose a base image canvas and the relationship between auxiliary images
     if populate_watch_fields:
         idx = ub.argmax(auxiliary, lambda x: (x['width'] * x['height']))
