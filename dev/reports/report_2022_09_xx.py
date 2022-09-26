@@ -159,17 +159,27 @@ def main():
     dpath = ub.Path.appdir('watch/expt-report/2022-09-xx').ensuredir()
 
     # Dump details out about the best models
-    best_models_dpath = (dpath / 'best_models' / ub.timestamp()).ensuredir()
-    test_dset_to_shortlist = reporter.report_best(show_configs=True)
+    cohort = ub.timestamp()
+    best_models_dpath = (dpath / 'best_models' / cohort).ensuredir()
+    groupid_to_shortlist = reporter.report_best(show_configs=True)
 
     rlut = reporter._build_cfg_rlut(None)
 
-    for test_dset, shortlist in test_dset_to_shortlist.items():
-        _dpath = (best_models_dpath / test_dset).ensuredir()
+    # Ideally we would have more consistent name conventions, but just
+    # register things for now
+    cfg_param_relationship = [
+        {'cfg_key': 'trk_cfg', 'param_key': 'track_params', 'type': 'trk'},
+        {'cfg_key': 'pred_cfg', 'param_key': 'pred_params', 'type': 'pxl'},
+        # TODO: act
+    ]
+
+    for groupid, shortlist in groupid_to_shortlist.items():
+        test_dset, type = groupid
+        _dpath = (best_models_dpath / f'{test_dset}_{type}').ensuredir()
 
         for rank, row in enumerate(shortlist[::-1].to_dict('records'), start=1):
             parts = [p for p in [
-                'rank_{03d:rank}',
+                f'rank_{rank:03d}',
                 row.get('model', None),
                 # row.get('test_dset', None)
                 row.get('pred_cfg', None),
@@ -194,11 +204,69 @@ def main():
             for key, real_fpath in linkables.items():
                 if real_fpath.exists():
                     link_dpath = row_dpath / f'_link_{key}'
-                    ub.symlink(real_fpath.parent.parent, link_dpath, verbose=1, overwrite=1)
+                    # hack:
+                    if key == 'eval_pxl':
+                        real_dpath = real_fpath.parent.parent
+                    else:
+                        real_dpath = real_fpath.parent
+                    ub.symlink(real_dpath, link_dpath, verbose=0, overwrite=1)
 
-            row['model']
-            row['pred_params']
-            row['track_params']
+            # Check if the registered params agree with the rlut params
+            for relate in cfg_param_relationship:
+                cfg_key = relate['cfg_key']
+                param_key = relate['param_key']
+                if param_key in row and cfg_key in row:
+                    cfg_hashid = row[cfg_key]
+                    cfg_params = row[param_key]
+                    if cfg_hashid in rlut:
+                        resolved = rlut[cfg_hashid]
+
+            metric_names = reporter.metric_registry.name
+            metric_cols = (ub.oset(metric_names) & row.keys())
+            primary_metrics = (ub.oset(['mean_f1', 'BAS_F1']) & row.keys())
+            metric_cols = list((metric_cols & primary_metrics) | (metric_cols - primary_metrics))
+
+            from kwcoco.util.util_json import ensure_json_serializable
+            row = ensure_json_serializable(row)
+            walker = ub.IndexableWalker(row)
+            for path, val in walker:
+                if hasattr(val, 'spec'):
+                    walker[path] = val.spec
+
+            import json
+            details = json.dumps(row, indent='   ')
+            deatils_fpath = row_dpath / 'details.json'
+            deatils_fpath.write_text(details)
+
+            # hack to get back to regular names
+            pred_params = ub.udict({k[5:] : v for k, v in row['pred_params'].items() if k.startswith('pred_')})
+            pred_params = pred_params - {'in_dataset_name', 'model_name', 'in_dataset_fpath', 'model_fpath'}
+
+            # hack to get back to regular names
+            track_params = ub.udict({
+                k[4:] : v for k, v in row['track_params'].items() if k.startswith('trk_')})
+
+            track_params = track_params - {
+                'in_dataset_name', 'model_name', 'in_dataset_fpath', 'model_fpath'}
+
+            row_ = row.copy()
+            row['rank'] = (rank, cohort)
+            row_['expt_dvc_dpath'] = '.'
+            pkg_fpath = state.templates['pkg'].format(**row_)
+
+            metrics = ub.udict(row) & metric_cols
+            metrics['test_dset'] = test_dset
+            summary = {
+                'rank': (rank, cohort),
+                'model': row['model'],
+                'file_name': pkg_fpath,
+                'pred_params': pred_params,
+                'track_params': track_params,
+                'metrics': metrics,
+            }
+            summary_fpath = row_dpath / 'summary.json'
+            summary_fpath.write_text(json.dumps(summary, indent='   '))
+            print(f'summary_fpath={summary_fpath}')
 
     reporter = reporter
     orig_merged_df = reporter.orig_merged_df
@@ -243,6 +311,8 @@ def main():
     plotter.plot_groups('plot_pixel_ap_verus_auc', huevar='expt')
 
     plotter.plot_groups('plot_resource_versus_metric', huevar='expt')
+
+    plotter.plot_groups('plot_violinplots', metrics='BAS_F1')
 
     import xdev
     xdev.view_directory(dpath)

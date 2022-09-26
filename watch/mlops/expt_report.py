@@ -213,6 +213,7 @@ class EvaluationReporter:
         cfg_names = ['pred_cfg', 'act_cfg', 'trk_cfg']
         id_names = ['model'] + cfg_names
 
+        metric_names = reporter.metric_registry.name
         metric_cols = (ub.oset(metric_names) & orig_merged_df.columns)
         primary_metrics = (ub.oset(['mean_f1', 'BAS_F1']) & metric_cols)
         metric_cols = list((metric_cols & primary_metrics) | (metric_cols - primary_metrics))
@@ -229,8 +230,9 @@ class EvaluationReporter:
         group_keys = ['test_dset', 'type']
 
         for groupid, subdf in orig_merged_df.groupby(group_keys):
-            print('')
-            rich.print(f'[orange1] -- <BEST ON: {groupid}> --')
+            if verbose:
+                print('')
+                rich.print(f'[orange1] -- <BEST ON: {groupid}> --')
 
             top_indexes = set()
             for metric in metric_cols:

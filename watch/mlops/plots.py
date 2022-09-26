@@ -272,7 +272,7 @@ class Plotter:
             prefix = f'{test_dset}_{type}_'
             fnum = plot_name + param_name + prefix
             dpath = plotter.dpath
-            run_make_fig(make_fig, fnum, dpath, plotter.human_mapping, plot_name, prefix)
+            run_make_fig(make_fig, fnum, dpath, plotter.human_mapping, plot_name + param_name, prefix)
             # sns.violinplot(data=expanded, x=x, y=metrics[0], hue=param_name,
             #                medianprops={"color": "coral"})
 
