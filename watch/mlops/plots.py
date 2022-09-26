@@ -12,36 +12,83 @@ act_param_keys = heuristics.act_param_keys
 DSET_CODE_TO_GSD = heuristics.DSET_CODE_TO_GSD
 
 
-def expt_over_time(merged_df, metrics, human_mapping, dpath, huevar='expt', fnum=None):
-    import kwplot
-    if fnum is None:
-        fnum = kwplot.next_fnum()
+class UnableToPlot(Exception):
+    pass
 
-    expt_group = dict(list(merged_df.groupby(['test_dset', 'type'])))
-    for code_type, group in expt_group.items():
 
+class Plotter:
+    """
+    A WIP refactor to hold the information we need to do plotting.
+    """
+    def __init__(plotter):
+        pass
+
+    @classmethod
+    def from_reporter(cls, reporter, common_plotkw, dpath):
+        plotter = Plotter()
+        orig_merged_df = reporter.orig_merged_df
+        iarpa_metric_lut = reporter.iarpa_metric_lut
+        pixel_metric_lut = reporter.pixel_metric_lut
+        # predcfg_to_label = reporter.predcfg_to_label
+        # actcfg_to_label = reporter.actcfg_to_label
+        human_mapping = reporter.human_mapping
+        merged_df = orig_merged_df.copy()
+        plotter.dpath = dpath
+        plotter.metric_luts = {
+            'pxl': pixel_metric_lut,
+            'trk': iarpa_metric_lut,
+            'act': iarpa_metric_lut,
+        }
+        common_plotkw = common_plotkw
+        plotter.common_plotkw = common_plotkw
+        plotter.human_mapping = human_mapping
+        plotter.merged_df = merged_df
+
+        # It's important to separate results by what dataset they were tested
+        # on / what type of result they were evaluating
+        plotter.group_keys = ['test_dset', 'type']
+        plotter.expt_groups = dict(list(merged_df.groupby(plotter.group_keys)))
+
+    def plot_groups(plotter, plot_name, **kwargs):
+        """
+        plot_name = 'metric_over_training_time'
+        metrics = ['BAS_F1']
+        """
+        plot_method = getattr(plotter, plot_name)
+        for code_type, group in plotter.expt_groups.items():
+            try:
+                plot_method(code_type, group, **kwargs)
+            except UnableToPlot as ex:
+                print(f'ex={ex}')
+                continue
+
+    def metric_over_training_time(plotter, code_type, group, metrics, huevar='expt'):
         test_dset, type = code_type
-        selected = group
-
+        metrics = metrics if ub.iterable(metrics) else [metrics]
+        metrics_key = '_'.join(metrics)
+        plot_name = 'metric_over_time_' + metrics_key
+        prefix = f'{test_dset}_{type}_'
         plotkw = ub.udict({
             'x': 'step',
             'y': 'value',
             'star': 'in_production',
         })
-        metrics = metrics if ub.iterable(metrics) else [metrics]
-        metrics_key = '_'.join(metrics)
 
         missing = set((plotkw & {'x'}).values()) - set(group.columns)
         if missing:
-            print(f'Cannot plot plot_pixel_ap_verus_iarpa for {code_type} missing={missing}')
+            raise UnableToPlot(f'Cannot plot {plot_name} for {code_type} missing={missing}')
+
+        missing = set((plotkw & {'x'}).values()) - set(group.columns)
+        if missing:
+            raise UnableToPlot(f'Cannot plot {plot_name} for {code_type} missing={missing}')
 
         if plotkw['x'] not in group.columns:
-            continue
+            raise UnableToPlot
 
         if all(m not in group.columns for m in metrics):
-            continue
+            raise UnableToPlot
 
-        melted = selected.melt(
+        melted = group.melt(
             ['step', 'in_production', 'expt', 'pred_cfg'],
             metrics, var_name='metric')
 
@@ -50,120 +97,39 @@ def expt_over_time(merged_df, metrics, human_mapping, dpath, huevar='expt', fnum
 
         plotkw['hue'] = huevar
 
-        plot_name = 'expt_over_time_' + metrics_key
-        prefix = f'{test_dset}_{type}_'
-
         def make_fig(fnum, legend=True):
+            import kwplot
             fig = kwplot.figure(fnum=fnum, doclf=True)
             ax = fig.gca()
-            humanized_scatterplot(human_mapping, plot_type='line', data=melted, ax=ax, legend=0, **plotkw)
-            humanized_scatterplot(human_mapping, plot_type='scatter', data=melted, ax=ax, legend=legend,  s=80, **plotkw)
+            humanized_scatterplot(plotter.human_mapping, plot_type='line', data=melted, ax=ax, legend=0, **plotkw)
+            humanized_scatterplot(plotter.human_mapping, plot_type='scatter', data=melted, ax=ax, legend=legend,  s=80, **plotkw)
             if len(metrics) == 1:
                 ax.set_ylabel(metrics[0])
-            nice_type = human_mapping.get(type, type)
+            nice_type = plotter.human_mapping.get(type, type)
             ax.set_title(f'Metric over time - {nice_type} - {test_dset}')
 
         fnum = plot_name + prefix
-        run_make_fig(make_fig, fnum, dpath, human_mapping, plot_name, prefix)
+        run_make_fig(make_fig, fnum, plotter.dpath, plotter.human_mapping,
+                     plot_name, prefix)
 
-
-def run_make_fig(make_fig, fnum, dpath, human_mapping, plot_name, prefix):
-    """
-    Runs a function that plots a figure with and without a legend.
-    Also saves the legend to its own file.
-    """
-    import kwplot
-    plt = kwplot.autoplt()
-
-    plot_dpath_main = (dpath / plot_name).ensuredir()
-    plot_dpath_parts = (dpath / (plot_name + '_parts')).ensuredir()
-
-    make_fig(str(fnum) + '_legend', legend=True)
-    fig = plt.gcf()
-    fname = f'{prefix}{plot_name}.png'
-    fpath = plot_dpath_main / fname
-    fig.set_size_inches(np.array([6.4, 4.8]) * 1.4)
-    fig.tight_layout()
-    fig.savefig(fpath)
-
-    SAVE_PARTS = 1
-    if SAVE_PARTS:
-        ax = fig.gca()
-        legend_handles = ax.get_legend_handles_labels()
-
-        # TODO: incorporate that
-        make_fig(str(fnum) + '_nolegend', legend=False)
-        fig_nolegend = plt.gcf()
-        fname = f'{prefix}{plot_name}_nolegend.png'
-        fpath = plot_dpath_parts / fname
-        fig_nolegend.set_size_inches(np.array([6.4, 4.8]) * 1.4)
-        fig_nolegend.tight_layout()
-        fig_nolegend.savefig(fpath)
-
-        fig_onlylegend = kwplot.figure(fnum=str(fnum) + '_onlylegend', doclf=1)
-        ax2 = fig_onlylegend.gca()
-        ax2.axis('off')
-        new_legend = ax2.legend(*legend_handles, loc='lower center')
-        humanize_legend(new_legend, human_mapping)
-        fname = f'{prefix}{plot_name}_onlylegend.png'
-        fpath = plot_dpath_parts / fname
-        try:
-            new_extent = new_legend.get_window_extent()
-            inv_scale = fig_onlylegend.dpi_scale_trans.inverted()
-            bbox = new_extent.transformed(inv_scale)
-            newkw = {'bbox_inches': bbox}
-        except Exception:
-            newkw = {'bbox_inches': None}
-        fig_onlylegend.tight_layout()
-        fig_onlylegend.savefig(fpath, **newkw)
-        kwplot.close_figures([fig_onlylegend, fig_nolegend])
-        cropwhite_ondisk(fpath)
-
-
-def plot_pixel_ap_verus_iarpa(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath, huevar='sensorchan'):
-    import kwplot
-    # expt_group = dict(list(merged_df.groupby(['test_dset', 'type'])))
-    expt_group = dict(list(merged_df.groupby(['test_dset', 'type'])))
-    plot_name = 'pxl_vs_iarpa'
-
-    for code_type, group in expt_group.items():
+    def plot_pixel_ap_verus_iarpa(plotter, code_type, group, huevar='sensorchan'):
+        import kwplot
+        plot_name = 'pxl_vs_iarpa'
 
         test_dset, type = code_type
-        if type == 'eval_act+pxl':
-            plotkw = ub.udict({
-                'x': pixel_metric_lut[type],
-                'y': iarpa_metric_lut[type],
-                'hue': huevar,
-                **common_plotkw,
-                # 'hue': 'trk_use_viterbi',
-                # 'style': 'trk_thresh',
-                # 'size': 'trk_thresh',
-                # 'hue': 'pred_cfg',
-                # 'hue': 'expt',
-            })
-        elif type == 'eval_trk+pxl':
-            # hacks
-            plotkw = ub.udict({
-                'x': pixel_metric_lut[type],
-                'y': iarpa_metric_lut[type],
-                'hue': huevar,
-                **common_plotkw,
-                # 'hue': 'trk_thresh',
-                # 'size': 'trk_thresh_hysteresis',
-                # 'style': 'track_agg_fn',
-                # 'hue': 'trk_cfg',
-                # 'hue': 'pred_cfg',
-                # 'hue': 'expt',
-            })
-        else:
-            raise KeyError(type)
+        plotkw = ub.udict({
+            'x': plotter.metric_luts['pxl'][type],
+            'y': plotter.metric_luts['trk'][type],
+            'hue': huevar,
+            **plotter.common_plotkw,
+        })
 
         missing = set((plotkw & {'x', 'y'}).values()) - set(group.columns)
         if missing:
-            print(f'Cannot plot plot_pixel_ap_verus_iarpa for {code_type} missing={missing}')
+            raise UnableToPlot(f'Cannot plot {plot_name} for {code_type} missing={missing}')
 
         if plotkw['x'] not in group.columns or plotkw['y'] not in group.columns:
-            continue
+            raise UnableToPlot
 
         metrics_of_interest = group[[plotkw['x'], plotkw['y']]]
         metric_corr_mat = metrics_of_interest.corr()
@@ -183,53 +149,41 @@ def plot_pixel_ap_verus_iarpa(merged_df, human_mapping, iarpa_metric_lut, pixel_
             fig = kwplot.figure(fnum=fnum, doclf=True)
             ax = fig.gca()
             n = len(data)
-            ax = humanized_scatterplot(human_mapping, data=data, ax=ax, legend=legend, **plotkw)
-            nice_type = human_mapping.get(type, type)
+            ax = humanized_scatterplot(plotter.human_mapping, data=data, ax=ax, legend=legend, **plotkw)
+            nice_type = plotter.human_mapping.get(type, type)
             ax.set_title(f'Pixelwise Vs IARPA metrics - {nice_type} - {test_dset}\n{corr_lbl}, n={n}')
 
         prefix = f'{test_dset}_{type}_'
-        fnum = 'plot_pixel_ap_verus_iarpa' + prefix
-        run_make_fig(make_fig, fnum, dpath, human_mapping, plot_name, prefix)
+        fnum = plot_name + prefix
+        dpath = plotter.dpath
+        run_make_fig(make_fig, fnum, dpath, plotter.human_mapping, plot_name, prefix)
 
-
-def plot_pixel_ap_verus_auc(merged_df, human_mapping, iarpa_metric_lut,
-                            pixel_metric_lut, common_plotkw, dpath, huevar='sensorchan'):
-    import kwplot
-    expt_group = dict(list(merged_df.groupby(['test_dset', 'type'])))
-    plot_name = 'pxl_vs_auc'
-    for code_type, group in expt_group.items():
-
-        group = group[~group['sensorchan'].isnull()]
+    def plot_pixel_ap_verus_auc(plotter, code_type, group, huevar='sensorchan'):
+        import kwplot
+        plot_name = 'pxl_vs_auc'
+        # group = group[~group['sensorchan'].isnull()]
         # group['has_teamfeat'] = group['sensorchan'].apply(lambda x: (('depth' in x) or ('invariants' in x) or ('matseg' in x) or ('land' in x)))
 
         test_dset, type = code_type
         if type == 'eval_act+pxl':
             plotkw = ub.udict({
-                'x': pixel_metric_lut[type],
+                'x': plotter.metric_luts['pxl'][type],
                 'y': 'coi_mAUC',
                 'hue': huevar,
-                **common_plotkw,
-                # 'hue': 'trk_use_viterbi',
-                # 'style': 'trk_thresh',
-                # 'size': 'trk_thresh',
-                # 'hue': 'pred_cfg',
-                # 'hue': 'expt',
+                **plotter.common_plotkw,
             })
         elif type == 'eval_trk+pxl':
             plotkw = ub.udict({
-                'x': pixel_metric_lut[type],
+                'x': plotter.metric_luts['pxl'][type],
                 'y': 'salient_AUC',
                 'hue': huevar,
-                **common_plotkw,
-                # 'hue': 'trk_cfg',
-                # 'hue': 'pred_cfg',
-                # 'hue': 'expt',
+                **plotter.common_plotkw,
             })
         else:
             raise KeyError(type)
         missing = set((plotkw & {'x', 'y'}).values()) - set(group.columns)
         if missing:
-            print(f'Cannot plot plot_pixel_ap_verus_auc for {code_type} missing={missing}')
+            raise UnableToPlot(f'Cannot plot plot_pixel_ap_verus_auc for {code_type} missing={missing}')
 
         metric_corr_mat = group[[plotkw['x'], plotkw['y']]].corr()
         metric_corr = metric_corr_mat.stack()
@@ -243,67 +197,121 @@ def plot_pixel_ap_verus_auc(merged_df, human_mapping, iarpa_metric_lut,
         def make_fig(fnum, legend=True):
             fig = kwplot.figure(fnum=fnum)
             ax = fig.gca()
-            ax = humanized_scatterplot(human_mapping, data=group, ax=ax, **plotkw)
-            nice_type = human_mapping.get(type, type)
+            ax = humanized_scatterplot(plotter.human_mapping, data=group, ax=ax, **plotkw)
+            nice_type = plotter.human_mapping.get(type, type)
             ax.set_title(f'Pixelwise metrics - {nice_type} - {test_dset}\n{corr_lbl}')
             fig.set_size_inches(16.85, 8.82)
 
         prefix = f'{test_dset}_{type}_'
         fnum = 'plot_pixel_ap_verus_auc' + prefix
-        run_make_fig(make_fig, fnum, dpath, human_mapping, plot_name, prefix)
+        run_make_fig(make_fig, fnum, plotter.dpath, plotter.human_mapping, plot_name, prefix)
 
+    def plot_violinplots(plotter, code_type, group, metrics):
+        """
+        metrics = ['salient_AP']
+        metrics = ['BAS_F1']
 
-def plot_resource_versus_metric(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw, dpath, huevar='sensorchan'):
-    import kwplot
-    expt_group = dict(list(merged_df.groupby(['test_dset', 'type'])))
-    plot_name = 'resource_vs_metric'
-    if 1:
-        expt_group.pop((10, 'eval_act+pxl'), None)
-        expt_group.pop((1, 'eval_act+pxl'), None)
-        expt_group.pop((1, 'eval_trk+pxl'), None)
+        """
 
-    for resource_type in ['total_hours', 'co2_kg']:
-        human_resource_type = human_mapping.get(resource_type, resource_type)
+        test_dset, type = code_type
+        metrics = metrics if ub.iterable(metrics) else [metrics]
+        metrics_key = '_'.join(metrics)
+        plot_name = 'violin_' + metrics_key
+        prefix = f'{test_dset}_{type}_'
 
-        # 'pixel']:
-        # for metric_type in ['pixel']:
-        for metric_type in ['iarpa']:
-            if metric_type == 'iarpa':
-                metric_lut = iarpa_metric_lut
-                human_metric_type = 'IARPA'
-            else:
-                metric_lut = pixel_metric_lut
-                human_metric_type = 'Pixelwise'
+        metrics_key = '_'.join(metrics)
+        pred_param_df = pd.DataFrame(group['pred_params'].tolist(), index=group.index)
+        track_param_df = pd.DataFrame(group['track_params'].tolist(), index=group.index)
+        fit_param_df = pd.DataFrame(group['fit_params'].tolist(), index=group.index)
 
-            # pnum_ = kwplot.PlotNums(nCols=len(expt_group))
-            for code_type, group in expt_group.items():
+        # varied_params = ub.varied_values(pred_param_df.to_dict('records'), min_variations=1)
 
-                group['pred_tta_time'] = group['pred_tta_time'].astype(str)
-                group['pred_tta_fliprot'] = group['pred_tta_fliprot'].astype(str)
+        blocklist = ub.oset(['step', 'epoch', 'pred_in_dataset_name'])
+        pred_param_df = pred_param_df.drop(blocklist & pred_param_df.columns, axis=1)
 
-                group.loc[group['pred_tta_time'] == 'nan', 'pred_tta_time'] = '0.0'
-                group.loc[group['pred_tta_fliprot'] == 'nan', 'pred_tta_fliprot'] = '0.0'
+        main_cols = ub.oset(['expt', 'model', 'step', 'test_dset'] + metrics)
+        expanded = group[main_cols & group.columns]
+        expanded = expanded.join(pred_param_df)
+        expanded = expanded.join(track_param_df)
+        expanded = expanded.join(fit_param_df)
+
+        params_of_interest = [
+            'pred_use_cloudmask',
+            'pred_resample_invalid_frames',
+            'pred_input_space_scale',
+            'pred_window_space_scale',
+        ]
+
+        x = 'model'
+
+        def make_make_fig(expanded, param_name):
+            def make_fig(fnum, legend=True):
+                fig = kwplot.figure(fnum=fnum, doclf=True)
+                ax = fig.gca()
+                n = len(expanded)
+
+                assert len(metrics) == 1
+
+                # sns.violinplot(data=expanded, x=param_name, y=metrics[0], hue='expt')
+                # sns.violinplot(data=expanded, x='expt', y=metrics[0], hue=param_name, split=True)
+                # sns.boxplot(data=expanded, x='expt', y=metrics[0], hue=param_name, notch=True)
+                sns.boxplot(data=expanded, x=x, y=metrics[0], hue=param_name,
+                            medianprops={"color": "coral"})
+
+                nice_type = plotter.human_mapping.get(type, type)
+                nice_param_name = plotter.human_mapping.get(param_name, param_name)
+                ax.set_title(f'Varied {nice_param_name} - {nice_type} - {test_dset}\nn={n}')
+            return make_fig
+
+        import kwplot
+        import seaborn as sns
+        for param_name in params_of_interest:
+            expanded[[param_name] + metrics]
+            make_fig = make_make_fig(expanded, param_name)
+            prefix = f'{test_dset}_{type}_'
+            fnum = plot_name + param_name + prefix
+            dpath = plotter.dpath
+            run_make_fig(make_fig, fnum, dpath, plotter.human_mapping, plot_name, prefix)
+            # sns.violinplot(data=expanded, x=x, y=metrics[0], hue=param_name,
+            #                medianprops={"color": "coral"})
+
+    def plot_resource_versus_metric(plotter, code_type, group, huevar='sensorchan'):
+        import kwplot
+        plot_name = 'resource_vs_metric'
+
+        for resource_type in ['total_hours', 'co2_kg']:
+            human_resource_type = plotter.human_mapping.get(resource_type, resource_type)
+
+            # 'pixel']:
+            # for metric_type in ['pixel']:
+            for metric_type in ['iarpa']:
+                if metric_type == 'iarpa':
+                    metric_lut = plotter.metric_luts['trk']
+                    human_metric_type = 'IARPA'
+                else:
+                    metric_lut = plotter.metric_luts['pxl']
+                    human_metric_type = 'Pixelwise'
+
+                # group['pred_tta_time'] = group['pred_tta_time'].astype(str)
+                # group['pred_tta_fliprot'] = group['pred_tta_fliprot'].astype(str)
+                # group.loc[group['pred_tta_time'] == 'nan', 'pred_tta_time'] = '0.0'
+                # group.loc[group['pred_tta_fliprot'] == 'nan', 'pred_tta_fliprot'] = '0.0'
+
                 test_dset, type = code_type
                 if type == 'eval_act+pxl':
                     plotkw = ub.udict({
                         'x': resource_type,
                         'y': metric_lut[type],
                         'hue': huevar,
-                        **common_plotkw,
-                        # 'style': 'pred_cfg',
-                        # 'hue': 'pred_tta_fliprot',
-                        # 'hue': 'pred_tta_time',
-                        # 'size': 'pred_tta_fliprot',
+                        **plotter.common_plotkw,
                         'style': 'hardware',
                     })
                 elif type == 'eval_trk+pxl':
                     plotkw = ub.udict({
                         'x': resource_type,
                         'y': metric_lut[type],
-                        'hue': 'sensorchan',
-                        **common_plotkw,
-                        # 'hue': 'pred_tta_time',
-                        # 'size': 'pred_tta_fliprot',
+                        'hue': huevar,
+                        **plotter.common_plotkw,
                         'style': 'hardware',
                     })
                 else:
@@ -313,22 +321,18 @@ def plot_resource_versus_metric(merged_df, human_mapping, iarpa_metric_lut, pixe
                 if missing:
                     print(f'Cannot plot plot_resource_versus_metric for {code_type} missing={missing}')
                     continue
-                # fig = kwplot.figure(fnum=fnum, pnum=pnum_())
-                # fig.get_size_inches()
-                # fig.set_size_inches(17.85,  6.82)
-                data = group
 
                 def make_fig(fnum, legend=True):
                     fig = kwplot.figure(fnum=fnum)
                     ax = fig.gca()
-                    ax = humanized_scatterplot(human_mapping, data=data, ax=ax, **plotkw)
-                    nice_type = human_mapping.get(type, type)
+                    ax = humanized_scatterplot(plotter.human_mapping, data=group, ax=ax, **plotkw)
+                    nice_type = plotter.human_mapping.get(type, type)
                     ax.set_title(f'{human_resource_type} vs {human_metric_type} - {nice_type} - {test_dset}')
                     fig.set_size_inches(np.array([6.4, 4.8]) * 1.4)
 
                 prefix = f'{test_dset}_{type}_'
-                fnum = 'plot_resource_versus_metric' + prefix
-                run_make_fig(make_fig, fnum, dpath, human_mapping, plot_name, prefix)
+                fnum = 'plot_resource_versus_metric_' + resource_type + prefix
+                run_make_fig(make_fig, fnum, plotter.dpath, plotter.human_mapping, plot_name, prefix)
 
 
 def plot_viterbii_analysis(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut, common_plotkw):
@@ -1083,3 +1087,56 @@ def plot_ta1_vs_l1(merged_df, human_mapping, iarpa_metric_lut, pixel_metric_lut,
     cropwhite_ondisk(fpath)
 
     # ax.set_title('TA1 vs L1' + '\n' + '\n'.join(conclusions))
+
+
+def run_make_fig(make_fig, fnum, dpath, human_mapping, plot_name, prefix):
+    """
+    Runs a function that plots a figure with and without a legend.
+    Also saves the legend to its own file.
+    """
+    import kwplot
+    plt = kwplot.autoplt()
+
+    plot_dpath_main = (dpath / plot_name).ensuredir()
+    plot_dpath_parts = (dpath / (plot_name + '_parts')).ensuredir()
+
+    make_fig(str(fnum) + '_legend', legend=True)
+    fig = plt.gcf()
+    fname = f'{prefix}{plot_name}.png'
+    fpath = plot_dpath_main / fname
+    fig.set_size_inches(np.array([6.4, 4.8]) * 1.4)
+    fig.tight_layout()
+    fig.savefig(fpath)
+
+    SAVE_PARTS = 1
+    if SAVE_PARTS:
+        ax = fig.gca()
+        legend_handles = ax.get_legend_handles_labels()
+
+        # TODO: incorporate that
+        make_fig(str(fnum) + '_nolegend', legend=False)
+        fig_nolegend = plt.gcf()
+        fname = f'{prefix}{plot_name}_nolegend.png'
+        fpath = plot_dpath_parts / fname
+        fig_nolegend.set_size_inches(np.array([6.4, 4.8]) * 1.4)
+        fig_nolegend.tight_layout()
+        fig_nolegend.savefig(fpath)
+
+        fig_onlylegend = kwplot.figure(fnum=str(fnum) + '_onlylegend', doclf=1)
+        ax2 = fig_onlylegend.gca()
+        ax2.axis('off')
+        new_legend = ax2.legend(*legend_handles, loc='lower center')
+        humanize_legend(new_legend, human_mapping)
+        fname = f'{prefix}{plot_name}_onlylegend.png'
+        fpath = plot_dpath_parts / fname
+        try:
+            new_extent = new_legend.get_window_extent()
+            inv_scale = fig_onlylegend.dpi_scale_trans.inverted()
+            bbox = new_extent.transformed(inv_scale)
+            newkw = {'bbox_inches': bbox}
+        except Exception:
+            newkw = {'bbox_inches': None}
+        fig_onlylegend.tight_layout()
+        fig_onlylegend.savefig(fpath, **newkw)
+        kwplot.close_figures([fig_onlylegend, fig_nolegend])
+        cropwhite_ondisk(fpath)
