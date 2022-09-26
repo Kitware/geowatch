@@ -263,10 +263,27 @@ class Plotter:
                 # sns.boxplot(data=expanded, x='expt', y=metrics[0], hue=param_name, notch=True)
                 sns.boxplot(data=expanded, x=x, y=metrics[0], hue=param_name,
                             medianprops={"color": "coral"})
-                humanize_axes(ax, plotter.human_mapping)
-
                 if not legend:
                     ax.get_legend().remove()
+                humanize_axes(ax, plotter.human_mapping)
+
+                # Relabel if it's too big to fit.
+                relabels = {}
+                from itertools import count
+                counter = count(1)
+                for label in ax.get_xticklabels():
+                    text = label.get_text()
+                    if len(text) > 10:
+                        relabels[text] = str(next(counter))
+
+                if relabels:
+                    new_labels = []
+                    for label in ax.get_xticklabels():
+                        text = label.get_text()
+                        if text in relabels:
+                            label.set_text(relabels[text])
+                        new_labels.append(label)
+                    ax.set_xticklabels(new_labels)
 
                 # for label in ax.get_xticklabels():
                 #     label.set_rotation(90)
