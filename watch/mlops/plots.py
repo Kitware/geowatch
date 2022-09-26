@@ -882,9 +882,10 @@ def run_make_fig(make_fig, fnum, dpath, human_mapping, plot_name, prefix):
     SAVE_PARTS = 1
     if SAVE_PARTS:
         ax = fig.gca()
+        orig_legend = ax.get_legend()
+        orig_legend_title = orig_legend.get_title().get_text()
         legend_handles = ax.get_legend_handles_labels()
 
-        # TODO: incorporate that
         make_fig(str(fnum) + '_nolegend', legend=False)
         fig_nolegend = plt.gcf()
         fname = f'{prefix}{plot_name}_nolegend.png'
@@ -893,10 +894,12 @@ def run_make_fig(make_fig, fnum, dpath, human_mapping, plot_name, prefix):
         fig_nolegend.tight_layout()
         fig_nolegend.savefig(fpath)
 
-        fig_onlylegend = kwplot.figure(fnum=str(fnum) + '_onlylegend', doclf=1)
+        fig_onlylegend = kwplot.figure(
+            fnum=str(fnum) + '_onlylegend', doclf=1)
         ax2 = fig_onlylegend.gca()
         ax2.axis('off')
-        new_legend = ax2.legend(*legend_handles, loc='lower center')
+        new_legend = ax2.legend(*legend_handles, title=orig_legend_title,
+                                loc='lower center')
         humanize_legend(new_legend, human_mapping)
         fname = f'{prefix}{plot_name}_onlylegend.png'
         fpath = plot_dpath_parts / fname
