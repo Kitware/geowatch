@@ -268,8 +268,8 @@ class Plotter:
                 if not legend:
                     ax.get_legend().remove()
 
-                for label in ax.get_xticklabels():
-                    label.set_rotation(90)
+                # for label in ax.get_xticklabels():
+                #     label.set_rotation(90)
 
                 nice_type = plotter.human_mapping.get(type, type)
                 nice_param_name = plotter.human_mapping.get(param_name, param_name)
