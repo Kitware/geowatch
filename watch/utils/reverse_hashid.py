@@ -91,7 +91,7 @@ class ReverseHashTable:
         return info
 
     @classmethod
-    def query(cls, key, verbose=1):
+    def query(cls, key=None, verbose=1):
         """
         If the type of the hash is unknown, we can search in a few different
         locations for it.
@@ -104,7 +104,7 @@ class ReverseHashTable:
             rlut_type = cls(type)
             full_shelf = rlut_type.load()
             # print('full_shelf = {}'.format(ub.repr2(full_shelf, nl=1, sort=1)))
-            if key in full_shelf:
+            if key is None or key in full_shelf:
                 candidates.append({'found': full_shelf[key], 'type': type, 'key': key})
 
         if verbose:

@@ -151,13 +151,51 @@ def main():
 
     reporter = expt_report.EvaluationReporter(state)
     reporter.load()
-
     reporter.state.summarize()
 
+    # dpath = reporter.dpath
+    import ubelt as ub
+    import pandas as pd
+    dpath = ub.Path.appdir('watch/expt-report/2022-09-xx').ensuredir()
+
+    # Dump details out about the best models
+    best_models_dpath = (dpath / 'best_models' / ub.timestamp()).ensuredir()
     test_dset_to_shortlist = reporter.report_best(show_configs=True)
     for test_dset, shortlist in test_dset_to_shortlist.items():
-        for _, row in best_rows[::-1].iterrows():
-            break
+        _dpath = (best_models_dpath / test_dset).ensuredir()
+
+        for rank, row in enumerate(shortlist[::-1].to_dict('records'), start=1):
+            parts = [p for p in [
+                'rank_{03d:rank}',
+                row.get('model', None),
+                # row.get('test_dset', None)
+                row.get('pred_cfg', None),
+                row.get('trk_cfg', None),
+                row.get('act_cfg', None),
+            ] if not pd.isnull(p)]
+            dname = '_'.join(parts)
+            row_dpath = (_dpath / dname).ensuredir()
+
+            linkable_keys = [
+                f'{a}_{b}'
+                for a in ['eval', 'pred']
+                for b in ['pxl', 'trk', 'act']
+            ]
+            linkables = {}
+            for key in linkable_keys:
+                try:
+                    linkables[key] = ub.Path(state.templates[key].format(**row))
+                except KeyError:
+                    ...
+
+            for key, real_fpath in linkables.items():
+                if real_fpath.exists():
+                    link_dpath = row_dpath / f'_link_{key}'
+                    ub.symlink(real_fpath.parent.parent, link_dpath, verbose=1, overwrite=1)
+
+            row['model']
+            row['pred_params']
+            row['track_params']
 
     reporter = reporter
     orig_merged_df = reporter.orig_merged_df
@@ -181,10 +219,6 @@ def main():
     kwplot.autosns()
 
     from watch.mlops import plots
-
-    # dpath = reporter.dpath
-    import ubelt as ub
-    dpath = ub.Path.appdir('watch/expt-report/2022-09-xx').ensuredir()
 
     plotter = plots.Plotter.from_reporter(
         reporter, common_plotkw=common_plotkw, dpath=dpath)

@@ -206,14 +206,12 @@ class EvaluationReporter:
         #     # dataset_summary_tables(dpath)
         #     initial_summary(table, loaded_table, reporter.dpath)
 
-    def report_best(reporter, show_configs=0, verbose=0):
+    def report_best(reporter, show_configs=0, verbose=0, top_k=2):
         import rich
         orig_merged_df = reporter.orig_merged_df
         metric_names = reporter.metric_registry.name
         cfg_names = ['pred_cfg', 'act_cfg', 'trk_cfg']
         id_names = ['model'] + cfg_names
-
-        top_k = 4
 
         metric_cols = (ub.oset(metric_names) & orig_merged_df.columns)
         primary_metrics = (ub.oset(['mean_f1', 'BAS_F1']) & metric_cols)
@@ -227,11 +225,12 @@ class EvaluationReporter:
             rich.print('[orange1]-- REPORTING BEST --')
             print('test_datasets = {}'.format(ub.repr2(test_datasets, nl=1)))
 
-        test_dset_to_shortlist = {}
+        grouped_shortlists = {}
+        group_keys = ['test_dset', 'type']
 
-        for test_dset, subdf in orig_merged_df.groupby('test_dset'):
+        for groupid, subdf in orig_merged_df.groupby(group_keys):
             print('')
-            rich.print(f'[orange1] -- <BEST ON: {test_dset}> --')
+            rich.print(f'[orange1] -- <BEST ON: {groupid}> --')
 
             top_indexes = set()
             for metric in metric_cols:
@@ -245,36 +244,38 @@ class EvaluationReporter:
 
             show_configs = show_configs
             if show_configs:
-                from watch.utils.reverse_hashid import ReverseHashTable
-                candidates = []
-                for cfg_name in cfg_names:
-                    if cfg_name in shortlist:
-                        keys = shortlist[cfg_name].dropna().unique()
-                        for key in keys:
-                            candidates += ReverseHashTable.query(key, verbose=0)
-
-                resolved = ub.ddict(list)
-                for cand in candidates:
-                    resolved[cand['key']].extend(
-                        [f['data'] for f in cand['found']])
-                for k in resolved.keys():
-                    if len(resolved[k]) == 1:
-                        resolved[k] = resolved[k][0]
-
+                keys = list(set([
+                    v for v in shortlist[ub.oset(cfg_names) & shortlist.columns].values.ravel()
+                    if not pd.isnull(v)
+                ]))
+                resolved = reporter._build_cfg_rlut(keys)
                 if verbose and show_configs:
                     rich.print('resolved = {}'.format(ub.repr2(resolved, nl=2)))
-                    # rich.print('candidates = {}'.format(ub.repr2(candidates, nl=-1)))
 
             # test_dset_to_best[test_dset] =
             if verbose:
                 shortlist_small = shortlist[id_cols + metric_cols]
                 rich.print(shortlist_small.to_string())
                 print('')
-                rich.print(f'[orange1] -- </BEST ON: {test_dset}> --')
+                rich.print(f'[orange1] -- </BEST ON: {groupid}> --')
                 print('')
-            test_dset_to_shortlist[test_dset] = shortlist
+            grouped_shortlists[groupid] = shortlist
 
-        return test_dset_to_shortlist
+        return grouped_shortlists
+
+    def _build_cfg_rlut(keys):
+        from watch.utils.reverse_hashid import ReverseHashTable
+        candidates = []
+        for key in keys:
+            candidates += ReverseHashTable.query(key, verbose=0)
+        resolved = ub.ddict(list)
+        for cand in candidates:
+            resolved[cand['key']].extend(
+                [f['data'] for f in cand['found']])
+        for k in resolved.keys():
+            if len(resolved[k]) == 1:
+                resolved[k] = resolved[k][0]
+        return resolved
 
     def load1(reporter):
         """
