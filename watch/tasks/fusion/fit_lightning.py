@@ -35,12 +35,13 @@ class WrappedKWCocoDataModule(KWCocoVideoDataModule):
         set_cover_algo="approx",
         resample_invalid_frames=0,
         use_cloudmask=0,
+        sqlview=False,
     ):
 
         super().__init__(
-            train_dataset=pathlib.Path(train_dataset) if (train_dataset != None) else None,
-            vali_dataset=pathlib.Path(vali_dataset) if (vali_dataset != None) else None,
-            test_dataset=pathlib.Path(test_dataset) if (test_dataset != None) else None,
+            train_dataset=pathlib.Path(train_dataset) if (train_dataset is not None) else None,
+            vali_dataset=pathlib.Path(vali_dataset) if (vali_dataset is not None) else None,
+            test_dataset=pathlib.Path(test_dataset) if (test_dataset is not None) else None,
             batch_size=batch_size,
             channels=channels,
             input_space_scale=input_space_scale,
@@ -59,15 +60,20 @@ class WrappedKWCocoDataModule(KWCocoVideoDataModule):
             set_cover_algo=set_cover_algo,
             resample_invalid_frames=resample_invalid_frames,
             use_cloudmask=use_cloudmask,
+            sqlview=sqlview,
         )
 
+        # Fixme: we shouldnt call this here because the trainer calls setup("fit") no matter what, and this duplicates
+        # the substantial effort of loading the project data. The main reason it is necessary to run this twice right now
+        # is to ensure that dataset_stats have been computed to pass off to the model.
+        # TODO: compute dataset stats outside of setup, if possible?
         self.setup("fit")
 
 
 def main():
     from pytorch_lightning.cli import LightningCLI
     import pytorch_lightning as pl
-    from watch.utils import lightning_ext as pl_ext
+    # from watch.utils import lightning_ext as pl_ext
     import ubelt as ub
 
     import yaml
@@ -121,11 +127,11 @@ def main():
                 # pl_ext.callbacks.StateLogger(),
                 # pl_ext.callbacks.TextLogger(args),
                 # pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
-                pl_ext.callbacks.BatchPlotter(
-                    num_draw=2,  # args.num_draw,
-                    draw_interval="5min",  # args.draw_interval
-                ),
-                pl_ext.callbacks.TensorboardPlotter(),
+                # pl_ext.callbacks.BatchPlotter( # Fixme: disabled for multi-gpu training with deepspeed
+                #     num_draw=2,  # args.num_draw,
+                #     draw_interval="5min",  # args.draw_interval
+                # ),
+                # pl_ext.callbacks.TensorboardPlotter(), # Fixme: disabled for multi-gpu training with deepspeed
                 pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
                 pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
 

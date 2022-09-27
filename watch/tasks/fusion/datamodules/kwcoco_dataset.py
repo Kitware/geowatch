@@ -308,6 +308,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         >>> kwplot.imshow(canvas)
         >>> kwplot.show_if_requested()
     """
+
     def __init__(self, sampler, sample_shape=None, window_overlap=None,
                  mode='fit', **kwargs):
 

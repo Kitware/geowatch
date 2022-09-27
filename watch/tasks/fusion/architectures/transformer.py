@@ -39,11 +39,18 @@ Notes:
     pip install reformer_pytorch
     pip install performer-pytorch  <- this one
 """
+
+from functools import wraps
+
 import torch
+from torch import nn, einsum
+import torch.nn.functional as F
+
 import einops
+from einops import rearrange, repeat
+
 import ubelt as ub  # NOQA
 import math
-from torch import nn
 
 
 try:
@@ -823,40 +830,20 @@ encoder_configs = _build_global_configs()
 # is a 1-to-1 drop-in replacement for perceiver models (minus latent_dim/num_latents options).
 # ========================================
 
-from math import pi, log
-from functools import wraps
-
-import torch
-from torch import nn, einsum
-import torch.nn.functional as F
-
-from einops import rearrange, repeat
-    
-import perceiver_pytorch as perceiver
-import torch
-import einops
-from einops.layers.torch import Rearrange
-from torch import nn
-from torchvision import transforms
-import pytorch_lightning as pl
-import itertools as it
-from types import MethodType
-import torchmetrics
-from functools import partial
-import numpy as np
-
-# helpers
 
 def exists(val):
     return val is not None
 
+
 def default(val, d):
     return val if exists(val) else d
 
+
 def cache_fn(f):
     cache = None
+
     @wraps(f)
-    def cached_fn(*args, _cache = True, **kwargs):
+    def cached_fn(*args, _cache=True, **kwargs):
         if not _cache:
             return f(*args, **kwargs)
         nonlocal cache
@@ -868,8 +855,9 @@ def cache_fn(f):
 
 # helper classes
 
+
 class PreNorm(nn.Module):
-    def __init__(self, dim, fn, context_dim = None):
+    def __init__(self, dim, fn, context_dim=None):
         super().__init__()
         self.fn = fn
         self.norm = nn.LayerNorm(dim)
@@ -881,17 +869,19 @@ class PreNorm(nn.Module):
         if exists(self.norm_context):
             context = kwargs['context']
             normed_context = self.norm_context(context)
-            kwargs.update(context = normed_context)
+            kwargs.update(context=normed_context)
 
         return self.fn(x, **kwargs)
 
+
 class GEGLU(nn.Module):
     def forward(self, x):
-        x, gates = x.chunk(2, dim = -1)
+        x, gates = x.chunk(2, dim=-1)
         return x * F.gelu(gates)
 
+
 class FeedForward(nn.Module):
-    def __init__(self, dim, mult = 4):
+    def __init__(self, dim, mult=4):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(dim, dim * mult * 2),
@@ -902,41 +892,43 @@ class FeedForward(nn.Module):
     def forward(self, x):
         return self.net(x)
 
+
 class Attention(nn.Module):
-    def __init__(self, query_dim, context_dim = None, heads = 8, dim_head = 64):
+    def __init__(self, query_dim, context_dim=None, heads=8, dim_head=64):
         super().__init__()
         inner_dim = dim_head * heads
         context_dim = default(context_dim, query_dim)
         self.scale = dim_head ** -0.5
         self.heads = heads
 
-        self.to_q = nn.Linear(query_dim, inner_dim, bias = False)
-        self.to_kv = nn.Linear(context_dim, inner_dim * 2, bias = False)
+        self.to_q = nn.Linear(query_dim, inner_dim, bias=False)
+        self.to_kv = nn.Linear(context_dim, inner_dim * 2, bias=False)
         self.to_out = nn.Linear(inner_dim, query_dim)
 
-    def forward(self, x, context = None, mask = None):
+    def forward(self, x, context=None, mask=None):
         h = self.heads
 
         q = self.to_q(x)
         context = default(context, x)
-        k, v = self.to_kv(context).chunk(2, dim = -1)
+        k, v = self.to_kv(context).chunk(2, dim=-1)
 
-        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h = h), (q, k, v))
+        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h=h), (q, k, v))
 
         sim = einsum('b i d, b j d -> b i j', q, k) * self.scale
 
         if exists(mask):
             mask = rearrange(mask, 'b ... -> b (...)')
             max_neg_value = -torch.finfo(sim.dtype).max
-            mask = repeat(mask, 'b j -> (b h) () j', h = h)
+            mask = repeat(mask, 'b j -> (b h) () j', h=h)
             sim.masked_fill_(~mask, max_neg_value)
 
         # attention, what we cannot get enough of
-        attn = sim.softmax(dim = -1)
+        attn = sim.softmax(dim=-1)
 
         out = einsum('b i j, b j d -> b i d', attn, v)
-        out = rearrange(out, '(b h) n d -> b n (h d)', h = h)
+        out = rearrange(out, '(b h) n d -> b n (h d)', h=h)
         return self.to_out(out)
+
 
 class TransformerEncoderDecoder(nn.Module):
     def __init__(
@@ -945,23 +937,27 @@ class TransformerEncoderDecoder(nn.Module):
         depth,
         dim,
         queries_dim,
-        logits_dim = None,
-        cross_heads = 1,
-        latent_heads = 8,
-        cross_dim_head = 64,
-        latent_dim_head = 64,
-        weight_tie_layers = False,
-        decoder_ff = False
+        logits_dim=None,
+        cross_heads=1,
+        latent_heads=8,
+        cross_dim_head=64,
+        latent_dim_head=64,
+        weight_tie_layers=False,
+        decoder_ff=False
     ):
         super().__init__()
 
         self.cross_attend_blocks = nn.ModuleList([
-            PreNorm(dim, Attention(dim, dim, heads = cross_heads, dim_head = cross_dim_head), context_dim = dim),
+            PreNorm(dim, Attention(dim, dim, heads=cross_heads, dim_head=cross_dim_head), context_dim=dim),
             PreNorm(dim, FeedForward(dim))
         ])
 
-        get_latent_attn = lambda: PreNorm(dim, Attention(dim, heads = latent_heads, dim_head = latent_dim_head))
-        get_latent_ff = lambda: PreNorm(dim, FeedForward(dim))
+        def get_latent_attn():
+            return PreNorm(dim, Attention(dim, heads=latent_heads, dim_head=latent_dim_head))
+
+        def get_latent_ff():
+            return PreNorm(dim, FeedForward(dim))
+
         get_latent_attn, get_latent_ff = map(cache_fn, (get_latent_attn, get_latent_ff))
 
         self.layers = nn.ModuleList([])
@@ -973,7 +969,7 @@ class TransformerEncoderDecoder(nn.Module):
                 get_latent_ff(**cache_args)
             ]))
 
-        self.decoder_cross_attn = PreNorm(queries_dim, Attention(queries_dim, dim, heads = cross_heads, dim_head = cross_dim_head), context_dim = dim)
+        self.decoder_cross_attn = PreNorm(queries_dim, Attention(queries_dim, dim, heads=cross_heads, dim_head=cross_dim_head), context_dim=dim)
         self.decoder_ff = PreNorm(queries_dim, FeedForward(queries_dim)) if decoder_ff else None
 
         self.to_logits = nn.Linear(queries_dim, logits_dim) if exists(logits_dim) else nn.Identity()
@@ -981,9 +977,10 @@ class TransformerEncoderDecoder(nn.Module):
     def forward(
         self,
         x,
-        mask = None,
-        queries = None
+        mask=None,
+        queries=None
     ):
+        b = x.shape[0]
 
         # layers
         for self_attn, self_ff in self.layers:
@@ -995,10 +992,10 @@ class TransformerEncoderDecoder(nn.Module):
 
         # make sure queries contains batch dimension
         if queries.ndim == 2:
-            queries = repeat(queries, 'n d -> b n d', b = b)
+            queries = repeat(queries, 'n d -> b n d', b=b)
 
         # cross attend from decoder queries to latents
-        latents = self.decoder_cross_attn(queries, context = x)
+        latents = self.decoder_cross_attn(queries, context=x)
 
         # optional decoder feedforward
         if exists(self.decoder_ff):

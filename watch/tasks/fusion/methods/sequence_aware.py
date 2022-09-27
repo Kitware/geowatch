@@ -47,13 +47,14 @@ class FourierPositionalEncoding(nn.Module):
         x = torch.einsum("xhw,s->xshw", x, self.scales.type_as(x))
         x = einops.rearrange(x, "x s h w -> (x s) h w")
         return torch.concat([x.sin(), x.cos(), orig_x], dim=0)
-        
+
+
 class RandomFourierPositionalEncoding(nn.Module):
     def __init__(self, in_dims, half_out_dims):
         super().__init__()
         self.weight = nn.Parameter(torch.randn(in_dims, half_out_dims).float(), requires_grad=False)
-        self.output_dim = 2*half_out_dims
-        
+        self.output_dim = 2 * half_out_dims
+
     def forward(self, x):
         x = 2 * torch.pi * torch.einsum("xy,x...->y...", self.weight, x)
         return torch.concat([x.sin(), x.cos()], dim=0)
@@ -148,7 +149,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             >>> assert "classes" in model.hparams
             >>> assert "dataset_stats" in model.hparams
             >>> assert "input_sensorchan" in model.hparams
-            
+
         Example:
             >>> # Note: it is important that the non-kwargs are saved as hyperparams
             >>> from watch.tasks.fusion.methods.sequence_aware import SequenceAwareModel
@@ -402,7 +403,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             base_positional_encoder = RandomFourierPositionalEncoding(3, 64)
         else:
             raise KeyError(positional_encoder)
-        
+
         self.positional_encoders = nn.ModuleDict({
             sanitize_key(str(key)): nn.Sequential(
                 base_positional_encoder,
@@ -445,8 +446,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             )
         else:
             raise KeyError(arch_name)
-            
-            
+
         feat_dim = in_features_pos
 
         self.change_head_hidden = change_head_hidden
@@ -596,7 +596,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
                 sensor_mode_key = sanitize_key(str((frame["sensor"], mode_key)))
 
                 stemmed_mode = self.sensor_channel_tokenizers[sensor_mode_key](
-                    mode_image.nan_to_num(0.0)[None].float()
+                    mode_image.nan_to_num(0.0)[None]  # .float()
                 )[0]
                 dtype = stemmed_mode.dtype
                 device = stemmed_mode.device
@@ -637,7 +637,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
                 continue
 
             labels = [
-                frame[labels_name] if (frame[labels_name] != None)
+                frame[labels_name] if (frame[labels_name] is not None)
                 else torch.zeros(
                     frame["output_dims"],
                     dtype=torch.int32,
@@ -646,7 +646,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             ]
             labels = torch.concat([einops.rearrange(x, "h w -> (h w)") for x in labels], dim=0)
             weights = [
-                frame[weights_name] if (frame[weights_name] != None)
+                frame[weights_name] if (frame[weights_name] is not None)
                 else torch.zeros(
                     frame["output_dims"],
                     dtype=dtype,
@@ -666,7 +666,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             # implementation should have an end-to-end forward pass that
             # maintains input shapes up to rearangements.
 
-            # determine valid label locations                
+            # determine valid label locations
             valid_mask = weights > 0.0
             pos_enc = pos_enc[valid_mask]
             labels = labels[valid_mask]
@@ -857,7 +857,6 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
 
         task_logits = self.forward(padded_inputs, queries=stacked_queries, input_mask=padded_valids)
         task_losses = {}
-        task_probs = {}
         for task_name in task_logits.keys():
 
             logits = einops.rearrange(task_logits[task_name], "batch chan seq -> (batch seq) chan")
@@ -889,24 +888,6 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             )
             self.log_dict(task_metric, prog_bar=True, sync_dist=True)
 
-            # Need to output probabilities here for consumers of the model
-            # TODO: only enable if requested, at train time we can discard this
-            # for the majority of the iterations (unless we need to visualize
-            # the batch)
-            NEED_OUTPUTS = False
-            if NEED_OUTPUTS:
-                item_probs = []
-                for item_index in range(len(batch)):
-                    item_logit = einops.rearrange(task_logits[task_name][item_index].detach(), "chan seq -> seq chan")
-                    item_mask = stacked_masks[task_name][item_index]
-                    item_shapes = [list(frame["output_dims"]) for frame in batch[item_index]["frames"]]
-                    # # if task_name == 'change':
-                    # #     item_shapes = item_shapes[1:]  # hack for change
-                    recon = self.reconstruct_output(item_logit, item_mask, item_shapes)
-                    probs = [p.sigmoid() for p in recon]
-                    item_probs.append(probs)
-                task_probs[task_name] = item_probs
-
         loss = sum(task_losses.values()) / len(task_losses)
 
         self.log("loss", loss, prog_bar=True, sync_dist=True)
@@ -914,10 +895,18 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         # These need to be returned so the caller is able to introspect them
         # calling "log" is great, but it denies the caller access to this
         # information.
-        batch_outputs = {}
+        batch_outputs = {
+            "loss": loss,
+            "task_losses": task_losses,
+            "task_logits": task_logits,
+            "stacked_queries": stacked_queries,
+            "stacked_weights": stacked_weights,
+            "stacked_labels": stacked_labels,
+            "stacked_masks": stacked_masks,
+        }
         batch_outputs['loss'] = loss
         batch_outputs['task_losses'] = task_losses
-        batch_outputs.update({k + '_probs': v for k, v in task_probs.items()})
+
         return batch_outputs
 
     @profile
@@ -934,6 +923,38 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
     def test_step(self, batch, batch_idx=None):
         outputs = self.shared_step(batch, batch_idx=batch_idx, stage='test')
         return outputs
+
+    @profile
+    def predict_step(self, batch, batch_idx=None):
+        outputs = self.shared_step(batch, batch_idx=batch_idx, stage='predict')
+
+        # Need to output probabilities here for consumers of the model
+        # TODO: only enable if requested, at train time we can discard this
+        # for the majority of the iterations (unless we need to visualize
+        # the batch)
+
+        task_logits = outputs["task_logits"]
+        stacked_masks = outputs["stacked_masks"]
+
+        task_probs = dict()
+        for task_name in task_logits.keys():
+            item_probs = []
+            for item_index in range(len(batch)):
+                item_logit = einops.rearrange(task_logits[task_name][item_index], "chan seq -> seq chan")
+                item_mask = stacked_masks[task_name][item_index]
+                item_shapes = [list(frame["output_dims"]) for frame in batch[item_index]["frames"]]
+                # # if task_name == 'change':
+                # #     item_shapes = item_shapes[1:]  # hack for change
+                recon = self.reconstruct_output(item_logit, item_mask, item_shapes)
+                probs = [p.sigmoid() for p in recon]
+                item_probs.append(probs)
+            task_probs[task_name] = item_probs
+
+        outputs["task_probs"] = task_probs
+        return outputs
+
+    # this is a special thing for the predict step
+    forward_step = predict_step
 
     def configure_optimizers(self):
         """
