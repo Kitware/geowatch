@@ -179,7 +179,7 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             loss.
             ''')),
 
-        'use_cloudmask': scfg.Value(1, type=int, help=ub.paragraph(
+        'use_cloudmask': scfg.Value(1, help=ub.paragraph(
             '''
             Allow the dataloader to use the quality band to skip frames.
             ''')),

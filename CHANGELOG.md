@@ -20,6 +20,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * fusion predict now writes nodata correctly and georeferences predictions.
 * Fixed issue where `chip_dims` was not set correctly at predict time.
 * NOT FIXED: Model GSD is not respected by fusion.predict
+* Several params were not inferred from the package at test time. Including `time_sampling` (now fixed).
 
 
 ### Changed

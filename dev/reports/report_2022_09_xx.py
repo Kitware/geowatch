@@ -245,7 +245,6 @@ def main():
             # hack to get back to regular names
             track_params = ub.udict({
                 k[4:] : v for k, v in row['track_params'].items() if k.startswith('trk_')})
-
             track_params = track_params - {
                 'in_dataset_name', 'model_name', 'in_dataset_fpath', 'model_fpath'}
 

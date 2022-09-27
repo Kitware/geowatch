@@ -112,8 +112,8 @@ def make_predict_config(cmdline=False, **kwargs):
         'chip_dims',
         'time_steps',
         'channels',
-        # 'time_sampling',
-        # 'time_span',
+        'time_sampling',
+        'time_span',
         'input_space_scale',
         'window_space_scale',
         'output_space_scale',
@@ -173,6 +173,7 @@ def predict(cmdline=False, **kwargs):
         ...     'devices': devices,
         ... }
         >>> package_fpath = fit_model(**fit_kwargs)
+        >>> assert ub.Path(package_fpath).exists()
         >>> # Predict via that model
         >>> predict_kwargs = kwargs = {
         >>>     'package_fpath': package_fpath,
@@ -185,6 +186,7 @@ def predict(cmdline=False, **kwargs):
         >>> }
         >>> result_dataset = predict(**kwargs)
         >>> dset = result_dataset
+        >>> dset.dataset['info'][-1]['properties']['config']['time_sampling']
         >>> # Check that the result format looks correct
         >>> for vidid in dset.index.videos.keys():
         >>>     # Note: only some of the images in the pred sequence will get
@@ -429,11 +431,16 @@ def predict(cmdline=False, **kwargs):
                 walker[problem['loc']] = '<IN_MEMORY_DATASET: {}>'.format(
                     bad_data._build_hashid())
 
+    config_updated = config.copy()
+    config_updated.update(datamodule_vars)
+    config_updated = util_json.ensure_json_serializable(config_updated)
+
     from watch.utils import process_context
     proc_context = process_context.ProcessContext(
         name='watch.tasks.fusion.predict',
         type='process',
         args=jsonified_args,
+        config=config_updated,
         track_emissions=True,
         extra={'fit_config': traintime_params}
     )
