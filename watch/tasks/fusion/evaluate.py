@@ -42,6 +42,7 @@ class SegmentationEvalConfig(scfg.Config):
          'score_space': scfg.Value('video', help='can score in image or video space'),
          'workers': scfg.Value('auto', help='number of parallel scoring workers'),
          'draw_workers': scfg.Value('auto', help='number of parallel drawing workers'),
+         'thresh': scfg.Value('auto', help='visualization threshold'),
     }
 
 
@@ -118,17 +119,19 @@ def main(cmdline=True, **kwargs):
     from scriptconfig.smartcast import smartcast
     draw_heatmaps = smartcast(config['draw_heatmaps'])
     draw_curves = smartcast(config['draw_curves'])
+    thresh = smartcast(config['thresh'])
     evaluate_segmentations(true_coco, pred_coco, eval_dpath,
                            draw_curves=draw_curves,
                            draw_heatmaps=draw_heatmaps,
                            score_space=score_space, workers=workers,
-                           draw_workers=draw_workers)
+                           draw_workers=draw_workers, thresh=thresh)
 
 
 @profile
 def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
                                       true_classes, true_dets, video1=None,
-                                      score_space='video', thresh_bins=None):
+                                      score_space='video', thresh_bins=None,
+                                      thresh=None):
     """
     Args:
         true_coco_img (kwcoco.CocoImage): detatched true coco image
@@ -368,8 +371,12 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
                 maximized_info = salient_measures.maximized_thresholds()
 
                 # This cherry-picks a threshold per image!
-                cherry_picked_thresh = maximized_info['f1']['thresh']
-                pred_saliency = salient_prob > cherry_picked_thresh
+                if thresh == 'auto':
+                    cherry_picked_thresh = maximized_info['f1']['thresh']
+                    saliency_thresh = cherry_picked_thresh
+                else:
+                    saliency_thresh = thresh
+                pred_saliency = salient_prob > saliency_thresh
 
                 y_true = true_saliency.ravel()
                 y_pred = pred_saliency.ravel()
@@ -379,7 +386,7 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
                 info.update({
                     'mat': mat,
                     'pred_saliency': pred_saliency,
-                    'saliency_thresh': cherry_picked_thresh,
+                    'saliency_thresh': saliency_thresh,
                 })
         except Exception:
             pass
@@ -750,7 +757,7 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
 def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                            draw_curves='auto', draw_heatmaps='auto',
                            score_space='video', workers='auto',
-                           draw_workers='auto'):
+                           draw_workers='auto', thresh='auto'):
     """
     CommandLine:
         XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.evaluate evaluate_segmentations
@@ -968,7 +975,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             job = metrics_executor.submit(
                 single_image_segmentation_metrics, pred_coco_img,
                 true_coco_img, true_classes, true_dets, video1,
-                score_space=score_space, thresh_bins=thresh_bins)
+                score_space=score_space, thresh_bins=thresh_bins,
+                thresh=thresh)
 
             if len(current_chunk) >= chunk_size:
                 job_chunks.append(current_chunk)
@@ -992,7 +1000,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             job = metrics_executor.submit(
                 single_image_segmentation_metrics, pred_coco_img,
                 true_coco_img, true_classes, true_dets, video1,
-                score_space=score_space, thresh_bins=thresh_bins)
+                score_space=score_space, thresh_bins=thresh_bins,
+                thresh=thresh)
             prog.update()
             job_chunks.append([job])
     else:
