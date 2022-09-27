@@ -44,19 +44,21 @@ python -m watch.mlops.expt_manager "evaluate" \
     --test_dataset="$VALI_DATASET_SUBSET" \
     --enable_track=1 \
     --enable_iarpa_eval=1 \
-    --bas_thresh=0.0,0.01,0.1 \
+    --bas_thresh=0.05,0.01 \
     --skip_existing=True \
     --model_pattern="models_of_interest.txt" \
-    --hack_bas_grid=True \
+    --hack_bas_grid=False \
     --json_grid_pred_pxl='{
         "input_space_scale": ["10GSD", "15GSD"],
-        "window_space_scale": ["10GSD"],
+        "window_space_scale": ["auto"],
         "use_cloudmask": [0,1],
         "resample_invalid_frames": [0,1],
-        "chip_overlap": [0.5],
-        "set_cover_algo": ["approx", null]
+        "chip_overlap": [0.3],
+        "set_cover_algo": ["approx", null],
+        "time_sampling": ["auto"],
+        "time_span": ["auto"]
     }' \
-    --devices="0,1" --enable_pred=1 --run=1
+    --devices="0,1" --enable_pred=1 --run=0
 
 
 # --model_pattern="${MODEL_OF_INTEREST}*" \
