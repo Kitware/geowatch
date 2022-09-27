@@ -19,7 +19,7 @@ class WrappedKWCocoDataModule(KWCocoVideoDataModule):
         test_dataset=None,
         channels=None,
         batch_size=4,
-        space_scale="native",
+        input_space_scale="native",
         num_workers="avail/2",
         time_steps=2,
         chip_size=128,
@@ -38,12 +38,12 @@ class WrappedKWCocoDataModule(KWCocoVideoDataModule):
     ):
 
         super().__init__(
-            train_dataset=pathlib.Path(train_dataset) if (train_dataset is not None) else None,
-            vali_dataset=pathlib.Path(vali_dataset) if (vali_dataset is not None) else None,
-            test_dataset=pathlib.Path(test_dataset) if (test_dataset is not None) else None,
+            train_dataset=pathlib.Path(train_dataset) if (train_dataset != None) else None,
+            vali_dataset=pathlib.Path(vali_dataset) if (vali_dataset != None) else None,
+            test_dataset=pathlib.Path(test_dataset) if (test_dataset != None) else None,
             batch_size=batch_size,
             channels=channels,
-            space_scale=space_scale,
+            input_space_scale=input_space_scale,
             num_workers=num_workers,
             time_steps=time_steps,
             chip_size=chip_size,

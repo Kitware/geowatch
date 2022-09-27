@@ -633,8 +633,11 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         ]
         for task_name, labels_name, weights_name in task_defs:
 
+            if task_name not in self.heads.keys():
+                continue
+
             labels = [
-                frame[labels_name] if (frame[labels_name] is not None)
+                frame[labels_name] if (frame[labels_name] != None)
                 else torch.zeros(
                     frame["output_dims"],
                     dtype=torch.int32,
@@ -643,7 +646,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             ]
             labels = torch.concat([einops.rearrange(x, "h w -> (h w)") for x in labels], dim=0)
             weights = [
-                frame[weights_name] if (frame[weights_name] is not None)
+                frame[weights_name] if (frame[weights_name] != None)
                 else torch.zeros(
                     frame["output_dims"],
                     dtype=dtype,
@@ -890,7 +893,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             # TODO: only enable if requested, at train time we can discard this
             # for the majority of the iterations (unless we need to visualize
             # the batch)
-            NEED_OUTPUTS = True
+            NEED_OUTPUTS = False
             if NEED_OUTPUTS:
                 item_probs = []
                 for item_index in range(len(batch)):
