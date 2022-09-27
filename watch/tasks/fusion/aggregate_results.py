@@ -224,9 +224,6 @@ def debug_all_results():
         )
         row = ub.odict(ub.dict_union(metrics, *param_types.values()))
 
-        if row['pred_in_dataset_name'] != 'Cropped-Drop3-TA1-2022-03-10/combo_DL_s2_wv_vali.kwcoco.json':
-            continue
-
         actcfg_dname = merged_fpath.parent.parent.parent.parent.name
         predcfg_dname = merged_fpath.parent.parent.parent.parent.parent.parent.parent.name
 
@@ -266,7 +263,6 @@ def debug_all_results():
     print(f'{len(sc_rows)=}')
 
     df = pd.DataFrame(sc_rows)
-    df = df[df['pred_in_dataset_name'] == 'Cropped-Drop3-TA1-2022-03-10/combo_DL_s2_wv_vali.kwcoco.json']
     df = df.sort_values('mean_f1')
 
     df[['trk_use_viterbi']]
@@ -304,22 +300,6 @@ def load_pxl_eval(fpath, dvc_dpath=None):
     predict_args = param_types['pred']
     if predict_args is None:
         raise Exception('no prediction metadata')
-
-    # pred_fpath = predict_args['pred_dataset']
-    # package_fpath = ub.Path(predict_args['pred_model_fpath'])
-    package_name = predict_args['pred_in_dataset_name']
-    title = meta['title']
-
-    if predict_args is not None:
-        # Relevant prediction parameters also count as params
-        pred_config = ub.dict_isect(predict_args, {
-            'pred_tta_fliprot',
-            'pred_tta_time',
-            'pred_chip_overlap',
-        })
-        pred_cfgstr = ub.hash_data(pred_config)[0:8]
-        title = title + pred_cfgstr
-        meta['prefix'] = package_name + pred_cfgstr
 
     salient_measures = measure_info['nocls_measures']
     class_measures = measure_info['ovr_measures']
@@ -374,7 +354,6 @@ def load_pxl_eval(fpath, dvc_dpath=None):
         'other': {
             'result': result,
             'coi_catnames': ','.join(sorted(coi_catnames)),
-            'title': title,
             # 'sc_cm': sc_cm,
             # 'sc_df': sc_df,
         },

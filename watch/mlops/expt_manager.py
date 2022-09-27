@@ -2,8 +2,6 @@ r"""
 Synchronize DVC states across the machine.
 
 This is a new Phase2 Variant of this script.
-The original proof of concept is in
-~/code/watch/watch/tasks/fusion/dvc_sync_manager.py
 
 Example:
 

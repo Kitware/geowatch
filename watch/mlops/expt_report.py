@@ -820,8 +820,7 @@ def clean_loaded_data(big_rows):
     }
 
     # TODO: compute total steps including with initialized continuations
-    from watch.tasks.fusion import dvc_sync_manager
-    epoch_info = merged_df['model'].apply(dvc_sync_manager.checkpoint_filepath_info).values
+    epoch_info = merged_df['model'].apply(checkpoint_filepath_info).values
     merged_df['epoch'] = [e.get('epoch', None) if e else None for e in epoch_info]
     merged_df['step'] = [e.get('step', None) if e else None for e in epoch_info]
 
@@ -914,6 +913,66 @@ def resolve_model_info(model_fpath):
         stats = torch_model_stats(model_fpath)
         cacher.save(stats)
     return stats
+
+
+def checkpoint_filepath_info(fname):
+    """
+    Finds information encoded in the checkpoint/model file path.
+
+    hacky
+
+    TODO:
+        We need to ensure this info is encoded inside the file header as well!
+
+    Ignore
+        parse.parse('{prefix}foo={bar}', 'foo=3')
+        parse.parse('{prefix}foo={bar}', 'afoao=3')
+
+    Example:
+        >>> fnames = [
+        >>>     'epoch=1-step=10.foo',
+        >>>     'epoch=1-step=10-v2.foo',
+        >>>     'epoch=1-step=10',
+        >>>     'epoch=1-step=10-v2',
+        >>>     'junkepoch=1-step=10.foo',
+        >>>     'junk/epoch=1-step=10-v2.foo',
+        >>>     'junk-epoch=1-step=10',
+        >>>     'junk_epoch=1-step=10-v2',
+        >>> ]
+        >>> for fname in fnames:
+        >>>     info = checkpoint_filepath_info(fname)
+        >>>     print(f'info={info}')
+        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v0'}
+        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v2'}
+        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v0'}
+        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v2'}
+        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v0'}
+        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v2'}
+        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v0'}
+        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v2'}
+    """
+    import parse
+    # We assume it must have this
+    suffix = ''.join(fname.partition('epoch=')[1:])
+    # Hack: making name assumptions
+    parsers = [
+        parse.Parser('epoch={epoch:d}-step={step:d}-{ckpt_ver}.{ext}'),
+        parse.Parser('epoch={epoch:d}-step={step:d}.{ext}'),
+        parse.Parser('epoch={epoch:d}-step={step:d}-{ckpt_ver}'),
+        parse.Parser('epoch={epoch:d}-step={step:d}'),
+    ]
+    # results = parser.parse(str(path))
+    info = None
+    for parsers in parsers:
+        result = parsers.parse(suffix)
+        if result:
+            break
+    if result:
+        info = result.named
+        if 'ckpt_ver' not in info:
+            info['ckpt_ver'] = 'v0'
+        info = ub.dict_diff(info, {'ext', 'prefix'})
+    return info
 
 
 # def deduplicate_test_datasets(raw_df):
