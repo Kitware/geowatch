@@ -497,9 +497,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
                         cfg['thresh_hysteresis'].format(**cfg))
 
                 if cfg['moving_window_size'] is None:
-                    cfg['moving_window_size'] = 'heatmaps_to_polys'
+                    cfg['polygon_fn'] = 'heatmaps_to_polys'
                 else:
-                    cfg['moving_window_size'] = 'heatmaps_to_polys_moving_window'
+                    cfg['polygon_fn'] = 'heatmaps_to_polys_moving_window'
 
                 track_kwargs_str = shlex.quote(json.dumps(cfg))
                 bas_args = f'--default_track_fn saliency_heatmaps --track_kwargs {track_kwargs_str}'

@@ -58,7 +58,7 @@ python -m watch.mlops.expt_manager "evaluate" \
         "time_sampling": ["auto"],
         "time_span": ["auto"]
     }' \
-    --devices="0,1" --enable_pred=1 --run=0
+    --devices="0,1" --enable_pred=1 --run=1
 
 
 # --model_pattern="${MODEL_OF_INTEREST}*" \
