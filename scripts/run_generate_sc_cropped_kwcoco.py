@@ -119,7 +119,7 @@ def run_generate_sc_cropped_kwcoco(input_path,
 
     # Paths to inputs generated in previous pipeline steps
     bas_region_path = os.path.join(ingress_dir,
-                                   'region_models',
+                                   'cropped_region_models_bas',
                                    '{}.geojson'.format(region_id))
     ta1_sc_kwcoco_path = os.path.join(ingress_dir,
                                       'kwcoco_for_sc.json')

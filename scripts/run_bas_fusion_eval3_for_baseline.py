@@ -259,6 +259,15 @@ def run_bas_fusion_for_baseline(
                     '--track_kwargs', json.dumps(bas_track_kwargs)],
                    check=True)
 
+    cropped_region_models_outdir = os.path.join(ingress_dir,
+                                                'cropped_region_models_bas')
+    subprocess.run(['python', '-m', 'watch.cli.crop_sites_to_regions',
+                    '--region_models',
+                    os.path.join(region_models_outdir, '*.geojson'),
+                    '--new_site_dpath', cropped_region_models_outdir,
+                    '--new_region_dpath', cropped_region_models_outdir],
+                   check=True)
+
     # 6. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
