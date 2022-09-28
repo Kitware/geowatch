@@ -628,6 +628,7 @@ def predict(cmdline=False, **kwargs):
                 else:
                     walker[problem['loc']] = '<IN_MEMORY_DATASET: {}>'.format(
                         bad_data._build_hashid())
+        return jsonified
 
     jsonified_args = jsonify(args.__dict__)
     config_resolved = jsonify(config)
