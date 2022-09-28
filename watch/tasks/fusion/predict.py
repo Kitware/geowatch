@@ -76,9 +76,6 @@ def make_predict_config(cmdline=False, **kwargs):
     # TODO:
     # parser.add_argument('--cache', type=smartcast, default=0, help='if True, dont rerun prediction on images where predictions exist'),
 
-    # TODO
-    # parser.add_argument('--test_time_augmentation', default=False, help='')
-
     parser.add_argument(
         '--write_preds', default=True, type=smartcast, help=ub.paragraph(
             '''
@@ -215,11 +212,12 @@ def predict(cmdline=False, **kwargs):
         >>> # assert pred2.max() > 1
     """
     args = make_predict_config(cmdline=cmdline, **kwargs)
-    config = args.__dict__
+    config = args.__dict__.copy()
+    datamodule_defaults = args.datamodule_defaults
     print('kwargs = {}'.format(ub.repr2(kwargs, nl=1)))
     print('config = {}'.format(ub.repr2(config, nl=2)))
 
-    package_fpath = ub.Path(args.package_fpath)
+    package_fpath = ub.Path(config['package_fpath'])
 
     try:
         # Ideally we have a package, everything is defined there
@@ -253,10 +251,10 @@ def predict(cmdline=False, **kwargs):
     # knows how to construct the appropriate test dataset?
 
     # init datamodule from args
-    datamodule_class = getattr(datamodules, args.datamodule)
-    datamodule_vars = datamodule_class.compatible(vars(args))
+    datamodule_class = getattr(datamodules, config['datamodule'])
+    datamodule_vars = datamodule_class.compatible(config)
 
-    parsetime_vals = ub.udict(datamodule_vars) & args.datamodule_defaults
+    parsetime_vals = ub.udict(datamodule_vars) & datamodule_defaults
     need_infer = ub.udict({k: v for k, v in parsetime_vals.items() if v == 'auto'})
     # Try and infer what data we were given at train time
     if hasattr(method, 'fit_config'):
@@ -285,8 +283,9 @@ def predict(cmdline=False, **kwargs):
     unable_to_infer = need_infer - traintime_params
     # Use defaults when we can't infer
     overloads = able_to_infer.copy()
-    overloads.update(args.datamodule_defaults & unable_to_infer)
+    overloads.update(datamodule_defaults & unable_to_infer)
     datamodule_vars.update(overloads)
+    config.update(datamodule_vars)
     print('able_to_infer = {}'.format(ub.repr2(able_to_infer, nl=1)))
     print('unable_to_infer = {}'.format(ub.repr2(unable_to_infer, nl=1)))
     print('overloads = {}'.format(ub.repr2(overloads, nl=1)))
@@ -403,54 +402,20 @@ def predict(cmdline=False, **kwargs):
     result_dataset.reroot(absolute=True)
     # Set the filepath for the prediction coco file
     # (modifies the bundle_dpath)
-    # if args.pred_dataset is None:
-    #     pred_dpath = util_path.coercepath(args.pred_dpath)
+    # if config['pred_dataset'] is None:
+    #     pred_dpath = util_path.coercepath(config['pred_dpath'])
     #     result_dataset.fpath = str(pred_dpath / 'pred.kwcoco.json')
     # else:
-    if not args.pred_dataset:
+    if not config['pred_dataset']:
         raise ValueError(
             f'Must specify path to the output (predicted) kwcoco file. '
-            f'Got {args.pred_dataset=}')
-    result_dataset.fpath = str(args.pred_dataset)
+            f'Got {config["pred_dataset"]=}')
+    result_dataset.fpath = str(config['pred_dataset'])
     result_fpath = util_path.coercepath(result_dataset.fpath)
 
-    # add hyperparam info to "info" section
-    info = result_dataset.dataset.get('info', [])
-
-    from kwcoco.util import util_json
-    jsonified_args = util_json.ensure_json_serializable(args.__dict__)
-    # This will be serailized in kwcoco, so make sure it can be coerced to json
-    walker = ub.IndexableWalker(jsonified_args)
-    for problem in util_json.find_json_unserializable(jsonified_args):
-        bad_data = problem['data']
-        if isinstance(bad_data, kwcoco.CocoDataset):
-            fixed_fpath = getattr(bad_data, 'fpath', None)
-            if fixed_fpath is not None:
-                walker[problem['loc']] = fixed_fpath
-            else:
-                walker[problem['loc']] = '<IN_MEMORY_DATASET: {}>'.format(
-                    bad_data._build_hashid())
-
-    config_updated = config.copy()
-    config_updated.update(datamodule_vars)
-    config_updated = util_json.ensure_json_serializable(config_updated)
-
-    from watch.utils import process_context
-    proc_context = process_context.ProcessContext(
-        name='watch.tasks.fusion.predict',
-        type='process',
-        args=jsonified_args,
-        config=config_updated,
-        track_emissions=True,
-        extra={'fit_config': traintime_params}
-    )
-    info.append(proc_context.obj)
-    proc_context.start()
-    proc_context.add_disk_info(test_coco_dataset.fpath)
-
     from watch.utils.lightning_ext import util_device
-    print('args.devices = {!r}'.format(args.devices))
-    devices = util_device.coerce_devices(args.devices)
+    print('devices = {!r}'.format(config['devices']))
+    devices = util_device.coerce_devices(config['devices'])
     print('devices = {!r}'.format(devices))
     if len(devices) > 1:
         raise NotImplementedError('TODO: handle multiple devices')
@@ -470,12 +435,12 @@ def predict(cmdline=False, **kwargs):
 
     stitch_managers = {}
 
-    if args.with_change == 'auto':
-        args.with_change = getattr(method, 'global_change_weight', 1.0)
-    if args.with_class == 'auto':
-        args.with_class = getattr(method, 'global_class_weight', 1.0)
-    if args.with_saliency == 'auto':
-        args.with_saliency = getattr(method, 'global_saliency_weight', 0.0)
+    if config['with_change'] == 'auto':
+        config['with_change'] = getattr(method, 'global_change_weight', 1.0)
+    if config['with_class'] == 'auto':
+        config['with_class'] = getattr(method, 'global_class_weight', 1.0)
+    if config['with_saliency'] == 'auto':
+        config['with_saliency'] = getattr(method, 'global_saliency_weight', 0.0)
 
     # could be torch on-device stitching
     stitch_device = 'numpy'
@@ -488,17 +453,17 @@ def predict(cmdline=False, **kwargs):
     stitcher_common_kw = dict(
         stiching_space='video',
         device=stitch_device,
-        thresh=args.thresh,
-        write_probs=args.write_probs,
-        write_preds=args.write_preds,
-        prob_compress=args.compress,
-        quantize=args.quantize,
+        thresh=config['thresh'],
+        write_probs=config['write_probs'],
+        write_preds=config['write_preds'],
+        prob_compress=config['compress'],
+        quantize=config['quantize'],
     )
 
     # If we only care about some predictions from the model, then keep track of
     # the class indices we need to take.
     task_keep_indices = {}
-    if args.with_change:
+    if config['with_change']:
         task_name = 'change'
         head_classes = ['change']
         head_keep_idxs = [
@@ -521,7 +486,7 @@ def predict(cmdline=False, **kwargs):
         )
         result_dataset.ensure_category('change')
 
-    if args.with_class:
+    if config['with_class']:
         task_name = 'class'
         if hasattr(method, 'foreground_classes'):
             foreground_classes = method.foreground_classes
@@ -552,7 +517,7 @@ def predict(cmdline=False, **kwargs):
             **stitcher_common_kw,
         )
 
-    if args.with_saliency:
+    if config['with_saliency']:
         # hack: the model should tell us what the shape of its head is
         task_name = 'saliency'
         head_classes = ['not_salient', 'salient']
@@ -643,6 +608,38 @@ def predict(cmdline=False, **kwargs):
         # us the targets that cover the entire image.
         image_id_to_input_space_slices = ub.ddict(list)
         image_id_to_output_space_slices = ub.ddict(list)
+
+    # add hyperparam info to "info" section
+    info = result_dataset.dataset.get('info', [])
+
+    from kwcoco.util import util_json
+    jsonified_args = util_json.ensure_json_serializable(args.__dict__)
+    # This will be serailized in kwcoco, so make sure it can be coerced to json
+    walker = ub.IndexableWalker(jsonified_args)
+    for problem in util_json.find_json_unserializable(jsonified_args):
+        bad_data = problem['data']
+        if isinstance(bad_data, kwcoco.CocoDataset):
+            fixed_fpath = getattr(bad_data, 'fpath', None)
+            if fixed_fpath is not None:
+                walker[problem['loc']] = fixed_fpath
+            else:
+                walker[problem['loc']] = '<IN_MEMORY_DATASET: {}>'.format(
+                    bad_data._build_hashid())
+
+    config_resolved = util_json.ensure_json_serializable(config)
+
+    from watch.utils import process_context
+    proc_context = process_context.ProcessContext(
+        name='watch.tasks.fusion.predict',
+        type='process',
+        args=jsonified_args,
+        config=config_resolved,
+        track_emissions=True,
+        extra={'fit_config': traintime_params}
+    )
+    info.append(proc_context.obj)
+    proc_context.start()
+    proc_context.add_disk_info(test_coco_dataset.fpath)
 
     with torch.set_grad_enabled(False):
         # FIXME: that data loader should not be producing incorrect sensor/mode
