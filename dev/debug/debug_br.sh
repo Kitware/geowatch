@@ -74,4 +74,4 @@ python -m watch.tasks.fusion.predict \
 
 #smartwatch visualize "$TMP_DPATH/br2_testv1/pred.kwcoco.json" \
 smartwatch visualize "/home/joncrall/remote/namek/smart_data_dvc/_tmp/br2_testv1/pred.kwcoco.json" \
-    --channels='red|green|blue,salient' --workers=4 --draw_anns=True 
+    --channels='red|green|blue,salient' --workers=4 --draw_anns --stack --skip_missing=False

@@ -106,7 +106,7 @@ class CocoVisualizeConfig(scfg.Config):
         'num_frames': scfg.Value(None, type=str, help='show the first N frames from each video, if None, all are shown'),
         'start_frame': scfg.Value(0, type=str, help='If specified each video will start on this frame'),
 
-        'skip_missing': scfg.Value(True, help=ub.paragraph(
+        'skip_missing': scfg.Value(True, isflag=True, help=ub.paragraph(
             '''
             If true, skip any image that does not have the requested channels. Otherwise a nan image will be shown
             ''')),
@@ -115,9 +115,9 @@ class CocoVisualizeConfig(scfg.Config):
 
         # TODO: better support for this
         # TODO: use the kwcoco_video_data, has good logic for this
-        'zoom_to_tracks': scfg.Value(False, type=str, help='if True, zoom to tracked annotations. Experimental, might not work perfectly yet.'),
+        'zoom_to_tracks': scfg.Value(False, isflag=True, type=str, help='if True, zoom to tracked annotations. Experimental, might not work perfectly yet.'),
 
-        'norm_over_time': scfg.Value(False, help='if True, normalize data over time'),
+        'norm_over_time': scfg.Value(False, isflag=True, help='if True, normalize data over time'),
 
         'fixed_normalization_scheme': scfg.Value(
             None, type=str, help='Use a fixed normalization scheme for visualization; e.g. "scaled_25percentile"'),
