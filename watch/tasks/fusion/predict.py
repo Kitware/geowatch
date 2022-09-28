@@ -617,7 +617,7 @@ def predict(cmdline=False, **kwargs):
         from kwcoco.util import util_json
         jsonified = util_json.ensure_json_serializable(data)
         walker = ub.IndexableWalker(jsonified)
-        for problem in util_json.find_json_unserializable(jsonified_args):
+        for problem in util_json.find_json_unserializable(jsonified):
             bad_data = problem['data']
             if hasattr(problem, 'spec'):
                 walker[problem['loc']] = problem.spec
