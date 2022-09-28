@@ -643,6 +643,8 @@ def predict(cmdline=False, **kwargs):
         track_emissions=config['track_emissions'],
         extra={'fit_config': traintime_params}
     )
+    import xdev
+    xdev.embed()
     info.append(proc_context.obj)
     proc_context.start()
     proc_context.add_disk_info(test_coco_dataset.fpath)
