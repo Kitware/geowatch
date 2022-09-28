@@ -446,6 +446,11 @@ def main(cmdline=True, **kwargs):
 
         print('animate_config = {}'.format(ub.repr2(animate_config, nl=1)))
         from watch.cli import animate_visualizations
+
+        # Hack: pretend that stack is a channel even though it is not.
+        if config['stack']:
+            channels = channels + ',stack'
+
         animate_visualizations.animate_visualizations(
             viz_dpath=viz_dpath,
             channels=channels,
