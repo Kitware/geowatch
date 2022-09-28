@@ -618,10 +618,9 @@ def predict(cmdline=False, **kwargs):
         jsonified = util_json.ensure_json_serializable(data)
         walker = ub.IndexableWalker(jsonified)
         for problem in util_json.find_json_unserializable(jsonified):
-            print('problem = {}'.format(ub.repr2(problem, nl=1)))
             bad_data = problem['data']
-            if hasattr(problem, 'spec'):
-                walker[problem['loc']] = problem.spec
+            if hasattr(bad_data, 'spec'):
+                walker[problem['loc']] = bad_data.spec
             if isinstance(bad_data, kwcoco.CocoDataset):
                 fixed_fpath = getattr(bad_data, 'fpath', None)
                 if fixed_fpath is not None:
@@ -643,8 +642,10 @@ def predict(cmdline=False, **kwargs):
         track_emissions=config['track_emissions'],
         extra={'fit_config': traintime_params}
     )
-    import xdev
-    xdev.embed()
+
+    from kwcoco.util import util_json
+    assert not list(util_json.find_json_unserializable(config_resolved))
+
     info.append(proc_context.obj)
     proc_context.start()
     proc_context.add_disk_info(test_coco_dataset.fpath)

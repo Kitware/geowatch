@@ -316,11 +316,7 @@ def main(cmdline=True, **kwargs):
                 s = max(1, len(coco_imgs) // 10)
                 obs = []
                 for coco_img in coco_imgs[::s]:
-                    new_delayed_impl = 1
-                    if new_delayed_impl:
-                        rawdata = coco_img.delay(channels=chan).prepare().optimize().finalize()
-                    else:
-                        rawdata = coco_img.delay(channels=chan).finalize()
+                    rawdata = coco_img.delay(channels=chan).prepare().optimize().finalize()
                     mask = rawdata != 0
                     obs.append(rawdata[mask].ravel())
                 allobs = np.hstack(obs)
@@ -618,15 +614,11 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     )
 
     coco_img = coco_dset.coco_image(img['id'])
-    new_delayed_impl = 1
-    mode = new_delayed_impl
     finalize_opts = {
         'interpolation': 'linear',
         'nodata_method': 'float',
     }
-    delayed = coco_img.delay(space=space, mode=mode, **finalize_opts)
-    if new_delayed_impl:
-        finalize_opts = {}
+    delayed = coco_img.delay(space=space, **finalize_opts)
 
     if space == 'video':
         warp_vid_from_img = coco_img.warp_vid_from_img
@@ -806,10 +798,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
         chan = delayed.take_channels(chan_group)
 
-        if new_delayed_impl:
-            # import xdev
-            # with xdev.embed_on_exception_context:
-            chan = chan.prepare().optimize()
+        # import xdev
+        # with xdev.embed_on_exception_context:
+        chan = chan.prepare().optimize()
 
         with ub.Timer('load channels', verbose=verbose):
             # When util_delayed_poc is removed, remove **delayed_ops
