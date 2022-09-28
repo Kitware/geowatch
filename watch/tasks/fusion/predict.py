@@ -565,7 +565,7 @@ def predict(cmdline=False, **kwargs):
     result_fpath.parent.ensuredir()
     print('result_fpath = {!r}'.format(result_fpath))
 
-    CHECK_GRID = 1
+    CHECK_GRID = 0
     if CHECK_GRID:
         # Check to see if the grid will cover all images
         image_id_to_target_space_slices = ub.ddict(list)
@@ -602,7 +602,7 @@ def predict(cmdline=False, **kwargs):
         iou_stats = kwarray.stats_dict(ious, n_extreme=True)
         print('iou_stats = {}'.format(ub.repr2(iou_stats, nl=1)))
 
-    CHECK_PRED_SPATIAL_COVERAGE = 1
+    CHECK_PRED_SPATIAL_COVERAGE = 0
     if CHECK_PRED_SPATIAL_COVERAGE:
         # Enable debugging to ensure the dataloader actually passed
         # us the targets that cover the entire image.

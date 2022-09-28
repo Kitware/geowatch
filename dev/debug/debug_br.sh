@@ -66,10 +66,7 @@ python -m watch.tasks.fusion.predict \
     --tta_time 0 \
     --tta_fliprot 0 \
     --chip_overlap 0.3 \
-    --clear_annots=False \
-    --input_space_scale=15GSD \
-    --output_space_scale=15GSD \
-    --window_space_scale=15GSD 
+    --clear_annots=False 
 
 
 #smartwatch visualize "$TMP_DPATH/br2_testv1/pred.kwcoco.json" \
@@ -78,4 +75,4 @@ smartwatch visualize "/home/joncrall/remote/namek/smart_data_dvc/_tmp/br2_testv1
 
 smartwatch visualize "/home/joncrall/remote/namek/smart_data_dvc/_tmp/br2_testv1/pred.kwcoco.json" \
     --channels='red|green|blue,salient' --workers=12 --draw_anns --stack --skip_missing=False --only_boxes=True --animate \
-    --space='image'
+    --space='image' --min_dim=None

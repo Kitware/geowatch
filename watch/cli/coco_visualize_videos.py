@@ -722,6 +722,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     if space == 'video':
         dets = dets.warp(warp_vid_from_img)
 
+    # TODO: asset space
+
     if vid_crop_box is not None:
         # Ensure the crop box is in the proper space
         if space == 'image':
