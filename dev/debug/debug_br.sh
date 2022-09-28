@@ -54,6 +54,7 @@ python -m watch.tasks.fusion.predict \
     --pred_dataset "$TMP_DPATH/br2_testv1/pred.kwcoco.json" \
     --num_workers 4 \
     --set_cover_algo approx \
+    --track_emissions=False \
     --batch_size 1 \
     --tta_time 0 \
     --tta_fliprot 0 \

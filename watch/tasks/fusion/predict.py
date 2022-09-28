@@ -612,21 +612,25 @@ def predict(cmdline=False, **kwargs):
     # add hyperparam info to "info" section
     info = result_dataset.dataset.get('info', [])
 
-    from kwcoco.util import util_json
-    jsonified_args = util_json.ensure_json_serializable(args.__dict__)
-    # This will be serailized in kwcoco, so make sure it can be coerced to json
-    walker = ub.IndexableWalker(jsonified_args)
-    for problem in util_json.find_json_unserializable(jsonified_args):
-        bad_data = problem['data']
-        if isinstance(bad_data, kwcoco.CocoDataset):
-            fixed_fpath = getattr(bad_data, 'fpath', None)
-            if fixed_fpath is not None:
-                walker[problem['loc']] = fixed_fpath
-            else:
-                walker[problem['loc']] = '<IN_MEMORY_DATASET: {}>'.format(
-                    bad_data._build_hashid())
+    def jsonify(data):
+        # This will be serailized in kwcoco, so make sure it can be coerced to json
+        from kwcoco.util import util_json
+        jsonified = util_json.ensure_json_serializable(data)
+        walker = ub.IndexableWalker(jsonified)
+        for problem in util_json.find_json_unserializable(jsonified_args):
+            bad_data = problem['data']
+            if hasattr(problem, 'spec'):
+                walker[problem['loc']] = problem.spec
+            if isinstance(bad_data, kwcoco.CocoDataset):
+                fixed_fpath = getattr(bad_data, 'fpath', None)
+                if fixed_fpath is not None:
+                    walker[problem['loc']] = fixed_fpath
+                else:
+                    walker[problem['loc']] = '<IN_MEMORY_DATASET: {}>'.format(
+                        bad_data._build_hashid())
 
-    config_resolved = util_json.ensure_json_serializable(config)
+    jsonified_args = jsonify(args.__dict__)
+    config_resolved = jsonify(config)
 
     from watch.utils import process_context
     proc_context = process_context.ProcessContext(
@@ -634,7 +638,7 @@ def predict(cmdline=False, **kwargs):
         type='process',
         args=jsonified_args,
         config=config_resolved,
-        track_emissions=True,
+        track_emissions=config['track_emissions'],
         extra={'fit_config': traintime_params}
     )
     info.append(proc_context.obj)
