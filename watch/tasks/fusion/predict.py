@@ -1273,7 +1273,7 @@ def quantize_float01(imdata, old_min=0, old_max=1, quantize_dtype=np.int16):
 
     Example:
         >>> from watch.tasks.fusion.predict import *  # NOQA
-        >>> from kwcoco.util.util_delayed_poc import dequantize
+        >>> from delayed_image.helpers import dequantize
         >>> # Test error when input is not nicely between 0 and 1
         >>> imdata = (np.random.randn(32, 32, 3) - 1.) * 2.5
         >>> quant1, quantization1 = quantize_float01(imdata, old_min=0, old_max=1)
@@ -1291,7 +1291,7 @@ def quantize_float01(imdata, old_min=0, old_max=1, quantize_dtype=np.int16):
     Example:
         >>> # Test dequantize with uint8
         >>> from watch.tasks.fusion.predict import *  # NOQA
-        >>> from kwcoco.util.util_delayed_poc import dequantize
+        >>> from delayed_image.helpers import dequantize
         >>> imdata = np.random.randn(32, 32, 3)
         >>> quant1, quantization1 = quantize_float01(imdata, old_min=0, old_max=1, quantize_dtype=np.uint8)
         >>> recon1 = dequantize(quant1, quantization1)

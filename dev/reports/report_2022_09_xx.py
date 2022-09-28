@@ -25,6 +25,16 @@ if [ ! -f "$VALI_DATASET_SUBSET" ]; then
 fi
 
 
+VALI_DATASET_SUBSET=$DATA_DVC_DPATH/$DATASET_CODE/data_vali_10GSD_KR_R001.kwcoco.json
+if [ ! -f "$VALI_DATASET_SUBSET" ]; then
+    VALI_DATASET_BIG=$DATA_DVC_DPATH/$DATASET_CODE/data_vali.kwcoco.json
+    kwcoco subset "$VALI_DATASET_BIG" "$VALI_DATASET_SUBSET" --select_videos '.name | test("KR_R001")'
+    jq .videos[0] $VALI_DATASET_SUBSET
+    smartwatch coco_add_watch_fields --src="$VALI_DATASET_SUBSET" --dst="$VALI_DATASET_SUBSET" --target_gsd=10
+    jq .videos[0] $VALI_DATASET_SUBSET
+fi
+
+
 # Then you should be able to evaluate that model
 # MODEL_OF_INTEREST="Drop4_BAS_Retrain_V002_epoch=14-step=7680"
 MODEL_OF_INTEREST="Drop4_BAS_Retrain_V002_epoch=31-step=16384"
@@ -438,3 +448,50 @@ if __name__ == '__main__':
         is git ignored
     """
     main()
+
+"""
+
+
+2022-09-28 EVAL RUN
+
+
+DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+
+TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data_vali_10GSD_KR_R001.kwcoco.json
+
+
+TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data_septest.kwcoco.json
+if [ ! -f "$TEST_DATASET" ]; then
+    DATASET_BIG=$DATA_DVC_DPATH/$DATASET_CODE/data.kwcoco.json
+    kwcoco subset "$DATASET_BIG" "$TEST_DATASET" \
+        --select_videos '((.name | test("KR_R001")) or (.name | test("KR_R002")) or (.name | test("BR_R002")) or (.name | test("US_R007")))'
+fi
+
+echo "
+Drop4_BAS_Retrain_V001_epoch=54-step=28160.pt
+Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt
+Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584*
+" > models_of_interest.txt
+DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+python -m watch.mlops.expt_manager "evaluate" \
+    --dataset_codes "$DATASET_CODE" \
+    --test_dataset="$TEST_DATASET" \
+    --enable_track=1 \
+    --enable_iarpa_eval=1 \
+    --skip_existing=True \
+    --model_pattern="models_of_interest.txt" \
+    --hack_bas_grid=True \
+    --json_grid_pred_pxl='{
+        "input_space_scale": ["10GSD", "15GSD"],
+        "window_space_scale": ["auto"],
+        "use_cloudmask": [0,1],
+        "resample_invalid_frames": [0,1],
+        "chip_overlap": [0.3],
+        "set_cover_algo": ["approx", null],
+        "time_sampling": ["auto", "continuous"],
+        "time_span": ["auto"]
+    }' \
+    --devices="0,1" --enable_pred=1 --run=1
+"""
