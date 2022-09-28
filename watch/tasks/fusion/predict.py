@@ -618,6 +618,7 @@ def predict(cmdline=False, **kwargs):
         jsonified = util_json.ensure_json_serializable(data)
         walker = ub.IndexableWalker(jsonified)
         for problem in util_json.find_json_unserializable(jsonified):
+            print('problem = {}'.format(ub.repr2(problem, nl=1)))
             bad_data = problem['data']
             if hasattr(problem, 'spec'):
                 walker[problem['loc']] = problem.spec
