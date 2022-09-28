@@ -33,6 +33,11 @@ import scriptconfig as scfg
 import numpy as np
 import ubelt as ub
 
+try:
+    from rich import print
+except ImportError:
+    pass
+
 
 class CocoVisualizeConfig(scfg.Config):
     """
@@ -91,20 +96,22 @@ class CocoVisualizeConfig(scfg.Config):
             name?
             ''')),
 
-        'draw_imgs': scfg.Value(True),
-        'draw_anns': scfg.Value('auto', help='auto means only draw anns if they exist'),
+        'draw_imgs': scfg.Value(True, isflag=True),
+        'draw_anns': scfg.Value('auto', isflag=True, help='auto means only draw anns if they exist'),
 
         'cmap': scfg.Value('viridis', help='colormap for single channel data'),
 
-        'animate': scfg.Value(False, help='if True, make an animated gif from the output'),
+        'animate': scfg.Value(False, isflag=True, help='if True, make an animated gif from the output'),
 
-        # 'channels': scfg.Value(None, type=str, help='only viz these channels'),
         'num_frames': scfg.Value(None, type=str, help='show the first N frames from each video, if None, all are shown'),
         'start_frame': scfg.Value(0, type=str, help='If specified each video will start on this frame'),
 
-        'skip_missing': scfg.Value(True, help='If true, skip any image that does not have the requested channels. Otherwise a nan image will be shown'),
+        'skip_missing': scfg.Value(True, help=ub.paragraph(
+            '''
+            If true, skip any image that does not have the requested channels. Otherwise a nan image will be shown
+            ''')),
 
-        'only_boxes': scfg.Value(False, help='If false, draws full annotation - which can be time consuming if there are a lot'),
+        'only_boxes': scfg.Value(False, isflag=True, help='If false, draws full annotation - which can be time consuming if there are a lot'),
 
         # TODO: better support for this
         # TODO: use the kwcoco_video_data, has good logic for this
@@ -161,17 +168,10 @@ class CocoVisualizeConfig(scfg.Config):
                 Requries the "jq" python library is installed.
                 ''')),
 
-        'verbose': scfg.Value(0, help='verbosity level')
+        'verbose': scfg.Value(0, isflag=True, help='verbosity level'),
+
+        'stack': scfg.Value(False, isflag=True, help='if True stack late fused channels in the same image')
     }
-
-
-def _dataset_id(coco_dset):
-    """ A possible good default for a coco candidate name """
-    try:
-        if hasattr(coco_dset, '_dataset_id'):
-            return coco_dset._dataset_id()
-    except Exception:
-        return _hack_dataset_id(coco_dset)
 
 
 def main(cmdline=True, **kwargs):
@@ -225,7 +225,7 @@ def main(cmdline=True, **kwargs):
         config['draw_anns'] = coco_dset.n_annots > 0
 
     bundle_dpath = ub.Path(coco_dset.bundle_dpath)
-    dset_idstr = _dataset_id(coco_dset)
+    dset_idstr = coco_dset._dataset_id()
     if config['viz_dpath'] is not None:
         viz_dpath = ub.Path(config['viz_dpath'])
     else:
@@ -372,7 +372,8 @@ def main(cmdline=True, **kwargs):
                                 min_dim=config['min_dim'],
                                 local_frame_index=local_frame_index,
                                 local_max_frame=local_max_frame,
-                                any3=config['any3'], dset_idstr=dset_idstr)
+                                any3=config['any3'], dset_idstr=dset_idstr,
+                                stack=config['stack'])
 
         else:
             gid_subset = gids[start_frame:end_frame]
@@ -404,7 +405,8 @@ def main(cmdline=True, **kwargs):
                             local_frame_index=local_frame_index,
                             local_max_frame=local_max_frame,
                             valid_vidspace_region=valid_vidspace_region,
-                            skip_missing=config['skip_missing'])
+                            skip_missing=config['skip_missing'],
+                            stack=config['stack'])
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
             job.result()
@@ -545,96 +547,12 @@ def select_fixed_normalization(fixed_normalization_scheme, sensor_coarse):
     return chan_to_normalizer
 
 
-def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
-                               img : dict,
-                               anns : list,
-                               sub_dpath : str,
-                               space : str,
-                               channels=None,
-                               vid_crop_box=None,
-                               request_grouped_bands='default',
-                               draw_imgs=True,
-                               draw_anns=True, _header_extra=None,
-                               chan_to_normalizer=None,
-                               fixed_normalization_scheme=None,
-                               any3=True, dset_idstr='',
-                               skip_missing=False,
-                               only_boxes=1,
-                               cmap='viridis',
-                               max_dim=None,
-                               min_dim=None,
-                               local_frame_index=None,
-                               local_max_frame=None,
-                               valid_vidspace_region=None,
-                               verbose=0):
+def _resolve_channel_groups(coco_img, channels, verbose, request_grouped_bands,
+                            any3):
     """
-    Dumps an intensity normalized "space-aligned" kwcoco image visualization
-    (with or without annotation overlays) for specific bands to disk.
+    Resolve which channel groups should be requested.
     """
-    # See if we can look at what we made
     from kwcoco import channel_spec
-    from watch.utils import util_kwimage
-
-    sensor_coarse = img.get('sensor_coarse', 'unknown')
-    align_method = img.get('align_method', 'unknown')
-    name = img.get('name', 'unnamed')
-
-    # Ensure names are differentiated between frames.
-    import math
-    if local_max_frame is None:
-        num_digits = 8
-    else:
-        num_digits = int(math.log10(max(local_max_frame, 1))) + 1
-    if local_frame_index is None:
-        local_frame_index = -1
-    frame_id = f'{local_frame_index:0{num_digits}d}'
-    # frame_index = img.get('frame_index', None)
-    # timestamp = img.get('timestamp', None)
-    # if frame_index is not None:
-    #     frame_id = '{:04d}'.format(frame_index)
-    # else:
-    #     frame_id = timestamp
-    #     if timestamp is None:
-    #         if name is None:
-    #             raise AssertionError('No method to differentiate between frames')
-    #         else:
-    #             frame_id = 'noframeid'
-    #             import warnings
-    #             warnings.warn(
-    #                 'The image does not have a frame_index or a timestamp, '
-    #                 'we are assuming the name will differentiate frames, which '
-    #                 'may not be safe.')
-
-    from watch import heuristics
-    header_lines = heuristics.build_image_header_text(
-        img=img,
-        name=None,
-        _header_extra=None,
-        coco_dset=coco_dset,
-    )
-
-    coco_img = coco_dset.coco_image(img['id'])
-    finalize_opts = {
-        'interpolation': 'linear',
-        'nodata_method': 'float',
-    }
-    delayed = coco_img.delay(space=space, **finalize_opts)
-
-    if space == 'video':
-        warp_vid_from_img = coco_img.warp_vid_from_img
-
-    if fixed_normalization_scheme is not None:
-        chan_to_normalizer = select_fixed_normalization(
-            fixed_normalization_scheme, sensor_coarse)
-        # Hacks for common "heatmap" channels
-        chan_to_normalizer['depth'] = {'type': 'normalize', 'mode': 'linear',
-                                       'min_val': 0, 'max_val': 255}
-
-    if verbose > 0:
-        print(f'fixed_normalization_scheme={fixed_normalization_scheme}')
-        print(f'chan_to_normalizer={chan_to_normalizer}')
-        print(f'channels={channels}')
-
     if channels is not None:
         if isinstance(channels, list):
             channels = ','.join(channels)  # hack
@@ -710,6 +628,86 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             'chan': found,
         })
 
+    return chan_groups
+
+
+def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
+                               img : dict,
+                               anns : list,
+                               sub_dpath : str,
+                               space : str,
+                               channels=None,
+                               vid_crop_box=None,
+                               request_grouped_bands='default',
+                               draw_imgs=True,
+                               draw_anns=True, _header_extra=None,
+                               chan_to_normalizer=None,
+                               fixed_normalization_scheme=None,
+                               any3=True, dset_idstr='',
+                               skip_missing=False,
+                               only_boxes=1,
+                               cmap='viridis',
+                               max_dim=None,
+                               min_dim=None,
+                               local_frame_index=None,
+                               local_max_frame=None,
+                               valid_vidspace_region=None,
+                               stack=False,
+                               verbose=0):
+    """
+    Dumps an intensity normalized "space-aligned" kwcoco image visualization
+    (with or without annotation overlays) for specific bands to disk.
+    """
+    # See if we can look at what we made
+    from watch.utils import util_kwimage
+
+    sensor_coarse = img.get('sensor_coarse', 'unknown')
+    align_method = img.get('align_method', 'unknown')
+    name = img.get('name', 'unnamed')
+
+    # Ensure names are differentiated between frames.
+    import math
+    if local_max_frame is None:
+        num_digits = 8
+    else:
+        num_digits = int(math.log10(max(local_max_frame, 1))) + 1
+    if local_frame_index is None:
+        local_frame_index = -1
+    frame_id = f'{local_frame_index:0{num_digits}d}'
+
+    from watch import heuristics
+    header_lines = heuristics.build_image_header_text(
+        img=img,
+        name=None,
+        _header_extra=None,
+        coco_dset=coco_dset,
+    )
+
+    coco_img = coco_dset.coco_image(img['id'])
+    finalize_opts = {
+        'interpolation': 'linear',
+        'nodata_method': 'float',
+    }
+    delayed = coco_img.delay(space=space, **finalize_opts)
+
+    if space == 'video':
+        warp_vid_from_img = coco_img.warp_vid_from_img
+
+    if fixed_normalization_scheme is not None:
+        chan_to_normalizer = select_fixed_normalization(
+            fixed_normalization_scheme, sensor_coarse)
+        # Hacks for common "heatmap" channels
+        chan_to_normalizer['depth'] = {'type': 'normalize', 'mode': 'linear',
+                                       'min_val': 0, 'max_val': 255}
+
+    if verbose > 0:
+        print(f'fixed_normalization_scheme={fixed_normalization_scheme}')
+        print(f'chan_to_normalizer={chan_to_normalizer}')
+        print(f'channels={channels}')
+
+    chan_groups = _resolve_channel_groups(coco_img, channels, verbose,
+                                          request_grouped_bands, any3)
+
     img_view_dpath = sub_dpath / '_imgs'
     ann_view_dpath = sub_dpath / '_anns'
 
@@ -774,6 +772,13 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             valid_image_poly = valid_image_poly.warp(viz_warp)
         if valid_video_poly is not None:
             valid_video_poly = valid_video_poly.warp(viz_warp)
+    # import xdev
+    # xdev.embed()
+    if stack:
+        img_stacked_dpath = img_view_dpath / 'stack'
+        ann_stacked_dpath = ann_view_dpath / 'stack'
+
+    stacked = []
 
     for chan_row in chan_groups:
         chan_pname = chan_row['pname']
@@ -796,16 +801,39 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         view_img_fpath = ub.augpath(name, dpath=img_chan_dpath) + '_' + suffix + '.view_img.jpg'
         view_ann_fpath = ub.augpath(name, dpath=ann_chan_dpath) + '_' + suffix + '.view_ann.jpg'
 
-        chan = delayed.take_channels(chan_group)
+        if 0:
+            delayed1 = coco_img.delay(channels='blue|salient', space=space, **finalize_opts)
+            delayed1 = delayed1.warp(viz_warp)
 
-        # import xdev
-        # with xdev.embed_on_exception_context:
+            delayed2 = coco_img.delay(channels='blue|salient', space=space, **finalize_opts)
+            delayed2 = delayed2.warp(viz_warp)
+
+            orig = delayed1.take_channels(chan_group)
+            prep = delayed2.take_channels(chan_group).prepare()
+
+            print(ub.repr2(orig.nesting(), sort=0, nl=-1))
+            print(ub.repr2(prep.nesting(), sort=0, nl=-1))
+
+            orig_opt = orig.optimize()
+            prep_opt = prep.optimize()
+            print('--orig--')
+            orig.write_network_text()
+            print('--prep--')
+            prep.write_network_text()
+            print('--orig_opt--')
+            orig_opt.write_network_text()
+            print('--prep_opt--')
+            prep_opt.write_network_text()
+
+        chan = delayed.take_channels(chan_group)
         chan = chan.prepare().optimize()
 
         with ub.Timer('load channels', verbose=verbose):
             # When util_delayed_poc is removed, remove **delayed_ops
             # as they should be given in the constructor.
             raw_canvas = canvas = chan.finalize(**finalize_opts)
+
+        # foo = kwimage.fill_nans_with_checkers(raw_canvas)
 
         if verbose > 1:
             import kwarray
@@ -931,61 +959,6 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                                   fit='shrink')
             with ub.Timer('write ann_canvas', verbose=verbose):
                 kwimage.imwrite(view_ann_fpath, ann_canvas)
-
-
-def _hack_cached_hashid(self):
-    """
-    TODO: remove when kwcoco 0.22 is out
-    """
-    cache_miss = True
-    import json
-    enable_cache = (
-        self._state['was_loaded'] and
-        not self._state['was_modified']
-    )
-    if enable_cache:
-        coco_fpath = ub.Path(self.fpath)
-        enable_cache = coco_fpath.exists()
-
-    if enable_cache:
-        hashid_sidecar_fpath = ub.Path(str(coco_fpath) + '.hashid.cache')
-        # Generate current lookup key
-        fpath_stat = coco_fpath.stat()
-        status_key = {
-            'st_size': fpath_stat.st_size,
-            'st_mtime': fpath_stat.st_mtime
-        }
-        if hashid_sidecar_fpath.exists():
-            cached_data = json.loads(hashid_sidecar_fpath.read_text())
-            if cached_data['status_key'] == status_key:
-                self.hashid = cached_data['hashid']
-                self.hashid_parts = cached_data['hashid_parts']
-                cache_miss = False
-
-    if cache_miss:
-        self._build_hashid()
-        if enable_cache:
-            hashid_cache_data = {
-                'hashid': self.hashid,
-                'hashid_parts': self.hashid_parts,
-                'status_key': status_key,
-            }
-            hashid_sidecar_fpath.write_text(json.dumps(hashid_cache_data))
-    return self.hashid
-
-
-def _hack_dataset_id(self):
-    """
-    A human interpretable name that can be used to uniquely identify the
-    dataset.
-
-    Note:
-        This function is currently subject to change.
-    """
-    hashid = _hack_cached_hashid(self)
-    coco_fpath = ub.Path(self.fpath)
-    dset_id = '_'.join([coco_fpath.parent.stem, coco_fpath.stem, hashid[0:8]])
-    return dset_id
 
 
 if __name__ == '__main__':
