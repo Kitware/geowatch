@@ -77,7 +77,7 @@ def make_predict_config(cmdline=False, **kwargs):
     # parser.add_argument('--cache', type=smartcast, default=0, help='if True, dont rerun prediction on images where predictions exist'),
 
     parser.add_argument(
-        '--write_preds', default=True, type=smartcast, help=ub.paragraph(
+        '--write_preds', default=False, type=smartcast, help=ub.paragraph(
             '''
             If True, convert probability maps into raw "hard" predictions and
             write them as annotations to the prediction kwcoco file.
@@ -895,10 +895,11 @@ class CocoStitchingManager(object):
               the code that adds soft predictions to the kwcoco file?
     """
 
-    def __init__(self, result_dataset, short_code=None, chan_code=None, stiching_space='video',
-                 device='numpy', thresh=0.5, write_probs=True,
-                 write_preds=True, num_bands='auto', prob_compress='DEFLATE',
-                 polygon_categories=None, quantize=True):
+    def __init__(self, result_dataset, short_code=None, chan_code=None,
+                 stiching_space='video', device='numpy', thresh=0.5,
+                 write_probs=True, write_preds=True, num_bands='auto',
+                 prob_compress='DEFLATE', polygon_categories=None,
+                 quantize=True):
         self.short_code = short_code
         self.result_dataset = result_dataset
         self.device = device
@@ -995,6 +996,10 @@ class CocoStitchingManager(object):
                 # do something clever to know if frames are ready early?
                 # might be tricky in general if we run over multiple
                 # times per image with different frame samplings.
+                # .
+                # TODO: we know if an image is done if all of the samples that
+                # contain it have been processed. (although that does not
+                # account for dynamic resampling)
                 self._ready_gids.update(ready_gids)
 
             self._last_vidid = vidid
@@ -1077,8 +1082,6 @@ class CocoStitchingManager(object):
             print(f'stitch_slice={stitch_slice}')
             print(f'stitch_weights.shape={stitch_weights.shape}')
             print(f'stitch_data.shape={stitch_data.shape}')
-            import xdev
-            xdev.embed()
             raise
 
     def managed_image_ids(self):

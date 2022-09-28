@@ -65,7 +65,11 @@ python -m watch.tasks.fusion.predict \
     --batch_size 1 \
     --tta_time 0 \
     --tta_fliprot 0 \
-    --chip_overlap 0.3 
+    --chip_overlap 0.3 \
+    --clear_annots=False \
+    --input_space_scale=15GSD \
+    --output_space_scale=15GSD \
+    --window_space_scale=15GSD 
 
 
 smartwatch visualize "$TMP_DPATH/br2_testv1/pred.kwcoco.json" \
