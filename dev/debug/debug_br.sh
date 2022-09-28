@@ -12,12 +12,12 @@ if [ ! -f "$TEST_DATASET" ]; then
     kwcoco subset "$SRC_DATASET" "$TEST_DATASET" --select_videos '.name | test("BR_R002")'
 fi
 
-TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data_BR_R002_small.kwcoco.json
-if [ ! -f "$TEST_DATASET" ]; then
-    SRC_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data.kwcoco.json
-    kwcoco subset "$SRC_DATASET" "$TEST_DATASET" --select_videos '.name | test("BR_R002")' \
-        --select_images '.frame_index < 250 and .frame_index > 150' 
-fi
+#TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data_BR_R002_small.kwcoco.json
+#if [ ! -f "$TEST_DATASET" ]; then
+#    SRC_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data.kwcoco.json
+#    kwcoco subset "$SRC_DATASET" "$TEST_DATASET" --select_videos '.name | test("BR_R002")' \
+#        --select_images '.frame_index < 250 and .frame_index > 150' 
+#fi
 
 
 PACKAGE_FPATH=$DVC_EXPT_DPATH/models/fusion/$DATASET_CODE/packages/Drop4_BAS_Continue_15GSD_BGR_V004/Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt.pt
@@ -48,7 +48,7 @@ python -m watch.tasks.fusion.predict \
 DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
-TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data_BR_R002_small.kwcoco.json
+TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data_BR_R002.kwcoco.json
 PACKAGE_FPATH=$DVC_EXPT_DPATH/models/fusion/$DATASET_CODE/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt
 TMP_DPATH=$DATA_DVC_DPATH/_tmp
 mkdir -p "$OUT_DPATH"
@@ -72,7 +72,6 @@ python -m watch.tasks.fusion.predict \
     --window_space_scale=15GSD 
 
 
-smartwatch visualize "$TMP_DPATH/br2_testv1/pred.kwcoco.json" \
+#smartwatch visualize "$TMP_DPATH/br2_testv1/pred.kwcoco.json" \
 smartwatch visualize "/home/joncrall/remote/namek/smart_data_dvc/_tmp/br2_testv1/pred.kwcoco.json" \
-    --channels='red|green|blue,salient' --workers=4 --draw_anns=True \
-    --select_images '.frame_index < 152 and .frame_index > 150' 
+    --channels='red|green|blue,salient' --workers=4 --draw_anns=True 

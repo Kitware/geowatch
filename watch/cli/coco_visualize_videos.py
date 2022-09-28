@@ -711,13 +711,11 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     img_view_dpath = sub_dpath / '_imgs'
     ann_view_dpath = sub_dpath / '_anns'
 
-    with ub.Timer('build dets', verbose=verbose):
-        anns_ = [ub.dict_diff(ann, ['keypoints']) for ann in anns]  # Ignore keypoints
-        dets = kwimage.Detections.from_coco_annots(anns_, dset=coco_dset)
+    anns_ = [ub.dict_diff(ann, ['keypoints']) for ann in anns]  # Ignore keypoints
+    dets = kwimage.Detections.from_coco_annots(anns_, dset=coco_dset)
 
     if space == 'video':
-        with ub.Timer('warp dets', verbose=verbose > 2):
-            dets = dets.warp(warp_vid_from_img)
+        dets = dets.warp(warp_vid_from_img)
 
     if vid_crop_box is not None:
         # Ensure the crop box is in the proper space
@@ -775,10 +773,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     # import xdev
     # xdev.embed()
     if stack:
-        img_stacked_dpath = img_view_dpath / 'stack'
-        ann_stacked_dpath = ann_view_dpath / 'stack'
-
-    stacked = []
+        ann_stack = []
+        img_stack = []
 
     for chan_row in chan_groups:
         chan_pname = chan_row['pname']
@@ -828,10 +824,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         chan = delayed.take_channels(chan_group)
         chan = chan.prepare().optimize()
 
-        with ub.Timer('load channels', verbose=verbose):
-            # When util_delayed_poc is removed, remove **delayed_ops
-            # as they should be given in the constructor.
-            raw_canvas = canvas = chan.finalize(**finalize_opts)
+        # When util_delayed_poc is removed, remove **delayed_ops
+        # as they should be given in the constructor.
+        raw_canvas = canvas = chan.finalize(**finalize_opts)
 
         # foo = kwimage.fill_nans_with_checkers(raw_canvas)
 
@@ -856,36 +851,34 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             needs_norm = dmax > 1.0
             # if canvas.max() <= 0 or canvas.min() >= 255:
             # Hack to only do noramlization on "non-standard" data ranges
-            with ub.Timer('normalize1', verbose=verbose > 2):
-                if needs_norm:
-                    mask = ~np.isnan(raw_canvas)
-                    norm_canvas = kwimage.normalize_intensity(raw_canvas, mask=mask, params={
+            if needs_norm:
+                mask = ~np.isnan(raw_canvas)
+                norm_canvas = kwimage.normalize_intensity(raw_canvas, mask=mask, params={
+                    'high': 0.90,
+                    'mid': 0.5,
+                    'low': 0.01,
+                    'mode': 'linear',
+                })
+                canvas = norm_canvas
+            canvas = np.clip(canvas, 0, None)
+        else:
+            new_parts = []
+            for cx, c in enumerate(chan_list):
+                normalizer = chan_to_normalizer.get(c, None)
+                data = canvas[..., cx]
+                mask = ~np.isnan(data)
+                if normalizer is None:
+                    p = kwimage.normalize_intensity(data, params={
                         'high': 0.90,
                         'mid': 0.5,
                         'low': 0.01,
                         'mode': 'linear',
                     })
-                    canvas = norm_canvas
-                canvas = np.clip(canvas, 0, None)
-        else:
-            with ub.Timer('normalize2', verbose=verbose > 2):
-                new_parts = []
-                for cx, c in enumerate(chan_list):
-                    normalizer = chan_to_normalizer.get(c, None)
-                    data = canvas[..., cx]
-                    mask = ~np.isnan(data)
-                    if normalizer is None:
-                        p = kwimage.normalize_intensity(data, params={
-                            'high': 0.90,
-                            'mid': 0.5,
-                            'low': 0.01,
-                            'mode': 'linear',
-                        })
-                    else:
-                        p = kwarray.apply_normalizer(data, normalizer, mask=mask,
-                                                     set_value_at_mask=0.)
-                    new_parts.append(p)
-                canvas = np.stack(new_parts, axis=2)
+                else:
+                    p = kwarray.apply_normalizer(data, normalizer, mask=mask,
+                                                 set_value_at_mask=0.)
+                new_parts.append(p)
+            canvas = np.stack(new_parts, axis=2)
 
         canvas = kwimage.fill_nans_with_checkers(canvas)
 
@@ -899,8 +892,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                     canvas = canvas[..., 0]
                     canvas = cmap_(canvas)[..., 0:3].astype(np.float32)
 
-        with ub.Timer('false color', verbose=verbose > 2):
-            canvas = util_kwimage.ensure_false_color(canvas)
+        canvas = util_kwimage.ensure_false_color(canvas)
 
         if len(canvas.shape) > 2 and canvas.shape[2] > 4:
             # hack for wv
@@ -912,10 +904,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
         if valid_image_poly is not None:
             # Draw the valid region specified at the image level
-            with ub.Timer('valid region', verbose=verbose > 2):
-                if any([p.data['exterior'].data.size for p in valid_image_poly.data]):
-                    canvas = valid_image_poly.draw_on(canvas, color='kitware_green',
-                                                      fill=False, border=True)
+            if any([p.data['exterior'].data.size for p in valid_image_poly.data]):
+                canvas = valid_image_poly.draw_on(canvas, color='kitware_green',
+                                                  fill=False, border=True)
 
         if valid_video_poly is not None:
             # Draw the valid region specified at the video level
@@ -924,41 +915,69 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                                   fill=False, border=True)
 
         if draw_imgs:
-            with ub.Timer('prep img_canvas', verbose=verbose):
-                img_canvas = kwimage.ensure_uint255(canvas, copy=True)
-                img_canvas = kwimage.draw_header_text(image=img_canvas,
-                                                      text=header_text,
-                                                      stack=True,
-                                                      fit='shrink')
-            with ub.Timer('write img_canvas', verbose=verbose):
-                kwimage.imwrite(view_img_fpath, img_canvas)
+            img_canvas = kwimage.ensure_uint255(canvas, copy=True)
+            if stack:
+                img_stack.append(img_canvas)
+            img_canvas = kwimage.draw_header_text(image=img_canvas,
+                                                  text=header_text,
+                                                  stack=True,
+                                                  fit='shrink')
+            kwimage.imwrite(view_img_fpath, img_canvas)
 
         if draw_anns:
             ann_canvas = kwimage.ensure_float01(canvas, copy=True)
 
             ONLY_BOXES = only_boxes
             if ONLY_BOXES:
-                with ub.Timer('dets.draw_on 1', verbose=verbose):
-                    ann_canvas = dets.draw_on(ann_canvas, sseg=False,
-                                              labels=False, color='classes')
-                    # ann_canvas = dets.boxes.draw_on(ann_canvas, color='blue')
+                ann_canvas = dets.draw_on(ann_canvas, sseg=False,
+                                          labels=False, color='classes')
+                # ann_canvas = dets.boxes.draw_on(ann_canvas, color='blue')
             else:
                 # THERE IS A IN DRAW POLY WITH LARGE POLYS. THIS IS FINE FOR
                 # REAL DATA BUT A TEST FAILS HARD. HACKING THIS OFF FOR NOW
-                with ub.Timer('dets.draw_on 2', verbose=verbose):
-                    try:
-                        # kwimage 0.8.4 fixes this error
-                        ann_canvas = dets.draw_on(ann_canvas, color='classes')
-                    except Exception:
-                        ann_canvas = dets.draw_on(ann_canvas)
+                try:
+                    # kwimage 0.8.4 fixes this error
+                    ann_canvas = dets.draw_on(ann_canvas, color='classes')
+                except Exception:
+                    ann_canvas = dets.draw_on(ann_canvas)
 
             ann_canvas = kwimage.ensure_uint255(ann_canvas)
+            if stack:
+                ann_stack.append(ann_canvas)
             ann_canvas = kwimage.draw_header_text(image=ann_canvas,
                                                   text=header_text,
                                                   stack=True,
                                                   fit='shrink')
-            with ub.Timer('write ann_canvas', verbose=verbose):
-                kwimage.imwrite(view_ann_fpath, ann_canvas)
+            kwimage.imwrite(view_ann_fpath, ann_canvas)
+
+    if stack:
+        img_stacked_dpath = (img_view_dpath / 'stack')
+        ann_stacked_dpath = (ann_view_dpath / 'stack')
+
+        view_img_fpath = img_stacked_dpath / (name + '_stack' + '.view_img.jpg')
+        view_ann_fpath = ann_stacked_dpath / (name + '_stack' + '.view_ann.jpg')
+
+        stack_header_lines = header_lines.copy()
+        # stack_header_lines.append(chan_group)
+        header_text = '\n'.join(stack_header_lines)
+
+        if ann_stack:
+            ann_stack_canvas = kwimage.stack_images(ann_stack)
+            ann_canvas = kwimage.draw_header_text(image=ann_stack_canvas,
+                                                  text=header_text,
+                                                  stack=True,
+                                                  fit='shrink')
+            view_ann_fpath.parent.ensuredir()
+            kwimage.imwrite(view_ann_fpath, ann_canvas)
+
+        if img_stack:
+            img_stack_canvas = kwimage.stack_images(img_stack)
+            img_canvas = kwimage.draw_header_text(image=img_stack_canvas,
+                                                  text=header_text,
+                                                  stack=True,
+                                                  fit='shrink')
+            view_img_fpath.parent.ensuredir()
+            kwimage.imwrite(view_img_fpath, img_canvas)
 
 
 if __name__ == '__main__':
