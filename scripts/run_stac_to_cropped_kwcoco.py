@@ -170,19 +170,20 @@ def run_stac_to_cropped_kwcoco(input_path,
     print("* Cropping KWCOCO dataset to region for BAS*")
     ta1_cropped_kwcoco_path = os.path.join(ta1_cropped_dir,
                                            'cropped_kwcoco_for_bas.json')
+    include_channels = 'blue|green|red|nir|swir16|swir22|cloudmask'
     subprocess.run(['python', '-m', 'watch.cli.coco_align_geotiffs',
                     '--visualize', 'False',
                     '--src', ta1_bas_kwcoco_path,
                     '--dst', ta1_cropped_kwcoco_path,
                     '--regions', local_region_path,
                     '--force_nodata', '-9999',
-                    '--include_channels', 'red|green|blue|cloudmask',
+                    '--include_channels', include_channels,  # noqa
                     '--geo_preprop', 'auto',
                     '--keep', 'none',
-                    '--target_gsd', '15',  # TODO: Expose as cli parameter
+                    '--target_gsd', '10',  # TODO: Expose as cli parameter
                     '--context_factor', '1',
                     '--workers', '1' if force_one_job_for_cropping else str(jobs),  # noqa: 501
-                    '--aux_workers', '4',
+                    '--aux_workers', include_channels.count('|') + 1,
                     '--rpc_align_method', 'affine_warp'], check=True)
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;

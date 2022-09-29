@@ -219,21 +219,24 @@ def run_bas_fusion_for_baseline(
         ingress_dir, 'bas_fusion_kwcoco.json')
 
     predict_config = json.loads("""
-    {
-      "tta_fliprot": 0,
-      "tta_time": 0,
-      "chip_overlap": 0.5,
-      "input_space_scale": "15GSD",
-      "window_space_scale": "10GSD",
-      "output_space_scale": "auto",
-      "time_span": "2y",
-      "time_sampling": "contiguous",
-      "time_steps": "auto",
-      "chip_dims": "auto",
-      "set_cover_algo": null,
-      "resample_invalid_frames": 1,
-      "use_cloudmask": 1
-    }
+{
+    "tta_fliprot": 0,
+    "tta_time": 0,
+    "clear_annots": 1,
+    "write_preds": false,
+    "write_probs": true,
+    "time_steps": 11,
+    "chip_dims": [380, 380],
+    "window_space_scale": "10GSD",
+    "input_space_scale": "10GSD",
+    "chip_overlap": 0.3,
+    "channels": "blue|green|red|nir|swir16|swir22",
+    "resample_invalid_frames": 0,
+    "set_cover_algo": "approx",
+    "time_sampling": "soft2+distribute",
+    "time_span": "6m",
+    "use_cloudmask": 0
+}
     """)
 
     predict(devices='0,',
@@ -259,13 +262,15 @@ def run_bas_fusion_for_baseline(
     shutil.copy(local_region_path, os.path.join(
         region_models_outdir, '{}.geojson'.format(region_id)))
 
-    bas_tracking_config = {'use_viterbi': False,
-                           'thresh': bas_thresh,
-                           'morph_kernel': 3,
-                           'time_filtering': True,
-                           'response_filtering': False,
-                           'norm_ord': 1,
-                           'moving_window_size': 150}
+    bas_tracking_config = {
+        "thresh": bas_thresh,
+        "morph_kernel": 3,
+        "norm_ord": 1,
+        "agg_fn": "probs",
+        "thresh_hysteresis": None,
+        "moving_window_size": None,
+        "polygon_fn": "heatmaps_to_polys"}
+
     subprocess.run(['python', '-m', 'watch.cli.kwcoco_to_geojson',
                     bas_fusion_kwcoco_path,
                     '--out_dir', region_models_outdir,
