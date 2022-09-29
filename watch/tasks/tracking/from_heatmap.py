@@ -427,6 +427,69 @@ def time_aggregated_polys(sub_dset,
 # --- time_aggregated_polys utilities ---
 #
 
+def _merge_polys(p1, p2):
+    '''
+    Given two lists of polygons, p1 and p2, merge these according to:
+      - add all unique polygons in the merged list
+      - for overlapping polygons, add the union of both polygons
+
+    Ignore:
+        from watch.tasks.tracking.from_heatmap import * # NOQA
+        from watch.tasks.tracking.from_heatmap import _merge_polys  # NOQA
+        p1 = [kwimage.Polygon.random().to_shapely() for _ in range(10)]
+        p2 = [kwimage.Polygon.random().to_shapely() for _ in range(10)]
+        _merge_polys(p1, p2)
+
+        while True:
+            _p1 = kwimage.Polygon.random().to_shapely()
+            _p2 = kwimage.Polygon.random().to_shapely()
+            if 1 or _p1.intersects(_p2):
+                combo = unary_union([_p1, _p2])
+                if combo.type != 'Polygon':
+                    raise Exception('!')
+    '''
+    merged_polys = []
+
+    p1_seen = set()
+    p2_seen = set()
+
+    # add all polygons that overlap
+    for j, _p1 in enumerate(p1):
+        if j in p1_seen:
+            continue
+        for i, _p2 in enumerate(p2):
+            if (i in p2_seen) or (i > len(p2) - 1):
+                continue
+            if _p1.intersects(_p2):
+                combo = unary_union([_p1, _p2])
+                if combo.type == 'Polygon':
+                    merged_polys.append(combo)
+                elif combo.type == 'MultiPolygon':
+                    # Can this ever happen? It seems to have occurred in a test
+                    # run. Unsure how to reproduce.
+                    import warnings
+                    warnings.warn('Found two intersecting polygons where the union was a multipolygon')
+                    merged_polys.extend(list(combo.geoms))
+                else:
+                    raise AssertionError(f'Unexpected type {combo.type} from {_p1} and {_p2}')
+
+                p1_seen.add(j)
+                p2_seen.add(i)
+
+    # all polygons that did not overlap with any polygon
+    all_p1 = set(np.arange(len(p1)))
+    remaining_p1 = all_p1 - p1_seen
+
+    for index in remaining_p1:
+        merged_polys.append(p1[index])
+
+    all_p2 = set(np.arange(len(p2)))
+    remaining_p2 = all_p2 - p2_seen
+    for index in remaining_p2:
+        merged_polys.append(p2[index])
+
+    return merged_polys
+
 
 def _heatmaps_to_polys_moving_window(heatmaps, bounds, agg_fn, thresh, morph_kernel,
                                      thresh_hysteresis, norm_ord, moving_window_size=150):
@@ -437,45 +500,7 @@ def _heatmaps_to_polys_moving_window(heatmaps, bounds, agg_fn, thresh, morph_ker
         return [p.to_shapely() for p in polys]
 
     def convert_to_kwimage_poly(shapely_polys):
-        return [kwimage.structs.polygon.Polygon.from_shapely(p) for p in shapely_polys]
-
-    def merge_polys(p1, p2):
-        '''
-        Given two lists of polygons, p1 and p2, merge these according to:
-          - add all unique polygons in the merged list
-          - for overlapping polygons, add the union of both polygons
-        '''
-        merged_polys = []
-
-        p1_seen = set()
-        p2_seen = set()
-
-        # add all polygons that overlap
-        for j, _p1 in enumerate(p1):
-            if j in p1_seen:
-                continue
-            for i, _p2 in enumerate(p2):
-                if (i in p2_seen) or (i > len(p2) - 1):
-                    continue
-                if _p1.intersects(_p2):
-                    convex_hull = unary_union([_p1, _p2])
-                    merged_polys.append(convex_hull)
-                    p1_seen.add(j)
-                    p2_seen.add(i)
-
-        # all polygons that did not overlap with nay polygon
-        all_p1 = set(np.arange(len(p1)))
-        remaining_p1 = all_p1 - p1_seen
-
-        for index in remaining_p1:
-            merged_polys.append(p1[index])
-
-        all_p2 = set(np.arange(len(p2)))
-        remaining_p2 = all_p2 - p2_seen
-        for index in remaining_p2:
-            merged_polys.append(p2[index])
-
-        return merged_polys
+        return [kwimage.Polygon.from_shapely(p) for p in shapely_polys]
 
     min_area_px = 80  # TODO: parameterize
     size_filter = SmallPolygonFilter(min_area_px=min_area_px)
@@ -494,7 +519,7 @@ def _heatmaps_to_polys_moving_window(heatmaps, bounds, agg_fn, thresh, morph_ker
         h1 = heatmaps[(i + 1) * final_size:(i + 2) * final_size]
         p1 = _heatmaps_to_polys(h1, bounds, agg_fn, thresh, morph_kernel, thresh_hysteresis, norm_ord)
         p1 = convert_to_shapely(p1)
-        polys_final = merge_polys(polys_final, p1)
+        polys_final = _merge_polys(polys_final, p1)
 
     polys_final = convert_to_kwimage_poly(polys_final)
 

@@ -532,6 +532,22 @@ def mask_to_polygons(probs,
         >>> import kwplot
         >>> kwplot.autompl()
         >>> kwplot.imshow(probs > 0.5)
+
+    Ignore:
+        >>> from watch.tasks.tracking.utils import mask_to_polygons
+        >>> import kwimage
+        >>> probs = kwimage.Heatmap.random(dims=(128, 128)).data['class_probs'][0]
+        >>> thresh = 0.5
+        >>> polys1 = list(mask_to_polygons(probs, thresh, scored=0, use_rasterio=0))
+        >>> polys2 = list(mask_to_polygons(probs, thresh, scored=0, use_rasterio=1))
+        >>> polys3 = list(mask_to_polygons(probs, thresh, scored=1, use_rasterio=0))
+        >>> polys4 = list(mask_to_polygons(probs, thresh, scored=1, use_rasterio=1))
+        >>> # xdoctest: +IGNORE_WANT
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(probs > 0.5)
+        >>> for score, poly in polys:
+        >>>     poly.draw()
     """
     # Threshold scores
     if thresh_hysteresis is None:
@@ -573,7 +589,8 @@ def mask_to_polygons(probs,
 
     if scored:
         for poly in polygons:
-            yield score_poly(poly, probs, use_rasterio=use_rasterio), poly
+            score = score_poly(poly, probs, use_rasterio=use_rasterio)
+            yield score, poly
     else:
         yield from polygons
 
