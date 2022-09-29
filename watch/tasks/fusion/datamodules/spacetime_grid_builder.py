@@ -6,256 +6,6 @@ from watch.utils import util_kwimage
 from watch import heuristics
 
 
-def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
-    r"""
-    Debug visualization for sampling grid
-
-    Draws multiple frames.
-
-    Places a red dot where there is a negative sample (at the center of the negative window)
-
-    Places a blue dot where there is a positive sample
-
-    Draws a yellow polygon over invalid spatial regions.
-
-    Notes:
-        * Dots are more intense when there are more temporal coverage of that dot.
-
-        * Dots are placed on the center of the window.  They do not indicate its extent.
-
-        * Dots are blue if they overlap any annotation in their temporal region
-          so they may visually be near an annotation.
-
-    Example:
-        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
-        >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_multisensor
-        >>> dset = coco_dset = demo_kwcoco_multisensor(num_frames=3, dates=True, geodata=True, heatmap=True, rng=10)
-        >>> window_overlap = 0.0
-        >>> window_dims = (3, 32, 32)
-        >>> keepbound = False
-        >>> time_sampling = 'soft2+distribute'
-        >>> use_centered_positives = True
-        >>> use_grid_positives = 1
-        >>> sample_grid = sample_video_spacetime_targets(
-        >>>     dset, window_dims, window_overlap, time_sampling=time_sampling,
-        >>>     use_grid_positives=use_grid_positives, use_centered_positives=use_centered_positives)
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> plt = kwplot.autoplt()
-        >>> canvas = visualize_sample_grid(dset, sample_grid, max_vids=1,
-        >>>                                max_frames=3)
-        >>> kwplot.imshow(canvas, doclf=1)
-        >>> plt.gca().set_title(ub.codeblock(
-            '''
-            Places a red dot where there is a negative sample (at the center of the negative window)
-
-            Places a blue dot where there is a positive sample
-
-            Draws a yellow polygon over invalid spatial regions.
-            '''))
-        >>> kwplot.show_if_requested()
-        >>> #
-        >>> # Now demo this same grid, but where we are sampling at a different resolution
-        >>> window_space_scale = 0.3
-        >>> sample_grid2 = sample_video_spacetime_targets(
-        >>>     dset, window_dims, window_overlap, time_sampling=time_sampling,
-        >>>     use_grid_positives=use_grid_positives,
-        >>>     use_centered_positives=use_centered_positives,
-        >>>     window_space_scale=window_space_scale)
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> plt = kwplot.autoplt()
-        >>> canvas = visualize_sample_grid(dset, sample_grid2, max_vids=1,
-        >>>                                max_frames=3)
-        >>> kwplot.imshow(canvas, doclf=1, fnum=2)
-        >>> plt.gca().set_title(ub.codeblock(
-            '''
-            Sampled using larger scaled windows
-            '''))
-        >>> kwplot.show_if_requested()
-
-    Example:
-        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
-        >>> import watch
-        >>> # dset = coco_dset = demo_kwcoco_multisensor(dates=True, geodata=True, heatmap=True)
-        >>> dvc_dpath = watch.find_dvc_dpath(hardware='ssd', tags='phase2_data')
-        >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/combo_DILM_train.kwcoco.json'
-        >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_vali.kwcoco.json'
-        >>> big_dset = kwcoco.CocoDataset(coco_fpath)
-        >>> vid_gids = big_dset.videos(names=['KR_R002']).images.lookup('id')[0]
-        >>> idxs = np.linspace(0, len(vid_gids) - 1, 12).round().astype(int)
-        >>> vid_gids = list(ub.take(vid_gids, idxs))
-        >>> dset = big_dset.subset(vid_gids)
-        >>> window_overlap = 0.0
-        >>> window_dims = (3, 256, 256)
-        >>> keepbound = False
-        >>> time_sampling = 'soft2+distribute'
-        >>> use_centered_positives = 0
-        >>> use_grid_positives = 1
-        >>> window_space_scale = '30GSD'
-        >>> sample_grid = sample_video_spacetime_targets(
-        >>>     dset, window_dims, window_overlap, time_sampling=time_sampling,
-        >>>     use_grid_positives=True,
-        >>>     use_centered_positives=use_centered_positives,
-        >>>     window_space_scale=window_space_scale)
-        >>> print(list(ub.unique([t['space_slice'] for t in sample_grid['targets']], key=ub.hash_data)))
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> plt = kwplot.autoplt()
-        >>> canvas = visualize_sample_grid(dset, sample_grid, max_vids=1, max_frames=12)
-        >>> kwplot.imshow(canvas, doclf=1)
-        >>> kwplot.show_if_requested()
-        >>> plt.gca().set_title(ub.codeblock(
-        >>>     f'''
-        >>>     Sample window {window_dims} @ {window_space_scale}
-        >>>     '''))
-    """
-    # Visualize the sample grid
-    import pandas as pd
-    targets = pd.DataFrame(sample_grid['targets'])
-
-    dataset_canvases = []
-
-    # max_vids = 2
-    # max_frames = 6
-
-    vidid_to_videodf = dict(list(targets.groupby('video_id')))
-
-    orientation = 1
-
-    for vidid, video_df in vidid_to_videodf.items():
-        video = dset.index.videos[vidid]
-        vidname = video['name']
-        gid_to_infos = ub.ddict(list)
-        for _, row in video_df.iterrows():
-            for gid in row['gids']:
-                gid_to_infos[gid].append({
-                    'gid': gid,
-                    'space_slice': row['space_slice'],
-                    'label': row['label'],
-                })
-
-        video_canvases = []
-        common = ub.oset(dset.images(vidid=vidid)) & (gid_to_infos)
-
-        if True:
-            # HACK: Use a temporal sampler once to get a nice overview of the
-            # dataset in time.
-            from dateutil import parser
-            from watch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
-            images = dset.images(common)
-            datetimes = [None if date is None else parser.parse(date) for date in images.lookup('date_captured', None)]
-            unixtimes = np.array([np.nan if dt is None else dt.timestamp() for dt in datetimes])
-            sensors = images.lookup('sensor_coarse', None)
-            time_sampler = tsm.TimeWindowSampler(
-                unixtimes=unixtimes, sensors=sensors, time_window=max_frames,
-                time_span='1y', affinity_type='hardish3',
-                update_rule='distribute+pairwise')
-            sample = time_sampler.sample()
-            common = list(ub.take(common, sample))
-
-        for gid in common:
-            infos = gid_to_infos[gid]
-            label_to_items = ub.group_items(infos, key=lambda x: x['label'])
-            video = dset.index.videos[vidid]
-
-            shape = (video['height'], video['width'], 4)
-            canvas = np.zeros(shape, dtype=np.float32)
-            shape = (2, video['height'], video['width'])
-            accum = np.zeros(shape, dtype=np.float32)
-
-            for label, items in label_to_items.items():
-                label_idx = {'positive_grid': 1, 'positive_center': 1,
-                             'negative_grid': 0}[label]
-                for info in items:
-                    space_slice = info['space_slice']
-                    y_sl, x_sl = space_slice
-                    # ww = x_sl.stop - x_sl.start
-                    # wh = y_sl.stop - y_sl.start
-                    ss = accum[(label_idx,) + space_slice].shape
-                    if np.prod(ss) > 0:
-                        vals = util_kwimage.upweight_center_mask(ss)
-                        vals = np.maximum(vals, 0.1)
-                        accum[(label_idx,) + space_slice] += vals
-                        # Add extra weight to borders for viz
-                        accum[label_idx, y_sl.start:y_sl.start + 1, x_sl.start: x_sl.stop] += 0.15
-                        accum[label_idx, y_sl.stop - 1:y_sl.stop, x_sl.start:x_sl.stop] += 0.15
-                        accum[label_idx, y_sl.start:y_sl.stop, x_sl.start: x_sl.start + 1] += 0.15
-                        accum[label_idx, y_sl.start:y_sl.stop, x_sl.stop - 1: x_sl.stop] += 0.15
-
-            neg_accum = accum[0]
-            pos_accum = accum[1]
-
-            neg_alpha = neg_accum / (neg_accum.max() * 2)
-            pos_alpha = pos_accum / (pos_accum.max() * 2)
-            bg_canvas = canvas.copy()
-            bg_canvas[..., 0:4] = [0., 0., 0., 1.0]
-            pos_canvas = canvas.copy()
-            neg_canvas = canvas.copy()
-            pos_canvas[..., 0:3] = kwimage.Color('dodgerblue').as01()
-            neg_canvas[..., 0:3] = kwimage.Color('orangered').as01()
-            neg_canvas[..., 3] = neg_alpha
-            pos_canvas[..., 3] = pos_alpha
-            neg_canvas = np.nan_to_num(neg_canvas)
-            pos_canvas = np.nan_to_num(pos_canvas)
-
-            warp_vid_from_img = kwimage.Affine.coerce(
-                dset.index.imgs[gid]['warp_img_to_vid'])
-
-            vid_poly = kwimage.Boxes([[0, 0, video['width'], video['height']]], 'xywh').to_polygons()[0]
-            coco_poly = dset.index.imgs[gid].get('valid_region', None)
-            if coco_poly is None:
-                kw_invalid_poly = None
-            else:
-                kw_poly_img = kwimage.MultiPolygon.coerce(coco_poly)
-                valid_poly = kw_poly_img.warp(warp_vid_from_img)
-                sh_invalid_poly = vid_poly.to_shapely().difference(valid_poly.to_shapely())
-                kw_invalid_poly = kwimage.MultiPolygon.coerce(sh_invalid_poly)
-
-            final_canvas = kwimage.overlay_alpha_layers([pos_canvas, neg_canvas, bg_canvas])
-            final_canvas = kwimage.ensure_uint255(final_canvas)
-
-            annot_dets = dset.annots(gid=gid).detections
-            vid_annot_dets = annot_dets.warp(warp_vid_from_img)
-
-            if 1:
-                final_canvas = vid_annot_dets.draw_on(
-                    final_canvas, color='white', alpha=0.5, kpts=False,
-                    labels=False)
-
-            if kw_invalid_poly is not None:
-                final_canvas = kw_invalid_poly.draw_on(final_canvas, color='yellow', alpha=0.5)
-
-            # from watch import heuristics
-            img = dset.index.imgs[gid]
-            header_lines = heuristics.build_image_header_text(
-                img=img, vidname=vidname)
-            header_text = '\n'.join(header_lines)
-
-            final_canvas = kwimage.draw_header_text(final_canvas, header_text, fit=True)
-            video_canvases.append(final_canvas)
-
-            if len(video_canvases) >= max_frames:
-                break
-
-        if max_vids == 1:
-            video_canvas = kwimage.stack_images_grid(
-                video_canvases, axis=orientation, pad=10)
-        else:
-            video_canvas = kwimage.stack_images(video_canvases, axis=1 - orientation, pad=10)
-        dataset_canvases.append(video_canvas)
-        if len(dataset_canvases) >= max_vids:
-            break
-
-    dataset_canvas = kwimage.stack_images(dataset_canvases, axis=orientation, pad=20)
-    if 0:
-        import kwplot
-        kwplot.autompl()
-        kwplot.imshow(dataset_canvas, doclf=1)
-    return dataset_canvas
-
-
 def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                                    negative_classes=None, keepbound=False,
                                    exclude_sensors=None,
@@ -344,6 +94,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> sample_grid = sample_video_spacetime_targets(dset, window_dims)
         >>> time_sampling = 'hard+distribute'
         >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
+
         _ = xdev.profile_now(sample_video_spacetime_targets)(dset, window_dims)
 
         >>> import os
@@ -388,6 +139,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> sample_grid = sample_video_spacetime_targets(dset, window_dims, window_overlap, set_cover_algo=set_cover_algo)
         >>> time_sampling = 'hard+distribute'
         >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
+
         _ = xdev.profile_now(sample_video_spacetime_targets)(dset, window_dims, window_overlap)
 
 
@@ -462,8 +214,6 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     if negative_classes is None:
         negative_classes = heuristics.BACKGROUND_CLASSES
 
-    # import xdev
-    # xdev.embed()
     dset_hashid = dset._cached_hashid()
 
     # Given an video
@@ -484,7 +234,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         set_cover_algo,
         use_grid_positives,
         use_centered_positives,
-        'cache_v5',
+        'cache_v7',
     ]
     # Higher level cacher (not sure if adding this secondary level of caching
     # is faster or not).
@@ -519,16 +269,18 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         negative_idxs = []
         vidid_to_time_sampler = {}
         vidid_to_valid_gids = {}
+        vidid_to_meta = ub.ddict(dict)
         for job in jobs.as_completed(desc='Collect region sample grids',
                                      progkw=dict(verbose=3)):
             video_id = job.video_id
-            _cached, time_sampler, video_gids = job.result()
+            _cached, meta, time_sampler, video_gids = job.result()
             offset = len(targets)
             targets.extend(_cached['video_targets'])
             positive_idxs.extend([idx + offset for idx in _cached['video_positive_idxs']])
             negative_idxs.extend([idx + offset for idx in _cached['video_negative_idxs']])
             vidid_to_time_sampler[video_id] = time_sampler
             vidid_to_valid_gids[video_id] = video_gids
+            vidid_to_meta[video_id] = meta
 
         print('Found {} targets'.format(len(targets)))
         if use_annot_info:
@@ -541,8 +293,11 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
             'targets': targets,
             'vidid_to_valid_gids': vidid_to_valid_gids,
             'vidid_to_time_sampler': vidid_to_time_sampler,
+            'vidid_to_meta': vidid_to_meta,
         }
         cacher.save(sample_grid)
+    vidid_to_meta = sample_grid['vidid_to_meta']
+    print('vidid_to_meta = {}'.format(ub.repr2(vidid_to_meta, nl=-1)))
     return sample_grid
 
 
@@ -606,7 +361,6 @@ def _sample_single_video_spacetime_targets(
 
     resolved_scale = data_utils.resolve_scale_request(
         request=window_space_scale, data_gsd=vidspace_gsd)
-    print('resolved_scale = {}'.format(ub.repr2(resolved_scale, nl=1)))
     window_scale = resolved_scale['scale']
 
     all_video_gids = list(dset.index.vidid_to_gids[video_id])
@@ -735,8 +489,13 @@ def _sample_single_video_spacetime_targets(
 
     # Disable determenism in the returned sampler
     time_sampler.determenistic = False
-
-    return _cached, time_sampler, video_gids
+    meta = {
+        'resolved_scale': resolved_scale,
+        'vidspace_window_space_dims': vidspace_window_dims,
+        'winspace_window_space_dims': winspace_space_dims,
+        'vidspace_full_dims': vidspace_full_dims,
+    }
+    return _cached, meta, time_sampler, video_gids
 
 
 def _build_targets_around_track(video_id, tid, infos, video_gids,
@@ -1054,3 +813,253 @@ def make_track_based_spatial_samples(coco_dset):
             negative_boxes.draw(setlim=1, color='red', fill=True)
             positives.draw(color='limegreen')
             positives_samples.draw(color='green')
+
+
+def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
+    r"""
+    Debug visualization for sampling grid
+
+    Draws multiple frames.
+
+    Places a red dot where there is a negative sample (at the center of the negative window)
+
+    Places a blue dot where there is a positive sample
+
+    Draws a yellow polygon over invalid spatial regions.
+
+    Notes:
+        * Dots are more intense when there are more temporal coverage of that dot.
+
+        * Dots are placed on the center of the window.  They do not indicate its extent.
+
+        * Dots are blue if they overlap any annotation in their temporal region
+          so they may visually be near an annotation.
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
+        >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_multisensor
+        >>> dset = coco_dset = demo_kwcoco_multisensor(num_frames=3, dates=True, geodata=True, heatmap=True, rng=10)
+        >>> window_overlap = 0.0
+        >>> window_dims = (3, 32, 32)
+        >>> keepbound = False
+        >>> time_sampling = 'soft2+distribute'
+        >>> use_centered_positives = True
+        >>> use_grid_positives = 1
+        >>> sample_grid = sample_video_spacetime_targets(
+        >>>     dset, window_dims, window_overlap, time_sampling=time_sampling,
+        >>>     use_grid_positives=use_grid_positives, use_centered_positives=use_centered_positives)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> plt = kwplot.autoplt()
+        >>> canvas = visualize_sample_grid(dset, sample_grid, max_vids=1,
+        >>>                                max_frames=3)
+        >>> kwplot.imshow(canvas, doclf=1)
+        >>> plt.gca().set_title(ub.codeblock(
+            '''
+            Places a red dot where there is a negative sample (at the center of the negative window)
+
+            Places a blue dot where there is a positive sample
+
+            Draws a yellow polygon over invalid spatial regions.
+            '''))
+        >>> kwplot.show_if_requested()
+        >>> #
+        >>> # Now demo this same grid, but where we are sampling at a different resolution
+        >>> window_space_scale = 0.3
+        >>> sample_grid2 = sample_video_spacetime_targets(
+        >>>     dset, window_dims, window_overlap, time_sampling=time_sampling,
+        >>>     use_grid_positives=use_grid_positives,
+        >>>     use_centered_positives=use_centered_positives,
+        >>>     window_space_scale=window_space_scale)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> plt = kwplot.autoplt()
+        >>> canvas = visualize_sample_grid(dset, sample_grid2, max_vids=1,
+        >>>                                max_frames=3)
+        >>> kwplot.imshow(canvas, doclf=1, fnum=2)
+        >>> plt.gca().set_title(ub.codeblock(
+            '''
+            Sampled using larger scaled windows
+            '''))
+        >>> kwplot.show_if_requested()
+
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> from watch.tasks.fusion.datamodules.spacetime_grid_builder import *  # NOQA
+        >>> import watch
+        >>> # dset = coco_dset = demo_kwcoco_multisensor(dates=True, geodata=True, heatmap=True)
+        >>> dvc_dpath = watch.find_dvc_dpath(hardware='ssd', tags='phase2_data')
+        >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/combo_DILM_train.kwcoco.json'
+        >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_vali.kwcoco.json'
+        >>> big_dset = kwcoco.CocoDataset(coco_fpath)
+        >>> vid_gids = big_dset.videos(names=['KR_R002']).images.lookup('id')[0]
+        >>> idxs = np.linspace(0, len(vid_gids) - 1, 12).round().astype(int)
+        >>> vid_gids = list(ub.take(vid_gids, idxs))
+        >>> dset = big_dset.subset(vid_gids)
+        >>> window_overlap = 0.0
+        >>> window_dims = (3, 256, 256)
+        >>> keepbound = False
+        >>> time_sampling = 'soft2+distribute'
+        >>> use_centered_positives = 0
+        >>> use_grid_positives = 1
+        >>> window_space_scale = '30GSD'
+        >>> sample_grid = sample_video_spacetime_targets(
+        >>>     dset, window_dims, window_overlap, time_sampling=time_sampling,
+        >>>     use_grid_positives=True,
+        >>>     use_centered_positives=use_centered_positives,
+        >>>     window_space_scale=window_space_scale)
+        >>> print(list(ub.unique([t['space_slice'] for t in sample_grid['targets']], key=ub.hash_data)))
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> plt = kwplot.autoplt()
+        >>> canvas = visualize_sample_grid(dset, sample_grid, max_vids=1, max_frames=12)
+        >>> kwplot.imshow(canvas, doclf=1)
+        >>> kwplot.show_if_requested()
+        >>> plt.gca().set_title(ub.codeblock(
+        >>>     f'''
+        >>>     Sample window {window_dims} @ {window_space_scale}
+        >>>     '''))
+    """
+    # Visualize the sample grid
+    import pandas as pd
+    targets = pd.DataFrame(sample_grid['targets'])
+
+    dataset_canvases = []
+
+    # max_vids = 2
+    # max_frames = 6
+
+    vidid_to_videodf = dict(list(targets.groupby('video_id')))
+
+    orientation = 1
+
+    for vidid, video_df in vidid_to_videodf.items():
+        video = dset.index.videos[vidid]
+        vidname = video['name']
+        gid_to_infos = ub.ddict(list)
+        for _, row in video_df.iterrows():
+            for gid in row['gids']:
+                gid_to_infos[gid].append({
+                    'gid': gid,
+                    'space_slice': row['space_slice'],
+                    'label': row['label'],
+                })
+
+        video_canvases = []
+        common = ub.oset(dset.images(vidid=vidid)) & (gid_to_infos)
+
+        if True:
+            # HACK: Use a temporal sampler once to get a nice overview of the
+            # dataset in time.
+            from dateutil import parser
+            from watch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
+            images = dset.images(common)
+            datetimes = [None if date is None else parser.parse(date) for date in images.lookup('date_captured', None)]
+            unixtimes = np.array([np.nan if dt is None else dt.timestamp() for dt in datetimes])
+            sensors = images.lookup('sensor_coarse', None)
+            time_sampler = tsm.TimeWindowSampler(
+                unixtimes=unixtimes, sensors=sensors, time_window=max_frames,
+                time_span='1y', affinity_type='hardish3',
+                update_rule='distribute+pairwise')
+            sample = time_sampler.sample()
+            common = list(ub.take(common, sample))
+
+        for gid in common:
+            infos = gid_to_infos[gid]
+            label_to_items = ub.group_items(infos, key=lambda x: x['label'])
+            video = dset.index.videos[vidid]
+
+            shape = (video['height'], video['width'], 4)
+            canvas = np.zeros(shape, dtype=np.float32)
+            shape = (2, video['height'], video['width'])
+            accum = np.zeros(shape, dtype=np.float32)
+
+            for label, items in label_to_items.items():
+                label_idx = {'positive_grid': 1, 'positive_center': 1,
+                             'negative_grid': 0}[label]
+                for info in items:
+                    space_slice = info['space_slice']
+                    y_sl, x_sl = space_slice
+                    # ww = x_sl.stop - x_sl.start
+                    # wh = y_sl.stop - y_sl.start
+                    ss = accum[(label_idx,) + space_slice].shape
+                    if np.prod(ss) > 0:
+                        vals = util_kwimage.upweight_center_mask(ss)
+                        vals = np.maximum(vals, 0.1)
+                        accum[(label_idx,) + space_slice] += vals
+                        # Add extra weight to borders for viz
+                        accum[label_idx, y_sl.start:y_sl.start + 1, x_sl.start: x_sl.stop] += 0.15
+                        accum[label_idx, y_sl.stop - 1:y_sl.stop, x_sl.start:x_sl.stop] += 0.15
+                        accum[label_idx, y_sl.start:y_sl.stop, x_sl.start: x_sl.start + 1] += 0.15
+                        accum[label_idx, y_sl.start:y_sl.stop, x_sl.stop - 1: x_sl.stop] += 0.15
+
+            neg_accum = accum[0]
+            pos_accum = accum[1]
+
+            neg_alpha = neg_accum / (neg_accum.max() * 2)
+            pos_alpha = pos_accum / (pos_accum.max() * 2)
+            bg_canvas = canvas.copy()
+            bg_canvas[..., 0:4] = [0., 0., 0., 1.0]
+            pos_canvas = canvas.copy()
+            neg_canvas = canvas.copy()
+            pos_canvas[..., 0:3] = kwimage.Color('dodgerblue').as01()
+            neg_canvas[..., 0:3] = kwimage.Color('orangered').as01()
+            neg_canvas[..., 3] = neg_alpha
+            pos_canvas[..., 3] = pos_alpha
+            neg_canvas = np.nan_to_num(neg_canvas)
+            pos_canvas = np.nan_to_num(pos_canvas)
+
+            warp_vid_from_img = kwimage.Affine.coerce(
+                dset.index.imgs[gid]['warp_img_to_vid'])
+
+            vid_poly = kwimage.Boxes([[0, 0, video['width'], video['height']]], 'xywh').to_polygons()[0]
+            coco_poly = dset.index.imgs[gid].get('valid_region', None)
+            if coco_poly is None:
+                kw_invalid_poly = None
+            else:
+                kw_poly_img = kwimage.MultiPolygon.coerce(coco_poly)
+                valid_poly = kw_poly_img.warp(warp_vid_from_img)
+                sh_invalid_poly = vid_poly.to_shapely().difference(valid_poly.to_shapely())
+                kw_invalid_poly = kwimage.MultiPolygon.coerce(sh_invalid_poly)
+
+            final_canvas = kwimage.overlay_alpha_layers([pos_canvas, neg_canvas, bg_canvas])
+            final_canvas = kwimage.ensure_uint255(final_canvas)
+
+            annot_dets = dset.annots(gid=gid).detections
+            vid_annot_dets = annot_dets.warp(warp_vid_from_img)
+
+            if 1:
+                final_canvas = vid_annot_dets.draw_on(
+                    final_canvas, color='white', alpha=0.5, kpts=False,
+                    labels=False)
+
+            if kw_invalid_poly is not None:
+                final_canvas = kw_invalid_poly.draw_on(final_canvas, color='yellow', alpha=0.5)
+
+            # from watch import heuristics
+            img = dset.index.imgs[gid]
+            header_lines = heuristics.build_image_header_text(
+                img=img, vidname=vidname)
+            header_text = '\n'.join(header_lines)
+
+            final_canvas = kwimage.draw_header_text(final_canvas, header_text, fit=True)
+            video_canvases.append(final_canvas)
+
+            if len(video_canvases) >= max_frames:
+                break
+
+        if max_vids == 1:
+            video_canvas = kwimage.stack_images_grid(
+                video_canvases, axis=orientation, pad=10)
+        else:
+            video_canvas = kwimage.stack_images(video_canvases, axis=1 - orientation, pad=10)
+        dataset_canvases.append(video_canvas)
+        if len(dataset_canvases) >= max_vids:
+            break
+
+    dataset_canvas = kwimage.stack_images(dataset_canvases, axis=orientation, pad=20)
+    if 0:
+        import kwplot
+        kwplot.autompl()
+        kwplot.imshow(dataset_canvas, doclf=1)
+    return dataset_canvas

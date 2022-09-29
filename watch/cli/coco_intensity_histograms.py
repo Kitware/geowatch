@@ -519,8 +519,6 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
                 try:
                     band_name = declared_channel_list[band_idx]
                 except IndexError:
-                    import xdev
-                    xdev.embed()
                     print('bad channel declaration fpath = {!r}'.format(fpath))
                     if 0:
                         print('obj = {}'.format(ub.repr2(obj, nl=1)))

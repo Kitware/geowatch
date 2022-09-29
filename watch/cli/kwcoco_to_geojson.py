@@ -1088,32 +1088,20 @@ def main(args):
         bad_data = problem['data']
         walker[problem['loc']] = str(bad_data)
 
-    # TODO: use process context instead
-    # from watch.utils.process_context import ProcessContext
-    # proc_context = ProcessContext(
-    #     name='watch.cli.kwcoco_to_geojson', type='process',
-    #     args=jsonified_args, extra={'pred_info': pred_info},
-    # )
-    # proc_context.start()
-    # info.append(proc_context.obj())
-    import socket
-    start_timestamp = ub.timestamp()
+    # TODO: ensure all args are resolved here.
     info = tracking_output['info']
-    proc_repr = {
-        'type': 'process',
-        'properties': {
-            'name': 'watch.cli.kwcoco_to_geojson',
-            'args': jsonified_args,
-            'hostname': socket.gethostname(),
-            'cwd': os.getcwd(),
-            'userhome': ub.userhome(),
-            'timestamp': start_timestamp,
-            'start_timestamp': start_timestamp,
-            'pred_info': pred_info,
-            # TODO: could pass the info in from the input kwcoco file as well
-        }
-    }
-    info.append(proc_repr)
+
+    # TODO: use process context instead
+    from watch.utils.process_context import ProcessContext
+    proc_context = ProcessContext(
+        name='watch.cli.kwcoco_to_geojson', type='process',
+        args=jsonified_args,
+        config=jsonified_args,
+        extra={'pred_info': pred_info},
+        track_emissions=False,
+    )
+    proc_context.start()
+    info.append(proc_context.obj)
     fpaths = tracking_output['files']
 
     # Pick a track_fn
@@ -1225,9 +1213,7 @@ def main(args):
                 geojson.dump(site, f, indent=2)
 
     # Measure how long tracking takes
-    proc_repr['end_timestamp'] = ub.timestamp()
-    # TODO:
-    # proc_context.stop()
+    proc_context.stop()
 
     out_dir = ub.Path(out_dir)
     if args.out_fpath is not None:

@@ -196,6 +196,11 @@ class CocoAlignGeotiffConfig(scfg.Config):
                                                'Ideally this is not needed and all source geotiffs properly specify nodata')),
     }
 
+    def normalize(config):
+        if isinstance(config['target_gsd'], str):
+            if config['target_gsd'].lower().endswith('gsd'):
+                config['target_gsd'] = int(config['target_gsd'][:-3].strip())
+
 
 @profile
 def main(cmdline=True, **kw):

@@ -570,17 +570,29 @@ class ExperimentState(ub.NiceRepr):
         }
 
         self.volitile_templates = {
-            'pred_pxl': 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/pred.kwcoco.json',
-            'pred_trk': 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/tracking/{trk_cfg}/tracks.json',
-            'pred_act': 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/actclf/{act_cfg}/activity_tracks.json',
+            'pred_pxl_dpath'  : 'pred/{expt}/{model}/{test_dset}/{pred_cfg}',
+            'pred_pxl'        : 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/pred.kwcoco.json',
+
+            'pred_trk_dpath'  : 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/tracking/{trk_cfg}',
+            'pred_trk_kwcoco' : 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/tracking/{trk_cfg}/tracks.kwcoco.json',
+            'pred_trk'        : 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/tracking/{trk_cfg}/tracks.json',
+
+            'pred_act_dpath'  : 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/actclf/{act_cfg}',
+            'pred_act_kwcoco' : 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/actclf/{act_cfg}/activity_tracks.kwcoco.json',
+            'pred_act'        : 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/actclf/{act_cfg}/activity_tracks.json',
         }
 
         self.versioned_templates = {
             # TODO: rename curves to pixel
-            'pkg': 'packages/{expt}/{model}.pt',
-            'eval_pxl': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/eval_pxl/curves/measures2.json',
-            'eval_trk': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
-            'eval_act': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
+            'pkg'            : 'packages/{expt}/{model}.pt',
+            'eval_pxl_dpath' : 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval',
+            'eval_pxl'       : 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/eval_pxl/curves/measures2.json',
+
+            'eval_trk_dpath' : 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval',
+            'eval_trk'       : 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
+
+            'eval_act_dpath' : 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval',
+            'eval_act'       : 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
         }
 
         # User specified config mapping a formatstr variable to a set of items
@@ -612,6 +624,24 @@ class ExperimentState(ub.NiceRepr):
             (self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/heatmaps',
              self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/eval_pxl/heatmaps'),
         }
+
+    def _make_cross_links(self):
+        # Link between evals and predictions
+        eval_rows = list(self.evaluation_rows())
+        num_links = 0
+        for row in ub.ProgIter(eval_rows, desc='linking evals and preds'):
+            if row['has_raw']:
+                eval_type = row['type']
+                pred_type = eval_type.replace('eval', 'pred')
+                eval_dpath = ub.Path(self.templates[eval_type + '_dpath'].format(**row))
+                pred_dpath = ub.Path(self.templates[pred_type + '_dpath'].format(**row))
+                if eval_dpath.exists() and pred_dpath.exists():
+                    pred_lpath = eval_dpath / '_pred_link'
+                    eval_lpath = pred_dpath / '_eval_link'
+                    ub.symlink(pred_dpath, pred_lpath, verbose=1, overwrite=True)
+                    ub.symlink(eval_dpath, eval_lpath, verbose=1, overwrite=True)
+                    num_links += 1
+        print(f'made {num_links} links')
 
     VERSIONED_COLUMNS = [
         'type', 'has_dvc', 'has_raw', 'needs_pull', 'is_link', 'is_broken',
@@ -941,26 +971,6 @@ class ExperimentState(ub.NiceRepr):
         })
         return tables
 
-    def _make_cross_links(self):
-        # Link between evals and predictions
-        eval_rows = list(self.evaluation_rows())
-        num_links = 0
-        for row in ub.ProgIter(eval_rows, desc='linking evals and preds'):
-            if row['has_raw']:
-                eval_fpath = ub.Path(row['raw'])
-                eval_dpath = eval_fpath.parent.parent.parent
-                pred_type = row['type'].replace('eval', 'pred')
-                pred_fpath = ub.Path(self.templates[pred_type].format(**row))
-                pred_dpath = pred_fpath.parent
-
-                if eval_dpath.exists() and pred_dpath.exists():
-                    pred_lpath = eval_dpath / '_pred_link'
-                    eval_lpath = pred_dpath / '_eval_link'
-                    ub.symlink(pred_dpath, pred_lpath, verbose=1)
-                    ub.symlink(eval_dpath, eval_lpath, verbose=1)
-                    num_links += 1
-        print(f'made {num_links} links')
-
     def summarize(self):
         """
         Ignore:
@@ -1207,7 +1217,7 @@ def summarize_tables(tables):
     if volitile_df is not None:
         title = ('[bright_blue] Volitile Summary (Predictions)')
         if len(volitile_df):
-            num_pred_types = volitile_df.groupby(['dataset_code', 'type']).nunique()
+            num_pred_types = volitile_df.groupby(['dataset_code', 'test_dset', 'type']).nunique()
             body_df = num_pred_types
             body = console.highlighter(str(body_df))
         else:
@@ -1222,7 +1232,7 @@ def summarize_tables(tables):
         # version_bitcols = ['has_raw', 'has_dvc', 'is_link', 'is_broken', 'needs_pull', 'needs_push', 'has_orig']
         version_bitcols = ['has_raw', 'has_dvc', 'is_link', 'is_broken', 'needs_pull', 'needs_push']
         if len(versioned_df):
-            body_df = versioned_df.groupby(['dataset_code', 'type'])[version_bitcols].sum()
+            body_df = versioned_df.groupby(['dataset_code', 'test_dset', 'type'])[version_bitcols].sum()
             body = console.highlighter(str(body_df))
         else:
             body = console.highlighter('There are no versioned items')

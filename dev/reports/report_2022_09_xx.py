@@ -159,7 +159,7 @@ def main():
         'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_vali_10GSD_KR_R001.kwcoco')
 
     state.patterns['test_dset'] = (
-        'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_vali_10GSD_KR_R001.kwcoco')
+        'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_septest.kwcoco')
 
     state._build_path_patterns()
     state._make_cross_links()
@@ -177,7 +177,7 @@ def main():
     # Dump details out about the best models
     cohort = ub.timestamp()
     best_models_dpath = (dpath / 'best_models' / cohort).ensuredir()
-    groupid_to_shortlist = reporter.report_best(show_configs=True)
+    groupid_to_shortlist = reporter.report_best(show_configs=True, verbose=1)
 
     rlut = reporter._build_cfg_rlut(None)
 
@@ -463,9 +463,6 @@ DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
 
-TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data_vali_10GSD_KR_R001.kwcoco.json
-
-
 TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data_septest.kwcoco.json
 if [ ! -f "$TEST_DATASET" ]; then
     DATASET_BIG=$DATA_DVC_DPATH/$DATASET_CODE/data.kwcoco.json
@@ -497,5 +494,31 @@ python -m watch.mlops.expt_manager "evaluate" \
         "time_sampling": ["auto", "continuous"],
         "time_span": ["auto"]
     }' \
-    --devices="0,1" --enable_pred=1 --run=1
+    --devices="0,1" --enable_pred=1 --run=0
+
+
+echo "
+Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt
+" > models_of_interest.txt
+DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+python -m watch.mlops.expt_manager "evaluate" \
+    --dataset_codes "$DATASET_CODE" \
+    --test_dataset="$TEST_DATASET" \
+    --enable_track=1 \
+    --draw_tracks=0 \
+    --enable_iarpa_eval=0 \
+    --skip_existing=0 \
+    --model_pattern="models_of_interest.txt" \
+    --hack_bas_grid=True \
+    --json_grid_pred_pxl='{
+        "input_space_scale": ["10GSD"],
+        "window_space_scale": ["10GSD"],
+        "use_cloudmask": [0],
+        "resample_invalid_frames": [0],
+        "chip_overlap": [0.3],
+        "set_cover_algo": ["approx"],
+        "time_sampling": ["auto"],
+        "time_span": ["auto"]
+    }' \
+    --devices="0,1" --enable_pred=0 --run=1
 """
