@@ -77,33 +77,34 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
             reference to all of the site files written to the "out_dir".
             This file serves as "proof" the tracks have been computed.
             '''))
-    out_kwcoco = scfg.Value(None, help=ub.paragraph(
-            '''
-            This is the placeholder argument for a additional kwcoco
-            file that contains all of the "tracked" information.
-            '''))
     in_file_gt = scfg.Value(None, help=ub.paragraph(
             '''
             If available, ground truth KWCOCO to visualize
-            '''))
+            '''), group='convenience')
     region_id = scfg.Value(None, help=ub.paragraph(
             '''
             ID for region that sites belong to. If None, try to infer
             from kwcoco file.
-            '''))
+            '''), group='convenience')
     write_in_file = scfg.Value(False, isflag=True, help=ub.paragraph(
             '''
             If set, write the normalized and tracked kwcoco in_file back
             to disk so you can skip the --track_fn next time this is run
-            on it. DEPRECATE. Use out_kwcoco for now, but eventually split this
-            up.
-            '''))
+            on it. DEPRECATE. Use out_kwcoco for now, but eventually
+            split this up.
+            '''), group='convenience')
+    out_kwcoco = scfg.Value(None, help=ub.paragraph(
+            '''
+            This is the placeholder argument for a additional kwcoco
+            file that contains all of the "tracked" information. Should
+            be separated into watch.tracking.track
+            '''), group='convenience')
     track_fn = scfg.Value(None, help=ub.paragraph(
             '''
             Function to add tracks. If None, use existing tracks.
             Example:
             'watch.tasks.tracking.from_heatmap.TimeAggregatedBAS'
-            '''))
+            '''), group='track', mutex_group=1)
     default_track_fn = scfg.Value(None, help=ub.paragraph(
             '''
             String code to pick a sensible track_fn based on the
@@ -115,33 +116,33 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
             'Active Construction', 'Post Construction', 'No Activity'].
             For class_heatmaps, these should be image channels; for
             class_polys, they should be annotation categories.
-            '''))
-    track_kwargs = scfg.Value('{}', help=ub.paragraph(
+            '''), group='track', mutex_group=1)
+    track_kwargs = scfg.Value('{}', type=str, help=ub.paragraph(
             '''
             JSON string or path to file containing keyword arguments for
             the chosen TrackFunction. Examples include: coco_dset_gt,
             coco_dset_sc, thresh, key. Any file paths will be loaded as
             CocoDatasets if possible.
-            '''))
+            '''), group='track')
     bas_mode = scfg.Value(False, isflag=True, help=ub.paragraph(
             '''
             In BAS mode, output will be site summaries instead of sites.
             Region files will be searched for in out_dir, or generated
             from in_file if not found, and site summaries will be
             appended to them.
-            '''))
+            '''), group='behavior')
     site_summary = scfg.Value(None, help=ub.paragraph(
             '''
             A filepath glob or json blob containing either a
             site_summary or a region_model that includes site summaries.
             Each summary found will be added to in_file as 'Site
             Boundary' annotations.
-            '''))
+            '''), group='behavior')
     clear_annots = scfg.Value(False, isflag=True, help=ub.paragraph(
             '''
             Clears all annotations before running tracking, so it starts
             from a clean slate.
-            '''))
+            '''), group='behavior')
 
 
 __config__ = KWCocoToGeoJSONConfig
@@ -963,27 +964,29 @@ def main(args):
         >>> import ubelt as ub
         >>> # run BAS on demodata in a new place
         >>> coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
-        >>> coco_dset.fpath = 'bas.kwcoco.json'
+        >>> dpath = ub.Path.appdir('watch', 'test', 'tracking').ensuredir()
+        >>> coco_dset.reroot(absolute=True)
+        >>> coco_dset.fpath = dpath / 'bas.kwcoco.json'
         >>> coco_dset.dump(coco_dset.fpath, indent=2)
         >>> region_id = 'dummy_region'
-        >>> regions_dir = 'regions/'
-        >>> bas_args = [
+        >>> regions_dir = dpath / 'regions/'
+        >>> args = bas_args = [
         >>>     coco_dset.fpath,
-        >>>     '--out_dir', regions_dir,
+        >>>     '--out_dir', str(regions_dir),
         >>>     '--track_fn', 'watch.tasks.tracking.from_polygon.MonoTrack',
         >>>     '--bas_mode',
         >>>     '--write_in_file'
         >>> ]
-        >>> main(bas_args)
+        >>> main(args)
         >>> # reload it with tracks
         >>> coco_dset = kwcoco.CocoDataset(coco_dset.fpath)
         >>> # run SC on the same dset
         >>> sites_dir = 'sites/'
-        >>> sc_args = [
+        >>> args = sc_args = [
         >>>     coco_dset.fpath,
         >>>     '--out_dir', sites_dir,
         >>> ]
-        >>> main(sc_args)
+        >>> main(args)
         >>> # cleanup
         >>> for pth in os.listdir(regions_dir):
         >>>     os.remove(os.path.join(regions_dir, pth))
@@ -1030,6 +1033,7 @@ def main(args):
         >>> demo(coco_dset, regions_dir, coco_dset_sc, sites_dir, cleanup=True)
 
     """
+    # args = KWCocoToGeoJSONConfig.legacy(cmdline=args)
     parser = _argparse_cli()
     args = parser.parse_args(args)
 

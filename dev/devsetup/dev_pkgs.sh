@@ -25,6 +25,7 @@ do
     echo "name = $name"
     dpath=$HOME/code/$name
     if [[ -d "$dpath" ]]; then
+        git fetch
         (cd "$dpath" && gup)
     else
         echo "does not exist dpath = $dpath"
