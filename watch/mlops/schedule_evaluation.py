@@ -56,7 +56,9 @@ class ScheduleEvaluationConfig(scfg.Config):
         'dvc_expt_dpath': None,
         'dvc_data_dpath': None,
 
-        'check_other_sessions': scfg.Value('auto', help='if True, will ask to kill other sessions that might exist')
+        'check_other_sessions': scfg.Value('auto', help='if True, will ask to kill other sessions that might exist'),
+
+        'queue_size': scfg.Value('auto', help='if True, defaults to number of GPUs')
     }
 
 
@@ -78,12 +80,14 @@ class Task(dict):
         all_deps_will_exist = all(deps_will_exist)
         task_info['all_deps_will_exist'] = all_deps_will_exist
 
+        output = task_info.get('output', None)
+
         if not all_deps_will_exist:
             # If dependencies wont exist, then we cant run
             enabled = False
         else:
             # If we can run, then do it this task is requested
-            if task_info.skip_existing and task_info['output'].exists():
+            if task_info.skip_existing and (output and output.exists()):
                 enabled = task_info['recompute']
             else:
                 enabled = bool(task_info['requested'])
@@ -91,7 +95,7 @@ class Task(dict):
         # exist.
         task_info['enabled'] = enabled
         # Mark if we do exist, or we will exist
-        will_exist = enabled or task_info['output'].exists()
+        will_exist = enabled or (output and output.exists())
         task_info['will_exist'] = will_exist
         return task_info['enabled']
 
@@ -208,9 +212,13 @@ def schedule_evaluation(cmdline=False, **kwargs):
         GPUS = None if devices is None else ensure_iterable(devices)
     print('GPUS = {!r}'.format(GPUS))
 
+    queue_size = config['queue_size']
+    if queue_size == 'auto':
+        queue_size = len(GPUS)
+
     environ = {}
     queue = cmd_queue.Queue.create(config['backend'], name='schedule-eval',
-                                   size=len(GPUS), environ=environ,
+                                   size=queue_size, environ=environ,
                                    dpath=queue_dpath, gres=GPUS)
 
     virtualenv_cmd = config['virtualenv_cmd']

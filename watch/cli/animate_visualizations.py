@@ -145,6 +145,9 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
         job.result()
 
     print('Wrote animations to viz_dpath = {!r}'.format(viz_dpath))
+    # The animation jobs can do something weird to the tty, so we should try
+    # and fix it.
+    ub.cmd('stty sane')
 
 
 if __name__ == '__main__':
