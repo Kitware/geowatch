@@ -1,9 +1,7 @@
-"""
+r"""
 Synchronize DVC states across the machine.
 
 This is a new Phase2 Variant of this script.
-The original proof of concept is in
-~/code/watch/watch/tasks/fusion/dvc_sync_manager.py
 
 Example:
 
@@ -11,30 +9,31 @@ Example:
     export DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
     cd $DVC_EXPT_DPATH
 
-    python -m watch.mlops.expt_manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
-    python -m watch.mlops.expt_manager "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
-    python -m watch.mlops.expt_manager "pull packages evals" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
-    python -m watch.mlops.expt_manager "push packages evals"
+    python -m watch mlops "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch mlops "status" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch mlops "pull packages evals" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch mlops "push packages evals"
 
-    python -m watch.mlops.expt_manager "status"
+    python -m watch mlops "status"
 
-    python -m watch.mlops.expt_manager "list"
+    python -m watch mlops "list"
 
     # On training machine
-    python -m watch.mlops.expt_manager "push packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch mlops "push packages"
+    python -m watch mlops "push packages" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
 
     # On testing machine
-    python -m watch.mlops.expt_manager "pull packages"
-    python -m watch.mlops.expt_manager "status"
+    python -m watch mlops "pull packages"
+    python -m watch mlops "status"
 
     # Run evals on testing machine
-    python -m watch.mlops.expt_manager "evaluate" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
+    python -m watch mlops "evaluate" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
 
     # On testing machine
-    python -m watch.mlops.expt_manager "push evals"
+    python -m watch mlops "push evals"
 
     # On analysis machine
-    python -m watch.mlops.expt_manager "pull evals"
+    python -m watch mlops "pull evals"
 
 
 TODO:
@@ -53,34 +52,12 @@ TODO:
 
     # You should be able to pull things wrt to that model
 
-    python -m watch.mlops.expt_manager "pull packages" --model_pattern="${MODEL_OF_INTEREST}*"
-    python -m watch.mlops.expt_manager "pull evals" --model_pattern="${MODEL_OF_INTEREST}*"
-
-    python -m watch.mlops.expt_manager "status" --model_pattern="${MODEL_OF_INTEREST}*"
-
-    MODEL_OF_INTEREST="Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584"
-    DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
-    DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
-
-    # Evaluate on a subset of the training set
-    TRAIN_DATASET_SUBSET=$DATA_DVC_DPATH/$DATASET_CODE/data_train_subset.kwcoco.json
-    # TRAIN_DATASET_BIG=$DATA_DVC_DPATH/$DATASET_CODE/data_train.kwcoco.json
-    # kwcoco subset "$TRAIN_DATASET_BIG" "$TRAIN_DATASET_SUBSET" --select_videos '.name | test(".*_R.*")'
-
-    # Then you should be able to evaluate that model
-    python -m watch.mlops.expt_manager "evaluate" \
-        --model_pattern="${MODEL_OF_INTEREST}*" \
-        --dataset_codes "$DATASET_CODE" \
-        --test_dataset="$TRAIN_DATASET_SUBSET" \
-        --enable_track=1 \
-        --enable_iarpa_eval=1 \
-        --set_cover_algo=approx,exact \
-        --bas_thresh=0.0,0.01,0.1 \
-        --devices="0,1" --run=1
+    python -m watch mlops "pull packages" --model_pattern="${MODEL_OF_INTEREST}*"
+    python -m watch mlops "pull evals" --model_pattern="${MODEL_OF_INTEREST}*"
+    python -m watch mlops "status" --model_pattern="${MODEL_OF_INTEREST}*"
 
 Ignore:
-    python -m watch.mlops.expt_manager "evaluate" \
+    python -m watch mlops "evaluate" \
         --enable_pred=1 \
         --enable_eval=1 \
         --enable_actclf=1 \
@@ -88,7 +65,7 @@ Ignore:
         --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC" \
         --devices="0,1,2,3" --run=1
 
-    python -m watch.mlops.expt_manager "evaluate" \
+    python -m watch mlops "evaluate" \
         --bas_thresh=0.0,0.01,0.1 \
         --set_cover_algo=approx,exact \
         --enable_pred=1 \
@@ -111,13 +88,7 @@ import scriptconfig as scfg
 from watch.utils import simple_dvc
 from watch.utils import util_pattern
 from watch.utils import util_path
-
-
-# TODO: replace globals with a global config if necessary
-DATASET_CODES = [
-    'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC',
-    'Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC',
-]
+from watch import heuristics
 
 
 class ExptManagerConfig(scfg.Config):
@@ -205,14 +176,12 @@ def main(cmdline=True, **kwargs):
     """
     from watch.mlops.expt_manager import *  # NOQA
     """
-    import watch
-
     config = ExptManagerConfig(cmdline=cmdline, data=kwargs)
     print('ExptManagerConfig config = {}'.format(ub.repr2(dict(config), nl=1)))
     command = config['command']
 
     available_actions = [
-        'status', 'evaluate', 'push', 'pull', 'list'
+        'status', 'evaluate', 'push', 'pull', 'list', 'report',
     ]
     available_targets = [
         'packages', 'evals'
@@ -230,21 +199,21 @@ def main(cmdline=True, **kwargs):
                 if t in c:
                     targets.append(t)
 
-    print(f'actions={actions}')
-    print(f'targets={targets}')
-    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+    # print(f'actions={actions}')
+    # print(f'targets={targets}')
+    # print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
     dvc_remote = config['dvc_remote']
 
     if config['dataset_codes'] is None:
-        dataset_codes = DATASET_CODES
+        dataset_codes = heuristics.DATASET_CODES
     else:
         dataset_codes = config['dataset_codes']
 
     if config['expt_dvc_dpath'] == 'auto':
-        config['expt_dvc_dpath'] = watch.find_dvc_dpath(tags='phase2_expt', envvar='EXPT_DVC_DPATH')
+        config['expt_dvc_dpath'] = heuristics.auto_expt_dvc()
     if config['data_dvc_dpath'] == 'auto':
-        config['data_dvc_dpath'] = watch.find_dvc_dpath(tags='phase2_data', envvar='DATA_DVC_DPATH')
+        config['data_dvc_dpath'] = heuristics.auto_data_dvc()
 
     expt_dvc_dpath = config['expt_dvc_dpath']
     data_dvc_dpath = config['data_dvc_dpath']
@@ -270,7 +239,17 @@ def main(cmdline=True, **kwargs):
         for state in self.states:
             state.schedule_evaluation()
 
+    if 'report' in actions:
+        self = manager
+        from watch.mlops import expt_report
+        dvc_manager = manager
+        reporter = expt_report.EvaluationReporter(dvc_manager)
+        reporter.load()
+        reporter.status()
+        reporter.plot()
 
+
+# TODO: rename to DVCMultiStateManager and DVCStateManager
 class DVCExptManager(ub.NiceRepr):
     """
     Implements an API around our DVC structure, which can be described as
@@ -354,7 +333,7 @@ class DVCExptManager(ub.NiceRepr):
         if expt_dvc_dpath is None:
             expt_dvc_dpath = watch.find_smart_dvc_dpath()
         dvc_remote = 'aws'
-        dataset_codes = DATASET_CODES
+        dataset_codes = heuristics.DATASET_CODES
         manager = cls(expt_dvc_dpath=expt_dvc_dpath, dvc_remote=dvc_remote,
                       dataset_codes=dataset_codes)
         return manager
@@ -410,6 +389,14 @@ class DVCExptManager(ub.NiceRepr):
         if len(weird_df):
             print(f'weird_df=\n{weird_df}')
 
+        # Determine what evaluations need to be added to DVC
+        to_add = eval_df[~eval_df['has_dvc']]
+        if len(to_add):
+            to_add_paths = to_add['raw']
+            # paths = to_add_paths
+            dvc.add(to_add_paths)
+            ...
+
         to_push = eval_df[eval_df.needs_push == True]  # NOQA
         assert not to_push['has_dvc'].any()
 
@@ -420,7 +407,7 @@ class DVCExptManager(ub.NiceRepr):
         to_push_fpaths = to_push['raw'].tolist()
         print(f'to_push=\n{to_push}')
         if len(to_push_fpaths):
-            dvc.add(to_push_fpaths)
+            # dvc.add(to_push_fpaths)
             dvc.git_commitpush(f'Sync evals from {platform.node()}')
             dvc.push(to_push_fpaths)
 
@@ -437,6 +424,8 @@ class DVCExptManager(ub.NiceRepr):
         pull_rows = eval_df[eval_df.needs_pull]
         pull_fpaths = pull_rows['dvc'].tolist()
         print(f'{len(pull_fpaths)=}')
+        for p in pull_fpaths:
+            assert p.exists()
         dvc.pull(pull_fpaths)
 
     def pull_packages(manager):
@@ -467,6 +456,38 @@ class DVCExptManager(ub.NiceRepr):
         if 'evals' in targets:
             manager.pull_evals()
 
+    def reverse_hash_lookup(manager, key):
+        # This probably doesn't belong here
+        from watch.utils.reverse_hashid import ReverseHashTable
+        ReverseHashTable.query(key, verbose=1)
+
+
+# TODO: can we hook into DVC more efficiently to query this?
+# def _check_ignore_tables(paths, dvc):
+#     import os
+#     dvc_root = dvc.dvc_root
+#     @ub.memoize
+#     def make_gitignore_pattern(root):
+#         from watch.utils import util_pattern
+#         # ignore_fpath = (root / '.gitignore')
+#         ignore_fpath = (root / '.dvcignore')
+#         if ignore_fpath.exists():
+#             ignore_lines = [p.strip() for p in ignore_fpath.read_text().split('\n')
+#                             if not p.startswith('#')]
+#             ignore_pats = [str(p) for p in ignore_lines if p]
+#             pat = util_pattern.MultiPattern.coerce(ignore_pats, hint='glob')
+#             return pat
+#     for path in ub.ProgIter(paths):
+#         rel_path = path.relative_to(dvc_root).parent
+#         for i in reversed(range(len(rel_path.parts))):
+#             rel_root = dvc_root / ub.Path(*rel_path.parts[0:i])
+#             rel_pat = make_gitignore_pattern(rel_root)
+#             if rel_pat is not None:
+#                 print(f'rel_root={rel_root}')
+#                 suffix_path = os.fspath(path.relative_to(rel_root))
+#                 if rel_pat.match(suffix_path):
+#                     raise Exception
+
 
 class ExperimentState(ub.NiceRepr):
     """
@@ -494,6 +515,17 @@ class ExperimentState(ub.NiceRepr):
 
     def __init__(self, expt_dvc_dpath, dataset_code, dvc_remote=None,
                  data_dvc_dpath=None, model_pattern='*'):
+
+        if isinstance(model_pattern, str) and model_pattern.endswith('.txt') and ub.Path(model_pattern).exists():
+            model_pattern = [
+                p.strip()
+                for p in ub.Path(model_pattern).read_text().split('\n')
+                if p.strip()]
+
+        # from watch.mlops.schedule_evaluation import schedule_evaluation
+        # from watch.utils import util_pattern
+        # model_pattern = util_pattern.MultiPattern.coerce(model_pattern, hint='glob')
+
         self.expt_dvc_dpath = ub.Path(expt_dvc_dpath)
 
         if data_dvc_dpath is None:
@@ -551,6 +583,17 @@ class ExperimentState(ub.NiceRepr):
             'eval_act': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
         }
 
+        # User specified config mapping a formatstr variable to a set of items
+        # that will cause a row to be ignored if it has one of those values
+        # when a table is being built.
+        self.blocklists = {
+            k: set() for k in self.patterns.keys()
+        }
+
+        # Denote which of the keys represent hashed information that could be
+        # looked up via the rlut.
+        self.hashed_cfgkeys = ['pred_cfg', 'act_cfg', 'trk_cfg']
+
         self.templates = {}
         for k, v in self.staging_templates.items():
             self.templates[k] = self.staging_template_prefix + v
@@ -559,7 +602,7 @@ class ExperimentState(ub.NiceRepr):
         for k, v in self.versioned_templates.items():
             self.templates[k] = self.storage_template_prefix + v
 
-        self.path_patterns = {}
+        self.path_patterns_matrix = {}
         self._build_path_patterns()
 
         # These are some locations that I used to know
@@ -581,35 +624,29 @@ class ExperimentState(ub.NiceRepr):
     STAGING_COLUMNS = [
         'ckpt_exists', 'is_packaged', 'is_copied', 'needs_package', 'needs_copy']
 
-    # def _check(self):
-    #     from watch.utils import util_pattern
-    #     pat = self.path_patterns['pkg']
-    #     # pat = self.path_patterns['eval_act']
-    #     p1 = [p for p in list(util_pattern.Pattern.coerce(pat).paths()) if not p.name.endswith('.dvc')]
-    #     p2 = list(util_pattern.Pattern.coerce(pat + '.dvc').paths())
-    #     for p in p2:
-    #         if not p.augment(ext='').exists():
-    #             break
-    #     print(len(p1))
-    #     print(len(p2))
-    # self.
-    # pass
-
     def _build_path_patterns(self):
-        self.path_patterns = {
-            k: v.format(**self.patterns)
-            for k, v in self.templates.items()}
+        _patterns = ub.udict(self.patterns).map_values(
+            lambda x: x if ub.iterable(x) else [x])
+        self._pattern_matrix = list(ub.named_product(_patterns))
+
+        self.path_patterns_matrix = [
+            {
+                k: v.format(**patterns)
+                for k, v in self.templates.items()
+            }
+            for patterns in self._pattern_matrix
+        ]
+        # print('self.path_patterns_matrix = {}'.format(ub.repr2(self.path_patterns_matrix, nl=1)))
 
     def __nice__(self):
         return self.dataset_code
 
-    def _parse_pattern_attrs(self, key, path):
+    def _parse_pattern_attrs(self, template, path):
         row = {}
-        template = self.templates[key]
         parser = parse.Parser(str(template))
         results = parser.parse(str(path))
         if results is None:
-            raise AssertionError(path)
+            raise AssertionError(f'Failed to match path={path} to template={template}')
             parser = parse.Parser(str(template)[:-4])
             results = parser.parse(str(path))
         if results is not None:
@@ -617,6 +654,23 @@ class ExperimentState(ub.NiceRepr):
         else:
             warnings.warn('warning: bad attrs')
         return row
+
+    def relevant_reverse_hashes(self):
+        raise NotImplementedError
+
+    def _block_non_existing_rhashes(self):
+        # TODO: helper, could be refactored
+        state = self
+        state._build_path_patterns()
+        orig_eval_table = state.evaluation_table()
+        for cfgkey in state.hashed_cfgkeys:
+            if cfgkey in orig_eval_table:
+                unique_keys = orig_eval_table[cfgkey].dropna().unique()
+                for key in unique_keys:
+                    from watch.utils.reverse_hashid import ReverseHashTable
+                    candidates = ReverseHashTable.query(key, verbose=0)
+                    if not candidates:
+                        state.blocklists[cfgkey].add(key)
 
     def staging_rows(self):
         """
@@ -632,51 +686,51 @@ class ExperimentState(ub.NiceRepr):
         default = {'ckpt_path': None, 'spkg_path': None}
         _id_to_row = ub.ddict(default.copy)
 
-        key = 'ckpt'
-        pat = self.path_patterns[key]
-        mpat = util_pattern.Pattern.coerce(pat)
-        # Find all checkpoints
         rows = []
-        for ckpt_path in list(mpat.paths()):
-            if ckpt_path.suffix != '.ckpt':
-                continue
-            row = default.copy()
-            row['ckpt_path'] = ckpt_path
-            row['type'] = 'ckpt'
-            row['is_packaged'] = False
-            row['ckpt_exists'] = True
+        key = 'ckpt'
+        for pat in [p[key] for p in self.path_patterns_matrix]:
+            mpat = util_pattern.Pattern.coerce(pat)
+            # Find all checkpoints
+            for ckpt_path in list(mpat.paths()):
+                if ckpt_path.suffix != '.ckpt':
+                    continue
+                row = default.copy()
+                row['ckpt_path'] = ckpt_path
+                row['type'] = 'ckpt'
+                row['is_packaged'] = False
+                row['ckpt_exists'] = True
 
-            _attrs = self._parse_pattern_attrs(key, ckpt_path)
-            row.update(_attrs)
-            rows.append(row)
-            _id_to_row[ckpt_path] = row
+                _attrs = self._parse_pattern_attrs(self.templates[key], ckpt_path)
+                row.update(_attrs)
+                rows.append(row)
+                _id_to_row[ckpt_path] = row
 
         # Find repackaged checkpoints
         key = 'spkg'  # stands for staged package
-        pat = self.path_patterns[key]
-        mpat = util_pattern.Pattern.coerce(pat)
-        for spkg_path in list(mpat.paths()):
-            # Does this correspond to an existing checkpoint?
-            _attrs = self._parse_pattern_attrs(key, spkg_path)
+        for pat in [p[key] for p in self.path_patterns_matrix]:
+            mpat = util_pattern.Pattern.coerce(pat)
+            for spkg_path in list(mpat.paths()):
+                # Does this correspond to an existing checkpoint?
+                _attrs = self._parse_pattern_attrs(self.templates[key], spkg_path)
 
-            # Hack: making assumption about naming pattern
-            spkg_stem = spkg_path.stem
-            ckpt_stem = ''.join(spkg_stem.partition('_epoch')[-2:])[1:]
-            ckpt_path = spkg_path.parent / (ckpt_stem + '.ckpt')
+                # Hack: making assumption about naming pattern
+                spkg_stem = spkg_path.stem
+                ckpt_stem = ''.join(spkg_stem.partition('_epoch')[-2:])[1:]
+                ckpt_path = spkg_path.parent / (ckpt_stem + '.ckpt')
 
-            if ckpt_path.exists():
-                # Modify existing row
-                row = _id_to_row[ckpt_path]
-            else:
-                # Add new row
-                row = default.copy()
-                row['checkpoint'] = ckpt_stem
-                row['ckpt_exists'] = False
-                row['type'] = 'ckpt'
-                rows.append(row)
-            row['spkg_path'] = spkg_path
-            row['is_packaged'] = True
-            row.update(_attrs)
+                if ckpt_path.exists():
+                    # Modify existing row
+                    row = _id_to_row[ckpt_path]
+                else:
+                    # Add new row
+                    row = default.copy()
+                    row['checkpoint'] = ckpt_stem
+                    row['ckpt_exists'] = False
+                    row['type'] = 'ckpt'
+                    rows.append(row)
+                row['spkg_path'] = spkg_path
+                row['is_packaged'] = True
+                row.update(_attrs)
 
         for row in rows:
             fname = row['checkpoint']
@@ -708,16 +762,16 @@ class ExperimentState(ub.NiceRepr):
         """
         keys = ['pred_pxl', 'pred_trk', 'pred_act']
         for key in keys:
-            pat = self.path_patterns[key]
-            found = util_path.coerce_patterned_paths(pat)
-            for path in found:
-                row = {
-                    'type': key,
-                    'raw': path,
-                }
-                _attrs = self._parse_pattern_attrs(key, path)
-                row.update(_attrs)
-                yield row
+            for pat in [p[key] for p in self.path_patterns_matrix]:
+                found = util_path.coerce_patterned_paths(pat)
+                for path in found:
+                    row = {
+                        'type': key,
+                        'raw': path,
+                    }
+                    _attrs = self._parse_pattern_attrs(self.templates[key], path)
+                    row.update(_attrs)
+                    yield row
 
     def evaluation_rows(self, with_attrs=1, types=None, notypes=None):
         keys = ['eval_pxl', 'eval_act', 'eval_trk']
@@ -739,34 +793,44 @@ class ExperimentState(ub.NiceRepr):
         if notypes is not None:
             keys = list(ub.oset(keys) - set(notypes))
         for key in keys:
-            pat = self.path_patterns[key]
-            found = list(util_path.sidecar_glob(
-                pat, sidecar_ext='.dvc', sidecar_key='dvc', main_key='raw'))
-            for row in found:
-                row['type'] = key
-                row['has_dvc'] = (row['dvc'] is not None)
-                row['has_raw'] = (row['raw'] is not None)
-                row['needs_pull'] = row['has_dvc'] and not row['has_raw']
-                row['is_link'] = False
-                row['is_broken'] = False
-                row['unprotected'] = False
-                row['needs_push'] = False
-                if with_attrs:
-                    if row['raw']:
-                        path = row['raw']
-                    else:
-                        path = row['dvc'].augment(ext='')
-                    row['dataset_code'] = self.dataset_code
-                    _attrs = self._parse_pattern_attrs(key, path)
-                    row.update(_attrs)
+            for pat in [p[key] for p in self.path_patterns_matrix]:
+                found = list(util_path.sidecar_glob(
+                    pat, sidecar_ext='.dvc', sidecar_key='dvc', main_key='raw'))
+                for row in found:
+                    row['type'] = key
+                    row['has_dvc'] = (row['dvc'] is not None)
+                    row['has_raw'] = (row['raw'] is not None)
+                    row['needs_pull'] = row['has_dvc'] and not row['has_raw']
+                    row['is_link'] = False
+                    row['is_broken'] = False
+                    row['unprotected'] = False
+                    row['needs_push'] = False
+                    if with_attrs:
+                        if row['raw']:
+                            path = row['raw']
+                        else:
+                            path = row['dvc'].augment(ext='')
+                        row['dataset_code'] = self.dataset_code
+                        _attrs = self._parse_pattern_attrs(self.templates[key], path)
 
-                if row['has_raw']:
-                    p = ub.Path(row['raw'])
-                    row['is_link'] = p.is_symlink()
-                    row['is_broken'] = row['is_link'] and not p.exists()
-                    row['unprotected'] = row['has_dvc'] and not row['is_link']
-                    row['needs_push'] = not row['has_dvc']
-                yield row
+                        if self.blocklists is not None:
+                            blocked = False
+                            for k, v in _attrs.items():
+                                if k in self.blocklists:
+                                    if v in self.blocklists[k]:
+                                        blocked = True
+                            if blocked:
+                                continue
+
+                        row.update(_attrs)
+
+                    if row['has_raw']:
+                        p = ub.Path(row['raw'])
+                        row['is_link'] = p.is_symlink()
+                        row['is_broken'] = row['is_link'] and not p.exists()
+                        row['unprotected'] = row['has_dvc'] and not row['is_link']
+                        row['needs_push'] = not row['has_dvc']
+                    yield row
 
     def volitile_table(self):
         volitile_rows = list(self.volitile_rows())
@@ -877,6 +941,26 @@ class ExperimentState(ub.NiceRepr):
         })
         return tables
 
+    def _make_cross_links(self):
+        # Link between evals and predictions
+        eval_rows = list(self.evaluation_rows())
+        num_links = 0
+        for row in ub.ProgIter(eval_rows, desc='linking evals and preds'):
+            if row['has_raw']:
+                eval_fpath = ub.Path(row['raw'])
+                eval_dpath = eval_fpath.parent.parent.parent
+                pred_type = row['type'].replace('eval', 'pred')
+                pred_fpath = ub.Path(self.templates[pred_type].format(**row))
+                pred_dpath = pred_fpath.parent
+
+                if eval_dpath.exists() and pred_dpath.exists():
+                    pred_lpath = eval_dpath / '_pred_link'
+                    eval_lpath = pred_dpath / '_eval_link'
+                    ub.symlink(pred_dpath, pred_lpath, verbose=1)
+                    ub.symlink(eval_dpath, eval_lpath, verbose=1)
+                    num_links += 1
+        print(f'made {num_links} links')
+
     def summarize(self):
         """
         Ignore:
@@ -920,7 +1004,6 @@ class ExperimentState(ub.NiceRepr):
             if not flag:
                 raise UserAbort
 
-        from watch.tasks.fusion.repackage import repackage
         if 'ckpt_path' in needs_package:
             to_repackage = needs_package['ckpt_path'].values.tolist()
         else:
@@ -1008,7 +1091,10 @@ class ExperimentState(ub.NiceRepr):
         #         --skip_existing=True --backend=slurm --run=0
         # from watch.tasks.fusion.schedule_evaluation import schedule_evaluation
         from watch.mlops.schedule_evaluation import schedule_evaluation
-        model_globstr = state.path_patterns['pkg']
+        model_globstr = [p['pkg'] for p in state.path_patterns_matrix]
+
+        # NOTE: this should more often be specified as a cmdline arg maybe
+        # jsonargparse can help with getting this nested correctly.
         test_kwcoco_fpath = state.data_dvc_dpath / state.dataset_code / 'data_vali.kwcoco.json'
         annotations_dpath = state.data_dvc_dpath / 'annotations'
         # TODO: how do we make scriptconfig do modal CLIs easilly?
@@ -1107,7 +1193,7 @@ def summarize_tables(tables):
     versioned_df = tables.get('versioned', None)
 
     if staging_df is not None:
-        title = '[yellow] Staging Summary'
+        title = '[yellow] Staging Summary (Training)'
 
         if len(staging_df):
             staging_df['needs_copy'] = (~staging_df['is_copied'])
@@ -1119,7 +1205,7 @@ def summarize_tables(tables):
         print(Panel(body, title=title))
 
     if volitile_df is not None:
-        title = ('[bright_blue] Volitile Summary')
+        title = ('[bright_blue] Volitile Summary (Predictions)')
         if len(volitile_df):
             num_pred_types = volitile_df.groupby(['dataset_code', 'type']).nunique()
             body_df = num_pred_types
@@ -1130,7 +1216,7 @@ def summarize_tables(tables):
         print(Panel(body, title=title))
 
     if versioned_df is not None:
-        title = ('[bright_green] Versioned Summary')
+        title = ('[bright_green] Versioned Summary (Models and Evaluations)')
         # if 'has_orig' not in versioned_df.columns:
         #     versioned_df['has_orig'] = np.nan
         # version_bitcols = ['has_raw', 'has_dvc', 'is_link', 'is_broken', 'needs_pull', 'needs_push', 'has_orig']
@@ -1201,8 +1287,142 @@ def checkpoint_filepath_info(fname):
     return info
 
 
+@ub.memoize
+def load_meta(fpath):
+    import yaml
+    with open(fpath, 'r') as file:
+        data = yaml.safe_load(file)
+    return data
+
+
+def repackage(checkpoint_fpath, force=False, dry=False):
+    """
+    TODO:
+        generalize this beyond the fusion model, also refactor.
+
+    checkpoint_fpath
+
+    Ignore:
+        >>> import ubelt as ub
+        >>> checkpoint_fpath = ub.expandpath(
+        ...     '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/checkpoint_DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera_epoch=2-step=2147.ckpt')
+
+    checkpoint_fpath = '/home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=53-step=28457.ckpt'
+    """
+    import os
+    # For now there is only one model, but in the future we will need
+    # some sort of modal switch to package the correct metadata
+    from watch.tasks.fusion import methods
+    from watch.utils import util_path
+    checkpoint_fpaths = util_path.coerce_patterned_paths(checkpoint_fpath)
+    package_fpaths = []
+    for checkpoint_fpath in checkpoint_fpaths:
+        # If we have a checkpoint path we can load it if we make assumptions
+        # init method from checkpoint.
+        checkpoint_fpath = os.fspath(checkpoint_fpath)
+
+        x = ub.Path(ub.augpath(checkpoint_fpath, ext='.pt'))
+        package_name = x.name
+
+        # Can we precompute the package name of this checkpoint?
+        train_dpath_hint = None
+        if checkpoint_fpath.endswith('.ckpt'):
+            path_ = ub.Path(checkpoint_fpath)
+            if path_.parent.stem == 'checkpoints':
+                train_dpath_hint = path_.parent.parent
+
+        meta_fpath = None
+        if train_dpath_hint is not None:
+            # Look at the training config file to get info about this
+            # experiment
+            candidates = list(train_dpath_hint.glob('fit_config.yaml'))
+            if len(candidates) == 1:
+                meta_fpath = candidates[0]
+                data = load_meta(meta_fpath)
+                if 'name' in data:
+                    # Use the metadata package name if it exists
+                    expt_name = data['name']
+                else:
+                    # otherwise, hack to put experiment name in package name
+                    # based on an assumed directory structure
+                    expt_name = ub.Path(data['default_root_dir']).name
+                if expt_name not in package_name:
+                    package_name = expt_name + '_' + package_name
+
+        package_fpath = x.parent / package_name
+
+        if force or not package_fpath.exists():
+            if not dry:
+                import netharn as nh
+                xpu = nh.XPU.coerce('cpu')
+                checkpoint = xpu.load(checkpoint_fpath)
+
+                # checkpoint = torch.load(checkpoint_fpath)
+                print(list(checkpoint.keys()))
+                hparams = checkpoint['hyper_parameters']
+
+                if 'input_sensorchan' not in hparams:
+                    # HACK: we had old models that did not save their hparams
+                    # correctly. Try to fix them up here. The best we can do
+                    # is try to start a small training run with the exact same
+                    # settings and capture fixed model state from that.
+                    if meta_fpath is None:
+                        raise Exception('we cant do a fix without the meta fpath')
+
+                    hackfix_hparams_fpath = meta_fpath.augment(prefix='hackfix_')
+                    if not hackfix_hparams_fpath.exists():
+                        # Do this once per experiment group to save time.
+                        import tempfile
+                        tmp_dpath = ub.Path(tempfile.mkdtemp())
+                        tmp_root = (tmp_dpath / package_name)
+                        ub.cmd(f'python -m watch.tasks.fusion.fit '
+                               f'--config "{meta_fpath}" --default_root_dir "{tmp_root}" '
+                               f'--max_epochs=0 --max_epoch_length=1', system=1, verbose=3)
+                        tmp_llogs_dpaths = sorted((tmp_root / 'lightning_logs').glob('*'))
+                        assert tmp_llogs_dpaths, 'cannot fix this model'
+                        tmp_hparams_fpath = tmp_llogs_dpaths[-1] / 'hparams.yaml'
+                        import shutil
+                        shutil.copy(tmp_hparams_fpath, hackfix_hparams_fpath)
+
+                    import yaml
+                    with open(hackfix_hparams_fpath, 'r') as file:
+                        hacked_hparams = yaml.load(file, yaml.Loader)
+                    hacked_hparams = ub.udict(hacked_hparams)
+                    # Select the known problematic variables
+                    problem_hparams = hacked_hparams.subdict([
+                        'classes', 'dataset_stats', 'input_sensorchan',
+                        'input_channels'])
+                    hparams.update(problem_hparams)
+                    # hacked_hparams - hparams
+
+                if 'input_channels' in hparams:
+                    import kwcoco
+                    # Hack for strange pickle issue
+                    chan = hparams['input_channels']
+                    if chan is not None:
+                        if not hasattr(chan, '_spec') and hasattr(chan, '_info'):
+                            chan = kwcoco.ChannelSpec.coerce(chan._info['spec'])
+                            hparams['input_channels'] = chan
+                        else:
+                            hparams['input_channels'] = kwcoco.ChannelSpec.coerce(chan.spec)
+
+                method = methods.MultimodalTransformer(**hparams)
+                state_dict = checkpoint['state_dict']
+                method.load_state_dict(state_dict)
+
+                if train_dpath_hint is not None:
+                    method.train_dpath_hint = train_dpath_hint
+
+                method.save_package(os.fspath(package_fpath))
+        package_fpaths.append(os.fspath(package_fpath))
+    return package_fpaths
+
+
 class UserAbort(Exception):
     pass
+
+
+__config__ = ExptManagerConfig
 
 
 if __name__ == '__main__':

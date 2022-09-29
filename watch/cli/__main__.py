@@ -28,6 +28,7 @@ def main(cmdline=True, **kw):
         'kwcoco_to_geojson',
         'run_metrics_framework',
         'torch_model_stats',
+        'mlops_cli',
     ]
     module_lut = {}
     for name in modnames:
@@ -53,13 +54,17 @@ def main(cmdline=True, **kw):
     subparsers = parser.add_subparsers(help='specify a command to run')
 
     cmd_alias = {
-        'torch_model_stats': ['model_info'],
-        'watch_coco_stats': ['stats'],
-        'coco_visualize_videos': ['visualize'],
-        'coco_align_geotiffs': ['align'],
-        'project_annotations': ['project'],
-        'coco_add_watch_fields': ['add_fields'],
-        'coco_intensity_histograms': ['intensity_histograms'],
+        'watch.cli.torch_model_stats': ['model_info'],
+        'watch.cli.watch_coco_stats': ['stats'],
+        'watch.cli.coco_visualize_videos': ['visualize'],
+        'watch.cli.coco_align_geotiffs': ['align'],
+        'watch.cli.project_annotations': ['project'],
+        'watch.cli.coco_add_watch_fields': ['add_fields'],
+        'watch.cli.coco_intensity_histograms': ['intensity_histograms'],
+        'watch.cli.mlops_cli': ['mlops'],
+        'watch.cli.run_metrics_framework': ['iarpa_eval'],
+        'watch.cli.kwcoco_to_geojson': [],
+        'watch.cli.find_dvc': ['dvcdir'],
     }
 
     for cli_module in cli_modules:
@@ -69,7 +74,10 @@ def main(cmdline=True, **kw):
             cli_subconfig = cli_module._SubConfig
         else:
             cli_subconfig = None
-            if hasattr(cli_module, '_CLI'):
+            if hasattr(cli_module, '__config__'):
+                # scriptconfig cli pattern
+                cli_subconfig = cli_module.__config__
+            elif hasattr(cli_module, '_CLI'):
                 # scriptconfig cli pattern
                 cli_subconfig = cli_module._CLI
             else:
@@ -84,10 +92,16 @@ def main(cmdline=True, **kw):
         if main_func is None:
             raise AssertionError(f'No main function for {cli_module}')
 
-        cmdname = cli_module.__name__.split('.')[-1]
+        cli_modname = cli_module.__name__
+        cli_rel_modname = cli_modname.split('.')[-1]
+
+        cmdname_aliases = cmd_alias.get(cli_modname, []) + [cli_rel_modname]
+
         parserkw = {}
-        if cmdname in cmd_alias:
-            parserkw['aliases']  = cmd_alias[cmdname]
+        primary_cmdname = cmdname_aliases[0]
+        secondary_cmdnames = cmdname_aliases[1:]
+        if secondary_cmdnames:
+            parserkw['aliases']  = secondary_cmdnames
 
         if cli_subconfig is not None:
             # TODO: make subparser.add_parser args consistent with what
@@ -95,10 +109,10 @@ def main(cmdline=True, **kw):
             subconfig = cli_subconfig()
             parserkw.update(subconfig._parserkw())
             parserkw['help'] = parserkw['description'].split('\n')[0]
-            subparser = subparsers.add_parser(cmdname, **parserkw)
+            subparser = subparsers.add_parser(primary_cmdname, **parserkw)
             subparser = subconfig.argparse(subparser)
         else:
-            subparser = subparsers.add_parser(cmdname, help='opaque sub command')
+            subparser = subparsers.add_parser(primary_cmdname, help='opaque sub command')
 
         subparser.set_defaults(main=main_func)
 
@@ -106,7 +120,7 @@ def main(cmdline=True, **kw):
     # TODO: need to make a nicer pattern for new CLI integration, but this
     # works for now
     kw = ns.__dict__
-    print('kw = {}'.format(ub.repr2(kw, nl=1)))
+    # print('kw = {}'.format(ub.repr2(kw, nl=1)))
 
     if kw.pop('version'):
         import watch

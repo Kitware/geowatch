@@ -29,8 +29,8 @@ class ScheduleEvaluationConfig(scfg.Config):
         'partition': scfg.Value(None, help='specify slurm partition (slurm backend only)'),
         'mem': scfg.Value(None, help='specify slurm memory per task (slurm backend only)'),
 
-        'tta_fliprot': scfg.Value(None, help='grid of flip test-time-augmentation to test'),
-        'tta_time': scfg.Value(None, help='grid of temporal test-time-augmentation to test'),
+        'tta_fliprot': scfg.Value(0, help='grid of flip test-time-augmentation to test'),
+        'tta_time': scfg.Value(0, help='grid of temporal test-time-augmentation to test'),
         'chip_overlap': scfg.Value(0.3, help='grid of chip overlaps test'),
         'set_cover_algo': scfg.Value(['approx'], help='grid of set_cover_algo to test'),
 
@@ -48,10 +48,14 @@ class ScheduleEvaluationConfig(scfg.Config):
 
         'bas_thresh': scfg.Value([0.01], help='grid of track thresholds'),
 
+        'json_grid_pred_pxl': scfg.Value(None, type=str, help='a json grid/matrix of prediction params'),
+
         'hack_bas_grid': scfg.Value(False, help='if True use hard coded BAS grid'),
         'hack_sc_grid': scfg.Value(False, help='if True use hard coded SC grid'),
         'dvc_expt_dpath': None,
         'dvc_data_dpath': None,
+
+        'check_other_sessions': scfg.Value('auto', help='if True, will ask to kill other sessions that might exist')
     }
 
 
@@ -112,7 +116,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
     import shlex
     import json
     from watch.utils.lightning_ext import util_globals
-    import glob
     import kwarray
     import cmd_queue
 
@@ -129,19 +132,15 @@ def schedule_evaluation(cmdline=False, **kwargs):
     if model_globstr is None and test_dataset_fpath is None:
         raise ValueError('model_globstr and test_dataset are required')
 
-    # HACK FOR DVC PTH FIXME:
-    if str(model_globstr).endswith('.txt'):
-        from watch.utils.simple_dvc import SimpleDVC
-        print('model_globstr = {!r}'.format(model_globstr))
-        if dvc_expt_dpath is None:
-            dvc_expt_dpath = SimpleDVC.find_root(ub.Path(model_globstr))
-
     if dvc_expt_dpath is None:
         dvc_expt_dpath = watch.find_smart_dvc_dpath(tags='phase2_expt')
     if dvc_data_dpath is None:
         dvc_data_dpath = watch.find_smart_dvc_dpath(tags='phase2_data')
     dvc_data_dpath = ub.Path(dvc_data_dpath)
     dvc_expt_dpath = ub.Path(dvc_expt_dpath)
+
+    # Gather the appropriate requested models
+    package_fpaths = resolve_package_paths(model_globstr, dvc_expt_dpath)
 
     print(f'dvc_expt_dpath={dvc_expt_dpath}')
     print(f'dvc_data_dpath={dvc_data_dpath}')
@@ -163,7 +162,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     recompute_track = check_recompute(with_track, [with_pred])
     recompute_iarpa_eval = check_recompute(with_iarpa_eval, [with_pred, recompute_track])
     print('with_pred = {!r}'.format(with_pred))
-    print('with_pred = {!r}'.format(with_pred))
+    print('with_eval = {!r}'.format(with_eval))
     print('with_track = {!r}'.format(with_track))
     print('with_iarpa_eval = {!r}'.format(with_iarpa_eval))
 
@@ -184,51 +183,13 @@ def schedule_evaluation(cmdline=False, **kwargs):
     annotations_dpath = ub.Path(annotations_dpath)
     region_model_dpath = annotations_dpath / 'region_models'
 
-    def expand_model_list_file(model_lists_fpath, dvc_expt_dpath=None):
-        """
-        Given a file containing paths to models, expand it into individual
-        paths.
-        """
-        expanded_fpaths = []
-        lines = [line for line in ub.Path(model_globstr).read_text().split('\n') if line]
-        missing = []
-        for line in lines:
-            if dvc_expt_dpath is not None:
-                package_fpath = ub.Path(dvc_expt_dpath / line)
-            else:
-                package_fpath = ub.Path(line)
-            if package_fpath.is_file():
-                expanded_fpaths.append(package_fpath)
-            else:
-                missing.append(line)
-        if missing:
-            print('WARNING: missing = {}'.format(ub.repr2(missing, nl=1)))
-            print(f'WARNING: specified a models-of-interest.txt and {len(missing)} / {len(lines)} models were missing')
-        return expanded_fpaths
-
-    print('model_globstr = {!r}'.format(model_globstr))
-    package_fpaths = []
-    for package_fpath in glob.glob(model_globstr, recursive=True):
-        package_fpath = ub.Path(package_fpath)
-        if package_fpath.name.endswith('.txt'):
-            # HACK FOR PATH OF MODELS
-            model_lists_fpath = package_fpath
-            expanded_fpaths = expand_model_list_file(model_lists_fpath, dvc_expt_dpath=dvc_expt_dpath)
-            package_fpaths.extend(expanded_fpaths)
-        else:
-            package_fpaths.append(package_fpath)
-
-    if len(package_fpaths) == 0:
-        if '*' not in str(model_globstr):
-            package_fpaths = [ub.Path(model_globstr)]
-
     from watch.mlops.expt_manager import ExperimentState
     # start using the experiment state logic as the path and metadata
     # organization logic
     state = ExperimentState('*', '*')
     candidate_pkg_rows = []
     for package_fpath in package_fpaths:
-        condensed = state._parse_pattern_attrs('pkg', package_fpath)
+        condensed = state._parse_pattern_attrs(state.templates['pkg'], package_fpath)
         package_info = {}
         package_info['package_fpath'] = package_fpath
         package_info['condensed'] = condensed
@@ -262,6 +223,24 @@ def schedule_evaluation(cmdline=False, **kwargs):
     pred_cfg_basis['tta_fliprot'] = ensure_iterable(config['tta_fliprot'])
     pred_cfg_basis['chip_overlap'] = ensure_iterable(config['chip_overlap'])
     pred_cfg_basis['set_cover_algo'] = ensure_iterable(config['set_cover_algo'])
+
+    # TODO: not using a consisent basis means that the hash might be different
+    # for the same effective pred config. Not sure how big of a problem this
+    # is.
+
+    if config['json_grid_pred_pxl']:
+        pred_cfg_basis.update(
+            json.loads(config['json_grid_pred_pxl'])
+        )
+
+    print('pred_cfg_basis = {}'.format(ub.repr2(pred_cfg_basis, nl=2)))
+
+    # if 1:
+    #     # pred_cfg_basis['input_space_scale'] = ensure_iterable(config['input_space_scale'])
+    #     pred_cfg_basis['input_space_scale'] = ['10GSD', '15SGD']
+    #     pred_cfg_basis['use_cloudmask'] = [0, 1]  # HACK
+    #     pred_cfg_basis['resample_invalid_frames'] = [0, 1]  # HACK
+    #     # TODO: allow for "auto"
 
     trk_defaults = {
         'thresh': [0.1],
@@ -306,7 +285,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # Build the info we need to submit every prediction job of interest
     candidate_pred_rows = []
     test_dset = state._condense_test_dset(test_dataset_fpath)
-    for pkg_row in candidate_pkg_rows:
+    for pkg_row in ub.ProgIter(candidate_pkg_rows, desc='build pred rows'):
         for pred_cfg in ub.named_product(pred_cfg_basis):
             pred_pxl_row = pkg_row.copy()
             condensed  = pred_pxl_row['condensed'].copy()
@@ -359,7 +338,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
         mem=config['mem']
     )
 
-    for pred_pxl_row in candidate_pred_rows:
+    for pred_pxl_row in ub.ProgIter(candidate_pred_rows, desc='build track rows'):
         package_fpath = pred_pxl_row['package_fpath']
         pred_cfg = pred_pxl_row['pred_cfg']
         condensed = pred_pxl_row['condensed']
@@ -446,6 +425,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 **pred_cfg,
                 **pred_pxl_row,
             }
+            predictkw['pred_cfg_argstr'] = chr(10).join(
+                [f'    --{k}={v} \\' for k, v in pred_cfg.items()]).lstrip()
             command = ub.codeblock(
                 r'''
                 python -m watch.tasks.fusion.predict \
@@ -458,10 +439,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     --pred_dataset={pred_dataset_fpath} \
                     --test_dataset={test_dataset_fpath} \
                     --num_workers={workers_per_queue} \
-                    --chip_overlap={chip_overlap} \
-                    --tta_time={tta_time} \
-                    --tta_fliprot={tta_fliprot} \
-                    --set_cover_algo={set_cover_algo} \
+                    {pred_cfg_argstr}
                     --devices=0, \
                     --accelerator=gpu \
                     --batch_size=1
@@ -519,9 +497,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
                         cfg['thresh_hysteresis'].format(**cfg))
 
                 if cfg['moving_window_size'] is None:
-                    cfg['moving_window_size'] = 'heatmaps_to_polys'
+                    cfg['polygon_fn'] = 'heatmaps_to_polys'
                 else:
-                    cfg['moving_window_size'] = 'heatmaps_to_polys_moving_window'
+                    cfg['polygon_fn'] = 'heatmaps_to_polys_moving_window'
 
                 track_kwargs_str = shlex.quote(json.dumps(cfg))
                 bas_args = f'--default_track_fn saliency_heatmaps --track_kwargs {track_kwargs_str}'
@@ -656,7 +634,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # RUN
     if config['run']:
         # ub.cmd('bash ' + str(driver_fpath), verbose=3, check=True)
-        queue.run(block=True)
+        queue.run(block=True, check_other_sessions=config['check_other_sessions'])
     else:
         driver_fpath = queue.write()
         print('Wrote script: to run execute:\n{}'.format(driver_fpath))
@@ -677,6 +655,77 @@ def _auto_gpus():
         if len(gpu_info['procs']) == 0:
             GPUS.append(gpu_idx)
     return GPUS
+
+
+def resolve_package_paths(model_globstr, dvc_expt_dpath):
+    import rich
+    # import glob
+    from watch.utils import util_pattern
+
+    # HACK FOR DVC PTH FIXME:
+    # if str(model_globstr).endswith('.txt'):
+    #     from watch.utils.simple_dvc import SimpleDVC
+    #     print('model_globstr = {!r}'.format(model_globstr))
+    #     # if dvc_expt_dpath is None:
+    #     #     dvc_expt_dpath = SimpleDVC.find_root(ub.Path(model_globstr))
+
+    def expand_model_list_file(model_lists_fpath, dvc_expt_dpath=None):
+        """
+        Given a file containing paths to models, expand it into individual
+        paths.
+        """
+        expanded_fpaths = []
+        lines = [line for line in ub.Path(model_globstr).read_text().split('\n') if line]
+        missing = []
+        for line in lines:
+            if dvc_expt_dpath is not None:
+                package_fpath = ub.Path(dvc_expt_dpath / line)
+            else:
+                package_fpath = ub.Path(line)
+            if package_fpath.is_file():
+                expanded_fpaths.append(package_fpath)
+            else:
+                missing.append(line)
+        if missing:
+            rich.print('[yellow] WARNING: missing = {}'.format(ub.repr2(missing, nl=1)))
+            rich.print(f'[yellow] WARNING: specified a models-of-interest.txt and {len(missing)} / {len(lines)} models were missing')
+        return expanded_fpaths
+
+    print('model_globstr = {!r}'.format(model_globstr))
+    model_globstr = util_pattern.MultiPattern.coerce(model_globstr)
+    package_fpaths = []
+    # for package_fpath in glob.glob(model_globstr, recursive=True):
+    for package_fpath in model_globstr.paths(recursive=True):
+        package_fpath = ub.Path(package_fpath)
+        if package_fpath.name.endswith('.txt'):
+            # HACK FOR PATH OF MODELS
+            model_lists_fpath = package_fpath
+            expanded_fpaths = expand_model_list_file(model_lists_fpath, dvc_expt_dpath=dvc_expt_dpath)
+            package_fpaths.extend(expanded_fpaths)
+        else:
+            package_fpaths.append(package_fpath)
+
+    if len(package_fpaths) == 0:
+        import pathlib
+        if '*' not in str(model_globstr):
+            package_fpaths = [ub.Path(model_globstr)]
+        elif isinstance(model_globstr, (str, pathlib.Path)):
+            # Warn the user if they gave a bad model globstr (this is just one
+            # of the many potential ways things could go wrong)
+            glob_path = ub.Path(model_globstr)
+            def _concrete_glob_part(path):
+                " Find the resolved part of the glob path "
+                concrete_parts = []
+                for p in path.parts:
+                    if '*' in p:
+                        break
+                    concrete_parts.append(p)
+                return ub.Path(*concrete_parts)
+            concrete = _concrete_glob_part(glob_path)
+            if not concrete.exists():
+                rich.print('[yellow] WARNING: part of the model_globstr does not exist: {}'.format(concrete))
+
+    return package_fpaths
 
 
 if __name__ == '__main__':

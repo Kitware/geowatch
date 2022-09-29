@@ -368,6 +368,7 @@ def baseline(coco_dset,
         cids = np.where([g in gids_first_half for g in gids], siteprep_cid,
                         active_cid)
         cids = np.where(gids == gids_second_half[-1], post_cid, cids)
+        cids = [int(c) for c in cids]
         annots.set('category_id', cids)
 
     return coco_dset

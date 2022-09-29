@@ -88,7 +88,7 @@ class PrepareTA2Config(scfg.Config):
 
         's3_fpath': scfg.Value(None, nargs='+', help='A list of .input files which were the results of an existing stac query. Mutex with stac_query_* args. Mutex with sensors.'),
         'dvc_dpath': scfg.Value('auto', help=''),
-        'run': scfg.Value('0', help='if True execute the pipeline'),
+        'run': scfg.Value('0', isflag=1, help='if True execute the pipeline'),
         'collated': scfg.Value([True], nargs='+', help='set to false if the input data is not collated'),
 
         'backend': scfg.Value('serial', help='can be serial, tmux, or slurm. Using tmux is recommended.'),
@@ -104,29 +104,29 @@ class PrepareTA2Config(scfg.Config):
 
         'ignore_duplicates': scfg.Value(1, help='workers for align script'),
 
-        'visualize': scfg.Value(0, help='if True runs visualize'),
-        'visualize_only_boxes': scfg.Value(True, help='if False will draw full polygons'),
+        'visualize': scfg.Value(0, isflag=1, help='if True runs visualize'),
+        'visualize_only_boxes': scfg.Value(True, isflag=1, help='if False will draw full polygons'),
 
         'verbose': scfg.Value(0, help='help control verbosity (just align for now)'),
 
         # '--requester_pays'
         'requester_pays': scfg.Value(0, help='if True, turn on requester_pays in ingress. Needed for official L1/L2 catalogs.'),
 
-        'debug': scfg.Value(False, help='if enabled, turns on debug visualizations'),
+        'debug': scfg.Value(False, isflag=1,  help='if enabled, turns on debug visualizations'),
         'select_images': scfg.Value(False, help='if enabled only uses select images'),
 
-        'cache': scfg.Value(1, help='If 1 or 0 globally enable/disable caching. If a comma separated list of strings, only cache those stages'),
+        'cache': scfg.Value(1, isflag=1, help='If 1 or 0 globally enable/disable caching. If a comma separated list of strings, only cache those stages'),
 
         'include_channels': scfg.Value(None, help='specific channels to use in align crop'),
         'exclude_channels': scfg.Value(None, help='specific channels to NOT use in align crop'),
 
-        'splits': scfg.Value(False, help='if True do splits'),
+        'splits': scfg.Value(False, isflag=1, help='if True do splits'),
 
         'region_globstr': scfg.Value('annotations/region_models', help='region model globstr (relative to the dvc path, unless absolute or prefixed by "./")'),
         'site_globstr': scfg.Value('annotations/site_models', help='site model globstr (relative to the dvc path, unless absolute or prefixed by "./")'),
 
         'target_gsd': 10,
-        'remove_broken': scfg.Value(True, help='if True, will remove any image that fails population (e.g. caused by a 404)'),
+        'remove_broken': scfg.Value(True, isflag=1, help='if True, will remove any image that fails population (e.g. caused by a 404)'),
         'force_nodata': scfg.Value(None, help='if specified, forces nodata to this value'),
 
         'align_keep': scfg.Value('img', choices=['img', 'img-roi', 'none', None], help='if the coco align script caches or recomputes images / rois'),

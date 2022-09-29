@@ -29,7 +29,7 @@ def demo_smart_raw_kwcoco():
         >>> raw_coco_dset = demo_smart_raw_kwcoco()
         >>> print('raw_coco_dset = {!r}'.format(raw_coco_dset))
     """
-    cache_dpath = ub.Path.appdir('watch/demo/kwcoco').ensuredir()
+    cache_dpath = ub.Path.appdir('watch', 'demo', 'kwcoco').ensuredir()
     raw_coco_fpath = join(cache_dpath, 'demo_smart_raw.kwcoco.json')
     stamp = ub.CacheStamp('raw_stamp', dpath=cache_dpath, depends=['v4'],
                           product=raw_coco_fpath)

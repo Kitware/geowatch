@@ -484,11 +484,12 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         set_cover_algo,
         use_grid_positives,
         use_centered_positives,
-        'cache_v4',
+        'cache_v5',
     ]
     # Higher level cacher (not sure if adding this secondary level of caching
     # is faster or not).
-    cacher = ub.Cacher('sample_grid-dataset-cache', appname='watch/grid_cache',
+    cache_dpath = ub.Path.appdir('watch', 'grid_cache').ensuredir()
+    cacher = ub.Cacher('sample_grid-dataset-cache', dpath=cache_dpath,
                        depends=depends, enabled=use_cache)
     sample_grid = cacher.tryload()
     if sample_grid is None:
@@ -656,7 +657,7 @@ def _sample_single_video_spacetime_targets(
         time_span, use_annot_info,
         use_grid_positives,
         use_centered_positives,
-        'cache_v4',
+        'cache_v5',
     ]
     cacher = ub.Cacher('sliding-window-cache', appname='watch/grid_cache',
                        depends=depends, enabled=use_cache)

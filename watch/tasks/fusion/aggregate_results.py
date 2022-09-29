@@ -224,9 +224,6 @@ def debug_all_results():
         )
         row = ub.odict(ub.dict_union(metrics, *param_types.values()))
 
-        if row['pred_in_dataset_name'] != 'Cropped-Drop3-TA1-2022-03-10/combo_DL_s2_wv_vali.kwcoco.json':
-            continue
-
         actcfg_dname = merged_fpath.parent.parent.parent.parent.name
         predcfg_dname = merged_fpath.parent.parent.parent.parent.parent.parent.parent.name
 
@@ -266,7 +263,6 @@ def debug_all_results():
     print(f'{len(sc_rows)=}')
 
     df = pd.DataFrame(sc_rows)
-    df = df[df['pred_in_dataset_name'] == 'Cropped-Drop3-TA1-2022-03-10/combo_DL_s2_wv_vali.kwcoco.json']
     df = df.sort_values('mean_f1')
 
     df[['trk_use_viterbi']]
@@ -304,22 +300,6 @@ def load_pxl_eval(fpath, dvc_dpath=None):
     predict_args = param_types['pred']
     if predict_args is None:
         raise Exception('no prediction metadata')
-
-    # pred_fpath = predict_args['pred_dataset']
-    # package_fpath = ub.Path(predict_args['pred_model_fpath'])
-    package_name = predict_args['pred_in_dataset_name']
-    title = meta['title']
-
-    if predict_args is not None:
-        # Relevant prediction parameters also count as params
-        pred_config = ub.dict_isect(predict_args, {
-            'pred_tta_fliprot',
-            'pred_tta_time',
-            'pred_chip_overlap',
-        })
-        pred_cfgstr = ub.hash_data(pred_config)[0:8]
-        title = title + pred_cfgstr
-        meta['prefix'] = package_name + pred_cfgstr
 
     salient_measures = measure_info['nocls_measures']
     class_measures = measure_info['ovr_measures']
@@ -374,7 +354,6 @@ def load_pxl_eval(fpath, dvc_dpath=None):
         'other': {
             'result': result,
             'coi_catnames': ','.join(sorted(coi_catnames)),
-            'title': title,
             # 'sc_cm': sc_cm,
             # 'sc_df': sc_df,
         },
@@ -423,13 +402,13 @@ def load_bas_eval(fpath, dvc_expt_dpath):
     return info
 
 
-def load_sc_eval(fpath, dvc_dpath):
+def load_sc_eval(fpath, dvc_expt_dpath):
     sc_info = _load_json(fpath)
     # sc_info['sc_cm']
     sc_df = pd.read_json(io.StringIO(json.dumps(sc_info['sc_df'])), orient='table')
     sc_cm = pd.read_json(io.StringIO(json.dumps(sc_info['sc_cm'])), orient='table')
     tracker_info = sc_info['parent_info']
-    param_types = parse_tracker_params(tracker_info, dvc_dpath)
+    param_types = parse_tracker_params(tracker_info, dvc_expt_dpath)
 
     # non_measures = ub.dict_diff(param_types, ['resource'])
     # params = ub.dict_union(*non_measures.values())
@@ -456,12 +435,13 @@ def load_sc_eval(fpath, dvc_dpath):
     return info
 
 
-def parse_tracker_params(tracker_info, dvc_dpath, path_hint=None):
+def parse_tracker_params(tracker_info, dvc_expt_dpath, path_hint=None):
     track_item = find_track_item(tracker_info)
 
     if 'pred_info' not in track_item['properties']:
         if path_hint is None:
             raise Exception('cannot find pred info. This is an old result')
+        # TODO: remove the eval stealing
         eval_dpath = path_hint.parent.parent.parent.parent.parent.parent
         # Can we steal pred info from pixel metrics?
         # eval_dpath / 'curves'
@@ -478,7 +458,7 @@ def parse_tracker_params(tracker_info, dvc_dpath, path_hint=None):
     else:
         pred_info = track_item['properties']['pred_info']
 
-    param_types = parse_pred_params(pred_info, dvc_dpath, path_hint)
+    param_types = parse_pred_params(pred_info, dvc_expt_dpath, path_hint)
     track_args = track_item['properties']['args']
     track_config = relevant_track_config(track_args)
     param_types['track'] = track_config
@@ -491,23 +471,42 @@ def relevant_track_config(track_args):
     return track_config
 
 
-def parse_pred_params(pred_info, dvc_dpath, path_hint=None):
+def parse_pred_params(pred_info, dvc_expt_dpath, path_hint=None):
     from watch.utils import util_time
-    pred_measures = list(find_info_items(pred_info, 'measure', None))
-    assert len(pred_measures) <= 1
-    meta = {'pred_start_time': None}
-    if len(pred_measures):
-        item = pred_measures[0]
-        resources = parse_measure_item(item)
-        predict_resources = item['properties']
-        start_time = util_time.coerce_datetime(predict_resources.get('start_timestamp', None))
-        meta['pred_start_time'] = start_time
-    else:
-        resources = {}
     pred_item = find_pred_item(pred_info)
+
+    # NOTE: the place where measure are stored has changed to be inside
+    # the pred item.
+    pred_measures = list(find_info_items(pred_info, 'measure', None))
+    if len(pred_measures) > 0:
+        # OLD CODE: Eventually delete
+        assert len(pred_measures) <= 1
+        meta = {'pred_start_time': None}
+        if len(pred_measures):
+            item = pred_measures[0]
+            resources = parse_resource_item(item)
+            predict_resources = item['properties']
+            start_time = util_time.coerce_datetime(predict_resources.get('start_timestamp', None))
+            meta['pred_start_time'] = start_time
+        else:
+            resources = {}
+        fit_config = pred_item['properties']['fit_config']
+    else:
+        meta = {'pred_start_time': None}
+        resources = {}
+        # New code should have measures inside the pred item
+        fit_config = pred_item['properties']['extra']['fit_config']
+        meta['pred_start_time'] = pred_item['properties']['start_timestamp']
+        meta['pred_end_time'] = pred_item['properties']['stop_timestamp']
+        meta['start_timestamp'] = pred_item['properties']['start_timestamp']
+        meta['stop_timestamp'] = pred_item['properties']['stop_timestamp']
+
+        item = pred_item
+        parse_resource_item(pred_item)
+        resources = parse_resource_item(item)
+
     pred_args = pred_item['properties']['args']
-    fit_config = pred_item['properties']['fit_config']
-    pred_config = relevant_pred_config(pred_args, dvc_dpath)
+    pred_config = relevant_pred_config(pred_args, dvc_expt_dpath)
     fit_config = relevant_fit_config(fit_config)
 
     param_types = {
@@ -519,44 +518,59 @@ def parse_pred_params(pred_info, dvc_dpath, path_hint=None):
     return param_types
 
 
-def parse_measure_item(item):
+def parse_resource_item(item):
     from watch.utils import util_time
     ureg = global_ureg()
-    predict_resources = item['properties']
-    start_time = util_time.coerce_datetime(predict_resources.get('start_timestamp', None))
-    end_time = util_time.coerce_datetime(predict_resources.get('end_timestamp', None))
-    iters_per_second = predict_resources.get('iters_per_second', None)
+    pred_prop = item['properties']
+
+    start_time = util_time.coerce_datetime(pred_prop.get('start_timestamp', None))
+    end_time = util_time.coerce_datetime(pred_prop.get('end_timestamp', pred_prop.get('stop_timestamp', None)))
+    iters_per_second = pred_prop.get('iters_per_second', None)
     total_hours = (end_time - start_time).total_seconds() / (60 * 60)
-    vram = predict_resources['device_info']['allocated_vram']
-    vram_gb = ureg.parse_expression(f'{vram} bytes').to('gigabytes').m
-    co2_kg = predict_resources['emissions']['co2_kg']
 
     try:
-        cpu_name = predict_resources['system_info']['cpu_info']['brand_raw']
-    except KeyError:
-        cpu_name = None
-    try:
-        gpu_name = predict_resources['device_info']['device_name']
-    except KeyError:
-        gpu_name = None
-    try:
-        disk_type = predict_resources['system_info']['disk_info']['filesystem']
-    except KeyError:
-        disk_type = None
-    try:
-        vram_gb = (predict_resources['device_info']['allocated_vram'] * ureg.bytes).to('gigabyte').m
+        vram = pred_prop['device_info']['allocated_vram']
+        vram_gb = ureg.parse_expression(f'{vram} bytes').to('gigabytes').m
     except KeyError:
         vram_gb = None
+    try:
+        gpu_name = pred_prop['device_info']['device_name']
+    except KeyError:
+        gpu_name = None
+    co2_kg = pred_prop['emissions']['co2_kg']
+
+    if 'machine' in pred_prop:
+        # New method
+        cpu_name = pred_prop['machine']['cpu_brand']
+        pred_prop['machine']['cpu_brand']
+        co2_kg = pred_prop['emissions']['co2_kg']
+        kwh = pred_prop['emissions']['total_kWH']
+        disk_type = pred_prop['disk_info']['filesystem']
+    else:
+        kwh = None
+        # Old method
+        try:
+            cpu_name = pred_prop['system_info']['cpu_info']['brand_raw']
+        except KeyError:
+            cpu_name = None
+        try:
+            disk_type = pred_prop['system_info']['disk_info']['filesystem']
+        except KeyError:
+            disk_type = None
 
     resources = {}
     resources['co2_kg'] = co2_kg
-    resources['vram_gb'] = vram_gb
+    resources['kwh'] = kwh
     resources['total_hours'] = total_hours
     resources['iters_per_second'] = iters_per_second
     resources['cpu_name'] = cpu_name
     resources['gpu_name'] = gpu_name
     resources['disk_type'] = disk_type
     resources['vram_gb'] = vram_gb
+
+    import re
+    cpu_name = re.sub('.*Gen Intel(R) Core(TM) ', '', cpu_name)
+    resources['hardware'] = '{} {}'.format(cpu_name, gpu_name)
     return resources
 
 
@@ -565,6 +579,16 @@ def relevant_pred_config(pred_args, dvc_dpath):
     pred_config['tta_fliprot'] = pred_args.get('tta_fliprot', 0)
     pred_config['tta_time'] = pred_args.get('tta_time', 0)
     pred_config['chip_overlap'] = pred_args['chip_overlap']
+    pred_config['input_space_scale'] = pred_args.get('input_space_scale', None)
+    pred_config['window_space_scale'] = pred_args.get('window_space_scale', None)
+    pred_config['output_space_scale'] = pred_args.get('output_space_scale', None)
+    pred_config['time_span'] = pred_args.get('time_span', None)
+    pred_config['time_sampling'] = pred_args.get('time_sampling', None)
+    pred_config['time_steps'] = pred_args.get('time_steps', None)
+    pred_config['chip_dims'] = pred_args.get('chip_dims', None)
+    pred_config['set_cover_algo'] = pred_args.get('set_cover_algo', None)
+    pred_config['resample_invalid_frames'] = pred_args.get('resample_invalid_frames', None)
+    pred_config['use_cloudmask'] = pred_args.get('use_cloudmask', None)
     package_fpath = pred_args['package_fpath']
     test_dataset = pred_args['test_dataset']
     if dvc_dpath is not None:
@@ -897,7 +921,7 @@ def prepare_results(all_infos, coi_pattern, dvc_dpath=None):
             if meta_item['type'] == 'measure':
                 predict_resources = meta_item['properties']
                 start_time = util_time.coerce_datetime(predict_resources.get('start_timestamp', None))
-                end_time = util_time.coerce_datetime(predict_resources.get('end_timestamp', None))
+                end_time = util_time.coerce_datetime(predict_resources.get('end_timestamp', predict_resources.get('stop_timestamp', None)))
                 iters_per_second = predict_resources.get('iters_per_second', None)
                 total_hours = (end_time - start_time).total_seconds() / (60 * 60)
                 vram = predict_resources['device_info']['allocated_vram']

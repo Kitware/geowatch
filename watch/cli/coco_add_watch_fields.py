@@ -46,7 +46,7 @@ class AddWatchFieldsConfig(scfg.Config):
     }
 
 
-def main(**kwargs):
+def main(cmdline=True, **kwargs):
     r"""
     CommandLine:
 
@@ -96,7 +96,7 @@ def main(**kwargs):
         kwargs['src'] = kwargs['dst']
         main(**kwargs)
     """
-    config = AddWatchFieldsConfig(kwargs, cmdline=True)
+    config = AddWatchFieldsConfig(kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
     print('read dataset')

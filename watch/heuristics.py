@@ -552,3 +552,68 @@ QUALITY_BITS = ub.udict({
     'clear'         : 1 << 6,
     'water'         : 1 << 7,
 })
+
+
+# The main dataset codes currently in use.
+DATASET_CODES = [
+    'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC',
+    'Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC',
+]
+
+
+DVC_FIND_EXPT_KWARGS = {'tags': 'phase2_expt', 'envvar': 'EXPT_DVC_DPATH'}
+DVC_FIND_DATA_KWARGS = {'tags': 'phase2_data', 'envvar': 'DATA_DVC_DPATH'}
+
+
+def auto_expt_dvc():
+    import watch
+    return watch.find_dvc_dpath(**DVC_FIND_EXPT_KWARGS)
+
+
+def auto_data_dvc():
+    import watch
+    return watch.find_dvc_dpath(**DVC_FIND_DATA_KWARGS)
+
+
+# We should be able to figure out a way to robustly introspect these
+fit_param_keys = [
+    'sensorchan',
+    # 'channels',
+    'time_steps',
+    'chip_dims', 'chip_overlap', 'arch_name', 'optimizer',
+    'time_sampling', 'time_span', 'true_multimodal',
+    'accumulate_grad_batches', 'modulate_class_weights', 'tokenizer',
+    'use_grid_positives', 'use_cloudmask', 'upweight_centers',
+    'temporal_dropout', 'stream_channels', 'saliency_loss',
+    'class_loss', 'init', 'learning_rate', 'decoder',
+]
+
+
+pred_param_keys = [
+    'pred_tta_fliprot',
+    'pred_tta_time',
+    'pred_chip_overlap',
+]
+
+
+trk_param_keys = [
+    'trk_thresh',
+    'trk_morph_kernel',
+    'trk_agg_fn',
+    'trk_thresh_hysteresis',
+    'trk_moving_window_size',
+]
+
+
+act_param_keys = [
+    'trk_use_viterbi',
+    'trk_thresh',
+]
+
+
+DSET_CODE_TO_GSD = {
+    # DEPRECATE
+    'Aligned-Drop3-L1': 10.0,
+    'Aligned-Drop3-TA1-2022-03-10': 10.0,
+    'Cropped-Drop3-TA1-2022-03-10': 1.0,
+}

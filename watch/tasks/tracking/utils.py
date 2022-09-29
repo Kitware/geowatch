@@ -732,7 +732,7 @@ def build_heatmap(dset, gid, key, return_chan_probs=False, space='video',
         if channels_have.numel() != channels_request.numel():
             raise ValueError(ub.paragraph(
                 f'''
-                Requeted {channels_request=} in the image {gid=} of {dset=}
+                Requested {channels_request=} in the image {gid=} of {dset=}
                 but only {channels_have=} existed.
                 '''))
 
@@ -756,6 +756,12 @@ def build_heatmap(dset, gid, key, return_chan_probs=False, space='video',
                   'I hope there is only ever one channel here')
 
     key_img_probs = coco_img.delay(channels=common, space=space).finalize(nodata='float')
+
+    #### FIXME!
+    #### Curently hacking all nans to zero! Instead we should use the fact
+    #### That we don't have an observation in later stages!
+    key_img_probs = np.nan_to_num(key_img_probs)
+
     # Not sure about that sum axis=-1 here
     fg_img_probs = key_img_probs.sum(axis=-1)
     if return_chan_probs:

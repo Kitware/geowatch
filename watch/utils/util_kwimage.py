@@ -1329,7 +1329,7 @@ def find_low_overlap_covering_boxes_optimize(polygons, scale, min_box_dim, max_b
 
 class Box(ub.NiceRepr):
     """
-    Like kwimage.Boxes, but only one of them.
+    Like kwimage.Boxes, but only one of t/em.
 
     Currently implemented by storing a Boxes object with one item and indexing
     into it. Could be done more efficiently
@@ -1375,6 +1375,14 @@ class Box(ub.NiceRepr):
         self = Box(boxes)
         return self
 
+    @classmethod
+    def coerce(cls, data):
+        if isinstance(data, Box):
+            return data
+        else:
+            import kwimage
+            return cls(kwimage.Boxes.coerce(data))
+
     @property
     def dsize(self):
         return (int(self.width), int(self.height))
@@ -1404,13 +1412,72 @@ class Box(ub.NiceRepr):
         new = self.__class__(new_boxes)
         return new
 
+    def copy(self, *args, **kwargs):
+        new_boxes = self.boxes.copy(*args, **kwargs)
+        new = self.__class__(new_boxes)
+        return new
+
+    def round(self, *args, **kwargs):
+        new_boxes = self.boxes.round(*args, **kwargs)
+        new = self.__class__(new_boxes)
+        return new
+
+    def pad(self, *args, **kwargs):
+        new_boxes = self.boxes.pad(*args, **kwargs)
+        new = self.__class__(new_boxes)
+        return new
+
+    def resize(self, *args, **kwargs):
+        new_boxes = self.boxes.resize(*args, **kwargs)
+        new = self.__class__(new_boxes)
+        return new
+
+    def to_ltbr(self, *args, **kwargs):
+        return self.__class__(self.boxes.to_ltbr(*args, **kwargs))
+
+    def to_xywh(self, *args, **kwargs):
+        return self.__class__(self.boxes.to_xywh(*args, **kwargs))
+
+    def to_cxywh(self, *args, **kwargs):
+        return self.__class__(self.boxes.to_cxywh(*args, **kwargs))
+
+    def toformat(self, *args, **kwargs):
+        return self.__class__(self.boxes.toformat(*args, **kwargs))
+
+    def corners(self, *args, **kwargs):
+        return self.boxes.corners(*args, **kwargs)[0]
+
     @property
     def width(self):
         return self.boxes.width.ravel()[0]
 
     @property
+    def aspect_ratio(self):
+        return self.boxes.aspect_ratio.ravel()[0]
+
+    @property
     def height(self):
-        return self.boxes.width.ravel()[0]
+        return self.boxes.height.ravel()[0]
+
+    @property
+    def tl_x(self):
+        return self.boxes.tl_x[0]
+
+    @property
+    def tl_y(self):
+        return self.boxes.tl_y[0]
+
+    @property
+    def br_x(self):
+        return self.boxes.br_x[0]
+
+    @property
+    def br_y(self):
+        return self.boxes.br_y[0]
+
+    @property
+    def dtype(self):
+        return self.boxes.dtype
 
     @property
     def area(self):

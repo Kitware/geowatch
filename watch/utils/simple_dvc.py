@@ -95,7 +95,7 @@ class SimpleDVC(ub.NiceRepr):
             remote = self.remote
         return remote
 
-    def add(self, path):
+    def add(self, path, verbose=0):
         from dvc import main as dvc_main
         paths = list(map(ub.Path, _ensure_iterable(path)))
         if len(paths) == 0:
@@ -105,11 +105,35 @@ class SimpleDVC(ub.NiceRepr):
         rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
         with util_path.ChDir(dvc_root):
             dvc_command = ['add'] + rel_paths
-            dvc_main.main(dvc_command)
+            if verbose:
+                verb_flag = '-' + ('v' * min(verbose, 3))
+                dvc_command += [verb_flag]
+            ret = dvc_main.main(dvc_command)
+        if ret != 0:
+            raise Exception('Failed to add files')
 
         has_autostage = ub.cmd('dvc config core.autostage', cwd=dvc_root, check=True)['out'].strip() == 'true'
         if not has_autostage:
             raise NotImplementedError('Need autostage to complete the git commit')
+
+    def check_ignore(self, path, details=0, verbose=0):
+        from dvc import main as dvc_main
+        paths = list(map(ub.Path, _ensure_iterable(path)))
+        if len(paths) == 0:
+            print('No paths to add')
+            return
+        dvc_root = self._ensure_root(paths)
+        rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
+        with util_path.ChDir(dvc_root):
+            dvc_command = ['check-ignore'] + rel_paths
+            if details:
+                dvc_command += ['--details']
+            if verbose:
+                verb_flag = '-' + ('v' * min(verbose, 3))
+                dvc_command += [verb_flag]
+            ret = dvc_main.main(dvc_command)
+        if ret != 0:
+            raise Exception('Failed check-ignore')
 
     def git_pull(self):
         ub.cmd('git pull', verbose=3, check=True, cwd=self.dvc_root)

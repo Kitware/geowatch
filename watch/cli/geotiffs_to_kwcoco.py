@@ -23,7 +23,7 @@ class KWCocoFromGeotiffConfig(scfg.Config):
         'relative': scfg.Value(False, help='if true make paths relative'),
         'dst': scfg.Value(None, help='path to write new kwcoco file'),
         'workers': scfg.Value(0, help='number of parallel jobs'),
-        'strict': scfg.Value(False, help='it True, will raise an errornumber of parallel jobs'),
+        'strict': scfg.Value(False, isflag=True, help='it True, will raise an error if any job fails'),
     }
 
 

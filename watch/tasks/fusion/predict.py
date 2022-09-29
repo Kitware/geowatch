@@ -36,6 +36,7 @@ def make_predict_config(cmdline=False, **kwargs):
     """
     Configuration for fusion prediction
     """
+    # TODO: switch to jsonargparse
     from watch.utils import configargparse_ext
     from scriptconfig.smartcast import smartcast
 
@@ -75,11 +76,8 @@ def make_predict_config(cmdline=False, **kwargs):
     # TODO:
     # parser.add_argument('--cache', type=smartcast, default=0, help='if True, dont rerun prediction on images where predictions exist'),
 
-    # TODO
-    # parser.add_argument('--test_time_augmentation', default=False, help='')
-
     parser.add_argument(
-        '--write_preds', default=True, type=smartcast, help=ub.paragraph(
+        '--write_preds', default=False, type=smartcast, help=ub.paragraph(
             '''
             If True, convert probability maps into raw "hard" predictions and
             write them as annotations to the prediction kwcoco file.
@@ -116,6 +114,9 @@ def make_predict_config(cmdline=False, **kwargs):
         'input_space_scale',
         'window_space_scale',
         'output_space_scale',
+        'use_cloudmask',
+        'resample_invalid_frames',
+        'set_cover_algo',
     ]
     parser = datamodule_class.add_argparse_args(parser)
     datamodule_defaults = {k: parser.get_default(k) for k in overloadable_datamodule_keys}
@@ -169,6 +170,7 @@ def predict(cmdline=False, **kwargs):
         ...     'devices': devices,
         ... }
         >>> package_fpath = fit_model(**fit_kwargs)
+        >>> assert ub.Path(package_fpath).exists()
         >>> # Predict via that model
         >>> predict_kwargs = kwargs = {
         >>>     'package_fpath': package_fpath,
@@ -181,6 +183,7 @@ def predict(cmdline=False, **kwargs):
         >>> }
         >>> result_dataset = predict(**kwargs)
         >>> dset = result_dataset
+        >>> dset.dataset['info'][-1]['properties']['config']['time_sampling']
         >>> # Check that the result format looks correct
         >>> for vidid in dset.index.videos.keys():
         >>>     # Note: only some of the images in the pred sequence will get
@@ -209,11 +212,12 @@ def predict(cmdline=False, **kwargs):
         >>> # assert pred2.max() > 1
     """
     args = make_predict_config(cmdline=cmdline, **kwargs)
-    config = args.__dict__
+    config = args.__dict__.copy()
+    datamodule_defaults = args.datamodule_defaults
     print('kwargs = {}'.format(ub.repr2(kwargs, nl=1)))
     print('config = {}'.format(ub.repr2(config, nl=2)))
 
-    package_fpath = ub.Path(args.package_fpath)
+    package_fpath = ub.Path(config['package_fpath'])
 
     try:
         # Ideally we have a package, everything is defined there
@@ -247,11 +251,11 @@ def predict(cmdline=False, **kwargs):
     # knows how to construct the appropriate test dataset?
 
     # init datamodule from args
-    datamodule_class = getattr(datamodules, args.datamodule)
-    datamodule_vars = datamodule_class.compatible(vars(args))
+    datamodule_class = getattr(datamodules, config['datamodule'])
+    datamodule_vars = datamodule_class.compatible(config)
 
-    parsetime_vals = ub.dict_isect(datamodule_vars, args.datamodule_defaults)
-    need_infer = {k: v for k, v in parsetime_vals.items() if v == 'auto'}
+    parsetime_vals = ub.udict(datamodule_vars) & datamodule_defaults
+    need_infer = ub.udict({k: v for k, v in parsetime_vals.items() if v == 'auto'})
     # Try and infer what data we were given at train time
     if hasattr(method, 'fit_config'):
         traintime_params = method.fit_config
@@ -270,17 +274,18 @@ def predict(cmdline=False, **kwargs):
                 traintime_params['channels'] = list(method.input_norms.keys())[0]
 
     # FIXME: Some of the inferred args seem to not have the right type here.
-    able_to_infer = ub.dict_isect(traintime_params, need_infer)
+    able_to_infer = traintime_params & need_infer
     if able_to_infer.get('channels', None) is not None:
         # do this before smartcast breaks the spec
         able_to_infer['channels'] = kwcoco.SensorChanSpec.coerce(able_to_infer['channels'])
     from scriptconfig.smartcast import smartcast
-    able_to_infer = ub.map_vals(smartcast, able_to_infer)
-    unable_to_infer = ub.dict_diff(need_infer, traintime_params)
+    able_to_infer = ub.udict(able_to_infer).map_values(smartcast)
+    unable_to_infer = need_infer - traintime_params
     # Use defaults when we can't infer
     overloads = able_to_infer.copy()
-    overloads.update(ub.dict_isect(args.datamodule_defaults, unable_to_infer))
+    overloads.update(datamodule_defaults & unable_to_infer)
     datamodule_vars.update(overloads)
+    config.update(datamodule_vars)
     print('able_to_infer = {}'.format(ub.repr2(able_to_infer, nl=1)))
     print('unable_to_infer = {}'.format(ub.repr2(unable_to_infer, nl=1)))
     print('overloads = {}'.format(ub.repr2(overloads, nl=1)))
@@ -397,49 +402,20 @@ def predict(cmdline=False, **kwargs):
     result_dataset.reroot(absolute=True)
     # Set the filepath for the prediction coco file
     # (modifies the bundle_dpath)
-    # if args.pred_dataset is None:
-    #     pred_dpath = util_path.coercepath(args.pred_dpath)
+    # if config['pred_dataset'] is None:
+    #     pred_dpath = util_path.coercepath(config['pred_dpath'])
     #     result_dataset.fpath = str(pred_dpath / 'pred.kwcoco.json')
     # else:
-    if not args.pred_dataset:
+    if not config['pred_dataset']:
         raise ValueError(
             f'Must specify path to the output (predicted) kwcoco file. '
-            f'Got {args.pred_dataset=}')
-    result_dataset.fpath = str(args.pred_dataset)
+            f'Got {config["pred_dataset"]=}')
+    result_dataset.fpath = str(config['pred_dataset'])
     result_fpath = util_path.coercepath(result_dataset.fpath)
 
-    # add hyperparam info to "info" section
-    info = result_dataset.dataset.get('info', [])
-
-    from kwcoco.util import util_json
-    jsonified_args = util_json.ensure_json_serializable(args.__dict__)
-    # This will be serailized in kwcoco, so make sure it can be coerced to json
-    walker = ub.IndexableWalker(jsonified_args)
-    for problem in util_json.find_json_unserializable(jsonified_args):
-        bad_data = problem['data']
-        if isinstance(bad_data, kwcoco.CocoDataset):
-            fixed_fpath = getattr(bad_data, 'fpath', None)
-            if fixed_fpath is not None:
-                walker[problem['loc']] = fixed_fpath
-            else:
-                walker[problem['loc']] = '<IN_MEMORY_DATASET: {}>'.format(
-                    bad_data._build_hashid())
-
-    from watch.utils import process_context
-    proc_context = process_context.ProcessContext(
-        name='watch.tasks.fusion.predict',
-        type='process',
-        args=jsonified_args,
-        track_emissions=True,
-        extra={'fit_config': traintime_params}
-    )
-    info.append(proc_context.obj)
-    proc_context.start()
-    proc_context.add_disk_info(test_coco_dataset.fpath)
-
     from watch.utils.lightning_ext import util_device
-    print('args.devices = {!r}'.format(args.devices))
-    devices = util_device.coerce_devices(args.devices)
+    print('devices = {!r}'.format(config['devices']))
+    devices = util_device.coerce_devices(config['devices'])
     print('devices = {!r}'.format(devices))
     if len(devices) > 1:
         raise NotImplementedError('TODO: handle multiple devices')
@@ -459,12 +435,12 @@ def predict(cmdline=False, **kwargs):
 
     stitch_managers = {}
 
-    if args.with_change == 'auto':
-        args.with_change = getattr(method, 'global_change_weight', 1.0)
-    if args.with_class == 'auto':
-        args.with_class = getattr(method, 'global_class_weight', 1.0)
-    if args.with_saliency == 'auto':
-        args.with_saliency = getattr(method, 'global_saliency_weight', 0.0)
+    if config['with_change'] == 'auto':
+        config['with_change'] = getattr(method, 'global_change_weight', 1.0)
+    if config['with_class'] == 'auto':
+        config['with_class'] = getattr(method, 'global_class_weight', 1.0)
+    if config['with_saliency'] == 'auto':
+        config['with_saliency'] = getattr(method, 'global_saliency_weight', 0.0)
 
     # could be torch on-device stitching
     stitch_device = 'numpy'
@@ -477,17 +453,17 @@ def predict(cmdline=False, **kwargs):
     stitcher_common_kw = dict(
         stiching_space='video',
         device=stitch_device,
-        thresh=args.thresh,
-        write_probs=args.write_probs,
-        write_preds=args.write_preds,
-        prob_compress=args.compress,
-        quantize=args.quantize,
+        thresh=config['thresh'],
+        write_probs=config['write_probs'],
+        write_preds=config['write_preds'],
+        prob_compress=config['compress'],
+        quantize=config['quantize'],
     )
 
     # If we only care about some predictions from the model, then keep track of
     # the class indices we need to take.
     task_keep_indices = {}
-    if args.with_change:
+    if config['with_change']:
         task_name = 'change'
         head_classes = ['change']
         head_keep_idxs = [
@@ -510,7 +486,7 @@ def predict(cmdline=False, **kwargs):
         )
         result_dataset.ensure_category('change')
 
-    if args.with_class:
+    if config['with_class']:
         task_name = 'class'
         if hasattr(method, 'foreground_classes'):
             foreground_classes = method.foreground_classes
@@ -541,7 +517,7 @@ def predict(cmdline=False, **kwargs):
             **stitcher_common_kw,
         )
 
-    if args.with_saliency:
+    if config['with_saliency']:
         # hack: the model should tell us what the shape of its head is
         task_name = 'saliency'
         head_classes = ['not_salient', 'salient']
@@ -592,19 +568,87 @@ def predict(cmdline=False, **kwargs):
     CHECK_GRID = 0
     if CHECK_GRID:
         # Check to see if the grid will cover all images
-        test_dataloader.dataset
-
+        image_id_to_target_space_slices = ub.ddict(list)
         seen_gids = set()
         primary_gids = set()
         for target in test_dataloader.dataset.new_sample_grid['targets']:
+            target['video_id']
+            # Denote we have seen this vidspace slice in this image.
+            for gid in target['gids']:
+                image_id_to_target_space_slices[gid].append(target['space_slice'])
             primary_gids.add(target['main_gid'])
             seen_gids.update(target['gids'])
         all_gids = list(test_dataloader.dataset.sampler.dset.images())
         from xdev import set_overlaps
         img_overlaps = set_overlaps(all_gids, seen_gids)
-        primary_img_overlaps = set_overlaps(all_gids, primary_gids)
         print('img_overlaps = {}'.format(ub.repr2(img_overlaps, nl=1)))
-        print('primary_img_overlaps = {}'.format(ub.repr2(primary_img_overlaps, nl=1)))
+        # primary_img_overlaps = set_overlaps(all_gids, primary_gids)
+        # print('primary_img_overlaps = {}'.format(ub.repr2(primary_img_overlaps, nl=1)))
+
+        # Check to see how much of each image is covered in video space
+        # import kwimage
+        coco_dset = test_dataloader.dataset.sampler.dset
+        gid_to_iou = {}
+        for gid, slices in image_id_to_target_space_slices.items():
+            vidid = coco_dset.index.imgs[gid]['video_id']
+            video = coco_dset.index.videos[vidid]
+            video_poly = util_kwimage.Box.from_dsize((video['width'], video['height'])).to_polygon()
+            boxes = kwimage.Boxes.concatenate([kwimage.Boxes.from_slice(sl) for sl in slices])
+            polys = boxes.to_polygons()
+            covered = polys.unary_union().simplify(0.01)
+            iou = covered.iou(video_poly)
+            gid_to_iou[gid] = iou
+        ious = list(gid_to_iou.values())
+        iou_stats = kwarray.stats_dict(ious, n_extreme=True)
+        print('iou_stats = {}'.format(ub.repr2(iou_stats, nl=1)))
+
+    CHECK_PRED_SPATIAL_COVERAGE = 0
+    if CHECK_PRED_SPATIAL_COVERAGE:
+        # Enable debugging to ensure the dataloader actually passed
+        # us the targets that cover the entire image.
+        image_id_to_input_space_slices = ub.ddict(list)
+        image_id_to_output_space_slices = ub.ddict(list)
+
+    # add hyperparam info to "info" section
+    info = result_dataset.dataset.get('info', [])
+
+    def jsonify(data):
+        # This will be serailized in kwcoco, so make sure it can be coerced to json
+        from kwcoco.util import util_json
+        jsonified = util_json.ensure_json_serializable(data)
+        walker = ub.IndexableWalker(jsonified)
+        for problem in util_json.find_json_unserializable(jsonified):
+            bad_data = problem['data']
+            if hasattr(bad_data, 'spec'):
+                walker[problem['loc']] = bad_data.spec
+            if isinstance(bad_data, kwcoco.CocoDataset):
+                fixed_fpath = getattr(bad_data, 'fpath', None)
+                if fixed_fpath is not None:
+                    walker[problem['loc']] = fixed_fpath
+                else:
+                    walker[problem['loc']] = '<IN_MEMORY_DATASET: {}>'.format(
+                        bad_data._build_hashid())
+        return jsonified
+
+    jsonified_args = jsonify(args.__dict__)
+    config_resolved = jsonify(config)
+
+    from watch.utils import process_context
+    proc_context = process_context.ProcessContext(
+        name='watch.tasks.fusion.predict',
+        type='process',
+        args=jsonified_args,
+        config=config_resolved,
+        track_emissions=config['track_emissions'],
+        extra={'fit_config': traintime_params}
+    )
+
+    from kwcoco.util import util_json
+    assert not list(util_json.find_json_unserializable(config_resolved))
+
+    info.append(proc_context.obj)
+    proc_context.start()
+    proc_context.add_disk_info(test_coco_dataset.fpath)
 
     with torch.set_grad_enabled(False):
         # FIXME: that data loader should not be producing incorrect sensor/mode
@@ -629,16 +673,17 @@ def predict(cmdline=False, **kwargs):
                     continue
                 item = item.copy()
                 batch_gids = [frame['gid'] for frame in item['frames']]
-                outspace_info = [ub.udict(f) & {
+                frame_infos = [ub.udict(f) & {
                     'gid',
                     'output_space_slice',
                     'output_image_dsize',
+                    'scale_outspace_from_vid',
                 } for f in item['frames']]
                 batch_trs.append({
                     'space_slice': tuple(item['target']['space_slice']),
                     'scale': item['target']['scale'],
                     'gids': batch_gids,
-                    'outspace_info': outspace_info,
+                    'frame_infos': frame_infos,
                     'fliprot_params': item['target'].get('fliprot_params', None)
                 })
                 position_tensors = item.get('positional_tensors', None)
@@ -718,21 +763,30 @@ def predict(cmdline=False, **kwargs):
                     # Get the spatio-temporal subregion this prediction belongs to
                     # out_gids: list[int] = target['gids'][predicted_frame_slice]
                     # space_slice: tuple[slice, slice] = target['space_slice']
-                    outspace_info: list[dict] = target['outspace_info'][predicted_frame_slice]
+                    frame_infos: list[dict] = target['frame_infos'][predicted_frame_slice]
 
                     fliprot_params: dict = target['fliprot_params']
                     # Update the stitcher with this windowed prediction
-                    for probs, outspace_slice in zip(bin_probs, outspace_info):
+                    for probs, frame_info in zip(bin_probs, frame_infos):
                         if fliprot_params is not None:
                             # Undo fliprot TTA
                             probs = data_utils.inv_fliprot(probs, **fliprot_params)
 
-                        gid = outspace_slice['gid']
-                        output_image_dsize = outspace_slice['output_image_dsize']
-                        output_space_slice = outspace_slice['output_space_slice']
+                        gid = frame_info['gid']
+                        output_image_dsize = frame_info['output_image_dsize']
+                        output_space_slice = frame_info['output_space_slice']
+                        scale_outspace_from_vid = frame_info['scale_outspace_from_vid']
+                        # print(f'output_image_dsize={output_image_dsize}')
+                        # print(f'output_space_slice={output_space_slice}')
+
+                        if CHECK_PRED_SPATIAL_COVERAGE:
+                            image_id_to_input_space_slices[gid].append(target['space_slice'])
+                            image_id_to_output_space_slices[gid].append(output_space_slice)
 
                         head_stitcher.accumulate_image(
-                            gid, output_space_slice, probs, dsize=output_image_dsize)
+                            gid, output_space_slice, probs,
+                            dsize=output_image_dsize,
+                            scale=scale_outspace_from_vid)
 
                 # Free up space for any images that have been completed
                 for gid in head_stitcher.ready_image_ids():
@@ -746,6 +800,31 @@ def predict(cmdline=False, **kwargs):
             for gid in head_stitcher.managed_image_ids():
                 writer_queue.submit(head_stitcher.finalize_image, gid)
         writer_queue.wait_until_finished()
+
+    if CHECK_PRED_SPATIAL_COVERAGE:
+        coco_dset = test_dataloader.dataset.sampler.dset
+        gid_to_iou = {}
+        for gid, slices in image_id_to_input_space_slices.items():
+            vidid = coco_dset.index.imgs[gid]['video_id']
+            video = coco_dset.index.videos[vidid]
+            video_poly = util_kwimage.Box.from_dsize((video['width'], video['height'])).to_polygon()
+            boxes = kwimage.Boxes.concatenate([kwimage.Boxes.from_slice(sl) for sl in slices])
+            polys = boxes.to_polygons()
+            covered = polys.unary_union().simplify(0.01)
+            iou = covered.iou(video_poly)
+            gid_to_iou[gid] = iou
+
+        outspace_areas = []
+        for gid, slices in image_id_to_output_space_slices.items():
+            boxes = kwimage.Boxes.concatenate([kwimage.Boxes.from_slice(sl) for sl in slices])
+            polys = boxes.to_polygons()
+            covered = polys.unary_union().simplify(0.01)
+            outspace_areas.append(covered.area)
+
+        print('outspace_rt_areas ' + repr(ub.dict_hist(np.sqrt(np.array(outspace_areas)))))
+        ious = list(gid_to_iou.values())
+        iou_stats = kwarray.stats_dict(ious, n_extreme=True)
+        print('input_space iou_stats = {}'.format(ub.repr2(iou_stats, nl=1)))
 
     proc_context.add_device_info(device)
     proc_context.stop()
@@ -816,10 +895,11 @@ class CocoStitchingManager(object):
               the code that adds soft predictions to the kwcoco file?
     """
 
-    def __init__(self, result_dataset, short_code=None, chan_code=None, stiching_space='video',
-                 device='numpy', thresh=0.5, write_probs=True,
-                 write_preds=True, num_bands='auto', prob_compress='DEFLATE',
-                 polygon_categories=None, quantize=True):
+    def __init__(self, result_dataset, short_code=None, chan_code=None,
+                 stiching_space='video', device='numpy', thresh=0.5,
+                 write_probs=True, write_preds=True, num_bands='auto',
+                 prob_compress='DEFLATE', polygon_categories=None,
+                 quantize=True):
         self.short_code = short_code
         self.result_dataset = result_dataset
         self.device = device
@@ -843,6 +923,7 @@ class CocoStitchingManager(object):
         # as needed.  We use the fact that videos are iterated over
         # sequentially so free up memory of a video after it completes.
         self.image_stitchers = {}
+        self.image_scales = {}  # TODO: should be a more general transform
         self._seen_gids = set()
         self._last_vidid = None
         self._ready_gids = set()
@@ -866,7 +947,7 @@ class CocoStitchingManager(object):
             self.prob_dpath = join(bundle_dpath, prob_subdir)
             ub.ensuredir(self.prob_dpath)
 
-    def accumulate_image(self, gid, space_slice, data, dsize=None):
+    def accumulate_image(self, gid, space_slice, data, dsize=None, scale=None):
         """
         Stitches a result into the appropriate image stitcher.
 
@@ -879,7 +960,9 @@ class CocoStitchingManager(object):
 
             data (ndarray | Tensor): the feature or probability data
 
-            dsize (Tuple): the w/h i
+            dsize (Tuple): the w/h of outputspace
+
+            scale (float | None): the scale to the outspace from from the vidspace
         """
         data = kwarray.atleast_nd(data, 3)
         dset = self.result_dataset
@@ -897,9 +980,11 @@ class CocoStitchingManager(object):
                         self.num_bands = data.shape[2]
                     else:
                         raise NotImplementedError
-                stitch_dims = (width, height, self.num_bands)
+                # stitch_dims = (width, height, self.num_bands)
+                stitch_dims = (height, width, self.num_bands)
                 self.image_stitchers[gid] = kwarray.Stitcher(
                     stitch_dims, device=self.device)
+                self.image_scales[gid] = scale
 
             if self._last_vidid is not None and vidid != self._last_vidid:
                 # We assume sequential video iteration, thus when we see a new
@@ -911,6 +996,10 @@ class CocoStitchingManager(object):
                 # do something clever to know if frames are ready early?
                 # might be tricky in general if we run over multiple
                 # times per image with different frame samplings.
+                # .
+                # TODO: we know if an image is done if all of the samples that
+                # contain it have been processed. (although that does not
+                # account for dynamic resampling)
                 self._ready_gids.update(ready_gids)
 
             self._last_vidid = vidid
@@ -968,11 +1057,28 @@ class CocoStitchingManager(object):
 
         stitch_slice = fix_slice(stitch_slice)
 
+        HACK_FIX_SHAPE = 1
+        if HACK_FIX_SHAPE:
+            # Something is causing an off by one error, not sure what it is
+            # this hack just forces the slice to agree.
+            dh, dw = stitch_data.shape[0:2]
+            box = util_kwimage.Box.from_slice(stitch_slice)
+            sw, sh = box.dsize
+            if sw > dw:
+                box = box.resize(width=dw)
+            if sh > dh:
+                box = box.resize(height=dh)
+            if sw < dw:
+                stitch_data = stitch_data[:, 0:sw]
+                stitch_weights = stitch_weights[:, 0:sw]
+            if sh < dh:
+                stitch_data = stitch_data[0:sh]
+                stitch_weights = stitch_weights[0:sh]
+            stitch_slice = box.to_slice()
+
         try:
             stitcher.add(stitch_slice, stitch_data, weight=stitch_weights)
         except IndexError:
-            import xdev
-            xdev.embed()
             print(f'stitch_slice={stitch_slice}')
             print(f'stitch_weights.shape={stitch_weights.shape}')
             print(f'stitch_data.shape={stitch_data.shape}')
@@ -1025,6 +1131,8 @@ class CocoStitchingManager(object):
 
         self._seen_gids.add(gid)
 
+        scale_asset_from_vidspace = self.image_scales.pop(gid)
+
         # Get the final stitched feature for this image
         final_probs = stitcher.finalize()
         final_probs = kwarray.atleast_nd(final_probs, 3)
@@ -1065,7 +1173,8 @@ class CocoStitchingManager(object):
             new_fname = img.get('name', str(img['id'])) + f'_{self.suffix_code}.tif'  # FIXME
             new_fpath = join(self.prob_dpath, new_fname)
             assert final_probs.shape[2] == (self.chan_code.count('|') + 1)
-            img_from_asset = img_from_vid
+            vid_from_asset = kwimage.Affine.coerce(scale=scale_asset_from_vidspace).inv()
+            img_from_asset = img_from_vid @ vid_from_asset
             aux = {
                 'file_name': relpath(new_fpath, bundle_dpath),
                 'channels': self.chan_code,
@@ -1107,7 +1216,6 @@ class CocoStitchingManager(object):
                 quant_probs, quantization = quantize_float01(final_probs)
                 aux['quantization'] = quantization
 
-                # TODO: add geo-referencing when appropriate
                 kwimage.imwrite(
                     str(new_fpath), quant_probs, space=None, backend='gdal',
                     nodata=quantization['nodata'], **write_kwargs,
@@ -1119,6 +1227,9 @@ class CocoStitchingManager(object):
                 )
 
         if self.write_preds:
+            # NOTE: The typical pipeline will never do this.
+            # This is generally reserved for a subsequent tracking stage.
+
             # This is the final step where we convert soft-probabilities to
             # hard-polygons, we need to choose an good operating point here.
 
@@ -1162,7 +1273,7 @@ def quantize_float01(imdata, old_min=0, old_max=1, quantize_dtype=np.int16):
 
     Example:
         >>> from watch.tasks.fusion.predict import *  # NOQA
-        >>> from kwcoco.util.util_delayed_poc import dequantize
+        >>> from delayed_image.helpers import dequantize
         >>> # Test error when input is not nicely between 0 and 1
         >>> imdata = (np.random.randn(32, 32, 3) - 1.) * 2.5
         >>> quant1, quantization1 = quantize_float01(imdata, old_min=0, old_max=1)
@@ -1180,7 +1291,7 @@ def quantize_float01(imdata, old_min=0, old_max=1, quantize_dtype=np.int16):
     Example:
         >>> # Test dequantize with uint8
         >>> from watch.tasks.fusion.predict import *  # NOQA
-        >>> from kwcoco.util.util_delayed_poc import dequantize
+        >>> from delayed_image.helpers import dequantize
         >>> imdata = np.random.randn(32, 32, 3)
         >>> quant1, quantization1 = quantize_float01(imdata, old_min=0, old_max=1, quantize_dtype=np.uint8)
         >>> recon1 = dequantize(quant1, quantization1)
@@ -1315,107 +1426,6 @@ if __name__ == '__main__':
         --test_dataset=$TEST_DATASET \
         --tta_fliprot=0 \
         --tta_time=0 --dump=$DVC_DPATH/_tmp/test_pred_config.yaml
-
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
-    TEST_DATASET=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1_small.kwcoco.json
-
-    PRED_DATASET_00=$DVC_DPATH/_tmp/_tmp_pred_00/pred.kwcoco.json
-    PRED_DATASET_10=$DVC_DPATH/_tmp/_tmp_pred_10/pred.kwcoco.json
-    PRED_DATASET_01=$DVC_DPATH/_tmp/_tmp_pred_01/pred.kwcoco.json
-    PRED_DATASET_11=$DVC_DPATH/_tmp/_tmp_pred_11/pred.kwcoco.json
-
-    export CUDA_VISIBLE_DEVICES=0
-    python -m watch.tasks.fusion.predict \
-        --config=$DVC_DPATH/_tmp/test_pred_config.yaml \
-        --pred_dataset=$PRED_DATASET_00 \
-        --test_dataset=$TEST_DATASET \
-        --tta_fliprot=0 \
-        --tta_time=0
-
-    export CUDA_VISIBLE_DEVICES=1
-    python -m watch.tasks.fusion.predict \
-        --config=$DVC_DPATH/_tmp/test_pred_config.yaml \
-        --pred_dataset=$PRED_DATASET_10 \
-        --test_dataset=$TEST_DATASET \
-        --tta_fliprot=1 \
-        --tta_time=0
-
-    export CUDA_VISIBLE_DEVICES=0
-    python -m watch.tasks.fusion.predict \
-        --config=$DVC_DPATH/_tmp/test_pred_config.yaml \
-        --pred_dataset=$PRED_DATASET_01 \
-        --test_dataset=$TEST_DATASET \
-        --tta_fliprot=0 \
-        --tta_time=1
-
-    export CUDA_VISIBLE_DEVICES=1
-    python -m watch.tasks.fusion.predict \
-        --config=$DVC_DPATH/_tmp/test_pred_config.yaml \
-        --pred_dataset=$PRED_DATASET_11 \
-        --test_dataset=$TEST_DATASET \
-        --tta_fliprot=1 \
-        --tta_time=1
-
-    #####
-
-    python -m watch.tasks.fusion.evaluate \
-        --true_dataset=$TEST_DATASET \
-        --pred_dataset=$PRED_DATASET_11 \
-        --eval_dpath=$DVC_DPATH/_tmp/_tmp_pred_11/eval
-        --score_space=video \
-        --draw_curves=1 \
-        --draw_heatmaps=1 --workers=2
-
-    python -m watch.tasks.fusion.evaluate \
-        --true_dataset=$TEST_DATASET \
-        --pred_dataset=$PRED_DATASET_00 \
-        --eval_dpath=$DVC_DPATH/_tmp/_tmp_pred_00/eval
-        --score_space=video \
-        --draw_curves=1 \
-        --draw_heatmaps=1 --workers=2
-
-    python -m watch.tasks.fusion.evaluate \
-        --true_dataset=$TEST_DATASET \
-        --pred_dataset=$PRED_DATASET_01 \
-        --eval_dpath=$DVC_DPATH/_tmp/_tmp_pred_01/eval
-        --score_space=video \
-        --draw_curves=1 \
-        --draw_heatmaps=1 --workers=2
-
-    python -m watch.tasks.fusion.evaluate \
-        --true_dataset=$TEST_DATASET \
-        --pred_dataset=$PRED_DATASET_10 \
-        --eval_dpath=$DVC_DPATH/_tmp/_tmp_pred_10/eval
-        --score_space=video \
-        --draw_curves=1 \
-        --draw_heatmaps=1 --workers=2
-
-
-    DVC_DPATH=$(smartwatch_dvc)
-    TEST_DATASET=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1.kwcoco.json
-    EXPT_PATTERN="*"
-    python -m watch.tasks.fusion.schedule_evaluation \
-            --devices="0,1" \
-            --model_globstr="$DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=19-step=13659-v1.pt" \
-            --test_dataset="$TEST_DATASET" \
-            --workdir="$DVC_DPATH/_tmp/smalltest" \
-            --tta_fliprot=0 \
-            --tta_time=0,5 \
-            --chip_overlap=0.3 \
-            --draw_heatmaps=0 \
-            --enable_pred=1 \
-            --enable_iarpa_eval=0 \
-            --enable_eval=0 \
-            --skip_existing=0 --backend=tmux --run=1
-
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc)
-    MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json
-
-    python -m watch.tasks.fusion.aggregate_results \
-        --measure_globstr="$DVC_DPATH/_tmp/smalltest/eval/*/*/*/*/eval/curves/measures2.json" \
-        --out_dpath="$DVC_DPATH/_tmp/smalltest/_agg_results" \
-        --dset_group_key="*" --show=True \
-        --classes_of_interest "Site Preparation" "Active Construction"
 
     """
     main()

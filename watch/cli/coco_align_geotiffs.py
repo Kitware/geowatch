@@ -142,21 +142,21 @@ class CocoAlignGeotiffConfig(scfg.Config):
             '''
         )),
 
-        'write_subsets': scfg.Value(True, help=ub.paragraph(
+        'write_subsets': scfg.Value(True, isflag=1, help=ub.paragraph(
             '''
             if True, writes a separate kwcoco file for every discovered ROI
             in addition to the final kwcoco file.
             '''
         )),
 
-        'visualize': scfg.Value(False, help=ub.paragraph(
+        'visualize': scfg.Value(False, isflag=1, help=ub.paragraph(
             '''
             if True, normalize and draw image / annotation sequences when
             extracting.
             '''
         )),
 
-        'debug_valid_regions': scfg.Value(False, help=ub.paragraph(
+        'debug_valid_regions': scfg.Value(False, isflag=1, help=ub.paragraph(
             '''
             write valid region visualizations to help debug "black images"
             issues.

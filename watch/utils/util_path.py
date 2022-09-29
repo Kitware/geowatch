@@ -399,7 +399,6 @@ def sidecar_glob(main_pat, sidecar_ext, main_key='main', sidecar_key=None,
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.tasks.fusion.dvc_sync_manager import *  # NOQA
         >>> import watch
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
         >>> bundle_dpath = dvc_dpath / 'Cropped-Drop3-TA1-2022-03-10'

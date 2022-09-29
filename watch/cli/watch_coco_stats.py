@@ -233,19 +233,48 @@ def coco_sensorchan_gsd_stats(coco_dset):
     Checks the GSD of each band.
     """
     import pandas as pd
+    import math
+    import numpy as np
+    import kwimage
     longform_rows = []
     for image_id in coco_dset.images():
         coco_img = coco_dset.coco_image(image_id)
 
-        for asset in coco_img.iter_asset_objs():
+        asset_rows = []
+        assets = list(coco_img.iter_asset_objs())
+        missing_gsd_idxs = []
+        for idx, asset in enumerate(assets):
             gsd = asset.get('approx_meter_gsd', float('nan'))
             sensor = asset.get('sensor_coarse', '*')
             channels = asset.get('channels', '?')
-            longform_rows.append({
+            asset_rows.append({
                 'sensor': sensor,
                 'channels': channels,
                 'gsd': gsd,
             })
+            if math.isnan(gsd):
+                missing_gsd_idxs.append(idx)
+
+        if missing_gsd_idxs:
+            # If we have a GSD for some but not all assets,
+            # we can relate them.
+            flags = ~np.array(ub.boolmask(missing_gsd_idxs, len(assets)))
+            if np.any(flags):
+                reference_idx = np.where(flags[0])[0][0]
+                ref_asset = assets[reference_idx]
+                img_from_ref = kwimage.Affine.coerce(
+                    ref_asset.get('warp_aux_to_img', ref_asset.get('warp_asset_to_img')))
+                for miss_idx in missing_gsd_idxs:
+                    mis_asset = assets[miss_idx]
+                    img_from_mis = kwimage.Affine.coerce(
+                        mis_asset.get('warp_aux_to_img', mis_asset.get('warp_asset_to_img')))
+                    mis_from_img = img_from_mis.inv()
+                    mis_from_ref = mis_from_img @ img_from_ref
+                    approx_scale = np.mean(mis_from_ref.decompose()['scale'])
+                    mis_gsd = ref_asset['approx_meter_gsd'] / approx_scale
+                    asset_rows[miss_idx]['gsd'] = mis_gsd
+
+        longform_rows.extend(asset_rows)
 
     gsd_table = pd.DataFrame(longform_rows)
     groups = gsd_table.groupby(['sensor', 'channels'])

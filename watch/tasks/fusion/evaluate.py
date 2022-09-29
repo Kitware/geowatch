@@ -42,6 +42,7 @@ class SegmentationEvalConfig(scfg.Config):
          'score_space': scfg.Value('video', help='can score in image or video space'),
          'workers': scfg.Value('auto', help='number of parallel scoring workers'),
          'draw_workers': scfg.Value('auto', help='number of parallel drawing workers'),
+         'thresh': scfg.Value('auto', help='visualization threshold'),
     }
 
 
@@ -84,6 +85,9 @@ def main(cmdline=True, **kwargs):
             'score_space': 'video',
         }
         cmdline = False
+
+        argv = '/home/joncrall/code/watch/watch/tasks/fusion/evaluate.py --true_dataset=/home/joncrall/data/dvc-repos/smart_data_dvc/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_train_subset.kwcoco.json --pred_dataset=/home/joncrall/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/pred/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=43-step=22528.pt/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_train_subset.kwcoco/predcfg_480dba90/pred.kwcoco.json --eval_dpath=/home/joncrall/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/eval/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=43-step=22528.pt/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_train_subset.kwcoco/predcfg_480dba90/eval/eval_pxl --score_space=video --draw_curves=1 --draw_heatmaps=1 --workers=2'
+        kwargs = dict(SegmentationEvalConfig(cmdline=argv))
     """
 
     # args = make_evaluate_config(cmdline=cmdline, **kwargs)
@@ -115,17 +119,19 @@ def main(cmdline=True, **kwargs):
     from scriptconfig.smartcast import smartcast
     draw_heatmaps = smartcast(config['draw_heatmaps'])
     draw_curves = smartcast(config['draw_curves'])
+    thresh = smartcast(config['thresh'])
     evaluate_segmentations(true_coco, pred_coco, eval_dpath,
                            draw_curves=draw_curves,
                            draw_heatmaps=draw_heatmaps,
                            score_space=score_space, workers=workers,
-                           draw_workers=draw_workers)
+                           draw_workers=draw_workers, thresh=thresh)
 
 
 @profile
 def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
                                       true_classes, true_dets, video1=None,
-                                      score_space='video', thresh_bins=None):
+                                      score_space='video', thresh_bins=None,
+                                      thresh=None):
     """
     Args:
         true_coco_img (kwcoco.CocoImage): detatched true coco image
@@ -330,6 +336,7 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
             # TODO: consolidate this with above class-specific code
             salient_delay = pred_coco_img.delay(salient_class, space=score_space)
             salient_prob = salient_delay.finalize(nodata='float')[..., 0]
+            salient_prob_orig = salient_prob.copy()
             invalid_mask = np.isnan(salient_prob)
             salient_prob[invalid_mask] = 0
             saliency_weights[invalid_mask] = 0
@@ -356,7 +363,7 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
 
             info.update({
                 'salient_measures': salient_measures,
-                'salient_prob': salient_prob,
+                'salient_prob': salient_prob_orig,
                 'true_saliency': true_saliency,
             })
 
@@ -364,8 +371,12 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
                 maximized_info = salient_measures.maximized_thresholds()
 
                 # This cherry-picks a threshold per image!
-                cherry_picked_thresh = maximized_info['f1']['thresh']
-                pred_saliency = salient_prob > cherry_picked_thresh
+                if thresh == 'auto':
+                    cherry_picked_thresh = maximized_info['f1']['thresh']
+                    saliency_thresh = cherry_picked_thresh
+                else:
+                    saliency_thresh = thresh
+                pred_saliency = salient_prob > saliency_thresh
 
                 y_true = true_saliency.ravel()
                 y_pred = pred_saliency.ravel()
@@ -375,7 +386,7 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
                 info.update({
                     'mat': mat,
                     'pred_saliency': pred_saliency,
-                    'saliency_thresh': cherry_picked_thresh,
+                    'saliency_thresh': saliency_thresh,
                 })
         except Exception:
             pass
@@ -666,6 +677,7 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
             try:
                 real_image = true_coco_img.delay(chosen_viz_channs, space=score_space, nodata_method='float').finalize()[:]
                 real_image_norm = kwimage.normalize_intensity(real_image)
+                real_image_norm = kwimage.fill_nans_with_checkers(real_image_norm)
                 real_image_int = kwimage.ensure_uint255(real_image_norm)
             except Exception as ex:
                 print('ex = {!r}'.format(ex))
@@ -676,8 +688,11 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
             salient_prob = info.get('salient_prob', None)
             # invalid_mask = info.get('invalid_mask', None)
             if salient_prob is not None:
+                invalid_mask = np.isnan(salient_prob)
                 heatmap = kwimage.make_heatmask(
                     salient_prob, with_alpha=0.5, cmap='plasma')
+                heatmap[invalid_mask] = np.nan
+                heatmap = kwimage.fill_nans_with_checkers(heatmap)
                 # heatmap[invalid_mask] = 0
                 heatmap_int = kwimage.ensure_uint255(heatmap[..., 0:3])
                 heatmap_int = kwimage.draw_text_on_image(
@@ -742,7 +757,7 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
 def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                            draw_curves='auto', draw_heatmaps='auto',
                            score_space='video', workers='auto',
-                           draw_workers='auto'):
+                           draw_workers='auto', thresh='auto'):
     """
     CommandLine:
         XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.evaluate evaluate_segmentations
@@ -887,7 +902,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             #!/bin/bash
             {command}
             '''))
-
+        # TODO: use the process tracker
         jsonified_args = util_json.ensure_json_serializable(sys.argv)
         eval_process_info_item = {
             'type': 'process',
@@ -929,7 +944,6 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     # Prepare job pools
     print('workers = {!r}'.format(workers))
     print('draw_workers = {!r}'.format(draw_workers))
-    workers = 10
     metrics_executor = ub.Executor(mode='process', max_workers=workers)
     draw_executor = ub.Executor(mode='process', max_workers=draw_workers)
 
@@ -961,7 +975,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             job = metrics_executor.submit(
                 single_image_segmentation_metrics, pred_coco_img,
                 true_coco_img, true_classes, true_dets, video1,
-                score_space=score_space, thresh_bins=thresh_bins)
+                score_space=score_space, thresh_bins=thresh_bins,
+                thresh=thresh)
 
             if len(current_chunk) >= chunk_size:
                 job_chunks.append(current_chunk)
@@ -985,7 +1000,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             job = metrics_executor.submit(
                 single_image_segmentation_metrics, pred_coco_img,
                 true_coco_img, true_classes, true_dets, video1,
-                score_space=score_space, thresh_bins=thresh_bins)
+                score_space=score_space, thresh_bins=thresh_bins,
+                thresh=thresh)
             prog.update()
             job_chunks.append([job])
     else:

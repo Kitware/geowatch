@@ -30,9 +30,15 @@ Variable abbreviations:
 
 * ``tr`` often means "target", but that pattern has been deprecated and its usually just spelled out as ``target`` now. 
 
+* The "xywh", "ltrb", and "cxywh" are codes indicating the format of bounding boxes for `kwimage.Boxes <https://kwimage.readthedocs.io/en/release/kwimage.structs.boxes.html#module-kwimage.structs.boxes>_`. They stand for "left-x, top-y, width, height", "left-x, top-y, right-x, bottom-y", and "center-x, center-y, width, height" respectively.
+
 * ``dsize`` - This ALWAYS means a (width, height) pair, usually a ``Tuple[int, int]``, but not always. In VERY rare circumstances, an individual width or height may be None to represent that it is not known or needed to be specified. 
 
 * ``shape`` - This is going to be the row-major shape of an array usually. Often (h, w, channel) or just (h, w)
+
+* ``fpath`` - a "file" path. This is used to store a string of ``Path`` object representing a path that points to a file (i.e. not a directory).
+
+* ``dpath`` - a "directory" path. This is used to store a string of ``Path`` object representing a path that points to a directory (i.e. not a file).
 
 
 Notes on row-vs-column major coordinate axes:
