@@ -157,6 +157,10 @@ def main():
     # state.patterns['test_dset'] = 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_train_subset.kwcoco'
     state.patterns['test_dset'] = (
         'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_vali_10GSD_KR_R001.kwcoco')
+
+    state.patterns['test_dset'] = (
+        'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_vali_10GSD_KR_R001.kwcoco')
+
     state._build_path_patterns()
     state._make_cross_links()
     # state._block_non_existing_rhashes()

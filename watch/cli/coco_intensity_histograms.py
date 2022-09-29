@@ -167,7 +167,7 @@ class HistAccum:
         return full_df
 
 
-def main(**kwargs):
+def main(cmdline=True, **kwargs):
     r"""
     Example:
         >>> # xdoctest: +REQUIRES(--slow)
@@ -205,7 +205,7 @@ def main(**kwargs):
     import kwplot
     kwplot.autosns()
 
-    config = IntensityHistogramConfig(kwargs, cmdline=True)
+    config = IntensityHistogramConfig(kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.repr2(config.to_dict(), nl=1)))
 
     # coco_dset = kwcoco.CocoDataset.coerce(config['src'])

@@ -4,23 +4,39 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.3.5 - Target 2022-09-30
+## Version 0.3.6 - Target 2022-10-29
+
+
+## Version 0.3.5 - Finalized 2022-09-29
 
 ### Added
 * dataloader can now specify `output_space_scale` as native or in GSD. (requires ndsampler 0.7.1)
+* Added `--stack` argument to visualize cli
+* Add `util_kwimage.Box` and other candidate kwimage tools
+
+
+### Changed
+* Large changes in `watch.mlops`
+* Reorganized dev folder to reduce clutter
+* More docs in docs folder
+* Can pass hard threshold to evaluate
 
 
 ### Removed
 * Removed original fusion schedule evaluation code.
 * Removed old CLI scripts. 
+* Old scripts in fusion
 
 ### Fixed
 * Fixed various bugs where `project_annotations`, and `coco_align_geotiffs`
   would fail when a video was empty.
 * fusion predict now writes nodata correctly and georeferences predictions.
 * Fixed issue where `chip_dims` was not set correctly at predict time.
-* NOT FIXED: Model GSD is not respected by fusion.predict
+* Fixed model GSD is not respected by fusion.predict
 * Several params were not inferred from the package at test time. Including `time_sampling` (now fixed).
+* Issue in `delayed_image` where bottom right of the image was getting cropped off in some circumstances.
+* Some config settings were not resolved in predict.
+* Issue in tracker where it was not able to handle nans
 
 
 ### Changed

@@ -7,6 +7,9 @@ python -m watch mlops "pull evals"
 python -m watch mlops "pull packages"
 python -m watch mlops "push evals"
 
+SeeAlso:
+    ~/code/watch/dev/reports/report_2022_09_xx.py
+
 """
 import ubelt as ub
 import math
@@ -725,16 +728,17 @@ def clean_loaded_data(big_rows):
     # simple_df[simple_df['sensorchan'].isnull()]
     # simple_df['bad_channels']
 
+    # FIXME; Broken
     actcfg_to_track_config = {}
     for actcfg, track_cfgs in _actcfg_to_track_config.items():
         unique_configs = list(ub.unique(track_cfgs, key=ub.hash_data))
-        assert len(unique_configs) == 1
+        # assert len(unique_configs) == 1
         actcfg_to_track_config[actcfg] = unique_configs[0]
 
     trkcfg_to_track_config = {}
     for trkcfg, track_cfgs in _trkcfg_to_track_config.items():
         unique_configs = list(ub.unique(track_cfgs, key=ub.hash_data))
-        assert len(unique_configs) == 1
+        # assert len(unique_configs) == 1
         trkcfg_to_track_config[trkcfg] = unique_configs[0]
 
     prdcfg_to_pred_config = {}
