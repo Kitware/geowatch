@@ -10,6 +10,7 @@ import shutil
 
 from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
 from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress  # noqa: 501
+from watch.tasks.fusion.predict import predict
 
 
 def main():
@@ -217,22 +218,36 @@ def run_bas_fusion_for_baseline(
     bas_fusion_kwcoco_path = os.path.join(
         ingress_dir, 'bas_fusion_kwcoco.json')
 
-    subprocess.run(['python', '-m', 'watch.tasks.fusion.predict',
-                    '--devices', '0,',
-                    '--write_preds', 'False',
-                    '--write_probs', 'True',
-                    '--with_change', 'False',
-                    '--with_saliency', 'True',
-                    '--with_class', 'False',
-                    '--test_dataset', ingress_kwcoco_path,
-                    '--package_fpath', bas_fusion_model_path,
-                    '--pred_dataset', bas_fusion_kwcoco_path,
-                    '--num_workers', '0' if force_zero_num_workers else str(jobs),  # noqa: 501
-                    '--set_cover_algo', 'approx',
-                    '--batch_size', '8',
-                    '--tta_time', '1',
-                    '--tta_fliprot', '0',
-                    '--chip_overlap', '0.3'], check=True)
+    predict_config = json.loads("""
+    {
+      "tta_fliprot": 0,
+      "tta_time": 0,
+      "chip_overlap": 0.5,
+      "input_space_scale": "15GSD",
+      "window_space_scale": "10GSD",
+      "output_space_scale": "auto",
+      "time_span": "2y",
+      "time_sampling": "contiguous",
+      "time_steps": "auto",
+      "chip_dims": "auto",
+      "set_cover_algo": null,
+      "resample_invalid_frames": 1,
+      "use_cloudmask": 1
+    }
+    """)
+
+    predict(devices='0,',
+            write_preds=False,
+            write_probs=True,
+            with_change=False,
+            with_saliency=True,
+            with_class=False,
+            test_dataset=ingress_kwcoco_path,
+            package_fpath=bas_fusion_model_path,
+            pred_dataset=bas_fusion_kwcoco_path,
+            num_workers=('0' if force_zero_num_workers else str(jobs)),  # noqa: 501
+            batch_size=8,
+            **predict_config)
 
     # 4. Compute tracks (BAS)
     print("* Computing tracks (BAS) *")
@@ -244,19 +259,19 @@ def run_bas_fusion_for_baseline(
     shutil.copy(local_region_path, os.path.join(
         region_models_outdir, '{}.geojson'.format(region_id)))
 
-    bas_track_kwargs = {'use_viterbi': False,
-                        'thresh': bas_thresh,
-                        'morph_kernel': 3,
-                        'time_filtering': True,
-                        'response_filtering': False,
-                        'norm_ord': 1,
-                        'moving_window_size': 150}
+    bas_tracking_config = {'use_viterbi': False,
+                           'thresh': bas_thresh,
+                           'morph_kernel': 3,
+                           'time_filtering': True,
+                           'response_filtering': False,
+                           'norm_ord': 1,
+                           'moving_window_size': 150}
     subprocess.run(['python', '-m', 'watch.cli.kwcoco_to_geojson',
                     bas_fusion_kwcoco_path,
                     '--out_dir', region_models_outdir,
                     '--bas_mode',
                     '--default_track_fn', 'saliency_heatmaps',
-                    '--track_kwargs', json.dumps(bas_track_kwargs)],
+                    '--track_kwargs', json.dumps(bas_tracking_config)],
                    check=True)
 
     cropped_region_models_outdir = os.path.join(ingress_dir,
