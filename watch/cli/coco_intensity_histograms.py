@@ -39,7 +39,7 @@ class IntensityHistogramConfig(scfg.Config):
 
         'dst': scfg.Value(None, help='if specified dump the figure to disk at this file path (e.g. with a jpg or png suffix)'),
 
-        'show': scfg.Value(False, help='if True, do a plt.show()'),
+        'show': scfg.Value(False, isflag=True, help='if True, do a plt.show()'),
 
         'workers': scfg.Value(0, help='number of io workers'),
         'mode': scfg.Value('process', help='type of parallelism'),
@@ -63,7 +63,7 @@ class IntensityHistogramConfig(scfg.Config):
         # 'bins': scfg.Value(256, help='Generic bin parameter that can be the name of a reference rule or the number of bins.'),
         'bins': scfg.Value('auto', help='Generic bin parameter that can be the name of a reference rule or the number of bins.'),
 
-        'fill': scfg.Value(True, help='If True, fill in the space under the histogram.'),
+        'fill': scfg.Value(True, isflag=True, help='If True, fill in the space under the histogram.'),
         'element': scfg.Value('step', help='Visual representation of the histogram statistic.', choices=['bars', 'step', 'poly']),
         'multiple': scfg.Value('layer', choices=['layer', 'dodge', 'stack', 'fill']
                                , help='Approach to resolving multiple elements when semantic mapping creates subsets.'),

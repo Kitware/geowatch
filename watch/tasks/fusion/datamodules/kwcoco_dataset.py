@@ -1650,7 +1650,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                                 # Put channels last so we can update multiple at once
                                 flat_vals = val.transpose(1, 2, 0).reshape(-1, val.shape[0])
                                 flat_weights = weights.transpose(1, 2, 0).reshape(-1, weights.shape[0])
-                                data_utils.update_many(running, flat_vals, weights=flat_weights)
+                                running.update_many(flat_vals, weights=flat_weights)
                             else:
                                 running.update(val, weights=weights)
 
