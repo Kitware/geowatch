@@ -131,6 +131,9 @@ _PUBLIC_L1_PRODUCTS = {
 }
 
 
+# NOTE;
+# Info about QA bands:
+# https://d9-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/s3fs-public/media/files/LSDS-1435%20Landsat%20C2%20US%20ARD%20Data%20Format%20Control%20Book-v3.pdf
 _PUBLIC_L2_PRODUCTS = {
     # Public L2 Products
     'sentinel-s2-l2a-cogs': {

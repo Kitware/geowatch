@@ -34,14 +34,15 @@ recommend the following directory structure:
    git clone https://gitlab.kitware.com/smart/smart_expt_dvc/ $HOME/data/dvc-repos/smart_expt_dvc
 
    # Or if you have credentials
-
    git clone git@gitlab.kitware.com:smart/smart_data_dvc.git $HOME/data/dvc-repos/smart_data_dvc
    git clone git@gitlab.kitware.com:smart/smart_expt_dvc.git $HOME/data/dvc-repos/smart_expt_dvc
 
 
 For details on installing the watch system in development mode see 
-`installing watch for development guide <../docs/installing_watch.rst.rst>`_.
+`installing watch for development guide <../docs/installing_watch.rst>`_.
 
+For more detailed instructions on setting up the DVC repos see: 
+`accessing dvc repos <../docs/access_dvc_repos.rst>`_.
 
 
 This onboarding document is a work in progress. While things are are still
