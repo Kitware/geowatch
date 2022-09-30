@@ -535,10 +535,9 @@ def phase_prediction_baseline(annots) -> List[float]:
         else:
             break
 
-    predicted = np.array(
-        [first_date[phase] + phase_avg_days[phase] for phase in annots.cnames])
-
     try:
+        predicted = np.array(
+            [first_date[phase] + phase_avg_days[phase] for phase in annots.cnames])
         today_offset = (predicted - today).astype('timedelta64[D]').astype(float)
         is_future = predicted > today
         next_offset = np.where(is_future, today_offset, 1)
