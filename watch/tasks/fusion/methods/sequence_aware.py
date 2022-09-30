@@ -325,7 +325,6 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         ])
 
         MODAL_AGREEMENT_CHANS = self.hparams.stream_channels
-        self.tokenizer = tokenizer
         self.sensor_channel_tokenizers = RobustModuleDict()
 
         # Unique sensor modes obviously isn't very correct here.
@@ -340,8 +339,6 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             mode_code = kwcoco.FusedChannelSpec.coerce(c)
             # For each mode make a network that should learn to tokenize
             in_chan = mode_code.numel()
-            if s not in self.sensor_channel_tokenizers:
-                self.sensor_channel_tokenizers[s] = RobustModuleDict()
 
             if tokenizer == 'rearrange':
                 tokenize = RearrangeTokenizer(
@@ -370,16 +367,9 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
                 else:
                     input_norm = nh.layers.InputNorm(**stats)
 
-            # self.sensor_channel_tokenizers[s][c] = tokenize
             key = sanitize_key(str((s, c)))
-            try:
-                sensor_chan_input_norm = input_norm
-            except (KeyError, TypeError) as e:
-                print(e)
-                sensor_chan_input_norm = nn.Identity()
-
             self.sensor_channel_tokenizers[key] = nn.Sequential(
-                sensor_chan_input_norm,
+                input_norm,
                 tokenize,
             )
             in_features_raw = tokenize.out_channels

@@ -473,7 +473,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         Visualize a batch produced by this DataSet.
 
         Args:
-            batch (List[Dict]): uncollated list of Dataset Items
+            batch (List[Dict[str, Tensor]]): uncollated list of Dataset Items
+                change: [T-1, H, W] \in [0, 1]
+                saliency: [T, H, W, 2] \in [0, 1]
+                class: [T, H, W, 10] \in [0, 1]
 
             outputs (Dict[str, Tensor]):
                 maybe-collated list of network outputs?

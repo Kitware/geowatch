@@ -73,7 +73,7 @@ class WrappedKWCocoDataModule(KWCocoVideoDataModule):
 def main():
     from pytorch_lightning.cli import LightningCLI
     import pytorch_lightning as pl
-    # from watch.utils import lightning_ext as pl_ext
+    from watch.utils import lightning_ext as pl_ext
     import ubelt as ub
 
     import yaml
@@ -93,8 +93,19 @@ def main():
     class MyLightningCLI(LightningCLI):
 
         # TODO: import initialization code from fit.py
-
+        
         def add_arguments_to_parser(self, parser):
+            
+            # TODO: separate final_package dir and fpath for more configuration
+            # pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
+            parser.add_lightning_class_args(pl_ext.callbacks.Packager, "packager")
+            # parser.set_defaults({"packager.package_fpath": "???"}) # "$DEFAULT_ROOT_DIR"/final_package.pt
+            parser.link_arguments(
+                "trainer.default_root_dir",
+                "packager.package_fpath",
+                compute_fn=lambda root: str(pathlib.Path(root) / "final_package.pt")
+                # apply_on="instantiate",
+            )
 
             parser.add_argument(
                 '--profile',
@@ -122,17 +133,16 @@ def main():
             # (https://pytorch-lightning.readthedocs.io/en/latest/cli/lightning_cli_expert.html#configure-forced-callbacks)
             # Another option is to have a base_config.yaml that includes these, which would make them fully configurable
             # without modifying source code.
+            profiler=pl.profilers.AdvancedProfiler(dirpath=".", filename="perf_logs"),
             callbacks=[
-                # pl_ext.callbacks.AutoResumer(),
-                # pl_ext.callbacks.StateLogger(),
-                # pl_ext.callbacks.TextLogger(args),
-                # pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
-                # pl_ext.callbacks.BatchPlotter( # Fixme: disabled for multi-gpu training with deepspeed
-                #     num_draw=2,  # args.num_draw,
-                #     draw_interval="5min",  # args.draw_interval
-                # ),
+                pl_ext.callbacks.AutoResumer(),
+                pl_ext.callbacks.StateLogger(),
+                pl_ext.callbacks.BatchPlotter( # Fixme: disabled for multi-gpu training with deepspeed
+                    num_draw=2,  # args.num_draw,
+                    draw_interval="5min",  # args.draw_interval
+                ),
                 # pl_ext.callbacks.TensorboardPlotter(), # Fixme: disabled for multi-gpu training with deepspeed
-                pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
+                # pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
                 pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
 
                 pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0,1,2,3
 PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="hdd")
 PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
 WORKDIR=$PHASE2_EXPT_DPATH/training/$HOSTNAME/$USER
@@ -16,26 +16,29 @@ INITIAL_STATE="noop"
 EXPERIMENT_NAME=Drop4_BASELINE_Template
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion.fit_lightning fit \
-    --data.batch_size=1 \
+    --data.batch_size=8 \
     --data.channels="$CHANNELS" \
-    --data.chip_dims=128 \
-    --data.chip_overlap=0.0 \
+    --data.chip_dims=64 \
+    --data.chip_overlap=0.25 \
     --data.neg_to_pos_ratio=0.25 \
     --data.normalize_inputs=1024 \
-    --data.num_workers=8 \
+    --data.num_workers=16 \
     --data.resample_invalid_frames=0 \
+    --data.use_cloudmask=0 \
     --data.set_cover_algo=approx \
     --data.input_space_scale="3GSD" \
     --data.temporal_dropout=0.5 \
     --data.test_dataset="$TEST_FPATH" \
-    --data.time_sampling=soft2+distribute \
-    --data.time_span=6m \
-    --data.time_steps=24 \
+    --data.time_sampling="soft2+distribute" \
+    --data.time_span=1m \
+    --data.time_steps=3 \
     --data.train_dataset="$TRAIN_FPATH" \
     --data.use_centered_positives=False \
-    --data.use_cloudmask=0 \
     --data.vali_dataset="$VALI_FPATH" \
     --data.window_space_scale="3GSD" \
+    --data.sqlview=false \
+    --model=watch.tasks.fusion.methods.SequenceAwareModel \
+    --model.stream_channels=1 \
     --model.attention_impl=exact \
     --model.class_loss='dicefocal' \
     --model.decoder=mlp \
@@ -47,17 +50,21 @@ python -m watch.tasks.fusion.fit_lightning fit \
     --model.name=$EXPERIMENT_NAME \
     --model.optimizer=AdamW \
     --model.saliency_loss='focal' \
-    --model.tokenizer=linconv \
+    --model.tokenizer=conv7 \
     --model.weight_decay=0 \
-    --model=watch.tasks.fusion.methods.SequenceAwareModel \
-    --trainer.accelerator="gpu" \
-    --trainer.accumulate_grad_batches=4 \
     --trainer.default_root_dir="$DEFAULT_ROOT_DIR" \
-    --trainer.devices 1 \
-    --trainer.max_epochs=160 \
-    --trainer.num_sanity_val_steps=2 
+    --trainer.accelerator="gpu" \
+    --trainer.devices=1 \
+    --trainer.precision=16 \
+    --trainer.max_steps=20000 \
+    --trainer.accumulate_grad_batches=16 \
+    --trainer.num_sanity_val_steps=2 \
+    --trainer.fast_dev_run=5
+    # --trainer.profiler=simple
+    # --trainer.strategy=deepspeed_stage_2_offload \
+    # --trainer.track_grad_norm=2 \
+    # --trainer.fast_dev_run=5 \
     # --trainer.amp_backend=apex \
-    # --data.stream_channels=16 \
     # --model.dist_weights=0 \
     # --model.arch_name=smt_it_stm_p8 \
     # --init="$INITIAL_STATE" \
