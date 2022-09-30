@@ -155,10 +155,11 @@ main = prep_splits
 if __name__ == '__main__':
     """
     CommandLine:
-        DVC_DPATH=$(smartwatch_dvc)
+        DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data)
+        BASE_FPATH=$DATA_DVC_DPATH/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data.kwcoco.json
         python -m watch.cli.prepare_splits \
-            --base_fpath=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json \
-            --run=0 --backend=serial
+            --base_fpath=$BASE_FPATH \
+            --backend=serial --run=0
 
         python -m watch.cli.prepare_splits \
             --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/foo.kwcoco.json \
