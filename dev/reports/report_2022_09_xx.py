@@ -410,10 +410,11 @@ if [ ! -f "$TEST_DATASET" ]; then
         --select_videos '((.name | test("KR_R001")) or (.name | test("KR_R002")) or (.name | test("BR_R002")) or (.name | test("US_R007")))'
 fi
 
+# Drop4_BAS_Retrain_V001_epoch=54-step=28160.pt
+# Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584*
+
 echo "
-Drop4_BAS_Retrain_V001_epoch=54-step=28160.pt
 Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt
-Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584*
 " > models_of_interest.txt
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 python -m watch.mlops.expt_manager "evaluate" \
@@ -459,7 +460,7 @@ python -m watch.mlops.expt_manager "evaluate" \
         "time_sampling": ["auto", "contiguous"],
         "time_span": ["auto"]
     }' \
-    --devices="0,1" --queue_size=2 \
+    --devices="0,1" --queue_size=8 \
     --enable_pred_pxl=0 --enable_eval_pxl=1 \
     --enable_pred_trk=1 --enable_eval_trk=1 --enable_pred_trk_viz=0  \
     --skip_existing=1 \

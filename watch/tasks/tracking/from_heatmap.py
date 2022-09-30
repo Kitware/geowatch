@@ -417,7 +417,9 @@ def time_aggregated_polys(sub_dset,
         # TODO investigate different thresh here
         time_thresh = thresh
         time_filter = TimePolygonFilter(sub_dset, tuple(key), time_thresh)
-        _filtered = list(map(time_filter, tracks))
+        import xdev
+        with xdev.embed_on_exception_context:
+            _filtered = list(map(time_filter, tracks))
         tracks = [t for t in _filtered if len(list(t.observations)) > 0]
 
     return tracks
