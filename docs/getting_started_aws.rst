@@ -170,7 +170,7 @@ That completes the install. Verify that it worked by attempting to access bucket
 
 .. code:: bash
 
-    aws --profile iarpa s3 ls s3://kitware-smart-watch-data/
+    aws --profile iarpa s3 ls s3://kitware-smart-watch-data/dvc/
 
 
 Note the ``--profile iarpa`` tells aws to authenticate using the "iarpa"
@@ -178,8 +178,11 @@ profile in our config/credentials. We could also set an environment variable
 ``export AWS_PROFILE=iarpa``.
 
 
-The contents of that folder should include a "dvc" directory. This means that
-you authenticated sucessfully.
+The contents of that folder will be a long list of 2 letter folders and temp
+files. This is the hashed file structure that the dvc cache uses. include a
+"dvc" directory. Seeing this means that you authenticated sucessfully. Note
+that when working with DVC you will not need to use the cache directly, we are
+simply checking that you have access to it.
 
 AWS Security
 ------------
