@@ -436,9 +436,26 @@ def _merge_polys(p1, p2):
     Ignore:
         from watch.tasks.tracking.from_heatmap import * # NOQA
         from watch.tasks.tracking.from_heatmap import _merge_polys  # NOQA
+
         p1 = [kwimage.Polygon.random().to_shapely() for _ in range(10)]
         p2 = [kwimage.Polygon.random().to_shapely() for _ in range(10)]
         _merge_polys(p1, p2)
+
+        p1_kw = kwimage.Polygon(exterior=np.array([(0, 0), (1, 0), (0.5, 1)]))
+        p2_kw = kwimage.Polygon(exterior=np.array([(0, 2), (1, 2), (0.5, 1)]))
+        _p1 = p2_kw.to_shapely()
+        _p2 = p1_kw.to_shapely()
+        print(_p1.intersects(_p2))
+        print(_p1.overlaps(_p2))
+        print(unary_union([_p1, _p2]))
+
+        p1_kw = kwimage.Boxes([[0, 0, 10, 10]], 'xywh').to_polygons()[0]
+        p2_kw = kwimage.Boxes([[10, 0, 10, 10]], 'xywh').to_polygons()[0]
+        _p1 = p2_kw.to_shapely()
+        _p2 = p1_kw.to_shapely()
+        print(_p1.intersects(_p2))
+        print(_p1.overlaps(_p2))
+        print(unary_union([_p1, _p2]))
 
         while True:
             _p1 = kwimage.Polygon.random().to_shapely()
@@ -466,9 +483,9 @@ def _merge_polys(p1, p2):
                     merged_polys.append(combo)
                 elif combo.type == 'MultiPolygon':
                     # Can this ever happen? It seems to have occurred in a test
-                    # run. Unsure how to reproduce.
-                    import warnings
-                    warnings.warn('Found two intersecting polygons where the union was a multipolygon')
+                    # run. Bowties can cause this.
+                    # import warnings
+                    # warnings.warn('Found two intersecting polygons where the union was a multipolygon')
                     merged_polys.extend(list(combo.geoms))
                 else:
                     raise AssertionError(f'Unexpected type {combo.type} from {_p1} and {_p2}')
