@@ -1,5 +1,9 @@
 """
 Helper for scheduling a set of prediction + evaluation jobs
+
+TODO:
+    - [ ] Differentiate between pixel models for different tasks.
+    - [ ] Allow the output of tracking to feed into activity classification
 """
 import ubelt as ub
 import scriptconfig as scfg
@@ -11,6 +15,7 @@ class ScheduleEvaluationConfig(scfg.Config):
     """
     default = {
         'model_globstr': scfg.Value(None, help='one or more glob patterns that match the models to predict/evaluate on'),
+
         'test_dataset': scfg.Value(None, help='path to the test dataset to predict/evaluate on'),
         'devices': scfg.Value('auto', help='if using tmux or serial, indicate which gpus are available for use as a comma separated list: e.g. 0,1'),
         'run': scfg.Value(False, help='if False, only prints the commands, otherwise executes them'),
@@ -37,7 +42,7 @@ class ScheduleEvaluationConfig(scfg.Config):
         'enable_pred_act': scfg.Value(False, isflag=True, help='if True, enable actclf', alias=['enable_actclf']),
         'enable_eval_act': scfg.Value(False, isflag=True, help='if True, enable iapra SC evalaution', alias=['enable_actclf_eval']),
 
-        'enable_pred_trk_viz': scfg.Value(True, isflag=True, help='if true draw predicted tracks'),
+        'enable_pred_trk_viz': scfg.Value(False, isflag=True, help='if true draw predicted tracks'),
 
         'draw_heatmaps': scfg.Value(1, isflag=True, help='if true draw heatmaps on eval'),
         'draw_curves': scfg.Value(1, isflag=True, help='if true draw curves on eval'),
@@ -51,8 +56,8 @@ class ScheduleEvaluationConfig(scfg.Config):
         'set_cover_algo': scfg.Value(['approx'], help='grid of set_cover_algo to test'),
         'bas_thresh': scfg.Value([0.01], help='grid of track thresholds'),
         'json_grid_pred_pxl': scfg.Value(None, type=str, help='a json grid/matrix of prediction params'),
-        'hack_bas_grid': scfg.Value(False, help='if True use hard coded BAS grid'),
-        'hack_sc_grid': scfg.Value(False, help='if True use hard coded SC grid'),
+        'json_grid_pred_trk': scfg.Value(False, help='if True use hard coded BAS grid'),
+        'json_grid_pred_act': scfg.Value(False, help='if True use hard coded SC grid'),
     }
 
 
@@ -221,31 +226,14 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     # Define the parameter grids to loop over
 
-    pred_cfg_basis = {}
-    pred_cfg_basis['tta_time'] = ensure_iterable(config['tta_time'])
-    pred_cfg_basis['tta_fliprot'] = ensure_iterable(config['tta_fliprot'])
-    pred_cfg_basis['chip_overlap'] = ensure_iterable(config['chip_overlap'])
-    pred_cfg_basis['set_cover_algo'] = ensure_iterable(config['set_cover_algo'])
+    pred_pxl_param_basis = {}
+    pred_pxl_param_basis['tta_time'] = ensure_iterable(config['tta_time'])
+    pred_pxl_param_basis['tta_fliprot'] = ensure_iterable(config['tta_fliprot'])
+    pred_pxl_param_basis['chip_overlap'] = ensure_iterable(config['chip_overlap'])
+    pred_pxl_param_basis['set_cover_algo'] = ensure_iterable(config['set_cover_algo'])
+    pred_pxl_param_basis_auto = pred_pxl_param_basis.copy()
 
-    # TODO: not using a consisent basis means that the hash might be different
-    # for the same effective pred config. Not sure how big of a problem this
-    # is.
-
-    if config['json_grid_pred_pxl']:
-        pred_cfg_basis.update(
-            json.loads(config['json_grid_pred_pxl'])
-        )
-
-    print('pred_cfg_basis = {}'.format(ub.repr2(pred_cfg_basis, nl=2)))
-
-    # if 1:
-    #     # pred_cfg_basis['input_space_scale'] = ensure_iterable(config['input_space_scale'])
-    #     pred_cfg_basis['input_space_scale'] = ['10GSD', '15SGD']
-    #     pred_cfg_basis['use_cloudmask'] = [0, 1]  # HACK
-    #     pred_cfg_basis['resample_invalid_frames'] = [0, 1]  # HACK
-    #     # TODO: allow for "auto"
-
-    trk_defaults = {
+    pred_trk_param_basis = {
         'thresh': [0.1],
         'morph_kernel': [3],
         'norm_ord': [1],
@@ -253,43 +241,62 @@ def schedule_evaluation(cmdline=False, **kwargs):
         'thresh_hysteresis': [None],
         'moving_window_size': [None],
     }
-    trk_param_basis = trk_defaults.copy()
-    trk_param_basis.update({
-        'thresh': ensure_iterable(config['bas_thresh']),
-        # 'thresh': [0.1, 0.2, 0.3],
-    })
-    if config['hack_bas_grid']:
-        grid = {
-            'thresh': [0.01, 0.05, 0.1, 0.15, 0.2],
-            'morph_kernel': [3],
-            'norm_ord': [1],
-            'agg_fn': ['probs', 'mean_normalized'],
-            'thresh_hysteresis': [None, '2*{thresh}'],
-            'moving_window_size': [None, 150],
-        }
-        trk_param_basis.update(grid)
-
-    act_param_basis = {
+    pred_act_param_basis = {
         # TODO viterbi or not
         # Not sure what SC thresh is
         'thresh': ensure_iterable(config['bas_thresh']),
         # 'thresh': [0.0],
         'use_viterbi': [0],
     }
-    if config['hack_sc_grid']:
-        # TODO: remove
-        grid = {
-            'thresh': [0, 0.01, 0.1],
-            # 'use_viterbi': [0],
-            'use_viterbi': [0, 'v1,v6'],
-        }
-        act_param_basis.update(grid)
+
+    pred_trk_param_basis_auto = {
+        'thresh': [0.01, 0.05, 0.1, 0.15, 0.2],
+        'morph_kernel': [3],
+        'norm_ord': [1],
+        'agg_fn': ['probs', 'mean_normalized'],
+        'thresh_hysteresis': [None, '2*{thresh}'],
+        'moving_window_size': [None, 150],
+    }
+    pred_act_param_basis_auto = {
+        'thresh': [0, 0.01, 0.1],
+        'use_viterbi': [0, 'v1,v6'],
+    }
+    # if 1:
+    #     # pred_pxl_param_basis['input_space_scale'] = ensure_iterable(config['input_space_scale'])
+    #     pred_pxl_param_basis['input_space_scale'] = ['10GSD', '15SGD']
+    #     pred_pxl_param_basis['use_cloudmask'] = [0, 1]  # HACK
+    #     pred_pxl_param_basis['resample_invalid_frames'] = [0, 1]  # HACK
+    #     # TODO: allow for "auto"
+
+    # TODO: not using a consisent basis means that the hash might be different
+    # for the same effective pred config. Not sure how big of a problem this
+    # is.
+
+    def handle_json_grid(default, auto, arg):
+        basis = default.copy()
+        if arg:
+            if isinstance(arg, str):
+                if arg == 'auto':
+                    basis = auto
+                else:
+                    basis.update(json.loads(arg))
+            else:
+                raise TypeError
+        grid = list(ub.named_product(basis))
+        return grid
+
+    pred_pxl_param_grid = handle_json_grid(
+        pred_pxl_param_basis, pred_pxl_param_basis_auto, config['json_grid_pred_pxl'])
+    pred_trk_param_grid = handle_json_grid(
+        pred_trk_param_basis, pred_trk_param_basis_auto, config['json_grid_pred_trk'])
+    pred_act_param_grid = handle_json_grid(
+        pred_act_param_basis, pred_act_param_basis_auto, config['json_grid_pred_act'])
 
     # Build the info we need to submit every prediction job of interest
     candidate_pred_rows = []
     test_dset = state._condense_test_dset(test_dataset_fpath)
     for pkg_row in ub.ProgIter(candidate_pkg_rows, desc='build pred rows'):
-        for pred_cfg in ub.named_product(pred_cfg_basis):
+        for pred_cfg in pred_pxl_param_grid:
             pred_pxl_row = pkg_row.copy()
             condensed  = pred_pxl_row['condensed'].copy()
 
@@ -353,7 +360,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
         # First compute children track, activity rows (todo: refactor to do
         # ealier)
         candidate_trk_rows = []
-        for trk_cfg in ub.named_product(trk_param_basis):
+        for trk_cfg in pred_trk_param_grid:
             pred_trk_row = pred_pxl_row.copy()
             pred_trk_row['condensed'] = condensed = pred_trk_row['condensed'].copy()
             condensed['trk_cfg'] = state._condense_trk_cfg(trk_cfg)
@@ -384,7 +391,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
         # TODO: refactor to depend on a non-truth set of predicted sites.
         candidate_act_rows = []
-        for act_cfg in ub.named_product(act_param_basis):
+        for act_cfg in pred_act_param_grid:
             pred_act_row = pred_pxl_row.copy()
             pred_act_row['condensed'] = condensed = pred_act_row['condensed'].copy()
             condensed['act_cfg'] = state._condense_act_cfg(act_cfg)
@@ -673,6 +680,10 @@ def schedule_evaluation(cmdline=False, **kwargs):
     with_status = 0
     with_rich = 0
     queue.rprint(with_status=with_status, with_rich=with_rich)
+
+    for job in queue.jobs:
+        # TODO: should be able to set this as a queue param.
+        job.log = False
 
     # RUN
     if config['run']:

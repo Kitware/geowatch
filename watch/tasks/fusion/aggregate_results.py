@@ -438,7 +438,11 @@ def load_sc_eval(fpath, dvc_expt_dpath):
 def parse_tracker_params(tracker_info, dvc_expt_dpath, path_hint=None):
     track_item = find_track_item(tracker_info)
 
-    if 'pred_info' not in track_item['properties']:
+    if 'extra' in track_item['properties']:
+        pred_info = track_item['properties']['extra']['pred_info']
+    elif 'pred_info' in track_item['properties']:
+        pred_info = track_item['properties']['pred_info']
+    else:
         if path_hint is None:
             raise Exception('cannot find pred info. This is an old result')
         # TODO: remove the eval stealing
@@ -455,11 +459,12 @@ def parse_tracker_params(tracker_info, dvc_expt_dpath, path_hint=None):
                 raise Exception('dvc pull')
             else:
                 raise Exception('got nothing')
-    else:
-        pred_info = track_item['properties']['pred_info']
 
     param_types = parse_pred_params(pred_info, dvc_expt_dpath, path_hint)
-    track_args = track_item['properties']['args']
+    track_config = track_item['properties'].get('args', None)
+    track_args = track_item['properties'].get('args', None)
+    if track_config is not None:
+        track_args = track_config
     track_config = relevant_track_config(track_args)
     param_types['track'] = track_config
     return param_types
@@ -505,7 +510,10 @@ def parse_pred_params(pred_info, dvc_expt_dpath, path_hint=None):
         parse_resource_item(pred_item)
         resources = parse_resource_item(item)
 
-    pred_args = pred_item['properties']['args']
+    pred_config = pred_item['properties'].get('args', None)
+    pred_args = pred_item['properties'].get('args', None)
+    if pred_config is not None:
+        pred_args = pred_config
     pred_config = relevant_pred_config(pred_args, dvc_expt_dpath)
     fit_config = relevant_fit_config(fit_config)
 

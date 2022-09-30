@@ -53,11 +53,11 @@ python -m watch.mlops.expt_manager "evaluate" \
     --dataset_codes "$DATASET_CODE" \
     --test_dataset="$VALI_DATASET_SUBSET" \
     --enable_pred_trk=1 \
-    --enable_trk_eval=1 \
+    --enable_eval_trk=1 \
     --bas_thresh=0.05,0.01 \
     --skip_existing=True \
     --model_pattern="models_of_interest.txt" \
-    --hack_bas_grid=False \
+    --json_grid_pred_trk=False \
     --json_grid_pred_pxl='{
         "input_space_scale": ["10GSD", "15GSD"],
         "window_space_scale": ["auto"],
@@ -69,66 +69,6 @@ python -m watch.mlops.expt_manager "evaluate" \
         "time_span": ["auto"]
     }' \
     --devices="0,1" --enable_pred_pxl=1 --run=1
-
-
-# --model_pattern="${MODEL_OF_INTEREST}*" \
-# --test_dataset="$TRAIN_DATASET_SUBSET" \
-# TRAIN_DATASET_SUBSET=$DATA_DVC_DPATH/$DATASET_CODE/data_train_subset.kwcoco.json
-# TRAIN_DATASET_BIG=$DATA_DVC_DPATH/$DATASET_CODE/data_train.kwcoco.json
-# kwcoco subset "$TRAIN_DATASET_BIG" "$TRAIN_DATASET_SUBSET" --select_videos '.name | test(".*_R.*")'
-
-
-
-# ENSURE THE MODEL WE CARE ABOUT IS EVALUTATED
-
-MODEL_OF_INTEREST="Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt"
-DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
-DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
-VALI_DATASET_SUBSET=$DATA_DVC_DPATH/$DATASET_CODE/data_train_subset.kwcoco.json
-python -m watch.mlops.expt_manager "evaluate" \
-    --model_pattern="${MODEL_OF_INTEREST}*" \
-    --dataset_codes "$DATASET_CODE" \
-    --test_dataset="$VALI_DATASET_SUBSET" \
-    --enable_eval=1 \
-    --enable_pred_trk=1 \
-    --enable_trk_eval=1 \
-    --bas_thresh=0.01,0.1 \
-    --skip_existing=True \
-    --json_grid_pred_pxl='{
-        "input_space_scale": ["10GSD", "15GSD"],
-        "window_space_scale": ["10GSD"],
-        "use_cloudmask": [0],
-        "resample_invalid_frames": [0, 1],
-        "chip_overlap": [0.3, 0.0],
-        "set_cover_algo": ["approx", null]
-    }' \
-    --devices="0,1" --enable_pred_pxl=1 --run=1 --check_other_sessions=0
-
-
-# # Then you should be able to evaluate that model
-# # MODEL_OF_INTEREST="Drop4_BAS_Retrain_V002_epoch=14-step=7680"
-# MODEL_OF_INTEREST="Drop4_BAS_Retrain_V002_epoch=31-step=16384"
-# MODEL_OF_INTEREST="Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584"
-# python -m watch.mlops.expt_manager "evaluate" \
-#     --dataset_codes "$DATASET_CODE" \
-#     --test_dataset="$VALI_DATASET_SUBSET" \
-#     --enable_pred_trk=1 \
-#     --enable_trk_eval=1 \
-#     --bas_thresh=0.00,0.01,0.1 \
-#     --skip_existing=True \
-#     --model_pattern="${MODEL_OF_INTEREST}*" \
-#     --json_grid_pred_pxl='{
-#         "input_space_scale": ["10GSD", "15GSD"],
-#         "window_space_scale": ["10GSD"],
-#         "use_cloudmask": [0],
-#         "resample_invalid_frames": [0],
-#         "chip_overlap": [0.3],
-#         "set_cover_algo": ["approx", null]
-#     }' \
-#     --devices="0,1" --enable_pred_pxl=1 --run=1
-
-models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Continue_15GSD_BGR_V004/Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt.pt
 """
 
 
@@ -177,7 +117,7 @@ def main():
     # Dump details out about the best models
     cohort = ub.timestamp()
     best_models_dpath = (dpath / 'best_models' / cohort).ensuredir()
-    groupid_to_shortlist = reporter.report_best(show_configs=True, verbose=1)
+    groupid_to_shortlist = reporter.report_best(show_configs=True, verbose=1, top_k=4)
 
     rlut = reporter._build_cfg_rlut(None)
 
@@ -331,7 +271,7 @@ def main():
 
     import xdev
     xdev.view_directory(dpath)
-    model = shortlist_models()[0]
+    # model = shortlist_models()[0]
 
 
 def single_model_analysis(reporter, model):
@@ -479,22 +419,52 @@ DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 python -m watch.mlops.expt_manager "evaluate" \
     --dataset_codes "$DATASET_CODE" \
     --test_dataset="$TEST_DATASET" \
-    --enable_pred_trk=1 \
-    --enable_trk_eval=1 \
-    --skip_existing=True \
     --model_pattern="models_of_interest.txt" \
-    --hack_bas_grid=True \
+    --json_grid_pred_trk=auto \
     --json_grid_pred_pxl='{
         "input_space_scale": ["10GSD", "15GSD"],
-        "window_space_scale": ["auto"],
+        "window_space_scale": ["10GSD"],
         "use_cloudmask": [0,1],
         "resample_invalid_frames": [0,1],
         "chip_overlap": [0.3],
         "set_cover_algo": ["approx", null],
-        "time_sampling": ["auto", "continuous"],
+        "time_sampling": ["auto", "contiguous"],
         "time_span": ["auto"]
     }' \
-    --devices="0,1" --enable_pred_pxl=1 --run=0
+    --devices="0,1" --queue_size=2 \
+    --enable_pred_pxl=1 --enable_eval_pxl=1 \
+    --enable_pred_trk=1 --enable_eval_trk=1 --enable_pred_trk_viz=0  \
+    --skip_existing=1 \
+    --run=1
+
+
+echo "
+Drop4_BAS_Retrain_V001_epoch=54-step=28160.pt
+Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt
+Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584*
+" > models_of_interest.txt
+DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+python -m watch.mlops.expt_manager "evaluate" \
+    --dataset_codes "$DATASET_CODE" \
+    --test_dataset="$TEST_DATASET" \
+    --model_pattern="models_of_interest.txt" \
+    --json_grid_pred_trk=auto \
+    --json_grid_pred_pxl='{
+        "input_space_scale": ["10GSD", "15GSD"],
+        "window_space_scale": ["10GSD"],
+        "use_cloudmask": [0,1],
+        "resample_invalid_frames": [0,1],
+        "chip_overlap": [0.3],
+        "set_cover_algo": ["approx", null],
+        "time_sampling": ["auto", "contiguous"],
+        "time_span": ["auto"]
+    }' \
+    --devices="0,1" --queue_size=2 \
+    --enable_pred_pxl=0 --enable_eval_pxl=1 \
+    --enable_pred_trk=1 --enable_eval_trk=1 --enable_pred_trk_viz=0  \
+    --skip_existing=1 \
+    --run=1
+
 
 
 echo "
@@ -505,7 +475,7 @@ python -m watch.mlops.expt_manager "evaluate" \
     --dataset_codes "$DATASET_CODE" \
     --test_dataset="$TEST_DATASET" \
     --model_pattern="models_of_interest.txt" \
-    --hack_bas_grid=True \
+    --json_grid_pred_trk=auto \
     --json_grid_pred_pxl='{
         "input_space_scale": ["10GSD"],
         "window_space_scale": ["10GSD"],
@@ -516,9 +486,9 @@ python -m watch.mlops.expt_manager "evaluate" \
         "time_sampling": ["auto"],
         "time_span": ["auto"]
     }' \
-    --devices="0,1" --queue_size=4 \
-    --enable_pred_trk=1 --enable_trk_eval=0 \
-    --enable_pred_pxl=0 --enable_eval_pxl=1 --viz_pred_trk=0  \
-    --skip_existing=0 \
-    --run=1
+    --devices="0,1" --queue_size=8 \
+    --enable_pred_pxl=0 --enable_eval_pxl=0 \
+    --enable_pred_trk=0 --enable_eval_trk=1 --enable_pred_trk_viz=0  \
+    --skip_existing=1 \
+    --run=0
 """

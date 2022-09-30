@@ -29,6 +29,7 @@ def main(cmdline=True, **kw):
         'run_metrics_framework',
         'torch_model_stats',
         'mlops_cli',
+        'gifify',
     ]
     module_lut = {}
     for name in modnames:
@@ -65,6 +66,7 @@ def main(cmdline=True, **kw):
         'watch.cli.run_metrics_framework': ['iarpa_eval'],
         'watch.cli.kwcoco_to_geojson': [],
         'watch.cli.find_dvc': ['dvcdir'],
+        'watch.cli.gifify': ['animate'],
     }
 
     for cli_module in cli_modules:

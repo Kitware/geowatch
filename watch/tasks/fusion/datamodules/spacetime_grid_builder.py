@@ -413,7 +413,8 @@ def _sample_single_video_spacetime_targets(
         use_centered_positives,
         'cache_v5',
     ]
-    cacher = ub.Cacher('sliding-window-cache', appname='watch/grid_cache',
+    cache_dpath = ub.Path.appdir('watch', 'grid_cache').ensuredir()
+    cacher = ub.Cacher('sliding-window-cache', dpath=cache_dpath,
                        depends=depends, enabled=use_cache)
     _cached = cacher.tryload()
     if _cached is None:

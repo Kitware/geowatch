@@ -125,6 +125,12 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
                             gifify.ffmpeg_animate_frames, frame_fpaths,
                             gif_fpath, in_framerate=frames_per_second,
                             verbose=verbose_worker)
+                        ani_fname = '{}{}_{}.mp4'.format(track_name, type_, chan_dpath.name)
+                        ani_fpath = track_subdpath / ani_fname
+                        pool.submit(
+                            gifify.ffmpeg_animate_frames, frame_fpaths,
+                            ani_fpath, in_framerate=frames_per_second,
+                            verbose=verbose_worker)
 
             else:
                 type_dpath = video_dpath / type_
@@ -139,6 +145,11 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
                     gif_fpath = video_dpath / gif_fname
                     pool.submit(
                         gifify.ffmpeg_animate_frames, frame_fpaths, gif_fpath,
+                        in_framerate=frames_per_second, verbose=verbose_worker)
+                    ani_fname = '{}{}_{}.mp4'.format(video_name, type_, chan_dpath.name)
+                    ani_fpath = video_dpath / ani_fname
+                    pool.submit(
+                        gifify.ffmpeg_animate_frames, frame_fpaths, ani_fpath,
                         in_framerate=frames_per_second, verbose=verbose_worker)
 
     for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='collect animate jobs'):

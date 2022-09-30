@@ -580,22 +580,22 @@ class ExperimentState(ub.NiceRepr):
         }
 
         self.volitile_templates = {
-            'pred_pxl'        : task_dpaths['pred_pxl_dpath'] / 'pred.kwcoco.json',
+            'pred_pxl'        : task_dpaths['pred_pxl_dpath'] + '/pred.kwcoco.json',
 
-            'pred_trk_kwcoco' : task_dpaths['pred_trk_dpath'] / 'tracks.kwcoco.json',
-            'pred_trk'        : task_dpaths['pred_trk_dpath'] / 'tracks.json',
-            'pred_trk_viz_stamp'  : task_dpaths['pred_trk_dpath'] / '_viz.stamp',
+            'pred_trk_kwcoco' : task_dpaths['pred_trk_dpath'] + '/tracks.kwcoco.json',
+            'pred_trk'        : task_dpaths['pred_trk_dpath'] + '/tracks.json',
+            'pred_trk_viz_stamp'  : task_dpaths['pred_trk_dpath'] + '/_viz.stamp',
 
-            'pred_act_kwcoco' : task_dpaths['pred_act_dpath'] / 'activity_tracks.kwcoco.json',
-            'pred_act'        : task_dpaths['pred_act_dpath'] / 'activity_tracks.json',
+            'pred_act_kwcoco' : task_dpaths['pred_act_dpath'] + '/activity_tracks.kwcoco.json',
+            'pred_act'        : task_dpaths['pred_act_dpath'] + '/activity_tracks.json',
         }
 
         self.versioned_templates = {
             # TODO: rename curves to pixel
             'pkg'            : 'packages/{expt}/{model}.pt',
-            'eval_pxl'       : task_dpaths['eval_pxl_dpath'] / 'eval_pxl/curves/measures2.json',
-            'eval_trk'       : task_dpaths['pred_trk_dpath'] / 'scores/merged/summary2.json',
-            'eval_act'       : task_dpaths['eval_act_dpath'] / 'scores/merged/summary3.json',
+            'eval_pxl'       : task_dpaths['eval_pxl_dpath'] + '/eval_pxl/curves/measures2.json',
+            'eval_trk'       : task_dpaths['pred_trk_dpath'] + '/scores/merged/summary2.json',
+            'eval_act'       : task_dpaths['eval_act_dpath'] + '/scores/merged/summary3.json',
         }
 
         # User specified config mapping a formatstr variable to a set of items

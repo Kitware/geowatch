@@ -10,30 +10,53 @@ TODO:
 
 import ubelt as ub
 from os.path import isdir, join
+import scriptconfig as scfg
 
 
-def main():
-    import argparse
+class AnimateConfig(scfg.DataConfig):
+    """
+    Convert a sequence of images into a video or gif.
+    """
+    image_list = scfg.Value(None, required=True, help=ub.paragraph(
+            '''
+            list of images (or a text file containing a list of images)
+            '''), position=1, nargs='*', alias=['input'])
+    # input = scfg.Value(None, short_alias=['i'], help='alternate way to specify list of images', nargs='*')
+    delay = scfg.Value(10, type=float, short_alias=['d'], help='delay between frames', nargs=1)
+    output = scfg.Value('out.gif', short_alias=['o'], help='output file', required=True)
+    max_width = scfg.Value(None, type=int, help='resize to max width')
+    frames_per_second = scfg.Value(10, type=float, help='number of frames per second')
+
+__config__ = AnimateConfig
+
+
+def main(cmdline=True, **kwargs):
+    # import argparse
     import glob
-    description = ub.codeblock(
-        '''
-        Convert a sequence of images into a gif
-        ''')
-    parser = argparse.ArgumentParser(prog='gifify', description=description)
+    # description = ub.codeblock(
+    #     '''
+    #     Convert a sequence of images into a gif
+    #     ''')
+    # parser = argparse.ArgumentParser(prog='gifify', description=description)
+    # parser.add_argument('image_list', nargs='*', help='list of images (or a text file containing a list of images)')
+    # parser.add_argument('-i', '--input', nargs='*', help='alternate way to specify list of images')
+    # parser.add_argument('-d', '--delay', nargs=1, type=float, default=10, help='delay between frames')
+    # parser.add_argument('-o', '--output', default='out.gif', help='output file')
+    # parser.add_argument('--max_width', default=None, type=int, help='resize to max width')
+    # parser.add_argument('--frames_per_second', default=10, type=float, help='number of frames per second')
+    # args, unknown = parser.parse_known_args()
+    # # print('unknown = {!r}'.format(unknown))
+    # # print('args = {!r}'.format(args))
+    # ns = args.__dict__.copy()
 
-    parser.add_argument('image_list', nargs='*', help='list of images (or a text file containing a list of images)')
-    parser.add_argument('-i', '--input', nargs='*', help='alternate way to specify list of images')
-    parser.add_argument('-d', '--delay', nargs=1, type=float, default=10, help='delay between frames')
-    parser.add_argument('-o', '--output', default='out.gif', help='output file')
-    parser.add_argument('--max_width', default=None, type=int, help='resize to max width')
-    parser.add_argument('--frames_per_second', default=10, type=float, help='number of frames per second')
-    args, unknown = parser.parse_known_args()
-    # print('unknown = {!r}'.format(unknown))
-    # print('args = {!r}'.format(args))
-    ns = args.__dict__.copy()
+    config = AnimateConfig.legacy(cmdline=cmdline, data=kwargs)
+    # args = config
+    ns = config
+    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
     image_paths1 = ns['image_list']
-    image_paths2 = ns['input']
+    image_paths2 = None
+    # ns['input']
 
     print('Converting:')
     print('image_paths1 = ' + ub.repr2(image_paths1))
@@ -112,6 +135,7 @@ def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=3,
         https://superuser.com/questions/624563/how-to-resize-a-video-to-make-it-smaller-with-ffmpeg
 
     Example:
+        >>> from watch.cli.gifify import *  # NOQA
         >>> import kwcoco
         >>> dset = kwcoco.CocoDataset.demo('shapes8')
         >>> ffmpeg_exe = ub.find_exe('ffmpeg')
