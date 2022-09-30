@@ -118,28 +118,33 @@ class TimePolygonFilter(CocoDsetFilter):
         with its mask.
         Mask is computed by comparing heatmaps with threshold.
         """
+        found = None
+        magic_thresh = 0.5
         for image_ind, (gid, poly) in enumerate(gids_polys):
             try:
                 overlap = self.score(poly,
                                      gid,
                                      mode='overlap',
                                      threshold=self.threshold)
-                if overlap > 0.5:
-                    return image_ind
+                if overlap > magic_thresh:
+                    found = image_ind
+                    break
             except AssertionError as e:
                 print(f'image {gid} does not have all predictions: {e}')
 
-        return None  # TODO error handling
+        # return None  # TODO error handling
+        return found
 
     def on_observations(self, observations):
-        start_idx = self.get_poly_time_ind(
-            map(lambda o: (o.gid, o.poly), observations))
-        end_idx = self.get_poly_time_ind(
-            map(lambda o: (o.gid, o.poly), reversed(observations)))
-        len_obs = sum(1 for _ in observations)
-        # have to make sure this doesn't get consumed
-        return list(
-            itertools.islice(observations, start_idx, len_obs - end_idx))
+        observations = list(observations)
+        len_obs = len(observations)
+        gids_polys = [(o.gid, o.poly) for o in observations]
+        start_idx = self.get_poly_time_ind(gids_polys)
+        if start_idx is None:
+            return []
+        rev_end_idx = self.get_poly_time_ind(reversed(gids_polys))
+        end_idx = len_obs - rev_end_idx
+        return observations[start_idx:end_idx]
 
     def on_augmented_polys(self, aug_polys):
         raise NotImplementedError('need gids for time filtering')
