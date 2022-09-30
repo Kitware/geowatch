@@ -223,8 +223,6 @@ def run_bas_fusion_for_baseline(
     "tta_fliprot": 0,
     "tta_time": 0,
     "clear_annots": 1,
-    "write_preds": false,
-    "write_probs": true,
     "time_steps": 11,
     "chip_dims": [380, 380],
     "window_space_scale": "10GSD",
