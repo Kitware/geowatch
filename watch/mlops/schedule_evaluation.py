@@ -20,11 +20,27 @@ class ScheduleEvaluationConfig(scfg.Config):
 
         'pred_workers': scfg.Value(4, help='number of prediction workers in each process'),
 
-        'enable_pxl_eval': scfg.Value(True, help='if False, then evaluation is not run', alias=['enable_eval']),
-        'enable_pxl_pred': scfg.Value(True, help='if False, then prediction is not run', alias=['enable_pred']),
+        'sidecar2': scfg.Value(True, help='if True uses parallel sidecar pattern, otherwise nested'),
+        'shuffle_jobs': scfg.Value(True, help='if True, shuffles the jobs so they are submitted in a random order'),
+        'annotations_dpath': scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval'),
 
-        'draw_heatmaps': scfg.Value(1, help='if true draw heatmaps on eval'),
-        'draw_curves': scfg.Value(1, help='if true draw curves on eval'),
+        'dvc_expt_dpath': None,
+        'dvc_data_dpath': None,
+
+        'check_other_sessions': scfg.Value('auto', help='if True, will ask to kill other sessions that might exist'),
+        'queue_size': scfg.Value('auto', help='if auto, defaults to number of GPUs'),
+
+        'enable_pred_pxl': scfg.Value(True, isflag=True, help='if False, then prediction is not run', alias=['enable_pred']),
+        'enable_eval_pxl': scfg.Value(True, isflag=True, help='if False, then evaluation is not run', alias=['enable_eval']),
+        'enable_pred_trk': scfg.Value(False, isflag=True, help='if True, enable tracking', alias=['enable_track']),
+        'enable_eval_trk': scfg.Value(False, isflag=True, help='if True, enable iapra BAS evalaution', alias=['enable_iarpa_eval']),
+        'enable_pred_act': scfg.Value(False, isflag=True, help='if True, enable actclf', alias=['enable_actclf']),
+        'enable_eval_act': scfg.Value(False, isflag=True, help='if True, enable iapra SC evalaution', alias=['enable_actclf_eval']),
+
+        'enable_pred_trk_viz': scfg.Value(True, isflag=True, help='if true draw predicted tracks'),
+
+        'draw_heatmaps': scfg.Value(1, isflag=True, help='if true draw heatmaps on eval'),
+        'draw_curves': scfg.Value(1, isflag=True, help='if true draw curves on eval'),
 
         'partition': scfg.Value(None, help='specify slurm partition (slurm backend only)'),
         'mem': scfg.Value(None, help='specify slurm memory per task (slurm backend only)'),
@@ -33,32 +49,10 @@ class ScheduleEvaluationConfig(scfg.Config):
         'tta_time': scfg.Value(0, help='grid of temporal test-time-augmentation to test'),
         'chip_overlap': scfg.Value(0.3, help='grid of chip overlaps test'),
         'set_cover_algo': scfg.Value(['approx'], help='grid of set_cover_algo to test'),
-
-        'sidecar2': scfg.Value(True, help='if True uses parallel sidecar pattern, otherwise nested'),
-
-        'shuffle_jobs': scfg.Value(True, help='if True, shuffles the jobs so they are submitted in a random order'),
-
-        'enable_track': scfg.Value(False, help='if True, enable tracking'),
-        'enable_iarpa_eval': scfg.Value(False, help='if True, enable iapra BAS evalaution'),
-        'draw_tracks': scfg.Value(True, help='if true draw predicted tracks'),
-
-        'enable_actclf': scfg.Value(False, help='if True, enable actclf'),
-        'enable_actclf_eval': scfg.Value(False, help='if True, enable iapra SC evalaution'),
-
-        'annotations_dpath': scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval'),
-
         'bas_thresh': scfg.Value([0.01], help='grid of track thresholds'),
-
         'json_grid_pred_pxl': scfg.Value(None, type=str, help='a json grid/matrix of prediction params'),
-
         'hack_bas_grid': scfg.Value(False, help='if True use hard coded BAS grid'),
         'hack_sc_grid': scfg.Value(False, help='if True use hard coded SC grid'),
-        'dvc_expt_dpath': None,
-        'dvc_data_dpath': None,
-
-        'check_other_sessions': scfg.Value('auto', help='if True, will ask to kill other sessions that might exist'),
-
-        'queue_size': scfg.Value('auto', help='if True, defaults to number of GPUs')
     }
 
 
@@ -154,10 +148,10 @@ def schedule_evaluation(cmdline=False, **kwargs):
     with_class = 'auto'
 
     skip_existing = config['skip_existing']
-    with_pred = config['enable_pxl_pred']  # TODO: allow caching
-    with_eval = config['enable_pxl_eval']
-    with_track = config['enable_track']
-    with_iarpa_eval = config['enable_iarpa_eval']
+    with_pred = config['enable_pred_pxl']  # TODO: allow caching
+    with_eval = config['enable_eval_pxl']
+    with_track = config['enable_pred_trk']
+    with_iarpa_eval = config['enable_eval_trk']
     recompute = False
 
     def check_recompute(flag, depends_flags=[]):
@@ -369,17 +363,22 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 condensed['trk_cfg'],
             ])
 
-            pred_trk_row['trk_pred_fpath'] = ub.Path(state.templates['pred_trk'].format(**condensed))
-            pred_trk_row['trk_pred_kwcoco_fpath'] = ub.Path(state.templates['pred_trk_kwcoco'].format(**condensed))
-            pred_trk_row['bas_eval_out_fpath'] = ub.Path(state.templates['eval_trk'].format(**condensed))
-            pred_trk_row['trk_eval_fpath'] = ub.Path(state.templates['eval_trk'].format(**condensed))
-            pred_trk_row['trk_score_dpath'] = pred_trk_row['trk_eval_fpath'].parent.parent
-            pred_trk_row['trk_eval_dpath'] = pred_trk_row['trk_score_dpath'].parent
-            pred_trk_row['pred_tracks_dpath'] = pred_trk_row['trk_pred_fpath'].parent / 'tracked_sites'
+            pred_trk_row['pred_trk_fpath'] = ub.Path(state.templates['pred_trk'].format(**condensed))
+            pred_trk_row['pred_trk_kwcoco_fpath'] = ub.Path(state.templates['pred_trk_kwcoco'].format(**condensed))
+            pred_trk_row['pred_trk_dpath'] = pred_trk_row['pred_trk_fpath'].parent / 'tracked_sites'
+            pred_trk_row['pred_trk_viz_stamp'] = ub.Path(state.templates['pred_trk_viz_stamp'].format(**condensed))
 
-            pred_trk_row['trk_tmp_dpath'] = pred_trk_row['trk_eval_dpath'] / '_tmp'
+            pred_trk_row['eval_trk_out_fpath'] = ub.Path(state.templates['eval_trk'].format(**condensed))
+            pred_trk_row['eval_trk_fpath'] = ub.Path(state.templates['eval_trk'].format(**condensed))
+            pred_trk_row['eval_trk_score_dpath'] = pred_trk_row['eval_trk_fpath'].parent.parent
+            pred_trk_row['eval_trk_dpath'] = pred_trk_row['eval_trk_score_dpath'].parent
+
+            pred_trk_row['eval_trk_tmp_dpath'] = pred_trk_row['eval_trk_dpath'] / '_tmp'
             pred_trk_row['true_site_dpath'] = annotations_dpath / 'site_models'
             pred_trk_row['true_region_dpath'] = annotations_dpath / 'region_models'
+
+            # This is the requested config, not the resolved config.
+            # TODO: # differentiate.
             pred_trk_row['trk_cfg'] = trk_cfg
             candidate_trk_rows.append(pred_trk_row)
 
@@ -389,18 +388,18 @@ def schedule_evaluation(cmdline=False, **kwargs):
             pred_act_row = pred_pxl_row.copy()
             pred_act_row['condensed'] = condensed = pred_act_row['condensed'].copy()
             condensed['act_cfg'] = state._condense_act_cfg(act_cfg)
-            pred_act_row['act_pred_fpath'] = ub.Path(state.templates['pred_act'].format(**condensed))
-            pred_trk_row['act_pred_kwcoco_fpath'] = ub.Path(state.templates['pred_act_kwcoco'].format(**condensed))
-            pred_act_row['act_pred_dpath'] = pred_act_row['act_pred_fpath'].parent / 'classified_sites'
+            pred_act_row['pred_act_fpath'] = ub.Path(state.templates['pred_act'].format(**condensed))
+            pred_trk_row['pred_act_kwcoco_fpath'] = ub.Path(state.templates['pred_act_kwcoco'].format(**condensed))
+            pred_act_row['pred_act_dpath'] = pred_act_row['pred_act_fpath'].parent / 'classified_sites'
 
-            pred_act_row['act_eval_fpath'] = ub.Path(state.templates['eval_act'].format(**condensed))
-            pred_act_row['act_score_dpath'] = pred_act_row['act_eval_fpath'].parent.parent
-            pred_act_row['act_eval_dpath'] = pred_act_row['act_score_dpath'].parent
+            pred_act_row['eval_act_fpath'] = ub.Path(state.templates['eval_act'].format(**condensed))
+            pred_act_row['eval_act_score_dpath'] = pred_act_row['eval_act_fpath'].parent.parent
+            pred_act_row['eval_act_dpath'] = pred_act_row['eval_act_score_dpath'].parent
             pred_act_row['site_summary_glob'] = (region_model_dpath / '*.geojson')
 
             pred_act_row['true_site_dpath'] = annotations_dpath / 'site_models'
             pred_act_row['true_region_dpath'] = annotations_dpath / 'region_models'
-            pred_act_row['act_tmp_dpath'] = pred_act_row['act_eval_dpath'] / '_tmp'
+            pred_act_row['eval_act_tmp_dpath'] = pred_act_row['eval_act_dpath'] / '_tmp'
             pred_act_row['act_cfg'] = act_cfg
 
             pred_act_row['name_suffix'] = '-'.join([
@@ -420,8 +419,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
             'recompute': recompute_pred,
         }, manager=manager, skip_existing=skip_existing)
 
-        manager['pxl_eval'] = Task(**{
-            'name': 'pxl_eval',
+        manager['eval_pxl'] = Task(**{
+            'name': 'eval_pxl',
             'requested': with_eval,
             'output': pred_pxl_row['eval_pxl_fpath'],
             'requires': ['pred_pxl'],
@@ -461,10 +460,10 @@ def schedule_evaluation(cmdline=False, **kwargs):
             pred_job = queue.submit(command, gpus=1, name=name,
                                     cpus=pred_cpus, **common_submitkw)
 
-        task_info = manager['pxl_eval']
+        task_info = manager['eval_pxl']
         if task_info.should_compute_task():
 
-            pxl_eval_row = pred_pxl_row  # hack, for now these are 1-to-1
+            eval_pxl_row = pred_pxl_row  # hack, for now these are 1-to-1
 
             command = ub.codeblock(
                 r'''
@@ -477,7 +476,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                       --draw_heatmaps={draw_heatmaps} \
                       --viz_thresh=0.2 \
                       --workers=2
-                ''').format(**pxl_eval_row)
+                ''').format(**eval_pxl_row)
             command = task_info.prefix_command(command)
             name = task_info['name'] + pred_pxl_row['name_suffix']
             task_info['job'] = queue.submit(
@@ -485,32 +484,32 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 **common_submitkw)
 
         for pred_trk_row in candidate_trk_rows:
-            manager['bas_track'] = Task(**{
-                'name': 'bas_track',
-                'requested': config['enable_track'],
-                'output': pred_trk_row['trk_pred_fpath'],
+            manager['pred_trk'] = Task(**{
+                'name': 'pred_trk',
+                'requested': config['enable_pred_trk'],
+                'output': pred_trk_row['pred_trk_fpath'],
                 'requires': ['pred_pxl'],
                 'recompute': recompute_track,
             }, manager=manager, skip_existing=skip_existing)
 
-            manager['bas_track_viz'] = Task(**{
-                'name': 'bas_track_viz',
-                'requested': config['draw_tracks'],
-                # 'output': pred_trk_row['trk_pred_fpath'],
-                'requires': ['bas_track'],
+            manager['pred_trk_viz'] = Task(**{
+                'name': 'pred_trk_viz',
+                'requested': config['enable_pred_trk_viz'],
+                'output': pred_trk_row['pred_trk_viz_stamp'],
+                'requires': ['pred_trk'],
                 'recompute': recompute_track,
             }, manager=manager, skip_existing=skip_existing)
 
-            manager['bas_eval'] = Task(**{
-                'name': 'bas_eval',
+            manager['eval_trk'] = Task(**{
+                'name': 'eval_trk',
                 'requested': with_iarpa_eval,
-                'output': pred_trk_row['bas_eval_out_fpath'],
-                'requires': ['bas_track'],
+                'output': pred_trk_row['eval_trk_out_fpath'],
+                'requires': ['pred_trk'],
                 'recompute': recompute_iarpa_eval,
             }, manager=manager, skip_existing=skip_existing)
 
             bas_job = None
-            task_info = manager['bas_track']
+            task_info = manager['pred_trk']
             if task_info.should_compute_task():
                 cfg = pred_trk_row['trk_cfg'].copy()
                 if isinstance(cfg['thresh_hysteresis'], str):
@@ -533,9 +532,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
                         "{pred_pxl_fpath}" \
                         {bas_args} \
                         --clear_annots \
-                        --out_dir "{pred_tracks_dpath}" \
-                        --out_fpath "{trk_pred_fpath}" \
-                        --out_kwcoco "{trk_pred_kwcoco_fpath}"
+                        --out_dir "{pred_trk_dpath}" \
+                        --out_fpath "{pred_trk_fpath}" \
+                        --out_kwcoco "{pred_trk_kwcoco_fpath}"
                     ''').format(**pred_trk_row)
                 command = task_info.prefix_command(command)
                 name = task_info['name'] + pred_trk_row['name_suffix']
@@ -543,17 +542,21 @@ def schedule_evaluation(cmdline=False, **kwargs):
                                          name=name, cpus=2, **common_submitkw)
                 task_info['job'] = bas_job
 
-            task_info = manager['bas_track_viz']
+            task_info = manager['pred_trk_viz']
             if task_info.should_compute_task():
                 command = ub.codeblock(
                     r'''
                     smartwatch visualize \
-                        "{trk_pred_kwcoco_fpath}" \
+                        "{pred_trk_kwcoco_fpath}" \
                         --channels="red|green|blue,salient" \
                         --stack=True \
                         --workers=avail/2 \
-                        --animate=True
+                        --animate=True && touch {pred_trk_viz_stamp}
                     ''').format(**pred_trk_row)
+                # FIXME: the process itself should likely take care of writing
+                # a stamp that indicates it is done. Or we can generalize this
+                # as some wrapper applied to every watch command, but that
+                # might require knowing about all configs a-priori.
                 command = task_info.prefix_command(command)
                 name = task_info['name'] + pred_trk_row['name_suffix']
                 bas_viz_job = queue.submit(command=command, depends=bas_job,
@@ -563,7 +566,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
             # TODO: need a way of knowing if a package is BAS or SC.
             # Might need info on GSD as well.
-            task_info = manager['bas_eval']
+            task_info = manager['eval_trk']
             if task_info.should_compute_task():
                 eval_trk_row = pred_trk_row.copy()  # 1-to-1 for now
                 command = ub.codeblock(
@@ -572,12 +575,12 @@ def schedule_evaluation(cmdline=False, **kwargs):
                         --merge=True \
                         --true_site_dpath "{true_site_dpath}" \
                         --true_region_dpath "{true_region_dpath}" \
-                        --tmp_dir "{trk_tmp_dpath}" \
-                        --out_dir "{trk_score_dpath}" \
+                        --tmp_dir "{eval_trk_tmp_dpath}" \
+                        --out_dir "{eval_trk_score_dpath}" \
                         --name "{name_suffix}" \
-                        --merge_fpath "{trk_eval_fpath}" \
+                        --merge_fpath "{eval_trk_fpath}" \
                         --inputs_are_paths=True \
-                        --pred_sites={trk_pred_fpath}
+                        --pred_sites={pred_trk_fpath}
                     ''').format(**eval_trk_row)
 
                 command = task_info.prefix_command(command)
@@ -589,23 +592,23 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
         for pred_act_row in candidate_act_rows:
 
-            manager['actclf'] = Task(**{
-                'name': 'actclf',
-                'requested': config['enable_actclf'],
-                'output': pred_act_row['act_pred_fpath'],
+            manager['pred_act'] = Task(**{
+                'name': 'pred_act',
+                'requested': config['enable_pred_act'],
+                'output': pred_act_row['pred_act_fpath'],
                 'requires': ['pred_pxl'],
                 'recompute': 0,
             }, manager=manager, skip_existing=skip_existing)
-            manager['sc_eval'] = Task(**{
-                'name': 'sc_eval',
-                'requested': config['enable_actclf_eval'],
-                'output': pred_act_row['act_eval_fpath'],
-                'requires': ['actclf'],
+            manager['eval_act'] = Task(**{
+                'name': 'eval_act',
+                'requested': config['enable_eval_act'],
+                'output': pred_act_row['eval_act_fpath'],
+                'requires': ['pred_act'],
                 'recompute': 0,
             }, manager=manager, skip_existing=skip_existing)
 
             sc_job = None
-            task_info = manager['actclf']
+            task_info = manager['pred_act']
             if task_info.should_compute_task():
                 actclf_cfg = {
                     'boundaries_as': 'polys',
@@ -622,9 +625,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
                         "{pred_pxl_fpath}" \
                         --site_summary '{site_summary_glob}' \
                         {sc_args} \
-                        --out_dir "{act_pred_dpath}" \
-                        --out_fpath "{act_pred_fpath}" \
-                        --out_kwcoco_fpath "{act_pred_kwcoco_fpath}"
+                        --out_dir "{pred_act_dpath}" \
+                        --out_fpath "{pred_act_fpath}" \
+                        --out_kwcoco_fpath "{pred_act_kwcoco_fpath}"
                     ''').format(**pred_act_row)
 
                 command = task_info.prefix_command(command)
@@ -636,7 +639,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 )
                 task_info['job'] = sc_job
 
-            task_info = manager['sc_eval']
+            task_info = manager['eval_act']
             if task_info.should_compute_task():
                 eval_act_row = pred_act_row.copy()  # 1-to-1 for now
                 command = ub.codeblock(
@@ -645,12 +648,12 @@ def schedule_evaluation(cmdline=False, **kwargs):
                         --merge=True \
                         --true_site_dpath "{true_site_dpath}" \
                         --true_region_dpath "{true_region_dpath}" \
-                        --tmp_dir "{act_tmp_dpath}" \
-                        --out_dir "{act_score_dpath}" \
+                        --tmp_dir "{eval_act_tmp_dpath}" \
+                        --out_dir "{eval_act_score_dpath}" \
                         --name "{name_suffix}" \
-                        --merge_fpath "{act_eval_fpath}" \
+                        --merge_fpath "{eval_act_fpath}" \
                         --inputs_are_paths=True \
-                        --pred_sites={act_pred_fpath}
+                        --pred_sites={pred_act_fpath}
                     ''').format(**eval_act_row)
 
                 command = task_info.prefix_command(command)

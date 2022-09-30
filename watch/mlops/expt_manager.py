@@ -569,30 +569,33 @@ class ExperimentState(ub.NiceRepr):
             'spkg': 'runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{model}.pt',
         }
 
-        self.volitile_templates = {
+        task_dpaths = {
             'pred_pxl_dpath'  : 'pred/{expt}/{model}/{test_dset}/{pred_cfg}',
-            'pred_pxl'        : 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/pred.kwcoco.json',
-
             'pred_trk_dpath'  : 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/tracking/{trk_cfg}',
-            'pred_trk_kwcoco' : 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/tracking/{trk_cfg}/tracks.kwcoco.json',
-            'pred_trk'        : 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/tracking/{trk_cfg}/tracks.json',
-
             'pred_act_dpath'  : 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/actclf/{act_cfg}',
-            'pred_act_kwcoco' : 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/actclf/{act_cfg}/activity_tracks.kwcoco.json',
-            'pred_act'        : 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/actclf/{act_cfg}/activity_tracks.json',
+
+            'eval_pxl_dpath' : 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval',
+            'eval_trk_dpath' : 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval',
+            'eval_act_dpath' : 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval',
+        }
+
+        self.volitile_templates = {
+            'pred_pxl'        : task_dpaths['pred_pxl_dpath'] / 'pred.kwcoco.json',
+
+            'pred_trk_kwcoco' : task_dpaths['pred_trk_dpath'] / 'tracks.kwcoco.json',
+            'pred_trk'        : task_dpaths['pred_trk_dpath'] / 'tracks.json',
+            'pred_trk_viz_stamp'  : task_dpaths['pred_trk_dpath'] / '_viz.stamp',
+
+            'pred_act_kwcoco' : task_dpaths['pred_act_dpath'] / 'activity_tracks.kwcoco.json',
+            'pred_act'        : task_dpaths['pred_act_dpath'] / 'activity_tracks.json',
         }
 
         self.versioned_templates = {
             # TODO: rename curves to pixel
             'pkg'            : 'packages/{expt}/{model}.pt',
-            'eval_pxl_dpath' : 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval',
-            'eval_pxl'       : 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/eval_pxl/curves/measures2.json',
-
-            'eval_trk_dpath' : 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval',
-            'eval_trk'       : 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
-
-            'eval_act_dpath' : 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval',
-            'eval_act'       : 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
+            'eval_pxl'       : task_dpaths['eval_pxl_dpath'] / 'eval_pxl/curves/measures2.json',
+            'eval_trk'       : task_dpaths['pred_trk_dpath'] / 'scores/merged/summary2.json',
+            'eval_act'       : task_dpaths['eval_act_dpath'] / 'scores/merged/summary3.json',
         }
 
         # User specified config mapping a formatstr variable to a set of items
@@ -609,9 +612,14 @@ class ExperimentState(ub.NiceRepr):
         self.templates = {}
         for k, v in self.staging_templates.items():
             self.templates[k] = self.staging_template_prefix + v
+
         for k, v in self.volitile_templates.items():
             self.templates[k] = self.storage_template_prefix + v
+
         for k, v in self.versioned_templates.items():
+            self.templates[k] = self.storage_template_prefix + v
+
+        for k, v in task_dpaths.items():
             self.templates[k] = self.storage_template_prefix + v
 
         self.path_patterns_matrix = {}

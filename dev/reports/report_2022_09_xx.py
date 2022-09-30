@@ -52,8 +52,8 @@ VALI_DATASET_SUBSET=$DATA_DVC_DPATH/$DATASET_CODE/data_vali_10GSD_KR_R001.kwcoco
 python -m watch.mlops.expt_manager "evaluate" \
     --dataset_codes "$DATASET_CODE" \
     --test_dataset="$VALI_DATASET_SUBSET" \
-    --enable_track=1 \
-    --enable_iarpa_eval=1 \
+    --enable_pred_trk=1 \
+    --enable_trk_eval=1 \
     --bas_thresh=0.05,0.01 \
     --skip_existing=True \
     --model_pattern="models_of_interest.txt" \
@@ -68,7 +68,7 @@ python -m watch.mlops.expt_manager "evaluate" \
         "time_sampling": ["auto"],
         "time_span": ["auto"]
     }' \
-    --devices="0,1" --enable_pred=1 --run=1
+    --devices="0,1" --enable_pred_pxl=1 --run=1
 
 
 # --model_pattern="${MODEL_OF_INTEREST}*" \
@@ -91,8 +91,8 @@ python -m watch.mlops.expt_manager "evaluate" \
     --dataset_codes "$DATASET_CODE" \
     --test_dataset="$VALI_DATASET_SUBSET" \
     --enable_eval=1 \
-    --enable_track=1 \
-    --enable_iarpa_eval=1 \
+    --enable_pred_trk=1 \
+    --enable_trk_eval=1 \
     --bas_thresh=0.01,0.1 \
     --skip_existing=True \
     --json_grid_pred_pxl='{
@@ -103,7 +103,7 @@ python -m watch.mlops.expt_manager "evaluate" \
         "chip_overlap": [0.3, 0.0],
         "set_cover_algo": ["approx", null]
     }' \
-    --devices="0,1" --enable_pred=1 --run=1 --check_other_sessions=0
+    --devices="0,1" --enable_pred_pxl=1 --run=1 --check_other_sessions=0
 
 
 # # Then you should be able to evaluate that model
@@ -113,8 +113,8 @@ python -m watch.mlops.expt_manager "evaluate" \
 # python -m watch.mlops.expt_manager "evaluate" \
 #     --dataset_codes "$DATASET_CODE" \
 #     --test_dataset="$VALI_DATASET_SUBSET" \
-#     --enable_track=1 \
-#     --enable_iarpa_eval=1 \
+#     --enable_pred_trk=1 \
+#     --enable_trk_eval=1 \
 #     --bas_thresh=0.00,0.01,0.1 \
 #     --skip_existing=True \
 #     --model_pattern="${MODEL_OF_INTEREST}*" \
@@ -126,7 +126,7 @@ python -m watch.mlops.expt_manager "evaluate" \
 #         "chip_overlap": [0.3],
 #         "set_cover_algo": ["approx", null]
 #     }' \
-#     --devices="0,1" --enable_pred=1 --run=1
+#     --devices="0,1" --enable_pred_pxl=1 --run=1
 
 models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Continue_15GSD_BGR_V004/Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt.pt
 """
@@ -479,8 +479,8 @@ DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 python -m watch.mlops.expt_manager "evaluate" \
     --dataset_codes "$DATASET_CODE" \
     --test_dataset="$TEST_DATASET" \
-    --enable_track=1 \
-    --enable_iarpa_eval=1 \
+    --enable_pred_trk=1 \
+    --enable_trk_eval=1 \
     --skip_existing=True \
     --model_pattern="models_of_interest.txt" \
     --hack_bas_grid=True \
@@ -494,7 +494,7 @@ python -m watch.mlops.expt_manager "evaluate" \
         "time_sampling": ["auto", "continuous"],
         "time_span": ["auto"]
     }' \
-    --devices="0,1" --enable_pred=1 --run=0
+    --devices="0,1" --enable_pred_pxl=1 --run=0
 
 
 echo "
@@ -504,10 +504,6 @@ DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 python -m watch.mlops.expt_manager "evaluate" \
     --dataset_codes "$DATASET_CODE" \
     --test_dataset="$TEST_DATASET" \
-    --enable_track=1 \
-    --draw_tracks=0 \
-    --enable_iarpa_eval=0 \
-    --skip_existing=0 \
     --model_pattern="models_of_interest.txt" \
     --hack_bas_grid=True \
     --json_grid_pred_pxl='{
@@ -520,5 +516,9 @@ python -m watch.mlops.expt_manager "evaluate" \
         "time_sampling": ["auto"],
         "time_span": ["auto"]
     }' \
-    --devices="0,1" --enable_pred=0 --run=1
+    --devices="0,1" --queue_size=4 \
+    --enable_pred_trk=1 --enable_trk_eval=0 \
+    --enable_pred_pxl=0 --enable_eval_pxl=1 --viz_pred_trk=0  \
+    --skip_existing=0 \
+    --run=1
 """
