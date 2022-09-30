@@ -327,6 +327,7 @@ def predict(cmdline=False, **kwargs):
             hack_model_sensorchan_spec = kwcoco.SensorChanSpec.coerce(','.join(model_sensorchan_stem_parts))
             # hack_model_spec = kwcoco.ChannelSpec.coerce(','.join(unique_channel_streams))
             if datamodule_sensorchan_spec is not None:
+                datamodule_sensorchan_spec = kwcoco.SensorChanSpec.coerce(datamodule_sensorchan_spec)
                 hack_model_sensorchan_spec = hack_model_sensorchan_spec.normalize()
                 datamodule_sensorchan_spec = datamodule_sensorchan_spec.normalize()
 
