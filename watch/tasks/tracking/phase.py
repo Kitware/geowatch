@@ -505,6 +505,9 @@ def phase_prediction_baseline(annots) -> List[float]:
     Number of days until the next expected activity phase transition.
 
     Baseline: (average days in current_phase - elapsed days in current_phase)
+
+    Returns:
+        float: number of days in the future
     '''
     # from watch.dev.check_transition_probs
     phase_avg_days = {
@@ -535,9 +538,16 @@ def phase_prediction_baseline(annots) -> List[float]:
     predicted = np.array(
         [first_date[phase] + phase_avg_days[phase] for phase in annots.cnames])
 
-    return np.where(predicted > today,
-                    (predicted - today).astype('timedelta64[D]').astype(float),
-                    1)
+    try:
+        today_offset = (predicted - today).astype('timedelta64[D]').astype(float)
+        is_future = predicted > today
+        next_offset = np.where(is_future, today_offset, 1)
+    except KeyError:
+        # This can occur when we just dont have any information
+        # Punt.
+        next_offset = np.array(list(phase_avg_days.values())).astype('timedelta64[D]').astype(float).mean()
+
+    return next_offset
 
 
 def phase_prediction_heatmap(annots, coco_dset, key) -> List[float]:
