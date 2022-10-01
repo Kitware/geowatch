@@ -101,6 +101,9 @@ def main():
     state.patterns['test_dset'] = (
         'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_septest.kwcoco')
 
+    state.patterns['test_dset'] = (
+        'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_kr1br2.kwcoco')
+
     state._build_path_patterns()
     state._make_cross_links()
     # state._block_non_existing_rhashes()
@@ -119,21 +122,14 @@ def main():
     best_models_dpath = (dpath / 'best_models' / cohort).ensuredir()
     groupid_to_shortlist = reporter.report_best(show_configs=True, verbose=1, top_k=4)
 
-    rlut = reporter._build_cfg_rlut(None)
+    viz_cmds = []
 
-    # Ideally we would have more consistent name conventions, but just
-    # register things for now
-    cfg_param_relationship = [
-        {'cfg_key': 'trk_cfg', 'param_key': 'track_params', 'type': 'trk'},
-        {'cfg_key': 'pred_cfg', 'param_key': 'pred_params', 'type': 'pxl'},
-        # TODO: act
-    ]
-
+    import rich as rich_mod
     for groupid, shortlist in groupid_to_shortlist.items():
         test_dset, type = groupid
         _dpath = (best_models_dpath / f'{test_dset}_{type}').ensuredir()
 
-        for rank, row in enumerate(shortlist[::-1].to_dict('records'), start=1):
+        for rank, row in reversed(list(enumerate(shortlist[::-1].to_dict('records'), start=1))):
             parts = [p for p in [
                 f'rank_{rank:03d}',
                 row.get('model', None),
@@ -167,16 +163,6 @@ def main():
                         real_dpath = real_fpath.parent
                     ub.symlink(real_dpath, link_dpath, verbose=0, overwrite=1)
 
-            # Check if the registered params agree with the rlut params
-            for relate in cfg_param_relationship:
-                cfg_key = relate['cfg_key']
-                param_key = relate['param_key']
-                if param_key in row and cfg_key in row:
-                    cfg_hashid = row[cfg_key]
-                    cfg_params = row[param_key]
-                    if cfg_hashid in rlut:
-                        resolved = rlut[cfg_hashid]
-
             metric_names = reporter.metric_registry.name
             metric_cols = (ub.oset(metric_names) & row.keys())
             primary_metrics = (ub.oset(['mean_f1', 'BAS_F1']) & row.keys())
@@ -204,10 +190,36 @@ def main():
             track_params = track_params - {
                 'in_dataset_name', 'model_name', 'in_dataset_fpath', 'model_fpath'}
 
+            fit_params = ub.udict({
+                k : v for k, v in row['fit_params'].items()})
+            fit_params = fit_params - {
+                'in_dataset_name', 'model_name', 'in_dataset_fpath', 'model_fpath'}
+
             row_ = row.copy()
             row['rank'] = (rank, cohort)
             row_['expt_dvc_dpath'] = '.'
             pkg_fpath = state.templates['pkg'].format(**row_)
+
+            pred_trk_kwcoco_fpath = ub.Path(state.templates['pred_trk_kwcoco'].format(**row))
+
+            name = row.get('model', '') + row.get('pred_cfg', '') + row.get('trk_cfg', '')
+
+            # TODO: allow specification of truth fpath as well?
+            viz_track_cmd = ub.codeblock(
+                fr'''
+                smartwatch visualize \
+                    "{pred_trk_kwcoco_fpath}" \
+                    --channels="red|green|blue,salient" \
+                    --viz_dpath={row_dpath}/_viz \
+                    --stack=only \
+                    --skip_missing=False \
+                    --draw_imgs=False \
+                    --draw_anns=True \
+                    --workers=avail/2 \
+                    --animate=True \
+                    --extra_header="\nRank#{rank} {cohort}\n{name}"
+                ''')
+            viz_cmds.append(viz_track_cmd)
 
             metrics = ub.udict(row) & metric_cols
             metrics['test_dset'] = test_dset
@@ -217,11 +229,18 @@ def main():
                 'file_name': pkg_fpath,
                 'pred_params': pred_params,
                 'track_params': track_params,
+                'fit_params': fit_params,
                 'metrics': metrics,
             }
             summary_fpath = row_dpath / 'summary.json'
             summary_fpath.write_text(json.dumps(summary, indent='   '))
+            rich_mod.print('summary = {}'.format(ub.repr2(summary, nl=2)))
             print(f'summary_fpath={summary_fpath}')
+
+    for viz_cmd in viz_cmds:
+        print(viz_cmd)
+        print('')
+        print('')
 
     reporter = reporter
     orig_merged_df = reporter.orig_merged_df
@@ -248,6 +267,11 @@ def main():
 
     plotter = plots.Plotter.from_reporter(
         reporter, common_plotkw=common_plotkw, dpath=dpath)
+    analysis = plotter.analysis = reporter.build_analysis()
+
+    params_of_interest = [s['param_name'].replace('pxl', 'pred') for s in analysis.statistics][::-1]
+    print('params_of_interest = {}'.format(ub.repr2(params_of_interest, nl=1)))
+    plotter.params_of_interest = params_of_interest
 
     # Takes a long time to load these
     # plots.dataset_summary_tables(dpath)
@@ -256,18 +280,39 @@ def main():
 
     plots.describe_varied(merged_df, dpath, human_mapping=human_mapping)
 
-    tracked_metrics = ['salient_AP', 'BAS_F1']
-    for metrics in tracked_metrics:
-        plotter.plot_groups(
-            'metric_over_training_time', metrics=metrics, huevar='expt')
+    for code_type, group in plotter.expt_groups.items():
+        pass
 
-    plotter.plot_groups('plot_pixel_ap_verus_iarpa', huevar='expt')
+    tracked_metrics = ['salient_AP', 'BAS_F1']
+    for param in params_of_interest:
+        for metrics in tracked_metrics:
+            try:
+                plotter.plot_groups('plot_pixel_ap_verus_iarpa', huevar=param)
+            except Exception as ex:
+                print(f'ex={ex}')
+
+    plotter.plot_groups(
+        'metric_over_training_time', metrics=metrics, huevar='expt')
 
     plotter.plot_groups('plot_pixel_ap_verus_auc', huevar='expt')
 
     plotter.plot_groups('plot_resource_versus_metric', huevar='expt')
 
-    plotter.plot_groups('plot_violinplots', metrics='BAS_F1')
+    # params_of_interest = list(analysis.varied)
+
+    # params_of_interest = [
+    #     # 'pred_use_cloudmask',
+    #     # 'pred_resample_invalid_frames',
+    #     # 'pred_input_space_scale',
+    #     # 'pred_window_space_scale',
+    #     'trk_thresh',
+    # ]
+
+    plotter.plot_groups('plot_param_analysis', metrics='BAS_F1',
+                        params_of_interest=params_of_interest)
+
+    plotter.plot_groups('plot_param_analysis', metrics='total_hours',
+                        params_of_interest=params_of_interest)
 
     import xdev
     xdev.view_directory(dpath)
@@ -410,10 +455,17 @@ if [ ! -f "$TEST_DATASET" ]; then
         --select_videos '((.name | test("KR_R001")) or (.name | test("KR_R002")) or (.name | test("BR_R002")) or (.name | test("US_R007")))'
 fi
 
-# Drop4_BAS_Retrain_V001_epoch=54-step=28160.pt
-# Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584*
+TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data_kr1br2.kwcoco.json
+if [ ! -f "$TEST_DATASET" ]; then
+    DATASET_BIG=$DATA_DVC_DPATH/$DATASET_CODE/data.kwcoco.json
+    kwcoco subset "$DATASET_BIG" "$TEST_DATASET" \
+        --select_videos '((.name | test("KR_R001")) or (.name | test("BR_R002")))'
+fi
+
 
 echo "
+Drop4_BAS_Retrain_V001_epoch=54-step=28160.pt
+Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584*
 Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt
 " > models_of_interest.txt
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
@@ -434,9 +486,8 @@ python -m watch.mlops.expt_manager "evaluate" \
     }' \
     --devices="0,1" --queue_size=2 \
     --enable_pred_pxl=1 --enable_eval_pxl=1 \
-    --enable_pred_trk=1 --enable_eval_trk=1 --enable_pred_trk_viz=0  \
-    --skip_existing=1 \
-    --run=1
+    --enable_pred_trk=1 --enable_eval_trk=1 \
+    --skip_existing=1 --run=1
 
 
 echo "
@@ -460,7 +511,7 @@ python -m watch.mlops.expt_manager "evaluate" \
         "time_sampling": ["auto", "contiguous"],
         "time_span": ["auto"]
     }' \
-    --devices="0,1" --queue_size=8 \
+    --devices="0,1" --queue_size=2 \
     --enable_pred_pxl=0 --enable_eval_pxl=1 \
     --enable_pred_trk=1 --enable_eval_trk=1 --enable_pred_trk_viz=0  \
     --skip_existing=1 \
@@ -491,5 +542,5 @@ python -m watch.mlops.expt_manager "evaluate" \
     --enable_pred_pxl=0 --enable_eval_pxl=0 \
     --enable_pred_trk=0 --enable_eval_trk=1 --enable_pred_trk_viz=0  \
     --skip_existing=1 \
-    --run=0
+    --run=1
 """

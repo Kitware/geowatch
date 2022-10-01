@@ -250,7 +250,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
     }
 
     pred_trk_param_basis_auto = {
-        'thresh': [0.01, 0.05, 0.1, 0.15, 0.2],
+        # 'thresh': [0.01, 0.05, 0.1, 0.15, 0.2],
+        'thresh': [0.01, 0.05, 0.1],  # , 0.15, 0.2],
         'morph_kernel': [3],
         'norm_ord': [1],
         'agg_fn': ['probs', 'mean_normalized'],
@@ -340,13 +341,13 @@ def schedule_evaluation(cmdline=False, **kwargs):
             simple_dvc = SimpleDVC(dvc_expt_dpath)
             simple_dvc.unprotect(needs_unprotect)
 
-    if config['shuffle_jobs']:
-        candidate_pred_rows = kwarray.shuffle(candidate_pred_rows)
-
     common_submitkw = dict(
         partition=config['partition'],
         mem=config['mem']
     )
+
+    if config['shuffle_jobs']:
+        candidate_pred_rows = kwarray.shuffle(candidate_pred_rows)
 
     for pred_pxl_row in ub.ProgIter(candidate_pred_rows, desc='build track rows'):
         package_fpath = pred_pxl_row['package_fpath']
@@ -356,6 +357,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
             condensed['model'],
             condensed['pred_cfg'],
         ])
+
+        if config['shuffle_jobs']:
+            pred_trk_param_grid = kwarray.shuffle(pred_trk_param_grid)
 
         # First compute children track, activity rows (todo: refactor to do
         # ealier)
@@ -388,6 +392,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
             # TODO: # differentiate.
             pred_trk_row['trk_cfg'] = trk_cfg
             candidate_trk_rows.append(pred_trk_row)
+
+        if config['shuffle_jobs']:
+            pred_act_param_grid = kwarray.shuffle(pred_act_param_grid)
 
         # TODO: refactor to depend on a non-truth set of predicted sites.
         candidate_act_rows = []

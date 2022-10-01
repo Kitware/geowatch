@@ -248,14 +248,16 @@ class EvaluationReporter:
             shortlist = shortlist.sort_values(metric_cols, na_position='first')
 
             show_configs = show_configs
+
             if show_configs:
-                keys = list(set([
-                    v for v in shortlist[ub.oset(cfg_names) & shortlist.columns].values.ravel()
-                    if not pd.isnull(v)
-                ]))
+                cfg_cols = shortlist[ub.oset(cfg_names) & shortlist.columns]
+                keys = [
+                    v for v in ub.unique(cfg_cols.values[::-1].ravel())
+                    if not pd.isnull(v)][::-1]
                 resolved = reporter._build_cfg_rlut(keys)
+                resolved = ub.udict(resolved).subdict(keys)
                 if verbose and show_configs:
-                    rich.print('resolved = {}'.format(ub.repr2(resolved, nl=2)))
+                    rich.print('resolved = {}'.format(ub.repr2(resolved, sort=0, nl=2)))
 
             # test_dset_to_best[test_dset] =
             if verbose:
@@ -267,6 +269,88 @@ class EvaluationReporter:
             grouped_shortlists[groupid] = shortlist
 
         return grouped_shortlists
+
+    def serialize_rows(reporter):
+        from kwcoco.util.util_json import ensure_json_serializable
+        table = reporter.orig_merged_df
+        state = reporter.state
+        for row in table.to_dict('records'):
+            row = ensure_json_serializable(row)
+            walker = ub.IndexableWalker(row)
+            for path, val in walker:
+                if hasattr(val, 'spec'):
+                    walker[path] = val.spec
+
+            # hack to get back to regular names
+            pred_params = ub.udict(
+                {k[5:] : v for k, v in row['pred_params'].items()
+                 if k.startswith('pred_')})
+
+            pred_params = pred_params - {
+                'in_dataset_name', 'model_name', 'in_dataset_fpath', 'model_fpath'}
+
+            # hack to get back to regular names
+            track_params = ub.udict({
+                k[4:] : v for k, v in row['track_params'].items() if k.startswith('trk_')})
+            track_params = track_params - {
+                'in_dataset_name', 'model_name', 'in_dataset_fpath', 'model_fpath'}
+
+            fit_params = ub.udict({
+                k : v for k, v in row['fit_params'].items()})
+            fit_params = fit_params - {
+                'in_dataset_name', 'model_name', 'in_dataset_fpath', 'model_fpath'}
+
+            row_ = row.copy()
+            row_['expt_dvc_dpath'] = '.'
+            pkg_fpath = state.templates['pkg'].format(**row_)
+
+            metric_names = reporter.metric_registry.name
+            metric_cols = (ub.oset(metric_names) & row.keys())
+            primary_metrics = (ub.oset(['mean_f1', 'BAS_F1']) & row.keys())
+            metric_cols = list((metric_cols & primary_metrics) | (metric_cols - primary_metrics))
+
+            metrics = ub.udict(row) & metric_cols
+            cost_metrics_cols = {'co2_kg', 'kwh', 'total_hours'}
+            metrics.update(ub.udict(row) & cost_metrics_cols)
+            metrics['properties'] = {'test_dataset': row['test_dset']}
+            summary = {
+                'model': row['model'],
+                'file_name': pkg_fpath,
+                'pred_params': pred_params,
+                'track_params': track_params,
+                'fit_params': fit_params,
+                'metrics': metrics,
+            }
+            yield summary, row
+
+    def build_analysis(reporter):
+        from watch.utils.result_analysis import ResultAnalysis
+        from watch.utils.result_analysis import Result
+        # import json
+
+        results = []
+        for summary, details in reporter.serialize_rows():
+            params = {
+                **summary['fit_params'].map_keys(lambda k: 'fit_' + k),
+                **summary['track_params'].map_keys(lambda k: 'trk_' + k),
+                **summary['pred_params'].map_keys(lambda k: 'pxl_' + k),
+            }
+            for k, v in params.items():
+                if isinstance(v, list):
+                    params[k] = repr(v)
+            name = 'row_' + ub.hash_data(summary)[0:8]
+            metrics = ub.udict(summary['metrics']) - {'properties'}
+            result = Result(name, params, metrics)
+            results.append(result)
+
+        analysis = ResultAnalysis(
+            results,
+            metric_objectives={'BAS_F1': 'max', 'salient_AP': 'max'},
+            metrics=['BAS_F1']
+        )
+        analysis.build()
+        analysis.report()
+        return analysis
 
     def _build_cfg_rlut(reporter, keys):
         from watch.utils.reverse_hashid import ReverseHashTable
@@ -717,9 +801,22 @@ def clean_loaded_data(big_rows):
         row.update(info['metrics'])
         row.update(resource)
         row.update(selected_fit_params)
+
+        def fix_none(v):
+            return "None" if v is None else v
+
+        pred_params = ub.udict(pred_params).map_values(fix_none)
+        fit_params = ub.udict(fit_params).map_values(fix_none)
+        track_params = ub.udict(track_params).map_values(fix_none)
+
         row['pred_params'] = pred_params
         row['track_params'] = track_params
         row['fit_params'] = fit_params
+
+        # TODO: make prefix scheme consistent
+        row.update(track_params)
+        row.update(pred_params)
+        row.update({'fit_' + k: v for k, v in fit_params.items()})
         simple_rows.append(row)
 
     simple_df = pd.DataFrame(simple_rows)

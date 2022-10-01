@@ -623,6 +623,9 @@ class ResultAnalysis(ub.NiceRepr):
                 value_to_metric[param_value] = metric_vals.values
 
         moments = pd.DataFrame(value_to_metric_stats).T
+        if "mean" not in moments.columns:
+            raise ValueError(f'No values for {metric_key}')
+
         moments = moments.sort_values("mean", ascending=ascending)
         moments.index.name = param_group_name
         moments.columns.name = metric_key
@@ -810,8 +813,16 @@ class ResultAnalysis(ub.NiceRepr):
         self.statistics = statistics = []
         for param_group in held_constant_groups:
             for metric_key in metrics_of_interest:
-                stats_row = self.test_group(param_group, metric_key)
-                statistics.append(stats_row)
+                try:
+                    stats_row = self.test_group(param_group, metric_key)
+                except ValueError as ex:
+                    import warnings
+                    warnings.warn(repr(ex))
+                    # print(f'param_group={param_group}')
+                    # print(f'metric_key={metric_key}')
+                    # raise
+                else:
+                    statistics.append(stats_row)
 
         self.stats_table = pd.DataFrame(
             [

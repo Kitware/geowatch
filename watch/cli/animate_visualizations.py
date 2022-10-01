@@ -119,12 +119,13 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
 
                     for chan_dpath in channel_dpaths:
                         frame_fpaths = sorted(chan_dpath.glob('*'))
-                        gif_fname = '{}{}_{}.gif'.format(track_name, type_, chan_dpath.name)
-                        gif_fpath = track_subdpath / gif_fname
-                        pool.submit(
-                            gifify.ffmpeg_animate_frames, frame_fpaths,
-                            gif_fpath, in_framerate=frames_per_second,
-                            verbose=verbose_worker)
+                        if len(frame_fpaths) < 300:
+                            gif_fname = '{}{}_{}.gif'.format(track_name, type_, chan_dpath.name)
+                            gif_fpath = track_subdpath / gif_fname
+                            pool.submit(
+                                gifify.ffmpeg_animate_frames, frame_fpaths,
+                                gif_fpath, in_framerate=frames_per_second,
+                                verbose=verbose_worker)
                         ani_fname = '{}{}_{}.mp4'.format(track_name, type_, chan_dpath.name)
                         ani_fpath = track_subdpath / ani_fname
                         pool.submit(
@@ -141,11 +142,12 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
                                       for c in channels.streams()]
                 for chan_dpath in channel_dpaths:
                     frame_fpaths = sorted(chan_dpath.glob('*'))
-                    gif_fname = '{}{}_{}.gif'.format(video_name, type_, chan_dpath.name)
-                    gif_fpath = video_dpath / gif_fname
-                    pool.submit(
-                        gifify.ffmpeg_animate_frames, frame_fpaths, gif_fpath,
-                        in_framerate=frames_per_second, verbose=verbose_worker)
+                    if len(frame_fpaths) < 300:
+                        gif_fname = '{}{}_{}.gif'.format(video_name, type_, chan_dpath.name)
+                        gif_fpath = video_dpath / gif_fname
+                        pool.submit(
+                            gifify.ffmpeg_animate_frames, frame_fpaths, gif_fpath,
+                            in_framerate=frames_per_second, verbose=verbose_worker)
                     ani_fname = '{}{}_{}.mp4'.format(video_name, type_, chan_dpath.name)
                     ani_fpath = video_dpath / ani_fname
                     pool.submit(

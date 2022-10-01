@@ -521,6 +521,7 @@ def build_image_header_text(**kwargs):
     header_lines = []
     for line_info in header_line_infos:
         header_line = ' '.join([p for p in line_info if p])
+        header_line = header_line.replace('\\n', '\n')  # hack
         if header_line:
             header_lines.append(header_line)
     return header_lines

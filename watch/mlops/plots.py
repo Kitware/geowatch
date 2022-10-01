@@ -149,6 +149,24 @@ class Plotter:
             corr_lbl = ''
         data = group
 
+        if huevar not in {'auto', 'random'}:
+            allow_magic_huevar = True
+            if allow_magic_huevar:
+                if len(data[huevar].unique()) <= 1:
+                    huevar = 'random'
+
+        if huevar == 'random':
+            import random
+            huevar = random.choice(plotter.analysis.statistics)['param_name']
+            # huevar = plotter.analysis.statistics[-1]['param_name']
+            # huevar.replace('pxl', 'pred')
+            plotkw['hue'] = huevar
+
+        if huevar == 'auto':
+            huevar = plotter.analysis.statistics[-1]['param_name']
+            # huevar.replace('pxl', 'pred')
+            plotkw['hue'] = huevar
+
         def make_fig(fnum, legend=True):
             fig = kwplot.figure(fnum=fnum, doclf=True)
             ax = fig.gca()
@@ -158,7 +176,7 @@ class Plotter:
             nice_type = plotter.human_mapping.get(type, type)
             ax.set_title(f'Pixelwise Vs IARPA metrics - {nice_type} - {test_dset}\n{corr_lbl}, n={n}')
 
-        prefix = f'{test_dset}_{type}_'
+        prefix = f'{test_dset}_{type}_{huevar}'
         fnum = plot_name + prefix
         dpath = plotter.dpath
         run_make_fig(make_fig, fnum, dpath, plotter.human_mapping, plot_name, prefix)
@@ -208,11 +226,11 @@ class Plotter:
             ax.set_title(f'Pixelwise metrics - {nice_type} - {test_dset}\n{corr_lbl}')
             fig.set_size_inches(16.85, 8.82)
 
-        prefix = f'{test_dset}_{type}_'
+        prefix = f'{test_dset}_{type}_{huevar}'
         fnum = 'plot_pixel_ap_verus_auc' + prefix
         run_make_fig(make_fig, fnum, plotter.dpath, plotter.human_mapping, plot_name, prefix)
 
-    def plot_violinplots(plotter, code_type, group, metrics):
+    def plot_param_analysis(plotter, code_type, group, metrics, params_of_interest=None):
         """
         metrics = ['salient_AP']
         metrics = ['BAS_F1']
@@ -241,12 +259,14 @@ class Plotter:
         expanded = expanded.join(track_param_df)
         expanded = expanded.join(fit_param_df)
 
-        params_of_interest = [
-            'pred_use_cloudmask',
-            'pred_resample_invalid_frames',
-            'pred_input_space_scale',
-            'pred_window_space_scale',
-        ]
+        if params_of_interest is None:
+            params_of_interest = [
+                'pred_use_cloudmask',
+                'pred_resample_invalid_frames',
+                'pred_input_space_scale',
+                'pred_window_space_scale',
+                'trk_thresh',
+            ]
 
         x = 'model'
 
@@ -263,6 +283,10 @@ class Plotter:
                 # sns.violinplot(data=expanded, x=param_name, y=metrics[0], hue='expt')
                 # sns.violinplot(data=expanded, x='expt', y=metrics[0], hue=param_name, split=True)
                 # sns.boxplot(data=expanded, x='expt', y=metrics[0], hue=param_name, notch=True)
+
+                if param_name not in expanded.columns:
+                    raise UnableToPlot
+
                 sns.boxplot(data=expanded, x=x, y=metrics[0], hue=param_name,
                             medianprops={"color": "coral"})
                 if not legend:
@@ -274,9 +298,17 @@ class Plotter:
                 needs_relabel = False
                 from itertools import count
                 counter = count(1)
-                for label in ax.get_xticklabels():
+
+                xtick_labels = list(ax.get_xticklabels())
+                n_xticks = len(xtick_labels)
+                if n_xticks == 1:
+                    len_thresh = 60
+                else:
+                    len_thresh = 10
+
+                for label in xtick_labels:
                     text = label.get_text()
-                    if len(text) > 10:
+                    if len(text) > len_thresh:
                         needs_relabel = True
                         relabels[text] = str(next(counter))
 
@@ -307,7 +339,10 @@ class Plotter:
         import kwplot
         import seaborn as sns
         for param_name in params_of_interest:
-            expanded[[param_name] + metrics]
+            try:
+                expanded[[param_name] + metrics]
+            except KeyError:
+                continue
             make_fig = make_make_fig(expanded, param_name)
             prefix = f'{test_dset}_{type}_'
             fnum = plot_name + param_name + prefix
@@ -871,9 +906,11 @@ def run_make_fig(make_fig, fnum, dpath, human_mapping, plot_name, prefix):
     plot_dpath_main = (dpath / plot_name).ensuredir()
     plot_dpath_parts = (dpath / (plot_name + '_parts')).ensuredir()
 
+    print(f'fnum={fnum}')
     make_fig(str(fnum) + '_legend', legend=True)
     fig = plt.gcf()
-    fname = f'{prefix}{plot_name}.png'
+    # fname = f'{prefix}{plot_name}.png'
+    fname = f'{fnum}.png'
     fpath = plot_dpath_main / fname
     fig.set_size_inches(np.array([6.4, 4.8]) * 1.4)
     fig.tight_layout()
