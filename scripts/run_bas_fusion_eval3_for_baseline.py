@@ -225,7 +225,7 @@ def run_bas_fusion_for_baseline(
       "chip_overlap": 0.3,
       "input_space_scale": "15GSD",
       "window_space_scale": "10GSD",
-      "output_space_scale": "auto",
+      "output_space_scale": "15GSD",
       "time_span": "auto",
       "time_sampling": "auto",
       "time_steps": "auto",
