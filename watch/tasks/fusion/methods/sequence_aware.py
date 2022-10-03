@@ -589,7 +589,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
                 sensor_mode_key = sanitize_key(str((frame["sensor"], mode_key)))
 
                 stemmed_mode = self.sensor_channel_tokenizers[sensor_mode_key](
-                    mode_image.nan_to_num(0.0)[None]  # .float()
+                    mode_image.nan_to_num(0.0)[None].float()
                 )[0]
                 dtype = stemmed_mode.dtype
                 device = stemmed_mode.device
@@ -686,6 +686,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
             >>> self.eval()
             >>> batch = self.demo_batch(width=64, height=65)
+            >>> batch += self.demo_batch(width=70, height=40)
             >>> inputs = list(map(self.process_inputs, batch))
             >>> outputs = [self.process_outputs(example, dtype=inputs[0].dtype, device=inputs[0].device) for example in batch]
             >>> stacked_queries = {
@@ -695,11 +696,11 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             >>>     ], batch_first=True, padding_value=0.0)
             >>>     for task_name in list(["saliency",])
             >>> }
-            >>> stacked_weights = {
+            >>> stacked_masks = {
             >>>     task_name: nn.utils.rnn.pad_sequence([
-            >>>         example[task_name]["weights"]
+            >>>         example[task_name]["mask"]
             >>>         for example in outputs
-            >>>     ], batch_first=True, padding_value=0.0)
+            >>>     ], batch_first=True, padding_value=0)
             >>>     for task_name in list(["saliency",])
             >>> }
             >>> padded_inputs = nn.utils.rnn.pad_sequence(inputs, batch_first=True, padding_value=-1000.0)
@@ -707,18 +708,21 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             >>> padded_inputs[~padded_valids] = 0.0
             >>> logits = self.forward(padded_inputs, stacked_queries, input_mask=padded_valids)
             >>> logits = einops.rearrange(logits["saliency"], "batch chan seq -> batch seq chan")
-            >>> shapes = [list(frame["output_dims"]) for frame in batch[0]["frames"]]
-            >>> recon = self.reconstruct_output(logits[0], stacked_weights["saliency"][0] > 0., shapes)
+            >>> for idx in range(len(batch)):
+            >>>   shapes = [list(frame["output_dims"]) for frame in batch[idx]["frames"]]
+            >>>   recon = self.reconstruct_output(logits[idx], stacked_masks["saliency"][idx], shapes)
+            >>>   print('recon')
+            >>>   print(nh.data.collate._debug_inbatch_shapes(recon))
             >>> print('batch')
             >>> print(nh.data.collate._debug_inbatch_shapes(batch))
-            >>> print('recon')
-            >>> print(nh.data.collate._debug_inbatch_shapes(recon))
         """
         big_canvas = torch.nan * torch.zeros(mask.shape[0], output.shape[-1], dtype=output.dtype, device=output.device)
         big_canvas[mask] = output[:mask.sum()]
+        
+        max_len = sum([w * h for w, h in shapes])
 
         canvases = []
-        for canvas, shape in zip(torch.split(big_canvas, [w * h for w, h in shapes]), shapes):
+        for canvas, shape in zip(torch.split(big_canvas[:max_len], [w * h for w, h in shapes]), shapes):
             canvas = canvas.reshape(list(shape) + [output.shape[-1], ])
             canvases.append(canvas)
         return canvases
@@ -912,9 +916,14 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
                     item_logit = einops.rearrange(task_logits[task_name][item_index], "chan seq -> seq chan")
                     item_mask = stacked_masks[task_name][item_index]
                     item_shapes = [list(frame["output_dims"]) for frame in batch[item_index]["frames"]]
-                    if task_name == 'change':
-                        item_shapes = item_shapes[1:]  # hack for change
-                    recon = self.reconstruct_output(item_logit, item_mask, item_shapes)
+                    # if task_name == 'change':
+                    #     item_shapes = item_shapes[1:]  # hack for change
+                    try:
+                        recon = self.reconstruct_output(item_logit, item_mask, item_shapes)
+                    except:
+                        print(f"Failed on {task_name} idk={item_index}")
+                        print(f"logits.shape = {item_logit.shape} shapes = {item_shapes}")
+                        raise
                     probs = [p.sigmoid() for p in recon]
                     item_probs.append(probs)
                 batch_outputs[task_name + "_probs"] = item_probs

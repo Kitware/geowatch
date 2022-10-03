@@ -1,6 +1,6 @@
 #!/bin/bash
 
-KWCOCO_BUNDLE_DPATH=$HOME/data/dvc-repos/smart_watch_dvc/extern/onera_2018/
+KWCOCO_BUNDLE_DPATH=$HOME/Projects/SMART/smart_watch_dvc/extern/onera_2018/
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/onera_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/onera_test.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/onera_test.kwcoco.json
