@@ -139,7 +139,15 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
         size_str = xdev.byte_str(file_stat.st_size)
 
         # Add in some params about how this model was trained
-        fit_config = raw_module.fit_config
+        if hasattr(raw_module, 'fit_config'):
+            # Old non-cli modules
+            fit_config = raw_module.fit_config
+        else:
+            # new lightning cli modules
+            fit_config = (
+                ub.udict(raw_module.datamodule_hparams) |
+                ub.udict(raw_module.hparams)
+            )
 
         train_dataset = ub.Path(fit_config['train_dataset'])
 
