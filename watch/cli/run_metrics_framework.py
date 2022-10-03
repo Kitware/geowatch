@@ -151,7 +151,24 @@ class RegionResult:
 
         '''
         bas_dpath, region_id = self.bas_dpath, self.region_id
-        scoreboard = pd.read_csv(bas_dpath / 'scoreboard.csv')
+        scoreboard_fpath = bas_dpath / 'scoreboard.csv'
+        if scoreboard_fpath.exists():
+            scoreboard = pd.read_csv(scoreboard_fpath)
+        else:
+            import parse
+            # ugg we have to parse rho out of the filename.
+            fpaths = list(bas_dpath.glob('scoreboard_rho=*.csv'))
+            if len(fpaths) == 0:
+                raise ValueError('no scoreboards')
+            parser = parse.Parser('scoreboard_rho={rho:f}.csv')
+            rows = []
+            for fpath in fpaths:
+                # yo dawg
+                rho = parser.parse(fpath.name)['rho']
+                row = pd.read_csv(fpath)
+                row['rho'] = rho
+                rows.append(row)
+            scoreboard = pd.concat(rows)
         scoreboard = scoreboard.iloc[:, 1:].copy()
         scoreboard['region_id'] = region_id
         scoreboard = scoreboard.set_index(['region_id', 'rho', 'tau'])
