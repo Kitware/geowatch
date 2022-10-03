@@ -154,6 +154,7 @@ class RegionResult:
         scoreboard_fpath = bas_dpath / 'scoreboard.csv'
         if scoreboard_fpath.exists():
             scoreboard = pd.read_csv(scoreboard_fpath)
+            scoreboard = scoreboard.iloc[:, 1:].copy()
         else:
             import parse
             # ugg we have to parse rho out of the filename.
@@ -169,7 +170,6 @@ class RegionResult:
                 row['rho'] = rho
                 rows.append(row)
             scoreboard = pd.concat(rows)
-        scoreboard = scoreboard.iloc[:, 1:].copy()
         scoreboard['region_id'] = region_id
         scoreboard = scoreboard.set_index(['region_id', 'rho', 'tau'])
         return scoreboard
@@ -1048,12 +1048,13 @@ def main(cmdline=True, **kwargs):
         #     raise Exception('jobs failed')
     else:
 
-        for cmd in commands:
-            try:
-                ub.cmd(cmd, verbose=3, check=True, shell=True)
-            except subprocess.CalledProcessError:
-                print('error in metrics framework, probably due to zero '
-                      'TP site matches.')
+        if 0:
+            for cmd in commands:
+                try:
+                    ub.cmd(cmd, verbose=3, check=True, shell=True)
+                except subprocess.CalledProcessError:
+                    print('error in metrics framework, probably due to zero '
+                          'TP site matches.')
 
 
     print('out_dirs = {}'.format(ub.repr2(out_dirs, nl=1)))
