@@ -9,11 +9,11 @@ import shapely.geometry
 import shapely.ops
 from tempfile import TemporaryDirectory
 from dataclasses import dataclass
-from typing import List, Dict
+from typing import List, Dict, Optional
 import ubelt as ub
-import subprocess
 import scriptconfig as scfg
 from packaging import version
+import safer
 
 
 class MetricsConfig(scfg.DataConfig):
@@ -52,30 +52,33 @@ class MetricsConfig(scfg.DataConfig):
         Command to run before calling the metrics framework in a subshell.
 
         Only necessary if the metrics framework is installed in a different
-        virtual env from the current one. (Or maybe if you don't auto start it?
-        Not sure. TODO: figure out if this inherits or not).
+        virtual env from the current one.
         '''))
     out_dir = scfg.Value(None, help=ub.paragraph(
         '''
         Output directory where scores will be written. Each
         region will have. Defaults to ./iarpa-metrics-output/
         '''))
-    merge = scfg.Value(False, isflag=1, help=ub.paragraph(
+    merge = scfg.Value(False, help=ub.paragraph(
         '''
         Merge BAS and SC metrics from all regions and output to
-        {out_dir}/merged/
+        {out_dir}/merged/[micro, macro, viz]
         '''))
     merge_fpath = scfg.Value(None, help=ub.paragraph(
         '''
         Forces the merge summary to be written to a specific
         location.
         '''))
+    merge_fbetas = scfg.Value([], help=ub.paragraph(
+        '''
+        A list of BAS F-scores to compute besides F1.
+        '''))
     tmp_dir = scfg.Value(None, help=ub.paragraph(
         '''
         If specified, will write temporary data here instead of
-        using a     non-persistant directory
+        using a     non-persistent directory
         '''))
-    enable_viz = scfg.Value(False,  isflag=1, help=ub.paragraph(
+    enable_viz = scfg.Value(False, help=ub.paragraph(
         '''
         If true, enables iarpa visualizations
         '''))
@@ -83,16 +86,19 @@ class MetricsConfig(scfg.DataConfig):
         '''
         Short name for the algorithm used to generate the model
         '''))
-    inputs_are_paths = scfg.Value(False,  isflag=1, help=ub.paragraph(
+    inputs_are_paths = scfg.Value(False, help=ub.paragraph(
         '''
         If given, the sites inputs will always be interpreted as
         paths and not raw json text.
         '''))
-    use_cache = scfg.Value(False,  isflag=1, help=ub.paragraph(
+    use_cache = scfg.Value(False, help=ub.paragraph(
         '''
         IARPA metrics code currently contains a cache bug, do not
         enable the cache until this is fixed.
         '''))
+
+
+phases = ['No Activity', 'Site Preparation', 'Active Construction', 'Post Construction']
 
 
 @dataclass(frozen=True)
@@ -100,17 +106,22 @@ class RegionResult:
     region_id: str  # 'KR_R001'
     region_model: Dict
     site_models: List[Dict]
-    bas_dpath: ub.Path = None  # 'path/to/scores/latest/KR_R001/bas/'
-    sc_dpath: ub.Path = None  # 'path/to/scores/latest/KR_R001/phase_activity/'
+    bas_dpath: Optional[ub.Path] = None  # 'path/to/scores/latest/KR_R001/bas/'
+    sc_dpath: Optional[ub.Path] = None   # 'path/to/scores/latest/KR_R001/phase_activity/'
 
     @classmethod
-    def from_dpath_and_anns_root(cls, region_dpath, true_site_dpath, true_region_dpath):
+    def from_dpath_and_anns_root(cls, region_dpath,
+                                 true_site_dpath, true_region_dpath):
         region_dpath = ub.Path(region_dpath)
         region_id = region_dpath.name
+
+        # TODO use overall instead of completed?
         bas_dpath = region_dpath / 'completed' / 'bas'
         bas_dpath = bas_dpath if bas_dpath.is_dir() else None
+
         sc_dpath = region_dpath / 'completed' / 'phase_activity'
         sc_dpath = sc_dpath if sc_dpath.is_dir() else None
+
         region_fpath = true_region_dpath / (region_id + '.geojson')
         with open(region_fpath, 'r') as f:
             region_model = json.load(f)
@@ -122,28 +133,217 @@ class RegionResult:
         ]
         return cls(region_id, region_model, site_models, bas_dpath, sc_dpath)
 
+    @property
+    def n_sites(self):
+        '''
+        returns:
+            {
+                'completed': int,
+                'partial': int,
+                'overall': int,
+            }
+        '''
+        raise NotImplementedError
 
-def merge_bas_metrics_results(bas_results: List[RegionResult]):
+    @property
+    def bas_df(self):
+        '''
+        index:
+            region_id, rho, tau
+        columns:
+            same as merge_bas_metrics_results
+
+        '''
+        bas_dpath, region_id = self.bas_dpath, self.region_id
+        scoreboard = pd.read_csv(bas_dpath / 'scoreboard.csv')
+        scoreboard = scoreboard.iloc[:, 1:].copy()
+        scoreboard['region_id'] = region_id
+        scoreboard = scoreboard.set_index(['region_id', 'rho', 'tau'])
+        return scoreboard
+
+    @property
+    def sc_df(self):
+        '''
+        index:
+            region_id, site_id, [predicted] phase (w/o No Activity)
+            incl. special site_id __avg__
+                F1: micro (or option for macro)
+                TIoU: ~micro over all truth-prediction pairs, skipping
+                    undetected truth sites
+                TE(p): micro
+                confusion: micro
+        columns:
+            F1, TIoU, TE, TEp, [true] phase (incl. No Activity)
+
+        confusion matrix and f1 scores apprently ignore subsites,
+        so we must do the same
+        https://smartgitlab.com/TE/metrics-and-test-framework/-/issues/24
+        MWE:
+        >>> from sklearn.metrics import f1_score, confusion_matrix
+        >>> f1 = f1_score(['a,a', 'a'], ['a,a', 'b'], labels=['a', 'b'],
+        >>>               average=None)
+        >>> confusion_matrix(['a,a', 'a'], ['a,a', 'b'], labels=['a', 'b'])
+        array([[0, 1],
+               [0, 0]])
+        '''
+        sc_dpath = self.sc_dpath
+        ph = self.sc_phasetable
+
+        sites = ph.index.get_level_values(1).unique()
+        site_candidates = ph.index.get_level_values(2).unique()
+        if len(site_candidates) != len(sites):
+            raise NotImplementedError
+
+        df = pd.DataFrame(
+            index=pd.MultiIndex.from_product((list(sites) + ['__avg__'], phases[1:]), names=['site', 'phase']),
+            columns=(['F1', 'TIoU', 'TE', 'TEp'] + phases)
+        )
+
+        def _read(fpath):
+            if fpath.is_file():
+                _df = pd.read_csv(fpath, index_col=0)
+                if not _df.empty:
+                    return _df
+
+        # per-site metrics
+        # TODO parallelize, scales with no. of detected sites
+
+        for site in sites:
+
+            if (site_df := _read(sc_dpath / f'ac_f1_{site}.csv')) is not None:
+                df.loc[(site, site_df.columns), 'F1'] = site_df.loc['F1 score'].values
+
+            if (cm_df := _read(sc_dpath / f'ac_confusion_matrix_{site}.csv')) is not None:
+                df.loc[(site, cm_df.index), cm_df.columns] = cm_df.values
+
+            if (te_df := _read(sc_dpath / f'ac_temporal_error_{site}.csv')) is not None:
+                df.loc[(site, te_df.columns), 'TE'] = te_df.iloc[0].values.flatten()
+
+            if (tep_df := _read(sc_dpath / f'ap_temporal_error_{site}.csv')) is not None:
+                df.loc[(site, tep_df.columns), 'TEp'] = tep_df.iloc[0].values.flatten()
+
+        # already-calculated avg metrics
+
+        # only defined for SP, AC
+        if (f1_df := _read(sc_dpath / 'ac_f1_all_sites.csv')) is not None:
+            df.loc[('__avg__', f1_df.columns), 'F1'] = f1_df.loc['F1 micro average'].values
+
+        # TODO use phasetable instead to get true no activity?
+        if (cm_df := _read(sc_dpath / 'ac_confusion_matrix_all_sites.csv')) is not None:
+            df.loc[('__avg__', cm_df.index), cm_df.columns] = cm_df.values
+
+        if (te_df := _read(sc_dpath / 'ac_temporal_error.csv')) is not None:
+            df.loc[('__avg__', te_df.columns), 'TE'] = te_df.iloc[0].values.flatten()
+
+        if (tep_df := _read(sc_dpath / 'ap_temporal_error.csv')) is not None:
+            df.loc[('__avg__', tep_df.columns), 'TEp'] = tep_df.iloc[0].values.flatten()
+
+        # TODO differentiate between zero and missing values in merge instead of fillna?
+        # TODO doesn't handle oversegmentation of a truth site (n_pred > n_true)
+        if (tiou_df := _read(sc_dpath / 'ac_tiou.csv')) is not None:
+            tiou_df.index = tiou_df.index.str.replace('site truth ', '').str.split(' vs. ').str[0]
+            df.loc[(tiou_df.index, tiou_df.columns), 'TIoU'] = tiou_df.values.flatten()
+        df.loc['__avg__', 'TIoU'] = df.loc[sites, 'TIoU'].fillna(0).groupby(level='phase', sort=False).mean()
+
+        df['region_id'] = self.region_id
+        df = df.reset_index().set_index(['region_id', 'site', 'phase'])
+
+        df[['F1', 'TIoU', 'TE', 'TEp']] = df[['F1', 'TIoU', 'TE', 'TEp']].astype(float)
+        df[phases] = df[phases].astype(int)
+        return df
+
+    @property
+    def sc_te_df(self):
+        '''
+        micro avg is used here officially instead of macro avg, is this the
+        only metric for which this is the case?
+
+        index:
+            region_id, (site | __micro__), (ac | ap), phase
+
+        columns:
+            mean days (all detections)  <-- main value
+            std days (all)
+            mean days (early detections)
+            std days (early)
+            mean days (late detections)
+            std days (late)
+            all detections
+            early
+            late
+            perfect
+            missing proposals
+            missing truth sites
+        '''
+        raise NotImplementedError
+
+    @property
+    def sc_phasetable(self):
+        '''
+        Currently unused except to get a list of matched truth sites. Could be
+        used to recalculate all SC metrics for micro-average.
+
+        This excludes gt sites with no matched proposals and proposals with no
+        matched gt sites.
+        TODO how does it handle over/undersegmentation?
+        '''
+        region_id, sc_dpath = self.region_id, self.sc_dpath
+
+        delim = ' vs. '
+
+        df = pd.read_csv(sc_dpath / 'ac_phase_table.csv')
+
+        # df['date'] = pd.to_datetime(df['date'])
+        df = df.fillna('NA' + delim + 'NA').astype('string').set_index('date')
+        df = df.melt(ignore_index=False)
+        df_sites = pd.DataFrame(df['variable'].str.split(delim).tolist(), columns=['site', 'site_candidate'], index=df.index)
+        df_sites['site'] = df_sites['site'].str.replace('site truth ', '')
+        df_sites['site_candidate'] = df_sites['site_candidate'].str.replace('site model ', '')
+        df_slices = pd.DataFrame(df['value'].str.split(delim).tolist(), columns=['true', 'pred'], index=df.index)
+        df = pd.concat((df_sites, df_slices), axis=1)
+        df['region_id'] = region_id
+        df = df.reset_index().astype('string').set_index(['region_id', 'site', 'site_candidate', 'date'])
+        df = df.replace(['NA', '[]', None], pd.NA).astype('string').apply(lambda s: s.str.replace("'", '').str.strip('{}'))
+        # df = df.apply(lambda s: s.str.split(', '))
+
+        # phases_type = pd.api.types.CategoricalDtype(phases, ordered=True)
+        return df
+
+
+def merge_bas_metrics_results(bas_results: List[RegionResult], fbetas: List[float]):
     '''
     Merge BAS results and return as a pd.DataFrame
 
-    with MultiIndex(['rho', 'tau']) (a parameter sweep)
+    with MultiIndex([region_id', 'rho', 'tau'])
+    incl. special region_ids __micro__, __macro__
 
     and columns:
-        tp sites             int64
-        fp sites             int64
-        fn sites             int64
-        truth sites          int64
-        proposed sites       int64
-        total sites          int64
-        truth slices         int64
-        proposed slices      int64
-        precision          float64
-        recall (PD)        float64
-        F1                 float64
-        spatial FAR        float64
-        temporal FAR       float64
-        images FAR         float64
+        min_area                  int64
+        tp sites                  int64
+        tp exact                  int64
+        tp under                  int64
+        tp under (IoU)            int64
+        tp under (IoT)            int64
+        tp over                   int64
+        fp sites                  int64
+        fp area                 float64
+        ffpa                    float64
+        proposal area           float64
+        fpa                     float64
+        fn sites                  int64
+        truth annotations         int64
+        truth sites               int64
+        proposed annotations      int64
+        proposed sites            int64
+        total sites               int64
+        truth slices              int64
+        proposed slices           int64
+        precision               float64
+        recall (PD)             float64
+        F1                      float64
+        spatial FAR             float64
+        temporal FAR            float64
+        images FAR              float64
     '''
 
     #
@@ -154,10 +354,13 @@ def merge_bas_metrics_results(bas_results: List[RegionResult]):
         # ref: metrics-and-test-framework.evaluation.GeometryUtil
         def scale_area(lat):
             """
-            Find square meters per degree for a given latitude based on EPSG:4326
-            :param lat: average latitude
-                note that both latitude and longitude scales are dependent on latitude only
-                https://en.wikipedia.org/wiki/Geographic_coordinate_system#Length_of_a_degree
+            Find square meters per degree for a given latitude based on
+            EPSG:4326 :param lat: average latitude
+
+            note that both latitude and longitude scales are dependent on
+            latitude only
+            https://en.wikipedia.org/wiki/Geographic_coordinate_system#Length_of_a_degree
+
             :return: square meters per degree for latitude coordinate
             """
 
@@ -225,354 +428,161 @@ def merge_bas_metrics_results(bas_results: List[RegionResult]):
     # --- Main logic ---
     #
 
-    def to_df(bas_dpath, region_id):
-        # scoreboard_fpaths = sorted(
-        #     glob(os.path.join(bas_dpath, 'scoreboard_rho=*.csv')))
-        # bas_dpath / 'F1.csv'
-        scoreboard_fpath = (bas_dpath / 'scoreboard.csv')
-        scoreboard = pd.read_csv(scoreboard_fpath)
-        scoreboard = scoreboard.iloc[:, 1:].copy()
-        scoreboard['region_id'] = region_id
-        scoreboard = scoreboard.set_index(['region_id', 'rho', 'tau'])
-        # f1_csv_fpath = (bas_dpath / 'F1.csv')
-        # f1_csv = pd.read_csv(f1_csv_fpath)
-        # f1_csv = f1_csv.set_index('tau')
-        # f1_csv = f1_csv.rename(lambda x: x.split('rho=')[-1], axis=1)
-        # f1_csv.columns.name = 'rho'
-        # f1_csv = f1_csv.melt(ignore_index=False, value_name='F1').reset_index()
-        # f1_csv['region_id'] = region_id
-        return scoreboard
+    # all regions
 
-        # load each per-rho scoreboard and concat them
-        # rho_parser = parse.Parser('scoreboard_rho={rho:f}.csv')
-        # dfs = []
-        # for pth in scoreboard_fpaths:
-        #     rho = rho_parser.parse(os.path.basename(pth)).named['rho']
-        #     df = pd.read_csv(pth)
-        #     df['rho'] = rho
-        #     df['region_id'] = region_id
-        #     # MultiIndex with rho, tau and region_id
-        #     df = df.set_index(['region_id', 'rho', 'tau'])
-        #     dfs.append(df)
-        # return pd.concat(dfs)
-
-    dfs = [to_df(r.bas_dpath, r.region_id) for r in bas_results]
-
-    concat_df = pd.concat(dfs)
+    concat_df = pd.concat([r.bas_df for r in bas_results])
 
     sum_cols = [
         'tp sites', 'fp sites', 'fn sites', 'truth sites', 'proposed sites',
-        'total sites', 'truth slices', 'proposed slices'
+        'total sites', 'truth slices', 'proposed slices',
+        'tp exact', 'tp over', 'tp under', 'tp under (IoT)', 'tp under (IoU)',
+        'proposed annotations', 'truth annotations',
+        'proposal area', 'fp area',
     ]
-    merged_df = concat_df.groupby(['rho', 'tau'])[sum_cols].sum()
-    merged_df.loc[:, 'region_id'] = '__merged__'
-    merged_df = merged_df.reset_index().set_index(['region_id', 'rho', 'tau'])
+    mean_cols = [
+        'precision', 'recall (PD)', 'F1',
+        'spatial FAR', 'temporal FAR', 'images FAR',
+        'fpa', 'ffpa',
+    ]
+    # alternate sweep param w/ rho, tau. range(0, 50000, 1000)
+    # drop_cols = [ 'min_area', ]
 
-    # # ref: metrics-and-test-framework.evaluation.Metric
-    (_, tp), (_, fp), (_, fn) = merged_df[['tp sites', 'fp sites',
-                                           'fn sites']].iteritems()
-    merged_df['precision'] = np.where(tp > 0, tp / (tp + fp), 0)
-    merged_df['recall (PD)'] = np.where(tp > 0, tp / (tp + fn), 0)
-    merged_df['F1'] = np.where(tp > 0, tp / (tp + 0.5 * (fp + fn)), 0)
+    #
+    # micro-average over sites
+    #
+
+    micro_df = concat_df.groupby(['rho', 'tau', 'min_area'])[sum_cols].sum()
+    micro_df.loc[:, 'region_id'] = '__micro__'
+    micro_df = micro_df.reset_index().set_index(['region_id', 'rho', 'tau'])
+
+    # ref: metrics-and-test-framework.evaluation.Metric
+    (_, tp), (_, fp), (_, fn) = micro_df[
+        ['tp sites', 'fp sites', 'fn sites']].iteritems()
+    micro_df['precision'] = np.where(tp > 0, tp / (tp + fp), 0)
+    micro_df['recall (PD)'] = np.where(tp > 0, tp / (tp + fn), 0)
+    micro_df['F1'] = np.where(tp > 0, tp / (tp + 0.5 * (fp + fn)), 0)
 
     all_regions = [r.region_model for r in bas_results]
-    # # ref: metrics-and-test-framework.evaluation.Evaluation.build_scoreboard
-    merged_df['spatial FAR'] = fp.astype(float) / area(all_regions)
-    merged_df['temporal FAR'] = fp.astype(float) / n_dates(all_regions)
+    all_area = area(all_regions)
+    # ref: metrics-and-test-framework.evaluation.Evaluation.build_scoreboard
+    micro_df['spatial FAR'] = fp.astype(float) / all_area
+    micro_df['temporal FAR'] = fp.astype(float) / n_dates(all_regions)
 
     # this is not actually how Images FAR is calculated!
     # https://smartgitlab.com/TE/metrics-and-test-framework/-/issues/23
     #
     # all_sites = list(itertools.chain.from_iterable([
     #     r.site_models for r in bas_results]))
-    # merged_df['images FAR'] = fp.astype(float) / n_unique_images(all_sites)
+    # micro_df['images FAR'] = fp.astype(float) / n_unique_images(all_sites)
     #
     # instead, images in multiple proposed site stacks are double-counted.
     # take advantage of this to merge this metric with a simple average.
     n_images = (concat_df['fp sites'] /
                 concat_df['images FAR']).groupby('region_id').mean().sum()
-    merged_df['images FAR'] = fp.astype(float) / n_images
+    micro_df['images FAR'] = fp.astype(float) / n_images
 
-    bas_merged_df, bas_concat_df = merged_df, concat_df
-    return bas_merged_df, bas_concat_df
+    # assume proposals are disjoint between regions
+    micro_df['fpa'] = micro_df['proposal area'] / all_area
+    micro_df['ffpa'] = micro_df['fp area'] / all_area
 
+    #
+    # compute fbeta scores
+    #
 
-def _to_sc_df(sc_dpath, region_id):
-    '''
-    confusion matrix and f1 scores apprently ignore subsites,
-    so we must do the same
-    https://smartgitlab.com/TE/metrics-and-test-framework/-/issues/24
-    MWE:
-    >>> from sklearn.metrics import confusion_matrix
-    >>> confusion_matrix(['a,a', 'a'], ['a,a', 'b'], labels=['a', 'b'])
-    array([[0, 1],
-           [0, 0]])
-    '''
+    for fbeta in fbetas:
+        (_, tp), (_, fp), (_, fn) = concat_df[
+            ['tp sites', 'fp sites', 'fn sites']].iteritems()
+        ftp = (1 + fbeta**2) * tp
+        concat_df[f'F{fbeta:.2f}'] = np.where(tp > 0, (ftp / (ftp + (fbeta**2 * fn) + fp)), 0)
 
-    delim = ' vs. '
-    sc_dpath = ub.Path(sc_dpath)
+        (_, tp), (_, fp), (_, fn) = micro_df[
+            ['tp sites', 'fp sites', 'fn sites']].iteritems()
+        ftp = (1 + fbeta**2) * tp
+        micro_df[f'F{fbeta:.2f}'] = np.where(tp > 0, (ftp / (ftp + (fbeta**2 * fn) + fp)), 0)
 
-    phase_table_fpath = sc_dpath / 'ac_phase_table.csv'
-    if not phase_table_fpath.exists():
-        return None
+        mean_cols.append(f'F{fbeta:.2f}')
 
-    df = pd.read_csv(phase_table_fpath)
+    #
+    # macro-average over regions
+    #
 
-    # terr_df = pd.read_csv(sc_dpath / 'ac_temporal_error.csv')
-    # f1_df = pd.read_csv(sc_dpath / 'ac_f1_all_sites.csv')
-    # pd.read_csv(sc_dpath / 'ap_temporal_error.csv')
+    macro_df = pd.concat(
+        (concat_df.groupby(['rho', 'tau', 'min_area'])[sum_cols].sum(),
+         concat_df.groupby(['rho', 'tau', 'min_area'])[mean_cols].mean()),
+        axis=1
+    )
+    macro_df.loc[:, 'region_id'] = '__macro__'
+    macro_df = macro_df.reset_index().set_index(['region_id', 'rho', 'tau'])
 
-    # df['date'] = pd.to_datetime(df['date'])
-    df = df.set_index('date')
-    df = df.fillna(pd.NA).astype('string')
-
-    site_names = df.columns.values.tolist()
-
-    df = df.applymap(lambda cell: delim.join((cell, cell))
-                     if not pd.isna(cell) and delim not in cell else cell)
-
-    parts = [df[col].str.split(delim, expand=True) for col in site_names]
-    df = pd.concat(parts, axis=1, ignore_index=True)
-
-    df.columns = pd.MultiIndex.from_product(
-        #  ([region_id], site_names, ['truth', 'proposed']),
-        #  names=['region_id', 'site', 'type'])
-        (site_names, ['true', 'pred']),
-        names=['site', 'type'])
-
-    def fix_cell(c):
-        if isinstance(c, str):
-            if c.startswith('{') and c.count(',') == 0:
-                return c.replace('{', '').replace('}', '')
-            if c == '[]':
-                return None
-        return c
-
-    df = df.applymap(fix_cell)
-
+    df = pd.concat(
+        (concat_df, micro_df, macro_df),
+        axis=0
+    )
     return df
 
 
 def merge_sc_metrics_results(sc_results: List[RegionResult]):
     '''
+    Merge SC results and return as a pd.DataFrame
 
-    Note:
-        Handled:
-        * ac_phase_table.csv
-        * ac_tiou.csv
-        * ac_temporal_error.csv
+    with MultiIndex(['region_id', 'phase'])
+    incl. special region_ids
+    __micro__: micro-avg over regions (normalize by n_sites per region)
+    __macro__: macro-avg over regions
+    In neither case do we weight by the length/size of individual sites.
 
-        Not yet handled:
-        * ac_confusion_matrix_all_sites.csv
-        * ac_f1_all_sites.csv
-        * ap_temporal_error.csv
+    and columns:
+        F1                     float64
+        TIoU                   float64
+        TE                     float64
+        TEp                    float64
+        No Activity              int64
+        Site Preparation         int64
+        Active Construction      int64
+        Post Construction        int64
 
-    Returns:
-        a list of pd.DataFrames
-        activity_table: F1 score, mean TIoU, temporal error
-        confusion_matrix: confusion matrix
+    Notes:
+        - For confusion matrix, rows are pred and cols are true.
+        - Confusion matrix is never normalized, so macro == micro.
+        - F1 is only defined for SP and AC.
+        - TEp is temporal error of next predicted phase
+        - merged TE(p) is RMSE, so nonnegative, but regions' TE(p) can be
+            negative.
+        - TE is temporal error of current phase
+        - TEp is temporal error of next predicted phase
     '''
 
-    from sklearn.metrics import f1_score, confusion_matrix
+    dfs = [r.sc_df for r in sc_results]
+    concat_df = pd.concat(dfs, axis=0)
+    # concat_df = concat_df.sort_values('date')
 
-    # for r in sc_results:
-    #     sc_dpath = r.sc_dpath
-    #     region_id = r.region_id
-    #     to_df(sc_dpath, region_id)
-    # if 0:
-    #     r = sc_results[0]
-    #     sc_dpath, region_id = r.sc_dpath, r.region_id
+    sites_df = concat_df.query('site != "__avg__"')
+    avg_df = concat_df.query('site == "__avg__"')
 
-    # Handle ac_phase_table.csv
-    dfs = [_to_sc_df(r.sc_dpath, r.region_id) for r in sc_results]
-    dfs = [d for d in dfs if d is not None]
-    if len(dfs):
-        df = pd.concat(dfs, axis=1).sort_values('date')
-        sites = df.columns.levels[0]
-    else:
-        df = pd.DataFrame()
-        sites = []
+    def merge(df, region_id):
+        g = df.groupby(level='phase', sort=False)
+        merged_df = pd.concat(
+            (g[['F1', 'TIoU']].agg(lambda s: s.fillna(0).mean()),
+             g[['TE', 'TEp']].agg(lambda s: np.sqrt(np.mean(s.dropna() ** 2))),
+             g[phases].sum()),
+            axis=1
+        )
+        merged_df['region_id'] = region_id
+        merged_df = merged_df.reset_index().set_index(['region_id', 'phase'])
+        return merged_df
 
-    # phase activity categories
-    phase_classifications = [
-        "No Activity",
-        "Site Preparation",
-        "Active Construction",
-        "Post Construction",
-    ]
+    macro_df = merge(avg_df, '__macro__')
+    micro_df = merge(sites_df, '__micro__')
 
-    # Not sure abou this
-    def propogate(labels):
-        import pandas as pd
-        prev = 'No Activity'
-        new = []
-        for item in labels:
-            if isinstance(item, str):
-                if item.lower() == 'nan':
-                    item = None
-            elif item is not None:
-                if pd.isnull(item):
-                    item = None
-            if item is None:
-                item = prev
-            item = item.replace("'", '')
-            item = item.replace('"', '')
-            new.append(item)
-            prev = item
-        return new
-
-    phase_true = []
-    phase_pred = []
-    for site in sites:
-        true = propogate(df[site, 'true'])
-        pred = propogate(df[site, 'pred'])
-        phase_pred.extend(pred)
-        phase_true.extend(true)
-
-    # Can't drop NA. Need to propogate
-    phase_true = np.array(phase_true)
-    phase_pred = np.array(phase_pred)
-
-    if len(phase_true) == 0:
-        f1 = [np.nan] * len(phase_classifications)
-    else:
-        f1 = f1_score(phase_true, phase_pred,
-                      labels=phase_classifications,
-                      average=None)
-
-    # TIoU is only ever evaluated per-site, so we can safely average these
-    # per-site and call it a new metric mTIoU.
-    tiou_dfs = []
-    for r in sc_results:
-        ac_tiou_fpath = r.sc_dpath / 'ac_tiou.csv'
-        if ac_tiou_fpath.exists():
-            table = pd.read_csv(ac_tiou_fpath, index_col=0)
-            missing = sorted(set(phase_classifications) - set(table.columns))
-            table.loc[:, missing] = np.nan
-            table = table.loc[:, phase_classifications]
-            tiou_dfs.append(table)
-
-    if tiou_dfs:
-        tious = pd.concat(tiou_dfs, axis=0)
-        mtiou = tious.mean(axis=0, skipna=True)
-        mtiou_vals = [mtiou.get(c, default=np.nan) for c in phase_classifications]
-    else:
-        mtiou = np.nan
-        mtiou_vals = [np.nan] * len(phase_classifications)
-
-    # these are averaged using the mean over sites for each phase.
-    # So the correct average over regions is to weight by (sites/region)
-    temporal_errs = []
-    for r in sc_results:
-        ac_temporal_err_fpath = r.sc_dpath / 'ac_temporal_error.csv'
-        if ac_temporal_err_fpath.exists():
-            tdf = pd.read_csv(ac_temporal_err_fpath)
-            missing = sorted(set(phase_classifications) - set(tdf.columns))
-            tdf.loc[:, missing] = np.nan
-            if len(tdf) > 0:
-                tdf = tdf.loc[tdf.index[0], phase_classifications]  # mean days (all detections)
-            temporal_errs.append(tdf.astype(float).values)
-
-    n_sites = [df.shape[1] for df in dfs]
-    try:
-        temporal_err = np.average(temporal_errs, weights=n_sites, axis=0)
-    except (ValueError, ZeroDivisionError):
-        temporal_err = [np.nan] * len(phase_classifications)
-
-    sc_df = pd.DataFrame(
-        {
-            'F1 score': f1,
-            'mean TIoU': mtiou_vals,
-            'Temporal Error (days)': temporal_err
-        },
-        index=phase_classifications).T
-    sc_df = sc_df.rename_axis('Activity Classification', axis='columns')
-
-    _cmval = confusion_matrix(phase_true, phase_pred,
-                              labels=phase_classifications)
-
-    sc_cm = pd.DataFrame(_cmval,
-                         columns=phase_classifications,
-                         index=phase_classifications)
-    sc_cm = sc_cm.rename_axis("truth phase")
-    sc_cm = sc_cm.rename_axis("predicted phase", axis="columns")
-
-    return sc_df, sc_cm
+    df = pd.concat(
+        (avg_df.droplevel('site'), macro_df, micro_df),
+        axis=0
+    )
+    return df
 
 
-def _make_merge_metrics(region_dpaths, true_site_dpath, true_region_dpath):
-    results = [
-        RegionResult.from_dpath_and_anns_root(pth, true_site_dpath, true_region_dpath)
-        for pth in region_dpaths
-    ]
-
-    # merge BA
-    bas_results = [r for r in results if r.bas_dpath]
-    bas_merged_df, bas_concat_df = merge_bas_metrics_results(bas_results)
-
-    # merge SC
-    sc_results = [r for r in results if r.sc_dpath]
-    sc_df, sc_cm = merge_sc_metrics_results(sc_results)
-
-    return bas_concat_df, bas_merged_df, sc_df, sc_cm
-
-
-def _make_summary_info(bas_concat_df, bas_merged_df, sc_cm, sc_df, parent_info, info):
-    # Find best bas row in combined results
-
-    min_rho, max_rho = 0.5, 0.5
-    min_tau, max_tau = 0.2, 0.2
-
-    bas_merged_df = bas_merged_df.reset_index()
-    rho = bas_merged_df['rho']
-    tau = bas_merged_df['tau']
-    rho_flags = (min_rho <= rho) & (rho <= max_rho)
-    tau_flags = (min_tau <= tau) & (tau <= max_tau)
-    flags = tau_flags & rho_flags
-    candidate_merged_bas_df = bas_merged_df[flags]
-
-    bas_concat_df = bas_concat_df.reset_index()
-    rho = bas_concat_df['rho']
-    tau = bas_concat_df['tau']
-    rho_flags = (min_rho <= rho) & (rho <= max_rho)
-    tau_flags = (min_tau <= tau) & (tau <= max_tau)
-    flags = tau_flags & rho_flags
-    candidate_bas_concat_df = bas_concat_df[flags]
-
-    # Find best merged bas row
-    best_merged_row = candidate_merged_bas_df.loc[[candidate_merged_bas_df['F1'].idxmax()]]
-    # Find best per-region bas row
-    best_ids = candidate_bas_concat_df.groupby('region_id')['F1'].idxmax()
-    best_per_region = candidate_bas_concat_df.loc[best_ids]
-    # best_bas_row_ = pd.concat({'__merged__': best_bas_row}, names=['region_id'])
-    # best_bas_row_.loc[:, 'region_id'] = '__merged__'
-    # Get a best row for each region and the "merged" region
-    best_bas_rows = pd.concat([best_per_region, best_merged_row])
-    concise_best_bas_rows = best_bas_rows.rename(
-        {'tp sites': 'tp',
-         'fp sites': 'fp',
-         'fn sites': 'fn',
-         'truth sites': 'truth',
-         'proposed sites': 'proposed',
-         'total sites': 'total'}, axis=1)
-    concise_best_bas_rows = concise_best_bas_rows.drop([
-        'truth slices',
-        'proposed slices', 'precision', 'recall (PD)', 'spatial FAR',
-        'temporal FAR', 'images FAR'], axis=1)
-
-    json_data = {}
-    # TODO: parent info should probably belong to info itself
-    json_data['info'] = info
-    json_data['parent_info'] = parent_info
-    json_data['best_bas_rows'] = json.loads(best_bas_rows.to_json(orient='table', indent=2))
-    json_data['sc_cm'] = json.loads(sc_cm.to_json(orient='table', indent=2))
-    json_data['sc_df'] = json.loads(sc_df.to_json(orient='table', indent=2))
-
-    return json_data, concise_best_bas_rows, best_bas_rows
-
-
-def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath, merge_dpath, merge_fpath,
-                          parent_info, info):
+def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath,
+                          merge_dpath, merge_fpath, fbetas, parent_info, info):
     '''
     Merge metrics results from multiple regions.
 
@@ -580,7 +590,6 @@ def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath, mer
         region_dpaths: List of directories containing the subdirs
             bas/
             phase_activity/ [optional]
-            time_activity/ [TBD, not scored yet]
         true_site_dpath, true_region_dpath: Path to GT annotations repo
         merge_dpath: Directory to save merged results.
             Existing contents will be removed.
@@ -588,24 +597,88 @@ def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath, mer
     Returns:
         (bas_df, sc_df)
         Two pd.DataFrames that are saved as
-            {out_dpath}/(bas|sc)_scoreboard_df.pkl
+            {out_dpath}/(bas|sc)_df.pkl
     '''
-    import safer
     merge_dpath = ub.Path(merge_dpath).ensuredir()
     # assert merge_dpath not in region_dpaths
     # merge_dpath.delete().ensuredir()
 
-    bas_concat_df, bas_df, sc_df, sc_cm = _make_merge_metrics(region_dpaths, true_site_dpath, true_region_dpath)
-    bas_df.to_pickle(merge_dpath / 'bas_scoreboard_df.pkl')
-    sc_df.to_pickle(merge_dpath / 'sc_activity_df.pkl')
-    sc_cm.to_pickle(merge_dpath / 'sc_confusion_df.pkl')
+    results = [
+        RegionResult.from_dpath_and_anns_root(
+            pth, true_site_dpath, true_region_dpath)
+        for pth in region_dpaths
+    ]
 
-    json_data, concise_best_bas_rows, best_bas_rows = _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info, info)
+    # merge BAS
+    bas_results = [r for r in results if r.bas_dpath]
+    bas_df = merge_bas_metrics_results(bas_results, fbetas)
+
+    # merge SC
+    sc_results = [r for r in results if r.sc_dpath]
+    sc_df = merge_sc_metrics_results(sc_results)
+
+    bas_df.to_pickle(merge_dpath / 'bas_df.pkl')
+    sc_df.to_pickle(merge_dpath / 'sc_df.pkl')
+
+    # create and print a BAS and SC summary
+    min_rho, max_rho = 0.5, 0.5
+    min_tau, max_tau = 0.2, 0.2
+
+    group = bas_df.query(
+        f'{min_rho} <= rho <= {max_rho} and {min_tau} <= tau <= {max_tau}'
+    ).groupby('region_id')
+    best_bas_rows = bas_df.loc[group['F1'].idxmax()]
+
+    concise_best_bas_rows = best_bas_rows.rename(
+        {'tp sites': 'tp',
+         'fp sites': 'fp',
+         'fn sites': 'fn',
+         'truth sites': 'truth',
+         'proposed sites': 'proposed',
+         'total sites': 'total'}, axis=1)
+    concise_best_bas_rows = concise_best_bas_rows[
+        ['tp', 'fp', 'fn', 'truth', 'proposed'] +
+        [c for c in best_bas_rows.columns if c.startswith('F')]
+    ]
     print(concise_best_bas_rows.to_string())
 
-    region_viz_dpath = (merge_dpath / 'region_viz_overall').ensuredir()
+    concise_sc = sc_df.query('phase in ["Site Preparation", "Active Construction"]').copy()
+    # there has to be some way to do this using
+    # concise_sc.loc[concise_sc.index.map(???)], selecting series of
+    # (column_label == row_label) and (column_label in (phases - row_label)).
+    # Oh well.
+    concise_sc['tp'] = np.stack([
+            concise_sc.loc[(slice(None), 'Site Preparation'), 'Site Preparation'].values,
+            concise_sc.loc[(slice(None), 'Active Construction'), 'Active Construction'].values,
+        ], axis=1
+    ).reshape(-1)
+    concise_sc['fp'] = np.stack([
+            concise_sc.loc[(slice(None), 'Site Preparation'), ['No Activity', 'Active Construction', 'Post Construction']].sum(axis=1).values,
+            concise_sc.loc[(slice(None), 'Active Construction'), ['No Activity', 'Site Preparation', 'Post Construction']].sum(axis=1).values,
+            ], axis=1
+    ).reshape(-1)
+    concise_sc = concise_sc[['F1', 'TIoU', 'TE', 'tp', 'fp']]
+    print(concise_sc.to_string())
+
+    # write BAS and SC summary in readable form
+    with safer.open(merge_dpath / 'summary.csv', 'w') as f:
+        best_bas_rows.to_csv(f)
+        f.write('\n')
+        sc_df.to_csv(f)
+
+    json_data = {}
+    # TODO: parent info should probably belong to info itself
+    json_data['info'] = info
+    json_data['parent_info'] = parent_info
+    json_data['best_bas_rows'] = json.loads(best_bas_rows.to_json(orient='table', indent=2))
+    json_data['sc_df'] = json.loads(sc_df.to_json(orient='table', indent=2))
+
+    with safer.open(merge_fpath, 'w', temp_file=True) as f:
+        json.dump(json_data, f, indent=4)
 
     # Symlink to visualizations
+    region_viz_dpath = (merge_dpath / 'region_viz_overall').ensuredir()
+
     for dpath in region_dpaths:
         overall_dpath = dpath / 'overall'
         viz_dpath = overall_dpath / 'bas' / 'region'
@@ -614,20 +687,7 @@ def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath, mer
             viz_link = viz_fpath.augment(dpath=region_viz_dpath)
             ub.symlink(viz_fpath, viz_link, verbose=1)
 
-    # write summary in readable form
-    #
-    summary_path = merge_dpath / 'summary.csv'
-    with open(summary_path, 'w') as f:
-        best_bas_rows.to_csv(f)
-        f.write('\n')
-        sc_df.to_csv(f)
-        f.write('\n')
-        sc_cm.to_csv(f)
-
-    with safer.open(merge_fpath, 'w', temp_file=True) as f:
-        json.dump(json_data, f, indent=4)
-
-    return bas_df, sc_df, sc_cm
+    return bas_df, sc_df
 
 
 def ensure_thumbnails(image_root, region_id, sites):
@@ -748,7 +808,6 @@ def main(cmdline=True, **kwargs):
         >>> main(cmdline=False, **kwargs)
         >>> # TODO: visualize
     """
-    import safer
 
     from watch.utils import util_path
     # from watch.utils import util_pattern
@@ -783,7 +842,7 @@ def main(cmdline=True, **kwargs):
     from kwcoco.util import util_json
     from watch.utils import process_context
 
-    # Args will be serailized in kwcoco, so make sure it can be coerced to json
+    # Args will be serialized in kwcoco, so make sure it can be coerced to json
     jsonified_args = util_json.ensure_json_serializable(config_dict)
     walker = ub.IndexableWalker(jsonified_args)
     for problem in util_json.find_json_unserializable(jsonified_args):
@@ -967,23 +1026,14 @@ def main(cmdline=True, **kwargs):
         (out_dir / 'invocation.sh').write_text(region_invocation_text)
         commands.append(cmd)
 
-    if 1:
-        import cmd_queue
-        queue = cmd_queue.Queue.create(backend='serial')
-        for cmd in commands:
-            queue.submit(cmd)
-            # TODO: make command queue stop on the first failure?
-            queue.run()
-        # if queue.read_state()['failed']:
-        #     raise Exception('jobs failed')
-    else:
-        # Original way to invoke
-        for cmd in commands:
-            try:
-                ub.cmd(cmd, verbose=3, check=True, shell=True)
-            except subprocess.CalledProcessError:
-                print('error in metrics framework, probably due to zero '
-                      'TP site matches.')
+    import cmd_queue
+    queue = cmd_queue.Queue.create(backend='serial')
+    for cmd in commands:
+        queue.submit(cmd)
+        # TODO: make command queue stop on the first failure?
+        queue.run()
+    # if queue.read_state()['failed']:
+    #     raise Exception('jobs failed')
 
     print('out_dirs = {}'.format(ub.repr2(out_dirs, nl=1)))
     if args.merge and out_dirs:
@@ -1000,58 +1050,8 @@ def main(cmdline=True, **kwargs):
 
         merge_metrics_results(region_dpaths, true_site_dpath,
                               true_region_dpath, merge_dpath, merge_fpath,
-                              parent_info, info)
+                              args.merge_fbetas, parent_info, info)
         print('merge_fpath = {!r}'.format(merge_fpath))
-
-
-def _hack_remerge_data():
-    """
-    Hack to redo the merge with a different F1 maximization criterion
-
-    TODO: it would be nice to have a variant of this script that only performed
-    merging.
-
-    DVC_DPATH=$(WATCH_PREIMPORT=none python -m watch.cli.find_dvc --hardware="hdd")
-    cd "$DVC_DPATH"
-    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/curves/measures2.json
-    ls models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json
-    """
-    import watch
-    data_dvc_dpath = watch.find_dvc_dpath(hardware='hdd')
-    globstr = str(data_dvc_dpath / 'models/fusion/eval3_candidates/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/merged/summary2.json')
-    from watch.utils import util_path
-    from watch.utils import simple_dvc
-    summary_metrics = util_path.coerce_patterned_paths(globstr)
-    import json
-    import safer
-    dvc = simple_dvc.SimpleDVC(data_dvc_dpath)
-
-    # for merge_fpath in summary_metrics:
-    #     if dvc.is_tracked(merge_fpath):
-    #     pass
-
-    dvc.unprotect(summary_metrics)
-
-    for merge_fpath in ub.ProgIter(summary_metrics, desc='rewrite merge metrics'):
-        region_dpaths = [p for p in list(merge_fpath.parent.parent.glob('*')) if p.name != 'merged']
-        anns_root = data_dvc_dpath / 'annotations'
-        true_site_dpath = anns_root / 'site_models'
-        true_region_dpath = anns_root / 'region_models'
-
-        # merge_dpath = merge_fpath.parent
-
-        json_data = json.loads(merge_fpath.read_text())
-        parent_info = json_data['parent_info']
-
-        bas_concat_df, bas_df, sc_df, sc_cm = _make_merge_metrics(region_dpaths, true_site_dpath, true_region_dpath)
-        new_json_data, *_ = _make_summary_info(bas_concat_df, bas_df, sc_cm, sc_df, parent_info)
-
-        with safer.open(merge_fpath, 'w', temp_file=True) as f:
-            json.dump(new_json_data, f, indent=4)
-
-    dvc.add(summary_metrics)
-    dvc.git_commitpush('Fixup merged iarpa metrics')
-    dvc.push(summary_metrics, remote='aws')
 
 
 if __name__ == '__main__':
