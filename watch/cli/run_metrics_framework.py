@@ -9,7 +9,7 @@ import shapely.geometry
 import shapely.ops
 from tempfile import TemporaryDirectory
 from dataclasses import dataclass
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Literal
 import ubelt as ub
 import scriptconfig as scfg
 from packaging import version
@@ -52,10 +52,10 @@ class MetricsConfig(scfg.DataConfig):
         Output directory where scores will be written. Each
         region will have. Defaults to ./iarpa-metrics-output/
         '''))
-    merge = scfg.Value(False, help=ub.paragraph(
+    merge = scfg.Value(False, isflag=1, help=ub.paragraph(
         '''
         Merge BAS and SC metrics from all regions and output to
-        {out_dir}/merged/[micro, macro, viz]
+        {out_dir}/merged/
         '''))
     merge_fpath = scfg.Value(None, help=ub.paragraph(
         '''
@@ -71,7 +71,7 @@ class MetricsConfig(scfg.DataConfig):
         If specified, will write temporary data here instead of
         using a     non-persistent directory
         '''))
-    enable_viz = scfg.Value(False, help=ub.paragraph(
+    enable_viz = scfg.Value(False, isflag=1, help=ub.paragraph(
         '''
         If true, enables iarpa visualizations
         '''))
@@ -79,12 +79,12 @@ class MetricsConfig(scfg.DataConfig):
         '''
         Short name for the algorithm used to generate the model
         '''))
-    inputs_are_paths = scfg.Value(False, help=ub.paragraph(
+    inputs_are_paths = scfg.Value(False, isflag=1, help=ub.paragraph(
         '''
         If given, the sites inputs will always be interpreted as
         paths and not raw json text.
         '''))
-    use_cache = scfg.Value(False, help=ub.paragraph(
+    use_cache = scfg.Value(False, isflag=1, help=ub.paragraph(
         '''
         IARPA metrics code currently contains a cache bug, do not
         enable the cache until this is fixed.
@@ -101,18 +101,20 @@ class RegionResult:
     site_models: List[Dict]
     bas_dpath: Optional[ub.Path] = None  # 'path/to/scores/latest/KR_R001/bas/'
     sc_dpath: Optional[ub.Path] = None   # 'path/to/scores/latest/KR_R001/phase_activity/'
+    unbounded_site_status: Optional[Literal['completed', 'partial', 'overall']] = None
 
     @classmethod
     def from_dpath_and_anns_root(cls, region_dpath,
-                                 true_site_dpath, true_region_dpath):
+                                 true_site_dpath, true_region_dpath,
+                                 unbounded_site_status='completed'):
         region_dpath = ub.Path(region_dpath)
         region_id = region_dpath.name
 
         # TODO use overall instead of completed?
-        bas_dpath = region_dpath / 'completed' / 'bas'
+        bas_dpath = region_dpath / unbounded_site_status / 'bas'
         bas_dpath = bas_dpath if bas_dpath.is_dir() else None
 
-        sc_dpath = region_dpath / 'completed' / 'phase_activity'
+        sc_dpath = region_dpath / unbounded_site_status / 'phase_activity'
         sc_dpath = sc_dpath if sc_dpath.is_dir() else None
 
         region_fpath = true_region_dpath / (region_id + '.geojson')
@@ -124,7 +126,8 @@ class RegionResult:
             json.loads(open(pth).read())
             for pth in site_fpaths
         ]
-        return cls(region_id, region_model, site_models, bas_dpath, sc_dpath)
+        return cls(region_id, region_model, site_models,
+                   bas_dpath, sc_dpath, unbounded_site_status)
 
     @property
     def n_sites(self):
@@ -182,7 +185,7 @@ class RegionResult:
         sc_dpath = self.sc_dpath
         ph = self.sc_phasetable
 
-        sites = ph.index.get_level_values(1).unique()
+        sites = ph.index.get_level_values(1).unique()  # assert sites == csv names
         site_candidates = ph.index.get_level_values(2).unique()
         if len(site_candidates) != len(sites):
             raise NotImplementedError
@@ -248,9 +251,7 @@ class RegionResult:
     @property
     def sc_te_df(self):
         '''
-        micro avg is used here officially instead of macro avg, is this the
-        only metric for which this is the case?
-
+        More detailed temporal error results; main value is included in sc_df.
         index:
             region_id, (site | __micro__), (ac | ap), phase
 
