@@ -134,6 +134,246 @@ def make_predict_config(cmdline=False, **kwargs):
     return args
 
 
+def build_stitching_managers(config, method, result_dataset):
+    # could be torch on-device stitching
+    stitch_managers = {}
+    stitch_device = 'numpy'
+
+    ignore_classes = {
+        'not_salient', 'ignore', 'background', 'Unknown'}
+    # hack, not general
+    ignore_classes.update({'negative', 'positive'})
+
+    stitcher_common_kw = dict(
+        stiching_space='video',
+        device=stitch_device,
+        thresh=config['thresh'],
+        write_probs=config['write_probs'],
+        write_preds=config['write_preds'],
+        prob_compress=config['compress'],
+        quantize=config['quantize'],
+    )
+
+    # If we only care about some predictions from the model, then keep track of
+    # the class indices we need to take.
+    task_keep_indices = {}
+    if config['with_change']:
+        task_name = 'change'
+        head_classes = ['change']
+        head_keep_idxs = [
+            idx for idx, catname in enumerate(head_classes)
+            if catname not in ignore_classes]
+        head_keep_classes = list(ub.take(head_classes, head_keep_idxs))
+        chan_code = '|'.join(head_keep_classes)
+        task_keep_indices[task_name] = head_keep_idxs
+        print('task_name = {!r}'.format(task_name))
+        print('head_classes = {!r}'.format(head_classes))
+        print('head_keep_classes = {!r}'.format(head_keep_classes))
+        print('chan_code = {!r}'.format(chan_code))
+        print('head_keep_idxs = {!r}'.format(head_keep_idxs))
+        stitch_managers[task_name] = CocoStitchingManager(
+            result_dataset,
+            chan_code=chan_code,
+            short_code='pred_' + task_name,
+            num_bands=len(head_keep_classes),
+            **stitcher_common_kw,
+        )
+        stitch_managers[task_name].head_keep_idxs = head_keep_idxs
+        result_dataset.ensure_category('change')
+
+    if config['with_class']:
+        task_name = 'class'
+        if hasattr(method, 'foreground_classes'):
+            foreground_classes = method.foreground_classes
+        else:
+            from watch import heuristics
+            not_foreground = (heuristics.BACKGROUND_CLASSES |
+                              heuristics.IGNORE_CLASSNAMES |
+                              heuristics.NEGATIVE_CLASSES)
+            foreground_classes = ub.oset(method.classes) - not_foreground
+        head_classes = method.classes
+        head_keep_idxs = [
+            idx for idx, catname in enumerate(head_classes)
+            if catname not in ignore_classes]
+        head_keep_classes = list(ub.take(head_classes, head_keep_idxs))
+        task_keep_indices[task_name] = head_keep_idxs
+        chan_code = '|'.join(list(head_keep_classes))
+        print('task_name = {!r}'.format(task_name))
+        print('head_classes = {!r}'.format(head_classes))
+        print('head_keep_classes = {!r}'.format(head_keep_classes))
+        print('chan_code = {!r}'.format(chan_code))
+        print('head_keep_idxs = {!r}'.format(head_keep_idxs))
+        stitch_managers[task_name] = CocoStitchingManager(
+            result_dataset,
+            chan_code=chan_code,
+            short_code='pred_' + task_name,
+            polygon_categories=foreground_classes,
+            num_bands=len(head_keep_classes),
+            **stitcher_common_kw,
+        )
+        stitch_managers[task_name].head_keep_idxs = head_keep_idxs
+
+    if config['with_saliency']:
+        # hack: the model should tell us what the shape of its head is
+        task_name = 'saliency'
+        head_classes = ['not_salient', 'salient']
+        head_keep_idxs = [
+            idx for idx, catname in enumerate(head_classes)
+            if catname not in ignore_classes]
+        head_keep_classes = list(ub.take(head_classes, head_keep_idxs))
+        task_keep_indices[task_name] = head_keep_idxs
+        chan_code = '|'.join(head_keep_classes)
+        print('task_name = {!r}'.format(task_name))
+        print('head_classes = {!r}'.format(head_classes))
+        print('head_keep_classes = {!r}'.format(head_keep_classes))
+        print('chan_code = {!r}'.format(chan_code))
+        print('head_keep_idxs = {!r}'.format(head_keep_idxs))
+        stitch_managers[task_name] = CocoStitchingManager(
+            result_dataset,
+            chan_code=chan_code,
+            short_code='pred_' + task_name,
+            polygon_categories=['salient'],
+            num_bands=len(head_keep_classes),
+            **stitcher_common_kw,
+        )
+        stitch_managers[task_name].head_keep_idxs = head_keep_idxs
+    return stitch_managers
+
+
+def resolve_datamodule(config, method, datamodule_defaults):
+    """
+    TODO: refactor / cleanup.
+
+    Breakup the sections that handle getting the traintime params, resolving
+    the datamodule args, and building the datamodule.
+    """
+    # init datamodule from args
+    datamodule_class = getattr(datamodules, config['datamodule'])
+    datamodule_vars = datamodule_class.compatible(config)
+
+    parsetime_vals = ub.udict(datamodule_vars) & datamodule_defaults
+    need_infer = ub.udict({k: v for k, v in parsetime_vals.items() if v == 'auto'})
+    # Try and infer what data we were given at train time
+    if hasattr(method, 'fit_config'):
+        traintime_params = method.fit_config
+    elif hasattr(method, 'datamodule_hparams'):
+        traintime_params = method.datamodule_hparams
+    else:
+        traintime_params = {}
+        if datamodule_vars['channels'] in {None, 'auto'}:
+            print('Warning have to make assumptions. Might not always work')
+            raise NotImplementedError('TODO: needs to be sensorchan if we do this')
+            if hasattr(method, 'input_channels'):
+                # note input_channels are sometimes different than the channels the
+                # datamodule expects. Depending on special keys and such.
+                traintime_params['channels'] = method.input_channels.spec
+            else:
+                traintime_params['channels'] = list(method.input_norms.keys())[0]
+
+    def get_scriptconfig_compatible(config_cls, other):
+        """
+        TODO: add to scriptconfig. Get the set of keys that we will accept.
+        """
+        acceptable_keys = set(config_cls.default.keys())
+        for val in config_cls.default.values():
+            if val.alias:
+                acceptable_keys.update(val.alias)
+
+        common = ub.udict(other) & acceptable_keys
+        resolved = dict(config_cls(cmdline=0, data=common))
+        return resolved
+
+    config_cls = datamodules.kwcoco_dataset.KWCocoVideoDatasetConfig
+    other = traintime_params
+    traintime_datavars = get_scriptconfig_compatible(
+        config_cls,
+        other
+    )
+
+    # FIXME: Some of the inferred args seem to not have the right type here.
+    able_to_infer = traintime_datavars & need_infer
+    if able_to_infer.get('channels', None) is not None:
+        # do this before smartcast breaks the spec
+        able_to_infer['channels'] = kwcoco.SensorChanSpec.coerce(able_to_infer['channels'])
+    from scriptconfig.smartcast import smartcast
+    able_to_infer = ub.udict(able_to_infer).map_values(smartcast)
+    unable_to_infer = need_infer - traintime_datavars
+    # Use defaults when we can't infer
+    overloads = able_to_infer.copy()
+    overloads.update(datamodule_defaults & unable_to_infer)
+    datamodule_vars.update(overloads)
+    config.update(datamodule_vars)
+    print('able_to_infer = {}'.format(ub.repr2(able_to_infer, nl=1)))
+    print('unable_to_infer = {}'.format(ub.repr2(unable_to_infer, nl=1)))
+    print('overloads = {}'.format(ub.repr2(overloads, nl=1)))
+
+    # Look at the difference between predict and train time settings
+    print('deviation from fit->predict settings:')
+    for key in (traintime_datavars.keys() & datamodule_vars.keys()):
+        f_val = traintime_datavars[key]  # fit-time value
+        p_val = datamodule_vars[key]  # pred-time value
+        if f_val != p_val:
+            print(f'    {key!r}: {f_val!r} -> {p_val!r}')
+
+    HACK_FIX_MODELS_WITH_BAD_CHANNEL_SPEC = True
+    if HACK_FIX_MODELS_WITH_BAD_CHANNEL_SPEC:
+        # There was an issue where we trained models and specified
+        # r|g|b|mat:0.3 but we only passed data with r|g|b. At train time
+        # current logic (whch we need to fix) will happilly just take a subset
+        # of those channels, which means the recorded channels disagree with
+        # what the model was actually trained with.
+        if hasattr(method, 'sensor_channel_tokenizers'):
+            datamodule_sensorchan_spec = datamodule_vars['channels']
+            unique_channel_streams = ub.oset()
+            model_sensorchan_stem_parts = []
+            for sensor, tokenizers in method.sensor_channel_tokenizers.items():
+                for code in tokenizers.keys():
+                    from watch.tasks.fusion.methods.network_modules import RobustModuleDict
+                    code = RobustModuleDict._unnormalize_key(code)
+                    unique_channel_streams.add(code)
+                    model_sensorchan_stem_parts.append(f'{sensor}:{code}')
+
+            hack_model_sensorchan_spec = kwcoco.SensorChanSpec.coerce(','.join(model_sensorchan_stem_parts))
+            # hack_model_spec = kwcoco.ChannelSpec.coerce(','.join(unique_channel_streams))
+            if datamodule_sensorchan_spec is not None:
+                datamodule_sensorchan_spec = kwcoco.SensorChanSpec.coerce(datamodule_sensorchan_spec)
+                hack_model_sensorchan_spec = hack_model_sensorchan_spec.normalize()
+                datamodule_sensorchan_spec = datamodule_sensorchan_spec.normalize()
+                if hack_model_sensorchan_spec.normalize().spec != datamodule_sensorchan_spec.normalize().spec:
+                    print('Warning: reported model channels may be incorrect '
+                          'due to bad train hyperparams')
+                    compat_parts = []
+                    for model_part in hack_model_sensorchan_spec.streams():
+                        data_part = datamodule_sensorchan_spec.matching_sensor(model_part.sensor.spec)
+                        if not data_part.chans.spec:
+                            # Try the generic sensor
+                            data_part = datamodule_sensorchan_spec.matching_sensor('*')
+                        isect_part = model_part.chans.intersection(data_part.chans)
+                        # Stems required chunked channels, cant take subsets of them
+                        if isect_part.spec == model_part.chans.spec:
+                            compat_parts.append(model_part)
+
+                    if len(compat_parts) == 0:
+                        print(f'datamodule_sensorchan_spec={datamodule_sensorchan_spec}')
+                        print(f'hack_model_sensorchan_spec={hack_model_sensorchan_spec}')
+                        raise ValueError('no compatible channels between model and data')
+                    hack_common = sum(compat_parts)
+                    # hack_common = hack_model_sensorchan_spec.intersection(datamodule_sensorchan_spec)
+                    datamodule_vars['channels'] = hack_common.spec
+
+    DZYNE_MODEL_HACK = 1
+    if DZYNE_MODEL_HACK:
+        package_fpath = ub.Path(config['package_fpath'])
+        if package_fpath.stem == 'lc_rgb_fusion_model_package':
+            # This model has an issue with the L8 features it was trained on
+            datamodule_vars['exclude_sensors'] = ['L8']
+
+    datamodule = datamodule_class(
+        **datamodule_vars
+    )
+    return config, traintime_params, datamodule
+
+
 @profile
 def predict(cmdline=False, **kwargs):
     """
@@ -249,110 +489,8 @@ def predict(cmdline=False, **kwargs):
 
     # TODO: perhaps we should enforce that that packaged model
     # knows how to construct the appropriate test dataset?
+    config, traintime_params, datamodule = resolve_datamodule(config, method, datamodule_defaults)
 
-    # init datamodule from args
-    datamodule_class = getattr(datamodules, config['datamodule'])
-    datamodule_vars = datamodule_class.compatible(config)
-
-    parsetime_vals = ub.udict(datamodule_vars) & datamodule_defaults
-    need_infer = ub.udict({k: v for k, v in parsetime_vals.items() if v == 'auto'})
-    # Try and infer what data we were given at train time
-    if hasattr(method, 'fit_config'):
-        traintime_params = method.fit_config
-    elif hasattr(method, 'datamodule_hparams'):
-        traintime_params = method.datamodule_hparams
-    else:
-        traintime_params = {}
-        if datamodule_vars['channels'] in {None, 'auto'}:
-            print('Warning have to make assumptions. Might not always work')
-            raise NotImplementedError('TODO: needs to be sensorchan if we do this')
-            if hasattr(method, 'input_channels'):
-                # note input_channels are sometimes different than the channels the
-                # datamodule expects. Depending on special keys and such.
-                traintime_params['channels'] = method.input_channels.spec
-            else:
-                traintime_params['channels'] = list(method.input_norms.keys())[0]
-
-    # FIXME: Some of the inferred args seem to not have the right type here.
-    able_to_infer = traintime_params & need_infer
-    if able_to_infer.get('channels', None) is not None:
-        # do this before smartcast breaks the spec
-        able_to_infer['channels'] = kwcoco.SensorChanSpec.coerce(able_to_infer['channels'])
-    from scriptconfig.smartcast import smartcast
-    able_to_infer = ub.udict(able_to_infer).map_values(smartcast)
-    unable_to_infer = need_infer - traintime_params
-    # Use defaults when we can't infer
-    overloads = able_to_infer.copy()
-    overloads.update(datamodule_defaults & unable_to_infer)
-    datamodule_vars.update(overloads)
-    config.update(datamodule_vars)
-    print('able_to_infer = {}'.format(ub.repr2(able_to_infer, nl=1)))
-    print('unable_to_infer = {}'.format(ub.repr2(unable_to_infer, nl=1)))
-    print('overloads = {}'.format(ub.repr2(overloads, nl=1)))
-
-    # Look at the difference between predict and train time settings
-    print('deviation from fit->predict settings:')
-    for key in (traintime_params.keys() & datamodule_vars.keys()):
-        f_val = traintime_params[key]  # fit-time value
-        p_val = datamodule_vars[key]  # pred-time value
-        if f_val != p_val:
-            print(f'    {key!r}: {f_val!r} -> {p_val!r}')
-
-    HACK_FIX_MODELS_WITH_BAD_CHANNEL_SPEC = True
-    if HACK_FIX_MODELS_WITH_BAD_CHANNEL_SPEC:
-        # There was an issue where we trained models and specified
-        # r|g|b|mat:0.3 but we only passed data with r|g|b. At train time
-        # current logic (whch we need to fix) will happilly just take a subset
-        # of those channels, which means the recorded channels disagree with
-        # what the model was actually trained with.
-        if hasattr(method, 'sensor_channel_tokenizers'):
-            datamodule_sensorchan_spec = datamodule_vars['channels']
-            unique_channel_streams = ub.oset()
-            model_sensorchan_stem_parts = []
-            for sensor, tokenizers in method.sensor_channel_tokenizers.items():
-                for code in tokenizers.keys():
-                    from watch.tasks.fusion.methods.network_modules import RobustModuleDict
-                    code = RobustModuleDict._unnormalize_key(code)
-                    unique_channel_streams.add(code)
-                    model_sensorchan_stem_parts.append(f'{sensor}:{code}')
-
-            hack_model_sensorchan_spec = kwcoco.SensorChanSpec.coerce(','.join(model_sensorchan_stem_parts))
-            # hack_model_spec = kwcoco.ChannelSpec.coerce(','.join(unique_channel_streams))
-            if datamodule_sensorchan_spec is not None:
-                datamodule_sensorchan_spec = kwcoco.SensorChanSpec.coerce(datamodule_sensorchan_spec)
-                hack_model_sensorchan_spec = hack_model_sensorchan_spec.normalize()
-                datamodule_sensorchan_spec = datamodule_sensorchan_spec.normalize()
-                if hack_model_sensorchan_spec.normalize().spec != datamodule_sensorchan_spec.normalize().spec:
-                    print('Warning: reported model channels may be incorrect '
-                          'due to bad train hyperparams')
-                    compat_parts = []
-                    for model_part in hack_model_sensorchan_spec.streams():
-                        data_part = datamodule_sensorchan_spec.matching_sensor(model_part.sensor.spec)
-                        if not data_part.chans.spec:
-                            # Try the generic sensor
-                            data_part = datamodule_sensorchan_spec.matching_sensor('*')
-                        isect_part = model_part.chans.intersection(data_part.chans)
-                        # Stems required chunked channels, cant take subsets of them
-                        if isect_part.spec == model_part.chans.spec:
-                            compat_parts.append(model_part)
-
-                    if len(compat_parts) == 0:
-                        print(f'datamodule_sensorchan_spec={datamodule_sensorchan_spec}')
-                        print(f'hack_model_sensorchan_spec={hack_model_sensorchan_spec}')
-                        raise ValueError('no compatible channels between model and data')
-                    hack_common = sum(compat_parts)
-                    # hack_common = hack_model_sensorchan_spec.intersection(datamodule_sensorchan_spec)
-                    datamodule_vars['channels'] = hack_common.spec
-
-    DZYNE_MODEL_HACK = 1
-    if DZYNE_MODEL_HACK:
-        if package_fpath.stem == 'lc_rgb_fusion_model_package':
-            # This model has an issue with the L8 features it was trained on
-            datamodule_vars['exclude_sensors'] = ['L8']
-
-    datamodule = datamodule_class(
-        **datamodule_vars
-    )
     # TODO: if TTA=True, disable determenistic time sampling
     datamodule.setup('test')
     print('Finished dataset setup')
@@ -434,8 +572,6 @@ def predict(cmdline=False, **kwargs):
 
     method = method.to(device)
 
-    stitch_managers = {}
-
     if config['with_change'] == 'auto':
         config['with_change'] = getattr(method, 'global_change_weight', 1.0)
     if config['with_class'] == 'auto':
@@ -443,104 +579,7 @@ def predict(cmdline=False, **kwargs):
     if config['with_saliency'] == 'auto':
         config['with_saliency'] = getattr(method, 'global_saliency_weight', 0.0)
 
-    # could be torch on-device stitching
-    stitch_device = 'numpy'
-
-    ignore_classes = {
-        'not_salient', 'ignore', 'background', 'Unknown'}
-    # hack, not general
-    ignore_classes.update({'negative', 'positive'})
-
-    stitcher_common_kw = dict(
-        stiching_space='video',
-        device=stitch_device,
-        thresh=config['thresh'],
-        write_probs=config['write_probs'],
-        write_preds=config['write_preds'],
-        prob_compress=config['compress'],
-        quantize=config['quantize'],
-    )
-
-    # If we only care about some predictions from the model, then keep track of
-    # the class indices we need to take.
-    task_keep_indices = {}
-    if config['with_change']:
-        task_name = 'change'
-        head_classes = ['change']
-        head_keep_idxs = [
-            idx for idx, catname in enumerate(head_classes)
-            if catname not in ignore_classes]
-        head_keep_classes = list(ub.take(head_classes, head_keep_idxs))
-        chan_code = '|'.join(head_keep_classes)
-        task_keep_indices[task_name] = head_keep_idxs
-        print('task_name = {!r}'.format(task_name))
-        print('head_classes = {!r}'.format(head_classes))
-        print('head_keep_classes = {!r}'.format(head_keep_classes))
-        print('chan_code = {!r}'.format(chan_code))
-        print('head_keep_idxs = {!r}'.format(head_keep_idxs))
-        stitch_managers[task_name] = CocoStitchingManager(
-            result_dataset,
-            chan_code=chan_code,
-            short_code='pred_' + task_name,
-            num_bands=len(head_keep_classes),
-            **stitcher_common_kw,
-        )
-        result_dataset.ensure_category('change')
-
-    if config['with_class']:
-        task_name = 'class'
-        if hasattr(method, 'foreground_classes'):
-            foreground_classes = method.foreground_classes
-        else:
-            from watch import heuristics
-            not_foreground = (heuristics.BACKGROUND_CLASSES |
-                              heuristics.IGNORE_CLASSNAMES |
-                              heuristics.NEGATIVE_CLASSES)
-            foreground_classes = ub.oset(method.classes) - not_foreground
-        head_classes = method.classes
-        head_keep_idxs = [
-            idx for idx, catname in enumerate(head_classes)
-            if catname not in ignore_classes]
-        head_keep_classes = list(ub.take(head_classes, head_keep_idxs))
-        task_keep_indices[task_name] = head_keep_idxs
-        chan_code = '|'.join(list(head_keep_classes))
-        print('task_name = {!r}'.format(task_name))
-        print('head_classes = {!r}'.format(head_classes))
-        print('head_keep_classes = {!r}'.format(head_keep_classes))
-        print('chan_code = {!r}'.format(chan_code))
-        print('head_keep_idxs = {!r}'.format(head_keep_idxs))
-        stitch_managers[task_name] = CocoStitchingManager(
-            result_dataset,
-            chan_code=chan_code,
-            short_code='pred_' + task_name,
-            polygon_categories=foreground_classes,
-            num_bands=len(head_keep_classes),
-            **stitcher_common_kw,
-        )
-
-    if config['with_saliency']:
-        # hack: the model should tell us what the shape of its head is
-        task_name = 'saliency'
-        head_classes = ['not_salient', 'salient']
-        head_keep_idxs = [
-            idx for idx, catname in enumerate(head_classes)
-            if catname not in ignore_classes]
-        head_keep_classes = list(ub.take(head_classes, head_keep_idxs))
-        task_keep_indices[task_name] = head_keep_idxs
-        chan_code = '|'.join(head_keep_classes)
-        print('task_name = {!r}'.format(task_name))
-        print('head_classes = {!r}'.format(head_classes))
-        print('head_keep_classes = {!r}'.format(head_keep_classes))
-        print('chan_code = {!r}'.format(chan_code))
-        print('head_keep_idxs = {!r}'.format(head_keep_idxs))
-        stitch_managers[task_name] = CocoStitchingManager(
-            result_dataset,
-            chan_code=chan_code,
-            short_code='pred_' + task_name,
-            polygon_categories=['salient'],
-            num_bands=len(head_keep_classes),
-            **stitcher_common_kw,
-        )
+    stitch_managers = build_stitching_managers(config, method, result_dataset)
 
     expected_outputs = set(stitch_managers.keys())
     got_outputs = None
@@ -736,9 +775,9 @@ def predict(cmdline=False, **kwargs):
 
             # For each item in the batch, process the results
             for head_key in writable_outputs:
-                head_stitcher = stitch_managers[head_key]
                 head_probs = outputs[head_key]
-                chan_keep_idxs = task_keep_indices[head_key]
+                head_stitcher = stitch_managers[head_key]
+                chan_keep_idxs = head_stitcher.head_keep_idxs
 
                 # HACK: FIXME: WE ARE HARD CODING THAT CHANGE IS GIVEN TO
                 # ALL FRAMES EXECPT THE FIRST IN MULTIPLE PLACES.

@@ -6,10 +6,27 @@ import ubelt as ub
 
 def get_production_model_test_info(task):
     from watch.tasks.fusion import production
-    MODELS = [row for row in production.PRODUCTION_MODELS
-              if row.get('task', None) == task]
-    model_info = MODELS[-1]
-    tags = model_info['tags']
+    import json
+    candidates = []
+
+    candidates = [row for row in production.PRODUCTION_MODELS
+                  if row.get('task', None) == task]
+
+    for item in production.NEW_PRODUCTION_MODELS:
+        if isinstance(item, str):
+            item = json.loads(item)
+            if 'tasks' not in item:
+                item['tasks'] = []
+                if item['fit_params']['global_saliency_weight'] > 0:
+                    item['tasks'].append('BAS')
+                if item['fit_params']['global_class_weight'] > 0:
+                    item['tasks'].append('SC')
+            if task in item['tasks']:
+                candidates.append(item)
+            item['file_name']
+
+    model_info = candidates[-1]
+    tags = model_info.get('tags', 'phase2_expt')
 
     try:
         expt_dvc_dpath = watch.find_smart_dvc_dpath(tags=tags)
@@ -18,13 +35,56 @@ def get_production_model_test_info(task):
 
     model_fpath = expt_dvc_dpath / model_info['file_name']
 
-    from watch.cli import torch_model_stats
-    torch_model_stats.main(cmdline=False, src=model_fpath)
+    if task == 'SC' and 'pred_params' not in model_info:
+        model_info['pred_params'] = {
+            'chip_overlap': 0.3,
+            'num_workers': 0,
+            'with_class': True,
+            'with_saliency': False,
+            'with_change': False,
+            'write_preds': False,
+            'clear_annots': False,
+            'use_cloudmask': False,
+            'resample_invalid_frames': False,
+            'set_cover_algo': 'approx',
+        }
+    if task == 'BAS' and 'pred_params' not in model_info:
+        model_info['pred_params'] = {
+            'chip_overlap': 0.3,
+            'num_workers': 0,
+            'write_preds': False,
+            'clear_annots': False,
+            # 'set_cover_algo': 'approx',
+            'set_cover_algo': 'approx',
+            'space_scale': '15GSD',
+            'window_space_scale': '15GSD',
+            'use_cloudmask': False,
+            'resample_invalid_frames': False,
+        }
+
+    model_info['pred_params']['package_fpath'] = model_fpath
 
     from watch.utils.simple_dvc import SimpleDVC
     dvc = SimpleDVC()
     dvc.request(model_fpath)
-    return model_fpath
+
+    from watch.cli import torch_model_stats
+    torch_model_stats.main(cmdline=False, src=model_fpath)
+    return model_info
+
+
+def get_test_dataset_fpath(task):
+    try:
+        data_dvc_dpath = watch.find_smart_dvc_dpath(tags='phase2_data')
+    except Exception:
+        pytest.skip('dvc path does not exist')
+    if task == 'BAS':
+        bundle_dpath = (data_dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC')
+        vali_fpath = (bundle_dpath / 'data_vali.kwcoco.json')
+    elif task == 'BAS':
+        bundle_dpath = (data_dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC')
+        vali_fpath = (bundle_dpath / 'data_vali.kwcoco.json')
+    return vali_fpath
 
 
 DEBUGGING_NOW = 0
@@ -34,37 +94,23 @@ def test_predict_latest_bas_model():
     """
     Test the predict step with the latest and greatest
     """
-    model_fpath = get_production_model_test_info(task='BAS')
-
-    try:
-        data_dvc_dpath = watch.find_smart_dvc_dpath(tags='phase2_data')
-    except Exception:
-        pytest.skip('dvc path does not exist')
-    bundle_dpath = (data_dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC')
-    vali_fpath = (bundle_dpath / 'data_vali.kwcoco.json')
+    model_info = get_production_model_test_info(task='BAS')
+    pred_params = model_info['pred_params']
 
     output_dpath = ub.Path.appdir('watch/tests/pred/bas_latest').ensuredir()
 
-    pred_fpath = output_dpath / 'pred_bundle/pred.kwcoco.json'
+    vali_fpath = get_test_dataset_fpath(task='BAS')
     dset = kwcoco.CocoDataset(vali_fpath)
     subset = make_small_kwcoco_subset(dset, output_dpath)
 
+    pred_fpath = output_dpath / 'pred_bundle/pred.kwcoco.json'
+
     from watch.tasks.fusion import predict as predict_mod
-    pred_kwargs = {
+    pred_kwargs = ub.udict(pred_params) | {
         'test_dataset': subset.fpath,
         'pred_dataset': pred_fpath,
-        'package_fpath': model_fpath,
-        'chip_overlap': 0.3,
         'gpus': "auto:1",
         'num_workers': 0,
-        'write_preds': False,
-        'clear_annots': False,
-        # 'set_cover_algo': 'approx',
-        'set_cover_algo': 'approx',
-        'space_scale': '15GSD',
-        'window_space_scale': '15GSD',
-        'use_cloudmask': False,
-        'resample_invalid_frames': False,
     }
     kwargs = pred_kwargs  # NOQA
     predict_mod.predict(cmdline=0, **pred_kwargs)
@@ -80,36 +126,23 @@ def test_predict_latest_bas_model():
 
 
 def test_predict_latest_sc_model():
-    model_fpath = get_production_model_test_info(task='SC')
-
-    try:
-        data_dvc_dpath = watch.find_smart_dvc_dpath(tags='phase2_data')
-    except Exception:
-        pytest.skip('dvc path does not exist')
-    bundle_dpath = (data_dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC')
-    vali_fpath = (bundle_dpath / 'data_vali.kwcoco.json')
+    model_info = get_production_model_test_info(task='SC')
+    pred_params = model_info['pred_params']
 
     output_dpath = ub.Path.appdir('watch/tests/pred/sc_latest').ensuredir()
-    pred_fpath = output_dpath / 'pred_bundle/pred.kwcoco.json'
+
+    vali_fpath = get_test_dataset_fpath(task='SC')
     dset = kwcoco.CocoDataset(vali_fpath)
     subset = make_small_kwcoco_subset(dset, output_dpath)
 
+    pred_fpath = output_dpath / 'pred_bundle/pred.kwcoco.json'
+
     from watch.tasks.fusion import predict as predict_mod
-    pred_kwargs = {
+    pred_kwargs = ub.udict(pred_params) | {
         'test_dataset': subset.fpath,
         'pred_dataset': pred_fpath,
-        'package_fpath': model_fpath,
-        'chip_overlap': 0.3,
         'gpus': "auto:1",
         'num_workers': 0,
-        'with_class': True,
-        'with_saliency': False,
-        'with_change': False,
-        'write_preds': False,
-        'clear_annots': False,
-        'use_cloudmask': False,
-        'resample_invalid_frames': False,
-        'set_cover_algo': 'approx',
     }
     kwargs = pred_kwargs  # NOQA
     cmdline = False
