@@ -36,6 +36,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 python -m watch.tasks.fusion.fit_lightning fit \
     --model.learning_rate=1e-4 \
     --model.name=$EXPERIMENT_NAME \
     --model.optimizer=AdamW \
+    --model.render_outputs=true \
     --model.saliency_loss='focal' \
     --model.tokenizer="linconv" \
     --model.weight_decay=0 \

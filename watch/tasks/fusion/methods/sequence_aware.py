@@ -105,6 +105,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         multimodal_reduce: str = "max",  # TODO: remove with replacement of hardcoded perceiver
         perceiver_depth: int = 4,  # TODO: remove with replacement of hardcoded perceiver
         perceiver_latents: int = 512,  # TODO: remove with replacement of hardcoded perceiver
+        render_outputs: bool = False,
 
     ):
         """
@@ -139,6 +140,8 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             multimodal_reduce: operation used to combine multiple modes from the same timestep
             perceiver_depth: How many layers used by the perceiver model.
             perceiver_latents: How many latents used by the perceiver model.
+            render_outputs: During each batch, whether or not to reshape logits back to image shape and convert
+                to logits for a downstream task. Always on during predict.
 
         Example:
             >>> # Note: it is important that the non-kwargs are saved as hyperparams
@@ -897,6 +900,25 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         batch_outputs['loss'] = loss
         batch_outputs['task_losses'] = task_losses
 
+        if self.hparams.render_outputs or (stage == "predict"):
+            # Need to output probabilities here for consumers of the model
+            # TODO: only enable if requested, at train time we can discard this
+            # for the majority of the iterations (unless we need to visualize
+            # the batch)
+
+            for task_name in task_logits.keys():
+                item_probs = []
+                for item_index in range(len(batch)):
+                    item_logit = einops.rearrange(task_logits[task_name][item_index], "chan seq -> seq chan")
+                    item_mask = stacked_masks[task_name][item_index]
+                    item_shapes = [list(frame["output_dims"]) for frame in batch[item_index]["frames"]]
+                    if task_name == 'change':
+                        item_shapes = item_shapes[1:]  # hack for change
+                    recon = self.reconstruct_output(item_logit, item_mask, item_shapes)
+                    probs = [p.sigmoid() for p in recon]
+                    item_probs.append(probs)
+                batch_outputs[task_name + "_probs"] = item_probs
+
         return batch_outputs
 
     @profile
@@ -917,30 +939,6 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
     @profile
     def predict_step(self, batch, batch_idx=None):
         outputs = self.shared_step(batch, batch_idx=batch_idx, stage='predict')
-
-        # Need to output probabilities here for consumers of the model
-        # TODO: only enable if requested, at train time we can discard this
-        # for the majority of the iterations (unless we need to visualize
-        # the batch)
-
-        task_logits = outputs["task_logits"]
-        stacked_masks = outputs["stacked_masks"]
-
-        task_probs = dict()
-        for task_name in task_logits.keys():
-            item_probs = []
-            for item_index in range(len(batch)):
-                item_logit = einops.rearrange(task_logits[task_name][item_index], "chan seq -> seq chan")
-                item_mask = stacked_masks[task_name][item_index]
-                item_shapes = [list(frame["output_dims"]) for frame in batch[item_index]["frames"]]
-                # # if task_name == 'change':
-                # #     item_shapes = item_shapes[1:]  # hack for change
-                recon = self.reconstruct_output(item_logit, item_mask, item_shapes)
-                probs = [p.sigmoid() for p in recon]
-                item_probs.append(probs)
-            task_probs[task_name] = item_probs
-
-        outputs["task_probs"] = task_probs
         return outputs
 
     # this is a special thing for the predict step

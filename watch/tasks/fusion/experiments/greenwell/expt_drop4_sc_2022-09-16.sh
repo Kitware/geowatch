@@ -58,8 +58,8 @@ python -m watch.tasks.fusion.fit_lightning fit \
     --trainer.precision=16 \
     --trainer.max_steps=20000 \
     --trainer.accumulate_grad_batches=16 \
-    --trainer.num_sanity_val_steps=2 \
-    --trainer.fast_dev_run=5
+    --trainer.num_sanity_val_steps=2
+    # --trainer.fast_dev_run=5
     # --trainer.profiler=simple
     # --trainer.strategy=deepspeed_stage_2_offload \
     # --trainer.track_grad_norm=2 \
