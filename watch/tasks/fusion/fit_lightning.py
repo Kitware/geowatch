@@ -95,9 +95,8 @@ def main():
     class MyLightningCLI(LightningCLI):
 
         # TODO: import initialization code from fit.py
-        
         def add_arguments_to_parser(self, parser):
-            
+
             # TODO: separate final_package dir and fpath for more configuration
             # pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
             parser.add_lightning_class_args(pl_ext.callbacks.Packager, "packager")
@@ -141,9 +140,9 @@ def main():
             # without modifying source code.
             profiler=pl.profilers.AdvancedProfiler(dirpath=".", filename="perf_logs"),
             callbacks=[
-                pl_ext.callbacks.AutoResumer(),
-                pl_ext.callbacks.StateLogger(),
-                pl_ext.callbacks.BatchPlotter( # Fixme: disabled for multi-gpu training with deepspeed
+                # pl_ext.callbacks.AutoResumer(),
+                # pl_ext.callbacks.StateLogger(),
+                pl_ext.callbacks.BatchPlotter(  # Fixme: disabled for multi-gpu training with deepspeed
                     num_draw=2,  # args.num_draw,
                     draw_interval="5min",  # args.draw_interval
                 ),

@@ -32,8 +32,8 @@ except Exception:
     profile = ub.identity
 
 
-def sanitize_key(key):
-    return key.replace(".", "-")
+# def sanitize_key(key):
+#     return key.replace(".", "-")
 
 
 class FourierPositionalEncoding(nn.Module):
@@ -370,7 +370,8 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
                 else:
                     input_norm = nh.layers.InputNorm(**stats)
 
-            key = sanitize_key(str((s, c)))
+            # key = sanitize_key(str((s, c)))
+            key = f'{s}:{c}'
             self.sensor_channel_tokenizers[key] = nn.Sequential(
                 input_norm,
                 tokenize,
@@ -397,8 +398,10 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         else:
             raise KeyError(positional_encoder)
 
-        self.positional_encoders = nn.ModuleDict({
-            sanitize_key(str(key)): nn.Sequential(
+        sensorchan_keys = [f'{s}:{c}' for s, c in self.unique_sensor_modes]
+
+        self.positional_encoders = RobustModuleDict({
+            key: nn.Sequential(
                 base_positional_encoder,
                 nn.Conv2d(
                     base_positional_encoder.output_dim,
@@ -406,7 +409,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
                     1,
                 ),
             )
-            for key in list(self.unique_sensor_modes) + ["change", "saliency", "class"]
+            for key in sensorchan_keys + ["change", "saliency", "class"]
         })
 
         if self.hparams.arch_name == "perciever":
@@ -535,8 +538,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         for frame in example["frames"]:
             for mode_key, mode_image in frame["modes"].items():
 
-                sensor_mode_key = sanitize_key(str((frame["sensor"], mode_key)))
-
+                sensor_mode_key = frame["sensor"] + ':' + mode_key
                 stemmed_mode = self.sensor_channel_tokenizers[sensor_mode_key](
                     mode_image.nan_to_num(0.0)[None].float()
                 )[0]
@@ -586,8 +588,8 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         for frame in example["frames"]:
             for mode_key, mode_image in frame["modes"].items():
 
-                sensor_mode_key = sanitize_key(str((frame["sensor"], mode_key)))
-
+                # sensor_mode_key = sanitize_key(str((frame["sensor"], mode_key)))
+                sensor_mode_key = frame["sensor"] + ':' + mode_key
                 stemmed_mode = self.sensor_channel_tokenizers[sensor_mode_key](
                     mode_image.nan_to_num(0.0)[None].float()
                 )[0]
@@ -717,7 +719,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             >>> print(nh.data.collate._debug_inbatch_shapes(batch))
         """
         big_canvas = torch.nan * torch.zeros(mask.shape[0], output.shape[-1], dtype=output.dtype, device=output.device)
-        
+
         max_len = sum([w * h for w, h in shapes])
         # big_canvas[mask] = output[:max_len]
         big_canvas[mask] = output[:mask.sum()]
@@ -797,7 +799,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
 
         return outputs
 
-    def shared_step(self, batch, batch_idx=None, stage="train"):
+    def shared_step(self, batch, batch_idx=None, stage="train", with_loss=True):
         """
         Example:
             >>> from watch.tasks.fusion.methods.sequence_aware import *  # NOQA
@@ -856,40 +858,44 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
 
         task_logits = self.forward(padded_inputs, queries=stacked_queries, input_mask=padded_valids)
         task_losses = {}
-        for task_name in task_logits.keys():
 
-            logits = einops.rearrange(task_logits[task_name], "batch chan seq -> (batch seq) chan")
-            labels = einops.rearrange(stacked_labels[task_name], "batch seq -> (batch seq)")
-            weights = einops.rearrange(stacked_weights[task_name], "batch seq -> (batch seq)")
+        if with_loss:
+            for task_name in task_logits.keys():
 
-            # task_mask = (labels != -1)
-            task_mask = (weights > 0.0)
+                logits = einops.rearrange(task_logits[task_name], "batch chan seq -> (batch seq) chan")
+                labels = einops.rearrange(stacked_labels[task_name], "batch seq -> (batch seq)")
+                weights = einops.rearrange(stacked_weights[task_name], "batch seq -> (batch seq)")
 
-            criterion = self.criterions[task_name]
-            if criterion.target_encoding == 'index':
-                loss_labels = labels.long()
-            elif criterion.target_encoding == 'onehot':
-                # Note: 1HE is much easier to work with
-                loss_labels = kwarray.one_hot_embedding(labels.long(), criterion.in_channels, dim=-1)
-                weights = weights[..., None]
-            else:
-                raise KeyError(criterion.target_encoding)
+                # task_mask = (labels != -1)
+                task_mask = (weights > 0.0)
 
-            task_loss = weights[task_mask] * criterion(
-                logits[task_mask],
-                loss_labels[task_mask],
-            )
-            task_losses[task_name] = task_loss.mean()
+                criterion = self.criterions[task_name]
+                if criterion.target_encoding == 'index':
+                    loss_labels = labels.long()
+                elif criterion.target_encoding == 'onehot':
+                    # Note: 1HE is much easier to work with
+                    loss_labels = kwarray.one_hot_embedding(labels.long(), criterion.in_channels, dim=-1)
+                    weights = weights[..., None]
+                else:
+                    raise KeyError(criterion.target_encoding)
 
-            task_metric = self.head_metrics[f"{stage}_stage"][task_name](
-                logits[task_mask],
-                labels[task_mask],
-            )
-            self.log_dict(task_metric, prog_bar=True, sync_dist=True)
+                task_loss = weights[task_mask] * criterion(
+                    logits[task_mask],
+                    loss_labels[task_mask],
+                )
+                task_losses[task_name] = task_loss.mean()
 
-        loss = sum(task_losses.values()) / len(task_losses)
+                task_metric = self.head_metrics[f"{stage}_stage"][task_name](
+                    logits[task_mask],
+                    labels[task_mask],
+                )
+                self.log_dict(task_metric, prog_bar=True, sync_dist=True)
 
-        self.log(f"{stage}_loss", loss, prog_bar=True, sync_dist=True)
+            loss = sum(task_losses.values()) / len(task_losses)
+
+            self.log(f"{stage}_loss", loss, prog_bar=True, sync_dist=True)
+        else:
+            loss = None
 
         # These need to be returned so the caller is able to introspect them
         # calling "log" is great, but it denies the caller access to this
@@ -903,8 +909,6 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             "stacked_labels": stacked_labels,
             "stacked_masks": stacked_masks,
         }
-        batch_outputs['loss'] = loss
-        batch_outputs['task_losses'] = task_losses
 
         if self.hparams.render_outputs or (stage == "predict"):
             # Need to output probabilities here for consumers of the model
@@ -922,16 +926,16 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
                         recon = self.reconstruct_output(item_logit, item_mask, item_shapes)
                         if task_name == 'change':
                             recon = [
-                                recon_img[...,1] for recon_img in recon
+                                recon_img[..., 1] for recon_img in recon
                             ]
-                    except:
+                    except Exception:
                         print(f"Failed on {task_name} idk={item_index}")
                         print(f"logits.shape = {item_logit.shape} shapes = {item_shapes}")
                         raise
                     probs = [p.sigmoid() for p in recon]
                     item_probs.append(probs)
                 batch_outputs[task_name + "_probs"] = item_probs
-                
+
             # print(batch_outputs.keys())
             # raise
 
@@ -954,11 +958,12 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
 
     @profile
     def predict_step(self, batch, batch_idx=None):
-        outputs = self.shared_step(batch, batch_idx=batch_idx, stage='predict')
+        outputs = self.shared_step(batch, batch_idx=batch_idx, stage='predict',
+                                   with_loss=False)
         return outputs
 
     # this is a special thing for the predict step
-    forward_step = predict_step
+    forward_step = shared_step
 
     def configure_optimizers(self):
         """

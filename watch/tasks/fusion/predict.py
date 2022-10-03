@@ -306,15 +306,23 @@ def predict(cmdline=False, **kwargs):
         # of those channels, which means the recorded channels disagree with
         # what the model was actually trained with.
         if hasattr(method, 'sensor_channel_tokenizers'):
+            from watch.tasks.fusion.methods.network_modules import RobustModuleDict
             datamodule_sensorchan_spec = datamodule_vars['channels']
             unique_channel_streams = ub.oset()
             model_sensorchan_stem_parts = []
             for sensor, tokenizers in method.sensor_channel_tokenizers.items():
-                for code in tokenizers.keys():
-                    from watch.tasks.fusion.methods.network_modules import RobustModuleDict
-                    code = RobustModuleDict._unnormalize_key(code)
-                    unique_channel_streams.add(code)
-                    model_sensorchan_stem_parts.append(f'{sensor}:{code}')
+                sensor = RobustModuleDict._unnormalize_key(sensor)
+                if ':' in sensor:
+                    # full sensorchan already exists (sequence aware model)
+                    sensorchan = sensor
+                    model_sensorchan_stem_parts.append(sensorchan)
+                else:
+                    # dict is nested sensor channel code (older model)
+                    for code in tokenizers.keys():
+                        code = RobustModuleDict._unnormalize_key(code)
+                        unique_channel_streams.add(code)
+                        sensorchan = f'{sensor}:{code}'
+                        model_sensorchan_stem_parts.append(sensorchan)
 
             hack_model_sensorchan_spec = kwcoco.SensorChanSpec.coerce(','.join(model_sensorchan_stem_parts))
             # hack_model_spec = kwcoco.ChannelSpec.coerce(','.join(unique_channel_streams))
@@ -632,6 +640,12 @@ def predict(cmdline=False, **kwargs):
 
     jsonified_args = jsonify(args.__dict__)
     config_resolved = jsonify(config)
+    traintime_params = jsonify(traintime_params)
+
+    from kwcoco.util import util_json
+    assert not list(util_json.find_json_unserializable(jsonified_args))
+    assert not list(util_json.find_json_unserializable(config_resolved))
+    assert not list(util_json.find_json_unserializable(traintime_params))
 
     from watch.utils import process_context
     proc_context = process_context.ProcessContext(
@@ -643,8 +657,7 @@ def predict(cmdline=False, **kwargs):
         extra={'fit_config': traintime_params}
     )
 
-    from kwcoco.util import util_json
-    assert not list(util_json.find_json_unserializable(config_resolved))
+    assert not list(util_json.find_json_unserializable(proc_context.obj))
 
     info.append(proc_context.obj)
     proc_context.start()
@@ -653,7 +666,7 @@ def predict(cmdline=False, **kwargs):
     with torch.set_grad_enabled(False):
         # FIXME: that data loader should not be producing incorrect sensor/mode
         # pairs in the first place!
-        EMERGENCY_INPUT_AGREEMENT_HACK = 1
+        EMERGENCY_INPUT_AGREEMENT_HACK = 1 and hasattr(method, 'input_norms')
         # prog.set_extra(' <will populate stats after first video>')
         _batch_iter = iter(prog)
         if 0:
@@ -723,7 +736,12 @@ def predict(cmdline=False, **kwargs):
                 print(nh.data.collate._debug_inbatch_shapes(batch))
 
             # Predict on the batch
-            outputs = method.forward_step(batch, with_loss=False)
+            try:
+                raise Exception
+                outputs = method.forward_step(batch, with_loss=False)
+            except Exception:
+                outputs = method.predict_step(batch)
+
             outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
 
             if got_outputs is None:
@@ -755,10 +773,10 @@ def predict(cmdline=False, **kwargs):
 
                 for bx in range(num_batches):
                     target: dict = batch_trs[bx]
-                    item_head_probs: torch.Tensor = head_probs[bx]
+                    item_head_probs: list[torch.Tensor] | torch.Tensor = head_probs[bx]
                     # Keep only the channels we want to write to disk
-                    item_head_relevant_probs = item_head_probs[..., chan_keep_idxs]
-                    bin_probs = item_head_relevant_probs.detach().cpu().numpy()
+                    item_head_relevant_probs = [p[..., chan_keep_idxs] for p in item_head_probs]
+                    bin_probs = [p.detach().cpu().numpy() for p in item_head_relevant_probs]
 
                     # Get the spatio-temporal subregion this prediction belongs to
                     # out_gids: list[int] = target['gids'][predicted_frame_slice]
