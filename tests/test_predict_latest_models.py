@@ -110,7 +110,8 @@ def test_predict_latest_bas_model():
         'test_dataset': subset.fpath,
         'pred_dataset': pred_fpath,
         'gpus': "auto:1",
-        'num_workers': 0,
+        # "output_space_scale": "15GSD",
+        'num_workers': 2,
     }
     kwargs = pred_kwargs  # NOQA
     predict_mod.predict(cmdline=0, **pred_kwargs)
@@ -122,7 +123,7 @@ def test_predict_latest_bas_model():
         from watch.cli import coco_visualize_videos
         coco_visualize_videos.main(cmdline=0, src=pred_fpath,
                                    channels='red|green|blue,salient',
-                                   skip_missing=False, animate=True)
+                                   stack='only', skip_missing=False, animate=True)
 
 
 def test_predict_latest_sc_model():
