@@ -186,9 +186,9 @@ class RegionResult:
         ph = self.sc_phasetable
 
         sites = ph.index.get_level_values(1).unique()  # assert sites == csv names
-        site_candidates = ph.index.get_level_values(2).unique()
-        if len(site_candidates) != len(sites):
-            raise NotImplementedError
+        # site_candidates = ph.index.get_level_values(2).unique()
+        # if len(site_candidates) != len(sites):
+            # raise NotImplementedError
 
         df = pd.DataFrame(
             index=pd.MultiIndex.from_product((list(sites) + ['__avg__'], phases[1:]), names=['site', 'phase']),
