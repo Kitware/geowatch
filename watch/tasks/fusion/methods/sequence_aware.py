@@ -717,9 +717,10 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             >>> print(nh.data.collate._debug_inbatch_shapes(batch))
         """
         big_canvas = torch.nan * torch.zeros(mask.shape[0], output.shape[-1], dtype=output.dtype, device=output.device)
-        big_canvas[mask] = output[:mask.sum()]
         
         max_len = sum([w * h for w, h in shapes])
+        # big_canvas[mask] = output[:max_len]
+        big_canvas[mask] = output[:mask.sum()]
 
         canvases = []
         for canvas, shape in zip(torch.split(big_canvas[:max_len], [w * h for w, h in shapes]), shapes):
@@ -916,10 +917,12 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
                     item_logit = einops.rearrange(task_logits[task_name][item_index], "chan seq -> seq chan")
                     item_mask = stacked_masks[task_name][item_index]
                     item_shapes = [list(frame["output_dims"]) for frame in batch[item_index]["frames"]]
-                    # if task_name == 'change':
-                    #     item_shapes = item_shapes[1:]  # hack for change
                     try:
                         recon = self.reconstruct_output(item_logit, item_mask, item_shapes)
+                        if task_name == 'change':
+                            recon = [
+                                recon_img[...,1] for recon_img in recon
+                            ]
                     except:
                         print(f"Failed on {task_name} idk={item_index}")
                         print(f"logits.shape = {item_logit.shape} shapes = {item_shapes}")
@@ -927,6 +930,9 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
                     probs = [p.sigmoid() for p in recon]
                     item_probs.append(probs)
                 batch_outputs[task_name + "_probs"] = item_probs
+                
+            # print(batch_outputs.keys())
+            # raise
 
         return batch_outputs
 
