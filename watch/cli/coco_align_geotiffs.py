@@ -757,7 +757,7 @@ class SimpleDataCube(object):
                     region_row = region_row.copy()
                     region_row['geometry'] = fixed_geom_crs84['geometry'].iloc[0]
 
-            space_region = kwimage.Polygon.from_shapely(region_row.geometry)
+            space_region = kwimage.MultiPolygon.from_shapely(region_row.geometry)
             space_box = space_region.bounding_box().to_ltrb()
 
             # Data is from geo-pandas so this should be traditional order
