@@ -19,7 +19,7 @@ class WrappedKWCocoDataModule(KWCocoVideoDataModule):
         test_dataset=None,
         channels=None,
         batch_size=4,
-        input_space_scale="native",
+        input_space_scale=None,
         num_workers="avail/2",
         time_steps=2,
         chip_size=128,
@@ -36,6 +36,7 @@ class WrappedKWCocoDataModule(KWCocoVideoDataModule):
         resample_invalid_frames=0,
         use_cloudmask=0,
         sqlview=False,
+        max_epoch_length=None,
     ):
 
         super().__init__(
@@ -61,6 +62,7 @@ class WrappedKWCocoDataModule(KWCocoVideoDataModule):
             resample_invalid_frames=resample_invalid_frames,
             use_cloudmask=use_cloudmask,
             sqlview=sqlview,
+            max_epoch_length=max_epoch_length,
         )
 
         # Fixme: we shouldnt call this here because the trainer calls setup("fit") no matter what, and this duplicates
