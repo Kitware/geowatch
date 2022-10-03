@@ -25,7 +25,7 @@ class WrappedKWCocoDataModule(KWCocoVideoDataModule):
         chip_size=128,
         neg_to_pos_ratio=0,
         chip_overlap=0,
-        window_space_scale="3GSD",
+        window_space_scale=None, #"3GSD",
         chip_dims=128,
         time_sampling="soft2+distribute",
         time_span="6m",
