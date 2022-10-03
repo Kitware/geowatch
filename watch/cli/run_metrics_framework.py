@@ -106,7 +106,7 @@ class RegionResult:
     @classmethod
     def from_dpath_and_anns_root(cls, region_dpath,
                                  true_site_dpath, true_region_dpath,
-                                 unbounded_site_status='completed'):
+                                 unbounded_site_status='overall'):
         region_dpath = ub.Path(region_dpath)
         region_id = region_dpath.name
 
@@ -302,7 +302,8 @@ class RegionResult:
 
         delim = ' vs. '
 
-        df = pd.read_csv(sc_dpath / 'ac_phase_table.csv')
+        phase_table_fpath = sc_dpath / 'ac_phase_table.csv'
+        df = pd.read_csv(phase_table_fpath)
 
         # df['date'] = pd.to_datetime(df['date'])
         df = df.fillna('NA' + delim + 'NA').astype('string').set_index('date')
@@ -963,7 +964,7 @@ def main(cmdline=True, **kwargs):
 
     # First build up all of the commands and prepare necessary data for them.
     commands = []
-    for region_id, region_sites in ub.ProgIter(list(grouped_sites.items()),
+    for region_id, region_sites in ub.ProgIter(sorted(grouped_sites.items()),
                                                desc='prepare regions for eval'):
 
         site_dpath = (tmp_dpath / 'site' / region_id).ensuredir()
@@ -1012,8 +1013,14 @@ def main(cmdline=True, **kwargs):
             '--image_dir', os.fspath(image_dpath),
             '--output_dir', os.fspath(out_dir),
             '--cache_dir', os.fspath(cache_dpath),
+            ## Restrict to make this faster
+            #'--tau', '0.2',
+            #'--rho', '0.5',
+            '--activity', 'overall',
+            #'--loglevel', 'error',
             '--name', name,
-            '--no-db',
+            '--serial',
+            # '--no-db',
         ]
         run_eval_command += viz_flags
         # run metrics framework
@@ -1030,14 +1037,24 @@ def main(cmdline=True, **kwargs):
         (out_dir / 'invocation.sh').write_text(region_invocation_text)
         commands.append(cmd)
 
-    import cmd_queue
-    queue = cmd_queue.Queue.create(backend='serial')
-    for cmd in commands:
-        queue.submit(cmd)
-        # TODO: make command queue stop on the first failure?
-        queue.run()
-    # if queue.read_state()['failed']:
-    #     raise Exception('jobs failed')
+    if 0:
+        import cmd_queue
+        queue = cmd_queue.Queue.create(backend='serial')
+        for cmd in commands:
+            queue.submit(cmd)
+            # TODO: make command queue stop on the first failure?
+            queue.run()
+        # if queue.read_state()['failed']:
+        #     raise Exception('jobs failed')
+    else:
+
+        for cmd in commands:
+            try:
+                ub.cmd(cmd, verbose=3, check=True, shell=True)
+            except subprocess.CalledProcessError:
+                print('error in metrics framework, probably due to zero '
+                      'TP site matches.')
+
 
     print('out_dirs = {}'.format(ub.repr2(out_dirs, nl=1)))
     if args.merge and out_dirs:
