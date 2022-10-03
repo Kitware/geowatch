@@ -121,6 +121,10 @@ def main():
                 "data.dataset_stats",
                 "model.init_args.dataset_stats",
                 apply_on="instantiate")
+            parser.link_arguments(
+                "data.classes",
+                "model.init_args.classes",
+                apply_on="instantiate")
 
     MyLightningCLI(
         # SequenceAwareModel,

@@ -803,6 +803,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             >>> from watch.tasks.fusion.methods.sequence_aware import *  # NOQA
             >>> channels, classes, dataset_stats = SequenceAwareModel.demo_dataset_stats()
             >>> self = SequenceAwareModel(
+            >>>     render_outputs=True,
             >>>     tokenizer='linconv',
             >>>     classes=classes, global_saliency_weight=1,
             >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
@@ -888,7 +889,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
 
         loss = sum(task_losses.values()) / len(task_losses)
 
-        self.log("loss", loss, prog_bar=True, sync_dist=True)
+        self.log(f"{stage}_loss", loss, prog_bar=True, sync_dist=True)
 
         # These need to be returned so the caller is able to introspect them
         # calling "log" is great, but it denies the caller access to this
