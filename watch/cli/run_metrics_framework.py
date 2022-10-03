@@ -188,7 +188,7 @@ class RegionResult:
         sites = ph.index.get_level_values(1).unique()  # assert sites == csv names
         # site_candidates = ph.index.get_level_values(2).unique()
         # if len(site_candidates) != len(sites):
-            # raise NotImplementedError
+        #     raise NotImplementedError
 
         df = pd.DataFrame(
             index=pd.MultiIndex.from_product((list(sites) + ['__avg__'], phases[1:]), names=['site', 'phase']),
@@ -644,7 +644,7 @@ def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath,
     concise_sc['tp'] = np.stack([
             concise_sc.loc[(slice(None), 'Site Preparation'), 'Site Preparation'].values,
             concise_sc.loc[(slice(None), 'Active Construction'), 'Active Construction'].values,
-        ], axis=1
+           ], axis=1
     ).reshape(-1)
     concise_sc['fp'] = np.stack([
             concise_sc.loc[(slice(None), 'Site Preparation'), ['No Activity', 'Active Construction', 'Post Construction']].sum(axis=1).values,
