@@ -463,7 +463,9 @@ def merge_bas_metrics_results(bas_results: List[RegionResult], fbetas: List[floa
     # micro-average over sites
     #
 
-    micro_df = concat_df.groupby(['rho', 'tau', 'min_area'])[sum_cols].sum()
+    group_keys = list((ub.oset(concat_df.index.names) | concat_df.columns) & ['rho', 'tau', 'min_area'])
+
+    micro_df = concat_df.groupby(group_keys)[sum_cols].sum()
     micro_df.loc[:, 'region_id'] = '__micro__'
     micro_df = micro_df.reset_index().set_index(['region_id', 'rho', 'tau'])
 
@@ -519,8 +521,8 @@ def merge_bas_metrics_results(bas_results: List[RegionResult], fbetas: List[floa
     #
 
     macro_df = pd.concat(
-        (concat_df.groupby(['rho', 'tau', 'min_area'])[sum_cols].sum(),
-         concat_df.groupby(['rho', 'tau', 'min_area'])[mean_cols].mean()),
+        (concat_df.groupby(group_keys)[sum_cols].sum(),
+         concat_df.groupby(group_keys)[mean_cols].mean()),
         axis=1
     )
     macro_df.loc[:, 'region_id'] = '__macro__'
@@ -1047,15 +1049,13 @@ def main(cmdline=True, **kwargs):
         # if queue.read_state()['failed']:
         #     raise Exception('jobs failed')
     else:
-
-        if 0:
-            for cmd in commands:
-                try:
-                    ub.cmd(cmd, verbose=3, check=True, shell=True)
-                except subprocess.CalledProcessError:
-                    print('error in metrics framework, probably due to zero '
-                          'TP site matches.')
-
+        import subprocess
+        for cmd in commands:
+            try:
+                ub.cmd(cmd, verbose=3, check=True, shell=True)
+            except subprocess.CalledProcessError:
+                print('error in metrics framework, probably due to zero '
+                      'TP site matches.')
 
     print('out_dirs = {}'.format(ub.repr2(out_dirs, nl=1)))
     if args.merge and out_dirs:
