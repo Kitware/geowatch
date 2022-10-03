@@ -47,13 +47,6 @@ class MetricsConfig(scfg.DataConfig):
         gt_dpath / region_models
         '''))
 
-    virtualenv_cmd = scfg.Value(['true'], nargs='+', help=ub.paragraph(
-        '''
-        Command to run before calling the metrics framework in a subshell.
-
-        Only necessary if the metrics framework is installed in a different
-        virtual env from the current one.
-        '''))
     out_dir = scfg.Value(None, help=ub.paragraph(
         '''
         Output directory where scores will be written. Each
@@ -932,13 +925,6 @@ def main(cmdline=True, **kwargs):
         temp_dir = TemporaryDirectory(suffix='iarpa-metrics-tmp')
         tmp_dpath = ub.Path(temp_dir.name)
 
-    # validate virtualenv command
-    virtualenv_cmd = ' '.join(args.virtualenv_cmd)
-    try:
-        ub.cmd(virtualenv_cmd, verbose=1, check=True, shell=True)
-    except Exception as ex:
-        raise ValueError('The given virtualenv command is invalid') from ex
-
     # split sites by region
     out_dirs = []
     grouped_sites = ub.group_items(
@@ -1013,7 +999,7 @@ def main(cmdline=True, **kwargs):
         ]
         run_eval_command += viz_flags
         # run metrics framework
-        cmd = f'{virtualenv_cmd} && ' + shlex.join(run_eval_command)
+        cmd = shlex.join(run_eval_command)
         region_invocation_text = ub.codeblock(
             '''
             #!/bin/bash
