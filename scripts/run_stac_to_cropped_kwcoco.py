@@ -180,7 +180,7 @@ def run_stac_to_cropped_kwcoco(input_path,
                     '--include_channels', include_channels,  # noqa
                     '--geo_preprop', 'auto',
                     '--keep', 'none',
-                    '--target_gsd', '10',  # TODO: Expose as cli parameter
+                    '--target_gsd', '15',  # TODO: Expose as cli parameter
                     '--context_factor', '1',
                     '--workers', '1' if force_one_job_for_cropping else str(jobs),  # noqa: 501
                     '--aux_workers', str(include_channels.count('|') + 1),
