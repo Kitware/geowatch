@@ -798,30 +798,6 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         view_img_fpath = ub.augpath(name, dpath=img_chan_dpath) + '_' + suffix + '.view_img.jpg'
         view_ann_fpath = ub.augpath(name, dpath=ann_chan_dpath) + '_' + suffix + '.view_ann.jpg'
 
-        if 0:
-            delayed1 = coco_img.delay(channels='blue|salient', space=space, **finalize_opts)
-            delayed1 = delayed1.warp(viz_warp)
-
-            delayed2 = coco_img.delay(channels='blue|salient', space=space, **finalize_opts)
-            delayed2 = delayed2.warp(viz_warp)
-
-            orig = delayed1.take_channels(chan_group)
-            prep = delayed2.take_channels(chan_group).prepare()
-
-            print(ub.repr2(orig.nesting(), sort=0, nl=-1))
-            print(ub.repr2(prep.nesting(), sort=0, nl=-1))
-
-            orig_opt = orig.optimize()
-            prep_opt = prep.optimize()
-            print('--orig--')
-            orig.write_network_text()
-            print('--prep--')
-            prep.write_network_text()
-            print('--orig_opt--')
-            orig_opt.write_network_text()
-            print('--prep_opt--')
-            prep_opt.write_network_text()
-
         chan = delayed.take_channels(chan_group)
         chan = chan.prepare().optimize()
 
@@ -881,7 +857,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                 new_parts.append(p)
             canvas = np.stack(new_parts, axis=2)
 
-        canvas = kwimage.fill_nans_with_checkers(canvas)
+        _kw = ub.compatible({'on_value': 0.3}, kwimage.fill_nans_with_checkers)
+        canvas = kwimage.fill_nans_with_checkers(canvas, **_kw)
 
         if cmap is not None:
             if kwimage.num_channels(canvas) == 1:
@@ -929,7 +906,10 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         if draw_imgs_alone or stack_imgs:
             img_canvas = kwimage.ensure_uint255(canvas, copy=True)
             if stack_imgs:
-                img_stack.append(img_canvas)
+                img_stack.append({
+                    'im': img_canvas,
+                    'chan': chan_group,
+                })
             if draw_imgs_alone:
                 img_header = kwimage.draw_header_text(image=img_canvas,
                                                       text=header_text,
@@ -957,7 +937,10 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
             ann_canvas = kwimage.ensure_uint255(ann_canvas)
             if stack_anns:
-                ann_stack.append(ann_canvas)
+                ann_stack.append({
+                    'im': ann_canvas,
+                    'chan': chan_group,
+                })
             if draw_anns_alone:
                 ann_header = kwimage.draw_header_text(image=ann_canvas,
                                                       text=header_text,
@@ -976,11 +959,22 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         view_ann_fpath = ann_stacked_dpath / (name + '_stack' + '.view_ann.jpg')
 
         stack_header_lines = header_lines.copy()
-        # stack_header_lines.append(chan_group)
         header_text = '\n'.join(stack_header_lines)
 
+        def stack_infos(_stack):
+            tostack = []
+            for item in _stack:
+                canvas = item['im']
+                chan = item['chan']
+                canvas = kwimage.draw_text_on_image(
+                    canvas, chan, (1, 2),
+                    valign='top', color='lime', border=3)
+                tostack.append(canvas)
+            canvas = kwimage.stack_images(tostack)
+            return canvas
+
         if ann_stack:
-            ann_stack_canvas = kwimage.stack_images(ann_stack)
+            ann_stack_canvas = stack_infos(ann_stack)
             ann_header = kwimage.draw_header_text(image=ann_stack_canvas,
                                                   text=header_text,
                                                   stack=False,
@@ -994,16 +988,13 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             kwimage.imwrite(view_ann_fpath, ann_canvas)
 
         if img_stack:
-            img_stack_canvas = kwimage.stack_images(img_stack)
+            img_stack_canvas = stack_infos(img_stack)
             img_header = kwimage.draw_header_text(image=img_stack_canvas,
                                                   text=header_text,
                                                   fit='shrink', stack=False)
             img_header = kwimage.imresize(
                 img_header, dsize=(img_header.shape[1], 100), letterbox=True)
-            print(f'img_header.shape={img_header.shape}')
             img_canvas = kwimage.stack_images([img_header, img_stack_canvas])
-            img_canvas = kwimage.imresize(
-                img_canvas, dsize=(img_canvas.shape[1], 100), letterbox=True)
             view_img_fpath.parent.ensuredir()
             kwimage.imwrite(view_img_fpath, img_canvas)
 

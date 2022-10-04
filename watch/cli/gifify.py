@@ -21,59 +21,41 @@ class AnimateConfig(scfg.DataConfig):
             '''
             list of images (or a text file containing a list of images)
             '''), position=1, nargs='*', alias=['input'])
-    # input = scfg.Value(None, short_alias=['i'], help='alternate way to specify list of images', nargs='*')
     delay = scfg.Value(10, type=float, short_alias=['d'], help='delay between frames', nargs=1)
-    output = scfg.Value('out.gif', short_alias=['o'], help='output file', required=True)
+    output = scfg.Value('auto', short_alias=['o'], help=ub.paragraph(
+        '''
+        Path to the output file. If "auto", then the name will be chosen
+        automatically.  If the input is a folder, it will be the folder name
+        .mp4 otherwise it will be out.mp4.
+        '''))
     max_width = scfg.Value(None, type=int, help='resize to max width')
-    frames_per_second = scfg.Value(10, type=float, help='number of frames per second')
+    frames_per_second = scfg.Value(10, type=float, alias=['fps'], help=ub.paragraph(
+        '''
+        number of frames per second
+        '''))
 
 __config__ = AnimateConfig
 
 
 def main(cmdline=True, **kwargs):
-    # import argparse
     import glob
-    # description = ub.codeblock(
-    #     '''
-    #     Convert a sequence of images into a gif
-    #     ''')
-    # parser = argparse.ArgumentParser(prog='gifify', description=description)
-    # parser.add_argument('image_list', nargs='*', help='list of images (or a text file containing a list of images)')
-    # parser.add_argument('-i', '--input', nargs='*', help='alternate way to specify list of images')
-    # parser.add_argument('-d', '--delay', nargs=1, type=float, default=10, help='delay between frames')
-    # parser.add_argument('-o', '--output', default='out.gif', help='output file')
-    # parser.add_argument('--max_width', default=None, type=int, help='resize to max width')
-    # parser.add_argument('--frames_per_second', default=10, type=float, help='number of frames per second')
-    # args, unknown = parser.parse_known_args()
-    # # print('unknown = {!r}'.format(unknown))
-    # # print('args = {!r}'.format(args))
-    # ns = args.__dict__.copy()
-
     config = AnimateConfig.legacy(cmdline=cmdline, data=kwargs)
-    # args = config
-    ns = config
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
-    image_paths1 = ns['image_list']
-    image_paths2 = None
-    # ns['input']
+    image_paths = config['image_list']
 
     print('Converting:')
-    print('image_paths1 = ' + ub.repr2(image_paths1))
-    print('image_paths2 = ' + ub.repr2(image_paths2))
-
-    if image_paths1:
-        image_paths = image_paths1
-        assert not image_paths2, 'can only specify inputs one way'
-    elif image_paths2:
-        image_paths = image_paths2
-        assert not image_paths1, 'can only specify inputs one way'
+    print('image_paths = ' + ub.repr2(image_paths))
 
     assert image_paths is not None
+
+    auto_outname = 'out.mp4'
 
     frame_fpaths = []
     for p in image_paths:
         if isdir(p):
+            if len(image_paths) == 1:
+                auto_outname = ub.Path(p) + '.mp4'
             toadd = sorted(glob.glob(join(p, '*.png')))
             toadd += sorted(glob.glob(join(p, '*.jpg')))
             frame_fpaths.extend(toadd)
@@ -87,6 +69,10 @@ def main(cmdline=True, **kwargs):
             else:
                 frame_fpaths.append(p)
 
+    if config['output'] == 'auto':
+        print(f'Resolved output to {auto_outname}')
+        config['output'] = auto_outname
+
     # frame_fpaths = frame_fpaths[::2]
 
     print('frame_fpaths = {!r}'.format(frame_fpaths))
@@ -94,8 +80,8 @@ def main(cmdline=True, **kwargs):
     backend = 'imagemagik'
     backend = 'ffmpeg'
     if backend == 'imagemagik':
-        escaped_gif_fpath = ns['output'].replace('%', '%%')
-        command = ['convert', '-delay', str(ns['delay']), '-loop', '0']
+        escaped_gif_fpath = config['output'].replace('%', '%%')
+        command = ['convert', '-delay', str(config['delay']), '-loop', '0']
         command += frame_fpaths
         command += [escaped_gif_fpath]
         # print('command = {!r}'.format(command))
@@ -108,13 +94,13 @@ def main(cmdline=True, **kwargs):
             raise RuntimeError(info['err'])
         return info['err']
     elif backend == 'ffmpeg':
-        output_fpath = ns['output']
-        ns['delay']
-        # ns['delay']
-        in_framerate = ns['frames_per_second']
+        output_fpath = config['output']
+        config['delay']
+        # config['delay']
+        in_framerate = config['frames_per_second']
         ffmpeg_animate_frames(frame_fpaths, output_fpath,
                               in_framerate=in_framerate,
-                              max_width=ns['max_width'])
+                              max_width=config['max_width'])
 
 
 def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=3, max_width=None):
