@@ -29,8 +29,8 @@ class ScheduleEvaluationConfig(scfg.Config):
         'shuffle_jobs': scfg.Value(True, help='if True, shuffles the jobs so they are submitted in a random order'),
         'annotations_dpath': scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval'),
 
-        'dvc_expt_dpath': None,
-        'dvc_data_dpath': None,
+        'expt_dvc_dpath': None,
+        'data_dvc_dpath': None,
 
         'check_other_sessions': scfg.Value('auto', help='if True, will ask to kill other sessions that might exist'),
         'queue_size': scfg.Value('auto', help='if auto, defaults to number of GPUs'),
@@ -55,9 +55,9 @@ class ScheduleEvaluationConfig(scfg.Config):
         'chip_overlap': scfg.Value(0.3, help='grid of chip overlaps test'),
         'set_cover_algo': scfg.Value(['approx'], help='grid of set_cover_algo to test'),
         'bas_thresh': scfg.Value([0.01], help='grid of track thresholds'),
-        'json_grid_pred_pxl': scfg.Value(None, type=str, help='a json grid/matrix of prediction params'),
-        'json_grid_pred_trk': scfg.Value(False, help='if True use hard coded BAS grid'),
-        'json_grid_pred_act': scfg.Value(False, help='if True use hard coded SC grid'),
+        'grid_pred_pxl': scfg.Value(None, type=str, help='a yaml/json grid/matrix of prediction params'),
+        'grid_pred_trk': scfg.Value(False, type=str, help='a yaml/json grid/matrix of prediction params. Using True uses auto defaults.'),
+        'grid_pred_act': scfg.Value(False, type=str, help='a yaml/json grid/matrix of prediction params. Using True uses auto defaults.'),
     }
 
 
@@ -130,24 +130,24 @@ def schedule_evaluation(cmdline=False, **kwargs):
     test_dataset_fpath = config['test_dataset']
     draw_curves = config['draw_curves']
     draw_heatmaps = config['draw_heatmaps']
-    dvc_expt_dpath = config['dvc_expt_dpath']
-    dvc_data_dpath = config['dvc_data_dpath']
+    expt_dvc_dpath = config['expt_dvc_dpath']
+    data_dvc_dpath = config['data_dvc_dpath']
 
     if model_globstr is None and test_dataset_fpath is None:
         raise ValueError('model_globstr and test_dataset are required')
 
-    if dvc_expt_dpath is None:
-        dvc_expt_dpath = watch.find_smart_dvc_dpath(tags='phase2_expt')
-    if dvc_data_dpath is None:
-        dvc_data_dpath = watch.find_smart_dvc_dpath(tags='phase2_data')
-    dvc_data_dpath = ub.Path(dvc_data_dpath)
-    dvc_expt_dpath = ub.Path(dvc_expt_dpath)
+    if expt_dvc_dpath is None:
+        expt_dvc_dpath = watch.find_smart_dvc_dpath(tags='phase2_expt')
+    if data_dvc_dpath is None:
+        data_dvc_dpath = watch.find_smart_dvc_dpath(tags='phase2_data')
+    data_dvc_dpath = ub.Path(data_dvc_dpath)
+    expt_dvc_dpath = ub.Path(expt_dvc_dpath)
 
     # Gather the appropriate requested models
-    package_fpaths = resolve_package_paths(model_globstr, dvc_expt_dpath)
+    package_fpaths = resolve_package_paths(model_globstr, expt_dvc_dpath)
 
-    print(f'dvc_expt_dpath={dvc_expt_dpath}')
-    print(f'dvc_data_dpath={dvc_data_dpath}')
+    print(f'expt_dvc_dpath={expt_dvc_dpath}')
+    print(f'data_dvc_dpath={data_dvc_dpath}')
 
     with_saliency = 'auto'
     with_class = 'auto'
@@ -183,24 +183,27 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     annotations_dpath = config['annotations_dpath']
     if annotations_dpath is None:
-        annotations_dpath = dvc_data_dpath / 'annotations'
+        annotations_dpath = data_dvc_dpath / 'annotations'
     annotations_dpath = ub.Path(annotations_dpath)
     region_model_dpath = annotations_dpath / 'region_models'
 
     from watch.mlops.expt_manager import ExperimentState
     # start using the experiment state logic as the path and metadata
     # organization logic
-    state = ExperimentState('*', '*')
+    state = ExperimentState(expt_dvc_dpath, '*')
     candidate_pkg_rows = []
     for package_fpath in package_fpaths:
         condensed = state._parse_pattern_attrs(state.templates['pkg'], package_fpath)
+        # Overwrite expt_dvc_dpath because it was parsed as a src dir,
+        # but we are going to use it as a dst dir
+        condensed['expt_dvc_dpath'] = expt_dvc_dpath
         package_info = {}
         package_info['package_fpath'] = package_fpath
         package_info['condensed'] = condensed
         candidate_pkg_rows.append(package_info)
     print(f'{len(candidate_pkg_rows)=}')
 
-    queue_dpath = dvc_expt_dpath / '_cmd_queue_schedule'
+    queue_dpath = expt_dvc_dpath / '_cmd_queue_schedule'
     queue_dpath.mkdir(exist_ok=True)
 
     devices = config['devices']
@@ -227,10 +230,10 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # Define the parameter grids to loop over
 
     pred_pxl_param_basis = {}
-    pred_pxl_param_basis['tta_time'] = ensure_iterable(config['tta_time'])
-    pred_pxl_param_basis['tta_fliprot'] = ensure_iterable(config['tta_fliprot'])
-    pred_pxl_param_basis['chip_overlap'] = ensure_iterable(config['chip_overlap'])
-    pred_pxl_param_basis['set_cover_algo'] = ensure_iterable(config['set_cover_algo'])
+    # pred_pxl_param_basis['tta_time'] = ensure_iterable(config['tta_time'])
+    # pred_pxl_param_basis['tta_fliprot'] = ensure_iterable(config['tta_fliprot'])
+    # pred_pxl_param_basis['chip_overlap'] = ensure_iterable(config['chip_overlap'])
+    # pred_pxl_param_basis['set_cover_algo'] = ensure_iterable(config['set_cover_algo'])
     pred_pxl_param_basis_auto = pred_pxl_param_basis.copy()
 
     pred_trk_param_basis = {
@@ -273,25 +276,12 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # for the same effective pred config. Not sure how big of a problem this
     # is.
 
-    def handle_json_grid(default, auto, arg):
-        basis = default.copy()
-        if arg:
-            if isinstance(arg, str):
-                if arg == 'auto':
-                    basis = auto
-                else:
-                    basis.update(json.loads(arg))
-            else:
-                raise TypeError
-        grid = list(ub.named_product(basis))
-        return grid
-
-    pred_pxl_param_grid = handle_json_grid(
-        pred_pxl_param_basis, pred_pxl_param_basis_auto, config['json_grid_pred_pxl'])
-    pred_trk_param_grid = handle_json_grid(
-        pred_trk_param_basis, pred_trk_param_basis_auto, config['json_grid_pred_trk'])
-    pred_act_param_grid = handle_json_grid(
-        pred_act_param_basis, pred_act_param_basis_auto, config['json_grid_pred_act'])
+    pred_pxl_param_grid = handle_yaml_grid(
+        pred_pxl_param_basis, pred_pxl_param_basis_auto, config['grid_pred_pxl'])
+    pred_trk_param_grid = handle_yaml_grid(
+        pred_trk_param_basis, pred_trk_param_basis_auto, config['grid_pred_trk'])
+    pred_act_param_grid = handle_yaml_grid(
+        pred_act_param_basis, pred_act_param_basis_auto, config['grid_pred_act'])
 
     # Build the info we need to submit every prediction job of interest
     candidate_pred_rows = []
@@ -338,7 +328,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             # TODO: use the dvc experiment manager for this.
             # This should not be our concern
             from watch.utils.simple_dvc import SimpleDVC
-            simple_dvc = SimpleDVC(dvc_expt_dpath)
+            simple_dvc = SimpleDVC(expt_dvc_dpath)
             simple_dvc.unprotect(needs_unprotect)
 
     common_submitkw = dict(
@@ -526,14 +516,19 @@ def schedule_evaluation(cmdline=False, **kwargs):
             task_info = manager['pred_trk']
             if task_info.should_compute_task():
                 cfg = pred_trk_row['trk_cfg'].copy()
-                if isinstance(cfg['thresh_hysteresis'], str):
-                    cfg['thresh_hysteresis'] = util_globals.restricted_eval(
-                        cfg['thresh_hysteresis'].format(**cfg))
+                if 'thresh_hysteresis' in cfg:
+                    if isinstance(cfg['thresh_hysteresis'], str):
+                        cfg['thresh_hysteresis'] = util_globals.restricted_eval(
+                            cfg['thresh_hysteresis'].format(**cfg))
 
-                if cfg['moving_window_size'] is None:
-                    cfg['polygon_fn'] = 'heatmaps_to_polys'
-                else:
-                    cfg['polygon_fn'] = 'heatmaps_to_polys_moving_window'
+                if 'moving_window_size' in cfg:
+                    if isinstance(cfg['moving_window_size'], str):
+                        cfg['moving_window_size'] = util_globals.restricted_eval(
+                            cfg['moving_window_size'].format(**cfg))
+                    if cfg['moving_window_size'] is None:
+                        cfg['polygon_fn'] = 'heatmaps_to_polys'
+                    else:
+                        cfg['polygon_fn'] = 'heatmaps_to_polys_moving_window'
 
                 track_kwargs_str = shlex.quote(json.dumps(cfg))
                 bas_args = f'--default_track_fn saliency_heatmaps --track_kwargs {track_kwargs_str}'
@@ -563,7 +558,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     smartwatch visualize \
                         "{pred_trk_kwcoco_fpath}" \
                         --channels="red|green|blue,salient" \
-                        --stack=True \
+                        --stack=only \
                         --workers=avail/2 \
                         --animate=True && touch {pred_trk_viz_stamp}
                     ''').format(**pred_trk_row)
@@ -718,7 +713,7 @@ def _auto_gpus():
     return GPUS
 
 
-def resolve_package_paths(model_globstr, dvc_expt_dpath):
+def resolve_package_paths(model_globstr, expt_dvc_dpath):
     import rich
     # import glob
     from watch.utils import util_pattern
@@ -727,10 +722,10 @@ def resolve_package_paths(model_globstr, dvc_expt_dpath):
     # if str(model_globstr).endswith('.txt'):
     #     from watch.utils.simple_dvc import SimpleDVC
     #     print('model_globstr = {!r}'.format(model_globstr))
-    #     # if dvc_expt_dpath is None:
-    #     #     dvc_expt_dpath = SimpleDVC.find_root(ub.Path(model_globstr))
+    #     # if expt_dvc_dpath is None:
+    #     #     expt_dvc_dpath = SimpleDVC.find_root(ub.Path(model_globstr))
 
-    def expand_model_list_file(model_lists_fpath, dvc_expt_dpath=None):
+    def expand_model_list_file(model_lists_fpath, expt_dvc_dpath=None):
         """
         Given a file containing paths to models, expand it into individual
         paths.
@@ -739,8 +734,8 @@ def resolve_package_paths(model_globstr, dvc_expt_dpath):
         lines = [line for line in ub.Path(model_globstr).read_text().split('\n') if line]
         missing = []
         for line in lines:
-            if dvc_expt_dpath is not None:
-                package_fpath = ub.Path(dvc_expt_dpath / line)
+            if expt_dvc_dpath is not None:
+                package_fpath = ub.Path(expt_dvc_dpath / line)
             else:
                 package_fpath = ub.Path(line)
             if package_fpath.is_file():
@@ -761,7 +756,7 @@ def resolve_package_paths(model_globstr, dvc_expt_dpath):
         if package_fpath.name.endswith('.txt'):
             # HACK FOR PATH OF MODELS
             model_lists_fpath = package_fpath
-            expanded_fpaths = expand_model_list_file(model_lists_fpath, dvc_expt_dpath=dvc_expt_dpath)
+            expanded_fpaths = expand_model_list_file(model_lists_fpath, expt_dvc_dpath=expt_dvc_dpath)
             package_fpaths.extend(expanded_fpaths)
         else:
             package_fpaths.append(package_fpath)
@@ -787,6 +782,72 @@ def resolve_package_paths(model_globstr, dvc_expt_dpath):
                 rich.print('[yellow] WARNING: part of the model_globstr does not exist: {}'.format(concrete))
 
     return package_fpaths
+
+
+def handle_yaml_grid(default, auto, arg):
+    """
+    Example:
+        >>> default = {}
+        >>> auto = {}
+        >>> arg = ub.codeblock(
+        >>>     '''
+        >>>     matrix:
+        >>>         foo: ['bar', 'baz']
+        >>>     include:
+        >>>         - {'foo': 'buz', 'bug': 'boop'}
+        >>>     ''')
+        >>> handle_yaml_grid(default, auto, arg)
+
+        >>> default = {'baz': [1, 2, 3]}
+        >>> arg = '''
+        >>>     include:
+        >>>     - {
+        >>>       "thresh": 0.1,
+        >>>       "morph_kernel": 3,
+        >>>       "norm_ord": 1,
+        >>>       "agg_fn": "probs",
+        >>>       "thresh_hysteresis": "None",
+        >>>       "moving_window_size": "None",
+        >>>       "polygon_fn": "heatmaps_to_polys"
+        >>>     }
+        >>>     '''
+        >>> handle_yaml_grid(default, auto, arg)
+    """
+    stdform_keys = {'matrix', 'include'}
+    import ruamel.yaml
+    print('arg = {}'.format(ub.repr2(arg, nl=1)))
+    if arg:
+        if arg is True:
+            arg = 'auto'
+        if isinstance(arg, str):
+            if arg == 'auto':
+                arg = auto
+            if isinstance(arg, str):
+                arg = ruamel.yaml.safe_load(arg)
+    else:
+        arg = {'matrix': default}
+    if isinstance(arg, dict):
+        arg = ub.udict(arg)
+        if len(arg - stdform_keys) == 0 and (arg & stdform_keys):
+            # Standard form
+            ...
+        else:
+            # Transform matrix to standard form
+            arg = {'matrix': arg}
+    elif isinstance(arg, list):
+        # Transform list form to standard form
+        arg = {'include': arg}
+    else:
+        raise TypeError(type(arg))
+    assert set(arg.keys()).issubset(stdform_keys)
+    print('arg = {}'.format(ub.repr2(arg, nl=1)))
+    basis = arg.get('matrix', {})
+    if basis:
+        grid = list(ub.named_product(basis))
+    else:
+        grid = []
+    grid.extend(arg.get('include', []))
+    return grid
 
 
 if __name__ == '__main__':

@@ -47,8 +47,8 @@ def evaluation_report():
     kwplot.autosns()
     from watch import heuristics
     from watch.mlops import expt_manager
-    dvc_expt_dpath = heuristics.auto_expt_dvc()
-    manager = expt_manager.DVCExptManager.coerce(dvc_expt_dpath)
+    expt_dvc_dpath = heuristics.auto_expt_dvc()
+    manager = expt_manager.DVCExptManager.coerce(expt_dvc_dpath)
     state = manager
     reporter = EvaluationReporter(state)
     reporter.load()
@@ -78,7 +78,7 @@ class EvaluationReporter:
             state (DVCExptManager | ExperimentState)
         """
         reporter.state = state
-        reporter.dvc_expt_dpath = state.expt_dvc_dpath
+        reporter.expt_dvc_dpath = state.expt_dvc_dpath
 
         reporter.raw_df = None
         reporter.filt_df = None
@@ -204,7 +204,7 @@ class EvaluationReporter:
         # if 0:
         #     if table is None:
         #         table = reporter.state.evaluation_table()
-        #     loaded_table = load_extended_data(table, reporter.dvc_expt_dpath)
+        #     loaded_table = load_extended_data(table, reporter.expt_dvc_dpath)
         #     loaded_table = pd.DataFrame(loaded_table)
         #     # dataset_summary_tables(dpath)
         #     initial_summary(table, loaded_table, reporter.dpath)
@@ -415,9 +415,9 @@ class EvaluationReporter:
         Load detailed data that might cross reference files
         """
         df = reporter.raw_df
-        dvc_expt_dpath = reporter.dvc_expt_dpath
-        reporter.big_rows = load_extended_data(df, dvc_expt_dpath)
-        # reporter.big_rows = load_extended_data(reporter.comp_df, reporter.dvc_expt_dpath)
+        expt_dvc_dpath = reporter.expt_dvc_dpath
+        reporter.big_rows = load_extended_data(df, expt_dvc_dpath)
+        # reporter.big_rows = load_extended_data(reporter.comp_df, reporter.expt_dvc_dpath)
         # set(r['expt'] for r in reporter.big_rows)
 
         big_rows = reporter.big_rows
@@ -603,7 +603,7 @@ def unique_col_stats(df):
     return col_stats_df
 
 
-def load_extended_data(df, dvc_expt_dpath):
+def load_extended_data(df, expt_dvc_dpath):
     from watch.tasks.fusion import aggregate_results as agr
     rows = df.to_dict('records')
     big_rows = []
@@ -613,13 +613,13 @@ def load_extended_data(df, dvc_expt_dpath):
         fpath = row['raw']
         try:
             if row['type'] == 'eval_pxl':
-                pxl_info = agr.load_pxl_eval(fpath, dvc_expt_dpath)
+                pxl_info = agr.load_pxl_eval(fpath, expt_dvc_dpath)
                 big_row['info'] = pxl_info
             elif row['type'] == 'eval_act':
-                sc_info = agr.load_sc_eval(fpath, dvc_expt_dpath)
+                sc_info = agr.load_sc_eval(fpath, expt_dvc_dpath)
                 big_row['info'] = sc_info
             elif row['type'] == 'eval_trk':
-                bas_info = agr.load_bas_eval(fpath, dvc_expt_dpath)
+                bas_info = agr.load_bas_eval(fpath, expt_dvc_dpath)
                 big_row['info'] = bas_info
             else:
                 raise KeyError(row['type'])

@@ -57,8 +57,8 @@ python -m watch.mlops.expt_manager "evaluate" \
     --bas_thresh=0.05,0.01 \
     --skip_existing=True \
     --model_pattern="models_of_interest.txt" \
-    --json_grid_pred_trk=False \
-    --json_grid_pred_pxl='{
+    --grid_pred_trk=False \
+    --grid_pred_pxl='{
         "input_space_scale": ["10GSD", "15GSD"],
         "window_space_scale": ["auto"],
         "use_cloudmask": [0,1],
@@ -473,8 +473,8 @@ python -m watch.mlops.expt_manager "evaluate" \
     --dataset_codes "$DATASET_CODE" \
     --test_dataset="$TEST_DATASET" \
     --model_pattern="models_of_interest.txt" \
-    --json_grid_pred_trk=auto \
-    --json_grid_pred_pxl='{
+    --grid_pred_trk=auto \
+    --grid_pred_pxl='{
         "input_space_scale": ["10GSD", "15GSD"],
         "window_space_scale": ["10GSD"],
         "use_cloudmask": [0,1],
@@ -500,8 +500,8 @@ python -m watch.mlops.expt_manager "evaluate" \
     --dataset_codes "$DATASET_CODE" \
     --test_dataset="$TEST_DATASET" \
     --model_pattern="models_of_interest.txt" \
-    --json_grid_pred_trk=auto \
-    --json_grid_pred_pxl='{
+    --grid_pred_trk=auto \
+    --grid_pred_pxl='{
         "input_space_scale": ["10GSD", "15GSD"],
         "window_space_scale": ["10GSD"],
         "use_cloudmask": [0,1],
@@ -527,8 +527,8 @@ python -m watch.mlops.expt_manager "evaluate" \
     --dataset_codes "$DATASET_CODE" \
     --test_dataset="$TEST_DATASET" \
     --model_pattern="models_of_interest.txt" \
-    --json_grid_pred_trk=auto \
-    --json_grid_pred_pxl='{
+    --grid_pred_trk=auto \
+    --grid_pred_pxl='{
         "input_space_scale": ["10GSD"],
         "window_space_scale": ["10GSD"],
         "use_cloudmask": [0],

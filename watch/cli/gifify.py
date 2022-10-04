@@ -235,6 +235,10 @@ def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=3,
         pass
         # ub.delete(temp_dpath)
 
+    import sys
+    if sys.stdout.isatty():
+        ub.cmd('stty sane')
+
     if info['ret'] != 0:
         # if not verbose:
         # print(info['out'])

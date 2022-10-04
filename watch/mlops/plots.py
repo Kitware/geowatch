@@ -731,7 +731,7 @@ memo_kwcoco_load = ub.memoize(kwcoco.CocoDataset)
 def dataset_summary_tables(dpath):
     import watch
 
-    dvc_expt_dpath = watch.find_smart_dvc_dpath()
+    expt_dvc_dpath = watch.find_smart_dvc_dpath()
     rows = []
     DSET_CODE_TO_TASK = {
         # 'Aligned-Drop3-TA1-2022-03-10': 'bas',
@@ -743,7 +743,7 @@ def dataset_summary_tables(dpath):
     for bundle_name in DSET_CODE_TO_TASK.keys():
         task = DSET_CODE_TO_TASK[bundle_name]
         gsd = DSET_CODE_TO_GSD.get(bundle_name, None)
-        bundle_dpath = dvc_expt_dpath / bundle_name
+        bundle_dpath = expt_dvc_dpath / bundle_name
         train_fpath = bundle_dpath / 'data_train.kwcoco.json'
         vali_fpath = bundle_dpath / 'data_vali.kwcoco.json'
 

@@ -362,7 +362,7 @@ def load_pxl_eval(fpath, dvc_dpath=None):
     return info
 
 
-def load_bas_eval(fpath, dvc_expt_dpath):
+def load_bas_eval(fpath, expt_dvc_dpath):
     bas_info = _load_json(fpath)
 
     best_bas_rows = pd.read_json(io.StringIO(json.dumps(bas_info['best_bas_rows'])), orient='table')
@@ -380,7 +380,7 @@ def load_bas_eval(fpath, dvc_expt_dpath):
 
     tracker_info = bas_info['parent_info']
     path_hint = fpath
-    param_types = parse_tracker_params(tracker_info, dvc_expt_dpath, path_hint=path_hint)
+    param_types = parse_tracker_params(tracker_info, expt_dvc_dpath, path_hint=path_hint)
 
     metrics = {
         'BAS_F1': bas_row['F1'],
@@ -402,13 +402,13 @@ def load_bas_eval(fpath, dvc_expt_dpath):
     return info
 
 
-def load_sc_eval(fpath, dvc_expt_dpath):
+def load_sc_eval(fpath, expt_dvc_dpath):
     sc_info = _load_json(fpath)
     # sc_info['sc_cm']
     sc_df = pd.read_json(io.StringIO(json.dumps(sc_info['sc_df'])), orient='table')
     sc_cm = pd.read_json(io.StringIO(json.dumps(sc_info['sc_cm'])), orient='table')
     tracker_info = sc_info['parent_info']
-    param_types = parse_tracker_params(tracker_info, dvc_expt_dpath)
+    param_types = parse_tracker_params(tracker_info, expt_dvc_dpath)
 
     # non_measures = ub.dict_diff(param_types, ['resource'])
     # params = ub.dict_union(*non_measures.values())
@@ -435,7 +435,7 @@ def load_sc_eval(fpath, dvc_expt_dpath):
     return info
 
 
-def parse_tracker_params(tracker_info, dvc_expt_dpath, path_hint=None):
+def parse_tracker_params(tracker_info, expt_dvc_dpath, path_hint=None):
     track_item = find_track_item(tracker_info)
 
     if 'extra' in track_item['properties']:
@@ -460,7 +460,7 @@ def parse_tracker_params(tracker_info, dvc_expt_dpath, path_hint=None):
             else:
                 raise Exception('got nothing')
 
-    param_types = parse_pred_params(pred_info, dvc_expt_dpath, path_hint)
+    param_types = parse_pred_params(pred_info, expt_dvc_dpath, path_hint)
     track_config = track_item['properties'].get('args', None)
     track_args = track_item['properties'].get('args', None)
     if track_config is not None:
@@ -476,7 +476,7 @@ def relevant_track_config(track_args):
     return track_config
 
 
-def parse_pred_params(pred_info, dvc_expt_dpath, path_hint=None):
+def parse_pred_params(pred_info, expt_dvc_dpath, path_hint=None):
     from watch.utils import util_time
     pred_item = find_pred_item(pred_info)
 
@@ -514,7 +514,7 @@ def parse_pred_params(pred_info, dvc_expt_dpath, path_hint=None):
     pred_args = pred_item['properties'].get('args', None)
     if pred_config is not None:
         pred_args = pred_config
-    pred_config = relevant_pred_config(pred_args, dvc_expt_dpath)
+    pred_config = relevant_pred_config(pred_args, expt_dvc_dpath)
     fit_config = relevant_fit_config(fit_config)
 
     param_types = {

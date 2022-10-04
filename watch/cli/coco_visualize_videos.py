@@ -461,7 +461,9 @@ def main(cmdline=True, **kwargs):
             zoom_to_tracks=config['zoom_to_tracks'],
             **animate_config,
         )
-        ub.cmd('stty sane', verbose=3)
+        import sys
+        if sys.stdout.isatty():
+            ub.cmd('stty sane', verbose=3)
 
 
 def video_track_info(coco_dset, vidid):
