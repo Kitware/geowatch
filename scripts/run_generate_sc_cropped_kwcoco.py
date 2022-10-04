@@ -129,7 +129,7 @@ def run_generate_sc_cropped_kwcoco(input_path,
     ta1_sc_cropped_kwcoco_path = os.path.join(ingress_dir,
                                               'cropped_kwcoco_for_sc.json')
     # Crops to BAS generated site_summaries
-    include_channels = 'red|green|blue|cloudmask'
+    include_channels = 'red|green|blue|quality'
     subprocess.run(['python', '-m', 'watch.cli.coco_align_geotiffs',
                     '--visualize', 'False',
                     '--src', ta1_sc_kwcoco_path,
