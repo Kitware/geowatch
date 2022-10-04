@@ -170,7 +170,7 @@ def run_stac_to_cropped_kwcoco(input_path,
     print("* Cropping KWCOCO dataset to region for BAS*")
     ta1_cropped_kwcoco_path = os.path.join(ta1_cropped_dir,
                                            'cropped_kwcoco_for_bas.json')
-    include_channels = 'blue|green|red|nir|swir16|swir22|cloudmask'
+    include_channels = 'blue|green|red|nir|swir16|swir22|quality'
     subprocess.run(['python', '-m', 'watch.cli.coco_align_geotiffs',
                     '--visualize', 'False',
                     '--src', ta1_bas_kwcoco_path,
