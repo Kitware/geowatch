@@ -252,7 +252,7 @@ def resolve_datamodule(config, method, datamodule_defaults):
     datamodule_vars = datamodule_class.compatible(config)
 
     parsetime_vals = ub.udict(datamodule_vars) & datamodule_defaults
-    need_infer = ub.udict({k: v for k, v in parsetime_vals.items() if v == 'auto'})
+    need_infer = ub.udict({k: v for k, v in parsetime_vals.items() if v == 'auto' or v == ['auto']})
     # Try and infer what data we were given at train time
     if hasattr(method, 'fit_config'):
         traintime_params = method.fit_config
