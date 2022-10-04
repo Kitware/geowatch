@@ -127,15 +127,19 @@ class WatchModuleMixins:
                 if time_index == 0:
                     frame['change'] = None
                     frame['change_weights'] = None
+                    frame['change_output_dims'] = None
                 else:
                     frame['change'] = rng.randint(low=0, high=1, size=(H0, W0))
                     frame['change_weights'] = rng.rand(H0, W0)
+                    frame['change_output_dims'] = (H0, W0)
 
                 frame['class_idxs'] = rng.randint(low=0, high=C - 1, size=(H0, W0))
                 frame['class_weights'] = rng.rand(H0, W0)
+                frame['class_output_dims'] = (H0, W0)
 
                 frame['saliency'] = rng.randint(low=0, high=1, size=(H0, W0))
                 frame['saliency_weights'] = rng.rand(H0, W0)
+                frame['saliency_output_dims'] = (H0, W0)
 
                 frame['date_captured'] = '',
                 frame['gid'] = bx

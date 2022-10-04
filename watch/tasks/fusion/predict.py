@@ -735,12 +735,8 @@ def predict(cmdline=False, **kwargs):
                 import netharn as nh
                 print(nh.data.collate._debug_inbatch_shapes(batch))
 
-            # Predict on the batch
-            try:
-                raise Exception
-                outputs = method.forward_step(batch, with_loss=False)
-            except Exception:
-                outputs = method.predict_step(batch)
+            # Predict on the batch: todo: rename to predict_step
+            outputs = method.forward_step(batch, with_loss=False)
 
             outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
 

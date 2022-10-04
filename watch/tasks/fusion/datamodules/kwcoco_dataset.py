@@ -1015,6 +1015,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 'change_weights': None,
                 'class_weights': None,
                 'saliency_weights': None,
+                # Could group these into head and input/head specific dictionaries?
+                # info for how to construct the output.
+                'change_output_dims':  None if time_idx == 0 else output_dims,
+                'class_output_dims': output_dims,
+                'saliency_output_dims': output_dims,
+                #
                 'output_dims': output_dims,
                 'output_space_slice': frame_outspace_box.to_slice(),
                 'output_image_dsize': outimg_box.dsize,

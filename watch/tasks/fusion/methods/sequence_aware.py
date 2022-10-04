@@ -456,6 +456,24 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         self.criterions = torch.nn.ModuleDict()
         self.heads = torch.nn.ModuleDict()
 
+        self.task_to_keynames = {
+            'change': {
+                'labels': 'change',
+                'weights': 'change_weights',
+                'output_dims': 'change_output_dims'
+            },
+            'saliency': {
+                'labels': 'change',
+                'weights': 'saliency_weights',
+                'output_dims': 'saliency_output_dims'
+            },
+            'class': {
+                'labels': 'class_idxs',
+                'weights': 'class_weights',
+                'output_dims': 'class_output_dims'
+            },
+        }
+
         head_properties = [
             {
                 'name': 'change',
@@ -560,16 +578,31 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         return modes
 
     def encode_query_position(self, example, task_name, dtype, device):
-        return [
-            self.positional_encoders[task_name](torch.stack(
-                (frame["time_index"] * torch.ones(*frame["output_dims"], dtype=dtype, device=device),) +
+        _encodings = []
+        for frame in example['frames']:
+            dims = frame["output_dims"]
+            ones = torch.ones(*dims, device=device, dtype=dtype)
+            stacked = torch.stack(
+                (frame["time_index"] * ones,) +
                 torch.meshgrid(
-                    torch.linspace(-1, 1, frame["output_dims"][0], dtype=dtype, device=device),
-                    torch.linspace(-1, 1, frame["output_dims"][1], dtype=dtype, device=device),
+                    torch.linspace(-1, 1, dims[0], dtype=dtype, device=device),
+                    torch.linspace(-1, 1, dims[1], dtype=dtype, device=device),
                 ),
-            ))
-            for frame in example["frames"]
-        ]
+            )
+            encoding = self.positional_encoders[task_name](stacked)
+            _encodings.append(encoding)
+        return _encodings
+
+        # return [
+        #     self.positional_encoders[task_name](torch.stack(
+        #         (frame["time_index"] * torch.ones(*frame["output_dims"], dtype=dtype, device=device),) +
+        #         torch.meshgrid(
+        #             torch.linspace(-1, 1, frame["output_dims"][0], dtype=dtype, device=device),
+        #             torch.linspace(-1, 1, frame["output_dims"][1], dtype=dtype, device=device),
+        #         ),
+        #     ))
+        #     for frame in example["frames"]
+        # ]
 
     def process_inputs(self, example):
         """
@@ -610,46 +643,65 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
         inputs = torch.concat([einops.rearrange(x, "c h w -> (h w) c") for x in inputs], dim=0)
         return inputs
 
-    def process_outputs(self, example, force_dropout=False, dtype="float32", device="cpu"):
+    def process_outputs(self, example, dtype="float32", device="cpu", with_loss=True):
         """
-        TODO: documentation about what this step is
+        Compute information about what outputs are needed.
 
-        Example is a single item from a batch, and this pushes that example
-        through the input stems and constructs the token sequence for that
-        batch item as well as information about how to produce outputs for that
-        sequence.
+        Given a single batch item, creates positional embeddings for the inputs
+        and outputs as flattened tensors. If given, this also prepares the labels.
 
+        Args:
+            example (dict): a single batch item
+
+        Example:
+            >>> from watch.tasks.fusion.methods.sequence_aware import *  # NOQA
+            >>> channels, classes, dataset_stats = SequenceAwareModel.demo_dataset_stats()
+            >>> self = SequenceAwareModel(
+            >>>     tokenizer='linconv',
+            >>>     decoder='segmenter', classes=classes, global_saliency_weight=1,
+            >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
+            >>> self.eval()
+            >>> batch = self.demo_batch(width=64, height=65)
+            >>> example = batch[0]
+            >>> device = 'cpu'
+            >>> import kwarray
+            >>> dtype = kwarray.arrayapi._torch_dtype_lut()['float32']
+            >>> ary = kwarray.ArrayAPI.coerce('torch')
+            >>> dtype = ary.torch_dtype(dtype)
+            >>> inputs1 = self.process_outputs(example, with_loss=True, device=device, dtype=dtype)
+            >>> inputs2 = self.process_outputs(example, with_loss=False, device=device, dtype=dtype)
         """
         outputs = {}
-        task_defs = [
-            ("change", "change", "change_weights"),
-            ("saliency", "saliency", "saliency_weights"),
-            ("class", "class_idxs", "class_weights"),
-        ]
-        for task_name, labels_name, weights_name in task_defs:
+        for task_name in self.heads.keys():
+            keynames = self.task_to_keynames[task_name]
+            labels_name = keynames['labels']
+            weights_name = keynames['weights']
+            # outdims_name = keynames['output_dims']
+            outdims_name = 'output_dims'
+            frames = example["frames"]
 
-            if task_name not in self.heads.keys():
-                continue
+            _weights = []
+            for frame in frames:
+                w = frame[weights_name]
+                if w is None:
+                    w = torch.zeros(
+                        frame['output_dims'], dtype=dtype,
+                        device=device)
+                _weights.append(w)
 
-            labels = [
-                frame[labels_name] if (frame[labels_name] is not None)
-                else torch.zeros(
-                    frame["output_dims"],
-                    dtype=torch.int32,
-                    device=device)
-                for frame in example["frames"]
-            ]
-            labels = torch.concat([einops.rearrange(x, "h w -> (h w)") for x in labels], dim=0)
-            weights = [
-                frame[weights_name] if (frame[weights_name] is not None)
-                else torch.zeros(
-                    frame["output_dims"],
-                    dtype=dtype,
-                    device=device)
-                for frame in example["frames"]
-            ]
-            weights = torch.concat([einops.rearrange(x, "h w -> (h w)") for x in weights], dim=0)
+            if with_loss:
+                _labels = []
+                for frame in frames:
+                    lbl = frame[labels_name]
+                    if lbl is None:
+                        lbl = torch.zeros(frame['output_dims'],
+                                          dtype=torch.int32, device=device)
+                    _labels.append(lbl)
+                labels = torch.concat([einops.rearrange(x, "h w -> (h w)") for x in _labels], dim=0)
+            else:
+                labels = None
 
+            weights = torch.concat([einops.rearrange(x, "h w -> (h w)") for x in _weights], dim=0)
             pos_enc = self.encode_query_position(example, task_name, dtype, device)
             pos_enc = torch.concat([einops.rearrange(x, "c h w -> (h w) c") for x in pos_enc], dim=0)
 
@@ -662,17 +714,24 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             # maintains input shapes up to rearangements.
 
             # determine valid label locations
-            valid_mask = weights > 0.0
+            if with_loss:
+                valid_mask = weights > 0.0
+            else:
+                weights[:] = 1
+                valid_mask = weights >= 0
+
             pos_enc = pos_enc[valid_mask]
-            labels = labels[valid_mask]
             weights = weights[valid_mask]
+            if labels is not None:
+                labels = labels[valid_mask]
 
             outputs[task_name] = {
+                # "task": task_name,
                 "labels": labels,
                 "weights": weights,
                 "pos_enc": pos_enc,
                 "mask": valid_mask,
-                "shape": [frame["output_dims"] for frame in example["frames"]],
+                "shape": [frame[outdims_name] for frame in example["frames"]],
             }
 
         return outputs
@@ -815,14 +874,25 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             >>> assert 'saliency_probs' in batch_output
             >>> assert 'class_probs' in batch_output
             >>> assert 'loss' in batch_output
-        """
 
-        # FIXME: This will break at test-time when labels are not provided
+            >>> batch_output2 = self.shared_step(batch, with_loss=False)
+            >>> assert batch_output2['loss'] is None
+
+        Ignore:
+            batch_output2['class_probs'][0][0].shape
+            batch_output2['change_probs'][0][0].shape
+        """
         inputs = list(map(self.process_inputs, batch))
-        outputs = [self.process_outputs(example, dtype=inputs[0].dtype, device=inputs[0].device) for example in batch]
+        device = inputs[0].device
+        dtype = inputs[0].dtype
+        # import kwarray
+        # dtype = kwarray.arrayapi._torch_dtype_lut().get(dtype, dtype)
+        # for example in batch:
+        #     self.process_outputs(example, dtype=dtype, device=device)
+        outputs = [self.process_outputs(example, dtype=dtype, device=device, with_loss=with_loss) for example in batch]
 
         padded_inputs = nn.utils.rnn.pad_sequence(inputs, batch_first=True, padding_value=-1000.0)
-        padded_valids = (padded_inputs[..., 0] > -1000.0).bool()
+        padded_valids = (padded_inputs[..., 0] > -1000.0).bool()  # magic numbers? todo: document
         padded_inputs[~padded_valids] = 0.0
 
         model_tasks = list(self.heads.keys())
@@ -834,20 +904,9 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             ], batch_first=True, padding_value=0.0)
             for task_name in model_tasks
         }
-        stacked_weights = {
-            task_name: nn.utils.rnn.pad_sequence([
-                example[task_name]["weights"]
-                for example in outputs
-            ], batch_first=True, padding_value=0.0)
-            for task_name in model_tasks
-        }
-        stacked_labels = {
-            task_name: nn.utils.rnn.pad_sequence([
-                example[task_name]["labels"]
-                for example in outputs
-            ], batch_first=True, padding_value=0).long()
-            for task_name in model_tasks
-        }
+
+        task_logits = self.forward(padded_inputs, queries=stacked_queries, input_mask=padded_valids)
+
         stacked_masks = {
             task_name: nn.utils.rnn.pad_sequence([
                 example[task_name]["mask"]
@@ -855,11 +914,24 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             ], batch_first=True, padding_value=0)
             for task_name in model_tasks
         }
+        stacked_weights = {
+            task_name: nn.utils.rnn.pad_sequence([
+                example[task_name]["weights"]
+                for example in outputs
+            ], batch_first=True, padding_value=0.0)
+            for task_name in model_tasks
+        }
 
-        task_logits = self.forward(padded_inputs, queries=stacked_queries, input_mask=padded_valids)
-        task_losses = {}
-
+        batch_outputs = {}
         if with_loss:
+            task_losses = {}
+            stacked_labels = {
+                task_name: nn.utils.rnn.pad_sequence([
+                    example[task_name]["labels"]
+                    for example in outputs
+                ], batch_first=True, padding_value=0).long()
+                for task_name in model_tasks
+            }
             for task_name in task_logits.keys():
 
                 logits = einops.rearrange(task_logits[task_name], "batch chan seq -> (batch seq) chan")
@@ -894,21 +966,23 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             loss = sum(task_losses.values()) / len(task_losses)
 
             self.log(f"{stage}_loss", loss, prog_bar=True, sync_dist=True)
+            batch_outputs.update({
+                "stacked_labels": stacked_labels,
+                "task_losses": task_losses,
+            })
         else:
             loss = None
 
         # These need to be returned so the caller is able to introspect them
         # calling "log" is great, but it denies the caller access to this
         # information.
-        batch_outputs = {
+        batch_outputs.update({
             "loss": loss,
-            "task_losses": task_losses,
             "task_logits": task_logits,
             "stacked_queries": stacked_queries,
-            "stacked_weights": stacked_weights,
-            "stacked_labels": stacked_labels,
             "stacked_masks": stacked_masks,
-        }
+            "stacked_weights": stacked_weights,
+        })
 
         if self.hparams.render_outputs or (stage == "predict"):
             # Need to output probabilities here for consumers of the model

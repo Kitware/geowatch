@@ -136,8 +136,11 @@ python -m watch.tasks.fusion.fit_lightning fit \
     --model.render_outputs=true \
     --data.batch_size=1 \
     --data.input_space_scale=null \
-    --trainer.max_epochs=1 \
-    --trainer.accelerator="cpu" \
+    --trainer.max_epochs=40 \
+    --trainer.limit_val_batches=0.2 \
+    --trainer.val_check_interval=13 \
+    --trainer.accelerator="gpu" \
+    --trainer.devices="0," \
     --trainer.accumulate_grad_batches=1
 
 
