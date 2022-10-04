@@ -46,6 +46,19 @@ def geotiff_metadata(gpath, elevation='gtop30', strict=False,
 
         >>> info = geotiff_metadata(gpath)
         >>> print('info = {}'.format(ub.repr2(info, nl=1)))
+
+
+    Ignore:
+        source secrets/secrets
+        export AWS_PROFILE=iarpa
+
+        export XDEV_PROFILE=1
+        pyblock "
+        gpath = '/vsis3/smart-data-accenture/ta-1/ta1-wv-acc/52/S/DG/2020/4/13/20APR13020407-M1BS-014418171010_01_P004_ACC/20APR13020407-M1BS-014418171010_01_P004_ACC_B05.tif'
+        from watch.gis.geotiff import geotiff_metadata
+        info = geotiff_metadata(gpath)
+        print(info)
+        "
     """
     from watch.utils import util_gdal
     infos = {}
@@ -198,6 +211,21 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
 
     info = {}
     ref = util_gdal.GdalDataset.coerce(gpath_or_ref)
+
+    if 0:
+        # TODO: is it more efficient to use a gdal info call?  Do we get all
+        # the information we need from it so we can serialize the data?
+        json_info = gdal.Info(ref, format='json')
+        json_info['coordinateSystem']
+        aff_geo_transform = json_info['geoTransform']
+
+        aff_wld_crs = osr.SpatialReference()
+        aff_wld_crs.ImportFromWkt(json_info['coordinateSystem']['wkt'])
+        # Not sure about how to import this info best
+        if json_info['coordinateSystem']['dataAxisToSRSAxisMapping'] == [1, 2]:
+            aff_wld_crs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+        else:
+            aff_wld_crs.SetAxisMappingStrategy(osr.OAMS_AUTHORITY_COMPLIANT)
 
     # tags = ref.GetMetadataDomainList()  # 7.5% of the execution time
     rpc_info = ref.GetMetadata(domain='RPC')  # 5% of execution time
