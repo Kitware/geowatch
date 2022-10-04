@@ -631,6 +631,11 @@ class ExperimentState(ub.NiceRepr):
              self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/eval_pxl/curves'),
             (self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/heatmaps',
              self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/eval_pxl/heatmaps'),
+            ##
+            # Move activity metrics to depend on pred_pxl_cfg, trk_cfg and
+            ##
+            # (self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/actclf/',
+            #  self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/tracking/truth/actclf/'),
         }
 
     def _make_cross_links(self):

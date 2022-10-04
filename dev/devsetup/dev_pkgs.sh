@@ -20,6 +20,7 @@ ndsampler
 )
 
 
+### Pull and update
 for name in "${mylibs[@]}" 
 do
     echo "name = $name"
@@ -32,6 +33,8 @@ do
     fi
 done
 
+needs_uninstall=()
+needs_install=()
 for name in "${mylibs[@]}" 
 do
     echo "name = $name"
@@ -42,15 +45,27 @@ do
             echo "already have dpath = $dpath"
         else
             echo "ensuring dpath = $dpath"
-            pip uninstall "$name" -y
-            pip uninstall "$name" -y
-            pip install -e "$dpath"
+            needs_uninstall+=("$name")
+            needs_install+=("$dpath")
+            #pip uninstall "$name" -y
+            #pip uninstall "$name" -y
+            #pip install -e "$dpath"
         fi
     else
         echo "does not exist dpath = $dpath"
     fi
 done
 
+bash_array_repr "${needs_uninstall[@]}"
+bash_array_repr "${needs_install[@]}"
+
+if [[ ${#needs_uninstall[@]} -gt 0 ]]; then
+    pip uninstall -y "${needs_uninstall[@]}"
+fi
+
+if [[ ${#needs_install[@]} -gt 0 ]]; then
+    pip install -e "${needs_install[@]}"
+fi
 
 
 for name in "${mylibs[@]}" 

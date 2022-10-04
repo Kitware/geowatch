@@ -50,11 +50,6 @@ class ScheduleEvaluationConfig(scfg.Config):
         'partition': scfg.Value(None, help='specify slurm partition (slurm backend only)'),
         'mem': scfg.Value(None, help='specify slurm memory per task (slurm backend only)'),
 
-        'tta_fliprot': scfg.Value(0, help='grid of flip test-time-augmentation to test'),
-        'tta_time': scfg.Value(0, help='grid of temporal test-time-augmentation to test'),
-        'chip_overlap': scfg.Value(0.3, help='grid of chip overlaps test'),
-        'set_cover_algo': scfg.Value(['approx'], help='grid of set_cover_algo to test'),
-        'bas_thresh': scfg.Value([0.01], help='grid of track thresholds'),
         'grid_pred_pxl': scfg.Value(None, type=str, help='a yaml/json grid/matrix of prediction params'),
         'grid_pred_trk': scfg.Value(False, type=str, help='a yaml/json grid/matrix of prediction params. Using True uses auto defaults.'),
         'grid_pred_act': scfg.Value(False, type=str, help='a yaml/json grid/matrix of prediction params. Using True uses auto defaults.'),
@@ -229,11 +224,12 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     # Define the parameter grids to loop over
 
-    pred_pxl_param_basis = {}
-    # pred_pxl_param_basis['tta_time'] = ensure_iterable(config['tta_time'])
-    # pred_pxl_param_basis['tta_fliprot'] = ensure_iterable(config['tta_fliprot'])
-    # pred_pxl_param_basis['chip_overlap'] = ensure_iterable(config['chip_overlap'])
-    # pred_pxl_param_basis['set_cover_algo'] = ensure_iterable(config['set_cover_algo'])
+    pred_pxl_param_basis = {
+        'tta_time': [0],
+        'tta_fliprot': [0],
+        'chip_overlap': [0.3],
+        'set_cover_algo': ['approx'],
+    }
     pred_pxl_param_basis_auto = pred_pxl_param_basis.copy()
 
     pred_trk_param_basis = {
@@ -247,7 +243,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     pred_act_param_basis = {
         # TODO viterbi or not
         # Not sure what SC thresh is
-        'thresh': ensure_iterable(config['bas_thresh']),
+        'thresh': [0.01],
         # 'thresh': [0.0],
         'use_viterbi': [0],
     }
@@ -554,7 +550,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             task_info = manager['pred_trk_viz']
             if task_info.should_compute_task():
                 condensed = pred_trk_row['condensed']
-                pred_trk_row['extra_header'] = f"\n{condensed['pred_cfg']}-{condensed['trk_cfg']}"
+                pred_trk_row['extra_header'] = f"\\n{condensed['pred_cfg']}-{condensed['trk_cfg']}"
                 command = ub.codeblock(
                     r'''
                     smartwatch visualize \
@@ -563,7 +559,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                         --stack=only \
                         --workers=avail/2 \
                         --workers=avail/2 \
-                        --extra_header={extra_header} \
+                        --extra_header="{extra_header}" \
                         --animate=True && touch {pred_trk_viz_stamp}
                     ''').format(**pred_trk_row)
                 print(command)
