@@ -15,8 +15,12 @@ class ScheduleEvaluationConfig(scfg.Config):
     """
     default = {
         'model_globstr': scfg.Value(None, help='one or more glob patterns that match the models to predict/evaluate on'),
+        'trk_model_globstr': scfg.Value(None, help='one or more glob patterns that match the models to predict/evaluate on'),
+        'act_model_globstr': scfg.Value(None, help='one or more glob patterns that match the models to predict/evaluate on'),
 
-        'test_dataset': scfg.Value(None, help='path to the test dataset to predict/evaluate on'),
+        'trk_test_dataset': scfg.Value(None, help='path to the test dataset to predict/evaluate on for BAS'),
+        'act_test_dataset': scfg.Value(None, help='path to the test dataset to predict/evaluate/crop from for SC'),
+
         'devices': scfg.Value('auto', help='if using tmux or serial, indicate which gpus are available for use as a comma separated list: e.g. 0,1'),
         'run': scfg.Value(False, help='if False, only prints the commands, otherwise executes them'),
         'virtualenv_cmd': scfg.Value(None, help='command to activate a virtualenv if needed. (might have issues with slurm backend)'),
@@ -139,7 +143,21 @@ def schedule_evaluation(cmdline=False, **kwargs):
     expt_dvc_dpath = ub.Path(expt_dvc_dpath)
 
     # Gather the appropriate requested models
-    package_fpaths = resolve_package_paths(model_globstr, expt_dvc_dpath)
+    if model_globstr is not None:
+        package_fpaths = resolve_package_paths(model_globstr, expt_dvc_dpath)
+
+    task_model_fpaths = {
+        'trk_pxl': [],
+        'act_pxl': [],
+    }
+
+    if config['trk_model_globstr'] is not None:
+        task_model_fpaths['trk_pxl'] = resolve_package_paths(config['trk_model_globstr'], expt_dvc_dpath)
+
+    if config['act_model_globstr'] is not None:
+        task_model_fpaths['act_pxl'] = resolve_package_paths(config['act_model_globstr'], expt_dvc_dpath)
+
+    # package_fpaths = resolve_package_paths(model_globstr, expt_dvc_dpath)
 
     print(f'expt_dvc_dpath={expt_dvc_dpath}')
     print(f'data_dvc_dpath={data_dvc_dpath}')
@@ -160,15 +178,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
     recompute_eval = check_recompute(with_pred, [with_pred])
     recompute_track = check_recompute(with_track, [with_pred])
     recompute_iarpa_eval = check_recompute(with_iarpa_eval, [with_pred, recompute_track])
-    print('with_pred = {!r}'.format(with_pred))
-    print('with_eval = {!r}'.format(with_eval))
-    print('with_track = {!r}'.format(with_track))
-    print('with_iarpa_eval = {!r}'.format(with_iarpa_eval))
-
-    print('recompute_pred = {!r}'.format(recompute_pred))
-    print('recompute_eval = {!r}'.format(recompute_eval))
-    print('recompute_track = {!r}'.format(recompute_track))
-    print('recompute_iarpa_eval = {!r}'.format(recompute_iarpa_eval))
 
     workers_per_queue = config['pred_workers']
 
@@ -186,41 +195,27 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # start using the experiment state logic as the path and metadata
     # organization logic
     state = ExperimentState(expt_dvc_dpath, '*')
-    candidate_pkg_rows = []
-    for package_fpath in package_fpaths:
-        condensed = state._parse_pattern_attrs(state.templates['pkg'], package_fpath)
-        # Overwrite expt_dvc_dpath because it was parsed as a src dir,
-        # but we are going to use it as a dst dir
-        condensed['expt_dvc_dpath'] = expt_dvc_dpath
-        package_info = {}
-        package_info['package_fpath'] = package_fpath
-        package_info['condensed'] = condensed
-        candidate_pkg_rows.append(package_info)
-    print(f'{len(candidate_pkg_rows)=}')
+    import xdev
+    xdev.embed()
 
-    queue_dpath = expt_dvc_dpath / '_cmd_queue_schedule'
-    queue_dpath.mkdir(exist_ok=True)
+    pred_task_rows = {
+        'trk_pxl': [],
+        'act_pxl': [],
+    }
+    for task, package_fpaths in task_model_fpaths.items():
+        candidate_pkg_rows = []
+        for package_fpath in package_fpaths:
+            condensed = state._parse_pattern_attrs(state.templates['pkg_' + task], package_fpath)
+            # Overwrite expt_dvc_dpath because it was parsed as a src dir,
+            # but we are going to use it as a dst dir
+            condensed['expt_dvc_dpath'] = expt_dvc_dpath
+            package_info = {}
+            package_info['package_fpath'] = package_fpath
+            package_info['condensed'] = condensed
+            candidate_pkg_rows.append(package_info)
+        pred_task_rows[task] = candidate_pkg_rows
 
-    devices = config['devices']
-    print('devices = {!r}'.format(devices))
-    if devices == 'auto':
-        GPUS = _auto_gpus()
-    else:
-        GPUS = None if devices is None else ensure_iterable(devices)
-    print('GPUS = {!r}'.format(GPUS))
-
-    queue_size = config['queue_size']
-    if queue_size == 'auto':
-        queue_size = len(GPUS)
-
-    environ = {}
-    queue = cmd_queue.Queue.create(config['backend'], name='schedule-eval',
-                                   size=queue_size, environ=environ,
-                                   dpath=queue_dpath, gres=GPUS)
-
-    virtualenv_cmd = config['virtualenv_cmd']
-    if virtualenv_cmd:
-        queue.add_header_command(virtualenv_cmd)
+    print('pred_task_rows = {}'.format(ub.repr2(pred_task_rows, nl=1)))
 
     # Define the parameter grids to loop over
 
@@ -311,21 +306,46 @@ def schedule_evaluation(cmdline=False, **kwargs):
             pred_pxl_row['draw_heatmaps'] = draw_heatmaps
             candidate_pred_rows.append(pred_pxl_row)
 
-    if with_eval == 'redo':
-        # Need to dvc unprotect
-        # TODO: this can be a job in the queue
-        needs_unprotect = []
-        for pred_pxl_row in candidate_pred_rows:
-            eval_metrics_fpath = ub.Path(pred_pxl_row['eval_pxl_fpath'])
-            eval_metrics_dvc_fpath = eval_metrics_fpath.augment(tail='.dvc')
-            if eval_metrics_dvc_fpath.exists():
-                needs_unprotect.append(eval_metrics_fpath)
-        if needs_unprotect:
-            # TODO: use the dvc experiment manager for this.
-            # This should not be our concern
-            from watch.utils.simple_dvc import SimpleDVC
-            simple_dvc = SimpleDVC(expt_dvc_dpath)
-            simple_dvc.unprotect(needs_unprotect)
+    # FIXME: reintroduce
+    # if with_eval == 'redo':
+    #     # Need to dvc unprotect
+    #     # TODO: this can be a job in the queue
+    #     needs_unprotect = []
+    #     for pred_pxl_row in candidate_pred_rows:
+    #         eval_metrics_fpath = ub.Path(pred_pxl_row['eval_pxl_fpath'])
+    #         eval_metrics_dvc_fpath = eval_metrics_fpath.augment(tail='.dvc')
+    #         if eval_metrics_dvc_fpath.exists():
+    #             needs_unprotect.append(eval_metrics_fpath)
+    #     if needs_unprotect:
+    #         # TODO: use the dvc experiment manager for this.
+    #         # This should not be our concern
+    #         from watch.utils.simple_dvc import SimpleDVC
+    #         simple_dvc = SimpleDVC(expt_dvc_dpath)
+    #         simple_dvc.unprotect(needs_unprotect)
+
+    queue_dpath = expt_dvc_dpath / '_cmd_queue_schedule'
+    queue_dpath.ensuredir()
+
+    devices = config['devices']
+    print('devices = {!r}'.format(devices))
+    if devices == 'auto':
+        GPUS = _auto_gpus()
+    else:
+        GPUS = None if devices is None else ensure_iterable(devices)
+    print('GPUS = {!r}'.format(GPUS))
+
+    queue_size = config['queue_size']
+    if queue_size == 'auto':
+        queue_size = len(GPUS)
+
+    environ = {}
+    queue = cmd_queue.Queue.create(config['backend'], name='schedule-eval',
+                                   size=queue_size, environ=environ,
+                                   dpath=queue_dpath, gres=GPUS)
+
+    virtualenv_cmd = config['virtualenv_cmd']
+    if virtualenv_cmd:
+        queue.add_header_command(virtualenv_cmd)
 
     common_submitkw = dict(
         partition=config['partition'],

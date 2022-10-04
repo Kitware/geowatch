@@ -598,16 +598,86 @@ class ExperimentState(ub.NiceRepr):
             'eval_act'       : task_dpaths['eval_act_dpath'] + '/scores/merged/summary3.json',
         }
 
+        # Denote which of the keys represent hashed information that could be
+        # looked up via the rlut.
+        self.hashed_cfgkeys = ['pred_cfg', 'act_cfg', 'trk_cfg']
+
+        ### Experimental, add in SC dependencies
+        SC_DEPS = 1
+        if SC_DEPS:
+            self.staging_template_prefix = '{expt_dvc_dpath}/training/{host}/{user}/{dataset_code}/'
+            self.storage_template_prefix = '{expt_dvc_dpath}/models/fusion/{dataset_code}/'
+
+            self.patterns = {
+                # General
+                'expt': '*',
+                'expt_dvc_dpath': expt_dvc_dpath,
+                'dataset_code': dataset_code,
+                ### Versioned
+                'test_trk_dset': '*',
+                'test_act_dset': '*',
+                'trk_model': model_pattern,  # hack, should have ext
+                'act_model': model_pattern,  # hack, should have ext
+                'model': model_pattern,  # hack, should have ext
+                'trk_pxl_cfg': '*',
+                'trk_poly_cfg': '*',
+                'act_pxl_cfg': '*',
+                'act_poly_cfg': '*',
+                #### Staging
+                'host': '*',
+                'user': '*',
+                'lightning_version': '*',
+                'checkpoint': '*',  # hack, should have ext
+                'stage_model': '*',  # hack, should have ext
+            }
+
+            # directory suffixes after the pred/eval type
+            task_dpath_suffix = {
+                'trk_pxl_dpath'  : 'trk/{trk_deps}/{trk_model}/{test_trk_dset}/{trk_pxl_cfg}',
+                'trk_poly_dpath' : 'trk/{trk_deps}/{trk_model}/{test_trk_dset}/{trk_pxl_cfg}/{trk_poly_cfg}',
+                'act_pxl_dpath'  : 'act/{act_model}/{test_act_dset}/{act_pxl_cfg}',
+                'act_poly_dpath' : 'act/{act_model}/{test_act_dset}/{act_pxl_cfg}/{act_poly_cfg}',
+            }
+
+            task_dpaths = {
+                'pred_trk_pxl_dpath'   : 'pred/' + task_dpath_suffix['trk_pxl_dpath'],
+                'pred_trk_poly_dpath'  : 'pred/' + task_dpath_suffix['trk_pxl_dpath'],
+                'pred_act_pxl_dpath'   : 'pred/' + task_dpath_suffix['trk_pxl_dpath'],
+                'pred_act_poly_dpath'  : 'pred/' + task_dpath_suffix['trk_pxl_dpath'],
+
+                'eval_trk_pxl_dpath'   : 'eval/' + task_dpath_suffix['trk_pxl_dpath'],
+                'eval_trk_poly_dpath'  : 'eval/' + task_dpath_suffix['trk_pxl_dpath'],
+                'eval_act_pxl_dpath'   : 'eval/' + task_dpath_suffix['trk_pxl_dpath'],
+                'eval_act_poly_dpath'  : 'eval/' + task_dpath_suffix['trk_pxl_dpath'],
+            }
+
+            self.volitile_templates = {
+                'pred_trk_pxl'            : task_dpaths['pred_trk_pxl_dpath'] + '/pred.kwcoco.json',
+                'pred_trk_poly_kwcoco'    : task_dpaths['eval_trk_poly_dpath'] + '/tracks.kwcoco.json',
+                'pred_trk_poly'           : task_dpaths['eval_trk_poly_dpath'] + '/tracks.json',
+                'pred_trk_poly_viz_stamp' : task_dpaths['eval_trk_poly_dpath'] + '/_viz.stamp',
+
+                'pred_act_pxl'         : task_dpaths['pred_act_pxl_dpath'] + '/pred.kwcoco.json',
+                'pred_act_poly_kwcoco' : task_dpaths['pred_act_poly_dpath'] + '/activity_tracks.kwcoco.json',
+                'pred_act_poly'        : task_dpaths['pred_act_poly_dpath'] + '/activity_tracks.json',
+            }
+
+            self.versioned_templates = {
+                # TODO: rename curves to pixel
+                'pkg_trk_pxl'    : 'packages/{expt}/{trk_model}.pt',
+                'pkg_act_pxl'    : 'packages/{expt}/{act_model}.pt',
+                'eval_trk_pxl'   : task_dpaths['pred_trk_pxl_dpath'] + '/eval_pxl/curves/measures2.json',
+                'eval_trk_poly'  : task_dpaths['pred_trk_poly_dpath'] + '/scores/merged/summary2.json',
+                'eval_act_pxl'   : task_dpaths['pred_act_pxl_dpath'] + '/eval_pxl/curves/measures2.json',
+                'eval_act_poly'  : task_dpaths['pred_act_poly_dpath'] + '/scores/merged/summary3.json',
+            }
+
         # User specified config mapping a formatstr variable to a set of items
         # that will cause a row to be ignored if it has one of those values
         # when a table is being built.
         self.blocklists = {
             k: set() for k in self.patterns.keys()
         }
-
-        # Denote which of the keys represent hashed information that could be
-        # looked up via the rlut.
-        self.hashed_cfgkeys = ['pred_cfg', 'act_cfg', 'trk_cfg']
 
         self.templates = {}
         for k, v in self.staging_templates.items():
