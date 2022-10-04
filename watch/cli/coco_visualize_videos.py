@@ -449,7 +449,10 @@ def main(cmdline=True, **kwargs):
 
         # Hack: pretend that stack is a channel even though it is not.
         if config['stack']:
-            channels = channels + ',stack'
+            if channels:
+                channels = 'stack'
+            else:
+                channels = channels + ',stack'
 
         animate_visualizations.animate_visualizations(
             viz_dpath=viz_dpath,
