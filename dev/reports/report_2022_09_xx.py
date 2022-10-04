@@ -213,7 +213,7 @@ def main():
                     --viz_dpath={row_dpath}/_viz \
                     --stack=only \
                     --skip_missing=False \
-                    --draw_imgs=False \
+                    --draw_imgs=True \
                     --draw_anns=True \
                     --workers=avail/2 \
                     --animate=True \

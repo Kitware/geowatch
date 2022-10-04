@@ -1007,7 +1007,7 @@ def is_null(x):
 
 
 def resolve_model_info(model_fpath):
-    cacher = ub.Cacher('model_info_memo', depends=[str(model_fpath)], appname='watch')
+    cacher = ub.Cacher('model_info_memo', depends=[str(model_fpath)], appname='watch/model_info_memo')
     stats = cacher.tryload()
     if stats is None:
         from watch.cli.torch_model_stats import torch_model_stats

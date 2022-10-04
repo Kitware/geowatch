@@ -553,6 +553,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
             task_info = manager['pred_trk_viz']
             if task_info.should_compute_task():
+                condensed = pred_trk_row['condensed']
+                pred_trk_row['extra_header'] = f"\n{condensed['pred_cfg']}-{condensed['trk_cfg']}"
                 command = ub.codeblock(
                     r'''
                     smartwatch visualize \
@@ -560,8 +562,11 @@ def schedule_evaluation(cmdline=False, **kwargs):
                         --channels="red|green|blue,salient" \
                         --stack=only \
                         --workers=avail/2 \
+                        --workers=avail/2 \
+                        --extra_header={extra_header} \
                         --animate=True && touch {pred_trk_viz_stamp}
                     ''').format(**pred_trk_row)
+                print(command)
                 # FIXME: the process itself should likely take care of writing
                 # a stamp that indicates it is done. Or we can generalize this
                 # as some wrapper applied to every watch command, but that
