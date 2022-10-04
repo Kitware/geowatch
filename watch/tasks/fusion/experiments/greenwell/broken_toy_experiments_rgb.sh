@@ -120,12 +120,12 @@ WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 EXPERIMENT_NAME=ToyRGB_Demo_V001
 DATASET_CODE=ToyRGB
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit_lightning fit \
+python -m watch.tasks.fusion fit \
     --trainer.default_root_dir="$DEFAULT_ROOT_DIR" \
     --data.train_dataset="$TRAIN_FPATH" \
     --data.vali_dataset="$VALI_FPATH" \
     --data.channels="r|g|b" \
-    --data.time_steps=2 \
+    --data.time_steps=3 \
     --data.chip_size=128 \
     --model=watch.tasks.fusion.methods.SequenceAwareModel \
     --model.name="$EXPERIMENT_NAME" \
@@ -134,11 +134,11 @@ python -m watch.tasks.fusion.fit_lightning fit \
     --model.weight_decay=1e-5 \
     --model.dropout=0.1 \
     --model.render_outputs=true \
-    --data.batch_size=1 \
+    --data.batch_size=4 \
     --data.input_space_scale=null \
-    --trainer.max_epochs=40 \
-    --trainer.limit_val_batches=0.2 \
-    --trainer.val_check_interval=13 \
+    --trainer.max_epochs=100 \
+    --trainer.limit_val_batches=0.0 \
+    --trainer.val_check_interval=9 \
     --trainer.accelerator="gpu" \
     --trainer.devices="0," \
     --trainer.accumulate_grad_batches=1
