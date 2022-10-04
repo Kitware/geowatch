@@ -130,18 +130,6 @@ class RegionResult:
                    bas_dpath, sc_dpath, unbounded_site_status)
 
     @property
-    def n_sites(self):
-        '''
-        returns:
-            {
-                'completed': int,
-                'partial': int,
-                'overall': int,
-            }
-        '''
-        raise NotImplementedError
-
-    @property
     def bas_df(self):
         '''
         index:
@@ -175,6 +163,57 @@ class RegionResult:
         return scoreboard
 
     @property
+    def site_ids(self) -> List[str]:
+        '''
+        There are a few possible sets of sites it would make sense to return here.
+        - all gt sites
+        - "eligible" gt sites that could be matched against, ie with status ==
+        "predicted*". This depends on temporal_unbounded handling choice of
+        completed, partial, or overall.
+        - "matched" gt sites with at least 1 observation matched to at least 1
+        observation in a proposed site.
+
+        Currently we are returning "matched" for consistency with the metrics
+        framework, but we should consider trying "eligible" to decouple BAS and
+        SC metrics; i.e. it would no longer be possible to do worse on SC by
+        doing better on BAS.
+        '''
+        if 0:    # read all/eligible sites from region json
+            site_ids = []
+            for s in self.region_model['features']:
+                if s['properties']['type'] == 'site_summary':
+                    # TODO enumerate good statuses
+                    # this should really be done in the metrics framework itself
+                    if 'positive' in s['properties']['status']:
+                        # TODO adjust sequestered site ids
+                        # this will fail for demodata without it
+                        site_ids.append(s['properties']['site_id'])
+        elif 0:  # read all/eligible sites from site jsons
+            site_ids = []
+            for site in self.site_models:
+                s = site['features'][0]
+                if s['properties']['type'] == 'site':
+                    if 'positive' in s['properties']['status']:
+                        site_ids.append(s['properties']['site_id'])
+        elif 0:  # read matched sites from phase table csv
+            ph = self.sc_phasetable
+            site_ids = ph.index.get_level_values(1).unique()  # assert sites == csv names
+            # site_candidates = ph.index.get_level_values(2).unique()
+            # if len(site_candidates) != len(sites):
+            #     raise NotImplementedError
+        else:   # read matched sites from other csvs
+            site_ids = ub.oset([])
+            fnames = ['ac_confusion_matrix', 'ac_f1', 'ac_temporal_error', 'ap_temporal_error']
+            # could parallelize, scales with no. of detected sites
+            for fname in fnames:
+                for p in self.sc_dpath.glob(f'{fname}_*.csv'):
+                    site_id = p.with_suffix('').name.replace(fname + '_', '')
+                    if site_id != 'all_sites':
+                        site_ids.append(site_id)
+
+        return list(site_ids)
+
+    @property
     def sc_df(self):
         '''
         index:
@@ -199,13 +238,7 @@ class RegionResult:
         array([[0, 1],
                [0, 0]])
         '''
-        sc_dpath = self.sc_dpath
-        ph = self.sc_phasetable
-
-        sites = ph.index.get_level_values(1).unique()  # assert sites == csv names
-        # site_candidates = ph.index.get_level_values(2).unique()
-        # if len(site_candidates) != len(sites):
-        #     raise NotImplementedError
+        sc_dpath, sites = self.sc_dpath, self.site_ids
 
         df = pd.DataFrame(
             index=pd.MultiIndex.from_product((list(sites) + ['__avg__'], phases[1:]), names=['site', 'phase']),
@@ -1023,6 +1056,7 @@ def main(cmdline=True, **kwargs):
             '--name', name,
             '--serial',
             # '--no-db',
+            '--sequestered_id', 'seq',  # default None broken on autogen branch
         ]
         run_eval_command += viz_flags
         # run metrics framework
