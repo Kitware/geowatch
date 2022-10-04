@@ -681,6 +681,12 @@ def normalize(
 
     # apply tracks
     assert issubclass(track_fn, TrackFunction), 'must supply a valid track_fn!'
+
+    # fixup the track kwargs when they come in via json
+    for k, v in track_kwargs.items():
+        if isinstance(v, str) and v.lower() == 'none':
+            track_kwargs[k] = None
+
     tracker: TrackFunction = track_fn(polygon_fn=polygon_fn, **track_kwargs)
     out_dset = tracker.apply_per_video(coco_dset)
 
