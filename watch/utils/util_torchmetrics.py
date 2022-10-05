@@ -6,6 +6,13 @@ over the two classes stats when most of the time we only want one of them. This 
 necessary in imbalanced settings where the metric for the largest class completely obscures the
 impact of the smaller class.
 '''
+import warnings
+warnings.warn('''
+    util_torchmetrics is deprecated since torchmetrics==0.10.0. 
+    Consider replacing calls to `util_torchmetrics.Binary{Metric}(...)`
+    with calls to `torchmetrics.{Metric}(..., task='binary')`.
+''', DeprecationWarning, stacklevel=2)
+
 
 import torchmetrics
 

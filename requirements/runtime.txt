@@ -132,7 +132,7 @@ geojson>=2.5.0
 # Machine learning
 torch>=1.11.0   # 1.10 does not run latest models
 torchvision>=0.12.0
-torchmetrics>=0.8.1
+torchmetrics>=0.10.0
 torch_liberator>=0.1.0
 pytorch_lightning>=1.6.0  
 monai>=0.6.0
