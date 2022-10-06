@@ -145,6 +145,38 @@ credentials and a config.  The default location to store credentials is:
 ``$HOME/.aws/credentials`` The default location to store a config is:
 ``$HOME/.aws/config``.
 
+
+Obtaining Credentials
+~~~~~~~~~~~~~~~~~~~~~
+
+To obtain credentials, the current point of contact is
+yonatan.gefen@kitware.com (as of 2022-10-06). Please send Yoni an email and CC
+matt.leotta@kitware.com and jon.crall@kitware.com to request credentials. 
+
+We will then start the process of securely sending you your credentials. If you
+have a public GPG key, please send that with your request. We will encrypt your
+credentials with your GPG public key, send it to you, and then only you can
+decrypt it with your GPG private key.
+
+If you don't have a GPG we will use manual Diffie Hellman handshake. Navigate
+to https://cryptotools.net/dhe and generate a private and public key. Send the
+public key in your email (don't leave this page, until the process is done). We
+will then do the same process on our end, and we will send you our public key.
+The next step is we will both paste each other's public keys into the webpage
+which will establish a shared secret key. Copy down this shared key, you will
+need it later.
+
+On our end, we will take your credentials and encrypt them with this shared
+secret. We will send you the encrypted data. Then navigate to
+https://cryptotools.net/aes, click "decrypt", paste in both the shared secret
+key and then the encrypted message. The plaintext credentials will be generated
+in the top box. These are your credentials that we will use in the subsequent
+steps.
+
+
+Using Credentials
+~~~~~~~~~~~~~~~~~
+
 In the credentials file (``$HOME/.aws/credentials``) append the following text
 to create credentials associated with the "iarpa" AWS_PROFILE.
 
