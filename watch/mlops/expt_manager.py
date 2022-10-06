@@ -538,139 +538,116 @@ class ExperimentState(ub.NiceRepr):
         self.dataset_code = dataset_code
         self.dvc_remote = dvc_remote
         self.training_dpath = self.expt_dvc_dpath / 'training'
+
+        # TODO: the name "fusion" should be a high level task or group not be hard coded.
+        # TODO: the name "models" should be configurable. It's the versioning place.
+        # We could move the pred out of the models subdir
+
+        # Denote which of the keys represent hashed information that could be
+        # looked up via the rlut.
+        self.hashed_cfgkeys = [
+            'trk_pxl_cfg',
+            'trk_poly_cfg',
+            'act_pxl_cfg',
+            'act_poly_cfg',
+            'crop_cfg',
+        ]
+        self.condensed_keys = self.hashed_cfgkeys + [
+            'test_trk_dset',
+            'test_act_dset',
+            'trk_model',
+            'act_model',
+            'crop_src_dset',
+            'crop_id',
+        ]
+
+        ### Experimental, add in SC dependencies
+        self.staging_template_prefix = '{expt_dvc_dpath}/training/{host}/{user}/{dataset_code}/'
+        self.storage_template_prefix = '{expt_dvc_dpath}/models/fusion/{dataset_code}/'
+
         self.patterns = {
             # General
-            'expt': '*',
+            'trk_expt': '*',
+            'act_expt': '*',
             'expt_dvc_dpath': expt_dvc_dpath,
             'dataset_code': dataset_code,
             ### Versioned
-            'test_dset': '*',
-            'model': model_pattern,  # hack, should have ext
-            'pred_cfg': '*',
-            'trk_cfg': '*',
-            'act_cfg': '*',
+            'test_trk_dset': '*',
+            'test_act_dset': '*',
+            'trk_model': model_pattern,  # hack, should have ext
+            'act_model': model_pattern,  # hack, should have ext
+            'trk_pxl_cfg': '*',
+            'trk_poly_cfg': '*',
+            'act_pxl_cfg': '*',
+            'act_poly_cfg': '*',
+            'crop_src_dset': '*',
+            'crop_cfg': '*',
+            'crop_id': '*',
+            'trk_poly_id': '*',
+            'regions_id': '*',
             #### Staging
             'host': '*',
             'user': '*',
             'lightning_version': '*',
             'checkpoint': '*',  # hack, should have ext
             'stage_model': '*',  # hack, should have ext
+            ### Deprecated
+            'model': model_pattern,  # hack, should have ext
+            'expt': '*',
         }
-
-        # TODO: the name "fusion" should be a high level task or group not be hard coded.
-        # TODO: the name "models" should be configurable. It's the versioning place.
-        # We could move the pred out of the models subdir
-
-        self.staging_template_prefix = '{expt_dvc_dpath}/training/{host}/{user}/{dataset_code}/'
-        self.storage_template_prefix = '{expt_dvc_dpath}/models/fusion/{dataset_code}/'
 
         self.staging_templates = {
             'ckpt': 'runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{checkpoint}.ckpt',
             'spkg': 'runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{model}.pt',
         }
 
-        task_dpaths = {
-            'pred_pxl_dpath'  : 'pred/{expt}/{model}/{test_dset}/{pred_cfg}',
-            'pred_trk_dpath'  : 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/tracking/{trk_cfg}',
-            'pred_act_dpath'  : 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/actclf/{act_cfg}',
+        # directory suffixes after the pred/eval type
+        task_dpath_suffix = {
+            'trk_pxl_dpath'  : 'trk/{trk_model}/{test_trk_dset}/{trk_pxl_cfg}',
+            'trk_poly_dpath' : 'trk/{trk_model}/{test_trk_dset}/{trk_pxl_cfg}/{trk_poly_cfg}',
 
-            'eval_pxl_dpath' : 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval',
-            'eval_trk_dpath' : 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval',
-            'eval_act_dpath' : 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval',
+            'act_pxl_dpath'  : 'act/{act_model}/{test_act_dset}/{act_pxl_cfg}',
+            'act_poly_dpath' : 'act/{act_model}/{test_act_dset}/{act_pxl_cfg}/{act_poly_cfg}',
+
+            'crop_dpath': 'crop/{crop_src_dset}/{regions_id}/{crop_cfg}/{crop_id}',
+        }
+
+        task_dpaths = {
+            'pred_trk_pxl_dpath'   : 'pred/' + task_dpath_suffix['trk_pxl_dpath'],
+            'pred_trk_poly_dpath'  : 'pred/' + task_dpath_suffix['trk_poly_dpath'],
+            'pred_act_pxl_dpath'   : 'pred/' + task_dpath_suffix['act_pxl_dpath'],
+            'pred_act_poly_dpath'  : 'pred/' + task_dpath_suffix['act_poly_dpath'],
+
+            'crop_dpath'           : task_dpath_suffix['crop_dpath'],
+
+            'eval_trk_pxl_dpath'   : 'eval/' + task_dpath_suffix['trk_pxl_dpath'],
+            'eval_trk_poly_dpath'  : 'eval/' + task_dpath_suffix['trk_poly_dpath'],
+            'eval_act_pxl_dpath'   : 'eval/' + task_dpath_suffix['act_pxl_dpath'],
+            'eval_act_poly_dpath'  : 'eval/' + task_dpath_suffix['act_poly_dpath'],
         }
 
         self.volitile_templates = {
-            'pred_pxl'        : task_dpaths['pred_pxl_dpath'] + '/pred.kwcoco.json',
+            'pred_trk_pxl_fpath'      : task_dpaths['pred_trk_pxl_dpath'] + '/pred.kwcoco.json',
+            'pred_trk_poly_kwcoco'    : task_dpaths['eval_trk_poly_dpath'] + '/tracks.kwcoco.json',
+            'pred_trk_poly_fpath'     : task_dpaths['eval_trk_poly_dpath'] + '/tracks.json',
+            'pred_trk_poly_viz_stamp' : task_dpaths['eval_trk_poly_dpath'] + '/_viz.stamp',
 
-            'pred_trk_kwcoco' : task_dpaths['pred_trk_dpath'] + '/tracks.kwcoco.json',
-            'pred_trk'        : task_dpaths['pred_trk_dpath'] + '/tracks.json',
-            'pred_trk_viz_stamp'  : task_dpaths['pred_trk_dpath'] + '/_viz.stamp',
+            'crop_fpath'              : task_dpaths['crop_dpath'] + '/crop.kwcoco.json',
 
-            'pred_act_kwcoco' : task_dpaths['pred_act_dpath'] + '/activity_tracks.kwcoco.json',
-            'pred_act'        : task_dpaths['pred_act_dpath'] + '/activity_tracks.json',
+            'pred_act_pxl_fpath'   : task_dpaths['pred_act_pxl_dpath'] + '/pred.kwcoco.json',
+            'pred_act_poly_kwcoco' : task_dpaths['pred_act_poly_dpath'] + '/activity_tracks.kwcoco.json',
+            'pred_act_poly_fpath'  : task_dpaths['pred_act_poly_dpath'] + '/activity_tracks.json',
         }
 
         self.versioned_templates = {
             # TODO: rename curves to pixel
-            'pkg'            : 'packages/{expt}/{model}.pt',
-            'eval_pxl'       : task_dpaths['eval_pxl_dpath'] + '/eval_pxl/curves/measures2.json',
-            'eval_trk'       : task_dpaths['pred_trk_dpath'] + '/scores/merged/summary2.json',
-            'eval_act'       : task_dpaths['eval_act_dpath'] + '/scores/merged/summary3.json',
+            'pkg_trk_pxl_fpath'    : 'packages/{trk_expt}/{trk_model}.pt',
+            'pkg_act_pxl_fpath'    : 'packages/{act_expt}/{act_model}.pt',
+            'eval_trk_pxl_fpath'   : task_dpaths['pred_trk_pxl_dpath'] + '/eval_pxl/curves/measures2.json',
+            'eval_trk_poly_fpath'  : task_dpaths['pred_trk_poly_dpath'] + '/scores/merged/summary2.json',
+            'eval_act_pxl_fpath'   : task_dpaths['pred_act_pxl_dpath'] + '/eval_pxl/curves/measures2.json',
+            'eval_act_poly_fpath'  : task_dpaths['pred_act_poly_dpath'] + '/scores/merged/summary3.json',
         }
-
-        # Denote which of the keys represent hashed information that could be
-        # looked up via the rlut.
-        self.hashed_cfgkeys = ['pred_cfg', 'act_cfg', 'trk_cfg']
-
-        ### Experimental, add in SC dependencies
-        SC_DEPS = 1
-        if SC_DEPS:
-            self.staging_template_prefix = '{expt_dvc_dpath}/training/{host}/{user}/{dataset_code}/'
-            self.storage_template_prefix = '{expt_dvc_dpath}/models/fusion/{dataset_code}/'
-
-            self.patterns = {
-                # General
-                'expt': '*',
-                'expt_dvc_dpath': expt_dvc_dpath,
-                'dataset_code': dataset_code,
-                ### Versioned
-                'test_trk_dset': '*',
-                'test_act_dset': '*',
-                'trk_model': model_pattern,  # hack, should have ext
-                'act_model': model_pattern,  # hack, should have ext
-                'model': model_pattern,  # hack, should have ext
-                'trk_pxl_cfg': '*',
-                'trk_poly_cfg': '*',
-                'act_pxl_cfg': '*',
-                'act_poly_cfg': '*',
-                #### Staging
-                'host': '*',
-                'user': '*',
-                'lightning_version': '*',
-                'checkpoint': '*',  # hack, should have ext
-                'stage_model': '*',  # hack, should have ext
-            }
-
-            # directory suffixes after the pred/eval type
-            task_dpath_suffix = {
-                'trk_pxl_dpath'  : 'trk/{trk_deps}/{trk_model}/{test_trk_dset}/{trk_pxl_cfg}',
-                'trk_poly_dpath' : 'trk/{trk_deps}/{trk_model}/{test_trk_dset}/{trk_pxl_cfg}/{trk_poly_cfg}',
-                'act_pxl_dpath'  : 'act/{act_model}/{test_act_dset}/{act_pxl_cfg}',
-                'act_poly_dpath' : 'act/{act_model}/{test_act_dset}/{act_pxl_cfg}/{act_poly_cfg}',
-            }
-
-            task_dpaths = {
-                'pred_trk_pxl_dpath'   : 'pred/' + task_dpath_suffix['trk_pxl_dpath'],
-                'pred_trk_poly_dpath'  : 'pred/' + task_dpath_suffix['trk_pxl_dpath'],
-                'pred_act_pxl_dpath'   : 'pred/' + task_dpath_suffix['trk_pxl_dpath'],
-                'pred_act_poly_dpath'  : 'pred/' + task_dpath_suffix['trk_pxl_dpath'],
-
-                'eval_trk_pxl_dpath'   : 'eval/' + task_dpath_suffix['trk_pxl_dpath'],
-                'eval_trk_poly_dpath'  : 'eval/' + task_dpath_suffix['trk_pxl_dpath'],
-                'eval_act_pxl_dpath'   : 'eval/' + task_dpath_suffix['trk_pxl_dpath'],
-                'eval_act_poly_dpath'  : 'eval/' + task_dpath_suffix['trk_pxl_dpath'],
-            }
-
-            self.volitile_templates = {
-                'pred_trk_pxl'            : task_dpaths['pred_trk_pxl_dpath'] + '/pred.kwcoco.json',
-                'pred_trk_poly_kwcoco'    : task_dpaths['eval_trk_poly_dpath'] + '/tracks.kwcoco.json',
-                'pred_trk_poly'           : task_dpaths['eval_trk_poly_dpath'] + '/tracks.json',
-                'pred_trk_poly_viz_stamp' : task_dpaths['eval_trk_poly_dpath'] + '/_viz.stamp',
-
-                'pred_act_pxl'         : task_dpaths['pred_act_pxl_dpath'] + '/pred.kwcoco.json',
-                'pred_act_poly_kwcoco' : task_dpaths['pred_act_poly_dpath'] + '/activity_tracks.kwcoco.json',
-                'pred_act_poly'        : task_dpaths['pred_act_poly_dpath'] + '/activity_tracks.json',
-            }
-
-            self.versioned_templates = {
-                # TODO: rename curves to pixel
-                'pkg_trk_pxl'    : 'packages/{expt}/{trk_model}.pt',
-                'pkg_act_pxl'    : 'packages/{expt}/{act_model}.pt',
-                'eval_trk_pxl'   : task_dpaths['pred_trk_pxl_dpath'] + '/eval_pxl/curves/measures2.json',
-                'eval_trk_poly'  : task_dpaths['pred_trk_poly_dpath'] + '/scores/merged/summary2.json',
-                'eval_act_pxl'   : task_dpaths['pred_act_pxl_dpath'] + '/eval_pxl/curves/measures2.json',
-                'eval_act_poly'  : task_dpaths['pred_act_poly_dpath'] + '/scores/merged/summary3.json',
-            }
 
         # User specified config mapping a formatstr variable to a set of items
         # that will cause a row to be ignored if it has one of those values
@@ -697,10 +674,10 @@ class ExperimentState(ub.NiceRepr):
 
         # These are some locations that I used to know
         self.legacy_versioned_templates = {
-            (self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/curves',
-             self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/eval_pxl/curves'),
-            (self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/heatmaps',
-             self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/eval_pxl/heatmaps'),
+            (self.storage_template_prefix + 'eval/{trk_expt}/{model}/{test_dset}/{pred_cfg}/eval/curves',
+             self.storage_template_prefix + 'eval/{trk_expt}/{model}/{test_dset}/{pred_cfg}/eval/eval_pxl/curves'),
+            (self.storage_template_prefix + 'eval/{trk_expt}/{model}/{test_dset}/{pred_cfg}/eval/heatmaps',
+             self.storage_template_prefix + 'eval/{trk_expt}/{model}/{test_dset}/{pred_cfg}/eval/eval_pxl/heatmaps'),
             ##
             # Move activity metrics to depend on pred_pxl_cfg, trk_cfg and
             ##
@@ -1221,6 +1198,20 @@ class ExperimentState(ub.NiceRepr):
 
         return test_dset_name
 
+    def _condense_cfg(self, params, type):
+        human_opts = ub.dict_isect(params, {})
+        other_opts = ub.dict_diff(params, human_opts)
+        if len(human_opts):
+            human_part = ub.repr2(human_opts, compact=1) + '_'
+        else:
+            human_part = ''
+        cfgstr_suffix = human_part + ub.hash_data(other_opts)[0:8]
+        cfgstr = f'{type}_{cfgstr_suffix}'
+        from watch.utils.reverse_hashid import ReverseHashTable
+        rhash = ReverseHashTable(type=type)
+        rhash.register(cfgstr, params)
+        return cfgstr
+
     def _condense_pred_cfg(self, pred_cfg):
         """
         This does what "organize" used to do.
@@ -1254,6 +1245,9 @@ class ExperimentState(ub.NiceRepr):
         rhash = ReverseHashTable(type='pred_cfg')
         rhash.register(trk_cfg_dname, bas_track_cfg)
         return trk_cfg_dname
+
+    def _condense_model(self, model):
+        return ub.Path(model).name
 
     def _condense_act_cfg(self, act_cfg):
         """

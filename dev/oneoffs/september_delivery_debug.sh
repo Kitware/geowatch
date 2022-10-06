@@ -7,16 +7,25 @@ rsync -avpr horologic:/data/david.joy/Ph2Oct5/./KR_R001_0.1BASThresh_40cloudcove
 
 WORKDIR=/home/joncrall/data/dvc-repos/smart_data_dvc/tmp
 BUNDLE_DPATH=$WORKDIR/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco
-TEST_DATASET=$BUNDLE_DPATH/cropped_kwcoco_for_bas.json
+BAS_TEST_DATASET=$BUNDLE_DPATH/cropped_kwcoco_for_bas.json
+SC_TEST_DATASET=$BUNDLE_DPATH/cropped_kwcoco_for_sc.json
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
 BAS_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt
 SC_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
+echo "
+
+DVC_EXPT_DPATH = $DVC_EXPT_DPATH
+SC_MODEL_FPATH = $SC_MODEL_FPATH
+BAS_MODEL_FPATH = $BAS_MODEL_FPATH
+
+"
 mkdir -p $BUNDLE_DPATH/testing
 python -m watch.mlops.schedule_evaluation \
     --trk_model_globstr="$BAS_MODEL_FPATH" \
     --act_model_globstr="$SC_MODEL_FPATH" \
     --model_globstr="$BAS_MODEL_FPATH" \
-    --test_dataset="$TEST_DATASET" \
+    --trk_test_dataset="$BAS_TEST_DATASET" \
+    --act_test_dataset="$SC_TEST_DATASET" \
     --grid_pred_pxl='
     include:
     - {
@@ -53,7 +62,61 @@ python -m watch.mlops.schedule_evaluation \
     --enable_eval_pxl=1 \
     --enable_eval_trk=1 \
     --enable_pred_trk_viz=1 \
-    --backend=tmux --run=1  --skip_existing=1 --check_other_sessions=0
+    --backend=tmux --run=0  --skip_existing=1 --check_other_sessions=0
+
+
+
+
+WORKDIR=/home/joncrall/data/dvc-repos/smart_data_dvc/tmp
+BUNDLE_DPATH=$WORKDIR/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco
+BAS_TEST_DATASET=$BUNDLE_DPATH/cropped_kwcoco_for_bas.json
+SC_TEST_DATASET=$BUNDLE_DPATH/cropped_kwcoco_for_sc.json
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+BAS_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt
+SC_MODEL_FPATH=$DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
+python -m watch.mlops.schedule_evaluation \
+    --params="
+    - matrix:
+        ###
+        ### BAS Pixel Prediction
+        ###
+        trk.pxl.model: $BAS_MODEL_FPATH
+        trk.pxl.data.test_dataset: $BAS_TEST_DATASET
+        trk.pxl.data.tta_time: 0
+        trk.pxl.data.chip_overlap: 0.3
+        trk.pxl.data.window_scale_space: 10GSD
+        trk.pxl.data.input_scale_space: 15GSD
+        trk.pxl.data.output_scale_space: 15GSD
+        trk.pxl.data.time_span: auto
+        trk.pxl.data.time_sampling: auto
+        trk.pxl.data.time_steps: auto
+        trk.pxl.data.chip_dims: auto
+        trk.pxl.data.set_cover_algo: None
+        trk.pxl.data.resample_invalid_frames: 1
+        trk.pxl.data.use_cloudmask: 1
+        ###
+        ### BAS Polygon Prediction
+        ###
+        trk.poly.thresh: 0.10
+        trk.poly.morph_kernel: 3
+        trk.poly.norm_ord: 1
+        trk.poly.agg_fn: probs
+        trk.poly.thresh_hysteresis: None
+        trk.poly.moving_window_size: None
+        trk.poly.polygon_fn: heatmaps_to_polys
+        ###
+        ### SC Pixel Prediction
+        ###
+        act.pxl.model: $SC_MODEL_FPATH
+        act.pxl.data.test_dataset: $SC_TEST_DATASET
+    " \
+    --expt_dvc_dpath="$BUNDLE_DPATH/testing"  \
+    --enable_pred_trk=1 \
+    --enable_pred_pxl=1 \
+    --enable_eval_pxl=1 \
+    --enable_eval_trk=1 \
+    --enable_pred_trk_viz=1 \
+    --backend=tmux --run=0  --skip_existing=1 --check_other_sessions=0
 
 
 
