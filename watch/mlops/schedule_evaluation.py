@@ -146,6 +146,138 @@ def build_crop_job():
         ''')
 
 
+class JobCommands:
+    def crop(**crop_kwargs):
+        perf_options = {
+            'verbose': 1,
+            'workers': 2,
+            'aux_workers': 2,
+            'visualize': False,
+        }
+        command = ub.codeblock(
+            r'''
+            python -m watch.cli.coco_align_geotiffs \
+                --src "{crop_src_fpath}" \
+                --dst "{crop_fpath}" \
+                --regions "{regions}" \
+                --context_factor=1.5 \
+                --geo_preprop=auto \
+                --keep={crop_config['align_keep']} \
+                --force_nodata={crop_config['force_nodata']} \
+                --visualize=False \
+                --debug_valid_regions={crop_config['debug_valid_regions']} \
+                --rpc_align_method {crop_config['rpc_align_method']} \
+                --verbose={crop_config['verbose']} \
+                --target_gsd={crop_config['target_gsd']} \
+                --workers={crop_config['align_workers']}
+                --aux_workers={crop_config['align_aux_workers']} \
+            ''').format(crop_kwargs)
+        return command
+
+    def pred_trk_pxl(trk_pxl_params, **kwargs):
+        kwargs['trk_pxl_params_argstr'] = chr(10).join(
+            [f'    --{k}={v} \\' for k, v in trk_pxl_params.items()]).lstrip()
+        command = ub.codeblock(
+            r'''
+            python -m watch.tasks.fusion.predict \
+                --package_fpath={pkg_trk_pxl_fpath} \
+                --pred_dataset={pred_trk_pxl_fpath} \
+                --test_dataset={trk_dataset_fpath} \
+                --num_workers={workers_per_queue} \
+                {trk_pxl_param_argstr}
+                --devices=0, \
+                --accelerator=gpu \
+                --batch_size=1
+            ''').format(**kwargs)
+        return command
+
+    def pred_trk_poly(**kwargs):
+        command = ub.codeblock(
+            r'''
+            python -m watch.cli.kwcoco_to_geojson \
+                "{pred_pxl_fpath}" \
+                {bas_args} \
+                --clear_annots \
+                --out_dir "{pred_trk_dpath}" \
+                --out_fpath "{pred_trk_fpath}" \
+                --out_kwcoco "{pred_trk_kwcoco_fpath}"
+            ''').format(**kwargs)
+        return command
+
+    def eval_trk_pxl(**kwargs):
+        command = ub.codeblock(
+            r'''
+            python -m watch.tasks.fusion.evaluate \
+                --true_dataset={trk_dataset_fpath} \
+                --pred_dataset={pred_pxl_fpath} \
+                  --eval_dpath={eval_pxl_dpath} \
+                  --score_space=video \
+                  --draw_curves={draw_curves} \
+                  --draw_heatmaps={draw_heatmaps} \
+                  --viz_thresh=0.2 \
+                  --workers=2
+            ''').format(**kwargs)
+        return command
+
+    def viz_pred_trk_poly(**kwargs):
+        command = ub.codeblock(
+            r'''
+            smartwatch visualize \
+                "{pred_trk_kwcoco_fpath}" \
+                --channels="red|green|blue,salient" \
+                --stack=only \
+                --workers=avail/2 \
+                --workers=avail/2 \
+                --extra_header="{extra_header}" \
+                --animate=True && touch {pred_trk_viz_stamp}
+            ''').format(**kwargs)
+        return command
+
+    def eval_trk_poly(**kwargs):
+        command = ub.codeblock(
+            r'''
+            python -m watch.cli.run_metrics_framework \
+                --merge=True \
+                --true_site_dpath "{true_site_dpath}" \
+                --true_region_dpath "{true_region_dpath}" \
+                --tmp_dir "{eval_trk_tmp_dpath}" \
+                --out_dir "{eval_trk_score_dpath}" \
+                --name "{name_suffix}" \
+                --merge_fpath "{eval_trk_fpath}" \
+                --inputs_are_paths=True \
+                --pred_sites={pred_trk_fpath}
+            ''').format(**kwargs)
+        return command
+
+    def pred_act_poly(**kwargs):
+        command = ub.codeblock(
+            r'''
+            python -m watch.cli.kwcoco_to_geojson \
+                "{pred_pxl_fpath}" \
+                --site_summary '{site_summary_glob}' \
+                {sc_args} \
+                --out_dir "{pred_act_dpath}" \
+                --out_fpath "{pred_act_fpath}" \
+                --out_kwcoco_fpath "{pred_act_kwcoco_fpath}"
+            ''').format(**kwargs)
+        return command
+
+    def eval_act_poly(**kwargs):
+        command = ub.codeblock(
+            r'''
+            python -m watch.cli.run_metrics_framework \
+                --merge=True \
+                --true_site_dpath "{true_site_dpath}" \
+                --true_region_dpath "{true_region_dpath}" \
+                --tmp_dir "{eval_act_tmp_dpath}" \
+                --out_dir "{eval_act_score_dpath}" \
+                --name "{name_suffix}" \
+                --merge_fpath "{eval_act_fpath}" \
+                --inputs_are_paths=True \
+                --pred_sites={pred_act_fpath}
+            ''').format(**kwargs)
+        return command
+
 
 def schedule_evaluation(cmdline=False, **kwargs):
     r"""
@@ -190,12 +322,12 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     ###
                     ### SC Pixel Prediction
                     ###
-                    act.crop.src: ~/data/dvc-repos/smart_data_dvc/tmp/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco/kwcoco_for_sc.json
-                    act.crop.regions:
+                    crop.src: ~/data/dvc-repos/smart_data_dvc/tmp/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco/kwcoco_for_sc.json
+                    crop.regions:
                         - trk.poly.output
                         - truth
                     act.pxl.data.test_dataset:
-                        - act.pxl.crop.dst
+                        - crop.dst
                         - ~/data/dvc-repos/smart_data_dvc/tmp/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco/cropped_kwcoco_for_sc.json
                     act.pxl.model:
                         - ~/data/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
@@ -241,8 +373,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
         'trk.pxl.data.test_dataset': None,
         'trk.poly.thresh': 0.1,
 
-        'act.crop.src': None,
-        'act.crop.regions': 'truth',
+        'crop.src': None,
+        'crop.context_factor': 1.5,
+        'crop.regions': 'truth',
 
         'act.pxl.model': None,
         'act.pxl.data.test_dataset': None,
@@ -304,8 +437,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
         ### CROPPING ###
 
-        crop_params = ub.udict(nested['act']['crop']).copy()
+        crop_params = ub.udict(nested['crop']).copy()
         crop_src_fpath = crop_params.pop('src')
+        paths['crop_src_fpath'] = crop_src_fpath
         if crop_params['regions'] == 'truth':
             # Crop job depends only on true annotations
             crop_params['regions'] = str(region_model_dpath) + '/*.geojson'
@@ -324,6 +458,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
         paths['crop_fpath'] = ub.Path(state.templates['crop_fpath'].format(**condensed))
         condensed['crop_dst_dset'] = state._condense_test_dset(paths['crop_fpath'])
 
+        crop_kwargs = {**paths}
+        JobCommands.crop(crop_params, **crop_kwargs)
+
         ### SC / ACTIVITY ###
         act_pxl  = nested['act']['pxl']
         act_poly = nested['act']['poly']
@@ -339,7 +476,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
         condensed.update(pkg_act_pixel_pathcfg)
 
         # paths['act_test_dataset_fpath'] = item['act.pxl.data.test_dataset']
-        if item['act.pxl.data.test_dataset'] == 'act.pxl.crop.dst':
+        if item['act.pxl.data.test_dataset'] == 'crop.dst':
             # Activity prediction depends on a cropping job
             paths['act_test_dataset_fpath'] = paths['crop_fpath']
         else:
@@ -370,6 +507,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
             'task_params': task_params,
         }
         resolved_rows.append(row)
+
+    for row in resolved_rows:
+        pass
 
     # model_globstr = config['model_globstr']
     # trk_dataset_fpath = config['trk_test_dataset']
@@ -622,7 +762,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 **pred_cfg,
                 **pred_pxl_row,
             }
-            predictkw['pred_cfg_argstr'] = chr(10).join(
+            predictkw['trk_pxl_param_argstr'] = chr(10).join(
                 [f'    --{k}={v} \\' for k, v in pred_cfg.items()]).lstrip()
             command = ub.codeblock(
                 r'''
@@ -631,7 +771,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     --pred_dataset={pred_pxl_fpath} \
                     --test_dataset={trk_dataset_fpath} \
                     --num_workers={workers_per_queue} \
-                    {pred_cfg_argstr}
+                    {trk_pxl_param_argstr}
                     --devices=0, \
                     --accelerator=gpu \
                     --batch_size=1
