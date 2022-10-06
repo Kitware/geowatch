@@ -663,6 +663,9 @@ def normalize(
         >>> assert (coco_dset.images().get('sensor_coarse') ==
         >>>     ['WorldView', 'Sentinel-2', 'Landsat 8'])
     '''
+
+    DEBUG_JSON_SERIALIZABLE = 0
+
     viz_out_dir = ub.Path('_assets/tracking_visualization')
 
     def _normalize_annots(coco_dset, overwrite):
@@ -674,6 +677,12 @@ def normalize(
         # coco_dset._build_index()
 
         return coco_dset
+
+    if DEBUG_JSON_SERIALIZABLE:
+        from kwcoco.util import util_json
+        unserializable = list(util_json.find_json_unserializable(coco_dset.dataset))
+        if unserializable:
+            raise Exception('Input dataset: ' + ub.repr2(unserializable))
 
     if len(coco_dset.anns) > 0:
         coco_dset = _normalize_annots(coco_dset, overwrite)
@@ -687,8 +696,20 @@ def normalize(
         if isinstance(v, str) and v.lower() == 'none':
             track_kwargs[k] = None
 
+    if DEBUG_JSON_SERIALIZABLE:
+        from kwcoco.util import util_json
+        unserializable = list(util_json.find_json_unserializable(coco_dset.dataset))
+        if unserializable:
+            raise Exception('After ensure: ' + ub.repr2(unserializable))
+
     tracker: TrackFunction = track_fn(polygon_fn=polygon_fn, **track_kwargs)
     out_dset = tracker.apply_per_video(coco_dset)
+
+    if DEBUG_JSON_SERIALIZABLE:
+        from kwcoco.util import util_json
+        unserializable = list(util_json.find_json_unserializable(out_dset.dataset))
+        if unserializable:
+            raise Exception('After apply_per_video: ' + ub.repr2(unserializable))
 
     # normalize and add geo segmentations
     out_dset = _normalize_annots(out_dset, overwrite=False)
@@ -696,8 +717,20 @@ def normalize(
     print('After normalizing: track ids',
           set(out_dset.annots().get('track_id', None)))
 
+    if DEBUG_JSON_SERIALIZABLE:
+        from kwcoco.util import util_json
+        unserializable = list(util_json.find_json_unserializable(out_dset.dataset))
+        if unserializable:
+            raise Exception('After _normalize_annots: ' + ub.repr2(unserializable))
+
     out_dset = dedupe_tracks(out_dset)
     out_dset = add_track_index(out_dset)
+
+    if DEBUG_JSON_SERIALIZABLE:
+        from kwcoco.util import util_json
+        unserializable = list(util_json.find_json_unserializable(out_dset.dataset))
+        if unserializable:
+            raise Exception('After add_track_index: ' + ub.repr2(unserializable))
 
     if viz_sc_bounds:
         from watch.tasks.tracking.visualize import keys_to_score_sc, viz_track_scores
@@ -736,4 +769,9 @@ def normalize(
                          viz_out_dir,
                          coco_dset_sc=track_kwargs.get('coco_dset_sc'))
 
+    if DEBUG_JSON_SERIALIZABLE:
+        from kwcoco.util import util_json
+        unserializable = list(util_json.find_json_unserializable(out_dset.dataset))
+        if unserializable:
+            raise Exception('After normalize: ' + ub.repr2(unserializable))
     return out_dset

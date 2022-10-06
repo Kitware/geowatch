@@ -340,7 +340,7 @@ def interpolate(coco_dset,
 
     cids = np.array(annots.cids)
     good_ixs = np.in1d(cnames, list(cnames_to_replace), invert=True)
-    ix_to_cid = dict(zip(range(len(good_ixs)), cids[good_ixs]))
+    ix_to_cid = dict(zip(range(len(good_ixs)), map(int, cids[good_ixs])))
     interp = np.interp(range(len(cnames)), good_ixs, range(len(good_ixs)))
     annots.set('category_id', [ix_to_cid[int(ix)] for ix in np.round(interp)])
     return annots
