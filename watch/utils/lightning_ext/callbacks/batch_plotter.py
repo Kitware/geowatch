@@ -1,7 +1,6 @@
 import pytorch_lightning as pl
 import ubelt as ub
 import numpy as np
-from os.path import join
 import kwimage
 # import pytimeparse
 # import numbers
@@ -119,6 +118,11 @@ class BatchPlotter(pl.callbacks.Callback):
     def draw_batch(self, trainer, outputs, batch, batch_idx):
         from watch.utils import util_kwimage
 
+        if trainer.log_dir is None:
+            import warnings
+            warnings.warn('The trainer logdir is not set. Cannot dump a batch plot')
+            return
+
         model = trainer.model
         # TODO: get step number
         if hasattr(model, 'get_cfgstr'):
@@ -159,9 +163,9 @@ class BatchPlotter(pl.callbacks.Callback):
         canvas = util_kwimage.draw_header_text(image=canvas, text=title,
                                                stack=True)
 
-        dump_dpath = ub.ensuredir((trainer.log_dir, 'monitor', stage, 'batch'))
-        dump_fname = f'pred_{title}.jpg'
-        fpath = join(dump_dpath, dump_fname)
+        log_dpath = ub.Path(trainer.log_dir)
+        dump_dpath = (log_dpath / 'monitor' / stage / 'batch').ensuredir()
+        fpath = dump_dpath / f'pred_{title}.jpg'
         # print('write to fpath = {!r}'.format(fpath))
         kwimage.imwrite(fpath, canvas)
 

@@ -216,6 +216,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         ...         assert mode_val.shape[1:3] == (chip_size, chip_size)
     """
 
+    __scriptconfig__ = KWCocoVideoDataModuleConfig
+
     def __init__(self, verbose=1, **kwargs):
         """
         For details on accepted arguments see KWCocoVideoDataModuleConfig
@@ -258,6 +260,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.coco_datasets: Dict[str, kwcoco.CocoDataset] = {}
 
         self.requested_tasks = None
+        self.did_setup = False
 
         if self.verbose:
             print('Init KWCocoVideoDataModule')
@@ -373,6 +376,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
         print('self.torch_datasets = {}'.format(ub.repr2(self.torch_datasets, nl=1)))
         self._notify_about_tasks(self.requested_tasks)
+        self.did_setup = True
 
     @property
     def train_dataset(self):
@@ -473,7 +477,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         Visualize a batch produced by this DataSet.
 
         Args:
-            batch (List[Dict]): uncollated list of Dataset Items
+            batch (Dict[str, List[Tensor]]): dictionary of uncollated lists of Dataset Items
+                change: [ [T-1, H, W] \in [0, 1] \forall examples ]
+                saliency: [ [T, H, W, 2] \in [0, 1] \forall examples ]
+                class: [ [T, H, W, 10] \in [0, 1] \forall examples ]
 
             outputs (Dict[str, Tensor]):
                 maybe-collated list of network outputs?
