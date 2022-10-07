@@ -11,67 +11,6 @@ The Wrapped class below are examples of why we should eventually factor out the 
 """
 
 
-# class WrappedKWCocoDataModule(KWCocoVideoDataModule):
-#     def __init__(
-#         self,
-#         train_dataset=None,
-#         vali_dataset=None,
-#         test_dataset=None,
-#         channels=None,
-#         batch_size=4,
-#         input_space_scale=None,
-#         num_workers="avail/2",
-#         time_steps=2,
-#         chip_size=128,
-#         neg_to_pos_ratio=0,
-#         chip_overlap=0,
-#         window_space_scale=None,  #"3GSD",
-#         chip_dims=128,
-#         time_sampling="soft2+distribute",
-#         time_span="6m",
-#         normalize_inputs=1024,
-#         use_centered_positives=False,
-#         temporal_dropout=0.5,
-#         set_cover_algo="approx",
-#         resample_invalid_frames=0,
-#         use_cloudmask=0,
-#         sqlview=False,
-#         max_epoch_length=None,
-#     ):
-
-#         super().__init__(
-#             train_dataset=pathlib.Path(train_dataset) if (train_dataset is not None) else None,
-#             vali_dataset=pathlib.Path(vali_dataset) if (vali_dataset is not None) else None,
-#             test_dataset=pathlib.Path(test_dataset) if (test_dataset is not None) else None,
-#             batch_size=batch_size,
-#             channels=channels,
-#             input_space_scale=input_space_scale,
-#             num_workers=num_workers,
-#             time_steps=time_steps,
-#             chip_size=chip_size,
-#             neg_to_pos_ratio=neg_to_pos_ratio,
-#             chip_overlap=chip_overlap,
-#             window_space_scale=window_space_scale,
-#             chip_dims=chip_dims,
-#             time_sampling=time_sampling,
-#             time_span=time_span,
-#             normalize_inputs=normalize_inputs,
-#             use_centered_positives=use_centered_positives,
-#             temporal_dropout=temporal_dropout,
-#             set_cover_algo=set_cover_algo,
-#             resample_invalid_frames=resample_invalid_frames,
-#             use_cloudmask=use_cloudmask,
-#             sqlview=sqlview,
-#             max_epoch_length=max_epoch_length,
-#         )
-
-#         # Fixme: we shouldnt call this here because the trainer calls setup("fit") no matter what, and this duplicates
-#         # the substantial effort of loading the project data. The main reason it is necessary to run this twice right now
-#         # is to ensure that dataset_stats have been computed to pass off to the model.
-#         # TODO: compute dataset stats outside of setup, if possible?
-#         self.setup("fit")
-
-
 def main():
     from watch.utils.lightning_ext.lightning_cli_ext import LightningCLI_Extension
     import pytorch_lightning as pl
