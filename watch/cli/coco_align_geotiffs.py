@@ -1803,6 +1803,7 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
 
 
 _CLI = CocoAlignGeotiffConfig
+__config__ = CocoAlignGeotiffConfig
 
 
 if __name__ == '__main__':

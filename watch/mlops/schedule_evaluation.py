@@ -6,6 +6,8 @@ TODO:
     - [ ] Allow the output of tracking to feed into activity classification
 """
 import ubelt as ub
+import shlex
+import json
 import scriptconfig as scfg
 
 
@@ -107,123 +109,148 @@ class Task(dict):
         return command
 
 
-def build_crop_job():
-    crop_config = {
-        'src': None,
-        'dst': None,
-        'region_globstr': None,
-        'force_nodata': -9999,  #
-        'align_keep': 'img',
-        'rpc_align_method': 'orthorectify',
-        'verbose': 1,
-        'target_gsd': 4,
-        'align_workers': 2,
-        'align_aux_workers': 4,
-        'debug_valid_regions': 0,
-        'debug_valid_regions': 0,
-        'include_channels': None,
-        'exclude_channels': None,
-    }
-    command = ub.codeblock(
-        rf'''
-        python -m watch.cli.coco_align_geotiffs \
-            --src "{crop_config['src']}" \
-            --dst "{crop_config['dst']}" \
-            --regions "{crop_config['region_globstr']}" \
-            --context_factor=1.5 \
-            --geo_preprop=auto \
-            --keep={crop_config['align_keep']} \
-            --force_nodata={crop_config['force_nodata']} \
-            --include_channels="{crop_config['include_channels']}" \
-            --exclude_channels="{crop_config['exclude_channels']}" \
-            --visualize=False \
-            --debug_valid_regions={crop_config['debug_valid_regions']} \
-            --rpc_align_method {crop_config['rpc_align_method']} \
-            --verbose={crop_config['verbose']} \
-            --target_gsd={crop_config['target_gsd']} \
-            --workers={crop_config['align_workers']}
-            --aux_workers={crop_config['align_aux_workers']} \
-        ''')
-
-
 class JobCommands:
-    def crop(**crop_kwargs):
+
+    @staticmethod
+    def _make_argstr(params):
+        parts = [f'    --{k}={v} \\' for k, v in params.items()]
+        return chr(10).join(parts).lstrip().rstrip('\\')
+
+    def crop(crop_params, **crop_kwargs):
+        from watch.cli import coco_align_geotiffs
+        confobj = coco_align_geotiffs.__config__
+        known_args = set(confobj.default.keys())
+        assert not len(ub.udict(crop_params) - known_args), 'unknown args'
+        crop_params = {
+            'geo_preprop': 'auto',
+            'keep': 'img',
+            'force_nodata': -9999,
+            'rpc_align_method': 'orthorectify',
+            'target_gsd': 4,
+        } | ub.udict(crop_params)
         perf_options = {
             'verbose': 1,
             'workers': 2,
             'aux_workers': 2,
+            'debug_valid_regions': False,
             'visualize': False,
         }
+        crop_kwargs['crop_params_argstr'] = JobCommands._make_argstr(crop_params)
+        crop_kwargs['crop_perf_argstr'] = JobCommands._make_argstr(perf_options)
         command = ub.codeblock(
             r'''
             python -m watch.cli.coco_align_geotiffs \
                 --src "{crop_src_fpath}" \
                 --dst "{crop_fpath}" \
-                --regions "{regions}" \
-                --context_factor=1.5 \
-                --geo_preprop=auto \
-                --keep={crop_config['align_keep']} \
-                --force_nodata={crop_config['force_nodata']} \
-                --visualize=False \
-                --debug_valid_regions={crop_config['debug_valid_regions']} \
-                --rpc_align_method {crop_config['rpc_align_method']} \
-                --verbose={crop_config['verbose']} \
-                --target_gsd={crop_config['target_gsd']} \
-                --workers={crop_config['align_workers']}
-                --aux_workers={crop_config['align_aux_workers']} \
-            ''').format(crop_kwargs)
+                {crop_params_argstr} \
+                {crop_perf_argstr}
+            ''').format(**crop_kwargs)
         return command
 
-    def pred_trk_pxl(trk_pxl_params, **kwargs):
-        kwargs['trk_pxl_params_argstr'] = chr(10).join(
-            [f'    --{k}={v} \\' for k, v in trk_pxl_params.items()]).lstrip()
+    def pred_trk_pxl(trk_pxl_params, **paths):
+        perf_options = {
+            'num_workers': 0,
+            'devices': '0,',
+            'accelerator': 'gpu',
+            'batch_size': 1,
+        }
+        paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
+        pred_trk_pxl_kw =  { **paths }
+        pred_trk_pxl_kw['params_argstr'] = JobCommands._make_argstr(trk_pxl_params)
+        pred_trk_pxl_kw['perf_argstr'] = JobCommands._make_argstr(perf_options)
         command = ub.codeblock(
             r'''
             python -m watch.tasks.fusion.predict \
                 --package_fpath={pkg_trk_pxl_fpath} \
                 --pred_dataset={pred_trk_pxl_fpath} \
-                --test_dataset={trk_dataset_fpath} \
-                --num_workers={workers_per_queue} \
-                {trk_pxl_param_argstr}
-                --devices=0, \
-                --accelerator=gpu \
-                --batch_size=1
-            ''').format(**kwargs)
+                --test_dataset={trk_test_dataset_fpath} \
+                {params_argstr} \
+                {perf_argstr}
+            ''').format(**pred_trk_pxl_kw)
         return command
 
-    def pred_trk_poly(**kwargs):
+    def pred_act_pxl(act_pxl_params, **paths):
+        perf_options = {
+            'num_workers': 0,
+            'devices': '0,',
+            'accelerator': 'gpu',
+            'batch_size': 1,
+        }
+        paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
+        pred_act_pxl_kw =  { **paths }
+        pred_act_pxl_kw['params_argstr'] = JobCommands._make_argstr(act_pxl_params)
+        pred_act_pxl_kw['perf_argstr'] = JobCommands._make_argstr(perf_options)
+        command = ub.codeblock(
+            r'''
+            python -m watch.tasks.fusion.predict \
+                --package_fpath={pkg_act_pxl_fpath} \
+                --pred_dataset={pred_act_pxl_fpath} \
+                --test_dataset={act_test_dataset_fpath} \
+                {params_argstr} \
+                {perf_argstr}
+            ''').format(**pred_act_pxl_kw)
+        return command
+
+    def pred_trk_poly(trk_poly_params, **paths):
+        pred_trk_poly_kw = { **paths }
+        from watch.utils.lightning_ext import util_globals
+        cfg = trk_poly_params.copy()
+        if 'thresh_hysteresis' in cfg:
+            if isinstance(cfg['thresh_hysteresis'], str):
+                cfg['thresh_hysteresis'] = util_globals.restricted_eval(
+                    cfg['thresh_hysteresis'].format(**cfg))
+
+        if 'moving_window_size' in cfg:
+            if isinstance(cfg['moving_window_size'], str):
+                cfg['moving_window_size'] = util_globals.restricted_eval(
+                    cfg['moving_window_size'].format(**cfg))
+
+        if cfg['moving_window_size'] is None:
+            cfg['polygon_fn'] = 'heatmaps_to_polys'
+        else:
+            cfg['polygon_fn'] = 'heatmaps_to_polys_moving_window'
+        # kwargs['params_argstr'] = JobCommands(trk_poly_params)
+        pred_trk_poly_kw['track_kwargs_str'] = shlex.quote(json.dumps(cfg))
+
         command = ub.codeblock(
             r'''
             python -m watch.cli.kwcoco_to_geojson \
-                "{pred_pxl_fpath}" \
-                {bas_args} \
+                "{pred_trk_pxl_fpath}" \
+                --default_track_fn saliency_heatmaps \
+                --track_kwargs {track_kwargs_str} \
                 --clear_annots \
-                --out_dir "{pred_trk_dpath}" \
-                --out_fpath "{pred_trk_fpath}" \
-                --out_kwcoco "{pred_trk_kwcoco_fpath}"
-            ''').format(**kwargs)
+                --out_dir "{pred_trk_poly_dpath}" \
+                --out_fpath "{pred_trk_poly_fpath}" \
+                --out_kwcoco "{pred_trk_poly_kwcoco}"
+            ''').format(**pred_trk_poly_kw)
         return command
 
-    def eval_trk_pxl(**kwargs):
+    def eval_trk_pxl(condensed, **paths):
+        paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
+        eval_trk_pxl_kwe = { **paths }
+        extra_opts = {
+            'draw_curves': True,
+            'draw_heatmaps': True,
+            'viz_thresh': 0.2,
+            'workers': 2,
+        }
+        eval_trk_pxl_kwe['extra_argstr'] = JobCommands._make_argstr(extra_opts)
         command = ub.codeblock(
             r'''
             python -m watch.tasks.fusion.evaluate \
-                --true_dataset={trk_dataset_fpath} \
-                --pred_dataset={pred_pxl_fpath} \
-                  --eval_dpath={eval_pxl_dpath} \
+                --true_dataset={trk_test_dataset_fpath} \
+                --pred_dataset={pred_trk_pxl_fpath} \
+                  --eval_dpath={eval_trk_pxl_dpath} \
                   --score_space=video \
-                  --draw_curves={draw_curves} \
-                  --draw_heatmaps={draw_heatmaps} \
-                  --viz_thresh=0.2 \
-                  --workers=2
-            ''').format(**kwargs)
+                  {extra_argstr}
+            ''').format(**eval_trk_pxl_kwe)
         return command
 
     def viz_pred_trk_poly(**kwargs):
         command = ub.codeblock(
             r'''
             smartwatch visualize \
-                "{pred_trk_kwcoco_fpath}" \
+                "{pred_trk_poly_kwcoco}" \
                 --channels="red|green|blue,salient" \
                 --stack=only \
                 --workers=avail/2 \
@@ -233,49 +260,102 @@ class JobCommands:
             ''').format(**kwargs)
         return command
 
-    def eval_trk_poly(**kwargs):
+    def eval_trk_poly(condensed, **paths):
+        eval_trk_poly_kw = { **paths }
+        eval_trk_poly_kw['true_site_dpath'] = paths['true_annotations_dpath'] / 'site_models'
+        eval_trk_poly_kw['true_region_dpath'] = paths['true_annotations_dpath'] / 'region_models'
+        eval_trk_poly_kw['eval_trk_poly_dpath'] = eval_trk_poly_kw['eval_trk_poly_dpath']
+        eval_trk_poly_kw['eval_trk_poly_tmp_dpath'] = eval_trk_poly_kw['eval_trk_poly_dpath'] / '_tmp'
+        eval_trk_poly_kw['name_suffix'] = '-'.join([
+            condensed['trk_model'],
+            condensed['trk_pxl_cfg'],
+            condensed['trk_poly_cfg'],
+        ])
         command = ub.codeblock(
             r'''
             python -m watch.cli.run_metrics_framework \
                 --merge=True \
                 --true_site_dpath "{true_site_dpath}" \
                 --true_region_dpath "{true_region_dpath}" \
-                --tmp_dir "{eval_trk_tmp_dpath}" \
-                --out_dir "{eval_trk_score_dpath}" \
+                --tmp_dir "{eval_trk_poly_tmp_dpath}" \
+                --out_dir "{eval_trk_poly_dpath}" \
                 --name "{name_suffix}" \
-                --merge_fpath "{eval_trk_fpath}" \
+                --merge_fpath "{eval_trk_poly_fpath}" \
                 --inputs_are_paths=True \
-                --pred_sites={pred_trk_fpath}
-            ''').format(**kwargs)
+                --pred_sites={pred_trk_poly_fpath}
+            ''').format(**eval_trk_poly_kw)
         return command
 
-    def pred_act_poly(**kwargs):
+    def pred_act_poly(act_poly_params, **paths):
+        # pred_act_row['site_summary_glob'] = (region_model_dpath / '*.geojson')
+        pred_act_poly_kw = paths.copy()
+        actclf_cfg = {
+            'boundaries_as': 'polys',
+        }
+        actclf_cfg.update(act_poly_params)
+        pred_act_poly_kw['kwargs_str'] = shlex.quote(json.dumps(actclf_cfg))
+        # pred_act_poly_kw['site_summary_glob'] = (pred_act_poly_kw['region_model_dpath'] / '*.geojson')
+        pred_act_poly_kw['site_summary_glob'] = 'TODO not well defined yet'
         command = ub.codeblock(
             r'''
             python -m watch.cli.kwcoco_to_geojson \
-                "{pred_pxl_fpath}" \
+                "{pred_act_pxl_fpath}" \
                 --site_summary '{site_summary_glob}' \
-                {sc_args} \
-                --out_dir "{pred_act_dpath}" \
-                --out_fpath "{pred_act_fpath}" \
-                --out_kwcoco_fpath "{pred_act_kwcoco_fpath}"
-            ''').format(**kwargs)
+                --default_track_fn class_heatmaps \
+                --track_kwargs {kwargs_str} \
+                --out_dir "{pred_act_poly_dpath}" \
+                --out_fpath "{pred_act_poly_fpath}" \
+                --out_kwcoco_fpath "{pred_act_poly_kwcoco}"
+            ''').format(**pred_act_poly_kw)
         return command
 
-    def eval_act_poly(**kwargs):
+    def eval_act_pxl(condensed, **paths):
+        paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
+        eval_act_pxl_kwe = { **paths }
+        extra_opts = {
+            'draw_curves': True,
+            'draw_heatmaps': True,
+            'viz_thresh': 0.2,
+            'workers': 2,
+        }
+        eval_act_pxl_kwe['extra_argstr'] = JobCommands._make_argstr(extra_opts)
+        command = ub.codeblock(
+            r'''
+            python -m watch.tasks.fusion.evaluate \
+                --true_dataset={act_test_dataset_fpath} \
+                --pred_dataset={pred_act_pxl_fpath} \
+                  --eval_dpath={eval_act_pxl_dpath} \
+                  --score_space=video \
+                  {extra_argstr}
+            ''').format(**eval_act_pxl_kwe)
+        return command
+
+    def eval_act_poly(condensed, **paths):
+        eval_act_poly_kw = paths.copy()
+        eval_act_poly_kw['name_suffix'] = '-'.join([
+            # condensed['crop_dst_dset']
+            condensed['test_act_dset'],
+            condensed['act_model'],
+            condensed['act_pxl_cfg'],
+            condensed['act_poly_cfg'],
+        ])
+        eval_act_poly_kw['true_site_dpath'] = paths['true_annotations_dpath'] / 'site_models'
+        eval_act_poly_kw['true_region_dpath'] = paths['true_annotations_dpath'] / 'region_models'
+        eval_act_poly_kw['eval_act_poly_dpath'] = eval_act_poly_kw['eval_trk_poly_dpath']
+        eval_act_poly_kw['eval_act_poly_tmp_dpath'] = eval_act_poly_kw['eval_trk_poly_dpath'] / '_tmp'
         command = ub.codeblock(
             r'''
             python -m watch.cli.run_metrics_framework \
                 --merge=True \
                 --true_site_dpath "{true_site_dpath}" \
                 --true_region_dpath "{true_region_dpath}" \
-                --tmp_dir "{eval_act_tmp_dpath}" \
-                --out_dir "{eval_act_score_dpath}" \
+                --tmp_dir "{eval_act_poly_tmp_dpath}" \
+                --out_dir "{eval_act_poly_dpath}" \
                 --name "{name_suffix}" \
-                --merge_fpath "{eval_act_fpath}" \
+                --merge_fpath "{eval_act_poly_fpath}" \
                 --inputs_are_paths=True \
-                --pred_sites={pred_act_fpath}
-            ''').format(**kwargs)
+                --pred_sites={pred_act_poly_fpath}
+            ''').format(**eval_act_poly_kw)
         return command
 
 
@@ -422,18 +502,23 @@ def schedule_evaluation(cmdline=False, **kwargs):
         condensed['trk_pxl_cfg'] = state._condense_cfg(trk_pxl_params, 'trk_pxl')
         condensed['trk_poly_cfg'] = state._condense_cfg(trk_poly_params, 'trk_poly')
 
-        paths['trk_model_fpath'] = ub.Path(item['trk.pxl.model'])
+        paths['pkg_trk_pxl_fpath'] = ub.Path(item['trk.pxl.model'])
         paths['trk_test_dataset_fpath'] = item['trk.pxl.data.test_dataset']
         paths['pred_trk_pxl_fpath'] = ub.Path(state.templates['pred_trk_pxl_fpath'].format(**condensed))
         paths['eval_trk_pxl_dpath'] = ub.Path(state.templates['eval_trk_pxl_dpath'].format(**condensed))
         paths['eval_trk_pxl_fpath'] = ub.Path(state.templates['eval_trk_pxl_fpath'].format(**condensed))
         paths['pred_trk_poly_fpath'] = ub.Path(state.templates['pred_trk_poly_fpath'].format(**condensed))
+        paths['pred_trk_poly_dpath'] = ub.Path(state.templates['pred_trk_poly_dpath'].format(**condensed))
+        paths['pred_trk_poly_kwcoco'] = ub.Path(state.templates['pred_trk_poly_kwcoco'].format(**condensed))
         paths['eval_trk_poly_fpath'] = ub.Path(state.templates['eval_trk_poly_fpath'].format(**condensed))
+        paths['eval_trk_poly_dpath'] = ub.Path(state.templates['eval_trk_poly_dpath'].format(**condensed))
 
         trackid_deps = {}
         trackid_deps = ub.udict(condensed) & (
             {'trk_model', 'test_trk_dset', 'trk_pxl_cfg', 'trk_poly_cfg'})
         condensed['trk_poly_id'] = state._condense_cfg(trackid_deps, 'trk_poly_id')
+
+        JobCommands.pred_trk_pxl(trk_pxl_params, **paths)
 
         ### CROPPING ###
 
@@ -459,7 +544,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
         condensed['crop_dst_dset'] = state._condense_test_dset(paths['crop_fpath'])
 
         crop_kwargs = {**paths}
-        JobCommands.crop(crop_params, **crop_kwargs)
+        command = JobCommands.crop(crop_params, **crop_kwargs)
+        print(command)
 
         ### SC / ACTIVITY ###
         act_pxl  = nested['act']['pxl']
@@ -484,13 +570,17 @@ def schedule_evaluation(cmdline=False, **kwargs):
             paths['act_test_dataset_fpath'] = item['act.pxl.data.test_dataset']
         condensed['test_act_dset'] = state._condense_test_dset(paths['act_test_dataset_fpath'])
 
-        paths['act_model_fpath'] = ub.Path(item['act.pxl.model'])
+        paths['pkg_act_pxl_fpath'] = ub.Path(item['act.pxl.model'])
         paths['pred_act_poly_fpath'] = ub.Path(state.templates['pred_act_poly_fpath'].format(**condensed))
+        paths['pred_act_poly_dpath'] = ub.Path(state.templates['pred_act_poly_dpath'].format(**condensed))
         paths['pred_act_pxl_fpath'] = ub.Path(state.templates['pred_act_pxl_fpath'].format(**condensed))
         paths['eval_act_pxl_fpath'] = ub.Path(state.templates['eval_act_pxl_fpath'].format(**condensed))
         paths['eval_act_pxl_dpath'] = ub.Path(state.templates['eval_act_pxl_dpath'].format(**condensed))
         paths['eval_act_poly_fpath'] = ub.Path(state.templates['eval_act_poly_fpath'].format(**condensed))
         paths['eval_act_poly_dpath'] = ub.Path(state.templates['eval_act_poly_dpath'].format(**condensed))
+        paths['pred_act_poly_kwcoco'] = ub.Path(state.templates['pred_act_poly_kwcoco'].format(**condensed))
+
+        # paths['eval_act_tmp_dpath'] = pred_act_row['eval_act_poly_dpath'] / '_tmp'
 
         task_params = {
             'trk.pxl': trk_pxl_params,
@@ -509,7 +599,46 @@ def schedule_evaluation(cmdline=False, **kwargs):
         resolved_rows.append(row)
 
     for row in resolved_rows:
-        pass
+        paths = row['paths']
+        paths['true_annotations_dpath'] = annotations_dpath
+        task_params = row['task_params']
+        paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
+
+        trk_pxl_params = task_params['trk.pxl']
+        trk_poly_params = task_params['trk.poly']
+        crop_params = task_params['crop']
+        act_pxl_params = task_params['act.pxl']
+        act_poly_params = task_params['act.poly']
+        condensed = row['condensed']
+
+        ### define the dag of this row item.
+
+        command = JobCommands.pred_trk_pxl(trk_pxl_params, **paths)
+        print(command)
+
+        command = JobCommands.pred_trk_poly(trk_poly_params, **paths)
+        print(command)
+
+        command = JobCommands.eval_trk_pxl(condensed, **paths)
+        print(command)
+
+        command = JobCommands.eval_trk_poly(condensed, **paths)
+        print(command)
+
+        command = JobCommands.crop(crop_params, **paths)
+        print(command)
+
+        command = JobCommands.pred_act_pxl(act_pxl_params, **paths)
+        print(command)
+
+        command = JobCommands.pred_act_poly(act_poly_params, **paths)
+        print(command)
+
+        command = JobCommands.eval_act_pxl(condensed, **paths)
+        print(command)
+
+        command = JobCommands.eval_act_poly(condensed, **paths)
+        print(command)
 
     # model_globstr = config['model_globstr']
     # trk_dataset_fpath = config['trk_test_dataset']
@@ -687,14 +816,14 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 condensed['trk_cfg'],
             ])
 
-            pred_trk_row['pred_trk_fpath'] = ub.Path(state.templates['pred_trk'].format(**condensed))
-            pred_trk_row['pred_trk_kwcoco_fpath'] = ub.Path(state.templates['pred_trk_kwcoco'].format(**condensed))
-            pred_trk_row['pred_trk_dpath'] = pred_trk_row['pred_trk_fpath'].parent / 'tracked_sites'
+            pred_trk_row['pred_trk_poly_fpath'] = ub.Path(state.templates['pred_trk'].format(**condensed))
+            pred_trk_row['pred_trk_poly_kwcoco'] = ub.Path(state.templates['pred_trk_kwcoco'].format(**condensed))
+            pred_trk_row['pred_trk_dpath'] = pred_trk_row['pred_trk_poly_fpath'].parent / 'tracked_sites'
             pred_trk_row['pred_trk_viz_stamp'] = ub.Path(state.templates['pred_trk_viz_stamp'].format(**condensed))
 
             pred_trk_row['eval_trk_out_fpath'] = ub.Path(state.templates['eval_trk'].format(**condensed))
-            pred_trk_row['eval_trk_fpath'] = ub.Path(state.templates['eval_trk'].format(**condensed))
-            pred_trk_row['eval_trk_score_dpath'] = pred_trk_row['eval_trk_fpath'].parent.parent
+            pred_trk_row['eval_trk_poly_fpath'] = ub.Path(state.templates['eval_trk'].format(**condensed))
+            pred_trk_row['eval_trk_score_dpath'] = pred_trk_row['eval_trk_poly_fpath'].parent.parent
             pred_trk_row['eval_trk_dpath'] = pred_trk_row['eval_trk_score_dpath'].parent
 
             pred_trk_row['eval_trk_tmp_dpath'] = pred_trk_row['eval_trk_dpath'] / '_tmp'
@@ -716,7 +845,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             pred_act_row['condensed'] = condensed = pred_act_row['condensed'].copy()
             condensed['act_cfg'] = state._condense_act_cfg(act_cfg)
             pred_act_row['pred_act_fpath'] = ub.Path(state.templates['pred_act'].format(**condensed))
-            pred_trk_row['pred_act_kwcoco_fpath'] = ub.Path(state.templates['pred_act_kwcoco'].format(**condensed))
+            pred_trk_row['pred_act_poly_kwcoco'] = ub.Path(state.templates['pred_act_kwcoco'].format(**condensed))
             pred_act_row['pred_act_dpath'] = pred_act_row['pred_act_fpath'].parent / 'classified_sites'
 
             pred_act_row['eval_act_fpath'] = ub.Path(state.templates['eval_act'].format(**condensed))
@@ -809,7 +938,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
             manager['pred_trk'] = Task(**{
                 'name': 'pred_trk',
                 'requested': config['enable_pred_trk'],
-                'output': pred_trk_row['pred_trk_fpath'],
+                'output': pred_trk_row['pred_trk_poly_fpath'],
                 'requires': ['pred_pxl'],
                 'recompute': recompute_track,
             }, manager=manager, skip_existing=skip_existing)
@@ -860,8 +989,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
                         {bas_args} \
                         --clear_annots \
                         --out_dir "{pred_trk_dpath}" \
-                        --out_fpath "{pred_trk_fpath}" \
-                        --out_kwcoco "{pred_trk_kwcoco_fpath}"
+                        --out_fpath "{pred_trk_poly_fpath}" \
+                        --out_kwcoco "{pred_trk_poly_kwcoco}"
                     ''').format(**pred_trk_row)
                 command = task_info.prefix_command(command)
                 name = task_info['name'] + pred_trk_row['name_suffix']
@@ -876,7 +1005,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 command = ub.codeblock(
                     r'''
                     smartwatch visualize \
-                        "{pred_trk_kwcoco_fpath}" \
+                        "{pred_trk_poly_kwcoco}" \
                         --channels="red|green|blue,salient" \
                         --stack=only \
                         --workers=avail/2 \
@@ -910,9 +1039,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
                         --tmp_dir "{eval_trk_tmp_dpath}" \
                         --out_dir "{eval_trk_score_dpath}" \
                         --name "{name_suffix}" \
-                        --merge_fpath "{eval_trk_fpath}" \
+                        --merge_fpath "{eval_trk_poly_fpath}" \
                         --inputs_are_paths=True \
-                        --pred_sites={pred_trk_fpath}
+                        --pred_sites={pred_trk_poly_fpath}
                     ''').format(**eval_trk_row)
 
                 command = task_info.prefix_command(command)
@@ -959,7 +1088,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                         {sc_args} \
                         --out_dir "{pred_act_dpath}" \
                         --out_fpath "{pred_act_fpath}" \
-                        --out_kwcoco_fpath "{pred_act_kwcoco_fpath}"
+                        --out_kwcoco_fpath "{pred_act_poly_kwcoco}"
                     ''').format(**pred_act_row)
 
                 command = task_info.prefix_command(command)
