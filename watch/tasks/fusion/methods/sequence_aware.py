@@ -667,7 +667,7 @@ class SequenceAwareModel(pl.LightningModule, WatchModuleMixins):
             >>> import kwarray
             >>> dtype = kwarray.arrayapi._torch_dtype_lut()['float32']
             >>> ary = kwarray.ArrayAPI.coerce('torch')
-            >>> dtype = ary.torch_dtype(dtype)
+            >>> #dtype = ary.torch_dtype(dtype)
             >>> inputs1 = self.process_outputs(example, with_loss=True, device=device, dtype=dtype)
             >>> inputs2 = self.process_outputs(example, with_loss=False, device=device, dtype=dtype)
         """
