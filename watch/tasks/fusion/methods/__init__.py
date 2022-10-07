@@ -7,5 +7,8 @@ from watch.tasks.fusion.methods.channelwise_transformer import (
 from watch.tasks.fusion.methods import sequence_aware
 from watch.tasks.fusion.methods.sequence_aware import (
     SequenceAwareModel)
+from watch.tasks.fusion.methods import noop_model
+from watch.tasks.fusion.methods.noop_model import (
+    NoopModel)
 
-__all__ = ['MultimodalTransformer', 'channelwise_transformer', 'SequenceAwareModel', 'sequence_aware']
+__all__ = ['MultimodalTransformer', 'channelwise_transformer', 'SequenceAwareModel', 'sequence_aware', 'noop_model', 'NoopModel']
