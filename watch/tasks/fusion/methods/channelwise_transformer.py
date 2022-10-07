@@ -257,90 +257,31 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         cfgstr = f'{self.hparams.name}_{self.hparams.arch_name}'
         return cfgstr
 
-    def __init__(
-        self,
-        classes=10,
-        dataset_stats=None,
-        input_sensorchan=None,
-        name: str = "unnamed_model",
-        optimizer: str = "RAdam",  # TODO: remove and push to the cli
-        learning_rate: float = 0.001,  # TODO: remove and push to the cli
-        weight_decay: float = 0.0,  # TODO: remove and push to the cli
-        positive_change_weight: float = 1.0,
-        negative_change_weight: float = 1.0,
-        class_weights: str = "auto",
-        saliency_weights: str = "auto",
-        stream_channels: int = 8,
-        tokenizer: str = "linconv",  # TODO: replace control string with a module, possibly a subclass
-        token_norm: str = "none",
-        arch_name: str = "smt_it_joint_p8",  # TODO: replace control string with a module, possibly a subclass
-        decoder: str = "mlp",  # TODO: replace control string with a module, possibly a subclass
-        dropout: float = 0.1,
-        backbone_depth=None,  # TODO: remove with replacement of arch_name
-        global_class_weight: float = 1.0,
-        global_change_weight: float = 1.0,
-        global_saliency_weight: float = 1.0,
-        modulate_class_weights: str = "",
-        change_loss: str = "cce",  # TODO: replace control string with a module, possibly a subclass
-        class_loss: str = "focal",  # TODO: replace control string with a module, possibly a subclass
-        saliency_loss: str = "focal",  # TODO: replace control string with a module, possibly a subclass
-        change_head_hidden: int = 2,
-        class_head_hidden: int = 2,
-        saliency_head_hidden: int = 2,
-        window_size: int = 8,  # TODO: remove with replacement of tokenizer
-        # squash_modes: bool = False,
-        decouple_resolution: bool = False,
-        attention_impl: str = "exact",  # TODO: remove with replacement of arch_name
-        multimodal_reduce: str = "max",  # TODO: remove with replacement of arch_name
-    ):
-        """
-        Args:
-            name: Specify a name for the experiment. (Unsure if the Model is the place for this)
-            optimizer: Optimizer name supported by the netharn API.
-            class_weights: Class weighting strategy.
-            saliency_weights: Class weighting strategy.
-            stream_channels: Number of channels to normalize each project stream to.
-            tokenizer:
-                How image patches are broken into tokens. rearrange is a 1x1
-                MLP and grouping of pixel grids. dwcnn is a is a mobile
-                convolutional stem. conv7 is a simple 1x1x7x7 convolutional
-                stem. linconv is a stack of 3x3 grouped convolutions without
-                any nonlinearity
-            backbone_depth: For supporting architectures, control the depth of the backbone. Default depends on arch_name.
-            modulate_class_weights:
-                S special syntax that lets the user modulate automatically
-                computed class weights. Should be a comma separated list of
-                name*weight or name*weight+offset. E.g.
-                `negative*0,background*0.001,No Activity*0.1+1`
-            saliency_loss: Saliency is trained to match any "positive/foreground/salient" class
-            change_head_hidden: Number of hidden layers in the CHANGE head. I.e. the depth of the head.
-            class_head_hidden: Number of hidden layers in the CLASS head. I.e. the depth of the head.
-            saliency_head_hidden: Number of hidden layers in the SALIENCY head. I.e. the depth of the head.
-            decouple_resolution: This turns on logic to decouple input and output resolutions. Probably very slow.
-            attention_impl:
-                Implementation for attention computation. Can be:
-                'exact' - the original O(n^2) method.
-                'performer' - a linear approximation.
-                'reformer' - a LSH approximation.
-            multimodal_reduce: operation used to combine multiple modes from the same timestep
+    __scriptconfig__ = MultimodalTransformerConfig
 
+    def __init__(self, *, classes=10, dataset_stats=None,
+                 input_sensorchan=None, input_channels=None, **kwargs):
+        """
         Example:
             >>> # Note: it is important that the non-kwargs are saved as hyperparams
             >>> from watch.tasks.fusion.methods.channelwise_transformer import MultimodalTransformer
-            >>> model = MultimodalTransformer(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b')
+            >>> self = model = MultimodalTransformer(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b')
             >>> assert "classes" in model.hparams
             >>> assert "dataset_stats" in model.hparams
             >>> assert "input_sensorchan" in model.hparams
+            >>> assert "tokenizer" in model.hparams
         """
-
-        assert tokenizer in ['dwcnn', 'rearrange', 'conv7', 'linconv']
-        assert token_norm in ['none', 'auto', 'group', 'batch']
-        assert arch_name in available_encoders
-        assert decoder in ['mlp', 'segmenter']
-        assert attention_impl in ["exact", "performer", "reformer"]
+        config = MultimodalTransformerConfig(**kwargs)
+        cfgdict = config.to_dict()
+        assert config.tokenizer in ['dwcnn', 'rearrange', 'conv7', 'linconv']
+        assert config.token_norm in ['none', 'auto', 'group', 'batch']
+        assert config.arch_name in available_encoders
+        assert config.decoder in ['mlp', 'segmenter']
+        assert config.attention_impl in ["exact", "performer", "reformer"]
 
         super().__init__()
         self.save_hyperparameters()
+        self.hparams.update(**cfgdict)
 
         if dataset_stats is not None:
             input_stats = dataset_stats['input_stats']
@@ -396,13 +337,13 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         self.classes = kwcoco.CategoryTree.coerce(classes)
         self.num_classes = len(self.classes)
 
-        self.global_class_weight = global_class_weight
-        self.global_change_weight = global_change_weight
-        self.global_saliency_weight = global_saliency_weight
+        self.global_class_weight = self.hparams.global_class_weight
+        self.global_change_weight = self.hparams.global_change_weight
+        self.global_saliency_weight = self.hparams.global_saliency_weight
         self.global_head_weights = {
-            'class': global_class_weight,
-            'change': global_change_weight,
-            'saliency': global_saliency_weight,
+            'class': self.hparams.global_class_weight,
+            'change': self.hparams.global_change_weight,
+            'saliency': self.hparams.global_saliency_weight,
         }
 
         # TODO: this data should be introspectable via the kwcoco file
@@ -422,8 +363,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         self.saliency_num_classes = 2
 
-        if isinstance(saliency_weights, str):
-            if saliency_weights == 'auto':
+        if isinstance(self.hparams.saliency_weights, str):
+            if self.hparams.saliency_weights == 'auto':
                 if class_freq is not None:
                     bg_freq = sum(class_freq.get(k, 0) for k in self.background_classes)
                     fg_freq = sum(class_freq.get(k, 0) for k in self.foreground_classes)
@@ -449,8 +390,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         # For loss function experiments, see and work in
         # ~/code/watch/watch/tasks/fusion/methods/channelwise_transformer.py
         # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
-        if isinstance(class_weights, str):
-            if class_weights == 'auto':
+        if isinstance(self.hparams.class_weights, str):
+            if self.hparams.class_weights == 'auto':
                 if self.class_freq is None:
                     heuristic_weights = {}
                 else:
@@ -511,7 +452,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         ])
 
         MODAL_AGREEMENT_CHANS = self.hparams.stream_channels
-        self.tokenizer = tokenizer
+        self.tokenizer = self.hparams.tokenizer
         self.sensor_channel_tokenizers = RobustModuleDict()
 
         # Unique sensor modes obviously isn't very correct here.
@@ -528,23 +469,23 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             if s not in self.sensor_channel_tokenizers:
                 self.sensor_channel_tokenizers[s] = RobustModuleDict()
 
-            if tokenizer == 'rearrange':
+            if self.hparams.tokenizer == 'rearrange':
                 tokenize = RearrangeTokenizer(
                     in_channels=in_chan, agree=MODAL_AGREEMENT_CHANS,
                     window_size=self.hparams.window_size,
                 )
-            elif tokenizer == 'conv7':
+            elif self.hparams.tokenizer == 'conv7':
                 # Hack for old models
                 in_features_raw = MODAL_AGREEMENT_CHANS
                 tokenize = ConvTokenizer(in_chan, in_features_raw, norm=None)
-            elif tokenizer == 'linconv':
+            elif self.hparams.tokenizer == 'linconv':
                 in_features_raw = MODAL_AGREEMENT_CHANS * 64
                 tokenize = LinearConvTokenizer(in_chan, in_features_raw)
-            elif tokenizer == 'dwcnn':
+            elif self.hparams.tokenizer == 'dwcnn':
                 in_features_raw = MODAL_AGREEMENT_CHANS * 64
-                tokenize = DWCNNTokenizer(in_chan, in_features_raw, norm=token_norm)
+                tokenize = DWCNNTokenizer(in_chan, in_features_raw, norm=self.hparams.token_norm)
             else:
-                raise KeyError(tokenizer)
+                raise KeyError(self.hparams.tokenizer)
 
             self.sensor_channel_tokenizers[s][c] = tokenize
             in_features_raw = tokenize.out_channels
@@ -568,19 +509,19 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             dim=0, in_channels=16, hidden_channels=3, out_channels=8, residual=True, norm=None)
 
         # 'https://rwightman.github.io/pytorch-image-models/models/vision-transformer/'
-        if arch_name in transformer.encoder_configs:
-            encoder_config = transformer.encoder_configs[arch_name]
-            if backbone_depth is not None:
+        if self.hparams.arch_name in transformer.encoder_configs:
+            encoder_config = transformer.encoder_configs[self.hparams.arch_name]
+            if self.hparams.backbone_depth is not None:
                 raise NotImplementedError('unsupported')
             encoder = transformer.FusionEncoder(
                 **encoder_config,
                 in_features=in_features,
-                attention_impl=attention_impl,
-                dropout=dropout,
+                attention_impl=self.hparams.attention_impl,
+                dropout=self.hparams.dropout,
             )
             self.encoder = encoder
-        elif arch_name.startswith('deit'):
-            if backbone_depth is not None:
+        elif self.hparams.arch_name.startswith('deit'):
+            if self.hparams.backbone_depth is not None:
                 raise ValueError('unsupported')
             self.encoder = transformer.DeiTEncoder(
                 # **encoder_config,
@@ -588,8 +529,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 # attention_impl=attention_impl,
                 # dropout=dropout,
             )
-        elif arch_name.startswith('perceiver'):
-            if backbone_depth is None:
+        elif self.hparams.arch_name.startswith('perceiver'):
+            if self.hparams.backbone_depth is None:
                 backbone_depth = 4
             self.encoder = transformer.PerceiverEncoder(
                 depth=backbone_depth,
@@ -603,13 +544,13 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         feat_dim = self.encoder.out_features
 
-        self.change_head_hidden = change_head_hidden
-        self.class_head_hidden = class_head_hidden
-        self.saliency_head_hidden = saliency_head_hidden
+        self.change_head_hidden = self.hparams.change_head_hidden
+        self.class_head_hidden = self.hparams.class_head_hidden
+        self.saliency_head_hidden = self.hparams.saliency_head_hidden
 
-        self.class_loss = class_loss
-        self.change_loss = change_loss
-        self.saliency_loss = saliency_loss
+        self.class_loss = self.hparams.class_loss
+        self.change_loss = self.hparams.change_loss
+        self.saliency_loss = self.hparams.saliency_loss
 
         self.criterions = torch.nn.ModuleDict()
         self.heads = torch.nn.ModuleDict()
@@ -619,21 +560,21 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 'name': 'change',
                 'hidden': self.change_head_hidden,
                 'channels': 2,
-                'loss': change_loss,
+                'loss': self.hparams.change_loss,
                 'weights': self.change_weights,
             },
             {
                 'name': 'saliency',
                 'hidden': self.saliency_head_hidden,
                 'channels': self.saliency_num_classes,
-                'loss': saliency_loss,
+                'loss': self.hparams.saliency_loss,
                 'weights': self.saliency_weights,
             },
             {
                 'name': 'class',
                 'hidden': self.class_head_hidden,
                 'channels': self.num_classes,
-                'loss': class_loss,
+                'loss': self.hparams.class_loss,
                 'weights': self.class_weights,
             },
         ]
@@ -684,6 +625,48 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         self.encode_h = utils.SinePositionalEncoding(3, 1, size=8)
         self.encode_w = utils.SinePositionalEncoding(3, 2, size=8)
+
+    @classmethod
+    def add_argparse_args(cls, parent_parser):
+        """
+        Only required for backwards compatibility until lightning CLI
+        is the primary entry point.
+
+        Example:
+            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from watch.utils.configargparse_ext import ArgumentParser
+            >>> cls = MultimodalTransformer
+            >>> parent_parser = ArgumentParser(formatter_class='defaults')
+            >>> cls.add_argparse_args(parent_parser)
+            >>> parent_parser.print_help()
+            >>> parent_parser.parse_known_args()
+
+            print(scfg.Config.port_argparse(parent_parser, style='dataconf'))
+        """
+        parser = parent_parser.add_argument_group('kwcoco_video_data')
+        config = MultimodalTransformerConfig()
+        config.argparse(parser)
+        return parent_parser
+
+    @classmethod
+    def compatible(cls, cfgdict):
+        """
+        Given keyword arguments, find the subset that is compatible with this
+        constructor. This is somewhat hacked because of usage of scriptconfig,
+        but could be made nicer by future updates.
+        # init_kwargs = ub.compatible(config, cls.__init__)
+        """
+        import inspect
+        nameable_kinds = {inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                          inspect.Parameter.KEYWORD_ONLY}
+        cls_sig = inspect.signature(cls)
+        explicit_argnames = [
+            argname for argname, argtype in cls_sig.parameters.items()
+            if argtype.kind in nameable_kinds
+        ]
+        valid_argnames = explicit_argnames + list(MultimodalTransformerConfig.__default__.keys())
+        clsvars = ub.dict_isect(cfgdict, valid_argnames)
+        return clsvars
 
     def configure_optimizers(self):
         """
