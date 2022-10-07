@@ -259,8 +259,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
     __scriptconfig__ = MultimodalTransformerConfig
 
-    def __init__(self, *, classes=10, dataset_stats=None,
-                 input_sensorchan=None, input_channels=None, **kwargs):
+    def __init__(self, classes=10, dataset_stats=None, input_sensorchan=None,
+                 input_channels=None, **kwargs):
         """
         Example:
             >>> # Note: it is important that the non-kwargs are saved as hyperparams

@@ -137,6 +137,10 @@ class Packager(pl.callbacks.Callback):
             - [ ] Symlink to "BEST" package at the end.
             - [ ] write some script such that any checkpoint can be packaged.
         """
+        if trainer.log_dir is None:
+            print('Trainer run without a log_dir, cannot save package')
+            return
+
         print('Training is complete, packaging model')
         package_fpath = self._make_package_fpath(trainer)
         print(f'self.package_fpath={self.package_fpath}')

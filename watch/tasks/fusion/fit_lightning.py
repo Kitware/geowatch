@@ -1,9 +1,7 @@
 from watch.tasks.fusion.datamodules.kwcoco_datamodule import KWCocoVideoDataModule
-
 # Import models for the CLI registry
-# from watch.tasks.fusion.methods import SequenceAwareModel  # NOQA
-# from watch.tasks.fusion.methods import MultimodalTransformer  # NOQA
-
+from watch.tasks.fusion.methods import SequenceAwareModel  # NOQA
+from watch.tasks.fusion.methods import MultimodalTransformer  # NOQA
 import pathlib
 
 """
@@ -35,7 +33,6 @@ def main():
 
         # TODO: import initialization code from fit.py
         def add_arguments_to_parser(self, parser):
-
             # TODO: separate final_package dir and fpath for more configuration
             # pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
             parser.add_lightning_class_args(pl_ext.callbacks.Packager, "packager")
@@ -43,7 +40,7 @@ def main():
             parser.link_arguments(
                 "trainer.default_root_dir",
                 "packager.package_fpath",
-                compute_fn=lambda root: str(pathlib.Path(root) / "final_package.pt")
+                compute_fn=lambda root: None if root is None else str(ub.Path(root) / "final_package.pt")
                 # apply_on="instantiate",
             )
 
@@ -56,21 +53,35 @@ def main():
                     profiling which checks sys.argv separately.
                     '''))
 
+            def data_value_getter(key):
+                # Hack to call setup on the datamodule before linking args
+                def get_value(data):
+                    if not data.did_setup:
+                        data.setup('fit')
+                    return getattr(data, key)
+                return get_value
+
             # pass dataset stats to model after initialization datamodule
             parser.link_arguments(
-                "data.dataset_stats",
+                "data",
                 "model.init_args.dataset_stats",
+                compute_fn=data_value_getter('dataset_stats'),
                 apply_on="instantiate")
             parser.link_arguments(
-                "data.classes",
+                "data",
                 "model.init_args.classes",
+                compute_fn=data_value_getter('classes'),
                 apply_on="instantiate")
+
+            super().add_arguments_to_parser(parser)
 
     MyLightningCLI(
         # SequenceAwareModel,
-        pl.LightningModule,  # TODO: factor out common components of the two models and put them in base class models inherit from
-        KWCocoVideoDataModule,
+        model_class=pl.LightningModule,  # TODO: factor out common components of the two models and put them in base class models inherit from
+        # MultimodalTransformer,
+        datamodule_class=KWCocoVideoDataModule,
         subclass_mode_model=True,
+        # subclass_mode_data=True,
         parser_kwargs=dict(parser_mode='yaml_unsafe_for_tuples'),
         trainer_defaults=dict(
             # The following works, but it might be better to move some of these callbacks into the cli
@@ -108,14 +119,18 @@ if __name__ == "__main__":
     r"""
     CommandLine:
         python -m watch.tasks.fusion.fit_lightning fit \
+                --model.help=MultimodalTransformer
+
+        python -m watch.tasks.fusion.fit_lightning fit \
             --data.train_dataset=special:vidshapes8-frames9-speed0.5-multispectral \
             --trainer.accelerator=gpu --trainer.devices=0, \
             --trainer.precision=16  \
             --trainer.fast_dev_run=5 \
-            --profile \
             --model=MultimodalTransformer \
-            --model.tokenizer=linconv  \
             --trainer.default_root_dir ./demo_train
+
+            --model=watch.tasks.fusion.methods.channelwise_transformer.MultimodalTransformer \
+            --model.tokenizer=linconv  \
 
         # Note: setting fast_dev_run seems to disable directory output.
 
@@ -125,7 +140,6 @@ if __name__ == "__main__":
             --trainer.devices=0, \
             --trainer.precision=16 \
             --trainer.fast_dev_run=5 \
-            --profile \
             --model=SequenceAwareModel \
             --model.tokenizer=linconv
     """

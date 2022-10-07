@@ -260,6 +260,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.coco_datasets: Dict[str, kwcoco.CocoDataset] = {}
 
         self.requested_tasks = None
+        self.did_setup = False
 
         if self.verbose:
             print('Init KWCocoVideoDataModule')
@@ -375,6 +376,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
         print('self.torch_datasets = {}'.format(ub.repr2(self.torch_datasets, nl=1)))
         self._notify_about_tasks(self.requested_tasks)
+        self.did_setup = True
 
     @property
     def train_dataset(self):
