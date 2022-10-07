@@ -271,17 +271,19 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> assert "input_sensorchan" in model.hparams
             >>> assert "tokenizer" in model.hparams
         """
-        config = MultimodalTransformerConfig(**kwargs)
-        cfgdict = config.to_dict()
-        assert config.tokenizer in ['dwcnn', 'rearrange', 'conv7', 'linconv']
-        assert config.token_norm in ['none', 'auto', 'group', 'batch']
-        assert config.arch_name in available_encoders
-        assert config.decoder in ['mlp', 'segmenter']
-        assert config.attention_impl in ["exact", "performer", "reformer"]
+        assert kwargs.pop('config', None) is None  # not sure why this is in the kwargs
+        print('kwargs = {}'.format(ub.repr2(kwargs, nl=1)))
+        _config = MultimodalTransformerConfig(**kwargs)
+        _cfgdict = _config.to_dict()
+        assert _config.tokenizer in ['dwcnn', 'rearrange', 'conv7', 'linconv']
+        assert _config.token_norm in ['none', 'auto', 'group', 'batch']
+        assert _config.arch_name in available_encoders
+        assert _config.decoder in ['mlp', 'segmenter']
+        assert _config.attention_impl in ["exact", "performer", "reformer"]
 
         super().__init__()
         self.save_hyperparameters()
-        self.hparams.update(**cfgdict)
+        self.hparams.update(**_cfgdict)
 
         if dataset_stats is not None:
             input_stats = dataset_stats['input_stats']

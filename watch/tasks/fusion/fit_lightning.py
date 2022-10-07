@@ -121,15 +121,16 @@ if __name__ == "__main__":
                 --model.help=MultimodalTransformer
 
         python -m watch.tasks.fusion.fit_lightning fit \
+                --model.help=SequenceAwareModel
+
+        python -m watch.tasks.fusion.fit_lightning fit \
             --data.train_dataset=special:vidshapes8-frames9-speed0.5-multispectral \
             --trainer.accelerator=gpu --trainer.devices=0, \
             --trainer.precision=16  \
             --trainer.fast_dev_run=5 \
             --model=MultimodalTransformer \
+            --model.tokenizer=linconv \
             --trainer.default_root_dir ./demo_train
-
-            --model=watch.tasks.fusion.methods.channelwise_transformer.MultimodalTransformer \
-            --model.tokenizer=linconv  \
 
         # Note: setting fast_dev_run seems to disable directory output.
 
