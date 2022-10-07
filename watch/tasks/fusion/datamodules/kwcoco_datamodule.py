@@ -216,6 +216,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         ...         assert mode_val.shape[1:3] == (chip_size, chip_size)
     """
 
+    __scriptconfig__ = KWCocoVideoDataModuleConfig
+
     def __init__(self, verbose=1, **kwargs):
         """
         For details on accepted arguments see KWCocoVideoDataModuleConfig
