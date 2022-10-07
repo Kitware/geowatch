@@ -15,7 +15,7 @@ class NoopModel(pl.LightningModule, WatchModuleMixins):
     """
     No-op example model. Contains a dummy parameter to satisfy the optimizer
     and trainer.
-    
+
     TODO:
         - [ ] Minimize even further.
         - [ ] Identify mandatory steps in __init__ and move to a parent class.
@@ -26,7 +26,7 @@ class NoopModel(pl.LightningModule, WatchModuleMixins):
     def get_cfgstr(self):
         cfgstr = f'{self.hparams.name}_NOOP'
         return cfgstr
-    
+
     def __init__(
         self,
         classes=10,
@@ -38,12 +38,12 @@ class NoopModel(pl.LightningModule, WatchModuleMixins):
         Args:
             name: Specify a name for the experiment. (Unsure if the Model is the place for this)
         """
-        
+
         super().__init__()
         self.save_hyperparameters()
-        
+
         self.dummy_param = nn.Parameter(torch.randn(1), requires_grad=True)
-        
+
         if dataset_stats is not None:
             input_stats = dataset_stats['input_stats']
             class_freq = dataset_stats['class_freq']
@@ -78,7 +78,7 @@ class NoopModel(pl.LightningModule, WatchModuleMixins):
 
         self.classes = kwcoco.CategoryTree.coerce(classes)
         self.num_classes = len(self.classes)
-        
+
         # TODO: this data should be introspectable via the kwcoco file
         hueristic_background_keys = heuristics.BACKGROUND_CLASSES
 
@@ -95,7 +95,7 @@ class NoopModel(pl.LightningModule, WatchModuleMixins):
         # hueristic_ignore_keys.update(hueristic_occluded_keys)
 
         self.saliency_num_classes = 2
-        
+
         self.sensor_channel_tokenizers = RobustModuleDict()
 
         # Unique sensor modes obviously isn't very correct here.
@@ -122,7 +122,7 @@ class NoopModel(pl.LightningModule, WatchModuleMixins):
             self.sensor_channel_tokenizers[key] = nn.Sequential(
                 input_norm,
             )
-            
+
     def forward(self, x):
         return x
 
@@ -132,7 +132,7 @@ class NoopModel(pl.LightningModule, WatchModuleMixins):
                 [
                     0.5 * torch.ones(*frame["output_dims"])
                     for frame in example["frames"]
-                    if frame["change"] != None
+                    if frame["change"] is not None
                 ]
                 for example in batch
             ],
@@ -151,16 +151,16 @@ class NoopModel(pl.LightningModule, WatchModuleMixins):
                 for example in batch
             ],
         }
-        
+
         if with_loss:
             outputs["loss"] = self.dummy_param
-            
+
         return outputs
-        
+
     training_step = shared_step
     # this is a special thing for the predict step
     forward_step = shared_step
-    
+
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters())
 

@@ -2,7 +2,6 @@ from watch.tasks.fusion.datamodules.kwcoco_datamodule import KWCocoVideoDataModu
 # Import models for the CLI registry
 from watch.tasks.fusion.methods import SequenceAwareModel  # NOQA
 from watch.tasks.fusion.methods import MultimodalTransformer  # NOQA
-import pathlib
 
 """
 The Wrapped class below are examples of why we should eventually factor out the current configuraiton system. LightningCLI interogates the __init__ methods belonging to LightningModule and LightningDataModule to decide which parameters can be configured.
