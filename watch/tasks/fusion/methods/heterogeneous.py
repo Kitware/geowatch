@@ -97,6 +97,10 @@ class MipNerfPositionalEncoder(nn.Module):
     
 
 class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
+    """
+    Todo:
+        - [ ] Weight losses, both global and per-pixel
+    """
 
     _HANDLES_NANS = True
 
@@ -490,13 +494,9 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             example_tokens.append(frame_tokens)
         return example_tokens
     
-    def process_query_tokens(self, example, conditional_key=None):
+    def process_query_tokens(self, example):
         example_tokens = []
         for frame in example["frames"]:
-            
-            if conditional_key:
-                if (conditional_key not in frame) or (frame[conditional_key] == None):
-                    continue
 
             # space
             # TODO: compute scale, include in pos encoding
@@ -620,17 +620,13 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 seq_probs = []
                 frame_sizes = [h*w for h, w in frame_shapes]
                 for output_frame_seq, (height, width), frame in zip(torch.split(output_seq, frame_sizes), frame_shapes, example["frames"]):
-                    
-                    task_labels_key = self.task_to_keynames[task_name]["labels"]
-                    if frame[task_labels_key] == None:
-                        continue
-                                           
+                                                              
                     output = einops.rearrange(
                         output_frame_seq, 
                         "(height width) chan -> chan height width", 
                         height=height, width=width,
                     )
-                    target_size = frame[task_labels_key].shape
+                    target_size = frame["output_dims"]
                     output = nn.functional.interpolate(
                         output[None], 
                         size=target_size, 
@@ -667,9 +663,17 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     task_labels_key = self.task_to_keynames[task_name]["labels"]
                     labels = frame[task_labels_key]
                     
-                    if (pred == None) or (labels == None):
+                    if labels == None:
                         continue
-                                           
+                     
+                    # FIXME: This is necessary because sometimes when data.input_space_scale==native, label shapes and output_dims dont match!
+                    if pred.shape[1:] != labels.shape:
+                        pred = nn.functional.interpolate(
+                            pred[None], 
+                            size=labels.shape, 
+                            mode="bilinear",
+                        )[0]
+                    
                     criterion = self.criterions[task_name]
                     if criterion.target_encoding == 'index':
                         loss_labels = labels.long()
@@ -698,7 +702,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                         prog_bar=True,
                     )
         
-        outputs["loss"] = sum(frame_losses) / len(frame_losses)
+        outputs["loss"] = sum(frame_losses) / len(frame_losses)    
         self.log(f"{stage}_loss", outputs["loss"], prog_bar=True)
         return outputs
 
@@ -756,9 +760,6 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
     # this is a special thing for the predict step
     forward_step = shared_step
-    
-    def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters())
 
     def save_package(self, package_path, verbose=1):
         """
