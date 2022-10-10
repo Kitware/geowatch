@@ -361,6 +361,12 @@ def main(cmdline=True, **kw):
     from kwcoco.util.util_json import ensure_json_serializable
     config_dict = ensure_json_serializable(config_dict)
 
+    import os
+    if os.environ.get('GDAL_DISABLE_READDIR_ON_OPEN') != 'EMPTY_DIR':
+        import warnings
+        warnings.warn('environ GDAL_DISABLE_READDIR_ON_OPEN should probably be set to EMPTY_DIR')
+        os.environ['GDAL_DISABLE_READDIR_ON_OPEN'] = 'EMPTY_DIR'
+
     process_info = {
         'type': 'process',
         'properties': {
