@@ -628,9 +628,9 @@ class ExperimentState(ub.NiceRepr):
 
         self.volitile_templates = {
             'pred_trk_pxl_fpath'      : task_dpaths['pred_trk_pxl_dpath'] + '/pred.kwcoco.json',
-            'pred_trk_poly_kwcoco'    : task_dpaths['eval_trk_poly_dpath'] + '/tracks.kwcoco.json',
-            'pred_trk_poly_fpath'     : task_dpaths['eval_trk_poly_dpath'] + '/tracks.json',
-            'pred_trk_poly_viz_stamp' : task_dpaths['eval_trk_poly_dpath'] + '/_viz.stamp',
+            'pred_trk_poly_kwcoco'    : task_dpaths['pred_trk_poly_dpath'] + '/tracks.kwcoco.json',
+            'pred_trk_poly_fpath'     : task_dpaths['pred_trk_poly_dpath'] + '/tracks.json',
+            'pred_trk_poly_viz_stamp' : task_dpaths['pred_trk_poly_dpath'] + '/_viz.stamp',
 
             'crop_fpath'              : task_dpaths['crop_dpath'] + '/crop.kwcoco.json',
 
@@ -643,9 +643,9 @@ class ExperimentState(ub.NiceRepr):
             # TODO: rename curves to pixel
             'pkg_trk_pxl_fpath'    : 'packages/{trk_expt}/{trk_model}.pt',
             'pkg_act_pxl_fpath'    : 'packages/{act_expt}/{act_model}.pt',
-            'eval_trk_pxl_fpath'   : task_dpaths['eval_trk_pxl_dpath'] + '/eval_pxl/curves/measures2.json',
+            'eval_trk_pxl_fpath'   : task_dpaths['eval_trk_pxl_dpath'] + '/curves/measures2.json',
             'eval_trk_poly_fpath'  : task_dpaths['eval_trk_poly_dpath'] + '/merged/summary2.json',
-            'eval_act_pxl_fpath'   : task_dpaths['eval_act_pxl_dpath'] + '/eval_pxl/curves/measures2.json',
+            'eval_act_pxl_fpath'   : task_dpaths['eval_act_pxl_dpath'] + '/curves/measures2.json',
             'eval_act_poly_fpath'  : task_dpaths['eval_act_poly_dpath'] + '/merged/summary3.json',
         }
 

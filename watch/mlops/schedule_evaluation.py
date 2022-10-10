@@ -25,12 +25,6 @@ class ScheduleEvaluationConfig(scfg.Config):
     Builds commands and optionally schedules them.
     """
     default = {
-        # 'model_globstr': scfg.Value(None, help='one or more glob patterns that match the models to predict/evaluate on'),
-        # 'trk_model_globstr': scfg.Value(None, help='one or more glob patterns that match the models to predict/evaluate on'),
-        # 'act_model_globstr': scfg.Value(None, help='one or more glob patterns that match the models to predict/evaluate on'),
-        # 'trk_test_dataset': scfg.Value(None, help='path to the test dataset to predict/evaluate on for BAS'),
-        # 'act_test_dataset': scfg.Value(None, help='path to the test dataset to predict/evaluate/crop from for SC'),
-
         'devices': scfg.Value('auto', help='if using tmux or serial, indicate which gpus are available for use as a comma separated list: e.g. 0,1'),
         'run': scfg.Value(False, help='if False, only prints the commands, otherwise executes them'),
         'virtualenv_cmd': scfg.Value(None, help='command to activate a virtualenv if needed. (might have issues with slurm backend)'),
@@ -39,7 +33,6 @@ class ScheduleEvaluationConfig(scfg.Config):
 
         'pred_workers': scfg.Value(4, help='number of prediction workers in each process'),
 
-        'sidecar2': scfg.Value(True, help='if True uses parallel sidecar pattern, otherwise nested'),
         'shuffle_jobs': scfg.Value(True, help='if True, shuffles the jobs so they are submitted in a random order'),
         'annotations_dpath': scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval'),
 
@@ -49,14 +42,18 @@ class ScheduleEvaluationConfig(scfg.Config):
         'check_other_sessions': scfg.Value('auto', help='if True, will ask to kill other sessions that might exist'),
         'queue_size': scfg.Value('auto', help='if auto, defaults to number of GPUs'),
 
-        'enable_pred_pxl': scfg.Value(True, isflag=True, help='if False, then prediction is not run', alias=['enable_pred']),
-        'enable_eval_pxl': scfg.Value(True, isflag=True, help='if False, then evaluation is not run', alias=['enable_eval']),
-        'enable_pred_trk': scfg.Value(False, isflag=True, help='if True, enable tracking', alias=['enable_track']),
-        'enable_eval_trk': scfg.Value(False, isflag=True, help='if True, enable iapra BAS evalaution', alias=['enable_iarpa_eval']),
-        'enable_pred_act': scfg.Value(False, isflag=True, help='if True, enable actclf', alias=['enable_actclf']),
-        'enable_eval_act': scfg.Value(False, isflag=True, help='if True, enable iapra SC evalaution', alias=['enable_actclf_eval']),
+        # These enabled flags should probably be pushed off to params
+        'enable_pred_trk_pxl': scfg.Value(True, isflag=True, help='BAS heatmap'),
+        'enable_pred_trk_poly': scfg.Value(True, isflag=True, help='BAS tracking'),
+        'enable_crop': scfg.Value(True, isflag=True, help='SC tracking'),
+        'enable_pred_act_pxl': scfg.Value(True, isflag=True, help='SC heatmaps'),
+        'enable_pred_act_poly': scfg.Value(True, isflag=True, help='SC tracking'),
 
-        'enable_pred_trk_viz': scfg.Value(False, isflag=True, help='if true draw predicted tracks'),
+        'enable_eval_trk_pxl': scfg.Value(True, isflag=True, help='BAS heatmap evaluation'),
+        'enable_eval_trk_poly': scfg.Value(True, isflag=True, help='BAS tracking evaluation'),
+        'enable_eval_act_pxl': scfg.Value(True, isflag=True, help='SC heatmaps evaluation'),
+        'enable_eval_act_poly': scfg.Value(True, isflag=True, help='SC tracking evaluation'),
+        'enable_viz_pred_trk_poly': scfg.Value(False, isflag=True, help='if true draw predicted tracks'),
 
         'draw_heatmaps': scfg.Value(1, isflag=True, help='if true draw heatmaps on eval'),
         'draw_curves': scfg.Value(1, isflag=True, help='if true draw curves on eval'),
@@ -203,6 +200,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
     if virtualenv_cmd:
         queue.add_header_command(virtualenv_cmd)
 
+    # Each row represents a single source-to-sink pipeline run, but multiple
+    # rows may share pipeline steps. This is handled by having unique ids per
+    # job that depend on their outputs.
     for row in resolved_rows:
         paths = row['paths']
         paths['true_annotations_dpath'] = annotations_dpath
@@ -220,53 +220,44 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
         ### define the dag of this row item.
 
-        steps = []
+        steps = {}
 
-        step = PipelineSteps.pred_trk_pxl(trk_pxl_params, **paths)
-        steps += [step]
-        print(step.command)
+        step = Pipeline.pred_trk_pxl(trk_pxl_params, **paths)
+        steps[step.name] = step
 
-        step = PipelineSteps.pred_trk_poly(trk_poly_params, **paths)
-        steps += [step]
-        print(step.command)
+        step = Pipeline.pred_trk_poly(trk_poly_params, **paths)
+        steps[step.name] = step
 
-        step = PipelineSteps.eval_trk_pxl(condensed, **paths)
-        steps += [step]
-        print(step.command)
+        step = Pipeline.act_crop(crop_params, **paths)
+        steps[step.name] = step
 
-        step = PipelineSteps.eval_trk_poly(condensed, **paths)
-        steps += [step]
-        print(step.command)
+        step = Pipeline.pred_act_pxl(act_pxl_params, **paths)
+        steps[step.name] = step
 
-        step = PipelineSteps.viz_pred_trk_poly(condensed, **paths)
-        steps += [step]
-        print(step.command)
+        step = Pipeline.pred_act_poly(act_poly_params, **paths)
+        steps[step.name] = step
 
-        step = PipelineSteps.act_crop(crop_params, **paths)
-        steps += [step]
-        print(step.command)
+        step = Pipeline.eval_trk_pxl(condensed, **paths)
+        steps[step.name] = step
 
-        step = PipelineSteps.pred_act_pxl(act_pxl_params, **paths)
-        steps += [step]
-        print(step.command)
+        step = Pipeline.eval_trk_poly(condensed, **paths)
+        steps[step.name] = step
 
-        step = PipelineSteps.pred_act_poly(act_poly_params, **paths)
-        steps += [step]
-        print(step.command)
+        step = Pipeline.viz_pred_trk_poly(condensed, **paths)
+        steps[step.name] = step
 
-        step = PipelineSteps.eval_act_pxl(condensed, **paths)
-        steps += [step]
-        print(step.command)
+        step = Pipeline.eval_act_pxl(condensed, **paths)
+        steps[step.name] = step
 
-        step = PipelineSteps.eval_act_poly(condensed, **paths)
-        steps += [step]
-        print(step.command)
+        step = Pipeline.eval_act_poly(condensed, **paths)
+        steps[step.name] = step
 
+        # Determine the interaction / dependencies between step inputs /
+        # outputs
         g = nx.DiGraph()
-        # Determine the interaction between step inputs / outputs
         outputs_to_step = ub.ddict(list)
         inputs_to_step = ub.ddict(list)
-        for step in steps:
+        for step in steps.values():
             for path in step.out_paths.values():
                 outputs_to_step[path].append(step.name)
             for path in step.in_paths.values():
@@ -283,7 +274,33 @@ def schedule_evaluation(cmdline=False, **kwargs):
             for istep, ostep in it.product(isteps, osteps):
                 g.add_edge(ostep, istep)
 
-        for node in nx.topological_sort(g):
+        #
+        # Determine which steps are enabled / disabled
+
+        sorted_nodes = list(nx.topological_sort(g))
+        for node in sorted_nodes:
+            step = g.nodes[node]['step']
+            step.enabled = config['enable_' + step.name]
+            # if config['skip_existing']:
+            ancestors_will_exist = all(
+                g.nodes[ancestor]['step'].will_exist
+                for ancestor in nx.ancestors(g, step.name)
+            )
+            step.does_exist = all(
+                step.out_paths.map_values(lambda p: p.exists()).values()
+            )
+            if config['skip_existing'] and step.does_exist:
+                step.enabled = False
+            step.will_exist = (
+                (step.enabled and ancestors_will_exist) or
+                step.does_exist
+            )
+            print('step.out_paths = {}'.format(ub.repr2(step.out_paths, nl=1)))
+            print(f'{step.name=}, does_exist={step.does_exist} will_exist={step.will_exist} enabled={step.enabled}')
+
+        #
+        # Submit steps to the scheduling queue
+        for node in sorted_nodes:
             # Skip duplicate jobs
             step = g.nodes[node]['step']
             if step.node_id in queue.named_jobs:
@@ -291,17 +308,20 @@ def schedule_evaluation(cmdline=False, **kwargs):
             depends = []
             for other, _ in list(g.in_edges(node)):
                 dep_step = g.nodes[other]['step']
-                depends.append(dep_step.node_id)
-            queue.submit(command=step.command, name=step.node_id,
-                         depends=depends, **common_submitkw)
+                if dep_step.enabled:
+                    depends.append(dep_step.node_id)
 
-    queue.write_network_text()
+            if step.will_exist and step.enabled:
+                queue.submit(command=step.command, name=step.node_id,
+                             depends=depends, **common_submitkw)
 
     print('queue = {!r}'.format(queue))
     # print(f'{len(queue)=}')
     with_status = 0
     with_rich = 0
     queue.rprint(with_status=with_status, with_rich=with_rich)
+
+    queue.write_network_text()
 
     for job in queue.jobs:
         # TODO: should be able to set this as a queue param.
@@ -337,6 +357,7 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
     from watch.mlops.expt_manager import ExperimentState
     state = ExperimentState(expt_dvc_dpath, '*')
     item = grid_item_defaults | item
+    print('item = {}'.format(ub.repr2(item, nl=1)))
     nested = dotdict_to_nested(item)
 
     condensed = {}
@@ -379,8 +400,6 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
     trackid_deps = ub.udict(condensed) & (
         {'trk_model', 'test_trk_dset', 'trk_pxl_cfg', 'trk_poly_cfg'})
     condensed['trk_poly_id'] = state._condense_cfg(trackid_deps, 'trk_poly_id')
-
-    PipelineSteps.pred_trk_pxl(trk_pxl_params, **paths)
 
     ### CROPPING ###
 
@@ -530,25 +549,41 @@ def resolve_package_paths(model_globstr, expt_dvc_dpath):
 
 
 class Step:
-    def __init__(step, name, command, in_paths, out_paths):
+    def __init__(step, name, command, in_paths, out_paths, resources):
         step.name = name
         step.command = command
         step.in_paths = in_paths
         step.out_paths = out_paths
+        step.resources = resources
+        #
+        # Set later
+        step.enabled = None
+        step.will_exist = None
 
     @property
     def node_id(step):
         """
-        Compute a unique node-id for this job based on the inputs and outputs,
-        which should uniquely encode everything wrt to a cmd-queue grid
+        The experiment manager constructs output paths such that they
+        are unique given the specific set of inputs and parameters. Thus
+        the output paths are sufficient to determine a unique id per step.
         """
-        return step.name + '_' + ub.hash_data([step.in_paths, step.out_paths])[0:8]
+        return step.name + '_' + ub.hash_data(step.out_paths)[0:12]
+
+    def test_is_computed_command(step):
+        test_cmds = ['test -f "{p}"' for p in step.out_paths.values()]
+        if len(test_cmds) == 1:
+            return test_cmds[0]
+        else:
+            return '(' + ' && '.join(test_cmds) + ')'
 
 
-class PipelineSteps:
+class Pipeline:
     """
     Registers how to call each step in the pipeline
     """
+
+    def __init__(pipe):
+        pass
 
     @staticmethod
     def _make_argstr(params):
@@ -576,8 +611,8 @@ class PipelineSteps:
             'visualize': False,
         }
         crop_kwargs = { **paths }
-        crop_kwargs['crop_params_argstr'] = PipelineSteps._make_argstr(crop_params)
-        crop_kwargs['crop_perf_argstr'] = PipelineSteps._make_argstr(perf_options)
+        crop_kwargs['crop_params_argstr'] = Pipeline._make_argstr(crop_params)
+        crop_kwargs['crop_perf_argstr'] = Pipeline._make_argstr(perf_options)
         command = ub.codeblock(
             r'''
             python -m watch.cli.coco_align_geotiffs \
@@ -592,21 +627,25 @@ class PipelineSteps:
                         'crop_regions',
                         'crop_src_fpath',
                     },
-                    out_paths=paths & {'crop_fpath'})
+                    out_paths=paths & {'crop_fpath'},
+                    resources={
+                        'cpus': 2,
+                    })
         return step
 
     def pred_trk_pxl(trk_pxl_params, **paths):
         paths = ub.udict(paths)
+        workers = 4  # todo: parametarize
         perf_options = {
-            'num_workers': 0,
+            'num_workers': workers,
             'devices': '0,',
             'accelerator': 'gpu',
             'batch_size': 1,
         }
         paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
         pred_trk_pxl_kw =  { **paths }
-        pred_trk_pxl_kw['params_argstr'] = PipelineSteps._make_argstr(trk_pxl_params)
-        pred_trk_pxl_kw['perf_argstr'] = PipelineSteps._make_argstr(perf_options)
+        pred_trk_pxl_kw['params_argstr'] = Pipeline._make_argstr(trk_pxl_params)
+        pred_trk_pxl_kw['perf_argstr'] = Pipeline._make_argstr(perf_options)
         command = ub.codeblock(
             r'''
             python -m watch.tasks.fusion.predict \
@@ -620,21 +659,26 @@ class PipelineSteps:
         step = Step(name, command,
                     in_paths=paths & {'pkg_trk_pxl_fpath',
                                       'trk_test_dataset_fpath'},
-                    out_paths=paths & {'pred_trk_pxl_fpath'})
+                    out_paths=paths & {'pred_trk_pxl_fpath'},
+                    resources={
+                        'cpus': workers,
+                        'gpus': 2,
+                    })
         return step
 
     def pred_act_pxl(act_pxl_params, **paths):
         paths = ub.udict(paths)
+        workers = 4
         perf_options = {
-            'num_workers': 0,
+            'num_workers': workers,
             'devices': '0,',
             'accelerator': 'gpu',
             'batch_size': 1,
         }
         paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
         pred_act_pxl_kw =  { **paths }
-        pred_act_pxl_kw['params_argstr'] = PipelineSteps._make_argstr(act_pxl_params)
-        pred_act_pxl_kw['perf_argstr'] = PipelineSteps._make_argstr(perf_options)
+        pred_act_pxl_kw['params_argstr'] = Pipeline._make_argstr(act_pxl_params)
+        pred_act_pxl_kw['perf_argstr'] = Pipeline._make_argstr(perf_options)
         command = ub.codeblock(
             r'''
             python -m watch.tasks.fusion.predict \
@@ -650,7 +694,11 @@ class PipelineSteps:
                         'pkg_act_pxl_fpath',
                         'act_test_dataset_fpath'
                     },
-                    out_paths=paths & {'pred_act_pxl_fpath'})
+                    out_paths=paths & {'pred_act_pxl_fpath'},
+                    resources={
+                        'cpus': workers,
+                        'gpus': 2,
+                    })
         return step
 
     def pred_trk_poly(trk_poly_params, **paths):
@@ -666,17 +714,19 @@ class PipelineSteps:
             if isinstance(cfg['moving_window_size'], str):
                 cfg['moving_window_size'] = util_globals.restricted_eval(
                     cfg['moving_window_size'].format(**cfg))
+        else:
+            cfg['moving_window_size'] = None
 
         if cfg['moving_window_size'] is None:
             cfg['polygon_fn'] = 'heatmaps_to_polys'
         else:
             cfg['polygon_fn'] = 'heatmaps_to_polys_moving_window'
-        # kwargs['params_argstr'] = PipelineSteps(trk_poly_params)
+        # kwargs['params_argstr'] = Pipeline(trk_poly_params)
         pred_trk_poly_kw['track_kwargs_str'] = shlex.quote(json.dumps(cfg))
 
         command = ub.codeblock(
             r'''
-            python -m watch.cli.kwcoco_to_geojson \
+            python -m watch.cli.run_tracker \
                 "{pred_trk_pxl_fpath}" \
                 --default_track_fn saliency_heatmaps \
                 --track_kwargs {track_kwargs_str} \
@@ -688,10 +738,9 @@ class PipelineSteps:
         name = 'pred_trk_poly'
         step = Step(name, command,
                     in_paths=paths & {'pred_trk_pxl_fpath'},
-                    out_paths=paths & {
-                        'pred_trk_poly_fpath',
-                        'pred_trk_poly_kwcoco'
-                    })
+                    out_paths=paths & {'pred_trk_poly_fpath',
+                                       'pred_trk_poly_kwcoco'},
+                    resources={'cpus': 2})
         return step
 
     def eval_trk_pxl(condensed, **paths):
@@ -699,25 +748,26 @@ class PipelineSteps:
         paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
         eval_trk_pxl_kwe = { **paths }
         extra_opts = {
-            'draw_curves': True,
-            'draw_heatmaps': True,
+            'draw_curves': True,  # todo: parametarize
+            'draw_heatmaps': True,  # todo: parametarize
             'viz_thresh': 0.2,
             'workers': 2,
         }
-        eval_trk_pxl_kwe['extra_argstr'] = PipelineSteps._make_argstr(extra_opts)
+        eval_trk_pxl_kwe['extra_argstr'] = Pipeline._make_argstr(extra_opts)
         command = ub.codeblock(
             r'''
             python -m watch.tasks.fusion.evaluate \
                 --true_dataset={trk_test_dataset_fpath} \
                 --pred_dataset={pred_trk_pxl_fpath} \
-                  --eval_dpath={eval_trk_pxl_dpath} \
-                  --score_space=video \
-                  {extra_argstr}
+                --eval_dpath={eval_trk_pxl_dpath} \
+                --score_space=video \
+                {extra_argstr}
             ''').format(**eval_trk_pxl_kwe)
         name = 'eval_trk_pxl'
         step = Step(name, command,
                     in_paths=paths & {'pred_trk_pxl_fpath'},
-                    out_paths=paths & {'eval_trk_pxl_fpath'})
+                    out_paths=paths & {'eval_trk_pxl_fpath'},
+                    resources={'cpus': 2})
         return step
 
     def viz_pred_trk_poly(condensed, **paths):
@@ -737,12 +787,9 @@ class PipelineSteps:
             ''').format(**viz_pred_trk_poly_kw)
         name = 'viz_pred_trk_poly'
         step = Step(name, command,
-                    in_paths=paths & {
-                        'pred_trk_poly_kwcoco',
-                    },
-                    out_paths=paths & {
-                        'pred_trk_poly_viz_stamp'
-                    })
+                    in_paths=paths & {'pred_trk_poly_kwcoco'},
+                    out_paths=paths & {'pred_trk_poly_viz_stamp'},
+                    resources={'cpus': 2})
         return step
 
     def eval_trk_poly(condensed, **paths):
@@ -771,7 +818,8 @@ class PipelineSteps:
         name = 'eval_trk_poly'
         step = Step(name, command,
                     in_paths=paths & {'pred_trk_poly_fpath'},
-                    out_paths=paths & {'eval_trk_poly_fpath'})
+                    out_paths=paths & {'eval_trk_poly_fpath'},
+                    resources={'cpus': 2})
         return step
 
     def pred_act_poly(act_poly_params, **paths):
@@ -787,7 +835,7 @@ class PipelineSteps:
         pred_act_poly_kw['site_summary_glob'] = 'TODO not well defined yet'
         command = ub.codeblock(
             r'''
-            python -m watch.cli.kwcoco_to_geojson \
+            python -m watch.cli.run_tracker \
                 "{pred_act_pxl_fpath}" \
                 --site_summary '{site_summary_glob}' \
                 --default_track_fn class_heatmaps \
@@ -798,13 +846,10 @@ class PipelineSteps:
             ''').format(**pred_act_poly_kw)
         name = 'pred_act_poly'
         step = Step(name, command,
-                    in_paths=paths & {
-                        'pred_act_pxl_fpath'
-                    },
-                    out_paths=paths & {
-                        'pred_act_poly_fpath',
-                        'pred_act_poly_kwcoco'
-                    })
+                    in_paths=paths & {'pred_act_pxl_fpath'},
+                    out_paths=paths & {'pred_act_poly_fpath',
+                                       'pred_act_poly_kwcoco'},
+                    resources={'cpus': 2})
         return step
 
     def eval_act_pxl(condensed, **paths):
@@ -817,20 +862,21 @@ class PipelineSteps:
             'viz_thresh': 0.2,
             'workers': 2,
         }
-        eval_act_pxl_kwe['extra_argstr'] = PipelineSteps._make_argstr(extra_opts)
+        eval_act_pxl_kwe['extra_argstr'] = Pipeline._make_argstr(extra_opts)
         command = ub.codeblock(
             r'''
             python -m watch.tasks.fusion.evaluate \
                 --true_dataset={act_test_dataset_fpath} \
                 --pred_dataset={pred_act_pxl_fpath} \
-                  --eval_dpath={eval_act_pxl_dpath} \
-                  --score_space=video \
-                  {extra_argstr}
+                --eval_dpath={eval_act_pxl_dpath} \
+                --score_space=video \
+                {extra_argstr}
             ''').format(**eval_act_pxl_kwe)
         name = 'eval_act_pxl'
         step = Step(name, command,
                     in_paths=paths & {'pred_act_pxl_fpath'},
-                    out_paths=paths & {'eval_act_pxl_fpath'})
+                    out_paths=paths & {'eval_act_pxl_fpath'},
+                    resources={'cpus': 2})
         return step
 
     def eval_act_poly(condensed, **paths):
@@ -861,7 +907,8 @@ class PipelineSteps:
         name = 'eval_act_poly'
         step = Step(name, command,
                     in_paths=paths & {'pred_act_poly_fpath'},
-                    out_paths=paths & {'eval_act_poly_fpath'})
+                    out_paths=paths & {'eval_act_poly_fpath'},
+                    resources={'cpus': 2})
         return step
 
 

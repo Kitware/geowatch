@@ -83,6 +83,8 @@ def coerce_list_of_action_matrices(arg):
         for item in data:
             action_matrices.append(item)
     elif isinstance(data, dict):
+        if not len(ub.udict(data) & {'matrix', 'include'}):
+            data = {'matrix': data}
         action_matrices.append(data)
     return action_matrices
 

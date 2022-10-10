@@ -377,7 +377,7 @@ def main(cmdline=True, **kw):
             'timestamp': ub.timestamp(),
         }
     }
-    print('process_info = {}'.format(ub.repr2(process_info, nl=3)))
+    print('process_info = {}'.format(ub.repr2(process_info, nl=3, sort=0)))
 
     src_fpath = config['src']
     dst = config['dst']
@@ -421,7 +421,14 @@ def main(cmdline=True, **kw):
         # when I pass the glob path to all the regions
         # I need to use the merged region script. Very strange.
         paths = util_path.coerce_patterned_paths(regions)
-        print('paths = {}'.format(ub.repr2(paths, nl=1)))
+
+        if len(paths) == 1:
+            # Test to see if the file is a region registry.
+            import json
+            peeked = json.loads(paths[0].read_text())
+            if isinstance(peeked, dict) and 'files' in peeked:
+                paths = peeked['files']
+
         if len(paths) == 0:
             raise KeyError(regions)
         parts = []
@@ -564,8 +571,17 @@ class SimpleDataCube(object):
         df_rows = []
         for gid in gids:
             img = coco_dset.index.imgs[gid]
-            sh_img_poly = shapely.geometry.shape(img['geos_corners'])
-            properties = img['geos_corners'].get('properties', {})
+            if 'geos_corners' in img:
+                geos_corners = img['geos_corners']
+            else:
+                geos_corners = None
+                for asset in img.get('auxiliary', img.get('assets', [])):
+                    if 'geos_corners' in asset:
+                        geos_corners = asset['geos_corners']
+                if geos_corners is None:
+                    raise Exception("could not find geos_corners in img or assets")
+            sh_img_poly = shapely.geometry.shape(geos_corners)
+            properties = geos_corners.get('properties', {})
             crs_info = properties.get('crs_info', None)
             if crs_info is not None:
                 crs_info = ensure_json_serializable(crs_info)

@@ -544,3 +544,49 @@ python -m watch.mlops.expt_manager "evaluate" \
     --skip_existing=1 \
     --run=1
 """
+
+
+"""
+
+NEWEST
+
+2022-09-28 EVAL RUN
+
+
+DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+
+TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data_kr1br2.kwcoco.json
+if [ ! -f "$TEST_DATASET" ]; then
+    DATASET_BIG=$DATA_DVC_DPATH/$DATASET_CODE/data.kwcoco.json
+    kwcoco subset "$DATASET_BIG" "$TEST_DATASET" \
+        --select_videos '((.name | test("KR_R001")) or (.name | test("BR_R002")))'
+fi
+
+python -m watch.mlops.schedule_evaluation \
+    --params="
+        trk.pxl.model:
+            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt
+        trk.pxl.data.test_dataset:
+            - $TEST_DATASET
+        crop.src:
+            # FIXME: should be cropping from a dataset with WV
+            - $TEST_DATASET
+        crop.regions:
+            - trk.poly.output
+        act.pxl.data.test_dataset:
+            - crop.dst
+        act.pxl.model:
+            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt
+    " \
+    --devices="0,1" --queue_size=2 \
+    --skip_existing=1 \
+    --enable_pred_trk_pxl=1 \
+    --enable_pred_trk_poly=1 \
+    --enable_crop=1 \
+    --enable_pred_act_pxl=1 \
+    --enable_pred_act_poly=1 \
+    --enable_viz_pred_trk_poly=0 \
+    --backend=serial --run=0
+"""
