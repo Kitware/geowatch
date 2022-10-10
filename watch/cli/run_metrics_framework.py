@@ -990,12 +990,22 @@ def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath,
     json_data['best_bas_rows'] = json.loads(best_bas_rows.to_json(orient='table', indent=2))
     json_data['sc_df'] = json.loads(sc_df.to_json(orient='table', indent=2))
 
+    if not merge_fpath.parent.exists():
+        raise OSError(f'{merge_fpath.parent=} does not exist')
+
     with safer.open(merge_fpath, 'w', temp_file=True) as f:
         json.dump(json_data, f, indent=4)
 
-    # Symlink to visualizations
+    # Consolodate visualizations
     region_viz_dpath = (merge_dpath / 'region_viz_overall').ensuredir()
 
+    # Write a legend to go with the BAS viz
+    legend_img = iarpa_bas_color_legend()
+    legend_fpath = (region_viz_dpath / 'bas_legend.png')
+    import kwimage
+    kwimage.imwrite(legend_fpath, legend_img)
+
+    # Symlink to visualizations
     for dpath in region_dpaths:
         overall_dpath = dpath / 'overall'
         viz_dpath = overall_dpath / 'bas' / 'region'
@@ -1141,7 +1151,7 @@ def main(cmdline=True, **kwargs):
 
     # args, _ = parser.parse_known_args(args)
     config_dict = config.asdict()
-    print('config = {}'.format(ub.repr2(config_dict, nl=2)))
+    print('config = {}'.format(ub.repr2(config_dict, nl=2, sort=0)))
 
     # load pred_sites
     pred_sites = []
@@ -1367,12 +1377,13 @@ def main(cmdline=True, **kwargs):
 
     print('out_dirs = {}'.format(ub.repr2(out_dirs, nl=1)))
     if args.merge and out_dirs:
-        merge_dpath = main_out_dir / 'merged'
 
         if args.merge_fpath is None:
+            merge_dpath = (main_out_dir / 'merged').ensuredir()
             merge_fpath = merge_dpath / 'summary2.json'
         else:
             merge_fpath = ub.Path(args.merge_fpath)
+            merge_dpath = merge_fpath.parent.ensuredir()
 
         region_dpaths = out_dirs
 
@@ -1384,9 +1395,8 @@ def main(cmdline=True, **kwargs):
         print('merge_fpath = {!r}'.format(merge_fpath))
 
 
-def _color_legend():
+def iarpa_bas_color_legend():
     import kwplot
-    kwplot.autompl()
     colors = {}
     colors['gt_true_pos'] = 'lime'
     colors['gt_false_pos'] = 'red'
@@ -1398,7 +1408,7 @@ def _color_legend():
     colors['sm_partially_wrong'] = "aquamarine"
     colors['sm_completely_wrong'] = "magenta"
     img = kwplot.make_legend_img(colors)
-    kwplot.imshow(img)
+    return img
 
 
 if __name__ == '__main__':
