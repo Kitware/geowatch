@@ -643,10 +643,10 @@ class ExperimentState(ub.NiceRepr):
             # TODO: rename curves to pixel
             'pkg_trk_pxl_fpath'    : 'packages/{trk_expt}/{trk_model}.pt',
             'pkg_act_pxl_fpath'    : 'packages/{act_expt}/{act_model}.pt',
-            'eval_trk_pxl_fpath'   : task_dpaths['pred_trk_pxl_dpath'] + '/eval_pxl/curves/measures2.json',
-            'eval_trk_poly_fpath'  : task_dpaths['pred_trk_poly_dpath'] + '/scores/merged/summary2.json',
-            'eval_act_pxl_fpath'   : task_dpaths['pred_act_pxl_dpath'] + '/eval_pxl/curves/measures2.json',
-            'eval_act_poly_fpath'  : task_dpaths['pred_act_poly_dpath'] + '/scores/merged/summary3.json',
+            'eval_trk_pxl_fpath'   : task_dpaths['eval_trk_pxl_dpath'] + '/eval_pxl/curves/measures2.json',
+            'eval_trk_poly_fpath'  : task_dpaths['eval_trk_poly_dpath'] + '/merged/summary2.json',
+            'eval_act_pxl_fpath'   : task_dpaths['eval_act_pxl_dpath'] + '/eval_pxl/curves/measures2.json',
+            'eval_act_poly_fpath'  : task_dpaths['eval_act_poly_dpath'] + '/merged/summary3.json',
         }
 
         # User specified config mapping a formatstr variable to a set of items

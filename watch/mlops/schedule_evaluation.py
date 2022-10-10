@@ -9,6 +9,15 @@ import ubelt as ub
 import shlex
 import json
 import scriptconfig as scfg
+# import watch
+import shlex  # NOQA
+import json  # NOQA
+from watch.utils.lightning_ext import util_globals  # NOQA
+import kwarray  # NOQA
+import cmd_queue
+import networkx as nx
+import itertools as it
+from watch.utils.util_param_grid import expand_param_grid, dotdict_to_nested
 
 
 class ScheduleEvaluationConfig(scfg.Config):
@@ -59,306 +68,6 @@ class ScheduleEvaluationConfig(scfg.Config):
     }
 
 
-class Task(dict):
-    def __init__(self, *args, manager=None, skip_existing=0, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.manager = manager
-        self.skip_existing = skip_existing
-
-    @property
-    def name(self):
-        return self['name']
-
-    def should_compute_task(task_info):
-        # Check if each dependency will exist by the time we run this job
-        deps_will_exist = []
-        for req in task_info['requires']:
-            deps_will_exist.append(task_info.manager[req]['will_exist'])
-        all_deps_will_exist = all(deps_will_exist)
-        task_info['all_deps_will_exist'] = all_deps_will_exist
-
-        output = task_info.get('output', None)
-
-        if not all_deps_will_exist:
-            # If dependencies wont exist, then we cant run
-            enabled = False
-        else:
-            # If we can run, then do it this task is requested
-            if task_info.skip_existing and (output and output.exists()):
-                enabled = task_info['recompute']
-            else:
-                enabled = bool(task_info['requested'])
-        # Only enable the task if we requested it and its dependencies will
-        # exist.
-        task_info['enabled'] = enabled
-        # Mark if we do exist, or we will exist
-        will_exist = enabled or (output and output.exists())
-        task_info['will_exist'] = will_exist
-        return task_info['enabled']
-
-    def prefix_command(task_info, command):
-        """
-        Augments the command so it is lazy if its output exists
-
-        TODO: incorporate into cmdq
-        """
-        if task_info['recompute']:
-            stamp_fpath = task_info['output']
-            if stamp_fpath is not None:
-                command = f'test -f "{stamp_fpath}" || \\\n  ' + command
-        return command
-
-
-class JobCommands:
-
-    @staticmethod
-    def _make_argstr(params):
-        parts = [f'    --{k}={v} \\' for k, v in params.items()]
-        return chr(10).join(parts).lstrip().rstrip('\\')
-
-    def crop(crop_params, **crop_kwargs):
-        from watch.cli import coco_align_geotiffs
-        confobj = coco_align_geotiffs.__config__
-        known_args = set(confobj.default.keys())
-        assert not len(ub.udict(crop_params) - known_args), 'unknown args'
-        crop_params = {
-            'geo_preprop': 'auto',
-            'keep': 'img',
-            'force_nodata': -9999,
-            'rpc_align_method': 'orthorectify',
-            'target_gsd': 4,
-        } | ub.udict(crop_params)
-        perf_options = {
-            'verbose': 1,
-            'workers': 2,
-            'aux_workers': 2,
-            'debug_valid_regions': False,
-            'visualize': False,
-        }
-        crop_kwargs['crop_params_argstr'] = JobCommands._make_argstr(crop_params)
-        crop_kwargs['crop_perf_argstr'] = JobCommands._make_argstr(perf_options)
-        command = ub.codeblock(
-            r'''
-            python -m watch.cli.coco_align_geotiffs \
-                --src "{crop_src_fpath}" \
-                --dst "{crop_fpath}" \
-                {crop_params_argstr} \
-                {crop_perf_argstr}
-            ''').format(**crop_kwargs)
-        return command
-
-    def pred_trk_pxl(trk_pxl_params, **paths):
-        perf_options = {
-            'num_workers': 0,
-            'devices': '0,',
-            'accelerator': 'gpu',
-            'batch_size': 1,
-        }
-        paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
-        pred_trk_pxl_kw =  { **paths }
-        pred_trk_pxl_kw['params_argstr'] = JobCommands._make_argstr(trk_pxl_params)
-        pred_trk_pxl_kw['perf_argstr'] = JobCommands._make_argstr(perf_options)
-        command = ub.codeblock(
-            r'''
-            python -m watch.tasks.fusion.predict \
-                --package_fpath={pkg_trk_pxl_fpath} \
-                --pred_dataset={pred_trk_pxl_fpath} \
-                --test_dataset={trk_test_dataset_fpath} \
-                {params_argstr} \
-                {perf_argstr}
-            ''').format(**pred_trk_pxl_kw)
-        return command
-
-    def pred_act_pxl(act_pxl_params, **paths):
-        perf_options = {
-            'num_workers': 0,
-            'devices': '0,',
-            'accelerator': 'gpu',
-            'batch_size': 1,
-        }
-        paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
-        pred_act_pxl_kw =  { **paths }
-        pred_act_pxl_kw['params_argstr'] = JobCommands._make_argstr(act_pxl_params)
-        pred_act_pxl_kw['perf_argstr'] = JobCommands._make_argstr(perf_options)
-        command = ub.codeblock(
-            r'''
-            python -m watch.tasks.fusion.predict \
-                --package_fpath={pkg_act_pxl_fpath} \
-                --pred_dataset={pred_act_pxl_fpath} \
-                --test_dataset={act_test_dataset_fpath} \
-                {params_argstr} \
-                {perf_argstr}
-            ''').format(**pred_act_pxl_kw)
-        return command
-
-    def pred_trk_poly(trk_poly_params, **paths):
-        pred_trk_poly_kw = { **paths }
-        from watch.utils.lightning_ext import util_globals
-        cfg = trk_poly_params.copy()
-        if 'thresh_hysteresis' in cfg:
-            if isinstance(cfg['thresh_hysteresis'], str):
-                cfg['thresh_hysteresis'] = util_globals.restricted_eval(
-                    cfg['thresh_hysteresis'].format(**cfg))
-
-        if 'moving_window_size' in cfg:
-            if isinstance(cfg['moving_window_size'], str):
-                cfg['moving_window_size'] = util_globals.restricted_eval(
-                    cfg['moving_window_size'].format(**cfg))
-
-        if cfg['moving_window_size'] is None:
-            cfg['polygon_fn'] = 'heatmaps_to_polys'
-        else:
-            cfg['polygon_fn'] = 'heatmaps_to_polys_moving_window'
-        # kwargs['params_argstr'] = JobCommands(trk_poly_params)
-        pred_trk_poly_kw['track_kwargs_str'] = shlex.quote(json.dumps(cfg))
-
-        command = ub.codeblock(
-            r'''
-            python -m watch.cli.kwcoco_to_geojson \
-                "{pred_trk_pxl_fpath}" \
-                --default_track_fn saliency_heatmaps \
-                --track_kwargs {track_kwargs_str} \
-                --clear_annots \
-                --out_dir "{pred_trk_poly_dpath}" \
-                --out_fpath "{pred_trk_poly_fpath}" \
-                --out_kwcoco "{pred_trk_poly_kwcoco}"
-            ''').format(**pred_trk_poly_kw)
-        return command
-
-    def eval_trk_pxl(condensed, **paths):
-        paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
-        eval_trk_pxl_kwe = { **paths }
-        extra_opts = {
-            'draw_curves': True,
-            'draw_heatmaps': True,
-            'viz_thresh': 0.2,
-            'workers': 2,
-        }
-        eval_trk_pxl_kwe['extra_argstr'] = JobCommands._make_argstr(extra_opts)
-        command = ub.codeblock(
-            r'''
-            python -m watch.tasks.fusion.evaluate \
-                --true_dataset={trk_test_dataset_fpath} \
-                --pred_dataset={pred_trk_pxl_fpath} \
-                  --eval_dpath={eval_trk_pxl_dpath} \
-                  --score_space=video \
-                  {extra_argstr}
-            ''').format(**eval_trk_pxl_kwe)
-        return command
-
-    def viz_pred_trk_poly(**kwargs):
-        command = ub.codeblock(
-            r'''
-            smartwatch visualize \
-                "{pred_trk_poly_kwcoco}" \
-                --channels="red|green|blue,salient" \
-                --stack=only \
-                --workers=avail/2 \
-                --workers=avail/2 \
-                --extra_header="{extra_header}" \
-                --animate=True && touch {pred_trk_viz_stamp}
-            ''').format(**kwargs)
-        return command
-
-    def eval_trk_poly(condensed, **paths):
-        eval_trk_poly_kw = { **paths }
-        eval_trk_poly_kw['true_site_dpath'] = paths['true_annotations_dpath'] / 'site_models'
-        eval_trk_poly_kw['true_region_dpath'] = paths['true_annotations_dpath'] / 'region_models'
-        eval_trk_poly_kw['eval_trk_poly_dpath'] = eval_trk_poly_kw['eval_trk_poly_dpath']
-        eval_trk_poly_kw['eval_trk_poly_tmp_dpath'] = eval_trk_poly_kw['eval_trk_poly_dpath'] / '_tmp'
-        eval_trk_poly_kw['name_suffix'] = '-'.join([
-            condensed['trk_model'],
-            condensed['trk_pxl_cfg'],
-            condensed['trk_poly_cfg'],
-        ])
-        command = ub.codeblock(
-            r'''
-            python -m watch.cli.run_metrics_framework \
-                --merge=True \
-                --true_site_dpath "{true_site_dpath}" \
-                --true_region_dpath "{true_region_dpath}" \
-                --tmp_dir "{eval_trk_poly_tmp_dpath}" \
-                --out_dir "{eval_trk_poly_dpath}" \
-                --name "{name_suffix}" \
-                --merge_fpath "{eval_trk_poly_fpath}" \
-                --inputs_are_paths=True \
-                --pred_sites={pred_trk_poly_fpath}
-            ''').format(**eval_trk_poly_kw)
-        return command
-
-    def pred_act_poly(act_poly_params, **paths):
-        # pred_act_row['site_summary_glob'] = (region_model_dpath / '*.geojson')
-        pred_act_poly_kw = paths.copy()
-        actclf_cfg = {
-            'boundaries_as': 'polys',
-        }
-        actclf_cfg.update(act_poly_params)
-        pred_act_poly_kw['kwargs_str'] = shlex.quote(json.dumps(actclf_cfg))
-        # pred_act_poly_kw['site_summary_glob'] = (pred_act_poly_kw['region_model_dpath'] / '*.geojson')
-        pred_act_poly_kw['site_summary_glob'] = 'TODO not well defined yet'
-        command = ub.codeblock(
-            r'''
-            python -m watch.cli.kwcoco_to_geojson \
-                "{pred_act_pxl_fpath}" \
-                --site_summary '{site_summary_glob}' \
-                --default_track_fn class_heatmaps \
-                --track_kwargs {kwargs_str} \
-                --out_dir "{pred_act_poly_dpath}" \
-                --out_fpath "{pred_act_poly_fpath}" \
-                --out_kwcoco_fpath "{pred_act_poly_kwcoco}"
-            ''').format(**pred_act_poly_kw)
-        return command
-
-    def eval_act_pxl(condensed, **paths):
-        paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
-        eval_act_pxl_kwe = { **paths }
-        extra_opts = {
-            'draw_curves': True,
-            'draw_heatmaps': True,
-            'viz_thresh': 0.2,
-            'workers': 2,
-        }
-        eval_act_pxl_kwe['extra_argstr'] = JobCommands._make_argstr(extra_opts)
-        command = ub.codeblock(
-            r'''
-            python -m watch.tasks.fusion.evaluate \
-                --true_dataset={act_test_dataset_fpath} \
-                --pred_dataset={pred_act_pxl_fpath} \
-                  --eval_dpath={eval_act_pxl_dpath} \
-                  --score_space=video \
-                  {extra_argstr}
-            ''').format(**eval_act_pxl_kwe)
-        return command
-
-    def eval_act_poly(condensed, **paths):
-        eval_act_poly_kw = paths.copy()
-        eval_act_poly_kw['name_suffix'] = '-'.join([
-            # condensed['crop_dst_dset']
-            condensed['test_act_dset'],
-            condensed['act_model'],
-            condensed['act_pxl_cfg'],
-            condensed['act_poly_cfg'],
-        ])
-        eval_act_poly_kw['true_site_dpath'] = paths['true_annotations_dpath'] / 'site_models'
-        eval_act_poly_kw['true_region_dpath'] = paths['true_annotations_dpath'] / 'region_models'
-        eval_act_poly_kw['eval_act_poly_dpath'] = eval_act_poly_kw['eval_trk_poly_dpath']
-        eval_act_poly_kw['eval_act_poly_tmp_dpath'] = eval_act_poly_kw['eval_trk_poly_dpath'] / '_tmp'
-        command = ub.codeblock(
-            r'''
-            python -m watch.cli.run_metrics_framework \
-                --merge=True \
-                --true_site_dpath "{true_site_dpath}" \
-                --true_region_dpath "{true_region_dpath}" \
-                --tmp_dir "{eval_act_poly_tmp_dpath}" \
-                --out_dir "{eval_act_poly_dpath}" \
-                --name "{name_suffix}" \
-                --merge_fpath "{eval_act_poly_fpath}" \
-                --inputs_are_paths=True \
-                --pred_sites={pred_act_poly_fpath}
-            ''').format(**eval_act_poly_kw)
-        return command
-
-
 def schedule_evaluation(cmdline=False, **kwargs):
     r"""
     First ensure that models have been copied to the DVC repo in the
@@ -368,59 +77,53 @@ def schedule_evaluation(cmdline=False, **kwargs):
         from watch.mlops.schedule_evaluation import *  # NOQA
         kwargs = {'params': ub.codeblock(
             '''
-                - matrix:
-                    ###
-                    ### BAS Pixel Prediction
-                    ###
-                    trk.pxl.model:
-                        - ~/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt
-                        - ~/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=73-step=37888.pt.pt
-                    trk.pxl.data.test_dataset:
-                        - ~/data/dvc-repos/smart_data_dvc/tmp/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco/cropped_kwcoco_for_bas.json
-                    trk.pxl.data.tta_time: 0
-                    trk.pxl.data.chip_overlap: 0.3
-                    trk.pxl.data.window_scale_space: 10GSD
-                    trk.pxl.data.input_scale_space: 15GSD
-                    trk.pxl.data.output_scale_space: 15GSD
-                    trk.pxl.data.time_span: auto
-                    trk.pxl.data.time_sampling: auto
-                    trk.pxl.data.time_steps: auto
-                    trk.pxl.data.chip_dims: auto
-                    trk.pxl.data.set_cover_algo: None
-                    trk.pxl.data.resample_invalid_frames: 1
-                    trk.pxl.data.use_cloudmask: 1
-                    ###
-                    ### BAS Polygon Prediction
-                    ###
-                    trk.poly.thresh: [0.10, 0.15]
-                    trk.poly.morph_kernel: 3
-                    trk.poly.norm_ord: 1
-                    trk.poly.agg_fn: probs
-                    trk.poly.thresh_hysteresis: None
-                    trk.poly.moving_window_size: None
-                    trk.poly.polygon_fn: heatmaps_to_polys
-                    ###
-                    ### SC Pixel Prediction
-                    ###
-                    crop.src: ~/data/dvc-repos/smart_data_dvc/tmp/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco/kwcoco_for_sc.json
-                    crop.regions:
-                        - trk.poly.output
-                        - truth
-                    act.pxl.data.test_dataset:
-                        - crop.dst
-                        - ~/data/dvc-repos/smart_data_dvc/tmp/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco/cropped_kwcoco_for_sc.json
-                    act.pxl.model:
-                        - ~/data/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
+            - matrix:
+                ###
+                ### BAS Pixel Prediction
+                ###
+                trk.pxl.model:
+                    - ~/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt
+                    - ~/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=73-step=37888.pt.pt
+                trk.pxl.data.test_dataset:
+                    - ~/data/dvc-repos/smart_data_dvc/tmp/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco/cropped_kwcoco_for_bas.json
+                trk.pxl.data.tta_time: 0
+                trk.pxl.data.chip_overlap: 0.3
+                trk.pxl.data.window_scale_space: 10GSD
+                trk.pxl.data.input_scale_space: 15GSD
+                trk.pxl.data.output_scale_space: 15GSD
+                trk.pxl.data.time_span: auto
+                trk.pxl.data.time_sampling: auto
+                trk.pxl.data.time_steps: auto
+                trk.pxl.data.chip_dims: auto
+                trk.pxl.data.set_cover_algo: None
+                trk.pxl.data.resample_invalid_frames: 1
+                trk.pxl.data.use_cloudmask: 1
+                ###
+                ### BAS Polygon Prediction
+                ###
+                trk.poly.thresh: [0.10, 0.15]
+                trk.poly.morph_kernel: 3
+                trk.poly.norm_ord: 1
+                trk.poly.agg_fn: probs
+                trk.poly.thresh_hysteresis: None
+                trk.poly.moving_window_size: None
+                trk.poly.polygon_fn: heatmaps_to_polys
+                ###
+                ### SC Pixel Prediction
+                ###
+                crop.src: ~/data/dvc-repos/smart_data_dvc/tmp/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco/kwcoco_for_sc.json
+                crop.regions:
+                    - trk.poly.output
+                    - truth
+                act.pxl.data.test_dataset:
+                    - crop.dst
+                    # - ~/data/dvc-repos/smart_data_dvc/tmp/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco/cropped_kwcoco_for_sc.json
+                act.pxl.model:
+                    - ~/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
             ''')}
         cmdline = 0
     """
     import watch
-    import shlex
-    import json
-    from watch.utils.lightning_ext import util_globals
-    import kwarray
-    import cmd_queue
-
     config = ScheduleEvaluationConfig(cmdline=cmdline, data=kwargs)
     print('ScheduleEvaluationConfig config = {}'.format(ub.repr2(dict(config), nl=1, si=1)))
 
@@ -446,7 +149,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
     region_model_dpath = annotations_dpath / 'region_models'
 
     # Expand paramater search grid
-    all_param_grid = handle_param_grid(config['params'])
+    # arg = config['params']
+    all_param_grid = expand_param_grid(config['params'])
 
     grid_item_defaults = ub.udict({
         'trk.pxl.model': None,
@@ -462,302 +166,14 @@ def schedule_evaluation(cmdline=False, **kwargs):
         'act.poly.thresh': 0.1,
     })
 
-    def build_trk_pxl_job(trk_pxl):
-        package_fpath = trk_pxl['model']
-        trk_pxl['condensed'] = condensed
-        package_info = {}
-        package_info['package_fpath'] = package_fpath
-        package_info['condensed'] = condensed
-        pass
-
     resolved_rows = []
     # Resolve parameters for each row
     for item in all_param_grid:
-
-        state = ExperimentState(expt_dvc_dpath, '*')
-        item = grid_item_defaults | item
-        nested = dotdict_to_nested(item)
-
-        condensed = {}
-        paths = {}
-
-        # Might not need this exactly
-        pkg_trk_pixel_pathcfg = state._parse_pattern_attrs(
-            state.templates['pkg_trk_pxl_fpath'], item['trk.pxl.model'])
-        # fixme: dataset code is ambiguous between BAS and SC
-        # pkg_trk_pixel_pathcfg.pop('dataset_code', None)
-        condensed.update(pkg_trk_pixel_pathcfg)
-
-        condensed['expt_dvc_dpath'] = expt_dvc_dpath
-
-        ### BAS / TRACKING ###
-
-        trk_pxl  = nested['trk']['pxl']
-        trk_poly = nested['trk']['poly']
-        trk_pxl_params = ub.udict(trk_pxl['data']) - {'test_dataset'}
-        trk_poly_params = ub.udict(trk_poly)
-
-        condensed['trk_model'] = state._condense_model(item['trk.pxl.model'])
-        condensed['test_trk_dset'] = state._condense_test_dset(item['trk.pxl.data.test_dataset'])
-        condensed['trk_pxl_cfg'] = state._condense_cfg(trk_pxl_params, 'trk_pxl')
-        condensed['trk_poly_cfg'] = state._condense_cfg(trk_poly_params, 'trk_poly')
-
-        paths['pkg_trk_pxl_fpath'] = ub.Path(item['trk.pxl.model'])
-        paths['trk_test_dataset_fpath'] = item['trk.pxl.data.test_dataset']
-        paths['pred_trk_pxl_fpath'] = ub.Path(state.templates['pred_trk_pxl_fpath'].format(**condensed))
-        paths['eval_trk_pxl_dpath'] = ub.Path(state.templates['eval_trk_pxl_dpath'].format(**condensed))
-        paths['eval_trk_pxl_fpath'] = ub.Path(state.templates['eval_trk_pxl_fpath'].format(**condensed))
-        paths['pred_trk_poly_fpath'] = ub.Path(state.templates['pred_trk_poly_fpath'].format(**condensed))
-        paths['pred_trk_poly_dpath'] = ub.Path(state.templates['pred_trk_poly_dpath'].format(**condensed))
-        paths['pred_trk_poly_kwcoco'] = ub.Path(state.templates['pred_trk_poly_kwcoco'].format(**condensed))
-        paths['eval_trk_poly_fpath'] = ub.Path(state.templates['eval_trk_poly_fpath'].format(**condensed))
-        paths['eval_trk_poly_dpath'] = ub.Path(state.templates['eval_trk_poly_dpath'].format(**condensed))
-
-        trackid_deps = {}
-        trackid_deps = ub.udict(condensed) & (
-            {'trk_model', 'test_trk_dset', 'trk_pxl_cfg', 'trk_poly_cfg'})
-        condensed['trk_poly_id'] = state._condense_cfg(trackid_deps, 'trk_poly_id')
-
-        JobCommands.pred_trk_pxl(trk_pxl_params, **paths)
-
-        ### CROPPING ###
-
-        crop_params = ub.udict(nested['crop']).copy()
-        crop_src_fpath = crop_params.pop('src')
-        paths['crop_src_fpath'] = crop_src_fpath
-        if crop_params['regions'] == 'truth':
-            # Crop job depends only on true annotations
-            crop_params['regions'] = str(region_model_dpath) + '/*.geojson'
-            condensed['regions_id'] = 'truth'  # todo: version info
-        if crop_params['regions'] == 'trk.poly.output':
-            # Crop job depends on track predictions
-            crop_params['regions'] = state.templates['pred_trk_poly_fpath'].format(**condensed)
-            condensed['regions_id'] = condensed['trk_poly_id']
-        condensed['crop_cfg'] = state._condense_cfg(crop_params, 'crop')
-        condensed['crop_src_dset'] = state._condense_test_dset(crop_src_fpath)
-
-        crop_id_deps = ub.udict(condensed) & (
-            {'regions_id', 'crop_cfg', 'crop_src_dset'})
-        condensed['crop_id'] = state._condense_cfg(crop_id_deps, 'crop_id')
-        paths['crop_dpath'] = ub.Path(state.templates['crop_dpath'].format(**condensed))
-        paths['crop_fpath'] = ub.Path(state.templates['crop_fpath'].format(**condensed))
-        condensed['crop_dst_dset'] = state._condense_test_dset(paths['crop_fpath'])
-
-        crop_kwargs = {**paths}
-        command = JobCommands.crop(crop_params, **crop_kwargs)
-        print(command)
-
-        ### SC / ACTIVITY ###
-        act_pxl  = nested['act']['pxl']
-        act_poly = nested['act']['poly']
-        act_pxl_params = ub.udict(act_pxl['data']) - {'test_dataset'}
-        act_poly_params = ub.udict(act_poly)
-
-        condensed['act_model'] = state._condense_model(item['act.pxl.model'])
-        condensed['act_pxl_cfg'] = state._condense_cfg(act_pxl_params, 'act_pxl')
-        condensed['act_poly_cfg'] = state._condense_cfg(act_poly_params, 'act_poly')
-
-        pkg_act_pixel_pathcfg = state._parse_pattern_attrs(state.templates['pkg_act_pxl_fpath'], item['act.pxl.model'])
-        # pkg_act_pixel_pathcfg.pop('dataset_code', None)
-        condensed.update(pkg_act_pixel_pathcfg)
-
-        # paths['act_test_dataset_fpath'] = item['act.pxl.data.test_dataset']
-        if item['act.pxl.data.test_dataset'] == 'crop.dst':
-            # Activity prediction depends on a cropping job
-            paths['act_test_dataset_fpath'] = paths['crop_fpath']
-        else:
-            # Activity prediction has no dependencies in this case.
-            paths['act_test_dataset_fpath'] = item['act.pxl.data.test_dataset']
-        condensed['test_act_dset'] = state._condense_test_dset(paths['act_test_dataset_fpath'])
-
-        paths['pkg_act_pxl_fpath'] = ub.Path(item['act.pxl.model'])
-        paths['pred_act_poly_fpath'] = ub.Path(state.templates['pred_act_poly_fpath'].format(**condensed))
-        paths['pred_act_poly_dpath'] = ub.Path(state.templates['pred_act_poly_dpath'].format(**condensed))
-        paths['pred_act_pxl_fpath'] = ub.Path(state.templates['pred_act_pxl_fpath'].format(**condensed))
-        paths['eval_act_pxl_fpath'] = ub.Path(state.templates['eval_act_pxl_fpath'].format(**condensed))
-        paths['eval_act_pxl_dpath'] = ub.Path(state.templates['eval_act_pxl_dpath'].format(**condensed))
-        paths['eval_act_poly_fpath'] = ub.Path(state.templates['eval_act_poly_fpath'].format(**condensed))
-        paths['eval_act_poly_dpath'] = ub.Path(state.templates['eval_act_poly_dpath'].format(**condensed))
-        paths['pred_act_poly_kwcoco'] = ub.Path(state.templates['pred_act_poly_kwcoco'].format(**condensed))
-
-        # paths['eval_act_tmp_dpath'] = pred_act_row['eval_act_poly_dpath'] / '_tmp'
-
-        task_params = {
-            'trk.pxl': trk_pxl_params,
-            'trk.poly': trk_poly_params,
-            'crop': crop_params,
-            'act.pxl': act_pxl_params,
-            'act.poly': act_poly_params,
-        }
-
-        row = {
-            'condensed': condensed,
-            'paths': paths,
-            'item': item,
-            'task_params': task_params,
-        }
+        row = resolve_pipeline_row(grid_item_defaults, state,
+                                   region_model_dpath, expt_dvc_dpath, item)
         resolved_rows.append(row)
 
-    for row in resolved_rows:
-        paths = row['paths']
-        paths['true_annotations_dpath'] = annotations_dpath
-        task_params = row['task_params']
-        paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
-
-        trk_pxl_params = task_params['trk.pxl']
-        trk_poly_params = task_params['trk.poly']
-        crop_params = task_params['crop']
-        act_pxl_params = task_params['act.pxl']
-        act_poly_params = task_params['act.poly']
-        condensed = row['condensed']
-
-        ### define the dag of this row item.
-
-        command = JobCommands.pred_trk_pxl(trk_pxl_params, **paths)
-        print(command)
-
-        command = JobCommands.pred_trk_poly(trk_poly_params, **paths)
-        print(command)
-
-        command = JobCommands.eval_trk_pxl(condensed, **paths)
-        print(command)
-
-        command = JobCommands.eval_trk_poly(condensed, **paths)
-        print(command)
-
-        command = JobCommands.crop(crop_params, **paths)
-        print(command)
-
-        command = JobCommands.pred_act_pxl(act_pxl_params, **paths)
-        print(command)
-
-        command = JobCommands.pred_act_poly(act_poly_params, **paths)
-        print(command)
-
-        command = JobCommands.eval_act_pxl(condensed, **paths)
-        print(command)
-
-        command = JobCommands.eval_act_poly(condensed, **paths)
-        print(command)
-
-    # model_globstr = config['model_globstr']
-    # trk_dataset_fpath = config['trk_test_dataset']
-    # act_dataset_fpath = config['act_test_dataset']
-
-    draw_curves = config['draw_curves']
-    draw_heatmaps = config['draw_heatmaps']
-
-    # if model_globstr is None and trk_dataset_fpath is None:
-    #     raise ValueError('model_globstr and test_dataset are required')
-
-    # # Gather the appropriate requested models
-    # if model_globstr is not None:
-    #     package_fpaths = resolve_package_paths(model_globstr, expt_dvc_dpath)
-    # task_model_fpaths = {
-    #     'trk_pxl': [],
-    #     'act_pxl': [],
-    # }
-    # if config['trk_model_globstr'] is not None:
-    #     task_model_fpaths['trk_pxl'] = resolve_package_paths(config['trk_model_globstr'], expt_dvc_dpath)
-
-    # if config['act_model_globstr'] is not None:
-    #     task_model_fpaths['act_pxl'] = resolve_package_paths(config['act_model_globstr'], expt_dvc_dpath)
-
-    # package_fpaths = resolve_package_paths(model_globstr, expt_dvc_dpath)
-
-    print(f'expt_dvc_dpath={expt_dvc_dpath}')
-    print(f'data_dvc_dpath={data_dvc_dpath}')
-
-    skip_existing = config['skip_existing']
-    with_pred = config['enable_pred_pxl']  # TODO: allow caching
-    with_eval = config['enable_eval_pxl']
-    with_track = config['enable_pred_trk']
-    with_iarpa_eval = config['enable_eval_trk']
-    recompute = False
-    def check_recompute(flag, depends_flags=[]):
-        return recompute or flag == 'redo' or any(f == 'redo' for f in depends_flags)
-    recompute_pred = check_recompute(with_pred)
-    recompute_eval = check_recompute(with_pred, [with_pred])
-    recompute_track = check_recompute(with_track, [with_pred])
-    recompute_iarpa_eval = check_recompute(with_iarpa_eval, [with_pred, recompute_track])
-
-    workers_per_queue = config['pred_workers']
-
-    trk_dataset_fpath = ub.Path(trk_dataset_fpath)
-    if not trk_dataset_fpath.exists():
-        print('warning test dataset does not exist')
-
-    task_pkg_rows = {
-        'trk_pxl': [],
-        'act_pxl': [],
-    }
-    for task, package_fpaths in task_model_fpaths.items():
-        candidate_pkg_rows = []
-        for package_fpath in package_fpaths:
-            condensed = state._parse_pattern_attrs(state.templates['pkg_' + task], package_fpath)
-            # Overwrite expt_dvc_dpath because it was parsed as a src dir,
-            # but we are going to use it as a dst dir
-            condensed['expt_dvc_dpath'] = expt_dvc_dpath
-            package_info = {}
-            package_info['package_fpath'] = package_fpath
-            package_info['condensed'] = condensed
-            candidate_pkg_rows.append(package_info)
-        task_pkg_rows[task] = candidate_pkg_rows
-
-    for candidate_pkg_rows in task_pkg_rows['trk_pxl']:
-        print('candidate_pkg_rows = {}'.format(ub.repr2(candidate_pkg_rows, nl=1)))
-        pass
-
-    print('task_pkg_rows = {}'.format(ub.repr2(task_pkg_rows, nl=1)))
-
-    # Build the info we need to submit every prediction job of interest
-    candidate_pred_rows = []
-    trk_test_dset = state._condense_test_dset(trk_dataset_fpath)
-    act_test_dset = state._condense_test_dset(act_dataset_fpath)
-    for pkg_row in ub.ProgIter(candidate_pkg_rows, desc='build pred rows'):
-        for pred_cfg in pred_pxl_param_grid:
-            pred_pxl_row = pkg_row.copy()
-            condensed  = pred_pxl_row['condensed'].copy()
-
-            condensed['trk_test_dset'] = trk_test_dset
-            condensed['act_test_dset'] = act_test_dset
-            condensed['pred_cfg'] = state._condense_pred_cfg(pred_cfg)
-
-            pred_pxl_row['condensed'] = condensed
-            pred_pxl_row['pred_cfg'] = pred_cfg
-            pred_pxl_row['trk_dataset_fpath'] = trk_dataset_fpath
-            # TODO: make using these templates easier
-            pred_pxl_row['pred_pxl_fpath'] = ub.Path(state.templates['pred_trk_pxl'].format(**condensed))
-            pred_pxl_row['eval_pxl_fpath'] = ub.Path(state.templates['eval_trk_pxl'].format(**condensed))
-            pred_pxl_row['eval_pxl_dpath'] = pred_pxl_row['eval_pxl_fpath'].parent.parent
-
-            # TODO: Technically the there should be an evaluation config list
-            # that is looped over for every prediction, but for now they are
-            # 1-to-1. A general ML-ops framwork should provide this.
-
-            # TODO: these are really part of the pred_cfg, even though they are
-            # semi-non-impactful, handle them gracefully
-            # These are part of the pxl eval config
-            pred_pxl_row['draw_curves'] = draw_curves
-            pred_pxl_row['draw_heatmaps'] = draw_heatmaps
-            candidate_pred_rows.append(pred_pxl_row)
-
-    # FIXME: reintroduce
-    # if with_eval == 'redo':
-    #     # Need to dvc unprotect
-    #     # TODO: this can be a job in the queue
-    #     needs_unprotect = []
-    #     for pred_pxl_row in candidate_pred_rows:
-    #         eval_metrics_fpath = ub.Path(pred_pxl_row['eval_pxl_fpath'])
-    #         eval_metrics_dvc_fpath = eval_metrics_fpath.augment(tail='.dvc')
-    #         if eval_metrics_dvc_fpath.exists():
-    #             needs_unprotect.append(eval_metrics_fpath)
-    #     if needs_unprotect:
-    #         # TODO: use the dvc experiment manager for this.
-    #         # This should not be our concern
-    #         from watch.utils.simple_dvc import SimpleDVC
-    #         simple_dvc = SimpleDVC(expt_dvc_dpath)
-    #         simple_dvc.unprotect(needs_unprotect)
+    # from rich import print
 
     queue_dpath = expt_dvc_dpath / '_cmd_queue_schedule'
     queue_dpath.ensuredir()
@@ -774,6 +190,10 @@ def schedule_evaluation(cmdline=False, **kwargs):
     if queue_size == 'auto':
         queue_size = len(GPUS)
 
+    common_submitkw = dict(
+        partition=config['partition'],
+        mem=config['mem']
+    )
     environ = {}
     queue = cmd_queue.Queue.create(config['backend'], name='schedule-eval',
                                    size=queue_size, environ=environ,
@@ -783,351 +203,99 @@ def schedule_evaluation(cmdline=False, **kwargs):
     if virtualenv_cmd:
         queue.add_header_command(virtualenv_cmd)
 
-    common_submitkw = dict(
-        partition=config['partition'],
-        mem=config['mem']
-    )
+    for row in resolved_rows:
+        paths = row['paths']
+        paths['true_annotations_dpath'] = annotations_dpath
+        paths['true_site_dpath'] = paths['true_annotations_dpath'] / 'site_models'
+        paths['true_region_dpath'] = paths['true_annotations_dpath'] / 'region_models'
+        task_params = row['task_params']
+        paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
 
-    if config['shuffle_jobs']:
-        candidate_pred_rows = kwarray.shuffle(candidate_pred_rows)
+        trk_pxl_params = task_params['trk.pxl']
+        trk_poly_params = task_params['trk.poly']
+        crop_params = task_params['crop']
+        act_pxl_params = task_params['act.pxl']
+        act_poly_params = task_params['act.poly']
+        condensed = row['condensed']
 
-    for pred_pxl_row in ub.ProgIter(candidate_pred_rows, desc='build track rows'):
-        package_fpath = pred_pxl_row['package_fpath']
-        pred_cfg = pred_pxl_row['pred_cfg']
-        condensed = pred_pxl_row['condensed']
-        pred_pxl_row['name_suffix'] = '-'.join([
-            condensed['model'],
-            condensed['pred_cfg'],
-        ])
+        ### define the dag of this row item.
 
-        if config['shuffle_jobs']:
-            pred_trk_param_grid = kwarray.shuffle(pred_trk_param_grid)
+        steps = []
 
-        # First compute children track, activity rows (todo: refactor to do
-        # ealier)
-        candidate_trk_rows = []
-        for trk_cfg in pred_trk_param_grid:
-            pred_trk_row = pred_pxl_row.copy()
-            pred_trk_row['condensed'] = condensed = pred_trk_row['condensed'].copy()
-            condensed['trk_cfg'] = state._condense_trk_cfg(trk_cfg)
-            pred_trk_row['name_suffix'] = '-'.join([
-                condensed['model'],
-                condensed['pred_cfg'],
-                condensed['trk_cfg'],
-            ])
+        step = PipelineSteps.pred_trk_pxl(trk_pxl_params, **paths)
+        steps += [step]
+        print(step.command)
 
-            pred_trk_row['pred_trk_poly_fpath'] = ub.Path(state.templates['pred_trk'].format(**condensed))
-            pred_trk_row['pred_trk_poly_kwcoco'] = ub.Path(state.templates['pred_trk_kwcoco'].format(**condensed))
-            pred_trk_row['pred_trk_dpath'] = pred_trk_row['pred_trk_poly_fpath'].parent / 'tracked_sites'
-            pred_trk_row['pred_trk_viz_stamp'] = ub.Path(state.templates['pred_trk_viz_stamp'].format(**condensed))
+        step = PipelineSteps.pred_trk_poly(trk_poly_params, **paths)
+        steps += [step]
+        print(step.command)
 
-            pred_trk_row['eval_trk_out_fpath'] = ub.Path(state.templates['eval_trk'].format(**condensed))
-            pred_trk_row['eval_trk_poly_fpath'] = ub.Path(state.templates['eval_trk'].format(**condensed))
-            pred_trk_row['eval_trk_score_dpath'] = pred_trk_row['eval_trk_poly_fpath'].parent.parent
-            pred_trk_row['eval_trk_dpath'] = pred_trk_row['eval_trk_score_dpath'].parent
+        step = PipelineSteps.eval_trk_pxl(condensed, **paths)
+        steps += [step]
+        print(step.command)
 
-            pred_trk_row['eval_trk_tmp_dpath'] = pred_trk_row['eval_trk_dpath'] / '_tmp'
-            pred_trk_row['true_site_dpath'] = annotations_dpath / 'site_models'
-            pred_trk_row['true_region_dpath'] = annotations_dpath / 'region_models'
+        step = PipelineSteps.eval_trk_poly(condensed, **paths)
+        steps += [step]
+        print(step.command)
 
-            # This is the requested config, not the resolved config.
-            # TODO: # differentiate.
-            pred_trk_row['trk_cfg'] = trk_cfg
-            candidate_trk_rows.append(pred_trk_row)
+        step = PipelineSteps.viz_pred_trk_poly(condensed, **paths)
+        steps += [step]
+        print(step.command)
 
-        if config['shuffle_jobs']:
-            pred_act_param_grid = kwarray.shuffle(pred_act_param_grid)
+        step = PipelineSteps.act_crop(crop_params, **paths)
+        steps += [step]
+        print(step.command)
 
-        # TODO: refactor to depend on a non-truth set of predicted sites.
-        candidate_act_rows = []
-        for act_cfg in pred_act_param_grid:
-            pred_act_row = pred_pxl_row.copy()
-            pred_act_row['condensed'] = condensed = pred_act_row['condensed'].copy()
-            condensed['act_cfg'] = state._condense_act_cfg(act_cfg)
-            pred_act_row['pred_act_fpath'] = ub.Path(state.templates['pred_act'].format(**condensed))
-            pred_trk_row['pred_act_poly_kwcoco'] = ub.Path(state.templates['pred_act_kwcoco'].format(**condensed))
-            pred_act_row['pred_act_dpath'] = pred_act_row['pred_act_fpath'].parent / 'classified_sites'
+        step = PipelineSteps.pred_act_pxl(act_pxl_params, **paths)
+        steps += [step]
+        print(step.command)
 
-            pred_act_row['eval_act_fpath'] = ub.Path(state.templates['eval_act'].format(**condensed))
-            pred_act_row['eval_act_score_dpath'] = pred_act_row['eval_act_fpath'].parent.parent
-            pred_act_row['eval_act_dpath'] = pred_act_row['eval_act_score_dpath'].parent
-            pred_act_row['site_summary_glob'] = (region_model_dpath / '*.geojson')
+        step = PipelineSteps.pred_act_poly(act_poly_params, **paths)
+        steps += [step]
+        print(step.command)
 
-            pred_act_row['true_site_dpath'] = annotations_dpath / 'site_models'
-            pred_act_row['true_region_dpath'] = annotations_dpath / 'region_models'
-            pred_act_row['eval_act_tmp_dpath'] = pred_act_row['eval_act_dpath'] / '_tmp'
-            pred_act_row['act_cfg'] = act_cfg
+        step = PipelineSteps.eval_act_pxl(condensed, **paths)
+        steps += [step]
+        print(step.command)
 
-            pred_act_row['name_suffix'] = '-'.join([
-                condensed['model'],
-                condensed['pred_cfg'],
-                condensed['act_cfg'],
-            ])
-            candidate_act_rows.append(pred_act_row)
+        step = PipelineSteps.eval_act_poly(condensed, **paths)
+        steps += [step]
+        print(step.command)
 
-        # Really should make this a class
-        manager = {}
-        manager['pred_pxl'] = Task(**{
-            'name': 'pred_pxl',
-            'requested': with_pred,
-            'output': pred_pxl_row['pred_pxl_fpath'],
-            'requires': [],
-            'recompute': recompute_pred,
-        }, manager=manager, skip_existing=skip_existing)
+        g = nx.DiGraph()
+        # Determine the interaction between step inputs / outputs
+        outputs_to_step = ub.ddict(list)
+        inputs_to_step = ub.ddict(list)
+        for step in steps:
+            for path in step.out_paths.values():
+                outputs_to_step[path].append(step.name)
+            for path in step.in_paths.values():
+                inputs_to_step[path].append(step.name)
+            g.add_node(step.name, step=step)
 
-        manager['eval_pxl'] = Task(**{
-            'name': 'eval_pxl',
-            'requested': with_eval,
-            'output': pred_pxl_row['eval_pxl_fpath'],
-            'requires': ['pred_pxl'],
-            'recompute': recompute_eval,
-        }, manager=manager, skip_existing=skip_existing)
+        inputs_to_step = ub.udict(inputs_to_step)
+        outputs_to_step = ub.udict(outputs_to_step)
 
-        pred_job = None
-        task_info = manager['pred_pxl']
-        if task_info.should_compute_task():
-            predictkw = {
-                'workers_per_queue': workers_per_queue,
-                **pred_cfg,
-                **pred_pxl_row,
-            }
-            predictkw['trk_pxl_param_argstr'] = chr(10).join(
-                [f'    --{k}={v} \\' for k, v in pred_cfg.items()]).lstrip()
-            command = ub.codeblock(
-                r'''
-                python -m watch.tasks.fusion.predict \
-                    --package_fpath={package_fpath} \
-                    --pred_dataset={pred_pxl_fpath} \
-                    --test_dataset={trk_dataset_fpath} \
-                    --num_workers={workers_per_queue} \
-                    {trk_pxl_param_argstr}
-                    --devices=0, \
-                    --accelerator=gpu \
-                    --batch_size=1
-                ''').format(**predictkw)
-            command = task_info.prefix_command(command)
-            name = task_info['name'] + pred_pxl_row['name_suffix']
-            pred_cpus = workers_per_queue
-            pred_job = queue.submit(command, gpus=1, name=name,
-                                    cpus=pred_cpus, **common_submitkw)
+        common = list((inputs_to_step & outputs_to_step).keys())
+        for path in common:
+            isteps = inputs_to_step[path]
+            osteps = outputs_to_step[path]
+            for istep, ostep in it.product(isteps, osteps):
+                g.add_edge(ostep, istep)
 
-        task_info = manager['eval_pxl']
-        if task_info.should_compute_task():
+        for node in nx.topological_sort(g):
+            # Skip duplicate jobs
+            step = g.nodes[node]['step']
+            if step.node_id in queue.named_jobs:
+                continue
+            depends = []
+            for other, _ in list(g.in_edges(node)):
+                dep_step = g.nodes[other]['step']
+                depends.append(dep_step.node_id)
+            queue.submit(command=step.command, name=step.node_id,
+                         depends=depends, **common_submitkw)
 
-            eval_pxl_row = pred_pxl_row  # hack, for now these are 1-to-1
-
-            command = ub.codeblock(
-                r'''
-                python -m watch.tasks.fusion.evaluate \
-                    --true_dataset={trk_dataset_fpath} \
-                    --pred_dataset={pred_pxl_fpath} \
-                      --eval_dpath={eval_pxl_dpath} \
-                      --score_space=video \
-                      --draw_curves={draw_curves} \
-                      --draw_heatmaps={draw_heatmaps} \
-                      --viz_thresh=0.2 \
-                      --workers=2
-                ''').format(**eval_pxl_row)
-            command = task_info.prefix_command(command)
-            name = task_info['name'] + pred_pxl_row['name_suffix']
-            task_info['job'] = queue.submit(
-                command, depends=pred_job, name=name, cpus=2,
-                **common_submitkw)
-
-        for pred_trk_row in candidate_trk_rows:
-            manager['pred_trk'] = Task(**{
-                'name': 'pred_trk',
-                'requested': config['enable_pred_trk'],
-                'output': pred_trk_row['pred_trk_poly_fpath'],
-                'requires': ['pred_pxl'],
-                'recompute': recompute_track,
-            }, manager=manager, skip_existing=skip_existing)
-
-            manager['pred_trk_viz'] = Task(**{
-                'name': 'pred_trk_viz',
-                'requested': config['enable_pred_trk_viz'],
-                'output': pred_trk_row['pred_trk_viz_stamp'],
-                'requires': ['pred_trk'],
-                'recompute': recompute_track,
-            }, manager=manager, skip_existing=skip_existing)
-
-            manager['eval_trk'] = Task(**{
-                'name': 'eval_trk',
-                'requested': with_iarpa_eval,
-                'output': pred_trk_row['eval_trk_out_fpath'],
-                'requires': ['pred_trk'],
-                'recompute': recompute_iarpa_eval,
-            }, manager=manager, skip_existing=skip_existing)
-
-            bas_job = None
-            task_info = manager['pred_trk']
-            if task_info.should_compute_task():
-                cfg = pred_trk_row['trk_cfg'].copy()
-                if 'thresh_hysteresis' in cfg:
-                    if isinstance(cfg['thresh_hysteresis'], str):
-                        cfg['thresh_hysteresis'] = util_globals.restricted_eval(
-                            cfg['thresh_hysteresis'].format(**cfg))
-
-                if 'moving_window_size' in cfg:
-                    if isinstance(cfg['moving_window_size'], str):
-                        cfg['moving_window_size'] = util_globals.restricted_eval(
-                            cfg['moving_window_size'].format(**cfg))
-                    if cfg['moving_window_size'] is None:
-                        cfg['polygon_fn'] = 'heatmaps_to_polys'
-                    else:
-                        cfg['polygon_fn'] = 'heatmaps_to_polys_moving_window'
-
-                track_kwargs_str = shlex.quote(json.dumps(cfg))
-                bas_args = f'--default_track_fn saliency_heatmaps --track_kwargs {track_kwargs_str}'
-                pred_trk_row['bas_args'] = bas_args
-                # Because BAS is the first step we want ensure we clear annotations so
-                # everything that comes out is a track from BAS.
-                command = ub.codeblock(
-                    r'''
-                    python -m watch.cli.kwcoco_to_geojson \
-                        "{pred_pxl_fpath}" \
-                        {bas_args} \
-                        --clear_annots \
-                        --out_dir "{pred_trk_dpath}" \
-                        --out_fpath "{pred_trk_poly_fpath}" \
-                        --out_kwcoco "{pred_trk_poly_kwcoco}"
-                    ''').format(**pred_trk_row)
-                command = task_info.prefix_command(command)
-                name = task_info['name'] + pred_trk_row['name_suffix']
-                bas_job = queue.submit(command=command, depends=pred_job,
-                                         name=name, cpus=2, **common_submitkw)
-                task_info['job'] = bas_job
-
-            task_info = manager['pred_trk_viz']
-            if task_info.should_compute_task():
-                condensed = pred_trk_row['condensed']
-                pred_trk_row['extra_header'] = f"\\n{condensed['pred_cfg']}-{condensed['trk_cfg']}"
-                command = ub.codeblock(
-                    r'''
-                    smartwatch visualize \
-                        "{pred_trk_poly_kwcoco}" \
-                        --channels="red|green|blue,salient" \
-                        --stack=only \
-                        --workers=avail/2 \
-                        --workers=avail/2 \
-                        --extra_header="{extra_header}" \
-                        --animate=True && touch {pred_trk_viz_stamp}
-                    ''').format(**pred_trk_row)
-                print(command)
-                # FIXME: the process itself should likely take care of writing
-                # a stamp that indicates it is done. Or we can generalize this
-                # as some wrapper applied to every watch command, but that
-                # might require knowing about all configs a-priori.
-                command = task_info.prefix_command(command)
-                name = task_info['name'] + pred_trk_row['name_suffix']
-                bas_viz_job = queue.submit(command=command, depends=bas_job,
-                                           name=name, cpus=2,
-                                           **common_submitkw)
-                task_info['job'] = bas_viz_job
-
-            # TODO: need a way of knowing if a package is BAS or SC.
-            # Might need info on GSD as well.
-            task_info = manager['eval_trk']
-            if task_info.should_compute_task():
-                eval_trk_row = pred_trk_row.copy()  # 1-to-1 for now
-                command = ub.codeblock(
-                    r'''
-                    python -m watch.cli.run_metrics_framework \
-                        --merge=True \
-                        --true_site_dpath "{true_site_dpath}" \
-                        --true_region_dpath "{true_region_dpath}" \
-                        --tmp_dir "{eval_trk_tmp_dpath}" \
-                        --out_dir "{eval_trk_score_dpath}" \
-                        --name "{name_suffix}" \
-                        --merge_fpath "{eval_trk_poly_fpath}" \
-                        --inputs_are_paths=True \
-                        --pred_sites={pred_trk_poly_fpath}
-                    ''').format(**eval_trk_row)
-
-                command = task_info.prefix_command(command)
-                name = task_info['name'] + eval_trk_row['name_suffix']
-                bas_eval_job = queue.submit(
-                    command=command, depends=bas_job, name=name, cpus=2,
-                    **common_submitkw)
-                task_info['job'] = bas_eval_job
-
-        for pred_act_row in candidate_act_rows:
-
-            manager['pred_act'] = Task(**{
-                'name': 'pred_act',
-                'requested': config['enable_pred_act'],
-                'output': pred_act_row['pred_act_fpath'],
-                'requires': ['pred_pxl'],
-                'recompute': 0,
-            }, manager=manager, skip_existing=skip_existing)
-            manager['eval_act'] = Task(**{
-                'name': 'eval_act',
-                'requested': config['enable_eval_act'],
-                'output': pred_act_row['eval_act_fpath'],
-                'requires': ['pred_act'],
-                'recompute': 0,
-            }, manager=manager, skip_existing=skip_existing)
-
-            sc_job = None
-            task_info = manager['pred_act']
-            if task_info.should_compute_task():
-                actclf_cfg = {
-                    'boundaries_as': 'polys',
-                }
-                actclf_cfg.update(pred_act_row['act_cfg'])
-                kwargs_str = shlex.quote(json.dumps(actclf_cfg))
-                pred_act_row['sc_args'] = f'--default_track_fn class_heatmaps --track_kwargs {kwargs_str}'
-
-                # TODO: make a variant that comes from truth, and a variant
-                # that comes from a selected BAS model.
-                command = ub.codeblock(
-                    r'''
-                    python -m watch.cli.kwcoco_to_geojson \
-                        "{pred_pxl_fpath}" \
-                        --site_summary '{site_summary_glob}' \
-                        {sc_args} \
-                        --out_dir "{pred_act_dpath}" \
-                        --out_fpath "{pred_act_fpath}" \
-                        --out_kwcoco_fpath "{pred_act_poly_kwcoco}"
-                    ''').format(**pred_act_row)
-
-                command = task_info.prefix_command(command)
-                name = task_info['name'] + pred_act_row['name_suffix']
-                sc_job = queue.submit(
-                    command=command, depends=pred_job, name=name, cpus=2,
-                    partition=config['partition'],
-                    mem=config['mem'],
-                )
-                task_info['job'] = sc_job
-
-            task_info = manager['eval_act']
-            if task_info.should_compute_task():
-                eval_act_row = pred_act_row.copy()  # 1-to-1 for now
-                command = ub.codeblock(
-                    r'''
-                    python -m watch.cli.run_metrics_framework \
-                        --merge=True \
-                        --true_site_dpath "{true_site_dpath}" \
-                        --true_region_dpath "{true_region_dpath}" \
-                        --tmp_dir "{eval_act_tmp_dpath}" \
-                        --out_dir "{eval_act_score_dpath}" \
-                        --name "{name_suffix}" \
-                        --merge_fpath "{eval_act_fpath}" \
-                        --inputs_are_paths=True \
-                        --pred_sites={pred_act_fpath}
-                    ''').format(**eval_act_row)
-
-                command = task_info.prefix_command(command)
-                name = task_info['name'] + eval_act_row['name_suffix']
-                sc_eval_job = queue.submit(
-                    command=command,
-                    depends=sc_job,
-                    name=name,
-                    cpus=2,
-                    partition=config['partition'],
-                    mem=config['mem'],
-                )
-                task_info['job'] = sc_eval_job
+    queue.write_network_text()
 
     print('queue = {!r}'.format(queue))
     # print(f'{len(queue)=}')
@@ -1163,6 +331,131 @@ def _auto_gpus():
         if len(gpu_info['procs']) == 0:
             GPUS.append(gpu_idx)
     return GPUS
+
+
+def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc_dpath, item):
+    from watch.mlops.expt_manager import ExperimentState
+    state = ExperimentState(expt_dvc_dpath, '*')
+    item = grid_item_defaults | item
+    nested = dotdict_to_nested(item)
+
+    condensed = {}
+    paths = {}
+
+    # Might not need this exactly
+    pkg_trk_pixel_pathcfg = state._parse_pattern_attrs(
+        state.templates['pkg_trk_pxl_fpath'], item['trk.pxl.model'])
+    # fixme: dataset code is ambiguous between BAS and SC
+    # pkg_trk_pixel_pathcfg.pop('dataset_code', None)
+    condensed.update(pkg_trk_pixel_pathcfg)
+
+    condensed['expt_dvc_dpath'] = expt_dvc_dpath
+
+    ### BAS / TRACKING ###
+
+    trk_pxl  = nested['trk']['pxl']
+    trk_poly = nested['trk']['poly']
+    trk_pxl_params = ub.udict(trk_pxl['data']) - {'test_dataset'}
+    trk_poly_params = ub.udict(trk_poly)
+
+    condensed['trk_model'] = state._condense_model(item['trk.pxl.model'])
+    condensed['test_trk_dset'] = state._condense_test_dset(item['trk.pxl.data.test_dataset'])
+    condensed['trk_pxl_cfg'] = state._condense_cfg(trk_pxl_params, 'trk_pxl')
+    condensed['trk_poly_cfg'] = state._condense_cfg(trk_poly_params, 'trk_poly')
+
+    paths['pkg_trk_pxl_fpath'] = ub.Path(item['trk.pxl.model'])
+    paths['trk_test_dataset_fpath'] = item['trk.pxl.data.test_dataset']
+    paths['pred_trk_pxl_fpath'] = ub.Path(state.templates['pred_trk_pxl_fpath'].format(**condensed))
+    paths['eval_trk_pxl_dpath'] = ub.Path(state.templates['eval_trk_pxl_dpath'].format(**condensed))
+    paths['eval_trk_pxl_fpath'] = ub.Path(state.templates['eval_trk_pxl_fpath'].format(**condensed))
+    paths['pred_trk_poly_fpath'] = ub.Path(state.templates['pred_trk_poly_fpath'].format(**condensed))
+    paths['pred_trk_poly_viz_stamp'] = ub.Path(state.templates['pred_trk_poly_viz_stamp'].format(**condensed))
+    paths['pred_trk_poly_dpath'] = ub.Path(state.templates['pred_trk_poly_dpath'].format(**condensed))
+    paths['pred_trk_poly_kwcoco'] = ub.Path(state.templates['pred_trk_poly_kwcoco'].format(**condensed))
+    paths['eval_trk_poly_fpath'] = ub.Path(state.templates['eval_trk_poly_fpath'].format(**condensed))
+    paths['eval_trk_poly_dpath'] = ub.Path(state.templates['eval_trk_poly_dpath'].format(**condensed))
+
+    trackid_deps = {}
+    trackid_deps = ub.udict(condensed) & (
+        {'trk_model', 'test_trk_dset', 'trk_pxl_cfg', 'trk_poly_cfg'})
+    condensed['trk_poly_id'] = state._condense_cfg(trackid_deps, 'trk_poly_id')
+
+    PipelineSteps.pred_trk_pxl(trk_pxl_params, **paths)
+
+    ### CROPPING ###
+
+    crop_params = ub.udict(nested['crop']).copy()
+    crop_src_fpath = crop_params.pop('src')
+    paths['crop_src_fpath'] = crop_src_fpath
+    if crop_params['regions'] == 'truth':
+        # Crop job depends only on true annotations
+        paths['crop_regions'] = str(region_model_dpath) + '/*.geojson'
+        condensed['regions_id'] = 'truth'  # todo: version info
+    if crop_params['regions'] == 'trk.poly.output':
+        # Crop job depends on track predictions
+        paths['crop_regions'] = state.templates['pred_trk_poly_fpath'].format(**condensed)
+        condensed['regions_id'] = condensed['trk_poly_id']
+
+    crop_params['regions'] = paths['crop_regions']
+    condensed['crop_cfg'] = state._condense_cfg(crop_params, 'crop')
+    condensed['crop_src_dset'] = state._condense_test_dset(crop_src_fpath)
+
+    crop_id_deps = ub.udict(condensed) & (
+        {'regions_id', 'crop_cfg', 'crop_src_dset'})
+    condensed['crop_id'] = state._condense_cfg(crop_id_deps, 'crop_id')
+    paths['crop_dpath'] = ub.Path(state.templates['crop_dpath'].format(**condensed))
+    paths['crop_fpath'] = ub.Path(state.templates['crop_fpath'].format(**condensed))
+    condensed['crop_dst_dset'] = state._condense_test_dset(paths['crop_fpath'])
+
+    ### SC / ACTIVITY ###
+    act_pxl  = nested['act']['pxl']
+    act_poly = nested['act']['poly']
+    act_pxl_params = ub.udict(act_pxl['data']) - {'test_dataset'}
+    act_poly_params = ub.udict(act_poly)
+
+    condensed['act_model'] = state._condense_model(item['act.pxl.model'])
+    condensed['act_pxl_cfg'] = state._condense_cfg(act_pxl_params, 'act_pxl')
+    condensed['act_poly_cfg'] = state._condense_cfg(act_poly_params, 'act_poly')
+
+    pkg_act_pixel_pathcfg = state._parse_pattern_attrs(state.templates['pkg_act_pxl_fpath'], item['act.pxl.model'])
+    condensed.update(pkg_act_pixel_pathcfg)
+
+    # paths['act_test_dataset_fpath'] = item['act.pxl.data.test_dataset']
+    if item['act.pxl.data.test_dataset'] == 'crop.dst':
+        # Activity prediction depends on a cropping job
+        paths['act_test_dataset_fpath'] = paths['crop_fpath']
+    else:
+        # Activity prediction has no dependencies in this case.
+        paths['act_test_dataset_fpath'] = item['act.pxl.data.test_dataset']
+    condensed['test_act_dset'] = state._condense_test_dset(paths['act_test_dataset_fpath'])
+
+    paths['pkg_act_pxl_fpath'] = ub.Path(item['act.pxl.model'])
+    paths['pred_act_poly_fpath'] = ub.Path(state.templates['pred_act_poly_fpath'].format(**condensed))
+    paths['pred_act_poly_dpath'] = ub.Path(state.templates['pred_act_poly_dpath'].format(**condensed))
+    paths['pred_act_pxl_fpath'] = ub.Path(state.templates['pred_act_pxl_fpath'].format(**condensed))
+    paths['eval_act_pxl_fpath'] = ub.Path(state.templates['eval_act_pxl_fpath'].format(**condensed))
+    paths['eval_act_pxl_dpath'] = ub.Path(state.templates['eval_act_pxl_dpath'].format(**condensed))
+    paths['eval_act_poly_fpath'] = ub.Path(state.templates['eval_act_poly_fpath'].format(**condensed))
+    paths['eval_act_poly_dpath'] = ub.Path(state.templates['eval_act_poly_dpath'].format(**condensed))
+    paths['pred_act_poly_kwcoco'] = ub.Path(state.templates['pred_act_poly_kwcoco'].format(**condensed))
+
+    # paths['eval_act_tmp_dpath'] = pred_act_row['eval_act_poly_dpath'] / '_tmp'
+
+    task_params = {
+        'trk.pxl': trk_pxl_params,
+        'trk.poly': trk_poly_params,
+        'crop': crop_params,
+        'act.pxl': act_pxl_params,
+        'act.poly': act_poly_params,
+    }
+
+    row = {
+        'condensed': condensed,
+        'paths': paths,
+        'item': item,
+        'task_params': task_params,
+    }
+    return row
 
 
 def resolve_package_paths(model_globstr, expt_dvc_dpath):
@@ -1236,272 +529,340 @@ def resolve_package_paths(model_globstr, expt_dvc_dpath):
     return package_fpaths
 
 
-def handle_yaml_grid(default, auto, arg):
-    """
-    Example:
-        >>> default = {}
-        >>> auto = {}
-        >>> arg = ub.codeblock(
-        >>>     '''
-        >>>     matrix:
-        >>>         foo: ['bar', 'baz']
-        >>>     include:
-        >>>         - {'foo': 'buz', 'bug': 'boop'}
-        >>>     ''')
-        >>> handle_yaml_grid(default, auto, arg)
+class Step:
+    def __init__(step, name, command, in_paths, out_paths):
+        step.name = name
+        step.command = command
+        step.in_paths = in_paths
+        step.out_paths = out_paths
 
-        >>> default = {'baz': [1, 2, 3]}
-        >>> arg = '''
-        >>>     include:
-        >>>     - {
-        >>>       "thresh": 0.1,
-        >>>       "morph_kernel": 3,
-        >>>       "norm_ord": 1,
-        >>>       "agg_fn": "probs",
-        >>>       "thresh_hysteresis": "None",
-        >>>       "moving_window_size": "None",
-        >>>       "polygon_fn": "heatmaps_to_polys"
-        >>>     }
-        >>>     '''
-        >>> handle_yaml_grid(default, auto, arg)
+    @property
+    def node_id(step):
+        """
+        Compute a unique node-id for this job based on the inputs and outputs,
+        which should uniquely encode everything wrt to a cmd-queue grid
+        """
+        return step.name + '_' + ub.hash_data([step.in_paths, step.out_paths])[0:8]
+
+
+class PipelineSteps:
     """
-    stdform_keys = {'matrix', 'include'}
-    import ruamel.yaml
-    print('arg = {}'.format(ub.repr2(arg, nl=1)))
-    if arg:
-        if arg is True:
-            arg = 'auto'
-        if isinstance(arg, str):
-            if arg == 'auto':
-                arg = auto
-            if isinstance(arg, str):
-                arg = ruamel.yaml.safe_load(arg)
-    else:
-        arg = {'matrix': default}
-    if isinstance(arg, dict):
-        arg = ub.udict(arg)
-        if len(arg - stdform_keys) == 0 and (arg & stdform_keys):
-            # Standard form
-            ...
+    Registers how to call each step in the pipeline
+    """
+
+    @staticmethod
+    def _make_argstr(params):
+        parts = [f'    --{k}={v} \\' for k, v in params.items()]
+        return chr(10).join(parts).lstrip().rstrip('\\')
+
+    def act_crop(crop_params, **paths):
+        paths = ub.udict(paths)
+        from watch.cli import coco_align_geotiffs
+        confobj = coco_align_geotiffs.__config__
+        known_args = set(confobj.default.keys())
+        assert not len(ub.udict(crop_params) - known_args), 'unknown args'
+        crop_params = {
+            'geo_preprop': 'auto',
+            'keep': 'img',
+            'force_nodata': -9999,
+            'rpc_align_method': 'orthorectify',
+            'target_gsd': 4,
+        } | ub.udict(crop_params)
+        perf_options = {
+            'verbose': 1,
+            'workers': 8,
+            'aux_workers': 8,
+            'debug_valid_regions': False,
+            'visualize': False,
+        }
+        crop_kwargs = { **paths }
+        crop_kwargs['crop_params_argstr'] = PipelineSteps._make_argstr(crop_params)
+        crop_kwargs['crop_perf_argstr'] = PipelineSteps._make_argstr(perf_options)
+        command = ub.codeblock(
+            r'''
+            python -m watch.cli.coco_align_geotiffs \
+                --src "{crop_src_fpath}" \
+                --dst "{crop_fpath}" \
+                {crop_params_argstr} \
+                {crop_perf_argstr}
+            ''').format(**crop_kwargs)
+        name = 'crop'
+        step = Step(name, command,
+                    in_paths=paths & {
+                        'crop_regions',
+                        'crop_src_fpath',
+                    },
+                    out_paths=paths & {'crop_fpath'})
+        return step
+
+    def pred_trk_pxl(trk_pxl_params, **paths):
+        paths = ub.udict(paths)
+        perf_options = {
+            'num_workers': 0,
+            'devices': '0,',
+            'accelerator': 'gpu',
+            'batch_size': 1,
+        }
+        paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
+        pred_trk_pxl_kw =  { **paths }
+        pred_trk_pxl_kw['params_argstr'] = PipelineSteps._make_argstr(trk_pxl_params)
+        pred_trk_pxl_kw['perf_argstr'] = PipelineSteps._make_argstr(perf_options)
+        command = ub.codeblock(
+            r'''
+            python -m watch.tasks.fusion.predict \
+                --package_fpath={pkg_trk_pxl_fpath} \
+                --test_dataset={trk_test_dataset_fpath} \
+                --pred_dataset={pred_trk_pxl_fpath} \
+                {params_argstr} \
+                {perf_argstr}
+            ''').format(**pred_trk_pxl_kw)
+        name = 'pred_trk_pxl'
+        step = Step(name, command,
+                    in_paths=paths & {'pkg_trk_pxl_fpath',
+                                      'trk_test_dataset_fpath'},
+                    out_paths=paths & {'pred_trk_pxl_fpath'})
+        return step
+
+    def pred_act_pxl(act_pxl_params, **paths):
+        paths = ub.udict(paths)
+        perf_options = {
+            'num_workers': 0,
+            'devices': '0,',
+            'accelerator': 'gpu',
+            'batch_size': 1,
+        }
+        paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
+        pred_act_pxl_kw =  { **paths }
+        pred_act_pxl_kw['params_argstr'] = PipelineSteps._make_argstr(act_pxl_params)
+        pred_act_pxl_kw['perf_argstr'] = PipelineSteps._make_argstr(perf_options)
+        command = ub.codeblock(
+            r'''
+            python -m watch.tasks.fusion.predict \
+                --package_fpath={pkg_act_pxl_fpath} \
+                --test_dataset={act_test_dataset_fpath} \
+                --pred_dataset={pred_act_pxl_fpath} \
+                {params_argstr} \
+                {perf_argstr}
+            ''').format(**pred_act_pxl_kw)
+        name = 'pred_act_pxl'
+        step = Step(name, command,
+                    in_paths=paths & {
+                        'pkg_act_pxl_fpath',
+                        'act_test_dataset_fpath'
+                    },
+                    out_paths=paths & {'pred_act_pxl_fpath'})
+        return step
+
+    def pred_trk_poly(trk_poly_params, **paths):
+        paths = ub.udict(paths)
+        pred_trk_poly_kw = { **paths }
+        cfg = trk_poly_params.copy()
+        if 'thresh_hysteresis' in cfg:
+            if isinstance(cfg['thresh_hysteresis'], str):
+                cfg['thresh_hysteresis'] = util_globals.restricted_eval(
+                    cfg['thresh_hysteresis'].format(**cfg))
+
+        if 'moving_window_size' in cfg:
+            if isinstance(cfg['moving_window_size'], str):
+                cfg['moving_window_size'] = util_globals.restricted_eval(
+                    cfg['moving_window_size'].format(**cfg))
+
+        if cfg['moving_window_size'] is None:
+            cfg['polygon_fn'] = 'heatmaps_to_polys'
         else:
-            # Transform matrix to standard form
-            arg = {'matrix': arg}
-    elif isinstance(arg, list):
-        # Transform list form to standard form
-        arg = {'include': arg}
-    else:
-        raise TypeError(type(arg))
-    assert set(arg.keys()).issubset(stdform_keys)
-    print('arg = {}'.format(ub.repr2(arg, nl=1)))
-    basis = arg.get('matrix', {})
-    if basis:
-        grid = list(ub.named_product(basis))
-    else:
-        grid = []
-    grid.extend(arg.get('include', []))
-    return grid
+            cfg['polygon_fn'] = 'heatmaps_to_polys_moving_window'
+        # kwargs['params_argstr'] = PipelineSteps(trk_poly_params)
+        pred_trk_poly_kw['track_kwargs_str'] = shlex.quote(json.dumps(cfg))
 
+        command = ub.codeblock(
+            r'''
+            python -m watch.cli.kwcoco_to_geojson \
+                "{pred_trk_pxl_fpath}" \
+                --default_track_fn saliency_heatmaps \
+                --track_kwargs {track_kwargs_str} \
+                --clear_annots \
+                --out_dir "{pred_trk_poly_dpath}" \
+                --out_fpath "{pred_trk_poly_fpath}" \
+                --out_kwcoco "{pred_trk_poly_kwcoco}"
+            ''').format(**pred_trk_poly_kw)
+        name = 'pred_trk_poly'
+        step = Step(name, command,
+                    in_paths=paths & {'pred_trk_pxl_fpath'},
+                    out_paths=paths & {
+                        'pred_trk_poly_fpath',
+                        'pred_trk_poly_kwcoco'
+                    })
+        return step
 
-def handle_param_grid(arg):
-    """
-    Our own method for specifying many combinations. Uses the github actions
-    method under the hood with our own
+    def eval_trk_pxl(condensed, **paths):
+        paths = ub.udict(paths)
+        paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
+        eval_trk_pxl_kwe = { **paths }
+        extra_opts = {
+            'draw_curves': True,
+            'draw_heatmaps': True,
+            'viz_thresh': 0.2,
+            'workers': 2,
+        }
+        eval_trk_pxl_kwe['extra_argstr'] = PipelineSteps._make_argstr(extra_opts)
+        command = ub.codeblock(
+            r'''
+            python -m watch.tasks.fusion.evaluate \
+                --true_dataset={trk_test_dataset_fpath} \
+                --pred_dataset={pred_trk_pxl_fpath} \
+                  --eval_dpath={eval_trk_pxl_dpath} \
+                  --score_space=video \
+                  {extra_argstr}
+            ''').format(**eval_trk_pxl_kwe)
+        name = 'eval_trk_pxl'
+        step = Step(name, command,
+                    in_paths=paths & {'pred_trk_pxl_fpath'},
+                    out_paths=paths & {'eval_trk_pxl_fpath'})
+        return step
 
-        >>> from watch.mlops.schedule_evaluation import *  # NOQA
-        >>> arg = ub.codeblock(
-            '''
-            - matrix:
-                trk.pxl.model: [trk_a, trk_b]
-                trk.pxl.data.tta_time: [0, 4]
-                trk.pxl.data.set_cover_algo: [None, approx]
-                trk.pxl.data.test_dataset: [D4_S2_L8]
+    def viz_pred_trk_poly(condensed, **paths):
+        paths = ub.udict(paths)
+        viz_pred_trk_poly_kw = paths.copy()
+        viz_pred_trk_poly_kw['extra_header'] = f"\\n{condensed['trk_pxl_cfg']}-{condensed['trk_poly_cfg']}"
+        command = ub.codeblock(
+            r'''
+            smartwatch visualize \
+                "{pred_trk_poly_kwcoco}" \
+                --channels="red|green|blue,salient" \
+                --stack=only \
+                --workers=avail/2 \
+                --workers=avail/2 \
+                --extra_header="{extra_header}" \
+                --animate=True && touch {pred_trk_poly_viz_stamp}
+            ''').format(**viz_pred_trk_poly_kw)
+        name = 'viz_pred_trk_poly'
+        step = Step(name, command,
+                    in_paths=paths & {
+                        'pred_trk_poly_kwcoco',
+                    },
+                    out_paths=paths & {
+                        'pred_trk_poly_viz_stamp'
+                    })
+        return step
 
-                act.pxl.model: [act_a, act_b]
-                act.pxl.data.test_dataset: [D4_WV_PD, D4_WV]
-                act.pxl.data.input_space_scale: [1GSD, 4GSD]
+    def eval_trk_poly(condensed, **paths):
+        paths = ub.udict(paths)
+        eval_trk_poly_kw = { **paths }
+        eval_trk_poly_kw['eval_trk_poly_dpath'] = eval_trk_poly_kw['eval_trk_poly_dpath']
+        eval_trk_poly_kw['eval_trk_poly_tmp_dpath'] = eval_trk_poly_kw['eval_trk_poly_dpath'] / '_tmp'
+        eval_trk_poly_kw['name_suffix'] = '-'.join([
+            condensed['trk_model'],
+            condensed['trk_pxl_cfg'],
+            condensed['trk_poly_cfg'],
+        ])
+        command = ub.codeblock(
+            r'''
+            python -m watch.cli.run_metrics_framework \
+                --merge=True \
+                --inputs_are_paths=True \
+                --name "{name_suffix}" \
+                --true_site_dpath "{true_site_dpath}" \
+                --true_region_dpath "{true_region_dpath}" \
+                --pred_sites "{pred_trk_poly_fpath}" \
+                --tmp_dir "{eval_trk_poly_tmp_dpath}" \
+                --out_dir "{eval_trk_poly_dpath}" \
+                --merge_fpath "{eval_trk_poly_fpath}"
+            ''').format(**eval_trk_poly_kw)
+        name = 'eval_trk_poly'
+        step = Step(name, command,
+                    in_paths=paths & {'pred_trk_poly_fpath'},
+                    out_paths=paths & {'eval_trk_poly_fpath'})
+        return step
 
-                trk.poly.thresh: [0.17]
-                act.poly.thresh: [0.13]
+    def pred_act_poly(act_poly_params, **paths):
+        paths = ub.udict(paths)
+        # pred_act_row['site_summary_glob'] = (region_model_dpath / '*.geojson')
+        pred_act_poly_kw = paths.copy()
+        actclf_cfg = {
+            'boundaries_as': 'polys',
+        }
+        actclf_cfg.update(act_poly_params)
+        pred_act_poly_kw['kwargs_str'] = shlex.quote(json.dumps(actclf_cfg))
+        # pred_act_poly_kw['site_summary_glob'] = (pred_act_poly_kw['region_model_dpath'] / '*.geojson')
+        pred_act_poly_kw['site_summary_glob'] = 'TODO not well defined yet'
+        command = ub.codeblock(
+            r'''
+            python -m watch.cli.kwcoco_to_geojson \
+                "{pred_act_pxl_fpath}" \
+                --site_summary '{site_summary_glob}' \
+                --default_track_fn class_heatmaps \
+                --track_kwargs {kwargs_str} \
+                --out_dir "{pred_act_poly_dpath}" \
+                --out_fpath "{pred_act_poly_fpath}" \
+                --out_kwcoco_fpath "{pred_act_poly_kwcoco}"
+            ''').format(**pred_act_poly_kw)
+        name = 'pred_act_poly'
+        step = Step(name, command,
+                    in_paths=paths & {
+                        'pred_act_pxl_fpath'
+                    },
+                    out_paths=paths & {
+                        'pred_act_poly_fpath',
+                        'pred_act_poly_kwcoco'
+                    })
+        return step
 
-                exclude:
-                  #
-                  # The BAS A should not run with tta
-                  - trk.pxl.model: trk_a
-                    trk.pxl.data.tta_time: 4
-                  # The BAS B should not run without tta
-                  - trk.pxl.model: trk_b
-                    trk.pxl.data.tta_time: 0
-                  #
-                  # The SC B should not run on the PD dataset when GSD is 1
-                  - act.pxl.model: act_b
-                    act.pxl.data.test_dataset: D4_WV_PD
-                    act.pxl.data.input_space_scale: 1GSD
-                  # The SC A should not run on the WV dataset when GSD is 4
-                  - act.pxl.model: act_a
-                    act.pxl.data.test_dataset: D4_WV
-                    act.pxl.data.input_space_scale: 4GSD
-                  #
-                  # The The BAS A and SC B model should not run together
-                  - trk.pxl.model: trk_a
-                    act.pxl.model: act_b
-                  # Other misc exclusions to make the output cleaner
-                  - trk.pxl.model: trk_b
-                    act.pxl.data.input_space_scale: 4GSD
-                  - trk.pxl.data.set_cover_algo: None
-                    act.pxl.data.input_space_scale: 1GSD
+    def eval_act_pxl(condensed, **paths):
+        paths = ub.udict(paths)
+        paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
+        eval_act_pxl_kwe = { **paths }
+        extra_opts = {
+            'draw_curves': True,
+            'draw_heatmaps': True,
+            'viz_thresh': 0.2,
+            'workers': 2,
+        }
+        eval_act_pxl_kwe['extra_argstr'] = PipelineSteps._make_argstr(extra_opts)
+        command = ub.codeblock(
+            r'''
+            python -m watch.tasks.fusion.evaluate \
+                --true_dataset={act_test_dataset_fpath} \
+                --pred_dataset={pred_act_pxl_fpath} \
+                  --eval_dpath={eval_act_pxl_dpath} \
+                  --score_space=video \
+                  {extra_argstr}
+            ''').format(**eval_act_pxl_kwe)
+        name = 'eval_act_pxl'
+        step = Step(name, command,
+                    in_paths=paths & {'pred_act_pxl_fpath'},
+                    out_paths=paths & {'eval_act_pxl_fpath'})
+        return step
 
-                include:
-                  # only try the 10GSD scale for trk model A
-                  - trk.pxl.model: trk_a
-                    trk.pxl.data.input_space_scale: 10GSD
-            ''')
-        >>> grid_items = handle_param_grid(arg)
-        >>> print('grid_items = {}'.format(ub.repr2(grid_items, nl=1, sort=0)))
-        >>> print(ub.repr2([dotdict_to_nested(p) for p in grid_items], nl=-3, sort=0))
-        >>> print(len(grid_items))
-    """
-    import ruamel.yaml
-    if isinstance(arg, str):
-        data = ruamel.yaml.safe_load(arg)
-    else:
-        data = arg.copy()
-    grid_items = []
-    if isinstance(data, list):
-        for item in data:
-            grid_items += github_action_matrix(item)
-    elif isinstance(data, dict):
-        grid_items += github_action_matrix(data)
-    return grid_items
-
-
-def dotdict_to_nested(d):
-    auto = ub.AutoDict()
-    walker = ub.IndexableWalker(auto)
-    for k, v in d.items():
-        path = k.split('.')
-        walker[path] = v
-    return auto.to_dict()
-
-
-def github_action_matrix(arg):
-    """
-    Try to implement the github method. Not sure if I like it.
-
-    References:
-        https://docs.github.com/en/actions/using-jobs/using-a-matrix-for-your-jobs#expanding-or-adding-matrix-configurations
-
-    Example:
-        >>> from watch.mlops.schedule_evaluation import *  # NOQA
-        >>> arg = ub.codeblock(
-                 '''
-                   matrix:
-                     fruit: [apple, pear]
-                     animal: [cat, dog]
-                     include:
-                       - color: green
-                       - color: pink
-                         animal: cat
-                       - fruit: apple
-                         shape: circle
-                       - fruit: banana
-                       - fruit: banana
-                         animal: cat
-                 ''')
-        >>> grid_items = github_action_matrix(arg)
-        >>> print('grid_items = {}'.format(ub.repr2(grid_items, nl=1)))
-        grid_items = [
-            {'animal': 'cat', 'color': 'pink', 'fruit': 'apple', 'shape': 'circle'},
-            {'animal': 'dog', 'color': 'green', 'fruit': 'apple', 'shape': 'circle'},
-            {'animal': 'cat', 'color': 'pink', 'fruit': 'pear'},
-            {'animal': 'dog', 'color': 'green', 'fruit': 'pear'},
-            {'fruit': 'banana'},
-            {'animal': 'cat', 'fruit': 'banana'},
-        ]
-
-
-    Example:
-        >>> from watch.mlops.schedule_evaluation import *  # NOQA
-        >>> arg = ub.codeblock(
-                '''
-                  matrix:
-                    os: [macos-latest, windows-latest]
-                    version: [12, 14, 16]
-                    environment: [staging, production]
-                    exclude:
-                      - os: macos-latest
-                        version: 12
-                        environment: production
-                      - os: windows-latest
-                        version: 16
-            ''')
-        >>> grid_items = github_action_matrix(arg)
-        >>> print('grid_items = {}'.format(ub.repr2(grid_items, nl=1)))
-        grid_items = [
-            {'environment': 'staging', 'os': 'macos-latest', 'version': 12},
-            {'environment': 'staging', 'os': 'macos-latest', 'version': 14},
-            {'environment': 'production', 'os': 'macos-latest', 'version': 14},
-            {'environment': 'staging', 'os': 'macos-latest', 'version': 16},
-            {'environment': 'production', 'os': 'macos-latest', 'version': 16},
-            {'environment': 'staging', 'os': 'windows-latest', 'version': 12},
-            {'environment': 'production', 'os': 'windows-latest', 'version': 12},
-            {'environment': 'staging', 'os': 'windows-latest', 'version': 14},
-            {'environment': 'production', 'os': 'windows-latest', 'version': 14},
-        ]
-    """
-    import ruamel.yaml
-    if isinstance(arg, str):
-        data = ruamel.yaml.safe_load(arg)
-    else:
-        data = arg.copy()
-
-    matrix = data.pop('matrix')
-    include = [ub.udict(p) for p in matrix.pop('include', [])]
-    exclude = [ub.udict(p) for p in matrix.pop('exclude', [])]
-
-    matrix_ = {k: (v if ub.iterable(v) else [v])
-               for k, v in matrix.items()}
-    grid_stage0 = list(map(ub.udict, ub.named_product(matrix_)))
-
-    # Note: All include combinations are processed after exclude. This allows
-    # you to use include to add back combinations that were previously
-    # excluded.
-    def is_excluded(grid_item):
-        for exclude_item in exclude:
-            common1 = exclude_item & grid_item
-            if common1:
-                common2 = grid_item & exclude_item
-                if common1 == common2 == exclude_item:
-                    return True
-
-    grid_stage1 = [p for p in grid_stage0 if not is_excluded(p)]
-
-    orig_keys = set(matrix.keys())
-    # Extra items are never modified by future include values include values
-    # will only modify non-conflicting original grid items or create one of
-    # these special immutable grid items.
-    appended_items = []
-
-    # For each object in the include list
-    for include_item in include:
-        any_updated = False
-        for grid_item in grid_stage1:
-            common_orig1 = (grid_item & include_item) & orig_keys
-            common_orig2 = (include_item & grid_item) & orig_keys
-            if common_orig1 == common_orig2:
-                # the key:value pairs in the object will be added to each of
-                # the [original] matrix combinations if none of the key:value
-                # pairs overwrite any of the original matrix values
-                any_updated = True
-                # Note that the original matrix values will not be overwritten
-                # but added matrix values can be overwritten
-                grid_item.update(include_item)
-        if not any_updated:
-            # If the object cannot be added to any of the matrix combinations, a
-            # new matrix combination will be created instead.
-            appended_items.append(include_item)
-    grid_items = grid_stage1 + appended_items
-
-    return grid_items
+    def eval_act_poly(condensed, **paths):
+        paths = ub.udict(paths)
+        eval_act_poly_kw = paths.copy()
+        eval_act_poly_kw['name_suffix'] = '-'.join([
+            # condensed['crop_dst_dset']
+            condensed['test_act_dset'],
+            condensed['act_model'],
+            condensed['act_pxl_cfg'],
+            condensed['act_poly_cfg'],
+        ])
+        eval_act_poly_kw['eval_act_poly_dpath'] = eval_act_poly_kw['eval_trk_poly_dpath']
+        eval_act_poly_kw['eval_act_poly_tmp_dpath'] = eval_act_poly_kw['eval_trk_poly_dpath'] / '_tmp'
+        command = ub.codeblock(
+            r'''
+            python -m watch.cli.run_metrics_framework \
+                --merge=True \
+                --inputs_are_paths=True \
+                --name "{name_suffix}" \
+                --true_site_dpath "{true_site_dpath}" \
+                --true_region_dpath "{true_region_dpath}" \
+                --pred_sites "{pred_act_poly_fpath}" \
+                --tmp_dir "{eval_act_poly_tmp_dpath}" \
+                --out_dir "{eval_act_poly_dpath}" \
+                --merge_fpath "{eval_act_poly_fpath}" \
+            ''').format(**eval_act_poly_kw)
+        name = 'eval_act_poly'
+        step = Step(name, command,
+                    in_paths=paths & {'pred_act_poly_fpath'},
+                    out_paths=paths & {'eval_act_poly_fpath'})
+        return step
 
 
 if __name__ == '__main__':
