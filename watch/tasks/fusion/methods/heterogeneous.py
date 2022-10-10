@@ -5,6 +5,7 @@ import torchmetrics
 import einops
 
 import kwcoco
+import kwarray
 import netharn as nh
 import ubelt as ub
 
@@ -343,7 +344,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 'output_dims': 'change_output_dims'
             },
             'saliency': {
-                'labels': 'change',
+                'labels': 'saliency',
                 'weights': 'saliency_weights',
                 'output_dims': 'saliency_output_dims'
             },
@@ -578,7 +579,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         orig_query_shapes = []
         orig_query_seqs = []
         for example in batch:
-            query_tokens = self.process_query_tokens(example, conditional_key="change")
+            query_tokens = self.process_query_tokens(example)
             query_shapes = [
                 frame_tokens.shape[1:]
                 for frame_tokens in query_tokens
@@ -618,13 +619,18 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 seq_outputs = []
                 seq_probs = []
                 frame_sizes = [h*w for h, w in frame_shapes]
-                for output_frame_seq, (height, width), frame in zip(torch.split(output_seq, frame_sizes), frame_shapes, example["frames"][1:]):
+                for output_frame_seq, (height, width), frame in zip(torch.split(output_seq, frame_sizes), frame_shapes, example["frames"]):
+                    
+                    task_labels_key = self.task_to_keynames[task_name]["labels"]
+                    if frame[task_labels_key] == None:
+                        continue
+                                           
                     output = einops.rearrange(
                         output_frame_seq, 
                         "(height width) chan -> chan height width", 
                         height=height, width=width,
                     )
-                    target_size = frame["change"].shape
+                    target_size = frame[task_labels_key].shape
                     output = nn.functional.interpolate(
                         output[None], 
                         size=target_size, 
@@ -643,7 +649,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 task_outputs.append(seq_outputs)
                 task_probs.append(seq_probs)
             outputs[task_name] = task_outputs
-            outputs[f"{task_name}_prob"] = task_probs
+            outputs[f"{task_name}_probs"] = task_probs
 
         return outputs
     
@@ -656,28 +662,41 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         frame_losses = []
         for task_name in self.heads:
             for pred_seq, example in zip(outputs[task_name], batch):
-                for pred, frame in zip(pred_seq, example["frames"][1:]):
-                    try:
-                        frame_losses.append(
-                            self.criterions[task_name](
-                                pred[None], 
-                                frame[
-                                    self.task_to_keynames[task_name]["labels"]
-                                ][None].long(),
-                            )
-                        )
-                        self.log_dict(
-                            self.head_metrics[f"{stage}_stage"][task_name](
-                                pred.argmax(dim=0)[None], 
-                                frame[
-                                    self.task_to_keynames[task_name]["labels"]
-                                ][None].long(),
-                            ),
-                            prog_bar=True,
-                        )
-                    except:
-                        print(f"failed on {task_name}")
-                        raise
+                for pred, frame in zip(pred_seq, example["frames"]):
+                    
+                    task_labels_key = self.task_to_keynames[task_name]["labels"]
+                    labels = frame[task_labels_key]
+                    
+                    if (pred == None) or (labels == None):
+                        continue
+                                           
+                    criterion = self.criterions[task_name]
+                    if criterion.target_encoding == 'index':
+                        loss_labels = labels.long()
+                    elif criterion.target_encoding == 'onehot':
+                        # Note: 1HE is much easier to work with
+                        loss_labels = kwarray.one_hot_embedding(
+                            labels.long(), 
+                            criterion.in_channels, 
+                            dim=0)
+                    else:
+                        raise KeyError(criterion.target_encoding)
+
+                    # TODO: weight losses and metrics
+                    frame_losses.append(
+                        criterion(
+                            pred[None], 
+                            loss_labels[None],
+                        ).mean()
+                    )
+                    self.log_dict(
+                        self.head_metrics[f"{stage}_stage"][task_name](
+                            pred.argmax(dim=0).flatten(), 
+                            # pred[None], 
+                            labels.flatten().long(),
+                        ),
+                        prog_bar=True,
+                    )
         
         outputs["loss"] = sum(frame_losses) / len(frame_losses)
         self.log(f"{stage}_loss", outputs["loss"], prog_bar=True)
