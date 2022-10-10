@@ -21,7 +21,6 @@ DESIGN TODO:
         1) given a kwcoco file, does tracking and produces another kwcoco file with predicted "tracked" annotations.
         2) given a kwcoco file with predicted "tracked" annotations, convert that back to geojson
 """
-import argparse
 import datetime
 import itertools
 import json
@@ -46,16 +45,6 @@ try:
     from xdev import profile
 except Exception:
     profile = ub.identity
-
-
-### Note: This config only exists for the purposes of the WATCH CLI.
-### The argparse CLI is still in primary use. Eventually we may port to
-### pure scriptconfig, but currently it is not exactly 1-to-1.
-"""
-from watch.cli.kwcoco_to_geojson import *  # NOQA
-from watch.cli.kwcoco_to_geojson import _argparse_cli
-print(scfg.Config.port_argparse(_argparse_cli(), name='KWCocoToGeoJSONConfig', style='dataconf'))
-"""
 
 
 class KWCocoToGeoJSONConfig(scfg.DataConfig):
