@@ -108,7 +108,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 ###
                 ### SC Pixel Prediction
                 ###
-                crop.src: ~/data/dvc-repos/smart_data_dvc/tmp/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco/kwcoco_for_sc.json
+                crop.src: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/online_v1/kwcoco_for_sc.json
                 crop.regions:
                     - trk.poly.output
                     - truth
@@ -165,7 +165,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     resolved_rows = []
     # Resolve parameters for each row
-    for item in all_param_grid:
+    for item in ub.ProgIter(all_param_grid, desc='resolving row'):
         row = resolve_pipeline_row(grid_item_defaults, state,
                                    region_model_dpath, expt_dvc_dpath, item)
         resolved_rows.append(row)
@@ -203,7 +203,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # Each row represents a single source-to-sink pipeline run, but multiple
     # rows may share pipeline steps. This is handled by having unique ids per
     # job that depend on their outputs.
-    for row in resolved_rows:
+    for row in ub.ProgIter(resolved_rows, desc='submiting pipelines'):
         paths = row['paths']
         paths['true_annotations_dpath'] = annotations_dpath
         paths['true_site_dpath'] = paths['true_annotations_dpath'] / 'site_models'
@@ -295,8 +295,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 (step.enabled and ancestors_will_exist) or
                 step.does_exist
             )
-            print('step.out_paths = {}'.format(ub.repr2(step.out_paths, nl=1)))
-            print(f'{step.name=}, does_exist={step.does_exist} will_exist={step.will_exist} enabled={step.enabled}')
+            # print('step.out_paths = {}'.format(ub.repr2(step.out_paths, nl=1)))
+            # print(f'{step.name=}, does_exist={step.does_exist} will_exist={step.will_exist} enabled={step.enabled}')
 
         #
         # Submit steps to the scheduling queue
@@ -551,7 +551,7 @@ def resolve_package_paths(model_globstr, expt_dvc_dpath):
 class Step:
     def __init__(step, name, command, in_paths, out_paths, resources):
         step.name = name
-        step.command = command
+        step._command = command
         step.in_paths = in_paths
         step.out_paths = out_paths
         step.resources = resources
@@ -559,6 +559,7 @@ class Step:
         # Set later
         step.enabled = None
         step.will_exist = None
+        step.otf_cache = True  # on-the-fly cache checking
 
     @property
     def node_id(step):
@@ -569,8 +570,15 @@ class Step:
         """
         return step.name + '_' + ub.hash_data(step.out_paths)[0:12]
 
+    @property
+    def command(step):
+        if step.otf_cache:
+            return step.test_is_computed_command() + ' && ' + step._command
+        else:
+            return step._command
+
     def test_is_computed_command(step):
-        test_cmds = ['test -f "{p}"' for p in step.out_paths.values()]
+        test_cmds = [f'test -f "{p}"' for p in step.out_paths.values()]
         if len(test_cmds) == 1:
             return test_cmds[0]
         else:
@@ -605,7 +613,7 @@ class Pipeline:
         } | ub.udict(crop_params)
         perf_options = {
             'verbose': 1,
-            'workers': 8,
+            'workers': 24,
             'aux_workers': 8,
             'debug_valid_regions': False,
             'visualize': False,
@@ -613,6 +621,7 @@ class Pipeline:
         crop_kwargs = { **paths }
         crop_kwargs['crop_params_argstr'] = Pipeline._make_argstr(crop_params)
         crop_kwargs['crop_perf_argstr'] = Pipeline._make_argstr(perf_options)
+
         command = ub.codeblock(
             r'''
             python -m watch.cli.coco_align_geotiffs \
@@ -621,6 +630,15 @@ class Pipeline:
                 {crop_params_argstr} \
                 {crop_perf_argstr}
             ''').format(**crop_kwargs)
+
+        # FIXME: parametarize and only if we need secrets
+        # secret_fpath = ub.Path('$HOME/code/watch/secrets/secrets').expand()
+        # # if ub.Path.home().name.startswith('jon'):
+        #     # if secret_fpath.exists():
+        #     #     secret_fpath
+        #         # command = f'source {secret_fpath} && ' + command
+        command = 'AWS_DEFAULT_PROFILE=iarpa GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR ' + command
+
         name = 'crop'
         step = Step(name, command,
                     in_paths=paths & {

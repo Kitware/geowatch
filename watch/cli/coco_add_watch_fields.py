@@ -20,9 +20,9 @@ class AddWatchFieldsConfig(scfg.Config):
     target GSD.
     """
     default = {
-        'src': scfg.Value('data.kwcoco.json', help='input kwcoco filepath'),
+        'src': scfg.Value('data.kwcoco.json', help='input kwcoco filepath', position=1),
 
-        'dst': scfg.Value(None, help='output kwcoco filepath'),
+        'dst': scfg.Value(None, help='output kwcoco filepath', position=2),
 
         'target_gsd': scfg.Value(10.0, help='compute transforms for a target gsd'),
 

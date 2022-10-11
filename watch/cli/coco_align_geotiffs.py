@@ -1017,7 +1017,7 @@ class SimpleDataCube(object):
         frame_index = 0
 
         # parallelize over images
-        jobs = ub.JobPool(mode='thread', max_workers=max_workers)
+        image_jobs = ub.JobPool(mode='thread', max_workers=max_workers)
 
         sh_space_region_crs84 = space_region.to_shapely()
         space_region_crs84 = gpd.GeoDataFrame(
@@ -1238,7 +1238,7 @@ class SimpleDataCube(object):
                 # Construct a name for the subregion to extract.
                 name = 'crop_{}_{}_{}_{}'.format(iso_time, space_str, sensor_coarse, num)
 
-                job = jobs.submit(
+                job = image_jobs.submit(
                     extract_image_job,
                     img, anns, bundle_dpath, new_bundle_dpath, name, datetime_,
                     num, frame_index, new_vidid, rpc_align_method,
@@ -1257,7 +1257,10 @@ class SimpleDataCube(object):
 
         sub_new_gids = []
         sub_new_aids = []
-        for job in jobs.as_completed(desc='collect extract jobs', progkw=dict(freq=1)):
+        image_timeout = util_time.coerce_timedelta('30 minutes').total_seconds()
+        for job in image_jobs.as_completed(desc='collect extract jobs',
+                                           timeout=image_timeout,
+                                           progkw=dict(freq=1)):
             new_img, new_anns = job.result()
 
             # Hack, the next ids dont update when new images are added
@@ -1454,22 +1457,25 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
 
     # Turn off internal threading because we refactored this to thread over all
     # images instead
-    executor = ub.Executor(mode='thread', max_workers=aux_workers)
-    for obj_group in ub.ProgIter(obj_groups, desc='submit warp auxiliaries', verbose=verbose):
-        job = executor.submit(
+    asset_jobs = ub.JobPool(mode='thread', max_workers=aux_workers)
+
+    aux_verbose = verbose > 3 or (verbose > 1 and (aux_workers == 0))
+    for obj_group in ub.ProgIter(obj_groups, desc='submit warp assets', verbose=verbose):
+        job = asset_jobs.submit(
             _aligncrop, obj_group, bundle_dpath, name, sensor_coarse,
             dst_dpath, space_region, space_box, align_method,
             is_multi_image, keep, local_epsg=local_epsg,
             include_channels=include_channels,
             exclude_channels=exclude_channels,
             force_nodata=force_nodata,
-            tries=tries, verbose=verbose)
+            tries=tries, verbose=aux_verbose)
         job_list.append(job)
 
     dst_list = []
-    for job in ub.ProgIter(job_list, total=len(job_list),
-                           desc='collect warp auxiliaries {}'.format(name),
-                           enabled=DEBUG, verbose=verbose):
+    timeout = util_time.coerce_timedelta('1 minute').total_seconds()
+    for job in asset_jobs.as_completed(desc='collect warp assets {}'.format(name),
+                                       timeout=timeout,
+                                       progkw=dict(enabled=DEBUG, verbose=verbose)):
         dst = job.result()
         dst_list.append(dst)
 

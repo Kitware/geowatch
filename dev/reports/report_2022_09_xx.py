@@ -529,14 +529,16 @@ python -m watch.mlops.expt_manager "evaluate" \
     --model_pattern="models_of_interest.txt" \
     --grid_pred_trk=auto \
     --grid_pred_pxl='{
-        "input_space_scale": ["10GSD"],
-        "window_space_scale": ["10GSD"],
-        "use_cloudmask": [0],
-        "resample_invalid_frames": [0],
-        "chip_overlap": [0.3],
-        "set_cover_algo": ["approx"],
-        "time_sampling": ["auto"],
-        "time_span": ["auto"]
+        matrix:
+            "input_space_scale": ["10GSD"],
+            "window_space_scale": ["10GSD"],
+            "use_cloudmask": [0],
+            "resample_invalid_frames": [0],
+            "chip_overlap": [0.3],
+            "set_cover_algo": ["approx"],
+            "time_sampling": ["auto"],
+            "time_span": ["auto"]
+
     }' \
     --devices="0,1" --queue_size=8 \
     --enable_pred_pxl=0 --enable_eval_pxl=0 \
@@ -552,6 +554,12 @@ NEWEST
 
 2022-09-28 EVAL RUN
 
+AWS_DEFAULT_PROFILE=iarpa GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR smartwatch add_fields kwcoco_for_sc.json kwcoco_for_sc_fielded.json \
+    --target_gsd=4 \
+    --enable_video_stats=True \
+    --enable_valid_region=True \
+    --workers=auto
+
 
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
@@ -564,29 +572,35 @@ if [ ! -f "$TEST_DATASET" ]; then
         --select_videos '((.name | test("KR_R001")) or (.name | test("BR_R002")))'
 fi
 
+
 python -m watch.mlops.schedule_evaluation \
     --params="
-        trk.pxl.model:
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt
-        trk.pxl.data.test_dataset:
-            - $TEST_DATASET
-        crop.src:
-            # FIXME: should be cropping from a dataset with WV
-            - $TEST_DATASET
-        crop.regions:
-            - trk.poly.output
-        act.pxl.data.test_dataset:
-            - crop.dst
-        act.pxl.model:
-            - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt
+        matrix:
+            trk.pxl.model:
+                - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt
+            trk.pxl.data.test_dataset:
+                - $TEST_DATASET
+            trk.pxl.data.window_scale_space: 15GSD
+            trk.pxl.data.time_sampling: ["auto", "contiguous"]
+            trk.pxl.data.input_scale_space: ["15GSD", "10GSD"]
+            crop.src:
+                # FIXME: should be cropping from a dataset with WV
+                - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/online_v1/kwcoco_for_sc_fielded.json
+                # - $TEST_DATASET
+            crop.regions:
+                - trk.poly.output
+            act.pxl.data.test_dataset:
+                - crop.dst
+            act.pxl.model:
+                - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
     " \
-    --devices="0,1" --queue_size=2 \
-    --skip_existing=1 \
+    --skip_existing=0 \
     --enable_pred_trk_pxl=1 \
     --enable_pred_trk_poly=1 \
     --enable_crop=1 \
     --enable_pred_act_pxl=1 \
     --enable_pred_act_poly=1 \
     --enable_viz_pred_trk_poly=0 \
-    --backend=serial --run=0
+    --devices="0,1" --queue_size=2 \
+    --backend=tmux --run=1
 """

@@ -305,7 +305,7 @@ class DVCExptManager(ub.NiceRepr):
         tables = manager.cross_referenced_tables()
 
         if 'staging' in tables:
-            todrop = ['expt_dvc_dpath', 'raw', 'ckpt_path', 'spkg_path', 'pkg_path', 'lightning_version', 'ckpt_exists']
+            todrop = ['expt_dvc_dpath', 'raw', 'ckpt_path', 'spkg_fpath', 'pkg_fpath', 'lightning_version', 'ckpt_exists']
             df = tables['staging']
             print(df.drop(ub.oset(todrop) & df.columns, axis=1).to_string())
 
@@ -430,7 +430,7 @@ class DVCExptManager(ub.NiceRepr):
 
     def pull_packages(manager):
         # TODO: git pull
-        pkg_df = manager.versioned_table(types=['pkg'])
+        pkg_df = manager.versioned_table(types=['pkg_fpath'])
         pull_df = pkg_df[pkg_df['needs_pull'].astype(bool)]
         pull_fpaths = pull_df['dvc'].tolist()
         manager.dvc.pull(pull_fpaths)
@@ -510,7 +510,7 @@ class ExperimentState(ub.NiceRepr):
         >>> print('self.templates = {}'.format(ub.repr2(self.templates, nl=1, sort=0)))
 
     Ignore:
-        table[table.type == 'pkg']['model'].unique()
+        table[table.type == 'pkg_fpath']['model'].unique()
     """
 
     def __init__(self, expt_dvc_dpath, dataset_code, dvc_remote=None,
@@ -641,6 +641,7 @@ class ExperimentState(ub.NiceRepr):
 
         self.versioned_templates = {
             # TODO: rename curves to pixel
+            'pkg_fpath'            : 'packages/{expt}/{model}.pt',  # by default packages dont know what task they have (because they may have multiple)
             'pkg_trk_pxl_fpath'    : 'packages/{trk_expt}/{trk_model}.pt',
             'pkg_act_pxl_fpath'    : 'packages/{act_expt}/{act_model}.pt',
             'eval_trk_pxl_fpath'   : task_dpaths['eval_trk_pxl_dpath'] + '/curves/measures2.json',
@@ -669,7 +670,7 @@ class ExperimentState(ub.NiceRepr):
         for k, v in task_dpaths.items():
             self.templates[k] = self.storage_template_prefix + v
 
-        self.path_patterns_matrix = {}
+        self.path_patterns_matrix = []
         self._build_path_patterns()
 
         # These are some locations that I used to know
@@ -720,10 +721,10 @@ class ExperimentState(ub.NiceRepr):
         self._pattern_matrix = list(ub.named_product(_patterns))
 
         self.path_patterns_matrix = [
-            {
+            ub.udict({
                 k: v.format(**patterns)
                 for k, v in self.templates.items()
-            }
+            })
             for patterns in self._pattern_matrix
         ]
         # print('self.path_patterns_matrix = {}'.format(ub.repr2(self.path_patterns_matrix, nl=1)))
@@ -773,7 +774,7 @@ class ExperimentState(ub.NiceRepr):
         # Some checkpoints may not have been repackaged yet.
         # Some packages may have had their checkpoints deleted.
         # None of these files are in DVC, this is entirely volitile state.
-        default = {'ckpt_path': None, 'spkg_path': None}
+        default = {'ckpt_path': None, 'spkg_fpath': None}
         _id_to_row = ub.ddict(default.copy)
 
         rows = []
@@ -799,14 +800,14 @@ class ExperimentState(ub.NiceRepr):
         key = 'spkg'  # stands for staged package
         for pat in [p[key] for p in self.path_patterns_matrix]:
             mpat = util_pattern.Pattern.coerce(pat)
-            for spkg_path in list(mpat.paths()):
+            for spkg_fpath in list(mpat.paths()):
                 # Does this correspond to an existing checkpoint?
-                _attrs = self._parse_pattern_attrs(self.templates[key], spkg_path)
+                _attrs = self._parse_pattern_attrs(self.templates[key], spkg_fpath)
 
                 # Hack: making assumption about naming pattern
-                spkg_stem = spkg_path.stem
+                spkg_stem = spkg_fpath.stem
                 ckpt_stem = ''.join(spkg_stem.partition('_epoch')[-2:])[1:]
-                ckpt_path = spkg_path.parent / (ckpt_stem + '.ckpt')
+                ckpt_path = spkg_fpath.parent / (ckpt_stem + '.ckpt')
 
                 if ckpt_path.exists():
                     # Modify existing row
@@ -818,18 +819,18 @@ class ExperimentState(ub.NiceRepr):
                     row['ckpt_exists'] = False
                     row['type'] = 'ckpt'
                     rows.append(row)
-                row['spkg_path'] = spkg_path
+                row['spkg_fpath'] = spkg_fpath
                 row['is_packaged'] = True
                 row.update(_attrs)
 
         for row in rows:
             fname = row['checkpoint']
 
-            if row.get('spkg_path', None) is None:
+            if row.get('spkg_fpath', None) is None:
                 # HACK!!!
                 row['model'] = None
             else:
-                row['model'] = ub.Path(row['spkg_path']).name
+                row['model'] = ub.Path(row['spkg_fpath']).name
 
             # Hack: making name assumptions
             info = checkpoint_filepath_info(fname)
@@ -839,8 +840,8 @@ class ExperimentState(ub.NiceRepr):
             kw = ub.udict(row).subdict({'expt', 'model'})
             kw['expt_dvc_dpath'] = self.expt_dvc_dpath
             kw['dataset_code'] = self.dataset_code
-            row['pkg_path'] = ub.Path(self.templates['pkg'].format(**kw))
-            row['is_copied'] = row['pkg_path'].exists()
+            row['pkg_fpath'] = ub.Path(self.templates['pkg_fpath'].format(**kw))
+            row['is_copied'] = row['pkg_fpath'].exists()
 
         return rows
 
@@ -850,7 +851,11 @@ class ExperimentState(ub.NiceRepr):
         (so it is recomputable), but it is not versioned itself. These are
         raw prediction, tracking, and classification results.
         """
-        keys = ['pred_pxl', 'pred_trk', 'pred_act']
+        keys = [
+            'pred_trk_pxl_fpath',
+            'pred_trk_poly_fpath',
+            'eval_act_poly_fpath'
+        ]
         for key in keys:
             for pat in [p[key] for p in self.path_patterns_matrix]:
                 found = util_path.coerce_patterned_paths(pat)
@@ -864,7 +869,12 @@ class ExperimentState(ub.NiceRepr):
                     yield row
 
     def evaluation_rows(self, with_attrs=1, types=None, notypes=None):
-        keys = ['eval_pxl', 'eval_act', 'eval_trk']
+        keys = [
+            'eval_trk_pxl_fpath',
+            'eval_trk_poly_fpath',
+            'eval_act_pxl_fpath',
+            'eval_act_poly_fpath'
+        ]
         yield from self.versioned_rows(with_attrs=with_attrs, types=keys)
 
     def versioned_rows(self, with_attrs=1, types=None, notypes=None):
@@ -877,7 +887,12 @@ class ExperimentState(ub.NiceRepr):
             notypes = None
             with_attrs = 1
         """
-        keys = ['eval_pxl', 'eval_act', 'eval_trk', 'pkg']
+        keys = [
+            'eval_trk_pxl_fpath',
+            'eval_act_poly_fpath',
+            'eval_trk_poly_fpath',
+            'pkg_fpath'
+        ]
         if types is not None:
             keys = types
         if notypes is not None:
@@ -965,18 +980,20 @@ class ExperimentState(ub.NiceRepr):
         staging_df = self.staging_table()
         versioned_df = self.versioned_table()
         volitile_df = self.volitile_table()
+        import xdev
+        xdev.embed()
 
         if len(volitile_df) and len(versioned_df):
             # Determine how many volitile items (i.e. predictions) we
             # have on disk that correspond with our versioned data
             # volitile_keys = ['pred_pxl', 'pred_trk', 'pred_act']
-            model_to_volitile = dict(list(volitile_df.groupby('model')))
+            trk_model_to_volitile = dict(list(volitile_df.groupby('trk_model')))
             if 0:
                 versioned_df.drop(['raw', 'dvc', 'dataset_code', 'expt_dvc_dpath'], axis=1)
-            model_to_versioned = dict(list(versioned_df.groupby(['type', 'model'])))
+            model_to_versioned = dict(list(versioned_df.groupby(['type', 'trk_model'])))
             versioned_df.loc[:, ['n_pred_pxl', 'n_pred_trk', 'n_pred_act']] = 0
             for (type, model), subdf in model_to_versioned.items():
-                associated = model_to_volitile.get(model, None)
+                associated = trk_model_to_volitile.get(model, None)
                 if associated is not None:
                     counts = associated.value_counts('type').rename(lambda x: 'n_' + x, axis=0)
                     versioned_df.loc[subdf.index, counts.index] += counts
@@ -1100,8 +1117,8 @@ class ExperimentState(ub.NiceRepr):
             kw = ub.udict(row).subdict({'expt', 'model'})
             kw['expt_dvc_dpath'] = self.expt_dvc_dpath
             kw['dataset_code'] = self.dataset_code
-            pkg_fpath = ub.Path(self.templates['pkg'].format(**kw))
-            src, dst = (row['spkg_path'], pkg_fpath)
+            pkg_fpath = ub.Path(self.templates['pkg_fpath'].format(**kw))
+            src, dst = (row['spkg_fpath'], pkg_fpath)
             dst.parent.ensuredir()
             shutil.copy(src, dst)
 
@@ -1161,7 +1178,7 @@ class ExperimentState(ub.NiceRepr):
         #         --skip_existing=True --backend=slurm --run=0
         # from watch.tasks.fusion.schedule_evaluation import schedule_evaluation
         from watch.mlops.schedule_evaluation import schedule_evaluation
-        model_globstr = [p['pkg'] for p in state.path_patterns_matrix]
+        model_globstr = [p['pkg_fpath'] for p in state.path_patterns_matrix]
 
         # NOTE: this should more often be specified as a cmdline arg maybe
         # jsonargparse can help with getting this nested correctly.

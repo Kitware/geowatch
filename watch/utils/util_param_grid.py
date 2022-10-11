@@ -278,8 +278,8 @@ def github_action_matrix(arg):
         data = arg.copy()
 
     matrix = data.pop('matrix')
-    include = [ub.udict(p) for p in matrix.pop('include', [])]
-    exclude = [ub.udict(p) for p in matrix.pop('exclude', [])]
+    include = [ub.udict(p) for p in data.pop('include', [])]
+    exclude = [ub.udict(p) for p in data.pop('exclude', [])]
 
     matrix_ = {k: (v if ub.iterable(v) else [v])
                for k, v in matrix.items()}

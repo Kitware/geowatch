@@ -244,9 +244,12 @@ class StacSearcher:
         features = [d.to_dict() for d in items]
 
         dates_found = [item.datetime for item in items]
-        min_date_found = min(dates_found).date().isoformat()
-        max_date_found = min(dates_found).date().isoformat()
-        self.logger.info(f'Search found {len(items)} items for {collections} between {min_date_found} and {max_date_found}')
+        if dates_found:
+            min_date_found = min(dates_found).date().isoformat()
+            max_date_found = min(dates_found).date().isoformat()
+            self.logger.info(f'Search found {len(items)} items for {collections} between {min_date_found} and {max_date_found}')
+        else:
+            self.logger.warning(f'Search found {len(items)} items for {collections}')
 
         if max_products_per_region and max_products_per_region < len(features):
             # Filter to a max number of items per region for testing

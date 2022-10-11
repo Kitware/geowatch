@@ -258,7 +258,9 @@ def _mwe_check_planet_processed():
                 intersects=geom,
                 max_items=1
             )
-            results = list(item_search.items())
+            search_iter = item_search.items()
+            # result0 = next(search_iter)
+            results = list(search_iter)
             region_to_results[region_id] = results
             # print(f'region_id={region_id}')
             # print(f'results={results}')
