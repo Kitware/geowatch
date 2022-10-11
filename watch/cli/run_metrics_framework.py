@@ -94,6 +94,13 @@ class MetricsConfig(scfg.DataConfig):
 phases = ['No Activity', 'Site Preparation', 'Active Construction', 'Post Construction']
 
 
+def _read(fpath):
+    if fpath.is_file():
+        _df = pd.read_csv(fpath, index_col=0)
+        if not _df.empty:
+            return _df
+
+
 @dataclass(frozen=True)
 class RegionResult:
     region_id: str  # 'KR_R001'
@@ -178,6 +185,7 @@ class RegionResult:
         SC metrics; i.e. it would no longer be possible to do worse on SC by
         doing better on BAS.
         '''
+        # TODO check out root/(gt|sm)_sites.csv for this
         if 0:    # read all/eligible sites from region json
             site_ids = []
             for s in self.region_model['features']:
@@ -244,12 +252,6 @@ class RegionResult:
             index=pd.MultiIndex.from_product((list(sites) + ['__avg__'], phases[1:]), names=['site', 'phase']),
             columns=(['F1', 'TIoU', 'TE', 'TEp'] + phases)
         )
-
-        def _read(fpath):
-            if fpath.is_file():
-                _df = pd.read_csv(fpath, index_col=0)
-                if not _df.empty:
-                    return _df
 
         # per-site metrics
         # TODO parallelize, scales with no. of detected sites
@@ -324,35 +326,44 @@ class RegionResult:
     @property
     def sc_phasetable(self):
         '''
-        Currently unused except to get a list of matched truth sites. Could be
-        used to recalculate all SC metrics for micro-average.
+        Currently used only for Gantt chart viz. Could be used to recalculate
+        all SC metrics for micro-average.
 
         This excludes gt sites with no matched proposals and proposals with no
         matched gt sites.
-        TODO how does it handle over/undersegmentation?
         '''
         region_id, sc_dpath = self.region_id, self.sc_dpath
 
         delim = ' vs. '
 
-        phase_table_fpath = sc_dpath / 'ac_phase_table.csv'
-        df = pd.read_csv(phase_table_fpath)
+        if (df := _read(sc_dpath / 'ac_phase_table.csv')) is not None:
 
-        # df['date'] = pd.to_datetime(df['date'])
-        df = df.fillna('NA' + delim + 'NA').astype('string').set_index('date')
-        df = df.melt(ignore_index=False)
-        df_sites = pd.DataFrame(df['variable'].str.split(delim).tolist(), columns=['site', 'site_candidate'], index=df.index)
-        df_sites['site'] = df_sites['site'].str.replace('site truth ', '')
-        df_sites['site_candidate'] = df_sites['site_candidate'].str.replace('site model ', '')
-        df_slices = pd.DataFrame(df['value'].str.split(delim).tolist(), columns=['true', 'pred'], index=df.index)
-        df = pd.concat((df_sites, df_slices), axis=1)
-        df['region_id'] = region_id
-        df = df.reset_index().astype('string').set_index(['region_id', 'site', 'site_candidate', 'date'])
-        df = df.replace(['NA', '[]', None], pd.NA).astype('string').apply(lambda s: s.str.replace("'", '').str.strip('{}'))
-        # df = df.apply(lambda s: s.str.split(', '))
+            # df['date'] = pd.to_datetime(df['date'])
+            if 'date' in df:  # could already be an idx
+                df.set_index('date')
+            df = df.fillna('NA' + delim + 'NA').astype('string')
+            df = df.melt(ignore_index=False)
+            df_sites = pd.DataFrame(
+                df['variable'].str.split(delim).tolist(),
+                columns=['site', 'site_candidate'],
+                index=df.index)
+            df_sites['site'] = df_sites['site'].str.replace('site truth ', '')
+            df_sites['site_candidate'] = df_sites['site_candidate'].str.replace('site model ', '')
+            df_slices = pd.DataFrame(
+                df['value'].str.split(delim).tolist(),
+                columns=['true', 'pred'],
+                index=df.index)
+            df = pd.concat((df_sites, df_slices), axis=1)
+            df['region_id'] = region_id
+            df = df.reset_index().set_index(['region_id', 'site', 'site_candidate', 'date'])
+            df = df.replace(['NA', '[]', None], pd.NA
+                           ).astype('string'
+                                   ).apply(
+                                       lambda s: s.str.replace("'", '').str.strip('{}'))
+            # df = df.apply(lambda s: s.str.split(', '))
 
-        # phases_type = pd.api.types.CategoricalDtype(phases, ordered=True)
-        return df
+            return df
+
 
 
 def merge_bas_metrics_results(bas_results: List[RegionResult], fbetas: List[float]):
@@ -628,8 +639,187 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
     return df
 
 
+import seaborn as sns
+import matplotlib.pyplot as plt
+# matplotlib.use('Agg')
+
+
+def viz_sc(sc_results, save_dpath):
+
+    def viz_sc_gantt(df, plot_title, save_fpath):
+        # ignore subsites
+        # TODO how to pick site boundary?
+        df = df.apply(lambda s: s.str.split(', ').str[0])
+
+        df['pred'] = df['pred'].fillna(method='ffill')
+        df = df[~df['true'].isna()]
+        # df['pred'] = df['pred'].fillna('Unknown')
+        df['pred'] = df['pred'].fillna(method='bfill')
+        df = df.reset_index()
+        df['date'] = pd.to_datetime(df['date']).dt.date
+        df = df.melt(id_vars=['date'])
+
+        # order hack for relplot
+        phases_type = pd.api.types.CategoricalDtype(
+            (['Unknown'] + phases)[::-1], ordered=True)
+        df['value'] = df['value'].astype(phases_type)
+        df = df.sort_values(by='value')
+
+        # TODO threadsafe
+        grid = sns.relplot(
+            data=df,
+            x='date',
+            y='value',
+            hue='variable',
+            size='variable'
+        )
+        grid.savefig(save_fpath)
+
+    def viz_sc_multi(df, plot_title, save_fpath):
+
+        # df.index = [df.index.map('{0[0]} {0[1]} {0[2]}'.format), df.index.get_level_values(3)]
+
+        # ignore subsites
+        # TODO how to pick site boundary?
+        df = df.apply(lambda s: s.str.split(', ').str[0])
+
+        # could do just region_id for error bars after fillna
+        df = df.reset_index()
+        df['group'] = df[['region_id', 'site', 'site_candidate']].astype('string').agg('-'.join, axis=1)
+        df = df.drop(['region_id', 'site', 'site_candidate'], axis=1)
+
+        # TODO phase transition consistency check util?
+        df['pred'] = df.groupby('group')['pred'].fillna(method='ffill').fillna('No Activity')
+        # df['pred'] = df['pred'].fillna('Unknown')
+        # df['pred'] = df['pred'].fillna(method='bfill')
+
+        df = df[~df['true'].isna()]
+        df = df[df['true'] != 'Unknown']  # Unk should be gone from df after this
+
+        df['date'] = pd.to_datetime(df['date'])#.dt.date
+
+        df['date'] = pd.to_datetime(df['date'])#.dt.date
+
+        # must do this before searchsorted
+        phases_type = pd.api.types.CategoricalDtype(
+            ['Unknown'] + phases, ordered=True)
+        df['pred'] = df['pred'].astype(phases_type)
+        df['true'] = df ['true'].astype(phases_type)
+        assert df.groupby('group')['true'].is_monotonic_increasing.all()
+        # assert df.groupby('group')['pred'].is_monotonic_increasing.all()
+        df['diff'] = df['pred'].cat.codes - df['true'].cat.codes
+
+        if 0:  # absolute date
+            df['date'] = df['date'].dt.date
+        elif 1:  # relative date since start
+            df['date'] = df.groupby('group')['date'].diff()
+            df['date'] = df['date'].dt.days.fillna(0)
+        else:  # relative date since last NA; requires 1 NA to exist before SP
+            def align_start(grp, phase='Site Preparation', before=True):
+                grp = grp.sort_values(by='date')
+                assert grp['true'].iloc[0] != phase, grp['true']
+                grp['date'] -= grp.iloc[grp['true'].searchsorted(phase) - int(before)]['date']
+                return grp
+            df = df.groupby('group').apply(align_start)
+            df['date'] = df['date'].dt.days
+        # df = df.melt(id_vars=['date'])
+
+        import watch
+        palette = {c['name']: c['color'] for c in watch.heuristics.CATEGORIES}
+
+        from matplotlib.collections import LineCollection
+        from matplotlib.colors import to_rgba
+
+        jitter = 0.1
+        df['diff'] += np.random.uniform(low=-jitter, high=jitter, size=len(df['diff']))
+
+        df['group_phase'] = df[['group', 'true']].agg('_'.join, axis=1)
+
+        # TODO threadsafe
+        grid = sns.relplot(
+            kind='scatter',
+            data=df,
+            x='date',
+            y='diff',
+            hue='true',
+            palette=palette,
+        )
+        # need args instead of kwargs because of grid.map() weirdness
+        def add_colored_linesegments(x, y, hue, units, **kwargs):
+            # sns.lineplot(x=x, y=y,
+                         # estimator=None,
+                         # units=units,
+                         # hue=hue,
+                         # palette=palette,
+            # )
+            _df = pd.DataFrame(dict(xy=zip(x,y), hue=pd.Series(hue).map(palette).astype('string').map(to_rgba), units=units))
+
+            lines = []
+            colors = []
+            for _, grp in _df.groupby('units'):
+                phases = grp['hue'].unique()
+                ixs = grp['hue'].searchsorted(phases)
+                for start, end, phase in zip(ixs, (np.array(ixs[1:]) + 1).tolist() + [None], phases):
+                    lines.append(grp['xy'][start:end])
+                    colors.append(phase)
+
+            import xdev; xdev.embed()
+            lc = LineCollection(lines, alpha=0.5, colors=colors)
+            ax.add_collection(lc)
+
+        grid.map(add_colored_linesegments,
+                 'date',
+                 'diff',
+                 'true',
+                 'group',
+        )
+        # grid.set_axis_labels(x_var='days since final No Activity', y_var='pred phases ahead of true phase')
+        grid.set_axis_labels(x_var='days since start', y_var='pred phases ahead of true phase')
+
+        ax = plt.gca()
+        ax
+            # order=_phases[::-1],
+            # kwargs=dict(
+            # **dict(
+                # jitter=False,
+                # dodge=False,
+                # size='variable'
+                # s=[20, 10],
+            # ),
+        grid.savefig(save_fpath)
+
+    phs = list(filter(lambda ph: ph is not None, (r.sc_phasetable for r in sc_results)))
+
+    for ph in phs:
+
+        rid = ph.index.get_level_values('region_id')[0]
+
+        # site-level viz
+        # for (site, site_cand), df in ph.groupby(['site', 'site_candidate']):
+            # viz_sc_gantt(
+                # df.droplevel([0, 1, 2]),
+                # ' vs. '.join((site, site_cand)),
+                # ((save_dpath / rid).ensuredir() / ('_'.join((site, site_cand)) + '.png'))
+            # )
+
+        # region-level viz
+        viz_sc_multi(
+            ph, rid,
+            (save_dpath / f'sc_{rid}.png')
+        )
+
+    # merged viz
+    merged_df = pd.concat(phs, axis=0)
+    viz_sc_multi(
+        merged_df,
+        ' '.join(merged_df.index.get_level_values('region_id')),
+        (save_dpath / 'sc_merged.png')
+    )
+
+
 def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath,
-                          merge_dpath, merge_fpath, fbetas, parent_info, info):
+                          merge_dpath, merge_fpath, fbetas, parent_info, info,
+                          sc_viz=True):
     '''
     Merge metrics results from multiple regions.
 
@@ -733,6 +923,10 @@ def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath,
         for viz_fpath in viz_dpath.iterdir():
             viz_link = viz_fpath.augment(dpath=region_viz_dpath)
             ub.symlink(viz_fpath, viz_link, verbose=1)
+
+    # viz SC
+    if sc_viz:
+        viz_sc(sc_results, region_viz_dpath)
 
     return bas_df, sc_df
 
