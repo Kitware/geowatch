@@ -10,7 +10,7 @@ Windows.
 
     # To update to a newer version see:
     # https://docs.conda.io/en/latest/miniconda_hashes.html for updating
-    CONDA_INSTALL_SCRIPT=Miniconda3-py38_4.9.2-Linux-x86_64.sh
+    CONDA_INSTALL_SCRIPT=Miniconda3-py39_4.12.0-Linux-x86_64.sh
     curl https://repo.anaconda.com/miniconda/$CONDA_INSTALL_SCRIPT > $CONDA_INSTALL_SCRIPT
 
     # For security, it is important to verify the hash
