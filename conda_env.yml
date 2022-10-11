@@ -4,7 +4,7 @@ channels:
   - conda-forge
   - nodefaults
 dependencies:
-  - python == 3.8
+  - python == 3.9
   - pip >= 21.0.1
   - pip:
     - -r requirements/runtime.txt
