@@ -97,10 +97,6 @@ class MipNerfPositionalEncoder(nn.Module):
     
 
 class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
-    """
-    Todo:
-        - [ ] Weight losses, both global and per-pixel
-    """
 
     _HANDLES_NANS = True
 
@@ -449,7 +445,6 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 tokens = self.sensor_channel_tokenizers[tokenizer_key](mode_img)
 
                 # space
-                # TODO: compute scale, include in pos encoding
                 height, width = tokens_shape = tokens.shape[1:]
                 token_positions = positions_from_shape(
                     tokens_shape, 
@@ -508,7 +503,6 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         for frame in example["frames"]:
 
             # space
-            # TODO: compute scale, include in pos encoding
             height, width = frame["output_dims"]
             height, width = tokens_shape = (height // self.hparams.token_width, width // self.hparams.token_width)
             token_positions = positions_from_shape(
@@ -696,12 +690,14 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     else:
                         raise KeyError(criterion.target_encoding)
 
-                    # TODO: weight losses and metrics
-                    frame_losses.append(
-                        criterion(
+                    task_weights_key = self.task_to_keynames[task_name]["weights"]
+                    loss = criterion(
                             pred[None], 
                             loss_labels[None],
-                        ).mean()
+                        )
+                    loss *= frame[task_weights_key]
+                    frame_losses.append(
+                        self.global_head_weights[task_name] * loss.mean()
                     )
                     self.log_dict(
                         self.head_metrics[f"{stage}_stage"][task_name](
