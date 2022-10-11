@@ -1,0 +1,4 @@
+lightning_logs/
+*.log
+*.pt
+*.txt
