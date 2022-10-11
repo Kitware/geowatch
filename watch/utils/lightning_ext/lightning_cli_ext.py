@@ -38,6 +38,9 @@ class LightningArgumentParser_Extension(LightningArgumentParser):
 
         For full details of accepted arguments see `ArgumentParser.__init__
         <https://jsonargparse.readthedocs.io/en/stable/index.html#jsonargparse.ArgumentParser.__init__>`_.
+
+        Example:
+            >>> from watch.utils.lightning_ext.lightning_cli_ext import LightningCLI_Extension
         """
         if not _JSONARGPARSE_SIGNATURES_AVAILABLE:
             raise ModuleNotFoundError(
