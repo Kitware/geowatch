@@ -573,16 +573,15 @@ class Step:
     @property
     def command(step):
         if step.otf_cache:
-            return step.test_is_computed_command() + ' && ' + step._command
+            return step.test_is_computed_command() + ' || ' + step._command
         else:
             return step._command
 
     def test_is_computed_command(step):
-        test_cmds = [f'test -f "{p}"' for p in step.out_paths.values()]
-        if len(test_cmds) == 1:
-            return test_cmds[0]
-        else:
-            return '(' + ' && '.join(test_cmds) + ')'
+        test_expr = ' -a '.join(
+            [f'-f "{p}"' for p in step.out_paths.values()])
+        test_cmd = 'test ' +  test_expr
+        return test_cmd
 
 
 class Pipeline:

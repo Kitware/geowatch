@@ -980,20 +980,33 @@ class ExperimentState(ub.NiceRepr):
         staging_df = self.staging_table()
         versioned_df = self.versioned_table()
         volitile_df = self.volitile_table()
-        import xdev
-        xdev.embed()
 
         if len(volitile_df) and len(versioned_df):
             # Determine how many volitile items (i.e. predictions) we
             # have on disk that correspond with our versioned data
             # volitile_keys = ['pred_pxl', 'pred_trk', 'pred_act']
-            trk_model_to_volitile = dict(list(volitile_df.groupby('trk_model')))
+
+            _grouper_keys = ['trk_model', 'act_model', 'model']
+            vol_grouper_keys = ub.oset(_grouper_keys) & volitile_df.columns
+            ver_grouper_keys = ub.oset(_grouper_keys) & versioned_df.columns
+            grouper_keys = list(vol_grouper_keys & ver_grouper_keys)
+
             if 0:
                 versioned_df.drop(['raw', 'dvc', 'dataset_code', 'expt_dvc_dpath'], axis=1)
-            model_to_versioned = dict(list(versioned_df.groupby(['type', 'trk_model'])))
-            versioned_df.loc[:, ['n_pred_pxl', 'n_pred_trk', 'n_pred_act']] = 0
-            for (type, model), subdf in model_to_versioned.items():
-                associated = trk_model_to_volitile.get(model, None)
+            group_to_volitile = dict(list(volitile_df.groupby(grouper_keys)))
+            group_to_versioned = dict(list(versioned_df.groupby(grouper_keys)))
+
+            pred_keys = [
+                'pred_trk_pxl_fpath',
+                'pred_act_pxl_fpath',
+                'pred_trk_poly_fpath',
+                'pred_act_poly_fpath'
+            ]
+            npred_keys = ['n_' + k for k in pred_keys]
+
+            versioned_df.loc[:, npred_keys] = 0
+            for groupvals, subdf in group_to_versioned.items():
+                associated = group_to_volitile.get(groupvals, None)
                 if associated is not None:
                     counts = associated.value_counts('type').rename(lambda x: 'n_' + x, axis=0)
                     versioned_df.loc[subdf.index, counts.index] += counts
@@ -1212,7 +1225,6 @@ class ExperimentState(ub.NiceRepr):
         from watch.utils.reverse_hashid import ReverseHashTable
         rhash = ReverseHashTable(type='test_dset')
         rhash.register(test_dset_name, test_dataset)
-
         return test_dset_name
 
     def _condense_cfg(self, params, type):
@@ -1308,10 +1320,13 @@ def summarize_tables(tables):
             body = console.highlighter('There are no unversioned staging items')
         print(Panel(body, title=title))
 
+    _grouper_keys = ub.oset(['dataset_code', 'test_trk_dset', 'test_act_dset', 'type'])
+
     if volitile_df is not None:
         title = ('[bright_blue] Volitile Summary (Predictions)')
         if len(volitile_df):
-            num_pred_types = volitile_df.groupby(['dataset_code', 'test_dset', 'type']).nunique()
+            grouper_keys = list(_grouper_keys & volitile_df.columns)
+            num_pred_types = volitile_df.groupby(grouper_keys).nunique()
             body_df = num_pred_types
             body = console.highlighter(str(body_df))
         else:
@@ -1326,7 +1341,8 @@ def summarize_tables(tables):
         # version_bitcols = ['has_raw', 'has_dvc', 'is_link', 'is_broken', 'needs_pull', 'needs_push', 'has_orig']
         version_bitcols = ['has_raw', 'has_dvc', 'is_link', 'is_broken', 'needs_pull', 'needs_push']
         if len(versioned_df):
-            body_df = versioned_df.groupby(['dataset_code', 'test_dset', 'type'])[version_bitcols].sum()
+            grouper_keys = list(_grouper_keys & versioned_df.columns)
+            body_df = versioned_df.groupby(grouper_keys)[version_bitcols].sum()
             body = console.highlighter(str(body_df))
         else:
             body = console.highlighter('There are no versioned items')
@@ -1543,3 +1559,4 @@ if __name__ == '__main__':
         python -m watch.mlops.expt_manager "pull packages"
     """
     main(cmdline=True)
+
