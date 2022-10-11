@@ -116,8 +116,16 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         name: str = "unnamed_model",
         token_width: int = 10,
         token_dim: int = 16,
-        scale_base: float = 1.,
+        spatial_scale_base: float = 1.,
+        temporal_scale_base: float = 1.,
         ignore_scale: bool = False,
+        backbone_depth: int = 4,
+        backbone_cross_heads: int = 1,
+        backbone_latent_heads: int = 8,
+        backbone_cross_dim_head: int = 64,
+        backbone_latent_dim_head: int = 64,
+        backbone_weight_tie_layers: bool = False,
+        position_encoding_frequencies: int = 16,
         class_weights: str = "auto",
         saliency_weights: str = "auto",
         positive_change_weight: float = 1.0,
@@ -134,7 +142,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             name: Specify a name for the experiment. (Unsure if the Model is the place for this)
             token_width: Width of each square token.
             token_dim: Dimensionality of each computed token.
-            scale_base: The scale assigned to each token equals `scale_base / token_density`, where the token density is the number of tokens along a given axis. This value is also the assigned scale for all tokens when `ignore_scale` is True.
+            spatial_scale_base: The scale assigned to each token equals `scale_base / token_density`, where the token density is the number of tokens along a given axis. This value is also the assigned scale for all tokens when `ignore_scale` is True.
+            temporal_scale_base: The scale assigned to each token equals `scale_base / token_density`, where the token density is the number of tokens along a given axis. This value is also the assigned scale for all tokens when `ignore_scale` is True.
             ignore_scale: Don't compute the scale for each token individually and instead assign a cosntant value, `scale_base`.
             class_weights: Class weighting strategy.
             saliency_weights: Class weighting strategy.
@@ -321,20 +330,20 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 ),
             )
         
-        self.position_encoder = MipNerfPositionalEncoder(3, 16)
+        self.position_encoder = MipNerfPositionalEncoder(3, position_encoding_frequencies)
         # self.position_encoder = RandomFourierPositionalEncoder(3, 16)
         position_dim = self.position_encoder.output_dim
         
         self.backbone = TransformerEncoderDecoder(
-            depth = 4,
+            depth = backbone_depth,
             dim = token_dim + position_dim,
             queries_dim = position_dim,
             logits_dim = token_dim,
-            cross_heads = 1,
-            latent_heads = 8,
-            cross_dim_head = 64,
-            latent_dim_head = 64,
-            weight_tie_layers = False,
+            cross_heads = backbone_cross_heads,
+            latent_heads = backbone_latent_heads,
+            cross_dim_head = backbone_cross_dim_head,
+            latent_dim_head = backbone_latent_dim_head,
+            weight_tie_layers = backbone_weight_tie_layers,
             decoder_ff = True,
         )
         
@@ -448,7 +457,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     device=tokens.device,
                 )
             
-                token_positions_scales = 1. / torch.tensor(
+                token_positions_scales = self.hparams.spatial_scale_base / torch.tensor(
                     token_positions.shape[1:],
                     dtype=token_positions.dtype, 
                     device=token_positions.device,
@@ -458,11 +467,14 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     "chan -> chan height width",
                     height=height, width=width,
                 )
+                
+                if self.hparams.ignore_scale:
+                    token_positions_scales = self.hparams.spatial_scale_base * torch.ones_like(token_positions_scales)
 
                 # time
                 token_times = frame["time_index"] * torch.ones_like(token_positions[0])[None].type_as(token_positions)
             
-                token_times_scales = torch.ones(
+                token_times_scales = self.hparams.temporal_scale_base * torch.ones(
                     1, height, width,
                     dtype=token_positions.dtype, 
                     device=token_positions.device,
@@ -479,9 +491,6 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     token_positions_scales,
                     token_times_scales,
                 ])
-                
-                if self.hparams.ignore_scale:
-                    token_scales = torch.ones_like(token_scales)
 
                 token_encodings = self.position_encoder(token_encodings, token_scales)
                 
@@ -508,11 +517,15 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 device=self.position_encoder.weight.device,
             )
             
-            token_positions_scales = 1. / torch.tensor(
+            token_positions_scales = self.hparams.spatial_scale_base / torch.tensor(
                 token_positions.shape[1:],
                 dtype=token_positions.dtype, 
                 device=token_positions.device,
             )
+                
+            if self.hparams.ignore_scale:
+                token_positions_scales = self.hparams.spatial_scale_base * torch.ones_like(token_positions_scales)
+                    
             token_positions_scales = einops.repeat(
                 token_positions_scales, 
                 "chan -> chan height width",
@@ -526,7 +539,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 device=token_positions.device,
             )[None]
             
-            token_times_scales = torch.ones(
+            token_times_scales = self.hparams.temporal_scale_base * torch.ones(
                 1, height, width,
                 dtype=token_positions.dtype, 
                 device=token_positions.device,
@@ -541,9 +554,6 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 token_positions_scales,
                 token_times_scales,
             ])
-                
-            if self.hparams.ignore_scale:
-                token_scales = torch.ones_like(token_scales)
                         
             token_encodings = self.position_encoder(token_encodings, token_scales)
 
