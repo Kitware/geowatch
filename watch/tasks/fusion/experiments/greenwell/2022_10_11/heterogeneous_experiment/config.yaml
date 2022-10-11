@@ -14,7 +14,7 @@ data:
   time_steps: 2
   channels: B02|B03|B04|B08,B01,B11|B12
   chip_overlap: 0.2
-  chip_size: 96
+  chip_size: 128
   dist_weights: 0
   exclude_sensors: null
   ignore_dilate: 0

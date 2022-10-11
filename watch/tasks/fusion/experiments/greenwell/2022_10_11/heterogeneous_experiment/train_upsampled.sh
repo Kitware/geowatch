@@ -19,6 +19,7 @@ python -m watch.tasks.fusion fit \
     --model.init_args.name=$EXPERIMENT_NAME \
     --model.ignore_scale=true \
     --model.spatial_scale_base=0.1 \
+    --data.batch_size=16 \
     --data.input_space_scale=null \
     --data.train_dataset="$TRAIN_FPATH" \
     --data.vali_dataset="$VALI_FPATH" \
@@ -35,6 +36,7 @@ python -m watch.tasks.fusion fit \
     --model.init_args.name=$EXPERIMENT_NAME \
     --model.ignore_scale=true \
     --model.spatial_scale_base=1.0 \
+    --data.batch_size=16 \
     --data.input_space_scale=null \
     --data.train_dataset="$TRAIN_FPATH" \
     --data.vali_dataset="$VALI_FPATH" \
