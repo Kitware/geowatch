@@ -8,11 +8,48 @@ On ubuntu this can be setup as follows:
 
    ### Based on code in https://github.com/Erotemic/local/blob/main/tools/pyenv_ext/pyenv_ext_commands.sh
 
+   apt_ensure(){
+        __doc__="
+        Checks to see if the packages are installed and installs them if needed.
+        "
+        ARGS=("$@")
+        MISS_PKGS=()
+        HIT_PKGS=()
+        # Only use the sudo command if we need it (i.e. we are not root)
+        _SUDO=""
+        if [ "$(whoami)" != "root" ]; then 
+            _SUDO="sudo "
+        fi
+        # shellcheck disable=SC2068
+        for PKG_NAME in ${ARGS[@]}
+        do
+            # Check if the package is already installed or not
+            if dpkg -l "$PKG_NAME" | grep "^ii *$PKG_NAME" > /dev/null; then 
+                echo "Already have PKG_NAME='$PKG_NAME'"
+                # shellcheck disable=SC2268,SC2206
+                HIT_PKGS=(${HIT_PKGS[@]} "$PKG_NAME")
+            else
+                echo "Do not have PKG_NAME='$PKG_NAME'"
+                # shellcheck disable=SC2268,SC2206
+                MISS_PKGS=(${MISS_PKGS[@]} "$PKG_NAME")
+            fi
+        done
+        # Install the packages if any are missing
+        if [ "${#MISS_PKGS}" -gt 0 ]; then
+            if [ "${UPDATE}" != "" ]; then
+                $_SUDO apt update -y
+            fi
+            $_SUDO apt install -y "${MISS_PKGS[@]}"
+        else
+            echo "No missing packages"
+        fi
+    }
+
     # Install requirements for building Python (apt-specific command, might be different for other distros)
-    sudo apt-get install -y \
+    apt_ensure \
         make build-essential libssl-dev zlib1g-dev \
         libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev \
-        libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev python-openssl
+        libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev 
 
     # Download pyenv
     export PYENV_ROOT="$HOME/.pyenv"

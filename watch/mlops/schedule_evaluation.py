@@ -410,10 +410,13 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
         # Crop job depends only on true annotations
         paths['crop_regions'] = str(region_model_dpath) + '/*.geojson'
         condensed['regions_id'] = 'truth'  # todo: version info
+        site_summary_glob = str(region_model_dpath) + '/*.geojson'
     if crop_params['regions'] == 'trk.poly.output':
         # Crop job depends on track predictions
         paths['crop_regions'] = state.templates['pred_trk_poly_fpath'].format(**condensed)
         condensed['regions_id'] = condensed['trk_poly_id']
+        # FIXME: not sure if this is correct.
+        site_summary_glob = state.templates['pred_trk_poly_dpath'].format(**condensed) + '/*.geojson'
 
     crop_params['regions'] = paths['crop_regions']
     condensed['crop_cfg'] = state._condense_cfg(crop_params, 'crop')
@@ -431,6 +434,8 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
     act_poly = nested['act']['poly']
     act_pxl_params = ub.udict(act_pxl['data']) - {'test_dataset'}
     act_poly_params = ub.udict(act_poly)
+    # TODO: make this nicer
+    act_poly_params['site_summary_glob'] = site_summary_glob
 
     condensed['act_model'] = state._condense_model(item['act.pxl.model'])
     condensed['act_pxl_cfg'] = state._condense_cfg(act_pxl_params, 'act_pxl')
@@ -849,7 +854,7 @@ class Pipeline:
         actclf_cfg.update(act_poly_params)
         pred_act_poly_kw['kwargs_str'] = shlex.quote(json.dumps(actclf_cfg))
         # pred_act_poly_kw['site_summary_glob'] = (pred_act_poly_kw['region_model_dpath'] / '*.geojson')
-        pred_act_poly_kw['site_summary_glob'] = 'TODO not well defined yet'
+        pred_act_poly_kw['site_summary_glob'] = act_poly_params.pop('site_summary_glob')
         command = ub.codeblock(
             r'''
             python -m watch.cli.run_tracker \
@@ -858,7 +863,7 @@ class Pipeline:
                 --default_track_fn class_heatmaps \
                 --track_kwargs {kwargs_str} \
                 --out_dir "{pred_act_poly_dpath}" \
-                --out_fpath "{pred_act_poly_fpath}" \
+                --out_site_summary_fpath "{pred_act_poly_fpath}" \
                 --out_kwcoco_fpath "{pred_act_poly_kwcoco}"
             ''').format(**pred_act_poly_kw)
         name = 'pred_act_poly'

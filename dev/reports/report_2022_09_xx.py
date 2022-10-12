@@ -594,7 +594,6 @@ python -m watch.mlops.schedule_evaluation \
             act.pxl.model:
                 - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
     " \
-    --skip_existing=0 \
     --enable_pred_trk_pxl=1 \
     --enable_pred_trk_poly=1 \
     --enable_crop=1 \
@@ -602,5 +601,6 @@ python -m watch.mlops.schedule_evaluation \
     --enable_pred_act_poly=1 \
     --enable_viz_pred_trk_poly=0 \
     --devices="0,1" --queue_size=2 \
-    --backend=tmux --run=1
+    --backend=tmux --skip_existing=0 \
+    --run=0
 """
