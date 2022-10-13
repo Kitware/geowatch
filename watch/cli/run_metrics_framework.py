@@ -374,7 +374,6 @@ class RegionResult:
             return df
 
 
-
 def merge_bas_metrics_results(bas_results: List[RegionResult], fbetas: List[float]):
     '''
     Merge BAS results and return as a pd.DataFrame
@@ -725,9 +724,9 @@ def viz_sc(sc_results, save_dpath):
             df = df[~df['true'].isna()]
             # df = df[df['true'] != 'Unknown']  # Unk should be gone from df after this
 
-        df['date'] = pd.to_datetime(df['date'])#.dt.date
+        df['date'] = pd.to_datetime(df['date'])  # .dt.date
 
-        df['date'] = pd.to_datetime(df['date'])#.dt.date
+        df['date'] = pd.to_datetime(df['date'])  # .dt.date
 
         # must do this before searchsorted
         phases_type = pd.api.types.CategoricalDtype(
