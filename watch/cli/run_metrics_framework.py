@@ -696,6 +696,7 @@ def viz_sc(sc_results, save_dpath):
             hue='variable',
             size='variable'
         )
+        plt.title(plot_title)
         grid.savefig(save_fpath)
         plt.close()
 
@@ -842,8 +843,7 @@ def viz_sc(sc_results, save_dpath):
 
         sns.move_legend(grid, 'upper right')
         grid.set_axis_labels(x_var=x_var, y_var='pred phases ahead of true phase')
-        # import xdev; xdev.embed()
-
+        plt.title(plot_title)
         grid.savefig(save_fpath)
         plt.close()
 
