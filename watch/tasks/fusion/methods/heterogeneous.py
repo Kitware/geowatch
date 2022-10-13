@@ -115,7 +115,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         spatial_scale_base: float = 1.,
         temporal_scale_base: float = 1.,
         ignore_scale: bool = False,
-        backbone_depth: int = 4,
+        backbone_encoder_depth: int = 4,
+        backbone_decoder_depth: int = 1,
         backbone_cross_heads: int = 1,
         backbone_latent_heads: int = 8,
         backbone_cross_dim_head: int = 64,
@@ -331,7 +332,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         position_dim = self.position_encoder.output_dim
         
         self.backbone = TransformerEncoderDecoder(
-            depth = backbone_depth,
+            encoder_depth = backbone_encoder_depth,
+            decoder_depth = backbone_decoder_depth,
             dim = token_dim + position_dim,
             queries_dim = position_dim,
             logits_dim = token_dim,
@@ -340,7 +342,6 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             cross_dim_head = backbone_cross_dim_head,
             latent_dim_head = backbone_latent_dim_head,
             weight_tie_layers = backbone_weight_tie_layers,
-            decoder_ff = True,
         )
         
         self.criterions = torch.nn.ModuleDict()
