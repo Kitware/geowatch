@@ -392,10 +392,10 @@ def sort_by_gid(coco_dset, track_id, prune=True):
         return images, []
     vidids = np.unique(images.get('video_id', None))
     assert len(vidids) == 1, f'track {track_id} spans multiple videos {vidids}'
-    vidid = vidids[0]
+    video_id = vidids[0]
     aids = set(coco_dset.index.trackid_to_aids[track_id])
     if not prune:
-        images = coco_dset.images(vidid=vidid)
+        images = coco_dset.images(video_id=video_id)
     return (images,
             kwcoco.coco_objects1d.AnnotGroups([
                 coco_dset.annots(aids.intersection(img_aids))
@@ -423,7 +423,7 @@ def ensure_post(coco_dset,
     if len(list(annot_groups)) > 1:
         last_gid = images.gids[-1]
         gids = coco_dset.index._set_sorted_by_frame_index(
-            coco_dset.images(vidid=images.get('vidid', None)[0]).gids)
+            coco_dset.images(video_id=images.get('video_id', None)[0]).gids)
         current_gid = gids[-1]
 
         def img_to_vid(gid):
