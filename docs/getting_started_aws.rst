@@ -12,7 +12,7 @@ Installing AWS CLI
 This section provides instructions to install the AWS CLI tool.
 
 For more details or troubleshooting, please refer to the the 
-`official instructions for installing the AWS CLI <https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html>_`.
+`official instructions for installing the AWS CLI <https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html>`_.
 
 We attempt to summarize the above with a series of commands that should "just
 work" and install the `aws` tool on your machine. This does assume a Linux
@@ -222,7 +222,7 @@ AWS Security
 It is important to periodically rotate your AWS credentials.
 
 See detailed **internal** instructions for rotating keys: 
-`here <https://docs.google.com/document/d/1bW8UM1jR3opJ2qf-OU28Yr3Gyg7chZQ2MH5YQYGBIhs/edit#heading=h.z29n19ypsfef>_`.
+`here <https://docs.google.com/document/d/1bW8UM1jR3opJ2qf-OU28Yr3Gyg7chZQ2MH5YQYGBIhs/edit#heading=h.z29n19ypsfef>`_.
 
 
 .. code:: bash
