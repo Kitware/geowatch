@@ -832,8 +832,7 @@ def coerce_geojson_datas(arg, format='dataframe', allow_raw=False, workers=0,
     geojson_fpaths = list(ub.unique(geojson_fpaths))
     data_gen = load_geojson_datas(
         geojson_fpaths, workers=workers, mode=mode, desc=desc,
-        verbose=verbose,
-        yield_after_submit=True)
+        format=format, verbose=verbose, yield_after_submit=True)
 
     # Start the background workers
     next(data_gen)
@@ -921,7 +920,9 @@ def _coerce_raw_geojson(item, format):
         else:
             was_raw = True
 
-    if isinstance(item, dict):
+    if isinstance(item, (os.PathLike, str)):
+        ...  # not raw
+    elif isinstance(item, dict):
         # Allow the item to be parsed json
         was_raw = True
         assert item.get('type', None) == 'FeatureCollection'
