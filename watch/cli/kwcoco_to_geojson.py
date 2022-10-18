@@ -553,9 +553,9 @@ def _coerce_site_summaries(site_summary_or_region_model,
         List[Tuple[region_id: str, site_summary: Dict]]
     """
     from watch.utils import util_path
-    from watch.utils import util_iarpa
+    from watch.utils import util_gis
 
-    summaries_or_rms = list(util_iarpa.coerce_region_or_site_datas(
+    summaries_or_rms = list(util_gis.coerce_geojson_datas(
         site_summary_or_region_model, format='json'))
 
     # open the filepath(s)

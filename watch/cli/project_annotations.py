@@ -135,7 +135,6 @@ def main(cmdline=False, **kwargs):
     """
     import geopandas as gpd  # NOQA
     from watch.utils import util_gis
-    from watch.utils import util_iarpa
     config = ProjectAnnotationsConfig(default=kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
@@ -163,7 +162,7 @@ def main(cmdline=False, **kwargs):
     # Read the external CRS84 annotations from the site models
     HACK_HANDLE_DUPLICATE_SITE_ROWS = True
 
-    site_model_infos = list(util_iarpa.coerce_region_or_site_datas(
+    site_model_infos = list(util_gis.coerce_geojson_datas(
         config['site_models'], desc='load site models'))
 
     sites = []
@@ -181,24 +180,11 @@ def main(cmdline=False, **kwargs):
 
     regions = []
     if config['region_models'] is not None:
-        region_model_infos = list(util_iarpa.coerce_region_or_site_datas(
+        region_model_infos = list(util_gis.coerce_geojson_datas(
             config['site_models'], desc='load geojson region-models'))
         for info in region_model_infos:
-            # fpath = info['fpath']
-            # if fpath.stem == 'IN_C000':
-            #     # HACK: Remove when shi region is fixed.
-            #     continue
             gdf = info['data']
             regions.append(gdf)
-            # if 1:
-            #     region_rows = gdf[gdf['type'] == 'region']
-            #     assert len(region_rows) == 1
-            #     region_row = region_rows.iloc[0]
-            #     if region_row['region_id'] != fpath.stem:
-            #         print(gdf)
-            #         print(region_row['region_id'])
-            #         print('fpath = {!r}'.format(fpath))
-            #         raise AssertionError
 
     if config['clear_existing']:
         coco_dset.clear_annotations()
@@ -1087,13 +1073,13 @@ def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sit
 
 
 def draw_geospace(dvc_dpath, sites):
-    from watch.utils import util_iarpa
+    from watch.utils import util_gis
     import geopandas as gpd
     import kwplot
     kwplot.autompl()
     region_fpaths = util_path.coerce_patterned_paths(dvc_dpath / 'drop1/region_models', '.geojson')
     regions = []
-    for info in util_iarpa.coerce_region_or_site_datas(region_fpaths):
+    for info in util_gis.coerce_geojson_datas(region_fpaths):
         gdf = info['data']
         regions.append(gdf)
 

@@ -51,7 +51,7 @@ USE_LISTS = 0  # turn on for eager debugging
 
 def main(cmdline=False, **kwargs):
     from watch.utils import util_path
-    from watch.utils import util_iarpa
+    from watch.utils import util_gis
     import geopandas as gpd
     import safer
 
@@ -75,14 +75,14 @@ def main(cmdline=False, **kwargs):
     if len(region_geojson_fpaths) != 1:
         raise ValueError(f'Must specify exactly one region file, Got: {region_geojson_fpaths}')
 
-    regions = util_iarpa.load_site_or_region_datas(
+    regions = util_gis.load_geojson_datas(
         region_geojson_fpaths, workers=0, desc='load geojson region-models')
     old_region_fpath = regions[0]['fpath']
     region_gdf_crs84: gpd.GeoDataFrame = regions[0]['data']
 
     # Load multiple site models
     io_workers = config['io_workers']
-    sites = util_iarpa.load_site_or_region_datas(
+    sites = util_gis.load_geojson_datas(
         site_geojson_fpaths, workers=io_workers,
         desc='load geojson site-models')
 

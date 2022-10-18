@@ -417,8 +417,8 @@ def main(cmdline=True, **kw):
     if regions in {'annots', 'images'}:
         pass
     else:
-        from watch.utils import util_iarpa
-        infos = list(util_iarpa.coerce_region_or_site_datas(regions))
+        from watch.utils import util_gis
+        infos = list(util_gis.coerce_geojson_datas(regions))
         parts = []
         for info in infos:
             df = info['gdf']
