@@ -553,13 +553,14 @@ def _coerce_site_summaries(site_summary_or_region_model,
     """
     from watch.utils import util_gis
 
-    summaries_or_rms = list(util_gis.coerce_geojson_datas(
+    geojson_infos = list(util_gis.coerce_geojson_datas(
         site_summary_or_region_model, format='json', allow_raw=True))
 
     # validate the json
     site_summaries = []
 
-    for site_summary_or_region_model in summaries_or_rms:
+    for info in geojson_infos:
+        site_summary_or_region_model = info['data']
 
         if strict and not isinstance(site_summary_or_region_model, dict):
             raise AssertionError(
@@ -1038,6 +1039,7 @@ def main(args):
     if out_kwcoco is not None:
         coco_dset = coco_dset.reroot(absolute=True)
         coco_dset.fpath = out_kwcoco
+        ub.Path(out_kwcoco).parent.ensuredir()
         print(f'write to coco_dset.fpath={coco_dset.fpath}')
         coco_dset.dump(out_kwcoco, indent=2)
 
@@ -1084,12 +1086,12 @@ def main(args):
         # TODO / FIXME:
         # The script should control if you are in "write" or "append" mode.
         # Often I don't want to append to existing files.
+        APPEND_MODE = 0
+
         site_summary_fpaths = []
         for region_id, site_summaries in groups.items():
 
             region_fpath = site_summary_dir / (region_id + '.geojson')
-            APPEND_MODE = 0
-
             if APPEND_MODE and region_fpath.is_file():
                 with open(region_fpath, 'r') as f:
                     region = geojson.load(f)
