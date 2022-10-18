@@ -189,7 +189,7 @@ def demo_regions_geojson_text():
     return geojson_text
 
 
-def read_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
+def load_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
     """
     Args:
         file (str | file): path or file object containing geojson data.
@@ -207,6 +207,9 @@ def read_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
         # with an OAMS_AUTHORITY_COMPLIANT wgs84 crs (i.e. lat,lon) even
         # though the on disk order is should be OAMS_TRADITIONAL_GIS_ORDER.
 
+    TODO:
+        - [ ] Rename to load_geojson
+
     References:
         https://geopandas.org/docs/user_guide/projections.html#the-axis-order-of-a-crs
 
@@ -217,7 +220,7 @@ def read_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
         >>> file = io.StringIO()
         >>> file.write(geojson_text)
         >>> file.seek(0)
-        >>> region_df = read_geojson(file)
+        >>> region_df = load_geojson(file)
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> import geopandas as gpd
@@ -266,6 +269,9 @@ def read_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
     else:
         raise NotImplementedError('geopandas only deals with traditional lon/lat')
     return region_df
+
+
+read_geojson = load_geojson  # backwards compat
 
 
 @ub.memoize
@@ -893,6 +899,11 @@ def _coerce_raw_geojson(item, format):
         assert item.get('type', None) == 'FeatureCollection'
         if format == 'dataframe':
             item = gpd.GeoDataFrame.from_features(item['features'])
+            # Hack in CRS-84
+            crs84 = _get_crs84()
+            # this is much faster and the only reason this is ok is because the
+            # input is xy-wgs84 so the transform (which is slow) would be a noop
+            item._crs = crs84
     elif isinstance(item, gpd.GeoDataFrame):
         # Allow the item to be a GeoDataFrame
         was_raw = True
@@ -907,6 +918,11 @@ def _coerce_raw_geojson(item, format):
             'format': format,
         }
     return was_raw, item
+
+
+def _load_json_from_path(path):
+    with open(path, 'r') as file:
+        return json.load(file)
 
 
 def load_geojson_datas(geojson_fpaths, format='dataframe', workers=0,
@@ -931,14 +947,23 @@ def load_geojson_datas(geojson_fpaths, format='dataframe', workers=0,
             backend argument that will yield None after the data is submitted
             to force the data loading to start processing in the background.
 
-
     Yields:
         Dict:
             containing keys, 'fpath' and 'gdf'.
 
     SeeAlso:
-        * coerce_geojson_datas -
-            the coercable version of this function.
+        * coerce_geojson_datas - the coercable version of this function.
+        * coerce_geojson_paths - only coerces paths
+
+    Example:
+        >>> from watch.utils.util_gis import *  # NOQA
+        >>> import ubelt as ub
+        >>> dpath = ub.Path.appdir('watch', 'tests', 'util_gis', 'load_geojson_data')
+        >>> dpath.ensuredir()
+        >>> fpath = dpath / 'data.geojson'
+        >>> fpath.write_text(demo_regions_geojson_text())
+        >>> gdf = list(load_geojson_datas([fpath], format='dataframe'))[0]['data']
+        >>> dct = list(load_geojson_datas([fpath], format='json'))[0]['data']
     """
     from watch.utils import util_gis
     # sites = []
@@ -952,9 +977,9 @@ def load_geojson_datas(geojson_fpaths, format='dataframe', workers=0,
     }
 
     if format == 'dataframe':
-        loader = util_gis.read_geojson
+        loader = util_gis.load_geojson
     elif format == 'json':
-        loader = json.load
+        loader = _load_json_from_path
     else:
         raise KeyError(format)
 

@@ -308,7 +308,7 @@ def main(cmdline=True, **kwargs):
         >>> dpath = ub.Path.appdir('watch/tests/test-stac-search').ensuredir()
         >>> search_fpath = dpath / 'stac_search.json'
         >>> region_fpath = demo_region.demo_khq_region_fpath()
-        >>> region = util_gis.read_geojson(region_fpath)
+        >>> region = util_gis.load_geojson(region_fpath)
         >>> result_fpath = dpath / 'demo.input'
         >>> start_date = region['start_date'].iloc[0]
         >>> end_date = region['end_date'].iloc[0]
@@ -391,7 +391,7 @@ def _auto_search_params_from_region(r_file_loc, config):
     from watch.utils import util_gis
     from watch.utils import util_time
     from watch.stac.stac_search_builder import build_search_json
-    region_df = util_gis.read_geojson(r_file_loc)
+    region_df = util_gis.load_geojson(r_file_loc)
     region_row = region_df[region_df['type'] == 'region'].iloc[0]
     end_date = util_time.coerce_datetime(region_row['end_date'])
     start_date = util_time.coerce_datetime(region_row['start_date'])
