@@ -50,8 +50,8 @@ USE_LISTS = 0  # turn on for eager debugging
 
 
 def main(cmdline=False, **kwargs):
-    from watch.utils import util_gis
     from watch.utils import util_path
+    from watch.utils import util_iarpa
     import geopandas as gpd
     import safer
 
@@ -66,22 +66,25 @@ def main(cmdline=False, **kwargs):
     assert new_region_dpath is not None, 'must specify new_region_dpath'
     new_region_dpath = ub.Path(new_region_dpath)
 
-    site_geojson_fpaths: list[ub.Path] = util_path.coerce_patterned_paths(config['site_models'], '.geojson')
-    region_geojson_fpaths: list[ub.Path] = util_path.coerce_patterned_paths(config['region_models'], '.geojson')
+    site_geojson_fpaths: list[ub.Path] = util_path.coerce_patterned_paths(
+        config['site_models'], '.geojson')
+    region_geojson_fpaths: list[ub.Path] = util_path.coerce_patterned_paths(
+        config['region_models'], '.geojson')
 
+    # Load a single region
     if len(region_geojson_fpaths) != 1:
         raise ValueError(f'Must specify exactly one region file, Got: {region_geojson_fpaths}')
 
-    regions = []
-    for region_fpath in ub.ProgIter(region_geojson_fpaths, desc='load geojson region-models'):
-        region_gdf_crs84 : gpd.GeoDataFrame = util_gis.read_geojson(region_fpath)
-        regions.append(region_gdf_crs84)
-    old_region_fpath = region_fpath
-    region_gdf_crs84 = regions[0]
+    regions = util_iarpa.load_site_or_region_datas(
+        region_geojson_fpaths, workers=0, desc='load geojson region-models')
+    old_region_fpath = regions[0]['fpath']
+    region_gdf_crs84: gpd.GeoDataFrame = regions[0]['data']
 
+    # Load multiple site models
     io_workers = config['io_workers']
-
-    sites = load_site_gen(site_geojson_fpaths, io_workers)
+    sites = util_iarpa.load_site_or_region_datas(
+        site_geojson_fpaths, workers=io_workers,
+        desc='load geojson site-models')
 
     if USE_LISTS:
         sites = list(sites)
@@ -114,7 +117,7 @@ def main(cmdline=False, **kwargs):
         total = 0
         for cropped_site_info in cropped_sites:
             total += 1
-            cropped_site = cropped_site_info['gdf']
+            cropped_site = cropped_site_info['data']
             if len(cropped_site):
                 num_valid += 1
                 old_site_fpath = cropped_site_info['fpath']
@@ -134,46 +137,6 @@ def main(cmdline=False, **kwargs):
         print(f'Wrote {num_valid} / {total} valid cropped sites in {new_site_dpath}')
 
 
-def load_site_gen(site_geojson_fpaths, io_workers=0, mode='thread'):
-    """
-    Generator that loads sites (and the path they loaded from) in parallel
-
-    Args:
-        site_geojson_fpaths (Iterable[PathLike]):
-            geojson paths to load
-
-        io_workers (int):
-            number of background loading workers
-
-        mode (str):
-            concurrent executor mode
-
-    Yields:
-        Dict:
-            containing keys, 'fpath' and 'gdf'.
-    """
-    from watch.utils import util_gis
-    import geopandas as gpd
-    # sites = []
-    if USE_LISTS:
-        desc = 'load geojson site-models'
-    else:
-        desc = 'load / cropping geojson site-models'
-
-    jobs = ub.JobPool(mode=mode, max_workers=io_workers)
-    for site_fpath in ub.ProgIter(site_geojson_fpaths, desc='submit ' + desc):
-        job = jobs.submit(util_gis.read_geojson, site_fpath)
-        job.fpath = site_fpath
-
-    for job in jobs.as_completed(desc=desc):
-        site_gdf_crs84 : gpd.GeoDataFrame = job.result()
-        site_info = {
-            'fpath': job.fpath,
-            'gdf': site_gdf_crs84
-        }
-        yield site_info
-
-
 def crop_sites_to_region(region_gdf_crs84, sites):
     """
     Args:
@@ -182,13 +145,13 @@ def crop_sites_to_region(region_gdf_crs84, sites):
             the site summary geometry
 
         sites (Iterable[Dict]):
-            List of the loaded geo data frames with a 'gdf' key
-            and the file path in the 'path' key.
+            List of the loaded geo data frames with a 'data' key
+            and the file path in the 'fpath' key.
 
     Returns:
         Tuple[GeoDataFrame, List[Dict]]:
             Region model with cropped site summaries and a list of site info
-            dictionaries containing the new cropped gdf field.
+            dictionaries containing the new cropped data field.
 
     Example:
         >>> from watch.cli.crop_sites_to_regions import *  # NOQA
@@ -216,7 +179,7 @@ def crop_sites_to_region(region_gdf_crs84, sites):
         >>>         {'type': 'observation', 'observation_date': '2020-01-02', 'current_phase': 'phase2', 'geometry': sh_poly},
         >>>         {'type': 'observation', 'observation_date': '2020-01-03', 'current_phase': 'phase3', 'geometry': sh_poly},
         >>>     ], crs=crs84)
-        >>>     return {'fpath': None, 'gdf': site}
+        >>>     return {'fpath': None, 'data': site}
         >>> region_gdf_crs84 = gpd.GeoDataFrame([
         >>>     {
         >>>         'type': 'region',
@@ -265,7 +228,7 @@ def crop_sites_to_region(region_gdf_crs84, sites):
         >>>         {'type': 'observation', 'observation_date': '2020-01-02', 'current_phase': 'phase2', 'geometry': sh_poly},
         >>>         {'type': 'observation', 'observation_date': '2020-01-03', 'current_phase': 'phase3', 'geometry': sh_poly},
         >>>     ], crs=crs84)
-        >>>     return {'fpath': None, 'gdf': site}
+        >>>     return {'fpath': None, 'data': site}
         >>> region_gdf_crs84 = gpd.GeoDataFrame([
         >>>     {
         >>>         'type': 'region',
@@ -286,9 +249,9 @@ def crop_sites_to_region(region_gdf_crs84, sites):
         >>> cropped_region, cropped_sites = crop_sites_to_region(region_gdf_crs84, sites)
         >>> cropped_sites = list(cropped_sites)
         >>> assert len(cropped_sites) == len(sites)
-        >>> assert len(cropped_sites[0]['gdf']) == len(sites[0]['gdf'])
-        >>> assert len(cropped_sites[1]['gdf']) == len(sites[1]['gdf'])
-        >>> assert len(cropped_sites[2]['gdf']) == 0
+        >>> assert len(cropped_sites[0]['data']) == len(sites[0]['data'])
+        >>> assert len(cropped_sites[1]['data']) == len(sites[1]['data'])
+        >>> assert len(cropped_sites[2]['data']) == 0
         >>> assert len(cropped_region) == 2
     """
     from watch.utils import util_gis
@@ -340,12 +303,12 @@ def crop_sites_to_region(region_gdf_crs84, sites):
 def _cropper_gen(sites, crop_geom_utm, utm_epsg, output_crs):
     import geopandas as gpd
     for site_info in sites:
-        site_gdf_crs84: gpd.GeoDataFrame = site_info['gdf']
+        site_gdf_crs84: gpd.GeoDataFrame = site_info['data']
         valid_site_gdf_crs84 = crop_gdf_in_utm(
             site_gdf_crs84, crop_geom_utm, utm_epsg, output_crs)
 
         new_site_info: dict = site_info.copy()
-        new_site_info['gdf'] = valid_site_gdf_crs84
+        new_site_info['data'] = valid_site_gdf_crs84
         yield new_site_info
 
 

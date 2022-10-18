@@ -135,6 +135,7 @@ def main(cmdline=False, **kwargs):
     """
     import geopandas as gpd  # NOQA
     from watch.utils import util_gis
+    from watch.utils import util_iarpa
     config = ProjectAnnotationsConfig(default=kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
@@ -144,7 +145,6 @@ def main(cmdline=False, **kwargs):
 
     # Load the coco dataset with all of the images
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
-    site_geojson_fpaths = util_path.coerce_patterned_paths(config['site_models'], '.geojson')
 
     geo_preprop = config['geo_preprop']
     geospace_lookup = config['geospace_lookup']
@@ -161,12 +161,14 @@ def main(cmdline=False, **kwargs):
         )
 
     # Read the external CRS84 annotations from the site models
-    sites = []
-
     HACK_HANDLE_DUPLICATE_SITE_ROWS = True
 
-    for fpath in ub.ProgIter(site_geojson_fpaths, desc='load geojson site-models'):
-        gdf = util_gis.read_geojson(fpath)
+    site_model_infos = list(util_iarpa.coerce_region_or_site_datas(
+        config['site_models'], desc='load site models'))
+
+    sites = []
+    for info in site_model_infos:
+        gdf = info['data']
         is_site = gdf['type'] == 'site'
         if HACK_HANDLE_DUPLICATE_SITE_ROWS:
             if is_site.sum() > 1:
@@ -179,16 +181,15 @@ def main(cmdline=False, **kwargs):
 
     regions = []
     if config['region_models'] is not None:
-        region_geojson_fpaths = util_path.coerce_patterned_paths(config['region_models'], '.geojson')
-        for fpath in ub.ProgIter(region_geojson_fpaths, desc='load geojson region-models'):
-
-            if fpath.stem == 'IN_C000':
-                # HACK: Remove when shi region is fixed.
-                continue
-
-            gdf = util_gis.read_geojson(fpath)
+        region_model_infos = list(util_iarpa.coerce_region_or_site_datas(
+            config['site_models'], desc='load geojson region-models'))
+        for info in region_model_infos:
+            # fpath = info['fpath']
+            # if fpath.stem == 'IN_C000':
+            #     # HACK: Remove when shi region is fixed.
+            #     continue
+            gdf = info['data']
             regions.append(gdf)
-
             # if 1:
             #     region_rows = gdf[gdf['type'] == 'region']
             #     assert len(region_rows) == 1
@@ -1086,14 +1087,14 @@ def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sit
 
 
 def draw_geospace(dvc_dpath, sites):
-    from watch.utils import util_gis
+    from watch.utils import util_iarpa
     import geopandas as gpd
     import kwplot
     kwplot.autompl()
     region_fpaths = util_path.coerce_patterned_paths(dvc_dpath / 'drop1/region_models', '.geojson')
     regions = []
-    for fpath in ub.ProgIter(region_fpaths, desc='load geojson annots'):
-        gdf = util_gis.read_geojson(fpath)
+    for info in util_iarpa.coerce_region_or_site_datas(region_fpaths):
+        gdf = info['data']
         regions.append(gdf)
 
     wld_map_gdf = gpd.read_file(

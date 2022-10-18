@@ -49,7 +49,7 @@ Notes:
         --dst $OUTPUT_COCO_FPATH \
         --regions $REGION_FPATH \
         --rpc_align_method orthorectify \
-        --max_workers=10 \
+        --workers=10 \
         --aux_workers=2 \
         --context_factor=1 \
         --visualize=False \
@@ -68,6 +68,7 @@ TODO:
         ERROR 1: PROJ: proj_create: unrecognized format / unknown name
         ERROR 1: PROJ: proj_create_from_database: Cannot find proj.db
         ```
+    - [ ] Rename file to coco_geoalign.py
 """
 import kwcoco
 import kwimage
@@ -313,7 +314,7 @@ def main(cmdline=True, **kw):
         >>>     'src': coco_dset,
         >>>     'dst': dst,
         >>>     'regions': region_fpath,
-        >>>     'max_workers': 0,
+        >>>     'workers': 0,
         >>>     'aux_workers': 0,
         >>>     'visualize': 1,
         >>>     'debug_valid_regions': True,
@@ -345,7 +346,6 @@ def main(cmdline=True, **kw):
         df2 = covered_image_geo_regions(coco_dset)
     """
     from watch.utils.lightning_ext import util_globals
-    from watch.utils import util_path
     import pandas as pd
     config = CocoAlignGeotiffConfig(default=kw, cmdline=cmdline)
 
@@ -386,19 +386,19 @@ def main(cmdline=True, **kw):
     rpc_align_method = config['rpc_align_method']
     visualize = config['visualize']
     write_subsets = config['write_subsets']
-    max_workers = config['max_workers']
+    img_workers = config['max_workers']
     aux_workers = config['aux_workers']
     keep = config['keep']
     target_gsd = config['target_gsd']
     max_frames = config['max_frames']
 
     if config['max_workers'] is not None:
-        max_workers = util_globals.coerce_num_workers(config['max_workers'])
+        img_workers = util_globals.coerce_num_workers(config['max_workers'])
     else:
-        max_workers = util_globals.coerce_num_workers(config['workers'])
+        img_workers = util_globals.coerce_num_workers(config['workers'])
 
     aux_workers = util_globals.coerce_num_workers(config['aux_workers'])
-    print('max_workers = {!r}'.format(max_workers))
+    print('img_workers = {!r}'.format(img_workers))
     print('aux_workers = {!r}'.format(aux_workers))
 
     dst = ub.Path(ub.expandpath(dst))
@@ -417,23 +417,11 @@ def main(cmdline=True, **kw):
     if regions in {'annots', 'images'}:
         pass
     else:
-        # TODO: FIXME: I dont understand why this doesnt work
-        # when I pass the glob path to all the regions
-        # I need to use the merged region script. Very strange.
-        paths = util_path.coerce_patterned_paths(regions)
-
-        if len(paths) == 1:
-            # Test to see if the file is a region registry.
-            import json
-            peeked = json.loads(paths[0].read_text())
-            if isinstance(peeked, dict) and 'files' in peeked:
-                paths = peeked['files']
-
-        if len(paths) == 0:
-            raise KeyError(regions)
+        from watch.utils import util_iarpa
+        infos = list(util_iarpa.coerce_region_or_site_datas(regions))
         parts = []
-        for fpath in paths:
-            df = util_gis.read_geojson(fpath)
+        for info in infos:
+            df = info['gdf']
             if config['site_summary']:
                 df = df[df['type'] == 'site_summary']
             else:
@@ -464,8 +452,9 @@ def main(cmdline=True, **kw):
             print('auto-choose geo_preprop = {!r}'.format(geo_preprop))
 
     if geo_preprop:
+        geopop_workers = img_workers * aux_workers
         kwcoco_extensions.coco_populate_geo_heuristics(
-            coco_dset, overwrite={'warp'}, workers=max_workers,
+            coco_dset, overwrite={'warp'}, workers=geopop_workers,
             keep_geotiff_metadata=True, gids=valid_gids
         )
     if config['edit_geotiff_metadata']:
@@ -516,7 +505,7 @@ def main(cmdline=True, **kw):
         new_dset = cube.extract_overlaps(
             image_overlaps, extract_dpath, rpc_align_method=rpc_align_method,
             new_dset=new_dset, visualize=visualize,
-            write_subsets=write_subsets, max_workers=max_workers,
+            write_subsets=write_subsets, img_workers=img_workers,
             aux_workers=aux_workers, keep=keep, target_gsd=target_gsd,
             max_frames=max_frames,
             debug_valid_regions=config['debug_valid_regions'],
@@ -534,7 +523,7 @@ def main(cmdline=True, **kw):
         rerooted_dataset = rerooted_dataset.reroot(new_root=output_bundle_dpath, absolute=False)
     except Exception:
         # Hack to fix broken pipeline, todo: find robust fix
-        hack_region_id = paths[0].stem
+        hack_region_id = infos[0]['fpath'].stem
         rerooted_dataset = new_dset.copy()
         rerooted_dataset.reroot(new_prefix=hack_region_id)
         rerooted_dataset.reroot(new_root=output_bundle_dpath, absolute=False)
@@ -741,15 +730,20 @@ class SimpleDataCube(object):
             _region_row_df = gpd.GeoDataFrame([region_row], crs=region_df.crs)
             crs = _region_row_df.estimate_utm_crs()
             utm_epsg_zone_v1 = crs.to_epsg()
-            geom_crs84 = region_row.geometry
-            utm_epsg_zone_v2 = util_gis.find_local_meter_epsg_crs(geom_crs84)
-            assert utm_epsg_zone_v2 == utm_epsg_zone_v1, 'consistency'
-            local_epsg = utm_epsg_zone_v2
+            # geom_crs84 = region_row.geometry
+            # utm_epsg_zone_v2 = util_gis.find_local_meter_epsg_crs(geom_crs84)
+            # if utm_epsg_zone_v2 != utm_epsg_zone_v1:
+            #     raise Exception(
+            #         'Consistency Error: '
+            #         f'utm_epsg_zone_v1={utm_epsg_zone_v1} '
+            #         f'utm_epsg_zone_v2={utm_epsg_zone_v2} '
+            #     )
+            local_epsg = utm_epsg_zone_v1
 
             CHECK_THIN_REGIONS = True
             if CHECK_THIN_REGIONS:
                 # Try and detect thin regions and then add context
-                region_row_df_utm = _region_row_df.to_crs(utm_epsg_zone_v2)
+                region_row_df_utm = _region_row_df.to_crs(local_epsg)
                 region_utm_geom = region_row_df_utm['geometry'].iloc[0]
                 # poly = kwimage.Polygon.coerce(region_utm_geom)
                 import cv2
@@ -779,7 +773,7 @@ class SimpleDataCube(object):
                     new_hull_utm = ubox.warp(T @ R @ S)
                     fixed_geom_utm = gpd.GeoDataFrame({
                         'geometry': [new_hull_utm.to_shapely()]},
-                        crs=utm_epsg_zone_v2)
+                        crs=local_epsg)
                     fixed_geom_crs84 = fixed_geom_utm.to_crs(region_df.crs)
                     region_row = region_row.copy()
                     region_row['geometry'] = fixed_geom_crs84['geometry'].iloc[0]
@@ -871,7 +865,7 @@ class SimpleDataCube(object):
     @profile
     def extract_overlaps(cube, image_overlaps, extract_dpath,
                          rpc_align_method='orthorectify', new_dset=None,
-                         write_subsets=True, visualize=True, max_workers=0,
+                         write_subsets=True, visualize=True, img_workers=0,
                          aux_workers=0, keep='none', target_gsd=10,
                          max_frames=None, debug_valid_regions=False,
                          include_channels=None, exclude_channels=None,
@@ -929,12 +923,12 @@ class SimpleDataCube(object):
             >>> new_dset = kwcoco.CocoDataset()
             >>> write_subsets = True
             >>> visualize = True
-            >>> max_workers = 32
+            >>> img_workers = 32
             >>> to_extract = cube.query_image_overlaps(region_df)
             >>> image_overlaps = to_extract[0]
             >>> cube.extract_overlaps(image_overlaps, extract_dpath,
             >>>                       new_dset=new_dset, visualize=visualize,
-            >>>                       max_workers=max_workers)
+            >>>                       img_workers=img_workers)
 
         Example:
             >>> # xdoctest: +REQUIRES(--slow)
@@ -944,13 +938,13 @@ class SimpleDataCube(object):
             >>> rpc_align_method = 'orthorectify'
             >>> write_subsets = True
             >>> visualize = True
-            >>> max_workers = 0
+            >>> img_workers = 0
             >>> to_extract = cube.query_image_overlaps(region_df)
             >>> new_dset = kwcoco.CocoDataset()
             >>> image_overlaps = to_extract[1]
             >>> cube.extract_overlaps(image_overlaps, extract_dpath,
             >>>                       new_dset=new_dset, visualize=visualize,
-            >>>                       max_workers=max_workers)
+            >>>                       img_workers=img_workers)
 
             xdev.profile_now(SimpleDataCube.demo)
         """
@@ -1017,7 +1011,7 @@ class SimpleDataCube(object):
         frame_index = 0
 
         # parallelize over images
-        image_jobs = ub.JobPool(mode='thread', max_workers=max_workers)
+        image_jobs = ub.JobPool(mode='thread', max_workers=img_workers)
 
         sh_space_region_crs84 = space_region.to_shapely()
         space_region_crs84 = gpd.GeoDataFrame(
