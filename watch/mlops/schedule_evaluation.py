@@ -389,10 +389,17 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
     paths['pred_trk_pxl_fpath'] = ub.Path(state.templates['pred_trk_pxl_fpath'].format(**condensed))
     paths['eval_trk_pxl_dpath'] = ub.Path(state.templates['eval_trk_pxl_dpath'].format(**condensed))
     paths['eval_trk_pxl_fpath'] = ub.Path(state.templates['eval_trk_pxl_fpath'].format(**condensed))
-    paths['pred_trk_poly_fpath'] = ub.Path(state.templates['pred_trk_poly_fpath'].format(**condensed))
+
+    paths['pred_trk_poly_sites_fpath'] = ub.Path(state.templates['pred_trk_poly_sites_fpath'].format(**condensed))
+    paths['pred_trk_poly_site_summaries_fpath'] = ub.Path(state.templates['pred_trk_poly_site_summaries_fpath'].format(**condensed))
+    paths['pred_trk_poly_sites_dpath'] = ub.Path(state.templates['pred_trk_poly_sites_dpath'].format(**condensed))
+    paths['pred_trk_poly_site_summaries_dpath'] = ub.Path(state.templates['pred_trk_poly_site_summaries_dpath'].format(**condensed))
+
     paths['pred_trk_poly_viz_stamp'] = ub.Path(state.templates['pred_trk_poly_viz_stamp'].format(**condensed))
+
     paths['pred_trk_poly_dpath'] = ub.Path(state.templates['pred_trk_poly_dpath'].format(**condensed))
     paths['pred_trk_poly_kwcoco'] = ub.Path(state.templates['pred_trk_poly_kwcoco'].format(**condensed))
+
     paths['eval_trk_poly_fpath'] = ub.Path(state.templates['eval_trk_poly_fpath'].format(**condensed))
     paths['eval_trk_poly_dpath'] = ub.Path(state.templates['eval_trk_poly_dpath'].format(**condensed))
 
@@ -410,13 +417,12 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
         # Crop job depends only on true annotations
         paths['crop_regions'] = str(region_model_dpath) + '/*.geojson'
         condensed['regions_id'] = 'truth'  # todo: version info
-        site_summary_glob = str(region_model_dpath) + '/*.geojson'
+        site_summary = str(region_model_dpath) + '/*.geojson'
     if crop_params['regions'] == 'trk.poly.output':
         # Crop job depends on track predictions
-        paths['crop_regions'] = state.templates['pred_trk_poly_fpath'].format(**condensed)
+        paths['crop_regions'] = paths['pred_trk_poly_site_summaries_fpath']
         condensed['regions_id'] = condensed['trk_poly_id']
-        # FIXME: not sure if this is correct.
-        site_summary_glob = state.templates['pred_trk_poly_dpath'].format(**condensed) + '/*.geojson'
+        site_summary = state.templates['pred_trk_poly_site_summaries_fpath'].format(**condensed)
 
     crop_params['regions'] = paths['crop_regions']
     condensed['crop_cfg'] = state._condense_cfg(crop_params, 'crop')
@@ -435,7 +441,7 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
     act_pxl_params = ub.udict(act_pxl['data']) - {'test_dataset'}
     act_poly_params = ub.udict(act_poly)
     # TODO: make this nicer
-    act_poly_params['site_summary_glob'] = site_summary_glob
+    act_poly_params['site_summary'] = site_summary
 
     condensed['act_model'] = state._condense_model(item['act.pxl.model'])
     condensed['act_pxl_cfg'] = state._condense_cfg(act_pxl_params, 'act_pxl')
@@ -454,8 +460,12 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
     condensed['test_act_dset'] = state._condense_test_dset(paths['act_test_dataset_fpath'])
 
     paths['pkg_act_pxl_fpath'] = ub.Path(item['act.pxl.model'])
-    paths['pred_act_poly_fpath'] = ub.Path(state.templates['pred_act_poly_fpath'].format(**condensed))
-    paths['pred_act_poly_dpath'] = ub.Path(state.templates['pred_act_poly_dpath'].format(**condensed))
+
+    paths['pred_act_poly_sites_fpath'] = ub.Path(state.templates['pred_act_poly_sites_fpath'].format(**condensed))
+    # paths['pred_act_poly_site_summaries_fpath'] = ub.Path(state.templates['pred_act_poly_site_summaries_fpath'].format(**condensed))
+    paths['pred_act_poly_sites_dpath'] = ub.Path(state.templates['pred_act_poly_sites_dpath'].format(**condensed))
+    # paths['pred_act_poly_site_summaries_dpath'] = ub.Path(state.templates['pred_act_poly_site_summaries_dpath'].format(**condensed))
+
     paths['pred_act_pxl_fpath'] = ub.Path(state.templates['pred_act_pxl_fpath'].format(**condensed))
     paths['eval_act_pxl_fpath'] = ub.Path(state.templates['eval_act_pxl_fpath'].format(**condensed))
     paths['eval_act_pxl_dpath'] = ub.Path(state.templates['eval_act_pxl_dpath'].format(**condensed))
@@ -604,8 +614,8 @@ class Pipeline:
 
     def act_crop(crop_params, **paths):
         paths = ub.udict(paths)
-        from watch.cli import coco_align_geotiffs
-        confobj = coco_align_geotiffs.__config__
+        from watch.cli import coco_align
+        confobj = coco_align.__config__
         known_args = set(confobj.default.keys())
         assert not len(ub.udict(crop_params) - known_args), 'unknown args'
         crop_params = {
@@ -614,11 +624,20 @@ class Pipeline:
             'force_nodata': -9999,
             'rpc_align_method': 'orthorectify',
             'target_gsd': 4,
+            'site_summary': True,
         } | ub.udict(crop_params)
+
+        # The best setting of this depends on if the data is remote or not.
+        # When networking, around 20+ workers is a good idea, but that's a very
+        # bad idea for local images or if the images are too big.
+        # Parametarizing would be best.
+        CROP_IMAGE_WORKERS = 16
+        CROP_AUX_WORKERS = 8
+
         perf_options = {
             'verbose': 1,
-            'workers': 24,
-            'aux_workers': 8,
+            'workers': CROP_IMAGE_WORKERS,
+            'aux_workers': CROP_AUX_WORKERS,
             'debug_valid_regions': False,
             'visualize': False,
         }
@@ -628,12 +647,12 @@ class Pipeline:
 
         command = ub.codeblock(
             r'''
-            python -m watch.cli.coco_align_geotiffs \
+            python -m watch.cli.coco_align \
                 --src "{crop_src_fpath}" \
                 --dst "{crop_fpath}" \
                 {crop_params_argstr} \
-                {crop_perf_argstr}
-            ''').format(**crop_kwargs)
+                {crop_perf_argstr} \
+            ''').format(**crop_kwargs).strip().rstrip('\\')
 
         # FIXME: parametarize and only if we need secrets
         # secret_fpath = ub.Path('$HOME/code/watch/secrets/secrets').expand()
@@ -753,15 +772,19 @@ class Pipeline:
                 --default_track_fn saliency_heatmaps \
                 --track_kwargs {track_kwargs_str} \
                 --clear_annots \
-                --out_dir "{pred_trk_poly_dpath}" \
-                --out_fpath "{pred_trk_poly_fpath}" \
+                --out_sites_dir "{pred_trk_poly_sites_dpath}" \
+                --out_site_summaries_dir "{pred_trk_poly_site_summaries_dpath}" \
+                --out_sites_fpath "{pred_trk_poly_sites_fpath}" \
+                --out_site_summaries_fpath "{pred_trk_poly_site_summaries_fpath}" \
                 --out_kwcoco "{pred_trk_poly_kwcoco}"
             ''').format(**pred_trk_poly_kw)
         name = 'pred_trk_poly'
         step = Step(name, command,
                     in_paths=paths & {'pred_trk_pxl_fpath'},
-                    out_paths=paths & {'pred_trk_poly_fpath',
-                                       'pred_trk_poly_kwcoco'},
+                    out_paths=paths & {
+                        'pred_trk_poly_sites_fpath',
+                        'pred_trk_poly_site_summaries_fpath',
+                        'pred_trk_poly_kwcoco'},
                     resources={'cpus': 2})
         return step
 
@@ -832,46 +855,66 @@ class Pipeline:
                 --name "{name_suffix}" \
                 --true_site_dpath "{true_site_dpath}" \
                 --true_region_dpath "{true_region_dpath}" \
-                --pred_sites "{pred_trk_poly_fpath}" \
+                --pred_sites "{pred_trk_poly_sites_fpath}" \
                 --tmp_dir "{eval_trk_poly_tmp_dpath}" \
                 --out_dir "{eval_trk_poly_dpath}" \
                 --merge_fpath "{eval_trk_poly_fpath}"
             ''').format(**eval_trk_poly_kw)
         name = 'eval_trk_poly'
         step = Step(name, command,
-                    in_paths=paths & {'pred_trk_poly_fpath'},
+                    in_paths=paths & {'pred_trk_poly_sites_fpath'},
                     out_paths=paths & {'eval_trk_poly_fpath'},
                     resources={'cpus': 2})
         return step
 
     def pred_act_poly(act_poly_params, **paths):
         paths = ub.udict(paths)
-        # pred_act_row['site_summary_glob'] = (region_model_dpath / '*.geojson')
         pred_act_poly_kw = paths.copy()
+        # pred_act_row['site_summary_glob'] = (region_model_dpath / '*.geojson')
+        # pred_act_poly_kw['site_summary_glob'] = (pred_act_poly_kw['region_model_dpath'] / '*.geojson')
+        # pred_act_poly_kw['site_summary_glob'] = (paths['pred_trk_poly_sites_dpath'] / '*.geojson')
+        pred_act_poly_kw['site_summary'] = act_poly_params.pop('site_summary')
         actclf_cfg = {
             'boundaries_as': 'polys',
         }
         actclf_cfg.update(act_poly_params)
         pred_act_poly_kw['kwargs_str'] = shlex.quote(json.dumps(actclf_cfg))
-        # pred_act_poly_kw['site_summary_glob'] = (pred_act_poly_kw['region_model_dpath'] / '*.geojson')
-        pred_act_poly_kw['site_summary_glob'] = act_poly_params.pop('site_summary_glob')
         command = ub.codeblock(
             r'''
             python -m watch.cli.run_tracker \
                 "{pred_act_pxl_fpath}" \
-                --site_summary '{site_summary_glob}' \
                 --default_track_fn class_heatmaps \
                 --track_kwargs {kwargs_str} \
-                --out_dir "{pred_act_poly_dpath}" \
-                --out_site_summary_fpath "{pred_act_poly_fpath}" \
-                --out_kwcoco_fpath "{pred_act_poly_kwcoco}"
+                --site_summary '{site_summary}' \
+                --out_sites_fpath "{pred_act_poly_sites_fpath}" \
+                --out_sites_dir "{pred_act_poly_sites_dpath}" \
+                --out_kwcoco "{pred_act_poly_kwcoco}"
             ''').format(**pred_act_poly_kw)
         name = 'pred_act_poly'
         step = Step(name, command,
                     in_paths=paths & {'pred_act_pxl_fpath'},
-                    out_paths=paths & {'pred_act_poly_fpath',
+                    out_paths=paths & {'pred_act_poly_sites_fpath',
                                        'pred_act_poly_kwcoco'},
                     resources={'cpus': 2})
+
+        # TODO: viz act pred
+        r"""
+        smartwatch visualize \
+            /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/pred/act/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt/crop_id_80015a58_crop.kwcoco/act_pxl_abd043ec/pred.kwcoco.json \
+                --stack="red|green|blue,Site Preparation|Active Construction|Post Construction" \
+                --animate=True  \
+                --channels="red|green|blue,Site Preparation|Active Construction|Post Construction" \
+                --workers=auto
+
+        /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/pred/act/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt/crop_id_80015a58_crop.kwcoco/act_pxl_abd043ec/act_poly_0e4ab3bf/site_activity_manifest.json
+
+        smartwatch visualize \
+                /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/pred/act/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt/crop_id_80015a58_crop.kwcoco/act_pxl_abd043ec/act_poly_0e4ab3bf/activity_tracks.kwcoco.json \
+                --stack="red|green|blue,Site Preparation|Active Construction|Post Construction" \
+                --animate=True \
+                --channels="red|green|blue,Site Preparation|Active Construction|Post Construction" \
+                --workers=auto
+        """
         return step
 
     def eval_act_pxl(condensed, **paths):
@@ -893,7 +936,7 @@ class Pipeline:
                 --eval_dpath={eval_act_pxl_dpath} \
                 --score_space=video \
                 {extra_argstr}
-            ''').format(**eval_act_pxl_kwe)
+            ''').format(**eval_act_pxl_kwe).strip().rstrip('\\')
         name = 'eval_act_pxl'
         step = Step(name, command,
                     in_paths=paths & {'pred_act_pxl_fpath'},
@@ -911,8 +954,8 @@ class Pipeline:
             condensed['act_pxl_cfg'],
             condensed['act_poly_cfg'],
         ])
-        eval_act_poly_kw['eval_act_poly_dpath'] = eval_act_poly_kw['eval_trk_poly_dpath']
-        eval_act_poly_kw['eval_act_poly_tmp_dpath'] = eval_act_poly_kw['eval_trk_poly_dpath'] / '_tmp'
+        eval_act_poly_kw['eval_act_poly_dpath'] = eval_act_poly_kw['eval_act_poly_dpath']
+        eval_act_poly_kw['eval_act_poly_tmp_dpath'] = eval_act_poly_kw['eval_act_poly_dpath'] / '_tmp'
         command = ub.codeblock(
             r'''
             python -m watch.cli.run_metrics_framework \
@@ -921,14 +964,14 @@ class Pipeline:
                 --name "{name_suffix}" \
                 --true_site_dpath "{true_site_dpath}" \
                 --true_region_dpath "{true_region_dpath}" \
-                --pred_sites "{pred_act_poly_fpath}" \
+                --pred_sites "{pred_act_poly_sites_fpath}" \
                 --tmp_dir "{eval_act_poly_tmp_dpath}" \
                 --out_dir "{eval_act_poly_dpath}" \
                 --merge_fpath "{eval_act_poly_fpath}" \
             ''').format(**eval_act_poly_kw)
         name = 'eval_act_poly'
         step = Step(name, command,
-                    in_paths=paths & {'pred_act_poly_fpath'},
+                    in_paths=paths & {'pred_act_poly_sites_fpath'},
                     out_paths=paths & {'eval_act_poly_fpath'},
                     resources={'cpus': 2})
         return step

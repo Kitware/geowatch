@@ -581,8 +581,12 @@ python -m watch.mlops.schedule_evaluation \
             trk.pxl.data.test_dataset:
                 - $TEST_DATASET
             trk.pxl.data.window_scale_space: 15GSD
-            trk.pxl.data.time_sampling: ["auto", "contiguous"]
-            trk.pxl.data.input_scale_space: ["15GSD", "10GSD"]
+            trk.pxl.data.time_sampling:
+                - "auto"
+                - "contiguous"
+            trk.pxl.data.input_scale_space:
+                - "15GSD"
+                - "10GSD"
             crop.src:
                 # FIXME: should be cropping from a dataset with WV
                 - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/online_v1/kwcoco_for_sc_fielded.json
@@ -596,11 +600,15 @@ python -m watch.mlops.schedule_evaluation \
     " \
     --enable_pred_trk_pxl=1 \
     --enable_pred_trk_poly=1 \
+    --enable_eval_trk_pxl=0 \
+    --enable_eval_trk_poly=0 \
     --enable_crop=1 \
     --enable_pred_act_pxl=1 \
     --enable_pred_act_poly=1 \
+    --enable_eval_act_pxl=0 \
+    --enable_eval_act_poly=1 \
     --enable_viz_pred_trk_poly=0 \
     --devices="0,1" --queue_size=2 \
-    --backend=tmux --skip_existing=0 \
-    --run=0
+    --backend=serial --skip_existing=0 \
+    --run=1
 """

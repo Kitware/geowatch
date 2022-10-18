@@ -627,16 +627,23 @@ class ExperimentState(ub.NiceRepr):
         }
 
         self.volitile_templates = {
-            'pred_trk_pxl_fpath'      : task_dpaths['pred_trk_pxl_dpath'] + '/pred.kwcoco.json',
-            'pred_trk_poly_kwcoco'    : task_dpaths['pred_trk_poly_dpath'] + '/tracks.kwcoco.json',
-            'pred_trk_poly_fpath'     : task_dpaths['pred_trk_poly_dpath'] + '/tracks.json',
+            'pred_trk_pxl_fpath'        : task_dpaths['pred_trk_pxl_dpath'] + '/pred.kwcoco.json',
+            'pred_trk_poly_kwcoco'      : task_dpaths['pred_trk_poly_dpath'] + '/tracks.kwcoco.json',
+            'pred_trk_poly_sites_fpath'          : task_dpaths['pred_trk_poly_dpath'] + '/site_tracks_manifest.json',
+            'pred_trk_poly_site_summaries_fpath' : task_dpaths['pred_trk_poly_dpath'] + '/site_summary_tracks_manifest.json',
+            'pred_trk_poly_sites_dpath'          : task_dpaths['pred_trk_poly_dpath'] + '/sites',
+            'pred_trk_poly_site_summaries_dpath' : task_dpaths['pred_trk_poly_dpath'] + '/site-summaries',
+
             'pred_trk_poly_viz_stamp' : task_dpaths['pred_trk_poly_dpath'] + '/_viz.stamp',
 
             'crop_fpath'              : task_dpaths['crop_dpath'] + '/crop.kwcoco.json',
 
             'pred_act_pxl_fpath'   : task_dpaths['pred_act_pxl_dpath'] + '/pred.kwcoco.json',
             'pred_act_poly_kwcoco' : task_dpaths['pred_act_poly_dpath'] + '/activity_tracks.kwcoco.json',
-            'pred_act_poly_fpath'  : task_dpaths['pred_act_poly_dpath'] + '/activity_tracks.json',
+            'pred_act_poly_sites_fpath'  : task_dpaths['pred_act_poly_dpath'] + '/site_activity_manifest.json',
+            # 'pred_act_poly_site_summaries_fpath' : task_dpaths['pred_act_poly_dpath'] + '/site_summary_activity_manifest.json',
+            'pred_act_poly_sites_dpath'  : task_dpaths['pred_act_poly_dpath'] + '/sites'
+            # 'pred_act_poly_site_summaries_dpath' : task_dpaths['pred_act_poly_dpath'] + '/site-summaries',
         }
 
         self.versioned_templates = {
@@ -853,7 +860,8 @@ class ExperimentState(ub.NiceRepr):
         """
         keys = [
             'pred_trk_pxl_fpath',
-            'pred_trk_poly_fpath',
+            'pred_trk_poly_sites_fpath',
+            'pred_trk_poly_site_summaries_fpath',
             'eval_act_poly_fpath'
         ]
         for key in keys:
@@ -999,8 +1007,14 @@ class ExperimentState(ub.NiceRepr):
             pred_keys = [
                 'pred_trk_pxl_fpath',
                 'pred_act_pxl_fpath',
-                'pred_trk_poly_fpath',
-                'pred_act_poly_fpath'
+
+                'pred_trk_poly_sites_fpath',
+                'pred_trk_poly_site_summaries_fpath',
+
+                'pred_act_poly_sites_fpath',
+                # 'pred_act_poly_site_summaries_fpath',
+
+                'pred_act_poly_sites_fpath'
             ]
             npred_keys = ['n_' + k for k in pred_keys]
 
