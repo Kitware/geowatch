@@ -79,7 +79,7 @@ class CocoVisualizeConfig(scfg.Config):
             writes them adjacent to the input kwcoco file
             ''')),
 
-        'workers': scfg.Value(0, help='number of parallel procs'),
+        'workers': scfg.Value('auto', help='number of parallel procs'),
         'max_workers': scfg.Value(None, help='DEPRECATED USE workers'),
 
         'space': scfg.Value('video', help='can be image or video space'),
@@ -212,6 +212,9 @@ def main(cmdline=True, **kwargs):
     print('config = {}'.format(ub.repr2(dict(config), nl=2)))
 
     if config['max_workers'] is not None:
+        ub.schedule_deprecation(
+            'watch', 'max_workers', 'argument to coco_visualize_videos',
+            deprecate='now', error='later', remove='later')
         max_workers = util_globals.coerce_num_workers(config['max_workers'])
     else:
         max_workers = util_globals.coerce_num_workers(config['workers'])
@@ -220,6 +223,28 @@ def main(cmdline=True, **kwargs):
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
     print('coco_dset.fpath = {!r}'.format(coco_dset.fpath))
     print('coco_dset = {!r}'.format(coco_dset))
+
+    if channels == 'auto':
+        from delayed_image import FusedChannelSpec
+        auto_channels = [
+            FusedChannelSpec.coerce('red|green|blue'),
+            FusedChannelSpec.coerce('No Activity|Active Construction|Post Construction'),
+            FusedChannelSpec.coerce('salient'),
+        ]
+        from watch.utils import kwcoco_extensions
+        from collections import defaultdict, Counter
+        channel_stats = kwcoco_extensions.coco_channel_stats(coco_dset)
+        all_sensorchan = channel_stats['all_sensorchan']
+        sensor_to_single_channels = defaultdict(Counter)
+        for spec in all_sensorchan.streams():
+            sensor_to_single_channels[spec.sensor.spec].update(spec.chans.as_list())
+        chosen = []
+        for sensor, chanhist in sensor_to_single_channels.items():
+            has_chans = set(chanhist.keys())
+            for ac in auto_channels:
+                if ac.to_set().issubset(has_chans):
+                    chosen.append(ac.spec)
+        channels = ','.join(sorted(set(chosen)))
 
     if config['draw_anns'] == 'auto':
         config['draw_anns'] = coco_dset.n_annots > 0
@@ -449,7 +474,7 @@ def main(cmdline=True, **kwargs):
 
         # Hack: pretend that stack is a channel even though it is not.
         if config['stack']:
-            if channels:
+            if not channels:
                 channels = 'stack'
             else:
                 channels = channels + ',stack'
@@ -782,8 +807,6 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             valid_image_poly = valid_image_poly.warp(viz_warp)
         if valid_video_poly is not None:
             valid_video_poly = valid_video_poly.warp(viz_warp)
-    # import xdev
-    # xdev.embed()
     if stack:
         ann_stack = []
         img_stack = []
@@ -876,6 +899,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                     canvas = cmap_(canvas)[..., 0:3].astype(np.float32)
 
         canvas = util_kwimage.ensure_false_color(canvas)
+        canvas = kwimage.ensure_uint255(canvas)
 
         if len(canvas.shape) > 2 and canvas.shape[2] > 4:
             # hack for wv
@@ -940,13 +964,13 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                 except Exception:
                     ann_canvas = dets.draw_on(ann_canvas)
 
-            ann_canvas = kwimage.ensure_uint255(ann_canvas)
             if stack_anns:
                 ann_stack.append({
                     'im': ann_canvas,
                     'chan': chan_group,
                 })
             if draw_anns_alone:
+                ann_canvas = kwimage.ensure_uint255(ann_canvas)
                 ann_header = kwimage.draw_header_text(image=ann_canvas,
                                                       text=header_text,
                                                       stack=False,
@@ -971,11 +995,14 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             for item in _stack:
                 canvas = item['im']
                 chan = item['chan']
+                # canvas = kwimage.ensure_float01(canvas, copy=True)
+                canvas = kwimage.ensure_uint255(canvas)
                 canvas = kwimage.draw_text_on_image(
                     canvas, chan, (1, 2),
                     valign='top', color='lime', border=3)
                 tostack.append(canvas)
             canvas = kwimage.stack_images(tostack)
+            canvas = kwimage.ensure_uint255(canvas)
             return canvas
 
         if ann_stack:
