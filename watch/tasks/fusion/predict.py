@@ -329,9 +329,15 @@ def predict(cmdline=False, **kwargs):
             if datamodule_sensorchan_spec is not None:
                 hack_model_sensorchan_spec = hack_model_sensorchan_spec.normalize()
                 datamodule_sensorchan_spec = datamodule_sensorchan_spec.normalize()
-                if hack_model_sensorchan_spec.normalize().spec != datamodule_sensorchan_spec.normalize().spec:
+                
+                hack_sensorchan_set = set(hack_model_sensorchan_spec.normalize().spec.split(","))
+                datamodule_sensorchan_set = set(datamodule_sensorchan_spec.normalize().spec.split(","))
+                if hack_sensorchan_set != datamodule_sensorchan_set:
                     print('Warning: reported model channels may be incorrect '
-                          'due to bad train hyperparams')
+                          'due to bad train hyperparams',
+                          hack_model_sensorchan_spec.normalize().spec, 
+                          'versus',
+                          datamodule_sensorchan_spec.normalize().spec)
                     compat_parts = []
                     for model_part in hack_model_sensorchan_spec.streams():
                         data_part = datamodule_sensorchan_spec.matching_sensor(model_part.sensor.spec)
@@ -694,7 +700,8 @@ def predict(cmdline=False, **kwargs):
                 } for f in item['frames']]
                 batch_trs.append({
                     'space_slice': tuple(item['target']['space_slice']),
-                    'scale': item['target']['scale'],
+                    # 'scale': item['target']['scale'],
+                    'scale': item['target'].get('scale', None),
                     'gids': batch_gids,
                     'frame_infos': frame_infos,
                     'fliprot_params': item['target'].get('fliprot_params', None)

@@ -23,8 +23,11 @@ train a fusion model on RGB data.
 # In this example we are not using any DVC directories, but we will use DVC in
 # the variable names to be consistent with future tutorials.
 
-DVC_DATA_DPATH=$HOME/data/dvc-repos/toy_data_dvc
-DVC_EXPT_DPATH=$HOME/data/dvc-repos/toy_expt_dvc
+#DVC_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="hdd")
+DVC_DATA_DPATH=/home/local/KHQ/connor.greenwell/Projects/SMART/smart_watch_dvc
+# DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DVC_EXPT_DPATH=/home/local/KHQ/connor.greenwell/data/dvc-repos/smart_expt_dvc
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 
 mkdir -p "$DVC_DATA_DPATH"
 mkdir -p "$DVC_EXPT_DPATH"
@@ -40,23 +43,12 @@ The kwcoco package comes with a commandline utility called 'kwcoco toydata' to
 accomplish this.
 "
 
-NUM_TOY_TRAIN_VIDS="${NUM_TOY_TRAIN_VIDS:-100}"  # If variable not set or null, use default.
-NUM_TOY_VALI_VIDS="${NUM_TOY_VALI_VIDS:-5}"  # If variable not set or null, use default.
-NUM_TOY_TEST_VIDS="${NUM_TOY_TEST_VIDS:-2}"  # If variable not set or null, use default.
+DATASET_CODE=onera_2018
 
-# Generate toy datasets
-TRAIN_FPATH=$DVC_DATA_DPATH/vidshapes_msi_train${NUM_TOY_TRAIN_VIDS}/data.kwcoco.json
-VALI_FPATH=$DVC_DATA_DPATH/vidshapes_msi_vali${NUM_TOY_VALI_VIDS}/data.kwcoco.json
-TEST_FPATH=$DVC_DATA_DPATH/vidshapes_msi_test${NUM_TOY_TEST_VIDS}/data.kwcoco.json 
-
-kwcoco toydata --key="vidshapes${NUM_TOY_TRAIN_VIDS}-frames5-randgsize-speed0.2-msi-multisensor" \
-    --bundle_dpath "$DVC_DATA_DPATH/vidshapes_msi_train${NUM_TOY_TRAIN_VIDS}" --verbose=4
-
-kwcoco toydata --key="vidshapes${NUM_TOY_VALI_VIDS}-frames5-randgsize-speed0.2-msi-multisensor" \
-    --bundle_dpath "$DVC_DATA_DPATH/vidshapes_msi_vali${NUM_TOY_VALI_VIDS}"  --verbose=4
-
-kwcoco toydata --key="vidshapes${NUM_TOY_TEST_VIDS}-frames6-randgsize-speed0.2-msi-multisensor" \
-    --bundle_dpath "$DVC_DATA_DPATH/vidshapes_msi_test${NUM_TOY_TEST_VIDS}" --verbose=4
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/extern/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/onera_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/onera_test.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/onera_test.kwcoco.json
 
 
 echo "
@@ -124,15 +116,14 @@ We will also specify a work directory that will be similar to directories used
 when real watch models are trained.
 "
 # Fit 
-WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
-EXPERIMENT_NAME=ToyRGB_Heterogeneous_Demo_V001
-DATASET_CODE=ToyMSI
+EXPERIMENT_NAME=OSCD_Heterogeneous_Demo_V001
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion fit \
     --trainer.default_root_dir="$DEFAULT_ROOT_DIR" \
     --data.train_dataset="$TRAIN_FPATH" \
     --data.vali_dataset="$VALI_FPATH" \
-    --data.time_steps=3 \
+    --data.channels="B02|B03|B04,B11|B12,B01" \
+    --data.time_steps=2 \
     --data.chip_size=96 \
     --data.batch_size=4 \
     --data.input_space_scale=native \
