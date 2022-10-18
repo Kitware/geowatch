@@ -1077,7 +1077,7 @@ def draw_geospace(dvc_dpath, sites):
     import geopandas as gpd
     import kwplot
     kwplot.autompl()
-    region_fpaths = util_path.coerce_patterned_paths(dvc_dpath / 'drop1/region_models', '.geojson')
+    region_fpaths = util_gis.coerce_geojson_paths(dvc_dpath / 'drop1/region_models')
     regions = []
     for info in util_gis.coerce_geojson_datas(region_fpaths):
         gdf = info['data']

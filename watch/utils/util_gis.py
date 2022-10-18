@@ -5,7 +5,6 @@ import ubelt as ub
 import numpy as np
 import json
 import os
-from watch.utils import util_path
 
 
 def geopandas_pairwise_overlaps(gdf1, gdf2, predicate='intersects'):
@@ -850,6 +849,7 @@ def coerce_geojson_paths(data):
     full path, a glob string, a path to a manifest file or any combination of
     the previous in a list.
     """
+    from watch.utils import util_path
     paths = util_path.coerce_patterned_paths(data, '.geojson')
     geojson_fpaths = []
     for p in paths:

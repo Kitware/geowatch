@@ -552,45 +552,10 @@ def _coerce_site_summaries(site_summary_or_region_model,
     Returns:
         List[Tuple[region_id: str, site_summary: Dict]]
     """
-    from watch.utils import util_path
     from watch.utils import util_gis
 
     summaries_or_rms = list(util_gis.coerce_geojson_datas(
-        site_summary_or_region_model, format='json'))
-
-    # open the filepath(s)
-    summaries_or_rms = []
-
-    if isinstance(site_summary_or_region_model, str):
-        paths = util_path.coerce_patterned_paths(site_summary_or_region_model)
-        if len(paths) == 1:
-            # Test to see if the file is a geojson manifest.
-            import json
-            peeked = json.loads(paths[0].read_text())
-            if isinstance(peeked, dict) and 'files' in peeked:
-                paths = peeked['files']
-        if len(paths) > 0:
-            print(f'Loading {len(paths)} site/region geojson files')
-            for path in paths:
-                with open(path, 'r') as f:
-                    summaries_or_rms.append(json.load(f))
-        else:
-            warnings.warn(
-                f'Site summary {site_summary_or_region_model} did not '
-                'resolve to a path'
-            )
-            try:
-                summaries_or_rms.append(
-                    json.loads(site_summary_or_region_model))
-            except json.JSONDecodeError as err:
-                if strict:
-                    raise err
-            else:
-                warnings.warn(
-                    'Site summary/region passed in via raw json text on the '
-                    'command line. It is best to avoid this because the '
-                    'command line has a max character limit'
-                )
+        site_summary_or_region_model, format='json', allow_raw=True))
 
     # validate the json
     site_summaries = []

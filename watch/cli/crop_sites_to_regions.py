@@ -50,7 +50,6 @@ USE_LISTS = 0  # turn on for eager debugging
 
 
 def main(cmdline=False, **kwargs):
-    from watch.utils import util_path
     from watch.utils import util_gis
     import geopandas as gpd
     import safer
@@ -66,10 +65,10 @@ def main(cmdline=False, **kwargs):
     assert new_region_dpath is not None, 'must specify new_region_dpath'
     new_region_dpath = ub.Path(new_region_dpath)
 
-    site_geojson_fpaths: list[ub.Path] = util_path.coerce_patterned_paths(
-        config['site_models'], '.geojson')
-    region_geojson_fpaths: list[ub.Path] = util_path.coerce_patterned_paths(
-        config['region_models'], '.geojson')
+    site_geojson_fpaths: list[ub.Path] = util_gis.coerce_geojson_paths(
+        config['site_models'])
+    region_geojson_fpaths: list[ub.Path] = util_gis.coerce_geojson_paths(
+        config['region_models'])
 
     # Load a single region
     if len(region_geojson_fpaths) != 1:

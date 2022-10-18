@@ -1140,14 +1140,12 @@ def main(cmdline=True, **kwargs):
         >>> # TODO: visualize
     """
 
-    from watch.utils import util_path
-    # from watch.utils import util_pattern
+    from watch.utils import util_gis
 
     config = MetricsConfig.legacy(cmdline=cmdline, data=kwargs)
     args = config
 
-    config['pred_sites'] = util_path.coerce_patterned_paths(
-        config['pred_sites'], expected_extension='*.geojson')
+    config['pred_sites'] = util_gis.coerce_geojson_paths(config['pred_sites'])
 
     # args, _ = parser.parse_known_args(args)
     config_dict = config.asdict()

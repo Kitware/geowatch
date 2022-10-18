@@ -219,7 +219,7 @@ def main(cmdline=False, **kwargs):
     final_site_globstr = _coerce_globstr(config['site_globstr'])
 
     import cmd_queue
-    from watch.utils import util_path
+    from watch.utils import util_gis
 
     # Global environs are given to all jobs
     api_key = config['api_key']
@@ -303,8 +303,8 @@ def main(cmdline=False, **kwargs):
             # Note: this requires the annotation files to exist on disk.  or we
             # have to write a mechanism that lets the explicit relative path be
             # specified.
-            region_file_fpaths = util_path.coerce_patterned_paths(final_region_globstr.expand())
-            region_site_fpaths = util_path.coerce_patterned_paths(final_site_globstr.expand())
+            region_file_fpaths = util_gis.coerce_geojson_paths(final_region_globstr.expand())
+            region_site_fpaths = util_gis.coerce_geojson_paths(final_site_globstr.expand())
 
             # Assign site models to region files
             ASSIGN_BY_FPATH = True

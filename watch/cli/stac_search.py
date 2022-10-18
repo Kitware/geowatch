@@ -358,8 +358,8 @@ def main(cmdline=True, **kwargs):
 
     if args.mode == 'area':
         if config['region_globstr'] is not None:
-            from watch.utils import util_path
-            region_file_fpaths = util_path.coerce_patterned_paths(config['region_globstr'])
+            from watch.utils import util_gis
+            region_file_fpaths = util_gis.coerce_geojson_paths(config['region_globstr'])
             assert args.mode == 'area'
         else:
             if not hasattr(args, 'region_file'):
