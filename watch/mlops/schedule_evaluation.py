@@ -904,7 +904,7 @@ class Pipeline:
                 --stack="red|green|blue,Site Preparation|Active Construction|Post Construction" \
                 --animate=True  \
                 --channels="red|green|blue,Site Preparation|Active Construction|Post Construction" \
-                --workers=auto
+                --workers=0
 
         /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/pred/act/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt/crop_id_80015a58_crop.kwcoco/act_pxl_abd043ec/act_poly_0e4ab3bf/site_activity_manifest.json
 
@@ -913,7 +913,7 @@ class Pipeline:
                 --stack="red|green|blue,Site Preparation|Active Construction|Post Construction" \
                 --animate=True \
                 --channels="red|green|blue,Site Preparation|Active Construction|Post Construction" \
-                --workers=auto
+                --workers=0
         """
         return step
 
