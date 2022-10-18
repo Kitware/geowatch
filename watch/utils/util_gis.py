@@ -820,7 +820,8 @@ def coerce_geojson_datas(arg, format='dataframe', allow_raw=False, workers=0,
 
     if allow_raw:
         if verbose:
-            print(f'Coerced {len(raw_items)} raw geojson item')
+            if raw_items or len(geojson_fpaths) == 0:
+                print(f'Coerced {len(raw_items)} raw geojson item')
             if raw_items:
                 if len(geojson_fpaths) == 0:
                     # Disable path verbosity if there were raw items, but no
