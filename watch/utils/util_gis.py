@@ -846,11 +846,16 @@ def coerce_geojson_datas(arg, format='dataframe', allow_raw=False, workers=0,
     yield from data_gen
 
 
-def coerce_geojson_paths(data):
+def coerce_geojson_paths(data, return_manifests=False):
     """
     Resolves the argument to a list of geojson paths.  The argument can be a
     full path, a glob string, a path to a manifest file or any combination of
     the previous in a list.
+
+    Args:
+        data : argument to coerce
+        return_manifests (bool): if True additionally returns paths to
+            any intermediate manifest files.
 
     Example:
         >>> # xdoctest +REQURIES(module:iarpa_smart_metrics)
@@ -882,21 +887,34 @@ def coerce_geojson_paths(data):
         >>> data = [geojson_dpath / '*R002_*'] + geojson_fpaths
         >>> geojson_fpaths = coerce_geojson_paths(data)
         >>> assert len(geojson_fpaths) == 12
+        >>> # Test manifest case2
+        >>> info = coerce_geojson_paths(manifest_fpath1, return_manifests=True)
+        >>> assert len(info['manifest_fpaths']) == 1
+        >>> assert len(info['geojson_fpaths']) == 2
     """
     from watch.utils import util_path
     paths = util_path.coerce_patterned_paths(data, '.geojson')
     geojson_fpaths = []
+    manifest_fpaths = []
     for p in paths:
         resolved = None
         if isinstance(p, (str, os.PathLike)) and str(p).endswith('.json'):
             # Check to see if this is a manifest file
             peeked = json.loads(p.read_text())
             if isinstance(peeked, dict) and 'files' in peeked:
+                manifest_fpaths.append(p)
                 resolved = peeked['files']
         if resolved is None:
             resolved = [p]
         geojson_fpaths.extend(resolved)
-    return geojson_fpaths
+
+    if return_manifests:
+        return {
+            'manifest_fpaths': manifest_fpaths,
+            'geojson_fpaths': geojson_fpaths,
+        }
+    else:
+        return geojson_fpaths
 
 
 def _coerce_raw_geojson(item, format):
