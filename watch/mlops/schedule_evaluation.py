@@ -48,12 +48,13 @@ class ScheduleEvaluationConfig(scfg.Config):
         'enable_crop': scfg.Value(True, isflag=True, help='SC tracking'),
         'enable_pred_act_pxl': scfg.Value(True, isflag=True, help='SC heatmaps'),
         'enable_pred_act_poly': scfg.Value(True, isflag=True, help='SC tracking'),
+        'enable_viz_pred_act_poly': scfg.Value(False, isflag=True, help='if true draw predicted tracks for SC'),
 
         'enable_eval_trk_pxl': scfg.Value(True, isflag=True, help='BAS heatmap evaluation'),
         'enable_eval_trk_poly': scfg.Value(True, isflag=True, help='BAS tracking evaluation'),
         'enable_eval_act_pxl': scfg.Value(True, isflag=True, help='SC heatmaps evaluation'),
         'enable_eval_act_poly': scfg.Value(True, isflag=True, help='SC tracking evaluation'),
-        'enable_viz_pred_trk_poly': scfg.Value(False, isflag=True, help='if true draw predicted tracks'),
+        'enable_viz_pred_trk_poly': scfg.Value(False, isflag=True, help='if true draw predicted tracks for BAS'),
 
         'draw_heatmaps': scfg.Value(1, isflag=True, help='if true draw heatmaps on eval'),
         'draw_curves': scfg.Value(1, isflag=True, help='if true draw curves on eval'),
@@ -252,55 +253,80 @@ def schedule_evaluation(cmdline=False, **kwargs):
         step = Pipeline.eval_act_poly(condensed, **paths)
         steps[step.name] = step
 
-        # Determine the interaction / dependencies between step inputs /
-        # outputs
-        g = nx.DiGraph()
-        outputs_to_step = ub.ddict(list)
-        inputs_to_step = ub.ddict(list)
+        step = Pipeline.viz_pred_act_poly(condensed, **paths)
+        steps[step.name] = step
+
         for step in steps.values():
-            for path in step.out_paths.values():
-                outputs_to_step[path].append(step.name)
-            for path in step.in_paths.values():
-                inputs_to_step[path].append(step.name)
-            g.add_node(step.name, step=step)
-
-        inputs_to_step = ub.udict(inputs_to_step)
-        outputs_to_step = ub.udict(outputs_to_step)
-
-        common = list((inputs_to_step & outputs_to_step).keys())
-        for path in common:
-            isteps = inputs_to_step[path]
-            osteps = outputs_to_step[path]
-            for istep, ostep in it.product(isteps, osteps):
-                g.add_edge(ostep, istep)
-
-        #
-        # Determine which steps are enabled / disabled
-
-        sorted_nodes = list(nx.topological_sort(g))
-        for node in sorted_nodes:
-            step = g.nodes[node]['step']
             step.enabled = config['enable_' + step.name]
-            # if config['skip_existing']:
-            ancestors_will_exist = all(
-                g.nodes[ancestor]['step'].will_exist
-                for ancestor in nx.ancestors(g, step.name)
-            )
-            step.does_exist = all(
-                step.out_paths.map_values(lambda p: p.exists()).values()
-            )
-            if config['skip_existing'] and step.does_exist:
-                step.enabled = False
-            step.will_exist = (
-                (step.enabled and ancestors_will_exist) or
-                step.does_exist
-            )
-            # print('step.out_paths = {}'.format(ub.repr2(step.out_paths, nl=1)))
-            # print(f'{step.name=}, does_exist={step.does_exist} will_exist={step.will_exist} enabled={step.enabled}')
+
+        ADD_LINKS = 1
+        if ADD_LINKS:
+            # Make jobs to symlink things on the fly
+            linkable_pairs = [
+                {'pred': 'pred_trk_pxl_dpath', 'eval': 'eval_trk_pxl_dpath'},
+                {'pred': 'pred_act_pxl_dpath', 'eval': 'eval_act_pxl_dpath'},
+                {'pred': 'pred_trk_poly_dpath', 'eval': 'eval_trk_poly_dpath'},
+                {'pred': 'pred_act_poly_dpath', 'eval': 'eval_act_poly_dpath'},
+            ]
+            for pair in linkable_pairs:
+                pred_key = pair['pred']
+                eval_key = pair['eval']
+                pred_dpath = paths[pred_key]
+                eval_dpath = paths[eval_key]
+                pred_lpath = eval_dpath / '_pred_link'
+                eval_lpath = pred_dpath / '_eval_link'
+                out_paths = {
+                    pred_key.replace('dpath', 'lpath'): pred_lpath,
+                    eval_key.replace('dpath', 'lpath'): eval_lpath,
+                }
+                name = 'link_' + eval_key.replace('eval_', '')
+                parts = [
+                    f'ln -sf "{eval_dpath}" "{eval_lpath}"',
+                    f'ln -sf "{pred_dpath}" "{pred_lpath}"',
+                ]
+                command = ' && '.join(parts)
+                step = Step(name, command,
+                            in_paths=paths & {pred_key, eval_key},
+                            out_paths=out_paths,
+                            resources={'cpus': 1})
+                steps[step.name] = step
+                step.enabled = True
+
+            # The track to act is multiway.
+            # One way pair
+            if condensed['regions_id'] != 'truth':
+                key1 = 'pred_trk_poly_dpath'
+                key2 = 'crop_dpath'
+                dpath1 = paths[key1]
+                dpath2 = paths[key2]
+                lpath_parent = dpath2 / '_crop_links'
+                lpath1 = lpath_parent / condensed['crop_id']
+                lpath2 = dpath1 / '_pred_trk_poly_link'
+                eval_lpath = pred_dpath / '_eval_link'
+                out_paths = {
+                    key1.replace('dpath', 'lpath'): lpath1,
+                    key2.replace('dpath', 'lpath'): lpath2,
+                }
+                name = 'link_trk_crop'
+                parts = [
+                    f'mkdir {lpath_parent}',
+                    f'ln -sf "{dpath1}" "{lpath1}"',
+                    f'ln -sf "{dpath2}" "{lpath2}"',
+                ]
+                command = ' && '.join(parts)
+                step = Step(name, command,
+                            in_paths=paths & {pred_key, eval_key},
+                            out_paths=out_paths,
+                            resources={'cpus': 1})
+                steps[step.name] = step
+                step.enabled = True
+
+        skip_existing = config['skip_existing']
+        g = Pipeline.connect_steps(steps, skip_existing)
 
         #
         # Submit steps to the scheduling queue
-        for node in sorted_nodes:
+        for node in g.graph['order']:
             # Skip duplicate jobs
             step = g.nodes[node]['step']
             if step.node_id in queue.named_jobs:
@@ -386,6 +412,7 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
 
     paths['pkg_trk_pxl_fpath'] = ub.Path(item['trk.pxl.model'])
     paths['trk_test_dataset_fpath'] = item['trk.pxl.data.test_dataset']
+    paths['pred_trk_pxl_dpath'] = ub.Path(state.templates['pred_trk_pxl_dpath'].format(**condensed))
     paths['pred_trk_pxl_fpath'] = ub.Path(state.templates['pred_trk_pxl_fpath'].format(**condensed))
     paths['eval_trk_pxl_dpath'] = ub.Path(state.templates['eval_trk_pxl_dpath'].format(**condensed))
     paths['eval_trk_pxl_fpath'] = ub.Path(state.templates['eval_trk_pxl_fpath'].format(**condensed))
@@ -466,12 +493,15 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
     paths['pred_act_poly_sites_dpath'] = ub.Path(state.templates['pred_act_poly_sites_dpath'].format(**condensed))
     # paths['pred_act_poly_site_summaries_dpath'] = ub.Path(state.templates['pred_act_poly_site_summaries_dpath'].format(**condensed))
 
+    paths['pred_act_pxl_dpath'] = ub.Path(state.templates['pred_act_pxl_dpath'].format(**condensed))
+    paths['pred_act_poly_dpath'] = ub.Path(state.templates['pred_act_poly_dpath'].format(**condensed))
     paths['pred_act_pxl_fpath'] = ub.Path(state.templates['pred_act_pxl_fpath'].format(**condensed))
     paths['eval_act_pxl_fpath'] = ub.Path(state.templates['eval_act_pxl_fpath'].format(**condensed))
     paths['eval_act_pxl_dpath'] = ub.Path(state.templates['eval_act_pxl_dpath'].format(**condensed))
     paths['eval_act_poly_fpath'] = ub.Path(state.templates['eval_act_poly_fpath'].format(**condensed))
     paths['eval_act_poly_dpath'] = ub.Path(state.templates['eval_act_poly_dpath'].format(**condensed))
     paths['pred_act_poly_kwcoco'] = ub.Path(state.templates['pred_act_poly_kwcoco'].format(**condensed))
+    paths['pred_act_poly_viz_stamp'] = ub.Path(state.templates['pred_act_poly_viz_stamp'].format(**condensed))
 
     # paths['eval_act_tmp_dpath'] = pred_act_row['eval_act_poly_dpath'] / '_tmp'
 
@@ -567,9 +597,9 @@ class Step:
     def __init__(step, name, command, in_paths, out_paths, resources):
         step.name = name
         step._command = command
-        step.in_paths = in_paths
-        step.out_paths = out_paths
-        step.resources = resources
+        step.in_paths = ub.udict(in_paths)
+        step.out_paths = ub.udict(out_paths)
+        step.resources = ub.udict(resources)
         #
         # Set later
         step.enabled = None
@@ -587,22 +617,77 @@ class Step:
 
     @property
     def command(step):
-        if step.otf_cache:
+        if step.otf_cache and step.enabled != 'redo':
             return step.test_is_computed_command() + ' || ' + step._command
         else:
             return step._command
 
     def test_is_computed_command(step):
         test_expr = ' -a '.join(
-            [f'-f "{p}"' for p in step.out_paths.values()])
+            [f'-e "{p}"' for p in step.out_paths.values()])
         test_cmd = 'test ' +  test_expr
         return test_cmd
+
+    @ub.memoize_property
+    def does_exist(self):
+        return all(self.out_paths.map_values(lambda p: p.exists()).values())
 
 
 class Pipeline:
     """
     Registers how to call each step in the pipeline
     """
+
+    @classmethod
+    def connect_steps(cls, steps, skip_existing=False):
+        """
+        Build the graph that represents this pipeline
+        """
+        # Determine the interaction / dependencies between step inputs /
+        # outputs
+        g = nx.DiGraph()
+        outputs_to_step = ub.ddict(list)
+        inputs_to_step = ub.ddict(list)
+        for step in steps.values():
+            for path in step.out_paths.values():
+                outputs_to_step[path].append(step.name)
+            for path in step.in_paths.values():
+                inputs_to_step[path].append(step.name)
+            g.add_node(step.name, step=step)
+
+        inputs_to_step = ub.udict(inputs_to_step)
+        outputs_to_step = ub.udict(outputs_to_step)
+
+        common = list((inputs_to_step & outputs_to_step).keys())
+        for path in common:
+            isteps = inputs_to_step[path]
+            osteps = outputs_to_step[path]
+            for istep, ostep in it.product(isteps, osteps):
+                g.add_edge(ostep, istep)
+
+        #
+        # Determine which steps are enabled / disabled
+        sorted_nodes = list(nx.topological_sort(g))
+        g.graph['order'] = sorted_nodes
+
+        for node in sorted_nodes:
+            step = g.nodes[node]['step']
+            # if config['skip_existing']:
+            ancestors_will_exist = all(
+                g.nodes[ancestor]['step'].will_exist
+                for ancestor in nx.ancestors(g, step.name)
+            )
+            if skip_existing and step.enabled != 'redo' and step.does_exist:
+                step.enabled = False
+            step.will_exist = (
+                (step.enabled and ancestors_will_exist) or
+                step.does_exist
+            )
+
+        if 0:
+            from cmd_queue.util.util_networkx import write_network_text
+            write_network_text(g)
+        return g
 
     def __init__(pipe):
         pass
@@ -664,14 +749,9 @@ class Pipeline:
 
         name = 'crop'
         step = Step(name, command,
-                    in_paths=paths & {
-                        'crop_regions',
-                        'crop_src_fpath',
-                    },
-                    out_paths=paths & {'crop_fpath'},
-                    resources={
-                        'cpus': 2,
-                    })
+                    in_paths=paths & {'crop_regions', 'crop_src_fpath'},
+                    out_paths=paths & {'crop_fpath', 'crop_dpath'},
+                    resources={'cpus': 2})
         return step
 
     def pred_trk_pxl(trk_pxl_params, **paths):
@@ -701,10 +781,7 @@ class Pipeline:
                     in_paths=paths & {'pkg_trk_pxl_fpath',
                                       'trk_test_dataset_fpath'},
                     out_paths=paths & {'pred_trk_pxl_fpath'},
-                    resources={
-                        'cpus': workers,
-                        'gpus': 2,
-                    })
+                    resources={'cpus': workers, 'gpus': 2})
         return step
 
     def pred_act_pxl(act_pxl_params, **paths):
@@ -736,10 +813,7 @@ class Pipeline:
                         'act_test_dataset_fpath'
                     },
                     out_paths=paths & {'pred_act_pxl_fpath'},
-                    resources={
-                        'cpus': workers,
-                        'gpus': 2,
-                    })
+                    resources={'cpus': workers, 'gpus': 2})
         return step
 
     def pred_trk_poly(trk_poly_params, **paths):
@@ -782,88 +856,10 @@ class Pipeline:
         step = Step(name, command,
                     in_paths=paths & {'pred_trk_pxl_fpath'},
                     out_paths=paths & {
+                        'pred_trk_poly_dpath',
                         'pred_trk_poly_sites_fpath',
                         'pred_trk_poly_site_summaries_fpath',
                         'pred_trk_poly_kwcoco'},
-                    resources={'cpus': 2})
-        return step
-
-    def eval_trk_pxl(condensed, **paths):
-        paths = ub.udict(paths)
-        paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
-        eval_trk_pxl_kwe = { **paths }
-        extra_opts = {
-            'draw_curves': True,  # todo: parametarize
-            'draw_heatmaps': True,  # todo: parametarize
-            'viz_thresh': 0.2,
-            'workers': 2,
-        }
-        eval_trk_pxl_kwe['extra_argstr'] = Pipeline._make_argstr(extra_opts)
-        command = ub.codeblock(
-            r'''
-            python -m watch.tasks.fusion.evaluate \
-                --true_dataset={trk_test_dataset_fpath} \
-                --pred_dataset={pred_trk_pxl_fpath} \
-                --eval_dpath={eval_trk_pxl_dpath} \
-                --score_space=video \
-                {extra_argstr}
-            ''').format(**eval_trk_pxl_kwe)
-        name = 'eval_trk_pxl'
-        step = Step(name, command,
-                    in_paths=paths & {'pred_trk_pxl_fpath'},
-                    out_paths=paths & {'eval_trk_pxl_fpath'},
-                    resources={'cpus': 2})
-        return step
-
-    def viz_pred_trk_poly(condensed, **paths):
-        paths = ub.udict(paths)
-        viz_pred_trk_poly_kw = paths.copy()
-        viz_pred_trk_poly_kw['extra_header'] = f"\\n{condensed['trk_pxl_cfg']}-{condensed['trk_poly_cfg']}"
-        command = ub.codeblock(
-            r'''
-            smartwatch visualize \
-                "{pred_trk_poly_kwcoco}" \
-                --channels="red|green|blue,salient" \
-                --stack=only \
-                --workers=avail/2 \
-                --workers=avail/2 \
-                --extra_header="{extra_header}" \
-                --animate=True && touch {pred_trk_poly_viz_stamp}
-            ''').format(**viz_pred_trk_poly_kw)
-        name = 'viz_pred_trk_poly'
-        step = Step(name, command,
-                    in_paths=paths & {'pred_trk_poly_kwcoco'},
-                    out_paths=paths & {'pred_trk_poly_viz_stamp'},
-                    resources={'cpus': 2})
-        return step
-
-    def eval_trk_poly(condensed, **paths):
-        paths = ub.udict(paths)
-        eval_trk_poly_kw = { **paths }
-        eval_trk_poly_kw['eval_trk_poly_dpath'] = eval_trk_poly_kw['eval_trk_poly_dpath']
-        eval_trk_poly_kw['eval_trk_poly_tmp_dpath'] = eval_trk_poly_kw['eval_trk_poly_dpath'] / '_tmp'
-        eval_trk_poly_kw['name_suffix'] = '-'.join([
-            condensed['trk_model'],
-            condensed['trk_pxl_cfg'],
-            condensed['trk_poly_cfg'],
-        ])
-        command = ub.codeblock(
-            r'''
-            python -m watch.cli.run_metrics_framework \
-                --merge=True \
-                --inputs_are_paths=True \
-                --name "{name_suffix}" \
-                --true_site_dpath "{true_site_dpath}" \
-                --true_region_dpath "{true_region_dpath}" \
-                --pred_sites "{pred_trk_poly_sites_fpath}" \
-                --tmp_dir "{eval_trk_poly_tmp_dpath}" \
-                --out_dir "{eval_trk_poly_dpath}" \
-                --merge_fpath "{eval_trk_poly_fpath}"
-            ''').format(**eval_trk_poly_kw)
-        name = 'eval_trk_poly'
-        step = Step(name, command,
-                    in_paths=paths & {'pred_trk_poly_sites_fpath'},
-                    out_paths=paths & {'eval_trk_poly_fpath'},
                     resources={'cpus': 2})
         return step
 
@@ -893,41 +889,51 @@ class Pipeline:
         name = 'pred_act_poly'
         step = Step(name, command,
                     in_paths=paths & {'pred_act_pxl_fpath'},
-                    out_paths=paths & {'pred_act_poly_sites_fpath',
+                    out_paths=paths & {'pred_act_poly_dpath',
+                                       'pred_act_poly_sites_fpath',
                                        'pred_act_poly_kwcoco'},
                     resources={'cpus': 2})
+        return step
 
-        # TODO: viz act pred
-        r"""
-        smartwatch visualize \
-            /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/pred/act/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt/crop_id_80015a58_crop.kwcoco/act_pxl_abd043ec/pred.kwcoco.json \
-                --stack="red|green|blue,Site Preparation|Active Construction|Post Construction" \
-                --animate=True  \
-                --channels="red|green|blue,Site Preparation|Active Construction|Post Construction" \
-                --workers=0
-
-        /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/pred/act/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt/crop_id_80015a58_crop.kwcoco/act_pxl_abd043ec/act_poly_0e4ab3bf/site_activity_manifest.json
-
-        smartwatch visualize \
-                /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/pred/act/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt/crop_id_80015a58_crop.kwcoco/act_pxl_abd043ec/act_poly_0e4ab3bf/activity_tracks.kwcoco.json \
-                --stack="red|green|blue,Site Preparation|Active Construction|Post Construction" \
-                --animate=True \
-                --channels="red|green|blue,Site Preparation|Active Construction|Post Construction" \
-                --workers=0
-        """
+    def eval_trk_pxl(condensed, **paths):
+        paths = ub.udict(paths)
+        paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
+        eval_trk_pxl_kw = { **paths }
+        extra_opts = {
+            'draw_curves': True,  # todo: parametarize
+            'draw_heatmaps': True,  # todo: parametarize
+            'viz_thresh': 0.2,
+            'workers': 2,
+        }
+        eval_trk_pxl_kw['extra_argstr'] = Pipeline._make_argstr(extra_opts)
+        command = ub.codeblock(
+            r'''
+            python -m watch.tasks.fusion.evaluate \
+                --true_dataset={trk_test_dataset_fpath} \
+                --pred_dataset={pred_trk_pxl_fpath} \
+                --eval_dpath={eval_trk_pxl_dpath} \
+                --score_space=video \
+                {extra_argstr}
+            ''').format(**eval_trk_pxl_kw)
+        name = 'eval_trk_pxl'
+        step = Step(name, command,
+                    in_paths=paths & {'pred_trk_pxl_fpath'},
+                    out_paths=paths & {'eval_trk_pxl_fpath',
+                                       'eval_trk_pxl_dpath'},
+                    resources={'cpus': 2})
         return step
 
     def eval_act_pxl(condensed, **paths):
         paths = ub.udict(paths)
         paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
-        eval_act_pxl_kwe = { **paths }
+        eval_act_pxl_kw = { **paths }
         extra_opts = {
             'draw_curves': True,
             'draw_heatmaps': True,
             'viz_thresh': 0.2,
             'workers': 2,
         }
-        eval_act_pxl_kwe['extra_argstr'] = Pipeline._make_argstr(extra_opts)
+        eval_act_pxl_kw['extra_argstr'] = Pipeline._make_argstr(extra_opts)
         command = ub.codeblock(
             r'''
             python -m watch.tasks.fusion.evaluate \
@@ -936,11 +942,88 @@ class Pipeline:
                 --eval_dpath={eval_act_pxl_dpath} \
                 --score_space=video \
                 {extra_argstr}
-            ''').format(**eval_act_pxl_kwe).strip().rstrip('\\')
+            ''').format(**eval_act_pxl_kw).strip().rstrip('\\')
         name = 'eval_act_pxl'
         step = Step(name, command,
                     in_paths=paths & {'pred_act_pxl_fpath'},
-                    out_paths=paths & {'eval_act_pxl_fpath'},
+                    out_paths=paths & {'eval_act_pxl_fpath',
+                                       'eval_act_pxl_dpath'},
+                    resources={'cpus': 2})
+        return step
+
+    def viz_pred_trk_poly(condensed, **paths):
+        paths = ub.udict(paths)
+        viz_pred_trk_poly_kw = paths.copy()
+        viz_pred_trk_poly_kw['extra_header'] = f"\\n{condensed['trk_pxl_cfg']}-{condensed['trk_poly_cfg']}"
+        viz_pred_trk_poly_kw['viz_channels'] = "red|green|blue,salient"
+        command = ub.codeblock(
+            r'''
+            smartwatch visualize \
+                "{pred_trk_poly_kwcoco}" \
+                --channels="{viz_channels}" \
+                --stack=only \
+                --workers=avail/2 \
+                --workers=avail/2 \
+                --extra_header="{extra_header}" \
+                --animate=True && touch {pred_trk_poly_viz_stamp}
+            ''').format(**viz_pred_trk_poly_kw)
+        name = 'viz_pred_trk_poly'
+        step = Step(name, command,
+                    in_paths=paths & {'pred_trk_poly_kwcoco'},
+                    out_paths=paths & {'pred_trk_poly_viz_stamp'},
+                    resources={'cpus': 2})
+        return step
+
+    def viz_pred_act_poly(condensed, **paths):
+        paths = ub.udict(paths)
+        viz_pred_act_poly_kw = paths.copy()
+        viz_pred_act_poly_kw['extra_header'] = f"\\n{condensed['act_pxl_cfg']}-{condensed['act_poly_cfg']}"
+        viz_pred_act_poly_kw['viz_channels'] = 'red|green|blue,No Activity|Site Preparation|Active Construction|Post Construction'
+        command = ub.codeblock(
+            r'''
+            smartwatch visualize \
+                "{pred_act_poly_kwcoco}" \
+                --channels="{viz_channels}" \
+                --stack=only \
+                --workers=avail/2 \
+                --extra_header="{extra_header}" \
+                --animate=True && touch {pred_act_poly_viz_stamp}
+            ''').format(**viz_pred_act_poly_kw)
+        name = 'viz_pred_act_poly'
+        step = Step(name, command,
+                    in_paths=paths & {'pred_act_poly_kwcoco'},
+                    out_paths=paths & {'pred_act_poly_viz_stamp'},
+                    resources={'cpus': 2})
+        return step
+
+    def eval_trk_poly(condensed, **paths):
+        paths = ub.udict(paths)
+        eval_trk_poly_kw = { **paths }
+        eval_trk_poly_kw['eval_trk_poly_dpath'] = eval_trk_poly_kw['eval_trk_poly_dpath']
+        eval_trk_poly_kw['eval_trk_poly_tmp_dpath'] = eval_trk_poly_kw['eval_trk_poly_dpath'] / '_tmp'
+        eval_trk_poly_kw['name_suffix'] = '-'.join([
+            condensed['trk_model'],
+            condensed['trk_pxl_cfg'],
+            condensed['trk_poly_cfg'],
+        ])
+        command = ub.codeblock(
+            r'''
+            python -m watch.cli.run_metrics_framework \
+                --merge=True \
+                --inputs_are_paths=True \
+                --name "{name_suffix}" \
+                --true_site_dpath "{true_site_dpath}" \
+                --true_region_dpath "{true_region_dpath}" \
+                --pred_sites "{pred_trk_poly_sites_fpath}" \
+                --tmp_dir "{eval_trk_poly_tmp_dpath}" \
+                --out_dir "{eval_trk_poly_dpath}" \
+                --merge_fpath "{eval_trk_poly_fpath}"
+            ''').format(**eval_trk_poly_kw)
+        name = 'eval_trk_poly'
+        step = Step(name, command,
+                    in_paths=paths & {'pred_trk_poly_sites_fpath'},
+                    out_paths=paths & {'eval_trk_poly_dpath',
+                                       'eval_trk_poly_fpath'},
                     resources={'cpus': 2})
         return step
 
@@ -972,7 +1055,8 @@ class Pipeline:
         name = 'eval_act_poly'
         step = Step(name, command,
                     in_paths=paths & {'pred_act_poly_sites_fpath'},
-                    out_paths=paths & {'eval_act_poly_fpath'},
+                    out_paths=paths & {'eval_act_poly_fpath',
+                                       'eval_act_poly_dpath'},
                     resources={'cpus': 2})
         return step
 

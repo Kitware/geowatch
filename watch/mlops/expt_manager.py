@@ -633,7 +633,6 @@ class ExperimentState(ub.NiceRepr):
             'pred_trk_poly_site_summaries_fpath' : task_dpaths['pred_trk_poly_dpath'] + '/site_summary_tracks_manifest.json',
             'pred_trk_poly_sites_dpath'          : task_dpaths['pred_trk_poly_dpath'] + '/sites',
             'pred_trk_poly_site_summaries_dpath' : task_dpaths['pred_trk_poly_dpath'] + '/site-summaries',
-
             'pred_trk_poly_viz_stamp' : task_dpaths['pred_trk_poly_dpath'] + '/_viz.stamp',
 
             'crop_fpath'              : task_dpaths['crop_dpath'] + '/crop.kwcoco.json',
@@ -642,8 +641,9 @@ class ExperimentState(ub.NiceRepr):
             'pred_act_poly_kwcoco' : task_dpaths['pred_act_poly_dpath'] + '/activity_tracks.kwcoco.json',
             'pred_act_poly_sites_fpath'  : task_dpaths['pred_act_poly_dpath'] + '/site_activity_manifest.json',
             # 'pred_act_poly_site_summaries_fpath' : task_dpaths['pred_act_poly_dpath'] + '/site_summary_activity_manifest.json',
-            'pred_act_poly_sites_dpath'  : task_dpaths['pred_act_poly_dpath'] + '/sites'
+            'pred_act_poly_sites_dpath'  : task_dpaths['pred_act_poly_dpath'] + '/sites',
             # 'pred_act_poly_site_summaries_dpath' : task_dpaths['pred_act_poly_dpath'] + '/site-summaries',
+            'pred_act_poly_viz_stamp' : task_dpaths['pred_act_poly_dpath'] + '/_viz.stamp',
         }
 
         self.versioned_templates = {
