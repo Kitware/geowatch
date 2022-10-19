@@ -87,7 +87,8 @@ def main():
     # I messed up the name of the dataset I was working on.
     # it is marked as train, but it should have been vali.
 
-    dataset_code = 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC'
+    # dataset_code = 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC'
+    dataset_code = '*'
 
     state = expt_manager.ExperimentState(
         expt_dvc_dpath, dataset_code=dataset_code,
@@ -105,7 +106,7 @@ def main():
         'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_kr1br2.kwcoco')
 
     state._build_path_patterns()
-    state._make_cross_links()
+    # state._make_cross_links()
     # state._block_non_existing_rhashes()
 
     reporter = expt_report.EvaluationReporter(state)
@@ -595,8 +596,20 @@ python -m watch.mlops.schedule_evaluation \
                 - trk.poly.output
             act.pxl.data.test_dataset:
                 - crop.dst
+            act.pxl.data.window_scale_space:
+                - 15GSD
+                - auto
+            act.poly.thresh:
+                - 0.01
+                - 0.05
+                - 0.1
+                - 0.2
+            act.poly.use_viterbi:
+                - 0
+                - 1
             act.pxl.model:
                 - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
+                - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=155-step=78468.pt.pt
     " \
     --enable_pred_trk_pxl=1 \
     --enable_pred_trk_poly=1 \
@@ -611,5 +624,5 @@ python -m watch.mlops.schedule_evaluation \
     --enable_viz_pred_act_poly=1 \
     --devices="0,1" --queue_size=2 \
     --backend=tmux --skip_existing=1 \
-    --run=0
+    --run=1
 """

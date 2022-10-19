@@ -749,7 +749,7 @@ class ExperimentState(ub.NiceRepr):
         parser = parse.Parser(str(template))
         results = parser.parse(str(path))
         if results is None:
-            raise AssertionError(f'Failed to match path={path} to template={template}')
+            raise RuntimeError(f'Failed to match path={path} to template={template}')
             parser = parse.Parser(str(template)[:-4])
             results = parser.parse(str(path))
         if results is not None:
@@ -1578,4 +1578,3 @@ if __name__ == '__main__':
         python -m watch.mlops.expt_manager "pull packages"
     """
     main(cmdline=True)
-

@@ -4,6 +4,56 @@ Helper for scheduling a set of prediction + evaluation jobs
 TODO:
     - [ ] Differentiate between pixel models for different tasks.
     - [ ] Allow the output of tracking to feed into activity classification
+
+
+
+Example:
+
+    python -m watch.mlops.schedule_evaluation \
+        --params="
+            matrix:
+                trk.pxl.model:
+                    - ./my_bas_model.pt
+                trk.pxl.data.test_dataset:
+                    - ./my_test_dataset/bas_ready_data.kwcoco.json
+                trk.pxl.data.window_scale_space: 15GSD
+                trk.pxl.data.time_sampling:
+                    - "auto"
+                trk.pxl.data.input_scale_space:
+                    - "15GSD"
+                crop.src:
+                    - ./my_test_dataset/sc_query_data.kwcoco.json
+                crop.regions:
+                    - trk.poly.output
+                act.pxl.data.test_dataset:
+                    - crop.dst
+                act.pxl.data.window_scale_space:
+                    - auto
+                act.poly.thresh:
+                    - 0.1
+                act.poly.use_viterbi:
+                    - 0
+                act.pxl.model:
+                    - my_sc_model.pt
+        " \
+        --expt_dvc_dpath=./my_expt_dir \
+        --data_dvc_dpath=./my_data_dir \
+        --dynamic_skips=0 \
+        --enable_pred_trk_pxl=1 \
+        --enable_pred_trk_poly=1 \
+        --enable_eval_trk_pxl=0 \
+        --enable_eval_trk_poly=0 \
+        --enable_crop=1 \
+        --enable_pred_act_pxl=1 \
+        --enable_pred_act_poly=1 \
+        --enable_eval_act_pxl=0 \
+        --enable_eval_act_poly=0 \
+        --enable_viz_pred_trk_poly=0 \
+        --enable_viz_pred_act_poly=0 \
+        --enable_links=0 \
+        --devices="0,1" --queue_size=2 \
+        --backend=serial --skip_existing=0 \
+        --run=0
 """
 import ubelt as ub
 import shlex
@@ -55,6 +105,9 @@ class ScheduleEvaluationConfig(scfg.Config):
         'enable_eval_act_pxl': scfg.Value(True, isflag=True, help='SC heatmaps evaluation'),
         'enable_eval_act_poly': scfg.Value(True, isflag=True, help='SC tracking evaluation'),
         'enable_viz_pred_trk_poly': scfg.Value(False, isflag=True, help='if true draw predicted tracks for BAS'),
+        'enable_links': scfg.Value(True, isflag=True, help='if true enable symlink jobs'),
+
+        'dynamic_skips': scfg.Value(True, isflag=True, help='if true, each a test is appened to each job to skip itself if its output exists'),
 
         'draw_heatmaps': scfg.Value(1, isflag=True, help='if true draw heatmaps on eval'),
         'draw_curves': scfg.Value(1, isflag=True, help='if true draw curves on eval'),
@@ -258,8 +311,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
         for step in steps.values():
             step.enabled = config['enable_' + step.name]
+            step.otf_cache = config['dynamic_skips']
 
-        ADD_LINKS = 1
+        ADD_LINKS = config['enable_links']
         if ADD_LINKS:
             # Make jobs to symlink things on the fly
             linkable_pairs = [
@@ -291,6 +345,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                             resources={'cpus': 1})
                 steps[step.name] = step
                 step.enabled = True
+                step.otf_cache = False
 
             # The track to act is multiway.
             # One way pair
@@ -320,6 +375,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                             resources={'cpus': 1})
                 steps[step.name] = step
                 step.enabled = True
+                step.otf_cache = True
 
         skip_existing = config['skip_existing']
         g = Pipeline.connect_steps(steps, skip_existing)
@@ -390,11 +446,18 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
     paths = {}
 
     # Might not need this exactly
-    pkg_trk_pixel_pathcfg = state._parse_pattern_attrs(
-        state.templates['pkg_trk_pxl_fpath'], item['trk.pxl.model'])
-    # fixme: dataset code is ambiguous between BAS and SC
-    # pkg_trk_pixel_pathcfg.pop('dataset_code', None)
-    condensed.update(pkg_trk_pixel_pathcfg)
+    try:
+        pkg_trk_pixel_pathcfg = state._parse_pattern_attrs(
+            state.templates['pkg_trk_pxl_fpath'], item['trk.pxl.model'])
+    except RuntimeError:
+        ...  # user specified a custom model
+        condensed['dataset_code'] = 'dset_code_unknown'
+        condensed['trk_expt'] = 'trk_expt_unknown'
+        condensed['trk_model'] = ub.Path(item['trk.pxl.model']).name
+    else:
+        # fixme: dataset code is ambiguous between BAS and SC
+        # pkg_trk_pixel_pathcfg.pop('dataset_code', None)
+        condensed.update(pkg_trk_pixel_pathcfg)
 
     condensed['expt_dvc_dpath'] = expt_dvc_dpath
 
@@ -474,8 +537,15 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
     condensed['act_pxl_cfg'] = state._condense_cfg(act_pxl_params, 'act_pxl')
     condensed['act_poly_cfg'] = state._condense_cfg(act_poly_params, 'act_poly')
 
-    pkg_act_pixel_pathcfg = state._parse_pattern_attrs(state.templates['pkg_act_pxl_fpath'], item['act.pxl.model'])
-    condensed.update(pkg_act_pixel_pathcfg)
+    try:
+        pkg_act_pixel_pathcfg = state._parse_pattern_attrs(state.templates['pkg_act_pxl_fpath'], item['act.pxl.model'])
+    except RuntimeError:
+        ...  # user specified a custom model
+        condensed['dataset_code'] = 'dset_code_unknown'
+        condensed['act_expt'] = 'act_expt_unknown'
+        condensed['act_model'] = ub.Path(item['act.pxl.model']).name
+    else:
+        condensed.update(pkg_act_pixel_pathcfg)
 
     # paths['act_test_dataset_fpath'] = item['act.pxl.data.test_dataset']
     if item['act.pxl.data.test_dataset'] == 'crop.dst':
