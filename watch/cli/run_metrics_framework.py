@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+"""
+TODO:
+    - [ ] Rename to run_polygon_evaluation.py? Or run_iarpa_metrics.py?
+"""
 import os
 import sys
 import json
@@ -85,11 +89,6 @@ class MetricsConfig(scfg.DataConfig):
     name = scfg.Value('unknown', help=ub.paragraph(
         '''
         Short name for the algorithm used to generate the model
-        '''))
-    inputs_are_paths = scfg.Value(False, isflag=1, help=ub.paragraph(
-        '''
-        If given, the sites inputs will always be interpreted as
-        paths and not raw json text.
         '''))
     use_cache = scfg.Value(False, isflag=1, help=ub.paragraph(
         '''
@@ -1145,16 +1144,9 @@ def main(cmdline=True, **kwargs):
     config = MetricsConfig.legacy(cmdline=cmdline, data=kwargs)
     args = config
 
-    config['pred_sites'] = util_gis.coerce_geojson_paths(config['pred_sites'])
-
     # args, _ = parser.parse_known_args(args)
     config_dict = config.asdict()
     print('config = {}'.format(ub.repr2(config_dict, nl=2, sort=0)))
-
-    # load pred_sites
-    pred_sites = []
-    if len(args.pred_sites) == 0:
-        raise Exception('No input sites were given')
 
     try:
         # Do we have the latest and greatest?
@@ -1186,50 +1178,33 @@ def main(cmdline=True, **kwargs):
     )
     proc_context.start()
 
+    # load pred_sites
+    # config['pred_sites'] = util_gis.coerce_geojson_datas(config['pred_sites'])
+    pred_site_infos = util_gis.coerce_geojson_paths(config['pred_sites'],
+                                                    return_manifests=True)
+
+    if len(pred_site_infos['manifest_fpaths']) > 1:
+        raise Exception('Only expected at most one manifest')
+
     parent_info = []
-    for site_data in args.pred_sites:
-        in_fpath = ub.Path(site_data)
+    for manifest_fpath in pred_site_infos['manifest_fpaths']:
+        # The manifest contains info about how these predictions were computed
+        # Grab that if possible.
+        print('Load parent info from manifest')
+        with open(manifest_fpath, 'r') as file:
+            manifest = json.load(file)
+        assert (isinstance(manifest, dict) and
+                manifest.get('type', None) == 'tracking_result')
+        # The input was a track result json which contains pointers to
+        # the actual sites
+        parent_info.extend(manifest.get('info', []))
 
-        if args.inputs_are_paths:
-            if not in_fpath.exists():
-                raise FileNotFoundError(str(in_fpath))
-            with open(in_fpath, 'r') as file:
-                site_or_result = json.load(file)
-
-            is_track_result = (
-                isinstance(site_or_result, dict) and
-                site_or_result.get('type', None) == 'tracking_result'
-            )
-
-            if is_track_result:
-                track_result = site_or_result
-                # The input was a track result json which contains pointers to
-                # the actual sites
-                parent_info.extend(track_result.get('info', []))
-                for site_fpath in track_result['files']:
-                    with open(site_fpath, 'r') as file:
-                        site = json.load(file)
-                    pred_sites.append(site)
-            else:
-                # It was just a site json file.
-                site = site_or_result
-                pred_sites.append(site)
-        else:
-            # TODO:
-            # Deprecate passing raw json on the CLI, it has a limited length
-            # What would be best is a single file that points to all of the
-            # site jsons we care about, so we don't need to glob.
-            try:
-                if in_fpath.is_file():
-                    with open(site_data, 'r') as file:
-                        site = json.load(file)
-                else:
-                    raise NotImplementedError('deprecated to pass json as str')
-                    site = json.loads(site_data)
-            except json.JSONDecodeError as e:  # TODO split out as decorator?
-                raise json.JSONDecodeError(e.msg + ' [cut for length]',
-                                           e.doc[:100] + '...', e.pos)
-            pred_sites.append(site)
+    pred_sites = [
+        info['data'] for info in util_gis.coerce_geojson_datas(
+            pred_site_infos['geojson_fpaths'], format='json')
+    ]
+    if len(args.pred_sites) == 0:
+        raise Exception('No input sites were given')
 
     name = args.name
     true_site_dpath = args.true_site_dpath
