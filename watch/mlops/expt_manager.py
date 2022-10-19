@@ -867,7 +867,7 @@ class ExperimentState(ub.NiceRepr):
             'pred_trk_pxl_fpath',
             'pred_trk_poly_sites_fpath',
             'pred_trk_poly_site_summaries_fpath',
-            'eval_act_poly_fpath'
+            'pred_act_poly_sites_fpath'
         ]
         for key in keys:
             for pat in [p[key] for p in self.path_patterns_matrix]:
@@ -1327,6 +1327,11 @@ def summarize_tables(tables):
     volitile_df = tables.get('volitile', None)
     versioned_df = tables.get('versioned', None)
 
+    table_shapes = ub.udict(tables).map_values(lambda x: x.shape)
+    title = '[blue] Table Summary'
+    print(title)
+    print('table_shapes = {}'.format(ub.repr2(table_shapes, nl=1, align=':', sort=0)))
+
     if staging_df is not None:
         title = '[yellow] Staging Summary (Training)'
 
@@ -1339,13 +1344,18 @@ def summarize_tables(tables):
             body = console.highlighter('There are no unversioned staging items')
         print(Panel(body, title=title))
 
-    _grouper_keys = ub.oset(['dataset_code', 'test_trk_dset', 'test_act_dset', 'type'])
+    _grouper_keys = ub.oset([
+        'dataset_code',
+        # 'test_trk_dset',
+        # 'test_act_dset',
+        'type'
+    ])
 
     if volitile_df is not None:
         title = ('[bright_blue] Volitile Summary (Predictions)')
         if len(volitile_df):
             grouper_keys = list(_grouper_keys & volitile_df.columns)
-            num_pred_types = volitile_df.groupby(grouper_keys).nunique()
+            num_pred_types = volitile_df.groupby(grouper_keys, dropna=False).nunique()
             body_df = num_pred_types
             body = console.highlighter(str(body_df))
         else:

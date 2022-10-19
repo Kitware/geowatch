@@ -1,4 +1,4 @@
-"""
+r"""
 Helper for scheduling a set of prediction + evaluation jobs
 
 TODO:

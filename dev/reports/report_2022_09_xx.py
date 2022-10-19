@@ -102,8 +102,9 @@ def main():
     state.patterns['test_dset'] = (
         'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_septest.kwcoco')
 
-    state.patterns['test_dset'] = (
-        'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_kr1br2.kwcoco')
+    state.patterns['test_dset'] = ('Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_kr1br2.kwcoco')
+
+    state.patterns['test_dset'] = ('*')
 
     state._build_path_patterns()
     # state._make_cross_links()
