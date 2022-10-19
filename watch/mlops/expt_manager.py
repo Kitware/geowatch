@@ -612,6 +612,11 @@ class ExperimentState(ub.NiceRepr):
             'crop_dpath': 'crop/{crop_src_dset}/{regions_id}/{crop_cfg}/{crop_id}',
         }
 
+        # TODO:
+        # Can we abstract this so the only piece of user input is a definition
+        # of a set of steps? The steps can define the path templates that they
+        # want and the variables they use.
+
         task_dpaths = {
             'pred_trk_pxl_dpath'   : 'pred/' + task_dpath_suffix['trk_pxl_dpath'],
             'pred_trk_poly_dpath'  : 'pred/' + task_dpath_suffix['trk_poly_dpath'],

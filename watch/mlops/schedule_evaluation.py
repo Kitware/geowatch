@@ -785,6 +785,16 @@ class Pipeline:
         return step
 
     def pred_act_pxl(act_pxl_params, **paths):
+        """
+        Idea:
+            Step(<command_template>, <path-templates>)
+
+            path_templates=[
+                Template('pkg_act_pxl_fpath', 'packages/{act_expt}/{act_model}.pt')
+                Template('act_test_dataset_fpath', '???'),
+                Template('pred_act_pxl_fpath', '{pred_act_pxl_dpath}/pred.kwcoco.json'),
+            ]
+        """
         paths = ub.udict(paths)
         workers = 4
         perf_options = {
@@ -1028,6 +1038,15 @@ class Pipeline:
         return step
 
     def eval_act_poly(condensed, **paths):
+        """
+        Idea:
+            Step(<command_template>, <path-templates>)
+
+            path_templates=[
+                Template('true_site_dpath', 'true_site_dpath')
+                Template('pred_act_poly_sites_fpath', '{pred_act_poly_dpath}/activity_tracks.kwcoco.json'),
+            ]
+        """
         paths = ub.udict(paths)
         eval_act_poly_kw = paths.copy()
         eval_act_poly_kw['name_suffix'] = '-'.join([
