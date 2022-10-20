@@ -139,6 +139,8 @@ class StacSearchConfig(scfg.Config):
 
         'max_products_per_region': scfg.Value(None, help='does uniform affinity sampling over time to filter down to this many results per region'),
 
+        'append_mode': scfg.Value(True, help='if True appends to the existing output file. If false will overwrite an existing output file'),
+
         'region_file': scfg.Value(
             None,
             help='path to a region geojson file; required if mode is area',
@@ -356,7 +358,7 @@ def main(cmdline=True, **kwargs):
 
     ub.Path(dest_path).parent.ensuredir()
 
-    if dest_path.exists():
+    if config['append_mode']:
         # Ensure we are not appending to an existing file
         dest_path.delete()
 
