@@ -356,6 +356,10 @@ def main(cmdline=True, **kwargs):
 
     ub.Path(dest_path).parent.ensuredir()
 
+    if dest_path.exists():
+        # Ensure we are not appending to an existing file
+        dest_path.delete()
+
     if args.mode == 'area':
         if config['region_globstr'] is not None:
             from watch.utils import util_gis
@@ -450,14 +454,14 @@ def area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config,
 
     for s in search_params['stac_search']:
         searcher.by_geometry(
-            s['endpoint'],
-            geom,
-            s['collections'],
-            s['start_date'],
-            s['end_date'],
-            dest_path,
-            s.get('query', {}),
-            s.get('headers', {}),
+            provider=s['endpoint'],
+            geom=geom,
+            collections=s['collections'],
+            start=s['start_date'],
+            end=s['end_date'],
+            outfile=dest_path,
+            query=s.get('query', {}),
+            headers=s.get('headers', {}),
             max_products_per_region=max_products_per_region
         )
 

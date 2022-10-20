@@ -181,7 +181,7 @@ def main(cmdline=False, **kwargs):
     regions = []
     if config['region_models'] is not None:
         region_model_infos = list(util_gis.coerce_geojson_datas(
-            config['site_models'], desc='load geojson region-models'))
+            config['region_models'], desc='load geojson region-models'))
         for info in region_model_infos:
             gdf = info['data']
             regions.append(gdf)
