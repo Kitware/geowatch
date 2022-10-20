@@ -1251,7 +1251,7 @@ class SimpleDataCube(object):
 
         sub_new_gids = []
         sub_new_aids = []
-        image_timeout = util_time.coerce_timedelta('30 minutes').total_seconds()
+        image_timeout = util_time.coerce_timedelta('8 hours').total_seconds()
         for job in image_jobs.as_completed(desc='collect extract jobs',
                                            timeout=image_timeout,
                                            progkw=dict(freq=1)):
@@ -1466,7 +1466,7 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
         job_list.append(job)
 
     dst_list = []
-    timeout = util_time.coerce_timedelta('1 minute').total_seconds()
+    timeout = util_time.coerce_timedelta('4 hours').total_seconds()
     for job in asset_jobs.as_completed(desc='collect warp assets {}'.format(name),
                                        timeout=timeout,
                                        progkw=dict(enabled=DEBUG, verbose=verbose)):
