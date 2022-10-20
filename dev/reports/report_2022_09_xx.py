@@ -167,7 +167,7 @@ def main():
 
             metric_names = reporter.metric_registry.name
             metric_cols = (ub.oset(metric_names) & row.keys())
-            primary_metrics = (ub.oset(['mean_f1', 'BAS_F1']) & row.keys())
+            primary_metrics = (ub.oset(['sc_macro_f1', 'BAS_F1']) & row.keys())
             metric_cols = list((metric_cols & primary_metrics) | (metric_cols - primary_metrics))
 
             from kwcoco.util.util_json import ensure_json_serializable
@@ -600,6 +600,12 @@ python -m watch.mlops.schedule_evaluation \
             act.pxl.data.window_scale_space:
                 - 15GSD
                 - auto
+            trk.poly.thresh:
+                - 0.01
+                - 0.03
+                - 0.05
+                - 0.07
+                - 0.1
             act.poly.thresh:
                 - 0.01
                 - 0.05
@@ -614,16 +620,16 @@ python -m watch.mlops.schedule_evaluation \
     " \
     --enable_pred_trk_pxl=1 \
     --enable_pred_trk_poly=1 \
-    --enable_eval_trk_pxl=0 \
-    --enable_eval_trk_poly=redo \
+    --enable_eval_trk_pxl=1 \
+    --enable_eval_trk_poly=0 \
     --enable_crop=1 \
     --enable_pred_act_pxl=1 \
     --enable_pred_act_poly=1 \
-    --enable_eval_act_pxl=0 \
-    --enable_eval_act_poly=redo \
-    --enable_viz_pred_trk_poly=0 \
+    --enable_eval_act_pxl=1 \
+    --enable_eval_act_poly=0 \
+    --enable_viz_pred_trk_poly=1 \
     --enable_viz_pred_act_poly=1 \
     --devices="0,1" --queue_size=2 \
     --backend=tmux --skip_existing=1 \
-    --run=1
+    --run=0
 """

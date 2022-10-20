@@ -277,7 +277,7 @@ def debug_all_results():
     print(df2.reset_index().to_string())
 
 
-@ub.memoize
+# @ub.memoize
 def _load_json(fpath):
     # memo hack for development
     with open(fpath, 'r') as file:
@@ -367,16 +367,8 @@ def load_bas_eval(fpath, expt_dvc_dpath):
 
     best_bas_rows = pd.read_json(io.StringIO(json.dumps(bas_info['best_bas_rows'])), orient='table')
 
-    flags = best_bas_rows['region_id'] == '__merged__'
-
-    if np.any(flags):
-        bas_row = best_bas_rows[flags].iloc[0]
-    else:
-        # OLD Phase 1 code, can eventually remove
-        try:
-            bas_row = best_bas_rows.loc['merged'].reset_index().iloc[0].to_dict()
-        except Exception:
-            bas_row = best_bas_rows[best_bas_rows['region_id'].isnull()].reset_index(drop=1).iloc[0].to_dict()
+    # flags = best_bas_rows['region_id'] == '__merged__'
+    bas_row = best_bas_rows.loc['__macro__'].reset_index()
 
     tracker_info = bas_info['parent_info']
     path_hint = fpath
@@ -406,16 +398,18 @@ def load_sc_eval(fpath, expt_dvc_dpath):
     sc_info = _load_json(fpath)
     # sc_info['sc_cm']
     sc_df = pd.read_json(io.StringIO(json.dumps(sc_info['sc_df'])), orient='table')
-    sc_cm = pd.read_json(io.StringIO(json.dumps(sc_info['sc_cm'])), orient='table')
+    # sc_cm = pd.read_json(io.StringIO(json.dumps(sc_info['sc_cm'])), orient='table')
     tracker_info = sc_info['parent_info']
     param_types = parse_tracker_params(tracker_info, expt_dvc_dpath)
 
     # non_measures = ub.dict_diff(param_types, ['resource'])
     # params = ub.dict_union(*non_measures.values())
     metrics = {
-        'mean_f1': sc_df.loc['F1 score'].mean(),
-        'siteprep_f1': sc_df.loc['F1 score', 'Site Preparation'].mean(),
-        'active_f1': sc_df.loc['F1 score', 'Active Construction'].mean(),
+        # 'mean_f1': sc_df.loc['F1'].mean(),
+        'sc_macro_f1': sc_df.loc['__macro__']['F1'].mean(),
+        'sc_micro_f1': sc_df.loc['__micro__']['F1'].mean(),
+        'sc_siteprep_macro_f1': sc_df.loc['__macro__', 'Site Preparation']['F1'],
+        'sc_active_macro_f1': sc_df.loc['__macro__', 'Site Preparation']['F1'],
     }
     # metrics.update(
     #     param_types['resource']
@@ -427,7 +421,7 @@ def load_sc_eval(fpath, expt_dvc_dpath):
         'metrics': metrics,
         'param_types': param_types,
         'other': {
-            'sc_cm': sc_cm,
+            # 'sc_cm': sc_cm,
             'sc_df': sc_df,
         },
         'json_info': sc_info,
@@ -465,6 +459,11 @@ def parse_tracker_params(tracker_info, expt_dvc_dpath, path_hint=None):
     track_args = track_item['properties'].get('args', None)
     if track_config is not None:
         track_args = track_config
+    # Fix for broken scriptconfig handling
+    FIX_BROKEN_SCRIPTCONFIG_HANDLING = 1
+    if FIX_BROKEN_SCRIPTCONFIG_HANDLING:
+        if '_data' in track_args:
+            track_args = track_args['_data']
     track_config = relevant_track_config(track_args)
     param_types['track'] = track_config
     return param_types

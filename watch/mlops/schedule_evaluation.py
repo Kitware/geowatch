@@ -439,7 +439,7 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
     from watch.mlops.expt_manager import ExperimentState
     state = ExperimentState(expt_dvc_dpath, '*')
     item = grid_item_defaults | item
-    print('item = {}'.format(ub.repr2(item, nl=1)))
+    # print('item = {}'.format(ub.repr2(item, nl=1)))
     nested = dotdict_to_nested(item)
 
     condensed = {}
@@ -1090,7 +1090,6 @@ class Pipeline:
             r'''
             python -m watch.cli.run_metrics_framework \
                 --merge=True \
-                --inputs_are_paths=True \
                 --name "{name_suffix}" \
                 --true_site_dpath "{true_site_dpath}" \
                 --true_region_dpath "{true_region_dpath}" \
@@ -1132,7 +1131,6 @@ class Pipeline:
             r'''
             python -m watch.cli.run_metrics_framework \
                 --merge=True \
-                --inputs_are_paths=True \
                 --name "{name_suffix}" \
                 --true_site_dpath "{true_site_dpath}" \
                 --true_region_dpath "{true_region_dpath}" \

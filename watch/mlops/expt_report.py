@@ -57,13 +57,13 @@ def evaluation_report():
 
     if 0:
         merged_df = reporter.orig_merged_df.copy()
-        merged_df[merged_df.expt.str.contains('invar')]['mean_f1']
-        merged_df[merged_df.in_production]['mean_f1']
+        merged_df[merged_df.expt.str.contains('invar')]['sc_macro_f1']
+        merged_df[merged_df.in_production]['sc_macro_f1']
 
-        selected = merged_df[merged_df.in_production].sort_values('mean_f1')
-        selected = selected[['siteprep_f1', 'active_f1', 'mean_f1', 'model']]
-        selected['coi_mean_f1'] = selected[['siteprep_f1', 'active_f1']].mean(axis=1)
-        selected = selected.sort_values('coi_mean_f1')
+        selected = merged_df[merged_df.in_production].sort_values('sc_macro_f1')
+        selected = selected[['siteprep_f1', 'active_f1', 'sc_macro_f1', 'model']]
+        selected['sc_macro_f1'] = selected[['siteprep_f1', 'active_f1']].mean(axis=1)
+        selected = selected.sort_values('sc_macro_f1')
         print(selected)
 
 
@@ -89,7 +89,7 @@ class EvaluationReporter:
         reporter.metric_registry = pd.DataFrame([
             {'name': 'coi_mAP', 'tasks': ['sc'], 'human': 'Pixelwise mAP (classes of interest)'},
             {'name': 'coi_mAUC', 'tasks': ['sc'], 'human': 'Pixelwise mAUC (classes of interest)'},
-            {'name': 'mean_f1', 'tasks': ['sc'], 'human': 'IARPA SC mean F1'},
+            {'name': 'sc_macro_f1', 'tasks': ['sc'], 'human': 'IARPA SC mean F1'},
 
             {'name': 'salient_AP', 'tasks': ['bas'], 'human': 'Pixelwise Salient AP'},
             {'name': 'salient_AUC', 'tasks': ['bas'], 'human': 'Pixelwise Salient AUC'},
@@ -105,7 +105,10 @@ class EvaluationReporter:
             {'name': 'step', 'help': 'The number of steps taken by the most recent training run associated with the row'},
             {'name': 'total_steps', 'help': 'An estimate of the total number of steps the model associated with the row took over all training runs.'},
             {'name': 'model', 'help': 'The name of the learned model associated with this row'},
-            {'name': 'test_dset', 'help': 'The name of the test dataset used to compute a metric associated with this row'},
+            # {'name': 'test_dset', 'help': 'The name of the test dataset used to compute a metric associated with this row'},
+            {'name': 'test_trk_dset', 'help': 'The name of the test BAS dataset used to compute a metric associated with this row'},
+            {'name': 'test_act_dset', 'help': 'The name of the test SC dataset used to compute a metric associated with this row'},
+
             {'name': 'expt', 'help': 'The name of the experiment, i.e. training session that might have made several models'},
             {'name': 'dataset_code', 'help': 'The higher level dataset code associated with this row'},
 
@@ -218,7 +221,7 @@ class EvaluationReporter:
 
         metric_names = reporter.metric_registry.name
         metric_cols = (ub.oset(metric_names) & orig_merged_df.columns)
-        primary_metrics = (ub.oset(['mean_f1', 'BAS_F1']) & metric_cols)
+        primary_metrics = (ub.oset(['sc_macro_f1', 'BAS_F1']) & metric_cols)
         metric_cols = list((metric_cols & primary_metrics) | (metric_cols - primary_metrics))
         # print('orig_merged_df.columns = {}'.format(ub.repr2(list(orig_merged_df.columns), nl=1)))
         id_cols = list(ub.oset(id_names) & orig_merged_df.columns)
@@ -306,7 +309,7 @@ class EvaluationReporter:
 
             metric_names = reporter.metric_registry.name
             metric_cols = (ub.oset(metric_names) & row.keys())
-            primary_metrics = (ub.oset(['mean_f1', 'BAS_F1']) & row.keys())
+            primary_metrics = (ub.oset(['sc_macro_f1', 'BAS_F1']) & row.keys())
             metric_cols = list((metric_cols & primary_metrics) | (metric_cols - primary_metrics))
 
             metrics = ub.udict(row) & metric_cols
@@ -383,8 +386,8 @@ class EvaluationReporter:
             print('Column Unique Value Frequencies')
             print(col_stats_df.to_string())
 
-        test_dset_freq = raw_df['test_dset'].value_counts()
-        print(f'test_dset_freq={test_dset_freq}')
+        # test_dset_freq = raw_df['test_dset'].value_counts()
+        # print(f'test_dset_freq={test_dset_freq}')
 
         print('\nRaw')
         num_files_summary(raw_df)
@@ -393,8 +396,8 @@ class EvaluationReporter:
         # reporter.filt_df = filt_df = deduplicate_test_datasets(raw_df)
         reporter.raw_df = filt_df = raw_df
 
-        print('\nDeduplicated (over test dataset)')
-        num_files_summary(filt_df)
+        # print('\nDeduplicated (over test dataset)')
+        # num_files_summary(filt_df)
 
         USE_COMP = 0
         if USE_COMP:
@@ -431,7 +434,7 @@ class EvaluationReporter:
             'coi_mAUC': 'Pixelwise mAUC (classes of interest)',
             'salient_AP': 'Pixelwise Salient AP',
             'salient_AUC': 'Pixelwise Salient AUC',
-            'mean_f1': 'IARPA SC mean F1',
+            'sc_macro_f1': 'IARPA SC mean F1',
             'BAS_F1': 'IARPA BAS F1',
             'act_cfg': 'SC Tracking Config',
             'trk_use_viterbi': 'Viterbi Enabled',
@@ -449,7 +452,7 @@ class EvaluationReporter:
         }
         reporter.human_mapping = human_mapping
         reporter.iarpa_metric_lut = {
-            'eval_act+pxl': 'mean_f1',
+            'eval_act+pxl': 'sc_macro_f1',
             'eval_trk+pxl': 'BAS_F1',
         }
         reporter.pixel_metric_lut = {
@@ -525,7 +528,7 @@ def plot_merged(reporter):
 
     if 0:
         metrics = [
-            'mean_f1',
+            'sc_macro_f1',
             'BAS_F1',
             # 'salient_AP',
             # 'coi_mAP'
@@ -568,13 +571,18 @@ def num_files_summary(df):
         # col_stats_df2 = unique_col_stats(group)
         # print(col_stats_df2.to_string())
         row = {}
-        type_evals = ub.dict_hist(group['type'])
         row['dataset_code'] = dataset_code
-        row['num_experiments'] = len(group['expt'].unique())
-        row['num_models'] = len(group['model'].unique())
-        row['num_pxl_evals'] = type_evals.get('eval_pxl', 0)
-        row['num_bas_evals'] = type_evals.get('eval_trk', 0)
-        row['num_sc_evals'] = type_evals.get('eval_act', 0)
+        row['num_trk_models'] = len(df['trk_model'].dropna().unique())
+        row['num_act_models'] = len(df['act_model'].dropna().unique())
+        row.update(
+            ub.udict(df['type'].value_counts().to_dict()).map_keys(
+                lambda x: 'num_' + x)
+        )
+        # row['num_experiments'] = len(group['expt'].unique())
+        # row['num_models'] = len(group['model'].unique())
+        # row['num_pxl_evals'] = type_evals.get('eval_pxl', 0)
+        # row['num_bas_evals'] = type_evals.get('eval_trk', 0)
+        # row['num_sc_evals'] = type_evals.get('eval_act', 0)
         filt_summaries.append(row)
     _summary_df = pd.DataFrame(filt_summaries)
     total_row = _summary_df.sum().to_dict()
@@ -612,17 +620,20 @@ def load_extended_data(df, expt_dvc_dpath):
         big_row = row.copy()
         fpath = row['raw']
         try:
-            if row['type'] == 'eval_pxl':
+            if row['type'] == 'eval_trk_pxl_fpath':
                 pxl_info = agr.load_pxl_eval(fpath, expt_dvc_dpath)
                 big_row['info'] = pxl_info
-            elif row['type'] == 'eval_act':
+            elif row['type'] == 'eval_act_pxl_fpath':
+                pxl_info = agr.load_pxl_eval(fpath, expt_dvc_dpath)
+                big_row['info'] = pxl_info
+            elif row['type'] == 'eval_act_poly_fpath':
                 sc_info = agr.load_sc_eval(fpath, expt_dvc_dpath)
                 big_row['info'] = sc_info
-            elif row['type'] == 'eval_trk':
+            elif row['type'] == 'eval_trk_poly_fpath':
                 bas_info = agr.load_bas_eval(fpath, expt_dvc_dpath)
                 big_row['info'] = bas_info
             else:
-                raise KeyError(row['type'])
+                raise KeyError('Unknown row type: ' + str(row['type']))
             big_rows.append(big_row)
         except Exception as ex:
             errors.append((ex, row))

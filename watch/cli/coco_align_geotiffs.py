@@ -421,7 +421,7 @@ def main(cmdline=True, **kw):
         infos = list(util_gis.coerce_geojson_datas(regions))
         parts = []
         for info in infos:
-            df = info['gdf']
+            df = info['data']
             if config['site_summary']:
                 df = df[df['type'] == 'site_summary']
             else:

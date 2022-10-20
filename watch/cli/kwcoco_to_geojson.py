@@ -50,6 +50,19 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
     """
     Convert KWCOCO to IARPA GeoJSON
     """
+
+    # TODO: can we store metadata in the type annotation?
+    # e.g.
+    #
+    # in_file : scfg.Coercable(help='Input KWCOCO to convert', position=1) = None
+    # in_file : scfg.Type(help='Input KWCOCO to convert', position=1) = None
+    # in_file : scfg.PathLike(help='Input KWCOCO to convert', position=1) = None
+    #
+    # or
+    #
+    # in_file = None
+    # in_file : scfg.Value[help='Input KWCOCO to convert', position=1]
+
     in_file = scfg.Value(None, required=True, help='Input KWCOCO to convert', position=1)
 
     out_kwcoco = scfg.Value(None, help=ub.paragraph(
@@ -895,9 +908,6 @@ def main(args):
     """
     args = KWCocoToGeoJSONConfig.legacy(cmdline=args)
     print('args = {}'.format(ub.repr2(dict(args), nl=1)))
-    # parser = _argparse_cli()
-    # args = parser.parse_args(args)
-    # print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
 
     coco_fpath = ub.Path(args.in_file)
 
@@ -957,7 +967,7 @@ def main(args):
     }
     from kwcoco.util import util_json
     # Args will be serailized in kwcoco, so make sure it can be coerced to json
-    jsonified_args = util_json.ensure_json_serializable(args.__dict__)
+    jsonified_args = util_json.ensure_json_serializable(args.asdict())
     walker = ub.IndexableWalker(jsonified_args)
     for problem in util_json.find_json_unserializable(jsonified_args):
         bad_data = problem['data']
