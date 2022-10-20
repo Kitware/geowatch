@@ -621,15 +621,15 @@ python -m watch.mlops.schedule_evaluation \
     --enable_pred_trk_pxl=1 \
     --enable_pred_trk_poly=1 \
     --enable_eval_trk_pxl=1 \
-    --enable_eval_trk_poly=0 \
+    --enable_eval_trk_poly=1 \
     --enable_crop=1 \
     --enable_pred_act_pxl=1 \
     --enable_pred_act_poly=1 \
     --enable_eval_act_pxl=1 \
-    --enable_eval_act_poly=0 \
+    --enable_eval_act_poly=1 \
     --enable_viz_pred_trk_poly=1 \
     --enable_viz_pred_act_poly=1 \
     --devices="0,1" --queue_size=2 \
     --backend=tmux --skip_existing=1 \
-    --run=0
+    --run=1
 """

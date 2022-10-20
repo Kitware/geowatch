@@ -181,7 +181,6 @@ class EvaluationReporter:
         # 'upweight_centers',
         # 'use_cloudmask',
         # 'use_grid_positives',
-        # 'bad_channels',
         # 'sensorchan',
         # 'true_multimodal',
         # 'hardware',
@@ -419,10 +418,9 @@ class EvaluationReporter:
         """
         df = reporter.raw_df
         expt_dvc_dpath = reporter.expt_dvc_dpath
-        reporter.big_rows = load_extended_data(df, expt_dvc_dpath)
+        big_rows = reporter.big_rows = load_extended_data(df, expt_dvc_dpath)
         # reporter.big_rows = load_extended_data(reporter.comp_df, reporter.expt_dvc_dpath)
         # set(r['expt'] for r in reporter.big_rows)
-
         big_rows = reporter.big_rows
         orig_merged_df, other = clean_loaded_data(big_rows)
         reporter.orig_merged_df = orig_merged_df
@@ -612,7 +610,10 @@ def unique_col_stats(df):
 
 
 def load_extended_data(df, expt_dvc_dpath):
-    from watch.tasks.fusion import aggregate_results as agr
+    """
+
+    """
+    from watch.mlops import fusion_result_parser as frp
     rows = df.to_dict('records')
     big_rows = []
     errors = []
@@ -621,16 +622,16 @@ def load_extended_data(df, expt_dvc_dpath):
         fpath = row['raw']
         try:
             if row['type'] == 'eval_trk_pxl_fpath':
-                pxl_info = agr.load_pxl_eval(fpath, expt_dvc_dpath)
+                pxl_info = frp.load_pxl_eval(fpath, expt_dvc_dpath, arg_prefix='trk.')
                 big_row['info'] = pxl_info
             elif row['type'] == 'eval_act_pxl_fpath':
-                pxl_info = agr.load_pxl_eval(fpath, expt_dvc_dpath)
+                pxl_info = frp.load_pxl_eval(fpath, expt_dvc_dpath, arg_prefix='act.')
                 big_row['info'] = pxl_info
             elif row['type'] == 'eval_act_poly_fpath':
-                sc_info = agr.load_sc_eval(fpath, expt_dvc_dpath)
+                sc_info = frp.load_eval_act_poly(fpath, expt_dvc_dpath)
                 big_row['info'] = sc_info
             elif row['type'] == 'eval_trk_poly_fpath':
-                bas_info = agr.load_bas_eval(fpath, expt_dvc_dpath)
+                bas_info = frp.load_eval_trk_poly(fpath, expt_dvc_dpath)
                 big_row['info'] = bas_info
             else:
                 raise KeyError('Unknown row type: ' + str(row['type']))
@@ -651,54 +652,18 @@ def clean_loaded_data(big_rows):
     Turn the nested "loaded" data into flat data for tabulation.
     Also combine eval types together into a single row per model / config.
     """
-    from watch.tasks.fusion import aggregate_results as agr
-    import kwcoco
-
     def _is_teamfeat(sensorchan):
         unique_chans = sum([s.chans for s in sensorchan.streams()]).fuse().to_set()
         if isinstance(unique_chans, float) and math.isnan(unique_chans):
             return False
         return any([a in unique_chans for a in ['depth', 'invariant', 'invariants', 'matseg', 'land']])
 
-    _actcfg_to_track_config = ub.ddict(list)
-    _trkcfg_to_track_config = ub.ddict(list)
-    _prdcfg_to_pred_config = ub.ddict(list)
     simple_rows = []
-    missing_models = []
-    blocklist = {
-        'S2:|R|G',
-        'S2:|G|R|,invariants:16)',
-        'S2:(RGB|land:8,R|G,R|G|land:8)',
-    }
 
-    passlist = {
-        'BGR',
-        'BGRN',
-        'RGB|near-ir1|near-ir2|red-edge|yellow',
-        'BGR|near-ir1',
-        'BGRNSH|land:8|matseg:4|mat_up5:64',
-        'BGRNSH',
-        'BGR|near-ir1|depth',
-        'RGB',
-        'RGB|near-ir1',
-        'RGB|land:8',
-        'RGB|near-ir1|near-ir2|depth',
-        'RGB|near_ir1|near_ir2|depth',
-        'land:8',
-        'invariants:16',
-        'matseg:4',
-        'matseg:4|mat_up5:64',
-        'G|R|N|S|H|land:8',
-    }
-    chan_blocklist = {
-        'R|G',
-        'G|R',
-        'G|R|N|S|H',
-        'R|G|land:8',
-        'RGB|near-ir1|depth',
-        'G|R|N|S|H|land:8|matseg:4|mat_up5:64',
-        'BGRNSH|land:8',
-    }
+    def fix_none(v):
+        return "None" if v is None else v
+
+    # from watch.utils.util_param_grid import dotdict_to_nested
 
     for big_row in ub.ProgIter(big_rows, desc='big rows'):
         # fpath = big_row['raw']
@@ -707,178 +672,38 @@ def clean_loaded_data(big_rows):
 
         param_type = info['param_types']
 
-        meta = param_type['meta']
-        fit_params = param_type['fit']
-        pred_params = param_type['pred']
-        model_fpath = pred_params['pred_model_fpath']
+        for k, v in param_type.items():
+            v = ub.udict(v).map_values(fix_none)
+            row.update(v)
 
-        track_params = info['param_types'].get('track', {})
+        # fit_params = param_type['fit']
+        # pred_params = param_type['pred']
+        # track_params = info['param_types'].get('track', {})
 
-        # Shrink and check the sensorchan spec
-        request_sensorchan = kwcoco.SensorChanSpec.coerce(
-            agr.shrink_channels(fit_params['channels']))
-        fit_params['channels'] = request_sensorchan.spec
-        sensorchan = request_sensorchan
+        # # Shrink and check the sensorchan spec
+        # request_sensorchan = kwcoco.SensorChanSpec.coerce(
+        #     frp.shrink_channels(fit_params['channels']))
+        # fit_params['channels'] = request_sensorchan.spec
+        # sensorchan = request_sensorchan
 
-        if 0:
-            # Hack for Phase1 Models with improper sensorchan.
-            # This can likely be removed as we move forward in Phase 2.
+        # fit_params['sensorchan'] = sensorchan
+        # row['has_teamfeat'] = _is_teamfeat(sensorchan)
 
-            # Dont trust what the model info says about channels, look
-            # at the model stats to be sure.
-            if model_fpath and model_fpath.exists():
-                stats = resolve_model_info(model_fpath)
-                real_chan_parts = ub.oset()
-                senschan_parts = []
-                real_sensors = []
-                for input_row in stats['model_stats']['known_inputs']:
-                    known_sensorchan = agr.shrink_channels(input_row['sensor'] + ':' + input_row['channel'])
-                    known_sensorchan = kwcoco.SensorChanSpec.coerce(known_sensorchan)
-                    real_chan = known_sensorchan.chans.spec
-                    if real_chan not in chan_blocklist:
-                        if real_chan not in passlist:
-                            print(f'Unknown real_chan={real_chan}')
-                        real_chan_parts.add(real_chan)
-                        real_sensors.append(input_row['sensor'])
-                        senschan_parts.append('{}:{}'.format(input_row['sensor'], real_chan))
-                model_sensorchan = ','.join(sorted(set(senschan_parts)))
-                model_sensorchan = kwcoco.SensorChanSpec.coerce(model_sensorchan)
-
-                model_parts = model_sensorchan.normalize().spec.split(',')
-                request_parts = request_sensorchan.normalize().spec.split(',')
-                if not request_parts.issubset(model_parts):
-                    fit_params['bad_channels'] = True
-                else:
-                    fit_params['bad_channels'] = False
-            else:
-                missing_models.append(model_fpath)
-
-                if 'Cropped' in big_row['test_dset']:
-                    # Hack
-                    sensors = ['WV', 'S2']
-                elif 'Cropped' in big_row['test_dset']:
-                    sensors = ['S2', 'L8']
-                else:
-                    sensors = ['*']
-
-                channels = kwcoco.ChannelSpec.coerce(fit_params['channels'])
-                senschan_parts = []
-                for sensor in sensors:
-                    for chan in channels.streams():
-                        senschan_parts.append(f'{sensor}:{chan.spec}')
-
-                sensorchan = ','.join(sorted(senschan_parts))
-                sensorchan = kwcoco.SensorChanSpec.coerce(sensorchan)
-                fit_params['bad_channels'] = True
-
-            # MANUAL HACK:
-            if 1:
-                sensorchan = ','.join([p.spec for p in sensorchan.streams() if p.chans.spec not in blocklist])
-        else:
-            fit_params['bad_channels'] = False
-
-        fit_params['sensorchan'] = sensorchan
-        row['has_teamfeat'] = _is_teamfeat(sensorchan)
-
-        fit_param_keys2 = list(fit_param_keys) + ['bad_channels', 'channels']
-        selected_fit_params = ub.dict_isect(fit_params, fit_param_keys2)
-
-        act_cfg = row.get('act_cfg', None)
-        if not is_null(act_cfg):
-            track_cfg = param_type.get('track', None)
-            row.update(track_cfg)
-            _actcfg_to_track_config[act_cfg].append(track_cfg)
-
-        trk_cfg = row.get('trk_cfg', None)
-        if not is_null(trk_cfg):
-            track_cfg = param_type.get('track', None)
-            row.update(track_cfg)
-            _trkcfg_to_track_config[trk_cfg].append(track_cfg)
-
-        pred_cfg = row.get('pred_cfg', None)
-        if not is_null(trk_cfg):
-            pred_config = param_type.get('pred', None)
-            pred_config = ub.dict_isect(pred_config, pred_param_keys)
-            if pred_config.get('pred_tta_time', None) is None:
-                pred_config['pred_tta_time'] = 0
-            if pred_config.get('pred_tta_fliprot', None) is None:
-                pred_config['pred_tta_fliprot'] = 0
-            row.update(pred_config)
-            _prdcfg_to_pred_config[pred_cfg].append(pred_config)
-
-        resource = param_type.get('resource', {})
-        row['model_fpath'] = model_fpath
-        row.update(**meta)
-        row.update(info['metrics'])
-        row.update(resource)
-        row.update(selected_fit_params)
-
-        def fix_none(v):
-            return "None" if v is None else v
-
-        pred_params = ub.udict(pred_params).map_values(fix_none)
-        fit_params = ub.udict(fit_params).map_values(fix_none)
-        track_params = ub.udict(track_params).map_values(fix_none)
-
-        row['pred_params'] = pred_params
-        row['track_params'] = track_params
-        row['fit_params'] = fit_params
-
-        # TODO: make prefix scheme consistent
-        row.update(track_params)
-        row.update(pred_params)
-        row.update({'fit_' + k: v for k, v in fit_params.items()})
+        # fit_param_keys2 = list(fit_param_keys) + ['channels']
+        # selected_fit_params = ub.dict_isect(fit_params, fit_param_keys2)
+        # row.update(selected_fit_params)
         simple_rows.append(row)
 
     simple_df = pd.DataFrame(simple_rows)
-    print(f'{len(simple_df)=}')
+    print(f'{simple_df.shape=}')
     # simple_df['sensorchan'].unique()
     # simple_df[simple_df['sensorchan'].isnull()]
-    # simple_df['bad_channels']
 
-    # FIXME; Broken
-    actcfg_to_track_config = {}
-    for actcfg, track_cfgs in _actcfg_to_track_config.items():
-        unique_configs = list(ub.unique(track_cfgs, key=ub.hash_data))
-        # assert len(unique_configs) == 1
-        actcfg_to_track_config[actcfg] = unique_configs[0]
-
-    trkcfg_to_track_config = {}
-    for trkcfg, track_cfgs in _trkcfg_to_track_config.items():
-        unique_configs = list(ub.unique(track_cfgs, key=ub.hash_data))
-        # assert len(unique_configs) == 1
-        trkcfg_to_track_config[trkcfg] = unique_configs[0]
-
-    prdcfg_to_pred_config = {}
-    for predcfg, track_cfgs in _prdcfg_to_pred_config.items():
-        unique_configs = list(ub.unique(track_cfgs, key=ub.hash_data))
-        if len(unique_configs) == 1:
-            prdcfg_to_pred_config[predcfg] = unique_configs[0]
-        else:
-            print(f'{unique_configs=}')
-            print('predcfg = {}'.format(ub.repr2(predcfg, nl=1)))
-
-    if True:
-        # Get activity config labels
-        actcfg_to_label = {}
-        varied_act = ub.varied_values(actcfg_to_track_config.values(), 1, default=None)
-        varied_act_keys = sorted(varied_act.keys())
-        for k, v in actcfg_to_track_config.items():
-            c = ub.dict_isect(v, varied_act_keys)
-            label = ub.repr2(c, compact=1)
-            actcfg_to_label[k] = label
-
-        # Get activity config labels
-        predcfg_to_label = {}
-        varied_act = ub.varied_values(prdcfg_to_pred_config.values(), 1, default=None)
-        varied_act_keys = sorted(varied_act.keys())
-        for k, v in prdcfg_to_pred_config.items():
-            c = ub.dict_isect(v, varied_act_keys)
-            label = ub.repr2(c, compact=1)
-            predcfg_to_label[k] = label
-
-    bad_expts = simple_df[simple_df['bad_channels']]['expt']
-    print('bad_expts =\n{}'.format(ub.repr2(bad_expts, nl=1)))
+    if 0:
+        sensorchan_keys = [k for k in simple_df.keys() if 'sensorchan' in k]
+        print(f'sensorchan_keys={sensorchan_keys}')
+        chan_keys = [k for k in simple_df.keys() if 'channels' in k]
+        print(f'chan_keys={chan_keys}')
 
     ub.dict_hist(simple_df['channels'])
     merged_rows = []

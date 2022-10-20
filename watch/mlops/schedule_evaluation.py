@@ -276,6 +276,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
         steps = {}
 
+        # TODO: detect if BAS team features are needed and compute those here.
+        # Do we update the dataset paths here or beforehand?
+
         step = Pipeline.pred_trk_pxl(trk_pxl_params, **paths)
         steps[step.name] = step
 
@@ -284,6 +287,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
         step = Pipeline.act_crop(crop_params, **paths)
         steps[step.name] = step
+
+        # TODO: detect if SC team features are needed and compute those here.
 
         step = Pipeline.pred_act_pxl(act_pxl_params, **paths)
         steps[step.name] = step
@@ -436,6 +441,11 @@ def _auto_gpus():
 
 
 def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc_dpath, item):
+    """
+    The idea is to handle any dependencies between parameters, extract any
+    path-based metadata, and construct every path that this pipeline will
+    touch.
+    """
     from watch.mlops.expt_manager import ExperimentState
     state = ExperimentState(expt_dvc_dpath, '*')
     item = grid_item_defaults | item
@@ -469,6 +479,9 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
     trk_poly_params = ub.udict(trk_poly)
 
     condensed['trk_model'] = state._condense_model(item['trk.pxl.model'])
+    # TODO:
+    # based on the model, we should infer if we need team features or not.
+
     condensed['test_trk_dset'] = state._condense_test_dset(item['trk.pxl.data.test_dataset'])
     condensed['trk_pxl_cfg'] = state._condense_cfg(trk_pxl_params, 'trk_pxl')
     condensed['trk_poly_cfg'] = state._condense_cfg(trk_poly_params, 'trk_poly')
@@ -530,10 +543,11 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
     act_poly = nested['act']['poly']
     act_pxl_params = ub.udict(act_pxl['data']) - {'test_dataset'}
     act_poly_params = ub.udict(act_poly)
-    # TODO: make this nicer
     act_poly_params['site_summary'] = site_summary
 
     condensed['act_model'] = state._condense_model(item['act.pxl.model'])
+    # TODO:
+    # based on the model, we should infer if we need team features or not.
     condensed['act_pxl_cfg'] = state._condense_cfg(act_pxl_params, 'act_pxl')
     condensed['act_poly_cfg'] = state._condense_cfg(act_poly_params, 'act_poly')
 
