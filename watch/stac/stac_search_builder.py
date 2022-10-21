@@ -169,6 +169,35 @@ _PUBLIC_L2_PRODUCTS = {
 }
 
 
+_PUBLIC_ARD_PRODUCTS = {
+    # https://stacindex.org/catalogs/usgs-landsat-collection-2-api#/
+    # Surface Reflectance
+    'landsat-c2ard-sr': {
+        # Note: AWS_REQUEST_PAYER='requester' is required to grab the data
+        "collections": ["landsat-c2ard-sr"],
+        "endpoint": "https://landsatlook.usgs.gov/stac-server/",
+        "query": {
+            "platform": {
+                "eq": "LANDSAT_8"
+            }
+        }
+    },
+
+    # https://stacindex.org/catalogs/usgs-landsat-collection-2-api#/
+    # Brightness Temperature
+    'landsat-c2ard-bt': {
+        # Note: AWS_REQUEST_PAYER='requester' is required to grab the data
+        "collections": ["landsat-c2ard-bt"],
+        "endpoint": "https://landsatlook.usgs.gov/stac-server/",
+        "query": {
+            "platform": {
+                "eq": "LANDSAT_8"
+            }
+        }
+    },
+}
+
+
 def _devcheck_providers_exist():
     """
     develoepr logic to test to see if providers are working
@@ -270,6 +299,7 @@ SENSOR_TO_DEFAULTS = ub.dict_union(
     _ACCENTURE_PHASE2_TA1_PRODUCTS,
     _PUBLIC_L1_PRODUCTS,
     _PUBLIC_L2_PRODUCTS,
+    _PUBLIC_ARD_PRODUCTS,
     _SMARTSTAC_PRODUCTS,
 )
 
@@ -292,6 +322,15 @@ CONVINIENCE_SENSOR_GROUPS = {
         'sentinel-s2-l2a-cogs',
         'landsat-c2l2-sr',
         'landsat-c2l2-bt',
+    ],
+    'ARD-L8': [
+        'landsat-c2ard-sr',
+        'landsat-c2ard-bt',
+    ],
+    'ARD-S2-L8': [
+        'sentinel-s2-l2a-cogs',
+        'landsat-c2ard-sr',
+        'landsat-c2ard-bt',
     ],
 
     'TA1-S2-L8-ACC': [
