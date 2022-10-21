@@ -25,7 +25,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --requester_pays=False \
     --fields_workers=20 \
     --convert_workers=8 \
-    --max_queue_size=12 \
+    --max_queue_size=2 \
     --align_workers=12 \
     --cache=0 \
     --ignore_duplicates=1 \

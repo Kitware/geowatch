@@ -206,6 +206,20 @@ def dotdict_to_nested(d):
     return auto.to_dict()
 
 
+def dotkeys_to_nested(keys):
+    """
+    Args:
+        keys (List[str]): a list of dotted key names
+    """
+    auto = ub.AutoDict()
+    walker = ub.IndexableWalker(auto)
+    for k in keys:
+        path = k.split('.')
+        walker[path] = k
+    # print(ub.repr2(auto))
+    return auto.to_dict()
+
+
 def github_action_matrix(arg):
     """
     Try to implement the github method. Not sure if I like it.
@@ -215,6 +229,7 @@ def github_action_matrix(arg):
 
     Example:
         >>> from watch.mlops.schedule_evaluation import *  # NOQA
+        >>> from watch.utils import util_param_grid
         >>> arg = ub.codeblock(
                  '''
                    matrix:

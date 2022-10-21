@@ -80,6 +80,7 @@ class ScheduleEvaluationConfig(scfg.Config):
         'virtualenv_cmd': scfg.Value(None, help='command to activate a virtualenv if needed. (might have issues with slurm backend)'),
         'skip_existing': scfg.Value(False, help='if True dont submit commands where the expected products already exist'),
         'backend': scfg.Value('tmux', help='can be tmux, slurm, or maybe serial in the future'),
+        'queue_name': scfg.Value('schedule-eval', help='Name of the queue'),
 
         'pred_workers': scfg.Value(4, help='number of prediction workers in each process'),
 
@@ -246,13 +247,28 @@ def schedule_evaluation(cmdline=False, **kwargs):
         mem=config['mem']
     )
     environ = {}
-    queue = cmd_queue.Queue.create(config['backend'], name='schedule-eval',
-                                   size=queue_size, environ=environ,
-                                   dpath=queue_dpath, gres=GPUS)
+    queue = cmd_queue.Queue.create(
+        config['backend'], name=config['queue_name'],
+        size=queue_size, environ=environ,
+        dpath=queue_dpath, gres=GPUS
+    )
 
     virtualenv_cmd = config['virtualenv_cmd']
     if virtualenv_cmd:
         queue.add_header_command(virtualenv_cmd)
+
+    # TODO: parameterize
+    perf_params = {
+        'trk.pxl.batch_size': 1,
+        'trk.pxl.workers': 4,
+        'trk.pxl.devices': '0,',
+        'trk.pxl.accelerator': 'gpu',
+
+        'act.pxl.batch_size': 1,
+        'act.pxl.workers': 4,
+        'act.pxl.devices': '0,',
+        'act.pxl.accelerator': 'gpu',
+    }
 
     # Each row represents a single source-to-sink pipeline run, but multiple
     # rows may share pipeline steps. This is handled by having unique ids per
@@ -279,7 +295,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
         # TODO: detect if BAS team features are needed and compute those here.
         # Do we update the dataset paths here or beforehand?
 
-        step = Pipeline.pred_trk_pxl(trk_pxl_params, **paths)
+        step = Pipeline.pred_trk_pxl(perf_params, trk_pxl_params, **paths)
         steps[step.name] = step
 
         step = Pipeline.pred_trk_poly(trk_poly_params, **paths)
@@ -290,7 +306,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
         # TODO: detect if SC team features are needed and compute those here.
 
-        step = Pipeline.pred_act_pxl(act_pxl_params, **paths)
+        step = Pipeline.pred_act_pxl(perf_params, act_pxl_params, **paths)
         steps[step.name] = step
 
         step = Pipeline.pred_act_poly(act_poly_params, **paths)
@@ -406,9 +422,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # print(f'{len(queue)=}')
     with_status = 0
     with_rich = 0
+    # queue.write_network_text()
     queue.rprint(with_status=with_status, with_rich=with_rich)
-
-    queue.write_network_text()
 
     for job in queue.jobs:
         # TODO: should be able to set this as a queue param.
@@ -507,8 +522,7 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
     paths['eval_trk_poly_dpath'] = ub.Path(state.templates['eval_trk_poly_dpath'].format(**condensed))
 
     trackid_deps = {}
-    trackid_deps = ub.udict(condensed) & (
-        {'trk_model', 'test_trk_dset', 'trk_pxl_cfg', 'trk_poly_cfg'})
+    trackid_deps = ub.udict(condensed) & state.hashid_dependencies['trk_poly_id']
     condensed['trk_poly_id'] = state._condense_cfg(trackid_deps, 'trk_poly_id')
 
     ### CROPPING ###
@@ -531,8 +545,7 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
     condensed['crop_cfg'] = state._condense_cfg(crop_params, 'crop')
     condensed['crop_src_dset'] = state._condense_test_dset(crop_src_fpath)
 
-    crop_id_deps = ub.udict(condensed) & (
-        {'regions_id', 'crop_cfg', 'crop_src_dset'})
+    crop_id_deps = ub.udict(condensed) & state.hashid_dependencies['crop_id']
     condensed['crop_id'] = state._condense_cfg(crop_id_deps, 'crop_id')
     paths['crop_dpath'] = ub.Path(state.templates['crop_dpath'].format(**condensed))
     paths['crop_fpath'] = ub.Path(state.templates['crop_fpath'].format(**condensed))
@@ -838,14 +851,14 @@ class Pipeline:
                     resources={'cpus': 2})
         return step
 
-    def pred_trk_pxl(trk_pxl_params, **paths):
+    def pred_trk_pxl(perf_params, trk_pxl_params, **paths):
         paths = ub.udict(paths)
-        workers = 4  # todo: parametarize
+        workers = perf_params['trk.pxl.workers']
         perf_options = {
             'num_workers': workers,
-            'devices': '0,',
-            'accelerator': 'gpu',
-            'batch_size': 1,
+            'devices': perf_params['trk.pxl.devices'],
+            'accelerator': perf_params['trk.pxl.accelerator'],
+            'batch_size': perf_params['trk.pxl.batch_size'],
         }
         paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
         pred_trk_pxl_kw =  { **paths }
@@ -868,7 +881,7 @@ class Pipeline:
                     resources={'cpus': workers, 'gpus': 2})
         return step
 
-    def pred_act_pxl(act_pxl_params, **paths):
+    def pred_act_pxl(perf_params, act_pxl_params, **paths):
         """
         Idea:
             Step(<command_template>, <path-templates>)
@@ -880,12 +893,12 @@ class Pipeline:
             ]
         """
         paths = ub.udict(paths)
-        workers = 4
+        workers = perf_params['act.pxl.workers']
         perf_options = {
-            'num_workers': workers,
-            'devices': '0,',
-            'accelerator': 'gpu',
-            'batch_size': 1,
+            'num_workers': workers,  # note: the "num_workers" cli arg should be changed to "workers" everywhere
+            'devices': perf_params['act.pxl.devices'],
+            'accelerator': perf_params['act.pxl.accelerator'],
+            'batch_size': perf_params['act.pxl.batch_size'],
         }
         paths = ub.udict(paths).map_values(lambda p: ub.Path(p).expand())
         pred_act_pxl_kw =  { **paths }
@@ -1072,7 +1085,8 @@ class Pipeline:
         paths = ub.udict(paths)
         viz_pred_act_poly_kw = paths.copy()
         viz_pred_act_poly_kw['extra_header'] = f"\\n{condensed['act_pxl_cfg']}-{condensed['act_poly_cfg']}"
-        viz_pred_act_poly_kw['viz_channels'] = 'red|green|blue,No Activity|Site Preparation|Active Construction|Post Construction'
+        # viz_pred_act_poly_kw['viz_channels'] = 'red|green|blue,No Activity|Site Preparation|Active Construction|Post Construction'
+        viz_pred_act_poly_kw['viz_channels'] = 'red|green|blue,No Activity|Active Construction|Post Construction'
         command = ub.codeblock(
             r'''
             smartwatch visualize \
@@ -1160,6 +1174,50 @@ class Pipeline:
                                        'eval_act_poly_dpath'},
                     resources={'cpus': 2})
         return step
+
+
+__notes__ = """
+If this is going to be a real mlops framework, then we need to abstract the
+pipeline. The user needs to define what the steps are, but then they need to
+explicitly connect them. We can't make the assumptions we are currently using.
+
+Ignore:
+
+    # We can use our CLIs as definitions of the pipeline as long as the config
+    # object has enough metadata. With scriptconfig+jsonargparse we should be
+    # able to do this.
+
+    import watch.cli.run_metrics_framework
+    import watch.cli.run_tracker
+    import watch.tasks.fusion.predict
+
+    watch.cli.run_tracker.__config__.__default__
+
+    list(watch.tasks.fusion.predict.make_predict_config().__dict__.keys())
+
+
+    from watch.tasks.tracking.from_heatmap import NewTrackFunction
+    from watch.tasks.tracking.from_heatmap import TimeAggregatedBAS
+    from watch.tasks.tracking.from_heatmap import TimeAggregatedSC
+    from watch.tasks.tracking.from_heatmap import TimeAggregatedHybrid
+
+    import jsonargparse
+    parser = jsonargparse.ArgumentParser()
+    parser.add_class_arguments(TimeAggregatedBAS, nested_key='trk.poly')
+    parser.add_class_arguments(TimeAggregatedSC, nested_key='act.poly')
+    # parser.add_subclass_arguments(NewTrackFunction, nested_key='poly')
+    parser.print_help()
+
+    parser.parse_known_args([])
+
+
+    import jsonargparse
+    parser = jsonargparse.ArgumentParser()
+    parser.add_argument('--foo')
+    args = parser.parse_args(args=[])
+    parser.save(args)
+
+"""
 
 
 if __name__ == '__main__':

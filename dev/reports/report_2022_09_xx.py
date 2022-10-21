@@ -78,6 +78,8 @@ def main():
     sys.path.append(ubelt.expandpath('~/code/watch/dev/reports'))
     from report_2022_09_xx import *  # NOQA
     """
+    import ubelt as ub
+    import pandas as pd
     from watch import heuristics
     from watch.mlops import expt_manager
     from watch.mlops import expt_report
@@ -107,16 +109,28 @@ def main():
     state.patterns['test_dset'] = ('*')
 
     state._build_path_patterns()
+    state.summarize()
     # state._make_cross_links()
     # state._block_non_existing_rhashes()
 
     reporter = expt_report.EvaluationReporter(state)
-    reporter.load()
+    reporter.load1()
+    reporter.load2()
+
     reporter.state.summarize()
+    df = reporter.orig_merged_df
+
+    non_dotted_cols = ub.oset([c for c in df.columns if '.' not in c])
+    non_dotted_cols = non_dotted_cols - {
+        'expt_dvc_dpath', 'raw', 'dvc', 'has_dvc', 'has_raw', 'needs_pull',
+        'is_link', 'is_broken', 'unprotected', 'needs_push',
+        'dataset_code', 'has_teamfeat',
+        'crop_id', 'crop_cfg',
+    }
+    print(df[list(non_dotted_cols)].to_string())
+    print(df[['type', 'trk.poly.thresh']].value_counts(dropna=False))
 
     # dpath = reporter.dpath
-    import ubelt as ub
-    import pandas as pd
     dpath = ub.Path.appdir('watch/expt-report/2022-09-xx').ensuredir()
 
     # Dump details out about the best models
@@ -126,49 +140,63 @@ def main():
 
     viz_cmds = []
 
+    # from watch.utils import util_param_grid
+    colnames = ub.oset(reporter.orig_merged_df.columns)
+    # column_nestings = util_param_grid.dotkeys_to_nested(colnames)
+    dotted = ub.oset([c for c in colnames if '.' in c])
+    metric_cols = ub.oset([c for c in dotted if 'metrics.' in c])
+    resource_cols = ub.oset([c for c in dotted if 'resource.' in c])
+    fit_cols = ub.oset([c for c in dotted if 'fit.' in c])
+    param_cols = dotted - (metric_cols | fit_cols | resource_cols)
+
     import rich as rich_mod
     for groupid, shortlist in groupid_to_shortlist.items():
         test_dset, type = groupid
         _dpath = (best_models_dpath / f'{test_dset}_{type}').ensuredir()
 
         for rank, row in reversed(list(enumerate(shortlist[::-1].to_dict('records'), start=1))):
+            row = ub.udict(row)
+
             parts = [p for p in [
                 f'rank_{rank:03d}',
-                row.get('model', None),
+                row.get('trk_model', None),
+                row.get('act_model', None),
                 # row.get('test_dset', None)
-                row.get('pred_cfg', None),
-                row.get('trk_cfg', None),
-                row.get('act_cfg', None),
+                row.get('trk_pxl_cfg', None),
+                row.get('trk_poly_cfg', None),
+                row.get('act_pxl_cfg', None),
+                row.get('act_poly_cfg', None),
             ] if not pd.isnull(p)]
             dname = '_'.join(parts)
             row_dpath = (_dpath / dname).ensuredir()
 
-            linkable_keys = [
-                f'{a}_{b}'
-                for a in ['eval', 'pred']
-                for b in ['pxl', 'trk', 'act']
-            ]
-            linkables = {}
-            for key in linkable_keys:
-                try:
-                    linkables[key] = ub.Path(state.templates[key].format(**row))
-                except KeyError:
-                    ...
+            # linkable_keys = [
+            #     f'{a}_{b}'
+            #     for a in ['eval', 'pred']
+            #     for b in ['pxl', 'trk', 'act']
+            # ]
+            # linkables = {}
+            # for key in linkable_keys:
+            #     try:
+            #         linkables[key] = ub.Path(state.templates[key].format(**row))
+            #     except KeyError:
+            #         ...
 
-            for key, real_fpath in linkables.items():
-                if real_fpath.exists():
-                    link_dpath = row_dpath / f'_link_{key}'
-                    # hack:
-                    if key == 'eval_pxl':
-                        real_dpath = real_fpath.parent.parent
-                    else:
-                        real_dpath = real_fpath.parent
-                    ub.symlink(real_dpath, link_dpath, verbose=0, overwrite=1)
+            # for key, real_fpath in linkables.items():
+            #     if real_fpath.exists():
+            #         link_dpath = row_dpath / f'_link_{key}'
+            #         # hack:
+            #         if key == 'eval_pxl':
+            #             real_dpath = real_fpath.parent.parent
+            #         else:
+            #             real_dpath = real_fpath.parent
+            #         ub.symlink(real_dpath, link_dpath, verbose=0, overwrite=1)
 
-            metric_names = reporter.metric_registry.name
-            metric_cols = (ub.oset(metric_names) & row.keys())
-            primary_metrics = (ub.oset(['sc_macro_f1', 'BAS_F1']) & row.keys())
-            metric_cols = list((metric_cols & primary_metrics) | (metric_cols - primary_metrics))
+            # metric_names = reporter.metric_registry.name
+            # metric_cols = (ub.oset(metric_names) & row.keys())
+            # primary_metrics = (ub.oset(['sc_macro_f1', 'BAS_F1']) & row.keys())
+            metric_cols = [c for c in row.keys() if 'metrics.' in c]
+            # metric_cols = list((metric_cols & primary_metrics) | (metric_cols - primary_metrics))
 
             from kwcoco.util.util_json import ensure_json_serializable
             row = ensure_json_serializable(row)
@@ -183,56 +211,57 @@ def main():
             deatils_fpath.write_text(details)
 
             # hack to get back to regular names
-            pred_params = ub.udict({k[5:] : v for k, v in row['pred_params'].items() if k.startswith('pred_')})
-            pred_params = pred_params - {'in_dataset_name', 'model_name', 'in_dataset_fpath', 'model_fpath'}
+            # pred_params = ub.udict({k[5:] : v for k, v in row['pred_params'].items() if k.startswith('pred_')})
+            # pred_params = pred_params - {'in_dataset_name', 'model_name', 'in_dataset_fpath', 'model_fpath'}
 
-            # hack to get back to regular names
-            track_params = ub.udict({
-                k[4:] : v for k, v in row['track_params'].items() if k.startswith('trk_')})
-            track_params = track_params - {
-                'in_dataset_name', 'model_name', 'in_dataset_fpath', 'model_fpath'}
+            # # hack to get back to regular names
+            # track_params = ub.udict({
+            #     k[4:] : v for k, v in row['track_params'].items() if k.startswith('trk_')})
+            # track_params = track_params - {
+            #     'in_dataset_name', 'model_name', 'in_dataset_fpath', 'model_fpath'}
 
-            fit_params = ub.udict({
-                k : v for k, v in row['fit_params'].items()})
-            fit_params = fit_params - {
-                'in_dataset_name', 'model_name', 'in_dataset_fpath', 'model_fpath'}
+            # fit_params = ub.udict({
+            #     k : v for k, v in row['fit_params'].items()})
+            # fit_params = fit_params - {
+            #     'in_dataset_name', 'model_name', 'in_dataset_fpath', 'model_fpath'}
 
             row_ = row.copy()
             row['rank'] = (rank, cohort)
-            row_['expt_dvc_dpath'] = '.'
-            pkg_fpath = state.templates['pkg'].format(**row_)
+            # row_['expt_dvc_dpath'] = '.'
+            # pkg_fpath = state.templates['pkg_trk_pxl_fpath'].format(**row_)
+            # act_fpath = state.templates['pkg_act_pxl_fpath'].format(**row_)
 
-            pred_trk_kwcoco_fpath = ub.Path(state.templates['pred_trk_kwcoco'].format(**row))
+            if 0:
+                pred_act_poly_kwcoco = ub.Path(state.templates['pred_act_poly_kwcoco'].format(**row))
+                # name = row.get('model', '') + row.get('pred_cfg', '') + row.get('trk_cfg', '')
+                name = '<todo: more context>'
+                # TODO: allow specification of truth fpath as well?
+                viz_track_cmd = ub.codeblock(
+                    fr'''
+                    smartwatch visualize \
+                        "{pred_act_poly_kwcoco}" \
+                        --channels="red|green|blue,No Activity|Active Construction|Post Construction" \
+                        --viz_dpath={row_dpath}/_viz \
+                        --stack=only \
+                        --skip_missing=False \
+                        --draw_imgs=True \
+                        --draw_anns=True \
+                        --workers=avail/2 \
+                        --animate=True \
+                        --extra_header="\nRank#{rank} {cohort}\n{name}"
+                    ''')
+                print(viz_track_cmd)
+                viz_cmds.append(viz_track_cmd)
 
-            name = row.get('model', '') + row.get('pred_cfg', '') + row.get('trk_cfg', '')
-
-            # TODO: allow specification of truth fpath as well?
-            viz_track_cmd = ub.codeblock(
-                fr'''
-                smartwatch visualize \
-                    "{pred_trk_kwcoco_fpath}" \
-                    --channels="red|green|blue,salient" \
-                    --viz_dpath={row_dpath}/_viz \
-                    --stack=only \
-                    --skip_missing=False \
-                    --draw_imgs=True \
-                    --draw_anns=True \
-                    --workers=avail/2 \
-                    --animate=True \
-                    --extra_header="\nRank#{rank} {cohort}\n{name}"
-                ''')
-            viz_cmds.append(viz_track_cmd)
-
-            metrics = ub.udict(row) & metric_cols
-            metrics['test_dset'] = test_dset
+            # metrics['test_dset'] = test_dset
             summary = {
                 'rank': (rank, cohort),
-                'model': row['model'],
-                'file_name': pkg_fpath,
-                'pred_params': pred_params,
-                'track_params': track_params,
-                'fit_params': fit_params,
-                'metrics': metrics,
+                # 'model': row['model'],
+                # 'file_name': pkg_fpath,
+                'pred_params': row & param_cols,
+                'fit_params': row & fit_cols,
+                'resources': row & resource_cols,
+                'metrics': row & metric_cols,
             }
             summary_fpath = row_dpath / 'summary.json'
             summary_fpath.write_text(json.dumps(summary, indent='   '))
@@ -601,6 +630,8 @@ python -m watch.mlops.schedule_evaluation \
                 - 15GSD
                 - auto
             trk.poly.thresh:
+                - 0.003
+                - 0.007
                 - 0.01
                 - 0.03
                 - 0.05
@@ -618,18 +649,130 @@ python -m watch.mlops.schedule_evaluation \
                 - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
                 - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=155-step=78468.pt.pt
     " \
-    --enable_pred_trk_pxl=1 \
-    --enable_pred_trk_poly=1 \
-    --enable_eval_trk_pxl=1 \
-    --enable_eval_trk_poly=1 \
-    --enable_crop=1 \
+    --enable_pred_trk_pxl=0 \
+    --enable_pred_trk_poly=0 \
+    --enable_eval_trk_pxl=0 \
+    --enable_eval_trk_poly=0 \
+    --enable_crop=0 \
+    --enable_pred_act_pxl=0 \
+    --enable_pred_act_poly=1 \
+    --enable_eval_act_pxl=1 \
+    --enable_eval_act_poly=1 \
+    --enable_viz_pred_trk_poly=0 \
+    --enable_viz_pred_act_poly=0 \
+    --devices="0,1" --queue_size=2 \
+    --backend=tmux --skip_existing=1 \
+    --run=1
+"""
+
+
+
+
+
+
+
+
+
+
+
+
+"""
+ALT:
+
+
+
+AWS_DEFAULT_PROFILE=iarpa GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR smartwatch add_fields kwcoco_for_sc.json kwcoco_for_sc_fielded.json \
+    --target_gsd=4 \
+    --enable_video_stats=True \
+    --enable_valid_region=True \
+    --workers=auto
+
+
+DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+
+TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data_kr1br2.kwcoco.json
+if [ ! -f "$TEST_DATASET" ]; then
+    DATASET_BIG=$DATA_DVC_DPATH/$DATASET_CODE/data.kwcoco.json
+    kwcoco subset "$DATASET_BIG" "$TEST_DATASET" \
+        --select_videos '((.name | test("KR_R001")) or (.name | test("BR_R002")))'
+fi
+
+
+python -m watch.mlops.schedule_evaluation \
+    --params="
+        matrix:
+            trk.pxl.model:
+                - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt
+            trk.pxl.data.test_dataset:
+                - $TEST_DATASET
+            trk.pxl.data.window_scale_space: 15GSD
+            trk.pxl.data.time_sampling:
+                - "auto"
+                - "contiguous"
+            trk.pxl.data.input_scale_space:
+                - "15GSD"
+                - "10GSD"
+            trk.poly.thresh:
+                - 0.003
+                - 0.007
+                - 0.01
+                - 0.03
+                - 0.05
+                - 0.07
+                - 0.1
+            crop.src:
+                # FIXME: should be cropping from a dataset with WV
+                - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/online_v1/kwcoco_for_sc_fielded.json
+                # - $TEST_DATASET
+            crop.regions:
+                - trk.poly.output
+            act.pxl.data.test_dataset:
+                - crop.dst
+            act.pxl.data.input_scale_space:
+                - 10GSD
+                - 5GSD
+            act.pxl.data.time_steps:
+                - 3
+                - 5
+            act.poly.thresh:
+                - 0.003
+                - 0.007
+                - 0.01
+                - 0.05
+                - 0.1
+                - 0.2
+            act.poly.use_viterbi:
+                - 0
+                - 1
+            act.pxl.model:
+                - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
+                - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=155-step=78468.pt.pt
+        include:
+            - act.pxl.data.chip_dims: 480,480
+              act.pxl.data.window_scale_space: 5GSD
+              act.pxl.data.input_scale_space: 5GSD
+              act.pxl.data.output_scale_space: 5GSD
+    " \
+    --enable_pred_trk_pxl=0 \
+    --enable_pred_trk_poly=0 \
+    --enable_eval_trk_pxl=0 \
+    --enable_eval_trk_poly=0 \
+    --enable_crop=0 \
     --enable_pred_act_pxl=1 \
     --enable_pred_act_poly=1 \
     --enable_eval_act_pxl=1 \
     --enable_eval_act_poly=1 \
-    --enable_viz_pred_trk_poly=1 \
-    --enable_viz_pred_act_poly=1 \
+    --enable_viz_pred_trk_poly=0 \
+    --enable_viz_pred_act_poly=0 \
     --devices="0,1" --queue_size=2 \
+    --queue_name='secondary-eval' \
     --backend=tmux --skip_existing=1 \
     --run=1
+
+
+
+    python -m watch.tasks.fusion.predict --package_fpath=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=155-step=78468.pt.pt --test_dataset=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/crop/online_v1_kwcoco_for_sc_fielded/trk_poly_id_4aa82814/crop_4ee34f2e/crop_id_e7ec2c85/crop.kwcoco.json --pred_dataset=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/pred/act/Drop4_SC_RGB_scratch_V002_epoch=155-step=78468.pt/crop_id_e7ec2c85_crop.kwcoco/act_pxl_f447d96a/pred.kwcoco.json --input_scale_space=10GSD --output_scale_space=10GSD --window_scale_space=10GSD --chip_dims=512,512 --time_steps=5 --num_workers=4 --devices=0, --accelerator=gpu --batch_size=1
+
 """

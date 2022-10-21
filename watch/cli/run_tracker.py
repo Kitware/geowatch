@@ -4,6 +4,7 @@ should move here.
 """
 import sys
 from watch.cli.kwcoco_to_geojson import main
+from watch.cli.kwcoco_to_geojson import __config__  # NOQA
 
 
 if __name__ == '__main__':

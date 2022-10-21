@@ -23,22 +23,24 @@ def load_eval_trk_poly(fpath, expt_dvc_dpath):
     bas_info = _load_json(fpath)
 
     best_bas_rows = pd.read_json(io.StringIO(json.dumps(bas_info['best_bas_rows'])), orient='table')
-    bas_row = best_bas_rows.loc['__macro__'].reset_index()
+    bas_row = best_bas_rows.loc['__macro__'].reset_index().iloc[0]
 
     tracker_info = bas_info['parent_info']
     arg_prefix = 'trk.'
     param_types = parse_tracker_params(tracker_info, expt_dvc_dpath, arg_prefix=arg_prefix)
 
     metrics = {
-        'BAS_F1': bas_row['F1'],
-        'BAS_rho': bas_row['rho'],
-        'BAS_tau': bas_row['tau'],
+        'f1': bas_row['F1'],
+        'rho': bas_row['rho'],
+        'tau': bas_row['tau'],
     }
+    extra_attrs = _add_prefix('trk.poly.metrics.', metrics)
     info = {
         'fpath': fpath,
         'metrics': metrics,
         'param_types': param_types,
         'other': {
+            'extra_attrs': extra_attrs,
             'best_bas_rows': best_bas_rows,
         },
         'json_info': bas_info,
@@ -59,27 +61,68 @@ def load_eval_act_poly(fpath, expt_dvc_dpath):
     # params = ub.dict_union(*non_measures.values())
     metrics = {
         # 'mean_f1': sc_df.loc['F1'].mean(),
-        'sc_macro_f1': sc_df.loc['__macro__']['F1'].mean(),
-        'sc_micro_f1': sc_df.loc['__micro__']['F1'].mean(),
-        'sc_siteprep_macro_f1': sc_df.loc['__macro__', 'Site Preparation']['F1'],
-        'sc_active_macro_f1': sc_df.loc['__macro__', 'Site Preparation']['F1'],
+        'macro_f1': sc_df.loc['__macro__']['F1'].mean(),
+        'micro_f1': sc_df.loc['__micro__']['F1'].mean(),
+        'macro_f1_siteprep': sc_df.loc['__macro__', 'Site Preparation']['F1'],
+        'macro_f1_active': sc_df.loc['__macro__', 'Site Preparation']['F1'],
     }
     # metrics.update(
     #     param_types['resource']
     # )
     # row = ub.odict(ub.dict_union(metrics, *param_types.values()))
 
+    # Hack to grab information that we should have already had.
+    HACK_HANDLE_CROPPED_AND_TRACK_PARAMS = 1
+    if HACK_HANDLE_CROPPED_AND_TRACK_PARAMS:
+        trk_param_types, extra_attrs = _handle_crop_and_trk_params(param_types, expt_dvc_dpath)
+        param_types.update(trk_param_types)
+    else:
+        extra_attrs = {}
+    extra_attrs.update(_add_prefix('act.poly.metrics.', metrics))
+
     info = {
         'fpath': fpath,
         'metrics': metrics,
         'param_types': param_types,
         'other': {
+            'extra_attrs': extra_attrs,
             # 'sc_cm': sc_cm,
             'sc_df': sc_df,
         },
         'json_info': sc_info,
     }
     return info
+
+
+def _handle_crop_and_trk_params(param_types, expt_dvc_dpath):
+    from watch.mlops import expt_manager
+    crop_fpath = param_types['act.pxl']['act.pxl.in_dataset_fpath']
+    state = expt_manager.ExperimentState('*', '*')
+    crop_attrs = ub.udict(state._parse_pattern_attrs(
+        state.templates['crop_fpath'], crop_fpath))
+
+    crop_dataset = _load_json(crop_fpath)
+    crop_item = list(
+        find_info_items(crop_dataset['info'], 'process', 'coco_align_geotiffs'))[-1]
+
+    # This is the path to either truth or the tracks we cropped from
+    region_fpath = crop_item['properties']['args']['regions']
+
+    try:
+        trk_attrs = ub.udict(state._parse_pattern_attrs(
+            state.templates['pred_trk_poly_site_summaries_fpath'],
+            region_fpath))
+    except Exception:
+        trk_attrs = ub.udict(state._parse_pattern_attrs(
+            state.templates['pred_trk_poly_sites_fpath'],
+            region_fpath))
+
+    extra_attrs = ub.udict(crop_attrs) | ub.udict(trk_attrs)
+
+    trk_poly_data = _load_json(region_fpath)
+    trk_poly_info = trk_poly_data['info']
+    trk_param_types = parse_tracker_params(trk_poly_info, expt_dvc_dpath, arg_prefix='trk.')
+    return trk_param_types, extra_attrs
 
 
 def parse_tracker_params(tracker_info, expt_dvc_dpath, arg_prefix=''):
@@ -98,6 +141,9 @@ def parse_tracker_params(tracker_info, expt_dvc_dpath, arg_prefix=''):
 
     param_types = parse_pred_pxl_params(
         pred_info, expt_dvc_dpath, arg_prefix=arg_prefix)
+
+    poly_resources = parse_resource_item(track_item, arg_prefix=(arg_prefix + 'poly.'))
+    param_types[arg_prefix + 'poly.resource'] = poly_resources
 
     track_args = track_item['properties']['config']
     track_config = relevant_track_config(track_args, arg_prefix=arg_prefix)
@@ -207,12 +253,23 @@ def load_pxl_eval(fpath, expt_dvc_dpath=None, arg_prefix=''):
 
     result = CocoSingleResult.from_json(measure_info)
 
+    HACK_HANDLE_CROPPED_AND_TRACK_PARAMS = 1
+    if HACK_HANDLE_CROPPED_AND_TRACK_PARAMS and arg_prefix == 'act.':
+        trk_param_types, extra_attrs = _handle_crop_and_trk_params(
+            param_types, expt_dvc_dpath)
+        param_types.update(trk_param_types)
+
+    else:
+        extra_attrs = {}
+    extra_attrs.update(_add_prefix(arg_prefix + 'pxl.metrics.', metrics))
+
     info = {
         'fpath': fpath,
         'metrics': metrics,
         'param_types': param_types,
         'other': {
             'result': result,
+            'extra_attrs': extra_attrs,
             'coi_catnames': ','.join(sorted(coi_catnames)),
             # 'sc_cm': sc_cm,
             # 'sc_df': sc_df,
@@ -406,6 +463,9 @@ def relevant_track_config(track_args, arg_prefix=''):
 
 def parse_resource_item(item, arg_prefix=''):
     from watch.utils import util_time
+
+    resources = {}
+
     ureg = global_ureg()
     pred_prop = item['properties']
 
@@ -413,50 +473,43 @@ def parse_resource_item(item, arg_prefix=''):
     end_time = util_time.coerce_datetime(pred_prop.get('end_timestamp', pred_prop.get('stop_timestamp', None)))
     iters_per_second = pred_prop.get('iters_per_second', None)
     total_hours = (end_time - start_time).total_seconds() / (60 * 60)
+    resources['total_hours'] = total_hours
+    if iters_per_second is not None:
+        resources['iters_per_second'] = iters_per_second
 
     try:
         vram = pred_prop['device_info']['allocated_vram']
         vram_gb = ureg.parse_expression(f'{vram} bytes').to('gigabytes').m
+        resources['vram_gb'] = vram_gb
     except KeyError:
-        vram_gb = None
-    try:
-        gpu_name = pred_prop['device_info']['device_name']
-    except KeyError:
-        gpu_name = None
-    co2_kg = pred_prop['emissions']['co2_kg']
+        ...
 
-    if 'machine' in pred_prop:
-        # New method
-        cpu_name = pred_prop['machine']['cpu_brand']
-        pred_prop['machine']['cpu_brand']
-        co2_kg = pred_prop['emissions']['co2_kg']
-        kwh = pred_prop['emissions']['total_kWH']
-        disk_type = pred_prop['disk_info']['filesystem']
-    else:
-        kwh = None
-        # Old method
-        try:
-            cpu_name = pred_prop['system_info']['cpu_info']['brand_raw']
-        except KeyError:
-            cpu_name = None
-        try:
-            disk_type = pred_prop['system_info']['disk_info']['filesystem']
-        except KeyError:
-            disk_type = None
-
-    resources = {}
-    resources['co2_kg'] = co2_kg
-    resources['kwh'] = kwh
-    resources['total_hours'] = total_hours
-    resources['iters_per_second'] = iters_per_second
-    resources['cpu_name'] = cpu_name
-    resources['gpu_name'] = gpu_name
-    resources['disk_type'] = disk_type
-    resources['vram_gb'] = vram_gb
+    hardware_parts = []
 
     import re
-    cpu_name = re.sub('.*Gen Intel(R) Core(TM) ', '', cpu_name)
-    resources['hardware'] = '{} {}'.format(cpu_name, gpu_name)
+    cpu_name = pred_prop['machine']['cpu_brand']
+    cpu_name = re.sub('.*Gen Intel.R. Core.TM. ', '', cpu_name)
+    resources['cpu_name'] = cpu_name
+    hardware_parts.append(cpu_name)
+
+    try:
+        gpu_name = pred_prop['device_info']['device_name']
+        resources['gpu_name'] = gpu_name
+        hardware_parts.append(gpu_name)
+    except KeyError:
+        ...
+
+    if 'emissions' in pred_prop:
+        co2_kg = pred_prop['emissions']['co2_kg']
+        kwh = pred_prop['emissions']['total_kWH']
+        resources['co2_kg'] = co2_kg
+        resources['kwh'] = kwh
+
+    if 'disk_info' in pred_prop:
+        disk_type = pred_prop['disk_info']['filesystem']
+        resources['disk_type'] = disk_type
+
+    resources['hardware'] = ' '.join(hardware_parts)
     resources = _add_prefix(arg_prefix + 'resource.', resources)
     return resources
 
@@ -483,12 +536,12 @@ def parse_pred_pxl_params(pred_info, expt_dvc_dpath, arg_prefix=''):
     # the pred item.
     assert not list(find_info_items(pred_info, 'measure', None))
 
-    meta = {'pred_start_time': None}
+    meta = {'start_time': None}
     resources = {}
     # New code should have measures inside the pred item
     fit_config = pred_item['properties']['extra']['fit_config']
-    meta['pred_start_time'] = pred_item['properties']['start_timestamp']
-    meta['pred_end_time'] = pred_item['properties']['stop_timestamp']
+    meta['start_time'] = pred_item['properties']['start_timestamp']
+    meta['end_time'] = pred_item['properties']['stop_timestamp']
     meta['start_timestamp'] = pred_item['properties']['start_timestamp']
     meta['stop_timestamp'] = pred_item['properties']['stop_timestamp']
 
@@ -553,3 +606,15 @@ def shrink_channels(x):
     new = ','.join(stream_parts)
     x = kwcoco.SensorChanSpec.coerce(new).concise().spec
     return x
+
+
+def is_teamfeat(sensorchan):
+    """
+    Check if the sensorchan spec contains a hard coded value we know is a team
+    feature
+    """
+    import math
+    unique_chans = sum([s.chans for s in sensorchan.streams()]).fuse().to_set()
+    if isinstance(unique_chans, float) and math.isnan(unique_chans):
+        return False
+    return any([a in unique_chans for a in ['depth', 'invariant', 'invariants', 'matseg', 'land']])

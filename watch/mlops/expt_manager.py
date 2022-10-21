@@ -561,6 +561,13 @@ class ExperimentState(ub.NiceRepr):
             'crop_id',
         ]
 
+        # Some of the "ids" are build from hashes of other configurations.
+        # This denotes what deps should be hashed and in what order.
+        self.hashid_dependencies = {
+            'trk_poly_id': ['trk_model', 'test_trk_dset', 'trk_pxl_cfg', 'trk_poly_cfg'],
+            'crop_id': ['regions_id', 'crop_cfg', 'crop_src_dset']
+        }
+
         ### Experimental, add in SC dependencies
         self.staging_template_prefix = '{expt_dvc_dpath}/training/{host}/{user}/{dataset_code}/'
         self.storage_template_prefix = '{expt_dvc_dpath}/models/fusion/{dataset_code}/'
@@ -879,6 +886,41 @@ class ExperimentState(ub.NiceRepr):
                     }
                     _attrs = self._parse_pattern_attrs(self.templates[key], path)
                     row.update(_attrs)
+
+                    ADD_CROPID_HACK = 0
+                    # We will not do this for now and handle it in the result
+                    # parser, but neither solution is great. Need a better way
+                    # to find the "join" of these tables
+                    if ADD_CROPID_HACK:
+                        # special handling for adding tracking / cropping
+                        # params to the activity row. We should figure out a
+                        # way of making this more general in the future.
+                        if row['type'] == 'pred_act_poly_sites_fpath':
+                            if row['test_act_dset'].startswith('crop'):
+                                # Fixme dataset name ids need a rework
+                                crop_id = row['test_act_dset'].split('_crop.kwcoco')[0]
+
+                                # There needs to be a search step for the crop
+                                # dataset, which is not ideal.
+                                pats = self.patterns.copy()
+                                pats['crop_id'] = crop_id
+                                pats = ub.udict(pats).map_values(str)
+                                pat = self.templates['crop_fpath'].format(**pats)
+                                _found = util_path.coerce_patterned_paths(pat)
+                                if _found:
+                                    assert len(_found) == 1, 'should not have dups here'
+                                    found = _found[0]
+                                    _crop_attrs = ub.udict(self._parse_pattern_attrs(self.templates['crop_fpath'], found))
+                                    _crop_attrs = _crop_attrs - row
+                                    row.update(_crop_attrs)
+                                    # Can we find the tracking params too?
+                                    # It looks like we'd need to parse out the
+                                    # file, so no, not here. We need to change the
+                                    # path scheme to fix that.
+                                    # import json
+                                    # dataset = json.loads(found.read_text())
+                                    # self._parse_pattern_attrs(self.templates['crop_fpath']
+
                     yield row
 
     def evaluation_rows(self, with_attrs=1, types=None, notypes=None):

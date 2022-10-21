@@ -811,7 +811,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         ann_stack = []
         img_stack = []
 
-    for chan_row in chan_groups:
+    for stack_idx, chan_row in enumerate(chan_groups):
         chan_pname = chan_row['pname']
         chan_group_obj = chan_row['chan']
         chan_list = chan_group_obj.parsed
@@ -932,6 +932,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         if draw_imgs_alone:
             img_chan_dpath.ensuredir()
 
+        img_canvas = None
+        ann_canvas = None
+
         if draw_imgs_alone or stack_imgs:
             img_canvas = kwimage.ensure_uint255(canvas, copy=True)
             if stack_imgs:
@@ -965,10 +968,16 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                     ann_canvas = dets.draw_on(ann_canvas)
 
             if stack_anns:
-                ann_stack.append({
-                    'im': ann_canvas,
-                    'chan': chan_group,
-                })
+                if stack_idx > 0 and img_canvas is not None:
+                    ann_stack.append({
+                        'im': img_canvas,
+                        'chan': chan_group,
+                    })
+                else:
+                    ann_stack.append({
+                        'im': ann_canvas,
+                        'chan': chan_group,
+                    })
             if draw_anns_alone:
                 ann_canvas = kwimage.ensure_uint255(ann_canvas)
                 ann_header = kwimage.draw_header_text(image=ann_canvas,
