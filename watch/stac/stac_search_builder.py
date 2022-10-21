@@ -143,9 +143,9 @@ _PUBLIC_L2_PRODUCTS = {
 
     # https://stacindex.org/catalogs/usgs-landsat-collection-2-api#/
     # Surface Reflectance
-    'landsat-c2ard-sr': {
+    'landsat-c2l2-sr': {
         # Note: AWS_REQUEST_PAYER='requester' is required to grab the data
-        "collections": ["landsat-c2ard-sr"],
+        "collections": ["landsat-c2l2-sr"],
         "endpoint": "https://landsatlook.usgs.gov/stac-server/",
         "query": {
             "platform": {
@@ -156,9 +156,9 @@ _PUBLIC_L2_PRODUCTS = {
 
     # https://stacindex.org/catalogs/usgs-landsat-collection-2-api#/
     # Brightness Temperature
-    'landsat-c2ard-bt': {
+    'landsat-c2l2-bt': {
         # Note: AWS_REQUEST_PAYER='requester' is required to grab the data
-        "collections": ["landsat-c2ard-bt"],
+        "collections": ["landsat-c2l2-bt"],
         "endpoint": "https://landsatlook.usgs.gov/stac-server/",
         "query": {
             "platform": {
@@ -285,13 +285,13 @@ CONVINIENCE_SENSOR_GROUPS = {
         'sentinel-s2-l2a-cogs',
     ],
     'L2-L8': [
-        'landsat-c2ard-sr',
-        'landsat-c2ard-bt',
+        'landsat-c2l2-sr',
+        'landsat-c2l2-bt',
     ],
     'L2-S2-L8': [
         'sentinel-s2-l2a-cogs',
-        'landsat-c2ard-sr',
-        'landsat-c2ard-bt',
+        'landsat-c2l2-sr',
+        'landsat-c2l2-bt',
     ],
 
     'TA1-S2-L8-ACC': [
