@@ -26,46 +26,46 @@ try:
 except Exception:
     profile = ub.identity
 
-    
+
 def to_next_multiple(n, mult):
     diff = mult - n % mult
-    if diff == mult: 
+    if diff == mult:
         return 0
     return diff
-    
-    
+
+
 def positions_from_shape(shape, dtype="float32", device="cpu"):
     positions = torch.stack(torch.meshgrid(*[
-        torch.linspace(-1, 1, size+1, dtype=dtype, device=device)[:-1]
+        torch.linspace(-1, 1, size + 1, dtype=dtype, device=device)[:-1]
         for size in shape
     ]), dim=0)
-    mean_dims = list(range(1,len(shape)+1))
+    mean_dims = list(range(1, len(shape) + 1))
     positions -= positions.mean(dim=mean_dims, keepdims=True)
     return positions
 
-        
+
 class PadToMultiple(nn.Module):
     def __init__(self, multiple, mode='constant', value=None):
         super().__init__()
         self.multiple = multiple
         self.mode = mode
         self.value = value
-        
+
     def forward(self, x):
-        
+
         height, width = x.shape[-2:]
         pad = (
-            0, to_next_multiple(height, self.multiple), 
+            0, to_next_multiple(height, self.multiple),
             0, to_next_multiple(width, self.multiple),
         )
         return nn.functional.pad(x, pad, mode=self.mode, value=self.value)
 
-    
+
 class NanToNum(nn.Module):
     def __init__(self, num=0.0):
         super().__init__()
         self.num = num
-        
+
     def forward(self, x):
         return torch.nan_to_num(x, self.num)
 
@@ -74,27 +74,27 @@ class MipNerfPositionalEncoder(nn.Module):
     def __init__(self, in_dims, L=10):
         super().__init__()
         self.mean_weights = nn.Parameter(
-            2. ** torch.arange(0, L), 
+            2. ** torch.arange(0, L),
             requires_grad=False)
         self.scale_weights = nn.Parameter(
-            -(2. ** (2. * torch.arange(0, L) - 1)), 
+            -(2. ** (2. * torch.arange(0, L) - 1)),
             requires_grad=False)
-        
+
         self.weight = self.mean_weights
         self.output_dim = 2 * in_dims * L
-        
+
     def forward(self, mean, scale):
         weighted_means = torch.einsum("y,x...->xy...", self.mean_weights, mean)
         weighted_means = einops.rearrange(weighted_means, "x y ... -> (x y) ...")
-        
+
         weighted_scales = torch.einsum("y,x...->xy...", self.scale_weights, scale)
         weighted_scales = einops.rearrange(weighted_scales, "x y ... -> (x y) ...")
-        
+
         return torch.concat([
             weighted_means.sin() * weighted_scales.exp(),
             weighted_means.cos() * weighted_scales.exp(),
         ], dim=0)
-    
+
 
 class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
@@ -103,7 +103,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
     def get_cfgstr(self):
         cfgstr = f'{self.hparams.name}_heterogeneous'
         return cfgstr
-    
+
     def __init__(
         self,
         classes=10,
@@ -150,10 +150,10 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>> from watch.tasks.fusion.methods.heterogeneous import HeterogeneousModel
             >>> model = HeterogeneousModel(input_sensorchan='r|g|b')
         """
-        
+
         super().__init__()
         self.save_hyperparameters()
-               
+
         if dataset_stats is not None:
             input_stats = dataset_stats['input_stats']
             class_freq = dataset_stats['class_freq']
@@ -188,7 +188,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
         self.classes = kwcoco.CategoryTree.coerce(classes)
         self.num_classes = len(self.classes)
-        
+
         # TODO: this data should be introspectable via the kwcoco file
         hueristic_background_keys = heuristics.BACKGROUND_CLASSES
 
@@ -293,7 +293,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             self.hparams.negative_change_weight,
             self.hparams.positive_change_weight
         ])
-        
+
         self.sensor_channel_tokenizers = RobustModuleDict()
 
         # Unique sensor modes obviously isn't very correct here.
@@ -325,30 +325,30 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 NanToNum(0.0),
                 PadToMultiple(token_width, value=0.0),
                 nn.Conv2d(
-                    in_chan, 
-                    token_dim, 
-                    kernel_size=token_width, 
+                    in_chan,
+                    token_dim,
+                    kernel_size=token_width,
                     stride=token_width,
                 ),
             )
-        
+
         self.position_encoder = MipNerfPositionalEncoder(3, position_encoding_frequencies)
         # self.position_encoder = RandomFourierPositionalEncoder(3, 16)
         position_dim = self.position_encoder.output_dim
-        
+
         self.backbone = TransformerEncoderDecoder(
-            encoder_depth = backbone_encoder_depth,
-            decoder_depth = backbone_decoder_depth,
-            dim = token_dim + position_dim,
-            queries_dim = position_dim,
-            logits_dim = token_dim,
-            cross_heads = backbone_cross_heads,
-            latent_heads = backbone_latent_heads,
-            cross_dim_head = backbone_cross_dim_head,
-            latent_dim_head = backbone_latent_dim_head,
-            weight_tie_layers = backbone_weight_tie_layers,
+            encoder_depth=backbone_encoder_depth,
+            decoder_depth=backbone_decoder_depth,
+            dim=token_dim + position_dim,
+            queries_dim=position_dim,
+            logits_dim=token_dim,
+            cross_heads=backbone_cross_heads,
+            latent_heads=backbone_latent_heads,
+            cross_dim_head=backbone_cross_dim_head,
+            latent_dim_head=backbone_latent_dim_head,
+            weight_tie_layers=backbone_weight_tie_layers,
         )
-        
+
         self.criterions = torch.nn.ModuleDict()
         self.heads = torch.nn.ModuleDict()
 
@@ -390,8 +390,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 'weights': self.class_weights,
             },
         ]
-        
-        
+
         self.global_head_weights = {
             'class': global_class_weight,
             'change': global_change_weight,
@@ -404,10 +403,10 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             if global_weight > 0:
                 self.criterions[head_name] = coerce_criterion(prop['loss'], prop['weights'])
                 self.heads[head_name] = nn.Conv2d(
-                    token_dim, 
-                    prop['channels'], 
-                    kernel_size=5, 
-                    padding="same", 
+                    token_dim,
+                    prop['channels'],
+                    kernel_size=5,
+                    padding="same",
                     bias=False)
 
         if hasattr(torchmetrics, 'FBetaScore'):
@@ -438,7 +437,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             })
             for stage in ["train", "val", "test"]
         })
-    
+
     def process_input_tokens(self, example):
         example_tokens = []
         for frame in example["frames"]:
@@ -453,31 +452,31 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 # space
                 height, width = tokens_shape = tokens.shape[1:]
                 token_positions = positions_from_shape(
-                    tokens_shape, 
-                    dtype=tokens.dtype, 
+                    tokens_shape,
+                    dtype=tokens.dtype,
                     device=tokens.device,
                 )
-            
+
                 token_positions_scales = self.hparams.spatial_scale_base / torch.tensor(
                     token_positions.shape[1:],
-                    dtype=token_positions.dtype, 
+                    dtype=token_positions.dtype,
                     device=token_positions.device,
                 )
                 token_positions_scales = einops.repeat(
-                    token_positions_scales, 
+                    token_positions_scales,
                     "chan -> chan height width",
                     height=height, width=width,
                 )
-                
+
                 if self.hparams.ignore_scale:
                     token_positions_scales = self.hparams.spatial_scale_base * torch.ones_like(token_positions_scales)
 
                 # time
                 token_times = frame["time_index"] * torch.ones_like(token_positions[0])[None].type_as(token_positions)
-            
+
                 token_times_scales = self.hparams.temporal_scale_base * torch.ones(
                     1, height, width,
-                    dtype=token_positions.dtype, 
+                    dtype=token_positions.dtype,
                     device=token_positions.device,
                 )
 
@@ -494,16 +493,16 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 ])
 
                 token_encodings = self.position_encoder(token_encodings, token_scales)
-                
+
                 tokens = torch.concat([
                     tokens,
                     token_encodings,
                 ])
                 frame_tokens.append(tokens)
-                
+
             example_tokens.append(frame_tokens)
         return example_tokens
-    
+
     def process_query_tokens(self, example):
         example_tokens = []
         for frame in example["frames"]:
@@ -513,21 +512,21 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             height, width = tokens_shape = (height // self.hparams.token_width, width // self.hparams.token_width)
             token_positions = positions_from_shape(
                 tokens_shape,
-                dtype=self.position_encoder.weight.dtype, 
+                dtype=self.position_encoder.weight.dtype,
                 device=self.position_encoder.weight.device,
             )
-            
+
             token_positions_scales = self.hparams.spatial_scale_base / torch.tensor(
                 token_positions.shape[1:],
-                dtype=token_positions.dtype, 
+                dtype=token_positions.dtype,
                 device=token_positions.device,
             )
-                
+
             if self.hparams.ignore_scale:
                 token_positions_scales = self.hparams.spatial_scale_base * torch.ones_like(token_positions_scales)
-                    
+
             token_positions_scales = einops.repeat(
-                token_positions_scales, 
+                token_positions_scales,
                 "chan -> chan height width",
                 height=height, width=width,
             )
@@ -535,13 +534,13 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             # time
             token_times = frame["time_index"] * torch.ones_like(
                 token_positions[0],
-                dtype=token_positions.dtype, 
+                dtype=token_positions.dtype,
                 device=token_positions.device,
             )[None]
-            
+
             token_times_scales = self.hparams.temporal_scale_base * torch.ones(
                 1, height, width,
-                dtype=token_positions.dtype, 
+                dtype=token_positions.dtype,
                 device=token_positions.device,
             )
 
@@ -554,19 +553,19 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 token_positions_scales,
                 token_times_scales,
             ])
-                        
+
             token_encodings = self.position_encoder(token_encodings, token_scales)
 
             example_tokens.append(token_encodings)
         return example_tokens
-    
+
     def forward(self, batch):
-        
+
         # input sequences
         orig_input_seqs = []
         for example in batch:
             input_tokens = self.process_input_tokens(example)
-            
+
             input_token_seq = torch.concat([
                 torch.concat([
                     einops.rearrange(mode_tokens, "chan ... -> (...) chan")
@@ -575,16 +574,16 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 for frame_tokens in input_tokens
             ])
             orig_input_seqs.append(input_token_seq)
-            
+
         padding_value = -1000.0
         input_seqs = nn.utils.rnn.pad_sequence(
-            orig_input_seqs, 
-            batch_first=True, 
+            orig_input_seqs,
+            batch_first=True,
             padding_value=padding_value,
         )
-        input_masks = input_seqs[...,0] > padding_value
+        input_masks = input_seqs[..., 0] > padding_value
         input_seqs[~input_masks] = 0.
-                
+
         # query sequences
         orig_query_shapes = []
         orig_query_seqs = []
@@ -598,58 +597,58 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 einops.rearrange(frame_tokens, "chan ... -> (...) chan")
                 for frame_tokens in query_tokens
             ])
-            
+
             orig_query_shapes.append(query_shapes)
             orig_query_seqs.append(query_token_seq)
-            
+
         padding_value = -1000.0
         query_seqs = nn.utils.rnn.pad_sequence(
-            orig_query_seqs, 
-            batch_first=True, 
+            orig_query_seqs,
+            batch_first=True,
             padding_value=padding_value,
         )
-        query_masks = query_seqs[...,0] > padding_value
+        query_masks = query_seqs[..., 0] > padding_value
         query_seqs[~query_masks] = 0.
-        
+
         # forward pass!
         output_seqs = self.backbone(
             input_seqs,
             mask=input_masks,
             queries=query_seqs,
         )
-        
+
         # decompose outputs
         outputs = dict()
         for task_name, task_head in self.heads.items():
             task_outputs = []
             task_probs = []
             for output_seq, query_mask, frame_shapes, example in zip(output_seqs, query_masks, orig_query_shapes, batch):
-                output_seq = output_seq[query_mask] # only want valid values we actually requested
+                output_seq = output_seq[query_mask]  # only want valid values we actually requested
 
                 seq_outputs = []
                 seq_probs = []
-                frame_sizes = [h*w for h, w in frame_shapes]
+                frame_sizes = [h * w for h, w in frame_shapes]
                 for output_frame_seq, (height, width), frame in zip(torch.split(output_seq, frame_sizes), frame_shapes, example["frames"]):
-                                                              
+
                     output = einops.rearrange(
-                        output_frame_seq, 
-                        "(height width) chan -> chan height width", 
+                        output_frame_seq,
+                        "(height width) chan -> chan height width",
                         height=height, width=width,
                     )
                     target_size = frame["output_dims"]
                     output = nn.functional.interpolate(
-                        output[None], 
-                        size=target_size, 
+                        output[None],
+                        size=target_size,
                         mode="bilinear",
                     )[0]
                     output = task_head(output)
-                    
+
                     probs = einops.rearrange(output, "chan height width -> height width chan")
                     if task_name == "change":
-                        probs = probs.sigmoid()[...,1]
+                        probs = probs.sigmoid()[..., 1]
                     else:
                         probs = probs.softmax(dim=-1)
-                    
+
                     seq_outputs.append(output)
                     seq_probs.append(probs)
                 task_outputs.append(seq_outputs)
@@ -658,47 +657,47 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             outputs[f"{task_name}_probs"] = task_probs
 
         return outputs
-    
+
     def shared_step(self, batch, batch_idx=None, stage="train", with_loss=True):
         outputs = self(batch)
-        
+
         if not with_loss:
             return outputs
-        
+
         frame_losses = []
         for task_name in self.heads:
             for pred_seq, example in zip(outputs[task_name], batch):
                 for pred, frame in zip(pred_seq, example["frames"]):
-                    
+
                     task_labels_key = self.task_to_keynames[task_name]["labels"]
                     labels = frame[task_labels_key]
-                    
+
                     if labels == None:
                         continue
-                     
+
                     # FIXME: This is necessary because sometimes when data.input_space_scale==native, label shapes and output_dims dont match!
                     if pred.shape[1:] != labels.shape:
                         pred = nn.functional.interpolate(
-                            pred[None], 
-                            size=labels.shape, 
+                            pred[None],
+                            size=labels.shape,
                             mode="bilinear",
                         )[0]
-                    
+
                     criterion = self.criterions[task_name]
                     if criterion.target_encoding == 'index':
                         loss_labels = labels.long()
                     elif criterion.target_encoding == 'onehot':
                         # Note: 1HE is much easier to work with
                         loss_labels = kwarray.one_hot_embedding(
-                            labels.long(), 
-                            criterion.in_channels, 
+                            labels.long(),
+                            criterion.in_channels,
                             dim=0)
                     else:
                         raise KeyError(criterion.target_encoding)
 
                     task_weights_key = self.task_to_keynames[task_name]["weights"]
                     loss = criterion(
-                            pred[None], 
+                            pred[None],
                             loss_labels[None],
                         )
                     loss *= frame[task_weights_key]
@@ -707,14 +706,14 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     )
                     self.log_dict(
                         self.head_metrics[f"{stage}_stage"][task_name](
-                            pred.argmax(dim=0).flatten(), 
-                            # pred[None], 
+                            pred.argmax(dim=0).flatten(),
+                            # pred[None],
                             labels.flatten().long(),
                         ),
                         prog_bar=True,
                     )
-        
-        outputs["loss"] = sum(frame_losses) / len(frame_losses)    
+
+        outputs["loss"] = sum(frame_losses) / len(frame_losses)
         self.log(f"{stage}_loss", outputs["loss"], prog_bar=True)
         return outputs
 
@@ -743,10 +742,10 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 #                 for example in batch
 #             ],
 #         }
-        
+
 #         if with_loss:
 #             outputs["loss"] = self.dummy_param
-            
+
 #         return outputs
 
     @profile

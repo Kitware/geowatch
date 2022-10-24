@@ -951,26 +951,26 @@ class TransformerEncoderDecoder(nn.Module):
 
         def latent_cross_attn():
             return PreNorm(
-                queries_dim, 
+                queries_dim,
                 Attention(
                     queries_dim, dim, dim,
-                    heads=cross_heads, 
-                    dim_head=cross_dim_head), 
+                    heads=cross_heads,
+                    dim_head=cross_dim_head),
                 context_dim=dim,
             )
 
         def latent_attn():
             return PreNorm(
-                dim, 
+                dim,
                 Attention(
-                    dim, 
-                    heads=latent_heads, 
+                    dim,
+                    heads=latent_heads,
                     dim_head=latent_dim_head),
             )
 
         def latent_ff():
             return PreNorm(
-                dim, 
+                dim,
                 FeedForward(dim),
             )
 
@@ -1029,7 +1029,7 @@ class TransformerEncoderDecoder(nn.Module):
                 x = cross_attn(queries, context=x)
             else:
                 self_attn, self_ff = layers
-                
+
             x = self_attn(x) + x
             x = self_ff(x) + x
 

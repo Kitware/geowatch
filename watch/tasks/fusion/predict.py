@@ -329,13 +329,13 @@ def predict(cmdline=False, **kwargs):
             if datamodule_sensorchan_spec is not None:
                 hack_model_sensorchan_spec = hack_model_sensorchan_spec.normalize()
                 datamodule_sensorchan_spec = datamodule_sensorchan_spec.normalize()
-                
+
                 hack_sensorchan_set = set(hack_model_sensorchan_spec.normalize().spec.split(","))
                 datamodule_sensorchan_set = set(datamodule_sensorchan_spec.normalize().spec.split(","))
                 if hack_sensorchan_set != datamodule_sensorchan_set:
                     print('Warning: reported model channels may be incorrect '
                           'due to bad train hyperparams',
-                          hack_model_sensorchan_spec.normalize().spec, 
+                          hack_model_sensorchan_spec.normalize().spec,
                           'versus',
                           datamodule_sensorchan_spec.normalize().spec)
                     compat_parts = []
