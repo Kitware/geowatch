@@ -535,7 +535,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             # handle * sensor in a way that works with previous models
             # This code is a little messy and should be cleaned up
             if sensorchan_hist is None:
-                sensorchan_hist = kwcoco_extensions.coco_channel_stats(sampler.dset)['sensorchan_hist']
+                sensorchan_stats = kwcoco_extensions.coco_channel_stats(sampler.dset)
+                sensorchan_hist = sensorchan_stats['sensorchan_hist']
 
             expanded_input_sensorchan_streams = []
             for fused_sensorchan in self.sensorchan.streams():

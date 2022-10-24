@@ -138,6 +138,8 @@ python -m watch.tasks.fusion.fit \
     --max_epochs=1 \
     --accelerator="cpu" \
     --init="noop" \
+    --sqlview=postgresql \
+    --num_workers=4 \
     --accumulate_grad_batches=1 \
     --package_fpath="$DEFAULT_ROOT_DIR"/final_package.pt
 
