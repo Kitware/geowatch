@@ -81,9 +81,11 @@ def get_test_dataset_fpath(task):
     if task == 'BAS':
         bundle_dpath = (data_dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC')
         vali_fpath = (bundle_dpath / 'data_vali.kwcoco.json')
-    elif task == 'BAS':
+    elif task == 'SC':
         bundle_dpath = (data_dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC')
         vali_fpath = (bundle_dpath / 'data_vali.kwcoco.json')
+    else:
+        raise KeyError(task)
     return vali_fpath
 
 
