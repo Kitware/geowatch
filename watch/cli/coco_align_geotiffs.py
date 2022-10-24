@@ -281,7 +281,8 @@ def main(cmdline=True, **kw):
         >>>     'regions': 'annots',
         >>>     'max_workers': 0,
         >>>     'aux_workers': 0,
-        >>>     'convexify_regions': convexify_regions,
+        >>>     'convexify_regions': True,
+        >>>     'visualize': True,
         >>> }
         >>> cmdline = False
         >>> new_dset = main(cmdline, **kw)
