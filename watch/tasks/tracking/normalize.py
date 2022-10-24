@@ -665,6 +665,10 @@ def normalize(
         >>>     ['WorldView', 'Sentinel-2', 'Landsat 8'])
     '''
 
+    DEBUG_JSON_SERIALIZABLE = 0
+    if DEBUG_JSON_SERIALIZABLE:
+        from watch.utils.util_json import debug_json_unserializable
+
     viz_out_dir = ub.Path('_assets/tracking_visualization')
 
     def _normalize_annots(coco_dset, overwrite):
@@ -681,6 +685,9 @@ def normalize(
         coco_dset = _normalize_annots(coco_dset, overwrite)
     coco_dset = ensure_videos(coco_dset)
 
+    if DEBUG_JSON_SERIALIZABLE:
+        debug_json_unserializable(coco_dset.dataset, 'Input to normalize: ')
+
     # apply tracks
     assert issubclass(track_fn, TrackFunction), 'must supply a valid track_fn!'
 
@@ -689,8 +696,14 @@ def normalize(
         if isinstance(v, str) and v.lower() == 'none':
             track_kwargs[k] = None
 
+    if DEBUG_JSON_SERIALIZABLE:
+        debug_json_unserializable(coco_dset.dataset, 'Before apply_per_video: ')
+
     tracker: TrackFunction = track_fn(polygon_fn=polygon_fn, **track_kwargs)
     out_dset = tracker.apply_per_video(coco_dset)
+
+    if DEBUG_JSON_SERIALIZABLE:
+        debug_json_unserializable(out_dset.dataset, 'After apply_per_video: ')
 
     # normalize and add geo segmentations
     out_dset = _normalize_annots(out_dset, overwrite=False)
@@ -725,10 +738,16 @@ def normalize(
         phase_kw['baseline_keys'] = set(track_kwargs['key'])
     out_dset = normalize_phases(out_dset, **phase_kw)
 
+    if DEBUG_JSON_SERIALIZABLE:
+        debug_json_unserializable(out_dset.dataset, 'After normalize_phases: ')
+
     out_dset = normalize_sensors(out_dset)
 
     # HACK, ensure out_dset.index is up to date
     out_dset._build_index()
+
+    if DEBUG_JSON_SERIALIZABLE:
+        debug_json_unserializable(out_dset.dataset, 'Output of normalize: ')
 
     if viz_videos:
         # visualize predicted sites with true sites

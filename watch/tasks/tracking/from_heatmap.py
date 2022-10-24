@@ -268,7 +268,6 @@ def add_tracks_to_dset(sub_dset,
                        segmentation=segmentation,
                        score=this_score,
                        track_id=track_id)
-
         return new_ann
 
     new_trackids = kwcoco_extensions.TrackidGenerator(sub_dset)
@@ -290,6 +289,11 @@ def add_tracks_to_dset(sub_dset,
     # "ids" first
     for new_ann in all_new_anns:
         sub_dset.add_annotation(**new_ann)
+
+    DEBUG_JSON_SERIALIZABLE = 0
+    if DEBUG_JSON_SERIALIZABLE:
+        from watch.utils.util_json import debug_json_unserializable
+        debug_json_unserializable(sub_dset.dataset)
 
     return sub_dset
 

@@ -1203,7 +1203,7 @@ def main(cmdline=True, **kwargs):
         info['data'] for info in util_gis.coerce_geojson_datas(
             pred_site_infos['geojson_fpaths'], format='json')
     ]
-    if len(args.pred_sites) == 0:
+    if len(pred_sites) == 0:
         raise Exception('No input sites were given')
 
     name = args.name
