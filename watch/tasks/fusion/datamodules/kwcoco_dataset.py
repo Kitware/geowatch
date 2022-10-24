@@ -738,7 +738,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         gid_to_isbad[gid] = force_bad
         gid_to_sample[gid] = sample_streams
-        
+
         HACK_FIX_NATIVE_ANNOT_SIZE = 1
         if HACK_FIX_NATIVE_ANNOT_SIZE:
             annot_mode_dims = None
