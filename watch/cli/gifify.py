@@ -129,7 +129,7 @@ def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=3,
         >>>     import pytest
         >>>     pytest.skip('test requires ffmpeg')
         >>> frame_fpaths = sorted(dset.images().gpath)
-        >>> test_dpath = ub.ensure_app_cache_dir('gifify', 'test')
+        >>> test_dpath = ub.Path.appdir('gifify', 'test').ensuredir()
         >>> # Test output to GIF
         >>> output_fpath = join(test_dpath, 'test.gif')
         >>> ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=0.5)
@@ -156,7 +156,7 @@ def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=3,
         raise Exception('cannot find ffmpeg')
 
     try:
-        temp_dpath = ub.ensure_app_cache_dir('gifify', 'temp')
+        temp_dpath = ub.Path.appdir('gifify', 'temp').ensuredir()
         temp_fpath = join(temp_dpath, 'temp_list_{}.txt'.format(str(uuid.uuid4())))
         if verbose:
             print('temp_fpath = {!r}'.format(temp_fpath))

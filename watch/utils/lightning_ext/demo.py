@@ -82,7 +82,7 @@ def demo_trainer():
 
     """
     import ubelt as ub
-    default_root_dir = ub.ensure_app_cache_dir('lightning_ext/demo_trainer')
+    default_root_dir = ub.Path.appdir('lightning_ext/demo_trainer').ensuredir()
     model = LightningToyNet2d(num_train=55)
 
     from watch.utils import lightning_ext as pl_ext

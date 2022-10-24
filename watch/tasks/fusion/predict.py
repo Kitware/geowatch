@@ -399,7 +399,7 @@ def predict(cmdline=False, **kwargs):
         >>> args = None
         >>> cmdline = False
         >>> devices = None
-        >>> test_dpath = ub.ensure_app_cache_dir('watch/test/fusion/')
+        >>> test_dpath = ub.Path.appdir('watch/test/fusion/').ensuredir()
         >>> results_path = ub.ensuredir((test_dpath, 'predict'))
         >>> ub.delete(results_path)
         >>> ub.ensuredir(results_path)

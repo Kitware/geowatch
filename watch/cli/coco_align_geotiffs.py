@@ -266,7 +266,7 @@ def main(cmdline=True, **kw):
         >>>     image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
         >>> #
         >>> # Create arguments to the script
-        >>> dpath = ub.ensure_app_cache_dir('watch/test/coco_align_geotiff')
+        >>> dpath = ub.Path.appdir('watch/test/coco_align_geotiff').ensuredir()
         >>> dst = ub.ensuredir((dpath, 'align_bundle1'))
         >>> ub.delete(dst)
         >>> dst = ub.ensuredir(dst)
@@ -918,7 +918,7 @@ class SimpleDataCube(object):
             >>> # xdoctest: +REQUIRES(--slow)
             >>> from watch.cli.coco_align_geotiffs import *  # NOQA
             >>> cube, region_df = SimpleDataCube.demo(with_region=True)
-            >>> extract_dpath = ub.ensure_app_cache_dir('watch/test/coco_align_geotiff/demo_extract_overlaps')
+            >>> extract_dpath = ub.Path.appdir('watch/test/coco_align_geotiff/demo_extract_overlaps').ensuredir()
             >>> rpc_align_method = 'orthorectify'
             >>> new_dset = kwcoco.CocoDataset()
             >>> write_subsets = True
@@ -934,7 +934,7 @@ class SimpleDataCube(object):
             >>> # xdoctest: +REQUIRES(--slow)
             >>> from watch.cli.coco_align_geotiffs import *  # NOQA
             >>> cube, region_df = SimpleDataCube.demo(with_region=True, extra=True)
-            >>> extract_dpath = ub.ensure_app_cache_dir('watch/test/coco_align_geotiff/demo_extract_overlaps2')
+            >>> extract_dpath = ub.Path.appdir('watch/test/coco_align_geotiff/demo_extract_overlaps2').ensuredir()
             >>> rpc_align_method = 'orthorectify'
             >>> write_subsets = True
             >>> visualize = True

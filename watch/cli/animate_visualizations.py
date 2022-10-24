@@ -38,9 +38,7 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
         >>> # xdoctest: +SKIP
         >>> # xdoctest: +REQUIRES(--ffmpeg-test')
         >>> import ubelt as ub
-        >>> dpath = ub.ensure_app_cache_dir('watch/test/ani_video')
-        >>> ub.delete(dpath)
-        >>> ub.ensuredir(dpath)
+        >>> dpath = ub.Path.appdir('watch/test/ani_video').delete().ensuredir()
         >>> import kwcoco
         >>> from watch.utils import kwcoco_extensions
         >>> dset = kwcoco.CocoDataset.demo('vidshapes2-msi', num_frames=5)

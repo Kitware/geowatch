@@ -123,7 +123,7 @@ def demo_smart_aligned_kwcoco():
         >>> aligned_coco_dset = demo_smart_aligned_kwcoco()
         >>> print('aligned_coco_dset = {!r}'.format(aligned_coco_dset))
     """
-    cache_dpath = ub.ensure_app_cache_dir('watch/demo/kwcoco')
+    cache_dpath = ub.Path.appdir('watch/demo/kwcoco').ensuredir()
     aligned_kwcoco_dpath = join(cache_dpath, 'demo_aligned')
     aligned_coco_fpath = join(aligned_kwcoco_dpath, 'data.kwcoco.json')
     stamp = ub.CacheStamp('aligned_stamp', dpath=cache_dpath, depends=['v2'],

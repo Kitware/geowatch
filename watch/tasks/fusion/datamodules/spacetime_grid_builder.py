@@ -558,7 +558,7 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
     from watch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
     y_sl, x_sl = vidspace_region
 
-    vidspace_box = kwimage.Boxes.from_slice(vidspace_region).to_tlbr()
+    vidspace_box = kwimage.Boxes.from_slice(vidspace_region).to_ltrb()
 
     # Find all annotations that pass through this spatial region
     if use_annot_info:
@@ -655,7 +655,7 @@ def _build_vidspace_track_qtree(dset, video_gids, negative_classes,
                 vidspace_box = vidspace_box.clip(
                     0, 0, vidspace_video_width, vidspace_video_height)
                 if vidspace_box.area.ravel()[0] > 0:
-                    tlbr_box = vidspace_box.to_tlbr().data[0]
+                    tlbr_box = vidspace_box.to_ltrb().data[0]
                     if tid is not None:
                         tid_to_infos[tid].append({
                             'gid': gid,

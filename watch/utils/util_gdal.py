@@ -606,7 +606,7 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
         >>> cube, region_df = SimpleDataCube.demo(with_region=True, extra=True)
         >>> local_epsg = 32635
         >>> space_box = kwimage.Polygon.from_shapely(region_df.geometry.iloc[1]).bounding_box().to_ltrb()
-        >>> dpath = ub.ensure_app_cache_dir('watch/test/gdal_multi_warp')
+        >>> dpath = ub.Path.appdir('watch/test/gdal_multi_warp').ensuredir()
         >>> out_fpath = ub.Path(dpath) / 'test_multi_warp.tif'
         >>> out_fpath.delete()
         >>> in_fpath1 = cube.coco_dset.get_image_fpath(2)

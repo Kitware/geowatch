@@ -785,7 +785,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>> # auxiliary channels to this demodata.
         >>> print('perterbing')
         >>> pred_coco = perterb_coco(true_coco, **kwargs)
-        >>> eval_dpath = ub.ensure_app_cache_dir('watch/tests/fusion_eval')
+        >>> eval_dpath = ub.Path.appdir('watch/tests/fusion_eval').ensuredir()
         >>> print('eval_dpath = {!r}'.format(eval_dpath))
         >>> score_space = 'image'
         >>> draw_curves = 'auto'

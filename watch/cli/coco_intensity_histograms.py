@@ -173,7 +173,7 @@ def main(cmdline=True, **kwargs):
         >>> # xdoctest: +REQUIRES(--slow)
         >>> from watch.cli.coco_intensity_histograms import *  # NOQA
         >>> import kwcoco
-        >>> test_dpath = ub.ensure_app_cache_dir('watch/tests')
+        >>> test_dpath = ub.Path.appdir('watch/tests').ensuredir()
         >>> image_fpath = test_dpath + '/intensityhist_demo.jpg'
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
         >>> kwargs = {'src': coco_dset, 'dst': image_fpath, 'mode': 'thread'}
@@ -186,7 +186,7 @@ def main(cmdline=True, **kwargs):
         >>> from watch.cli.coco_intensity_histograms import *  # NOQA
         >>> import kwcoco
         >>> import watch
-        >>> test_dpath = ub.ensure_app_cache_dir('watch/tests')
+        >>> test_dpath = ub.Path.appdir('watch/tests').ensuredir()
         >>> image_fpath = test_dpath + '/intensityhist_demo2.jpg'
         >>> coco_dset = coerce_kwcoco('watch-msi')
         >>> kwargs = {
@@ -435,7 +435,7 @@ def ensure_intensity_sidecar(fpath, recompute=False):
         >>> from watch.cli.coco_intensity_histograms import *  # NOQA
         >>> import kwimage
         >>> import ubelt as ub
-        >>> dpath = ub.Path(ub.ensure_app_cache_dir('watch/tests/intensity_sidecar'))
+        >>> dpath = ub.Path.appdir('watch/tests/intensity_sidecar').ensuredir()
         >>> dpath.delete().ensuredir()
         >>> img = kwimage.grab_test_image(dsize=(16, 16))
         >>> img01 = kwimage.ensure_float01(img)
