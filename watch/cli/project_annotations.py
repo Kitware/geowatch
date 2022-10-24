@@ -45,7 +45,6 @@ import io
 import warnings
 from watch.utils import kwcoco_extensions
 from watch.utils import util_kwplot
-from watch.utils import util_path
 from watch.utils import util_time
 
 
