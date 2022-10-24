@@ -747,7 +747,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
         site_id = site_summary['properties']['site_id']
 
         # track_id = next(new_trackids)
-        track_id = int(site_id)
+        track_id = site_id
 
         # get relevant images
         images = coco_dset.images(vidid=video_id)
