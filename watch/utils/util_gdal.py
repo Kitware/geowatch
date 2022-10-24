@@ -356,6 +356,7 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
     # Use the new COG output driver
     # Perf options
     if 1:
+        # TODO: these probably should be environment variables?
         builder.options['--config']['GDAL_CACHEMAX'] = '15%'
         builder.options['-co']['NUM_THREADS'] = 'ALL_CPUS'
 

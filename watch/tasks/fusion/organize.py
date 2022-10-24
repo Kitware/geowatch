@@ -1,8 +1,9 @@
 """
 Helper script for organizing experimental directory structures
 
-python -m watch.tasks.fusion.organize
+THIS IS SLOWY BEING DEPRECATED
 
+python -m watch.tasks.fusion.organize
 """
 import ubelt as ub
 import json
@@ -12,6 +13,8 @@ import os
 def suggest_paths(test_dataset=None, package_fpath=None, workdir=None,
                   sidecar2=True, as_json=True, pred_cfg=None, pred_cfgstr=None):
     """
+    DEPRECATED
+
     Suggest an organized set of paths for where data should be written.
 
     Attempt to reduce parameterization by suggesting paths for where
@@ -62,12 +65,12 @@ def suggest_paths(test_dataset=None, package_fpath=None, workdir=None,
         if sidecar2:
             condensed = {}
             condensed.update({
-                'model': package_fpath.name,
-                'test_dset': test_dset_name,
-                'pred_cfg': pred_cfg_dname,
+                'trk_model': package_fpath.name,
+                'test_trk_dset': test_dset_name,
+                'trk_pxl_cfg': pred_cfg_dname,
             })
             try:
-                condensed.update(state._parse_pattern_attrs('pkg', package_fpath))
+                condensed.update(state._parse_pattern_attrs(state.templates['pkg_trk_pxl_fpath'], package_fpath))
             except Exception:
                 if package_fpath.parent.parent != 'packages':
                     print('Assumptions are broken')
@@ -79,10 +82,10 @@ def suggest_paths(test_dataset=None, package_fpath=None, workdir=None,
                 workdir = state.storage_template_prefix.format(**condensed)
 
             workdir = ub.Path(workdir)
-            pred_fpath = workdir / state.volitile_templates['pred_pxl'].format(**condensed)
+            pred_fpath = workdir / state.volitile_templates['pred_trk_pxl_fpath'].format(**condensed)
             pred_dpath = pred_fpath.parent
 
-            eval_fpath = workdir / state.versioned_templates['eval_pxl'].format(**condensed)
+            eval_fpath = workdir / state.versioned_templates['eval_trk_pxl_fpath'].format(**condensed)
             eval_dpath = eval_fpath.parent.parent
         else:
             if workdir is None:

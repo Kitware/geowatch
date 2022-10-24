@@ -155,6 +155,8 @@ def make_fit_config(cmdline=False, **kwargs):
         '''
         If true, attempts to run default prediction and evaluation on the final
         packaged state.
+
+        DEPRECATED, DO NOT USE.
         '''))
 
     config_parser.add_argument('--auto_resume', action='store_true', default=False, help=ub.paragraph(
@@ -553,7 +555,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
         ...     'datamodule': 'KWCocoVideoDataModule',
         ...     'workdir': workdir,
         ...     'num_sanity_val_steps': 0,
-        ...     'eval_after_fit': True,
+        ...     'eval_after_fit': False,
         ...     'devices': 1,
         ...     'max_epochs': 2,
         ...     #'max_steps': 1,
@@ -626,6 +628,9 @@ def fit_model(args=None, cmdline=False, **kwargs):
 
     args = modules['args']
     if args.eval_after_fit:
+        raise NotImplementedError(
+            'Direct evaluation after the fit script is no longer supported. '
+            'Schedule jobs with watch.mlops instead')
         if not package_fpath:
             print('package fpath was not set, so we cant eval')
         else:

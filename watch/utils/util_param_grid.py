@@ -135,7 +135,7 @@ def expand_param_grid(arg):
     Our own method for specifying many combinations. Uses the github actions
     method under the hood with our own
 
-        >>> from watch.mlops.schedule_evaluation import *  # NOQA
+    Ignore:
         >>> from watch.utils.util_param_grid import *  # NOQA
         >>> arg = ub.codeblock(
             '''
@@ -228,7 +228,7 @@ def github_action_matrix(arg):
         https://docs.github.com/en/actions/using-jobs/using-a-matrix-for-your-jobs#expanding-or-adding-matrix-configurations
 
     Example:
-        >>> from watch.mlops.schedule_evaluation import *  # NOQA
+        >>> from watch.utils.util_param_grid import *  # NOQA
         >>> from watch.utils import util_param_grid
         >>> arg = ub.codeblock(
                  '''
@@ -258,7 +258,7 @@ def github_action_matrix(arg):
 
 
     Example:
-        >>> from watch.mlops.schedule_evaluation import *  # NOQA
+        >>> from watch.utils.util_param_grid import *  # NOQA
         >>> arg = ub.codeblock(
                 '''
                   matrix:
@@ -293,8 +293,8 @@ def github_action_matrix(arg):
         data = arg.copy()
 
     matrix = data.pop('matrix')
-    include = [ub.udict(p) for p in data.pop('include', [])]
-    exclude = [ub.udict(p) for p in data.pop('exclude', [])]
+    include = [ub.udict(p) for p in matrix.pop('include', [])]
+    exclude = [ub.udict(p) for p in matrix.pop('exclude', [])]
 
     matrix_ = {k: (v if ub.iterable(v) else [v])
                for k, v in matrix.items()}

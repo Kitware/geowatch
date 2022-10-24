@@ -747,7 +747,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
         site_id = site_summary['properties']['site_id']
 
         # track_id = next(new_trackids)
-        track_id = site_id
+        track_id = int(site_id)
 
         # get relevant images
         images = coco_dset.images(vidid=video_id)
@@ -849,7 +849,7 @@ def main(args):
         >>> sc_fpath = dpath / 'sc_sites.geojson'
         >>> args = bas_args = [
         >>>     '--in_file', coco_dset.fpath,
-        >>>     '--out_dir', str(regions_dir),
+        >>>     '--out_site_summaries_dir', str(regions_dir),
         >>>     '--out_site_summaries_fpath',  str(bas_fpath),
         >>>     '--out_kwcoco', str(bas_coco_fpath),
         >>>     '--track_fn', 'watch.tasks.tracking.from_polygon.MonoTrack',
@@ -861,7 +861,7 @@ def main(args):
         >>> sites_dir = dpath / 'sites'
         >>> args = sc_args = [
         >>>     '--in_file', str(bas_coco_fpath),
-        >>>     '--out_dir', str(sites_dir),
+        >>>     '--out_sites_dir', str(sites_dir),
         >>>     '--out_sites_fpath', str(sc_fpath),
         >>>     '--out_kwcoco', str(sc_coco_fpath),
         >>> ]
@@ -911,26 +911,23 @@ def main(args):
 
     coco_fpath = ub.Path(args.in_file)
 
-    # set the out dir
-    # default_out_dir = coco_fpath.parent
-
     if args.out_sites_dir is not None:
         args.out_sites_dir = ub.Path(args.out_sites_dir)
-        # args.out_sites_dir = default_out_dir / 'sites'
 
     if args.out_site_summaries_dir is not None:
         args.out_site_summaries_dir = ub.Path(args.out_site_summaries_dir)
-        # args.out_site_summaries_dir = default_out_dir / 'site-summaries'
-
-    # args.out_sites_dir = ub.Path(args.out_sites_dir)
-    # args.out_site_summaries_dir = ub.Path(args.out_site_summaries_dir)
 
     if args.out_sites_fpath is not None:
-        assert args.out_sites_dir is not None
+        if args.out_sites_dir is None:
+            raise ValueError(
+                'The directory to store individual sites must be specified')
         args.out_sites_fpath = ub.Path(args.out_sites_fpath)
 
     if args.out_site_summaries_fpath is not None:
-        assert args.out_site_summaries_dir is not None
+        if args.out_site_summaries_dir is None:
+            raise ValueError(
+                'The directory to store individual site summaries must be '
+                'specified')
         args.out_site_summaries_fpath = ub.Path(args.out_site_summaries_fpath)
 
     # load the track kwargs
@@ -1137,7 +1134,7 @@ def demo(coco_dset,
          hybrid=False):
     bas_args = [
         coco_dset.fpath,
-        '--out_dir',
+        '--out_site_summaries_dir',
         regions_dir,
         '--track_fn',
         'watch.tasks.tracking.from_heatmap.TimeAggregatedBAS',
@@ -1150,7 +1147,7 @@ def demo(coco_dset,
     # run SC on both of them
     if hybrid:  # hybrid approach
         sc_args = [
-            coco_dset.fpath, '--out_dir', sites_dir, '--track_fn',
+            coco_dset.fpath, '--out_site_sites_dir', sites_dir, '--track_fn',
             'watch.tasks.tracking.from_heatmap.'
             'TimeAggregatedHybrid', '--track_kwargs',
             ('{"coco_dset_sc": "' + coco_dset_sc.fpath + '"}')
@@ -1160,7 +1157,7 @@ def demo(coco_dset,
         import json
         from tempfile import NamedTemporaryFile
         sc_args = [
-            '--out_dir',
+            '--out_site_sites_dir',
             sites_dir,
             '--track_fn',
             'watch.tasks.tracking.from_heatmap.TimeAggregatedSC',
