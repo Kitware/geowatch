@@ -250,6 +250,53 @@ def upweight_center_mask(shape):
     return weights
 
 
+def perchannel_colorize(data, channel_colors=None):
+    """
+    Note: this logic semi-exist in kwimage.Heatmap.
+    It would be good to consolidate it.
+    """
+    import kwimage
+
+    num_channels = data.shape[2]
+
+    if len(data.shape) == 2:
+        # add in prefix channel if its not there
+        data = data[None, :, :]
+
+    existing_colors = [kwimage.Color.coerce(c).as01() for c in channel_colors if c is not None]
+
+    # Define default colors
+    fill_colors = kwimage.Color.distinct(
+        num_channels - len(existing_colors),
+        existing=existing_colors)
+    fill_color_iter = iter(fill_colors)
+
+    resolved_channel_colors = []
+    for c in channel_colors:
+        if c is None:
+            c = next(fill_color_iter)
+        else:
+            c = kwimage.Color.coerce(c).as01()
+        resolved_channel_colors.append(c)
+
+    # Each class gets its own color, and modulates the alpha
+    sumtotal = np.nansum(data, axis=2)
+    sumtotal[np.isnan(sumtotal)] = 1
+    sumtotal[sumtotal == 0] = 1
+    layers = []
+    for cidx in range(num_channels):
+        chan = data[:, :, cidx]
+        layer = np.empty(tuple(chan.shape) + (4,))
+        alpha = chan / sumtotal
+        layer[..., 3] = alpha
+        color = resolved_channel_colors[cidx]
+        layer[..., 0:3] = color
+
+    colormask = kwimage.overlay_alpha_layers(layers)
+    # colormask[..., 3] *= with_alpha
+    return colormask
+
+
 def ensure_false_color(canvas, method='ortho'):
     """
     Given a canvas with more than 3 colors, (or 2 colors) do

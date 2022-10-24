@@ -228,7 +228,7 @@ def main(cmdline=True, **kwargs):
         from delayed_image import FusedChannelSpec
         auto_channels = [
             FusedChannelSpec.coerce('red|green|blue'),
-            FusedChannelSpec.coerce('No Activity|Active Construction|Post Construction'),
+            FusedChannelSpec.coerce('No Activity|Site Preparation|Active Construction|Post Construction'),
             FusedChannelSpec.coerce('salient'),
         ]
         from watch.utils import kwcoco_extensions
@@ -244,7 +244,12 @@ def main(cmdline=True, **kwargs):
             for ac in auto_channels:
                 if ac.to_set().issubset(has_chans):
                     chosen.append(ac.spec)
-        channels = ','.join(sorted(set(chosen)))
+        chosen = ub.oset(sorted(set(chosen)))
+        if 'red|green|blue' in chosen:
+            # force RGB first
+            chosen = ub.oset(['red|green|blue']) | (chosen - {'red|green|blue'})
+        channels = ','.join(chosen)
+        print(f'AUTO channels={channels}')
 
     if config['draw_anns'] == 'auto':
         config['draw_anns'] = coco_dset.n_annots > 0
@@ -887,6 +892,22 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
         _kw = ub.compatible({'on_value': 0.3}, kwimage.fill_nans_with_checkers)
         canvas = kwimage.fill_nans_with_checkers(canvas, **_kw)
+
+        # Do the channels correspond to classes with known colors?
+        chan_names = chan_row['chan'].to_list()
+        channel_colors = []
+        for name in chan_names:
+            if name in coco_dset.index.name_to_cat:
+                cat = coco_dset.index.name_to_cat[name]
+                if 'color' in cat:
+                    channel_colors.append(cat['color'])
+                else:
+                    channel_colors.append(None)
+            else:
+                channel_colors.append(None)
+        if any(c is not None for c in channel_colors):
+            data = canvas
+            pass
 
         if cmap is not None:
             if kwimage.num_channels(canvas) == 1:

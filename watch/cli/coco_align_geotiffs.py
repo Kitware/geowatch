@@ -121,6 +121,11 @@ class CocoAlignGeotiffConfig(scfg.Config):
             '''
         )),
 
+        'convexify_regions': scfg.Value(False, help=ub.paragraph(
+            '''
+            if True, ensure that the regions are convex
+            ''')),
+
         'regions': scfg.Value('annots', help=ub.paragraph(
             '''
             Strategy for extracting regions, if annots, uses the convex hulls
@@ -276,6 +281,7 @@ def main(cmdline=True, **kw):
         >>>     'regions': 'annots',
         >>>     'max_workers': 0,
         >>>     'aux_workers': 0,
+        >>>     'convexify_regions': convexify_regions,
         >>> }
         >>> cmdline = False
         >>> new_dset = main(cmdline, **kw)
@@ -476,6 +482,10 @@ def main(cmdline=True, **kw):
 
     print('query region_df =\n{}'.format(region_df))
     print('cube.img_geos_df =\n{}'.format(cube.img_geos_df))
+
+    if config['convexify_regions']:
+        # Exapnd the ROI by the context factor
+        region_df['geometry'] = region_df['geometry'].convex_hull
 
     # Convert the ROI to a bounding box
     # region_df['geometry'] = region_df['geometry'].apply(shapely_bounding_box)

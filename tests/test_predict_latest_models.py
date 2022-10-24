@@ -156,7 +156,8 @@ def test_predict_latest_sc_model():
         xdev.view_directory(pred_fpath.parent)
 
         from watch.cli import coco_visualize_videos
-        coco_visualize_videos.main(cmdline=0, src=pred_fpath)
+        coco_visualize_videos.main(cmdline=0, src=pred_fpath, channels='auto',
+                                   stack='only', workers=0)
 
 
 def make_small_kwcoco_subset(dset, output_dpath):
