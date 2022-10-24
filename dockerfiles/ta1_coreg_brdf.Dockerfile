@@ -27,15 +27,15 @@ ENV PATH /opt/conda/bin:$PATH
 CMD [ "/bin/bash" ]
 
 # Leave these args here to better use the Docker build cache
-ARG CONDA_VERSION=py38_4.9.2
-ARG CONDA_MD5=122c8c9beb51e124ab32a0fa6426c656
+ARG CONDA_VERSION=py39_4.12.0
+ARG CONDA_SHA256=78f39f9bae971ec1ae7969f0516017f2413f17796670f7040725dd83fcff5689
 
 RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-${CONDA_VERSION}-Linux-x86_64.sh -O miniconda.sh && \
-    echo "${CONDA_MD5}  miniconda.sh" > miniconda.md5 && \
-    if ! md5sum --status -c miniconda.md5; then exit 1; fi && \
+    echo "${CONDA_SHA256}  miniconda.sh" > miniconda.sha256 && \
+    if ! sha256sum --status -c miniconda.sha256; then exit 1; fi && \
     mkdir -p /opt && \
     sh miniconda.sh -b -p /opt/conda && \
-    rm miniconda.sh miniconda.md5 && \
+    rm miniconda.sh miniconda.sha256 && \
     ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh && \
     echo ". /opt/conda/etc/profile.d/conda.sh" >> ~/.bashrc && \
     echo "conda activate watch" >> ~/.bashrc && \

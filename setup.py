@@ -226,7 +226,7 @@ if __name__ == '__main__':
     setup(
         author="WATCH developers",
         author_email='kitware@kitware.com',
-        python_requires='>=3.8',
+        python_requires='>=3.9',
         # https://pypi.org/classifiers/
         classifiers=[
             'Development Status :: 3 - Alpha',
