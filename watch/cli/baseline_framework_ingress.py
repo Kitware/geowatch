@@ -6,7 +6,6 @@ import tempfile
 import subprocess
 from urllib.parse import urlparse
 from datetime import datetime
-from concurrent.futures import as_completed
 import traceback
 
 import requests
