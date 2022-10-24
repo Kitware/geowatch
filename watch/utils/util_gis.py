@@ -710,7 +710,7 @@ def coerce_geojson_datas(arg, format='dataframe', allow_raw=False, workers=0,
             after the arguments are coerced.
 
     Example:
-        >>> # xdoctest +REQUIRES(module:iarpa_smart_metrics)
+        >>> # xdoctest: +REQUIRES(module:iarpa_smart_metrics)
         >>> from watch.utils.util_gis import *  # NOQA
         >>> from iarpa_smart_metrics.demo import generate_demodata
         >>> info1 = generate_demodata.generate_demo_metrics_framework_data(roi='DR_R001')
@@ -858,7 +858,7 @@ def coerce_geojson_paths(data, return_manifests=False):
             any intermediate manifest files.
 
     Example:
-        >>> # xdoctest +REQUIRES(module:iarpa_smart_metrics)
+        >>> # xdoctest: +REQUIRES(module:iarpa_smart_metrics)
         >>> from watch.utils.util_gis import *  # NOQA
         >>> import json
         >>> from iarpa_smart_metrics.demo import generate_demodata

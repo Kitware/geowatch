@@ -598,7 +598,7 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
     See gdal_single_warp() for args
 
     Example:
-        >>> # xdoctest +REQUIRES(--slow)
+        >>> # xdoctest: +REQUIRES(--slow)
         >>> # Uses data from the data cube with extra=1
         >>> from watch.utils.util_gdal import *  # NOQA
         >>> from watch.cli.coco_align_geotiffs import *  # NOQA
@@ -617,7 +617,7 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
         >>>                 local_epsg=local_epsg, rpcs=rpcs, verbose=3)
 
     Ignore:
-        >>> # xdoctest +REQUIRES(--slow)
+        >>> # xdoctest: +REQUIRES(--slow)
         >>> import kwimage
         >>> from watch.utils.util_gdal import gdal_single_warp
         >>> in_fpath = '/vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/23/K/PQ/2019/6/S2B_23KPQ_20190623_0_L2A/B03.tif'
