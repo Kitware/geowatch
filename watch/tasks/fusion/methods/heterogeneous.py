@@ -17,8 +17,6 @@ from watch.tasks.fusion.methods.watch_module_mixins import WatchModuleMixins
 from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
 
 import numpy as np
-from functools import partial
-import math
 
 try:
     import xdev
@@ -144,7 +142,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             ignore_scale: Don't compute the scale for each token individually and instead assign a cosntant value, `scale_base`.
             class_weights: Class weighting strategy.
             saliency_weights: Class weighting strategy.
-            
+
         Example:
             >>> # Note: it is important that the non-kwargs are saved as hyperparams
             >>> from watch.tasks.fusion.methods.heterogeneous import HeterogeneousModel
@@ -672,7 +670,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     task_labels_key = self.task_to_keynames[task_name]["labels"]
                     labels = frame[task_labels_key]
 
-                    if labels == None:
+                    if labels is None:
                         continue
 
                     # FIXME: This is necessary because sometimes when data.input_space_scale==native, label shapes and output_dims dont match!
@@ -697,9 +695,9 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
                     task_weights_key = self.task_to_keynames[task_name]["weights"]
                     loss = criterion(
-                            pred[None],
-                            loss_labels[None],
-                        )
+                        pred[None],
+                        loss_labels[None],
+                    )
                     loss *= frame[task_weights_key]
                     frame_losses.append(
                         self.global_head_weights[task_name] * loss.mean()

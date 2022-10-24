@@ -1,4 +1,5 @@
 from watch.tasks.fusion.methods import HeterogeneousModel
+from watch.tasks.fusion.datamodules import KWCocoVideoDataModule
 import tqdm
 import torch
 import numpy as np
@@ -6,8 +7,6 @@ from sklearn import metrics
 
 # Demo of the data module on auto-generated toy data
 from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-import watch
-import kwcoco
 
 
 def get_predictions(model, dataset):
@@ -31,7 +30,7 @@ def get_predictions(model, dataset):
 
             truth[key][frame["output_space_slice"]] = img_slice
 
-            if frame["change_weights"] != None:
+            if frame["change_weights"] is not None:
                 results[key][frame["output_space_slice"]] += frame_pred[1].detach() * frame["change_weights"]
                 counts[key][frame["output_space_slice"]] += frame["change_weights"]
 
@@ -84,7 +83,7 @@ def main():
     # Todo:
     #   - [ ] convert to package loading
     model = HeterogeneousModel.load_from_checkpoint(args.model_path)
-    model.eval();
+    model.eval()
 
     # Get prediction dicts
     # Todo:
