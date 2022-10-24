@@ -739,6 +739,22 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         gid_to_isbad[gid] = force_bad
         gid_to_sample[gid] = sample_streams
 
+        HACK_FIX_NATIVE_ANNOT_SIZE = 1
+        if HACK_FIX_NATIVE_ANNOT_SIZE:
+            annot_mode_dims = None
+            all_mode_dims = []
+            frame_dets = None
+            for sample in sample_streams.values():
+                mode_dims = sample['im'].shape[1:3]
+                if 'annots' in sample:
+                    frame_dets = sample['annots']['frame_dets'][0]
+                    annot_mode_dims = mode_dims
+                all_mode_dims.append(mode_dims)
+            max_mode_dims = np.array(max(all_mode_dims, key=np.prod))
+            if frame_dets is not None:
+                fixup_scale = (max_mode_dims / annot_mode_dims)[::-1]
+                frame_dets.scale(fixup_scale, inplace=True)
+
     def __getitem__(self, index):
         """
         Example:
