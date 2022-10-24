@@ -273,11 +273,13 @@ def perchannel_colorize(data, channel_colors=None):
 
     resolved_channel_colors = []
     for c in channel_colors:
+        # print(f'resolved_channel_colors={resolved_channel_colors}')
         if c is None:
             c = next(fill_color_iter)
         else:
             c = kwimage.Color.coerce(c).as01()
         resolved_channel_colors.append(c)
+    # print(f'resolved_channel_colors={resolved_channel_colors}')
 
     # Each class gets its own color, and modulates the alpha
     sumtotal = np.nansum(data, axis=2)
@@ -286,11 +288,13 @@ def perchannel_colorize(data, channel_colors=None):
     layers = []
     for cidx in range(num_channels):
         chan = data[:, :, cidx]
-        layer = np.empty(tuple(chan.shape) + (4,))
-        alpha = chan / sumtotal
-        layer[..., 3] = alpha
+        # alpha = chan / sumtotal
+        alpha = chan / num_channels
         color = resolved_channel_colors[cidx]
+        layer = np.empty(tuple(chan.shape) + (4,))
+        layer[..., 3] = alpha
         layer[..., 0:3] = color
+        layers.append(layer)
 
     colormask = kwimage.overlay_alpha_layers(layers)
     # colormask[..., 3] *= with_alpha

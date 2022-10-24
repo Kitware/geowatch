@@ -896,18 +896,19 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         # Do the channels correspond to classes with known colors?
         chan_names = chan_row['chan'].to_list()
         channel_colors = []
-        for name in chan_names:
-            if name in coco_dset.index.name_to_cat:
-                cat = coco_dset.index.name_to_cat[name]
+        for cname in chan_names:
+            if cname in coco_dset.index.name_to_cat:
+                cat = coco_dset.index.name_to_cat[cname]
                 if 'color' in cat:
                     channel_colors.append(cat['color'])
                 else:
                     channel_colors.append(None)
             else:
                 channel_colors.append(None)
+
         if any(c is not None for c in channel_colors):
-            data = canvas
-            pass
+            canvas = util_kwimage.perchannel_colorize(canvas, channel_colors=channel_colors)
+            canvas = canvas[..., 0:3]
 
         if cmap is not None:
             if kwimage.num_channels(canvas) == 1:
