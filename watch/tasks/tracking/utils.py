@@ -306,7 +306,18 @@ class TrackFunction(collections.abc.Callable):
                 new_tids = new_annots.get('track_id', None)
                 # Only overwrite track ids for annots that didn't have them
                 new_tids = np.where(orig_trackless_flags, new_tids, orig_tids)
-                new_tids = list(map(int, new_tids))
+
+                # Ensure types are json serializable
+                import numbers
+                def _fixtype(tid):
+                    # need to keep strings the same, but integers need to be
+                    # case from numpy to python ints.
+                    if isinstance(tid, numbers.Integral):
+                        return int(tid)
+                    else:
+                        return tid
+                new_tids = list(map(_fixtype, new_tids))
+
                 new_annots.set('track_id', new_tids)
 
         # TODO: why is this assert here?
