@@ -40,11 +40,16 @@ optimizer:
   class_path: torch.optim.AdamW
   init_args:
     lr: 1e-3
-    weight_decay: 1e-5
+    weight_decay: 1e-4
 profile: false
 seed_everything: true
 trainer:
-  callbacks: null
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        monitor: val_change_f1
+        save_top_k: 10
+        mode: max
   check_val_every_n_epoch: 5
   enable_checkpointing: true
   enable_model_summary: true

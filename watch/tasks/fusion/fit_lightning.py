@@ -1,7 +1,6 @@
 from watch.tasks.fusion.datamodules.kwcoco_datamodule import KWCocoVideoDataModule
 # Import models for the CLI registry
-from watch.tasks.fusion.methods import SequenceAwareModel  # NOQA
-from watch.tasks.fusion.methods import MultimodalTransformer  # NOQA
+from watch.tasks.fusion.methods import * # NOQA
 
 """
 The Wrapped class below are examples of why we should eventually factor out the current configuraiton system. LightningCLI interogates the __init__ methods belonging to LightningModule and LightningDataModule to decide which parameters can be configured.
@@ -75,7 +74,6 @@ def main():
             super().add_arguments_to_parser(parser)
 
     MyLightningCLI(
-        # SequenceAwareModel,
         model_class=pl.LightningModule,  # TODO: factor out common components of the two models and put them in base class models inherit from
         # MultimodalTransformer,
         datamodule_class=KWCocoVideoDataModule,
@@ -89,26 +87,23 @@ def main():
             # without modifying source code.
             profiler=pl.profilers.AdvancedProfiler(dirpath=".", filename="perf_logs"),
             callbacks=[
-                # pl_ext.callbacks.AutoResumer(),
-                # pl_ext.callbacks.StateLogger(),
                 pl_ext.callbacks.BatchPlotter(  # Fixme: disabled for multi-gpu training with deepspeed
                     num_draw=2,  # args.num_draw,
                     draw_interval="5min",  # args.draw_interval
                 ),
-                # pl_ext.callbacks.TensorboardPlotter(), # Fixme: disabled for multi-gpu training with deepspeed
-                # pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
                 pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
 
                 pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),
-                # pl.callbacks.GPUStatsMonitor(),  # enabling this breaks CPU tests
-                pl.callbacks.ModelCheckpoint(
-                    monitor='val_change_f1', mode='max', save_top_k=4),
-                pl.callbacks.ModelCheckpoint(
-                    monitor='val_saliency_f1', mode='max', save_top_k=4),
-                pl.callbacks.ModelCheckpoint(
-                    monitor='val_class_f1_micro', mode='max', save_top_k=4),
-                pl.callbacks.ModelCheckpoint(
-                    monitor='val_class_f1_macro', mode='max', save_top_k=4),
+                # leaving always on breaks when correspinding metric isnt
+                # tracked because loss_weight==0
+                # pl.callbacks.ModelCheckpoint(
+                #     monitor='val_change_f1', mode='max', save_top_k=4),
+                # pl.callbacks.ModelCheckpoint(
+                #     monitor='val_saliency_f1', mode='max', save_top_k=4),
+                # pl.callbacks.ModelCheckpoint(
+                #     monitor='val_class_f1_micro', mode='max', save_top_k=4),
+                # pl.callbacks.ModelCheckpoint(
+                #     monitor='val_class_f1_macro', mode='max', save_top_k=4),
             ]
         ),
     )
@@ -121,7 +116,7 @@ if __name__ == "__main__":
                 --model.help=MultimodalTransformer
 
         python -m watch.tasks.fusion.fit_lightning fit \
-                --model.help=SequenceAwareModel
+                --model.help=NoopModel
 
         python -m watch.tasks.fusion.fit_lightning fit \
             --data.train_dataset=special:vidshapes8-frames9-speed0.5-multispectral \
@@ -140,7 +135,7 @@ if __name__ == "__main__":
             --trainer.devices=0, \
             --trainer.precision=16 \
             --trainer.fast_dev_run=5 \
-            --model=SequenceAwareModel \
+            --model=NoopModel\
             --model.tokenizer=linconv
     """
     main()

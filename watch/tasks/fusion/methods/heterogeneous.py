@@ -657,6 +657,10 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         return outputs
 
     def shared_step(self, batch, batch_idx=None, stage="train", with_loss=True):
+
+        # FIXME: why are we getting nones here?
+        batch = [ex for ex in batch if ex is not None]
+
         outputs = self(batch)
 
         if not with_loss:
