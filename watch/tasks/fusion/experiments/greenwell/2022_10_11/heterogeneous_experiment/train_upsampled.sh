@@ -27,6 +27,7 @@ python -m watch.tasks.fusion fit \
     --trainer.accelerator="gpu" \
     --trainer.devices=1 \
     --trainer.precision=16 \
+    --trainer.accumulate_grad_batches=4 \
     --trainer.max_steps=20000
 
 EXPERIMENT_NAME=OSCD_HeterogeneousModel_upsampled_1.0
@@ -44,4 +45,5 @@ python -m watch.tasks.fusion fit \
     --trainer.accelerator="gpu" \
     --trainer.devices=1 \
     --trainer.precision=16 \
+    --trainer.accumulate_grad_batches=4 \
     --trainer.max_steps=20000

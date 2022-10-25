@@ -18,8 +18,8 @@ python -m watch.tasks.fusion fit \
     --config=config.yaml \
     --data.train_dataset="$TRAIN_FPATH" \
     --data.vali_dataset="$VALI_FPATH" \
-    --data.batch_size=1 \
-    --data.time_steps=2 \
+    --data.batch_size=2 \
+    --data.time_steps=3 \
     --model.init_args.name=$EXPERIMENT_NAME \
     --trainer.default_root_dir="$DEFAULT_ROOT_DIR" \
     --trainer.accelerator="gpu" \
