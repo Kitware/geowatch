@@ -16,6 +16,7 @@ from packaging import version
 import safer
 import watch.heuristics
 import kwplot
+import kwimage
 from matplotlib.collections import LineCollection
 from matplotlib.colors import to_rgba
 from matplotlib.dates import date2num
@@ -810,9 +811,24 @@ def viz_sc(sc_results, save_dpath):
             )
             y_var = 'pred phases ahead of true phase'
         elif how == 'strip':
+            # get tp idxs before reshaping
+            def tp_idxs(grp):
+                grp = grp.sort_values(by='date')
+                grp['pred'] = (grp['pred']
+                               .fillna(method='ffill')
+                               .fillna('No Activity'))
+                grp = grp[~grp['true'].isna()]
+                match = grp['pred'] == grp['true']
+                ixs = grp[match.shift() != match].index.values
+                x = grp['date'].map(date2num)
+                blocks = [x.loc[[start, end]] for start, end, matches in zip(ixs, ixs[1:], match[ixs]) if matches]
+                return blocks
+            tps = df.groupby('group').apply(tp_idxs)
+
             df = df.melt(id_vars=['date', 'group'], value_name='phase').dropna()
             df['phase'] = df['phase'].astype(phases_type)
             df['yval'], ylabels = pd.factorize(df['group'])
+            tps.index = tps.index.map(dict(zip(ylabels, range(len(ylabels)))))
             with pd.option_context('mode.chained_assignment', None):
                 df['yval'].loc[df['variable'] == 'pred'] -= 0.2
             grid = sns.relplot(
@@ -828,7 +844,12 @@ def viz_sc(sc_results, save_dpath):
             grid.map(add_colored_linesegments,
                      'date', 'yval', 'phase', 'yval',
             )
-            # import xdev; xdev.embed()
+            def highlight_tp(y, **kwargs):
+                sites = y.round().abs().astype(int).unique()
+                for site in sites:
+                    boxes = kwimage.Boxes([[*xs, site - 0.5, site + 0.5] for xs in tps.loc[site]], format='xxyy')
+                    kwplot.draw_boxes(boxes, color='green', fill=True, lw=0, alpha=0.3)
+            grid.map(highlight_tp, 'yval')
             if len(ylabels) <= 20:  # draw site names if they'll be readable
                 grid.set(yticks=range(len(ylabels)))
                 grid.set_yticklabels(ylabels, size=4)
