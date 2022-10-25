@@ -21,8 +21,6 @@ from matplotlib.collections import LineCollection
 from matplotlib.colors import to_rgba
 from matplotlib.dates import date2num
 import datetime
-# import seaborn as sns
-sns = kwplot.autosns()
 
 
 class MetricsConfig(scfg.DataConfig):
@@ -652,6 +650,7 @@ def viz_sc(sc_results, save_dpath):
     # kwimage.stack_image
     # kwplot.make_legend_image
     plt = kwplot.autoplt()
+    sns = kwplot.autosns()
 
     def viz_sc_gantt(df, plot_title, save_fpath):
         # TODO how to pick site boundary?
