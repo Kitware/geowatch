@@ -43,7 +43,28 @@ def positions_from_shape(shape, dtype="float32", device="cpu"):
 
 
 class PadToMultiple(nn.Module):
-    def __init__(self, multiple, mode='constant', value=None):
+    def __init__(self, multiple: int, mode: str='constant', value=None):
+        """
+        Pads input image-shaped tensors following strategy defined by mode/value. All padding appended to bottom and right of input.
+
+        Args:
+            multiple: (int)
+            mode:
+                (str, default: 'constant') Padding strategy. One of ('constant', 'reflect', 'replicate', 'circular').
+                See: https://pytorch.org/docs/stable/generated/torch.nn.functional.pad.html#torch.nn.functional.pad
+            value:
+                (Any, default: None) Fill value for 'constant', set to 0 automatically when value=None.
+                See: https://pytorch.org/docs/stable/generated/torch.nn.functional.pad.html#torch.nn.functional.pad
+
+        Example:
+            >>> from watch.tasks.fusion.methods.heterogeneous import PadToMultiple
+            >>> import torch
+            >>> pad_module = PadToMultiple(4)
+            >>> inputs = torch.randn(1, 3, 10, 11)
+            >>> outputs = pad_module(inputs)
+            >>> assert outputs.shape == (1, 3, 12, 12)
+        """
+
         super().__init__()
         self.multiple = multiple
         self.mode = mode
@@ -60,6 +81,10 @@ class PadToMultiple(nn.Module):
 
 
 class NanToNum(nn.Module):
+    """
+    Module which converts NaN values in input tensors to numbers.
+    """
+
     def __init__(self, num=0.0):
         super().__init__()
         self.num = num
@@ -69,29 +94,51 @@ class NanToNum(nn.Module):
 
 
 class MipNerfPositionalEncoder(nn.Module):
-    def __init__(self, in_dims, L=10):
+    """
+    Module which computes MipNeRf-based positional encoding vectors from tensors of mean and scale values
+    """
+
+    def __init__(self, in_dims: int, num_freqs: int = 10):
+        """
+        out_dims = 2 * in_dims * num_freqs
+
+        Args:
+            in_dims: (int) number of input dimensions to expect for future calls to .forward(). Currently only needed for computing .output_dim
+            num_freqs: (int) number of frequencies to project dimensions onto.
+
+        Example:
+            >>> from watch.tasks.fusion.methods.heterogeneous import MipNerfPositionalEncoder
+            >>> import torch
+            >>> pos_enc = MipNerfPositionalEncoder(3, 4)
+            >>> input_means = torch.randn(3, 10, 10)
+            >>> input_scales = torch.randn(3, 10, 10)
+            >>> outputs = pos_enc(input_means, input_scales)
+            >>> assert outputs.shape == (2*3*4, 10, 10)
+        """
+
         super().__init__()
         self.mean_weights = nn.Parameter(
-            2. ** torch.arange(0, L),
+            2. ** torch.arange(0, num_freqs),
             requires_grad=False)
         self.scale_weights = nn.Parameter(
-            -(2. ** (2. * torch.arange(0, L) - 1)),
+            -(2. ** (2. * torch.arange(0, num_freqs) - 1)),
             requires_grad=False)
 
         self.weight = self.mean_weights
-        self.output_dim = 2 * in_dims * L
+        self.output_dim = 2 * in_dims * num_freqs
 
     def forward(self, mean, scale):
-        weighted_means = torch.einsum("y,x...->xy...", self.mean_weights, mean)
-        weighted_means = einops.rearrange(weighted_means, "x y ... -> (x y) ...")
 
-        weighted_scales = torch.einsum("y,x...->xy...", self.scale_weights, scale)
-        weighted_scales = einops.rearrange(weighted_scales, "x y ... -> (x y) ...")
+        weighted_means = torch.einsum("y,bx...->bxy...", self.mean_weights, mean)
+        weighted_means = einops.rearrange(weighted_means, "batch x y ... -> batch (x y) ...")
+
+        weighted_scales = torch.einsum("y,bx...->bxy...", self.scale_weights, scale)
+        weighted_scales = einops.rearrange(weighted_scales, "batch x y ... -> batch (x y) ...")
 
         return torch.concat([
             weighted_means.sin() * weighted_scales.exp(),
             weighted_means.cos() * weighted_scales.exp(),
-        ], dim=0)
+        ], dim=1)
 
 
 class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
@@ -490,7 +537,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     token_times_scales,
                 ])
 
-                token_encodings = self.position_encoder(token_encodings, token_scales)
+                token_encodings = self.position_encoder(token_encodings[None], token_scales[None])[0]
 
                 tokens = torch.concat([
                     tokens,
@@ -552,7 +599,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 token_times_scales,
             ])
 
-            token_encodings = self.position_encoder(token_encodings, token_scales)
+            token_encodings = self.position_encoder(token_encodings[None], token_scales[None])[0]
 
             example_tokens.append(token_encodings)
         return example_tokens
