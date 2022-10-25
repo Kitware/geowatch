@@ -12,38 +12,19 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/onera_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/onera_test.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/onera_test.kwcoco.json
 
-EXPERIMENT_NAME=OSCD_HeterogeneousModel_upsampled_0.1
+EXPERIMENT_NAME=OSCD_HeterogeneousModel_native_scaled_1.0
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion fit \
     --config=config.yaml \
     --model.init_args.name=$EXPERIMENT_NAME \
-    --model.ignore_scale=true \
-    --model.spatial_scale_base=0.1 \
-    --data.batch_size=16 \
-    --data.input_space_scale=null \
-    --data.train_dataset="$TRAIN_FPATH" \
-    --data.vali_dataset="$VALI_FPATH" \
-    --trainer.default_root_dir="$DEFAULT_ROOT_DIR" \
-    --trainer.accelerator="gpu" \
-    --trainer.devices=1 \
-    --trainer.precision=16 \
-    --trainer.accumulate_grad_batches=4 \
-    --trainer.max_steps=20000
-
-EXPERIMENT_NAME=OSCD_HeterogeneousModel_upsampled_1.0
-DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion fit \
-    --config=config.yaml \
-    --model.init_args.name=$EXPERIMENT_NAME \
-    --model.ignore_scale=true \
+    --model.ignore_scale=false \
     --model.spatial_scale_base=1.0 \
-    --data.batch_size=16 \
-    --data.input_space_scale=null \
+    --data.input_space_scale=native \
     --data.train_dataset="$TRAIN_FPATH" \
     --data.vali_dataset="$VALI_FPATH" \
+    --data.num_workers=8 \
     --trainer.default_root_dir="$DEFAULT_ROOT_DIR" \
     --trainer.accelerator="gpu" \
     --trainer.devices=1 \
     --trainer.precision=16 \
-    --trainer.accumulate_grad_batches=4 \
-    --trainer.max_steps=20000
+    --trainer.max_steps=200000
