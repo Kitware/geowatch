@@ -15,14 +15,13 @@ import scriptconfig as scfg
 from packaging import version
 import safer
 import watch.heuristics
-import matplotlib
-import matplotlib.pyplot as plt
+import kwplot
 from matplotlib.collections import LineCollection
 from matplotlib.colors import to_rgba
 from matplotlib.dates import date2num
 import datetime
-import seaborn as sns
-matplotlib.use('Agg')
+# import seaborn as sns
+sns = kwplot.autosns()
 
 
 class MetricsConfig(scfg.DataConfig):
@@ -652,6 +651,7 @@ def viz_sc(sc_results, save_dpath):
     # check out:
     # kwimage.stack_image
     # kwplot.make_legend_image
+    plt = kwplot.autoplt()
 
     def viz_sc_gantt(df, plot_title, save_fpath):
         # TODO how to pick site boundary?
@@ -808,6 +808,7 @@ def viz_sc(sc_results, save_dpath):
             grid.map(add_colored_linesegments,
                      'date', 'diff', 'true', 'group',
             )
+            y_var = 'pred phases ahead of true phase'
         elif how == 'strip':
             df = df.melt(id_vars=['date', 'group'], value_name='phase').dropna()
             df['phase'] = df['phase'].astype(phases_type)
@@ -827,6 +828,7 @@ def viz_sc(sc_results, save_dpath):
             grid.map(add_colored_linesegments,
                      'date', 'yval', 'phase', 'yval',
             )
+            # import xdev; xdev.embed()
             if len(ylabels) <= 20:  # draw site names if they'll be readable
                 grid.set(yticks=range(len(ylabels)))
                 grid.set_yticklabels(ylabels, size=4)
@@ -838,16 +840,17 @@ def viz_sc(sc_results, save_dpath):
                 true=ytrue,
                 pred=ypred,
             )).to_csv(save_fpath.with_suffix('.index.csv'))
+            y_var = '[region, true, pred]'
 
         # df['group_phase'] = df[['group', 'true']].agg('_'.join, axis=1)
 
         sns.move_legend(grid, 'upper right')
-        grid.set_axis_labels(x_var=x_var, y_var='pred phases ahead of true phase')
+        grid.set_axis_labels(x_var=x_var, y_var=y_var)
         plt.title(plot_title)
         grid.savefig(save_fpath)
         plt.close()
 
-    phs = list(filter(lambda ph: ph is not None, (r.sc_phasetable for r in sc_results)))
+    phs = [ph for r in sc_results if (ph := r.sc_phasetable) is not None]
 
     for ph in phs:
 
@@ -871,7 +874,7 @@ def viz_sc(sc_results, save_dpath):
     merged_df = pd.concat(phs, axis=0)
     viz_sc_multi(
         merged_df,
-        ' '.join(merged_df.index.get_level_values('region_id')),
+        ' '.join(merged_df.index.unique(level='region_id')),
         (save_dpath / 'sc_merged.png')
     )
 
