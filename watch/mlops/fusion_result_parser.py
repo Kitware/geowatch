@@ -19,58 +19,52 @@ import io
 import pandas as pd
 
 
+def load_iarpa_evaluation(fpath):
+    iarpa_info = _load_json(fpath)
+    metrics = {}
+    if 'best_bas_rows' in iarpa_info:
+        best_bas_rows = pd.read_json(io.StringIO(json.dumps(iarpa_info['best_bas_rows'])), orient='table')
+        bas_row = best_bas_rows.loc['__macro__'].reset_index().iloc[0]
+        metrics.update({
+            'bas_f1': bas_row['F1'],
+            'rho': bas_row['rho'],
+            'tau': bas_row['tau'],
+        })
+    if 'sc_df' in iarpa_info:
+        sc_df = pd.read_json(io.StringIO(json.dumps(iarpa_info['sc_df'])), orient='table')
+        metrics.update({
+            # 'mean_f1': sc_df.loc['F1'].mean(),
+            'macro_f1': sc_df.loc['__macro__']['F1'].mean(),
+            'micro_f1': sc_df.loc['__micro__']['F1'].mean(),
+            'macro_f1_siteprep': sc_df.loc['__macro__', 'Site Preparation']['F1'],
+            'macro_f1_active': sc_df.loc['__macro__', 'Site Preparation']['F1'],
+        })
+    return metrics, iarpa_info
+
+
 def load_eval_trk_poly(fpath, expt_dvc_dpath):
-    bas_info = _load_json(fpath)
-
-    best_bas_rows = pd.read_json(io.StringIO(json.dumps(bas_info['best_bas_rows'])), orient='table')
-    bas_row = best_bas_rows.loc['__macro__'].reset_index().iloc[0]
-
-    tracker_info = bas_info['parent_info']
     arg_prefix = 'trk.'
+    metrics, iarpa_info = load_iarpa_evaluation(fpath)
+    tracker_info = iarpa_info['parent_info']
     param_types = parse_tracker_params(tracker_info, expt_dvc_dpath, arg_prefix=arg_prefix)
-
-    metrics = {
-        'f1': bas_row['F1'],
-        'rho': bas_row['rho'],
-        'tau': bas_row['tau'],
-    }
-    extra_attrs = _add_prefix('trk.poly.metrics.', metrics)
+    extra_attrs = _add_prefix(arg_prefix + 'poly.metrics.', metrics)
     info = {
         'fpath': fpath,
         'metrics': metrics,
         'param_types': param_types,
         'other': {
             'extra_attrs': extra_attrs,
-            'best_bas_rows': best_bas_rows,
         },
-        'json_info': bas_info,
+        'json_info': iarpa_info,
     }
     return info
 
 
 def load_eval_act_poly(fpath, expt_dvc_dpath):
-    sc_info = _load_json(fpath)
-    # sc_info['sc_cm']
-    sc_df = pd.read_json(io.StringIO(json.dumps(sc_info['sc_df'])), orient='table')
-    # sc_cm = pd.read_json(io.StringIO(json.dumps(sc_info['sc_cm'])), orient='table')
-    tracker_info = sc_info['parent_info']
     arg_prefix = 'act.'
+    metrics, iarpa_info = load_iarpa_evaluation(fpath)
+    tracker_info = iarpa_info['parent_info']
     param_types = parse_tracker_params(tracker_info, expt_dvc_dpath, arg_prefix=arg_prefix)
-
-    # non_measures = ub.dict_diff(param_types, ['resource'])
-    # params = ub.dict_union(*non_measures.values())
-    metrics = {
-        # 'mean_f1': sc_df.loc['F1'].mean(),
-        'macro_f1': sc_df.loc['__macro__']['F1'].mean(),
-        'micro_f1': sc_df.loc['__micro__']['F1'].mean(),
-        'macro_f1_siteprep': sc_df.loc['__macro__', 'Site Preparation']['F1'],
-        'macro_f1_active': sc_df.loc['__macro__', 'Site Preparation']['F1'],
-    }
-    # metrics.update(
-    #     param_types['resource']
-    # )
-    # row = ub.odict(ub.dict_union(metrics, *param_types.values()))
-
     # Hack to grab information that we should have already had.
     HACK_HANDLE_CROPPED_AND_TRACK_PARAMS = 1
     if HACK_HANDLE_CROPPED_AND_TRACK_PARAMS:
@@ -79,17 +73,14 @@ def load_eval_act_poly(fpath, expt_dvc_dpath):
     else:
         extra_attrs = {}
     extra_attrs.update(_add_prefix('act.poly.metrics.', metrics))
-
     info = {
         'fpath': fpath,
         'metrics': metrics,
         'param_types': param_types,
         'other': {
             'extra_attrs': extra_attrs,
-            # 'sc_cm': sc_cm,
-            'sc_df': sc_df,
         },
-        'json_info': sc_info,
+        'json_info': iarpa_info,
     }
     return info
 

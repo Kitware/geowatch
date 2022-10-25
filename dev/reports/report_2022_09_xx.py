@@ -170,28 +170,6 @@ def main():
             dname = '_'.join(parts)
             row_dpath = (_dpath / dname).ensuredir()
 
-            # linkable_keys = [
-            #     f'{a}_{b}'
-            #     for a in ['eval', 'pred']
-            #     for b in ['pxl', 'trk', 'act']
-            # ]
-            # linkables = {}
-            # for key in linkable_keys:
-            #     try:
-            #         linkables[key] = ub.Path(state.templates[key].format(**row))
-            #     except KeyError:
-            #         ...
-
-            # for key, real_fpath in linkables.items():
-            #     if real_fpath.exists():
-            #         link_dpath = row_dpath / f'_link_{key}'
-            #         # hack:
-            #         if key == 'eval_pxl':
-            #             real_dpath = real_fpath.parent.parent
-            #         else:
-            #             real_dpath = real_fpath.parent
-            #         ub.symlink(real_dpath, link_dpath, verbose=0, overwrite=1)
-
             # metric_names = reporter.metric_registry.name
             # metric_cols = (ub.oset(metric_names) & row.keys())
             # primary_metrics = (ub.oset(['sc_macro_f1', 'BAS_F1']) & row.keys())
@@ -225,7 +203,7 @@ def main():
             # fit_params = fit_params - {
             #     'in_dataset_name', 'model_name', 'in_dataset_fpath', 'model_fpath'}
 
-            row_ = row.copy()
+            row = row.copy()
             row['rank'] = (rank, cohort)
             # row_['expt_dvc_dpath'] = '.'
             # pkg_fpath = state.templates['pkg_trk_pxl_fpath'].format(**row_)

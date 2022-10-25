@@ -132,6 +132,12 @@ class EvaluationReporter:
         #     initial_summary(table, loaded_table, reporter.dpath)
 
     def report_best(reporter, show_configs=0, verbose=0, top_k=2):
+        """
+        Ignore:
+            show_configs = 0
+            verbose = 1
+            top_k = 2
+        """
         import rich
         orig_merged_df = reporter.orig_merged_df
         metric_names = reporter.metric_registry.name
@@ -170,6 +176,9 @@ class EvaluationReporter:
             return df
 
         for groupid, subdf in orig_merged_df.groupby(group_keys):
+            group_row = ub.dzip(group_keys, groupid)
+            if '_poly_' not in group_row['type']:
+                continue
             if verbose:
                 print('')
                 rich.print(f'[orange1] -- <BEST ON: {groupid}> --')
@@ -359,8 +368,29 @@ class EvaluationReporter:
         big_rows = reporter.big_rows
         cleaned_df = clean_loaded_data(big_rows, expt_dvc_dpath)
         # reporter.other = other
+        reporter.orig_cleaned_df = cleaned_df
+
+        if 0:
+            # Remove non-varying (interesting) columns to make development more
+            # sane
+            keep_cols = []
+            for col in cleaned_df.columns:
+                keep = True
+                try:
+                    unique_vals = cleaned_df[col].unique()
+                    unique_vals = unique_vals[~pd.isnull(unique_vals)]
+                    if len(unique_vals) == 1:
+                        if '.' in col:
+                            keep = False
+                except Exception:
+                    pass
+                if keep:
+                    keep_cols.append(col)
+            cleaned_df = cleaned_df[keep_cols]
 
         if 1:
+            # Merge rows from earlier pipeline steps to all of the descendant
+            # rows that depend on it.
             from watch.utils import util_param_grid
             colnames = ub.oset(cleaned_df.columns)
             column_nestings = util_param_grid.dotkeys_to_nested(colnames)
@@ -369,38 +399,45 @@ class EvaluationReporter:
             column_nestings['trk']
             column_nestings['act']
 
-            trk_poly_rows = cleaned_df[cleaned_df.type == 'eval_trk_poly_fpath']
-            act_poly_rows = cleaned_df[cleaned_df.type == 'eval_act_poly_fpath']
-            trk_pxl_rows = cleaned_df[cleaned_df.type == 'eval_trk_pxl_fpath']
+            type_to_idkeys = {
+                'eval_trk_pxl_fpath': ['trk_model', 'test_trk_dset', 'trk_pxl_cfg'],
+                'eval_trk_poly_fpath': ['trk_model', 'test_trk_dset', 'trk_pxl_cfg', 'trk_poly_cfg'],
+            }
 
             metric_names = [c for c in cleaned_df.columns if 'metrics.' in c]
             metric_cols = (ub.oset(metric_names) & cleaned_df.columns)
 
-            def my_nonstandard_merge(smaller, larger, smaller_keys, move_cols):
-                smaller_lut = smaller.set_index(smaller_keys)
-                for smaller_key, group in dict(list(larger.groupby(smaller_keys))).items():
-                    small_match = smaller_lut.loc[smaller_key, move_cols]
-                    larger.loc[group.index, move_cols] = small_match
-
-            trk_pxl_keys = ['trk_model', 'test_trk_dset', 'trk_pxl_cfg']
-            trk_poly_keys = ['trk_model', 'test_trk_dset', 'trk_pxl_cfg', 'trk_poly_cfg']
-
+            smaller_row_type = 'eval_trk_pxl_fpath'
+            larger_row_type = 'eval_trk_poly_fpath'
             move_cols = [c for c in metric_cols if 'trk.pxl' in c]
-            smaller = trk_pxl_rows
-            smaller_keys = trk_pxl_keys
-            larger = trk_poly_rows
-            my_nonstandard_merge(smaller, larger, smaller_keys, move_cols)
+            smaller_keys = type_to_idkeys[smaller_row_type]
+            smaller = cleaned_df[cleaned_df.type == smaller_row_type]
+            larger = cleaned_df[cleaned_df.type == larger_row_type]
+            new_larger = my_nonstandard_merge(smaller, larger, smaller_keys, move_cols)
+            cleaned_df.loc[new_larger.index, move_cols] = new_larger.loc[:, move_cols].values
 
-            larger = act_poly_rows
-            my_nonstandard_merge(smaller, larger, smaller_keys, move_cols)
+            smaller_row_type = 'eval_trk_pxl_fpath'
+            larger_row_type = 'eval_act_poly_fpath'
+            move_cols = [c for c in metric_cols if 'trk.pxl' in c]
+            smaller_keys = type_to_idkeys[smaller_row_type]
+            smaller = cleaned_df[cleaned_df.type == smaller_row_type]
+            larger = cleaned_df[cleaned_df.type == larger_row_type]
+            new_larger = my_nonstandard_merge(smaller, larger, smaller_keys, move_cols)
+            cleaned_df.loc[new_larger.index, move_cols] = new_larger.loc[:, move_cols].values
 
+            smaller_row_type = 'eval_trk_poly_fpath'
+            larger_row_type = 'eval_act_poly_fpath'
             move_cols = [c for c in metric_cols if 'trk.poly' in c]
-            smaller = trk_poly_rows
-            smaller_keys = trk_poly_keys
-            larger = act_poly_rows
-            my_nonstandard_merge(smaller, larger, smaller_keys, move_cols)
+            smaller_keys = type_to_idkeys[smaller_row_type]
+            smaller = cleaned_df[cleaned_df.type == smaller_row_type]
+            larger = cleaned_df[cleaned_df.type == larger_row_type]
+            new_larger = my_nonstandard_merge(smaller, larger, smaller_keys, move_cols)
+            cleaned_df.loc[new_larger.index, move_cols] = new_larger.loc[:, move_cols].values
 
-        reporter.orig_cleaned_df = cleaned_df
+            # larger[larger['type'] == 'eval_act_poly_fpath']
+            cleaned_df[cleaned_df['type'] == 'eval_trk_pxl_fpath'][metric_cols]
+            cleaned_df[cleaned_df['type'] == 'eval_act_poly_fpath'][metric_cols].T
+
         reporter.orig_merged_df = cleaned_df
 
         # import xdev
@@ -776,6 +813,69 @@ def checkpoint_filepath_info(fname):
             info['ckpt_ver'] = 'v0'
         info = ub.dict_diff(info, {'ext', 'prefix'})
     return info
+
+
+def my_nonstandard_merge(smaller, larger, smaller_keys, move_cols, mode=0):
+    """
+    We are copying specific columns from a single row in a smaller dataframe
+    into multiple rows in a larger data frame.
+
+    Args:
+        smaller (pd.DataFrame): a data frame to copy from
+        larger (pd.DataFrame): a data frame to copy into
+        smaller_keys (List[str]): columns that specify a single row in
+            `smaller` and groups of rows in `larger`
+        move_cols (List[str]): the columns to move.
+
+    Example:
+        >>> from watch.mlops.expt_report import *  # NOQA
+        >>> smaller = pd.DataFrame([
+        >>>     {'k1': 1, 'k2': 1, 'm1': 2, 'm2': 2, 's': 2, 'u1': 9},
+        >>>     {'k1': 3, 'k2': 3, 'm1': 4, 'm2': 3, 's': 2, 'u2': 8},
+        >>>     {'k1': 5, 'k2': 5, 'm1': 6, 'm2': 5, 's': 2, 'u3': 7},
+        >>> ])
+        >>> larger = pd.DataFrame([
+        >>>     {'k1': 1, 'k2': 1, 'm1': np.nan, 'u2': 1, 's': 3},
+        >>>     {'k1': 1, 'k2': 1, 'm1': np.nan, 'u2': 2, 's': 3},
+        >>>     {'k1': 3, 'k2': 3, 'm1': np.nan, 'u2': 3, 's': 3},
+        >>>     {'k1': 3, 'k2': 3, 'm1': np.nan, 'u2': 4, 's': 3},
+        >>>     {'k1': 5, 'k2': 5, 'm1': np.nan, 'u2': 5, 's': 3},
+        >>>     {'k1': 5, 'k2': 5, 'm1': np.nan, 'u2': 6, 's': 3},
+        >>> ])
+        >>> smaller_keys = ['k1', 'k2']  # should be usable as an index
+        >>> move_cols = ['m1', 'm2']  # columns to move
+        >>> larger1 = my_nonstandard_merge(smaller, larger, smaller_keys, move_cols, mode=0)
+        >>> print(larger1)
+        >>> larger2 = my_nonstandard_merge(smaller, larger, smaller_keys, move_cols, mode=1)
+        >>> print(larger2)
+
+    Ignore:
+        import timerit
+        ti = timerit.Timerit(100, bestof=10, verbose=2)
+        for timer in ti.reset('time'):
+            my_nonstandard_merge(smaller, larger, smaller_keys, move_cols, mode=1)
+        for timer in ti.reset('time'):
+            my_nonstandard_merge(smaller, larger, smaller_keys, move_cols, mode=0)
+    """
+    if mode == 0:
+        smaller_suffix = None
+        larger_suffix = '_y'
+        smaller_subset = smaller[smaller_keys + move_cols]
+        new_larger = pd.merge(smaller_subset, larger, on=smaller_keys,
+                              suffixes=[smaller_suffix, larger_suffix],
+                              validate='one_to_many')
+        drop_cols = [k + larger_suffix for k in larger.columns.intersection(move_cols)]
+        new_larger = new_larger.drop(drop_cols, axis=1)
+        return new_larger
+    else:
+        smaller_lut = smaller.set_index(smaller_keys)
+        new_larger = larger.copy()
+        for smaller_key, group in dict(list(larger.groupby(smaller_keys))).items():
+            small_match = smaller_lut.loc[smaller_key, move_cols]
+            # Why is .values needed here? TODO: understand
+            new_larger.loc[group.index, move_cols] = small_match.values
+            # larger.loc[group.index, move_cols] = small_match
+        return new_larger
 
 
 # def deduplicate_test_datasets(raw_df):
