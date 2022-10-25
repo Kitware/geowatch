@@ -365,10 +365,9 @@ class RegionResult:
             df = pd.concat((df_sites, df_slices), axis=1)
             df['region_id'] = region_id
             df = df.reset_index().set_index(['region_id', 'site', 'site_candidate', 'date'])
-            df = df.replace(['NA', '[]', None], pd.NA
-                           ).astype('string'
-                                   ).apply(
-                                       lambda s: s.str.replace("'", '').str.strip('{}'))
+            df = (df.replace(['NA', '[]', None], pd.NA)
+                    .astype('string')
+                    .apply(lambda s: s.str.replace("'", '').str.strip('{}')))
             # df = df.apply(lambda s: s.str.split(', '))
 
             return df
@@ -734,7 +733,7 @@ def viz_sc(sc_results, save_dpath):
         phases_type = pd.api.types.CategoricalDtype(
             ['Unknown'] + phases, ordered=True)
         df['pred'] = df['pred'].astype(phases_type)
-        df['true'] = df ['true'].astype(phases_type)
+        df['true'] = df['true'].astype(phases_type)
         # assert df.groupby('group')['true'].is_monotonic_increasing.all()
         # assert df.groupby('group')['pred'].is_monotonic_increasing.all()
 
@@ -807,8 +806,7 @@ def viz_sc(sc_results, save_dpath):
                 s=10,
             )
             grid.map(add_colored_linesegments,
-                     'date', 'diff', 'true', 'group',
-            )
+                     'date', 'diff', 'true', 'group',)
             y_var = 'pred phases ahead of true phase'
         elif how == 'strip':
             # get tp idxs before reshaping
@@ -842,8 +840,8 @@ def viz_sc(sc_results, save_dpath):
                 facet_kws=dict(legend_out=False),
             )
             grid.map(add_colored_linesegments,
-                     'date', 'yval', 'phase', 'yval',
-            )
+                     'date', 'yval', 'phase', 'yval',)
+
             def highlight_tp(y, **kwargs):
                 sites = y.round().abs().astype(int).unique()
                 for site in sites:
