@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import json
 from glob import glob
+import shutil
 
 from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
 from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress  # noqa: 501
@@ -228,50 +229,65 @@ def run_sc_fusion_for_baseline(
                                                     strip_nonregions=True,
                                                     replace_originator=True)
 
-    # 3. Run fusion
-    print("* Running SC fusion *")
     sc_fusion_kwcoco_path = os.path.join(
         ingress_dir, 'sc_fusion_kwcoco.json')
 
-    subprocess.run(['python', '-m', 'watch.tasks.fusion.predict',
-                    '--devices', '0,',
-                    '--write_preds', 'False',
-                    '--write_probs', 'True',
-                    '--with_change', 'False',
-                    '--with_saliency', 'False',
-                    '--with_class', 'True',
-                    '--test_dataset', ingress_kwcoco_path,
-                    '--package_fpath', sc_fusion_model_path,
-                    '--pred_dataset', sc_fusion_kwcoco_path,
-                    '--num_workers', '0' if force_zero_num_workers else str(jobs),  # noqa: 501
-                    '--set_cover_algo', 'approx',
-                    '--batch_size', '8',
-                    '--tta_time', '1',
-                    '--tta_fliprot', '0',
-                    '--chip_overlap', '0.3'], check=True)
-
-    # 4. Compute tracks (SC)
-    print("* Computing tracks (SC) *")
     site_models_outdir = os.path.join(ingress_dir, 'site_models')
-
+    os.makedirs(site_models_outdir, exist_ok=True)
     region_models_outdir = os.path.join(ingress_dir, 'region_models')
+    os.makedirs(region_models_outdir, exist_ok=True)
 
-    sc_track_kwargs = {"boundaries_as": "polys",
-                       "use_viterbi": "v1,v6",
-                       "thresh": sc_thresh}
-    subprocess.run(['python', '-m', 'watch.cli.kwcoco_to_geojson',
-                    sc_fusion_kwcoco_path,
-                    '--out_dir', site_models_outdir,
-                    '--default_track_fn', sc_track_fn,
-                    '--site_summary',
-                    os.path.join(region_models_outdir, '*.geojson'),
-                    '--track_kwargs', json.dumps(sc_track_kwargs)],
-                   check=True)
+    # 3.1. Check that we have at least one "video" (BAS identified
+    # site) to run over; if not skip SC fusion and KWCOCO to GeoJSON
+    with open(ingress_kwcoco_path) as f:
+        ingress_kwcoco_data = json.load(f)
 
-    cropped_region_models_outdir = os.path.join(ingress_dir,
-                                                'cropped_region_models')
+    if len(ingress_kwcoco_data.get('videos', ())) == 0:
+        # Copy input region model to output (since there no sites to
+        # modify)
+        shutil.copy(local_region_path,
+                    os.path.join(region_models_outdir,
+                                 "{}.geojson".format(region_id)))
+    else:
+        # 3. Run fusion
+        print("* Running SC fusion *")
+        subprocess.run(['python', '-m', 'watch.tasks.fusion.predict',
+                        '--devices', '0,',
+                        '--write_preds', 'False',
+                        '--write_probs', 'True',
+                        '--with_change', 'False',
+                        '--with_saliency', 'False',
+                        '--with_class', 'True',
+                        '--test_dataset', ingress_kwcoco_path,
+                        '--package_fpath', sc_fusion_model_path,
+                        '--pred_dataset', sc_fusion_kwcoco_path,
+                        '--num_workers', '0' if force_zero_num_workers else str(jobs),  # noqa: 501
+                        '--set_cover_algo', 'approx',
+                        '--batch_size', '8',
+                        '--tta_time', '1',
+                        '--tta_fliprot', '0',
+                        '--chip_overlap', '0.3'], check=True)
+
+        # 4. Compute tracks (SC)
+        print("* Computing tracks (SC) *")
+        sc_track_kwargs = {"boundaries_as": "polys",
+                           "use_viterbi": "v1,v6",
+                           "thresh": sc_thresh}
+        subprocess.run(['python', '-m', 'watch.cli.kwcoco_to_geojson',
+                        sc_fusion_kwcoco_path,
+                        '--out_dir', site_models_outdir,
+                        '--default_track_fn', sc_track_fn,
+                        '--site_summary',
+                        os.path.join(region_models_outdir, '*.geojson'),
+                        '--track_kwargs', json.dumps(sc_track_kwargs)],
+                       check=True)
+
     cropped_site_models_outdir = os.path.join(ingress_dir,
                                               'cropped_site_models')
+    os.makedirs(cropped_site_models_outdir, exist_ok=True)
+    cropped_region_models_outdir = os.path.join(ingress_dir,
+                                                'cropped_region_models')
+    os.makedirs(cropped_region_models_outdir, exist_ok=True)
 
     subprocess.run(['python', '-m', 'watch.cli.crop_sites_to_regions',
                     '--site_models',
