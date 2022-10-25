@@ -829,10 +829,10 @@ def main(args):
     """
     Example:
         >>> # test BAS and default (SC) modes
-        >>> import sys, ubelt
         >>> from watch.cli.kwcoco_to_geojson import *  # NOQA
         >>> from watch.cli.kwcoco_to_geojson import main
         >>> from watch.demo import smart_kwcoco_demodata
+        >>> from watch.utils import util_gis
         >>> import kwcoco
         >>> import ubelt as ub
         >>> # run BAS on demodata in a new place
@@ -845,8 +845,9 @@ def main(args):
         >>> regions_dir = dpath / 'regions/'
         >>> bas_coco_fpath = dpath / 'bas_output.kwcoco.json'
         >>> sc_coco_fpath = dpath / 'sc_output.kwcoco.json'
-        >>> bas_fpath = dpath / 'bas_sites.geojson'
-        >>> sc_fpath = dpath / 'sc_sites.geojson'
+        >>> bas_fpath = dpath / 'bas_sites.json'
+        >>> sc_fpath = dpath / 'sc_sites.json'
+        >>> # Run BAS
         >>> args = bas_args = [
         >>>     '--in_file', coco_dset.fpath,
         >>>     '--out_site_summaries_dir', str(regions_dir),
@@ -855,9 +856,7 @@ def main(args):
         >>>     '--track_fn', 'watch.tasks.tracking.from_polygon.MonoTrack',
         >>> ]
         >>> main(args)
-        >>> # reload it with tracks
-        >>> coco_dset = kwcoco.CocoDataset(bas_fpath)
-        >>> # run SC on the same dset
+        >>> # Run SC on the same dset
         >>> sites_dir = dpath / 'sites'
         >>> args = sc_args = [
         >>>     '--in_file', str(bas_coco_fpath),
@@ -866,8 +865,29 @@ def main(args):
         >>>     '--out_kwcoco', str(sc_coco_fpath),
         >>> ]
         >>> main(args)
-        >>> # TODO: check expected results
-        >>> # cleanup
+        >>> # Check expected results
+        >>> bas_coco_dset = kwcoco.CocoDataset(bas_coco_fpath)
+        >>> sc_coco_dset = kwcoco.CocoDataset(sc_coco_fpath)
+        >>> orig_trackids = coco_dset.annots().lookup('track_id', None)
+        >>> bas_trackids = bas_coco_dset.annots().lookup('track_id', None)
+        >>> sc_trackids = sc_coco_dset.annots().lookup('track_id', None)
+        >>> assert sorted(set(orig_trackids)) == [None]
+        >>> assert len(bas_trackids) and None not in bas_trackids
+        >>> assert len(sc_trackids) and None not in sc_trackids
+        >>> summaries = list(util_gis.coerce_geojson_datas(bas_fpath, format='dataframe'))
+        >>> sites = list(util_gis.coerce_geojson_datas(sc_fpath, format='dataframe'))
+        >>> import pandas as pd
+        >>> sc_df = pd.concat([d['data'] for d in sites])
+        >>> bas_df = pd.concat([d['data'] for d in summaries])
+        >>> ssum_rows = bas_df[bas_df['type'] == 'site_summary']
+        >>> site_rows = sc_df[sc_df['type'] == 'site']
+        >>> obs_rows = sc_df[sc_df['type'] == 'observation']
+        >>> assert len(site_rows) > 0
+        >>> assert len(ssum_rows) > 0
+        >>> assert len(ssum_rows) == len(site_rows)
+        >>> assert len(ssum_rows) == len(site_rows)
+        >>> assert len(obs_rows) > len(site_rows)
+        >>> # Cleanup
         >>> dpath.delete()
 
     Example:
@@ -922,6 +942,8 @@ def main(args):
             raise ValueError(
                 'The directory to store individual sites must be specified')
         args.out_sites_fpath = ub.Path(args.out_sites_fpath)
+        if not str(args.out_sites_fpath).endswith('.json'):
+            raise ValueError('out_sites_fpath should have a .json extension')
 
     if args.out_site_summaries_fpath is not None:
         if args.out_site_summaries_dir is None:
@@ -929,6 +951,8 @@ def main(args):
                 'The directory to store individual site summaries must be '
                 'specified')
         args.out_site_summaries_fpath = ub.Path(args.out_site_summaries_fpath)
+        if not str(args.out_site_summaries_fpath).endswith('.json'):
+            raise ValueError('out_site_summaries_fpath should have a .json extension')
 
     # load the track kwargs
     if os.path.isfile(args.track_kwargs):
@@ -1059,7 +1083,7 @@ def main(args):
         sites_dir = ub.Path(args.out_sites_dir).ensuredir()
         # Also do this in BAS mode
         sites = convert_kwcoco_to_iarpa(coco_dset,
-                                        args.region_id,
+                                        default_region_id=args.region_id,
                                         as_summary=False)
         print(f'{len(sites)=}')
         # write sites to disk
@@ -1083,7 +1107,8 @@ def main(args):
 
     # Convert kwcoco to sites summaries
     if args.out_site_summaries_dir is not None:
-        sites = convert_kwcoco_to_iarpa(coco_dset, args.region_id,
+        sites = convert_kwcoco_to_iarpa(coco_dset,
+                                        default_region_id=args.region_id,
                                         as_summary=True)
         print(f'{len(sites)=}')
         site_summary_dir = ub.Path(args.out_site_summaries_dir).ensuredir()
@@ -1138,7 +1163,6 @@ def demo(coco_dset,
         regions_dir,
         '--track_fn',
         'watch.tasks.tracking.from_heatmap.TimeAggregatedBAS',
-        '--bas_mode',
     ]
     # run BAS on it
     main(bas_args)
