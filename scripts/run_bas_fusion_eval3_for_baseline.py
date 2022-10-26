@@ -268,7 +268,7 @@ def run_bas_fusion_for_baseline(
         "polygon_fn": "heatmaps_to_polys",
         "morph_kernel": None,
         "norm_ord": None,
-        "agg_fn": None,
+        "agg_fn": "probs",
         "thresh_hysteresis": None}
 
     tracked_bas_kwcoco_path = '_tracked'.join(
