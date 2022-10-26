@@ -389,7 +389,7 @@ class ResultAnalysis(ub.NiceRepr):
         config_rows = [r.params for r in self.results]
         sentinel = object()
         # pd.DataFrame(config_rows).channels
-        varied = dict(ub.varied_values(config_rows, default=sentinel, min_variations=1))
+        varied = dict(varied_values(config_rows, default=sentinel, min_variations=2, dropna=True))
         # remove nans
         varied = {
             k: {v for v in vs if not (isinstance(v, float) and math.isnan(v))}
@@ -848,6 +848,7 @@ class ResultAnalysis(ub.NiceRepr):
             }
         )
         for grid_item in grid:
+            ...
             self._report_one(grid_item)
 
         print(self.stats_table)
@@ -1223,3 +1224,68 @@ class SkillTracker:
         new_team_ratings = openskill.rate(team_standings)
         new_ratings = [new[0] for new in new_team_ratings]
         ratings.update(ub.dzip(ranking, new_ratings))
+
+
+def varied_values(longform, min_variations=0, default=ub.NoParam, dropna=False):
+    """
+    Given a list of dictionaries, find the values that differ between them.
+
+    Args:
+        longform (List[Dict[KT, VT]]):
+            This is longform data, as described in [SeabornLongform]_. It is a
+            list of dictionaries.
+
+            Each item in the list - or row - is a dictionary and can be thought
+            of as an observation. The keys in each dictionary are the columns.
+            The values of the dictionary must be hashable. Lists will be
+            converted into tuples.
+
+        min_variations (int, default=0):
+            "columns" with fewer than ``min_variations`` unique values are
+            removed from the result.
+
+        default (VT | NoParamType):
+            if specified, unspecified columns are given this value.
+            Defaults to NoParam.
+
+    Returns:
+        Dict[KT, List[VT]] :
+            a mapping from each "column" to the set of unique values it took
+            over each "row". If a column is not specified for each row, it is
+            assumed to take a `default` value, if it is specified.
+
+    Raises:
+        KeyError: If ``default`` is unspecified and all the rows
+            do not contain the same columns.
+
+    References:
+        .. [SeabornLongform] https://seaborn.pydata.org/tutorial/data_structure.html#long-form-data
+    """
+    # Enumerate all defined columns
+    import numbers
+    columns = set()
+    for row in longform:
+        if default is ub.NoParam and len(row) != len(columns) and len(columns):
+            missing = set(columns).symmetric_difference(set(row))
+            raise KeyError((
+                'No default specified and not every '
+                'row contains columns {}').format(missing))
+        columns.update(row.keys())
+
+    # Build up the set of unique values for each column
+    varied = ub.ddict(set)
+    for row in longform:
+        for key in columns:
+            value = row.get(key, default)
+            if isinstance(value, list):
+                value = tuple(value)
+            if dropna and isinstance(value, numbers.Number) and math.isnan(value):
+                continue
+            varied[key].add(value)
+
+    # Remove any column that does not have enough variation
+    if min_variations > 0:
+        for key, values in list(varied.items()):
+            if len(values) <= min_variations:
+                varied.pop(key)
+    return varied

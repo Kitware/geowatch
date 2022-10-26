@@ -19,6 +19,7 @@ import functools  # NOQA
 # APPLY Monkey Patches
 from watch.tasks.fusion import monkey  # NOQA
 from watch import heuristics
+from watch.mlops import smart_pipeline as smart
 
 
 fit_param_keys = heuristics.fit_param_keys
@@ -98,26 +99,7 @@ class EvaluationReporter:
         reporter.metric_registry['type'] = 'metric'
 
         # TODO: add column types
-        column_meanings = [
-            {'name': 'raw', 'help': 'A full path to a file on disk that contains this info'},
-            {'name': 'dvc', 'help': 'A path to a DVC sidecar file if it exists.'},
-            {'name': 'type', 'help': 'The type of the row'},
-            {'name': 'step', 'help': 'The number of steps taken by the most recent training run associated with the row'},
-            {'name': 'total_steps', 'help': 'An estimate of the total number of steps the model associated with the row took over all training runs.'},
-            {'name': 'model', 'help': 'The name of the learned model associated with this row'},
-            # {'name': 'test_dset', 'help': 'The name of the test dataset used to compute a metric associated with this row'},
-            {'name': 'test_trk_dset', 'help': 'The name of the test BAS dataset used to compute a metric associated with this row'},
-            {'name': 'test_act_dset', 'help': 'The name of the test SC dataset used to compute a metric associated with this row'},
-
-            {'name': 'expt', 'help': 'The name of the experiment, i.e. training session that might have made several models'},
-            {'name': 'dataset_code', 'help': 'The higher level dataset code associated with this row'},
-
-            {'name': 'pred_cfg', 'help': 'A hash of the configuration used for pixel heatmap prediction'},
-            {'name': 'trk_cfg', 'help': 'A hash of the configuration used for BAS tracking'},
-            {'name': 'act_cfg', 'help': 'A hash of the configuration used for SC classification'},
-
-            {'name': 'total_steps', 'help': 'An estimate of the total number of steps the model associated with the row took over all training runs.'},
-        ]
+        column_meanings = smart.get_column_meanings()
         reporter.column_meanings = column_meanings
 
     def status(reporter, table=None):
@@ -226,53 +208,32 @@ class EvaluationReporter:
     def serialize_rows(reporter):
         from kwcoco.util.util_json import ensure_json_serializable
         table = reporter.orig_merged_df
-        state = reporter.state
+        # state = reporter.state
+
+        colnames = ub.oset(reporter.orig_merged_df.columns)
+        # column_nestings = util_param_grid.dotkeys_to_nested(colnames)
+        dotted = ub.oset([c for c in colnames if '.' in c])
+        metric_cols = ub.oset([c for c in dotted if 'metrics.' in c])
+        meta_cols = ub.oset([c for c in dotted if 'meta.' in c])
+        resource_cols = ub.oset([c for c in dotted if 'resource.' in c])
+        fit_cols = ub.oset([c for c in dotted if 'fit.' in c])
+        param_cols = dotted - (metric_cols | fit_cols | resource_cols | meta_cols)
+
         for row in table.to_dict('records'):
-            row = ensure_json_serializable(row)
+            row = ub.udict(ensure_json_serializable(row))
             walker = ub.IndexableWalker(row)
             for path, val in walker:
                 if hasattr(val, 'spec'):
                     walker[path] = val.spec
 
-            # hack to get back to regular names
-            pred_params = ub.udict(
-                {k[5:] : v for k, v in row['pred_params'].items()
-                 if k.startswith('pred_')})
-
-            pred_params = pred_params - {
-                'in_dataset_name', 'model_name', 'in_dataset_fpath', 'model_fpath'}
-
-            # hack to get back to regular names
-            track_params = ub.udict({
-                k[4:] : v for k, v in row['track_params'].items() if k.startswith('trk_')})
-            track_params = track_params - {
-                'in_dataset_name', 'model_name', 'in_dataset_fpath', 'model_fpath'}
-
-            fit_params = ub.udict({
-                k : v for k, v in row['fit_params'].items()})
-            fit_params = fit_params - {
-                'in_dataset_name', 'model_name', 'in_dataset_fpath', 'model_fpath'}
-
-            row_ = row.copy()
-            row_['expt_dvc_dpath'] = '.'
-            pkg_fpath = state.templates['pkg'].format(**row_)
-
-            metric_names = reporter.metric_registry.name
-            metric_cols = (ub.oset(metric_names) & row.keys())
-            primary_metrics = (ub.oset(['sc_macro_f1', 'BAS_F1']) & row.keys())
-            metric_cols = list((metric_cols & primary_metrics) | (metric_cols - primary_metrics))
-
-            metrics = ub.udict(row) & metric_cols
-            cost_metrics_cols = {'co2_kg', 'kwh', 'total_hours'}
-            metrics.update(ub.udict(row) & cost_metrics_cols)
-            metrics['properties'] = {'test_dataset': row['test_dset']}
             summary = {
-                'model': row['model'],
-                'file_name': pkg_fpath,
-                'pred_params': pred_params,
-                'track_params': track_params,
-                'fit_params': fit_params,
-                'metrics': metrics,
+                # 'model': row['model'],
+                # 'file_name': pkg_fpath,
+                'pred_params': row & param_cols,
+                'fit_params': row & fit_cols,
+                'resources': row & resource_cols,
+                'meta': row & meta_cols,
+                'metrics': row & metric_cols,
             }
             yield summary, row
 
@@ -284,22 +245,27 @@ class EvaluationReporter:
         results = []
         for summary, details in reporter.serialize_rows():
             params = {
-                **summary['fit_params'].map_keys(lambda k: 'fit_' + k),
-                **summary['track_params'].map_keys(lambda k: 'trk_' + k),
-                **summary['pred_params'].map_keys(lambda k: 'pxl_' + k),
+                **summary['fit_params'],
+                **summary['pred_params'],
             }
             for k, v in params.items():
                 if isinstance(v, list):
                     params[k] = repr(v)
             name = 'row_' + ub.hash_data(summary)[0:8]
-            metrics = ub.udict(summary['metrics']) - {'properties'}
+            metrics = ub.udict(summary['metrics'])  # - {'properties'}
             result = Result(name, params, metrics)
             results.append(result)
 
         analysis = ResultAnalysis(
             results,
-            metric_objectives={'BAS_F1': 'max', 'salient_AP': 'max'},
-            metrics=['BAS_F1']
+            metric_objectives={
+                'act.poly.metrics.bas_f1': 'max',
+                'act.poly.metrics.macro_f1': 'max'
+            },
+            metrics=[
+                'act.poly.metrics.bas_f1',
+                'act.poly.metrics.macro_f1'
+            ]
         )
         analysis.build()
         analysis.report()
@@ -593,9 +559,8 @@ def unique_col_stats(df):
 
 def load_extended_data(df, expt_dvc_dpath):
     """
-
     """
-    from watch.mlops import fusion_result_parser as frp
+    from watch.mlops import smart_pipeline as frp
     rows = df.to_dict('records')
     big_rows = []
     errors = []
@@ -638,7 +603,6 @@ def clean_loaded_data(big_rows, expt_dvc_dpath):
     def fix_none(v):
         return "None" if v is None else v
 
-    from watch.mlops import fusion_result_parser as frp
     # from watch.utils.util_param_grid import dotdict_to_nested
     import kwcoco
 
@@ -709,8 +673,8 @@ def clean_loaded_data(big_rows, expt_dvc_dpath):
         for k, v in params.items():
             if k.endswith('.channels'):
                 k3 = k.replace('channels', 'has_teamfeat')
-                request_sensorchan = kwcoco.SensorChanSpec.coerce(frp.shrink_channels(v))
-                row[k3] = frp.is_teamfeat(request_sensorchan)
+                request_sensorchan = kwcoco.SensorChanSpec.coerce(smart.shrink_channels(v))
+                row[k3] = smart.is_teamfeat(request_sensorchan)
 
         row.update(params)
         # row.update(info['metrics'])

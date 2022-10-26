@@ -131,7 +131,7 @@ def main():
     print(df[['type', 'trk.poly.thresh']].value_counts(dropna=False))
 
     # dpath = reporter.dpath
-    dpath = ub.Path.appdir('watch/expt-report/2022-09-xx').ensuredir()
+    dpath = ub.Path.appdir('watch/expt-report/2022-10-xx').ensuredir()
 
     # Dump details out about the best models
     cohort = ub.timestamp()
@@ -145,17 +145,30 @@ def main():
     # column_nestings = util_param_grid.dotkeys_to_nested(colnames)
     dotted = ub.oset([c for c in colnames if '.' in c])
     metric_cols = ub.oset([c for c in dotted if 'metrics.' in c])
+    meta_cols = ub.oset([c for c in dotted if 'meta.' in c])
     resource_cols = ub.oset([c for c in dotted if 'resource.' in c])
     fit_cols = ub.oset([c for c in dotted if 'fit.' in c])
-    param_cols = dotted - (metric_cols | fit_cols | resource_cols)
+    param_cols = dotted - (metric_cols | fit_cols | resource_cols | meta_cols)
 
     if 0:
         idx = 368
         df.loc[idx]
 
+    dset_blocklist = [
+        'KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco_cropped_kwcoco_for_bas',
+    ]
+    type_blocklist = [
+        'eval_trk_poly_fpath'
+    ]
+
     import rich as rich_mod
+    from watch.utils import util_yaml
     for groupid, shortlist in groupid_to_shortlist.items():
         test_dset, type = groupid
+        if test_dset in dset_blocklist:
+            continue
+        if type in type_blocklist:
+            continue
         _dpath = (best_models_dpath / f'{test_dset}_{type}').ensuredir()
 
         for rank, row in reversed(list(enumerate(shortlist[::-1].to_dict('records'), start=1))):
@@ -213,7 +226,7 @@ def main():
             # pkg_fpath = state.templates['pkg_trk_pxl_fpath'].format(**row_)
             # act_fpath = state.templates['pkg_act_pxl_fpath'].format(**row_)
 
-            if 0:
+            if 1:
                 pred_act_poly_kwcoco = ub.Path(state.templates['pred_act_poly_kwcoco'].format(**row))
                 # name = row.get('model', '') + row.get('pred_cfg', '') + row.get('trk_cfg', '')
                 name = '<todo: more context>'
@@ -222,7 +235,7 @@ def main():
                     fr'''
                     smartwatch visualize \
                         "{pred_act_poly_kwcoco}" \
-                        --channels="red|green|blue,No Activity|Active Construction|Post Construction" \
+                        --channels="red|green|blue,No Activity|Site Preparation|Active Construction|Post Construction" \
                         --viz_dpath={row_dpath}/_viz \
                         --stack=only \
                         --skip_missing=False \
@@ -230,6 +243,7 @@ def main():
                         --draw_anns=True \
                         --workers=avail/2 \
                         --animate=True \
+                        --draw_valid_region=False \
                         --extra_header="\nRank#{rank} {cohort}\n{name}"
                     ''')
                 print(viz_track_cmd)
@@ -243,10 +257,13 @@ def main():
                 'pred_params': row & param_cols,
                 'fit_params': row & fit_cols,
                 'resources': row & resource_cols,
+                'meta': row & meta_cols,
                 'metrics': row & metric_cols,
             }
-            summary_fpath = row_dpath / 'summary.json'
-            summary_fpath.write_text(json.dumps(summary, indent='   '))
+            summary_fpath = row_dpath / 'summary.yaml'
+            yaml_text = util_yaml.yaml_dumps(summary)
+            summary_fpath.write_text(yaml_text)
+            # summary_fpath.write_text(json.dumps(summary, indent='   '))
             rich_mod.print('summary = {}'.format(ub.repr2(summary, nl=2)))
             print(f'summary_fpath={summary_fpath}')
 
@@ -761,6 +778,67 @@ python -m watch.mlops.schedule_evaluation \
     --queue_name='secondary-eval' \
     --backend=tmux --skip_existing=1 \
     --run=1
+
+
+DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data_kr1br2.kwcoco.json
+python -m watch.mlops.schedule_evaluation \
+    --params="
+        matrix:
+            trk.pxl.model:
+                - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt
+            trk.pxl.data.test_dataset:
+                - $TEST_DATASET
+            trk.pxl.data.window_scale_space: 15GSD
+            trk.pxl.data.time_sampling:
+                - "contiguous"
+            trk.pxl.data.input_scale_space:
+                - "15GSD"
+            trk.poly.thresh:
+                - 0.07
+            crop.src:
+                - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/online_v1/kwcoco_for_sc_fielded.json
+            crop.regions:
+                - trk.poly.output
+            act.pxl.data.test_dataset:
+                - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/crop/online_v1_kwcoco_for_sc_fielded/trk_poly_id_0408400f/crop_f64d5b9a/crop_id_59ed6e1b/crop.kwcoco.json
+            act.pxl.data.input_scale_space:
+                - 3GSD
+            act.pxl.data.time_steps:
+                - 3
+            act.pxl.data.chip_overlap:
+                - 0.35
+            act.poly.thresh:
+                - 0.01
+            act.poly.use_viterbi:
+                - 0
+            act.pxl.model:
+                - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
+        include:
+            - act.pxl.data.chip_dims: 256,256
+              act.pxl.data.window_scale_space: 3GSD
+              act.pxl.data.input_scale_space: 3GSD
+              act.pxl.data.output_scale_space: 3GSD
+    " \
+    --enable_pred_trk_pxl=0 \
+    --enable_pred_trk_poly=0 \
+    --enable_eval_trk_pxl=0 \
+    --enable_eval_trk_poly=0 \
+    --enable_crop=1 \
+    --enable_pred_act_pxl=1 \
+    --enable_pred_act_poly=1 \
+    --enable_eval_act_pxl=0 \
+    --enable_eval_act_poly=1 \
+    --enable_viz_pred_trk_poly=0 \
+    --enable_viz_pred_act_poly=1 \
+    --enable_links=0 \
+    --devices="0,1" --queue_size=2 \
+    --queue_name='secondary-eval' \
+    --backend=serial --skip_existing=0 \
+    --run=1
+
 
 
 
