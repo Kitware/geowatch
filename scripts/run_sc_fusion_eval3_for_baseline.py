@@ -10,6 +10,7 @@ import shutil
 
 from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
 from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress  # noqa: 501
+from watch.tasks.fusion.predict import predict
 
 
 def main():
@@ -62,11 +63,6 @@ def main():
                         action='store_true',
                         default=False,
                         help="Force predict scripts to use --num_workers=0")
-    parser.add_argument("--bas_thresh",
-                        default=0.1,
-                        type=float,
-                        required=False,
-                        help="Threshold for BAS tracking (kwarg 'thresh')")
     parser.add_argument("--sc_thresh",
                         default=0.01,
                         type=float,
@@ -200,7 +196,6 @@ def run_sc_fusion_for_baseline(
         jobs=1,
         force_zero_num_workers=False,
         ta2_s3_collation_bucket=None,
-        bas_thresh=0.1,
         sc_thresh=0.01):
     if aws_profile is not None:
         aws_base_command =\
@@ -251,31 +246,52 @@ def run_sc_fusion_for_baseline(
     else:
         # 3. Run fusion
         print("* Running SC fusion *")
-        subprocess.run(['python', '-m', 'watch.tasks.fusion.predict',
-                        '--devices', '0,',
-                        '--write_preds', 'False',
-                        '--write_probs', 'True',
-                        '--with_change', 'False',
-                        '--with_saliency', 'False',
-                        '--with_class', 'True',
-                        '--test_dataset', ingress_kwcoco_path,
-                        '--package_fpath', sc_fusion_model_path,
-                        '--pred_dataset', sc_fusion_kwcoco_path,
-                        '--num_workers', '0' if force_zero_num_workers else str(jobs),  # noqa: 501
-                        '--set_cover_algo', 'approx',
-                        '--batch_size', '8',
-                        '--tta_time', '1',
-                        '--tta_fliprot', '0',
-                        '--chip_overlap', '0.3'], check=True)
+        predict_config = json.loads("""
+{
+      "tta_fliprot": 0.0,
+      "tta_time": 0.0,
+      "chip_overlap": 0.3,
+      "input_space_scale": "3GSD",
+      "window_space_scale": "3GSD",
+      "output_space_scale": "3GSD",
+      "time_span": "6m",
+      "time_sampling": "soft2+distribute",
+      "time_steps": 12.0,
+      "chip_dims": [
+         128,
+         128
+      ],
+      "set_cover_algo": "approx",
+      "resample_invalid_frames": true,
+      "use_cloudmask": 1.0
+}
+        """)
+
+        predict(devices='0,',
+                write_preds=False,
+                write_probs=True,
+                with_change=False,
+                with_saliency=False,
+                with_class=True,
+                test_dataset=ingress_kwcoco_path,
+                package_fpath=sc_fusion_model_path,
+                pred_dataset=sc_fusion_kwcoco_path,
+                num_workers=('0' if force_zero_num_workers else str(jobs)),  # noqa: 501
+                batch_size=8,
+                **predict_config)
 
         # 4. Compute tracks (SC)
         print("* Computing tracks (SC) *")
         sc_track_kwargs = {"boundaries_as": "polys",
-                           "use_viterbi": "v1,v6",
+                           "use_viterbi": 0.0,
                            "thresh": sc_thresh}
+
+        tracked_sc_kwcoco_path = '_tracked'.join(
+            os.path.splitext(sc_fusion_kwcoco_path))
         subprocess.run(['python', '-m', 'watch.cli.kwcoco_to_geojson',
                         sc_fusion_kwcoco_path,
-                        '--out_dir', site_models_outdir,
+                        '--out_sites_dir', site_models_outdir,
+                        '--out_kwcoco', tracked_sc_kwcoco_path,
                         '--default_track_fn', sc_track_fn,
                         '--site_summary',
                         os.path.join(region_models_outdir, '*.geojson'),

@@ -1120,7 +1120,7 @@ def main(args):
         # TODO / FIXME:
         # The script should control if you are in "write" or "append" mode.
         # Often I don't want to append to existing files.
-        APPEND_MODE = 0
+        APPEND_MODE = 1
 
         site_summary_fpaths = []
         for region_id, site_summaries in groups.items():

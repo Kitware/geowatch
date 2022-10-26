@@ -59,7 +59,7 @@ def main():
                         default=False,
                         help="Force predict scripts to use --num_workers=0")
     parser.add_argument("--bas_thresh",
-                        default=0.1,
+                        default=0.07,
                         type=float,
                         required=False,
                         help="Threshold for BAS tracking (kwarg 'thresh')")
@@ -223,15 +223,18 @@ def run_bas_fusion_for_baseline(
       "tta_fliprot": 0,
       "tta_time": 0,
       "chip_overlap": 0.3,
-      "input_space_scale": "15GSD",
-      "window_space_scale": "10GSD",
-      "output_space_scale": "15GSD",
-      "time_span": "auto",
-      "time_sampling": "auto",
-      "time_steps": "auto",
-      "chip_dims": "auto",
-      "set_cover_algo": "None",
-      "resample_invalid_frames": 1,
+      "input_space_scale": "30GSD",
+      "window_space_scale": "None",
+      "output_space_scale": "30GSD",
+      "time_span": "6m",
+      "time_sampling": "contiguous",
+      "time_steps": 11,
+      "chip_dims": [
+         380,
+         380
+      ],
+      "set_cover_algo": "approx",
+      "resample_invalid_frames": true,
       "use_cloudmask": 1
 }
     """)
@@ -261,17 +264,19 @@ def run_bas_fusion_for_baseline(
 
     bas_tracking_config = {
         "thresh": bas_thresh,
-        "morph_kernel": 3,
-        "norm_ord": 1,
-        "agg_fn": "probs",
-        "thresh_hysteresis": None,
         "moving_window_size": None,
-        "polygon_fn": "heatmaps_to_polys"}
+        "polygon_fn": "heatmaps_to_polys",
+        "morph_kernel": None,
+        "norm_ord": None,
+        "agg_fn": None,
+        "thresh_hysteresis": None}
 
+    tracked_bas_kwcoco_path = '_tracked'.join(
+        os.path.splitext(bas_fusion_kwcoco_path))
     subprocess.run(['python', '-m', 'watch.cli.kwcoco_to_geojson',
                     bas_fusion_kwcoco_path,
-                    '--out_dir', region_models_outdir,
-                    '--bas_mode',
+                    '--out_site_summaries_dir', region_models_outdir,
+                    '--out_kwcoco', tracked_bas_kwcoco_path,
                     '--default_track_fn', 'saliency_heatmaps',
                     '--track_kwargs', json.dumps(bas_tracking_config)],
                    check=True)
