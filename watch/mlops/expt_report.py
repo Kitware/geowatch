@@ -149,8 +149,15 @@ class EvaluationReporter:
         metric_names = [c for c in orig_merged_df.columns if 'metrics.' in c]
         metric_cols = (ub.oset(metric_names) & orig_merged_df.columns)
 
+        metric_cols = [c for c in metric_cols if '.tau' not in c and '.rho' not in c]
+        metric_cols = [c for c in metric_cols if '.salient_AUC' not in c]
+        metric_cols = [c for c in metric_cols if '.salient_APUC' not in c]
+        metric_cols = [c for c in metric_cols if '.macro_f1_active' not in c]
+        metric_cols = [c for c in metric_cols if '.macro_f1_siteprep' not in c]
+
         primary_metrics = (ub.oset(['act.poly.metrics.macro_f1', 'trk.poly.metrics.f1']) & metric_cols)
         metric_cols = list((metric_cols & primary_metrics) | (metric_cols - primary_metrics))
+
         # print('orig_merged_df.columns = {}'.format(ub.repr2(list(orig_merged_df.columns), nl=1)))
         id_cols = list(ub.oset(id_names) & orig_merged_df.columns)
 
@@ -642,6 +649,7 @@ def clean_loaded_data(big_rows, expt_dvc_dpath):
     if 0:
         big_row = big_rows[10]
         big_row = big_rows[-1]
+
     for big_row in ub.ProgIter(big_rows, desc='big rows'):
         # fpath = big_row['raw']
         row = ub.udict(big_row) - {'info'}

@@ -206,6 +206,8 @@ def main(cmdline=False, **kwargs):
         job_environ_str += ' '
 
     def _coerce_globstr(p):
+        if not p:
+            return None
         globstr = ub.Path(p)
         if str(globstr).startswith('./'):
             final_globstr = globstr
@@ -304,7 +306,11 @@ def main(cmdline=False, **kwargs):
             # have to write a mechanism that lets the explicit relative path be
             # specified.
             region_file_fpaths = util_gis.coerce_geojson_paths(final_region_globstr.expand())
-            region_site_fpaths = util_gis.coerce_geojson_paths(final_site_globstr.expand())
+
+            if final_site_globstr:
+                region_site_fpaths = util_gis.coerce_geojson_paths(final_site_globstr.expand())
+            else:
+                region_site_fpaths = []
 
             # Assign site models to region files
             ASSIGN_BY_FPATH = True
@@ -635,7 +641,7 @@ def main(cmdline=False, **kwargs):
                     --animate=True --workers=auto
                 '''), depends=[align_job], name=f'viz-imgs-{name}')
 
-        if 1:
+        if site_globstr:
             # site_model_dpath = (dvc_dpath / 'annotations/site_models').shrinkuser(home='$HOME')
             # region_model_dpath = (dvc_dpath / 'annotations/region_models').shrinkuser(home='$HOME')
 
@@ -653,6 +659,8 @@ def main(cmdline=False, **kwargs):
                     --site_models="{site_globstr}" \
                     --region_models="{region_globstr}" {viz_part}
                 '''), depends=[align_job], name=f'project-annots-{name}')
+        else:
+            project_anns_job = align_job
 
         if config['visualize']:
             queue.submit(ub.codeblock(

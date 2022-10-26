@@ -46,7 +46,7 @@ class Plotter:
 
         # It's important to separate results by what dataset they were tested
         # on / what type of result they were evaluating
-        plotter.group_keys = ['test_dset', 'type']
+        plotter.group_keys = ['test_trk_dset', 'type']
         plotter.expt_groups = dict(list(merged_df.groupby(plotter.group_keys)))
         return plotter
 
@@ -57,6 +57,7 @@ class Plotter:
         """
         plot_method = getattr(plotter, plot_name)
         for code_type, group in plotter.expt_groups.items():
+            print(f'code_type={code_type}')
             try:
                 plot_method(code_type, group, **kwargs)
             except UnableToPlot as ex:
@@ -234,9 +235,7 @@ class Plotter:
         """
         metrics = ['salient_AP']
         metrics = ['BAS_F1']
-
         """
-
         test_dset, type = code_type
         metrics = metrics if ub.iterable(metrics) else [metrics]
         metrics_key = '_'.join(metrics)
@@ -371,18 +370,24 @@ class Plotter:
         import kwplot
         plot_name = 'resource_vs_metric'
 
-        for resource_type in ['total_hours', 'co2_kg']:
+        resources_of_interest = [
+            'trk.pxl.resource.total_hours',
+            'trk.pxl.resource.co2_kg',
+            'act.pxl.resource.total_hours',
+            'act.pxl.resource.co2_kg',
+            'act.poly.resource.total_hours',
+            'trk.poly.resource.total_hours',
+        ]
+
+        metrics = [
+            'trk.poly.metrics.macro_f1',
+        ]
+
+        for resource_type in resources_of_interest:
             human_resource_type = plotter.human_mapping.get(resource_type, resource_type)
 
-            # 'pixel']:
-            # for metric_type in ['pixel']:
-            for metric_type in ['iarpa']:
-                if metric_type == 'iarpa':
-                    metric_lut = plotter.metric_luts['trk']
-                    human_metric_type = 'IARPA'
-                else:
-                    metric_lut = plotter.metric_luts['pxl']
-                    human_metric_type = 'Pixelwise'
+            for metric in metrics:
+                human_metric_type = plotter.human_mapping.get(metric, metric)
 
                 # group['pred_tta_time'] = group['pred_tta_time'].astype(str)
                 # group['pred_tta_fliprot'] = group['pred_tta_fliprot'].astype(str)
@@ -390,24 +395,13 @@ class Plotter:
                 # group.loc[group['pred_tta_fliprot'] == 'nan', 'pred_tta_fliprot'] = '0.0'
 
                 test_dset, type = code_type
-                if type == 'eval_act+pxl':
-                    plotkw = ub.udict({
-                        'x': resource_type,
-                        'y': metric_lut[type],
-                        'hue': huevar,
-                        **plotter.common_plotkw,
-                        'style': 'hardware',
-                    })
-                elif type == 'eval_trk+pxl':
-                    plotkw = ub.udict({
-                        'x': resource_type,
-                        'y': metric_lut[type],
-                        'hue': huevar,
-                        **plotter.common_plotkw,
-                        'style': 'hardware',
-                    })
-                else:
-                    raise KeyError(type)
+                plotkw = ub.udict({
+                    'x': resource_type,
+                    'y': metric,
+                    'hue': huevar,
+                    **plotter.common_plotkw,
+                    'style': 'hardware',
+                })
 
                 missing = set((plotkw & {'x', 'y'}).values()) - set(group.columns)
                 if missing:
@@ -526,18 +520,19 @@ def humanized_scatterplot(human_mapping, data, ax, plot_type='scatter', mesh=Non
         ax = plt.gca()
 
     if star is not None:
-        _starkw = ub.dict_isect(plotkw, {'s'})
-        _starkw = {
-            's': _starkw.get('s', 10) + 280,
-            'color': 'orange',
-        }
-        if starkw is not None:
-            _starkw.update(starkw)
-        flags = data[star].apply(bool)
-        star_data = data[flags]
-        star_x = star_data[xkey]
-        star_y = star_data[ykey]
-        ax.scatter(star_x, star_y, marker='*', **_starkw)
+        if star in data:
+            _starkw = ub.dict_isect(plotkw, {'s'})
+            _starkw = {
+                's': _starkw.get('s', 10) + 280,
+                'color': 'orange',
+            }
+            if starkw is not None:
+                _starkw.update(starkw)
+            flags = data[star].apply(bool)
+            star_data = data[flags]
+            star_x = star_data[xkey]
+            star_y = star_data[ykey]
+            ax.scatter(star_x, star_y, marker='*', **_starkw)
 
     if plot_type == 'scatter':
         ax = sns.scatterplot(data=data, ax=ax, **plotkw)

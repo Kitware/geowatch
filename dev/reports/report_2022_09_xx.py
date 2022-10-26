@@ -149,6 +149,10 @@ def main():
     fit_cols = ub.oset([c for c in dotted if 'fit.' in c])
     param_cols = dotted - (metric_cols | fit_cols | resource_cols)
 
+    if 0:
+        idx = 368
+        df.loc[idx]
+
     import rich as rich_mod
     for groupid, shortlist in groupid_to_shortlist.items():
         test_dset, type = groupid
@@ -273,7 +277,7 @@ def main():
     kwplot.autosns()
 
     from watch.mlops import plots
-
+    # cls = plots.Plotter
     plotter = plots.Plotter.from_reporter(
         reporter, common_plotkw=common_plotkw, dpath=dpath)
     analysis = plotter.analysis = reporter.build_analysis()
@@ -292,20 +296,29 @@ def main():
     for code_type, group in plotter.expt_groups.items():
         pass
 
-    tracked_metrics = ['salient_AP', 'BAS_F1']
+    # tracked_metrics = ['salient_AP', 'BAS_F1']
+    tracked_metrics = [
+        'trk.poly.metrics.bas_f1',
+        'act.poly.metrics.bas_f1',
+        'trk.pxl.metrics.salient_AP',
+        'act.poly.metrics.macro_f1',
+    ]
     for param in params_of_interest:
         for metrics in tracked_metrics:
+            ...
             try:
                 plotter.plot_groups('plot_pixel_ap_verus_iarpa', huevar=param)
             except Exception as ex:
                 print(f'ex={ex}')
 
     plotter.plot_groups(
-        'metric_over_training_time', metrics=metrics, huevar='expt')
+        plot_name='metric_over_training_time', metrics=metrics, huevar='expt')
 
     plotter.plot_groups('plot_pixel_ap_verus_auc', huevar='expt')
 
-    plotter.plot_groups('plot_resource_versus_metric', huevar='expt')
+    plotter.plot_groups(
+        plot_name='plot_resource_versus_metric',
+        huevar='expt')
 
     # params_of_interest = list(analysis.varied)
 
