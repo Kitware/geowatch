@@ -751,10 +751,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     frame_dets = sample['annots']['frame_dets'][0]
                     annot_mode_dims = mode_dims
                 all_mode_dims.append(mode_dims)
-            max_mode_dims = np.array(max(all_mode_dims, key=np.prod))
-            if frame_dets is not None:
-                fixup_scale = (max_mode_dims / annot_mode_dims)[::-1]
-                frame_dets.scale(fixup_scale, inplace=True)
+            if all_mode_dims:
+                max_mode_dims = np.array(max(all_mode_dims, key=np.prod))
+                if frame_dets is not None:
+                    fixup_scale = (max_mode_dims / annot_mode_dims)[::-1]
+                    frame_dets.scale(fixup_scale, inplace=True)
 
     def __getitem__(self, index):
         """
@@ -1241,6 +1242,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 new_gids = video_gids[new_idxs]
                 # print('new_gids = {!r}'.format(new_gids))
                 if not len(new_gids):
+                    # import warnings
+                    # warnings.warn('exhausted resample possibilities')
                     print('exhausted resample possibilities')
                     # Exhausted all possibilities
                     break
