@@ -6,6 +6,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.3.6 - Target 2022-10-29
 
+### Fixed
+* Bug where `window_space_overlap` was always zero at predict time.
+
 
 ## Version 0.3.5 - Finalized 2022-09-29
 
