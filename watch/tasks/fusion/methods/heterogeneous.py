@@ -26,6 +26,13 @@ except Exception:
 
 
 def to_next_multiple(n, mult):
+    """
+    Example:
+        >>> from watch.tasks.fusion.methods.heterogeneous import to_next_multiple
+        >>> x = to_next_multiple(11, 4)
+        >>> assert x == 1, f"x = {x}, should be 1"
+    """
+
     diff = mult - n % mult
     if diff == mult:
         return 0
@@ -43,7 +50,7 @@ def positions_from_shape(shape, dtype="float32", device="cpu"):
 
 
 class PadToMultiple(nn.Module):
-    def __init__(self, multiple: int, mode: str='constant', value=None):
+    def __init__(self, multiple: int, mode: str = 'constant', value=None):
         """
         Pads input image-shaped tensors following strategy defined by mode/value. All padding appended to bottom and right of input.
 
@@ -62,7 +69,7 @@ class PadToMultiple(nn.Module):
             >>> pad_module = PadToMultiple(4)
             >>> inputs = torch.randn(1, 3, 10, 11)
             >>> outputs = pad_module(inputs)
-            >>> assert outputs.shape == (1, 3, 12, 12)
+            >>> assert outputs.shape == (1, 3, 12, 12), f"outputs.shape actually {outputs.shape}"
         """
 
         super().__init__()
@@ -74,8 +81,8 @@ class PadToMultiple(nn.Module):
 
         height, width = x.shape[-2:]
         pad = (
-            0, to_next_multiple(height, self.multiple),
             0, to_next_multiple(width, self.multiple),
+            0, to_next_multiple(height, self.multiple),
         )
         return nn.functional.pad(x, pad, mode=self.mode, value=self.value)
 
@@ -110,10 +117,10 @@ class MipNerfPositionalEncoder(nn.Module):
             >>> from watch.tasks.fusion.methods.heterogeneous import MipNerfPositionalEncoder
             >>> import torch
             >>> pos_enc = MipNerfPositionalEncoder(3, 4)
-            >>> input_means = torch.randn(3, 10, 10)
-            >>> input_scales = torch.randn(3, 10, 10)
+            >>> input_means = torch.randn(1, 3, 10, 10)
+            >>> input_scales = torch.randn(1, 3, 10, 10)
             >>> outputs = pos_enc(input_means, input_scales)
-            >>> assert outputs.shape == (2*3*4, 10, 10)
+            >>> assert outputs.shape == (1, pos_enc.output_dim, 10, 10)
         """
 
         super().__init__()
@@ -484,6 +491,20 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         })
 
     def process_input_tokens(self, example):
+        """
+        Example:
+            >>> from watch.tasks import fusion
+            >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
+            >>> model = fusion.methods.HeterogeneousModel(
+            >>>     classes=classes,
+            >>>     dataset_stats=dataset_stats,
+            >>>     input_sensorchan=channels)
+            >>> example = model.demo_batch(width=64, height=65)[0]
+            >>> input_tokens = model.process_input_tokens(example)
+            >>> assert len(input_tokens) == len(example["frames"])
+            >>> assert len(input_tokens[0]) == len(example["frames"][0]["modes"])
+        """
+
         example_tokens = []
         for frame in example["frames"]:
             sensor = frame["sensor"]
@@ -549,6 +570,18 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         return example_tokens
 
     def process_query_tokens(self, example):
+        """
+        Example:
+            >>> from watch.tasks import fusion
+            >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
+            >>> model = fusion.methods.HeterogeneousModel(
+            >>>     classes=classes,
+            >>>     dataset_stats=dataset_stats,
+            >>>     input_sensorchan=channels)
+            >>> example = model.demo_batch(width=64, height=65)[0]
+            >>> query_tokens = model.process_query_tokens(example)
+            >>> assert len(query_tokens) == len(example["frames"])
+        """
         example_tokens = []
         for frame in example["frames"]:
 
@@ -605,6 +638,25 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         return example_tokens
 
     def forward(self, batch):
+        """
+        Example:
+            >>> from watch.tasks import fusion
+            >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
+            >>> model = fusion.methods.HeterogeneousModel(
+            >>>     classes=classes,
+            >>>     dataset_stats=dataset_stats,
+            >>>     input_sensorchan=channels)
+            >>> batch = model.demo_batch(width=64, height=65)
+            >>> batch += model.demo_batch(width=55, height=75)
+            >>> outputs = model.forward(batch)
+            >>> for task_key, task_outputs in outputs.items():
+            >>>     if "probs" in task_key: continue
+            >>>     if task_key == "class": task_key = "class_idxs"
+            >>>     for task_pred, example in zip(task_outputs, batch):
+            >>>         for frame_idx, (frame_pred, frame) in enumerate(zip(task_pred, example["frames"])):
+            >>>             if (frame_idx == 0) and task_key.startswith("change"): continue
+            >>>             assert frame_pred.shape[1:] == frame[task_key].shape
+        """
 
         # input sequences
         orig_input_seqs = []
@@ -878,7 +930,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>> self = methods.HeterogeneousModel(
             >>>     classes=classes,
             >>>     dataset_stats=dataset_stats, input_sensorchan=datamodule.input_sensorchan)
-            
+
             >>> from types import MethodType
             >>> def configure_optimizers(self):
             >>>     return torch.optim.Adam(self.parameters())
