@@ -5,7 +5,7 @@ A gif-ify script
 Wrapper around imgmagik convert or ffmpeg
 
 TODO:
-    - [ ] Moving this to kwplot
+    - [ ] Moving this to kwplot?
 """
 
 import ubelt as ub
@@ -130,6 +130,20 @@ def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=3,
         >>>     pytest.skip('test requires ffmpeg')
         >>> frame_fpaths = sorted(dset.images().gpath)
         >>> test_dpath = ub.Path.appdir('gifify', 'test').ensuredir()
+        >>> # Test output to MP4
+        >>> output_fpath = join(test_dpath, 'test.mp4')
+        >>> ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=0.5)
+
+    Example:
+        >>> from watch.cli.gifify import *  # NOQA
+        >>> import kwcoco
+        >>> dset = kwcoco.CocoDataset.demo('shapes8')
+        >>> ffmpeg_exe = ub.find_exe('ffmpeg')
+        >>> if ffmpeg_exe is None:
+        >>>     import pytest
+        >>>     pytest.skip('test requires ffmpeg')
+        >>> frame_fpaths = sorted(dset.images().gpath)
+        >>> test_dpath = ub.Path.appdir('gifify', 'test').ensuredir()
         >>> # Test output to GIF
         >>> output_fpath = join(test_dpath, 'test.gif')
         >>> ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=0.5)
@@ -160,6 +174,22 @@ def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=3,
         temp_fpath = join(temp_dpath, 'temp_list_{}.txt'.format(str(uuid.uuid4())))
         if verbose:
             print('temp_fpath = {!r}'.format(temp_fpath))
+
+        NEED_INPUT_SIZES = True
+        if NEED_INPUT_SIZES:
+            # Determine the maximum size of the image
+            imgsize_jobs = ub.JobPool(max_workers=0)
+            import kwimage
+            for fpath in frame_fpaths:
+                imgsize_jobs.submit(kwimage.load_image_shape, fpath)
+            max_w = 0
+            max_h = 0
+            for result in imgsize_jobs.as_completed():
+                shape = result.result()
+                h, w, *_ = shape
+                max_h = max(max_h, h)
+                max_w = max(max_w, w)
+
         lines = ["file '{}'".format(abspath(fpath)) for fpath in frame_fpaths]
         text = '\n'.join(lines)
         with open(temp_fpath, 'w') as file:
@@ -212,15 +242,26 @@ def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=3,
         #     '-vf scale="{}:-1"'.format(max_width)
         # ]
 
-        if output_fpath.endswith('.mp4'):
-            filtergraph_parts += [
-                'pad=width=ceil(iw/2)*2:height=ceil(ih/2)*2:x=0:y=0',
-            ]
-            # output_options += [
-            #     # MP4 needs even width
-            #     # https://stackoverflow.com/questions/20847674/ffmpeg-div2
-            #     '-filter:v "pad=width=ceil(iw/2)*2:height=ceil(ih/2)*2"',
-            # ]
+        import math
+        # Ensure width and height are even for mp4 outputs
+        max_w = int(2 * math.ceil(max_w / 2.))
+        max_h = int(2 * math.ceil(max_h / 2.))
+
+        # Ensure all padding happens to the bottom right by setting the
+        # frame size to something constant and putting the data at x,y=0,0
+        filtergraph_parts += [
+            f"pad=w={max_w}:h={max_h}:x=0:y=0:color=black",
+        ]
+
+        # if output_fpath.endswith('.mp4'):
+        #     # filtergraph_parts += [
+        #     #     'pad=width=ceil(iw/2)*2:height=ceil(ih/2)*2:x=0:y=0',
+        #     # ]
+        #     # output_options += [
+        #     #     # MP4 needs even width
+        #     #     # https://stackoverflow.com/questions/20847674/ffmpeg-div2
+        #     #     '-filter:v "pad=width=ceil(iw/2)*2:height=ceil(ih/2)*2"',
+        #     # ]
 
         if filtergraph_parts:
             filtergraph = ','.join(filtergraph_parts)
@@ -277,24 +318,6 @@ Video to GiF
 ffmpeg -ss 30 -t 3 -i input.mp4 -vf "fps=10,scale=320:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" -loop 0 output.gif
 
 ffmpeg -i "$HOME/2022-06-29 18-36-30.mkv" -vf "fps=3,scale=1000:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" -loop 0 output.gif
-
-
-
-w, h = 800, 1164
-
-
-
-/usr/bin/ffmpeg -y -r 2.0  -f concat -safe 0 \
-        -i /home/joncrall/.cache/gifify/temp/temp_list_22a90c96-3547-4252-baa3-2a063690fdab.txt \
-        -filter:v "pad=800:1164:-1:-1:color=black,scale=800:1164:force_original_aspect_ratio=decrease:eval=frame" \
-        '/data/joncrall/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/eval/act/Drop4_SC_RGB_scratch_V002_epoch=155-step=78468.pt/crop_id_0db95966_crop.kwcoco/act_pxl_4758a8eb/act_poly_c8e01153/_pred_link/_viz_act_poly_c8e01153_activity_tracks.kwcoco_59eb7098/N37.649560E128.654510_N37.668000E128.689287/ab.mp4'
-
-
-/usr/bin/ffmpeg -y -r 2.0  -f concat -safe 0 \
-        -i /home/joncrall/.cache/gifify/temp/temp_list_22a90c96-3547-4252-baa3-2a063690fdab.txt \
-        -filter:v "pad=w=iw:h='max(1164,ih)':x=0:y=0:color=white" \
-        '/data/joncrall/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/eval/act/Drop4_SC_RGB_scratch_V002_epoch=155-step=78468.pt/crop_id_0db95966_crop.kwcoco/act_pxl_4758a8eb/act_poly_c8e01153/_pred_link/_viz_act_poly_c8e01153_activity_tracks.kwcoco_59eb7098/N37.649560E128.654510_N37.668000E128.689287/ab.mp4'
-
 """
 
 if __name__ == '__main__':
