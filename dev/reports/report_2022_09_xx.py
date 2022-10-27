@@ -299,43 +299,44 @@ def main():
         reporter, common_plotkw=common_plotkw, dpath=dpath)
     analysis = plotter.analysis = reporter.build_analysis()
 
-    params_of_interest = [s['param_name'].replace('pxl', 'pred') for s in analysis.statistics][::-1]
+    params_of_interest = [s['param_name'] for s in analysis.statistics][::-1]
     print('params_of_interest = {}'.format(ub.repr2(params_of_interest, nl=1)))
     plotter.params_of_interest = params_of_interest
 
     # Takes a long time to load these
     # plots.dataset_summary_tables(dpath)
 
-    plots.initial_summary(reporter, dpath)
+    # plots.initial_summary(reporter, dpath)
 
-    plots.describe_varied(merged_df, dpath, human_mapping=human_mapping)
+    # plots.describe_varied(merged_df, dpath, human_mapping=human_mapping)
 
     for code_type, group in plotter.expt_groups.items():
         pass
 
     # tracked_metrics = ['salient_AP', 'BAS_F1']
     tracked_metrics = [
-        'trk.poly.metrics.bas_f1',
+        # 'trk.poly.metrics.bas_f1',
         'act.poly.metrics.bas_f1',
-        'trk.pxl.metrics.salient_AP',
-        'act.poly.metrics.macro_f1',
+        # 'trk.pxl.metrics.salient_AP',
+        # 'act.poly.metrics.macro_f1',
     ]
     for param in params_of_interest:
-        for metrics in tracked_metrics:
-            ...
-            try:
-                plotter.plot_groups('plot_pixel_ap_verus_iarpa', huevar=param)
-            except Exception as ex:
-                print(f'ex={ex}')
+        ...
+        # plot_name = 'plot_pixel_ap_verus_iarpa'
+        plot_name = 'plot_relationship'
+        try:
+            plotter.plot_groups(plot_name, huevar=param)
+        except Exception as ex:
+            print(f'ex={ex}')
 
-    plotter.plot_groups(
-        plot_name='metric_over_training_time', metrics=metrics, huevar='expt')
+    # plotter.plot_groups(
+    #     plot_name='metric_over_training_time', metrics=metrics, huevar='expt')
 
-    plotter.plot_groups('plot_pixel_ap_verus_auc', huevar='expt')
+    # plotter.plot_groups('plot_pixel_ap_verus_auc', huevar='expt')
 
-    plotter.plot_groups(
-        plot_name='plot_resource_versus_metric',
-        huevar='expt')
+    # plotter.plot_groups(
+    #     plot_name='plot_resource_versus_metric',
+    #     huevar='expt')
 
     # params_of_interest = list(analysis.varied)
 
@@ -347,7 +348,10 @@ def main():
     #     'trk_thresh',
     # ]
 
-    plotter.plot_groups('plot_param_analysis', metrics='BAS_F1',
+    plotter.plot_groups('plot_param_analysis', metrics='act.poly.metrics.macro_f1',
+                        params_of_interest=params_of_interest)
+
+    plotter.plot_groups('plot_param_analysis', metrics='act.poly.metrics.bas_f1',
                         params_of_interest=params_of_interest)
 
     plotter.plot_groups('plot_param_analysis', metrics='total_hours',
@@ -840,6 +844,65 @@ python -m watch.mlops.schedule_evaluation \
     --run=1
 
 
+
+DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data.kwcoco.json
+python -m watch.mlops.schedule_evaluation \
+    --params="
+        matrix:
+            trk.pxl.model:
+                - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt
+            trk.pxl.data.test_dataset:
+                - $TEST_DATASET
+            trk.pxl.data.window_scale_space: 15GSD
+            trk.pxl.data.time_sampling:
+                - "contiguous"
+            trk.pxl.data.input_scale_space:
+                - "15GSD"
+            trk.poly.thresh:
+                - 0.07
+            crop.src:
+                - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/online_v1/kwcoco_for_sc_fielded.json
+            crop.regions:
+                - trk.poly.output
+            act.pxl.data.test_dataset:
+                - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/crop/online_v1_kwcoco_for_sc_fielded/trk_poly_id_0408400f/crop_f64d5b9a/crop_id_59ed6e1b/crop.kwcoco.json
+            act.pxl.data.input_scale_space:
+                - 3GSD
+            act.pxl.data.time_steps:
+                - 3
+            act.pxl.data.chip_overlap:
+                - 0.35
+            act.poly.thresh:
+                - 0.01
+            act.poly.use_viterbi:
+                - 0
+            act.pxl.model:
+                - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
+        include:
+            - act.pxl.data.chip_dims: 256,256
+              act.pxl.data.window_scale_space: 3GSD
+              act.pxl.data.input_scale_space: 3GSD
+              act.pxl.data.output_scale_space: 3GSD
+    " \
+    --enable_pred_trk_pxl=1 \
+    --enable_pred_trk_poly=1 \
+    --enable_eval_trk_pxl=1 \
+    --enable_eval_trk_poly=1 \
+    --enable_crop=0 \
+    --enable_pred_act_pxl=0 \
+    --enable_pred_act_poly=0 \
+    --enable_eval_act_pxl=0 \
+    --enable_eval_act_poly=0 \
+    --enable_viz_pred_trk_poly=0 \
+    --enable_viz_pred_act_poly=0 \
+    --enable_links=0 \
+    --devices="0,1" --queue_size=2 \
+    --queue_name='secondary-eval' \
+    --backend=serial --skip_existing=0 \
+    --run=0
 
 
     python -m watch.tasks.fusion.predict --package_fpath=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=155-step=78468.pt.pt --test_dataset=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/crop/online_v1_kwcoco_for_sc_fielded/trk_poly_id_4aa82814/crop_4ee34f2e/crop_id_e7ec2c85/crop.kwcoco.json --pred_dataset=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/pred/act/Drop4_SC_RGB_scratch_V002_epoch=155-step=78468.pt/crop_id_e7ec2c85_crop.kwcoco/act_pxl_f447d96a/pred.kwcoco.json --input_scale_space=10GSD --output_scale_space=10GSD --window_scale_space=10GSD --chip_dims=512,512 --time_steps=5 --num_workers=4 --devices=0, --accelerator=gpu --batch_size=1

@@ -93,6 +93,11 @@ References:
 
     .. [Probst2019] https://www.jmlr.org/papers/volume20/18-444/18-444.pdf
 
+
+Look into:
+    https://scikit-optimize.github.io/stable/
+    https://wandb.ai/site/articles/find-the-most-important-hyperparameters-in-seconds
+
 """
 import itertools as it
 import math
@@ -354,7 +359,6 @@ class ResultAnalysis(ub.NiceRepr):
     @classmethod
     def demo(cls, num=10, mode="null", rng=None):
         import kwarray
-
         rng = kwarray.ensure_rng(rng)
         results = [Result.demo(mode=mode, rng=rng) for _ in range(num)]
         if mode == "null":

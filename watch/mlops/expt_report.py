@@ -263,7 +263,7 @@ class EvaluationReporter:
                 'act.poly.metrics.macro_f1': 'max'
             },
             metrics=[
-                'act.poly.metrics.bas_f1',
+                # 'act.poly.metrics.bas_f1',
                 'act.poly.metrics.macro_f1'
             ]
         )

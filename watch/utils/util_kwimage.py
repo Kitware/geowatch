@@ -254,6 +254,28 @@ def perchannel_colorize(data, channel_colors=None):
     """
     Note: this logic semi-exist in kwimage.Heatmap.
     It would be good to consolidate it.
+
+    Example:
+        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> import itertools as it
+        >>> import kwarray
+        >>> channel_colors = ['tomato', 'gold', 'lime', 'darkturquoise']
+        >>> c = len(channel_colors)
+        >>> s = 32
+        >>> cx_combos = list(ub.flatten(it.combinations(range(c), n) for n in range(0, c + 1)))
+        >>> w = s // len(cx_combos)
+        >>> data = np.zeros((s, s, c), dtype=np.float32)
+        >>> y_slider = kwarray.SlidingWindow((s, s), (w, s,))
+        >>> x_slider = kwarray.SlidingWindow((s, s), (s, w,))
+        >>> for idx, cxs in enumerate(cx_combos):
+        >>>     for cx in cxs:
+        >>>         data[x_slider[idx] + (cx,)] =  1
+        >>>         data[y_slider[idx] + (cx,)] =  0.5
+        >>> canvas = perchannel_colorize(data, channel_colors)[..., 0:3]
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas, docla=1)
     """
     import kwimage
 
@@ -263,7 +285,10 @@ def perchannel_colorize(data, channel_colors=None):
         # add in prefix channel if its not there
         data = data[None, :, :]
 
-    existing_colors = [kwimage.Color.coerce(c).as01() for c in channel_colors if c is not None]
+    existing_colors = [
+        kwimage.Color.coerce(c).as01()
+        for c in channel_colors if c is not None
+    ]
 
     # Define default colors
     fill_colors = kwimage.Color.distinct(

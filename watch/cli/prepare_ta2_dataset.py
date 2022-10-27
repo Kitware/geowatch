@@ -661,6 +661,7 @@ def main(cmdline=False, **kwargs):
                 '''), depends=[align_job], name=f'project-annots-{name}')
         else:
             aligned_imganns_fpath = aligned_imgonly_fpath
+            info['aligned_imganns_fpath'] = aligned_imgonly_fpath
             project_anns_job = align_job
 
         if config['visualize']:

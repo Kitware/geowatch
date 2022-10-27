@@ -117,6 +117,76 @@ class Plotter:
         run_make_fig(make_fig, fnum, plotter.dpath, plotter.human_mapping,
                      plot_name, prefix)
 
+    def plot_relationship(plotter, code_type, group, huevar='sensorchan'):
+        import kwplot
+        plot_name = 'plot_relationship'
+
+        x = 'act.poly.metrics.micro_f1'
+        y = 'trk.poly.metrics.bas_f1'
+
+        test_dset, type = code_type
+        plotkw = ub.udict({
+            # 'x': plotter.metric_luts['pxl'][type],
+            # 'y': plotter.metric_luts['trk'][type],
+            'x': x,
+            'y': y,
+            'hue': huevar,
+            **plotter.common_plotkw,
+        })
+
+        missing = set((plotkw & {'x', 'y'}).values()) - set(group.columns)
+        if missing:
+            raise UnableToPlot(f'Cannot plot {plot_name} for {code_type} missing={missing}')
+
+        if plotkw['x'] not in group.columns or plotkw['y'] not in group.columns:
+            raise UnableToPlot
+
+        metrics_of_interest = group[[plotkw['x'], plotkw['y']]]
+        metric_corr_mat = metrics_of_interest.corr()
+        metric_corr = metric_corr_mat.stack()
+        metric_corr.name = 'corr'
+        stack_idx = metric_corr.index
+        valid_idxs = [(a, b) for (a, b) in ub.unique(map(tuple, map(sorted, stack_idx.to_list()))) if a != b]
+        if valid_idxs:
+            metric_corr = metric_corr.loc[valid_idxs]
+            # corr_lbl = 'corr({},{})={:0.4f}'.format(*metric_corr.index[0], metric_corr.iloc[0])
+            corr_lbl = 'corr={:0.4f}'.format(metric_corr.iloc[0])
+        else:
+            corr_lbl = ''
+        data = group
+
+        if huevar not in {'auto', 'random'}:
+            allow_magic_huevar = True
+            if allow_magic_huevar:
+                if len(data[huevar].unique()) <= 1:
+                    huevar = 'random'
+
+        if huevar == 'random':
+            import random
+            huevar = random.choice(plotter.analysis.statistics)['param_name']
+            # huevar = plotter.analysis.statistics[-1]['param_name']
+            # huevar.replace('pxl', 'pred')
+            plotkw['hue'] = huevar
+
+        if huevar == 'auto':
+            huevar = plotter.analysis.statistics[-1]['param_name']
+            # huevar.replace('pxl', 'pred')
+            plotkw['hue'] = huevar
+
+        def make_fig(fnum, legend=True):
+            fig = kwplot.figure(fnum=fnum, doclf=True)
+            ax = fig.gca()
+            n = len(data)
+            ax = humanized_scatterplot(plotter.human_mapping, data=data, ax=ax,
+                                       legend=legend, **plotkw)
+            nice_type = plotter.human_mapping.get(type, type)
+            ax.set_title(f'{nice_type} - {test_dset}\n{corr_lbl}, n={n}')
+
+        prefix = f'{test_dset}_{type}_{huevar}'
+        fnum = plot_name + prefix
+        dpath = plotter.dpath
+        run_make_fig(make_fig, fnum, dpath, plotter.human_mapping, plot_name, prefix)
+
     def plot_pixel_ap_verus_iarpa(plotter, code_type, group, huevar='sensorchan'):
         import kwplot
         plot_name = 'pxl_vs_iarpa'
@@ -243,20 +313,15 @@ class Plotter:
         prefix = f'{test_dset}_{type}_'
 
         metrics_key = '_'.join(metrics)
-        pred_param_df = pd.DataFrame(group['pred_params'].tolist(), index=group.index)
-        track_param_df = pd.DataFrame(group['track_params'].tolist(), index=group.index)
-        fit_param_df = pd.DataFrame(group['fit_params'].tolist(), index=group.index)
-
+        # pred_param_df = pd.DataFrame(group['pred_params'].tolist(), index=group.index)
+        # track_param_df = pd.DataFrame(group['track_params'].tolist(), index=group.index)
+        # fit_param_df = pd.DataFrame(group['fit_params'].tolist(), index=group.index)
         # varied_params = ub.varied_values(pred_param_df.to_dict('records'), min_variations=1)
+        # blocklist = ub.oset(['step', 'epoch', 'pred_in_dataset_name'])
+        # pred_param_df = pred_param_df.drop(blocklist & pred_param_df.columns, axis=1)
 
-        blocklist = ub.oset(['step', 'epoch', 'pred_in_dataset_name'])
-        pred_param_df = pred_param_df.drop(blocklist & pred_param_df.columns, axis=1)
-
-        main_cols = ub.oset(['expt', 'model', 'step', 'test_dset'] + metrics)
-        expanded = group[main_cols & group.columns]
-        expanded = expanded.join(pred_param_df)
-        expanded = expanded.join(track_param_df)
-        expanded = expanded.join(fit_param_df)
+        # main_cols = ub.oset(['expt', 'model', 'step', 'test_dset'] + metrics)
+        expanded = group
 
         if params_of_interest is None:
             params_of_interest = [
@@ -267,7 +332,7 @@ class Plotter:
                 'trk_thresh',
             ]
 
-        x = 'model'
+        x = 'act.pxl.properties.model_name'
 
         additional_needed_legends = []
 
@@ -346,7 +411,11 @@ class Plotter:
             prefix = f'{test_dset}_{type}_'
             fnum = plot_name + param_name + prefix
             dpath = plotter.dpath
-            run_make_fig(make_fig, fnum, dpath, plotter.human_mapping, plot_name + param_name, prefix)
+            try:
+                run_make_fig(make_fig, fnum, dpath, plotter.human_mapping, plot_name + param_name, prefix)
+            except Exception:
+                print(f'Error checking {param_name}')
+                ...
             # sns.violinplot(data=expanded, x=x, y=metrics[0], hue=param_name,
             #                medianprops={"color": "coral"})
 
@@ -816,6 +885,23 @@ def initial_summary(reporter, dpath=None):
     co2_rows = []
     kwh_rows = []
     hour_rows = []
+
+    type_to_rows = dict(list(reporter.orig_merged_df.groupby('type')))
+    type_to_resource = {}
+
+    # pairs = [
+    #     ('eval_trk_poly_fpath', 'trk.poly.resource.total_hours'),
+    #     ('eval_act_poly_fpath', 'trk.poly.resource.total_hours'),
+    # ]
+    # if k1 in type_to_rows:
+    #     type_to_rows[k1][k2].sum()
+
+    reporter.orig_merged_df['trk.pxl.resource.co2_kg']
+    reporter.orig_merged_df['trk.pxl.resource.total_hours']
+    reporter.orig_merged_df['act.pxl.resource.co2_kg']
+    reporter.orig_merged_df['act.pxl.resource.total_hours']
+
+    # for row in reporter.merg
     for row in reporter.big_rows:
         if row['type'] == 'eval_pxl':
             co2_rows += [row['info']['param_types']['resource'].get('co2_kg', np.nan)]

@@ -99,6 +99,8 @@ class CocoVisualizeConfig(scfg.Config):
         'draw_imgs': scfg.Value(True, isflag=True),
         'draw_anns': scfg.Value('auto', isflag=True, help='auto means only draw anns if they exist'),
 
+        'draw_valid_region': scfg.Value(True, help='if True, draw the valid region if it exists'),
+
         'cmap': scfg.Value('viridis', help='colormap for single channel data'),
 
         'animate': scfg.Value(False, isflag=True, help='if True, make an animated gif from the output'),
@@ -223,6 +225,9 @@ def main(cmdline=True, **kwargs):
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
     print('coco_dset.fpath = {!r}'.format(coco_dset.fpath))
     print('coco_dset = {!r}'.format(coco_dset))
+
+    from watch import heuristics
+    heuristics.ensure_heuristic_coco_colors(coco_dset)
 
     if channels == 'auto':
         from delayed_image import FusedChannelSpec
@@ -360,7 +365,10 @@ def main(cmdline=True, **kwargs):
                 chan_to_normalizer[chan] = normalizer
             print('chan_to_normalizer = {}'.format(ub.repr2(chan_to_normalizer, nl=1)))
 
-        valid_vidspace_region = video.get('valid_region', None)
+        if config['draw_valid_region']:
+            valid_vidspace_region = video.get('valid_region', None)
+        else:
+            valid_vidspace_region = None
 
         if config['zoom_to_tracks']:
             assert space == 'video'
@@ -403,6 +411,7 @@ def main(cmdline=True, **kwargs):
                                 local_frame_index=local_frame_index,
                                 local_max_frame=local_max_frame,
                                 any3=config['any3'], dset_idstr=dset_idstr,
+                                draw_valid_region=config['draw_valid_region'],
                                 stack=config['stack'])
 
         else:
@@ -436,6 +445,7 @@ def main(cmdline=True, **kwargs):
                             local_max_frame=local_max_frame,
                             valid_vidspace_region=valid_vidspace_region,
                             skip_missing=config['skip_missing'],
+                            draw_valid_region=config['draw_valid_region'],
                             stack=config['stack'])
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
@@ -693,6 +703,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                local_max_frame=None,
                                valid_vidspace_region=None,
                                stack=False,
+                               draw_valid_region=True,
                                verbose=0):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
@@ -772,10 +783,15 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         dets = dets.translate(ann_shift)
         delayed = delayed.crop(crop_box.to_slices()[0])
 
-    valid_region = img.get('valid_region', None)
     valid_image_poly = None
     valid_video_poly = None
     vid_from_img = None
+
+    if draw_valid_region:
+        valid_region = img.get('valid_region', None)
+    else:
+        valid_region = None
+
     if valid_region:
         valid_image_poly: kwimage.MultiPolygon = kwimage.MultiPolygon.coerce(valid_region)
         if space == 'video':
