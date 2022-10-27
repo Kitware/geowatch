@@ -78,8 +78,8 @@ def main(cmdline=False, **kwargs):
     if len(region_geojson_fpaths) != 1:
         raise ValueError(f'Must specify exactly one region file, Got: {region_geojson_fpaths}')
 
-    regions = util_gis.load_geojson_datas(
-        region_geojson_fpaths, workers=0, desc='load geojson region-models')
+    regions = list(util_gis.load_geojson_datas(
+        region_geojson_fpaths, workers=0, desc='load geojson region-models'))
     old_region_fpath = regions[0]['fpath']
     region_gdf_crs84: gpd.GeoDataFrame = regions[0]['data']
 
