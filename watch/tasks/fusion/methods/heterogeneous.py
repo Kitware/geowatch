@@ -50,7 +50,7 @@ def positions_from_shape(shape, dtype="float32", device="cpu"):
 
 
 class PadToMultiple(nn.Module):
-    def __init__(self, multiple: int, mode: str = 'constant', value=None):
+    def __init__(self, multiple: int, mode: str = 'constant', value=0.):
         """
         Pads input image-shaped tensors following strategy defined by mode/value. All padding appended to bottom and right of input.
 
