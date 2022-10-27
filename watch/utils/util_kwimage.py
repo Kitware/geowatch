@@ -255,6 +255,10 @@ def perchannel_colorize(data, channel_colors=None):
     Note: this logic semi-exist in kwimage.Heatmap.
     It would be good to consolidate it.
 
+    Args:
+        data (ndarray): the last dimension should be chanels, and they should
+            be probabilities between zero and one.
+
     Example:
         >>> from watch.utils.util_kwimage import *  # NOQA
         >>> import itertools as it
@@ -271,6 +275,18 @@ def perchannel_colorize(data, channel_colors=None):
         >>>     for cx in cxs:
         >>>         data[x_slider[idx] + (cx,)] =  1
         >>>         data[y_slider[idx] + (cx,)] =  0.5
+        >>> canvas = perchannel_colorize(data, channel_colors)[..., 0:3]
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas, docla=1)
+
+    Example:
+        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> import itertools as it
+        >>> import kwarray
+        >>> channel_colors = ['blue']
+        >>> data = np.linspace(0, 1, 512 * 512).reshape(512, 512, 1)
         >>> canvas = perchannel_colorize(data, channel_colors)[..., 0:3]
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
@@ -298,30 +314,32 @@ def perchannel_colorize(data, channel_colors=None):
 
     resolved_channel_colors = []
     for c in channel_colors:
-        # print(f'resolved_channel_colors={resolved_channel_colors}')
         if c is None:
             c = next(fill_color_iter)
         else:
             c = kwimage.Color.coerce(c).as01()
         resolved_channel_colors.append(c)
-    # print(f'resolved_channel_colors={resolved_channel_colors}')
 
     # Each class gets its own color, and modulates the alpha
     sumtotal = np.nansum(data, axis=2)
     sumtotal[np.isnan(sumtotal)] = 1
     sumtotal[sumtotal == 0] = 1
+    sumtotal = np.maximum(sumtotal, 1)
     layers = []
     for cidx in range(num_channels):
         chan = data[:, :, cidx]
-        # alpha = chan / sumtotal
-        alpha = chan / num_channels
+        alpha = chan / sumtotal
+        # alpha = chan / num_channels
         color = resolved_channel_colors[cidx]
         layer = np.empty(tuple(chan.shape) + (4,))
         layer[..., 3] = alpha
         layer[..., 0:3] = color
         layers.append(layer)
 
-    colormask = kwimage.overlay_alpha_layers(layers)
+    background = np.zeros_like(layer)
+    background[..., 3] = 1
+    layers.append(background)
+    colormask = kwimage.overlay_alpha_layers(layers, keepalpha=False)
     # colormask[..., 3] *= with_alpha
     return colormask
 

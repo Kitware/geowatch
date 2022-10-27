@@ -22,6 +22,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --aws_profile=iarpa \
     --region_globstr="$REGION_GLOBSTR" \
     --site_globstr="$SITE_GLOBSTR" \
+    --exclude_channels=pan \
     --requester_pays=False \
     --fields_workers=20 \
     --convert_workers=8 \
