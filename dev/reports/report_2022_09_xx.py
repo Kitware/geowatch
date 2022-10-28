@@ -862,7 +862,7 @@ python -m watch.mlops.schedule_evaluation \
             trk.pxl.data.input_scale_space:
                 - "15GSD"
             trk.poly.thresh:
-                - 0.07
+                - 0.175
             crop.src:
                 - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/online_v1/kwcoco_for_sc_fielded.json
             crop.regions:
@@ -896,13 +896,13 @@ python -m watch.mlops.schedule_evaluation \
     --enable_pred_act_poly=0 \
     --enable_eval_act_pxl=0 \
     --enable_eval_act_poly=0 \
-    --enable_viz_pred_trk_poly=0 \
+    --enable_viz_pred_trk_poly=1 \
     --enable_viz_pred_act_poly=0 \
-    --enable_links=0 \
+    --enable_links=1 \
     --devices="0,1" --queue_size=2 \
     --queue_name='secondary-eval' \
     --backend=serial --skip_existing=0 \
-    --run=0
+    --run=1
 
 
     python -m watch.tasks.fusion.predict --package_fpath=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=155-step=78468.pt.pt --test_dataset=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/crop/online_v1_kwcoco_for_sc_fielded/trk_poly_id_4aa82814/crop_4ee34f2e/crop_id_e7ec2c85/crop.kwcoco.json --pred_dataset=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/pred/act/Drop4_SC_RGB_scratch_V002_epoch=155-step=78468.pt/crop_id_e7ec2c85_crop.kwcoco/act_pxl_f447d96a/pred.kwcoco.json --input_scale_space=10GSD --output_scale_space=10GSD --window_scale_space=10GSD --chip_dims=512,512 --time_steps=5 --num_workers=4 --devices=0, --accelerator=gpu --batch_size=1

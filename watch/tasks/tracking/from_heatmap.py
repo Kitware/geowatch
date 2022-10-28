@@ -406,7 +406,16 @@ def time_aggregated_polys(sub_dset,
     # vidpoly separately, so have to bookkeep both vidpolys and tracks
     # in a list track_polys
 
-    min_area_px = 80  # TODO: parameterize
+    # import xdev
+    # xdev.embed()
+
+    # video_gsd = video.get('target_gsd', None)
+    # if video_gsd is not None:
+    #     min_area_px = '28 meters^2'
+    # for t, p in tracks_polys:
+    #     print(np.sqrt(p.area))
+
+    min_area_px = 80  # TODO: parameterize TODO: make expressable in GSD
     size_filter = SmallPolygonFilter(min_area_px=min_area_px)
     n_orig = len(tracks_polys)
     tracks_polys = list(size_filter(tracks_polys))

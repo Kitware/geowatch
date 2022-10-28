@@ -1180,7 +1180,9 @@ def main(cmdline=True, **kwargs):
 
     # load pred_sites
     # config['pred_sites'] = util_gis.coerce_geojson_datas(config['pred_sites'])
+    load_workers = 2
     pred_site_infos = util_gis.coerce_geojson_paths(config['pred_sites'],
+                                                    workers=load_workers,
                                                     return_manifests=True)
 
     if len(pred_site_infos['manifest_fpaths']) > 1:
@@ -1201,7 +1203,9 @@ def main(cmdline=True, **kwargs):
 
     pred_sites = [
         info['data'] for info in util_gis.coerce_geojson_datas(
-            pred_site_infos['geojson_fpaths'], format='json')
+            pred_site_infos['geojson_fpaths'], format='json',
+            workers=load_workers
+        )
     ]
     if len(pred_sites) == 0:
         raise Exception('No input sites were given')

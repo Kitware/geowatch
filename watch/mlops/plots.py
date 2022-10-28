@@ -886,9 +886,8 @@ def initial_summary(reporter, dpath=None):
     kwh_rows = []
     hour_rows = []
 
-    type_to_rows = dict(list(reporter.orig_merged_df.groupby('type')))
-    type_to_resource = {}
-
+    # type_to_rows = dict(list(reporter.orig_merged_df.groupby('type')))
+    # type_to_resource = {}
     # pairs = [
     #     ('eval_trk_poly_fpath', 'trk.poly.resource.total_hours'),
     #     ('eval_act_poly_fpath', 'trk.poly.resource.total_hours'),

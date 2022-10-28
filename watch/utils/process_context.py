@@ -3,6 +3,7 @@ import socket
 import sys
 import os
 import ubelt as ub
+import uuid
 
 
 class ProcessContext:
@@ -21,8 +22,8 @@ class ProcessContext:
         >>> print('obj = {}'.format(ub.repr2(obj, nl=3)))
     """
 
-    def __init__(self, name=None, type='process_context', args=None,
-                 config=None, extra=None, track_emissions=False):
+    def __init__(self, name=None, type='process', args=None, config=None,
+                 extra=None, track_emissions=False):
         if args is None:
             args = sys.argv
 
@@ -33,6 +34,7 @@ class ProcessContext:
             "machine": None,
             "start_timestamp": None,
             "stop_timestamp": None,
+            "uuid": str(uuid.uuid4()),
             "extra": extra,
         }
         self.obj = {
@@ -131,14 +133,28 @@ class ProcessContext:
     def _start_emissions_tracker(self):
         try:
             from codecarbon import EmissionsTracker
-            # from codecarbon import OfflineEmissionsTracker
+            """
             # emissions_tracker = EmissionsTracker(log_level='info')
+            """
             emissions_tracker = EmissionsTracker(log_level='error')
             emissions_tracker.start()
         except Exception as ex:
-            print('Unable to track emissions ex = {!r}'.format(ex))
-        else:
-            self.emissions_tracker = emissions_tracker
+            # Pretend
+            try:
+                from codecarbon import OfflineEmissionsTracker
+                print('Unable to online emissions ex = {!r}'.format(ex))
+                emissions_tracker = OfflineEmissionsTracker(
+                    country_iso_code='USA',
+                    region='Virginia',
+                    cloud_provider='aws',
+                    cloud_region='us-east-1',
+                    # country_2letter_iso_code='us'
+                )
+                emissions_tracker.start()
+            except Exception as ex:
+                print('Unable to track emissions ex = {!r}'.format(ex))
+            else:
+                self.emissions_tracker = emissions_tracker
 
     def _stop_emissions_tracker(self):
         if self.emissions_tracker is None:
@@ -148,6 +164,16 @@ class ProcessContext:
         summary = self.emissions_tracker.final_emissions_data
         co2_kg = summary.emissions
         total_kWH = summary.energy_consumed
+        # summary.cloud_provider
+        # summary.cloud_region
+        # summary.duration
+        # summary.emissions_rate
+        # summary.cpu_power
+        # summary.gpu_power
+        # summary.ram_power
+        # summary.cpu_energy
+        # summary.gpu_energy
+        # summary.ram_energy
         emissions = {
             'co2_kg': co2_kg,
             'total_kWH': total_kWH,

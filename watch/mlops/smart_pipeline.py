@@ -46,6 +46,41 @@ def partition_params():
     pass
 
 
+def parse_json_header(fpath):
+    """
+    Ideally the information we need is in the first few bytes of the json file
+    """
+    pass
+
+
+def trace_json_lineage(fpath):
+    """
+    We will expect a json file to contain a top-level "info" section that
+    indicates how it is derived.
+
+    fpath = '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/pred/trk/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data.kwcoco/trk_pxl_b788335d/trk_poly_f2218f0b/tracks.kwcoco.json'
+    """
+    from watch.utils import ijson_ext
+    with open(fpath, 'r') as file:
+        # We only expect there to be one info section
+        # file.seek(0)
+        # iii = ijson_ext.items(file, '')
+        info_section_iter = ijson_ext.items(file, prefix='info')
+        info_section = next(info_section_iter)
+
+    # TODO:
+    # uniqify by uuid
+    for proc in list(find_info_items(info_section, 'process')):
+        name = proc['properties']['name']
+        if name not in {'coco_align_geotiffs'}:
+            print(f'name={name}')
+            print(proc['properties']['start_timestamp'])
+            print(proc['properties']['emissions']['run_id'])
+            print('proc = {}'.format(ub.repr2(proc, nl=2)))
+        # print(proc['properties']['name'])
+
+
+# def trace_kwcoco_lineage(fpath):
 def load_iarpa_evaluation(fpath):
     iarpa_info = _load_json(fpath)
     metrics = {}

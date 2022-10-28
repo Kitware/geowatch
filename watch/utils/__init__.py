@@ -53,7 +53,9 @@ __getattr__ = lazy_import(
         'ext_monai',
         'kwcoco_extensions',
         'lightning_ext',
+        'process_context',
         'result_analysis',
+        'reverse_hashid',
         'simple_dvc',
         'slugify_ext',
         'util_bands',
@@ -64,23 +66,28 @@ __getattr__ = lazy_import(
         'util_gis',
         'util_hardware',
         'util_iter',
+        'util_json',
         'util_kwarray',
         'util_kwimage',
         'util_kwplot',
+        'util_locks',
         'util_logging',
         'util_norm',
         'util_parallel',
+        'util_param_grid',
         'util_path',
         'util_pattern',
         'util_raster',
         'util_regex',
         'util_rgdc',
+        'util_s3',
         'util_time',
+        'util_torchmetrics',
+        'util_yaml',
     },
     submod_attrs={
         'util_data': [
             'find_smart_dvc_dpath',
-            'find_dvc_dpath',
         ],
     },
 )
@@ -89,12 +96,13 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
-
 __all__ = ['configargparse_ext', 'ext_monai', 'find_smart_dvc_dpath',
-           'kwcoco_extensions', 'lightning_ext', 'result_analysis',
-           'simple_dvc', 'slugify_ext', 'util_bands', 'util_data',
-           'util_framework', 'util_gdal', 'util_girder', 'util_gis',
-           'util_hardware', 'util_iter', 'util_kwarray', 'util_kwimage',
-           'util_kwplot', 'util_logging', 'util_norm', 'util_parallel',
-           'util_path', 'util_pattern', 'util_raster', 'util_regex',
-           'util_rgdc', 'util_time']
+           'kwcoco_extensions', 'lightning_ext', 'process_context',
+           'result_analysis', 'reverse_hashid', 'simple_dvc', 'slugify_ext',
+           'util_bands', 'util_data', 'util_framework', 'util_gdal',
+           'util_girder', 'util_gis', 'util_hardware', 'util_iter',
+           'util_json', 'util_kwarray', 'util_kwimage', 'util_kwplot',
+           'util_locks', 'util_logging', 'util_norm', 'util_parallel',
+           'util_param_grid', 'util_path', 'util_pattern', 'util_raster',
+           'util_regex', 'util_rgdc', 'util_s3', 'util_time',
+           'util_torchmetrics', 'util_yaml']

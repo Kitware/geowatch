@@ -302,6 +302,7 @@ def main(cmdline=True, **kwargs):
 
     video_names = []
     for vidid, video in prog:
+
         sub_dpath = viz_dpath / video['name']
 
         gids = coco_dset.index.vidid_to_gids[vidid]
@@ -314,6 +315,12 @@ def main(cmdline=True, **kwargs):
 
         sub_dpath.ensuredir()
         video_names.append(video['name'])
+
+        if config['animate'] == 'oops':
+            print('Got animate=oops. '
+                  'Assuming images already exists and you forgot to animate'
+                  'Skipping video draw')
+            continue
 
         norm_over_time = config['norm_over_time']
         if not norm_over_time:
@@ -456,25 +463,19 @@ def main(cmdline=True, **kwargs):
     print('Wrote images to viz_dpath = {!r}'.format(viz_dpath))
 
     if config['animate']:
-        def yaml_loads(text):
-            import io
-            import yaml
-            f = io.StringIO(text)
-            f.seek(0)
-            data = yaml.load(f, yaml.SafeLoader)
-            return data
         # TODO: develop this idea more
         # Try to parse out an animation config
         import scriptconfig as scfg
+        from watch.utils import util_yaml
 
         @scfg.dataconf
         class AnimateConfig:
             # TODO: should be able to load from an alias
             frames_per_second = scfg.Value(0.7, alias=['fps'])
         animate_config = dict(AnimateConfig())
-        if isinstance(config['animate'], str):
+        if isinstance(config['animate'], str) and config['animate'] not in {'oops'}:
             try:
-                user_config = yaml_loads(config['animate'])
+                user_config = util_yaml.yaml_loads(config['animate'])
                 assert isinstance(user_config, dict), 'animate subconfig should be coercable into a dict'
                 # hack
                 if 'fps' in user_config:
@@ -504,6 +505,7 @@ def main(cmdline=True, **kwargs):
             zoom_to_tracks=config['zoom_to_tracks'],
             **animate_config,
         )
+        # Terminal fixup
         import sys
         if sys.stdout.isatty():
             ub.cmd('stty sane', verbose=3)
