@@ -862,6 +862,9 @@ python -m watch.mlops.schedule_evaluation \
             trk.pxl.data.input_scale_space:
                 - "15GSD"
             trk.poly.thresh:
+                - 0.07
+                - 0.1
+                - 0.12
                 - 0.175
             crop.src:
                 - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/online_v1/kwcoco_for_sc_fielded.json
@@ -896,12 +899,12 @@ python -m watch.mlops.schedule_evaluation \
     --enable_pred_act_poly=0 \
     --enable_eval_act_pxl=0 \
     --enable_eval_act_poly=0 \
-    --enable_viz_pred_trk_poly=1 \
+    --enable_viz_pred_trk_poly=0 \
     --enable_viz_pred_act_poly=0 \
     --enable_links=1 \
     --devices="0,1" --queue_size=2 \
     --queue_name='secondary-eval' \
-    --backend=serial --skip_existing=0 \
+    --backend=tmux --skip_existing=0 \
     --run=1
 
 

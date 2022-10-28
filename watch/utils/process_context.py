@@ -34,6 +34,7 @@ class ProcessContext:
             "machine": None,
             "start_timestamp": None,
             "stop_timestamp": None,
+            "duration": None,
             "uuid": str(uuid.uuid4()),
             "extra": extra,
         }
@@ -120,6 +121,9 @@ class ProcessContext:
 
     def stop(self):
         self.properties["stop_timestamp"] = self._timestamp()
+        start_time = ub.timeparse(self.properties["start_timestamp"])
+        stop_time = ub.timeparse(self.properties["stop_timestamp"])
+        self.properties["duration"] = str(stop_time - start_time)
         if self.emissions_tracker is not None:
             self._stop_emissions_tracker()
         return self.obj

@@ -422,7 +422,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # print(f'{len(queue)=}')
     with_status = 0
     with_rich = 0
-    # queue.write_network_text()
+    queue.write_network_text()
     queue.rprint(with_status=with_status, with_rich=with_rich)
 
     for job in queue.jobs:
