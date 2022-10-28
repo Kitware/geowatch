@@ -1,6 +1,7 @@
 from watch.tasks.fusion.datamodules.kwcoco_datamodule import KWCocoVideoDataModule
 # Import models for the CLI registry
-from watch.tasks.fusion.methods import * # NOQA
+from watch.tasks.fusion.methods import SequenceAwareModel  # NOQA
+from watch.tasks.fusion.methods import MultimodalTransformer  # NOQA
 
 """
 The Wrapped class below are examples of why we should eventually factor out the current configuraiton system. LightningCLI interogates the __init__ methods belonging to LightningModule and LightningDataModule to decide which parameters can be configured.
@@ -74,6 +75,7 @@ def main():
             super().add_arguments_to_parser(parser)
 
     MyLightningCLI(
+        # SequenceAwareModel,
         model_class=pl.LightningModule,  # TODO: factor out common components of the two models and put them in base class models inherit from
         # MultimodalTransformer,
         datamodule_class=KWCocoVideoDataModule,
@@ -92,18 +94,6 @@ def main():
                     draw_interval="5min",  # args.draw_interval
                 ),
                 pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
-
-                pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),
-                # leaving always on breaks when correspinding metric isnt
-                # tracked because loss_weight==0
-                # pl.callbacks.ModelCheckpoint(
-                #     monitor='val_change_f1', mode='max', save_top_k=4),
-                # pl.callbacks.ModelCheckpoint(
-                #     monitor='val_saliency_f1', mode='max', save_top_k=4),
-                # pl.callbacks.ModelCheckpoint(
-                #     monitor='val_class_f1_micro', mode='max', save_top_k=4),
-                # pl.callbacks.ModelCheckpoint(
-                #     monitor='val_class_f1_macro', mode='max', save_top_k=4),
             ]
         ),
     )
@@ -116,7 +106,7 @@ if __name__ == "__main__":
                 --model.help=MultimodalTransformer
 
         python -m watch.tasks.fusion.fit_lightning fit \
-                --model.help=NoopModel
+                --model.help=SequenceAwareModel
 
         python -m watch.tasks.fusion.fit_lightning fit \
             --data.train_dataset=special:vidshapes8-frames9-speed0.5-multispectral \
@@ -135,7 +125,7 @@ if __name__ == "__main__":
             --trainer.devices=0, \
             --trainer.precision=16 \
             --trainer.fast_dev_run=5 \
-            --model=NoopModel\
+            --model=SequenceAwareModel \
             --model.tokenizer=linconv
     """
     main()

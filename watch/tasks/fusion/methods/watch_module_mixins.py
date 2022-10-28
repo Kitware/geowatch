@@ -119,9 +119,9 @@ class WatchModuleMixins:
                 W2 = width_distri.sample()
 
                 modes = {
-                    'pan': rng.rand(1, H0, W0),
-                    'red|green|blue': rng.rand(3, H1, W1),
-                    'nir|swir16|swir22': rng.rand(3, H2, W2),
+                    'pan': rng.rand(1, H0, W0).astype("float32"),
+                    'red|green|blue': rng.rand(3, H1, W1).astype("float32"),
+                    'nir|swir16|swir22': rng.rand(3, H2, W2).astype("float32"),
                 }
                 frame = {}
                 if time_index == 0:

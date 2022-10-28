@@ -894,16 +894,17 @@ class FeedForward(nn.Module):
 
 
 class Attention(nn.Module):
-    def __init__(self, query_dim, context_dim=None, heads=8, dim_head=64):
+    def __init__(self, query_dim, context_dim=None, output_dim=None, heads=8, dim_head=64):
         super().__init__()
         inner_dim = dim_head * heads
         context_dim = default(context_dim, query_dim)
+        output_dim = default(output_dim, query_dim)
         self.scale = dim_head ** -0.5
         self.heads = heads
 
         self.to_q = nn.Linear(query_dim, inner_dim, bias=False)
         self.to_kv = nn.Linear(context_dim, inner_dim * 2, bias=False)
-        self.to_out = nn.Linear(inner_dim, query_dim)
+        self.to_out = nn.Linear(inner_dim, output_dim)
 
     def forward(self, x, context=None, mask=None):
         h = self.heads
@@ -934,45 +935,72 @@ class TransformerEncoderDecoder(nn.Module):
     def __init__(
         self,
         *,
-        depth,
+        encoder_depth,
+        decoder_depth,
         dim,
         queries_dim,
         logits_dim=None,
+        decode_cross_every=1,
         cross_heads=1,
         latent_heads=8,
         cross_dim_head=64,
         latent_dim_head=64,
         weight_tie_layers=False,
-        decoder_ff=False
     ):
         super().__init__()
 
-        self.cross_attend_blocks = nn.ModuleList([
-            PreNorm(dim, Attention(dim, dim, heads=cross_heads, dim_head=cross_dim_head), context_dim=dim),
-            PreNorm(dim, FeedForward(dim))
-        ])
+        def latent_cross_attn():
+            return PreNorm(
+                queries_dim,
+                Attention(
+                    queries_dim, dim, dim,
+                    heads=cross_heads,
+                    dim_head=cross_dim_head),
+                context_dim=dim,
+            )
 
-        def get_latent_attn():
-            return PreNorm(dim, Attention(dim, heads=latent_heads, dim_head=latent_dim_head))
+        def latent_attn():
+            return PreNorm(
+                dim,
+                Attention(
+                    dim,
+                    heads=latent_heads,
+                    dim_head=latent_dim_head),
+            )
 
-        def get_latent_ff():
-            return PreNorm(dim, FeedForward(dim))
+        def latent_ff():
+            return PreNorm(
+                dim,
+                FeedForward(dim),
+            )
 
-        get_latent_attn, get_latent_ff = map(cache_fn, (get_latent_attn, get_latent_ff))
-
-        self.layers = nn.ModuleList([])
         cache_args = {'_cache': weight_tie_layers}
 
-        for i in range(depth):
-            self.layers.append(nn.ModuleList([
+        get_latent_attn, get_latent_ff = map(cache_fn, (latent_attn, latent_ff))
+        self.encoder_layers = nn.ModuleList([])
+        for i in range(encoder_depth):
+            self.encoder_layers.append(nn.ModuleList([
                 get_latent_attn(**cache_args),
                 get_latent_ff(**cache_args)
             ]))
 
-        self.decoder_cross_attn = PreNorm(queries_dim, Attention(queries_dim, dim, heads=cross_heads, dim_head=cross_dim_head), context_dim=dim)
-        self.decoder_ff = PreNorm(queries_dim, FeedForward(queries_dim)) if decoder_ff else None
+        get_latent_cross_attn, get_latent_attn, get_latent_ff = map(cache_fn, (latent_cross_attn, latent_attn, latent_ff))
+        self.decoder_layers = nn.ModuleList([])
+        for i in range(decoder_depth):
+            if (i % decode_cross_every) == 0:
+                layers = [
+                    get_latent_cross_attn(**cache_args),
+                    get_latent_attn(**cache_args),
+                    get_latent_ff(**cache_args)
+                ]
+            else:
+                layers = [
+                    get_latent_attn(**cache_args),
+                    get_latent_ff(**cache_args)
+                ]
+            self.decoder_layers.append(nn.ModuleList(layers))
 
-        self.to_logits = nn.Linear(queries_dim, logits_dim) if exists(logits_dim) else nn.Identity()
+        self.to_logits = nn.Linear(dim, logits_dim) if exists(logits_dim) else nn.Identity()
 
     def forward(
         self,
@@ -983,7 +1011,7 @@ class TransformerEncoderDecoder(nn.Module):
         b = x.shape[0]
 
         # layers
-        for self_attn, self_ff in self.layers:
+        for self_attn, self_ff in self.encoder_layers:
             x = self_attn(x) + x
             x = self_ff(x) + x
 
@@ -995,11 +1023,15 @@ class TransformerEncoderDecoder(nn.Module):
             queries = repeat(queries, 'n d -> b n d', b=b)
 
         # cross attend from decoder queries to latents
-        latents = self.decoder_cross_attn(queries, context=x)
+        for layers in self.decoder_layers:
+            if len(layers) == 3:
+                cross_attn, self_attn, self_ff = layers
+                x = cross_attn(queries, context=x)
+            else:
+                self_attn, self_ff = layers
 
-        # optional decoder feedforward
-        if exists(self.decoder_ff):
-            latents = latents + self.decoder_ff(latents)
+            x = self_attn(x) + x
+            x = self_ff(x) + x
 
         # final linear out
-        return self.to_logits(latents)
+        return self.to_logits(x)

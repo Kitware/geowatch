@@ -168,29 +168,27 @@ class NoopModel(pl.LightningModule, WatchModuleMixins):
         """
 
         CommandLine:
-            xdoctest -m watch.tasks.fusion.methods.sequence_aware SequenceAwareModel.save_package
+            xdoctest -m watch.tasks.fusion.methods.noop_model NoopModel.save_package
 
         Example:
             >>> # Test without datamodule
             >>> import ubelt as ub
             >>> from os.path import join
-            >>> #from watch.tasks.fusion.methods.sequence_aware import *  # NOQA
+            >>> #from watch.tasks.fusion.methods.noop_model import *  # NOQA
             >>> dpath = ub.Path.appdir('watch/tests/package').ensuredir()
             >>> package_path = join(dpath, 'my_package.pt')
 
             >>> # Use one of our fusion.architectures in a test
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
-            >>> model = self = methods.SequenceAwareModel(
-            >>>     input_sensorchan=5,
-            >>>     change_head_hidden=0, saliency_head_hidden=0,
-            >>>     class_head_hidden=0)
+            >>> model = self = methods.NoopModel(
+            >>>     input_sensorchan=5,)
 
             >>> # Save the model (TODO: need to save datamodule as well)
             >>> model.save_package(package_path)
 
             >>> # Test that the package can be reloaded
-            >>> #recon = methods.SequenceAwareModel.load_package(package_path)
+            >>> #recon = methods.NoopModel.load_package(package_path)
             >>> from watch.tasks.fusion.utils import load_model_from_package
             >>> recon = load_model_from_package(package_path)
             >>> # Check consistency and data is actually different
@@ -208,7 +206,7 @@ class NoopModel(pl.LightningModule, WatchModuleMixins):
             >>> from os.path import join
             >>> from watch.tasks.fusion import datamodules
             >>> from watch.tasks.fusion import methods
-            >>> from watch.tasks.fusion.methods.sequence_aware import *  # NOQA
+            >>> from watch.tasks.fusion.methods.noop_model import *  # NOQA
             >>> dpath = ub.Path.appdir('watch/tests/package').ensuredir()
             >>> package_path = dpath / 'my_package.pt'
 
@@ -220,12 +218,9 @@ class NoopModel(pl.LightningModule, WatchModuleMixins):
             >>> classes = datamodule.torch_datasets['train'].classes
 
             >>> # Use one of our fusion.architectures in a test
-            >>> self = methods.SequenceAwareModel(
+            >>> self = methods.NoopModel(
             >>>     classes=classes,
-            >>>     dataset_stats=dataset_stats, input_sensorchan=datamodule.input_sensorchan,
-            >>>     learning_rate=1e-8, optimizer='sgd',
-            >>>     change_head_hidden=0, saliency_head_hidden=0,
-            >>>     class_head_hidden=0)
+            >>>     dataset_stats=dataset_stats, input_sensorchan=datamodule.input_sensorchan)
 
             >>> # We have to run an input through the module because it is lazy
             >>> batch = ub.peek(iter(datamodule.train_dataloader()))
@@ -238,7 +233,7 @@ class NoopModel(pl.LightningModule, WatchModuleMixins):
             >>> self.save_package(package_path)
 
             >>> # Test that the package can be reloaded
-            >>> recon = methods.SequenceAwareModel.load_package(package_path)
+            >>> recon = methods.NoopModel.load_package(package_path)
 
             >>> # Check consistency and data is actually different
             >>> recon_state = recon.state_dict()
