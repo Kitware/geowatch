@@ -59,7 +59,7 @@ def main():
                         default=False,
                         help="Force predict scripts to use --num_workers=0")
     parser.add_argument("--bas_thresh",
-                        default=0.07,
+                        default=0.12,
                         type=float,
                         required=False,
                         help="Threshold for BAS tracking (kwarg 'thresh')")
@@ -223,9 +223,9 @@ def run_bas_fusion_for_baseline(
       "tta_fliprot": 0,
       "tta_time": 0,
       "chip_overlap": 0.3,
-      "input_space_scale": "30GSD",
-      "window_space_scale": "None",
-      "output_space_scale": "30GSD",
+      "input_space_scale": "15GSD",
+      "window_space_scale": "15GSD",
+      "output_space_scale": "15GSD",
       "time_span": "6m",
       "time_sampling": "contiguous",
       "time_steps": 11,
