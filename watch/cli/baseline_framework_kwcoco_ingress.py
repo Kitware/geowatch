@@ -53,7 +53,7 @@ def baseline_framework_kwcoco_ingress(input_path,
         aws_base_command.append('--dryrun')
 
     if not show_progress:
-        aws_base_command.append('--no-progress')
+        aws_base_command.append('--only-show-errors')
 
     def _load_input(path):
         try:
