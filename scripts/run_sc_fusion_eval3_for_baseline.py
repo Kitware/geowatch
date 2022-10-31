@@ -229,9 +229,9 @@ def run_sc_fusion_for_baseline(
     sc_fusion_kwcoco_path = os.path.join(
         ingress_dir, 'sc_fusion_kwcoco.json')
 
-    site_models_outdir = os.path.join(ingress_dir, 'site_models')
+    site_models_outdir = os.path.join(ingress_dir, 'sc_out_site_models')
     os.makedirs(site_models_outdir, exist_ok=True)
-    region_models_outdir = os.path.join(ingress_dir, 'region_models')
+    region_models_outdir = os.path.join(ingress_dir, 'sc_out_region_models')
     os.makedirs(region_models_outdir, exist_ok=True)
 
     # 3.1. Check that we have at least one "video" (BAS identified
@@ -302,6 +302,7 @@ def run_sc_fusion_for_baseline(
                 os.path.splitext(sc_fusion_kwcoco_path))
             subprocess.run(['python', '-m', 'watch.cli.kwcoco_to_geojson',
                             sc_fusion_kwcoco_path,
+                            '--out_site_summaries_dir', region_models_outdir,
                             '--out_sites_dir', site_models_outdir,
                             '--out_kwcoco', tracked_sc_kwcoco_path,
                             '--default_track_fn', sc_track_fn,
@@ -326,17 +327,7 @@ def run_sc_fusion_for_baseline(
                     '--new_region_dpath', cropped_region_models_outdir],
                    check=True)
 
-    # 5. Update region model with computed sites
-    # ** NOTE ** This is a destructive operation as the region file
-    # ** gets modified in place (locally or on S3)
-    # Referencing region model already computed during BAS fusion
-    print("* Updating region *")
-    _upload_region(aws_base_command,
-                   cropped_region_models_outdir,
-                   local_region_path,
-                   input_region_path)
-
-    # 6. Egress (envelop KWCOCO dataset in a STAC item and egress;
+    # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
@@ -348,7 +339,7 @@ def run_sc_fusion_for_baseline(
                                      dryrun=False,
                                      newline=False)
 
-    # 7. (Optional) collate TA-2 output
+    # 6. (Optional) collate TA-2 output
     if ta2_s3_collation_bucket is not None:
         print("* Collating TA-2 output")
         _ta2_collate_output(aws_base_command,
