@@ -28,3 +28,5 @@ some cases these are being developed simultaniosly with WATCH.
 * https://gitlab.kitware.com/utils/scriptconfig - Importance: Medium - generally how the CLI tools are written and configured
 
 * https://gitlab.kitware.com/computer-vision/cmd_queue - Importance: Medium - local scheduling
+
+* https://gitlab.kitware.com/smart/metrics-and-test-framework - Importance: Medium-high - This is our internal fork of the IARPA metrics module / scoring scripts.

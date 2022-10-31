@@ -19,6 +19,7 @@ import scriptconfig as scfg
 from packaging import version
 import safer
 import watch.heuristics
+import warnings
 import kwplot
 import kwimage
 from matplotlib.collections import LineCollection
@@ -94,6 +95,11 @@ class MetricsConfig(scfg.DataConfig):
         '''
         IARPA metrics code currently contains a cache bug, do not
         enable the cache until this is fixed.
+        '''))
+
+    load_workers = scfg.Value(0, help=ub.paragraph(
+        '''
+        The number of workers used to load site models.
         '''))
 
 
@@ -1179,8 +1185,7 @@ def main(cmdline=True, **kwargs):
     proc_context.start()
 
     # load pred_sites
-    # config['pred_sites'] = util_gis.coerce_geojson_datas(config['pred_sites'])
-    load_workers = 2
+    load_workers = config['load_workers']
     pred_site_infos = util_gis.coerce_geojson_paths(config['pred_sites'],
                                                     return_manifests=True)
 
@@ -1259,8 +1264,23 @@ def main(cmdline=True, **kwargs):
 
     # First build up all of the commands and prepare necessary data for them.
     commands = []
+
     for region_id, region_sites in ub.ProgIter(sorted(grouped_sites.items()),
                                                desc='prepare regions for eval'):
+
+        roi = region_id
+        gt_dir = os.fspath(true_site_dpath)
+
+        # Test to see if GT regions exist as they would be checked for in the
+        # iarpa_smart_metrics tool.
+        from iarpa_smart_metrics.commons import as_local_path
+        gt_dir = as_local_path(gt_dir, "annotations/truth/", reg_exp=f".*{roi}.*.geojson")
+        gt_dir = ub.Path(gt_dir)
+        gt_files = list(gt_dir.glob(f"*{roi}*.geojson"))
+
+        if len(gt_files) == 0:
+            warnings.warn(f'No truth for region: {roi}. Skipping')
+            continue
 
         site_dpath = (tmp_dpath / 'site' / region_id).ensuredir()
         image_dpath = (tmp_dpath / 'image').ensuredir()
@@ -1301,8 +1321,8 @@ def main(cmdline=True, **kwargs):
 
         run_eval_command = [
             'python', '-m', 'iarpa_smart_metrics.run_evaluation',
-            '--roi', region_id,
-            '--gt_dir', os.fspath(true_site_dpath),
+            '--roi', roi,
+            '--gt_dir', os.fspath(gt_dir),
             '--rm_dir', os.fspath(true_region_dpath),
             '--sm_dir', os.fspath(pred_site_sub_dpath),
             '--image_dir', os.fspath(image_dpath),

@@ -5,8 +5,7 @@ References:
     https://github.com/ICRAR/ijson/issues/33
 
 Example:
-    >>> import sys, ubelt
-    >>> sys.path.append(ubelt.expandpath('~/code/watch'))
+    >>> import ubelt as ub
     >>> from watch.utils import ijson_ext as ijson_ext
     >>> #
     >>> import kwcoco
