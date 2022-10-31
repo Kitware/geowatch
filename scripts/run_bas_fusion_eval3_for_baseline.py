@@ -59,7 +59,7 @@ def main():
                         default=False,
                         help="Force predict scripts to use --num_workers=0")
     parser.add_argument("--bas_thresh",
-                        default=0.1,
+                        default=0.12,
                         type=float,
                         required=False,
                         help="Threshold for BAS tracking (kwarg 'thresh')")
