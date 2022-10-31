@@ -568,12 +568,12 @@ DVC_FIND_DATA_KWARGS = {'tags': 'phase2_data', 'envvar': 'DATA_DVC_DPATH'}
 
 def auto_expt_dvc():
     import watch
-    return watch.find_dvc_dpath(**DVC_FIND_EXPT_KWARGS)
+    return watch.find_smart_dvc_dpath(**DVC_FIND_EXPT_KWARGS)
 
 
 def auto_data_dvc():
     import watch
-    return watch.find_dvc_dpath(**DVC_FIND_DATA_KWARGS)
+    return watch.find_smart_dvc_dpath(**DVC_FIND_DATA_KWARGS)
 
 
 # We should be able to figure out a way to robustly introspect these

@@ -863,8 +863,17 @@ python -m watch.mlops.schedule_evaluation \
                 - "15GSD"
             trk.poly.thresh:
                 - 0.07
+                - 0.08
+                - 0.09
+                - 0.095
                 - 0.1
+                - 0.105
+                - 0.11
                 - 0.12
+                - 0.13
+                - 0.14
+                - 0.15
+                - 0.16
                 - 0.175
             crop.src:
                 - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/online_v1/kwcoco_for_sc_fielded.json
@@ -904,7 +913,7 @@ python -m watch.mlops.schedule_evaluation \
     --enable_links=1 \
     --devices="0,1" --queue_size=2 \
     --queue_name='secondary-eval' \
-    --backend=tmux --skip_existing=0 \
+    --backend=tmux --skip_existing=1 \
     --run=1
 
 

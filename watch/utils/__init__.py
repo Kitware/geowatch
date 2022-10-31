@@ -51,6 +51,7 @@ __getattr__ = lazy_import(
     submodules={
         'configargparse_ext',
         'ext_monai',
+        'ijson_ext',
         'kwcoco_extensions',
         'lightning_ext',
         'process_context',
@@ -97,12 +98,12 @@ def __dir__():
     return __all__
 
 __all__ = ['configargparse_ext', 'ext_monai', 'find_smart_dvc_dpath',
-           'kwcoco_extensions', 'lightning_ext', 'process_context',
-           'result_analysis', 'reverse_hashid', 'simple_dvc', 'slugify_ext',
-           'util_bands', 'util_data', 'util_framework', 'util_gdal',
-           'util_girder', 'util_gis', 'util_hardware', 'util_iter',
-           'util_json', 'util_kwarray', 'util_kwimage', 'util_kwplot',
-           'util_locks', 'util_logging', 'util_norm', 'util_parallel',
-           'util_param_grid', 'util_path', 'util_pattern', 'util_raster',
-           'util_regex', 'util_rgdc', 'util_s3', 'util_time',
-           'util_torchmetrics', 'util_yaml']
+           'ijson_ext', 'kwcoco_extensions', 'lightning_ext',
+           'process_context', 'result_analysis', 'reverse_hashid',
+           'simple_dvc', 'slugify_ext', 'util_bands', 'util_data',
+           'util_framework', 'util_gdal', 'util_girder', 'util_gis',
+           'util_hardware', 'util_iter', 'util_json', 'util_kwarray',
+           'util_kwimage', 'util_kwplot', 'util_locks', 'util_logging',
+           'util_norm', 'util_parallel', 'util_param_grid', 'util_path',
+           'util_pattern', 'util_raster', 'util_regex', 'util_rgdc', 'util_s3',
+           'util_time', 'util_torchmetrics', 'util_yaml']

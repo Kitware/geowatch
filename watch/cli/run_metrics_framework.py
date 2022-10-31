@@ -1182,7 +1182,6 @@ def main(cmdline=True, **kwargs):
     # config['pred_sites'] = util_gis.coerce_geojson_datas(config['pred_sites'])
     load_workers = 2
     pred_site_infos = util_gis.coerce_geojson_paths(config['pred_sites'],
-                                                    workers=load_workers,
                                                     return_manifests=True)
 
     if len(pred_site_infos['manifest_fpaths']) > 1:
@@ -1350,7 +1349,7 @@ def main(cmdline=True, **kwargs):
                 ub.cmd(cmd, verbose=3, check=True, shell=True)
             except subprocess.CalledProcessError:
                 print('error in metrics framework, probably due to zero '
-                      'TP site matches.')
+                      'TP site matches or a region without site truth.')
 
     print('out_dirs = {}'.format(ub.repr2(out_dirs, nl=1)))
     if args.merge and out_dirs:

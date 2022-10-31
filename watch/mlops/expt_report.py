@@ -369,8 +369,8 @@ class EvaluationReporter:
             column_nestings = util_param_grid.dotkeys_to_nested(colnames)
             # non_nested = [k for k, v in column_nestings.items() if k == v]
             print(ub.repr2(column_nestings, sort=0))
-            column_nestings['trk']
-            column_nestings['act']
+            # column_nestings['trk']
+            # column_nestings['act']
 
             type_to_idkeys = {
                 'eval_trk_pxl_fpath': ['trk_model', 'test_trk_dset', 'trk_pxl_cfg'],
@@ -519,8 +519,14 @@ def num_files_summary(df):
         # print(col_stats_df2.to_string())
         row = {}
         row['dataset_code'] = dataset_code
-        row['num_trk_models'] = len(df['trk_model'].dropna().unique())
-        row['num_act_models'] = len(df['act_model'].dropna().unique())
+        if 'trk_model' in df.columns:
+            row['num_trk_models'] = len(df['trk_model'].dropna().unique())
+        else:
+            row['num_trk_models'] = 0
+        if 'act_model' in df.columns:
+            row['num_act_models'] = len(df['act_model'].dropna().unique())
+        else:
+            row['num_act_models'] = 0
         row.update(
             ub.udict(df['type'].value_counts().to_dict()).map_keys(
                 lambda x: 'num_' + x)

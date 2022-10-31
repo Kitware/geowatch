@@ -82,11 +82,22 @@ def trace_json_lineage(fpath):
 
 # def trace_kwcoco_lineage(fpath):
 def load_iarpa_evaluation(fpath):
+    print(f'fpath={fpath}')
     iarpa_info = _load_json(fpath)
     metrics = {}
     if 'best_bas_rows' in iarpa_info:
         best_bas_rows = pd.read_json(io.StringIO(json.dumps(iarpa_info['best_bas_rows'])), orient='table')
         bas_row = best_bas_rows.loc['__macro__'].reset_index().iloc[0]
+
+        metrics.update({
+            'bas_tp': bas_row['tp sites'],
+            'bas_fp': bas_row['fp sites'],
+            'bas_fn': bas_row['fn sites'],
+            'bas_ntrue': bas_row['total sites'],
+            'bas_npred': bas_row['proposed slices'],
+            'bas_ppv': bas_row['precision'],
+            'bas_tpr': bas_row['recall (PD)'],
+        })
         metrics.update({
             'bas_f1': bas_row['F1'],
             'rho': bas_row['rho'],
