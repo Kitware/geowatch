@@ -309,7 +309,7 @@ class RegionResult:
         df = df.reset_index().set_index(['region_id', 'site', 'phase'])
 
         df[['F1', 'TIoU', 'TE', 'TEp']] = df[['F1', 'TIoU', 'TE', 'TEp']].astype(float)
-        df[phases] = df[phases].astype(int)
+        df[phases] = df[phases].astype("Int64")
         return df
 
     @property
@@ -619,7 +619,6 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
         - TE is temporal error of current phase
         - TEp is temporal error of next predicted phase
     '''
-
     dfs = [r.sc_df for r in sc_results]
     concat_df = pd.concat(dfs, axis=0)
     # concat_df = concat_df.sort_values('date')
@@ -763,7 +762,7 @@ def viz_sc(sc_results, save_dpath):
 
         # need args instead of kwargs because of grid.map() weirdness
         def add_colored_linesegments(x, y, phase, units, **kwargs):
-            if isinstance(x[0], datetime.date):
+            if isinstance(x.iloc[0], datetime.date):
                 x = date2num(x)
 
             _df = pd.DataFrame(dict(
@@ -875,25 +874,27 @@ def viz_sc(sc_results, save_dpath):
 
     phs = [ph for r in sc_results if (ph := r.sc_phasetable) is not None]
 
-    for ph in phs:
+    for ph in ub.ProgIter(phs, desc='visualize sc gantt'):
 
         rid = ph.index.get_level_values('region_id')[0]
 
         # site-level viz
         for (site, site_cand), df in ph.groupby(['site', 'site_candidate']):
+            df = df.droplevel([0, 1, 2])
             viz_sc_gantt(
-                df.droplevel([0, 1, 2]),
+                df,
                 ' vs. '.join((site, site_cand)),
                 ((save_dpath / rid).ensuredir() / ('_'.join((site, site_cand)) + '.png'))
             )
 
         # region-level viz
-        viz_sc_multi(
-            ph, rid,
-            (save_dpath / f'sc_{rid}.png')
-        )
+        df = ph
+        plot_title = rid
+        save_fpath = (save_dpath / f'sc_{rid}.png')
+        viz_sc_multi(ph, plot_title, save_fpath)
 
     # merged viz
+    print('Visualize merged')
     merged_df = pd.concat(phs, axis=0)
     viz_sc_multi(
         merged_df,
@@ -1297,7 +1298,7 @@ def main(cmdline=True, **kwargs):
         pred_site_sub_dpath = site_dpath / 'latest' / region_id
         pred_site_sub_dpath.ensuredir()
 
-        # copy site models to site_dpath
+        # copy site models to site_dpat/e
         for site in region_sites:
             geojson_fpath = pred_site_sub_dpath / (
                 site['features'][0]['properties']['site_id'] + '.geojson'
