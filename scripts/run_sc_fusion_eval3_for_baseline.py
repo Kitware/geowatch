@@ -229,6 +229,9 @@ def run_sc_fusion_for_baseline(
     sc_fusion_kwcoco_path = os.path.join(
         ingress_dir, 'sc_fusion_kwcoco.json')
 
+    cropped_region_models_bas = os.path.join(ingress_dir,
+                                             'cropped_region_models_bas')
+
     site_models_outdir = os.path.join(ingress_dir, 'sc_out_site_models')
     os.makedirs(site_models_outdir, exist_ok=True)
     region_models_outdir = os.path.join(ingress_dir, 'sc_out_region_models')
@@ -307,7 +310,8 @@ def run_sc_fusion_for_baseline(
                             '--out_kwcoco', tracked_sc_kwcoco_path,
                             '--default_track_fn', sc_track_fn,
                             '--site_summary',
-                            os.path.join(region_models_outdir, '*.geojson'),
+                            os.path.join(cropped_region_models_bas,
+                                         '*.geojson'),
                             '--track_kwargs', json.dumps(sc_track_kwargs)],
                            check=True)
 
