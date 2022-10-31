@@ -7,10 +7,12 @@ import tempfile
 import json
 from glob import glob
 import shutil
+import traceback
 
 from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
 from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress  # noqa: 501
 from watch.tasks.fusion.predict import predict
+from watch.tasks.fusion.datamodules.temporal_sampling import TimeSampleError
 
 
 def main():
@@ -267,36 +269,46 @@ def run_sc_fusion_for_baseline(
 }
         """)
 
-        predict(devices='0,',
-                write_preds=False,
-                write_probs=True,
-                with_change=False,
-                with_saliency=False,
-                with_class=True,
-                test_dataset=ingress_kwcoco_path,
-                package_fpath=sc_fusion_model_path,
-                pred_dataset=sc_fusion_kwcoco_path,
-                num_workers=('0' if force_zero_num_workers else str(jobs)),  # noqa: 501
-                batch_size=8,
-                **predict_config)
+        try:
+            predict(devices='0,',
+                    write_preds=False,
+                    write_probs=True,
+                    with_change=False,
+                    with_saliency=False,
+                    with_class=True,
+                    test_dataset=ingress_kwcoco_path,
+                    package_fpath=sc_fusion_model_path,
+                    pred_dataset=sc_fusion_kwcoco_path,
+                    num_workers=('0' if force_zero_num_workers else str(jobs)),  # noqa: 501
+                    batch_size=8,
+                    **predict_config)
+        except TimeSampleError:
+            print("* Error with time sampling during SC Predict "
+                  "(shown below) -- attempting to continue anyway")
+            traceback.print_exception(*sys.exc_info())
+            # Copy input region model to output (since there no sites to
+            # modify)
+            shutil.copy(local_region_path,
+                        os.path.join(region_models_outdir,
+                                     "{}.geojson".format(region_id)))
+        else:
+            # 4. Compute tracks (SC)
+            print("* Computing tracks (SC) *")
+            sc_track_kwargs = {"boundaries_as": "polys",
+                               "use_viterbi": 0.0,
+                               "thresh": sc_thresh}
 
-        # 4. Compute tracks (SC)
-        print("* Computing tracks (SC) *")
-        sc_track_kwargs = {"boundaries_as": "polys",
-                           "use_viterbi": 0.0,
-                           "thresh": sc_thresh}
-
-        tracked_sc_kwcoco_path = '_tracked'.join(
-            os.path.splitext(sc_fusion_kwcoco_path))
-        subprocess.run(['python', '-m', 'watch.cli.kwcoco_to_geojson',
-                        sc_fusion_kwcoco_path,
-                        '--out_sites_dir', site_models_outdir,
-                        '--out_kwcoco', tracked_sc_kwcoco_path,
-                        '--default_track_fn', sc_track_fn,
-                        '--site_summary',
-                        os.path.join(region_models_outdir, '*.geojson'),
-                        '--track_kwargs', json.dumps(sc_track_kwargs)],
-                       check=True)
+            tracked_sc_kwcoco_path = '_tracked'.join(
+                os.path.splitext(sc_fusion_kwcoco_path))
+            subprocess.run(['python', '-m', 'watch.cli.kwcoco_to_geojson',
+                            sc_fusion_kwcoco_path,
+                            '--out_sites_dir', site_models_outdir,
+                            '--out_kwcoco', tracked_sc_kwcoco_path,
+                            '--default_track_fn', sc_track_fn,
+                            '--site_summary',
+                            os.path.join(region_models_outdir, '*.geojson'),
+                            '--track_kwargs', json.dumps(sc_track_kwargs)],
+                           check=True)
 
     cropped_site_models_outdir = os.path.join(ingress_dir,
                                               'cropped_site_models')
