@@ -422,7 +422,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # print(f'{len(queue)=}')
     with_status = 0
     with_rich = 0
-    queue.write_network_text()
+    # queue.write_network_text()  # not in cmd_queue 0.1.2?
     queue.rprint(with_status=with_status, with_rich=with_rich)
 
     for job in queue.jobs:
@@ -432,7 +432,12 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # RUN
     if config['run']:
         # ub.cmd('bash ' + str(driver_fpath), verbose=3, check=True)
-        queue.run(block=True, check_other_sessions=config['check_other_sessions'])
+        queue.run(
+            block=True,
+            # not in cmd_queue 0.1.2?
+            # check_other_sessions=config['check_other_sessions']
+            with_textual=False,  # needed for backend=tmux
+        )
     else:
         driver_fpath = queue.write()
         print('Wrote script: to run execute:\n{}'.format(driver_fpath))

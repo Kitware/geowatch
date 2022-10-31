@@ -420,9 +420,12 @@ class DVCExptManager(ub.NiceRepr):
         # manager.summarize()
         print(f'manager.expt_dvc_dpath={manager.expt_dvc_dpath}')
         print(len(eval_df))
-        eval_df = eval_df[~eval_df['is_broken']]
-        pull_rows = eval_df[eval_df.needs_pull]
-        pull_fpaths = pull_rows['dvc'].tolist()
+        if len(eval_df) > 0:
+            eval_df = eval_df[~eval_df['is_broken']]
+            pull_rows = eval_df[eval_df.needs_pull]
+            pull_fpaths = pull_rows['dvc'].tolist()
+        else:
+            pull_fpaths = []
         print(f'{len(pull_fpaths)=}')
         for p in pull_fpaths:
             assert p.exists()
