@@ -50,7 +50,14 @@ def parse_json_header(fpath):
     """
     Ideally the information we need is in the first few bytes of the json file
     """
-    pass
+    from watch.utils import ijson_ext
+    with open(fpath, 'r') as file:
+        # We only expect there to be one info section
+        # file.seek(0)
+        # iii = ijson_ext.items(file, '')
+        info_section_iter = ijson_ext.items(file, prefix='info')
+        info_section = next(info_section_iter)
+    return info_section
 
 
 def trace_json_lineage(fpath):
@@ -60,13 +67,8 @@ def trace_json_lineage(fpath):
 
     fpath = '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/pred/trk/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data.kwcoco/trk_pxl_b788335d/trk_poly_f2218f0b/tracks.kwcoco.json'
     """
-    from watch.utils import ijson_ext
-    with open(fpath, 'r') as file:
-        # We only expect there to be one info section
-        # file.seek(0)
-        # iii = ijson_ext.items(file, '')
-        info_section_iter = ijson_ext.items(file, prefix='info')
-        info_section = next(info_section_iter)
+
+    info_section = parse_json_header(fpath)
 
     # TODO:
     # uniqify by uuid

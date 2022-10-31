@@ -8,6 +8,29 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 * Bug where `window_space_overlap` was always zero at predict time.
+* Bug in tracker with multipolygons
+* Tracker no longer crashes on nans, and replaces them with zeros.
+* Bug in SC tracking when multiple videos were present. 
+* Fixed several issues in tracker where it output non-json-serializable data.
+* Bug in dataloader for heterogeneous GSD annotations 
+* Issue in giffify where images were stretched in videos.
+
+### Added
+* Experimental new mlops pipeline that runs bas-to-sc end-to-end or independently.
+* Ability to stack different channels in `coco_visualize_videos`
+* Common function for handling the loading of multiple geojson files `util_gis.coerce_geojson_datas`
+* New SC prediction quality visualization
+* Micro and Macro SC averages are now reported
+* New heterogeneous model can now be trained with lightning CLI.
+
+
+### Changed
+* Modified color defaults `coco_visualize_videos`
+* Moved `kwcoco_to_geojson` to scriptconfig and reworked CLI arguments
+* Improved ProcessContext metadata tracking
+* Increased default timeouts in `coco_align_geotiffs`
+* `prepare_ta2_dataset` can now work on regions without a type
+* Bumped minimum required Python to 3.9
 
 
 ## Version 0.3.5 - Finalized 2022-09-29

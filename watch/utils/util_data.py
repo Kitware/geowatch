@@ -261,4 +261,5 @@ def find_dvc_dpath(name=ub.NoParam, on_error="raise", **kwargs):
     return registry.find(on_error=on_error, **kwargs)
 
 
-find_smart_dvc_dpath = find_dvc_dpath
+def find_smart_dvc_dpath(*args, **kw):
+    return find_dvc_dpath(*args, **kw)
