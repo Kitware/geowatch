@@ -236,19 +236,18 @@ def run_sc_fusion_for_baseline(
     os.makedirs(site_models_outdir, exist_ok=True)
     region_models_outdir = os.path.join(ingress_dir, 'sc_out_region_models')
     os.makedirs(region_models_outdir, exist_ok=True)
+    # Copy input region model into region_models outdir to be updated
+    # (rather than generated from tracking, which may not have the
+    # same bounds as the original)
+    shutil.copy(local_region_path, os.path.join(
+        region_models_outdir, '{}.geojson'.format(region_id)))
 
     # 3.1. Check that we have at least one "video" (BAS identified
     # site) to run over; if not skip SC fusion and KWCOCO to GeoJSON
     with open(ingress_kwcoco_path) as f:
         ingress_kwcoco_data = json.load(f)
 
-    if len(ingress_kwcoco_data.get('videos', ())) == 0:
-        # Copy input region model to output (since there no sites to
-        # modify)
-        shutil.copy(local_region_path,
-                    os.path.join(region_models_outdir,
-                                 "{}.geojson".format(region_id)))
-    else:
+    if len(ingress_kwcoco_data.get('videos', ())) > 0:
         # 3. Run fusion
         print("* Running SC fusion *")
         predict_config = json.loads("""
@@ -289,11 +288,6 @@ def run_sc_fusion_for_baseline(
             print("* Error with time sampling during SC Predict "
                   "(shown below) -- attempting to continue anyway")
             traceback.print_exception(*sys.exc_info())
-            # Copy input region model to output (since there no sites to
-            # modify)
-            shutil.copy(local_region_path,
-                        os.path.join(region_models_outdir,
-                                     "{}.geojson".format(region_id)))
         else:
             # 4. Compute tracks (SC)
             print("* Computing tracks (SC) *")
