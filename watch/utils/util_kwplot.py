@@ -38,3 +38,11 @@ def phantom_legend(label_to_color, mode='line', ax=None, legend_id=None, loc=0):
         artist = _phantom['artist']
         if artist is not legend_artist:
             ax.add_artist(artist)
+
+
+def cropwhite_ondisk(fpath):
+    import kwimage
+    from kwplot.mpl_make import crop_border_by_color
+    imdata = kwimage.imread(fpath)
+    imdata = crop_border_by_color(imdata)
+    kwimage.imwrite(fpath, imdata)

@@ -1604,7 +1604,9 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
     elif align_method == 'affine_warp':
         # Warp Auth-WGS84 to whatever the image world space is,
         # and then from there to pixel space.
-        pxl_polys = geo_polys.warp(new_img['wgs84_to_wld']).warp(new_img['wld_to_pxl'])
+        import xdev
+        with xdev.embed_on_exception_context:
+            pxl_polys = geo_polys.warp(new_img['wgs84_to_wld']).warp(new_img['wld_to_pxl'])
     else:
         raise KeyError(align_method)
 

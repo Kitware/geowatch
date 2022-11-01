@@ -664,14 +664,6 @@ def humanized_scatterplot(human_mapping, data, ax, plot_type='scatter', mesh=Non
     return ax
 
 
-def cropwhite_ondisk(fpath):
-    import kwimage
-    from kwplot.mpl_make import crop_border_by_color
-    imdata = kwimage.imread(fpath)
-    imdata = crop_border_by_color(imdata)
-    kwimage.imwrite(fpath, imdata)
-
-
 def describe_varied(merged_df, dpath, human_mapping=None):
     # import pprint
     expt_group = dict(list(merged_df.groupby(['dataset_code', 'type'])))
@@ -1030,4 +1022,5 @@ def run_make_fig(make_fig, fnum, dpath, human_mapping, plot_name, prefix):
         fig_onlylegend.tight_layout()
         fig_onlylegend.savefig(fpath, **newkw)
         kwplot.close_figures([fig_onlylegend, fig_nolegend])
-        cropwhite_ondisk(fpath)
+        from watch.utils import util_kwplot
+        util_kwplot.cropwhite_ondisk(fpath)
