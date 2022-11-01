@@ -1267,7 +1267,11 @@ class SimpleDataCube(object):
         for job in image_jobs.as_completed(desc='collect extract jobs',
                                            timeout=image_timeout,
                                            progkw=dict(freq=1)):
-            new_img, new_anns = job.result()
+
+            try:
+                new_img, new_anns = job.result()
+            except SkipImage:
+                continue
 
             # Hack, the next ids dont update when new images are added
             # with explicit ids. This is a quick fix.
@@ -1411,7 +1415,8 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
 
     coco_img = CocoImage(img)
     has_base_image = img.get('file_name', None) is not None
-    objs = [ub.dict_diff(obj, {'auxiliary'}) for obj in coco_img.iter_asset_objs()]
+    objs = [ub.dict_diff(obj, {'auxiliary', 'assets'})
+            for obj in coco_img.iter_asset_objs()]
     sensor_coarse = img.get('sensor_coarse', 'unknown')
 
     channels_to_objs = ub.ddict(list)
@@ -1562,6 +1567,11 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
     new_img['timestamp'] = datetime_.timestamp()
 
     new_coco_img = CocoImage(new_img)
+
+    if len(list(new_coco_img.iter_asset_objs())):
+        # This image did not contained any requested bands. Skip it.
+        raise SkipImage
+
     new_coco_img._bundle_dpath = new_bundle_dpath
     new_coco_img._video = {}
     kwcoco_extensions._populate_valid_region(new_coco_img)
@@ -1604,9 +1614,9 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
     elif align_method == 'affine_warp':
         # Warp Auth-WGS84 to whatever the image world space is,
         # and then from there to pixel space.
-        import xdev
-        with xdev.embed_on_exception_context:
-            pxl_polys = geo_polys.warp(new_img['wgs84_to_wld']).warp(new_img['wld_to_pxl'])
+        pxl_polys = geo_polys.warp(
+            new_img['wgs84_to_wld']
+        ).warp(new_img['wld_to_pxl'])
     else:
         raise KeyError(align_method)
 
@@ -1837,6 +1847,10 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     if verbose > 2:
         print('finish gdal warp dst_gpath = {!r}'.format(dst_gpath))
     return dst
+
+
+class SkipImage(Exception):
+    ...
 
 
 _CLI = CocoAlignGeotiffConfig

@@ -4,7 +4,14 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.3.6 - Target 2022-10-29
+## Version 0.3.7 - Target 2022-11-xx
+
+
+### Changed
+* Update requirements to support Python 3.11
+
+
+## Version 0.3.6 - Finalized 2022-11-01
 
 ### Fixed
 * Bug where `window_space_overlap` was always zero at predict time.
@@ -29,7 +36,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Moved `kwcoco_to_geojson` to scriptconfig and reworked CLI arguments
 * Improved ProcessContext metadata tracking
 * Increased default timeouts in `coco_align_geotiffs`
-* `prepare_ta2_dataset` can now work on regions without a type
+* `prepare_ta2_dataset` can now work on regions without site annotations
 * Bumped minimum required Python to 3.9
 
 
