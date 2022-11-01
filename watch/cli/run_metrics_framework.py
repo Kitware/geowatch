@@ -1398,9 +1398,8 @@ def iarpa_bas_color_legend():
         import kwplot
         from watch.cli.run_metrics_framework import *  # NOQA
         img = iarpa_bas_color_legend()
-        kwplot.autompl(0
+        kwplot.autompl()
         kwplot.imshow(img)
-
     """
     import kwplot
     colors = {}

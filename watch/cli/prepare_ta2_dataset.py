@@ -8,6 +8,7 @@ An end-to-end script for calling all the scripts needed to
 See Also:
     ~/code/watch/scripts/prepare_drop3.sh
     ~/code/watch/scripts/prepare_drop4.sh
+    ~/code/watch/scripts/prepare_drop5.sh
 
 Example:
 
@@ -748,8 +749,8 @@ def main(cmdline=False, **kwargs):
     #         --run=1 --serial=True
     #     '''))
 
-    queue.rprint()
     queue.print_graph()
+    queue.rprint()
     if config['run']:
         queue.run(block=True, system=True)
 

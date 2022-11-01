@@ -34,7 +34,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --separate_align_jobs=1 \
     --visualize=0 \
     --target_gsd=10 \
-    --backend=tmux --run=1
+    --backend=tmux --run=0
 
 
 #--include_channels="blue|green|red|nir|swir16|swir22" \

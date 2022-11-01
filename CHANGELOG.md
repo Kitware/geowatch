@@ -7,6 +7,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## Version 0.3.7 - Target 2022-11-xx
 
 
+### Fixed
+
+* The `coco_align_geotiffs` will now skip images if it contains no requested bands.
+
+
 ### Changed
 * Update requirements to support Python 3.11
 
