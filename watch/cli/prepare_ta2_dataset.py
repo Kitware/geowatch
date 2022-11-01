@@ -60,7 +60,7 @@ Example:
         --target_gsd=30 \
         --visualize=True \
         --max_products_per_region=10 \
-        --serial=True --run=1
+        --serial=True --run=0
 
     smartwatch visualize $HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json
 
@@ -129,6 +129,8 @@ class PrepareTA2Config(scfg.Config):
         'force_nodata': scfg.Value(None, help='if specified, forces nodata to this value'),
 
         'align_keep': scfg.Value('img', choices=['img', 'img-roi', 'none', None], help='if the coco align script caches or recomputes images / rois'),
+
+        'skip_existing': scfg.Value(False, help='Unlike cache=1, which checks for file existence at runtime, this will explicitly not submit any job with a product that already exist'),
 
         'rpc_align_method': scfg.Value('orthorectify', help=ub.paragraph(
             '''
@@ -239,66 +241,17 @@ def main(cmdline=False, **kwargs):
         api_key_val = os.environ[api_key_name]
         environ[api_key_name] = api_key_val
 
-    queue = cmd_queue.Queue.create(
-        backend=config['backend'], name='prep-ta2-dataset', size=1, gres=None,
-        environ=environ)
-
     default_collated = config['collated'][0]
 
-    import networkx as nx
-    stage_data = [
-        {'name': 'stac_search'},
-        {'name': 'catalog', 'depends': ['stac_search']},
-        {'name': 'uncropped_kwcoco', 'depends': ['catalog']},
-        {'name': 'uncropped_feilds', 'depends': ['uncropped_kwcoco']},
-        {'name': 'aligned_kwcoco', 'depends': ['uncropped_feilds']},
-        {'name': 'project_annots', 'depends': ['aligned_kwcoco']},
-        {'name': 'final_union', 'depends': ['project_annots']},
-    ]
-    stages = nx.DiGraph()
-    for stage in stage_data:
-        stages.add_node(stage['name'], cache=0, **stage)
-    for stage in stage_data:
-        for dep in stage.get('depends', []):
-            stages.add_edge(dep, stage['name'])
-
-    # Determine what stages will be cached.
-    cache = config['cache']
-    if isinstance(cache, str):
-        cache = [p.strip() for p in cache.split(',')]
-    elif isinstance(cache, list):
-        pass
-    elif not ub.iterable(cache):
-        if cache:
-            cache = list(stages.nodes)
-        else:
-            cache = []
-    else:
-        raise AssertionError
-
-    for code in cache:
-        parts = code.split(':')
-        stage_name = parts[-1]
-        if len(parts) == 2:
-            action = parts[0]
-        else:
-            action = 'this'
-        if action == 'this':
-            stages.nodes[stage_name]['cache'] = 1
-        elif action == 'before':
-            for n in nx.ancestors(stages, stage_name):
-                stages.nodes[n]['cache'] = 1
-        else:
-            raise KeyError
-
-    for stage_name, stage_data in stages.nodes(data=True):
-        stage_data['label'] = '{name}:cache={cache}'.format(**stage_data)
-
-    from cmd_queue.util.util_networkx import write_network_text
-    write_network_text(stages)
+    # The pipeline is a layer on top of cmd-queue that will handle connecting
+    # inputs / outputs for us. At the time of writing we are still doing that
+    # explicitly, but we could remove that code and just rely on implicit
+    # dependencies based in in / out paths.
+    from watch.mlops import pipeline
+    pipeline = pipeline.Pipeline()
 
     stac_jobs = []
-    # base_mkdir_job = queue.submit(f'mkdir -p "{uncropped_query_dpath}"', name='mkdir-base')
+    # base_mkdir_job = pipeline.submit(f'mkdir -p "{uncropped_query_dpath}"', name='mkdir-base')
     if config['stac_query_mode'] == 'auto':
         # Each region gets their own job in the queue
         if config['separate_region_queues']:
@@ -346,21 +299,32 @@ def main(cmdline=False, **kwargs):
                 region_inputs_fpath = (uncropped_query_dpath / (region_id + '.input')).shrinkuser(home='$HOME')
                 final_region_fpath = region_fpath.shrinkuser(home='$HOME')
 
-                cache_prefix = f'[[ -f {region_inputs_fpath} ]] || ' if stages.nodes['stac_search']['cache'] else ''
-                stac_search_job = queue.submit(ub.codeblock(
-                    rf'''
-                    {cache_prefix}python -m watch.cli.stac_search \
-                        --region_file "{final_region_fpath}" \
-                        --search_json "auto" \
-                        --cloud_cover "{config['cloud_cover']}" \
-                        --sensors "{config['sensors']}" \
-                        --api_key "{config['api_key']}" \
-                        --max_products_per_region "{config['max_products_per_region']}" \
-                        --append_mode=False \
-                        --mode area \
-                        --verbose 2 \
-                        --outfile "{region_inputs_fpath}"
-                    '''), name=f'stac-search-{region_id}', depends=[])
+                stac_search_job = pipeline.submit(
+                    command=ub.codeblock(
+                        rf'''
+                        python -m watch.cli.stac_search \
+                            --region_file "{final_region_fpath}" \
+                            --search_json "auto" \
+                            --cloud_cover "{config['cloud_cover']}" \
+                            --sensors "{config['sensors']}" \
+                            --api_key "{config['api_key']}" \
+                            --max_products_per_region "{config['max_products_per_region']}" \
+                            --append_mode=False \
+                            --mode area \
+                            --verbose 2 \
+                            --outfile "{region_inputs_fpath}"
+                        '''),
+                    name=f'stac-search-{region_id}',
+                    depends=[],
+                    in_paths={
+                        'final_region_fpath': final_region_fpath,
+                    },
+                    out_paths={
+                        'region_inputs_fpath': region_inputs_fpath,
+                    },
+                    stage='stac_search',
+                )
+                # cache_prefix = f'[[ -f {region_inputs_fpath} ]] || ' if stages.nodes['stac_search']['cache'] else ''
 
                 stac_jobs.append({
                     'name': region_id,
@@ -369,30 +333,6 @@ def main(cmdline=False, **kwargs):
                     'region_globstr': final_region_fpath,
                     'collated': default_collated,
                 })
-
-            # Kind of pointless option, we could separate all stac jobs and
-            # then combine them, not sure if we want to be able to do that
-            # though. We could do it for a subset if we wanted.
-            if False and len(stac_jobs) > 1:
-                # Combine all into a single path.
-                input_fpath_list = [d['inputs_fpath'] for d in stac_jobs]
-                jobs = [d['job'] for d in stac_jobs]
-                combo_hash = ub.hash_data(stac_jobs)[0:8]
-                combo_name = f'combo_{combo_hash}'
-                combined_inputs_fpath = (uncropped_query_dpath / (f'{combo_name}.input')).shrinkuser(home='$HOME')
-                quoted_fpath_list = ['"{}"'.format(p) for p in input_fpath_list]
-                combine_job = queue.submit(ub.codeblock(
-                    f'''
-                    # GRAB Input STAC List
-                    cat {' '.join(quoted_fpath_list)} > "{combined_inputs_fpath}"
-                    '''), depends=jobs, name=combo_name)
-                stac_jobs = [{
-                    'name': combo_name,
-                    'job': combine_job,
-                    'inputs_fpath': combined_inputs_fpath,
-                    'region_globstr': final_region_globstr,
-                    'collated': default_collated,
-                }]
         else:
             warnings.warn(
                 'It is usually faster to split the queue amongst regions')
@@ -400,9 +340,11 @@ def main(cmdline=False, **kwargs):
             # single inputs file. The advantage here is we dont need to know
             # how many regions there are beforehand.
             combined_inputs_fpath = (uncropped_query_dpath / (f'combo_query_{config["dataset_suffix"]}.input')).shrinkuser(home='$HOME')
-            combo_stac_search_job = queue.submit(ub.codeblock(
-                rf'''
-                python -m watch.cli.stac_search \
+
+            combo_stac_search_job = pipeline.submit(
+                command=ub.codeblock(
+                    rf'''
+                    python -m watch.cli.stac_search \
                     --region_globstr "{final_region_globstr}" \
                     --search_json "auto" \
                     --cloud_cover "{config['cloud_cover']}" \
@@ -413,7 +355,16 @@ def main(cmdline=False, **kwargs):
                     --mode area \
                     --verbose 2 \
                     --outfile "{combined_inputs_fpath}"
-                '''), name='stac-search', depends=[])
+                    '''),
+                name='stac-search', depends=[],
+                in_paths={
+                    'final_region_globstr': final_region_globstr,
+                },
+                out_paths={
+                    'combined_inputs_fpath': combined_inputs_fpath,
+                },
+                stage='stac_search',
+            )
 
             stac_jobs.append({
                 'name': 'combined',
@@ -437,9 +388,6 @@ def main(cmdline=False, **kwargs):
                 'collated': collated,
             })
 
-    # hack to dynamically resize tmux jobs
-    queue.size = min(len(stac_jobs), config['max_queue_size'])
-
     uncropped_fielded_jobs = []
     for stac_job in stac_jobs:
         s3_fpath = ub.Path(stac_job['inputs_fpath'])
@@ -456,18 +404,25 @@ def main(cmdline=False, **kwargs):
             # Don't really need to copy anything in this case.
             uncropped_query_fpath = s3_fpath
             grab_job = parent_job
-            # grab_job = queue.submit(ub.codeblock(
+            # grab_job = pipeline.submit(ub.codeblock(
             #     f'''
             #     # GRAB Input STAC List
             #     {cache_prefix}cp "{s3_fpath}" "{uncropped_query_dpath}"
             #     '''), depends=parent_job, name=f'psudo-s3-pull-inputs-{s3_name}')
         else:
-            cache_prefix = f'[[ -f {uncropped_query_fpath} ]] || ' if stages.nodes['stac_search']['cache'] else ''
-            grab_job = queue.submit(ub.codeblock(
+            grab_job = pipeline.submit(command=ub.codeblock(
                 f'''
                 # GRAB Input STAC List
-                {cache_prefix}aws s3 --profile {aws_profile} cp "{s3_fpath}" "{uncropped_query_dpath}"
-                '''), depends=parent_job, name=f's3-pull-inputs-{s3_name}')
+                aws s3 --profile {aws_profile} cp "{s3_fpath}" "{uncropped_query_dpath}"
+                '''), depends=parent_job, name=f's3-pull-inputs-{s3_name}',
+                in_paths={
+                    's3_fpath': s3_fpath,
+                },
+                out_paths={
+                    'uncropped_query_fpath': uncropped_query_fpath,
+                },
+                stage='grab',
+            )
 
         ingress_options = [
             '--virtual',
@@ -476,17 +431,24 @@ def main(cmdline=False, **kwargs):
             ingress_options.append('--requester_pays')
         ingress_options_str = ' '.join(ingress_options)
 
-        cache_prefix = f'[[ -f {uncropped_catalog_fpath} ]] || ' if stages.nodes['catalog']['cache'] else ''
-        ingress_job = queue.submit(ub.codeblock(
+        ingress_job = pipeline.submit(command=ub.codeblock(
             rf'''
-            {cache_prefix}python -m watch.cli.baseline_framework_ingress \
+            python -m watch.cli.baseline_framework_ingress \
                 --aws_profile {aws_profile} \
                 --jobs avail \
                 {ingress_options_str} \
                 --outdir "{uncropped_ingress_dpath}" \
                 --catalog_fpath "{uncropped_catalog_fpath}" \
                 "{uncropped_query_fpath}"
-            '''), depends=[grab_job], name=f'baseline_ingress-{s3_name}')
+            '''), depends=[grab_job], name=f'baseline_ingress-{s3_name}',
+            in_paths={
+                'uncropped_query_fpath': uncropped_query_fpath,
+            },
+            out_paths={
+                'uncropped_catalog_fpath': uncropped_catalog_fpath,
+            },
+            stage='catalog',
+        )
 
         uncropped_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}.kwcoco.json'
         uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.shrinkuser(home='$HOME')
@@ -498,24 +460,32 @@ def main(cmdline=False, **kwargs):
             convert_options.append('--ignore_duplicates')
         convert_options_str = ' '.join(convert_options)
 
-        cache_prefix = f'[[ -f {uncropped_kwcoco_fpath} ]] || ' if stages.nodes['uncropped_kwcoco']['cache'] else ''
-        convert_job = queue.submit(ub.codeblock(
-            rf'''
-            {cache_prefix}{job_environ_str}python -m watch.cli.ta1_stac_to_kwcoco \
-                "{uncropped_catalog_fpath}" \
-                --outpath="{uncropped_kwcoco_fpath}" \
-                {convert_options_str} \
-                --jobs "{config['convert_workers']}"
-            '''), depends=[ingress_job], name=f'ta1_stac_to_kwcoco-{s3_name}')
+        convert_job = pipeline.submit(
+            command=ub.codeblock(
+                rf'''
+                {job_environ_str}python -m watch.cli.ta1_stac_to_kwcoco \
+                    "{uncropped_catalog_fpath}" \
+                    --outpath="{uncropped_kwcoco_fpath}" \
+                    {convert_options_str} \
+                    --jobs "{config['convert_workers']}"
+                '''),
+            depends=[ingress_job],
+            name=f'ta1_stac_to_kwcoco-{s3_name}',
+            in_paths={
+                'uncropped_catalog_fpath': uncropped_catalog_fpath,
+            },
+            out_paths={
+                'uncropped_kwcoco_fpath': uncropped_kwcoco_fpath,
+            },
+            stage='uncropped_kwcoco',
+        )
 
         uncropped_fielded_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}_fielded.kwcoco.json'
         uncropped_fielded_kwcoco_fpath = uncropped_fielded_kwcoco_fpath.shrinkuser(home='$HOME')
 
-        cache_prefix = f'[[ -f {uncropped_fielded_kwcoco_fpath} ]] || ' if stages.nodes['uncropped_feilds']['cache'] else ''
-        add_fields_job = queue.submit(ub.codeblock(
+        add_fields_job = pipeline.submit(command=ub.codeblock(
             rf'''
-            # PREPARE Uncropped datasets
-            {cache_prefix}{job_environ_str}python -m watch.cli.coco_add_watch_fields \
+            {job_environ_str}python -m watch.cli.coco_add_watch_fields \
                 --src "{uncropped_kwcoco_fpath}" \
                 --dst "{uncropped_fielded_kwcoco_fpath}" \
                 --enable_video_stats=False \
@@ -523,7 +493,16 @@ def main(cmdline=False, **kwargs):
                 --target_gsd={config['target_gsd']} \
                 --remove_broken={config['remove_broken']} \
                 --workers="{config['fields_workers']}"
-            '''), depends=convert_job, name=f'coco_add_watch_fields-{s3_name}')
+            '''),
+            depends=convert_job, name=f'coco_add_watch_fields-{s3_name}',
+            in_paths={
+                'uncropped_kwcoco_fpath': uncropped_kwcoco_fpath,
+            },
+            out_paths={
+                'uncropped_fielded_kwcoco_fpath': uncropped_fielded_kwcoco_fpath,
+            },
+            stage='uncropped_feilds',
+        )
 
         uncropped_fielded_jobs.append({
             'name': stac_job['name'],
@@ -552,14 +531,21 @@ def main(cmdline=False, **kwargs):
         uncropped_final_kwcoco_fpath = uncropped_dpath / f'data_{union_suffix}.kwcoco.json'
         uncropped_final_kwcoco_fpath = uncropped_final_kwcoco_fpath.shrinkuser(home='$HOME')
         uncropped_multi_src_part = ' '.join(['"{}"'.format(p) for p in uncropped_coco_paths])
-        cache_prefix = f'[[ -f {uncropped_final_kwcoco_fpath} ]] || ' if stages.nodes['uncropped_feilds']['cache'] else ''
-        union_job = queue.submit(ub.codeblock(
+        union_job = pipeline.submit(command=ub.codeblock(
             rf'''
             # COMBINE Uncropped datasets
-            {cache_prefix}{job_environ_str}python -m kwcoco union \
+            {job_environ_str}python -m kwcoco union \
                 --src {uncropped_multi_src_part} \
                 --dst "{uncropped_final_kwcoco_fpath}"
-            '''), depends=union_depends_jobs, name='kwcoco-union')
+            '''), depends=union_depends_jobs, name='kwcoco-union',
+            in_paths={
+                'uncropped_coco_paths': uncropped_coco_paths,
+            },
+            out_paths={
+                'uncropped_final_kwcoco_fpath': uncropped_final_kwcoco_fpath,
+            },
+            stage='union_uncropped_feilds',
+        )
         uncropped_final_jobs = [union_job]
 
         final_site_globstr = _coerce_globstr(config['site_globstr'])
@@ -595,9 +581,8 @@ def main(cmdline=False, **kwargs):
         include_channels = config['include_channels']
         exclude_channels = config['exclude_channels']
 
-        # if stages.nodes['aligned_kwcoco']['cache'] else ''
 
-        align_job = queue.submit(ub.codeblock(
+        align_job = pipeline.submit(command=ub.codeblock(
             rf'''
             # MAIN WORKHORSE CROP IMAGES
             # Crop big images to the geojson regions
@@ -618,7 +603,17 @@ def main(cmdline=False, **kwargs):
                 --aux_workers={config['align_aux_workers']} \
                 --target_gsd={config['target_gsd']} \
                 --workers={config['align_workers']}
-            '''), depends=parent_job, name=f'align-geotiffs-{name}')
+            '''),
+            depends=parent_job,
+            name=f'align-geotiffs-{name}',
+            in_paths={
+                'uncropped_fielded_fpath': uncropped_fielded_fpath,
+            },
+            out_paths={
+                'aligned_imgonly_fpath': aligned_imgonly_fpath,
+            },
+            stage='align_kwcoco',
+        )
 
         # TODO:
         # Project annotation from latest annotations subdir
@@ -629,9 +624,8 @@ def main(cmdline=False, **kwargs):
         viz_max_dim = 512
 
         if config['visualize']:
-            queue.submit(ub.codeblock(
+            pipeline.submit(command=ub.codeblock(
                 rf'''
-                # Update to whatever the state of the annotations submodule is
                 python -m watch visualize \
                     --src "{aligned_imgonly_fpath}" \
                     --viz_dpath "{aligned_viz_dpath}" \
@@ -640,7 +634,15 @@ def main(cmdline=False, **kwargs):
                     --channels="red|green|blue" \
                     --max_dim={viz_max_dim} \
                     --animate=True --workers=auto
-                '''), depends=[align_job], name=f'viz-imgs-{name}')
+                '''), depends=[align_job], name=f'viz-imgs-{name}',
+                in_paths={
+                    'aligned_imgonly_fpath': aligned_imgonly_fpath,
+                },
+                out_paths={
+                    'aligned_viz_dpath': aligned_viz_dpath,
+                },
+                stage='viz_imgs',
+            )
 
         if site_globstr:
             # site_model_dpath = (dvc_dpath / 'annotations/site_models').shrinkuser(home='$HOME')
@@ -650,25 +652,30 @@ def main(cmdline=False, **kwargs):
             # need to
             # viz_part = '--viz_dpath=auto' if config['visualize'] else ''
             viz_part = ''
-            cache_prefix = f'[[ -f {aligned_imganns_fpath} ]] || ' if stages.nodes['project_annots']['cache'] else ''
-            project_anns_job = queue.submit(ub.codeblock(
+            project_anns_job = pipeline.submit(command=ub.codeblock(
                 rf'''
-                # Update to whatever the state of the annotations submodule is
-                {cache_prefix}python -m watch project_annotations \
+                python -m watch project_annotations \
                     --src "{aligned_imgonly_fpath}" \
                     --dst "{aligned_imganns_fpath}" \
                     --site_models="{site_globstr}" \
                     --region_models="{region_globstr}" {viz_part}
-                '''), depends=[align_job], name=f'project-annots-{name}')
+                '''), depends=[align_job], name=f'project-annots-{name}',
+                in_paths={
+                    'aligned_imgonly_fpath': aligned_imgonly_fpath,
+                },
+                out_paths={
+                    'aligned_imganns_fpath': aligned_imganns_fpath,
+                },
+                stage='project_annots',
+            )
         else:
             aligned_imganns_fpath = aligned_imgonly_fpath
             info['aligned_imganns_fpath'] = aligned_imgonly_fpath
             project_anns_job = align_job
 
         if config['visualize']:
-            queue.submit(ub.codeblock(
+            pipeline.submit(command=ub.codeblock(
                 rf'''
-                # Update to whatever the state of the annotations submodule is
                 python -m watch visualize \
                     --src "{aligned_imganns_fpath}" \
                     --viz_dpath "{aligned_viz_dpath}" \
@@ -678,7 +685,15 @@ def main(cmdline=False, **kwargs):
                     --max_dim={viz_max_dim} \
                     --animate=True --workers=auto \
                     --only_boxes={config["visualize_only_boxes"]}
-                '''), depends=[project_anns_job], name=f'viz-annots-{name}')
+                '''), depends=[project_anns_job], name=f'viz-annots-{name}',
+                in_paths={
+                    'aligned_imganns_fpath': aligned_imganns_fpath,
+                },
+                out_paths={
+                    'aligned_viz_dpath': aligned_viz_dpath,
+                },
+                stage='viz_anns',
+            )
 
         align_info = info.copy()
         align_info['job'] = project_anns_job
@@ -691,14 +706,22 @@ def main(cmdline=False, **kwargs):
         # union_suffix = ub.hash_data([p.name for p in aligned_fpaths])[0:8]
         aligned_final_fpath = (aligned_kwcoco_bundle / 'data.kwcoco.json').shrinkuser(home='$HOME')
         aligned_multi_src_part = ' '.join(['"{}"'.format(p) for p in aligned_fpaths])
-        cache_prefix = f'[[ -f {aligned_final_fpath} ]] || ' if stages.nodes['final_union']['cache'] else ''
-        union_job = queue.submit(ub.codeblock(
+        # cache_prefix = f'[[ -f {aligned_final_fpath} ]] || ' if stages.nodes['final_union']['cache'] else ''
+        union_job = pipeline.submit(command=ub.codeblock(
             rf'''
             # COMBINE Uncropped datasets
-            {cache_prefix}{job_environ_str}python -m kwcoco union \
+            {job_environ_str}python -m kwcoco union \
                 --src {aligned_multi_src_part} \
                 --dst "{aligned_final_fpath}"
-            '''), depends=union_depends_jobs, name='kwcoco-union')
+            '''), depends=union_depends_jobs, name='kwcoco-union',
+            in_paths={
+                'aligned_fpaths': aligned_fpaths,
+            },
+            out_paths={
+                'aligned_final_fpath': aligned_final_fpath,
+            },
+            stage='final_union',
+        )
         aligned_final_jobs = [union_job]
     else:
         assert len(alignment_jobs) == 1
@@ -709,6 +732,28 @@ def main(cmdline=False, **kwargs):
     # TODO:
     # queue.synchronize -
     # force all submissions to finish before starting new ones.
+
+    # Determine what stages will be cached.
+    cache = config['cache']
+    if isinstance(cache, str):
+        cache = [p.strip() for p in cache.split(',')]
+
+    self = pipeline
+    pipeline._update_stage_otf_cache(cache)
+
+    queue = cmd_queue.Queue.create(
+        backend=config['backend'], name='prep-ta2-dataset', size=1, gres=None,
+        environ=environ)
+
+    # hack to dynamically resize tmux jobs
+    queue.size = min(len(stac_jobs), config['max_queue_size'])
+
+    # self._populate_explicit_dependency_queue(queue)
+    self._populate_implicit_dependency_queue(
+        queue, skip_existing=config['skip_existing'])
+
+    # queue.print_graph()
+    # queue.rprint()
 
     # Do Basic Splits
     if config['splits']:
@@ -741,7 +786,7 @@ def main(cmdline=False, **kwargs):
         */*.json
         ''')
 
-    # queue.submit(ub.codeblock(
+    # pipeline.submit(ub.codeblock(
     #     '''
     #     DVC_DPATH=$(smartwatch_dvc)
     #     python -m watch.cli.prepare_splits \
