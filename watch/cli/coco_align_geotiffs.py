@@ -1568,7 +1568,7 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
 
     new_coco_img = CocoImage(new_img)
 
-    if len(list(new_coco_img.iter_asset_objs())):
+    if not len(list(new_coco_img.iter_asset_objs())):
         # This image did not contained any requested bands. Skip it.
         raise SkipImage
 
