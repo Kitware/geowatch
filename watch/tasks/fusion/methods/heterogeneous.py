@@ -3,6 +3,8 @@ import torch
 from torch import nn
 import torchmetrics
 import einops
+from torchvision import models as tv_models
+from torchvision.models import feature_extraction
 
 import kwcoco
 import kwarray
@@ -17,6 +19,8 @@ from watch.tasks.fusion.methods.watch_module_mixins import WatchModuleMixins
 from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
 
 import numpy as np
+
+from abc import ABCMeta, abstractmethod
 
 try:
     import xdev
@@ -100,12 +104,18 @@ class NanToNum(nn.Module):
         return torch.nan_to_num(x, self.num)
 
 
-class MipNerfPositionalEncoder(nn.Module):
+class ScaleAwarePositionalEncoder(metaclass = ABCMeta):
+    @abstractmethod
+    def forward(self, mean, scale):
+        pass
+
+
+class MipNerfPositionalEncoder(nn.Module, ScaleAwarePositionalEncoder):
     """
     Module which computes MipNeRf-based positional encoding vectors from tensors of mean and scale values
     """
 
-    def __init__(self, in_dims: int, num_freqs: int = 10):
+    def __init__(self, in_dims: int, num_freqs: int = 10, max_freq: float = 4.):
         """
         out_dims = 2 * in_dims * num_freqs
 
@@ -124,11 +134,12 @@ class MipNerfPositionalEncoder(nn.Module):
         """
 
         super().__init__()
+        frequencies = torch.linspace(0, max_freq, num_freqs)
         self.mean_weights = nn.Parameter(
-            2. ** torch.arange(0, num_freqs),
+            2. ** frequencies,
             requires_grad=False)
         self.scale_weights = nn.Parameter(
-            -(2. ** (2. * torch.arange(0, num_freqs) - 1)),
+            -2. ** (2. * frequencies - 1),
             requires_grad=False)
 
         self.weight = self.mean_weights
@@ -148,6 +159,58 @@ class MipNerfPositionalEncoder(nn.Module):
         ], dim=1)
 
 
+class ScaleAgnostictPositionalEncoder(nn.Module, ScaleAwarePositionalEncoder):
+    """
+    Module which computes MipNeRf-based positional encoding vectors from tensors of mean and scale values
+    """
+
+    def __init__(self, in_dims: int, num_freqs: int = 10, max_freq: float = 4.):
+        """
+        out_dims = 2 * in_dims * num_freqs
+
+        Args:
+            in_dims: (int) number of input dimensions to expect for future calls to .forward(). Currently only needed for computing .output_dim
+            num_freqs: (int) number of frequencies to project dimensions onto.
+
+        Example:
+            >>> from watch.tasks.fusion.methods.heterogeneous import ScaleAgnostictPositionalEncoder
+            >>> import torch
+            >>> pos_enc = ScaleAgnostictPositionalEncoder(3, 4)
+            >>> input_means = torch.randn(1, 3, 10, 10)
+            >>> input_scales = torch.randn(1, 3, 10, 10)
+            >>> outputs = pos_enc(input_means, input_scales)
+            >>> assert outputs.shape == (1, pos_enc.output_dim, 10, 10)
+        """
+
+        super().__init__()
+        frequencies = torch.linspace(0, max_freq, num_freqs)
+        self.mean_weights = nn.Parameter(
+            2. ** frequencies,
+            requires_grad=False)
+
+        self.weight = self.mean_weights
+        self.output_dim = 2 * in_dims * num_freqs
+
+    def forward(self, mean, scale):
+
+        weighted_means = torch.einsum("y,bx...->bxy...", self.mean_weights, mean)
+        weighted_means = einops.rearrange(weighted_means, "batch x y ... -> batch (x y) ...")
+
+        return torch.concat([
+            weighted_means.sin(),
+            weighted_means.cos(),
+        ], dim=1)
+
+
+class ResNetShim(nn.Module):
+    def __init__(self, submodule):
+        super().__init__()
+        self.submodule = submodule
+
+    def forward(self, x):
+        return self.submodule(x[None])["layer4"][0]
+
+
 class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
     _HANDLES_NANS = True
@@ -162,11 +225,11 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         dataset_stats=None,
         input_sensorchan=None,
         name: str = "unnamed_model",
+        position_encoder: ScaleAwarePositionalEncoder = None,
         token_width: int = 10,
         token_dim: int = 16,
         spatial_scale_base: float = 1.,
         temporal_scale_base: float = 1.,
-        ignore_scale: bool = False,
         backbone_encoder_depth: int = 4,
         backbone_decoder_depth: int = 1,
         backbone_cross_heads: int = 1,
@@ -174,7 +237,6 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         backbone_cross_dim_head: int = 64,
         backbone_latent_dim_head: int = 64,
         backbone_weight_tie_layers: bool = False,
-        position_encoding_frequencies: int = 16,
         class_weights: str = "auto",
         saliency_weights: str = "auto",
         positive_change_weight: float = 1.0,
@@ -185,15 +247,15 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         change_loss: str = "cce",  # TODO: replace control string with a module, possibly a subclass
         class_loss: str = "focal",  # TODO: replace control string with a module, possibly a subclass
         saliency_loss: str = "focal",  # TODO: replace control string with a module, possibly a subclass
+        tokenizer: str = "simple_conv", # TODO: replace control string with a module, possibly a subclass
     ):
         """
         Args:
             name: Specify a name for the experiment. (Unsure if the Model is the place for this)
             token_width: Width of each square token.
             token_dim: Dimensionality of each computed token.
-            spatial_scale_base: The scale assigned to each token equals `scale_base / token_density`, where the token density is the number of tokens along a given axis. This value is also the assigned scale for all tokens when `ignore_scale` is True.
-            temporal_scale_base: The scale assigned to each token equals `scale_base / token_density`, where the token density is the number of tokens along a given axis. This value is also the assigned scale for all tokens when `ignore_scale` is True.
-            ignore_scale: Don't compute the scale for each token individually and instead assign a cosntant value, `scale_base`.
+            spatial_scale_base: The scale assigned to each token equals `scale_base / token_density`, where the token density is the number of tokens along a given axis.
+            temporal_scale_base: The scale assigned to each token equals `scale_base / token_density`, where the token density is the number of tokens along a given axis.
             class_weights: Class weighting strategy.
             saliency_weights: Class weighting strategy.
 
@@ -202,9 +264,10 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>> from watch.tasks.fusion.methods.heterogeneous import HeterogeneousModel
             >>> model = HeterogeneousModel(input_sensorchan='r|g|b')
         """
+        assert tokenizer in {"simple_conv", "resnet18"}, "Tokenizer not implemented yet."
 
         super().__init__()
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=["position_encoder"])
 
         if dataset_stats is not None:
             input_stats = dataset_stats['input_stats']
@@ -370,21 +433,36 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 else:
                     input_norm = nh.layers.InputNorm(**stats)
 
+            if tokenizer == "simple_conv":
+                tokenizer_layer = nn.Sequential(
+                    PadToMultiple(token_width, value=0.0),
+                    nn.Conv2d(
+                        in_chan,
+                        token_dim,
+                        kernel_size=token_width,
+                        stride=token_width,
+                    ),
+                )
+            elif tokenizer == "resnet18":
+                resnet = tv_models.resnet18(tv_models.ResNet18_Weights.IMAGENET1K_V1)
+                resnet.conv1 = nn.Conv2d(in_chan, resnet.conv1.out_channels, kernel_size=7, stride=2, padding=3, bias=False)
+                resnet = feature_extraction.create_feature_extractor(resnet, return_nodes=["layer4"])
+                tokenizer_layer = nn.Sequential(
+                    ResNetShim(resnet),
+                    nn.Conv2d(512, token_dim, 1),
+                )
+            else:
+                raise NotImplementedError(tokenizer)
+
             # key = sanitize_key(str((s, c)))
             key = f'{s}:{c}'
             self.sensor_channel_tokenizers[key] = nn.Sequential(
                 input_norm,
                 NanToNum(0.0),
-                PadToMultiple(token_width, value=0.0),
-                nn.Conv2d(
-                    in_chan,
-                    token_dim,
-                    kernel_size=token_width,
-                    stride=token_width,
-                ),
+                tokenizer_layer,
             )
 
-        self.position_encoder = MipNerfPositionalEncoder(3, position_encoding_frequencies)
+        self.position_encoder = position_encoder
         # self.position_encoder = RandomFourierPositionalEncoder(3, 16)
         position_dim = self.position_encoder.output_dim
 
@@ -530,9 +608,6 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     height=height, width=width,
                 )
 
-                if self.hparams.ignore_scale:
-                    token_positions_scales = self.hparams.spatial_scale_base * torch.ones_like(token_positions_scales)
-
                 # time
                 token_times = frame["time_index"] * torch.ones_like(token_positions[0])[None].type_as(token_positions)
 
@@ -595,9 +670,6 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                 dtype=token_positions.dtype,
                 device=token_positions.device,
             )
-
-            if self.hparams.ignore_scale:
-                token_positions_scales = self.hparams.spatial_scale_base * torch.ones_like(token_positions_scales)
 
             token_positions_scales = einops.repeat(
                 token_positions_scales,
