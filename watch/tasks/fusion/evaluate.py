@@ -42,7 +42,7 @@ class SegmentationEvalConfig(scfg.Config):
          'score_space': scfg.Value('video', help='can score in image or video space'),
          'workers': scfg.Value('auto', help='number of parallel scoring workers'),
          'draw_workers': scfg.Value('auto', help='number of parallel drawing workers'),
-         'thresh': scfg.Value('auto', help='visualization threshold'),
+         'viz_thresh': scfg.Value('auto', help='visualization threshold'),
     }
 
 
@@ -119,19 +119,19 @@ def main(cmdline=True, **kwargs):
     from scriptconfig.smartcast import smartcast
     draw_heatmaps = smartcast(config['draw_heatmaps'])
     draw_curves = smartcast(config['draw_curves'])
-    thresh = smartcast(config['thresh'])
+    viz_thresh = smartcast(config['viz_thresh'])
     evaluate_segmentations(true_coco, pred_coco, eval_dpath,
                            draw_curves=draw_curves,
                            draw_heatmaps=draw_heatmaps,
                            score_space=score_space, workers=workers,
-                           draw_workers=draw_workers, thresh=thresh)
+                           draw_workers=draw_workers, viz_thresh=viz_thresh)
 
 
 @profile
 def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
                                       true_classes, true_dets, video1=None,
                                       score_space='video', thresh_bins=None,
-                                      thresh=None):
+                                      viz_thresh=None):
     """
     Args:
         true_coco_img (kwcoco.CocoImage): detatched true coco image
@@ -371,11 +371,11 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
                 maximized_info = salient_measures.maximized_thresholds()
 
                 # This cherry-picks a threshold per image!
-                if thresh == 'auto':
-                    cherry_picked_thresh = maximized_info['f1']['thresh']
+                if viz_thresh == 'auto':
+                    cherry_picked_thresh = maximized_info['f1']['viz_thresh']
                     saliency_thresh = cherry_picked_thresh
                 else:
-                    saliency_thresh = thresh
+                    saliency_thresh = viz_thresh
                 pred_saliency = salient_prob > saliency_thresh
 
                 y_true = true_saliency.ravel()
@@ -757,7 +757,7 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
 def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                            draw_curves='auto', draw_heatmaps='auto',
                            score_space='video', workers='auto',
-                           draw_workers='auto', thresh='auto'):
+                           draw_workers='auto', viz_thresh='auto'):
     """
     CommandLine:
         XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.evaluate evaluate_segmentations
@@ -785,7 +785,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>> # auxiliary channels to this demodata.
         >>> print('perterbing')
         >>> pred_coco = perterb_coco(true_coco, **kwargs)
-        >>> eval_dpath = ub.ensure_app_cache_dir('watch/tests/fusion_eval')
+        >>> eval_dpath = ub.Path.appdir('watch/tests/fusion_eval').ensuredir()
         >>> print('eval_dpath = {!r}'.format(eval_dpath))
         >>> score_space = 'image'
         >>> draw_curves = 'auto'
@@ -976,7 +976,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                 single_image_segmentation_metrics, pred_coco_img,
                 true_coco_img, true_classes, true_dets, video1,
                 score_space=score_space, thresh_bins=thresh_bins,
-                thresh=thresh)
+                viz_thresh=viz_thresh)
 
             if len(current_chunk) >= chunk_size:
                 job_chunks.append(current_chunk)
@@ -1001,7 +1001,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                 single_image_segmentation_metrics, pred_coco_img,
                 true_coco_img, true_classes, true_dets, video1,
                 score_space=score_space, thresh_bins=thresh_bins,
-                thresh=thresh)
+                viz_thresh=viz_thresh)
             prog.update()
             job_chunks.append([job])
     else:

@@ -11,7 +11,7 @@ def demo():
     """
     data = sentinel2_demodata.grab_sentinel2_product(0)
     gpath = os.path.join(str(data.path), str(data.images[0]))
-    dpath = ub.ensure_app_cache_dir('watch/demo/demo_stac')
+    dpath = ub.Path.appdir('watch/demo/demo_stac').ensuredir()
     cat_path = os.path.join(dpath, 'demo_catalog.json')
     expected_cat_sha512 = '78e9f307e4e365c826a55f6beaa9d6e3b6b6ba4e3cc7d08'
     expected_item1_sha512 = '78224b4b2e56cbc58ca8d76b632b1c2c323eeae653b5323'

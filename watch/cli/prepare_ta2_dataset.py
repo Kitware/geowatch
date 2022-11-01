@@ -9,61 +9,59 @@ See Also:
     ~/code/watch/scripts/prepare_drop3.sh
     ~/code/watch/scripts/prepare_drop4.sh
 
+Example:
 
-TODO:
-    - [ ] Rename to schedule_ta2_dataset
+    # Create a demo region file, and create vairables that point at relevant
+    # paths, which are by default written in your ~/.cache folder
+    xdoctest -m watch.demo.demo_region demo_khq_region_fpath
+    REGION_FPATH="$HOME/.cache/watch/demo/annotations/KHQ_R001.geojson"
+    SITE_GLOBSTR="$HOME/.cache/watch/demo/annotations/KHQ_R001_sites/*.geojson"
 
+    # The "name" of the new dataset
+    DATASET_SUFFIX=Demo-TA2-KHQ
 
-Examples:
+    # Set this to where you want to build the dataset
+    DEMO_DPATH=$PWD/prep_ta2_demo
 
-DATASET_SUFFIX=TA1_FULL_SEQ_KR_S001_CLOUD_LT_10
-S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/eval2/master_collation_working/KR_S001.unique.fixed_ls_ids.cloudcover_lt_10.output
+    mkdir -p "$DEMO_DPATH"
 
+    # This is a string code indicating what STAC endpoint we will pull from
+    SENSORS="sentinel-s2-l2a-cogs"
 
+    # Depending on the STAC endpoint, some parameters may need to change:
+    # collated - True for IARPA endpoints, Usually False for public data
+    # requester_pays - True for public landsat
+    # api_key - A secret for non public data
 
-DVC_DPATH=$(smartwatch_dvc)
-S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/ALL_ANNOTATED_REGIONS_TA-1_PROCESSED_20220222.unique.input
-DATASET_SUFFIX=Drop2-TA1-2022-02-24
+    export SMART_STAC_API_KEY=""
+    export GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
 
+    # Construct the TA2-ready dataset
+    python -m watch.cli.prepare_ta2_dataset \
+        --dataset_suffix=$DATASET_SUFFIX \
+        --cloud_cover=100 \
+        --stac_query_mode=auto \
+        --sensors "$SENSORS" \
+        --api_key=env:SMART_STAC_API_KEY \
+        --collated False \
+        --requester_pays=True \
+        --dvc_dpath="$DEMO_DPATH" \
+        --aws_profile=iarpa \
+        --region_globstr="$REGION_FPATH" \
+        --site_globstr="$SITE_GLOBSTR" \
+        --fields_workers=8 \
+        --convert_workers=8 \
+        --align_workers=26 \
+        --cache=0 \
+        --ignore_duplicates=1 \
+        --separate_region_queues=1 \
+        --separate_align_jobs=1 \
+        --target_gsd=30 \
+        --visualize=True \
+        --max_products_per_region=10 \
+        --serial=True --run=1
 
-S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/ALL_ANNOTATED_REGIONS_TA-1_PROCESSED_20220222.unique.input.l1.mini
-
-
-
-DVC_DPATH=$(smartwatch_dvc)
-S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/big-stac-file-on-aws
-DATASET_SUFFIX=my-dataset-name
-python -m watch.cli.prepare_ta2_dataset \
-    --dataset_suffix=$DATASET_SUFFIX \
-    --s3_fpath=$S3_FPATH \
-    --dvc_dpath=$DVC_DPATH \
-    --collated=True \
-    --requester_pays=True \
-    --ignore_duplicates=True \
-    --fields_workers=0 \
-    --align_workers=0 \
-    --convert_workers=0 \
-    --debug=False \
-    --run=0 --cache=False
-
-        --select_images '.id % 1200 == 0'  \
-
-
-DVC_DPATH=$(smartwatch_dvc)
-S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220120/iMERIT_COMBINED.unique.input
-DATASET_SUFFIX=Drop2-TA1-2022-03-07
-python -m watch.cli.prepare_ta2_dataset \
-    --dataset_suffix=$DATASET_SUFFIX \
-    --s3_fpath=$S3_FPATH \
-    --dvc_dpath=$DVC_DPATH \
-    --collated=False \
-    --align_workers=4 \
-    --run=0
-
-
-jq .images[0] $HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json
-
-kwcoco visualize $HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json
+    smartwatch visualize $HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json
 
 """
 
@@ -142,6 +140,8 @@ class PrepareTA2Config(scfg.Config):
         )),
     }
 
+__config__ = PrepareTA2Config
+
 
 def main(cmdline=False, **kwargs):
     """
@@ -206,6 +206,8 @@ def main(cmdline=False, **kwargs):
         job_environ_str += ' '
 
     def _coerce_globstr(p):
+        if not p:
+            return None
         globstr = ub.Path(p)
         if str(globstr).startswith('./'):
             final_globstr = globstr
@@ -219,7 +221,7 @@ def main(cmdline=False, **kwargs):
     final_site_globstr = _coerce_globstr(config['site_globstr'])
 
     import cmd_queue
-    from watch.utils import util_path
+    from watch.utils import util_gis
 
     # Global environs are given to all jobs
     api_key = config['api_key']
@@ -303,8 +305,12 @@ def main(cmdline=False, **kwargs):
             # Note: this requires the annotation files to exist on disk.  or we
             # have to write a mechanism that lets the explicit relative path be
             # specified.
-            region_file_fpaths = util_path.coerce_patterned_paths(final_region_globstr.expand())
-            region_site_fpaths = util_path.coerce_patterned_paths(final_site_globstr.expand())
+            region_file_fpaths = util_gis.coerce_geojson_paths(final_region_globstr.expand())
+
+            if final_site_globstr:
+                region_site_fpaths = util_gis.coerce_geojson_paths(final_site_globstr.expand())
+            else:
+                region_site_fpaths = []
 
             # Assign site models to region files
             ASSIGN_BY_FPATH = True
@@ -349,6 +355,7 @@ def main(cmdline=False, **kwargs):
                         --sensors "{config['sensors']}" \
                         --api_key "{config['api_key']}" \
                         --max_products_per_region "{config['max_products_per_region']}" \
+                        --append_mode=False \
                         --mode area \
                         --verbose 2 \
                         --outfile "{region_inputs_fpath}"
@@ -401,6 +408,7 @@ def main(cmdline=False, **kwargs):
                     --sensors "{config['sensors']}" \
                     --api_key "{config['api_key']}" \
                     --max_products_per_region "{config['max_products_per_region']}" \
+                    --append_mode=False \
                     --mode area \
                     --verbose 2 \
                     --outfile "{combined_inputs_fpath}"
@@ -633,7 +641,7 @@ def main(cmdline=False, **kwargs):
                     --animate=True --workers=auto
                 '''), depends=[align_job], name=f'viz-imgs-{name}')
 
-        if 1:
+        if site_globstr:
             # site_model_dpath = (dvc_dpath / 'annotations/site_models').shrinkuser(home='$HOME')
             # region_model_dpath = (dvc_dpath / 'annotations/region_models').shrinkuser(home='$HOME')
 
@@ -651,6 +659,10 @@ def main(cmdline=False, **kwargs):
                     --site_models="{site_globstr}" \
                     --region_models="{region_globstr}" {viz_part}
                 '''), depends=[align_job], name=f'project-annots-{name}')
+        else:
+            aligned_imganns_fpath = aligned_imgonly_fpath
+            info['aligned_imganns_fpath'] = aligned_imgonly_fpath
+            project_anns_job = align_job
 
         if config['visualize']:
             queue.submit(ub.codeblock(

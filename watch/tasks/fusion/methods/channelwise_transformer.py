@@ -692,7 +692,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             ...     sched.last_epoch += 1
             ...     lr = sched.get_lr()[0]
             ...     rows.append({'lr': lr, 'last_epoch': sched.last_epoch})
-            >>> # xdoctest +REQUIRES(--show)
+            >>> # xdoctest: +REQUIRES(--show)
             >>> import kwplot
             >>> import pandas as pd
             >>> data = pd.DataFrame(rows)

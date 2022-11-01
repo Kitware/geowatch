@@ -134,7 +134,7 @@ def mask(raster: Union[rasterio.DatasetReader, str],
         >>> import kwimage
         >>> from watch.utils.util_raster import *
         >>> import pathlib
-        >>> dpath = pathlib.Path(ub.ensure_app_cache_dir('watch/tests/empty_raster'))
+        >>> dpath = ub.Path.appdir('watch/tests/empty_raster').ensuredir()
         >>> raster = dpath / 'empty.tif'
         >>> ub.delete(raster)
         >>> kwimage.imwrite(raster, np.zeros((3, 3, 5)))

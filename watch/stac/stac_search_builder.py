@@ -206,6 +206,8 @@ def _devcheck_providers_exist():
     # from watch.stac.stac_search_builder import _ACCENTURE_PHASE2_TA1_PRODUCTS
     # provider = _ACCENTURE_PHASE2_TA1_PRODUCTS['ta1-pd-acc']['endpoint']
     import pystac_client
+    import os
+    import ubelt as ub
 
     headers = {
         'x-api-key': os.environ['SMART_STAC_API_KEY']
@@ -213,6 +215,22 @@ def _devcheck_providers_exist():
     provider = "https://api.smart-stac.com"
     catalog = pystac_client.Client.open(provider, headers=headers)
     print(ub.repr2(list(catalog.get_collections())))
+
+    item_search = catalog.search(collections=["ta1-s2-acc"])
+    item_search = catalog.search(collections=["ta1-wv-acc"])
+    if 1:
+        item_iter = iter(item_search.items())
+        # View cloud cover
+        item = next(item_iter)
+        ccs = []
+        for item in item_iter:
+            cc = item.to_dict()['properties']['eo:cloud_cover']
+            ccs.append(cc)
+        import kwplot
+        sns = kwplot.autosns()
+        import pandas as pd
+        df = pd.DataFrame({'cc': ccs})
+        sns.histplot(data=df, x='cc')
 
     item_search = catalog.search(collections=["ta1-pd-acc"])
     item_search = catalog.search(collections=["ta1-pd-ara"])
@@ -258,7 +276,9 @@ def _mwe_check_planet_processed():
                 intersects=geom,
                 max_items=1
             )
-            results = list(item_search.items())
+            search_iter = item_search.items()
+            # result0 = next(search_iter)
+            results = list(search_iter)
             region_to_results[region_id] = results
             # print(f'region_id={region_id}')
             # print(f'results={results}')

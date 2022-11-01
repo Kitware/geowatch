@@ -46,7 +46,7 @@ class Plotter:
 
         # It's important to separate results by what dataset they were tested
         # on / what type of result they were evaluating
-        plotter.group_keys = ['test_dset', 'type']
+        plotter.group_keys = ['test_trk_dset', 'type']
         plotter.expt_groups = dict(list(merged_df.groupby(plotter.group_keys)))
         return plotter
 
@@ -57,6 +57,7 @@ class Plotter:
         """
         plot_method = getattr(plotter, plot_name)
         for code_type, group in plotter.expt_groups.items():
+            print(f'code_type={code_type}')
             try:
                 plot_method(code_type, group, **kwargs)
             except UnableToPlot as ex:
@@ -116,6 +117,76 @@ class Plotter:
         run_make_fig(make_fig, fnum, plotter.dpath, plotter.human_mapping,
                      plot_name, prefix)
 
+    def plot_relationship(plotter, code_type, group, huevar='sensorchan'):
+        import kwplot
+        plot_name = 'plot_relationship'
+
+        x = 'act.poly.metrics.micro_f1'
+        y = 'trk.poly.metrics.bas_f1'
+
+        test_dset, type = code_type
+        plotkw = ub.udict({
+            # 'x': plotter.metric_luts['pxl'][type],
+            # 'y': plotter.metric_luts['trk'][type],
+            'x': x,
+            'y': y,
+            'hue': huevar,
+            **plotter.common_plotkw,
+        })
+
+        missing = set((plotkw & {'x', 'y'}).values()) - set(group.columns)
+        if missing:
+            raise UnableToPlot(f'Cannot plot {plot_name} for {code_type} missing={missing}')
+
+        if plotkw['x'] not in group.columns or plotkw['y'] not in group.columns:
+            raise UnableToPlot
+
+        metrics_of_interest = group[[plotkw['x'], plotkw['y']]]
+        metric_corr_mat = metrics_of_interest.corr()
+        metric_corr = metric_corr_mat.stack()
+        metric_corr.name = 'corr'
+        stack_idx = metric_corr.index
+        valid_idxs = [(a, b) for (a, b) in ub.unique(map(tuple, map(sorted, stack_idx.to_list()))) if a != b]
+        if valid_idxs:
+            metric_corr = metric_corr.loc[valid_idxs]
+            # corr_lbl = 'corr({},{})={:0.4f}'.format(*metric_corr.index[0], metric_corr.iloc[0])
+            corr_lbl = 'corr={:0.4f}'.format(metric_corr.iloc[0])
+        else:
+            corr_lbl = ''
+        data = group
+
+        if huevar not in {'auto', 'random'}:
+            allow_magic_huevar = True
+            if allow_magic_huevar:
+                if len(data[huevar].unique()) <= 1:
+                    huevar = 'random'
+
+        if huevar == 'random':
+            import random
+            huevar = random.choice(plotter.analysis.statistics)['param_name']
+            # huevar = plotter.analysis.statistics[-1]['param_name']
+            # huevar.replace('pxl', 'pred')
+            plotkw['hue'] = huevar
+
+        if huevar == 'auto':
+            huevar = plotter.analysis.statistics[-1]['param_name']
+            # huevar.replace('pxl', 'pred')
+            plotkw['hue'] = huevar
+
+        def make_fig(fnum, legend=True):
+            fig = kwplot.figure(fnum=fnum, doclf=True)
+            ax = fig.gca()
+            n = len(data)
+            ax = humanized_scatterplot(plotter.human_mapping, data=data, ax=ax,
+                                       legend=legend, **plotkw)
+            nice_type = plotter.human_mapping.get(type, type)
+            ax.set_title(f'{nice_type} - {test_dset}\n{corr_lbl}, n={n}')
+
+        prefix = f'{test_dset}_{type}_{huevar}'
+        fnum = plot_name + prefix
+        dpath = plotter.dpath
+        run_make_fig(make_fig, fnum, dpath, plotter.human_mapping, plot_name, prefix)
+
     def plot_pixel_ap_verus_iarpa(plotter, code_type, group, huevar='sensorchan'):
         import kwplot
         plot_name = 'pxl_vs_iarpa'
@@ -149,6 +220,24 @@ class Plotter:
             corr_lbl = ''
         data = group
 
+        if huevar not in {'auto', 'random'}:
+            allow_magic_huevar = True
+            if allow_magic_huevar:
+                if len(data[huevar].unique()) <= 1:
+                    huevar = 'random'
+
+        if huevar == 'random':
+            import random
+            huevar = random.choice(plotter.analysis.statistics)['param_name']
+            # huevar = plotter.analysis.statistics[-1]['param_name']
+            # huevar.replace('pxl', 'pred')
+            plotkw['hue'] = huevar
+
+        if huevar == 'auto':
+            huevar = plotter.analysis.statistics[-1]['param_name']
+            # huevar.replace('pxl', 'pred')
+            plotkw['hue'] = huevar
+
         def make_fig(fnum, legend=True):
             fig = kwplot.figure(fnum=fnum, doclf=True)
             ax = fig.gca()
@@ -158,7 +247,7 @@ class Plotter:
             nice_type = plotter.human_mapping.get(type, type)
             ax.set_title(f'Pixelwise Vs IARPA metrics - {nice_type} - {test_dset}\n{corr_lbl}, n={n}')
 
-        prefix = f'{test_dset}_{type}_'
+        prefix = f'{test_dset}_{type}_{huevar}'
         fnum = plot_name + prefix
         dpath = plotter.dpath
         run_make_fig(make_fig, fnum, dpath, plotter.human_mapping, plot_name, prefix)
@@ -208,17 +297,15 @@ class Plotter:
             ax.set_title(f'Pixelwise metrics - {nice_type} - {test_dset}\n{corr_lbl}')
             fig.set_size_inches(16.85, 8.82)
 
-        prefix = f'{test_dset}_{type}_'
+        prefix = f'{test_dset}_{type}_{huevar}'
         fnum = 'plot_pixel_ap_verus_auc' + prefix
         run_make_fig(make_fig, fnum, plotter.dpath, plotter.human_mapping, plot_name, prefix)
 
-    def plot_violinplots(plotter, code_type, group, metrics):
+    def plot_param_analysis(plotter, code_type, group, metrics, params_of_interest=None):
         """
         metrics = ['salient_AP']
         metrics = ['BAS_F1']
-
         """
-
         test_dset, type = code_type
         metrics = metrics if ub.iterable(metrics) else [metrics]
         metrics_key = '_'.join(metrics)
@@ -226,29 +313,26 @@ class Plotter:
         prefix = f'{test_dset}_{type}_'
 
         metrics_key = '_'.join(metrics)
-        pred_param_df = pd.DataFrame(group['pred_params'].tolist(), index=group.index)
-        track_param_df = pd.DataFrame(group['track_params'].tolist(), index=group.index)
-        fit_param_df = pd.DataFrame(group['fit_params'].tolist(), index=group.index)
-
+        # pred_param_df = pd.DataFrame(group['pred_params'].tolist(), index=group.index)
+        # track_param_df = pd.DataFrame(group['track_params'].tolist(), index=group.index)
+        # fit_param_df = pd.DataFrame(group['fit_params'].tolist(), index=group.index)
         # varied_params = ub.varied_values(pred_param_df.to_dict('records'), min_variations=1)
+        # blocklist = ub.oset(['step', 'epoch', 'pred_in_dataset_name'])
+        # pred_param_df = pred_param_df.drop(blocklist & pred_param_df.columns, axis=1)
 
-        blocklist = ub.oset(['step', 'epoch', 'pred_in_dataset_name'])
-        pred_param_df = pred_param_df.drop(blocklist & pred_param_df.columns, axis=1)
+        # main_cols = ub.oset(['expt', 'model', 'step', 'test_dset'] + metrics)
+        expanded = group
 
-        main_cols = ub.oset(['expt', 'model', 'step', 'test_dset'] + metrics)
-        expanded = group[main_cols & group.columns]
-        expanded = expanded.join(pred_param_df)
-        expanded = expanded.join(track_param_df)
-        expanded = expanded.join(fit_param_df)
+        if params_of_interest is None:
+            params_of_interest = [
+                'pred_use_cloudmask',
+                'pred_resample_invalid_frames',
+                'pred_input_space_scale',
+                'pred_window_space_scale',
+                'trk_thresh',
+            ]
 
-        params_of_interest = [
-            'pred_use_cloudmask',
-            'pred_resample_invalid_frames',
-            'pred_input_space_scale',
-            'pred_window_space_scale',
-        ]
-
-        x = 'model'
+        x = 'act.pxl.properties.model_name'
 
         additional_needed_legends = []
 
@@ -263,6 +347,10 @@ class Plotter:
                 # sns.violinplot(data=expanded, x=param_name, y=metrics[0], hue='expt')
                 # sns.violinplot(data=expanded, x='expt', y=metrics[0], hue=param_name, split=True)
                 # sns.boxplot(data=expanded, x='expt', y=metrics[0], hue=param_name, notch=True)
+
+                if param_name not in expanded.columns:
+                    raise UnableToPlot
+
                 sns.boxplot(data=expanded, x=x, y=metrics[0], hue=param_name,
                             medianprops={"color": "coral"})
                 if not legend:
@@ -274,9 +362,17 @@ class Plotter:
                 needs_relabel = False
                 from itertools import count
                 counter = count(1)
-                for label in ax.get_xticklabels():
+
+                xtick_labels = list(ax.get_xticklabels())
+                n_xticks = len(xtick_labels)
+                if n_xticks == 1:
+                    len_thresh = 60
+                else:
+                    len_thresh = 10
+
+                for label in xtick_labels:
                     text = label.get_text()
-                    if len(text) > 10:
+                    if len(text) > len_thresh:
                         needs_relabel = True
                         relabels[text] = str(next(counter))
 
@@ -307,12 +403,19 @@ class Plotter:
         import kwplot
         import seaborn as sns
         for param_name in params_of_interest:
-            expanded[[param_name] + metrics]
+            try:
+                expanded[[param_name] + metrics]
+            except KeyError:
+                continue
             make_fig = make_make_fig(expanded, param_name)
             prefix = f'{test_dset}_{type}_'
             fnum = plot_name + param_name + prefix
             dpath = plotter.dpath
-            run_make_fig(make_fig, fnum, dpath, plotter.human_mapping, plot_name + param_name, prefix)
+            try:
+                run_make_fig(make_fig, fnum, dpath, plotter.human_mapping, plot_name + param_name, prefix)
+            except Exception:
+                print(f'Error checking {param_name}')
+                ...
             # sns.violinplot(data=expanded, x=x, y=metrics[0], hue=param_name,
             #                medianprops={"color": "coral"})
 
@@ -336,18 +439,24 @@ class Plotter:
         import kwplot
         plot_name = 'resource_vs_metric'
 
-        for resource_type in ['total_hours', 'co2_kg']:
+        resources_of_interest = [
+            'trk.pxl.resource.total_hours',
+            'trk.pxl.resource.co2_kg',
+            'act.pxl.resource.total_hours',
+            'act.pxl.resource.co2_kg',
+            'act.poly.resource.total_hours',
+            'trk.poly.resource.total_hours',
+        ]
+
+        metrics = [
+            'trk.poly.metrics.macro_f1',
+        ]
+
+        for resource_type in resources_of_interest:
             human_resource_type = plotter.human_mapping.get(resource_type, resource_type)
 
-            # 'pixel']:
-            # for metric_type in ['pixel']:
-            for metric_type in ['iarpa']:
-                if metric_type == 'iarpa':
-                    metric_lut = plotter.metric_luts['trk']
-                    human_metric_type = 'IARPA'
-                else:
-                    metric_lut = plotter.metric_luts['pxl']
-                    human_metric_type = 'Pixelwise'
+            for metric in metrics:
+                human_metric_type = plotter.human_mapping.get(metric, metric)
 
                 # group['pred_tta_time'] = group['pred_tta_time'].astype(str)
                 # group['pred_tta_fliprot'] = group['pred_tta_fliprot'].astype(str)
@@ -355,24 +464,13 @@ class Plotter:
                 # group.loc[group['pred_tta_fliprot'] == 'nan', 'pred_tta_fliprot'] = '0.0'
 
                 test_dset, type = code_type
-                if type == 'eval_act+pxl':
-                    plotkw = ub.udict({
-                        'x': resource_type,
-                        'y': metric_lut[type],
-                        'hue': huevar,
-                        **plotter.common_plotkw,
-                        'style': 'hardware',
-                    })
-                elif type == 'eval_trk+pxl':
-                    plotkw = ub.udict({
-                        'x': resource_type,
-                        'y': metric_lut[type],
-                        'hue': huevar,
-                        **plotter.common_plotkw,
-                        'style': 'hardware',
-                    })
-                else:
-                    raise KeyError(type)
+                plotkw = ub.udict({
+                    'x': resource_type,
+                    'y': metric,
+                    'hue': huevar,
+                    **plotter.common_plotkw,
+                    'style': 'hardware',
+                })
 
                 missing = set((plotkw & {'x', 'y'}).values()) - set(group.columns)
                 if missing:
@@ -491,18 +589,19 @@ def humanized_scatterplot(human_mapping, data, ax, plot_type='scatter', mesh=Non
         ax = plt.gca()
 
     if star is not None:
-        _starkw = ub.dict_isect(plotkw, {'s'})
-        _starkw = {
-            's': _starkw.get('s', 10) + 280,
-            'color': 'orange',
-        }
-        if starkw is not None:
-            _starkw.update(starkw)
-        flags = data[star].apply(bool)
-        star_data = data[flags]
-        star_x = star_data[xkey]
-        star_y = star_data[ykey]
-        ax.scatter(star_x, star_y, marker='*', **_starkw)
+        if star in data:
+            _starkw = ub.dict_isect(plotkw, {'s'})
+            _starkw = {
+                's': _starkw.get('s', 10) + 280,
+                'color': 'orange',
+            }
+            if starkw is not None:
+                _starkw.update(starkw)
+            flags = data[star].apply(bool)
+            star_data = data[flags]
+            star_x = star_data[xkey]
+            star_y = star_data[ykey]
+            ax.scatter(star_x, star_y, marker='*', **_starkw)
 
     if plot_type == 'scatter':
         ax = sns.scatterplot(data=data, ax=ax, **plotkw)
@@ -696,7 +795,7 @@ memo_kwcoco_load = ub.memoize(kwcoco.CocoDataset)
 def dataset_summary_tables(dpath):
     import watch
 
-    dvc_expt_dpath = watch.find_smart_dvc_dpath()
+    expt_dvc_dpath = watch.find_smart_dvc_dpath()
     rows = []
     DSET_CODE_TO_TASK = {
         # 'Aligned-Drop3-TA1-2022-03-10': 'bas',
@@ -708,7 +807,7 @@ def dataset_summary_tables(dpath):
     for bundle_name in DSET_CODE_TO_TASK.keys():
         task = DSET_CODE_TO_TASK[bundle_name]
         gsd = DSET_CODE_TO_GSD.get(bundle_name, None)
-        bundle_dpath = dvc_expt_dpath / bundle_name
+        bundle_dpath = expt_dvc_dpath / bundle_name
         train_fpath = bundle_dpath / 'data_train.kwcoco.json'
         vali_fpath = bundle_dpath / 'data_vali.kwcoco.json'
 
@@ -786,6 +885,22 @@ def initial_summary(reporter, dpath=None):
     co2_rows = []
     kwh_rows = []
     hour_rows = []
+
+    # type_to_rows = dict(list(reporter.orig_merged_df.groupby('type')))
+    # type_to_resource = {}
+    # pairs = [
+    #     ('eval_trk_poly_fpath', 'trk.poly.resource.total_hours'),
+    #     ('eval_act_poly_fpath', 'trk.poly.resource.total_hours'),
+    # ]
+    # if k1 in type_to_rows:
+    #     type_to_rows[k1][k2].sum()
+
+    reporter.orig_merged_df['trk.pxl.resource.co2_kg']
+    reporter.orig_merged_df['trk.pxl.resource.total_hours']
+    reporter.orig_merged_df['act.pxl.resource.co2_kg']
+    reporter.orig_merged_df['act.pxl.resource.total_hours']
+
+    # for row in reporter.merg
     for row in reporter.big_rows:
         if row['type'] == 'eval_pxl':
             co2_rows += [row['info']['param_types']['resource'].get('co2_kg', np.nan)]
@@ -871,9 +986,11 @@ def run_make_fig(make_fig, fnum, dpath, human_mapping, plot_name, prefix):
     plot_dpath_main = (dpath / plot_name).ensuredir()
     plot_dpath_parts = (dpath / (plot_name + '_parts')).ensuredir()
 
+    print(f'fnum={fnum}')
     make_fig(str(fnum) + '_legend', legend=True)
     fig = plt.gcf()
-    fname = f'{prefix}{plot_name}.png'
+    # fname = f'{prefix}{plot_name}.png'
+    fname = f'{fnum}.png'
     fpath = plot_dpath_main / fname
     fig.set_size_inches(np.array([6.4, 4.8]) * 1.4)
     fig.tight_layout()

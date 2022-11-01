@@ -535,7 +535,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             # handle * sensor in a way that works with previous models
             # This code is a little messy and should be cleaned up
             if sensorchan_hist is None:
-                sensorchan_hist = kwcoco_extensions.coco_channel_stats(sampler.dset)['sensorchan_hist']
+                sensorchan_stats = kwcoco_extensions.coco_channel_stats(sampler.dset)
+                sensorchan_hist = sensorchan_stats['sensorchan_hist']
 
             expanded_input_sensorchan_streams = []
             for fused_sensorchan in self.sensorchan.streams():
@@ -750,10 +751,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     frame_dets = sample['annots']['frame_dets'][0]
                     annot_mode_dims = mode_dims
                 all_mode_dims.append(mode_dims)
-            max_mode_dims = np.array(max(all_mode_dims, key=np.prod))
-            if frame_dets is not None:
-                fixup_scale = (max_mode_dims / annot_mode_dims)[::-1]
-                frame_dets.scale(fixup_scale, inplace=True)
+            if all_mode_dims:
+                max_mode_dims = np.array(max(all_mode_dims, key=np.prod))
+                if frame_dets is not None:
+                    fixup_scale = (max_mode_dims / annot_mode_dims)[::-1]
+                    frame_dets.scale(fixup_scale, inplace=True)
 
     def __getitem__(self, index):
         """
@@ -1240,6 +1242,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 new_gids = video_gids[new_idxs]
                 # print('new_gids = {!r}'.format(new_gids))
                 if not len(new_gids):
+                    # import warnings
+                    # warnings.warn('exhausted resample possibilities')
                     print('exhausted resample possibilities')
                     # Exhausted all possibilities
                     break
@@ -1650,7 +1654,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                                 # Put channels last so we can update multiple at once
                                 flat_vals = val.transpose(1, 2, 0).reshape(-1, val.shape[0])
                                 flat_weights = weights.transpose(1, 2, 0).reshape(-1, weights.shape[0])
-                                data_utils.update_many(running, flat_vals, weights=flat_weights)
+                                running.update_many(flat_vals, weights=flat_weights)
                             else:
                                 running.update(val, weights=weights)
 

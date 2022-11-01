@@ -93,6 +93,11 @@ References:
 
     .. [Probst2019] https://www.jmlr.org/papers/volume20/18-444/18-444.pdf
 
+
+Look into:
+    https://scikit-optimize.github.io/stable/
+    https://wandb.ai/site/articles/find-the-most-important-hyperparameters-in-seconds
+
 """
 import itertools as it
 import math
@@ -354,7 +359,6 @@ class ResultAnalysis(ub.NiceRepr):
     @classmethod
     def demo(cls, num=10, mode="null", rng=None):
         import kwarray
-
         rng = kwarray.ensure_rng(rng)
         results = [Result.demo(mode=mode, rng=rng) for _ in range(num)]
         if mode == "null":
@@ -389,7 +393,7 @@ class ResultAnalysis(ub.NiceRepr):
         config_rows = [r.params for r in self.results]
         sentinel = object()
         # pd.DataFrame(config_rows).channels
-        varied = dict(ub.varied_values(config_rows, default=sentinel, min_variations=1))
+        varied = dict(varied_values(config_rows, default=sentinel, min_variations=2, dropna=True))
         # remove nans
         varied = {
             k: {v for v in vs if not (isinstance(v, float) and math.isnan(v))}
@@ -623,6 +627,9 @@ class ResultAnalysis(ub.NiceRepr):
                 value_to_metric[param_value] = metric_vals.values
 
         moments = pd.DataFrame(value_to_metric_stats).T
+        if "mean" not in moments.columns:
+            raise ValueError(f'No values for {metric_key}')
+
         moments = moments.sort_values("mean", ascending=ascending)
         moments.index.name = param_group_name
         moments.columns.name = metric_key
@@ -810,8 +817,16 @@ class ResultAnalysis(ub.NiceRepr):
         self.statistics = statistics = []
         for param_group in held_constant_groups:
             for metric_key in metrics_of_interest:
-                stats_row = self.test_group(param_group, metric_key)
-                statistics.append(stats_row)
+                try:
+                    stats_row = self.test_group(param_group, metric_key)
+                except ValueError as ex:
+                    import warnings
+                    warnings.warn(repr(ex))
+                    # print(f'param_group={param_group}')
+                    # print(f'metric_key={metric_key}')
+                    # raise
+                else:
+                    statistics.append(stats_row)
 
         self.stats_table = pd.DataFrame(
             [
@@ -837,6 +852,7 @@ class ResultAnalysis(ub.NiceRepr):
             }
         )
         for grid_item in grid:
+            ...
             self._report_one(grid_item)
 
         print(self.stats_table)
@@ -1212,3 +1228,68 @@ class SkillTracker:
         new_team_ratings = openskill.rate(team_standings)
         new_ratings = [new[0] for new in new_team_ratings]
         ratings.update(ub.dzip(ranking, new_ratings))
+
+
+def varied_values(longform, min_variations=0, default=ub.NoParam, dropna=False):
+    """
+    Given a list of dictionaries, find the values that differ between them.
+
+    Args:
+        longform (List[Dict[KT, VT]]):
+            This is longform data, as described in [SeabornLongform]_. It is a
+            list of dictionaries.
+
+            Each item in the list - or row - is a dictionary and can be thought
+            of as an observation. The keys in each dictionary are the columns.
+            The values of the dictionary must be hashable. Lists will be
+            converted into tuples.
+
+        min_variations (int, default=0):
+            "columns" with fewer than ``min_variations`` unique values are
+            removed from the result.
+
+        default (VT | NoParamType):
+            if specified, unspecified columns are given this value.
+            Defaults to NoParam.
+
+    Returns:
+        Dict[KT, List[VT]] :
+            a mapping from each "column" to the set of unique values it took
+            over each "row". If a column is not specified for each row, it is
+            assumed to take a `default` value, if it is specified.
+
+    Raises:
+        KeyError: If ``default`` is unspecified and all the rows
+            do not contain the same columns.
+
+    References:
+        .. [SeabornLongform] https://seaborn.pydata.org/tutorial/data_structure.html#long-form-data
+    """
+    # Enumerate all defined columns
+    import numbers
+    columns = set()
+    for row in longform:
+        if default is ub.NoParam and len(row) != len(columns) and len(columns):
+            missing = set(columns).symmetric_difference(set(row))
+            raise KeyError((
+                'No default specified and not every '
+                'row contains columns {}').format(missing))
+        columns.update(row.keys())
+
+    # Build up the set of unique values for each column
+    varied = ub.ddict(set)
+    for row in longform:
+        for key in columns:
+            value = row.get(key, default)
+            if isinstance(value, list):
+                value = tuple(value)
+            if dropna and isinstance(value, numbers.Number) and math.isnan(value):
+                continue
+            varied[key].add(value)
+
+    # Remove any column that does not have enough variation
+    if min_variations > 0:
+        for key, values in list(varied.items()):
+            if len(values) <= min_variations:
+                varied.pop(key)
+    return varied

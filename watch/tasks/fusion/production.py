@@ -223,3 +223,125 @@ python -m watch.tasks.fusion.aggregate_results \
     --io_workers=10 --show=True
 
 '''
+
+
+NEW_PRODUCTION_MODELS = [
+    """
+    {
+       "rank": [
+          1,
+          "2022-10-01T224553-5"
+       ],
+       "model": "Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt",
+       "file_name": "./models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt",
+       "pred_params": {
+          "tta_fliprot": 0,
+          "tta_time": 0,
+          "chip_overlap": 0.3,
+          "input_space_scale": "15GSD",
+          "window_space_scale": "10GSD",
+          "output_space_scale": "auto",
+          "time_span": "auto",
+          "time_sampling": "auto",
+          "time_steps": "auto",
+          "chip_dims": "auto",
+          "set_cover_algo": "None",
+          "resample_invalid_frames": 1,
+          "use_cloudmask": 1
+       },
+       "track_params": {
+          "thresh": 0.1,
+          "morph_kernel": 3,
+          "norm_ord": 1,
+          "agg_fn": "probs",
+          "thresh_hysteresis": "None",
+          "moving_window_size": "None",
+          "polygon_fn": "heatmaps_to_polys"
+       },
+       "fit_params": {
+          "accelerator": "gpu",
+          "accumulate_grad_batches": 4,
+          "arch_name": "smt_it_stm_p8",
+          "attention_impl": "exact",
+          "batch_size": 1,
+          "change_head_hidden": 2,
+          "change_loss": "cce",
+          "channels": "*:BGRN|S|H",
+          "chip_dims": [
+             380,
+             380
+          ],
+          "chip_overlap": 0.0,
+          "class_head_hidden": 2,
+          "class_loss": "focal",
+          "class_weights": "auto",
+          "datamodule": "KWCocoVideoDataModule",
+          "decoder": "mlp",
+          "decouple_resolution": false,
+          "devices": "0,",
+          "diff_inputs": false,
+          "dist_weights": true,
+          "dropout": 0.1,
+          "global_change_weight": 0.0,
+          "global_class_weight": 0.0,
+          "global_saliency_weight": 1.0,
+          "gradient_clip_algorithm": "value",
+          "gradient_clip_val": 0.5,
+          "ignore_dilate": 0,
+          "init": "Drop3_SpotCheck_V323_epoch=18-step=12976.pt",
+          "learning_rate": 0.0001,
+          "match_histograms": false,
+          "max_epoch_length": 2048,
+          "max_epochs": 160,
+          "max_steps": -1,
+          "method": "MultimodalTransformer",
+          "min_spacetime_weight": 0.5,
+          "modulate_class_weights": "",
+          "multimodal_reduce": "max",
+          "name": "Drop4_BAS_Retrain_V002",
+          "neg_to_pos_ratio": 0.25,
+          "negative_change_weight": 1.0,
+          "normalize_inputs": 1024,
+          "normalize_perframe": false,
+          "optimizer": "AdamW",
+          "patience": 160,
+          "positive_change_weight": 1.0,
+          "precision": 32,
+          "resample_invalid_frames": true,
+          "saliency_head_hidden": 2,
+          "saliency_loss": "focal",
+          "saliency_weights": "auto",
+          "set_cover_algo": "approx",
+          "space_scale": "30GSD",
+          "squash_modes": false,
+          "stochastic_weight_avg": false,
+          "stream_channels": 16,
+          "temporal_dropout": 0.5,
+          "time_sampling": "soft2+distribute",
+          "time_span": "6m",
+          "time_steps": 11,
+          "token_norm": "None",
+          "tokenizer": "linconv",
+          "track_grad_norm": -1,
+          "true_multimodal": true,
+          "upweight_centers": true,
+          "use_centered_positives": true,
+          "use_cloudmask": 1,
+          "use_conditional_classes": true,
+          "use_grid_positives": true,
+          "weight_decay": 1e-05,
+          "window_size": 8,
+          "bad_channels": false,
+          "sensorchan": "*:BGRN|S|H"
+       },
+       "metrics": {
+          "coi_mAP": NaN,
+          "coi_mAUC": NaN,
+          "salient_AP": 0.28347576365492144,
+          "salient_AUC": 0.9234889970365587,
+          "BAS_F1": 0.6666666667000001,
+          "test_dset": "Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_kr1br2.kwcoco"
+       }
+    }
+    """
+]

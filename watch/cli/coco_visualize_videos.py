@@ -79,7 +79,7 @@ class CocoVisualizeConfig(scfg.Config):
             writes them adjacent to the input kwcoco file
             ''')),
 
-        'workers': scfg.Value(0, help='number of parallel procs'),
+        'workers': scfg.Value('auto', help='number of parallel procs'),
         'max_workers': scfg.Value(None, help='DEPRECATED USE workers'),
 
         'space': scfg.Value('video', help='can be image or video space'),
@@ -98,6 +98,8 @@ class CocoVisualizeConfig(scfg.Config):
 
         'draw_imgs': scfg.Value(True, isflag=True),
         'draw_anns': scfg.Value('auto', isflag=True, help='auto means only draw anns if they exist'),
+
+        'draw_valid_region': scfg.Value(True, help='if True, draw the valid region if it exists'),
 
         'cmap': scfg.Value('viridis', help='colormap for single channel data'),
 
@@ -212,6 +214,9 @@ def main(cmdline=True, **kwargs):
     print('config = {}'.format(ub.repr2(dict(config), nl=2)))
 
     if config['max_workers'] is not None:
+        ub.schedule_deprecation(
+            'watch', 'max_workers', 'argument to coco_visualize_videos',
+            deprecate='now', error='later', remove='later')
         max_workers = util_globals.coerce_num_workers(config['max_workers'])
     else:
         max_workers = util_globals.coerce_num_workers(config['workers'])
@@ -220,6 +225,36 @@ def main(cmdline=True, **kwargs):
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
     print('coco_dset.fpath = {!r}'.format(coco_dset.fpath))
     print('coco_dset = {!r}'.format(coco_dset))
+
+    from watch import heuristics
+    heuristics.ensure_heuristic_coco_colors(coco_dset)
+
+    if channels == 'auto':
+        from delayed_image import FusedChannelSpec
+        auto_channels = [
+            FusedChannelSpec.coerce('red|green|blue'),
+            FusedChannelSpec.coerce('No Activity|Site Preparation|Active Construction|Post Construction'),
+            FusedChannelSpec.coerce('salient'),
+        ]
+        from watch.utils import kwcoco_extensions
+        from collections import defaultdict, Counter
+        channel_stats = kwcoco_extensions.coco_channel_stats(coco_dset)
+        all_sensorchan = channel_stats['all_sensorchan']
+        sensor_to_single_channels = defaultdict(Counter)
+        for spec in all_sensorchan.streams():
+            sensor_to_single_channels[spec.sensor.spec].update(spec.chans.as_list())
+        chosen = []
+        for sensor, chanhist in sensor_to_single_channels.items():
+            has_chans = set(chanhist.keys())
+            for ac in auto_channels:
+                if ac.to_set().issubset(has_chans):
+                    chosen.append(ac.spec)
+        chosen = ub.oset(sorted(set(chosen)))
+        if 'red|green|blue' in chosen:
+            # force RGB first
+            chosen = ub.oset(['red|green|blue']) | (chosen - {'red|green|blue'})
+        channels = ','.join(chosen)
+        print(f'AUTO channels={channels}')
 
     if config['draw_anns'] == 'auto':
         config['draw_anns'] = coco_dset.n_annots > 0
@@ -267,6 +302,7 @@ def main(cmdline=True, **kwargs):
 
     video_names = []
     for vidid, video in prog:
+
         sub_dpath = viz_dpath / video['name']
 
         gids = coco_dset.index.vidid_to_gids[vidid]
@@ -279,6 +315,12 @@ def main(cmdline=True, **kwargs):
 
         sub_dpath.ensuredir()
         video_names.append(video['name'])
+
+        if config['animate'] == 'oops':
+            print('Got animate=oops. '
+                  'Assuming images already exists and you forgot to animate'
+                  'Skipping video draw')
+            continue
 
         norm_over_time = config['norm_over_time']
         if not norm_over_time:
@@ -330,7 +372,10 @@ def main(cmdline=True, **kwargs):
                 chan_to_normalizer[chan] = normalizer
             print('chan_to_normalizer = {}'.format(ub.repr2(chan_to_normalizer, nl=1)))
 
-        valid_vidspace_region = video.get('valid_region', None)
+        if config['draw_valid_region']:
+            valid_vidspace_region = video.get('valid_region', None)
+        else:
+            valid_vidspace_region = None
 
         if config['zoom_to_tracks']:
             assert space == 'video'
@@ -373,6 +418,7 @@ def main(cmdline=True, **kwargs):
                                 local_frame_index=local_frame_index,
                                 local_max_frame=local_max_frame,
                                 any3=config['any3'], dset_idstr=dset_idstr,
+                                draw_valid_region=config['draw_valid_region'],
                                 stack=config['stack'])
 
         else:
@@ -406,6 +452,7 @@ def main(cmdline=True, **kwargs):
                             local_max_frame=local_max_frame,
                             valid_vidspace_region=valid_vidspace_region,
                             skip_missing=config['skip_missing'],
+                            draw_valid_region=config['draw_valid_region'],
                             stack=config['stack'])
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
@@ -416,25 +463,19 @@ def main(cmdline=True, **kwargs):
     print('Wrote images to viz_dpath = {!r}'.format(viz_dpath))
 
     if config['animate']:
-        def yaml_loads(text):
-            import io
-            import yaml
-            f = io.StringIO(text)
-            f.seek(0)
-            data = yaml.load(f, yaml.SafeLoader)
-            return data
         # TODO: develop this idea more
         # Try to parse out an animation config
         import scriptconfig as scfg
+        from watch.utils import util_yaml
 
         @scfg.dataconf
         class AnimateConfig:
             # TODO: should be able to load from an alias
             frames_per_second = scfg.Value(0.7, alias=['fps'])
         animate_config = dict(AnimateConfig())
-        if isinstance(config['animate'], str):
+        if isinstance(config['animate'], str) and config['animate'] not in {'oops'}:
             try:
-                user_config = yaml_loads(config['animate'])
+                user_config = util_yaml.yaml_loads(config['animate'])
                 assert isinstance(user_config, dict), 'animate subconfig should be coercable into a dict'
                 # hack
                 if 'fps' in user_config:
@@ -449,7 +490,10 @@ def main(cmdline=True, **kwargs):
 
         # Hack: pretend that stack is a channel even though it is not.
         if config['stack']:
-            channels = channels + ',stack'
+            if not channels:
+                channels = 'stack'
+            else:
+                channels = channels + ',stack'
 
         animate_visualizations.animate_visualizations(
             viz_dpath=viz_dpath,
@@ -461,7 +505,10 @@ def main(cmdline=True, **kwargs):
             zoom_to_tracks=config['zoom_to_tracks'],
             **animate_config,
         )
-        pass
+        # Terminal fixup
+        import sys
+        if sys.stdout.isatty():
+            ub.cmd('stty sane', verbose=3)
 
 
 def video_track_info(coco_dset, vidid):
@@ -658,6 +705,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                local_max_frame=None,
                                valid_vidspace_region=None,
                                stack=False,
+                               draw_valid_region=True,
                                verbose=0):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
@@ -684,7 +732,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     header_lines = heuristics.build_image_header_text(
         img=img,
         name=None,
-        _header_extra=None,
+        _header_extra=_header_extra,
         coco_dset=coco_dset,
     )
 
@@ -737,10 +785,15 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         dets = dets.translate(ann_shift)
         delayed = delayed.crop(crop_box.to_slices()[0])
 
-    valid_region = img.get('valid_region', None)
     valid_image_poly = None
     valid_video_poly = None
     vid_from_img = None
+
+    if draw_valid_region:
+        valid_region = img.get('valid_region', None)
+    else:
+        valid_region = None
+
     if valid_region:
         valid_image_poly: kwimage.MultiPolygon = kwimage.MultiPolygon.coerce(valid_region)
         if space == 'video':
@@ -777,13 +830,11 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             valid_image_poly = valid_image_poly.warp(viz_warp)
         if valid_video_poly is not None:
             valid_video_poly = valid_video_poly.warp(viz_warp)
-    # import xdev
-    # xdev.embed()
     if stack:
         ann_stack = []
         img_stack = []
 
-    for chan_row in chan_groups:
+    for stack_idx, chan_row in enumerate(chan_groups):
         chan_pname = chan_row['pname']
         chan_group_obj = chan_row['chan']
         chan_list = chan_group_obj.parsed
@@ -792,41 +843,11 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         img_chan_dpath = img_view_dpath / chan_pname
         ann_chan_dpath = ann_view_dpath / chan_pname
 
-        if draw_anns:
-            ann_chan_dpath.ensuredir()
-
-        if draw_imgs:
-            img_chan_dpath.ensuredir()
-
         # Prevent long names for docker (limit is 242 chars)
         chan_pname2 = kwcoco.FusedChannelSpec.coerce(chan_group).path_sanitize(maxlen=10)
         suffix = '_'.join([frame_id, chan_pname2, sensor_coarse, align_method])
         view_img_fpath = ub.augpath(name, dpath=img_chan_dpath) + '_' + suffix + '.view_img.jpg'
         view_ann_fpath = ub.augpath(name, dpath=ann_chan_dpath) + '_' + suffix + '.view_ann.jpg'
-
-        if 0:
-            delayed1 = coco_img.delay(channels='blue|salient', space=space, **finalize_opts)
-            delayed1 = delayed1.warp(viz_warp)
-
-            delayed2 = coco_img.delay(channels='blue|salient', space=space, **finalize_opts)
-            delayed2 = delayed2.warp(viz_warp)
-
-            orig = delayed1.take_channels(chan_group)
-            prep = delayed2.take_channels(chan_group).prepare()
-
-            print(ub.repr2(orig.nesting(), sort=0, nl=-1))
-            print(ub.repr2(prep.nesting(), sort=0, nl=-1))
-
-            orig_opt = orig.optimize()
-            prep_opt = prep.optimize()
-            print('--orig--')
-            orig.write_network_text()
-            print('--prep--')
-            prep.write_network_text()
-            print('--orig_opt--')
-            orig_opt.write_network_text()
-            print('--prep_opt--')
-            prep_opt.write_network_text()
 
         chan = delayed.take_channels(chan_group)
         chan = chan.prepare().optimize()
@@ -887,7 +908,25 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                 new_parts.append(p)
             canvas = np.stack(new_parts, axis=2)
 
-        canvas = kwimage.fill_nans_with_checkers(canvas)
+        _kw = ub.compatible({'on_value': 0.3}, kwimage.fill_nans_with_checkers)
+        canvas = kwimage.fill_nans_with_checkers(canvas, **_kw)
+
+        # Do the channels correspond to classes with known colors?
+        chan_names = chan_row['chan'].to_list()
+        channel_colors = []
+        for cname in chan_names:
+            if cname in coco_dset.index.name_to_cat:
+                cat = coco_dset.index.name_to_cat[cname]
+                if 'color' in cat:
+                    channel_colors.append(cat['color'])
+                else:
+                    channel_colors.append(None)
+            else:
+                channel_colors.append(None)
+
+        if any(c is not None for c in channel_colors):
+            canvas = util_kwimage.perchannel_colorize(canvas, channel_colors=channel_colors)
+            canvas = canvas[..., 0:3]
 
         if cmap is not None:
             if kwimage.num_channels(canvas) == 1:
@@ -900,6 +939,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                     canvas = cmap_(canvas)[..., 0:3].astype(np.float32)
 
         canvas = util_kwimage.ensure_false_color(canvas)
+        canvas = kwimage.ensure_uint255(canvas)
 
         if len(canvas.shape) > 2 and canvas.shape[2] > 4:
             # hack for wv
@@ -921,17 +961,36 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                 canvas = valid_video_poly.draw_on(canvas, color='lawngreen',
                                                   fill=False, border=True)
 
-        if draw_imgs:
-            img_canvas = kwimage.ensure_uint255(canvas, copy=True)
-            if stack:
-                img_stack.append(img_canvas)
-            img_canvas = kwimage.draw_header_text(image=img_canvas,
-                                                  text=header_text,
-                                                  stack=True,
-                                                  fit='shrink')
-            kwimage.imwrite(view_img_fpath, img_canvas)
+        stack_imgs = draw_imgs and stack
+        stack_anns = draw_anns and stack
+        draw_anns_alone = draw_anns and stack != 'only'
+        draw_imgs_alone = draw_imgs and stack != 'only'
 
-        if draw_anns:
+        if draw_anns_alone:
+            ann_chan_dpath.ensuredir()
+
+        if draw_imgs_alone:
+            img_chan_dpath.ensuredir()
+
+        img_canvas = None
+        ann_canvas = None
+
+        if draw_imgs_alone or stack_imgs:
+            img_canvas = kwimage.ensure_uint255(canvas, copy=True)
+            if stack_imgs:
+                img_stack.append({
+                    'im': img_canvas,
+                    'chan': chan_group,
+                })
+            if draw_imgs_alone:
+                img_header = kwimage.draw_header_text(image=img_canvas,
+                                                      text=header_text,
+                                                      stack=False,
+                                                      fit='shrink')
+                img_header = kwimage.stack_images([img_header, img_canvas])
+                kwimage.imwrite(view_img_fpath, img_canvas)
+
+        if draw_anns_alone or stack_anns:
             ann_canvas = kwimage.ensure_float01(canvas, copy=True)
 
             ONLY_BOXES = only_boxes
@@ -948,14 +1007,27 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                 except Exception:
                     ann_canvas = dets.draw_on(ann_canvas)
 
-            ann_canvas = kwimage.ensure_uint255(ann_canvas)
-            if stack:
-                ann_stack.append(ann_canvas)
-            ann_canvas = kwimage.draw_header_text(image=ann_canvas,
-                                                  text=header_text,
-                                                  stack=True,
-                                                  fit='shrink')
-            kwimage.imwrite(view_ann_fpath, ann_canvas)
+            if stack_anns:
+                if stack_idx > 0 and img_canvas is not None:
+                    ann_stack.append({
+                        'im': img_canvas,
+                        'chan': chan_group,
+                    })
+                else:
+                    ann_stack.append({
+                        'im': ann_canvas,
+                        'chan': chan_group,
+                    })
+            if draw_anns_alone:
+                ann_canvas = kwimage.ensure_uint255(ann_canvas)
+                ann_header = kwimage.draw_header_text(image=ann_canvas,
+                                                      text=header_text,
+                                                      stack=False,
+                                                      fit='shrink')
+                ann_header = kwimage.imresize(
+                    ann_header, dsize=(ann_header.shape[1], 100), letterbox=True)
+                ann_canvas = kwimage.stack_images([ann_header, ann_canvas])
+                kwimage.imwrite(view_ann_fpath, ann_canvas)
 
     if stack:
         img_stacked_dpath = (img_view_dpath / 'stack')
@@ -965,24 +1037,45 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         view_ann_fpath = ann_stacked_dpath / (name + '_stack' + '.view_ann.jpg')
 
         stack_header_lines = header_lines.copy()
-        # stack_header_lines.append(chan_group)
         header_text = '\n'.join(stack_header_lines)
 
+        def stack_infos(_stack):
+            tostack = []
+            for item in _stack:
+                canvas = item['im']
+                chan = item['chan']
+                # canvas = kwimage.ensure_float01(canvas, copy=True)
+                canvas = kwimage.ensure_uint255(canvas)
+                canvas = kwimage.draw_text_on_image(
+                    canvas, chan, (1, 2),
+                    valign='top', color='lime', border=3)
+                tostack.append(canvas)
+            canvas = kwimage.stack_images(tostack)
+            canvas = kwimage.ensure_uint255(canvas)
+            return canvas
+
         if ann_stack:
-            ann_stack_canvas = kwimage.stack_images(ann_stack)
-            ann_canvas = kwimage.draw_header_text(image=ann_stack_canvas,
+            ann_stack_canvas = stack_infos(ann_stack)
+            ann_header = kwimage.draw_header_text(image=ann_stack_canvas,
                                                   text=header_text,
-                                                  stack=True,
+                                                  stack=False,
                                                   fit='shrink')
+            ann_header = kwimage.imresize(
+                # ann_header, dsize=(None, 100), letterbox=True)
+                ann_header, dsize=(ann_header.shape[1], 100), letterbox=True)
+            ann_canvas = kwimage.stack_images([ann_header, ann_stack_canvas])
+
             view_ann_fpath.parent.ensuredir()
             kwimage.imwrite(view_ann_fpath, ann_canvas)
 
         if img_stack:
-            img_stack_canvas = kwimage.stack_images(img_stack)
-            img_canvas = kwimage.draw_header_text(image=img_stack_canvas,
+            img_stack_canvas = stack_infos(img_stack)
+            img_header = kwimage.draw_header_text(image=img_stack_canvas,
                                                   text=header_text,
-                                                  stack=True,
-                                                  fit='shrink')
+                                                  fit='shrink', stack=False)
+            img_header = kwimage.imresize(
+                img_header, dsize=(img_header.shape[1], 100), letterbox=True)
+            img_canvas = kwimage.stack_images([img_header, img_stack_canvas])
             view_img_fpath.parent.ensuredir()
             kwimage.imwrite(view_img_fpath, img_canvas)
 

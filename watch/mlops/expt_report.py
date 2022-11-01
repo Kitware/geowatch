@@ -7,6 +7,9 @@ python -m watch mlops "pull evals"
 python -m watch mlops "pull packages"
 python -m watch mlops "push evals"
 
+SeeAlso:
+    ~/code/watch/dev/reports/report_2022_09_xx.py
+
 """
 import ubelt as ub
 import math
@@ -16,6 +19,7 @@ import functools  # NOQA
 # APPLY Monkey Patches
 from watch.tasks.fusion import monkey  # NOQA
 from watch import heuristics
+from watch.mlops import smart_pipeline as smart
 
 
 fit_param_keys = heuristics.fit_param_keys
@@ -44,8 +48,8 @@ def evaluation_report():
     kwplot.autosns()
     from watch import heuristics
     from watch.mlops import expt_manager
-    dvc_expt_dpath = heuristics.auto_expt_dvc()
-    manager = expt_manager.DVCExptManager.coerce(dvc_expt_dpath)
+    expt_dvc_dpath = heuristics.auto_expt_dvc()
+    manager = expt_manager.DVCExptManager.coerce(expt_dvc_dpath)
     state = manager
     reporter = EvaluationReporter(state)
     reporter.load()
@@ -54,13 +58,13 @@ def evaluation_report():
 
     if 0:
         merged_df = reporter.orig_merged_df.copy()
-        merged_df[merged_df.expt.str.contains('invar')]['mean_f1']
-        merged_df[merged_df.in_production]['mean_f1']
+        merged_df[merged_df.expt.str.contains('invar')]['sc_macro_f1']
+        merged_df[merged_df.in_production]['sc_macro_f1']
 
-        selected = merged_df[merged_df.in_production].sort_values('mean_f1')
-        selected = selected[['siteprep_f1', 'active_f1', 'mean_f1', 'model']]
-        selected['coi_mean_f1'] = selected[['siteprep_f1', 'active_f1']].mean(axis=1)
-        selected = selected.sort_values('coi_mean_f1')
+        selected = merged_df[merged_df.in_production].sort_values('sc_macro_f1')
+        selected = selected[['siteprep_f1', 'active_f1', 'sc_macro_f1', 'model']]
+        selected['sc_macro_f1'] = selected[['siteprep_f1', 'active_f1']].mean(axis=1)
+        selected = selected.sort_values('sc_macro_f1')
         print(selected)
 
 
@@ -75,7 +79,7 @@ class EvaluationReporter:
             state (DVCExptManager | ExperimentState)
         """
         reporter.state = state
-        reporter.dvc_expt_dpath = state.expt_dvc_dpath
+        reporter.expt_dvc_dpath = state.expt_dvc_dpath
 
         reporter.raw_df = None
         reporter.filt_df = None
@@ -86,7 +90,7 @@ class EvaluationReporter:
         reporter.metric_registry = pd.DataFrame([
             {'name': 'coi_mAP', 'tasks': ['sc'], 'human': 'Pixelwise mAP (classes of interest)'},
             {'name': 'coi_mAUC', 'tasks': ['sc'], 'human': 'Pixelwise mAUC (classes of interest)'},
-            {'name': 'mean_f1', 'tasks': ['sc'], 'human': 'IARPA SC mean F1'},
+            {'name': 'sc_macro_f1', 'tasks': ['sc'], 'human': 'IARPA SC mean F1'},
 
             {'name': 'salient_AP', 'tasks': ['bas'], 'human': 'Pixelwise Salient AP'},
             {'name': 'salient_AUC', 'tasks': ['bas'], 'human': 'Pixelwise Salient AUC'},
@@ -95,105 +99,8 @@ class EvaluationReporter:
         reporter.metric_registry['type'] = 'metric'
 
         # TODO: add column types
-        column_meanings = [
-            {'name': 'raw', 'help': 'A full path to a file on disk that contains this info'},
-            {'name': 'dvc', 'help': 'A path to a DVC sidecar file if it exists.'},
-            {'name': 'type', 'help': 'The type of the row'},
-            {'name': 'step', 'help': 'The number of steps taken by the most recent training run associated with the row'},
-            {'name': 'total_steps', 'help': 'An estimate of the total number of steps the model associated with the row took over all training runs.'},
-            {'name': 'model', 'help': 'The name of the learned model associated with this row'},
-            {'name': 'test_dset', 'help': 'The name of the test dataset used to compute a metric associated with this row'},
-            {'name': 'expt', 'help': 'The name of the experiment, i.e. training session that might have made several models'},
-            {'name': 'dataset_code', 'help': 'The higher level dataset code associated with this row'},
-
-            {'name': 'pred_cfg', 'help': 'A hash of the configuration used for pixel heatmap prediction'},
-            {'name': 'trk_cfg', 'help': 'A hash of the configuration used for BAS tracking'},
-            {'name': 'act_cfg', 'help': 'A hash of the configuration used for SC classification'},
-
-            {'name': 'total_steps', 'help': 'An estimate of the total number of steps the model associated with the row took over all training runs.'},
-        ]
+        column_meanings = smart.get_column_meanings()
         reporter.column_meanings = column_meanings
-
-        # COLUMNS TO DOCUMENT
-        # 'raw',
-        # 'dvc',
-        # 'type',
-        # 'has_dvc',
-        # 'has_raw',
-        # 'needs_pull',
-        # 'is_link',
-        # 'is_broken',
-        # 'unprotected',
-        # 'needs_push',
-        # 'dataset_code',
-        # 'expt_dvc_dpath',
-        # 'expt',
-        # 'model',
-        # 'test_dset',
-        # 'pred_cfg',
-        # 'trk_cfg',
-        # 'act_cfg': 'SC Tracking Config',
-
-        # 'has_teamfeat',
-        # 'model_fpath',
-        # 'pred_start_time',
-        # 'class_mAP',
-        # 'class_mAUC',
-        # 'class_mAPUC',
-        # 'coi_mAP',
-        # 'coi_mAUC',
-        # 'coi_mAPUC',
-        # 'salient_AP',
-        # 'salient_AUC',
-        # 'salient_APUC',
-        # 'co2_kg',
-        # 'vram_gb',
-
-        # 'total_hours',
-        # 'iters_per_second',
-        # 'cpu_name',
-        # 'gpu_name',
-
-        # 'disk_type',
-        # 'accumulate_grad_batches',
-        # 'arch_name',
-        # 'channels',
-        # 'chip_overlap',
-        # 'class_loss',
-        # 'decoder',
-        # 'init',
-        # 'learning_rate',
-        # 'modulate_class_weights',
-        # 'optimizer',
-        # 'saliency_loss',
-        # 'stream_channels',
-        # 'temporal_dropout',
-        # 'time_sampling',
-        # 'time_span',
-        # 'time_steps',
-        # 'tokenizer',
-        # 'upweight_centers',
-        # 'use_cloudmask',
-        # 'use_grid_positives',
-        # 'bad_channels',
-        # 'sensorchan',
-        # 'true_multimodal',
-        # 'hardware',
-        # 'epoch',
-        # 'step',
-        # 'total_steps',
-        # 'in_production',
-        # 'Processing',
-
-        # 'trk_use_viterbi': 'Viterbi Enabled',
-        # 'trk_thresh': 'SC Tracking Threshold',
-        # 'co2_kg': 'CO2 Emissions (kg)',
-        # 'total_hours': 'Time (hours)',
-        # 'sensorchan': 'Sensor/Channel',
-        # 'has_teamfeat': 'Has Team Features',
-        # 'eval_act+pxl': 'SC',
-        # 'eval_trk+pxl': 'BAS',
-        # ]
 
     def status(reporter, table=None):
         reporter.state.summarize()
@@ -201,42 +108,72 @@ class EvaluationReporter:
         # if 0:
         #     if table is None:
         #         table = reporter.state.evaluation_table()
-        #     loaded_table = load_extended_data(table, reporter.dvc_expt_dpath)
+        #     loaded_table = load_extended_data(table, reporter.expt_dvc_dpath)
         #     loaded_table = pd.DataFrame(loaded_table)
         #     # dataset_summary_tables(dpath)
         #     initial_summary(table, loaded_table, reporter.dpath)
 
     def report_best(reporter, show_configs=0, verbose=0, top_k=2):
+        """
+        Ignore:
+            show_configs = 0
+            verbose = 1
+            top_k = 2
+        """
         import rich
         orig_merged_df = reporter.orig_merged_df
         metric_names = reporter.metric_registry.name
-        cfg_names = ['pred_cfg', 'act_cfg', 'trk_cfg']
-        id_names = ['model'] + cfg_names
 
-        metric_names = reporter.metric_registry.name
+        cfg_names = reporter.state.hashed_cfgkeys
+        id_names = ['trk_model', 'act_model'] + cfg_names
+
+        # metric_names = reporter.metric_registry.name
+        metric_names = [c for c in orig_merged_df.columns if 'metrics.' in c]
         metric_cols = (ub.oset(metric_names) & orig_merged_df.columns)
-        primary_metrics = (ub.oset(['mean_f1', 'BAS_F1']) & metric_cols)
+
+        metric_cols = [c for c in metric_cols if '.tau' not in c and '.rho' not in c]
+        metric_cols = [c for c in metric_cols if '.salient_AUC' not in c]
+        metric_cols = [c for c in metric_cols if '.salient_APUC' not in c]
+        metric_cols = [c for c in metric_cols if '.macro_f1_active' not in c]
+        metric_cols = [c for c in metric_cols if '.macro_f1_siteprep' not in c]
+
+        primary_metrics = (ub.oset(['act.poly.metrics.macro_f1', 'trk.poly.metrics.f1']) & metric_cols)
         metric_cols = list((metric_cols & primary_metrics) | (metric_cols - primary_metrics))
+
         # print('orig_merged_df.columns = {}'.format(ub.repr2(list(orig_merged_df.columns), nl=1)))
         id_cols = list(ub.oset(id_names) & orig_merged_df.columns)
 
-        test_datasets = orig_merged_df['test_dset'].dropna().unique().tolist()
-
-        if verbose:
-            rich.print('[orange1]-- REPORTING BEST --')
-            print('test_datasets = {}'.format(ub.repr2(test_datasets, nl=1)))
+        # test_datasets = orig_merged_df['test_dset'].dropna().unique().tolist()
+        # if verbose:
+        #     rich.print('[orange1]-- REPORTING BEST --')
+        #     print('test_datasets = {}'.format(ub.repr2(test_datasets, nl=1)))
 
         grouped_shortlists = {}
-        group_keys = ['test_dset', 'type']
+        group_keys = ['test_trk_dset', 'type']
+
+        def _condense_report_df(df):
+            col_mapper = {c: c for c in df.columns}
+            metric_cols = []
+            for k in col_mapper.keys():
+                k2 = k.replace('metrics.', '')
+                col_mapper[k] = k2
+                metric_cols.append(k2)
+            df = df.rename(col_mapper, axis=1)
+
+            drop_cols = [k for k in metric_cols if df[k].isnull().all()]
+            df = df.drop(drop_cols, axis=1)
+            return df
 
         for groupid, subdf in orig_merged_df.groupby(group_keys):
+            group_row = ub.dzip(group_keys, groupid)
+            if '_poly_' not in group_row['type']:
+                continue
             if verbose:
                 print('')
                 rich.print(f'[orange1] -- <BEST ON: {groupid}> --')
 
             top_indexes = set()
             for metric in metric_cols:
-                # TODO: maximize or minimize
                 best_rows = subdf[metric].sort_values()
                 top_indexes.update(best_rows.iloc[-top_k:].index)
 
@@ -245,18 +182,21 @@ class EvaluationReporter:
             shortlist = shortlist.sort_values(metric_cols, na_position='first')
 
             show_configs = show_configs
+
             if show_configs:
-                keys = list(set([
-                    v for v in shortlist[ub.oset(cfg_names) & shortlist.columns].values.ravel()
-                    if not pd.isnull(v)
-                ]))
+                cfg_cols = shortlist[ub.oset(cfg_names) & shortlist.columns]
+                keys = [
+                    v for v in ub.unique(cfg_cols.values[::-1].ravel())
+                    if not pd.isnull(v)][::-1]
                 resolved = reporter._build_cfg_rlut(keys)
+                resolved = ub.udict(resolved).subdict(keys)
                 if verbose and show_configs:
-                    rich.print('resolved = {}'.format(ub.repr2(resolved, nl=2)))
+                    rich.print('resolved = {}'.format(ub.repr2(resolved, sort=0, nl=2)))
 
             # test_dset_to_best[test_dset] =
             if verbose:
                 shortlist_small = shortlist[id_cols + metric_cols]
+                shortlist_small = _condense_report_df(shortlist_small)
                 rich.print(shortlist_small.to_string())
                 print('')
                 rich.print(f'[orange1] -- </BEST ON: {groupid}> --')
@@ -264,6 +204,72 @@ class EvaluationReporter:
             grouped_shortlists[groupid] = shortlist
 
         return grouped_shortlists
+
+    def serialize_rows(reporter):
+        from kwcoco.util.util_json import ensure_json_serializable
+        table = reporter.orig_merged_df
+        # state = reporter.state
+
+        colnames = ub.oset(reporter.orig_merged_df.columns)
+        # column_nestings = util_param_grid.dotkeys_to_nested(colnames)
+        dotted = ub.oset([c for c in colnames if '.' in c])
+        metric_cols = ub.oset([c for c in dotted if 'metrics.' in c])
+        meta_cols = ub.oset([c for c in dotted if 'meta.' in c])
+        resource_cols = ub.oset([c for c in dotted if 'resource.' in c])
+        fit_cols = ub.oset([c for c in dotted if 'fit.' in c])
+        param_cols = dotted - (metric_cols | fit_cols | resource_cols | meta_cols)
+
+        for row in table.to_dict('records'):
+            row = ub.udict(ensure_json_serializable(row))
+            walker = ub.IndexableWalker(row)
+            for path, val in walker:
+                if hasattr(val, 'spec'):
+                    walker[path] = val.spec
+
+            summary = {
+                # 'model': row['model'],
+                # 'file_name': pkg_fpath,
+                'pred_params': row & param_cols,
+                'fit_params': row & fit_cols,
+                'resources': row & resource_cols,
+                'meta': row & meta_cols,
+                'metrics': row & metric_cols,
+            }
+            yield summary, row
+
+    def build_analysis(reporter):
+        from watch.utils.result_analysis import ResultAnalysis
+        from watch.utils.result_analysis import Result
+        # import json
+
+        results = []
+        for summary, details in reporter.serialize_rows():
+            params = {
+                **summary['fit_params'],
+                **summary['pred_params'],
+            }
+            for k, v in params.items():
+                if isinstance(v, list):
+                    params[k] = repr(v)
+            name = 'row_' + ub.hash_data(summary)[0:8]
+            metrics = ub.udict(summary['metrics'])  # - {'properties'}
+            result = Result(name, params, metrics)
+            results.append(result)
+
+        analysis = ResultAnalysis(
+            results,
+            metric_objectives={
+                'act.poly.metrics.bas_f1': 'max',
+                'act.poly.metrics.macro_f1': 'max'
+            },
+            metrics=[
+                # 'act.poly.metrics.bas_f1',
+                'act.poly.metrics.macro_f1'
+            ]
+        )
+        analysis.build()
+        analysis.report()
+        return analysis
 
     def _build_cfg_rlut(reporter, keys):
         from watch.utils.reverse_hashid import ReverseHashTable
@@ -296,8 +302,8 @@ class EvaluationReporter:
             print('Column Unique Value Frequencies')
             print(col_stats_df.to_string())
 
-        test_dset_freq = raw_df['test_dset'].value_counts()
-        print(f'test_dset_freq={test_dset_freq}')
+        # test_dset_freq = raw_df['test_dset'].value_counts()
+        # print(f'test_dset_freq={test_dset_freq}')
 
         print('\nRaw')
         num_files_summary(raw_df)
@@ -306,8 +312,8 @@ class EvaluationReporter:
         # reporter.filt_df = filt_df = deduplicate_test_datasets(raw_df)
         reporter.raw_df = filt_df = raw_df
 
-        print('\nDeduplicated (over test dataset)')
-        num_files_summary(filt_df)
+        # print('\nDeduplicated (over test dataset)')
+        # num_files_summary(filt_df)
 
         USE_COMP = 0
         if USE_COMP:
@@ -328,15 +334,90 @@ class EvaluationReporter:
         Load detailed data that might cross reference files
         """
         df = reporter.raw_df
-        dvc_expt_dpath = reporter.dvc_expt_dpath
-        reporter.big_rows = load_extended_data(df, dvc_expt_dpath)
-        # reporter.big_rows = load_extended_data(reporter.comp_df, reporter.dvc_expt_dpath)
+        expt_dvc_dpath = reporter.expt_dvc_dpath
+        big_rows = reporter.big_rows = load_extended_data(df, expt_dvc_dpath)
+        # reporter.big_rows = load_extended_data(reporter.comp_df, reporter.expt_dvc_dpath)
         # set(r['expt'] for r in reporter.big_rows)
-
         big_rows = reporter.big_rows
-        orig_merged_df, other = clean_loaded_data(big_rows)
-        reporter.orig_merged_df = orig_merged_df
-        reporter.other = other
+        cleaned_df = clean_loaded_data(big_rows, expt_dvc_dpath)
+        # reporter.other = other
+        reporter.orig_cleaned_df = cleaned_df
+
+        if 0:
+            # Remove non-varying (interesting) columns to make development more
+            # sane
+            keep_cols = []
+            for col in cleaned_df.columns:
+                keep = True
+                try:
+                    unique_vals = cleaned_df[col].unique()
+                    unique_vals = unique_vals[~pd.isnull(unique_vals)]
+                    if len(unique_vals) == 1:
+                        if '.' in col:
+                            keep = False
+                except Exception:
+                    pass
+                if keep:
+                    keep_cols.append(col)
+            cleaned_df = cleaned_df[keep_cols]
+
+        if 1:
+            # Merge rows from earlier pipeline steps to all of the descendant
+            # rows that depend on it.
+            from watch.utils import util_param_grid
+            colnames = ub.oset(cleaned_df.columns)
+            column_nestings = util_param_grid.dotkeys_to_nested(colnames)
+            # non_nested = [k for k, v in column_nestings.items() if k == v]
+            print(ub.repr2(column_nestings, sort=0))
+            # column_nestings['trk']
+            # column_nestings['act']
+
+            type_to_idkeys = {
+                'eval_trk_pxl_fpath': ['trk_model', 'test_trk_dset', 'trk_pxl_cfg'],
+                'eval_trk_poly_fpath': ['trk_model', 'test_trk_dset', 'trk_pxl_cfg', 'trk_poly_cfg'],
+            }
+
+            metric_names = [c for c in cleaned_df.columns if 'metrics.' in c]
+            metric_cols = (ub.oset(metric_names) & cleaned_df.columns)
+
+            smaller_row_type = 'eval_trk_pxl_fpath'
+            larger_row_type = 'eval_trk_poly_fpath'
+            move_cols = [c for c in metric_cols if 'trk.pxl' in c]
+            smaller_keys = type_to_idkeys[smaller_row_type]
+            smaller = cleaned_df[cleaned_df.type == smaller_row_type]
+            larger = cleaned_df[cleaned_df.type == larger_row_type]
+            new_larger = my_nonstandard_merge(smaller, larger, smaller_keys, move_cols)
+            cleaned_df.loc[new_larger.index, move_cols] = new_larger.loc[:, move_cols].values
+
+            smaller_row_type = 'eval_trk_pxl_fpath'
+            larger_row_type = 'eval_act_poly_fpath'
+            move_cols = [c for c in metric_cols if 'trk.pxl' in c]
+            smaller_keys = type_to_idkeys[smaller_row_type]
+            smaller = cleaned_df[cleaned_df.type == smaller_row_type]
+            larger = cleaned_df[cleaned_df.type == larger_row_type]
+            new_larger = my_nonstandard_merge(smaller, larger, smaller_keys, move_cols)
+            cleaned_df.loc[new_larger.index, move_cols] = new_larger.loc[:, move_cols].values
+
+            smaller_row_type = 'eval_trk_poly_fpath'
+            larger_row_type = 'eval_act_poly_fpath'
+            move_cols = [c for c in metric_cols if 'trk.poly' in c]
+            smaller_keys = type_to_idkeys[smaller_row_type]
+            smaller = cleaned_df[cleaned_df.type == smaller_row_type]
+            larger = cleaned_df[cleaned_df.type == larger_row_type]
+            new_larger = my_nonstandard_merge(smaller, larger, smaller_keys, move_cols)
+            cleaned_df.loc[new_larger.index, move_cols] = new_larger.loc[:, move_cols].values
+
+            # larger[larger['type'] == 'eval_act_poly_fpath']
+            cleaned_df[cleaned_df['type'] == 'eval_trk_pxl_fpath'][metric_cols]
+            cleaned_df[cleaned_df['type'] == 'eval_act_poly_fpath'][metric_cols].T
+
+        reporter.orig_merged_df = cleaned_df
+
+        # import xdev
+        # xdev.search_replace
+        # xdev.set_overlaps(a1['trk_poly_id'], a2['trk_poly_id'])
+
+        reporter.orig_merged_df
 
         # hard coded values
         human_mapping = {
@@ -344,7 +425,7 @@ class EvaluationReporter:
             'coi_mAUC': 'Pixelwise mAUC (classes of interest)',
             'salient_AP': 'Pixelwise Salient AP',
             'salient_AUC': 'Pixelwise Salient AUC',
-            'mean_f1': 'IARPA SC mean F1',
+            'sc_macro_f1': 'IARPA SC mean F1',
             'BAS_F1': 'IARPA BAS F1',
             'act_cfg': 'SC Tracking Config',
             'trk_use_viterbi': 'Viterbi Enabled',
@@ -362,17 +443,17 @@ class EvaluationReporter:
         }
         reporter.human_mapping = human_mapping
         reporter.iarpa_metric_lut = {
-            'eval_act+pxl': 'mean_f1',
+            'eval_act+pxl': 'sc_macro_f1',
             'eval_trk+pxl': 'BAS_F1',
         }
         reporter.pixel_metric_lut = {
             'eval_act+pxl': 'coi_mAP',
             'eval_trk+pxl': 'salient_AP',
         }
-        reporter.actcfg_to_label = other['actcfg_to_label']
-        reporter.predcfg_to_label = other['predcfg_to_label']
-        reporter.human_mapping.update(reporter.actcfg_to_label)
-        reporter.human_mapping.update(reporter.predcfg_to_label)
+        # reporter.actcfg_to_label = other['actcfg_to_label']
+        # reporter.predcfg_to_label = other['predcfg_to_label']
+        # reporter.human_mapping.update(reporter.actcfg_to_label)
+        # reporter.human_mapping.update(reporter.predcfg_to_label)
 
     def load(reporter):
         reporter.load1()
@@ -392,8 +473,8 @@ def plot_merged(reporter):
     orig_merged_df = reporter.orig_merged_df
     iarpa_metric_lut = reporter.iarpa_metric_lut
     pixel_metric_lut = reporter.pixel_metric_lut
-    predcfg_to_label = reporter.predcfg_to_label
-    actcfg_to_label = reporter.actcfg_to_label
+    # predcfg_to_label = reporter.predcfg_to_label
+    # actcfg_to_label = reporter.actcfg_to_label
     human_mapping = reporter.human_mapping
 
     # ['trk_thresh',
@@ -413,50 +494,6 @@ def plot_merged(reporter):
     }
 
     merged_df = orig_merged_df.copy()
-
-    if 0:
-        from watch.utils import util_time
-        deadline = util_time.coerce_datetime('2022-04-19')
-        before_deadline = ((merged_df['pred_start_time'] < deadline) | merged_df['pred_start_time'].isnull())
-        # after_deadline = ~before_deadline
-        # merged_df = merged_df[after_deadline]
-        merged_df = merged_df[before_deadline]
-
-    if 0:
-        chosen_pred_cfg = ub.invert_dict(predcfg_to_label)['pred_tta_time=0']
-        # chosen_act_cfg = ub.invert_dict(actcfg_to_label)['trk_thresh=0.01,trk_use_viterbi=v1,v6']
-        chosen_act_cfg = ub.invert_dict(actcfg_to_label)['trk_thresh=0,trk_use_viterbi=0']
-        # chosen_pred_cfg = 'predcfg_abd043ec'
-        # chosen_pred_cfg = 'predcfg_4d9147b0'
-        # chosen_pred_cfg = 'predcfg_036fdb96'
-        # chosen_act_cfg = 'actcfg_f1456a39'
-
-        merged_df = merged_df[(
-            (merged_df['pred_cfg'] == chosen_pred_cfg) &
-            ((merged_df['act_cfg'] == chosen_act_cfg) | merged_df['act_cfg'].isnull())
-        )]
-
-    if 0:
-        metrics = [
-            'mean_f1',
-            'BAS_F1',
-            # 'salient_AP',
-            # 'coi_mAP'
-        ]
-        # merged_df['pred_cfg'].value_counts()
-        # merged_df['act_cfg'].value_counts()
-        # HACK: need to maximize comparability, not the metric here.
-        # Do this for viz purposes, dont present if it changes the conclusion
-        # but might need to do this for visual clarity.
-        rows = []
-        for model, group in merged_df.groupby('model'):
-            if len(group) > 1:
-                chosen_idxs = [group[m].argmax() for m in metrics]
-                row = group.iloc[sorted(set(chosen_idxs))]
-            else:
-                row = group
-            rows.append(row)
-        merged_df = pd.concat(rows)
 
     # describe_varied(merged_df, dpath, human_mapping=human_mapping)
 
@@ -481,13 +518,24 @@ def num_files_summary(df):
         # col_stats_df2 = unique_col_stats(group)
         # print(col_stats_df2.to_string())
         row = {}
-        type_evals = ub.dict_hist(group['type'])
         row['dataset_code'] = dataset_code
-        row['num_experiments'] = len(group['expt'].unique())
-        row['num_models'] = len(group['model'].unique())
-        row['num_pxl_evals'] = type_evals.get('eval_pxl', 0)
-        row['num_bas_evals'] = type_evals.get('eval_trk', 0)
-        row['num_sc_evals'] = type_evals.get('eval_act', 0)
+        if 'trk_model' in df.columns:
+            row['num_trk_models'] = len(df['trk_model'].dropna().unique())
+        else:
+            row['num_trk_models'] = 0
+        if 'act_model' in df.columns:
+            row['num_act_models'] = len(df['act_model'].dropna().unique())
+        else:
+            row['num_act_models'] = 0
+        row.update(
+            ub.udict(df['type'].value_counts().to_dict()).map_keys(
+                lambda x: 'num_' + x)
+        )
+        # row['num_experiments'] = len(group['expt'].unique())
+        # row['num_models'] = len(group['model'].unique())
+        # row['num_pxl_evals'] = type_evals.get('eval_pxl', 0)
+        # row['num_bas_evals'] = type_evals.get('eval_trk', 0)
+        # row['num_sc_evals'] = type_evals.get('eval_act', 0)
         filt_summaries.append(row)
     _summary_df = pd.DataFrame(filt_summaries)
     total_row = _summary_df.sum().to_dict()
@@ -500,7 +548,6 @@ def num_files_summary(df):
 def unique_col_stats(df):
     col_stats = ub.ddict(dict)
     import kwarray
-    import numpy as np
     for key in df.columns:
         col_freq = np.array(list(ub.dict_hist(df[key]).values()))
         stats = kwarray.stats_dict(col_freq, median=True)
@@ -516,8 +563,10 @@ def unique_col_stats(df):
     return col_stats_df
 
 
-def load_extended_data(df, dvc_expt_dpath):
-    from watch.tasks.fusion import aggregate_results as agr
+def load_extended_data(df, expt_dvc_dpath):
+    """
+    """
+    from watch.mlops import smart_pipeline as frp
     rows = df.to_dict('records')
     big_rows = []
     errors = []
@@ -525,17 +574,20 @@ def load_extended_data(df, dvc_expt_dpath):
         big_row = row.copy()
         fpath = row['raw']
         try:
-            if row['type'] == 'eval_pxl':
-                pxl_info = agr.load_pxl_eval(fpath, dvc_expt_dpath)
+            if row['type'] == 'eval_trk_pxl_fpath':
+                pxl_info = frp.load_pxl_eval(fpath, expt_dvc_dpath, arg_prefix='trk.')
                 big_row['info'] = pxl_info
-            elif row['type'] == 'eval_act':
-                sc_info = agr.load_sc_eval(fpath, dvc_expt_dpath)
+            elif row['type'] == 'eval_act_pxl_fpath':
+                pxl_info = frp.load_pxl_eval(fpath, expt_dvc_dpath, arg_prefix='act.')
+                big_row['info'] = pxl_info
+            elif row['type'] == 'eval_act_poly_fpath':
+                sc_info = frp.load_eval_act_poly(fpath, expt_dvc_dpath)
                 big_row['info'] = sc_info
-            elif row['type'] == 'eval_trk':
-                bas_info = agr.load_bas_eval(fpath, dvc_expt_dpath)
+            elif row['type'] == 'eval_trk_poly_fpath':
+                bas_info = frp.load_eval_trk_poly(fpath, expt_dvc_dpath)
                 big_row['info'] = bas_info
             else:
-                raise KeyError(row['type'])
+                raise KeyError('Unknown row type: ' + str(row['type']))
             big_rows.append(big_row)
         except Exception as ex:
             errors.append((ex, row))
@@ -548,357 +600,123 @@ def load_extended_data(df, dvc_expt_dpath):
     return big_rows
 
 
-def clean_loaded_data(big_rows):
+def clean_loaded_data(big_rows, expt_dvc_dpath):
     """
     Turn the nested "loaded" data into flat data for tabulation.
     Also combine eval types together into a single row per model / config.
     """
-    from watch.tasks.fusion import aggregate_results as agr
+
+    def fix_none(v):
+        return "None" if v is None else v
+
+    # from watch.utils.util_param_grid import dotdict_to_nested
     import kwcoco
 
-    def _is_teamfeat(sensorchan):
-        unique_chans = sum([s.chans for s in sensorchan.streams()]).fuse().to_set()
-        if isinstance(unique_chans, float) and math.isnan(unique_chans):
-            return False
-        return any([a in unique_chans for a in ['depth', 'invariant', 'invariants', 'matseg', 'land']])
+    from watch.mlops import expt_manager
+    state = expt_manager.ExperimentState(expt_dvc_dpath, '*')
 
-    _actcfg_to_track_config = ub.ddict(list)
-    _trkcfg_to_track_config = ub.ddict(list)
-    _prdcfg_to_pred_config = ub.ddict(list)
     simple_rows = []
-    missing_models = []
-    blocklist = {
-        'S2:|R|G',
-        'S2:|G|R|,invariants:16)',
-        'S2:(RGB|land:8,R|G,R|G|land:8)',
-    }
-
-    passlist = {
-        'BGR',
-        'BGRN',
-        'RGB|near-ir1|near-ir2|red-edge|yellow',
-        'BGR|near-ir1',
-        'BGRNSH|land:8|matseg:4|mat_up5:64',
-        'BGRNSH',
-        'BGR|near-ir1|depth',
-        'RGB',
-        'RGB|near-ir1',
-        'RGB|land:8',
-        'RGB|near-ir1|near-ir2|depth',
-        'RGB|near_ir1|near_ir2|depth',
-        'land:8',
-        'invariants:16',
-        'matseg:4',
-        'matseg:4|mat_up5:64',
-        'G|R|N|S|H|land:8',
-    }
-    chan_blocklist = {
-        'R|G',
-        'G|R',
-        'G|R|N|S|H',
-        'R|G|land:8',
-        'RGB|near-ir1|depth',
-        'G|R|N|S|H|land:8|matseg:4|mat_up5:64',
-        'BGRNSH|land:8',
-    }
+    if 0:
+        big_row = big_rows[10]
+        big_row = big_rows[-1]
 
     for big_row in ub.ProgIter(big_rows, desc='big rows'):
         # fpath = big_row['raw']
-        row = ub.dict_diff(big_row, {'info'})
+        row = ub.udict(big_row) - {'info'}
         info = big_row['info']
+        param_types = info['param_types']
+        params = ub.udict().union(*param_types.values())
+        params = params.map_values(fix_none)
 
-        param_type = info['param_types']
+        ADD_CROPID_HACK = 1
+        if ADD_CROPID_HACK:
+            from watch.utils import util_path
+            # special handling for adding tracking / cropping
+            # params to the activity row. We should figure out a
+            # way of making this more general in the future.
+            if row['type'] == 'eval_act_poly_fpath':
+                if row['test_act_dset'].startswith('crop'):
+                    # Fixme dataset name ids need a rework
+                    crop_id = row['test_act_dset'].split('_crop.kwcoco')[0]
+                    # There needs to be a search step for the crop
+                    # dataset, which is not ideal.
+                    pats = state.patterns.copy()
+                    pats['crop_id'] = crop_id
+                    pats = ub.udict(pats).map_values(str)
+                    pat = state.templates['crop_fpath'].format(**pats)
+                    _found = util_path.coerce_patterned_paths(pat)
+                    if _found:
+                        assert len(_found) == 1, 'should not have dups here'
+                        found = _found[0]
+                        _crop_attrs = ub.udict(state._parse_pattern_attrs(state.templates['crop_fpath'], found))
+                        _crop_attrs = _crop_attrs - row
+                        print(f'_crop_attrs={_crop_attrs}')
+                        row.update(_crop_attrs)
+            if row['type'] == 'eval_trk_poly_fpath':
+                ...
 
-        meta = param_type['meta']
-        fit_params = param_type['fit']
-        pred_params = param_type['pred']
-        model_fpath = pred_params['pred_model_fpath']
+            # Some of the ids from the experiments state may not be build we
+            # should do that.
+            for k, vs in state.hashid_dependencies.items():
+                if k not in row:
+                    deps = row & vs
+                    if not any(pd.isnull(_) for _ in deps.values()):
+                        v = state._condense_cfg(deps, k)
+                        row[k] = v
 
-        track_params = info['param_types'].get('track', {})
+            if row['type'] == 'eval_act_poly_fpath':
+                if row['regions_id'].startswith('trk_poly_id'):
+                    row['trk_poly_id'] = row['regions_id']
 
-        # Shrink and check the sensorchan spec
-        request_sensorchan = kwcoco.SensorChanSpec.coerce(
-            agr.shrink_channels(fit_params['channels']))
-        fit_params['channels'] = request_sensorchan.spec
-        sensorchan = request_sensorchan
+        FIX_FOR_POSTLOAD_TRK_INFO = 1
+        if FIX_FOR_POSTLOAD_TRK_INFO:
+            extra_attrs = info['other'].get('extra_attrs', None)
+            if extra_attrs is None:
+                extra_attrs = {}
+            extra = ub.udict(extra_attrs) - {k for k, v in row.items() if not pd.isnull(v)}
+            row.update(extra)
 
-        if 0:
-            # Hack for Phase1 Models with improper sensorchan.
-            # This can likely be removed as we move forward in Phase 2.
+        for k, v in params.items():
+            if k.endswith('.channels'):
+                k3 = k.replace('channels', 'has_teamfeat')
+                request_sensorchan = kwcoco.SensorChanSpec.coerce(smart.shrink_channels(v))
+                row[k3] = smart.is_teamfeat(request_sensorchan)
 
-            # Dont trust what the model info says about channels, look
-            # at the model stats to be sure.
-            if model_fpath and model_fpath.exists():
-                stats = resolve_model_info(model_fpath)
-                real_chan_parts = ub.oset()
-                senschan_parts = []
-                real_sensors = []
-                for input_row in stats['model_stats']['known_inputs']:
-                    known_sensorchan = agr.shrink_channels(input_row['sensor'] + ':' + input_row['channel'])
-                    known_sensorchan = kwcoco.SensorChanSpec.coerce(known_sensorchan)
-                    real_chan = known_sensorchan.chans.spec
-                    if real_chan not in chan_blocklist:
-                        if real_chan not in passlist:
-                            print(f'Unknown real_chan={real_chan}')
-                        real_chan_parts.add(real_chan)
-                        real_sensors.append(input_row['sensor'])
-                        senschan_parts.append('{}:{}'.format(input_row['sensor'], real_chan))
-                model_sensorchan = ','.join(sorted(set(senschan_parts)))
-                model_sensorchan = kwcoco.SensorChanSpec.coerce(model_sensorchan)
+        row.update(params)
+        # row.update(info['metrics'])
 
-                model_parts = model_sensorchan.normalize().spec.split(',')
-                request_parts = request_sensorchan.normalize().spec.split(',')
-                if not request_parts.issubset(model_parts):
-                    fit_params['bad_channels'] = True
-                else:
-                    fit_params['bad_channels'] = False
-            else:
-                missing_models.append(model_fpath)
+        # fit_params = param_type['fit']
+        # pred_params = param_type['pred']
+        # track_params = info['param_types'].get('track', {})
 
-                if 'Cropped' in big_row['test_dset']:
-                    # Hack
-                    sensors = ['WV', 'S2']
-                elif 'Cropped' in big_row['test_dset']:
-                    sensors = ['S2', 'L8']
-                else:
-                    sensors = ['*']
+        # # Shrink and check the sensorchan spec
+        # request_sensorchan = kwcoco.SensorChanSpec.coerce(
+        #     frp.shrink_channels(fit_params['channels']))
+        # fit_params['channels'] = request_sensorchan.spec
+        # sensorchan = request_sensorchan
 
-                channels = kwcoco.ChannelSpec.coerce(fit_params['channels'])
-                senschan_parts = []
-                for sensor in sensors:
-                    for chan in channels.streams():
-                        senschan_parts.append(f'{sensor}:{chan.spec}')
+        # fit_params['sensorchan'] = sensorchan
+        # row['has_teamfeat'] = _is_teamfeat(sensorchan)
 
-                sensorchan = ','.join(sorted(senschan_parts))
-                sensorchan = kwcoco.SensorChanSpec.coerce(sensorchan)
-                fit_params['bad_channels'] = True
-
-            # MANUAL HACK:
-            if 1:
-                sensorchan = ','.join([p.spec for p in sensorchan.streams() if p.chans.spec not in blocklist])
-        else:
-            fit_params['bad_channels'] = False
-
-        fit_params['sensorchan'] = sensorchan
-        row['has_teamfeat'] = _is_teamfeat(sensorchan)
-
-        fit_param_keys2 = list(fit_param_keys) + ['bad_channels', 'channels']
-        selected_fit_params = ub.dict_isect(fit_params, fit_param_keys2)
-
-        act_cfg = row.get('act_cfg', None)
-        if not is_null(act_cfg):
-            track_cfg = param_type.get('track', None)
-            row.update(track_cfg)
-            _actcfg_to_track_config[act_cfg].append(track_cfg)
-
-        trk_cfg = row.get('trk_cfg', None)
-        if not is_null(trk_cfg):
-            track_cfg = param_type.get('track', None)
-            row.update(track_cfg)
-            _trkcfg_to_track_config[trk_cfg].append(track_cfg)
-
-        pred_cfg = row.get('pred_cfg', None)
-        if not is_null(trk_cfg):
-            pred_config = param_type.get('pred', None)
-            pred_config = ub.dict_isect(pred_config, pred_param_keys)
-            if pred_config.get('pred_tta_time', None) is None:
-                pred_config['pred_tta_time'] = 0
-            if pred_config.get('pred_tta_fliprot', None) is None:
-                pred_config['pred_tta_fliprot'] = 0
-            row.update(pred_config)
-            _prdcfg_to_pred_config[pred_cfg].append(pred_config)
-
-        resource = param_type.get('resource', {})
-        row['model_fpath'] = model_fpath
-        row.update(**meta)
-        row.update(info['metrics'])
-        row.update(resource)
-        row.update(selected_fit_params)
-        row['pred_params'] = pred_params
-        row['track_params'] = track_params
-        row['fit_params'] = fit_params
+        # fit_param_keys2 = list(fit_param_keys) + ['channels']
+        # selected_fit_params = ub.dict_isect(fit_params, fit_param_keys2)
+        # row.update(selected_fit_params)
         simple_rows.append(row)
 
-    simple_df = pd.DataFrame(simple_rows)
-    print(f'{len(simple_df)=}')
+    cleaned_df = pd.DataFrame(simple_rows)
+    print(f'{cleaned_df.shape=}')
     # simple_df['sensorchan'].unique()
     # simple_df[simple_df['sensorchan'].isnull()]
-    # simple_df['bad_channels']
-
-    actcfg_to_track_config = {}
-    for actcfg, track_cfgs in _actcfg_to_track_config.items():
-        unique_configs = list(ub.unique(track_cfgs, key=ub.hash_data))
-        assert len(unique_configs) == 1
-        actcfg_to_track_config[actcfg] = unique_configs[0]
-
-    trkcfg_to_track_config = {}
-    for trkcfg, track_cfgs in _trkcfg_to_track_config.items():
-        unique_configs = list(ub.unique(track_cfgs, key=ub.hash_data))
-        assert len(unique_configs) == 1
-        trkcfg_to_track_config[trkcfg] = unique_configs[0]
-
-    prdcfg_to_pred_config = {}
-    for predcfg, track_cfgs in _prdcfg_to_pred_config.items():
-        unique_configs = list(ub.unique(track_cfgs, key=ub.hash_data))
-        if len(unique_configs) == 1:
-            prdcfg_to_pred_config[predcfg] = unique_configs[0]
-        else:
-            print(f'{unique_configs=}')
-            print('predcfg = {}'.format(ub.repr2(predcfg, nl=1)))
-
-    if True:
-        # Get activity config labels
-        actcfg_to_label = {}
-        varied_act = ub.varied_values(actcfg_to_track_config.values(), 1, default=None)
-        varied_act_keys = sorted(varied_act.keys())
-        for k, v in actcfg_to_track_config.items():
-            c = ub.dict_isect(v, varied_act_keys)
-            label = ub.repr2(c, compact=1)
-            actcfg_to_label[k] = label
-
-        # Get activity config labels
-        predcfg_to_label = {}
-        varied_act = ub.varied_values(prdcfg_to_pred_config.values(), 1, default=None)
-        varied_act_keys = sorted(varied_act.keys())
-        for k, v in prdcfg_to_pred_config.items():
-            c = ub.dict_isect(v, varied_act_keys)
-            label = ub.repr2(c, compact=1)
-            predcfg_to_label[k] = label
-
-    bad_expts = simple_df[simple_df['bad_channels']]['expt']
-    print('bad_expts =\n{}'.format(ub.repr2(bad_expts, nl=1)))
-
-    ub.dict_hist(simple_df['channels'])
-    merged_rows = []
-    for pred_key, group in simple_df.groupby(['model', 'pred_cfg']):
-        # Can propogate pixel metrics to child groups
-        type_to_subgroup = dict(list(group.groupby('type')))
-        pxl_group = type_to_subgroup.pop('eval_pxl', None)
-        if pxl_group is not None:
-            if len(pxl_group) > 1:
-                print(f'Warning more than one pixel group for {pred_key}')
-            pxl_row = pxl_group.iloc[0]
-
-            if len(type_to_subgroup) == 0:
-                pxl_row = pxl_row.to_dict()
-                if not math.isnan(pxl_row.get('coi_mAP', np.nan)):
-                    srow = pxl_row.copy()
-                    srow['type'] = 'eval_act+pxl'
-                    merged_rows.append(srow)
-
-                if not math.isnan(pxl_row.get('salient_AP', np.nan)):
-                    srow = pxl_row.copy()
-                    srow['type'] = 'eval_trk+pxl'
-                    merged_rows.append(srow)
-
-            for type, subgroup in type_to_subgroup.items():
-                for srow in subgroup.to_dict('records'):
-                    srow['type'] = srow['type'] + '+pxl'
-                    for k1, v1 in pxl_row.items():
-                        v2 = srow.get(k1, None)
-                        if v2 is None or (isinstance(v2, float) and math.isnan(v2)):
-                            srow[k1] = v1
-                    merged_rows.append(srow)
-
-    merged_df = pd.DataFrame(merged_rows)
-    merged_df['sensorchan'] = merged_df['sensorchan'].apply(str)
-    print(f'{len(merged_df)=}')
-
-    total_carbon_cost = simple_df[simple_df['type'] == 'eval_pxl']['co2_kg'].sum()
-    # total_carbon_cost = merged_df['co2_kg'].sum()
-    print(f'{total_carbon_cost=}')
-    merged_df['gpu_name'] = merged_df['gpu_name'].fillna('?')
-    merged_df['cpu_name'] = merged_df['cpu_name'].fillna('?')
-    merged_df['hardware'] = merged_df['hardware'].fillna('?')
-    # cpu_names = merged_df['cpu_name'].apply(lambda x: x.replace('Intel(R) Core(TM) ', ''))
-    # gpu_names = merged_df['gpu_name']
-    # merged_df['hardware'] = ['{} {}'.format(c, g) for c, g in zip(cpu_names, gpu_names)]
-
-    other = {
-        'actcfg_to_label': actcfg_to_label,
-        'predcfg_to_label': predcfg_to_label,
-    }
-
-    # TODO: compute total steps including with initialized continuations
-    epoch_info = merged_df['model'].apply(checkpoint_filepath_info).values
-    merged_df['epoch'] = [e.get('epoch', None) if e else None for e in epoch_info]
-    merged_df['step'] = [e.get('step', None) if e else None for e in epoch_info]
-
-    merged_df['init'] = merged_df['init'].apply(lambda x: x[:-3] if x.endswith('.pt') else x)
-
-    known_models = merged_df['model'].unique()
-    init_models = merged_df['init'].unique()
-    traceable = sorted(set(init_models) & set(known_models))
-
-    merged_df = merged_df.reset_index(drop=True)  # because of enumerate
-    init_to_idxs = ub.map_vals(sorted, ub.invert_dict(dict(enumerate(merged_df['init'])), 0))
-    model_to_idxs = ub.map_vals(sorted, ub.invert_dict(dict(enumerate(merged_df['model'])), 0))
-    import networkx as nx
-    g = nx.DiGraph()
-    for model in traceable:
-        pred_idxs = model_to_idxs[model]
-        succ_idxs = init_to_idxs[model]
-        pred_df = merged_df.loc[pred_idxs]
-        succ_df = merged_df.loc[succ_idxs]
-        parents = pred_df['model'].unique()
-        children = succ_df['model'].unique()
-        for p in parents:
-            for c in children:
-                g.add_edge(p, c)
 
     if 0:
-        from cmd_queue.util.util_networkx import write_network_text
-        print(write_network_text(g))
+        sensorchan_keys = [k for k in cleaned_df.keys() if 'sensorchan' in k]
+        print(f'sensorchan_keys={sensorchan_keys}')
+        chan_keys = [k for k in cleaned_df.keys() if 'channels' in k]
+        print(f'chan_keys={chan_keys}')
 
-    # Ensure we compute total epochs for earlier models first
-    merged_df['total_steps'] = merged_df['step']
-    for model in list(nx.topological_sort(g)):
-        pred_idxs = model_to_idxs[model]
-        succ_idxs = init_to_idxs.get(model, [])
-        if len(succ_idxs):
-            pred_df = merged_df.loc[pred_idxs]
-            succ_df = merged_df.loc[succ_idxs]
-            assert len(pred_df['total_steps'].unique()) == 1
-            prev = pred_df['total_steps'].iloc[0]
-            merged_df.loc[succ_idxs, 'total_steps'] += prev
-
-    if 0:
-        print(ub.repr2(merged_df.columns.tolist()))
-
-    # Flag which models went into production.
-    from watch.tasks.fusion import production
-    import kwarray
-    production_models = [row['name'].replace('.pt', '') for row in production.PRODUCTION_MODELS]
-    model_names = np.array([n.replace('.pt', '') for n in merged_df['model']])
-    stared_models = set(model_names) & set(production_models)
-    star_flags = kwarray.isect_flags(model_names, stared_models)
-    merged_df['in_production'] = star_flags
-
-    if 'trk_use_viterbi' in merged_df.columns:
-        merged_df.loc[merged_df['trk_use_viterbi'].isnull(), 'trk_use_viterbi'] = 0
-
-    if 'track_agg_fn' in merged_df.columns:
-        merged_df['track_agg_fn'] = merged_df['trk_agg_fn'].fillna('probs')
-        flags = 1 - group['trk_thresh_hysteresis'].isnull()
-        merged_df['trk_thresh_hysteresis'] = merged_df['trk_thresh_hysteresis'].fillna(0) + (flags * merged_df['trk_thresh'])
-
-    actcfg_to_label = other['actcfg_to_label']
-    predcfg_to_label = other['predcfg_to_label']
-    label_to_cfgstr = ub.invert_dict(actcfg_to_label)
-    try:
-        # hack
-        a = label_to_cfgstr['trk_thresh=0,trk_use_viterbi=0']
-        b = label_to_cfgstr['trk_thresh=0.0,trk_use_viterbi=0']
-        merged_df.loc[merged_df['act_cfg'] == b, 'act_cfg'] = a
-    except Exception:
-        pass
-
-    is_l1 = np.array(['L1' in c for c in merged_df['dataset_code']])
-    is_ta1 = np.array(['TA1' in c for c in merged_df['dataset_code']])
-    merged_df.loc[is_l1, 'Processing'] = 'L1'
-    merged_df.loc[is_ta1, 'Processing'] = 'TA1'
-
-    return merged_df, other
+    # for gkey, group in cleaned_df.groupby('trk_pxl_cfg'):
+    #     pass
+    return cleaned_df
 
 
 def is_null(x):
@@ -906,7 +724,7 @@ def is_null(x):
 
 
 def resolve_model_info(model_fpath):
-    cacher = ub.Cacher('model_info_memo', depends=[str(model_fpath)], appname='watch')
+    cacher = ub.Cacher('model_info_memo', depends=[str(model_fpath)], appname='watch/model_info_memo')
     stats = cacher.tryload()
     if stats is None:
         from watch.cli.torch_model_stats import torch_model_stats
@@ -973,6 +791,69 @@ def checkpoint_filepath_info(fname):
             info['ckpt_ver'] = 'v0'
         info = ub.dict_diff(info, {'ext', 'prefix'})
     return info
+
+
+def my_nonstandard_merge(smaller, larger, smaller_keys, move_cols, mode=0):
+    """
+    We are copying specific columns from a single row in a smaller dataframe
+    into multiple rows in a larger data frame.
+
+    Args:
+        smaller (pd.DataFrame): a data frame to copy from
+        larger (pd.DataFrame): a data frame to copy into
+        smaller_keys (List[str]): columns that specify a single row in
+            `smaller` and groups of rows in `larger`
+        move_cols (List[str]): the columns to move.
+
+    Example:
+        >>> from watch.mlops.expt_report import *  # NOQA
+        >>> smaller = pd.DataFrame([
+        >>>     {'k1': 1, 'k2': 1, 'm1': 2, 'm2': 2, 's': 2, 'u1': 9},
+        >>>     {'k1': 3, 'k2': 3, 'm1': 4, 'm2': 3, 's': 2, 'u2': 8},
+        >>>     {'k1': 5, 'k2': 5, 'm1': 6, 'm2': 5, 's': 2, 'u3': 7},
+        >>> ])
+        >>> larger = pd.DataFrame([
+        >>>     {'k1': 1, 'k2': 1, 'm1': np.nan, 'u2': 1, 's': 3},
+        >>>     {'k1': 1, 'k2': 1, 'm1': np.nan, 'u2': 2, 's': 3},
+        >>>     {'k1': 3, 'k2': 3, 'm1': np.nan, 'u2': 3, 's': 3},
+        >>>     {'k1': 3, 'k2': 3, 'm1': np.nan, 'u2': 4, 's': 3},
+        >>>     {'k1': 5, 'k2': 5, 'm1': np.nan, 'u2': 5, 's': 3},
+        >>>     {'k1': 5, 'k2': 5, 'm1': np.nan, 'u2': 6, 's': 3},
+        >>> ])
+        >>> smaller_keys = ['k1', 'k2']  # should be usable as an index
+        >>> move_cols = ['m1', 'm2']  # columns to move
+        >>> larger1 = my_nonstandard_merge(smaller, larger, smaller_keys, move_cols, mode=0)
+        >>> print(larger1)
+        >>> larger2 = my_nonstandard_merge(smaller, larger, smaller_keys, move_cols, mode=1)
+        >>> print(larger2)
+
+    Ignore:
+        import timerit
+        ti = timerit.Timerit(100, bestof=10, verbose=2)
+        for timer in ti.reset('time'):
+            my_nonstandard_merge(smaller, larger, smaller_keys, move_cols, mode=1)
+        for timer in ti.reset('time'):
+            my_nonstandard_merge(smaller, larger, smaller_keys, move_cols, mode=0)
+    """
+    if mode == 0:
+        smaller_suffix = None
+        larger_suffix = '_y'
+        smaller_subset = smaller[smaller_keys + move_cols]
+        new_larger = pd.merge(smaller_subset, larger, on=smaller_keys,
+                              suffixes=[smaller_suffix, larger_suffix],
+                              validate='one_to_many')
+        drop_cols = [k + larger_suffix for k in larger.columns.intersection(move_cols)]
+        new_larger = new_larger.drop(drop_cols, axis=1)
+        return new_larger
+    else:
+        smaller_lut = smaller.set_index(smaller_keys)
+        new_larger = larger.copy()
+        for smaller_key, group in dict(list(larger.groupby(smaller_keys))).items():
+            small_match = smaller_lut.loc[smaller_key, move_cols]
+            # Why is .values needed here? TODO: understand
+            new_larger.loc[group.index, move_cols] = small_match.values
+            # larger.loc[group.index, move_cols] = small_match
+        return new_larger
 
 
 # def deduplicate_test_datasets(raw_df):

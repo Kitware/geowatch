@@ -250,6 +250,100 @@ def upweight_center_mask(shape):
     return weights
 
 
+def perchannel_colorize(data, channel_colors=None):
+    """
+    Note: this logic semi-exist in kwimage.Heatmap.
+    It would be good to consolidate it.
+
+    Args:
+        data (ndarray): the last dimension should be chanels, and they should
+            be probabilities between zero and one.
+
+    Example:
+        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> import itertools as it
+        >>> import kwarray
+        >>> channel_colors = ['tomato', 'gold', 'lime', 'darkturquoise']
+        >>> c = len(channel_colors)
+        >>> s = 32
+        >>> cx_combos = list(ub.flatten(it.combinations(range(c), n) for n in range(0, c + 1)))
+        >>> w = s // len(cx_combos)
+        >>> data = np.zeros((s, s, c), dtype=np.float32)
+        >>> y_slider = kwarray.SlidingWindow((s, s), (w, s,))
+        >>> x_slider = kwarray.SlidingWindow((s, s), (s, w,))
+        >>> for idx, cxs in enumerate(cx_combos):
+        >>>     for cx in cxs:
+        >>>         data[x_slider[idx] + (cx,)] =  1
+        >>>         data[y_slider[idx] + (cx,)] =  0.5
+        >>> canvas = perchannel_colorize(data, channel_colors)[..., 0:3]
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas, docla=1)
+
+    Example:
+        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> import itertools as it
+        >>> import kwarray
+        >>> channel_colors = ['blue']
+        >>> data = np.linspace(0, 1, 512 * 512).reshape(512, 512, 1)
+        >>> canvas = perchannel_colorize(data, channel_colors)[..., 0:3]
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas, docla=1)
+    """
+    import kwimage
+
+    num_channels = data.shape[2]
+
+    if len(data.shape) == 2:
+        # add in prefix channel if its not there
+        data = data[None, :, :]
+
+    existing_colors = [
+        kwimage.Color.coerce(c).as01()
+        for c in channel_colors if c is not None
+    ]
+
+    # Define default colors
+    fill_colors = kwimage.Color.distinct(
+        num_channels - len(existing_colors),
+        existing=existing_colors)
+    fill_color_iter = iter(fill_colors)
+
+    resolved_channel_colors = []
+    for c in channel_colors:
+        if c is None:
+            c = next(fill_color_iter)
+        else:
+            c = kwimage.Color.coerce(c).as01()
+        resolved_channel_colors.append(c)
+
+    # Each class gets its own color, and modulates the alpha
+    sumtotal = np.nansum(data, axis=2)
+    sumtotal[np.isnan(sumtotal)] = 1
+    sumtotal[sumtotal == 0] = 1
+    sumtotal = np.maximum(sumtotal, 1)
+    layers = []
+    for cidx in range(num_channels):
+        chan = data[:, :, cidx]
+        alpha = chan / sumtotal
+        # alpha = chan / num_channels
+        color = resolved_channel_colors[cidx]
+        layer = np.empty(tuple(chan.shape) + (4,))
+        layer[..., 3] = alpha
+        layer[..., 0:3] = color
+        layers.append(layer)
+
+    background = np.zeros_like(layer)
+    background[..., 3] = 1
+    layers.append(background)
+    colormask = kwimage.overlay_alpha_layers(layers, keepalpha=False)
+    # colormask[..., 3] *= with_alpha
+    return colormask
+
+
 def ensure_false_color(canvas, method='ortho'):
     """
     Given a canvas with more than 3 colors, (or 2 colors) do

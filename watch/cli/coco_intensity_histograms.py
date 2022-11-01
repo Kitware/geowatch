@@ -39,7 +39,7 @@ class IntensityHistogramConfig(scfg.Config):
 
         'dst': scfg.Value(None, help='if specified dump the figure to disk at this file path (e.g. with a jpg or png suffix)'),
 
-        'show': scfg.Value(False, help='if True, do a plt.show()'),
+        'show': scfg.Value(False, isflag=True, help='if True, do a plt.show()'),
 
         'workers': scfg.Value(0, help='number of io workers'),
         'mode': scfg.Value('process', help='type of parallelism'),
@@ -63,7 +63,7 @@ class IntensityHistogramConfig(scfg.Config):
         # 'bins': scfg.Value(256, help='Generic bin parameter that can be the name of a reference rule or the number of bins.'),
         'bins': scfg.Value('auto', help='Generic bin parameter that can be the name of a reference rule or the number of bins.'),
 
-        'fill': scfg.Value(True, help='If True, fill in the space under the histogram.'),
+        'fill': scfg.Value(True, isflag=True, help='If True, fill in the space under the histogram.'),
         'element': scfg.Value('step', help='Visual representation of the histogram statistic.', choices=['bars', 'step', 'poly']),
         'multiple': scfg.Value('layer', choices=['layer', 'dodge', 'stack', 'fill']
                                , help='Approach to resolving multiple elements when semantic mapping creates subsets.'),
@@ -167,13 +167,13 @@ class HistAccum:
         return full_df
 
 
-def main(**kwargs):
+def main(cmdline=True, **kwargs):
     r"""
     Example:
         >>> # xdoctest: +REQUIRES(--slow)
         >>> from watch.cli.coco_intensity_histograms import *  # NOQA
         >>> import kwcoco
-        >>> test_dpath = ub.ensure_app_cache_dir('watch/tests')
+        >>> test_dpath = ub.Path.appdir('watch/tests').ensuredir()
         >>> image_fpath = test_dpath + '/intensityhist_demo.jpg'
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
         >>> kwargs = {'src': coco_dset, 'dst': image_fpath, 'mode': 'thread'}
@@ -186,7 +186,7 @@ def main(**kwargs):
         >>> from watch.cli.coco_intensity_histograms import *  # NOQA
         >>> import kwcoco
         >>> import watch
-        >>> test_dpath = ub.ensure_app_cache_dir('watch/tests')
+        >>> test_dpath = ub.Path.appdir('watch/tests').ensuredir()
         >>> image_fpath = test_dpath + '/intensityhist_demo2.jpg'
         >>> coco_dset = coerce_kwcoco('watch-msi')
         >>> kwargs = {
@@ -205,7 +205,7 @@ def main(**kwargs):
     import kwplot
     kwplot.autosns()
 
-    config = IntensityHistogramConfig(kwargs, cmdline=True)
+    config = IntensityHistogramConfig(kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.repr2(config.to_dict(), nl=1)))
 
     # coco_dset = kwcoco.CocoDataset.coerce(config['src'])
@@ -435,7 +435,7 @@ def ensure_intensity_sidecar(fpath, recompute=False):
         >>> from watch.cli.coco_intensity_histograms import *  # NOQA
         >>> import kwimage
         >>> import ubelt as ub
-        >>> dpath = ub.Path(ub.ensure_app_cache_dir('watch/tests/intensity_sidecar'))
+        >>> dpath = ub.Path.appdir('watch/tests/intensity_sidecar').ensuredir()
         >>> dpath.delete().ensuredir()
         >>> img = kwimage.grab_test_image(dsize=(16, 16))
         >>> img01 = kwimage.ensure_float01(img)
@@ -519,8 +519,6 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
                 try:
                     band_name = declared_channel_list[band_idx]
                 except IndexError:
-                    import xdev
-                    xdev.embed()
                     print('bad channel declaration fpath = {!r}'.format(fpath))
                     if 0:
                         print('obj = {}'.format(ub.repr2(obj, nl=1)))

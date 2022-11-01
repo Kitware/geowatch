@@ -139,6 +139,8 @@ class StacSearchConfig(scfg.Config):
 
         'max_products_per_region': scfg.Value(None, help='does uniform affinity sampling over time to filter down to this many results per region'),
 
+        'append_mode': scfg.Value(True, help='if True appends to the existing output file. If false will overwrite an existing output file'),
+
         'region_file': scfg.Value(
             None,
             help='path to a region geojson file; required if mode is area',
@@ -244,9 +246,12 @@ class StacSearcher:
         features = [d.to_dict() for d in items]
 
         dates_found = [item.datetime for item in items]
-        min_date_found = min(dates_found).date().isoformat()
-        max_date_found = min(dates_found).date().isoformat()
-        self.logger.info(f'Search found {len(items)} items for {collections} between {min_date_found} and {max_date_found}')
+        if dates_found:
+            min_date_found = min(dates_found).date().isoformat()
+            max_date_found = min(dates_found).date().isoformat()
+            self.logger.info(f'Search found {len(items)} items for {collections} between {min_date_found} and {max_date_found}')
+        else:
+            self.logger.warning(f'Search found {len(items)} items for {collections}')
 
         if max_products_per_region and max_products_per_region < len(features):
             # Filter to a max number of items per region for testing
@@ -305,7 +310,7 @@ def main(cmdline=True, **kwargs):
         >>> dpath = ub.Path.appdir('watch/tests/test-stac-search').ensuredir()
         >>> search_fpath = dpath / 'stac_search.json'
         >>> region_fpath = demo_region.demo_khq_region_fpath()
-        >>> region = util_gis.read_geojson(region_fpath)
+        >>> region = util_gis.load_geojson(region_fpath)
         >>> result_fpath = dpath / 'demo.input'
         >>> start_date = region['start_date'].iloc[0]
         >>> end_date = region['end_date'].iloc[0]
@@ -353,10 +358,14 @@ def main(cmdline=True, **kwargs):
 
     ub.Path(dest_path).parent.ensuredir()
 
+    if config['append_mode']:
+        # Ensure we are not appending to an existing file
+        dest_path.delete()
+
     if args.mode == 'area':
         if config['region_globstr'] is not None:
-            from watch.utils import util_path
-            region_file_fpaths = util_path.coerce_patterned_paths(config['region_globstr'])
+            from watch.utils import util_gis
+            region_file_fpaths = util_gis.coerce_geojson_paths(config['region_globstr'])
             assert args.mode == 'area'
         else:
             if not hasattr(args, 'region_file'):
@@ -388,7 +397,7 @@ def _auto_search_params_from_region(r_file_loc, config):
     from watch.utils import util_gis
     from watch.utils import util_time
     from watch.stac.stac_search_builder import build_search_json
-    region_df = util_gis.read_geojson(r_file_loc)
+    region_df = util_gis.load_geojson(r_file_loc)
     region_row = region_df[region_df['type'] == 'region'].iloc[0]
     end_date = util_time.coerce_datetime(region_row['end_date'])
     start_date = util_time.coerce_datetime(region_row['start_date'])
@@ -447,14 +456,14 @@ def area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config,
 
     for s in search_params['stac_search']:
         searcher.by_geometry(
-            s['endpoint'],
-            geom,
-            s['collections'],
-            s['start_date'],
-            s['end_date'],
-            dest_path,
-            s.get('query', {}),
-            s.get('headers', {}),
+            provider=s['endpoint'],
+            geom=geom,
+            collections=s['collections'],
+            start=s['start_date'],
+            end=s['end_date'],
+            outfile=dest_path,
+            query=s.get('query', {}),
+            headers=s.get('headers', {}),
             max_products_per_region=max_products_per_region
         )
 

@@ -57,6 +57,23 @@ style of indexing is being used so we do not confuse them.
   column when you see these patterns.
 
 
+Misc termonology: 
+
+* Functions / methods called "coerce" are designed to auto-detect the type of
+  data that is given to them and then convert it into a stanardized expected
+  type. These allow you to write functions that accept multiple different input
+  formats, but guarentee a single output format.  For instace
+  kwcoco.CocoDataset.coerce will accept either a file path to a kwcoco file, an
+  existing kwcoco dataset, or a special string indicating the type of demodata
+  to produce, but the outptut is always a kwcoco.CocoDataset object. Another
+  example is watch.util_gis.coerce_geojson_datas, which can take one or more
+  json objects, path to json files, glob patterns, paths to files containing
+  lists of json files, etc, but the output is always the json data. Using these
+  coerce methods should be done with care and never in a critical loop because
+  they are slower than more direct methods and more prone to unintended
+  results, but the flexibile behavior can be very convinient, and it is often
+  worth using in system entry points before core logic takes place.
+
 
 Short semi-ambiguous identifiers:
 

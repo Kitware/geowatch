@@ -110,13 +110,13 @@ def update_data_ignores():
         Uncropped-*
         ''')
 
-    dvc_expt_dpath = watch.find_dvc_dpath(tags='phase2_data')
-    fpath1 = dvc_expt_dpath / '.gitignore'
-    fpath2 = dvc_expt_dpath / '.dvcignore'
+    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+    fpath1 = expt_dvc_dpath / '.gitignore'
+    fpath2 = expt_dvc_dpath / '.dvcignore'
     fpath1.write_text(ignore_text)
     fpath2.write_text(ignore_text)
 
-    ub.cmd(f'git add {fpath1} {fpath2}', cwd=dvc_expt_dpath)
+    ub.cmd(f'git add {fpath1} {fpath2}', cwd=expt_dvc_dpath)
 
 
 def update_expt_ignores():
@@ -158,13 +158,13 @@ def update_expt_ignores():
         models/fusion/*/eval/*/*/*/*/eval/tracking/*/iarpa_eval/scores/*.pkl
         ''')
 
-    dvc_expt_dpath = watch.find_dvc_dpath(tags='phase2_expt')
-    fpath1 = dvc_expt_dpath / '.gitignore'
-    fpath2 = dvc_expt_dpath / '.dvcignore'
+    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
+    fpath1 = expt_dvc_dpath / '.gitignore'
+    fpath2 = expt_dvc_dpath / '.dvcignore'
     fpath1.write_text(ignore_text)
     fpath2.write_text(ignore_text)
 
-    ub.cmd(f'git add {fpath1} {fpath2}', cwd=dvc_expt_dpath)
+    ub.cmd(f'git add {fpath1} {fpath2}', cwd=expt_dvc_dpath)
 
 
 def __dvc_notes__():

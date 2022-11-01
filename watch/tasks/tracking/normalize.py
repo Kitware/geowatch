@@ -459,11 +459,10 @@ def normalize_phases(coco_dset,
     #
 
     log = Counter()
-    for trackid, n_anns in ub.map_vals(
-            len, coco_dset.index.trackid_to_aids).items():
+    for trackid, annot_ids in coco_dset.index.trackid_to_aids.items():
+        n_anns = len(annot_ids)
         if n_anns > 1:
-
-            annots = coco_dset.annots(trackid=trackid)
+            annots = coco_dset.annots(annot_ids)
             has_missing_labels = bool(set(annots.cnames) - cnames_to_score)
             has_good_labels = bool(set(annots.cnames) - cnames_to_replace)
             if has_missing_labels and has_good_labels:
@@ -488,9 +487,10 @@ def normalize_phases(coco_dset,
     annots = coco_dset.annots()
     old_cnames_dct = dict(zip(annots.aids, annots.cnames))
 
-    for trackid, n_anns in ub.map_vals(
-            len, coco_dset.index.trackid_to_aids).items():
-        annots = coco_dset.annots(trackid=trackid)
+    for trackid, annot_ids in coco_dset.index.trackid_to_aids.items():
+        n_anns = len(annot_ids)
+        annots = coco_dset.annots(annot_ids)
+
         if n_anns > 1:
 
             if use_viterbi:
@@ -577,6 +577,7 @@ def normalize_sensors(coco_dset):
     '''
     Convert internal representations of sensors to their IARPA standards
     '''
+    # FIXME: should pull from heuristics
     sensor_dict = {
         'WV': 'WorldView',
         'S2': 'Sentinel-2',
@@ -663,6 +664,11 @@ def normalize(
         >>> assert (coco_dset.images().get('sensor_coarse') ==
         >>>     ['WorldView', 'Sentinel-2', 'Landsat 8'])
     '''
+
+    DEBUG_JSON_SERIALIZABLE = 0
+    if DEBUG_JSON_SERIALIZABLE:
+        from watch.utils.util_json import debug_json_unserializable
+
     viz_out_dir = ub.Path('_assets/tracking_visualization')
 
     def _normalize_annots(coco_dset, overwrite):
@@ -679,10 +685,25 @@ def normalize(
         coco_dset = _normalize_annots(coco_dset, overwrite)
     coco_dset = ensure_videos(coco_dset)
 
+    if DEBUG_JSON_SERIALIZABLE:
+        debug_json_unserializable(coco_dset.dataset, 'Input to normalize: ')
+
     # apply tracks
     assert issubclass(track_fn, TrackFunction), 'must supply a valid track_fn!'
+
+    # fixup the track kwargs when they come in via json
+    for k, v in track_kwargs.items():
+        if isinstance(v, str) and v.lower() == 'none':
+            track_kwargs[k] = None
+
+    if DEBUG_JSON_SERIALIZABLE:
+        debug_json_unserializable(coco_dset.dataset, 'Before apply_per_video: ')
+
     tracker: TrackFunction = track_fn(polygon_fn=polygon_fn, **track_kwargs)
     out_dset = tracker.apply_per_video(coco_dset)
+
+    if DEBUG_JSON_SERIALIZABLE:
+        debug_json_unserializable(out_dset.dataset, 'After apply_per_video: ')
 
     # normalize and add geo segmentations
     out_dset = _normalize_annots(out_dset, overwrite=False)
@@ -717,10 +738,16 @@ def normalize(
         phase_kw['baseline_keys'] = set(track_kwargs['key'])
     out_dset = normalize_phases(out_dset, **phase_kw)
 
+    if DEBUG_JSON_SERIALIZABLE:
+        debug_json_unserializable(out_dset.dataset, 'After normalize_phases: ')
+
     out_dset = normalize_sensors(out_dset)
 
     # HACK, ensure out_dset.index is up to date
     out_dset._build_index()
+
+    if DEBUG_JSON_SERIALIZABLE:
+        debug_json_unserializable(out_dset.dataset, 'Output of normalize: ')
 
     if viz_videos:
         # visualize predicted sites with true sites
@@ -729,5 +756,4 @@ def normalize(
                          gt_dset,
                          viz_out_dir,
                          coco_dset_sc=track_kwargs.get('coco_dset_sc'))
-
     return out_dset

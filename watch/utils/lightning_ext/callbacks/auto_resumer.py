@@ -15,7 +15,7 @@ class AutoResumer(pl.callbacks.Callback):
         >>> from watch.utils.lightning_ext.callbacks import StateLogger
         >>> import pytorch_lightning as pl
         >>> import ubelt as ub
-        >>> default_root_dir = ub.get_app_cache_dir('lightning_ext/test/auto_resume')
+        >>> default_root_dir = ub.Path.appdir('lightning_ext/test/auto_resume')
         >>> ub.delete(default_root_dir)
         >>> # Test starting a model without any existing checkpoints
         >>> trainer = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=2)

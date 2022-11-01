@@ -6,7 +6,6 @@ import tempfile
 import subprocess
 from urllib.parse import urlparse
 from datetime import datetime
-from concurrent.futures import as_completed
 import traceback
 
 import requests
@@ -303,7 +302,8 @@ def baseline_framework_ingress(input_path,
                                virtual=False):
 
     from watch.utils.lightning_ext import util_globals
-    jobs = util_globals.coerce_num_workers(jobs)
+    workers = util_globals.coerce_num_workers(jobs)
+    print(f'Runing baseline_framework_ingress with workers={workers}')
 
     os.makedirs(outdir, exist_ok=True)
 
@@ -339,15 +339,15 @@ def baseline_framework_ingress(input_path,
 
     input_stac_items = load_input_stac_items(input_path, aws_base_command)
 
-    executor = ub.Executor(mode='process' if jobs > 1 else 'serial',
-                           max_workers=jobs)
+    pool = ub.JobPool(mode='process' if workers > 1 else 'serial',
+                          max_workers=workers)
 
-    jobs = [executor.submit(ingress_item, feature, outdir, aws_base_command,
-                            dryrun, relative, asset_selector, virtual)
-            for feature in input_stac_items
-            if item_selector(feature)]
+    for feature in input_stac_items:
+        if item_selector(feature):
+            pool.submit(ingress_item, feature, outdir, aws_base_command,
+                        dryrun, relative, asset_selector, virtual)
 
-    for job in as_completed(jobs):
+    for job in pool.as_completed(desc='ingress items'):
         try:
             mapped_item = job.result()
         except Exception:
@@ -366,15 +366,16 @@ def baseline_framework_ingress(input_path,
 def download_file(href, outpath, aws_base_command, dryrun):
     # TODO: better handling of possible download failure?
     scheme, *_ = urlparse(href)
-
+    verbose = 0
     if scheme == 's3':
         command = [*aws_base_command, href, outpath]
-        print('Running: {}'.format(' '.join(command)))
+        if verbose > 1:
+            print('Running: {}'.format(' '.join(command)))
         # TODO: Manually check return code / output
         subprocess.run(command, check=True)
     elif scheme in {'https', 'http'}:
-        print('Downloading: {!r} to {!r}'.format(
-            href, outpath))
+        if verbose > 1:
+            print('Downloading: {!r} to {!r}'.format(href, outpath))
         if not dryrun:
             download_http_file(href, outpath)
     else:

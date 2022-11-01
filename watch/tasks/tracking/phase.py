@@ -340,7 +340,7 @@ def interpolate(coco_dset,
 
     cids = np.array(annots.cids)
     good_ixs = np.in1d(cnames, list(cnames_to_replace), invert=True)
-    ix_to_cid = dict(zip(range(len(good_ixs)), cids[good_ixs]))
+    ix_to_cid = dict(zip(range(len(good_ixs)), map(int, cids[good_ixs])))
     interp = np.interp(range(len(cnames)), good_ixs, range(len(good_ixs)))
     annots.set('category_id', [ix_to_cid[int(ix)] for ix in np.round(interp)])
     return annots
@@ -392,10 +392,10 @@ def sort_by_gid(coco_dset, track_id, prune=True):
         return images, []
     vidids = np.unique(images.get('video_id', None))
     assert len(vidids) == 1, f'track {track_id} spans multiple videos {vidids}'
-    vidid = vidids[0]
+    video_id = vidids[0]
     aids = set(coco_dset.index.trackid_to_aids[track_id])
     if not prune:
-        images = coco_dset.images(vidid=vidid)
+        images = coco_dset.images(video_id=video_id)
     return (images,
             kwcoco.coco_objects1d.AnnotGroups([
                 coco_dset.annots(aids.intersection(img_aids))
@@ -423,7 +423,7 @@ def ensure_post(coco_dset,
     if len(list(annot_groups)) > 1:
         last_gid = images.gids[-1]
         gids = coco_dset.index._set_sorted_by_frame_index(
-            coco_dset.images(vidid=images.get('vidid', None)[0]).gids)
+            coco_dset.images(video_id=images.get('video_id', None)[0]).gids)
         current_gid = gids[-1]
 
         def img_to_vid(gid):
@@ -505,6 +505,9 @@ def phase_prediction_baseline(annots) -> List[float]:
     Number of days until the next expected activity phase transition.
 
     Baseline: (average days in current_phase - elapsed days in current_phase)
+
+    Returns:
+        float: number of days in the future
     '''
     # from watch.dev.check_transition_probs
     phase_avg_days = {
@@ -532,12 +535,18 @@ def phase_prediction_baseline(annots) -> List[float]:
         else:
             break
 
-    predicted = np.array(
-        [first_date[phase] + phase_avg_days[phase] for phase in annots.cnames])
+    try:
+        predicted = np.array(
+            [first_date[phase] + phase_avg_days[phase] for phase in annots.cnames])
+        today_offset = (predicted - today).astype('timedelta64[D]').astype(float)
+        is_future = predicted > today
+        next_offset = np.where(is_future, today_offset, 1)
+    except KeyError:
+        # This can occur when we just dont have any information
+        # Punt.
+        next_offset = np.array(list(phase_avg_days.values())).astype('timedelta64[D]').astype(float).mean()
 
-    return np.where(predicted > today,
-                    (predicted - today).astype('timedelta64[D]').astype(float),
-                    1)
+    return next_offset
 
 
 def phase_prediction_heatmap(annots, coco_dset, key) -> List[float]:

@@ -21,10 +21,10 @@ def main():
     from watch.utils import util_gis
     import ubelt as ub
     jobs = ub.JobPool('process', max_workers=8)
-    site_results = list(ub.ProgIter(jobs.executor.map(util_gis.read_geojson, site_fpaths), total=len(site_fpaths)))
+    site_results = list(ub.ProgIter(jobs.executor.map(util_gis.load_geojson, site_fpaths), total=len(site_fpaths)))
 
     jobs = ub.JobPool('process', max_workers=8)
-    region_results = list(ub.ProgIter(jobs.executor.map(util_gis.read_geojson, region_fpaths), total=len(region_fpaths)))
+    region_results = list(ub.ProgIter(jobs.executor.map(util_gis.load_geojson, region_fpaths), total=len(region_fpaths)))
 
     region_to_prototype = {}
     for result in region_results:

@@ -38,9 +38,7 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
         >>> # xdoctest: +SKIP
         >>> # xdoctest: +REQUIRES(--ffmpeg-test')
         >>> import ubelt as ub
-        >>> dpath = ub.ensure_app_cache_dir('watch/test/ani_video')
-        >>> ub.delete(dpath)
-        >>> ub.ensuredir(dpath)
+        >>> dpath = ub.Path.appdir('watch/test/ani_video').delete().ensuredir()
         >>> import kwcoco
         >>> from watch.utils import kwcoco_extensions
         >>> dset = kwcoco.CocoDataset.demo('vidshapes2-msi', num_frames=5)
@@ -79,6 +77,8 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
     if video_names is None:
         video_dpaths = [p for p in viz_dpath.glob('*') if p.is_dir()]
     else:
+        if len(video_names) == 1:
+            workers = 0
         video_dpaths = [viz_dpath / n for n in video_names]
 
     pool = ub.JobPool(mode='thread', max_workers=workers)
@@ -89,6 +89,8 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
     if draw_anns:
         types.append('_anns')
 
+    if workers == 1:
+        workers = 0
     verbose_worker = verbose and workers <= 1
 
     # We make heavy reliance on a known directory structure here.
@@ -119,12 +121,20 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
 
                     for chan_dpath in channel_dpaths:
                         frame_fpaths = sorted(chan_dpath.glob('*'))
-                        gif_fname = '{}{}_{}.gif'.format(track_name, type_, chan_dpath.name)
-                        gif_fpath = track_subdpath / gif_fname
-                        pool.submit(
-                            gifify.ffmpeg_animate_frames, frame_fpaths,
-                            gif_fpath, in_framerate=frames_per_second,
-                            verbose=verbose_worker)
+                        if len(frame_fpaths):
+                            if len(frame_fpaths) < 300:
+                                gif_fname = '{}{}_{}.gif'.format(track_name, type_, chan_dpath.name)
+                                gif_fpath = track_subdpath / gif_fname
+                                pool.submit(
+                                    gifify.ffmpeg_animate_frames, frame_fpaths,
+                                    gif_fpath, in_framerate=frames_per_second,
+                                    verbose=verbose_worker)
+                            ani_fname = '{}{}_{}.mp4'.format(track_name, type_, chan_dpath.name)
+                            ani_fpath = track_subdpath / ani_fname
+                            pool.submit(
+                                gifify.ffmpeg_animate_frames, frame_fpaths,
+                                ani_fpath, in_framerate=frames_per_second,
+                                verbose=verbose_worker)
 
             else:
                 type_dpath = video_dpath / type_
@@ -135,16 +145,34 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
                                       for c in channels.streams()]
                 for chan_dpath in channel_dpaths:
                     frame_fpaths = sorted(chan_dpath.glob('*'))
-                    gif_fname = '{}{}_{}.gif'.format(video_name, type_, chan_dpath.name)
-                    gif_fpath = video_dpath / gif_fname
-                    pool.submit(
-                        gifify.ffmpeg_animate_frames, frame_fpaths, gif_fpath,
-                        in_framerate=frames_per_second, verbose=verbose_worker)
+                    if len(frame_fpaths):
+                        if len(frame_fpaths) < 300:
+                            gif_fname = '{}{}_{}.gif'.format(video_name, type_, chan_dpath.name)
+                            gif_fpath = video_dpath / gif_fname
+                            pool.submit(
+                                gifify.ffmpeg_animate_frames, frame_fpaths, gif_fpath,
+                                in_framerate=frames_per_second, verbose=verbose_worker)
+                        ani_fname = '{}{}_{}.mp4'.format(video_name, type_, chan_dpath.name)
+                        ani_fpath = video_dpath / ani_fname
+                        pool.submit(
+                            gifify.ffmpeg_animate_frames, frame_fpaths, ani_fpath,
+                            in_framerate=frames_per_second, verbose=verbose_worker)
 
+    failed = []
     for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='collect animate jobs'):
-        job.result()
+        try:
+            job.result()
+        except Exception as ex:
+            failed.append(ex)
+            pass
+
+    if failed:
+        raise Exception(f'{len(failed)} / {len(pool)} animations failed')
 
     print('Wrote animations to viz_dpath = {!r}'.format(viz_dpath))
+    # The animation jobs can do something weird to the tty, so we should try
+    # and fix it.
+    ub.cmd('stty sane')
 
 
 if __name__ == '__main__':

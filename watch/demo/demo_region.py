@@ -367,7 +367,7 @@ def _show_demo_annots_on_map():
     kwplot.autompl()
 
     region, sites = demo_khq_annots()
-    region_gdf = util_gis.read_geojson(io.StringIO(json.dumps(region)))
+    region_gdf = util_gis.load_geojson(io.StringIO(json.dumps(region)))
 
     region_geom = region_gdf.geometry.iloc[0]
     osm_graph = ox.graph_from_polygon(region_geom)

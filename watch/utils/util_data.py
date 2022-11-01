@@ -192,6 +192,23 @@ class DataRegistry:
                     flag = False
             if flag:
                 results.append(row)
+
+        HACK_JONS_REMOTE_PATTERN = 1
+        if HACK_JONS_REMOTE_PATTERN:
+            # If we can detect the remote pattern that jon likes (where remote
+            # machines are mounted via sshfs in the $HOME/remote/$REMOTENAME
+            # directory and the localmachine $HOME is symlinked to via
+            # $HOME/remote/$HOSTNAME) then use that version of the paths so its
+            # easier to work across multiple machines.
+            for row in results:
+                path = ub.Path(row['path'])
+                if path.exists():
+                    import platform
+                    host = platform.node()
+                    remote_base = ub.Path(f'~/remote/{host}').expand()
+                    remote_alt = path.shrinkuser(home=remote_base)
+                    if remote_alt.exists():
+                        row['path'] = os.fspath(remote_alt)
         return results
 
     def find(self, on_error="raise", envvar='DVC_DPATH', **kwargs):
@@ -244,4 +261,5 @@ def find_dvc_dpath(name=ub.NoParam, on_error="raise", **kwargs):
     return registry.find(on_error=on_error, **kwargs)
 
 
-find_smart_dvc_dpath = find_dvc_dpath
+def find_smart_dvc_dpath(*args, **kw):
+    return find_dvc_dpath(*args, **kw)

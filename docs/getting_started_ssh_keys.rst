@@ -14,6 +14,7 @@ do this, ensuring the file has the correct permissions.
 
 .. code:: bash
 
+    REMOTE_USERNAME="$USER"  # set to an identifier 
     PRIVATE_KEY_FPATH="$HOME/.ssh/id_${REMOTE_USERNAME}_ed25519"
 
     if [ -f $PRIVATE_KEY_FPATH ]; then
@@ -21,7 +22,7 @@ do this, ensuring the file has the correct permissions.
     else
         echo "Create PRIVATE_KEY_FPATH = $PRIVATE_KEY_FPATH"
 
-        ssh-keygen -t ed25519 -b 256 -f $PRIVATE_KEY_FPATH -N ""
+        ssh-keygen -t ed25519 -b 256 -f $PRIVATE_KEY_FPATH -N "" -C ""
         echo $PRIVATE_KEY_FPATH
 
         # Ensure permissions correct and the new key is registered with the ssh-agent

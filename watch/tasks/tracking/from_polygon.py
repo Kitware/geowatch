@@ -74,4 +74,12 @@ class OverlapTrack(TrackFunction):
                     next_ann = coco_dset.anns[next_aid]
                     next_ann['track_id'] = trackid
 
+                DEBUG_JSON_SERIALIZABLE = 0
+                if DEBUG_JSON_SERIALIZABLE:
+                    from kwcoco.util import util_json
+                    unserializable = list(util_json.find_json_unserializable(next_ann))
+                    if unserializable:
+                        import ubelt as ub
+                        raise Exception('Inside OverlapTrack: ' + ub.repr2(unserializable))
+
         return coco_dset

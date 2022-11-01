@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+"""
+TODO:
+    - [ ] Rename to run_polygon_evaluation.py? Or run_iarpa_metrics.py?
+"""
 import os
 import sys
 import json
@@ -15,6 +19,7 @@ import scriptconfig as scfg
 from packaging import version
 import safer
 import watch.heuristics
+import warnings
 import kwplot
 import kwimage
 from matplotlib.collections import LineCollection
@@ -86,15 +91,15 @@ class MetricsConfig(scfg.DataConfig):
         '''
         Short name for the algorithm used to generate the model
         '''))
-    inputs_are_paths = scfg.Value(False, isflag=1, help=ub.paragraph(
-        '''
-        If given, the sites inputs will always be interpreted as
-        paths and not raw json text.
-        '''))
     use_cache = scfg.Value(False, isflag=1, help=ub.paragraph(
         '''
         IARPA metrics code currently contains a cache bug, do not
         enable the cache until this is fixed.
+        '''))
+
+    load_workers = scfg.Value(0, help=ub.paragraph(
+        '''
+        The number of workers used to load site models.
         '''))
 
 
@@ -304,7 +309,7 @@ class RegionResult:
         df = df.reset_index().set_index(['region_id', 'site', 'phase'])
 
         df[['F1', 'TIoU', 'TE', 'TEp']] = df[['F1', 'TIoU', 'TE', 'TEp']].astype(float)
-        df[phases] = df[phases].astype(int)
+        df[phases] = df[phases].astype("Int64")
         return df
 
     @property
@@ -614,7 +619,6 @@ def merge_sc_metrics_results(sc_results: List[RegionResult]):
         - TE is temporal error of current phase
         - TEp is temporal error of next predicted phase
     '''
-
     dfs = [r.sc_df for r in sc_results]
     concat_df = pd.concat(dfs, axis=0)
     # concat_df = concat_df.sort_values('date')
@@ -758,7 +762,7 @@ def viz_sc(sc_results, save_dpath):
 
         # need args instead of kwargs because of grid.map() weirdness
         def add_colored_linesegments(x, y, phase, units, **kwargs):
-            if isinstance(x[0], datetime.date):
+            if isinstance(x.iloc[0], datetime.date):
                 x = date2num(x)
 
             _df = pd.DataFrame(dict(
@@ -870,25 +874,27 @@ def viz_sc(sc_results, save_dpath):
 
     phs = [ph for r in sc_results if (ph := r.sc_phasetable) is not None]
 
-    for ph in phs:
+    for ph in ub.ProgIter(phs, desc='visualize sc gantt'):
 
         rid = ph.index.get_level_values('region_id')[0]
 
         # site-level viz
         for (site, site_cand), df in ph.groupby(['site', 'site_candidate']):
+            df = df.droplevel([0, 1, 2])
             viz_sc_gantt(
-                df.droplevel([0, 1, 2]),
+                df,
                 ' vs. '.join((site, site_cand)),
                 ((save_dpath / rid).ensuredir() / ('_'.join((site, site_cand)) + '.png'))
             )
 
         # region-level viz
-        viz_sc_multi(
-            ph, rid,
-            (save_dpath / f'sc_{rid}.png')
-        )
+        df = ph
+        plot_title = rid
+        save_fpath = (save_dpath / f'sc_{rid}.png')
+        viz_sc_multi(ph, plot_title, save_fpath)
 
     # merged viz
+    print('Visualize merged')
     merged_df = pd.concat(phs, axis=0)
     viz_sc_multi(
         merged_df,
@@ -990,12 +996,22 @@ def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath,
     json_data['best_bas_rows'] = json.loads(best_bas_rows.to_json(orient='table', indent=2))
     json_data['sc_df'] = json.loads(sc_df.to_json(orient='table', indent=2))
 
+    if not merge_fpath.parent.exists():
+        raise OSError(f'{merge_fpath.parent=} does not exist')
+
     with safer.open(merge_fpath, 'w', temp_file=True) as f:
         json.dump(json_data, f, indent=4)
 
-    # Symlink to visualizations
+    # Consolodate visualizations
     region_viz_dpath = (merge_dpath / 'region_viz_overall').ensuredir()
 
+    # Write a legend to go with the BAS viz
+    legend_img = iarpa_bas_color_legend()
+    legend_fpath = (region_viz_dpath / 'bas_legend.png')
+    import kwimage
+    kwimage.imwrite(legend_fpath, legend_img)
+
+    # Symlink to visualizations
     for dpath in region_dpaths:
         overall_dpath = dpath / 'overall'
         viz_dpath = overall_dpath / 'bas' / 'region'
@@ -1130,23 +1146,14 @@ def main(cmdline=True, **kwargs):
         >>> # TODO: visualize
     """
 
-    from watch.utils import util_path
-    # from watch.utils import util_pattern
+    from watch.utils import util_gis
 
     config = MetricsConfig.legacy(cmdline=cmdline, data=kwargs)
     args = config
 
-    config['pred_sites'] = util_path.coerce_patterned_paths(
-        config['pred_sites'], expected_extension='*.geojson')
-
     # args, _ = parser.parse_known_args(args)
     config_dict = config.asdict()
-    print('config = {}'.format(ub.repr2(config_dict, nl=2)))
-
-    # load pred_sites
-    pred_sites = []
-    if len(args.pred_sites) == 0:
-        raise Exception('No input sites were given')
+    print('config = {}'.format(ub.repr2(config_dict, nl=2, sort=0)))
 
     try:
         # Do we have the latest and greatest?
@@ -1178,50 +1185,35 @@ def main(cmdline=True, **kwargs):
     )
     proc_context.start()
 
+    # load pred_sites
+    load_workers = config['load_workers']
+    pred_site_infos = util_gis.coerce_geojson_paths(config['pred_sites'],
+                                                    return_manifests=True)
+
+    if len(pred_site_infos['manifest_fpaths']) > 1:
+        raise Exception('Only expected at most one manifest')
+
     parent_info = []
-    for site_data in args.pred_sites:
-        in_fpath = ub.Path(site_data)
+    for manifest_fpath in pred_site_infos['manifest_fpaths']:
+        # The manifest contains info about how these predictions were computed
+        # Grab that if possible.
+        print('Load parent info from manifest')
+        with open(manifest_fpath, 'r') as file:
+            manifest = json.load(file)
+        assert (isinstance(manifest, dict) and
+                manifest.get('type', None) == 'tracking_result')
+        # The input was a track result json which contains pointers to
+        # the actual sites
+        parent_info.extend(manifest.get('info', []))
 
-        if args.inputs_are_paths:
-            if not in_fpath.exists():
-                raise FileNotFoundError(str(in_fpath))
-            with open(in_fpath, 'r') as file:
-                site_or_result = json.load(file)
-
-            is_track_result = (
-                isinstance(site_or_result, dict) and
-                site_or_result.get('type', None) == 'tracking_result'
-            )
-
-            if is_track_result:
-                track_result = site_or_result
-                # The input was a track result json which contains pointers to
-                # the actual sites
-                parent_info.extend(track_result.get('info', []))
-                for site_fpath in track_result['files']:
-                    with open(site_fpath, 'r') as file:
-                        site = json.load(file)
-                    pred_sites.append(site)
-            else:
-                # It was just a site json file.
-                site = site_or_result
-                pred_sites.append(site)
-        else:
-            # TODO:
-            # Deprecate passing raw json on the CLI, it has a limited length
-            # What would be best is a single file that points to all of the
-            # site jsons we care about, so we don't need to glob.
-            try:
-                if in_fpath.is_file():
-                    with open(site_data, 'r') as file:
-                        site = json.load(file)
-                else:
-                    raise NotImplementedError('deprecated to pass json as str')
-                    site = json.loads(site_data)
-            except json.JSONDecodeError as e:  # TODO split out as decorator?
-                raise json.JSONDecodeError(e.msg + ' [cut for length]',
-                                           e.doc[:100] + '...', e.pos)
-            pred_sites.append(site)
+    pred_sites = [
+        info['data'] for info in util_gis.coerce_geojson_datas(
+            pred_site_infos['geojson_fpaths'], format='json',
+            workers=load_workers
+        )
+    ]
+    if len(pred_sites) == 0:
+        raise Exception('No input sites were given')
 
     name = args.name
     true_site_dpath = args.true_site_dpath
@@ -1273,8 +1265,23 @@ def main(cmdline=True, **kwargs):
 
     # First build up all of the commands and prepare necessary data for them.
     commands = []
+
     for region_id, region_sites in ub.ProgIter(sorted(grouped_sites.items()),
                                                desc='prepare regions for eval'):
+
+        roi = region_id
+        gt_dir = os.fspath(true_site_dpath)
+
+        # Test to see if GT regions exist as they would be checked for in the
+        # iarpa_smart_metrics tool.
+        from iarpa_smart_metrics.commons import as_local_path
+        gt_dir = as_local_path(gt_dir, "annotations/truth/", reg_exp=f".*{roi}.*.geojson")
+        gt_dir = ub.Path(gt_dir)
+        gt_files = list(gt_dir.glob(f"*{roi}*.geojson"))
+
+        if len(gt_files) == 0:
+            warnings.warn(f'No truth for region: {roi}. Skipping')
+            continue
 
         site_dpath = (tmp_dpath / 'site' / region_id).ensuredir()
         image_dpath = (tmp_dpath / 'image').ensuredir()
@@ -1291,7 +1298,7 @@ def main(cmdline=True, **kwargs):
         pred_site_sub_dpath = site_dpath / 'latest' / region_id
         pred_site_sub_dpath.ensuredir()
 
-        # copy site models to site_dpath
+        # copy site models to site_dpat/e
         for site in region_sites:
             geojson_fpath = pred_site_sub_dpath / (
                 site['features'][0]['properties']['site_id'] + '.geojson'
@@ -1315,8 +1322,8 @@ def main(cmdline=True, **kwargs):
 
         run_eval_command = [
             'python', '-m', 'iarpa_smart_metrics.run_evaluation',
-            '--roi', region_id,
-            '--gt_dir', os.fspath(true_site_dpath),
+            '--roi', roi,
+            '--gt_dir', os.fspath(gt_dir),
             '--rm_dir', os.fspath(true_region_dpath),
             '--sm_dir', os.fspath(pred_site_sub_dpath),
             '--image_dir', os.fspath(image_dpath),
@@ -1363,16 +1370,17 @@ def main(cmdline=True, **kwargs):
                 ub.cmd(cmd, verbose=3, check=True, shell=True)
             except subprocess.CalledProcessError:
                 print('error in metrics framework, probably due to zero '
-                      'TP site matches.')
+                      'TP site matches or a region without site truth.')
 
     print('out_dirs = {}'.format(ub.repr2(out_dirs, nl=1)))
     if args.merge and out_dirs:
-        merge_dpath = main_out_dir / 'merged'
 
         if args.merge_fpath is None:
+            merge_dpath = (main_out_dir / 'merged').ensuredir()
             merge_fpath = merge_dpath / 'summary2.json'
         else:
             merge_fpath = ub.Path(args.merge_fpath)
+            merge_dpath = merge_fpath.parent.ensuredir()
 
         region_dpaths = out_dirs
 
@@ -1382,6 +1390,22 @@ def main(cmdline=True, **kwargs):
                               true_region_dpath, merge_dpath, merge_fpath,
                               args.merge_fbetas, parent_info, info)
         print('merge_fpath = {!r}'.format(merge_fpath))
+
+
+def iarpa_bas_color_legend():
+    import kwplot
+    colors = {}
+    colors['gt_true_pos'] = 'lime'
+    colors['gt_false_pos'] = 'red'
+    colors['gt_false_neg'] = 'black'
+    colors['gt_positive_unbounded'] = "darkviolet"
+    colors['gt_ignore'] = "lightsalmon"
+    colors['gt_seen'] = "gray"
+    colors['sm_pos_match'] = "orange"
+    colors['sm_partially_wrong'] = "aquamarine"
+    colors['sm_completely_wrong'] = "magenta"
+    img = kwplot.make_legend_img(colors)
+    return img
 
 
 if __name__ == '__main__':

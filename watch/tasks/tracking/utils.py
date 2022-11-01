@@ -271,14 +271,24 @@ class TrackFunction(collections.abc.Callable):
 
     @profile
     def safe_apply(self, coco_dset, gids, overwrite, legacy=True):
+        DEBUG_JSON_SERIALIZABLE = 0
+        if DEBUG_JSON_SERIALIZABLE:
+            from watch.utils.util_json import debug_json_unserializable
+
+        if DEBUG_JSON_SERIALIZABLE:
+            debug_json_unserializable(coco_dset.dataset, 'Input to safe_apply: ')
 
         if legacy:
             sub_dset, rest_dset = self.safe_partition(coco_dset, gids, remove=True)
         else:
             sub_dset = self.safe_partition(coco_dset, gids, remove=False)
 
+        if DEBUG_JSON_SERIALIZABLE:
+            debug_json_unserializable(sub_dset.dataset, 'Before __call__')
         if overwrite:
             sub_dset = self(sub_dset)
+            if DEBUG_JSON_SERIALIZABLE:
+                debug_json_unserializable(sub_dset.dataset, 'After __call__ (overwrite)')
         else:
             orig_annots = sub_dset.annots()
             orig_tids = orig_annots.get('track_id', None)
@@ -287,6 +297,8 @@ class TrackFunction(collections.abc.Callable):
 
             # TODO more sophisticated way to check if we can skip self()
             sub_dset = self(sub_dset)
+            if DEBUG_JSON_SERIALIZABLE:
+                debug_json_unserializable(sub_dset.dataset, 'After __call__')
 
             # if new annots were not created, rollover the old tracks
             new_annots = sub_dset.annots()
@@ -294,14 +306,31 @@ class TrackFunction(collections.abc.Callable):
                 new_tids = new_annots.get('track_id', None)
                 # Only overwrite track ids for annots that didn't have them
                 new_tids = np.where(orig_trackless_flags, new_tids, orig_tids)
+
+                # Ensure types are json serializable
+                import numbers
+                def _fixtype(tid):
+                    # need to keep strings the same, but integers need to be
+                    # case from numpy to python ints.
+                    if isinstance(tid, numbers.Integral):
+                        return int(tid)
+                    else:
+                        return tid
+                new_tids = list(map(_fixtype, new_tids))
+
                 new_annots.set('track_id', new_tids)
 
         # TODO: why is this assert here?
         assert None not in sub_dset.annots().lookup('track_id', None)
+
         if legacy:
-            return self.safe_union(rest_dset, sub_dset)
+            out_dset = self.safe_union(rest_dset, sub_dset)
         else:
-            return sub_dset
+            out_dset = sub_dset
+
+        if DEBUG_JSON_SERIALIZABLE:
+            debug_json_unserializable(out_dset.dataset, 'Output of safe_apply: ')
+        return out_dset
 
     @staticmethod
     @profile
@@ -532,6 +561,22 @@ def mask_to_polygons(probs,
         >>> import kwplot
         >>> kwplot.autompl()
         >>> kwplot.imshow(probs > 0.5)
+
+    Ignore:
+        >>> from watch.tasks.tracking.utils import mask_to_polygons
+        >>> import kwimage
+        >>> probs = kwimage.Heatmap.random(dims=(128, 128)).data['class_probs'][0]
+        >>> thresh = 0.5
+        >>> polys1 = list(mask_to_polygons(probs, thresh, scored=0, use_rasterio=0))
+        >>> polys2 = list(mask_to_polygons(probs, thresh, scored=0, use_rasterio=1))
+        >>> polys3 = list(mask_to_polygons(probs, thresh, scored=1, use_rasterio=0))
+        >>> polys4 = list(mask_to_polygons(probs, thresh, scored=1, use_rasterio=1))
+        >>> # xdoctest: +IGNORE_WANT
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(probs > 0.5)
+        >>> for score, poly in polys:
+        >>>     poly.draw()
     """
     # Threshold scores
     if thresh_hysteresis is None:
@@ -573,7 +618,8 @@ def mask_to_polygons(probs,
 
     if scored:
         for poly in polygons:
-            yield score_poly(poly, probs, use_rasterio=use_rasterio), poly
+            score = score_poly(poly, probs, use_rasterio=use_rasterio)
+            yield score, poly
     else:
         yield from polygons
 

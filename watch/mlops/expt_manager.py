@@ -305,7 +305,7 @@ class DVCExptManager(ub.NiceRepr):
         tables = manager.cross_referenced_tables()
 
         if 'staging' in tables:
-            todrop = ['expt_dvc_dpath', 'raw', 'ckpt_path', 'spkg_path', 'pkg_path', 'lightning_version', 'ckpt_exists']
+            todrop = ['expt_dvc_dpath', 'raw', 'ckpt_path', 'spkg_fpath', 'pkg_fpath', 'lightning_version', 'ckpt_exists']
             df = tables['staging']
             print(df.drop(ub.oset(todrop) & df.columns, axis=1).to_string())
 
@@ -420,9 +420,12 @@ class DVCExptManager(ub.NiceRepr):
         # manager.summarize()
         print(f'manager.expt_dvc_dpath={manager.expt_dvc_dpath}')
         print(len(eval_df))
-        eval_df = eval_df[~eval_df['is_broken']]
-        pull_rows = eval_df[eval_df.needs_pull]
-        pull_fpaths = pull_rows['dvc'].tolist()
+        if len(eval_df) > 0:
+            eval_df = eval_df[~eval_df['is_broken']]
+            pull_rows = eval_df[eval_df.needs_pull]
+            pull_fpaths = pull_rows['dvc'].tolist()
+        else:
+            pull_fpaths = []
         print(f'{len(pull_fpaths)=}')
         for p in pull_fpaths:
             assert p.exists()
@@ -430,7 +433,7 @@ class DVCExptManager(ub.NiceRepr):
 
     def pull_packages(manager):
         # TODO: git pull
-        pkg_df = manager.versioned_table(types=['pkg'])
+        pkg_df = manager.versioned_table(types=['pkg_fpath'])
         pull_df = pkg_df[pkg_df['needs_pull'].astype(bool)]
         pull_fpaths = pull_df['dvc'].tolist()
         manager.dvc.pull(pull_fpaths)
@@ -510,7 +513,7 @@ class ExperimentState(ub.NiceRepr):
         >>> print('self.templates = {}'.format(ub.repr2(self.templates, nl=1, sort=0)))
 
     Ignore:
-        table[table.type == 'pkg']['model'].unique()
+        table[table.type == 'pkg_fpath']['model'].unique()
     """
 
     def __init__(self, expt_dvc_dpath, dataset_code, dvc_remote=None,
@@ -538,49 +541,135 @@ class ExperimentState(ub.NiceRepr):
         self.dataset_code = dataset_code
         self.dvc_remote = dvc_remote
         self.training_dpath = self.expt_dvc_dpath / 'training'
+
+        # TODO: the name "fusion" should be a high level task or group not be hard coded.
+        # TODO: the name "models" should be configurable. It's the versioning place.
+        # We could move the pred out of the models subdir
+
+        # Denote which of the keys represent hashed information that could be
+        # looked up via the rlut.
+        self.hashed_cfgkeys = [
+            'trk_pxl_cfg',
+            'trk_poly_cfg',
+            'act_pxl_cfg',
+            'act_poly_cfg',
+            'crop_cfg',
+        ]
+        self.condensed_keys = self.hashed_cfgkeys + [
+            'test_trk_dset',
+            'test_act_dset',
+            'trk_model',
+            'act_model',
+            'crop_src_dset',
+            'crop_id',
+        ]
+
+        # Some of the "ids" are build from hashes of other configurations.
+        # This denotes what deps should be hashed and in what order.
+        self.hashid_dependencies = {
+            'trk_poly_id': ['trk_model', 'test_trk_dset', 'trk_pxl_cfg', 'trk_poly_cfg'],
+            'crop_id': ['regions_id', 'crop_cfg', 'crop_src_dset']
+        }
+
+        ### Experimental, add in SC dependencies
+        self.staging_template_prefix = '{expt_dvc_dpath}/training/{host}/{user}/{dataset_code}/'
+        self.storage_template_prefix = '{expt_dvc_dpath}/models/fusion/{dataset_code}/'
+
         self.patterns = {
             # General
-            'expt': '*',
+            'trk_expt': '*',
+            'act_expt': '*',
             'expt_dvc_dpath': expt_dvc_dpath,
             'dataset_code': dataset_code,
             ### Versioned
-            'test_dset': '*',
-            'model': model_pattern,  # hack, should have ext
-            'pred_cfg': '*',
-            'trk_cfg': '*',
-            'act_cfg': '*',
+            'test_trk_dset': '*',
+            'test_act_dset': '*',
+            'trk_model': model_pattern,  # hack, should have ext
+            'act_model': model_pattern,  # hack, should have ext
+            'trk_pxl_cfg': '*',
+            'trk_poly_cfg': '*',
+            'act_pxl_cfg': '*',
+            'act_poly_cfg': '*',
+            'crop_src_dset': '*',
+            'crop_cfg': '*',
+            'crop_id': '*',
+            'trk_poly_id': '*',
+            'regions_id': '*',
             #### Staging
             'host': '*',
             'user': '*',
             'lightning_version': '*',
             'checkpoint': '*',  # hack, should have ext
             'stage_model': '*',  # hack, should have ext
+            ### Deprecated
+            'model': model_pattern,  # hack, should have ext
+            'expt': '*',
         }
-
-        # TODO: the name "fusion" should be a high level task or group not be hard coded.
-        # TODO: the name "models" should be configurable. It's the versioning place.
-        # We could move the pred out of the models subdir
-
-        self.staging_template_prefix = '{expt_dvc_dpath}/training/{host}/{user}/{dataset_code}/'
-        self.storage_template_prefix = '{expt_dvc_dpath}/models/fusion/{dataset_code}/'
 
         self.staging_templates = {
             'ckpt': 'runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{checkpoint}.ckpt',
             'spkg': 'runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{model}.pt',
         }
 
+        # directory suffixes after the pred/eval type
+        task_dpath_suffix = {
+            'trk_pxl_dpath'  : 'trk/{trk_model}/{test_trk_dset}/{trk_pxl_cfg}',
+            'trk_poly_dpath' : 'trk/{trk_model}/{test_trk_dset}/{trk_pxl_cfg}/{trk_poly_cfg}',
+
+            'act_pxl_dpath'  : 'act/{act_model}/{test_act_dset}/{act_pxl_cfg}',
+            'act_poly_dpath' : 'act/{act_model}/{test_act_dset}/{act_pxl_cfg}/{act_poly_cfg}',
+
+            'crop_dpath': 'crop/{crop_src_dset}/{regions_id}/{crop_cfg}/{crop_id}',
+        }
+
+        # TODO:
+        # Can we abstract this so the only piece of user input is a definition
+        # of a set of steps? The steps can define the path templates that they
+        # want and the variables they use.
+
+        task_dpaths = {
+            'pred_trk_pxl_dpath'   : 'pred/' + task_dpath_suffix['trk_pxl_dpath'],
+            'pred_trk_poly_dpath'  : 'pred/' + task_dpath_suffix['trk_poly_dpath'],
+            'pred_act_pxl_dpath'   : 'pred/' + task_dpath_suffix['act_pxl_dpath'],
+            'pred_act_poly_dpath'  : 'pred/' + task_dpath_suffix['act_poly_dpath'],
+
+            'crop_dpath'           : task_dpath_suffix['crop_dpath'],
+
+            'eval_trk_pxl_dpath'   : 'eval/' + task_dpath_suffix['trk_pxl_dpath'],
+            'eval_trk_poly_dpath'  : 'eval/' + task_dpath_suffix['trk_poly_dpath'],
+            'eval_act_pxl_dpath'   : 'eval/' + task_dpath_suffix['act_pxl_dpath'],
+            'eval_act_poly_dpath'  : 'eval/' + task_dpath_suffix['act_poly_dpath'],
+        }
+
         self.volitile_templates = {
-            'pred_pxl': 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/pred.kwcoco.json',
-            'pred_trk': 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/tracking/{trk_cfg}/tracks.json',
-            'pred_act': 'pred/{expt}/{model}/{test_dset}/{pred_cfg}/actclf/{act_cfg}/activity_tracks.json',
+            'pred_trk_pxl_fpath'        : task_dpaths['pred_trk_pxl_dpath'] + '/pred.kwcoco.json',
+            'pred_trk_poly_kwcoco'      : task_dpaths['pred_trk_poly_dpath'] + '/tracks.kwcoco.json',
+            'pred_trk_poly_sites_fpath'          : task_dpaths['pred_trk_poly_dpath'] + '/site_tracks_manifest.json',
+            'pred_trk_poly_site_summaries_fpath' : task_dpaths['pred_trk_poly_dpath'] + '/site_summary_tracks_manifest.json',
+            'pred_trk_poly_sites_dpath'          : task_dpaths['pred_trk_poly_dpath'] + '/sites',
+            'pred_trk_poly_site_summaries_dpath' : task_dpaths['pred_trk_poly_dpath'] + '/site-summaries',
+            'pred_trk_poly_viz_stamp' : task_dpaths['pred_trk_poly_dpath'] + '/_viz.stamp',
+
+            'crop_fpath'              : task_dpaths['crop_dpath'] + '/crop.kwcoco.json',
+
+            'pred_act_pxl_fpath'   : task_dpaths['pred_act_pxl_dpath'] + '/pred.kwcoco.json',
+            'pred_act_poly_kwcoco' : task_dpaths['pred_act_poly_dpath'] + '/activity_tracks.kwcoco.json',
+            'pred_act_poly_sites_fpath'  : task_dpaths['pred_act_poly_dpath'] + '/site_activity_manifest.json',
+            # 'pred_act_poly_site_summaries_fpath' : task_dpaths['pred_act_poly_dpath'] + '/site_summary_activity_manifest.json',
+            'pred_act_poly_sites_dpath'  : task_dpaths['pred_act_poly_dpath'] + '/sites',
+            # 'pred_act_poly_site_summaries_dpath' : task_dpaths['pred_act_poly_dpath'] + '/site-summaries',
+            'pred_act_poly_viz_stamp' : task_dpaths['pred_act_poly_dpath'] + '/_viz.stamp',
         }
 
         self.versioned_templates = {
             # TODO: rename curves to pixel
-            'pkg': 'packages/{expt}/{model}.pt',
-            'eval_pxl': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/eval_pxl/curves/measures2.json',
-            'eval_trk': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/tracking/{trk_cfg}/iarpa_eval/scores/merged/summary2.json',
-            'eval_act': 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/actclf/{act_cfg}/iarpa_sc_eval/scores/merged/summary3.json',
+            'pkg_fpath'            : 'packages/{expt}/{model}.pt',  # by default packages dont know what task they have (because they may have multiple)
+            'pkg_trk_pxl_fpath'    : 'packages/{trk_expt}/{trk_model}.pt',
+            'pkg_act_pxl_fpath'    : 'packages/{act_expt}/{act_model}.pt',
+            'eval_trk_pxl_fpath'   : task_dpaths['eval_trk_pxl_dpath'] + '/curves/measures2.json',
+            'eval_trk_poly_fpath'  : task_dpaths['eval_trk_poly_dpath'] + '/merged/summary2.json',
+            'eval_act_pxl_fpath'   : task_dpaths['eval_act_pxl_dpath'] + '/curves/measures2.json',
+            'eval_act_poly_fpath'  : task_dpaths['eval_act_poly_dpath'] + '/merged/summary3.json',
         }
 
         # User specified config mapping a formatstr variable to a set of items
@@ -590,28 +679,52 @@ class ExperimentState(ub.NiceRepr):
             k: set() for k in self.patterns.keys()
         }
 
-        # Denote which of the keys represent hashed information that could be
-        # looked up via the rlut.
-        self.hashed_cfgkeys = ['pred_cfg', 'act_cfg', 'trk_cfg']
-
         self.templates = {}
         for k, v in self.staging_templates.items():
             self.templates[k] = self.staging_template_prefix + v
+
         for k, v in self.volitile_templates.items():
             self.templates[k] = self.storage_template_prefix + v
+
         for k, v in self.versioned_templates.items():
             self.templates[k] = self.storage_template_prefix + v
 
-        self.path_patterns_matrix = {}
+        for k, v in task_dpaths.items():
+            self.templates[k] = self.storage_template_prefix + v
+
+        self.path_patterns_matrix = []
         self._build_path_patterns()
 
         # These are some locations that I used to know
         self.legacy_versioned_templates = {
-            (self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/curves',
-             self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/eval_pxl/curves'),
-            (self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/heatmaps',
-             self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/eval_pxl/heatmaps'),
+            (self.storage_template_prefix + 'eval/{trk_expt}/{model}/{test_dset}/{pred_cfg}/eval/curves',
+             self.storage_template_prefix + 'eval/{trk_expt}/{model}/{test_dset}/{pred_cfg}/eval/eval_pxl/curves'),
+            (self.storage_template_prefix + 'eval/{trk_expt}/{model}/{test_dset}/{pred_cfg}/eval/heatmaps',
+             self.storage_template_prefix + 'eval/{trk_expt}/{model}/{test_dset}/{pred_cfg}/eval/eval_pxl/heatmaps'),
+            ##
+            # Move activity metrics to depend on pred_pxl_cfg, trk_cfg and
+            ##
+            # (self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/actclf/',
+            #  self.storage_template_prefix + 'eval/{expt}/{model}/{test_dset}/{pred_cfg}/eval/tracking/truth/actclf/'),
         }
+
+    def _make_cross_links(self):
+        # Link between evals and predictions
+        eval_rows = list(self.evaluation_rows())
+        num_links = 0
+        for row in ub.ProgIter(eval_rows, desc='linking evals and preds'):
+            if row['has_raw']:
+                eval_type = row['type']
+                pred_type = eval_type.replace('eval', 'pred')
+                eval_dpath = ub.Path(self.templates[eval_type + '_dpath'].format(**row))
+                pred_dpath = ub.Path(self.templates[pred_type + '_dpath'].format(**row))
+                if eval_dpath.exists() and pred_dpath.exists():
+                    pred_lpath = eval_dpath / '_pred_link'
+                    eval_lpath = pred_dpath / '_eval_link'
+                    ub.symlink(pred_dpath, pred_lpath, verbose=1, overwrite=True)
+                    ub.symlink(eval_dpath, eval_lpath, verbose=1, overwrite=True)
+                    num_links += 1
+        print(f'made {num_links} links')
 
     VERSIONED_COLUMNS = [
         'type', 'has_dvc', 'has_raw', 'needs_pull', 'is_link', 'is_broken',
@@ -630,10 +743,10 @@ class ExperimentState(ub.NiceRepr):
         self._pattern_matrix = list(ub.named_product(_patterns))
 
         self.path_patterns_matrix = [
-            {
+            ub.udict({
                 k: v.format(**patterns)
                 for k, v in self.templates.items()
-            }
+            })
             for patterns in self._pattern_matrix
         ]
         # print('self.path_patterns_matrix = {}'.format(ub.repr2(self.path_patterns_matrix, nl=1)))
@@ -646,7 +759,7 @@ class ExperimentState(ub.NiceRepr):
         parser = parse.Parser(str(template))
         results = parser.parse(str(path))
         if results is None:
-            raise AssertionError(f'Failed to match path={path} to template={template}')
+            raise RuntimeError(f'Failed to match path={path} to template={template}')
             parser = parse.Parser(str(template)[:-4])
             results = parser.parse(str(path))
         if results is not None:
@@ -683,7 +796,7 @@ class ExperimentState(ub.NiceRepr):
         # Some checkpoints may not have been repackaged yet.
         # Some packages may have had their checkpoints deleted.
         # None of these files are in DVC, this is entirely volitile state.
-        default = {'ckpt_path': None, 'spkg_path': None}
+        default = {'ckpt_path': None, 'spkg_fpath': None}
         _id_to_row = ub.ddict(default.copy)
 
         rows = []
@@ -709,14 +822,14 @@ class ExperimentState(ub.NiceRepr):
         key = 'spkg'  # stands for staged package
         for pat in [p[key] for p in self.path_patterns_matrix]:
             mpat = util_pattern.Pattern.coerce(pat)
-            for spkg_path in list(mpat.paths()):
+            for spkg_fpath in list(mpat.paths()):
                 # Does this correspond to an existing checkpoint?
-                _attrs = self._parse_pattern_attrs(self.templates[key], spkg_path)
+                _attrs = self._parse_pattern_attrs(self.templates[key], spkg_fpath)
 
                 # Hack: making assumption about naming pattern
-                spkg_stem = spkg_path.stem
+                spkg_stem = spkg_fpath.stem
                 ckpt_stem = ''.join(spkg_stem.partition('_epoch')[-2:])[1:]
-                ckpt_path = spkg_path.parent / (ckpt_stem + '.ckpt')
+                ckpt_path = spkg_fpath.parent / (ckpt_stem + '.ckpt')
 
                 if ckpt_path.exists():
                     # Modify existing row
@@ -728,18 +841,18 @@ class ExperimentState(ub.NiceRepr):
                     row['ckpt_exists'] = False
                     row['type'] = 'ckpt'
                     rows.append(row)
-                row['spkg_path'] = spkg_path
+                row['spkg_fpath'] = spkg_fpath
                 row['is_packaged'] = True
                 row.update(_attrs)
 
         for row in rows:
             fname = row['checkpoint']
 
-            if row.get('spkg_path', None) is None:
+            if row.get('spkg_fpath', None) is None:
                 # HACK!!!
                 row['model'] = None
             else:
-                row['model'] = ub.Path(row['spkg_path']).name
+                row['model'] = ub.Path(row['spkg_fpath']).name
 
             # Hack: making name assumptions
             info = checkpoint_filepath_info(fname)
@@ -749,8 +862,8 @@ class ExperimentState(ub.NiceRepr):
             kw = ub.udict(row).subdict({'expt', 'model'})
             kw['expt_dvc_dpath'] = self.expt_dvc_dpath
             kw['dataset_code'] = self.dataset_code
-            row['pkg_path'] = ub.Path(self.templates['pkg'].format(**kw))
-            row['is_copied'] = row['pkg_path'].exists()
+            row['pkg_fpath'] = ub.Path(self.templates['pkg_fpath'].format(**kw))
+            row['is_copied'] = row['pkg_fpath'].exists()
 
         return rows
 
@@ -760,7 +873,12 @@ class ExperimentState(ub.NiceRepr):
         (so it is recomputable), but it is not versioned itself. These are
         raw prediction, tracking, and classification results.
         """
-        keys = ['pred_pxl', 'pred_trk', 'pred_act']
+        keys = [
+            'pred_trk_pxl_fpath',
+            'pred_trk_poly_sites_fpath',
+            'pred_trk_poly_site_summaries_fpath',
+            'pred_act_poly_sites_fpath'
+        ]
         for key in keys:
             for pat in [p[key] for p in self.path_patterns_matrix]:
                 found = util_path.coerce_patterned_paths(pat)
@@ -771,10 +889,50 @@ class ExperimentState(ub.NiceRepr):
                     }
                     _attrs = self._parse_pattern_attrs(self.templates[key], path)
                     row.update(_attrs)
+
+                    ADD_CROPID_HACK = 0
+                    # We will not do this for now and handle it in the result
+                    # parser, but neither solution is great. Need a better way
+                    # to find the "join" of these tables
+                    if ADD_CROPID_HACK:
+                        # special handling for adding tracking / cropping
+                        # params to the activity row. We should figure out a
+                        # way of making this more general in the future.
+                        if row['type'] == 'pred_act_poly_sites_fpath':
+                            if row['test_act_dset'].startswith('crop'):
+                                # Fixme dataset name ids need a rework
+                                crop_id = row['test_act_dset'].split('_crop.kwcoco')[0]
+
+                                # There needs to be a search step for the crop
+                                # dataset, which is not ideal.
+                                pats = self.patterns.copy()
+                                pats['crop_id'] = crop_id
+                                pats = ub.udict(pats).map_values(str)
+                                pat = self.templates['crop_fpath'].format(**pats)
+                                _found = util_path.coerce_patterned_paths(pat)
+                                if _found:
+                                    assert len(_found) == 1, 'should not have dups here'
+                                    found = _found[0]
+                                    _crop_attrs = ub.udict(self._parse_pattern_attrs(self.templates['crop_fpath'], found))
+                                    _crop_attrs = _crop_attrs - row
+                                    row.update(_crop_attrs)
+                                    # Can we find the tracking params too?
+                                    # It looks like we'd need to parse out the
+                                    # file, so no, not here. We need to change the
+                                    # path scheme to fix that.
+                                    # import json
+                                    # dataset = json.loads(found.read_text())
+                                    # self._parse_pattern_attrs(self.templates['crop_fpath']
+
                     yield row
 
     def evaluation_rows(self, with_attrs=1, types=None, notypes=None):
-        keys = ['eval_pxl', 'eval_act', 'eval_trk']
+        keys = [
+            'eval_trk_pxl_fpath',
+            'eval_trk_poly_fpath',
+            'eval_act_pxl_fpath',
+            'eval_act_poly_fpath'
+        ]
         yield from self.versioned_rows(with_attrs=with_attrs, types=keys)
 
     def versioned_rows(self, with_attrs=1, types=None, notypes=None):
@@ -787,7 +945,12 @@ class ExperimentState(ub.NiceRepr):
             notypes = None
             with_attrs = 1
         """
-        keys = ['eval_pxl', 'eval_act', 'eval_trk', 'pkg']
+        keys = [
+            'eval_trk_pxl_fpath',
+            'eval_act_poly_fpath',
+            'eval_trk_poly_fpath',
+            'pkg_fpath'
+        ]
         if types is not None:
             keys = types
         if notypes is not None:
@@ -880,13 +1043,34 @@ class ExperimentState(ub.NiceRepr):
             # Determine how many volitile items (i.e. predictions) we
             # have on disk that correspond with our versioned data
             # volitile_keys = ['pred_pxl', 'pred_trk', 'pred_act']
-            model_to_volitile = dict(list(volitile_df.groupby('model')))
+
+            _grouper_keys = ['trk_model', 'act_model', 'model']
+            vol_grouper_keys = ub.oset(_grouper_keys) & volitile_df.columns
+            ver_grouper_keys = ub.oset(_grouper_keys) & versioned_df.columns
+            grouper_keys = list(vol_grouper_keys & ver_grouper_keys)
+
             if 0:
                 versioned_df.drop(['raw', 'dvc', 'dataset_code', 'expt_dvc_dpath'], axis=1)
-            model_to_versioned = dict(list(versioned_df.groupby(['type', 'model'])))
-            versioned_df.loc[:, ['n_pred_pxl', 'n_pred_trk', 'n_pred_act']] = 0
-            for (type, model), subdf in model_to_versioned.items():
-                associated = model_to_volitile.get(model, None)
+            group_to_volitile = dict(list(volitile_df.groupby(grouper_keys)))
+            group_to_versioned = dict(list(versioned_df.groupby(grouper_keys)))
+
+            pred_keys = [
+                'pred_trk_pxl_fpath',
+                'pred_act_pxl_fpath',
+
+                'pred_trk_poly_sites_fpath',
+                'pred_trk_poly_site_summaries_fpath',
+
+                'pred_act_poly_sites_fpath',
+                # 'pred_act_poly_site_summaries_fpath',
+
+                'pred_act_poly_sites_fpath'
+            ]
+            npred_keys = ['n_' + k for k in pred_keys]
+
+            versioned_df.loc[:, npred_keys] = 0
+            for groupvals, subdf in group_to_versioned.items():
+                associated = group_to_volitile.get(groupvals, None)
                 if associated is not None:
                     counts = associated.value_counts('type').rename(lambda x: 'n_' + x, axis=0)
                     versioned_df.loc[subdf.index, counts.index] += counts
@@ -940,26 +1124,6 @@ class ExperimentState(ub.NiceRepr):
             'volitile': volitile_df,
         })
         return tables
-
-    def _make_cross_links(self):
-        # Link between evals and predictions
-        eval_rows = list(self.evaluation_rows())
-        num_links = 0
-        for row in ub.ProgIter(eval_rows, desc='linking evals and preds'):
-            if row['has_raw']:
-                eval_fpath = ub.Path(row['raw'])
-                eval_dpath = eval_fpath.parent.parent.parent
-                pred_type = row['type'].replace('eval', 'pred')
-                pred_fpath = ub.Path(self.templates[pred_type].format(**row))
-                pred_dpath = pred_fpath.parent
-
-                if eval_dpath.exists() and pred_dpath.exists():
-                    pred_lpath = eval_dpath / '_pred_link'
-                    eval_lpath = pred_dpath / '_eval_link'
-                    ub.symlink(pred_dpath, pred_lpath, verbose=1)
-                    ub.symlink(eval_dpath, eval_lpath, verbose=1)
-                    num_links += 1
-        print(f'made {num_links} links')
 
     def summarize(self):
         """
@@ -1030,8 +1194,8 @@ class ExperimentState(ub.NiceRepr):
             kw = ub.udict(row).subdict({'expt', 'model'})
             kw['expt_dvc_dpath'] = self.expt_dvc_dpath
             kw['dataset_code'] = self.dataset_code
-            pkg_fpath = ub.Path(self.templates['pkg'].format(**kw))
-            src, dst = (row['spkg_path'], pkg_fpath)
+            pkg_fpath = ub.Path(self.templates['pkg_fpath'].format(**kw))
+            src, dst = (row['spkg_fpath'], pkg_fpath)
             dst.parent.ensuredir()
             shutil.copy(src, dst)
 
@@ -1091,7 +1255,7 @@ class ExperimentState(ub.NiceRepr):
         #         --skip_existing=True --backend=slurm --run=0
         # from watch.tasks.fusion.schedule_evaluation import schedule_evaluation
         from watch.mlops.schedule_evaluation import schedule_evaluation
-        model_globstr = [p['pkg'] for p in state.path_patterns_matrix]
+        model_globstr = [p['pkg_fpath'] for p in state.path_patterns_matrix]
 
         # NOTE: this should more often be specified as a cmdline arg maybe
         # jsonargparse can help with getting this nested correctly.
@@ -1125,8 +1289,21 @@ class ExperimentState(ub.NiceRepr):
         from watch.utils.reverse_hashid import ReverseHashTable
         rhash = ReverseHashTable(type='test_dset')
         rhash.register(test_dset_name, test_dataset)
-
         return test_dset_name
+
+    def _condense_cfg(self, params, type):
+        human_opts = ub.dict_isect(params, {})
+        other_opts = ub.dict_diff(params, human_opts)
+        if len(human_opts):
+            human_part = ub.repr2(human_opts, compact=1) + '_'
+        else:
+            human_part = ''
+        cfgstr_suffix = human_part + ub.hash_data(other_opts)[0:8]
+        cfgstr = f'{type}_{cfgstr_suffix}'
+        from watch.utils.reverse_hashid import ReverseHashTable
+        rhash = ReverseHashTable(type=type)
+        rhash.register(cfgstr, params)
+        return cfgstr
 
     def _condense_pred_cfg(self, pred_cfg):
         """
@@ -1162,6 +1339,9 @@ class ExperimentState(ub.NiceRepr):
         rhash.register(trk_cfg_dname, bas_track_cfg)
         return trk_cfg_dname
 
+    def _condense_model(self, model):
+        return ub.Path(model).name
+
     def _condense_act_cfg(self, act_cfg):
         """
         This does what "organize" used to do.
@@ -1192,6 +1372,11 @@ def summarize_tables(tables):
     volitile_df = tables.get('volitile', None)
     versioned_df = tables.get('versioned', None)
 
+    table_shapes = ub.udict(tables).map_values(lambda x: x.shape)
+    title = '[blue] Table Summary'
+    print(title)
+    print('table_shapes = {}'.format(ub.repr2(table_shapes, nl=1, align=':', sort=0)))
+
     if staging_df is not None:
         title = '[yellow] Staging Summary (Training)'
 
@@ -1204,10 +1389,18 @@ def summarize_tables(tables):
             body = console.highlighter('There are no unversioned staging items')
         print(Panel(body, title=title))
 
+    _grouper_keys = ub.oset([
+        'dataset_code',
+        # 'test_trk_dset',
+        # 'test_act_dset',
+        'type'
+    ])
+
     if volitile_df is not None:
         title = ('[bright_blue] Volitile Summary (Predictions)')
         if len(volitile_df):
-            num_pred_types = volitile_df.groupby(['dataset_code', 'type']).nunique()
+            grouper_keys = list(_grouper_keys & volitile_df.columns)
+            num_pred_types = volitile_df.groupby(grouper_keys, dropna=False).nunique()
             body_df = num_pred_types
             body = console.highlighter(str(body_df))
         else:
@@ -1222,7 +1415,8 @@ def summarize_tables(tables):
         # version_bitcols = ['has_raw', 'has_dvc', 'is_link', 'is_broken', 'needs_pull', 'needs_push', 'has_orig']
         version_bitcols = ['has_raw', 'has_dvc', 'is_link', 'is_broken', 'needs_pull', 'needs_push']
         if len(versioned_df):
-            body_df = versioned_df.groupby(['dataset_code', 'type'])[version_bitcols].sum()
+            grouper_keys = list(_grouper_keys & versioned_df.columns)
+            body_df = versioned_df.groupby(grouper_keys)[version_bitcols].sum()
             body = console.highlighter(str(body_df))
         else:
             body = console.highlighter('There are no versioned items')

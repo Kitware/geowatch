@@ -277,7 +277,7 @@ def debug_all_results():
     print(df2.reset_index().to_string())
 
 
-@ub.memoize
+# @ub.memoize
 def _load_json(fpath):
     # memo hack for development
     with open(fpath, 'r') as file:
@@ -362,25 +362,17 @@ def load_pxl_eval(fpath, dvc_dpath=None):
     return info
 
 
-def load_bas_eval(fpath, dvc_expt_dpath):
+def load_bas_eval(fpath, expt_dvc_dpath):
     bas_info = _load_json(fpath)
 
     best_bas_rows = pd.read_json(io.StringIO(json.dumps(bas_info['best_bas_rows'])), orient='table')
 
-    flags = best_bas_rows['region_id'] == '__merged__'
-
-    if np.any(flags):
-        bas_row = best_bas_rows[flags].iloc[0]
-    else:
-        # OLD Phase 1 code, can eventually remove
-        try:
-            bas_row = best_bas_rows.loc['merged'].reset_index().iloc[0].to_dict()
-        except Exception:
-            bas_row = best_bas_rows[best_bas_rows['region_id'].isnull()].reset_index(drop=1).iloc[0].to_dict()
+    # flags = best_bas_rows['region_id'] == '__merged__'
+    bas_row = best_bas_rows.loc['__macro__'].reset_index()
 
     tracker_info = bas_info['parent_info']
     path_hint = fpath
-    param_types = parse_tracker_params(tracker_info, dvc_expt_dpath, path_hint=path_hint)
+    param_types = parse_tracker_params(tracker_info, expt_dvc_dpath, path_hint=path_hint)
 
     metrics = {
         'BAS_F1': bas_row['F1'],
@@ -402,20 +394,22 @@ def load_bas_eval(fpath, dvc_expt_dpath):
     return info
 
 
-def load_sc_eval(fpath, dvc_expt_dpath):
+def load_sc_eval(fpath, expt_dvc_dpath):
     sc_info = _load_json(fpath)
     # sc_info['sc_cm']
     sc_df = pd.read_json(io.StringIO(json.dumps(sc_info['sc_df'])), orient='table')
-    sc_cm = pd.read_json(io.StringIO(json.dumps(sc_info['sc_cm'])), orient='table')
+    # sc_cm = pd.read_json(io.StringIO(json.dumps(sc_info['sc_cm'])), orient='table')
     tracker_info = sc_info['parent_info']
-    param_types = parse_tracker_params(tracker_info, dvc_expt_dpath)
+    param_types = parse_tracker_params(tracker_info, expt_dvc_dpath)
 
     # non_measures = ub.dict_diff(param_types, ['resource'])
     # params = ub.dict_union(*non_measures.values())
     metrics = {
-        'mean_f1': sc_df.loc['F1 score'].mean(),
-        'siteprep_f1': sc_df.loc['F1 score', 'Site Preparation'].mean(),
-        'active_f1': sc_df.loc['F1 score', 'Active Construction'].mean(),
+        # 'mean_f1': sc_df.loc['F1'].mean(),
+        'sc_macro_f1': sc_df.loc['__macro__']['F1'].mean(),
+        'sc_micro_f1': sc_df.loc['__micro__']['F1'].mean(),
+        'sc_siteprep_macro_f1': sc_df.loc['__macro__', 'Site Preparation']['F1'],
+        'sc_active_macro_f1': sc_df.loc['__macro__', 'Site Preparation']['F1'],
     }
     # metrics.update(
     #     param_types['resource']
@@ -427,7 +421,7 @@ def load_sc_eval(fpath, dvc_expt_dpath):
         'metrics': metrics,
         'param_types': param_types,
         'other': {
-            'sc_cm': sc_cm,
+            # 'sc_cm': sc_cm,
             'sc_df': sc_df,
         },
         'json_info': sc_info,
@@ -435,10 +429,14 @@ def load_sc_eval(fpath, dvc_expt_dpath):
     return info
 
 
-def parse_tracker_params(tracker_info, dvc_expt_dpath, path_hint=None):
+def parse_tracker_params(tracker_info, expt_dvc_dpath, path_hint=None):
     track_item = find_track_item(tracker_info)
 
-    if 'pred_info' not in track_item['properties']:
+    if 'extra' in track_item['properties']:
+        pred_info = track_item['properties']['extra']['pred_info']
+    elif 'pred_info' in track_item['properties']:
+        pred_info = track_item['properties']['pred_info']
+    else:
         if path_hint is None:
             raise Exception('cannot find pred info. This is an old result')
         # TODO: remove the eval stealing
@@ -455,11 +453,17 @@ def parse_tracker_params(tracker_info, dvc_expt_dpath, path_hint=None):
                 raise Exception('dvc pull')
             else:
                 raise Exception('got nothing')
-    else:
-        pred_info = track_item['properties']['pred_info']
 
-    param_types = parse_pred_params(pred_info, dvc_expt_dpath, path_hint)
-    track_args = track_item['properties']['args']
+    param_types = parse_pred_params(pred_info, expt_dvc_dpath, path_hint)
+    track_config = track_item['properties'].get('args', None)
+    track_args = track_item['properties'].get('args', None)
+    if track_config is not None:
+        track_args = track_config
+    # Fix for broken scriptconfig handling
+    FIX_BROKEN_SCRIPTCONFIG_HANDLING = 1
+    if FIX_BROKEN_SCRIPTCONFIG_HANDLING:
+        if '_data' in track_args:
+            track_args = track_args['_data']
     track_config = relevant_track_config(track_args)
     param_types['track'] = track_config
     return param_types
@@ -471,7 +475,7 @@ def relevant_track_config(track_args):
     return track_config
 
 
-def parse_pred_params(pred_info, dvc_expt_dpath, path_hint=None):
+def parse_pred_params(pred_info, expt_dvc_dpath, path_hint=None):
     from watch.utils import util_time
     pred_item = find_pred_item(pred_info)
 
@@ -505,8 +509,11 @@ def parse_pred_params(pred_info, dvc_expt_dpath, path_hint=None):
         parse_resource_item(pred_item)
         resources = parse_resource_item(item)
 
-    pred_args = pred_item['properties']['args']
-    pred_config = relevant_pred_config(pred_args, dvc_expt_dpath)
+    pred_config = pred_item['properties'].get('args', None)
+    pred_args = pred_item['properties'].get('args', None)
+    if pred_config is not None:
+        pred_args = pred_config
+    pred_config = relevant_pred_config(pred_args, expt_dvc_dpath)
     fit_config = relevant_fit_config(fit_config)
 
     param_types = {

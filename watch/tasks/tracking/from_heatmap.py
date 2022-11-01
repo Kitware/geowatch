@@ -118,28 +118,33 @@ class TimePolygonFilter(CocoDsetFilter):
         with its mask.
         Mask is computed by comparing heatmaps with threshold.
         """
+        found = None
+        magic_thresh = 0.5
         for image_ind, (gid, poly) in enumerate(gids_polys):
             try:
                 overlap = self.score(poly,
                                      gid,
                                      mode='overlap',
                                      threshold=self.threshold)
-                if overlap > 0.5:
-                    return image_ind
+                if overlap > magic_thresh:
+                    found = image_ind
+                    break
             except AssertionError as e:
                 print(f'image {gid} does not have all predictions: {e}')
 
-        return None  # TODO error handling
+        # return None  # TODO error handling
+        return found
 
     def on_observations(self, observations):
-        start_idx = self.get_poly_time_ind(
-            map(lambda o: (o.gid, o.poly), observations))
-        end_idx = self.get_poly_time_ind(
-            map(lambda o: (o.gid, o.poly), reversed(observations)))
-        len_obs = sum(1 for _ in observations)
-        # have to make sure this doesn't get consumed
-        return list(
-            itertools.islice(observations, start_idx, len_obs - end_idx))
+        observations = list(observations)
+        len_obs = len(observations)
+        gids_polys = [(o.gid, o.poly) for o in observations]
+        start_idx = self.get_poly_time_ind(gids_polys)
+        if start_idx is None:
+            return []
+        rev_end_idx = self.get_poly_time_ind(reversed(gids_polys))
+        end_idx = len_obs - rev_end_idx
+        return observations[start_idx:end_idx]
 
     def on_augmented_polys(self, aug_polys):
         raise NotImplementedError('need gids for time filtering')
@@ -263,7 +268,6 @@ def add_tracks_to_dset(sub_dset,
                        segmentation=segmentation,
                        score=this_score,
                        track_id=track_id)
-
         return new_ann
 
     new_trackids = kwcoco_extensions.TrackidGenerator(sub_dset)
@@ -285,6 +289,11 @@ def add_tracks_to_dset(sub_dset,
     # "ids" first
     for new_ann in all_new_anns:
         sub_dset.add_annotation(**new_ann)
+
+    DEBUG_JSON_SERIALIZABLE = 0
+    if DEBUG_JSON_SERIALIZABLE:
+        from watch.utils.util_json import debug_json_unserializable
+        debug_json_unserializable(sub_dset.dataset)
 
     return sub_dset
 
@@ -397,7 +406,16 @@ def time_aggregated_polys(sub_dset,
     # vidpoly separately, so have to bookkeep both vidpolys and tracks
     # in a list track_polys
 
-    min_area_px = 80  # TODO: parameterize
+    # import xdev
+    # xdev.embed()
+
+    # video_gsd = video.get('target_gsd', None)
+    # if video_gsd is not None:
+    #     min_area_px = '28 meters^2'
+    # for t, p in tracks_polys:
+    #     print(np.sqrt(p.area))
+
+    min_area_px = 80  # TODO: parameterize TODO: make expressable in GSD
     size_filter = SmallPolygonFilter(min_area_px=min_area_px)
     n_orig = len(tracks_polys)
     tracks_polys = list(size_filter(tracks_polys))
@@ -417,6 +435,10 @@ def time_aggregated_polys(sub_dset,
         # TODO investigate different thresh here
         time_thresh = thresh
         time_filter = TimePolygonFilter(sub_dset, tuple(key), time_thresh)
+        _filtered = []
+        for _, t in enumerate(tracks):
+            _t = time_filter(t)
+            _filtered.append(_t)
         _filtered = list(map(time_filter, tracks))
         tracks = [t for t in _filtered if len(list(t.observations)) > 0]
 
@@ -426,6 +448,86 @@ def time_aggregated_polys(sub_dset,
 #
 # --- time_aggregated_polys utilities ---
 #
+
+def _merge_polys(p1, p2):
+    '''
+    Given two lists of polygons, p1 and p2, merge these according to:
+      - add all unique polygons in the merged list
+      - for overlapping polygons, add the union of both polygons
+
+    Ignore:
+        from watch.tasks.tracking.from_heatmap import * # NOQA
+        from watch.tasks.tracking.from_heatmap import _merge_polys  # NOQA
+
+        p1 = [kwimage.Polygon.random().to_shapely() for _ in range(10)]
+        p2 = [kwimage.Polygon.random().to_shapely() for _ in range(10)]
+        _merge_polys(p1, p2)
+
+        p1_kw = kwimage.Polygon(exterior=np.array([(0, 0), (1, 0), (0.5, 1)]))
+        p2_kw = kwimage.Polygon(exterior=np.array([(0, 2), (1, 2), (0.5, 1)]))
+        _p1 = p2_kw.to_shapely()
+        _p2 = p1_kw.to_shapely()
+        print(_p1.intersects(_p2))
+        print(_p1.overlaps(_p2))
+        print(unary_union([_p1, _p2]))
+
+        p1_kw = kwimage.Boxes([[0, 0, 10, 10]], 'xywh').to_polygons()[0]
+        p2_kw = kwimage.Boxes([[10, 0, 10, 10]], 'xywh').to_polygons()[0]
+        _p1 = p2_kw.to_shapely()
+        _p2 = p1_kw.to_shapely()
+        print(_p1.intersects(_p2))
+        print(_p1.overlaps(_p2))
+        print(unary_union([_p1, _p2]))
+
+        while True:
+            _p1 = kwimage.Polygon.random().to_shapely()
+            _p2 = kwimage.Polygon.random().to_shapely()
+            if 1 or _p1.intersects(_p2):
+                combo = unary_union([_p1, _p2])
+                if combo.type != 'Polygon':
+                    raise Exception('!')
+    '''
+    merged_polys = []
+
+    p1_seen = set()
+    p2_seen = set()
+
+    # add all polygons that overlap
+    for j, _p1 in enumerate(p1):
+        if j in p1_seen:
+            continue
+        for i, _p2 in enumerate(p2):
+            if (i in p2_seen) or (i > len(p2) - 1):
+                continue
+            if _p1.intersects(_p2):
+                combo = unary_union([_p1, _p2])
+                if combo.type == 'Polygon':
+                    merged_polys.append(combo)
+                elif combo.type == 'MultiPolygon':
+                    # Can this ever happen? It seems to have occurred in a test
+                    # run. Bowties can cause this.
+                    # import warnings
+                    # warnings.warn('Found two intersecting polygons where the union was a multipolygon')
+                    merged_polys.extend(list(combo.geoms))
+                else:
+                    raise AssertionError(f'Unexpected type {combo.type} from {_p1} and {_p2}')
+
+                p1_seen.add(j)
+                p2_seen.add(i)
+
+    # all polygons that did not overlap with any polygon
+    all_p1 = set(np.arange(len(p1)))
+    remaining_p1 = all_p1 - p1_seen
+
+    for index in remaining_p1:
+        merged_polys.append(p1[index])
+
+    all_p2 = set(np.arange(len(p2)))
+    remaining_p2 = all_p2 - p2_seen
+    for index in remaining_p2:
+        merged_polys.append(p2[index])
+
+    return merged_polys
 
 
 def _heatmaps_to_polys_moving_window(heatmaps, bounds, agg_fn, thresh, morph_kernel,
@@ -437,45 +539,7 @@ def _heatmaps_to_polys_moving_window(heatmaps, bounds, agg_fn, thresh, morph_ker
         return [p.to_shapely() for p in polys]
 
     def convert_to_kwimage_poly(shapely_polys):
-        return [kwimage.structs.polygon.Polygon.from_shapely(p) for p in shapely_polys]
-
-    def merge_polys(p1, p2):
-        '''
-        Given two lists of polygons, p1 and p2, merge these according to:
-          - add all unique polygons in the merged list
-          - for overlapping polygons, add the union of both polygons
-        '''
-        merged_polys = []
-
-        p1_seen = set()
-        p2_seen = set()
-
-        # add all polygons that overlap
-        for j, _p1 in enumerate(p1):
-            if j in p1_seen:
-                continue
-            for i, _p2 in enumerate(p2):
-                if (i in p2_seen) or (i > len(p2) - 1):
-                    continue
-                if _p1.intersects(_p2):
-                    convex_hull = unary_union([_p1, _p2])
-                    merged_polys.append(convex_hull)
-                    p1_seen.add(j)
-                    p2_seen.add(i)
-
-        # all polygons that did not overlap with nay polygon
-        all_p1 = set(np.arange(len(p1)))
-        remaining_p1 = all_p1 - p1_seen
-
-        for index in remaining_p1:
-            merged_polys.append(p1[index])
-
-        all_p2 = set(np.arange(len(p2)))
-        remaining_p2 = all_p2 - p2_seen
-        for index in remaining_p2:
-            merged_polys.append(p2[index])
-
-        return merged_polys
+        return [kwimage.Polygon.from_shapely(p) for p in shapely_polys]
 
     min_area_px = 80  # TODO: parameterize
     size_filter = SmallPolygonFilter(min_area_px=min_area_px)
@@ -494,7 +558,7 @@ def _heatmaps_to_polys_moving_window(heatmaps, bounds, agg_fn, thresh, morph_ker
         h1 = heatmaps[(i + 1) * final_size:(i + 2) * final_size]
         p1 = _heatmaps_to_polys(h1, bounds, agg_fn, thresh, morph_kernel, thresh_hysteresis, norm_ord)
         p1 = convert_to_shapely(p1)
-        polys_final = merge_polys(polys_final, p1)
+        polys_final = _merge_polys(polys_final, p1)
 
     polys_final = convert_to_kwimage_poly(polys_final)
 

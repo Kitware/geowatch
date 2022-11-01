@@ -356,6 +356,7 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
     # Use the new COG output driver
     # Perf options
     if 1:
+        # TODO: these probably should be environment variables?
         builder.options['--config']['GDAL_CACHEMAX'] = '15%'
         builder.options['-co']['NUM_THREADS'] = 'ALL_CPUS'
 
@@ -597,7 +598,7 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
     See gdal_single_warp() for args
 
     Example:
-        >>> # xdoctest +REQUIRES(--slow)
+        >>> # xdoctest: +REQUIRES(--slow)
         >>> # Uses data from the data cube with extra=1
         >>> from watch.utils.util_gdal import *  # NOQA
         >>> from watch.cli.coco_align_geotiffs import *  # NOQA
@@ -605,7 +606,7 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
         >>> cube, region_df = SimpleDataCube.demo(with_region=True, extra=True)
         >>> local_epsg = 32635
         >>> space_box = kwimage.Polygon.from_shapely(region_df.geometry.iloc[1]).bounding_box().to_ltrb()
-        >>> dpath = ub.ensure_app_cache_dir('watch/test/gdal_multi_warp')
+        >>> dpath = ub.Path.appdir('watch/test/gdal_multi_warp').ensuredir()
         >>> out_fpath = ub.Path(dpath) / 'test_multi_warp.tif'
         >>> out_fpath.delete()
         >>> in_fpath1 = cube.coco_dset.get_image_fpath(2)
@@ -616,7 +617,7 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
         >>>                 local_epsg=local_epsg, rpcs=rpcs, verbose=3)
 
     Ignore:
-        >>> # xdoctest +REQUIRES(--slow)
+        >>> # xdoctest: +REQUIRES(--slow)
         >>> import kwimage
         >>> from watch.utils.util_gdal import gdal_single_warp
         >>> in_fpath = '/vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/23/K/PQ/2019/6/S2B_23KPQ_20190623_0_L2A/B03.tif'

@@ -40,7 +40,7 @@ class BatchPlotter(pl.callbacks.Callback):
         >>> from watch.utils.lightning_ext.callbacks.batch_plotter import *  # NOQA
         >>> from watch.utils.lightning_ext import demo
         >>> model = demo.LightningToyNet2d(num_train=55)
-        >>> default_root_dir = ub.ensure_app_cache_dir('lightning_ext/tests/BatchPlotter')
+        >>> default_root_dir = ub.Path.appdir('lightning_ext/tests/BatchPlotter').ensuredir()
         >>> #
         >>> trainer = pl.Trainer(callbacks=[BatchPlotter()],
         >>>                      default_root_dir=default_root_dir,

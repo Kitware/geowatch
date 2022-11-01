@@ -245,7 +245,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.vali_dataset_config['use_grid_positives'] = True
         self.vali_dataset_config['use_centered_positives'] = False
 
-        self.test_dataset_config = self.vali_dataset_config.copy()
+        self.test_dataset_config = self.train_dataset_config.copy()
 
         self.num_workers = util_globals.coerce_num_workers(cfgdict['num_workers'])
         self.dataset_stats = None

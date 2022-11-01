@@ -20,9 +20,9 @@ class AddWatchFieldsConfig(scfg.Config):
     target GSD.
     """
     default = {
-        'src': scfg.Value('data.kwcoco.json', help='input kwcoco filepath'),
+        'src': scfg.Value('data.kwcoco.json', help='input kwcoco filepath', position=1),
 
-        'dst': scfg.Value(None, help='output kwcoco filepath'),
+        'dst': scfg.Value(None, help='output kwcoco filepath', position=2),
 
         'target_gsd': scfg.Value(10.0, help='compute transforms for a target gsd'),
 
@@ -83,7 +83,7 @@ def main(cmdline=True, **kwargs):
         >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
         >>> print('dset = {!r}'.format(dset))
         >>> target_gsd = 13.0
-        >>> main(src=dset, target_gsd=target_gsd, default_gsd=1)
+        >>> main(cmdline=False, src=dset, target_gsd=target_gsd, default_gsd=1)
         >>> print('dset.index.imgs[1] = ' + ub.repr2(dset.index.imgs[1], nl=2))
         >>> print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=1)))
 

@@ -26,7 +26,7 @@ class TensorboardPlotter(pl.callbacks.Callback):
         >>> #
         >>> from watch.utils.lightning_ext import demo
         >>> self = demo.LightningToyNet2d(num_train=55)
-        >>> default_root_dir = ub.ensure_app_cache_dir('lightning_ext/tests/TensorboardPlotter')
+        >>> default_root_dir = ub.Path.appdir('lightning_ext/tests/TensorboardPlotter').ensuredir()
         >>> #
         >>> trainer = pl.Trainer(callbacks=[TensorboardPlotter()],
         >>>                      default_root_dir=default_root_dir,

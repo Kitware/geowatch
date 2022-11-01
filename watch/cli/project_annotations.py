@@ -45,7 +45,6 @@ import io
 import warnings
 from watch.utils import kwcoco_extensions
 from watch.utils import util_kwplot
-from watch.utils import util_path
 from watch.utils import util_time
 
 
@@ -120,7 +119,7 @@ def main(cmdline=False, **kwargs):
         >>> #kwcoco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
         >>> #kwcoco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
         >>> kwcoco_fpath = dvc_dpath / 'Aligned-Drop2-TA1-2022-03-07/data.kwcoco.json'
-        >>> dpath = ub.Path(ub.ensure_app_cache_dir('watch/tests/project_annots'))
+        >>> dpath = ub.Path.appdir('watch/tests/project_annots').ensuredir()
         >>> cmdline = False
         >>> output_fpath = dpath / 'data.kwcoco.json'
         >>> viz_dpath = (dpath / 'viz').ensuredir()
@@ -144,7 +143,6 @@ def main(cmdline=False, **kwargs):
 
     # Load the coco dataset with all of the images
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
-    site_geojson_fpaths = util_path.coerce_patterned_paths(config['site_models'], '.geojson')
 
     geo_preprop = config['geo_preprop']
     geospace_lookup = config['geospace_lookup']
@@ -161,12 +159,14 @@ def main(cmdline=False, **kwargs):
         )
 
     # Read the external CRS84 annotations from the site models
-    sites = []
-
     HACK_HANDLE_DUPLICATE_SITE_ROWS = True
 
-    for fpath in ub.ProgIter(site_geojson_fpaths, desc='load geojson site-models'):
-        gdf = util_gis.read_geojson(fpath)
+    site_model_infos = list(util_gis.coerce_geojson_datas(
+        config['site_models'], desc='load site models'))
+
+    sites = []
+    for info in site_model_infos:
+        gdf = info['data']
         is_site = gdf['type'] == 'site'
         if HACK_HANDLE_DUPLICATE_SITE_ROWS:
             if is_site.sum() > 1:
@@ -179,25 +179,11 @@ def main(cmdline=False, **kwargs):
 
     regions = []
     if config['region_models'] is not None:
-        region_geojson_fpaths = util_path.coerce_patterned_paths(config['region_models'], '.geojson')
-        for fpath in ub.ProgIter(region_geojson_fpaths, desc='load geojson region-models'):
-
-            if fpath.stem == 'IN_C000':
-                # HACK: Remove when shi region is fixed.
-                continue
-
-            gdf = util_gis.read_geojson(fpath)
+        region_model_infos = list(util_gis.coerce_geojson_datas(
+            config['region_models'], desc='load geojson region-models'))
+        for info in region_model_infos:
+            gdf = info['data']
             regions.append(gdf)
-
-            # if 1:
-            #     region_rows = gdf[gdf['type'] == 'region']
-            #     assert len(region_rows) == 1
-            #     region_row = region_rows.iloc[0]
-            #     if region_row['region_id'] != fpath.stem:
-            #         print(gdf)
-            #         print(region_row['region_id'])
-            #         print('fpath = {!r}'.format(fpath))
-            #         raise AssertionError
 
     if config['clear_existing']:
         coco_dset.clear_annotations()
@@ -509,7 +495,7 @@ def expand_site_models_with_site_summaries(sites, regions):
                         geometry=mpoly_json)
                 )
                 psudo_site_model = geojson.FeatureCollection(psudo_site_features)
-                pseudo_gpd = util_gis.read_geojson(io.StringIO(json.dumps(psudo_site_model)))
+                pseudo_gpd = util_gis.load_geojson(io.StringIO(json.dumps(psudo_site_model)))
                 region_id_to_sites[region_id].append(pseudo_gpd)
                 # if 1:
                 #     from watch.rc.registry import load_site_model_schema
@@ -1090,10 +1076,10 @@ def draw_geospace(dvc_dpath, sites):
     import geopandas as gpd
     import kwplot
     kwplot.autompl()
-    region_fpaths = util_path.coerce_patterned_paths(dvc_dpath / 'drop1/region_models', '.geojson')
+    region_fpaths = util_gis.coerce_geojson_paths(dvc_dpath / 'drop1/region_models')
     regions = []
-    for fpath in ub.ProgIter(region_fpaths, desc='load geojson annots'):
-        gdf = util_gis.read_geojson(fpath)
+    for info in util_gis.coerce_geojson_datas(region_fpaths):
+        gdf = info['data']
         regions.append(gdf)
 
     wld_map_gdf = gpd.read_file(
