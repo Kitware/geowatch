@@ -107,19 +107,19 @@ def pseudolive_consolidate(region_id,
     current_region = _load_region_data(
         region_id, ta2_collated_dir_current, performer_suffix)
 
-    previous_site_summaries = [f for f in previous_region.get('features', ())
-                               if f['properties']['type'] == 'site_summary']
-    current_site_summaries = [f for f in current_region.get('features', ())
-                              if f['properties']['type'] == 'site_summary']
+    previous_sites_by_id = {f['properties']['site_id']: f
+                            for f in previous_region.get('features', ())
+                            if f['properties']['type'] == 'site_summary'}
+    current_sites_by_id = {f['properties']['site_id']: f
+                           for f in current_region.get('features', ())
+                           if f['properties']['type'] == 'site_summary'}
 
-    previous_sites_by_id = {}
-    current_sites_by_id = {}
     overlaps = []
-    for pss in previous_site_summaries:
+    for pss in previous_sites_by_id.values():
         psid = pss['properties']['site_id']
         previous_sites_by_id[psid] = pss
 
-        for css in current_site_summaries:
+        for css in current_sites_by_id.values():
             csid = css['properties']['site_id']
             current_sites_by_id[csid] = css
 
