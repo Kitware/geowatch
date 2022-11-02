@@ -581,7 +581,6 @@ def main(cmdline=False, **kwargs):
         include_channels = config['include_channels']
         exclude_channels = config['exclude_channels']
 
-
         align_job = pipeline.submit(command=ub.codeblock(
             rf'''
             # MAIN WORKHORSE CROP IMAGES

@@ -107,6 +107,9 @@ class WatchCocoStats(scfg.Config):
                 ub.invert_dict(col_name_map), nl=1)))
 
         summary = summary.rename(col_name_map, axis=1)
+
+        max_colwidth = max(map(len, summary.split('\n')))
+
         print(summary.to_string())
 
         print('Other helpful commands:')
@@ -156,22 +159,22 @@ def coco_watch_stats(dset):
         else:
             date_range = None
 
-        video_info = ub.dict_union({
+        video_info = ub.udict({
             'name': video['name'],
             **ub.dict_isect(video, ['width', 'height']),
             'num_frames': len(gids),
             'sensor_freq': sensor_freq,
             'date_range': date_range,
-        }, video)
+        }) | video
         video_info.pop('regions', None)
         video_info.pop('properties', None)
         vid_info_str = ub.repr2(video_info, nl=-1, sort=False)
         vid_info_str = util_truncate.smart_truncate(
             vid_info_str, max_length=512, trunc_loc=0.6)
         print('video_info = {}'.format(vid_info_str))
-        all_sensor_entries.extend(all_sensor_entries)
+        all_sensor_entries.extend(avail_sensors)
         # video_summary_rows.append(ub.dict_diff(video_info, {'sensor_freq', 'warp_wld_to_vid'}))
-        video_summary_rows.append(ub.dict_diff(ub.odict(video_info), {'warp_wld_to_vid'}))
+        video_summary_rows.append(video_info - {'warp_wld_to_vid'})
 
     print('dset.tag = {!r}'.format(dset.tag))
 
@@ -206,7 +209,8 @@ def coco_watch_stats(dset):
     # fpath = coco_img.primary_image_filepath()
     # _ = ub.cmd('gdalinfo {}'.format(fpath), verbose=3)
 
-    print(coco_sensorchan_gsd_stats(dset))
+    sensorchan_gsd_stats = coco_sensorchan_gsd_stats(dset)
+    print(sensorchan_gsd_stats)
 
     sensor_hist = ub.dict_hist(all_sensor_entries)
     print('Sensor Histogram = {}'.format(ub.repr2(sensor_hist, nl=1)))
