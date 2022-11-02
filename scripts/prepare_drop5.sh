@@ -24,17 +24,17 @@ python -m watch.cli.prepare_ta2_dataset \
     --site_globstr="$SITE_GLOBSTR" \
     --exclude_channels=pan \
     --requester_pays=False \
-    --fields_workers=4 \
-    --convert_workers=4 \
-    --align_workers=4 \
-    --max_queue_size=1 \
+    --fields_workers=8 \
+    --convert_workers=8 \
+    --align_workers=8 \
+    --max_queue_size=4 \
     --ignore_duplicates=1 \
     --separate_region_queues=1 \
     --separate_align_jobs=1 \
     --visualize=0 \
     --target_gsd=10 \
-    --cache=1 \
-    --skip_existing=1 \
+    --cache=0 \
+    --skip_existing=0 \
     --backend=tmux --run=1
 
 
