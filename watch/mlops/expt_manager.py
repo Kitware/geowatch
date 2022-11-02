@@ -375,7 +375,11 @@ class DVCExptManager(ub.NiceRepr):
         for state in manager.states:
             tables = state.cross_referenced_tables()
             for k, v in tables.items():
-                table_accum[k].append(v)
+                if not v.empty:
+                    # col 'n_pred_act_poly_sites_fpath' can be duplicated
+                    table_accum[k].append(
+                        v.loc[:, ~v.columns.duplicated()]
+                    )
         combo_tables = ub.udict(table_accum).map_values(lambda vs: pd.concat(vs))
         return combo_tables
 
