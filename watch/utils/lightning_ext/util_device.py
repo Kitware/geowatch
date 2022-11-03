@@ -12,6 +12,8 @@ def coerce_devices(gpus):
 
     If `gpus` is None or "cpu", then the CPU is used.
 
+    If `gpus` is "cuda", that is equivalent to `gpus=[0]`.
+
     If `gpus` is a string without commas, then the string should be of a number
         indicating how many gpus should be used.
 
@@ -54,6 +56,9 @@ def coerce_devices(gpus):
     if isinstance(gpus, str):
         if gpus == 'cpu':
             gpu_ids = None
+            needs_gpu_coerce = False
+        elif gpus == 'cuda':
+            gpu_ids = [0]
             needs_gpu_coerce = False
         elif gpus.startswith('auto'):
             auto_select_gpus = True
