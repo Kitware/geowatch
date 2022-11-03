@@ -166,9 +166,9 @@ def prep_feats(cmdline=True, **kwargs):
         base_fpath = ub.Path(config['base_fpath'])
 
     if config['check']:
-        if base_fpath.exists():
+        if not base_fpath.exists():
             raise FileNotFoundError(
-                'Specified kwcoco files does not exist and check=True')
+                'Specified kwcoco file: {base_fpath!r=} does not exist and check=True')
 
     aligned_bundle_dpath = base_fpath.parent
 
