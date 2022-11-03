@@ -44,7 +44,7 @@ Ignore:
     EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt')
 
     python -m watch.cli.prepare_teamfeats \
-        --base_fpath="$DVC_DPATH/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC/data.kwcoco.json" \
+        --base_fpath="$DATA_DVC_DPATH/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC/data.kwcoco.json" \
         --expt_dpath="$EXPT_DVC_DPATH" \
         --with_landcover=0 \
         --with_materials=0 \
@@ -132,7 +132,6 @@ def prep_feats(cmdline=True, **kwargs):
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
     gres = config['gres']
-    # check = config['check']
     gres = smartcast(gres)
     if gres is None:
         gres = 'auto'
@@ -165,6 +164,11 @@ def prep_feats(cmdline=True, **kwargs):
             'Specify the absolute path to the data to generate features on')
     else:
         base_fpath = ub.Path(config['base_fpath'])
+
+    if config['check']:
+        if base_fpath.exists():
+            raise FileNotFoundError(
+                'Specified kwcoco files does not exist and check=True')
 
     aligned_bundle_dpath = base_fpath.parent
 
