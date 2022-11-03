@@ -7,7 +7,10 @@ def main():
     import kwcoco
     import kwimage
     import ubelt as ub
-    dset = kwcoco.CocoDataset('data.kwcoco.json')
+
+    bundle_dpath = ub.Path('.')
+    kwcoco_fpath = bundle_dpath / 'data.kwcoco.json'
+    dset = kwcoco.CocoDataset(kwcoco_fpath)
 
     registered_paths = []
     for gid in dset.images():
@@ -15,11 +18,10 @@ def main():
         registered_paths.extend(list(coco_img.iter_image_filepaths()))
 
     existing_image_paths = []
-    for r, ds, fs in ub.Path('.').walk():
+    for r, ds, fs in bundle_dpath.walk():
         for f in fs:
             if f.lower().endswith(kwimage.im_io.IMAGE_EXTENSIONS):
                 existing_image_paths.append(r / f)
-
 
     existing_image_paths = [p.absolute() for p in existing_image_paths]
     registered_paths = [ub.Path(p).absolute() for p in registered_paths]
@@ -32,3 +34,20 @@ def main():
 
     missing_fpaths = registered_paths - existing_image_paths
     unregistered_fpaths = existing_image_paths - registered_paths
+
+    print(f'{len(unregistered_fpaths)=}')
+    print(f'{len(missing_fpaths)=}')
+
+    ## ACTUALLY DELETE
+    for p in unregistered_fpaths:
+        p.delete()
+
+    # Find and remove empty directories
+    empty_dpaths = True
+    while empty_dpaths:
+        empty_dpaths = []
+        for r, ds, fs in bundle_dpath.walk():
+            if not ds and not fs:
+                empty_dpaths.append(r)
+        for d in empty_dpaths:
+            d.rmdir()

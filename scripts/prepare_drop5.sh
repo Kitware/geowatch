@@ -41,6 +41,32 @@ python -m watch.cli.prepare_ta2_dataset \
 #--include_channels="blue|green|red|nir|swir16|swir22" \
 
 
+smartwatch stats "$DATA_DVC_DPATH"/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC/data.kwcoco.json "$DATA_DVC_DPATH"/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data.kwcoco.json
+
+
+cd "$DATA_DVC_DPATH"/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC
+
+codeblock  "
+
+# CHECK SIZES:
+sensors = ['WV', 'PD', 'S2', 'L8']
+sensor_to_sizes = ub.ddict(list)
+for s in sensors:
+    for p in list(bundle_dpath.glob('*/' + s)):
+        nbytes = ub.cmd(f'du -sL {p}')['out'].split('\t')[0]
+        sensor_to_sizes[s].append(nbytes)
+
+sensor_to_bytes = ub.udict(sensor_to_sizes).map_values(lambda x: sum(int(b) * 1024 for b in x))
+import xdev as xd
+sensor_to_size = sensor_to_bytes.map_values(xd.byte_str)
+print('sensor_to_size = {}'.format(ub.repr2(sensor_to_size, nl=1)))
+
+total_size = sum(sensor_to_bytes.values())
+print('total = {}'.format(xd.byte_str(total_size)))
+
+"
+
+
 
 
 DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")

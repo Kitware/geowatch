@@ -14,6 +14,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 * Update requirements to support Python 3.11
+* Improved the reported information in `smartwatch stats` (i.e. `watch.cli.watch_coco_stats`)
 
 
 ## Version 0.3.6 - Finalized 2022-11-01

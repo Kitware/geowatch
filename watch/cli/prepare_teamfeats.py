@@ -6,12 +6,11 @@ CommandLine:
 
 Example:
     >>> from watch.cli.prepare_teamfeats import *  # NOQA
-    >>> dvc_dpath = ub.Path('.')
-    >>> base_fpath = dvc_dpath / 'bundle/data.kwcoco.json'
+    >>> expt_dvc_dpath = ub.Path('./pretend_expt_dpath')
     >>> config = {
-    >>>     'base_fpath': './bundle/data.kwcoco.json',
+    >>>     'base_fpath': './pretend_bundle/data.kwcoco.json',
     >>>     'gres': [0, 1],
-    >>>     'dvc_dpath': './',
+    >>>     'expt_dvc_dpath': './pretend_expt_dvc',
     >>> #
     >>>     'virtualenv_cmd': 'conda activate watch',
     >>> #
@@ -35,6 +34,25 @@ Example:
     >>> config['backend'] = 'serial'
     >>> queue = prep_feats(cmdline=False, **config)
     >>> queue.rprint(0, 0)
+
+
+Ignore:
+
+    # For Drop5
+
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data')
+    EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt')
+
+    python -m watch.cli.prepare_teamfeats \
+        --base_fpath="$DVC_DPATH/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC/data.kwcoco.json" \
+        --expt_dpath="$EXPT_DVC_DPATH" \
+        --with_landcover=0 \
+        --with_materials=0 \
+        --with_invariants=1 \
+        --with_depth=0 \
+        --backend=tmux --run=0
+
+
 """
 
 
@@ -56,11 +74,11 @@ class TeamFeaturePipelineConfig(scfg.Config):
             base coco file to compute team-features on, combine, and split. If
             auto, uses a hard-coded value
             ''')),
-        'dvc_dpath': scfg.Value('auto', help=ub.paragraph(
+        'expt_dvc_dpath': scfg.Value('auto', help=ub.paragraph(
             '''
             The DVC directory where team feature model weights can be found.
-            If "auto" uses the ``watch.find_smart_dvc_dpath`` mechanism
-            to infer the location.
+            If "auto" uses the ``watch.find_dvc_dpath(tags='phase2_expt')``
+            mechanism to infer the location.
             ''')),
         'gres': scfg.Value('auto', help='comma separated list of gpus or auto'),
 
@@ -135,16 +153,16 @@ def prep_feats(cmdline=True, **kwargs):
         else:
             workers = len(gres)
 
-    if config['dvc_dpath'] == 'auto':
+    if config['expt_dvc_dpath'] == 'auto':
         import watch
-        dvc_dpath = watch.find_smart_dvc_dpath()
+        expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
     else:
-        dvc_dpath = ub.Path(config['dvc_dpath'])
+        expt_dvc_dpath = ub.Path(config['expt_dvc_dpath'])
 
     if config['base_fpath'] == 'auto':
-        # Auto hack.
-        # base_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
-        base_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
+        raise NotImplementedError(
+            'Auto id deprecated. '
+            'Specify the absolute path to the data to generate features on')
     else:
         base_fpath = ub.Path(config['base_fpath'])
 
@@ -169,29 +187,17 @@ def prep_feats(cmdline=True, **kwargs):
     if config['virtualenv_cmd']:
         queue.add_header_command(config['virtualenv_cmd'])
 
-    _populate_teamfeat_queue(queue, base_fpath, dvc_dpath,
+    _populate_teamfeat_queue(queue, base_fpath, expt_dvc_dpath,
                              aligned_bundle_dpath, config)
 
     if config['verbose']:
-        queue.rprint()
+        queue.rprint(with_locks=0)
 
     if config['run']:
-        agg_state = None
-        # follow = config['follow']
-        # if follow and workers == 0 and len(queue.workers) == 1:
-        #     queue = queue.workers[0]
-        #     fpath = queue.write()
-        #     ub.cmd(f'bash {fpath}', verbose=3, check=True)
-        # else:
-        if config['serial']:
-            queue.serial_run()
-        else:
-            queue.run()
-        if config['follow']:
-            agg_state = queue.monitor()
-        if not config['keep_sessions']:
-            if agg_state is not None and not agg_state['errored']:
-                queue.kill()
+        queue.run(
+            block=True,
+            # with_textual=True,
+        )
 
     """
     Ignore:
@@ -201,14 +207,14 @@ def prep_feats(cmdline=True, **kwargs):
     return queue
 
 
-def _populate_teamfeat_queue(queue, base_fpath, dvc_dpath, aligned_bundle_dpath, config):
+def _populate_teamfeat_queue(queue, base_fpath, expt_dvc_dpath, aligned_bundle_dpath, config):
     from watch.utils.lightning_ext import util_globals
     data_workers = util_globals.coerce_num_workers(config['data_workers'])
 
     model_fpaths = {
-        'rutgers_materials': dvc_dpath / 'models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth',
+        'rutgers_materials': expt_dvc_dpath / 'models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth',
         # 'rutgers_materials': dvc_dpath / 'models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth',
-        'dzyne_landcover': dvc_dpath / 'models/landcover/visnav_remap_s2_subset.pt',
+        'dzyne_landcover': expt_dvc_dpath / 'models/landcover/visnav_remap_s2_subset.pt',
 
         # 2022-02-11
         # 'uky_pretext': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pretext_package.pt',
@@ -221,12 +227,12 @@ def _populate_teamfeat_queue(queue, base_fpath, dvc_dpath, aligned_bundle_dpath,
         # 'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt',  # uses old segmentation model
 
         # 2022-03-21
-        'uky_pretext': dvc_dpath / 'models/uky/uky_invariants_2022_03_21/pretext_model/pretext_package.pt',
-        'uky_pca': dvc_dpath / 'models/uky/uky_invariants_2022_03_21/pretext_model/pretext_pca_104.pt',
+        'uky_pretext': expt_dvc_dpath / 'models/uky/uky_invariants_2022_03_21/pretext_model/pretext_package.pt',
+        'uky_pca': expt_dvc_dpath / 'models/uky/uky_invariants_2022_03_21/pretext_model/pretext_pca_104.pt',
         # 'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_02_21/TA1_segmentation_model/segmentation_package.pt',  # uses old segmentation model
 
         # TODO: use v1 on RGB and v2 on PAN
-        'dzyne_depth': dvc_dpath / 'models/depth/weights_v1.pt',
+        'dzyne_depth': expt_dvc_dpath / 'models/depth/weights_v1.pt',
         # 'dzyne_depth': dvc_dpath / 'models/depth/weights_v2_gray.pt',
     }
 
