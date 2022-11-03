@@ -1760,14 +1760,15 @@ def coco_channel_stats(coco_dset):
     """
     import kwcoco
     from kwcoco.coco_image import CocoImage
+
     sensor_hist = ub.ddict(lambda: 0)
     chan_hist = ub.ddict(lambda: 0)
     sensorchan_hist = ub.ddict(lambda: ub.ddict(lambda: 0))
     sensorchan_hist2 = ub.ddict(lambda: 0)
-
     for _gid, img in coco_dset.index.imgs.items():
+        coco_img: CocoImage = coco_dset.coco_image(_gid)
         channels = []
-        for obj in CocoImage(img).iter_asset_objs():
+        for obj in coco_img.iter_asset_objs():
             channels.append(obj.get('channels', 'unknown-chan'))
         channels = sorted(channels)
         chan = ','.join(channels)
@@ -1777,15 +1778,16 @@ def coco_channel_stats(coco_dset):
         sensorchan_hist[sensor][chan] += 1
         # TODO: replace other usages with sensorchan_hist2 then remove other
         # uses, and rename sensorchan_hist2 to sensorchan_hist
-        sensorchan = f'{sensor}:{chan}'
+        sensorchan = f'{sensor}:({chan})'
         sensorchan_hist2[sensorchan] += 1
 
+    CS = kwcoco.ChannelSpec
     FS = kwcoco.FusedChannelSpec
-    osets = [FS.coerce(c).as_oset() for c in chan_hist]
+    osets = [CS.coerce(c).fuse().to_oset() for c in chan_hist]
     common_channels = FS.coerce(list(ub.oset.intersection(*osets))).concise()
     all_channels = FS.coerce(list(ub.oset.union(*osets))).concise()
 
-    all_sensorchan = sum([
+    all_sensorchan = kwcoco.SensorChanSpec.late_fuse(*[
         kwcoco.SensorChanSpec.coerce(s)
         for s in sensorchan_hist2.keys()]).concise()
 

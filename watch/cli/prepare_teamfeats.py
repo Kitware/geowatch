@@ -21,7 +21,7 @@ Example:
     >>> #
     >>>     'run': 0,
     >>>     #'check': False,
-    >>>     'cache': False,
+    >>>     'skip_existing': False,
     >>>     'backend': 'serial',
     >>>     'verbose': 0,
     >>> }
@@ -43,14 +43,22 @@ Ignore:
     DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data')
     EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt')
 
+    # BUNDLE_DPATH=$DATA_DVC_DPATH/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC
+    # KWCOCO_FPATH=$BUNDLE_DPATH/data.kwcoco.json
+
+    BUNDLE_DPATH=$DATA_DVC_DPATH/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+    KWCOCO_FPATH=$BUNDLE_DPATH/data_kr1br2.kwcoco.json
+
     python -m watch.cli.prepare_teamfeats \
-        --base_fpath="$DATA_DVC_DPATH/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC/data.kwcoco.json" \
+        --base_fpath="$KWCOCO_FPATH" \
         --expt_dpath="$EXPT_DVC_DPATH" \
         --with_landcover=0 \
         --with_materials=0 \
         --with_invariants=1 \
         --with_depth=0 \
-        --backend=tmux --run=0
+        --do_splits=0 \
+        --skip_existing=0 \
+        --backend=serial --run=0
 
 
 """
@@ -102,7 +110,7 @@ class TeamFeaturePipelineConfig(scfg.Config):
 
         'workers': scfg.Value('auto', help='Maximum number of parallel jobs, 0 is no-nonsense serial mode. '),
         'run': scfg.Value(0, help='if True execute the pipeline'),
-        'cache': scfg.Value(True, help='if True skip completed results'),
+        'skip_existing': scfg.Value(True, help='if True skip completed results'),
 
         'do_splits': scfg.Value(True, help='if True also make splits'),
 
@@ -240,11 +248,13 @@ def _populate_teamfeat_queue(queue, base_fpath, expt_dvc_dpath, aligned_bundle_d
         # 'dzyne_depth': dvc_dpath / 'models/depth/weights_v2_gray.pt',
     }
 
+    subset_name = base_fpath.name.split('.')[0]
+
     outputs = {
-        'rutgers_materials': aligned_bundle_dpath / 'rutgers_material_seg_v3.kwcoco.json',
-        'dzyne_landcover': aligned_bundle_dpath / 'dzyne_landcover.kwcoco.json',
-        'dzyne_depth': aligned_bundle_dpath / 'dzyne_depth.kwcoco.json',
-        'uky_invariants': aligned_bundle_dpath / 'uky_invariants.kwcoco.json',
+        'rutgers_materials': aligned_bundle_dpath / (subset_name + '_rutgers_material_seg_v3.kwcoco.json'),
+        'dzyne_landcover': aligned_bundle_dpath / (subset_name + '_dzyne_landcover.kwcoco.json'),
+        'dzyne_depth': aligned_bundle_dpath / (subset_name + '_dzyne_depth.kwcoco.json'),
+        'uky_invariants': aligned_bundle_dpath / (subset_name + '_uky_invariants.kwcoco.json'),
     }
 
     print('Exist check: ')
@@ -316,7 +326,7 @@ def _populate_teamfeat_queue(queue, base_fpath, expt_dvc_dpath, aligned_bundle_d
                 --deployed="{model_fpaths['dzyne_depth']}" \
                 --data_workers={depth_data_workers} \
                 --window_size={depth_window_size} \
-                --cache=1
+                --skip_existing=1
             ''')
         combo_code_parts.append(codes[key])
         tasks.append(task)
@@ -337,7 +347,7 @@ def _populate_teamfeat_queue(queue, base_fpath, expt_dvc_dpath, aligned_bundle_d
                 --num_workers="{data_workers}" \
                 --export_raw_features=1 \
                 --batch_size=32 --gpus "0" \
-                --compress=DEFLATE --blocksize=128 --cache=True
+                --compress=DEFLATE --blocksize=128 --skip_existing=True
             ''')
         combo_code_parts.append(codes[key])
         tasks.append(task)
@@ -380,7 +390,7 @@ def _populate_teamfeat_queue(queue, base_fpath, expt_dvc_dpath, aligned_bundle_d
 
     task_jobs = []
     for task in tasks:
-        if config['cache']:
+        if config['skip_existing']:
             if not task['output_fpath'].exists():
                 # command = f"[[ -f '{task['output_fpath']}' ]] || " + task['command']
                 command = f"test -f '{task['output_fpath']}' || " + task['command']
@@ -429,7 +439,7 @@ if __name__ == '__main__':
             --base_fpath="$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json" \
             --gres=0 \
             --with_depth=0 \
-            --run=False --cache=False --virtualenv_cmd "conda activate watch" \
+            --run=False --skip_existing=False --virtualenv_cmd "conda activate watch" \
             --backend=serial
 
         python -m watch.cli.prepare_teamfeats --gres=0,2 --with_depth=True --keep_sessions=True
@@ -467,7 +477,7 @@ if __name__ == '__main__':
             --with_invariants=1 \
             --with_materials=1 \
             --depth_workers=auto \
-            --do_splits=1  --cache=0 --run=0
+            --do_splits=1  --skip_existing=0 --run=0
 
         ###
         DVC_DPATH=$(smartwatch_dvc)
@@ -483,7 +493,7 @@ if __name__ == '__main__':
             --depth_workers=auto \
             --invariant_pca=0 \
             --invariant_segmentation=0 \
-            --do_splits=0  --cache=1 --run=0
+            --do_splits=0  --skip_existing=1 --run=0
 
         # Simple demo
         python -m watch.cli.prepare_teamfeats \
@@ -494,7 +504,7 @@ if __name__ == '__main__':
             --with_landcover=1 \
             --with_invariants=0 \
             --with_materials=1 \
-            --cache=0 \
+            --skip_existing=0 \
             --backend=serial \
             --run=0
 

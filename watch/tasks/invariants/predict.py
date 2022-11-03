@@ -13,6 +13,9 @@ from watch.utils.lightning_ext import util_device
 from .segmentation_model import segmentation_model as seg_model
 from watch.utils import util_kwimage  # NOQA
 
+from watch.tasks.fusion.predict import CocoStitchingManager
+from watch.tasks.fusion.predict import quantize_float01
+
 
 class Predictor(object):
     """
@@ -69,12 +72,24 @@ class Predictor(object):
         #     from albumentations.core import composition
         #     composition.Transforms = composition.TransformType
 
+        self.batch_size = args.batch_size
+        self.do_pca = args.do_pca
+
+        self.tasks = args.tasks
+
+        self.num_workers = util_globals.coerce_num_workers(args.num_workers)
+        print('self.num_workers = {!r}'.format(self.num_workers))
+
+        self.write_workers = util_globals.coerce_num_workers(args.write_workers)
+        print(f'self.write_workers={self.write_workers}')
+
         self.devices = util_device.coerce_devices(args.device)
         assert len(self.devices) == 1, 'only 1 for now'
         self.device = device = self.devices[0]
         print('device = {!r}'.format(device))
 
         # Initialize models
+        print('Initialize models')
         if 'all' in args.tasks:
             self.tasks = ['segmentation', 'before_after', 'pretext']
         else:
@@ -82,15 +97,19 @@ class Predictor(object):
         ### Define tasks
         if 'segmentation' in self.tasks:
             if args.segmentation_package_path:
+                print('Initialize segmentation model from package')
                 self.segmentation_model = seg_model.load_package(args.segmentation_package_path)
             else:
+                print('Initialize segmentation model from checkpoint')
                 self.segmentation_model = seg_model.load_from_checkpoint(args.segmentation_ckpt_path, dataset=None)
             self.segmentation_model = self.segmentation_model.to(device)
 
         if 'pretext' in self.tasks:
             if args.pretext_package_path:
+                print('Initialize pretext model from package')
                 self.pretext_model = pretext.load_package(args.pretext_package_path)
             else:
+                print('Initialize pretext model from checkpoint')
                 self.pretext_model = pretext.load_from_checkpoint(args.pretext_ckpt_path, train_dataset=None, vali_dataset=None)
             self.pretext_model = self.pretext_model.eval().to(device)
             # pretext_hparams = pretext_model.hparams
@@ -104,6 +123,7 @@ class Predictor(object):
 
         self.in_feature_dims = self.pretext_model.hparams.feature_dim_shared
         if args.do_pca:
+            print('Initialize PCA model')
             self.pca_projector = torch.load(args.pca_projection_path).to(device)
             self.out_feature_dims = self.pca_projector.shape[0]
         else:
@@ -163,12 +183,9 @@ class Predictor(object):
 
         self.stitcher_dict.pop(gid)
 
-        from watch.tasks.fusion.predict import quantize_float01
         quant_recon, quantization = quantize_float01(recon)
 
         save_path = self._build_img_fpath(gid)
-        save_path = self.output_feat_dpath / f'invariants_{gid}.tif'
-        save_path = os.fspath(save_path)
         kwimage.imwrite(save_path, quant_recon, space=None,
                         nodata=quantization['nodata'], **self.imwrite_kw)
 
@@ -179,7 +196,7 @@ class Predictor(object):
              img['height'] / aux_height))
 
         aux = {
-            'file_name': save_path,
+            'file_name': os.fspath(save_path),
             'height': aux_height,
             'width': aux_width,
             'channels': self.save_channels,
@@ -191,22 +208,18 @@ class Predictor(object):
         auxiliary = img['auxiliary']
         auxiliary.append(aux)
 
-    def forward(self, args):
+    def forward(self):
         device = self.device
-        print('device = {!r}'.format(device))
-        num_workers = util_globals.coerce_num_workers(args.num_workers)
-        print('num_workers = {!r}'.format(num_workers))
 
         loader = torch.utils.data.DataLoader(
-            self.dataset, num_workers=num_workers, batch_size=args.batch_size, shuffle=False)
+            self.dataset, num_workers=self.num_workers, batch_size=self.batch_size, shuffle=False)
         num_batches = len(loader)
 
         # Start background processes
         # Build a task queue for background write results workers (Not currently using this)
         # queue = util_parallel.BlockingJobQueue(max_workers=0)
         from watch.utils import util_parallel
-        write_workers = util_globals.coerce_num_workers(args.write_workers)
-        writer = util_parallel.BlockingJobQueue(max_workers=write_workers)
+        writer = util_parallel.BlockingJobQueue(max_workers=self.write_workers)
 
         # bundle_dpath = ub.Path(self.output_dset.bundle_dpath)
         # save_dpath = (bundle_dpath / 'uky_invariants').ensuredir()
@@ -234,7 +247,7 @@ class Predictor(object):
                 batch['offset_image1'] = torch.nan_to_num(offset_image1).to(device)
                 batch['augmented_image1'] = torch.nan_to_num(augmented_image1).to(device)
 
-                if 'pretext' in args.tasks:
+                if 'pretext' in self.tasks:
 
                     image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
                     image_stack = image_stack.to(device)
@@ -246,7 +259,7 @@ class Predictor(object):
                     features = self.pretext_model(image_stack)[:, 0, :, :, :]
                     #select features corresponding to second image
                     features2 = self.pretext_model(image_stack)[:, 1, :, :, :]
-                    if args.do_pca:
+                    if self.do_pca:
                         features = torch.einsum('xy,byhw->bxhw', self.pca_projector, features)
                         features2 = torch.einsum('xy,byhw->bxhw', self.pca_projector, features2)
 
@@ -259,7 +272,7 @@ class Predictor(object):
                     save_feat.append(features)
                     save_feat2.append(features2)
 
-                if 'before_after' in args.tasks:
+                if 'before_after' in self.tasks:
                     ### TO DO: Set to output of separate model.
                     before_after_heatmap = self.pretext_model.shared_step(batch)['before_after_heatmap'][0].permute(1, 2, 0)
                     before_after_heatmap = torch.sigmoid(torch.exp(before_after_heatmap[:, :, 1]) - torch.exp(before_after_heatmap[:, :, 0])).unsqueeze(-1).cpu()
@@ -270,9 +283,9 @@ class Predictor(object):
                     save_feat.append(before_after_heatmap)
                     save_feat2.append(before_after_heatmap)
 
-                if 'segmentation' in args.tasks:
+                if 'segmentation' in self.tasks:
                     image_stack = [batch[key] for key in batch if key.startswith('image')]
-                    image_stack = torch.stack(image_stack, dim=1).to(args.device)
+                    image_stack = torch.stack(image_stack, dim=1).to(self.device)
                     predictions = torch.exp(self.segmentation_model(image_stack)['predictions'])
 
                     segmentation_heatmap = torch.sigmoid(predictions[0, 0, 1, :, :] - predictions[0, 0, 0, :, :]).unsqueeze(0).permute(1, 2, 0).cpu()
@@ -317,6 +330,7 @@ class Predictor(object):
                 # free any memory used by its stitcher
                 mutually_exclusive = (set(previous_gids) - set(current_gids))
                 for gid in mutually_exclusive:
+                    assert gid not in seen_images
                     seen_images.add(gid)
                     writer.submit(self.finalize_image, gid)
 
@@ -348,7 +362,6 @@ class Predictor(object):
                 #     save_feat[invalid_mask2_np] = 0
 
                 # TODO: refactor and make a good CocoStitchingManager
-                from watch.tasks.fusion.predict import CocoStitchingManager
                 stitcher1 = self.stitcher_dict[gid1]
                 stitcher2 = self.stitcher_dict[gid2]
                 CocoStitchingManager._stitcher_center_weighted_add(
@@ -362,6 +375,8 @@ class Predictor(object):
             writer.wait_until_finished()
 
             for gid in list(self.stitcher_dict.keys()):
+                assert gid not in seen_images
+                seen_images.add(gid)
                 writer.submit(self.finalize_image, gid)
 
             writer.wait_until_finished()
@@ -435,7 +450,7 @@ def parse_args(argv=None):
 
 def main():
     args = parse_args()
-    Predictor(args).forward(args)
+    Predictor(args).forward()
 
 
 if __name__ == '__main__':
@@ -479,5 +494,19 @@ if __name__ == '__main__':
         python -m watch visualize $KWCOCO_BUNDLE_DPATH/uky_invariants/invariants_nowv_vali.kwcoco.json \
             --channels "invariants.7,invariants.6,invariants.5" --animate=True \
             --select_images '.sensor_coarse != "WV"' --draw_anns=False
+
+    Ignore:
+        ### Command 1 / 2 - watch-teamfeat-job-0
+        python -m watch.tasks.invariants.predict \
+            --input_kwcoco "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_kr1br2.kwcoco.json" \
+            --output_kwcoco "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_kr1br2_uky_invariants.kwcoco.json" \
+            --pretext_package_path "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_03_21/pretext_model/pretext_package.pt" \
+            --pca_projection_path  "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_03_21/pretext_model/pretext_pca_104.pt" \
+            --do_pca 0 \
+            --patch_overlap=0.5 \
+            --num_workers="2" \
+            --write_workers 2 \
+            --tasks before_after pretext
+
     """
     main()

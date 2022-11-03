@@ -1325,6 +1325,18 @@ class CocoStitchingManager(object):
         return info
 
 
+def write_new_asset(img, new_raster):
+    """
+    Given a new raster and an coco image it belongs to, write the raster to
+    disk and update that image's asset / auxiliary list.
+
+    Args:
+        img (dict): the coco image dictionary
+        new_raster (ndarray): the data to write
+    """
+    pass
+
+
 def quantize_float01(imdata, old_min=0, old_max=1, quantize_dtype=np.int16):
     """
     Note:
