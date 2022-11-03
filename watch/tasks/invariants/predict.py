@@ -14,11 +14,11 @@ from .segmentation_model import segmentation_model as seg_model
 from watch.utils import util_kwimage  # NOQA
 
 
-class predict(object):
+class Predictor(object):
     """
     CommandLine:
         DVC_DPATH=$(smartwatch_dvc)
-        DVC_DPATH=$DVC_DPATH xdoctest -m watch.tasks.invariants.predict predict
+        DVC_DPATH=$DVC_DPATH xdoctest -m watch.tasks.invariants.predict Predictor
 
         python -m watch visualize $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/test_uky.kwcoco.json \
             --channels='invariants.0:3' --animate=True --with_anns=False
@@ -52,7 +52,7 @@ class predict(object):
         >>> argv += ['--tasks', 'all']
         >>> argv += ['--do_pca', '1']
         >>> args = parse_args(argv)
-        >>> self = predict(args)
+        >>> self = Predictor(args)
         >>> self.forward(args)
     """
 
@@ -68,28 +68,7 @@ class predict(object):
         self.device = device = self.devices[0]
         print('device = {!r}'.format(device))
 
-        # initialize dataset
-        import kwcoco
-        print('load coco dataset')
-        self.coco_dset = kwcoco.CocoDataset = kwcoco.CocoDataset.coerce(args.input_kwcoco)
-
-        ###
-        print('build grid dataset')
-        self.dataset = gridded_dataset(self.coco_dset, args.bands,
-                                       patch_size=args.patch_size,
-                                       patch_overlap=args.patch_overlap,
-                                       mode='test')
-
-        print('copy dataset')
-        self.output_dset = self.dataset.coco_dset.copy()
-
-        print('reroot')
-        self.output_dset.reroot(absolute=True)  # Make all paths absolute
-        self.output_dset.fpath = args.output_kwcoco  # Change output file path and bundle path
-        self.output_dset.reroot(absolute=False)  # Reroot in the new bundle path
-
-        self.finalized_gids = set()
-        self.stitcher_dict = {}
+        # Initialize models
         if 'all' in args.tasks:
             self.tasks = ['segmentation', 'before_after', 'pretext']
         else:
@@ -129,6 +108,28 @@ class predict(object):
             self.num_out_channels += 1
         if 'before_after' in self.tasks:
             self.num_out_channels += 1
+
+        # initialize dataset
+        import kwcoco
+        print('load coco dataset')
+        self.coco_dset = kwcoco.CocoDataset = kwcoco.CocoDataset.coerce(args.input_kwcoco)
+
+        ###
+        print('build grid dataset')
+        self.dataset = gridded_dataset(self.coco_dset, args.bands,
+                                       patch_size=args.patch_size,
+                                       patch_overlap=args.patch_overlap,
+                                       mode='test')
+
+        print('copy dataset')
+        self.output_dset = self.dataset.coco_dset.copy()
+
+        print('reroot')
+        self.output_dset.reroot(absolute=True)  # Make all paths absolute
+        self.output_dset.fpath = args.output_kwcoco  # Change output file path and bundle path
+        self.output_dset.reroot(absolute=False)  # Reroot in the new bundle path
+        self.finalized_gids = set()
+        self.stitcher_dict = {}
 
         self.save_channels = f'invariants:{self.num_out_channels}'
         self.output_kwcoco_path = ub.Path(args.output_kwcoco)
@@ -428,7 +429,7 @@ def parse_args(argv=None):
 
 def main():
     args = parse_args()
-    predict(args).forward(args)
+    Predictor(args).forward(args)
 
 
 if __name__ == '__main__':
