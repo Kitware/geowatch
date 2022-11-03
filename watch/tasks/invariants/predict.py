@@ -63,6 +63,11 @@ class Predictor(object):
         # the cache misses. See dzyne and rutgers predictors for example
         # implementations.
 
+        FIX_ALBUMENTATIONS_HACK = 1
+        if FIX_ALBUMENTATIONS_HACK:
+            from albumentations.core import composition
+            composition.Transforms = composition.TransformType
+
         self.devices = util_device.coerce_devices(args.device)
         assert len(self.devices) == 1, 'only 1 for now'
         self.device = device = self.devices[0]
