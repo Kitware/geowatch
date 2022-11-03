@@ -63,6 +63,11 @@ class predict(object):
         # the cache misses. See dzyne and rutgers predictors for example
         # implementations.
 
+        self.devices = util_device.coerce_devices(args.device)
+        assert len(self.devices) == 1, 'only 1 for now'
+        self.device = device = self.devices[0]
+        print('device = {!r}'.format(device))
+
         # initialize dataset
         import kwcoco
         print('load coco dataset')
@@ -82,11 +87,6 @@ class predict(object):
         self.output_dset.reroot(absolute=True)  # Make all paths absolute
         self.output_dset.fpath = args.output_kwcoco  # Change output file path and bundle path
         self.output_dset.reroot(absolute=False)  # Reroot in the new bundle path
-
-        self.devices = util_device.coerce_devices(args.device)
-        assert len(self.devices) == 1, 'only 1 for now'
-        self.device = device = self.devices[0]
-        print('device = {!r}'.format(device))
 
         self.finalized_gids = set()
         self.stitcher_dict = {}
