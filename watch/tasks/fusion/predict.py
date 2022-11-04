@@ -892,7 +892,8 @@ def predict(cmdline=False, **kwargs):
     proc_context.stop()
 
     # validate and save results
-    print(result_dataset.validate())
+    if 0:
+        print(result_dataset.validate())
     print('dump result_dataset.fpath = {!r}'.format(result_dataset.fpath))
     result_dataset.dump(result_dataset.fpath)
     print('return result_dataset.fpath = {!r}'.format(result_dataset.fpath))

@@ -141,24 +141,6 @@ class gridded_dataset(torch.utils.data.Dataset):
             tr['main_idx'] = coco_dset.imgs[tr['main_gid']]['frame_index']
             tr['frame_indexes'] = coco_dset.images(tr['gids']).lookup('frame_index')
 
-        if 0:
-            # DEBUG:
-            # vidid = self.coco_dset.videos()[0]
-            # time_sampler = sample_grid['vidid_to_time_sampler'][vidid]
-            # gids = set(self.coco_dset.images(video_id=vidid))
-            # for loc, main_idx in enumerate(time_sampler.main_indexes):
-            #     print(time_sampler.sample(main_idx, exclude=time_sampler.main_indexes[loc:], error_level=0))
-            # covered1 = set()
-            # covered2 = set()
-            # for tr in all_samples:
-            #     tr['vidid'] = tr['video_id']  # hack
-            #     v = tr['vidid']
-            #     if v == vidid:
-            #         covered1.add(tr['gids'][0])
-            #         covered2.add(tr['gids'][1])
-            #         ...
-            ...
-
         # Postprocess the grid we get out of the temporal sampler to make it a
         # little nicer for this problem.
 
@@ -238,19 +220,17 @@ class gridded_dataset(torch.utils.data.Dataset):
 
             vidid_to_new_samples[vidid] = list(ub.flatten(new_frame_to_samples.values()))
 
+        # Sort the patches into an order where we can
         self.patches = []
-
         for vidid, samples in vidid_to_new_samples.items():
+            # TODO: find the best test-time ordering of the samples. For now just do sequentail
             samples = sorted(samples, key=lambda x: x['frame_index'])
+            # TODO: only do this at test time
+            idx_to_final_gids, g = find_complete_image_indexes(samples)
+            for idx, gids in idx_to_final_gids.items():
+                if gids and idx is not None:
+                    samples[idx]['complete_gids'] = gids
             self.patches.extend(samples)
-
-            if 0:
-                # Check ordering
-                prev_frame_index = -1
-                for sample in samples:
-                    assert sample['frame_index'] >= prev_frame_index
-                    prev_frame_index = sample['frame_index']
-                    assert np.all(np.array(sample['frame_indexes']) >= sample['frame_indexes'])
 
         # [x['vidid']] + [self.coco_dset.imgs[gid]['frame_index'] for gid in x['gids']]
         # self.patches : list[dict] = list(ub.flatten(vidid_to_new_samples.values()))
@@ -471,6 +451,87 @@ class gridded_dataset(torch.utils.data.Dataset):
                 for k in range(self.num_images):
                     out['segmentation{}'.format(1 + k)] = torch.tensor(segmentation_masks[k]).contiguous()
         return out
+
+
+def find_complete_image_indexes(samples):
+    """
+    Args:
+        samples (List[dict]):
+            A list of target dictionaries from ndsampler that contains a key
+            'gids' which maps to a list of image ids that the sample touches.
+
+    Returns:
+        Tuple: sample_to_complete_gids, g
+            mapping from sample indexes to what images can be marked as done
+
+            g is the graph used for debug purposes
+
+    Example:
+        >>> from watch.tasks.invariants.data.datasets import *  # NOQA
+        >>> samples = [
+        >>>     {'gids': [0, 3]},
+        >>>     {'gids': [0, 3]},
+        >>>     {'gids': [1, 2]},
+        >>>     {'gids': [1, 4]},
+        >>>     {'gids': [2, 5]},
+        >>>     {'gids': [0, 5]},
+        >>> ]
+        >>> sample_to_complete_gids, g = find_complete_image_indexes(samples)
+        >>> from cmd_queue.util.util_networkx import write_network_text
+        >>> write_network_text(g)
+        >>> print('sample_to_complete_gids = {}'.format(ub.repr2(sample_to_complete_gids, nl=1)))
+    """
+    # Create a graph describing how indexes cover frames so we can
+    # know when we are finally done with a particular image in
+    # predict mode.
+    # We connect an edge from each sample index to the images it
+    # needs. We also connect each sample index to the next index.
+    # At any sample index, if there is not a path to a particular
+    # image, then it is done.
+    import networkx as nx
+    g = nx.DiGraph()
+    # Check ordering
+    prev_sample_node = None
+    for sample_index, sample in enumerate(samples):
+        sample_node = ('sample', sample_index)
+        if prev_sample_node is not None:
+            g.add_edge(prev_sample_node, sample_node)
+        prev_sample_node = sample_node
+        for gid in sample['gids']:
+            image_node = ('gid', gid)
+            g.add_edge(sample_node, image_node)
+
+    image_nodes = {n for n in g.nodes if n[0] == 'gid'}
+
+    all_path_pairs = list(nx.all_pairs_shortest_path(g))
+    sample_to_touchable_images = {}
+    for source, node_to_path in all_path_pairs:
+        if source[0] == 'sample':
+            touchable_images = {k for k in node_to_path.keys() if k[0] == 'gid'}
+            sample_to_touchable_images[source] = touchable_images
+
+    sample_to_untouchable_images = {}
+    for source, touchable in sample_to_touchable_images.items():
+        sample_to_untouchable_images[source] = image_nodes - touchable
+
+    # Now mark the first sample we see an untouchable image so at
+    # that point in interation the predictor knows it can mark it
+    # as complete and finalize it.
+    sample_to_complete_nodes = {}
+    completed_images = set()
+    for source, untouchable in sample_to_untouchable_images.items():
+        marker = untouchable - completed_images
+        completed_images.update(untouchable)
+        sample_to_complete_nodes[source] = marker
+
+    # And these are the images that have to wait all the way
+    # until the end to complete
+    final_nodes = image_nodes - completed_images
+    sample_to_complete_nodes[('sample', None)] = final_nodes
+    sample_to_complete_gids = {
+        k[1]: [v[1] for v in vs]
+        for k, vs in sample_to_complete_nodes.items()}
+    return sample_to_complete_gids, g
 
 
 class kwcoco_dataset(Dataset):

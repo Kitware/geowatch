@@ -66,6 +66,10 @@ class InvariantPredictConfig(scfg.DataConfig):
             '''))
     pca_projection_path = scfg.Value('', type=str, help='Path to pca projection matrix')
 
+    def normalize(self):
+        if 'all' in self.tasks:
+            self['tasks'] = ['segmentation', 'before_after', 'pretext']
+
 
 class Predictor(object):
     """
@@ -104,7 +108,7 @@ class Predictor(object):
         >>> argv += ['--num_workers', '2']
         >>> argv += ['--tasks', 'all']
         >>> argv += ['--do_pca', '1']
-        >>> args = parse_args(argv)
+        >>> args = InvariantPredictConfig.cli(argv=argv)
         >>> self = Predictor(args)
         >>> self.forward(args)
     """
@@ -218,6 +222,16 @@ class Predictor(object):
             'blocksize': 128,
         }
 
+        from watch.utils import process_context
+        import sys
+        self.proc_context = process_context.ProcessContext(
+            args=sys.argv,
+            type='process',
+            name='watch.tasks.invariants.predict',
+            config=args.to_dict(),
+            track_emissions=True,
+        )
+
     def _build_img_fpath(self, gid):
         save_path = self.output_feat_dpath / f'invariants_{gid}.tif'
         return save_path
@@ -258,8 +272,24 @@ class Predictor(object):
         auxiliary = img['auxiliary']
         auxiliary.append(aux)
 
+    def ensure_stitcher(self, gid):
+        """
+        Create a stitcher for an image if it doesnt exist
+        """
+        if gid not in self.stitcher_dict:
+            img = self.dataset.coco_dset.index.imgs[gid]
+            space_dims = (img['height'], img['width'])
+            self.stitcher_dict[gid] = kwarray.Stitcher(
+                space_dims + (self.num_out_channels,), device='numpy')
+        return self.stitcher_dict[gid]
+
     def forward(self):
         device = self.device
+
+        self.proc_context.start()
+        self.proc_context.add_disk_info(self.output_dset.fpath)
+        self.output_dset.dataset.setdefault('info', [])
+        self.output_dset.dataset['info'].append(self.proc_context.obj)
 
         loader = torch.utils.data.DataLoader(
             self.dataset, num_workers=self.num_workers,
@@ -270,25 +300,15 @@ class Predictor(object):
         # Build a task queue for background write results workers (Not currently using this)
         # queue = util_parallel.BlockingJobQueue(max_workers=0)
         from watch.utils import util_parallel
+
         writer = util_parallel.BlockingJobQueue(max_workers=self.write_workers)
-
-        # bundle_dpath = ub.Path(self.output_dset.bundle_dpath)
-        # save_dpath = (bundle_dpath / 'uky_invariants').ensuredir()
-
-        CHECK_IMAGE_ORDERING = 0
-        if CHECK_IMAGE_ORDERING:
-            for tr in self.dataset.patches:
-                for gid in tr['gids']:
-                    img = self.dataset.coco_dset.imgs[gid]
-                    frame_idx = img['frame_index']
-                    print(f'frame_idx={frame_idx}')
 
         print('Evaluating and saving features')
 
         with torch.set_grad_enabled(False):
             seen_images = set()
-            current_gids = set()
-            for idx, batch in ub.ProgIter(enumerate(loader), total=num_batches, desc='Compute features', verbose=1):
+            prog = ub.ProgIter(enumerate(loader), total=num_batches, desc='Compute features', verbose=1)
+            for idx, batch in prog:
                 save_feat = []
                 save_feat2 = []
 
@@ -361,165 +381,52 @@ class Predictor(object):
                 save_feat2 = torch.cat(save_feat2, dim=-1)
                 save_feat2 = save_feat2.numpy()
 
-                # image_id = int(batch['img1_id'].item())
-                # image_info = output_dset.index.imgs[image_id]
-                # video_info = output_dset.index.videos[image_info['video_id']]
-
-                # video_folder = (save_dpath / video_info['name']).ensuredir()
-
-                # # Predictions are saved in 'video space', so warp_aux_to_img is the inverse of warp_img_to_vid
-                # warp_img_to_vid = kwimage.Affine.coerce(image_info.get('warp_img_to_vid', None))
-                # warp_aux_to_img = warp_img_to_vid.inv().concise()
-
-                # # Get the output image dictionary to be added to
-                # output_img = output_dset.index.imgs[image_id]
-
                 tr = self.dataset.patches[idx]
-                # sample = self.dataset.sampler.load_sample(tr)
-                # tr = sample['tr']
 
-                if len(current_gids) == 0:
-                    current_gids = {tr['main_gid']}
-                previous_gids = current_gids
-                current_gids = {tr['main_gid']}
-
-                # If we start looking at a new image, that means the
-                # previous image must be done (because we assume sorted
-                # batches). Thus we can finalize the previous image and
-                # free any memory used by its stitcher
-                mutually_exclusive = (set(previous_gids) - set(current_gids))
-                if 1:
-                    for gid in mutually_exclusive:
-                        # import xdev
-                        # with xdev.embed_on_exception_context:
-                        assert gid not in seen_images
-                        if gid in seen_images:
-                            print(f'warning gid={gid}')
-                        seen_images.add(gid)
-                        # print(f'submit gid={gid}')
-                        writer.submit(self.finalize_image, gid)
+                # These dataloader has told us that these iamges are now
+                # complete, and thus can be finalized free any memory used by
+                # its stitcher
+                new_complete_gids = tr.get('new_complete_gids', [])
+                for gid in new_complete_gids:
+                    assert gid not in seen_images
+                    seen_images.add(gid)
+                    # if 1:
+                    #     img = self.dataset.coco_dset.index.imgs[gid]
+                    #     frame_index = img['frame_index']
+                    #     video_id = img['video_id']
+                    #     prog.ensure_newline()
+                    #     print(f'finalize {video_id=}, {gid=}, {frame_index=}')
+                    writer.submit(self.finalize_image, gid)
 
                 gid1, gid2 = tr['gids']
-                if gid1 not in self.stitcher_dict.keys():
-                    img1 = self.dataset.coco_dset.index.imgs[gid1]
-                    space_dims = (img1['height'], img1['width'])
-                    self.stitcher_dict[gid1] = kwarray.Stitcher(
-                        space_dims + (self.num_out_channels,), device='numpy')
-                if gid2 not in self.stitcher_dict.keys():
-                    img2 = self.dataset.coco_dset.index.imgs[gid2]
-                    space_dims = (img2['height'], img2['width'])
-                    self.stitcher_dict[gid2] = kwarray.Stitcher(
-                        space_dims + (self.num_out_channels,), device='numpy')
-
                 slice_ = tr['space_slice']
-                # weights = util_kwimage.upweight_center_mask(save_feat.shape[0:2])[..., None]
-                # weights1 = weights.copy()
-                # weights2 = weights.copy()
-                # invalid_mask1_np = invalid_mask1.numpy()
-                # invalid_mask2_np = invalid_mask2.numpy()
-                # if invalid_mask1_np.any():
-                #     spatial_valid_mask1 = (1 - invalid_mask1_np)[..., None]
-                #     weights1 = weights1 * spatial_valid_mask1
-                #     save_feat[invalid_mask1_np] = 0
-                # if invalid_mask2_np.any():
-                #     spatial_valid_mask2 = (1 - invalid_mask2_np)[..., None]
-                #     weights2 = weights2 * spatial_valid_mask2
-                #     save_feat[invalid_mask2_np] = 0
-
-                # TODO: refactor and make a good CocoStitchingManager
-                stitcher1 = self.stitcher_dict[gid1]
-                stitcher2 = self.stitcher_dict[gid2]
+                stitcher1 = self.ensure_stitcher(gid1)
+                stitcher2 = self.ensure_stitcher(gid2)
                 CocoStitchingManager._stitcher_center_weighted_add(
                     stitcher1, slice_, save_feat)
                 CocoStitchingManager._stitcher_center_weighted_add(
                     stitcher2, slice_, save_feat2)
 
-                # self.stitcher_dict[gid1].add(slice_, save_feat, weight=weights1)
-                # self.stitcher_dict[gid2].add(slice_, save_feat2, weight=weights2)
-
             writer.wait_until_finished()
 
+            # Finalize everything else that hasn't completed
             for gid in list(self.stitcher_dict.keys()):
                 if gid not in seen_images:
-                    # import xdev
-                    # with xdev.embed_on_exception_context:
-                    #     assert gid not in seen_images
                     seen_images.add(gid)
                     writer.submit(self.finalize_image, gid)
 
             writer.wait_until_finished()
+
+        self.proc_context.add_device_info(device)
+        self.proc_context.stop()
 
         print('Write to dset.fpath = {!r}'.format(self.output_dset.fpath))
         self.output_dset.dump(self.output_dset.fpath, newlines=True)
         print('Done')
 
 
-def parse_args(argv=None):
-    """
-    Example:
-        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.tasks.invariants.predict import *  # NOQA
-        >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
-        >>> pretext_package_path = dvc_dpath / 'models/uky/uky_invariants_2022_03_11/TA1_pretext_model/pretext_package.pt'
-        >>> pca_projection_path = dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pca_projection_matrix.pt'
-        >>> segmentation_package_path = dvc_dpath / 'models/uky/uky_invariants_2022_03_11/TA1_segmentation_model/segmentation_package.pt'
-        >>> input_kwcoco = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
-        >>> output_kwcoco = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/test_uky.kwcoco.json'
-        >>> argv = []
-        >>> argv += ['--input_kwcoco', f'{input_kwcoco}']
-        >>> argv += ['--output_kwcoco', f'{output_kwcoco}']
-        >>> argv += ['--pca_projection_path', f'{pca_projection_path}']
-        >>> argv += ['--pretext_package_path', f'{pretext_package_path}']
-        >>> argv += ['--segmentation_package_path', f'{segmentation_package_path}']
-        >>> argv += ['--patch_overlap', '0']
-        >>> argv += ['--num_workers', '2']
-        >>> argv += ['--tasks', 'all']
-        >>> argv += ['--do_pca', '1']
-        >>> args = parse_args(argv)
-    """
-    # from argparse import ArgumentParser, RawTextHelpFormatter
-    # parser = ArgumentParser(description='', formatter_class=RawTextHelpFormatter)
-    # from scriptconfig.smartcast import smartcast
-    # parser.add_argument('--device', type=str, default='cuda')
-
-    # # pytorch lightning checkpoint
-    # parser.add_argument('--pretext_ckpt_path', type=str, default=None)
-    # parser.add_argument('--segmentation_ckpt_path', type=str, default=None)
-    # parser.add_argument('--pretext_package_path', type=str, default=None)
-    # parser.add_argument('--segmentation_package_path', type=str, default=None)
-    # parser.add_argument('--batch_size', type=int, default=1)
-    # parser.add_argument('--num_workers', default=4, help='number of background data loading workers')
-    # parser.add_argument('--write_workers', default=0, help='number of background data writing workers')
-
-    # # data flags - make sure these match the trained checkpoint
-    # parser.add_argument('--sensor', type=smartcast, nargs='+', default=['S2', 'L8'])
-    # parser.add_argument('--bands', type=str, help='Choose bands on which to train. Can specify \'all\' for all bands from given sensor, or \'share\' to use common bands when using both S2 and L8 sensors', nargs='+', default=['shared'])
-    # # output flags
-    # parser.add_argument('--patch_size', type=int, default=256)
-    # parser.add_argument('--patch_overlap', type=float, default=.25)
-    # parser.add_argument('--input_kwcoco', type=str, help='Path to kwcoco dataset with images to generate feature for', required=True)
-    # parser.add_argument('--output_kwcoco', type=str, help='Path to write an output kwcoco file. Output file will be a copy of input_kwcoco with addition feature fields generated by predict.py rerooted to point to the original data.', required=True)
-    # parser.add_argument('--tasks', nargs='+', help='Specify which tasks to choose from (segmentation, before_after, or pretext. Can also specify \'all\')', default=['all'])
-    # parser.add_argument('--do_pca', type=int, help='Set to 1 to perform pca. Choose output dimension in num_dim argument.', default=1)
-    # parser.add_argument('--pca_projection_path', type=str, help='Path to pca projection matrix', default='')
-
-    # parser.set_defaults(
-    #     terminate_on_nan=True
-    #     )
-    # import scriptconfig as scfg
-    # print(scfg.Config.port_argparse(parser, style='dataconf'))
-    # args = parser.parse_args(args=argv)
-
-    args = InvariantPredictConfig.cli(argv=argv)
-    if 'all' in args.tasks:
-        args['tasks'] = ['segmentation', 'before_after', 'pretext']
-
-    return args
-
-
 def main():
-    args = parse_args()
+    args = InvariantPredictConfig.cli()
     Predictor(args).forward()
 
 
@@ -573,9 +480,9 @@ if __name__ == '__main__':
             --pretext_package_path "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_03_21/pretext_model/pretext_package.pt" \
             --pca_projection_path  "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_03_21/pretext_model/pretext_pca_104.pt" \
             --do_pca 0 \
-            --patch_overlap=0.5 \
+            --patch_overlap=0.3 \
             --num_workers="2" \
-            --write_workers 2 \
+            --write_workers 0 \
             --tasks before_after pretext
 
     """
