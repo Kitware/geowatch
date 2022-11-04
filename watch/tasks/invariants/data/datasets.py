@@ -112,47 +112,138 @@ class gridded_dataset(torch.utils.data.Dataset):
 
         window_dims = [num_images, patch_size, patch_size]
 
-        NEW_GRID = 1
-        if NEW_GRID:
-            print('make grid')
-            from watch.tasks.fusion.datamodules.kwcoco_video_data import sample_video_spacetime_targets
-            sample_grid = sample_video_spacetime_targets(
-                self.coco_dset, window_dims=window_dims,
-                window_overlap=patch_overlap,
-                time_sampling='hardish3', time_span='1y',
-                use_annot_info=False,
-                keepbound=True,
-                exclude_sensors=['WV'],
-                use_centered_positives=False,
-            )
-            samples = sample_grid['targets']
-            for tr in samples:
-                tr['vidid'] = tr['video_id']  # hack
-            print('made grid')
-        else:
-            grid = self.sampler.new_sample_grid(**{
-                'task': 'video_detection',
-                'window_dims': [num_images, patch_size, patch_size],
-                'window_overlap': patch_overlap,
-            })
-            if segmentation:
-                samples = grid['positives']
-            else:
-                samples = grid['positives'] + grid['negatives']
+        print('make grid')
+        from watch.tasks.fusion.datamodules.kwcoco_video_data import sample_video_spacetime_targets
+        sample_grid = sample_video_spacetime_targets(
+            self.coco_dset, window_dims=window_dims,
+            window_overlap=patch_overlap,
+            time_sampling='hardish3', time_span='1y',
+            use_annot_info=False,
+            keepbound=True,
+            exclude_sensors=['WV'],
+            use_centered_positives=False,
+            # set_cover_algo='approx',
+            set_cover_algo=None,
+            use_cache=0,
+            workers=0,
+            window_space_scale=None,
+        )
+        import copy
+        # all_samples = sample_grid['targets']
+        all_samples = copy.deepcopy(sample_grid['targets'])
+        # import xdev
+        # xdev.embed()
+        for tr in all_samples:
+            tr['vidid'] = tr['video_id']  # hack
+            # The second gid is always the main gid in our case
+            tr['main_gid'] = tr['gids'][1]
+            tr['frame_index'] = coco_dset.imgs[tr['main_gid']]['frame_index']
+            tr['frame_indexes'] = coco_dset.images(tr['gids']).lookup('frame_index')
 
-        # vidid_to_patches = ub.group_items(samples, key=lambda x: x['vidid'])
-        # self.vidid_to_patches = vidid_to_patches
-        print('build patches')
-        grouped = ub.group_items(
-                samples,
-                lambda x: tuple(
-                    [x['vidid']] + [gid for gid in x['gids']]
-                )
-                )
-        grouped = ub.sorted_keys(grouped)
-        self.patches : list[dict] = list(ub.flatten(grouped.values()))
+        if 0:
+            # DEBUG:
+            # vidid = self.coco_dset.videos()[0]
+            # time_sampler = sample_grid['vidid_to_time_sampler'][vidid]
+            # gids = set(self.coco_dset.images(video_id=vidid))
+            # for loc, main_idx in enumerate(time_sampler.main_indexes):
+            #     print(time_sampler.sample(main_idx, exclude=time_sampler.main_indexes[loc:], error_level=0))
+            # covered1 = set()
+            # covered2 = set()
+            # for tr in all_samples:
+            #     tr['vidid'] = tr['video_id']  # hack
+            #     v = tr['vidid']
+            #     if v == vidid:
+            #         covered1.add(tr['gids'][0])
+            #         covered2.add(tr['gids'][1])
+            #         ...
+            ...
 
-        all_bands = [aux.get('channels', None) for aux in self.coco_dset.index.imgs[self.images._ids[0]].get('auxiliary', [])]
+        # Postprocess the grid we get out of the temporal sampler to make it a
+        # little nicer for this problem.
+
+        from watch.utils import util_kwimage
+        class HashableBox(util_kwimage.Box):
+            def to_tuple(box):
+                return tuple([box.format] + box.data.tolist())
+
+        vidid_to_new_samples = {}
+        vidid_to_samples = ub.group_items(all_samples, lambda x: x['vidid'])
+        for vidid, vid_samples in vidid_to_samples.items():
+            time_sampler = sample_grid['vidid_to_time_sampler'][vidid]
+            vid_images = coco_dset.images(video_id=vidid)
+            frame_idxs = vid_images.lookup('frame_index')
+            assert sorted(frame_idxs) == frame_idxs
+            frame_to_samples = ub.group_items(vid_samples, lambda x: x['frame_index'])
+            missing_frame_idxs = set(frame_idxs) - set(frame_to_samples)
+
+            # Get spatial information about the samples
+            from collections import Counter
+            spatial_slices = Counter()
+
+            # frame_index_to_timepairs = ub.ddict(Counter)
+            for samples in frame_to_samples.values():
+                for target in samples:
+                    tr = target
+                    tr['frame_index']
+                    box = HashableBox.from_slice(tr['space_slice'])
+                    box_tup = tuple([box.format] + box.data.tolist())
+                    spatial_slices.update([box_tup])
+                    # frame_index_to_timepairs[tr['frame_index']].update([tuple(tr['frame_indexes'])])
+            # print('frame_index_to_timepairs = {}'.format(ub.repr2(frame_index_to_timepairs, nl=2)))
+
+            # Make everything valid for this hack
+            time_sampler.affinity += np.finfo(np.float32).eps
+            # Fill in the gaps the sampler missed
+            new_frame_to_samples = ub.ddict(list)
+            for idx in missing_frame_idxs:
+                # Mask out everything in the future. We must take something
+                # from the past.
+
+                exclude_idxs = time_sampler.indexes[time_sampler.indexes > idx]
+                sample_idxs = time_sampler.sample(idx, exclude=exclude_idxs)
+
+                frame_index = frame_idxs[idx]
+                sample_gids = time_sampler.video_gids[sample_idxs]
+                main_gid = sample_gids[1]
+
+                partial_tr = ub.udict({
+                    'main_idx':  int(frame_index),
+                    'video_id': vidid,
+                    'vidid': vidid,
+                    'gids': list(map(int, sample_gids)),
+                    'main_gid': int(main_gid),
+                    'frame_index': int(frame_index),
+                    'frame_indexes': list(map(int, ub.take(frame_idxs, sample_idxs))),
+                    # 'space_slice': (slice(0, 256, None), slice(0, 256, None)),
+                    'resampled': None,
+                    'label': None,
+                })
+                for space_slice in spatial_slices.keys():
+                    format, a, b, c, d = space_slice
+                    box = util_kwimage.Box.coerce([[a, b, c, d]], format=format)
+                    space_slice = box.to_slice()
+                    new_tr = partial_tr | {
+                        'space_slice': space_slice,
+                    }
+                    new_frame_to_samples[frame_index].append(new_tr)
+
+            # Choose from the old ones
+            for frame_index, samples in frame_to_samples.items():
+                # TODO: spatial coverage
+                chosen = ub.udict(ub.group_items(samples, lambda x: x['gids'][0])).peek_value()
+                new_frame_to_samples[frame_index] = chosen
+
+            vidid_to_new_samples[vidid] = list(ub.flatten(new_frame_to_samples.values()))
+
+        # [x['vidid']] + [self.coco_dset.imgs[gid]['frame_index'] for gid in x['gids']]
+        self.patches : list[dict] = list(ub.flatten(vidid_to_new_samples.values()))
+
+        self.patches = sorted(self.patches,
+                              key=lambda x: (x['video_id'], x['frame_index']))
+
+        all_bands = [
+            aux.get('channels', None)
+            for aux in self.coco_dset.index.imgs[self.images._ids[0]].get('auxiliary', [])]
 
         if 'r|g|b' in all_bands:
             all_bands.remove('r|g|b')

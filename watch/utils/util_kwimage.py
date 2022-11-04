@@ -1423,13 +1423,31 @@ def find_low_overlap_covering_boxes_optimize(polygons, scale, min_box_dim, max_b
 
 class Box(ub.NiceRepr):
     """
-    Like kwimage.Boxes, but only one of t/em.
+    Represents a single Box.
+
+    For multiple boxes use kwimage.Boxes, which is more efficient.
+    This is a convinience class.
 
     Currently implemented by storing a Boxes object with one item and indexing
     into it. Could be done more efficiently
+
+    Example:
+        >>> from watch.utils import util_kwimage
+        >>> box = util_kwimage.Box.random()
+        >>> print(f'box={box}')
+        >>> #
+        >>> box.scale(10).quantize().to_slice()
+        >>> #
+        >>> sl = (slice(0, 10), slice(0, 30))
+        >>> box = util_kwimage.Box.from_slice(sl)
+        >>> print(f'box={box}')
     """
 
-    def __init__(self, boxes):
+    def __init__(self, boxes, _check: bool = False):
+        if _check:
+            raise Exception(
+                'For now, only construct an instance of this using a class '
+                ' method, like coerce, from_slice, from_shapely, etc...')
         self.boxes = boxes
 
     @property
@@ -1448,17 +1466,24 @@ class Box(ub.NiceRepr):
         return nice
 
     @classmethod
+    def random(self, *args, **kwargs):
+        import kwimage
+        boxes = kwimage.Boxes.random(*args, **kwargs)
+        self = Box(boxes, _check=False)
+        return self
+
+    @classmethod
     def from_slice(self, slice_):
         import kwimage
         boxes = kwimage.Boxes.from_slice(slice_)
-        self = Box(boxes)
+        self = Box(boxes, _check=False)
         return self
 
     @classmethod
     def from_shapely(self, geom):
         import kwimage
         boxes = kwimage.Boxes.from_shapely(geom)
-        self = Box(boxes)
+        self = Box(boxes, _check=False)
         return self
 
     @classmethod
@@ -1466,16 +1491,16 @@ class Box(ub.NiceRepr):
         width, height = dsize
         import kwimage
         boxes = kwimage.Boxes([[0, 0, width, height]], 'ltrb')
-        self = Box(boxes)
+        self = Box(boxes, _check=False)
         return self
 
     @classmethod
-    def coerce(cls, data):
+    def coerce(cls, data, **kwargs):
         if isinstance(data, Box):
             return data
         else:
             import kwimage
-            return cls(kwimage.Boxes.coerce(data))
+            return cls(kwimage.Boxes.coerce(data, **kwargs))
 
     @property
     def dsize(self):
@@ -1540,6 +1565,9 @@ class Box(ub.NiceRepr):
 
     def corners(self, *args, **kwargs):
         return self.boxes.corners(*args, **kwargs)[0]
+
+    def to_boxes(self):
+        return self.boxes
 
     @property
     def width(self):

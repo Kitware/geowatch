@@ -94,7 +94,11 @@ class CocoVisualizeConfig(scfg.Config):
             if True, ensure the "any3" channels are drawn. If set to "only",
             then other per-channel visualizations are supressed. TODO: better
             name?
+
+            TODO: deprecate?
             ''')),
+
+        'fast': scfg.Value(False, isflag=True, help='if True, override other params to go fast and use more resources'),
 
         'draw_imgs': scfg.Value(True, isflag=True),
         'draw_anns': scfg.Value('auto', isflag=True, help='auto means only draw anns if they exist'),
@@ -212,6 +216,9 @@ def main(cmdline=True, **kwargs):
     space = config['space']
     channels = config['channels']
     print('config = {}'.format(ub.repr2(dict(config), nl=2)))
+
+    if config['fast']:
+        config['workers'] = 'avail'
 
     if config['max_workers'] is not None:
         ub.schedule_deprecation(

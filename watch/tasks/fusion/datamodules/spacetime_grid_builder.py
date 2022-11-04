@@ -6,6 +6,17 @@ from watch.utils import util_kwimage
 from watch import heuristics
 
 
+# class DatasetSpacetimeTargetSampler:
+#     def __init__(self, dset, window_dims, window_overlap=0.0,
+#                  negative_classes=None, keepbound=False, exclude_sensors=None,
+#                  time_sampling='hard+distribute', time_span='2y',
+#                  use_annot_info=True, use_grid_positives=True,
+#                  use_centered_positives=True, window_space_scale=None,
+#                  set_cover_algo=None, workers=0, use_cache=1):
+#         # TODO: classify this nonsense
+
+
+
 def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                                    negative_classes=None, keepbound=False,
                                    exclude_sensors=None,
@@ -46,7 +57,8 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
             method requires the packe pulp, available at PyPi.
 
         window_space_scale (str):
-            Code indicating the scale at which to sample.
+            Code indicating the scale at which to sample. If None uses the
+            videospace GSD.
 
         use_grid_positives (bool):
             if False, will remove any grid sample that contains a positive
@@ -428,7 +440,7 @@ def _sample_single_video_spacetime_targets(
         # may modify this later depending on spatial properties.
         main_idx_to_gids = {
             main_idx: list(ub.take(video_gids, time_sampler.sample(main_idx)))
-            for main_idx in time_sampler.main_indexes
+            for main_idx in time_sampler.indexes
         }
 
         if use_annot_info:
@@ -517,15 +529,6 @@ def _build_targets_around_track(video_id, tid, infos, video_gids,
         _hack_main_idx = np.where(time_sampler.video_gids == main_gid)[0][0]
         sample_gids = list(ub.take(video_gids, time_sampler.sample(_hack_main_idx)))
         _hack = {_hack_main_idx: sample_gids}
-        # if 0:
-        #     # Too slow to handle here, will have to handle
-        #     # in getitem or be more efficient
-        #     # 86% of the time is spent here
-        #     _hack2, _ = _refine_time_sample(
-        #         dset, _hack, winspace_box,
-        #         refine_iooa_thresh, time_sampler,
-        #         get_image_valid_region_in_vidspace)
-        # else:
         _hack2 = _hack
         if _hack2:
             gids = _hack2[_hack_main_idx]
@@ -557,7 +560,6 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
     """
     from watch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
     y_sl, x_sl = vidspace_region
-
     vidspace_box = kwimage.Boxes.from_slice(vidspace_region).to_ltrb()
 
     # Find all annotations that pass through this spatial region

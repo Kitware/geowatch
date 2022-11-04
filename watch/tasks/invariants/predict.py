@@ -212,7 +212,8 @@ class Predictor(object):
         device = self.device
 
         loader = torch.utils.data.DataLoader(
-            self.dataset, num_workers=self.num_workers, batch_size=self.batch_size, shuffle=False)
+            self.dataset, num_workers=self.num_workers,
+            batch_size=self.batch_size, shuffle=False)
         num_batches = len(loader)
 
         # Start background processes
@@ -224,12 +225,21 @@ class Predictor(object):
         # bundle_dpath = ub.Path(self.output_dset.bundle_dpath)
         # save_dpath = (bundle_dpath / 'uky_invariants').ensuredir()
 
+        CHECK_IMAGE_ORDERING = 1
+        if CHECK_IMAGE_ORDERING:
+
+            for tr in self.dataset.patches:
+                for gid in tr['gids']:
+                    img = self.dataset.coco_dset.imgs[gid]
+                    frame_idx = img['frame_index']
+                    print(f'frame_idx={frame_idx}')
+
         print('Evaluating and saving features')
 
         with torch.set_grad_enabled(False):
             seen_images = set()
             current_gids = set()
-            for idx, batch in tqdm(enumerate(loader), total=num_batches, desc='Compute features'):
+            for idx, batch in ub.ProgIter(enumerate(loader), total=num_batches, desc='Compute features', verbose=3):
                 save_feat = []
                 save_feat2 = []
 
@@ -320,21 +330,25 @@ class Predictor(object):
                 # tr = sample['tr']
 
                 if len(current_gids) == 0:
-                    current_gids = tr['gids']
+                    current_gids = {tr['main_gid']}
                 previous_gids = current_gids
-                current_gids = tr['gids']
+                current_gids = {tr['main_gid']}
 
                 # If we start looking at a new image, that means the
                 # previous image must be done (because we assume sorted
                 # batches). Thus we can finalize the previous image and
                 # free any memory used by its stitcher
                 mutually_exclusive = (set(previous_gids) - set(current_gids))
-                for gid in mutually_exclusive:
-                    assert gid not in seen_images
-                    seen_images.add(gid)
-                    writer.submit(self.finalize_image, gid)
+                if 0:
+                    for gid in mutually_exclusive:
+                        import xdev
+                        with xdev.embed_on_exception_context:
+                            assert gid not in seen_images
+                        seen_images.add(gid)
+                        print(f'submit gid={gid}')
+                        writer.submit(self.finalize_image, gid)
 
-                gid1, gid2 = current_gids
+                gid1, gid2 = tr['gids']
                 if gid1 not in self.stitcher_dict.keys():
                     img1 = self.dataset.coco_dset.index.imgs[gid1]
                     space_dims = (img1['height'], img1['width'])
@@ -375,7 +389,9 @@ class Predictor(object):
             writer.wait_until_finished()
 
             for gid in list(self.stitcher_dict.keys()):
-                assert gid not in seen_images
+                import xdev
+                with xdev.embed_on_exception_context:
+                    assert gid not in seen_images
                 seen_images.add(gid)
                 writer.submit(self.finalize_image, gid)
 

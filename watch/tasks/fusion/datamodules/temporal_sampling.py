@@ -203,6 +203,9 @@ class TimeWindowSampler:
             attribute, which can be modified to change behavior (not thread
             safe).
 
+    Attributes:
+        main_indexes
+
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> import os
@@ -377,7 +380,13 @@ class TimeWindowSampler:
         else:
             raise KeyError(self.affinity_type)
 
-        self.main_indexes = np.arange(self.affinity.shape[0])
+        self.indexes = np.arange(self.affinity.shape[0])
+
+    @property
+    def main_indexes(self):
+        ub.schedule_deprecation(
+            'watch', 'main_indexes', 'use indexes instead', deprecate='now')
+        return self.indexes
 
     def sample(self, main_frame_idx=None, include=None, exclude=None,
                return_info=False, error_level=0, rng=None):

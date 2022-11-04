@@ -40,15 +40,13 @@ Ignore:
 
     # For Drop5
 
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data')
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
     EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt')
-
     # BUNDLE_DPATH=$DATA_DVC_DPATH/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC
     # KWCOCO_FPATH=$BUNDLE_DPATH/data.kwcoco.json
 
     BUNDLE_DPATH=$DATA_DVC_DPATH/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
-    KWCOCO_FPATH=$BUNDLE_DPATH/data_kr1br2.kwcoco.json
-
+    KWCOCO_FPATH=$BUNDLE_DPATH/data.kwcoco.json
     python -m watch.cli.prepare_teamfeats \
         --base_fpath="$KWCOCO_FPATH" \
         --expt_dpath="$EXPT_DVC_DPATH" \
