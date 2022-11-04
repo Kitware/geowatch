@@ -1,0 +1,65 @@
+model:
+  class_path: watch.tasks.fusion.methods.HeterogeneousModel
+  init_args:
+    token_width: 16
+    token_dim: 32
+    position_encoder:
+      class_path: watch.tasks.fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder
+      init_args:
+        in_dims: 3
+        max_freq: 4
+        num_freqs: 16
+    backbone_encoder_depth: 6
+    spatial_scale_base: 1.0
+    temporal_scale_base: 1.0
+    global_change_weight: 0.0
+    global_class_weight: 1.0
+    global_saliency_weight: 0.0
+data:
+  batch_size: 16
+  time_steps: 5
+  chip_dims: 80
+  channels: red|green|blue|nir|swir16|swir22 
+  input_space_scale: 10GSD
+  chip_overlap: 0
+  dist_weights: 0
+  exclude_sensors: null
+  ignore_dilate: 0
+  output_space_scale: null
+  window_space_scale: null
+  min_spacetime_weight: 0.5
+  neg_to_pos_ratio: 0.25
+  normalize_inputs: true
+  normalize_perframe: false
+  resample_invalid_frames: true 
+  temporal_dropout: 0.0
+  time_sampling: auto
+  time_span: 6m
+  torch_sharing_strategy: default
+  torch_start_method: default
+  upweight_centers: true
+  use_centered_positives: true
+  use_cloudmask: false
+  use_grid_positives: true
+  verbose: 1
+optimizer:
+  class_path: torch.optim.AdamW
+  init_args:
+    lr: 1e-4
+    weight_decay: 0.0 #1e-5
+profile: false
+seed_everything: true
+trainer:
+  callbacks: null
+  check_val_every_n_epoch: 5
+  enable_checkpointing: true
+  enable_model_summary: true
+  enable_progress_bar: true
+  gradient_clip_algorithm: null
+  gradient_clip_val: null
+  log_every_n_steps: 50
+  logger: true
+  max_steps: 200000
+  num_sanity_val_steps: 2
+  replace_sampler_ddp: true
+  track_grad_norm: 2

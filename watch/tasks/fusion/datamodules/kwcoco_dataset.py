@@ -96,6 +96,7 @@ import ubelt as ub
 from torch.utils import data
 from typing import Dict
 import scriptconfig as scfg
+from os import getenv
 
 from watch import heuristics
 from watch.utils import kwcoco_extensions
@@ -975,7 +976,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         gid_to_isbad[gid] = force_bad
         gid_to_sample[gid] = sample_streams
 
-        HACK_FIX_NATIVE_ANNOT_SIZE = 1
+        HACK_FIX_NATIVE_ANNOT_SIZE = getenv("HACK_FIX_NATIVE_ANNOT_SIZE", "True").lower() in ('true', '1', 't')
         if HACK_FIX_NATIVE_ANNOT_SIZE:
             # When sampling in native resolution, the annotations will be
             # sampled at that resolution. However, when there are multiple

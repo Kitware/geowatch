@@ -865,11 +865,18 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                         raise KeyError(criterion.target_encoding)
 
                     task_weights_key = self.task_to_keynames[task_name]["weights"]
+                    task_weights = frame[task_weights_key]
+
+                    valid_mask = task_weights > 0.
+                    pred_ = pred[:, valid_mask]
+                    loss_labels_ = loss_labels[:, valid_mask]
+                    task_weights_ = task_weights[valid_mask]
+
                     loss = criterion(
-                        pred[None],
-                        loss_labels[None],
+                        pred_[None],
+                        loss_labels_[None],
                     )
-                    loss *= frame[task_weights_key]
+                    loss *= task_weights_
                     frame_losses.append(
                         self.global_head_weights[task_name] * loss.mean()
                     )
