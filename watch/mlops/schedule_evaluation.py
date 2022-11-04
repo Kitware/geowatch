@@ -21,6 +21,8 @@ Example:
                     - "auto"
                 trk.pxl.data.input_scale_space:
                     - "15GSD"
+                trk.poly.moving_window_size:
+                    - null
                 crop.src:
                     - ./my_test_dataset/sc_query_data.kwcoco.json
                 crop.regions:
@@ -422,7 +424,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # print(f'{len(queue)=}')
     with_status = 0
     with_rich = 0
-    # queue.write_network_text()  # not in cmd_queue 0.1.2?
+    queue.write_network_text()
     queue.rprint(with_status=with_status, with_rich=with_rich)
 
     for job in queue.jobs:

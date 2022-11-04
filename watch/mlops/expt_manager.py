@@ -502,6 +502,7 @@ class ExperimentState(ub.NiceRepr):
         >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
         >>> dataset_code = 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC'
+        >>> dataset_code = '*'
         >>> dvc_remote = 'aws'
         >>> self = ExperimentState(expt_dvc_dpath, dataset_code, dvc_remote, data_dvc_dpath)
         >>> self.summarize()
@@ -516,7 +517,7 @@ class ExperimentState(ub.NiceRepr):
         table[table.type == 'pkg_fpath']['model'].unique()
     """
 
-    def __init__(self, expt_dvc_dpath, dataset_code, dvc_remote=None,
+    def __init__(self, expt_dvc_dpath, dataset_code='*', dvc_remote=None,
                  data_dvc_dpath=None, model_pattern='*'):
 
         if isinstance(model_pattern, str) and model_pattern.endswith('.txt') and ub.Path(model_pattern).exists():

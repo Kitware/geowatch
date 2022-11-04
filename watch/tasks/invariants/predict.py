@@ -2,8 +2,6 @@ import kwimage
 import kwarray
 import torch
 import ubelt as ub
-from argparse import ArgumentParser, RawTextHelpFormatter
-from tqdm import tqdm
 import os
 # local imports
 from .pretext_model import pretext
@@ -15,6 +13,58 @@ from watch.utils import util_kwimage  # NOQA
 
 from watch.tasks.fusion.predict import CocoStitchingManager
 from watch.tasks.fusion.predict import quantize_float01
+
+import scriptconfig as scfg
+
+
+class InvariantPredictConfig(scfg.DataConfig):
+    """
+    Configuration for UKY invariant models
+    """
+    device = scfg.Value('cuda', type=str)
+    pretext_ckpt_path = scfg.Value(None, type=str)
+    segmentation_ckpt_path = scfg.Value(None, type=str)
+    pretext_package_path = scfg.Value(None, type=str)
+    segmentation_package_path = scfg.Value(None, type=str)
+    batch_size = scfg.Value(1, type=int)
+    num_workers = scfg.Value(4, help=ub.paragraph(
+            '''
+            number of background data loading workers
+            '''))
+    write_workers = scfg.Value(0, help=ub.paragraph(
+            '''
+            number of background data writing workers
+            '''))
+    sensor = scfg.Value(['S2', 'L8'], nargs='+')
+    bands = scfg.Value(['shared'], type=str, help=ub.paragraph(
+            '''
+            Choose bands on which to train. Can specify 'all' for all
+            bands from given sensor, or 'share' to use common bands when
+            using both S2 and L8 sensors
+            '''), nargs='+')
+    patch_size = scfg.Value(256, type=int)
+    patch_overlap = scfg.Value(0.25, type=float)
+    input_kwcoco = scfg.Value(None, type=str, required=True, help=ub.paragraph(
+            '''
+            Path to kwcoco dataset with images to generate feature for
+            '''))
+    output_kwcoco = scfg.Value(None, type=str, required=True, help=ub.paragraph(
+            '''
+            Path to write an output kwcoco file. Output file will be a
+            copy of input_kwcoco with addition feature fields generated
+            by predict.py rerooted to point to the original data.
+            '''))
+    tasks = scfg.Value(['all'], help=ub.paragraph(
+            '''
+            Specify which tasks to choose from (segmentation,
+            before_after, or pretext. Can also specify 'all')
+            '''), nargs='+')
+    do_pca = scfg.Value(1, type=int, help=ub.paragraph(
+            '''
+            Set to 1 to perform pca. Choose output dimension in num_dim
+            argument.
+            '''))
+    pca_projection_path = scfg.Value('', type=str, help='Path to pca projection matrix')
 
 
 class Predictor(object):
@@ -225,9 +275,8 @@ class Predictor(object):
         # bundle_dpath = ub.Path(self.output_dset.bundle_dpath)
         # save_dpath = (bundle_dpath / 'uky_invariants').ensuredir()
 
-        CHECK_IMAGE_ORDERING = 1
+        CHECK_IMAGE_ORDERING = 0
         if CHECK_IMAGE_ORDERING:
-
             for tr in self.dataset.patches:
                 for gid in tr['gids']:
                     img = self.dataset.coco_dset.imgs[gid]
@@ -239,7 +288,7 @@ class Predictor(object):
         with torch.set_grad_enabled(False):
             seen_images = set()
             current_gids = set()
-            for idx, batch in ub.ProgIter(enumerate(loader), total=num_batches, desc='Compute features', verbose=3):
+            for idx, batch in ub.ProgIter(enumerate(loader), total=num_batches, desc='Compute features', verbose=1):
                 save_feat = []
                 save_feat2 = []
 
@@ -339,13 +388,15 @@ class Predictor(object):
                 # batches). Thus we can finalize the previous image and
                 # free any memory used by its stitcher
                 mutually_exclusive = (set(previous_gids) - set(current_gids))
-                if 0:
+                if 1:
                     for gid in mutually_exclusive:
-                        import xdev
-                        with xdev.embed_on_exception_context:
-                            assert gid not in seen_images
+                        # import xdev
+                        # with xdev.embed_on_exception_context:
+                        assert gid not in seen_images
+                        if gid in seen_images:
+                            print(f'warning gid={gid}')
                         seen_images.add(gid)
-                        print(f'submit gid={gid}')
+                        # print(f'submit gid={gid}')
                         writer.submit(self.finalize_image, gid)
 
                 gid1, gid2 = tr['gids']
@@ -389,11 +440,12 @@ class Predictor(object):
             writer.wait_until_finished()
 
             for gid in list(self.stitcher_dict.keys()):
-                import xdev
-                with xdev.embed_on_exception_context:
-                    assert gid not in seen_images
-                seen_images.add(gid)
-                writer.submit(self.finalize_image, gid)
+                if gid not in seen_images:
+                    # import xdev
+                    # with xdev.embed_on_exception_context:
+                    #     assert gid not in seen_images
+                    seen_images.add(gid)
+                    writer.submit(self.finalize_image, gid)
 
             writer.wait_until_finished()
 
@@ -426,40 +478,42 @@ def parse_args(argv=None):
         >>> argv += ['--do_pca', '1']
         >>> args = parse_args(argv)
     """
+    # from argparse import ArgumentParser, RawTextHelpFormatter
+    # parser = ArgumentParser(description='', formatter_class=RawTextHelpFormatter)
+    # from scriptconfig.smartcast import smartcast
+    # parser.add_argument('--device', type=str, default='cuda')
 
-    parser = ArgumentParser(description='', formatter_class=RawTextHelpFormatter)
-    from scriptconfig.smartcast import smartcast
-    parser.add_argument('--device', type=str, default='cuda')
+    # # pytorch lightning checkpoint
+    # parser.add_argument('--pretext_ckpt_path', type=str, default=None)
+    # parser.add_argument('--segmentation_ckpt_path', type=str, default=None)
+    # parser.add_argument('--pretext_package_path', type=str, default=None)
+    # parser.add_argument('--segmentation_package_path', type=str, default=None)
+    # parser.add_argument('--batch_size', type=int, default=1)
+    # parser.add_argument('--num_workers', default=4, help='number of background data loading workers')
+    # parser.add_argument('--write_workers', default=0, help='number of background data writing workers')
 
-    # pytorch lightning checkpoint
-    parser.add_argument('--pretext_ckpt_path', type=str, default=None)
-    parser.add_argument('--segmentation_ckpt_path', type=str, default=None)
-    parser.add_argument('--pretext_package_path', type=str, default=None)
-    parser.add_argument('--segmentation_package_path', type=str, default=None)
-    parser.add_argument('--batch_size', type=int, default=1)
-    parser.add_argument('--num_workers', default=4, help='number of background data loading workers')
-    parser.add_argument('--write_workers', default=0, help='number of background data writing workers')
+    # # data flags - make sure these match the trained checkpoint
+    # parser.add_argument('--sensor', type=smartcast, nargs='+', default=['S2', 'L8'])
+    # parser.add_argument('--bands', type=str, help='Choose bands on which to train. Can specify \'all\' for all bands from given sensor, or \'share\' to use common bands when using both S2 and L8 sensors', nargs='+', default=['shared'])
+    # # output flags
+    # parser.add_argument('--patch_size', type=int, default=256)
+    # parser.add_argument('--patch_overlap', type=float, default=.25)
+    # parser.add_argument('--input_kwcoco', type=str, help='Path to kwcoco dataset with images to generate feature for', required=True)
+    # parser.add_argument('--output_kwcoco', type=str, help='Path to write an output kwcoco file. Output file will be a copy of input_kwcoco with addition feature fields generated by predict.py rerooted to point to the original data.', required=True)
+    # parser.add_argument('--tasks', nargs='+', help='Specify which tasks to choose from (segmentation, before_after, or pretext. Can also specify \'all\')', default=['all'])
+    # parser.add_argument('--do_pca', type=int, help='Set to 1 to perform pca. Choose output dimension in num_dim argument.', default=1)
+    # parser.add_argument('--pca_projection_path', type=str, help='Path to pca projection matrix', default='')
 
-    # data flags - make sure these match the trained checkpoint
-    parser.add_argument('--sensor', type=smartcast, nargs='+', default=['S2', 'L8'])
-    parser.add_argument('--bands', type=str, help='Choose bands on which to train. Can specify \'all\' for all bands from given sensor, or \'share\' to use common bands when using both S2 and L8 sensors', nargs='+', default=['shared'])
-    # output flags
-    parser.add_argument('--patch_size', type=int, default=256)
-    parser.add_argument('--patch_overlap', type=float, default=.25)
-    parser.add_argument('--input_kwcoco', type=str, help='Path to kwcoco dataset with images to generate feature for', required=True)
-    parser.add_argument('--output_kwcoco', type=str, help='Path to write an output kwcoco file. Output file will be a copy of input_kwcoco with addition feature fields generated by predict.py rerooted to point to the original data.', required=True)
-    parser.add_argument('--tasks', nargs='+', help='Specify which tasks to choose from (segmentation, before_after, or pretext. Can also specify \'all\')', default=['all'])
-    parser.add_argument('--do_pca', type=int, help='Set to 1 to perform pca. Choose output dimension in num_dim argument.', default=1)
-    parser.add_argument('--pca_projection_path', type=str, help='Path to pca projection matrix', default='')
+    # parser.set_defaults(
+    #     terminate_on_nan=True
+    #     )
+    # import scriptconfig as scfg
+    # print(scfg.Config.port_argparse(parser, style='dataconf'))
+    # args = parser.parse_args(args=argv)
 
-    parser.set_defaults(
-        terminate_on_nan=True
-        )
-
-    args = parser.parse_args(args=argv)
-
+    args = InvariantPredictConfig.cli(argv=argv)
     if 'all' in args.tasks:
-        args.tasks = ['segmentation', 'before_after', 'pretext']
+        args['tasks'] = ['segmentation', 'before_after', 'pretext']
 
     return args
 

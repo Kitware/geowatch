@@ -13,8 +13,21 @@ def main():
 
     data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
 
-    pred_bas_dpath = ub.Path('/home/joncrall/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/pred/trk/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data.kwcoco/trk_pxl_b788335d')
-    pred_path_pat = (pred_bas_dpath / 'trk_poly*' / 'site-summaries' / '*_R*.geojson')
+    if 0:
+        # On Jons' machine
+        pred_bas_dpath = ub.Path('/home/joncrall/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/pred/trk/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data.kwcoco/trk_pxl_b788335d')
+        pred_path_pat = (pred_bas_dpath / 'trk_poly*' / 'site-summaries' / '*_R*.geojson')
+        pred_data_paths = list(watch.utils.util_gis.coerce_geojson_paths(pred_path_pat))
+
+        # For Matt
+        dump_path = ub.Path('./pred_regions_for_verification').ensuredir()
+        for p in pred_data_paths:
+            new_p = dump_path / (p.name.split('.')[0] + '_' + ub.hash_data(p.parts)[0:8] + '.geojson')
+            p.copy(new_p)
+    else:
+        hack_bas_paths = ub.Path('./pred_regions_for_verification')
+        pred_data_paths = list(watch.utils.util_gis.coerce_geojson_paths(hack_bas_paths))
+
     pred_data_infos = list(watch.utils.util_gis.coerce_geojson_datas(pred_path_pat, workers=4))
 
     true_region_dpath = data_dvc_dpath / 'annotations/region_models'
@@ -78,7 +91,6 @@ def main():
     # Visualize candidates
     region_id_to_pred_subdf = dict(list(cand_pred_sitesum_df.groupby('region_id')))
     for region_id, pred_subdf in region_id_to_pred_subdf.items():
-
         pred_subdf = region_id_to_pred_subdf[region_id]
 
         fig = kwplot.figure(fnum=region_id, doclf=True)

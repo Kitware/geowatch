@@ -138,6 +138,7 @@ class gridded_dataset(torch.utils.data.Dataset):
             # The second gid is always the main gid in our case
             tr['main_gid'] = tr['gids'][1]
             tr['frame_index'] = coco_dset.imgs[tr['main_gid']]['frame_index']
+            tr['main_idx'] = coco_dset.imgs[tr['main_gid']]['frame_index']
             tr['frame_indexes'] = coco_dset.images(tr['gids']).lookup('frame_index')
 
         if 0:
@@ -188,14 +189,14 @@ class gridded_dataset(torch.utils.data.Dataset):
                     box = HashableBox.from_slice(tr['space_slice'])
                     box_tup = tuple([box.format] + box.data.tolist())
                     spatial_slices.update([box_tup])
-                    # frame_index_to_timepairs[tr['frame_index']].update([tuple(tr['frame_indexes'])])
-            # print('frame_index_to_timepairs = {}'.format(ub.repr2(frame_index_to_timepairs, nl=2)))
 
             # Make everything valid for this hack
             time_sampler.affinity += np.finfo(np.float32).eps
             # Fill in the gaps the sampler missed
             new_frame_to_samples = ub.ddict(list)
             for idx in missing_frame_idxs:
+                if idx == frame_idxs[0]:
+                    continue
                 # Mask out everything in the future. We must take something
                 # from the past.
 
@@ -225,9 +226,11 @@ class gridded_dataset(torch.utils.data.Dataset):
                     new_tr = partial_tr | {
                         'space_slice': space_slice,
                     }
-                    new_frame_to_samples[frame_index].append(new_tr)
+                    if 1:
+                        new_frame_to_samples[frame_index].append(new_tr)
 
-            # Choose from the old ones
+            # For each each main frame, choose only one other frame as it's
+            # pair.
             for frame_index, samples in frame_to_samples.items():
                 # TODO: spatial coverage
                 chosen = ub.udict(ub.group_items(samples, lambda x: x['gids'][0])).peek_value()
@@ -235,11 +238,24 @@ class gridded_dataset(torch.utils.data.Dataset):
 
             vidid_to_new_samples[vidid] = list(ub.flatten(new_frame_to_samples.values()))
 
-        # [x['vidid']] + [self.coco_dset.imgs[gid]['frame_index'] for gid in x['gids']]
-        self.patches : list[dict] = list(ub.flatten(vidid_to_new_samples.values()))
+        self.patches = []
 
-        self.patches = sorted(self.patches,
-                              key=lambda x: (x['video_id'], x['frame_index']))
+        for vidid, samples in vidid_to_new_samples.items():
+            samples = sorted(samples, key=lambda x: x['frame_index'])
+            self.patches.extend(samples)
+
+            if 0:
+                # Check ordering
+                prev_frame_index = -1
+                for sample in samples:
+                    assert sample['frame_index'] >= prev_frame_index
+                    prev_frame_index = sample['frame_index']
+                    assert np.all(np.array(sample['frame_indexes']) >= sample['frame_indexes'])
+
+        # [x['vidid']] + [self.coco_dset.imgs[gid]['frame_index'] for gid in x['gids']]
+        # self.patches : list[dict] = list(ub.flatten(vidid_to_new_samples.values()))
+        # self.patches = sorted(list(ub.flatten(vidid_to_new_samples.values())),
+        #                       key=lambda x: (x['video_id'], x['frame_index']))
 
         all_bands = [
             aux.get('channels', None)
