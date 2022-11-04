@@ -85,7 +85,7 @@ def main():
     import kwplot
     import kwimage
     import geopandas as gpd  # NOQA
-    kwplot.autompl()
+    # kwplot.autompl()
 
     # Visualize candidates
     region_id_to_pred_subdf = dict(list(cand_pred_sitesum_df.groupby('region_id')))
