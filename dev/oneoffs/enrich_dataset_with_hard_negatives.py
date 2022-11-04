@@ -25,8 +25,7 @@ def main():
             new_p = dump_path / (p.name.split('.')[0] + '_' + ub.hash_data(p.parts)[0:8] + '.geojson')
             p.copy(new_p)
     else:
-        hack_bas_paths = ub.Path('./pred_regions_for_verification')
-        pred_data_paths = list(watch.utils.util_gis.coerce_geojson_paths(hack_bas_paths))
+        pred_path_pat = ub.Path('./pred_regions_for_verification')
 
     pred_data_infos = list(watch.utils.util_gis.coerce_geojson_datas(pred_path_pat, workers=4))
 
