@@ -223,13 +223,16 @@ class gridded_dataset(torch.utils.data.Dataset):
         # Sort the patches into an order where we can
         self.patches = []
         for vidid, samples in vidid_to_new_samples.items():
-            # TODO: find the best test-time ordering of the samples. For now just do sequentail
+
+            # TODO: find the best test-time ordering of the samples. For now just do sequential
             samples = sorted(samples, key=lambda x: x['frame_index'])
-            # TODO: only do this at test time
-            idx_to_final_gids, g = find_complete_image_indexes(samples)
-            for idx, gids in idx_to_final_gids.items():
-                if gids and idx is not None:
-                    samples[idx]['complete_gids'] = gids
+
+            if mode != 'train':
+                idx_to_final_gids, g = find_complete_image_indexes(samples)
+                for idx, gids in idx_to_final_gids.items():
+                    if gids and idx is not None:
+                        samples[idx]['complete_gids'] = gids
+
             self.patches.extend(samples)
 
         # [x['vidid']] + [self.coco_dset.imgs[gid]['frame_index'] for gid in x['gids']]
@@ -466,6 +469,9 @@ def find_complete_image_indexes(samples):
 
             g is the graph used for debug purposes
 
+    References:
+        https://cs.stackexchange.com/questions/155186/algorithm-for-minimizing-the-number-of-resources-simultaneously-open-while-itera
+
     Example:
         >>> from watch.tasks.invariants.data.datasets import *  # NOQA
         >>> samples = [
@@ -476,10 +482,35 @@ def find_complete_image_indexes(samples):
         >>>     {'gids': [2, 5]},
         >>>     {'gids': [0, 5]},
         >>> ]
-        >>> sample_to_complete_gids, g = find_complete_image_indexes(samples)
+        >>> sample_to_complete_gids, graphs = find_complete_image_indexes(samples)
         >>> from cmd_queue.util.util_networkx import write_network_text
-        >>> write_network_text(g)
+        >>> write_network_text(graphs['node_ordered'])
         >>> print('sample_to_complete_gids = {}'.format(ub.repr2(sample_to_complete_gids, nl=1)))
+
+    Example:
+        >>> from watch.tasks.invariants.data.datasets import *  # NOQA
+        >>> samples = [
+        >>>     {'gids': [0, 1]},
+        >>>     {'gids': [1, 2]},
+        >>>     {'gids': [2, 3]},
+        >>>     {'gids': [3, 4]},
+        >>>     {'gids': [4, 5]},
+        >>>     {'gids': [5, 6]},
+        >>> ]
+        >>> sample_to_complete_gids, graphs = find_complete_image_indexes(samples)
+        >>> from cmd_queue.util.util_networkx import write_network_text
+        >>> write_network_text(graphs['node_ordered'])
+        >>> print('sample_to_complete_gids = {}'.format(ub.repr2(sample_to_complete_gids, nl=1)))
+
+    Ignore:
+        import kwplot
+        kwplot.autompl()
+        from graphid import util
+        util.show_nx(graphs['constraint'])
+        util.show_nx(graphs['node_ordered'])
+
+        # util.show_nx(graphs['touchable_graph'])
+        # util.show_nx(graphs['untouchable_graph'])
     """
     # Create a graph describing how indexes cover frames so we can
     # know when we are finally done with a particular image in
@@ -489,30 +520,58 @@ def find_complete_image_indexes(samples):
     # At any sample index, if there is not a path to a particular
     # image, then it is done.
     import networkx as nx
-    g = nx.DiGraph()
-    # Check ordering
-    prev_sample_node = None
+    graphs = {}
+
+    SAMPLE = 'sample'
+    GID = 'gid'
+
+    # Build the graph where each sample points to the images it uses.
+    constraint_graph = graphs['constraint'] = nx.DiGraph()
     for sample_index, sample in enumerate(samples):
-        sample_node = ('sample', sample_index)
-        if prev_sample_node is not None:
-            g.add_edge(prev_sample_node, sample_node)
-        prev_sample_node = sample_node
+        sample_node = (SAMPLE, sample_index)
         for gid in sample['gids']:
-            image_node = ('gid', gid)
-            g.add_edge(sample_node, image_node)
+            image_node = (GID, gid)
+            constraint_graph.add_edge(sample_node, image_node)
 
-    image_nodes = {n for n in g.nodes if n[0] == 'gid'}
+    image_nodes = {n for n in constraint_graph.nodes if n[0] == GID}
+    sample_nodes = {n for n in constraint_graph.nodes if n[0] == SAMPLE}
+    sample_nodes = ub.oset(sorted(sample_nodes))
 
-    all_path_pairs = list(nx.all_pairs_shortest_path(g))
+    # Add in the baseline node ordering
+    node_ordered = graphs['node_ordered'] = constraint_graph.copy()
+    for s1, s2 in ub.iter_window(sorted(sample_nodes), 2):
+        node_ordered.add_edge(s1, s2)
+
+    # Make each sample node point to all of the images that cannot be unloaded
+    # touchable_graph = nx.transitive_closure_dag(node_ordered)
+    # Find the transative closure edges between samples and remove them
+    # tc_sample_edges = set(
+    #     edge for edge in touchable_graph.edges if (edge[0][0] == SAMPLE and edge[1][0] == SAMPLE))
+    # rm_edges = tc_sample_edges - set(node_ordered.edges)
+    # touchable_graph.remove_edges_from(rm_edges)
+    # graphs['touchable_graph'] = touchable_graph
+    # sample_to_touchable_images = {}
+    # for sample_node in sample_nodes:
+    #     touchable_images = set(touchable_graph.adj[sample_node]) - sample_nodes
+    #     sample_to_touchable_images[sample_node] = touchable_images
+
+    # Seems faster to just find shortest paths
     sample_to_touchable_images = {}
-    for source, node_to_path in all_path_pairs:
-        if source[0] == 'sample':
-            touchable_images = {k for k in node_to_path.keys() if k[0] == 'gid'}
-            sample_to_touchable_images[source] = touchable_images
+    for sample_node in sample_nodes:
+        node_to_path = nx.single_source_shortest_path(node_ordered, sample_node)
+        touchable_images = {k for k in node_to_path.keys() if k[0] == GID}
+        # assert (set(touchable_graph.adj[sample_node]) - sample_nodes) == touchable_images
+        sample_to_touchable_images[sample_node] = touchable_images
 
     sample_to_untouchable_images = {}
     for source, touchable in sample_to_touchable_images.items():
-        sample_to_untouchable_images[source] = image_nodes - touchable
+        untouchable = image_nodes - touchable
+        sample_to_untouchable_images[source] = untouchable
+
+    # untouchable_graph = nx.DiGraph()
+    # untouchable_graph.add_nodes_from(constraint_graph)
+    # untouchable_graph.add_edges_from((s, g) for s, gs in sample_to_untouchable_images.items() for g in gs)
+    # graphs['untouchable_graph'] = untouchable_graph
 
     # Now mark the first sample we see an untouchable image so at
     # that point in interation the predictor knows it can mark it
@@ -527,11 +586,11 @@ def find_complete_image_indexes(samples):
     # And these are the images that have to wait all the way
     # until the end to complete
     final_nodes = image_nodes - completed_images
-    sample_to_complete_nodes[('sample', None)] = final_nodes
+    sample_to_complete_nodes[(SAMPLE, None)] = final_nodes
     sample_to_complete_gids = {
         k[1]: [v[1] for v in vs]
         for k, vs in sample_to_complete_nodes.items()}
-    return sample_to_complete_gids, g
+    return sample_to_complete_gids, graphs
 
 
 class kwcoco_dataset(Dataset):
