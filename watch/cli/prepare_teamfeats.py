@@ -35,20 +35,42 @@ Example:
     >>> queue = prep_feats(cmdline=False, **config)
     >>> queue.rprint(0, 0)
 
+Ignore:
+
+
 
 Ignore:
 
     # For Drop5
-
     DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
     EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt')
     # BUNDLE_DPATH=$DATA_DVC_DPATH/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC
     # KWCOCO_FPATH=$BUNDLE_DPATH/data.kwcoco.json
 
+    codeblock "
+    import kwcoco
+    dset = kwcoco.CocoDataset('data.kwcoco.json')
+
+    from watch.utils import util_parallel
+    writer = util_parallel.BlockingJobQueue(max_workers=16)
+    for video in ub.ProgIter(dset.videos().objs, desc='Splitting dataset'):
+        vidname = video['name']
+        print(f'vidname={vidname}')
+        video_gids = list(dset.images(video_id=video['id']))
+        print(f'video_gids={video_gids}')
+        vid_subset = dset.subset(video_gids)
+        vid_subset.fpath = ub.Path(dset.bundle_dpath) / (vidname + '.kwcoco.json')
+        vid_subset.dump(vid_subset.fpath, newlines=False)
+    writer.wait_until_finished(desc="Finish write jobs")
+    "
+
+    # Drop 4
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
     BUNDLE_DPATH=$DATA_DVC_DPATH/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
-    KWCOCO_FPATH=$BUNDLE_DPATH/data.kwcoco.json
+    KWCOCO_FPATH_PAT=$BUNDLE_DPATH/*_R*0*.kwcoco.json
+
     python -m watch.cli.prepare_teamfeats \
-        --base_fpath="$KWCOCO_FPATH" \
+        --base_fpath="$KWCOCO_FPATH_PAT" \
         --expt_dpath="$EXPT_DVC_DPATH" \
         --with_landcover=0 \
         --with_materials=0 \
@@ -110,7 +132,7 @@ class TeamFeaturePipelineConfig(scfg.Config):
         'run': scfg.Value(0, help='if True execute the pipeline'),
         'skip_existing': scfg.Value(True, help='if True skip completed results'),
 
-        'do_splits': scfg.Value(True, help='if True also make splits'),
+        'do_splits': scfg.Value(False, help='if True also make splits'),
 
         'follow': scfg.Value(True),
 
@@ -133,6 +155,8 @@ def prep_feats(cmdline=True, **kwargs):
         - [ ] Option to just dump the serial bash script that does everything.
     """
     from scriptconfig.smartcast import smartcast
+    import cmd_queue
+    from watch.utils import util_path
 
     config = TeamFeaturePipelineConfig(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
@@ -168,15 +192,6 @@ def prep_feats(cmdline=True, **kwargs):
         raise NotImplementedError(
             'Auto id deprecated. '
             'Specify the absolute path to the data to generate features on')
-    else:
-        base_fpath = ub.Path(config['base_fpath'])
-
-    if config['check']:
-        if not base_fpath.exists():
-            raise FileNotFoundError(
-                'Specified kwcoco file: {base_fpath!r=} does not exist and check=True')
-
-    aligned_bundle_dpath = base_fpath.parent
 
     if workers == 0:
         gres = None
@@ -186,7 +201,6 @@ def prep_feats(cmdline=True, **kwargs):
     else:
         size = len(gres)
 
-    import cmd_queue
     queue = cmd_queue.Queue.create(
         name='watch-teamfeat',
         backend=config['backend'],
@@ -194,14 +208,24 @@ def prep_feats(cmdline=True, **kwargs):
         size=size, gres=gres,
     )
 
-    if config['virtualenv_cmd']:
-        queue.add_header_command(config['virtualenv_cmd'])
+    base_fpath_pat = config['base_fpath']
+    for base_fpath in util_path.coerce_patterned_paths(base_fpath_pat):
+        if config['check']:
+            if not base_fpath.exists():
+                raise FileNotFoundError(
+                    'Specified kwcoco file: {base_fpath!r=} does not exist and check=True')
+        aligned_bundle_dpath = base_fpath.parent
 
-    _populate_teamfeat_queue(queue, base_fpath, expt_dvc_dpath,
-                             aligned_bundle_dpath, config)
+        if config['virtualenv_cmd']:
+            queue.add_header_command(config['virtualenv_cmd'])
+
+        _populate_teamfeat_queue(queue, base_fpath, expt_dvc_dpath,
+                                 aligned_bundle_dpath, config)
 
     if config['verbose']:
         queue.rprint(with_locks=0)
+
+    queue.print_graph()
 
     if config['run']:
         queue.run(
@@ -378,7 +402,7 @@ def _populate_teamfeat_queue(queue, base_fpath, expt_dvc_dpath, aligned_bundle_d
                 --pretext_package_path "{model_fpaths['uky_pretext']}" \
                 --pca_projection_path  "{model_fpaths['uky_pca']}" \
                 --do_pca {config['invariant_pca']} \
-                --patch_overlap=0.5 \
+                --patch_overlap=0.3 \
                 --num_workers="{data_workers}" \
                 --write_workers 2 \
                 --tasks before_after pretext
