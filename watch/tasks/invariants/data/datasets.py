@@ -222,17 +222,14 @@ class gridded_dataset(torch.utils.data.Dataset):
 
         # Sort the patches into an order where we can
         self.patches = []
-        for vidid, samples in vidid_to_new_samples.items():
-
+        for vidid, samples in ub.ProgIter(vidid_to_new_samples.items(), desc='ordering samples'):
             # TODO: find the best test-time ordering of the samples. For now just do sequential
             samples = sorted(samples, key=lambda x: x['frame_index'])
-
             if mode != 'train':
                 idx_to_final_gids, g = find_complete_image_indexes(samples)
                 for idx, gids in idx_to_final_gids.items():
                     if gids and idx is not None:
                         samples[idx]['complete_gids'] = gids
-
             self.patches.extend(samples)
 
         # [x['vidid']] + [self.coco_dset.imgs[gid]['frame_index'] for gid in x['gids']]
@@ -456,7 +453,7 @@ class gridded_dataset(torch.utils.data.Dataset):
         return out
 
 
-def find_complete_image_indexes(samples):
+def find_complete_image_indexes(samples, fast=True):
     """
     Args:
         samples (List[dict]):
@@ -482,7 +479,9 @@ def find_complete_image_indexes(samples):
         >>>     {'gids': [2, 5]},
         >>>     {'gids': [0, 5]},
         >>> ]
-        >>> sample_to_complete_gids, graphs = find_complete_image_indexes(samples)
+        >>> sample_to_complete_gids, graphs = find_complete_image_indexes(samples, fast=False)
+        >>> sample_to_complete_gids2, _ = find_complete_image_indexes(samples, fast=True)
+        >>> assert sample_to_complete_gids == sample_to_complete_gids2
         >>> from cmd_queue.util.util_networkx import write_network_text
         >>> write_network_text(graphs['node_ordered'])
         >>> print('sample_to_complete_gids = {}'.format(ub.repr2(sample_to_complete_gids, nl=1)))
@@ -497,7 +496,9 @@ def find_complete_image_indexes(samples):
         >>>     {'gids': [4, 5]},
         >>>     {'gids': [5, 6]},
         >>> ]
-        >>> sample_to_complete_gids, graphs = find_complete_image_indexes(samples)
+        >>> sample_to_complete_gids, graphs = find_complete_image_indexes(samples, fast=False)
+        >>> sample_to_complete_gids2, _ = find_complete_image_indexes(samples, fast=True)
+        >>> assert sample_to_complete_gids == sample_to_complete_gids2
         >>> from cmd_queue.util.util_networkx import write_network_text
         >>> write_network_text(graphs['node_ordered'])
         >>> print('sample_to_complete_gids = {}'.format(ub.repr2(sample_to_complete_gids, nl=1)))
@@ -521,6 +522,24 @@ def find_complete_image_indexes(samples):
     # image, then it is done.
     import networkx as nx
     graphs = {}
+
+    if fast:
+        # Faster variant of the metric, just mark the last sample index we saw
+        # the image.
+        gid_to_last_idx = {}
+        sample_to_complete_gids = {}
+        for sample_idx, sample in enumerate(samples):
+            sample_to_complete_gids[sample_idx] = []
+            for gid in sample['gids']:
+                gid_to_last_idx[gid] = sample_idx
+        sample_to_complete_gids[None] = []
+        for gid, idx in gid_to_last_idx.items():
+            sample_idx = idx + 1
+            if sample_idx == len(samples):
+                sample_idx = None
+            sample_to_complete_gids[sample_idx].append(gid)
+        sample_to_complete_gids = ub.udict(sample_to_complete_gids).map_values(sorted)
+        return sample_to_complete_gids, graphs
 
     SAMPLE = 'sample'
     GID = 'gid'
@@ -590,6 +609,7 @@ def find_complete_image_indexes(samples):
     sample_to_complete_gids = {
         k[1]: [v[1] for v in vs]
         for k, vs in sample_to_complete_nodes.items()}
+    sample_to_complete_gids = ub.udict(sample_to_complete_gids).map_values(sorted)
     return sample_to_complete_gids, graphs
 
 

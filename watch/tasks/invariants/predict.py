@@ -66,6 +66,8 @@ class InvariantPredictConfig(scfg.DataConfig):
             '''))
     pca_projection_path = scfg.Value('', type=str, help='Path to pca projection matrix')
 
+    track_emissions = scfg.Value(True, help='Set to false to disable codecarbon')
+
     def normalize(self):
         if 'all' in self.tasks:
             self['tasks'] = ['segmentation', 'before_after', 'pretext']
@@ -194,6 +196,8 @@ class Predictor(object):
         print('load coco dataset')
         self.coco_dset = kwcoco.CocoDataset = kwcoco.CocoDataset.coerce(args.input_kwcoco)
 
+        self.coco_dset = self.coco_dset.subset(list(self.coco_dset.images()[0:20]))
+
         ###
         print('build grid dataset')
         self.dataset = gridded_dataset(self.coco_dset, args.bands,
@@ -229,7 +233,7 @@ class Predictor(object):
             type='process',
             name='watch.tasks.invariants.predict',
             config=args.to_dict(),
-            track_emissions=True,
+            track_emissions=args.track_emissions,
         )
 
     def _build_img_fpath(self, gid):
@@ -286,22 +290,21 @@ class Predictor(object):
     def forward(self):
         device = self.device
 
-        self.proc_context.start()
-        self.proc_context.add_disk_info(self.output_dset.fpath)
-        self.output_dset.dataset.setdefault('info', [])
-        self.output_dset.dataset['info'].append(self.proc_context.obj)
-
         loader = torch.utils.data.DataLoader(
             self.dataset, num_workers=self.num_workers,
             batch_size=self.batch_size, shuffle=False)
         num_batches = len(loader)
 
         # Start background processes
-        # Build a task queue for background write results workers (Not currently using this)
-        # queue = util_parallel.BlockingJobQueue(max_workers=0)
+        # Build a task queue for background write results workers
         from watch.utils import util_parallel
-
         writer = util_parallel.BlockingJobQueue(max_workers=self.write_workers)
+
+        self.proc_context.start()
+
+        self.proc_context.add_disk_info(ub.Path(self.output_dset.fpath).parent)
+        self.output_dset.dataset.setdefault('info', [])
+        self.output_dset.dataset['info'].append(self.proc_context.obj)
 
         print('Evaluating and saving features')
 
@@ -407,16 +410,19 @@ class Predictor(object):
                 CocoStitchingManager._stitcher_center_weighted_add(
                     stitcher2, slice_, save_feat2)
 
-            writer.wait_until_finished()
+            print('Finalize already compelted jobs')
+            writer.wait_until_finished(desc='Finalize submitted jobs')
 
             # Finalize everything else that hasn't completed
-            for gid in list(self.stitcher_dict.keys()):
+            for gid in ub.ProgIter(list(self.stitcher_dict.keys()), desc='submit loose write jobs'):
                 if gid not in seen_images:
                     seen_images.add(gid)
                     writer.submit(self.finalize_image, gid)
 
+            print('Finalize loose jobs')
             writer.wait_until_finished()
 
+        print('Finish process context')
         self.proc_context.add_device_info(device)
         self.proc_context.stop()
 
@@ -484,6 +490,27 @@ if __name__ == '__main__':
             --num_workers="2" \
             --write_workers 0 \
             --tasks before_after pretext
+
+        cd /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+        kwcoco subset --src=data.kwcoco.json --dst=AE_R001.kwcoco.json --select_videos='.name == "AE_R001"'
+        kwcoco subset --src=data.kwcoco.json --dst=NZ_R001.kwcoco.json --select_videos='.name == "NZ_R001"'
+
+        python -m watch.tasks.invariants.predict \
+            --input_kwcoco "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/NZ_R001.kwcoco.json" \
+            --output_kwcoco "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/NZ_R001_invariants.kwcoco.json" \
+            --pretext_package_path "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_03_21/pretext_model/pretext_package.pt" \
+            --pca_projection_path  "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_03_21/pretext_model/pretext_pca_104.pt" \
+            --do_pca 0 \
+            --patch_overlap=0.0 \
+            --num_workers="2" \
+            --write_workers 2 \
+            --sensor=L8 \
+            --tasks before_after pretext
+
+        python -m watch visualize NZ_R001_invariants.kwcoco.json \
+            --channels "invariants.5:8,invariants.8:11,invariants.11:14" --stack=only --fast --animate=True \
+            --select_images '.sensor_coarse == "L8"' --draw_anns=False
+
 
     """
     main()

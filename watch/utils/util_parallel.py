@@ -65,8 +65,12 @@ class BlockingJobQueue:
                     job.result()
             self.jobs = new_active_jobs
 
-    def wait_until_finished(self):
-        for job in self.jobs:
+    def wait_until_finished(self, desc=None):
+        if desc is None:
+            jobiter = self.jobs
+        else:
+            jobiter = ub.ProgIter(self.jobs, desc=desc)
+        for job in jobiter:
             job.result()
 
     def submit(self, func, *args, **kwargs):

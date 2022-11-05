@@ -10,6 +10,9 @@ class ProcessContext:
     """
     Context manager to track the context under which a result was computed
 
+    CommandLine:
+        xdoctest -m watch.utils.process_context ProcessContext
+
     Example:
         >>> from watch.utils.process_context import *
         >>> self = ProcessContext(track_emissions=True)
@@ -44,6 +47,7 @@ class ProcessContext:
         }
         self.track_emissions = track_emissions
         self.emissions_tracker = None
+        self._emission_backend = 'auto'
 
     def _timestamp(self):
         timestamp = ub.timestamp()
@@ -135,18 +139,28 @@ class ProcessContext:
         self.stop()
 
     def _start_emissions_tracker(self):
-        try:
-            from codecarbon import EmissionsTracker
-            """
-            # emissions_tracker = EmissionsTracker(log_level='info')
-            """
-            emissions_tracker = EmissionsTracker(log_level='error')
-            emissions_tracker.start()
-        except Exception as ex:
-            # Pretend
+        backend = self._emission_backend
+
+        if backend == 'auto':
+            backend = 'offline'
+
+        if backend == 'online':
+            try:
+                from codecarbon import EmissionsTracker
+                """
+                # emissions_tracker = EmissionsTracker(log_level='info')
+                """
+                emissions_tracker = EmissionsTracker(log_level='error')
+                emissions_tracker.start()
+            except Exception as ex:
+                print('ex = {}'.format(ub.repr2(ex, nl=1)))
+                print('Online emissions tracker is not available. Trying offline')
+                if self._emission_backend == 'auto':
+                    backend = 'offline'
+
+        if backend == 'offline':
             try:
                 from codecarbon import OfflineEmissionsTracker
-                print('Unable to online emissions ex = {!r}'.format(ex))
                 emissions_tracker = OfflineEmissionsTracker(
                     country_iso_code='USA',
                     region='Virginia',
@@ -157,8 +171,8 @@ class ProcessContext:
                 emissions_tracker.start()
             except Exception as ex:
                 print('Unable to track emissions ex = {!r}'.format(ex))
-            else:
-                self.emissions_tracker = emissions_tracker
+
+        self.emissions_tracker = emissions_tracker
 
     def _stop_emissions_tracker(self):
         if self.emissions_tracker is None:
@@ -198,6 +212,9 @@ class ProcessContext:
         self.properties['emissions'] = emissions
 
     def add_device_info(self, device):
+        """
+        Add information about a torch device that was used in this process.
+        """
         import torch
         try:
             device_info = {
@@ -223,6 +240,9 @@ class ProcessContext:
         self.properties['device_info'] = device_info
 
     def add_disk_info(self, path):
+        """
+        Add information about a storage disk that was used in this process
+        """
         try:
             from watch.utils import util_hardware
             # Get information about disk used in this process
@@ -232,3 +252,35 @@ class ProcessContext:
             print('ex = {!r}'.format(ex))
             disk_info = str(ex)
         self.properties['disk_info'] = disk_info
+
+# def _test_offline():
+#     """
+#     xdoctest -m watch.utils.process_context ProcessContext
+#     """
+#     from codecarbon import OfflineEmissionsTracker
+#     emissions_tracker = OfflineEmissionsTracker(
+#         country_iso_code='USA',
+#         # region='Virginia',
+#         region='virginia',
+#         cloud_provider='aws',
+#         cloud_region='us-east-1',
+#         log_level='info',
+#         # country_2letter_iso_code='us'
+#     )
+#     emissions_tracker.start()
+#     emissions_tracker.stop()
+
+#     from codecarbon import EmissionsTracker
+#     emissions_tracker = EmissionsTracker(log_level='debug')
+#     emissions_tracker.start()
+#     emissions_tracker.stop()
+
+#     from codecarbon.external.geography import CloudMetadata, GeoMetadata
+#     geo = GeoMetadata(
+#         country_iso_code="USA", country_name="United States", region="Illinois"
+#     )
+
+#     self = ProcessContext(track_emissions=True)
+#     self.start()
+#     self.stop()
+#     _ = self.emissions_tracker._data_source.get_country_emissions_data('usa')
