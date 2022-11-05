@@ -4,6 +4,9 @@ The following example simply produces the script under different variations.
 CommandLine:
     xdoctest -m watch.cli.prepare_teamfeats __doc__
 
+SeeAlso:
+    ~/code/watch/watch/tasks/invariants/predict.py
+
 Example:
     >>> from watch.cli.prepare_teamfeats import *  # NOQA
     >>> expt_dvc_dpath = ub.Path('./pretend_expt_dpath')
@@ -68,7 +71,6 @@ Ignore:
     DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
     BUNDLE_DPATH=$DATA_DVC_DPATH/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
     KWCOCO_FPATH_PAT=$BUNDLE_DPATH/*_R*0*.kwcoco.json
-
     python -m watch.cli.prepare_teamfeats \
         --base_fpath="$KWCOCO_FPATH_PAT" \
         --expt_dpath="$EXPT_DVC_DPATH" \
@@ -78,7 +80,7 @@ Ignore:
         --with_depth=0 \
         --do_splits=0 \
         --skip_existing=0 \
-        --backend=serial --run=0
+        --gres=0,1 --workers=2 --backend=tmux --run=0
 
 
 """
@@ -223,9 +225,8 @@ def prep_feats(cmdline=True, **kwargs):
                                  aligned_bundle_dpath, config)
 
     if config['verbose']:
+        queue.print_graph()
         queue.rprint(with_locks=0)
-
-    queue.print_graph()
 
     if config['run']:
         queue.run(
@@ -426,11 +427,11 @@ def _populate_teamfeat_queue(queue, base_fpath, expt_dvc_dpath, aligned_bundle_d
     tocombine = [str(base_fpath)] + [str(task['output_fpath']) for task in tasks]
     combo_code = ''.join(sorted(combo_code_parts))
 
-    base_combo_fpath = aligned_bundle_dpath / f'combo_{combo_code}.kwcoco.json'
+    base_combo_fpath = aligned_bundle_dpath / f'combo_{subset_name}_{combo_code}.kwcoco.json'
 
     # Note: sync tells the queue that everything after this
     # depends on everything before this
-    queue.sync()
+    # queue.sync()
 
     src_lines = ' \\\n        '.join(tocombine)
     command = '\n'.join([
@@ -439,7 +440,9 @@ def _populate_teamfeat_queue(queue, base_fpath, expt_dvc_dpath, aligned_bundle_d
         f'    --dst {base_combo_fpath}'
     ])
     print('task_jobs = {!r}'.format(task_jobs))
-    queue.submit(command)
+    queue.submit(command, depends=task_jobs)
+
+    # TODO: union?
 
     if config['do_splits']:
         # Also call the prepare-splits script
@@ -527,7 +530,7 @@ if __name__ == '__main__':
             --with_invariants=0 \
             --with_materials=1 \
             --skip_existing=0 \
-            --backend=serial \
+            --backend=tmux \
             --run=0
 
 

@@ -1,3 +1,7 @@
+"""
+SeeAlso:
+    ~/code/watch/watch/cli/prepare_teamfeats.py
+"""
 import kwimage
 import kwarray
 import torch
@@ -195,8 +199,7 @@ class Predictor(object):
         import kwcoco
         print('load coco dataset')
         self.coco_dset = kwcoco.CocoDataset = kwcoco.CocoDataset.coerce(args.input_kwcoco)
-
-        self.coco_dset = self.coco_dset.subset(list(self.coco_dset.images()[0:20]))
+        # self.coco_dset = self.coco_dset.subset(list(self.coco_dset.images()[0:20]))
 
         ###
         print('build grid dataset')
