@@ -82,6 +82,16 @@ Ignore:
         --skip_existing=0 \
         --gres=0,1 --workers=2 --backend=tmux --run=0
 
+    ls combo_*_I.kwcoco*
+
+    kwcoco union --src combo_AE_R001_I.kwcoco.json  combo_BR_R005_I.kwcoco.json combo_NZ_R001_I.kwcoco.json  combo_US_R006_I.kwcoco.json combo_BH_R001_I.kwcoco.json  combo_CH_R001_I.kwcoco.json combo_PE_R001_I.kwcoco.json  combo_BR_R001_I.kwcoco.json combo_US_R001_I.kwcoco.json combo_BR_R002_I.kwcoco.json combo_US_R004_I.kwcoco.json combo_BR_R004_I.kwcoco.json combo_LT_R001_I.kwcoco.json  combo_US_R005_I.kwcoco.json --dst combo_train_I.kwcoco.json
+
+
+    kwcoco union --src combo_KR_R001_I.kwcoco.json combo_KR_R002_I.kwcoco.json combo_US_R007_I.kwcoco.json --dst combo_vali_I.kwcoco.json
+
+    smartwatch stats combo_train_I.kwcoco.json
+
+
 
 """
 

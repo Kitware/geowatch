@@ -546,7 +546,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     for cand_sensor, cand_chans in sensorchan_hist.items():
                         valid_chan_cands = []
                         for cand_chan_group in cand_chans:
-                            cand_chan_group = kwcoco.FusedChannelSpec.coerce(cand_chan_group)
+                            cand_chan_group = kwcoco.ChannelSpec.coerce(cand_chan_group).fuse()
                             chan_isect = chans & cand_chan_group
                             if chan_isect.spec == chans.spec:
                                 valid_chan_cands.append(valid_chan_cands)

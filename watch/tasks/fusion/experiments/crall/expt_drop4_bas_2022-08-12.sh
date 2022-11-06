@@ -851,3 +851,76 @@ python -m watch.tasks.fusion.fit \
     --draw_interval=1year \
     --num_draw=0 \
     --init=/home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_BGR_10GSD_V015/lightning_logs/version_0/checkpoints/epoch=43-step=2772.ckpt 
+
+
+
+# Fit 
+export CUDA_VISIBLE_DEVICES=0
+PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
+PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+TRAIN_FNAME=combo_train_I.kwcoco.json
+VALI_FNAME=combo_vali_I.kwcoco.json
+TEST_FNAME=combo_vali_I.kwcoco.json
+WORKDIR=$PHASE2_EXPT_DPATH/training/$HOSTNAME/$USER
+KWCOCO_BUNDLE_DPATH=$PHASE2_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/$TRAIN_FNAME
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/$VALI_FNAME
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
+INITIAL_STATE=noop
+EXPERIMENT_NAME=Drop4_BAS_invariants_30GSD_V016
+#python -m watch.tasks.fusion fit \
+#    --trainer.default_root_dir="$DEFAULT_ROOT_DIR" \
+#    --data.train_dataset="$TRAIN_FPATH" \
+#    --data.vali_dataset="$VALI_FPATH" \
+#    --data.time_steps=3 \
+#    --data.chip_size=96 \
+#    --data.batch_size=4 \
+#    --data.input_space_scale=30GSD \
+#    --data.window_space_scale=30GSD \
+#    --data.output_space_scale=30GSD \
+#    --model=watch.tasks.fusion.methods.HeterogeneousModel \
+#    --model.name="$EXPERIMENT_NAME" \
+#    --optimizer=torch.optim.AdamW \
+#    --optimizer.lr=1e-3 \
+#    --trainer.accelerator="gpu" \
+#    --trainer.devices="0," \
+#    --data.channels="red|green|blue,invariants:17" 
+
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --arch_name=smt_it_stm_p8 \
+    --channels="red|green|blue,invariants:17" \
+    --num_workers=6 \
+    --global_saliency_weight=1.00 \
+    --saliency_loss='dicefocal' \
+    --class_loss='dicefocal' \
+    --change_loss='dicefocal' \
+    --dist_weights=0 \
+    --input_space_scale="30GSD" \
+    --window_space_scale="30GSD" \
+    --output_space_scale="30GSD" \
+    --chip_dims=128,128 \
+    --time_steps=8 \
+    --batch_size=48 \
+    --change_head_hidden=4 \
+    --class_head_hidden=4 \
+    --saliency_head_hidden=4 \
+    --stream_channels=32 \
+    --in_features_pos=128 \
+    --learning_rate=3e-4 \
+    --max_epoch_length=16384 \
+    --resample_invalid_frames=0 \
+    --limit_val_batches=0 \
+    --use_cloudmask=0 \
+    --max_epochs=640 \
+    --patience=340 \
+    --decouple_resolution=0 \
+    --draw_interval=1year \
+    --num_draw=0 \
+    --init=/home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_BGR_10GSD_V015/lightning_logs/version_0/checkpoints/epoch=43-step=2772.ckpt 
