@@ -396,6 +396,8 @@ def predict(cmdline=False, **kwargs):
         >>> # Train a demo model (in the future grab a pretrained demo model)
         >>> from watch.tasks.fusion.fit import fit_model  # NOQA
         >>> from watch.tasks.fusion.predict import *  # NOQA
+        >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+        >>> disable_lightning_hardware_warnings()
         >>> args = None
         >>> cmdline = False
         >>> devices = None
@@ -412,6 +414,7 @@ def predict(cmdline=False, **kwargs):
         ...     'datamodule': 'KWCocoVideoDataModule',
         ...     'workdir': ub.ensuredir((test_dpath, 'train')),
         ...     'package_fpath': package_fpath,
+        ...     #'channels': 'auto',
         ...     'max_epochs': 1,
         ...     'time_steps': 2,
         ...     'chip_size': 64,

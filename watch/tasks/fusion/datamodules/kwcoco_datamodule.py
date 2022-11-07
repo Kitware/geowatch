@@ -489,7 +489,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             >>> from watch.tasks.fusion.datamodules.kwcoco_datamodule import *  # NOQA
             >>> from watch.tasks.fusion import datamodules
             >>> self = datamodules.KWCocoVideoDataModule(
-            >>>     train_dataset='special:vidshapes8-multispectral', num_workers=0)
+            >>>     train_dataset='special:vidshapes8-multispectral', channels='auto', num_workers=0)
             >>> self.setup('fit')
             >>> loader = self.train_dataloader()
             >>> batch = next(iter(loader))

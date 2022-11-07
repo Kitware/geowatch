@@ -61,6 +61,8 @@ Example:
     ...     'devices': 1,
     ... }
     >>> #modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
+    >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+    >>> disable_lightning_hardware_warnings()
     >>> fit_model(cmdline=cmdline, **kwargs)
 """
 import pytorch_lightning as pl
@@ -363,6 +365,8 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         ...     'train_dataset': 'special:vidshapes8-multispectral',
         ...     'datamodule': 'KWCocoVideoDataModule',
         ... }
+        >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+        >>> disable_lightning_hardware_warnings()
         >>> modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
     """
     from watch.tasks.fusion import datamodules
@@ -563,6 +567,8 @@ def fit_model(args=None, cmdline=False, **kwargs):
         ...     'auto_lr_find': False,
         ...     'num_workers': 2,
         ... }
+        >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+        >>> disable_lightning_hardware_warnings()
         >>> fit_model(**kwargs)
     """
     # cv2.setNumThreads(0)
