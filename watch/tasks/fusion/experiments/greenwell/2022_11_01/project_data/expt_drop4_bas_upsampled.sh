@@ -14,6 +14,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 EXPERIMENT_NAME=Drop4_BAS_Upsampled_Multi
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion fit \
+    --config=config_common.yaml \
     --config=config_bas_upsampled.yaml \
     --model.init_args.name=$EXPERIMENT_NAME \
     --data.train_dataset="$TRAIN_FPATH" \
