@@ -464,6 +464,7 @@ def pop_tracks(
         yield track
 
 
+@profile
 def score_poly(poly, probs, mode='score', threshold=0, use_rasterio=True):
     '''
     Args:
@@ -641,6 +642,7 @@ def _validate_keys(key, bg_key):
     return key, bg_key
 
 
+@profile
 def build_heatmaps(sub_dset: kwcoco.CocoDataset,
                    gids: List[int],
                    keys: Union[List[str], Dict[str, List[str]]],
@@ -751,6 +753,7 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
     return heatmaps_dct
 
 
+@profile
 def build_heatmap(dset, gid, key, return_chan_probs=False, space='video',
                   missing='fill'):
     """
