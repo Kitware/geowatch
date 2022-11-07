@@ -8,14 +8,35 @@ import uuid
 
 class ProcessContext:
     """
-    Context manager to track the context under which a result was computed
+    Context manager to track the context under which a result was computed.
+
+    This tracks things like start / end time. The command line that can
+    reproduce the process (assuming an appropriate environment. The
+    configuration the process was run with. The machine details the process was
+    run on. The power usage / carbon emissions the process used, and other
+    information.
+
+    Args:
+        args (str | List[str]):
+            This should be the sys.argv or the command line string that can be
+            used to rerun the process
+
+        config (Dict):
+            This should be a configuration dictionary (likely based on
+            sys.argv)
+
+        name (str): the name of this process
+
+        type (str): The type of this process
+            (usually keep the default of process)
 
     CommandLine:
         xdoctest -m watch.utils.process_context ProcessContext
 
     Example:
         >>> from watch.utils.process_context import *
-        >>> self = ProcessContext(track_emissions=True)
+        >>> # Adding things like disk info an tracking emission usage
+        >>> self = ProcessContext(track_emissions='offline')
         >>> obj = self.start().stop()
         >>> self.add_disk_info('.')
         >>> import torch
@@ -139,10 +160,16 @@ class ProcessContext:
         self.stop()
 
     def _start_emissions_tracker(self):
-        backend = self._emission_backend
+
+        emissions_tracker = None
+
+        if isinstance(self.track_emissions, str):
+            backend = self.track_emissions
+        elif self.track_emissions:
+            backend = 'auto'
 
         if backend == 'auto':
-            backend = 'offline'
+            backend = 'online'
 
         if backend == 'online':
             try:
@@ -160,6 +187,7 @@ class ProcessContext:
 
         if backend == 'offline':
             try:
+                # TODO: allow configuration
                 from codecarbon import OfflineEmissionsTracker
                 emissions_tracker = OfflineEmissionsTracker(
                     country_iso_code='USA',
