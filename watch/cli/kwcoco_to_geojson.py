@@ -1161,8 +1161,7 @@ def demo(coco_dset,
          regions_dir,
          coco_dset_sc,
          sites_dir,
-         cleanup=True,
-         hybrid=False):
+         cleanup=True):
     bas_args = [
         coco_dset.fpath,
         '--out_site_summaries_dir',
@@ -1175,41 +1174,32 @@ def demo(coco_dset,
     # reload it with tracks
     # coco_dset = kwcoco.CocoDataset(coco_dset.fpath)
     # run SC on both of them
-    if hybrid:  # hybrid approach
-        sc_args = [
-            coco_dset.fpath, '--out_site_sites_dir', sites_dir, '--track_fn',
-            'watch.tasks.tracking.from_heatmap.'
-            'TimeAggregatedHybrid', '--track_kwargs',
-            ('{"coco_dset_sc": "' + coco_dset_sc.fpath + '"}')
-        ]
-        main(sc_args)
-    else:  # true per-site SC
-        import json
-        from tempfile import NamedTemporaryFile
-        sc_args = [
-            '--out_site_sites_dir',
-            sites_dir,
-            '--track_fn',
-            'watch.tasks.tracking.from_heatmap.TimeAggregatedSC',
-        ]
-        for vid_name, vid in coco_dset_sc.index.name_to_video.items():
-            gids = coco_dset_sc.index.vidid_to_gids[vid['id']]
-            sub_dset = coco_dset_sc.subset(gids)
-            tmpfile = NamedTemporaryFile()
-            sub_dset.fpath = tmpfile.name
-            sub_dset.dump(sub_dset.fpath)
-            region = json.load(
-                open(os.path.join(regions_dir, f'{vid_name}.geojson')))
-            for site in [
-                    f for f in region['features']
-                    if f['properties']['type'] == 'site_summary'
-            ]:
-                print('running site ' + site['properties']['site_id'])
-                main([
-                    sub_dset.fpath, '--track_kwargs',
-                    '{"boundaries_as": "none"}'
-                ] + sc_args)
-                # '--site_summary', json.dumps(site)])
+    import json
+    from tempfile import NamedTemporaryFile
+    sc_args = [
+        '--out_site_sites_dir',
+        sites_dir,
+        '--track_fn',
+        'watch.tasks.tracking.from_heatmap.TimeAggregatedSC',
+    ]
+    for vid_name, vid in coco_dset_sc.index.name_to_video.items():
+        gids = coco_dset_sc.index.vidid_to_gids[vid['id']]
+        sub_dset = coco_dset_sc.subset(gids)
+        tmpfile = NamedTemporaryFile()
+        sub_dset.fpath = tmpfile.name
+        sub_dset.dump(sub_dset.fpath)
+        region = json.load(
+            open(os.path.join(regions_dir, f'{vid_name}.geojson')))
+        for site in [
+                f for f in region['features']
+                if f['properties']['type'] == 'site_summary'
+        ]:
+            print('running site ' + site['properties']['site_id'])
+            main([
+                sub_dset.fpath, '--track_kwargs',
+                '{"boundaries_as": "none"}'
+            ] + sc_args)
+            # '--site_summary', json.dumps(site)])
     if cleanup:
         for pth in os.listdir(regions_dir):
             os.remove(os.path.join(regions_dir, pth))

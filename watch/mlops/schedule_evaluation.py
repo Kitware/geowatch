@@ -1206,7 +1206,7 @@ Ignore:
     from watch.tasks.tracking.from_heatmap import NewTrackFunction
     from watch.tasks.tracking.from_heatmap import TimeAggregatedBAS
     from watch.tasks.tracking.from_heatmap import TimeAggregatedSC
-    from watch.tasks.tracking.from_heatmap import TimeAggregatedHybrid
+    # from watch.tasks.tracking.from_heatmap import TimeAggregatedHybrid
 
     import jsonargparse
     parser = jsonargparse.ArgumentParser()
