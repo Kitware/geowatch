@@ -508,13 +508,15 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         self.special_inputs = {}
 
         if channels is None:
-            # If channels is not specified, attempt to determine a something
-            # sensible from the dataset statistics
+            # Find reasonable channel defaults if channels is not specified.
+            # Use dataset stats to determine something sensible.
             sensorchan_hist = kwcoco_extensions.coco_channel_stats(sampler.dset)['sensorchan_hist']
-            sensorchans = ','.join(sorted([
-                f'{sensor}:{chans}'
-                for sensor, chan_hist in sensorchan_hist.items()
-                for chans in chan_hist.keys()]))
+            parts = []
+            for sensor, chan_hist in sensorchan_hist.items():
+                for c in chan_hist.keys():
+                    chancode = kwcoco.ChannelSpec.coerce(c).fuse().spec
+                    parts.append(f'{sensor}:{chancode}')
+            sensorchans = ','.join(sorted(parts))
             sensorchans = kwcoco.SensorChanSpec.coerce(sensorchans)
             if len(sensorchan_hist) > 0:
                 warnings.warn(

@@ -16,7 +16,6 @@ from watch import heuristics
 #         # TODO: classify this nonsense
 
 
-
 def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                                    negative_classes=None, keepbound=False,
                                    exclude_sensors=None,
