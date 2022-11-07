@@ -869,23 +869,24 @@ VALI_FPATH=$KWCOCO_BUNDLE_DPATH/$VALI_FNAME
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 INITIAL_STATE=noop
 EXPERIMENT_NAME=Drop4_BAS_invariants_30GSD_V016
-#python -m watch.tasks.fusion fit \
-#    --trainer.default_root_dir="$DEFAULT_ROOT_DIR" \
-#    --data.train_dataset="$TRAIN_FPATH" \
-#    --data.vali_dataset="$VALI_FPATH" \
-#    --data.time_steps=3 \
-#    --data.chip_size=96 \
-#    --data.batch_size=4 \
-#    --data.input_space_scale=30GSD \
-#    --data.window_space_scale=30GSD \
-#    --data.output_space_scale=30GSD \
-#    --model=watch.tasks.fusion.methods.HeterogeneousModel \
-#    --model.name="$EXPERIMENT_NAME" \
-#    --optimizer=torch.optim.AdamW \
-#    --optimizer.lr=1e-3 \
-#    --trainer.accelerator="gpu" \
-#    --trainer.devices="0," \
-#    --data.channels="red|green|blue,invariants:17" 
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion fit \
+    --trainer.default_root_dir="$DEFAULT_ROOT_DIR" \
+    --data.train_dataset="$TRAIN_FPATH" \
+    --data.vali_dataset="$VALI_FPATH" \
+    --data.time_steps=3 \
+    --data.chip_size=96 \
+    --data.batch_size=2 \
+    --data.input_space_scale=30GSD \
+    --data.window_space_scale=30GSD \
+    --data.output_space_scale=30GSD \
+    --model=watch.tasks.fusion.methods.HeterogeneousModel \
+    --model.name="$EXPERIMENT_NAME" \
+    --optimizer=torch.optim.AdamW \
+    --optimizer.lr=1e-3 \
+    --trainer.accelerator="gpu" \
+    --trainer.devices="0," \
+    --data.channels="red|green|blue,invariants:17" 
 
 python -m watch.tasks.fusion.fit \
     --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
@@ -895,7 +896,7 @@ python -m watch.tasks.fusion.fit \
     --vali_dataset="$VALI_FPATH" \
     --test_dataset="$TEST_FPATH" \
     --arch_name=smt_it_stm_p8 \
-    --channels="red|green|blue,invariants:17" \
+    --channels="L8:(red|green|blue,invariants:17)" \
     --num_workers=6 \
     --global_saliency_weight=1.00 \
     --saliency_loss='dicefocal' \
@@ -907,7 +908,7 @@ python -m watch.tasks.fusion.fit \
     --output_space_scale="30GSD" \
     --chip_dims=128,128 \
     --time_steps=8 \
-    --batch_size=48 \
+    --batch_size=8 \
     --change_head_hidden=4 \
     --class_head_hidden=4 \
     --saliency_head_hidden=4 \

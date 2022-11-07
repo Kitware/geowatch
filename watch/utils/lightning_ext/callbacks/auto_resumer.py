@@ -1,5 +1,11 @@
+"""
+https://github.com/Lightning-AI/lightning/issues/10894
+"""
+
 import pytorch_lightning as pl
 from watch.utils import util_path
+from packaging.version import parse as Version
+from typing import Optional  # NOQA
 
 __all__ = ['AutoResumer']
 
@@ -15,31 +21,43 @@ class AutoResumer(pl.callbacks.Callback):
         >>> from watch.utils.lightning_ext.callbacks import StateLogger
         >>> import pytorch_lightning as pl
         >>> import ubelt as ub
+        >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+        >>> disable_lightning_hardware_warnings()
         >>> default_root_dir = ub.Path.appdir('lightning_ext/test/auto_resume')
-        >>> ub.delete(default_root_dir)
+        >>> default_root_dir.delete()
+        >>> #
+        >>> # STEP 1:
         >>> # Test starting a model without any existing checkpoints
-        >>> trainer = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=2)
+        >>> import pytest
+        >>> try:
+        >>>     AutoResumer()
+        >>> except NotImplementedError:
+        >>>     pytest.skip()
+        >>> trainer_orig = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=2)
         >>> model = LightningToyNet2d()
-        >>> trainer.fit(model)
-        >>> assert len(list((util_path.coercepath(trainer.logger.log_dir) / 'checkpoints').glob('*'))) > 0
+        >>> trainer_orig.fit(model)
+        >>> assert len(list((util_path.coercepath(trainer_orig.logger.log_dir) / 'checkpoints').glob('*'))) > 0
         >>> # See contents written
         >>> print(ub.repr2(list(util_path.tree(default_root_dir)), sort=0))
         >>> #
+        >>> # CHECK 1:
         >>> # Make a new trainer that should auto-resume
-        >>> trainer = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=2)
+        >>> self = AutoResumer()
+        >>> trainer = trainer_resume1 = pl.Trainer(default_root_dir=default_root_dir, callbacks=[self, StateLogger()], max_epochs=2)
         >>> model = LightningToyNet2d()
-        >>> trainer.fit(model)
+        >>> trainer_resume1.fit(model)
         >>> print(ub.repr2(list(util_path.tree(default_root_dir)), sort=0))
         >>> # max_epochs should prevent auto-resume from doing anything
-        >>> assert len(list((util_path.coercepath(trainer.logger.log_dir) / 'checkpoints').glob('*'))) == 0
+        >>> assert len(list((util_path.coercepath(trainer_resume1.logger.log_dir) / 'checkpoints').glob('*'))) == 0
         >>> #
+        >>> # CHECK 2:
         >>> # Increasing max epochs will let it train for longer
-        >>> trainer = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=3)
+        >>> trainer_resume2 = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=3)
         >>> model = LightningToyNet2d()
-        >>> trainer.fit(model)
+        >>> trainer_resume2.fit(model)
         >>> print(ub.repr2(list(util_path.tree(util_path.coercepath(default_root_dir))), sort=0))
         >>> # max_epochs should prevent auto-resume from doing anything
-        >>> assert len(list((util_path.coercepath(trainer.logger.log_dir) / 'checkpoints').glob('*'))) > 0
+        >>> assert len(list((util_path.coercepath(trainer_resume2.logger.log_dir) / 'checkpoints').glob('*'))) > 0
     """
 
     def __init__(self):
@@ -47,7 +65,12 @@ class AutoResumer(pl.callbacks.Callback):
         TODO:
             - [ ] Configure how to find which checkpoint to resume from
         """
-        pass
+        if Version(pl.__version__) >= Version('1.8.0'):
+            raise NotImplementedError(
+                'Lightning 1.8.0 broke on_init_start, and we havent fixed it. '
+                'This component should be non-critical. Avoid using in the '
+                'meantime'
+            )
 
     # @classmethod
     # def add_argparse_args(cls, parent_parser):
@@ -65,6 +88,9 @@ class AutoResumer(pl.callbacks.Callback):
     #     argparse_ext.add_arginfos_to_parser(parent_parser, arg_infos)
     #     return parent_parser
 
+    # FIXME: this doesn't work in new lightning versions
+
+    # def setup(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', stage: Optional[str] = None) -> None:
     def on_init_start(self, trainer: 'pl.Trainer') -> None:
         train_dpath = trainer.default_root_dir
         prev_states = self.recent_checkpoints(train_dpath)
