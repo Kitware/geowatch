@@ -216,6 +216,9 @@ def _devcheck_providers_exist():
     catalog = pystac_client.Client.open(provider, headers=headers)
     print(ub.repr2(list(catalog.get_collections())))
 
+    # item_search = catalog.search(collections=["ta1-mixedgsd-acc-1"])
+    # print(f'item_search={item_search}')
+
     item_search = catalog.search(collections=["ta1-s2-acc"])
     item_search = catalog.search(collections=["ta1-wv-acc"])
     if 1:
@@ -356,6 +359,12 @@ CONVINIENCE_SENSOR_GROUPS = {
     'TA1-S2-L8-ACC': [
         'ta1-s2-acc',
         'ta1-ls-acc',
+    ],
+    'TA1-S2-L8-WV-PD-ACC-1': [
+        'ta1-s2-acc-1',
+        'ta1-ls-acc-1',
+        'ta1-pd-acc-1',
+        'ta1-wv-acc-1',
     ],
     'TA1-S2-L8-WV-PD-ACC': [
         'ta1-s2-acc',
