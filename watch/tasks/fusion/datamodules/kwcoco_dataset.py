@@ -265,6 +265,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         >>>                           input_space_scale='native',
         >>>                           window_space_scale='0.7GSD',
         >>>                           output_space_scale='native',
+        >>>                           channels='auto',
         >>> )
         >>> self.disable_augmenter = True
         >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
@@ -294,6 +295,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         >>>                           input_space_scale='0.35GSD',
         >>>                           window_space_scale='0.7GSD',
         >>>                           output_space_scale='0.2GSD',
+        >>>                           channels='auto',
         >>> )
         >>> self.disable_augmenter = True
         >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
@@ -507,7 +509,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         self.special_inputs = {}
 
-        if channels is None:
+        if channels is None or channels == 'auto':
             # Find reasonable channel defaults if channels is not specified.
             # Use dataset stats to determine something sensible.
             sensorchan_hist = kwcoco_extensions.coco_channel_stats(sampler.dset)['sensorchan_hist']
@@ -518,7 +520,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     parts.append(f'{sensor}:{chancode}')
             sensorchans = ','.join(sorted(parts))
             sensorchans = kwcoco.SensorChanSpec.coerce(sensorchans)
-            if len(sensorchan_hist) > 0:
+            if len(sensorchan_hist) > 0 and channels is None:
+                # Only warn if not explicitly in auto mode
                 warnings.warn(
                     'Channels are unspecified, but the dataset has a complex '
                     'set of channels with multiple sensors. '
@@ -769,7 +772,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> coco_dset = watch.demo.demo_kwcoco_multisensor()
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> # Each sensor uses all of its own channels
-            >>> channels = None
+            >>> channels = 'auto'
             >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 256, 256), channels=channels, normalize_perframe=False)
             >>> self.disable_augmenter = False
             >>> index = 0
@@ -1537,7 +1540,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> dct_dset = coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=3)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (2, 256, 256)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels='auto')
             >>> self.compute_dataset_stats(num_workers=2)
 
         Example:
@@ -1547,7 +1550,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2')
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (2, 256, 256)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels='auto')
             >>> stats = self.compute_dataset_stats()
             >>> assert stats['class_freq']['star'] > 0 or stats['class_freq']['superstar'] > 0 or stats['class_freq']['eff'] > 0
             >>> assert stats['class_freq']['background'] > 0
@@ -1559,7 +1562,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> num = 10
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='vidshapes-watch', chip_size=64, time_steps=3,
-            >>>     num_workers=0, batch_size=3,
+            >>>     num_workers=0, batch_size=3, channels='auto',
             >>>     normalize_inputs=num)
             >>> datamodule.setup('fit')
             >>> self = datamodule.torch_datasets['train']
@@ -1895,7 +1898,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=(3, 530, 610))
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=(3, 530, 610), channels='auto')
             >>> loader = self.make_loader(batch_size=2)
             >>> batch = next(iter(loader))
         """

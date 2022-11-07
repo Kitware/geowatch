@@ -211,7 +211,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         >>> from watch.tasks.fusion import datamodules
         >>> print('(STEP 0): SETUP THE DATA MODULE')
         >>> datamodule = datamodules.KWCocoVideoDataModule(
-        >>>     train_dataset='special:vidshapes-watch', num_workers=4)
+        >>>     train_dataset='special:vidshapes-watch', num_workers=4, channels='auto')
         >>> datamodule.setup('fit')
         >>> dataset = datamodule.torch_datasets['train']
         >>> print('(STEP 1): ESTIMATE DATASET STATS')
@@ -682,6 +682,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         Example:
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # noqa
+            >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+            >>> disable_lightning_hardware_warnings()
             >>> self = MultimodalTransformer(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b')
             >>> max_epochs = 80
             >>> self.trainer = pl.Trainer(max_epochs=max_epochs)
@@ -690,7 +692,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> # Insepct what the LR curve will look like
             >>> for _ in range(max_epochs):
             ...     sched.last_epoch += 1
-            ...     lr = sched.get_lr()[0]
+            ...     lr = sched.get_last_lr()[0]
             ...     rows.append({'lr': lr, 'last_epoch': sched.last_epoch})
             >>> # xdoctest: +REQUIRES(--show)
             >>> import kwplot
@@ -981,6 +983,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>>     train_dataset='special:vidshapes-watch',
             >>>     num_workers='avail / 2', chip_size=96, time_steps=4,
             >>>     normalize_inputs=8, neg_to_pos_ratio=0, batch_size=1,
+            >>>     channels='auto',
             >>> )
             >>> datamodule.setup('fit')
             >>> train_dset = datamodule.torch_datasets['train']
@@ -1624,12 +1627,14 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> from watch.tasks.fusion import datamodules
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+            >>> disable_lightning_hardware_warnings()
             >>> dpath = ub.Path.appdir('watch/tests/package').ensuredir()
             >>> package_path = dpath / 'my_package.pt'
 
             >>> datamodule = datamodules.kwcoco_video_data.KWCocoVideoDataModule(
             >>>     train_dataset='special:vidshapes8-multispectral-multisensor', chip_size=32,
-            >>>     batch_size=1, time_steps=2, num_workers=2, normalize_inputs=10)
+            >>>     batch_size=1, time_steps=2, num_workers=2, normalize_inputs=10, channels='auto')
             >>> datamodule.setup('fit')
             >>> dataset_stats = datamodule.torch_datasets['train'].cached_dataset_stats(num=3)
             >>> classes = datamodule.torch_datasets['train'].classes
