@@ -10,7 +10,7 @@ from typing import Iterable, Tuple, Set, Union, Optional, Literal, Dict
 from dataclasses import dataclass, field
 from shapely.ops import unary_union
 from watch.tasks.tracking.utils import (
-    Track, PolygonFilter, NewTrackFunction, mask_to_polygons, build_heatmap,
+    Track, NewTrackFunction, mask_to_polygons, build_heatmap,
     score_poly, Poly, CocoDsetFilter, _validate_keys, Observation, pop_tracks,
     build_heatmaps, trackid_is_default)
 
@@ -98,17 +98,6 @@ AGG_FN_REGISTRY = {
 #
 # --- track/polygon filters ---
 #
-
-
-@dataclass
-class SmallPolygonFilter(PolygonFilter):
-    min_area_px: float = 80
-    min_area_sqm: float = 1200  # == 80px @ 15GSD
-
-    def on_augmented_polys(self, aug_polys):
-        for aug, poly in aug_polys:
-            if poly.to_shapely().area > self.min_area_px:
-                yield aug, poly
 
 
 class TimePolygonFilter(CocoDsetFilter):
@@ -306,11 +295,17 @@ def time_aggregated_polys(sub_dset,
                           key='salient',
                           bg_key=None,
                           time_filtering=False,
-                          response_filtering=False,
+                          response_thresh=None,
                           use_boundaries=False,
                           norm_ord=1,
                           agg_fn='probs',
                           moving_window_size=None,  # 150
+                          min_area_sqkm=0.072,  # 80px@30GSD
+                          # min_area_sqkm=0.018,  # 80px@15GSD
+                          # min_area_sqkm=0.008,  # 80px@10GSD
+                          max_area_sqkm=None,
+                          # max_area_sqkm=0.5,  # ~1/4 of KR_R002 vid area
+                          max_area_behavior='drop',
                           thresh_hysteresis=None):
     '''
     Track function.
@@ -380,7 +375,8 @@ def time_aggregated_polys(sub_dset,
         n_have = sum(has_requested_chans_list)
         n_missing = (n_total - n_have)
         print(f'warning: {n_missing} / {n_total} imgs in dset {sub_dset.tag} '
-              f'with video {vidname} have no keys {key} or {bg_key}. Interpolating...')
+              f'with video {vidname} have no keys {key} or {bg_key}. '
+               'Interpolating...')
 
     if norm_ord in {'inf', None}:
         norm_ord = np.inf
@@ -400,30 +396,36 @@ def time_aggregated_polys(sub_dset,
 
     print('time aggregation: number of polygons: ', len(tracks_polys))
 
-    # make tracks with start and end gids
-    # tracks = Track()
+    # size and response filters should operate on each vidpoly separately, so
+    # have to bookkeep both vidpolys and tracks in a list track_polys
 
-    # SmallPolygonFilter and ResponsePolygonFilter should operate on each
-    # vidpoly separately, so have to bookkeep both vidpolys and tracks
-    # in a list track_polys
+    video_gsd = video.get('target_gsd', None)
+    if video_gsd is None:
+        default_gsd = 30
+        video_gsd = default_gsd
+        print(f'warning: video {video["name"]} in dset {sub_dset.tag} '
+               'has no listed GSD; assuming {default_gsd}')
 
-    # import xdev
-    # xdev.embed()
+    if min_area_sqkm:
+        min_area_px = min_area_sqkm * 1e6 / (video_gsd ** 2)
+        n_orig = len(tracks_polys)
+        tracks_polys = [(t, p) for t, p in tracks_polys if p.to_shapely().area > min_area_px]
+        print(f'removed small: remaining polygons: {len(tracks_polys)} / {n_orig}')
 
-    # video_gsd = video.get('target_gsd', None)
-    # if video_gsd is not None:
-        # min_area_px = '28 meters^2'
-    # for t, p in tracks_polys:
-        # print(np.sqrt(p.area))
+    if max_area_sqkm:
+        max_area_px = max_area_sqkm * 1e6 / (video_gsd ** 2)
+        n_orig = len(tracks_polys)
+        if max_area_behavior == 'drop':
+            tracks_polys = [(t, p) for t, p in tracks_polys if p.to_shapely().area < max_area_px]
+            print(f'removed large: remaining polygons: {len(tracks_polys)} / {n_orig}')
+        elif max_area_behavior == 'grid':
+            # edits tracks instead of removing them
+            raise NotImplementedError
 
-    min_area_px = 80  # TODO: parameterize TODO: make expressable in GSD
-    size_filter = SmallPolygonFilter(min_area_px=min_area_px)
-    n_orig = len(tracks_polys)
-    tracks_polys = list(size_filter(tracks_polys))
-    print(f'removed small: remaining polygons: {len(tracks_polys)} / {n_orig}')
 
-    if response_filtering:
-        response_thresh = 0.0002  # 0.0005
+    # response_thresh = 0.0002
+    # response_thresh = 0.0005
+    if response_thresh:
         rsp_filter = ResponsePolygonFilter(
             [t for t, _ in tracks_polys], key, response_thresh)
         tracks_polys = list(rsp_filter(tracks_polys))
@@ -695,12 +697,16 @@ class TimeAggregatedBAS(NewTrackFunction):
     thresh: float = 0.2
     morph_kernel: int = 3
     time_filtering: bool = True
-    response_filtering: bool = False
+    response_thresh: Optional[float] = None
     key: str = 'salient'
     norm_ord: Optional[Union[int, str]] = 1
     agg_fn: str = 'probs'
     thresh_hysteresis: Optional[float] = None
     moving_window_size: Optional[int] = None
+    min_area_sqkm: Optional[float] = 0.072
+    max_area_sqkm: Optional[float] = 0.5
+    max_area_behavior: str = 'drop'
+    response_thresh: Optional[float] = None
 
     def create_tracks(self, sub_dset):
         tracks = time_aggregated_polys(
@@ -709,16 +715,20 @@ class TimeAggregatedBAS(NewTrackFunction):
             self.morph_kernel,
             key=self.key,
             time_filtering=self.time_filtering,
-            response_filtering=self.response_filtering,
+            response_thresh=self.response_thresh,
             norm_ord=self.norm_ord,
             agg_fn=self.agg_fn,
             thresh_hysteresis=self.thresh_hysteresis,
-            moving_window_size=self.moving_window_size)
+            moving_window_size=self.moving_window_size,
+            min_area_sqkm=self.min_area_sqkm,
+            max_area_sqkm=self.max_area_sqkm,
+            max_area_behavior=self.max_area_behavior,
+        )
         return tracks
 
     def add_tracks_to_dset(self, sub_dset, tracks):
         sub_dset = add_tracks_to_dset(sub_dset, tracks, self.thresh,
-                                       self.key)
+                                      self.key)
         return sub_dset
 
 
@@ -732,7 +742,7 @@ class TimeAggregatedSC(NewTrackFunction):
     thresh: float = 0.01
     morph_kernel: int = 3
     time_filtering: bool = False
-    response_filtering: bool = False
+    response_thresh: Optional[float] = None
     key: Tuple[str] = tuple(CNAMES_DCT['positive']['scored'])
     bg_key: Tuple[str] = tuple(CNAMES_DCT['negative']['scored'])
     boundaries_as: Literal['bounds', 'polys', 'none'] = 'bounds'
@@ -740,6 +750,10 @@ class TimeAggregatedSC(NewTrackFunction):
     agg_fn: str = 'probs'
     thresh_hysteresis: Optional[float] = None
     moving_window_size: Optional[int] = None
+    min_area_sqkm: Optional[float] = None
+    max_area_sqkm: Optional[float] = None
+    max_area_behavior: str = 'drop'
+    response_thresh: Optional[float] = None
 
     def create_tracks(self, sub_dset):
         '''
@@ -771,12 +785,16 @@ class TimeAggregatedSC(NewTrackFunction):
                 key=self.key,
                 bg_key=self.bg_key,
                 time_filtering=self.time_filtering,
-                response_filtering=self.response_filtering,
+                response_thresh=self.response_thresh,
                 use_boundaries=(self.boundaries_as != 'none'),
                 norm_ord=self.norm_ord,
                 agg_fn=self.agg_fn,
                 thresh_hysteresis=self.thresh_hysteresis,
-                moving_window_size=self.moving_window_size)
+                moving_window_size=self.moving_window_size,
+                min_area_sqkm=self.min_area_sqkm,
+                max_area_sqkm=self.max_area_sqkm,
+                max_area_behavior=self.max_area_behavior,
+            )
 
         return tracks
 
