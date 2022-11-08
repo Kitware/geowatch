@@ -929,11 +929,15 @@ def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath,
     # assert merge_dpath not in region_dpaths
     # merge_dpath.delete().ensuredir()
 
-    results = [
-        RegionResult.from_dpath_and_anns_root(
-            pth, true_site_dpath, true_region_dpath)
-        for pth in region_dpaths
-    ]
+    results = []
+    for pth in region_dpaths:
+        try:
+            results.append(
+                RegionResult.from_dpath_and_anns_root(
+                    pth, true_site_dpath, true_region_dpath)
+            )
+        except FileNotFoundError:
+            print(f'warning: missing region {pth}')
 
     # merge BAS
     bas_results = [r for r in results if r.bas_dpath]
@@ -1017,7 +1021,7 @@ def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath,
     # Symlink to visualizations
     for dpath in region_dpaths:
         overall_dpath = dpath / 'overall'
-        viz_dpath = overall_dpath / 'bas' / 'region'
+        viz_dpath = (overall_dpath / 'bas' / 'region').ensuredir()
 
         for viz_fpath in viz_dpath.iterdir():
             viz_link = viz_fpath.augment(dpath=region_viz_dpath)
