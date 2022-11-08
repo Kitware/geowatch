@@ -3,6 +3,7 @@ import numpy as np
 import kwcoco
 from rasterio import features
 import shapely.geometry
+import geopandas as gpd
 import ubelt as ub
 from dataclasses import dataclass, astuple
 # import functools
@@ -71,7 +72,7 @@ class Track:
     track_id: Optional[int] = None
 
     @classmethod
-    def from_polys(cls, polys, dset, probs=None, vidid=None, **kwargs):
+    def from_polys(cls, polys, dset, probs=None, vidid=None, scores=None, **kwargs):
         if vidid is not None:
             gids = dset.index.vidid_to_gids[vidid]
         else:
@@ -82,8 +83,10 @@ class Track:
                 Observation(poly, gid, score_poly(poly, prob))
                 for poly, gid, prob in zip(polys, gids, probs)
             ]
+        elif scores is not None:
+            obs = list(itertools.starmap(Observation, zip(polys, gids, scores)))
         else:
-            obs = [Observation(poly, gid) for poly, gid in zip(polys, gids)]
+            obs = list(itertools.starmap(Observation, zip(polys, gids)))
 
         return cls(observations=obs, dset=dset, vidid=vidid, **kwargs)
 
@@ -499,6 +502,9 @@ def score_poly(poly, probs, threshold=None, use_rasterio=True):
         x, y, w, h = box.data[0]
         if use_rasterio:  # rasterio inverse
             rel_poly = poly.translate((0.5 - x, 0.5 - y))
+            # TODO verify this works with shapely polys too
+            # or implement geo_interface in kwimage
+            # https://shapely.readthedocs.io/en/stable/manual.html#python-geo-interface
             rel_mask = features.rasterize([rel_poly.to_geojson()],
                                           out_shape=(h, w))
         else:  # kwimage inverse
