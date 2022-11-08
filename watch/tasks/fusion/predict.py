@@ -134,7 +134,7 @@ def make_predict_config(cmdline=False, **kwargs):
     return args
 
 
-def build_stitching_managers(config, method, result_dataset):
+def build_stitching_managers(config, method, result_dataset, writer_queue=None):
     # could be torch on-device stitching
     stitch_managers = {}
     stitch_device = 'numpy'
@@ -152,6 +152,7 @@ def build_stitching_managers(config, method, result_dataset):
         write_preds=config['write_preds'],
         prob_compress=config['compress'],
         quantize=config['quantize'],
+        writer_queue=writer_queue,
     )
 
     # If we only care about some predictions from the model, then keep track of
@@ -341,6 +342,7 @@ def resolve_datamodule(config, method, datamodule_defaults):
                         sensorchan = f'{sensor}:{code}'
                         model_sensorchan_stem_parts.append(sensorchan)
 
+            import xdev)
             hack_model_sensorchan_spec = kwcoco.SensorChanSpec.coerce(','.join(model_sensorchan_stem_parts))
             # hack_model_spec = kwcoco.ChannelSpec.coerce(','.join(unique_channel_streams))
             if datamodule_sensorchan_spec is not None:
@@ -352,9 +354,9 @@ def resolve_datamodule(config, method, datamodule_defaults):
                 if hack_sensorchan_set != datamodule_sensorchan_set:
                     print('Warning: reported model channels may be incorrect '
                           'due to bad train hyperparams',
-                          hack_model_sensorchan_spec.normalize().spec,
+                          hack_model_sensorchan_spec.normalize().concise().spec,
                           'versus',
-                          datamodule_sensorchan_spec.normalize().spec)
+                          datamodule_sensorchan_spec.normalize().concise().spec)
 
                     compat_parts = []
                     for model_part in hack_model_sensorchan_spec.streams():
@@ -362,7 +364,7 @@ def resolve_datamodule(config, method, datamodule_defaults):
                         if not data_part.chans.spec:
                             # Try the generic sensor
                             data_part = datamodule_sensorchan_spec.matching_sensor('*')
-                        isect_part = model_part.chans.intersection(data_part.chans)
+                        isect_part = model_part.chans.fuse().intersection(data_part.chans.fuse())
                         # Stems required chunked channels, cant take subsets of them
                         if isect_part.spec == model_part.chans.spec:
                             compat_parts.append(model_part)
@@ -597,7 +599,23 @@ def predict(cmdline=False, **kwargs):
     if config['with_saliency'] == 'auto':
         config['with_saliency'] = getattr(method, 'global_saliency_weight', 0.0)
 
-    stitch_managers = build_stitching_managers(config, method, result_dataset)
+    # Start background procs before we make threads
+    batch_iter = iter(test_dataloader)
+    prog = ub.ProgIter(batch_iter, desc='predicting', verbose=1)
+
+    # Make threads after starting background proces.
+    writer_queue = util_parallel.BlockingJobQueue(
+        mode='thread',
+        # mode='serial',
+        max_workers=datamodule.num_workers)
+
+    result_fpath.parent.ensuredir()
+    print('result_fpath = {!r}'.format(result_fpath))
+
+    stitch_managers = build_stitching_managers(
+        config, method, result_dataset,
+        writer_queue=writer_queue
+    )
 
     expected_outputs = set(stitch_managers.keys())
     got_outputs = None
@@ -610,18 +628,6 @@ def predict(cmdline=False, **kwargs):
         'class_probs': 'class',
         'change_probs': 'change',
     }
-
-    batch_iter = iter(test_dataloader)
-    prog = ub.ProgIter(batch_iter, desc='predicting', verbose=1)
-
-    # Start background procs before we make threads
-    writer_queue = util_parallel.BlockingJobQueue(
-        mode='thread',
-        # mode='serial',
-        max_workers=datamodule.num_workers)
-
-    result_fpath.parent.ensuredir()
-    print('result_fpath = {!r}'.format(result_fpath))
 
     CHECK_GRID = 0
     if CHECK_GRID:
@@ -856,14 +862,16 @@ def predict(cmdline=False, **kwargs):
                 # Free up space for any images that have been completed
                 for gid in head_stitcher.ready_image_ids():
                     head_stitcher._ready_gids.difference_update({gid})  # avoid race condition
-                    writer_queue.submit(head_stitcher.finalize_image, gid)
+                    head_stitcher.submit_finalize_image(gid)
+                    # writer_queue.submit(head_stitcher.finalize_image, gid)
 
         writer_queue.wait_until_finished()  # hack to avoid race condition
 
         # Prediction is completed, finalize all remaining images.
         for _head_key, head_stitcher in stitch_managers.items():
             for gid in head_stitcher.managed_image_ids():
-                writer_queue.submit(head_stitcher.finalize_image, gid)
+                head_stitcher.submit_finalize_image(gid)
+                # writer_queue.submit(head_stitcher.finalize_image, gid)
         writer_queue.wait_until_finished()
 
     if CHECK_PRED_SPATIAL_COVERAGE:
@@ -943,6 +951,10 @@ class CocoStitchingManager(object):
         quantize (bool):
             if True quantize heatmaps before writing them to disk
 
+        writer_queue (None | BlockingJobQueue):
+            if specified, uses this shared writer queue, otherwise creates
+            its own.
+
     TODO:
         - [ ] Handle the case where the input space is related to the output
               space by an affine transform.
@@ -959,13 +971,15 @@ class CocoStitchingManager(object):
               from (a) the code that converts soft-to-hard predictions (b)
               the code that adds hard predictions to the kwcoco file and (c)
               the code that adds soft predictions to the kwcoco file?
+
+        - [ ] TODO: remove polygon "predictions" from this completely.
     """
 
     def __init__(self, result_dataset, short_code=None, chan_code=None,
                  stiching_space='video', device='numpy', thresh=0.5,
-                 write_probs=True, write_preds=True, num_bands='auto',
+                 write_probs=True, write_preds=False, num_bands='auto',
                  prob_compress='DEFLATE', polygon_categories=None,
-                 quantize=True):
+                 quantize=True, writer_queue=None):
         self.short_code = short_code
         self.result_dataset = result_dataset
         self.device = device
@@ -975,6 +989,12 @@ class CocoStitchingManager(object):
         self.prob_compress = prob_compress
         self.polygon_categories = polygon_categories
         self.quantize = quantize
+
+        if writer_queue is None:
+            # basic queue if nothing fancy is given
+            writer_queue = util_parallel.BlockingJobQueue(
+                mode='serial', max_workers=0)
+        self.writer_queue = writer_queue
 
         self.suffix_code = (
             self.chan_code if '|' not in self.chan_code else
@@ -999,6 +1019,9 @@ class CocoStitchingManager(object):
         self.write_preds = write_preds
 
         if self.write_preds:
+            ub.schedule_deprecation(
+                'watch', 'write_preds', 'needs a different abstraction.',
+                deprecate='now')
             from kwcoco import channel_spec
             chan_spec = channel_spec.FusedChannelSpec.coerce(chan_code)
             if self.polygon_categories is None:
@@ -1013,7 +1036,8 @@ class CocoStitchingManager(object):
             self.prob_dpath = join(bundle_dpath, prob_subdir)
             ub.ensuredir(self.prob_dpath)
 
-    def accumulate_image(self, gid, space_slice, data, dsize=None, scale=None):
+    def accumulate_image(self, gid, space_slice, data, dsize=None, scale=None,
+                         is_ready='auto'):
         """
         Stitches a result into the appropriate image stitcher.
 
@@ -1029,6 +1053,8 @@ class CocoStitchingManager(object):
             dsize (Tuple): the w/h of outputspace
 
             scale (float | None): the scale to the outspace from from the vidspace
+
+            is_ready (bool): todo, fix this to work better
         """
         data = kwarray.atleast_nd(data, 3)
         dset = self.result_dataset
@@ -1052,7 +1078,10 @@ class CocoStitchingManager(object):
                     stitch_dims, device=self.device)
                 self.image_scales[gid] = scale
 
-            if self._last_vidid is not None and vidid != self._last_vidid:
+            if is_ready == 'auto':
+                is_ready = self._last_vidid is not None and vidid != self._last_vidid
+
+            if is_ready:
                 # We assume sequential video iteration, thus when we see a new
                 # video, we know the images from the previous video are ready.
                 video_gids = set(dset.index.vidid_to_gids[self._last_vidid])
@@ -1168,6 +1197,13 @@ class CocoStitchingManager(object):
             List[int]: image ids
         """
         return list(self._ready_gids)
+
+    def submit_finalize_image(self, gid):
+        """
+        Like finalize image, but submits the job to the manager's writer queue,
+        which could be asynchronous.
+        """
+        self.writer_queue.submit(self.finalize_image, gid)
 
     def finalize_image(self, gid):
         """
@@ -1293,6 +1329,9 @@ class CocoStitchingManager(object):
                 )
 
         if self.write_preds:
+            ub.schedule_deprecation(
+                'watch', 'write_preds', 'needs a different abstraction.',
+                deprecate='now')
             # NOTE: The typical pipeline will never do this.
             # This is generally reserved for a subsequent tracking stage.
 
@@ -1452,7 +1491,6 @@ if __name__ == '__main__':
 
     python -m watch.tasks.fusion.predict \
         --write_probs=True \
-        --write_preds=False \
         --with_class=auto \
         --with_saliency=auto \
         --with_change=False \
@@ -1491,7 +1529,6 @@ if __name__ == '__main__':
     TEST_DATASET=$DVC_DPATH/Aligned-Drop3-TA1-2022-03-10/data_nowv_vali_kr1_small.kwcoco.json
     python -m watch.tasks.fusion.predict \
         --write_probs=True \
-        --write_preds=False \
         --with_class=auto \
         --with_saliency=auto \
         --with_change=False \
@@ -1504,6 +1541,34 @@ if __name__ == '__main__':
         --test_dataset=$TEST_DATASET \
         --tta_fliprot=0 \
         --tta_time=0 --dump=$DVC_DPATH/_tmp/test_pred_config.yaml
+
+
+    # Testing first heterogeneous model
+
+    DVC_EXPT_DPATH=$(WATCH_PREIMPORT=none smartwatch_dvc --tags='phase2_expt')
+    DVC_DATA_DPATH=$(WATCH_PREIMPORT=none smartwatch_dvc --tags=phase2_data --hardware=ssd)
+    PACKAGE_FPATH=$DVC_EXPT_DPATH/package_epoch10_step200000.pt
+    TEST_DATASET=$DVC_DATA_DPATH/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/KR_R001.kwcoco.json
+    PRED_DATASET=$DVC_EXPT_DPATH/_testing/hg_kr1/pred.kwcoco.json
+    echo "
+    DVC_EXPT_DPATH = $DVC_EXPT_DPATH
+    DVC_DATA_DPATH = $DVC_DATA_DPATH
+    PACKAGE_FPATH = $PACKAGE_FPATH
+    TEST_DATASET = $TEST_DATASET
+    PRED_DATASET = $PRED_DATASET
+    "
+
+    smartwatch model_stats "$PACKAGE_FPATH"
+
+    python -m watch.tasks.fusion.predict \
+        --with_class=auto \
+        --with_saliency=auto \
+        --package_fpath=$PACKAGE_FPATH \
+        --num_workers=5 \
+        --devices=0, \
+        --batch_size=1 \
+        --pred_dataset=$PRED_DATASET \
+        --test_dataset=$TEST_DATASET
 
     """
     main()
