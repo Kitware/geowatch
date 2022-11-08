@@ -6,8 +6,8 @@ import kwcoco
 import numpy as np
 import ubelt as ub
 import itertools
-from typing import Iterable, Tuple, Set, Union, Optional, Literal, Dict
-from dataclasses import dataclass, field
+from typing import Iterable, Tuple, Union, Optional, Literal
+from dataclasses import dataclass
 from shapely.ops import unary_union
 from watch.tasks.tracking.utils import (
     Track, NewTrackFunction, mask_to_polygons, build_heatmap,
@@ -114,7 +114,6 @@ class TimePolygonFilter(CocoDsetFilter):
             try:
                 overlap = self.score(poly,
                                      gid,
-                                     mode='overlap',
                                      threshold=self.threshold)
                 if overlap > magic_thresh:
                     found = image_ind
@@ -140,33 +139,36 @@ class TimePolygonFilter(CocoDsetFilter):
         raise NotImplementedError('need gids for time filtering')
 
 
-class ResponsePolygonFilter(CocoDsetFilter):
+# TODO memoize or gpd
+class ResponsePolygonFilter:
     '''
     Filters each track based on the average response of all tracks.
     '''
-    mean_response: float
-    gids: Set[int] = {}
 
     def __init__(self, tracks: Iterable[Track], key, threshold=0.001):
 
-        self.threshold = threshold
-        self.key = key
-
         dsets = {track.dset for track in tracks}
         assert len(dsets) == 1, 'Tracks refer to different CocoDatasets!'
-        self.dset = dsets.pop()
+        dset = dsets.pop()
 
-        self.gids = set()
+        self.dset = dset
+        self.key = key
+        self.threshold = threshold
+
+        gids = set()
         all_responses = kwarray.RunningStats()
         for track in tracks:  # could disambiguate these for better stats
-            for obs in track.observation:
-                all_responses.update(np.array(self.response(obs.poly,
-                                                            obs.gid)))
-                self.gids.add(obs.gid)
-        self.mean_response = all_responses.summarize(keepdims=False)['mean']
+            for obs in track.observations:
+                rsp = np.array(self.response(obs.poly, obs.gid))
+                all_responses.update(rsp)
+                gids.add(obs.gid)
+        mean_response = all_responses.summarize(keepdims=False)['mean']
+
+        self.gids = gids
+        self.mean_response = mean_response
 
     def response(self, poly, gid):
-        return self.score(poly, gid, mode='response')
+        return score_poly(poly, build_heatmap(self.dset, gid, self.key))
 
     def on_augmented_polys(self, aug_polys, gids=None, threshold=None):
         '''
@@ -177,6 +179,7 @@ class ResponsePolygonFilter(CocoDsetFilter):
         if threshold is None:
             threshold = self.threshold
         for aug, poly in aug_polys:
+            # TODO nanmean
             this_response = np.mean([self.response(poly, gid) for gid in gids])
             if this_response / self.mean_response > threshold:
                 yield aug, poly
@@ -188,8 +191,7 @@ class ResponsePolygonFilter(CocoDsetFilter):
         if threshold is None:
             threshold = self.threshold
         for obs in observations:
-            if self.response(obs.poly,
-                             obs.gid) / self.mean_response > threshold:
+            if self.response(obs.poly, obs.gid) / self.mean_response > threshold:
                 yield obs
 
 
@@ -423,12 +425,11 @@ def time_aggregated_polys(sub_dset,
             raise NotImplementedError
 
 
-    # response_thresh = 0.0002
-    # response_thresh = 0.0005
+    # response_thresh = 0.9
     if response_thresh:
         rsp_filter = ResponsePolygonFilter(
             [t for t, _ in tracks_polys], key, response_thresh)
-        tracks_polys = list(rsp_filter(tracks_polys))
+        tracks_polys = list(rsp_filter.on_augmented_polys(tracks_polys))
         print('after filtering based on per-polygon response {len(track_polys)} / {n_orig}')
 
     # TimePolygonFilter edits tracks instead of removing them, so we can

@@ -173,8 +173,8 @@ class CocoDsetFilter(PolygonFilter):
         return build_heatmap(self.dset, gid, self.key)
 
     @ub.memoize_method
-    def score(self, poly, gid, mode, threshold=None):
-        return score_poly(poly, self._heatmap(gid), mode=mode, threshold=threshold)
+    def score(self, poly, gid, threshold=None):
+        return score_poly(poly, self._heatmap(gid), threshold=threshold)
 
 
 class TrackFunction(collections.abc.Callable):
@@ -465,21 +465,17 @@ def pop_tracks(
 
 
 @profile
-def score_poly(poly, probs, mode='score', threshold=0, use_rasterio=True):
+def score_poly(poly, probs, threshold=None, use_rasterio=True):
     '''
     Args:
         poly: kwimage.Polygon or MultiPolygon in pixel coords
 
         probs: heatmap to compare poly against
 
-        mode: return value.
-            'score': fraction of probs contained in poly
-            'response': average value of probs in poly
-            'overlap': fraction of poly with probs > threshold
-
         use_rasterio: use rasterio.features module instead of kwimage
 
-        threshold: only used for mode='overlap'
+        threshold: if not None, return fraction of poly with probs > threshold.
+        Else, return average value of probs in poly.
     '''
     # try converting from shapely
     # TODO standard coerce fns between kwimage, shapely, and __geo_interface__
@@ -497,7 +493,8 @@ def score_poly(poly, probs, mode='score', threshold=0, use_rasterio=True):
         ymax, xmax = probs.shape[:2]
         box = box.clip(0, 0, xmax, ymax).to_xywh()
         if box.area[0][0] == 0:
-            warnings.warn('warning: scoring a polygon against an img with no overlap!')
+            warnings.warn(
+                'warning: scoring a polygon against an img with no overlap!')
             return 0
         x, y, w, h = box.data[0]
         if use_rasterio:  # rasterio inverse
@@ -513,22 +510,16 @@ def score_poly(poly, probs, mode='score', threshold=0, use_rasterio=True):
         if len(rel_probs.shape) == 3:
             rel_probs = rel_probs[:, :, 0]
 
-    # TODO these are preserved for backwards compatibility, but they should
-    # actually be the same. Test and remove them.
-    if mode == 'response':
-        response = (rel_mask * rel_probs).mean()
-        return response
-    elif mode == 'score':
-        total = rel_mask.sum()
+    # TODO does anything need total response instead of avg response eg don't
+    # divide by total?
+    total = rel_mask.sum()
+    if threshold is None:
         score = 0 if total == 0 else (rel_mask * rel_probs).sum() / total
         return score
-    elif mode == 'overlap':
+    else:
         hard_prob = rel_probs > threshold
         overlap = (hard_prob * rel_mask).sum()
-        total_poly_area = rel_mask.sum()
-        return overlap / total_poly_area
-    else:
-        raise ValueError(mode)
+        return overlap / total
 
 
 def mask_to_polygons(probs,
