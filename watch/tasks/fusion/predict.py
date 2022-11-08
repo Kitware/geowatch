@@ -36,7 +36,7 @@ def make_predict_config(cmdline=False, **kwargs):
     """
     Configuration for fusion prediction
     """
-    # TODO: switch to jsonargparse
+    # TODO: switch to jsonargparse / scriptconfig + jsonargparse
     from watch.utils import configargparse_ext
     from scriptconfig.smartcast import smartcast
 
