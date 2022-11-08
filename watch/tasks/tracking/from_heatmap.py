@@ -296,7 +296,7 @@ def time_aggregated_polys(sub_dset,
                           morph_kernel=3,
                           key='salient',
                           bg_key=None,
-                          time_filtering=False,
+                          time_thresh=1,
                           response_thresh=None,
                           use_boundaries=False,
                           norm_ord=1,
@@ -435,15 +435,13 @@ def time_aggregated_polys(sub_dset,
     # TimePolygonFilter edits tracks instead of removing them, so we can
     # discard 'polys' and focus on 'tracks'
     tracks = [t for t, _ in tracks_polys]
-    if time_filtering:
-        # TODO investigate different thresh here
-        time_thresh = thresh
-        time_filter = TimePolygonFilter(sub_dset, tuple(key), time_thresh)
+    if time_thresh:  # as a fraction of thresh
+        time_filter = TimePolygonFilter(sub_dset, tuple(key), time_thresh * thresh)
         _filtered = []
         for _, t in enumerate(tracks):
             _t = time_filter(t)
             _filtered.append(_t)
-        _filtered = list(map(time_filter, tracks))
+        # _filtered = list(map(time_filter, tracks))
         tracks = [t for t in _filtered if len(list(t.observations)) > 0]
 
     return tracks
@@ -697,7 +695,7 @@ class TimeAggregatedBAS(NewTrackFunction):
     '''
     thresh: float = 0.2
     morph_kernel: int = 3
-    time_filtering: bool = True
+    time_thresh: Optional[float] = 1
     response_thresh: Optional[float] = None
     key: str = 'salient'
     norm_ord: Optional[Union[int, str]] = 1
@@ -715,7 +713,7 @@ class TimeAggregatedBAS(NewTrackFunction):
             self.thresh,
             self.morph_kernel,
             key=self.key,
-            time_filtering=self.time_filtering,
+            time_thresh=self.time_thresh,
             response_thresh=self.response_thresh,
             norm_ord=self.norm_ord,
             agg_fn=self.agg_fn,
@@ -742,7 +740,7 @@ class TimeAggregatedSC(NewTrackFunction):
     '''
     thresh: float = 0.01
     morph_kernel: int = 3
-    time_filtering: bool = False
+    time_thresh: Optional[float] = None
     response_thresh: Optional[float] = None
     key: Tuple[str] = tuple(CNAMES_DCT['positive']['scored'])
     bg_key: Tuple[str] = tuple(CNAMES_DCT['negative']['scored'])
@@ -785,7 +783,7 @@ class TimeAggregatedSC(NewTrackFunction):
                 self.morph_kernel,
                 key=self.key,
                 bg_key=self.bg_key,
-                time_filtering=self.time_filtering,
+                time_thresh=self.time_thresh,
                 response_thresh=self.response_thresh,
                 use_boundaries=(self.boundaries_as != 'none'),
                 norm_ord=self.norm_ord,
