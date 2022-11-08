@@ -1499,7 +1499,15 @@ class Box(ub.NiceRepr):
         if isinstance(data, Box):
             return data
         else:
+            import numbers
             import kwimage
+            from kwarray.arrayapi import torch
+            if isinstance(data, list):
+                if data and isinstance(data[0], numbers.Number):
+                    data = np.array(data)[None, :]
+            if isinstance(data, np.ndarray) or torch and torch.is_tensor(data):
+                if len(data.shape) == 1:
+                    data = data[None, :]
             return cls(kwimage.Boxes.coerce(data, **kwargs))
 
     @property
@@ -1562,6 +1570,9 @@ class Box(ub.NiceRepr):
 
     def toformat(self, *args, **kwargs):
         return self.__class__(self.boxes.toformat(*args, **kwargs))
+
+    def astype(self, *args, **kwargs):
+        return self.__class__(self.boxes.astype(*args, **kwargs))
 
     def corners(self, *args, **kwargs):
         return self.boxes.corners(*args, **kwargs)[0]

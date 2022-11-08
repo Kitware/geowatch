@@ -2,11 +2,11 @@
 SeeAlso:
     ~/code/watch/watch/cli/prepare_teamfeats.py
 """
-import kwimage
-import kwarray
+# import kwimage
+# import kwarray
 import torch
 import ubelt as ub
-import os
+# import os
 # local imports
 from .pretext_model import pretext
 from .data.datasets import gridded_dataset
@@ -16,7 +16,7 @@ from .segmentation_model import segmentation_model as seg_model
 from watch.utils import util_kwimage  # NOQA
 
 from watch.tasks.fusion.predict import CocoStitchingManager
-from watch.tasks.fusion.predict import quantize_float01
+# from watch.tasks.fusion.predict import quantize_float01
 
 import scriptconfig as scfg
 
@@ -39,6 +39,10 @@ class InvariantPredictConfig(scfg.DataConfig):
             '''
             number of background data writing workers
             '''))
+
+    window_space_scale = scfg.Value('10GSD', help='The window GSD to build the grid at')
+    input_space_scale = scfg.Value('10GSD', help='The input GSD to sample the grid at')
+
     sensor = scfg.Value(['S2', 'L8'], nargs='+')
     bands = scfg.Value(['shared'], type=str, help=ub.paragraph(
             '''
@@ -216,7 +220,7 @@ class Predictor(object):
         self.output_dset.fpath = args.output_kwcoco  # Change output file path and bundle path
         self.output_dset.reroot(absolute=False)  # Reroot in the new bundle path
         self.finalized_gids = set()
-        self.stitcher_dict = {}
+        # self.stitcher_dict = {}
 
         self.save_channels = f'invariants:{self.num_out_channels}'
         self.output_kwcoco_path = ub.Path(args.output_kwcoco)
@@ -229,6 +233,15 @@ class Predictor(object):
             'blocksize': 128,
         }
 
+        self.stitch_manager = CocoStitchingManager(
+            result_dataset=self.output_dset,
+            short_code='pred_invariants',
+            chan_code=self.save_channels,
+            stiching_space='video',
+            prob_compress=self.imwrite_kw['compress'],
+            quantize=True,
+        )
+
         from watch.utils import process_context
         import sys
         self.proc_context = process_context.ProcessContext(
@@ -239,56 +252,56 @@ class Predictor(object):
             track_emissions=args.track_emissions,
         )
 
-    def _build_img_fpath(self, gid):
-        save_path = self.output_feat_dpath / f'invariants_{gid}.tif'
-        return save_path
+    # def _build_img_fpath(self, gid):
+    #     save_path = self.output_feat_dpath / f'invariants_{gid}.tif'
+    #     return save_path
 
-    def finalize_image(self, gid):
-        self.finalized_gids.add(gid)
-        stitcher = self.stitcher_dict[gid]
+    # def finalize_image(self, gid):
+    #     self.finalized_gids.add(gid)
+    #     stitcher = self.stitcher_dict[gid]
 
-        import warnings
-        with warnings.catch_warnings():
-            warnings.filterwarnings('ignore', category=RuntimeWarning)
-            recon = stitcher.finalize()
+    #     import warnings
+    #     with warnings.catch_warnings():
+    #         warnings.filterwarnings('ignore', category=RuntimeWarning)
+    #         recon = stitcher.finalize()
 
-        self.stitcher_dict.pop(gid)
+    #     self.stitcher_dict.pop(gid)
 
-        quant_recon, quantization = quantize_float01(recon)
+    #     quant_recon, quantization = quantize_float01(recon)
 
-        save_path = self._build_img_fpath(gid)
-        kwimage.imwrite(save_path, quant_recon, space=None,
-                        nodata=quantization['nodata'], **self.imwrite_kw)
+    #     save_path = self._build_img_fpath(gid)
+    #     kwimage.imwrite(save_path, quant_recon, space=None,
+    #                     nodata=quantization['nodata'], **self.imwrite_kw)
 
-        aux_height, aux_width = recon.shape[0:2]
-        img = self.output_dset.index.imgs[gid]
-        warp_aux_to_img = kwimage.Affine.scale(
-            (img['width'] / aux_width,
-             img['height'] / aux_height))
+    #     aux_height, aux_width = recon.shape[0:2]
+    #     img = self.output_dset.index.imgs[gid]
+    #     warp_aux_to_img = kwimage.Affine.scale(
+    #         (img['width'] / aux_width,
+    #          img['height'] / aux_height))
 
-        aux = {
-            'file_name': os.fspath(save_path),
-            'height': aux_height,
-            'width': aux_width,
-            'channels': self.save_channels,
-            'warp_aux_to_img': warp_aux_to_img.concise(),
-            'quantization': quantization,
-        }
-        if 'auxiliary' not in img:
-            img['auxiliary'] = []
-        auxiliary = img['auxiliary']
-        auxiliary.append(aux)
+    #     aux = {
+    #         'file_name': os.fspath(save_path),
+    #         'height': aux_height,
+    #         'width': aux_width,
+    #         'channels': self.save_channels,
+    #         'warp_aux_to_img': warp_aux_to_img.concise(),
+    #         'quantization': quantization,
+    #     }
+    #     if 'auxiliary' not in img:
+    #         img['auxiliary'] = []
+    #     auxiliary = img['auxiliary']
+    #     auxiliary.append(aux)
 
-    def ensure_stitcher(self, gid):
-        """
-        Create a stitcher for an image if it doesnt exist
-        """
-        if gid not in self.stitcher_dict:
-            img = self.dataset.coco_dset.index.imgs[gid]
-            space_dims = (img['height'], img['width'])
-            self.stitcher_dict[gid] = kwarray.Stitcher(
-                space_dims + (self.num_out_channels,), device='numpy')
-        return self.stitcher_dict[gid]
+    # def ensure_stitcher(self, gid):
+    #     """
+    #     Create a stitcher for an image if it doesnt exist
+    #     """
+    #     if gid not in self.stitcher_dict:
+    #         img = self.dataset.coco_dset.index.imgs[gid]
+    #         space_dims = (img['height'], img['width'])
+    #         self.stitcher_dict[gid] = kwarray.Stitcher(
+    #             space_dims + (self.num_out_channels,), device='numpy')
+    #     return self.stitcher_dict[gid]
 
     def forward(self):
         device = self.device
@@ -301,7 +314,8 @@ class Predictor(object):
         # Start background processes
         # Build a task queue for background write results workers
         from watch.utils import util_parallel
-        writer = util_parallel.BlockingJobQueue(max_workers=self.write_workers)
+        writer_queue = util_parallel.BlockingJobQueue(max_workers=self.write_workers)
+        self.stitch_manager.writer_queue = writer_queue
 
         self.proc_context.start()
 
@@ -387,12 +401,12 @@ class Predictor(object):
                 save_feat2 = torch.cat(save_feat2, dim=-1)
                 save_feat2 = save_feat2.numpy()
 
-                tr = self.dataset.patches[idx]
+                target = self.dataset.patches[idx]
 
                 # These dataloader has told us that these iamges are now
                 # complete, and thus can be finalized free any memory used by
                 # its stitcher
-                new_complete_gids = tr.get('new_complete_gids', [])
+                new_complete_gids = target.get('new_complete_gids', [])
                 for gid in new_complete_gids:
                     assert gid not in seen_images
                     seen_images.add(gid)
@@ -402,28 +416,46 @@ class Predictor(object):
                     #     video_id = img['video_id']
                     #     prog.ensure_newline()
                     #     print(f'finalize {video_id=}, {gid=}, {frame_index=}')
-                    writer.submit(self.finalize_image, gid)
+                    # writer_queue.submit(self.stitch_manager.finalize, gid)
+                    self.stitch_manager.submit_finalize_image(gid)
 
-                gid1, gid2 = tr['gids']
-                slice_ = tr['space_slice']
-                stitcher1 = self.ensure_stitcher(gid1)
-                stitcher2 = self.ensure_stitcher(gid2)
-                CocoStitchingManager._stitcher_center_weighted_add(
-                    stitcher1, slice_, save_feat)
-                CocoStitchingManager._stitcher_center_weighted_add(
-                    stitcher2, slice_, save_feat2)
+                gid1, gid2 = target['gids']
+                # slice_ = target['space_slice']
+                # stitcher1 = self.ensure_stitcher(gid1)
+                # stitcher2 = self.ensure_stitcher(gid2)
+                # CocoStitchingManager._stitcher_center_weighted_add(
+                #     stitcher1, slice_, save_feat)
+                # CocoStitchingManager._stitcher_center_weighted_add(
+                #     stitcher2, slice_, save_feat2)
+
+                sample_outspace_ltrb = util_kwimage.Box.coerce(batch['sample_outspace_ltrb'].numpy(), format='ltrb')
+                full_stitch_outspace_box = util_kwimage.Box.coerce(batch['full_stitch_outspace_ltrb'].numpy(), format='ltrb')
+                scale_outspace_from_vid = batch['scale_outspace_from_vid'].numpy()[0]
+                outspace_slice = sample_outspace_ltrb.to_slice()
+                outspace_dsize = full_stitch_outspace_box.dsize
+
+                self.stitch_manager.accumulate_image(
+                    gid1, outspace_slice, save_feat,
+                    dsize=outspace_dsize,
+                    scale=scale_outspace_from_vid)
+
+                self.stitch_manager.accumulate_image(
+                    gid2, outspace_slice, save_feat2,
+                    dsize=outspace_dsize,
+                    scale=scale_outspace_from_vid)
 
             print('Finalize already compelted jobs')
-            writer.wait_until_finished(desc='Finalize submitted jobs')
+            writer_queue.wait_until_finished(desc='Finalize submitted jobs')
 
             # Finalize everything else that hasn't completed
-            for gid in ub.ProgIter(list(self.stitcher_dict.keys()), desc='submit loose write jobs'):
+            for gid in ub.ProgIter(list(self.stitch_manager.image_stitchers.keys()), desc='submit loose write jobs'):
                 if gid not in seen_images:
                     seen_images.add(gid)
-                    writer.submit(self.finalize_image, gid)
+                    self.stitch_manager.submit_finalize_image(gid)
+                    # writer_queue.submit(self.stitch_manager.finalize, gid)
 
             print('Finalize loose jobs')
-            writer.wait_until_finished()
+            writer_queue.wait_until_finished()
 
         print('Finish process context')
         self.proc_context.add_device_info(device)
@@ -489,7 +521,7 @@ if __name__ == '__main__':
             --pretext_package_path "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_03_21/pretext_model/pretext_package.pt" \
             --pca_projection_path  "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_03_21/pretext_model/pretext_pca_104.pt" \
             --do_pca 0 \
-            --patch_overlap=0.3 \
+            --patch_overlap=0.0 \
             --num_workers="2" \
             --write_workers 0 \
             --tasks before_after pretext
@@ -499,20 +531,22 @@ if __name__ == '__main__':
         kwcoco subset --src=data.kwcoco.json --dst=NZ_R001.kwcoco.json --select_videos='.name == "NZ_R001"'
 
         python -m watch.tasks.invariants.predict \
-            --input_kwcoco "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/NZ_R001.kwcoco.json" \
-            --output_kwcoco "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/NZ_R001_invariants.kwcoco.json" \
+            --input_kwcoco "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/KR_R001.kwcoco.json" \
+            --output_kwcoco "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/KR_R001_invariants.kwcoco.json" \
             --pretext_package_path "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_03_21/pretext_model/pretext_package.pt" \
             --pca_projection_path  "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_03_21/pretext_model/pretext_pca_104.pt" \
+            --input_space_scale=30GSD \
+            --window_space_scale=30GSD \
+            --patch_size=256 \
             --do_pca 0 \
             --patch_overlap=0.0 \
             --num_workers="2" \
             --write_workers 2 \
-            --sensor=L8 \
             --tasks before_after pretext
 
-        python -m watch visualize NZ_R001_invariants.kwcoco.json \
-            --channels "invariants.5:8,invariants.8:11,invariants.11:14" --stack=only --fast --animate=True \
-            --select_images '.sensor_coarse == "L8"' --draw_anns=False
+        python -m watch visualize KR_R001_invariants.kwcoco.json \
+            --channels "invariants.5:8,invariants.8:11,invariants.14:17" --stack=only --workers=avail --animate=True \
+            --draw_anns=False
 
 
     """

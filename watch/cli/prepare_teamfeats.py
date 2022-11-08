@@ -80,7 +80,7 @@ Ignore:
         --with_depth=0 \
         --do_splits=0 \
         --skip_existing=0 \
-        --gres=0,1 --workers=2 --backend=tmux --run=0
+        --gres=0,1 --workers=2 --backend=tmux --run=1
 
     ls combo_*_I.kwcoco*
 
@@ -412,6 +412,9 @@ def _populate_teamfeat_queue(queue, base_fpath, expt_dvc_dpath, aligned_bundle_d
                 --output_kwcoco "{task['output_fpath']}" \
                 --pretext_package_path "{model_fpaths['uky_pretext']}" \
                 --pca_projection_path  "{model_fpaths['uky_pca']}" \
+                --input_space_scale=30GSD \
+                --window_space_scale=30GSD \
+                --patch_size=256 \
                 --do_pca {config['invariant_pca']} \
                 --patch_overlap=0.3 \
                 --num_workers="{data_workers}" \

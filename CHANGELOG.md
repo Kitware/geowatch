@@ -6,15 +6,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.3.7 - Target 2022-11-xx
 
-
 ### Fixed
-
 * The `coco_align_geotiffs` will now skip images if it contains no requested bands.
 
 
 ### Changed
 * Update requirements to support Python 3.11
 * Improved the reported information in `smartwatch stats` (i.e. `watch.cli.watch_coco_stats`)
+* The invariants and fusion module now reuse the same stitching manager code.
+* The invariants can now use dynamic fixed GSDs.
 
 
 ## Version 0.3.6 - Finalized 2022-11-01

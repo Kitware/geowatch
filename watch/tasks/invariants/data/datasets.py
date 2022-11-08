@@ -65,10 +65,10 @@ class GriddedDataset(torch.utils.data.Dataset):
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
         >>> self = GriddedDataset(
         >>>     coco_dset,
-        >>>     window_space_scale='30GSD',
-        >>>     input_space_scale='30GSD',
+        >>>     window_space_scale='33GSD',
+        >>>     input_space_scale='33GSD',
         >>>     output_space_scale='input',
-        >>>     patch_size=128,
+        >>>     patch_size=64,
         >>>     include_debug_info=True,
         >>> )
         >>> dsize = (224, 224)
@@ -340,14 +340,28 @@ class GriddedDataset(torch.utils.data.Dataset):
         item['time_sort_label'] = float(normalized_date[0] < normalized_date[1])
         item['img1_id'] = gids[0]
 
+        vidspace_box = util_kwimage.Box.from_slice(target['space_slice'])
+
         if self.include_debug_info:
             item['sampled_input_gsd'] = target['_input_gsd']
             item['native_video_gsd'] = target['_native_video_gsd']
             item['date_list'] = date_list
             item['sensor_list'] = images.lookup('sensor_coarse', 'unknown')
             item['bands'] = self.bands
-            item['vidspace_box'] = util_kwimage.Box.from_slice(target['space_slice']).toformat('xywh')
-            item['scale_sample_from_vid'] = target['scale']
+            item['vidspace_xywh'] = torch.from_numpy(vidspace_box.toformat('xywh').data.astype(np.int32))
+
+        outspace_box = vidspace_box.scale(target['scale']).quantize().astype(np.int32)
+
+        im1_id = gids[0]
+        img_obj1 : dict = self.coco_dset.index.imgs[im1_id]
+        video_obj = self.coco_dset.index.videos[img_obj1['video_id']]
+        # The size of the canvas we will stitch into in video space and output space
+        full_stitch_vidspace_box = util_kwimage.Box.coerce([0, 0, video_obj['width'], video_obj['height']], format='xywh')
+        full_stitch_outspace_box = full_stitch_vidspace_box.scale(target['scale']).quantize().astype(np.int32)
+
+        item['full_stitch_outspace_ltrb'] = torch.from_numpy(full_stitch_outspace_box.data)
+        item['sample_outspace_ltrb'] = torch.from_numpy(outspace_box.data)
+        item['scale_outspace_from_vid'] = target['scale']
 
         # img1_info = self.coco_dset.index.imgs[gids[0]]
         # item['img1_info'] = img1_info

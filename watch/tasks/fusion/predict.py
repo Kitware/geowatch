@@ -342,7 +342,6 @@ def resolve_datamodule(config, method, datamodule_defaults):
                         sensorchan = f'{sensor}:{code}'
                         model_sensorchan_stem_parts.append(sensorchan)
 
-            import xdev)
             hack_model_sensorchan_spec = kwcoco.SensorChanSpec.coerce(','.join(model_sensorchan_stem_parts))
             # hack_model_spec = kwcoco.ChannelSpec.coerce(','.join(unique_channel_streams))
             if datamodule_sensorchan_spec is not None:
@@ -592,12 +591,14 @@ def predict(cmdline=False, **kwargs):
 
     method = method.to(device)
 
+    # Resolve what tasks are requested by looking at what heads are available.
+    global_head_weights = getattr(method, 'global_head_weights', {})
     if config['with_change'] == 'auto':
-        config['with_change'] = getattr(method, 'global_change_weight', 1.0)
+        config['with_change'] = getattr(method, 'global_change_weight', 1.0) or global_head_weights.get('change', 1)
     if config['with_class'] == 'auto':
-        config['with_class'] = getattr(method, 'global_class_weight', 1.0)
+        config['with_class'] = getattr(method, 'global_class_weight', 1.0) or global_head_weights.get('class', 1)
     if config['with_saliency'] == 'auto':
-        config['with_saliency'] = getattr(method, 'global_saliency_weight', 0.0)
+        config['with_saliency'] = getattr(method, 'global_saliency_weight', 0.0) or global_head_weights.get('saliency', 1)
 
     # Start background procs before we make threads
     batch_iter = iter(test_dataloader)
@@ -1274,7 +1275,9 @@ class CocoStitchingManager(object):
             bundle_dpath = self.result_dataset.bundle_dpath
             new_fname = img.get('name', str(img['id'])) + f'_{self.suffix_code}.tif'  # FIXME
             new_fpath = join(self.prob_dpath, new_fname)
-            assert final_probs.shape[2] == (self.chan_code.count('|') + 1)
+
+            # assert final_probs.shape[2] == (self.chan_code.count('|') + 1)
+
             vid_from_asset = kwimage.Affine.coerce(scale=scale_asset_from_vidspace).inv()
             img_from_asset = img_from_vid @ vid_from_asset
             aux = {

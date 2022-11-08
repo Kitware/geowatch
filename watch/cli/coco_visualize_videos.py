@@ -219,6 +219,10 @@ def main(cmdline=True, **kwargs):
 
     if config['fast']:
         config['workers'] = 'avail'
+        config['animate'] = True
+        config['stack'] = 'only'
+        if config['channels'] is None:
+            channels = config['channels'] = 'auto'
 
     if config['max_workers'] is not None:
         ub.schedule_deprecation(
