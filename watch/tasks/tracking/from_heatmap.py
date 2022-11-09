@@ -130,12 +130,13 @@ class TimePolygonFilter(CocoDsetFilter):
         if isinstance(observations, gpd.GeoDataFrame):  # new behavior
             def _edit(grp):
                 magic_thresh = 0.5
-                start_ix = np.searchsorted(grp[('fg', self.threshold)],
-                                           magic_thresh)
-                end_ix = -np.searchsorted(grp[('fg', self.threshold)][::-1],
-                                          magic_thresh)
-                # TODO is this ok when empty?
-                return grp.iloc[start_ix:end_ix]
+                (ok_ixs,) = (grp[('fg', self.threshold)] > magic_thresh).values.nonzero()
+                if len(ok_ixs) == 0:
+                    start_ix, end_ix = len(grp), len(grp)
+                else:
+                    start_ix, end_ix = ok_ixs[[0, -1]]
+                # print(grp.name, start_ix, end_ix+1)
+                return grp.iloc[start_ix:end_ix+1]
             return observations.groupby('track_idx', group_keys=False).apply(_edit)
         else:
             observations = list(observations)
@@ -143,9 +144,11 @@ class TimePolygonFilter(CocoDsetFilter):
             gids_polys = [(o.gid, o.poly) for o in observations]
             start_idx = self.get_poly_time_ind(gids_polys)
             if start_idx is None:
+                print(-1)
                 return []
             rev_end_idx = self.get_poly_time_ind(reversed(gids_polys))
             end_idx = len_obs - rev_end_idx
+            # print(start_idx, end_idx)
             return observations[start_idx:end_idx]
 
     def on_augmented_polys(self, aug_polys):
@@ -160,19 +163,18 @@ class ResponsePolygonFilter:
 
     def __init__(self, tracks: Iterable[Track], key, threshold=0.001):
 
-        dsets = {track.dset for track in tracks}
-        assert len(dsets) == 1, 'Tracks refer to different CocoDatasets!'
-        dset = dsets.pop()
-
-        self.dset = dset
-        self.key = key
         self.threshold = threshold
 
         if isinstance(tracks, gpd.GeoDataFrame):  # new behavior
-            gids = tracks['gid'].unique().values
+            gids = tracks['gid'].unique()
             mean_response = tracks[('fg', None)].mean()
 
         else:
+            self.key = key
+            dsets = {track.dset for track in tracks}
+            assert len(dsets) == 1, 'Tracks refer to different CocoDatasets!'
+            dset = dsets.pop()
+            self.dset = dset
             gids = set()
             all_responses = kwarray.RunningStats()
             for track in tracks:  # could disambiguate these for better stats
@@ -200,7 +202,8 @@ class ResponsePolygonFilter:
             def _filter(grp):
                 this_response = grp[grp['gid'].isin(self.gids)][('fg', None)].mean()
                 return this_response / self.mean_response > threshold
-            return aug_polys.groupby('track_idx', group_keys=False).filter(_filter)
+            # HACK
+            yield aug_polys.groupby('track_idx', group_keys=False).filter(_filter)
         else:
             for aug, poly in aug_polys:
                 # TODO nanmean
@@ -283,17 +286,24 @@ def add_tracks_to_dset(sub_dset,
     new_trackids = kwcoco_extensions.TrackidGenerator(sub_dset)
 
     all_new_anns = []
-    for track in tracks:
-        if not trackid_is_default(track.track_id):
-            track_id = track.track_id
+    def _add(obs, tid):
+        if not trackid_is_default(tid):
+            track_id = tid
             new_trackids.exclude_trackids([track_id])
         else:
             track_id = next(new_trackids)
 
-        for obs in track.observations:
-            new_ann = make_new_annotation(obs.gid, obs.poly, obs.score,
-                                          track_id)
+        for o in obs:
+            new_ann = make_new_annotation(*o, track_id)
             all_new_anns.append(new_ann)
+
+    if isinstance(tracks, gpd.GeoDataFrame):
+        for tid, grp in tracks.groupby('track_idx'):
+            _add(zip(grp['gid'], grp['poly'], grp[('fg', None)]), tid)
+    else:
+        for track in tracks:
+            _add([(o.gid, o.poly, o.score) for o in track.observations], track.trackid)
+
 
     # TODO: Faster to add annotations in bulk, but we need to construct the
     # "ids" first
@@ -324,7 +334,7 @@ def time_aggregated_polys(sub_dset,
                           # min_area_sqkm=0.018,  # 80px@15GSD
                           # min_area_sqkm=0.008,  # 80px@10GSD
                           max_area_sqkm=None,
-                          # max_area_sqkm=0.5,  # ~1/4 of KR_R002 vid area
+                          # max_area_sqkm=2.25,  # ~1.5x upper tail of truth
                           max_area_behavior='drop',
                           thresh_hysteresis=None):
     '''
@@ -445,7 +455,7 @@ def time_aggregated_polys(sub_dset,
     # now we start needing scores, so bulk-compute them
     # import xdev; xdev.embed()
 
-    if 1:
+    if 0:
         tracks = []
         heatmaps = build_heatmaps(sub_dset, list(sub_dset.imgs.keys()), {'fg': key})['fg']
         for gids, poly in gids_polys:
@@ -458,8 +468,12 @@ def time_aggregated_polys(sub_dset,
         gids, polys = zip(*gids_polys)
         polys = [p.to_shapely() for p in polys]
         _TRACKS = gpd.GeoDataFrame(dict(gid=gids, poly=polys), geometry='poly')
-        _TRACKS['track_idx'] = range(len(_TRACKS))
+        # _TRACKS['track_idx'] = range(len(_TRACKS))
         _TRACKS = _TRACKS.explode('gid')
+        sorted_gids = sub_dset.images(vidid=video['id']).gids
+        dct = dict(zip(sorted_gids, range(len(sorted_gids))))
+        assert _TRACKS['gid'].map(dct).groupby(lambda x: x).is_monotonic_increasing.all()
+        _TRACKS = _TRACKS.reset_index().rename(columns={'index': 'track_idx'})
 
         def _len(_TRACKS):
             return _TRACKS['track_idx'].nunique()
@@ -474,6 +488,7 @@ def time_aggregated_polys(sub_dset,
             thrs.add(time_thresh * thresh)
 
         def compute_scores(grp, thrs=[], ks=dict(fg=key, bg=bg_key)):
+            # TODO handle keys as channelcodes
             gid = grp['gid'].iloc[0]
             for k in set().union(itertools.chain.from_iterable(ks.values())):
                 heatmap = build_heatmap(sub_dset, gid, k, missing='fill')
@@ -491,40 +506,52 @@ def time_aggregated_polys(sub_dset,
         # TODO speedup
         # https://stackoverflow.com/questions/63254419/pandas-groupby-apply-using-numba
         # https://pandas.pydata.org/docs/user_guide/enhancingperf.html
+        # https://github.com/nalepae/pandarallel
+        # https://github.com/geopandas/dask-geopandas
         _TRACKS = _TRACKS.groupby('gid', group_keys=False).apply(
             compute_scores, thrs=thrs)
 
     # response_thresh = 0.9
     if response_thresh:
 
-        # n_orig = _len(_TRACKS)
-        # rsp_filter = ResponsePolygonFilter(
-            # _TRACKS, key, response_thresh)
-        # _TRACKS = rsp_filter.on_augmented_polys(_TRACKS)
-        # print('after filtering based on per-polygon response: '
-              # f'{_len(_TRACKS)} / {n_orig}')
-        n_orig = len(gids_polys)
+        n_orig = _len(_TRACKS)
         rsp_filter = ResponsePolygonFilter(
-            [t for t, _ in tracks_polys], key, response_thresh)
-        gids_polys = list(rsp_filter.on_augmented_polys(gids_polys))
+            _TRACKS, key, response_thresh)
+        # mixing yield and return makes the fn always yield
+        _TRACKS = next(rsp_filter.on_augmented_polys(_TRACKS))
         print('after filtering based on per-polygon response: '
-              f'{len(gids_polys)} / {n_orig}')
+              f'{_len(_TRACKS)} / {n_orig}')
+        # n_orig = len(gids_polys)
+        # rsp_filter = ResponsePolygonFilter(
+            # [t for t, _ in tracks_polys], key, response_thresh)
+        # gids_polys = list(rsp_filter.on_augmented_polys(gids_polys))
+        # print('after filtering based on per-polygon response: '
+              # f'{len(gids_polys)} / {n_orig}')
 
     # TimePolygonFilter edits tracks instead of removing them
-    tracks = [t for t, _ in tracks_polys]
-    if time_thresh:  # as a fraction of thresh
-        # time_filter = TimePolygonFilter(sub_dset, tuple(key), time_thresh * thresh)
-        # _TRACKS = time_filter.on_observations(_TRACKS)
-        time_filter = TimePolygonFilter(sub_dset, tuple(key), time_thresh * thresh)
-        _filtered = []
-        for _, t in enumerate(tracks):
-            _t = time_filter(t)
-            _filtered.append(_t)
-        # _filtered = list(map(time_filter, tracks))
-        tracks = [t for t in _filtered if len(list(t.observations)) > 0]
+    # tracks = [t for t, _ in tracks_polys]
 
+    # old = _TRACKS.copy()
+    # old['poly'] = old['poly'].map(kwimage.Polygon.from_shapely)
+    # # change score for time filtering
+    # tracks = [Track.from_polys(g['poly'], sub_dset, vidid=video['id'], scores=g[('fg', time_thresh * thresh)], track_id=tid)
+              # for tid, g in old.groupby('track_idx')]
+
+    if time_thresh:  # as a fraction of thresh
+        time_filter = TimePolygonFilter(sub_dset, tuple(key), time_thresh * thresh)
+        _TRACKS = time_filter.on_observations(_TRACKS)
+
+        # time_filter = TimePolygonFilter(sub_dset, tuple(key), time_thresh * thresh)
+        # _filtered = []
+        # for _, t in enumerate(tracks):
+            # _t = time_filter(t)  # this updates in place
+            # _filtered.append(_t)
+        # # _filtered = list(map(time_filter, tracks))
+        # tracks = [t for t in _filtered if len(list(t.observations)) > 0]
+
+    _TRACKS['poly'] = _TRACKS['poly'].map(kwimage.Polygon.from_shapely)
+    tracks = _TRACKS
     # # TODO doesn't work with site boundaries
-    # _TRACKS['poly'] = _TRACKS['poly'].map(kwimage.Polygon.from_shapely)
     # tracks = [Track.from_polys(g['poly'], sub_dset, vidid=video['id'], scores=g[('fg', None)])
               # for _, g in _TRACKS.groupby('track_idx')]
 
@@ -685,7 +712,11 @@ def _gids_polys(sub_dset,
               len(boundary_tracks))
     else:
         boundary_tracks = [None]
-        gids = list(sub_dset.imgs.keys())
+        # TODO WARNING this is wrong!!! need to make sure this is never used.
+        # The gids are lexically sorted, not sorted by order in video!
+        # gids = list(sub_dset.imgs.keys())
+        vidid = list(sub_dset.index.vidid_to_gids.keys())[0]
+        gids = sub_dset.images(vidid=vidid).gids
 
     _heatmaps = build_heatmaps(
         sub_dset,
@@ -753,7 +784,7 @@ class TimeAggregatedBAS(NewTrackFunction):
     thresh_hysteresis: Optional[float] = None
     moving_window_size: Optional[int] = None
     min_area_sqkm: Optional[float] = 0.072
-    max_area_sqkm: Optional[float] = 0.5
+    max_area_sqkm: Optional[float] = 2.25
     max_area_behavior: str = 'drop'
     response_thresh: Optional[float] = None
 
