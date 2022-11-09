@@ -1530,7 +1530,7 @@ class Box(ub.NiceRepr):
                     self = Boxes(_arr_data, format=format)
                 else:
                     raise NotImplementedError
-            return self
+            return cls(self)
 
     @property
     def dsize(self):

@@ -855,7 +855,7 @@ python -m watch.tasks.fusion.fit \
 
 
 # Fit 
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
 PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
@@ -906,7 +906,7 @@ python -m watch.tasks.fusion.fit \
     --input_space_scale="30GSD" \
     --window_space_scale="30GSD" \
     --output_space_scale="30GSD" \
-    --chip_dims=128,128 \
+    --chip_dims=192,192 \
     --time_steps=8 \
     --batch_size=8 \
     --change_head_hidden=4 \
@@ -917,11 +917,14 @@ python -m watch.tasks.fusion.fit \
     --learning_rate=3e-4 \
     --max_epoch_length=16384 \
     --resample_invalid_frames=0 \
-    --limit_val_batches=0 \
     --use_cloudmask=0 \
     --max_epochs=640 \
     --patience=340 \
     --decouple_resolution=0 \
-    --draw_interval=1year \
-    --num_draw=0 \
-    --init=/home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_BGR_10GSD_V015/lightning_logs/version_0/checkpoints/epoch=43-step=2772.ckpt 
+    --draw_interval=10minutes \
+    --num_draw=2 \
+    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_invariants_30GSD_V016/lightning_logs/version_2/checkpoints/epoch=1-step=1024-v2.ckpt
+
+#--init=/home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_BGR_10GSD_V015/lightning_logs/version_0/checkpoints/epoch=43-step=2772.ckpt 
+#--init=/home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_BGR_10GSD_V015/lightning_logs/version_0/checkpoints/epoch=43-step=2772.ckpt 
+#ls /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_invariants_30GSD_V016/lightning_logs/version_2/checkpoints/1024-v1.ckpt

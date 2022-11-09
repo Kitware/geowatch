@@ -552,6 +552,17 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         # assume collation is disabled
         batch_items = batch
 
+        DEBUG_INCOMING_DATA = 1
+        if DEBUG_INCOMING_DATA:
+            stats = {}
+            stats['batch_size'] = len(batch_items)
+            stats['num_None_batch_items'] = 0
+            for item_idx, item in enumerate(batch_items):
+                if item is None:
+                    stats['num_None_batch_items'] += 1
+
+        KNOWN_HEADS = ['change_probs', 'class_probs', 'saliency_probs']
+
         canvas_list = []
         for item_idx, item in zip(range(max_items), batch_items):
             # HACK: I'm not sure how general accepting outputs is
@@ -563,11 +574,14 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             item_output = {}
             if outputs is not None:
                 item_output = ub.AutoDict()
-                for head_key in ['change_probs', 'class_probs', 'saliency_probs']:
+                for head_key in KNOWN_HEADS:
                     if head_key in outputs:
-                        item_output[head_key] = [f.data.cpu().numpy() for f in outputs[head_key][item_idx]]
+                        item_output[head_key] = []
+                        for f in outputs[head_key][item_idx]:
+                            item_output[head_key].append(f.data.cpu().numpy())
 
             part = dataset.draw_item(item, item_output=item_output, overlay_on_image=overlay_on_image, **kwargs)
+
             canvas_list.append(part)
         canvas = kwimage.stack_images_grid(
             canvas_list, axis=1, overlap=-12, bg_value=[64, 60, 60])

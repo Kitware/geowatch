@@ -643,6 +643,13 @@ class BatchVisualizationBuilder:
                 'type': 'data',
             })
 
+        if 0:
+            for m in frame_metas:
+                print(m['frame_idx'])
+
+            for k, v in item_output.items():
+                print([z.shape for z in v])
+
         key = 'saliency_probs'
         if item_output and key in item_output and builder.requested_tasks['saliency']:
             x = item_output[key][frame_idx]

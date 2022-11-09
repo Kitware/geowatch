@@ -30,13 +30,35 @@ def _iter_deps(depends):
 class Step:
     """
     Represents a single pipeline step
+
+    Example:
+        from watch.mlops.pipeline import Pipeline
+        pipeline = Pipeline()
+        pipeline.submit(
+            name='foo',
+            command='read in, write out',
+            in_paths=['in'],
+            out_paths=['out']
+        )
+
+
     """
     def __init__(step, name, command, in_paths, out_paths, resources=None,
                  depends=None, enabled=True, stage=None):
+        """
+        Args:
+
+        """
         if resources is None:
             resources = {}
         step.name = name
         step._command = command
+
+        if isinstance(in_paths, list):
+            in_paths = dict(enumerate(in_paths))
+        if isinstance(out_paths, list):
+            out_paths = dict(enumerate(out_paths))
+
         step.in_paths = ub.udict(in_paths)
         step.out_paths = ub.udict(out_paths)
         step.resources = ub.udict(resources)

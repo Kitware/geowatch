@@ -70,7 +70,8 @@ Ignore:
     # Drop 4
     DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
     BUNDLE_DPATH=$DATA_DVC_DPATH/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
-    KWCOCO_FPATH_PAT=$BUNDLE_DPATH/*_R*0*.kwcoco.json
+    KWCOCO_FPATH_PAT=$BUNDLE_DPATH/[KLNPUBAC]*_[RC]*0[1234].kwcoco.json
+    ls $KWCOCO_FPATH_PAT
     python -m watch.cli.prepare_teamfeats \
         --base_fpath="$KWCOCO_FPATH_PAT" \
         --expt_dpath="$EXPT_DVC_DPATH" \
@@ -80,16 +81,18 @@ Ignore:
         --with_depth=0 \
         --do_splits=0 \
         --skip_existing=0 \
-        --gres=0,1 --workers=2 --backend=tmux --run=1
+        --gres=0,1 --workers=2 --backend=tmux --run=0
 
     ls combo_*_I.kwcoco*
 
-    kwcoco union --src combo_AE_R001_I.kwcoco.json  combo_BR_R005_I.kwcoco.json combo_NZ_R001_I.kwcoco.json  combo_US_R006_I.kwcoco.json combo_BH_R001_I.kwcoco.json  combo_CH_R001_I.kwcoco.json combo_PE_R001_I.kwcoco.json  combo_BR_R001_I.kwcoco.json combo_US_R001_I.kwcoco.json combo_BR_R002_I.kwcoco.json combo_US_R004_I.kwcoco.json combo_BR_R004_I.kwcoco.json combo_LT_R001_I.kwcoco.json  combo_US_R005_I.kwcoco.json --dst combo_train_I.kwcoco.json
+    kwcoco union --src  \
+        combo_AE_C001_I.kwcoco.json  combo_BR_R001_I.kwcoco.json  combo_NZ_R001_I.kwcoco.json  combo_US_C002_I.kwcoco.json combo_AE_C002_I.kwcoco.json  combo_BR_R002_I.kwcoco.json  combo_US_R001_I.kwcoco.json combo_AE_C003_I.kwcoco.json  combo_BR_R004_I.kwcoco.json  combo_PE_C001_I.kwcoco.json  combo_US_R004_I.kwcoco.json combo_AE_R001_I.kwcoco.json  combo_CH_R001_I.kwcoco.json  combo_PE_R001_I.kwcoco.json combo_BH_R001_I.kwcoco.json  combo_CN_C001_I.kwcoco.json  combo_LT_R001_I.kwcoco.json  combo_US_C001_I.kwcoco.json \
+    --dst combo_train_I.kwcoco.json
 
 
     kwcoco union --src combo_KR_R001_I.kwcoco.json combo_KR_R002_I.kwcoco.json combo_US_R007_I.kwcoco.json --dst combo_vali_I.kwcoco.json
 
-    smartwatch stats combo_train_I.kwcoco.json
+    smartwatch stats combo_vali_I.kwcoco.json combo_train_I.kwcoco.json
 
 
 
@@ -213,12 +216,8 @@ def prep_feats(cmdline=True, **kwargs):
     else:
         size = len(gres)
 
-    queue = cmd_queue.Queue.create(
-        name='watch-teamfeat',
-        backend=config['backend'],
-        # Tmux only
-        size=size, gres=gres,
-    )
+    from watch.mlops.pipeline import Pipeline
+    pipeline = Pipeline()
 
     base_fpath_pat = config['base_fpath']
     for base_fpath in util_path.coerce_patterned_paths(base_fpath_pat):
@@ -228,11 +227,21 @@ def prep_feats(cmdline=True, **kwargs):
                     'Specified kwcoco file: {base_fpath!r=} does not exist and check=True')
         aligned_bundle_dpath = base_fpath.parent
 
-        if config['virtualenv_cmd']:
-            queue.add_header_command(config['virtualenv_cmd'])
-
-        _populate_teamfeat_queue(queue, base_fpath, expt_dvc_dpath,
+        _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath,
                                  aligned_bundle_dpath, config)
+
+    queue = cmd_queue.Queue.create(
+        name='watch-teamfeat',
+        backend=config['backend'],
+        # Tmux only
+        size=size, gres=gres,
+    )
+
+    if config['virtualenv_cmd']:
+        queue.add_header_command(config['virtualenv_cmd'])
+
+    pipeline._populate_explicit_dependency_queue(queue)
+    # pipeline._populate_implicit_dependency_queue(queue, skip_existing=config['skip_existing'])
 
     if config['verbose']:
         queue.print_graph()
@@ -252,7 +261,8 @@ def prep_feats(cmdline=True, **kwargs):
     return queue
 
 
-def _populate_teamfeat_queue(queue, base_fpath, expt_dvc_dpath, aligned_bundle_dpath, config):
+def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundle_dpath, config):
+
     from watch.utils.lightning_ext import util_globals
     data_workers = util_globals.coerce_num_workers(config['data_workers'])
 
@@ -283,6 +293,8 @@ def _populate_teamfeat_queue(queue, base_fpath, expt_dvc_dpath, aligned_bundle_d
 
     subset_name = base_fpath.name.split('.')[0]
 
+    name_suffix = '_' + ub.hash_data(base_fpath)[0:8]
+
     outputs = {
         'rutgers_materials': aligned_bundle_dpath / (subset_name + '_rutgers_material_seg_v3.kwcoco.json'),
         'dzyne_landcover': aligned_bundle_dpath / (subset_name + '_dzyne_landcover.kwcoco.json'),
@@ -302,8 +314,8 @@ def _populate_teamfeat_queue(queue, base_fpath, expt_dvc_dpath, aligned_bundle_d
         'with_invariants': 'I',
     }
 
-    tasks = []
     # tmux queue is still limited. The order of submission matters.
+    task_jobs = []
 
     combo_code_parts = []
     key = 'with_landcover'
@@ -323,7 +335,15 @@ def _populate_teamfeat_queue(queue, base_fpath, expt_dvc_dpath, aligned_bundle_d
                 --device=0
             ''')
         combo_code_parts.append(codes[key])
-        tasks.append(task)
+        job = pipeline.submit(
+            name='landcover' + name_suffix,
+            command=task['command'],
+            in_paths=[base_fpath],
+            out_paths={
+                'output_fpath': task['output_fpath']
+            },
+        )
+        task_jobs.append(job)
 
     key = 'with_depth'
     if config[key]:
@@ -362,7 +382,15 @@ def _populate_teamfeat_queue(queue, base_fpath, expt_dvc_dpath, aligned_bundle_d
                 --skip_existing=1
             ''')
         combo_code_parts.append(codes[key])
-        tasks.append(task)
+        job = pipeline.submit(
+            name='depth' + name_suffix,
+            command=task['command'],
+            in_paths=[base_fpath],
+            out_paths={
+                'output_fpath': task['output_fpath']
+            },
+        )
+        task_jobs.append(job)
 
     # Run materials while landcover is running
     key = 'with_materials'
@@ -383,7 +411,15 @@ def _populate_teamfeat_queue(queue, base_fpath, expt_dvc_dpath, aligned_bundle_d
                 --compress=DEFLATE --blocksize=128 --skip_existing=True
             ''')
         combo_code_parts.append(codes[key])
-        tasks.append(task)
+        job = pipeline.submit(
+            name='materials' + name_suffix,
+            command=task['command'],
+            in_paths=[base_fpath],
+            out_paths={
+                'output_fpath': task['output_fpath']
+            },
+        )
+        task_jobs.append(job)
 
     # When landcover finishes run invariants
     # Note: Does not run on a 1080, needs 18GB in this form
@@ -422,22 +458,32 @@ def _populate_teamfeat_queue(queue, base_fpath, expt_dvc_dpath, aligned_bundle_d
                 --tasks before_after pretext
             ''')
         combo_code_parts.append(codes[key])
-        tasks.append(task)
+        job = pipeline.submit(
+            name='invariants' + name_suffix,
+            command=task['command'],
+            in_paths=[base_fpath],
+            out_paths={
+                'output_fpath': task['output_fpath']
+            },
+        )
+        task_jobs.append(job)
 
-    task_jobs = []
-    for task in tasks:
-        if config['skip_existing']:
-            if not task['output_fpath'].exists():
-                # command = f"[[ -f '{task['output_fpath']}' ]] || " + task['command']
-                command = f"test -f '{task['output_fpath']}' || " + task['command']
-                job = queue.submit(command, gpus=task['gpus'])
-                task_jobs.append(job)
-        else:
-            job = queue.submit(task['command'])
-            task_jobs.append(job)
+    # for task in tasks:
+    #     # if config['skip_existing']:
+    #     #     if not task['output_fpath'].exists():
+    #     #         # command = f"[[ -f '{task['output_fpath']}' ]] || " + task['command']
+    #     #         command = f"test -f '{task['output_fpath']}' || " + task['command']
+    #     #         job = queue.submit(command, gpus=task['gpus'])
+    #     #         task_jobs.append(job)
+    #     # else:
+    #     #     job = queue.submit(task['command'])
+    #     #     task_jobs.append(job)
 
     # Finalize features by combining them all into combo.kwcoco.json
-    tocombine = [str(base_fpath)] + [str(task['output_fpath']) for task in tasks]
+    # tocombine = [str(base_fpath)] + [str(task['output_fpath']) for task in tasks]
+
+    feature_paths = [str(job.out_paths['output_fpath']) for job in task_jobs]
+    tocombine = [str(base_fpath)] + feature_paths
     combo_code = ''.join(sorted(combo_code_parts))
 
     base_combo_fpath = aligned_bundle_dpath / f'combo_{subset_name}_{combo_code}.kwcoco.json'
@@ -453,18 +499,27 @@ def _populate_teamfeat_queue(queue, base_fpath, expt_dvc_dpath, aligned_bundle_d
         f'    --dst {base_combo_fpath}'
     ])
     print('task_jobs = {!r}'.format(task_jobs))
-    queue.submit(command, depends=task_jobs)
+    pipeline.submit(
+        name='combine_features' + name_suffix,
+        command=command,
+        in_paths=feature_paths,
+        out_paths={
+            'combo_fpath': base_combo_fpath,
+        },
+        depends=task_jobs
+    )
 
     # TODO: union?
 
     if config['do_splits']:
-        # Also call the prepare-splits script
-        from watch.cli import prepare_splits
-        base_fpath = str(base_combo_fpath)
-        queue.sync()
-        prepare_splits._submit_split_jobs(base_fpath, queue)
+        raise NotImplementedError
+        # # Also call the prepare-splits script
+        # from watch.cli import prepare_splits
+        # base_fpath = str(base_combo_fpath)
+        # queue.sync()
+        # prepare_splits._submit_split_jobs(base_fpath, queue)
 
-    return queue
+    # return queue
 
 
 main = prep_feats

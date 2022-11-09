@@ -1823,10 +1823,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 color='red')
             return bad_canvas
 
+        default_combinable_channels = self.default_combinable_channels
+
         from watch.tasks.fusion.datamodules.batch_visualization import BatchVisualizationBuilder
         builder = BatchVisualizationBuilder(
             item=item, item_output=item_output,
-            default_combinable_channels=self.default_combinable_channels,
+            default_combinable_channels=default_combinable_channels,
             norm_over_time=norm_over_time, max_dim=max_dim,
             max_channels=max_channels, overlay_on_image=overlay_on_image,
             draw_weights=draw_weights, combinable_extra=combinable_extra,

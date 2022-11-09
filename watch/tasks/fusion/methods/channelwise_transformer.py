@@ -982,13 +982,18 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='special:vidshapes-watch',
             >>>     num_workers='avail / 2', chip_size=96, time_steps=4,
-            >>>     normalize_inputs=8, neg_to_pos_ratio=0, batch_size=1,
+            >>>     normalize_inputs=8, neg_to_pos_ratio=0, batch_size=5,
             >>>     channels='auto',
             >>> )
             >>> datamodule.setup('fit')
             >>> train_dset = datamodule.torch_datasets['train']
             >>> loader = datamodule.train_dataloader()
             >>> batch = next(iter(loader))
+            >>> # Test with "failed samples"
+            >>> #batch[0] = None
+            >>> #batch[2] = None
+            >>> #batch[3] = None
+            >>> #batch[4] = None
             >>> if 1:
             >>>   print(nh.data.collate._debug_inbatch_shapes(batch))
             >>> # Choose subclass to test this with (does not cover all cases)
