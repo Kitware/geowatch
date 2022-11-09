@@ -1500,7 +1500,7 @@ class Box(ub.NiceRepr):
             return data
         else:
             import numbers
-            import kwimage
+            # import kwimage
             from kwarray.arrayapi import torch
             if isinstance(data, list):
                 if data and isinstance(data[0], numbers.Number):
@@ -1508,7 +1508,29 @@ class Box(ub.NiceRepr):
             if isinstance(data, np.ndarray) or torch and torch.is_tensor(data):
                 if len(data.shape) == 1:
                     data = data[None, :]
-            return cls(kwimage.Boxes.coerce(data, **kwargs))
+            # return cls(kwimage.Boxes.coerce(data, **kwargs))
+            # inline new coerce code until new version lands
+            from kwimage import Boxes
+            from shapely.geometry import Polygon
+            if isinstance(data, Boxes):
+                self = data
+            elif isinstance(data, Polygon):
+                self = Boxes.from_shapely(data)
+            else:
+                _arr_data = None
+                if isinstance(data, np.ndarray):
+                    _arr_data = np.array(data)
+                elif isinstance(data, list):
+                    _arr_data = np.array(data)
+
+                if _arr_data is not None:
+                    format = kwargs.get('format', None)
+                    if format is None:
+                        raise Exception('ambiguous, specify Box format')
+                    self = Boxes(_arr_data, format=format)
+                else:
+                    raise NotImplementedError
+            return self
 
     @property
     def dsize(self):

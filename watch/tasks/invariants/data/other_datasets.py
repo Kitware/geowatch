@@ -12,6 +12,7 @@ import kwcoco
 import kwimage
 import random
 from pandas import read_csv
+from watch.tasks.invariants.utils.read_sentinel_images import read_sentinel_img_trio
 
 
 class kwcoco_dataset(Dataset):
