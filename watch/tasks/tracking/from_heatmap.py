@@ -428,10 +428,9 @@ def time_aggregated_polys(
             # build_heatmaps(skipped='interpolate'). It will be changed with
             # nodata handling anyway, and that's easier to implement here.
             heatmap = build_heatmap(sub_dset, gid, k, missing='fill')
-            for thr in thrs:
-                s = grp['poly'].map(
-                    lambda p: score_poly(p, heatmap, threshold=thr))
-                grp[(k, thr)] = s
+            scores = grp['poly'].map(
+                lambda p: score_poly(p, heatmap, threshold=thrs))
+            grp[[(k, thr) for thr in thrs]] = scores.to_list()
         for thr in thrs:
             for k, kk in ks.items():
                 if kk:
@@ -445,6 +444,7 @@ def time_aggregated_polys(
         thrs.add(None)
     if time_thresh:
         thrs.add(time_thresh * thresh)
+    thrs = list(thrs)
 
     # TODO speedup, 73% of runtime
     # https://stackoverflow.com/questions/63254419/pandas-groupby-apply-using-numba
@@ -470,9 +470,7 @@ def time_aggregated_polys(
 
     # try to ignore this error
     _TRACKS['poly'] = _TRACKS['poly'].map(kwimage.Polygon.from_shapely)
-    tracks = _TRACKS
-
-    return tracks
+    return _TRACKS
 
 
 #
