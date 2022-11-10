@@ -113,7 +113,7 @@ Ignore:
         --with_depth=0 \
         --do_splits=0 \
         --skip_existing=0 \
-        --gres=1, --workers=1 --backend=serial --run=0
+        --gres=1, --workers=1 --backend=serial --run=1
 
 
 """

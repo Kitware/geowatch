@@ -476,7 +476,7 @@ def predict(cmdline=False, **kwargs):
     print('kwargs = {}'.format(ub.repr2(kwargs, nl=1)))
     print('config = {}'.format(ub.repr2(config, nl=2)))
 
-    package_fpath = ub.Path(config['package_fpath'])
+    package_fpath = ub.Path(config['package_fpath']).expand()
 
     try:
         # Ideally we have a package, everything is defined there

@@ -68,6 +68,8 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
     from watch.tasks.fusion import utils
     import netharn as nh
     import xdev
+    from watch.tasks.fusion import monkey  # NOQA
+    monkey.torchmetrics_compat_hack()
 
     package_fpath = ub.Path(package_fpath)
 

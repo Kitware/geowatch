@@ -945,5 +945,11 @@ rsync -avp "$PHASE2_DATA_DPATH_SSD"/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/*.kwc
 rsync -avprPR toothbrush:data/dvc-repos/smart_data_dvc/.dvc/./cache "$HOME"/data/dvc-repos/smart_data_dvc/.dvc/
 
 
-rsync -avprPR "$PHASE2_DATA_DPATH_HDD"/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/./_assets "$PHASE2_DATA_DPATH_SSD"/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/
-rsync -avp "$PHASE2_DATA_DPATH_HDD"/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/*.kwcoco.json "$PHASE2_DATA_DPATH_SSD"/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/
+rsync -avprPR "$PHASE2_DATA_DPATH_HDD"/Drop4-BAS/./_assets "$PHASE2_DATA_DPATH_SSD"/Drop4-BAS
+rsync -avp "$PHASE2_DATA_DPATH_HDD"/Drop4-BAS/*.kwcoco.json "$PHASE2_DATA_DPATH_SSD"/Drop4-BAS
+
+
+PHASE2_DATA_DPATH_HDD=$(smartwatch_dvc --tags="phase2_data" --hardware="hdd")
+PHASE2_DATA_DPATH_SSD=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
+rsync -avprPR "$PHASE2_DATA_DPATH_HDD"/Drop4-SC/./_assets "$PHASE2_DATA_DPATH_SSD"/Drop4-SC
+rsync -avp "$PHASE2_DATA_DPATH_HDD"/Drop4-SC/*.kwcoco.json "$PHASE2_DATA_DPATH_SSD"/Drop4-SC

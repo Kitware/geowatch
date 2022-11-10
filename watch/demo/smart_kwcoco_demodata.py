@@ -561,4 +561,9 @@ def coerce_kwcoco(data='watch-msi', **kwargs):
         kwargs.pop('sqlview', None)
         return demo_kwcoco_multisensor(**kwargs)
     else:
+        import os
+        if isinstance(data, (str, os.PathLike)):
+            expanded = ub.Path(data).expand()
+            if str(expanded) != str(data):
+                data = expanded
         return kwcoco.CocoDataset.coerce(data, **kwargs)
