@@ -126,8 +126,9 @@ python -m watch.mlops.schedule_evaluation \
     --params="
         matrix:
             trk.pxl.model:
-                - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Multi_Native/package_epoch10_step200000.pt
+                # - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Multi_Native/package_epoch10_step200000.pt
                 - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_invariants_30GSD_V016/lightning_logs/version_4/checkpoints/Drop4_BAS_invariants_30GSD_V016_epoch=10-step=5632.pt
+                # - $DVC_EXPT_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
             trk.pxl.data.test_dataset:
                 - $DATA_DVC_DPATH/$DATASET_CODE/combo_BR_R001_I.kwcoco.json
                 - $DATA_DVC_DPATH/$DATASET_CODE/combo_KR_R001_I.kwcoco.json
@@ -183,6 +184,84 @@ python -m watch.mlops.schedule_evaluation \
     --run=0
 
 
+
+
+# HOROLOGIC
+DATASET_CODE=Drop4-BAS
+DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+# TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data.kwcoco.json
+TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/BR_R001.kwcoco.json
+python -m watch.mlops.schedule_evaluation \
+    --params="
+        matrix:
+            trk.pxl.model:
+                - $DVC_EXPT_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+            trk.pxl.data.test_dataset:
+                - $DATA_DVC_DPATH/$DATASET_CODE/BR_R002.kwcoco.json
+                - $DATA_DVC_DPATH/$DATASET_CODE/KR_R001.kwcoco.json
+                - $DATA_DVC_DPATH/$DATASET_CODE/KR_R002.kwcoco.json
+                - $DATA_DVC_DPATH/$DATASET_CODE/US_R007.kwcoco.json
+            trk.pxl.data.window_scale_space:
+                - "auto"
+            trk.pxl.data.input_scale_space:
+                # - "auto"
+                - 10GSD
+            trk.pxl.data.time_sampling:
+                - "auto"
+            trk.poly.thresh:
+                - 0.1
+            crop.src:
+                - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/online_v1/kwcoco_for_sc_fielded.json
+            crop.regions:
+                - trk.poly.output
+            act.pxl.data.test_dataset:
+                - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/crop/online_v1_kwcoco_for_sc_fielded/trk_poly_id_0408400f/crop_f64d5b9a/crop_id_59ed6e1b/crop.kwcoco.json
+            act.pxl.data.input_scale_space:
+                - 3GSD
+            act.pxl.data.time_steps:
+                - 3
+            act.pxl.data.chip_overlap:
+                - 0.35
+            act.poly.thresh:
+                - 0.01
+            act.poly.use_viterbi:
+                - 0
+            act.pxl.model:
+                - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
+        include:
+            - act.pxl.data.chip_dims: 256,256
+              act.pxl.data.window_scale_space: 3GSD
+              act.pxl.data.input_scale_space: 3GSD
+              act.pxl.data.output_scale_space: 3GSD
+            - trk.pxl.data.window_scale_space: 10GSD
+              trk.pxl.data.input_scale_space: 10GSD
+              trk.pxl.data.output_scale_space: 10GSD
+            - trk.pxl.data.window_scale_space: 15GSD
+              trk.pxl.data.input_scale_space: 15GSD
+              trk.pxl.data.output_scale_space: 15GSD
+            - trk.pxl.data.window_scale_space: auto
+              trk.pxl.data.input_scale_space: auto
+              trk.pxl.data.output_scale_space: auto
+    " \
+    --enable_pred_trk_pxl=1 \
+    --enable_pred_trk_poly=1 \
+    --enable_eval_trk_pxl=1 \
+    --enable_eval_trk_poly=1 \
+    --enable_crop=0 \
+    --enable_pred_act_pxl=0 \
+    --enable_pred_act_poly=0 \
+    --enable_eval_act_pxl=0 \
+    --enable_eval_act_poly=0 \
+    --enable_viz_pred_trk_poly=0 \
+    --enable_viz_pred_act_poly=0 \
+    --enable_links=1 \
+    --devices="1," --queue_size=2 \
+    --queue_name='nov-eval' \
+    --backend=tmux --skip_existing=1 \
+    --run=1
+
+
 python -m watch.cli.run_metrics_framework --merge=True --name Drop4_BAS_invariants_30GSD_V016_epoch=10-step=5632.pt-trk_pxl_ca8e6033-trk_poly_9f08fb8c \
     --true_site_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/annotations/site_models \
     --true_region_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/annotations/region_models \
@@ -196,23 +275,65 @@ python -m watch.cli.run_metrics_framework --merge=True --name Drop4_BAS_invarian
 
 """
 
+# ------
 
-class FIFO:
-    def __init__(self):
-        self.queue = []
+"""
+SC
 
-    def push(self, value):
-        self.queue.append(value)
+python -m watch.mlops.schedule_evaluation \
+    --params="
+        matrix:
+            trk.pxl.model:
+                - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Multi_Native/package_epoch10_step200000.pt
+            trk.pxl.data.test_dataset:
+                - $DATA_DVC_DPATH/$DATASET_CODE/combo_US_R007_I.kwcoco.json
+            trk.pxl.data.window_scale_space:
+                - "auto"
+            trk.pxl.data.time_sampling:
+                - "auto"
+            trk.pxl.data.input_scale_space:
+                - "auto"
+            trk.poly.thresh:
+                - 0.1
+            crop.src:
+                - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/online_v1/kwcoco_for_sc_fielded.json
+            crop.regions:
+                - trk.poly.output
+            act.pxl.data.test_dataset:
+                - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/crop/online_v1_kwcoco_for_sc_fielded/trk_poly_id_0408400f/crop_f64d5b9a/crop_id_59ed6e1b/crop.kwcoco.json
+            act.pxl.data.input_scale_space:
+                - 3GSD
+            act.pxl.data.time_steps:
+                - 3
+            act.pxl.data.chip_overlap:
+                - 0.35
+            act.poly.thresh:
+                - 0.01
+            act.poly.use_viterbi:
+                - 0
+            act.pxl.model:
+                - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
+        include:
+            - act.pxl.data.chip_dims: 256,256
+              act.pxl.data.window_scale_space: 3GSD
+              act.pxl.data.input_scale_space: 3GSD
+              act.pxl.data.output_scale_space: 3GSD
+    " \
+    --enable_pred_trk_pxl=0 \
+    --enable_pred_trk_poly=0 \
+    --enable_eval_trk_pxl=0 \
+    --enable_eval_trk_poly=0 \
+    --enable_crop=0 \
+    --enable_pred_act_pxl=1 \
+    --enable_pred_act_poly=1 \
+    --enable_eval_act_pxl=1 \
+    --enable_eval_act_poly=1 \
+    --enable_viz_pred_trk_poly=0 \
+    --enable_viz_pred_act_poly=0 \
+    --enable_links=1 \
+    --devices="1," --queue_size=2 \
+    --queue_name='nov-eval' \
+    --backend=tmux --skip_existing=1 \
+    --run=0
 
-    def pop(self):
-        val = self.queue[-1]
-        self.queue = self.queue[:-1]
-        return val
-
-
-x = FIFO()
-x.push(3)
-x.push(2)
-x.push(1)
-x.pop()
-
+"""

@@ -164,7 +164,9 @@ class GriddedDataset(torch.utils.data.Dataset):
             workers=0,
             window_space_scale=window_space_scale,
         )
-        vidid_to_new_samples = fixup_samples(coco_dset, sample_grid)
+        import xdev
+        with xdev.embed_on_exception_context:
+            vidid_to_new_samples = fixup_samples(coco_dset, sample_grid)
 
         # Sort the patches into an order where we can
         self.patches = []
@@ -682,47 +684,67 @@ def fixup_samples(coco_dset, sample_grid):
     """
     import copy
     # all_samples = sample_grid['targets']
+
     all_samples = copy.deepcopy(sample_grid['targets'])
+
     # import xdev
     # xdev.embed()
     for target in all_samples:
         target['vidid'] = target['video_id']  # hack
-        # The second gid is always the main gid in our case
-        target['main_gid'] = target['gids'][1]
-        target['frame_index'] = coco_dset.imgs[target['main_gid']]['frame_index']
-        target['main_idx'] = coco_dset.imgs[target['main_gid']]['frame_index']
-        target['frame_indexes'] = coco_dset.images(target['gids']).lookup('frame_index')
+        time_sampler = sample_grid['vidid_to_time_sampler'][target['video_id']]
+
+        gids = target['gids']
+        images = coco_dset.images(gids)
+        frame_indexes = images.lookup('frame_index')
+
+        # The second gid is always the main gid in our case.
+        # FIXME: is this true? Only do this in test mode?
+        main_gid = gids[1]
+        main_frame_index = frame_indexes[1]
+        time_sampler.gid_to_index = ub.udict(enumerate(time_sampler.video_gids)).invert()
+        main_time_sampler_index = time_sampler.gid_to_index[main_gid]
+
+        target['main_gid'] = main_gid
+        target['frame_index'] = main_frame_index
+        target['main_idx'] = main_time_sampler_index
+        target['frame_indexes'] = frame_indexes
 
     # Postprocess the grid we get out of the temporal sampler to make it a
     # little nicer for this problem.
     vidid_to_new_samples = {}
     vidid_to_samples = ub.group_items(all_samples, lambda x: x['vidid'])
     for vidid, vid_samples in vidid_to_samples.items():
+
         time_sampler = sample_grid['vidid_to_time_sampler'][vidid]
-        vid_images = coco_dset.images(video_id=vidid)
+
+        # Make everything valid for this hack
+        time_sampler.affinity = np.maximum(
+            time_sampler.affinity, np.finfo(np.float32).eps)
+
+        # Only use the image id we filtered the time sampler to.
+        vid_images = coco_dset.images(time_sampler.video_gids)
         frame_idxs = vid_images.lookup('frame_index')
         assert sorted(frame_idxs) == frame_idxs
-        frame_to_samples = ub.group_items(vid_samples, lambda x: x['frame_index'])
-        missing_frame_idxs = set(frame_idxs) - set(frame_to_samples)
+
+        idx_to_sample = ub.group_items(vid_samples, lambda x: x['main_idx'])
+        missing_frame_idxs = set(time_sampler.indexes) - set(idx_to_sample)
 
         # Get spatial information about the samples
         from collections import Counter
         spatial_slices = Counter()
 
         # frame_index_to_timepairs = ub.ddict(Counter)
-        for samples in frame_to_samples.values():
+        for samples in idx_to_sample.values():
             for target in samples:
                 target = target
                 box = HashableBox.from_slice(target['space_slice'])
                 box_tup = tuple([box.format] + box.data.tolist())
                 spatial_slices.update([box_tup])
 
-        # Make everything valid for this hack
-        time_sampler.affinity += np.finfo(np.float32).eps
         # Fill in the gaps the sampler missed
-        new_frame_to_samples = ub.ddict(list)
+        new_idx_to_samples = ub.ddict(list)
         for idx in missing_frame_idxs:
-            if idx == frame_idxs[0]:
+            if idx == time_sampler.indexes[0]:
                 continue
             # Mask out everything in the future. We must take something
             # from the past.
@@ -730,17 +752,18 @@ def fixup_samples(coco_dset, sample_grid):
             exclude_idxs = time_sampler.indexes[time_sampler.indexes > idx]
             sample_idxs = time_sampler.sample(idx, exclude=exclude_idxs)
 
-            frame_index = frame_idxs[idx]
             sample_gids = time_sampler.video_gids[sample_idxs]
             main_gid = sample_gids[1]
+            main_frame_index = coco_dset.index.imgs[main_gid]['frame_index']
+            main_time_sampler_index = time_sampler.gid_to_index[main_gid]
 
             partial_tr = ub.udict({
-                'main_idx':  int(frame_index),
+                'main_idx':  main_time_sampler_index,
                 'video_id': vidid,
                 'vidid': vidid,
                 'gids': list(map(int, sample_gids)),
                 'main_gid': int(main_gid),
-                'frame_index': int(frame_index),
+                'frame_index': int(main_frame_index),
                 'frame_indexes': list(map(int, ub.take(frame_idxs, sample_idxs))),
                 # 'space_slice': (slice(0, 256, None), slice(0, 256, None)),
                 'resampled': None,
@@ -753,17 +776,15 @@ def fixup_samples(coco_dset, sample_grid):
                 new_tr = partial_tr | {
                     'space_slice': space_slice,
                 }
-                if 1:
-                    new_frame_to_samples[frame_index].append(new_tr)
+                new_idx_to_samples[main_frame_index].append(new_tr)
 
-        # For each each main frame, choose only one other frame as it's
-        # pair.
-        for frame_index, samples in frame_to_samples.items():
+        # For each each main frame, choose only one other frame as it's pair.
+        for main_idx, samples in idx_to_sample.items():
             # TODO: spatial coverage
             chosen = ub.udict(ub.group_items(samples, lambda x: x['gids'][0])).peek_value()
-            new_frame_to_samples[frame_index] = chosen
+            new_idx_to_samples[main_idx] = chosen
 
-        vidid_to_new_samples[vidid] = list(ub.flatten(new_frame_to_samples.values()))
+        vidid_to_new_samples[vidid] = list(ub.flatten(new_idx_to_samples.values()))
     return vidid_to_new_samples
 
 

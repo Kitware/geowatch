@@ -588,11 +588,11 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                         item_output[head_key] = []
                         head_outputs = outputs[head_key]
                         head_item_output = head_outputs[item_idx]
-                        for frame_out in head_item_output:
-                            if frame_out is None:
-                                item_output[head_key].append(None)
-                            else:
+                        if head_item_output is not None:
+                            for frame_out in head_item_output:
                                 item_output[head_key].append(frame_out.data.cpu().numpy())
+                        else:
+                            item_output[head_key].append(None)
             else:
                 item_output = {}
 

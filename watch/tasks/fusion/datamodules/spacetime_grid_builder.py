@@ -245,7 +245,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         set_cover_algo,
         use_grid_positives,
         use_centered_positives,
-        'cache_v7',
+        'cache_v8',
     ]
     # Higher level cacher (not sure if adding this secondary level of caching
     # is faster or not).
@@ -391,6 +391,7 @@ def _sample_single_video_spacetime_targets(
         affinity_type=affinity_type, update_rule=update_rule,
         name=video_name, time_span=time_span)
     time_sampler.video_gids = np.array(video_gids)
+    time_sampler.gid_to_index = ub.udict(enumerate(time_sampler.video_gids)).invert()
     time_sampler.determenistic = True
 
     # Convert winspace to vidspace and use that for the rest of the function
@@ -422,7 +423,7 @@ def _sample_single_video_spacetime_targets(
         time_span, use_annot_info,
         use_grid_positives,
         use_centered_positives,
-        'cache_v5',
+        'cache_v8',
     ]
     cache_dpath = ub.Path.appdir('watch', 'grid_cache').ensuredir()
     cacher = ub.Cacher('sliding-window-cache', dpath=cache_dpath,
