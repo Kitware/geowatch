@@ -26,11 +26,23 @@ except Exception:
 
 def _norm(heatmaps, norm_ord):
     heatmaps = np.array(heatmaps)
-    probs = np.linalg.norm(heatmaps, norm_ord, axis=0)
-    if 0 < norm_ord < np.inf:
-        probs /= np.power(len(heatmaps), 1 / norm_ord)
+    if 0:
+        heatmaps = np.nan_to_num(heatmaps)
+        probs = np.linalg.norm(heatmaps, norm_ord, axis=0)
+        if 0 < norm_ord < np.inf:
+            probs /= np.power(len(heatmaps), 1. / norm_ord)
+    else:
+        # heatmaps = np.ma.array(heatmaps, mask=np.isnan(heatmaps))
+        if norm_ord == np.inf:
+            probs = np.nansum(heatmaps)
+        else:
+            probs = np.power(np.nansum(np.power(heatmaps, norm_ord), axis=0),
+                             1. / norm_ord)
+            if norm_ord > 0:
+                n_nonzero = np.count_nonzero(~np.isnan(heatmaps), axis=0)
+                n_nonzero[n_nonzero == 0] = 1
+                probs /= np.power(n_nonzero, 1. / norm_ord)
     return probs
-
 
 # give all these the same signature so they can be swapped out
 
@@ -645,8 +657,10 @@ def _gids_polys(
 
     _heatmaps = build_heatmaps(sub_dset,
                                gids, {'fg': key},
-                               skipped='interpolate')['fg']
+                               skipped='interpolate',
+                               _NANS=True)['fg']
 
+    # TODO parallelize
     for track in boundary_tracks:
 
         # TODO when bounds are time-varying, this lets individual frames

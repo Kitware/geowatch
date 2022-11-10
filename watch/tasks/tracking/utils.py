@@ -590,7 +590,8 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
                    keys: Union[List[str], Dict[str, List[str]]],
                    missing='fill',
                    skipped='interpolate',
-                   video_id=None) -> Dict[str, List[np.array]]:
+                   video_id=None,
+                   _NANS=False) -> Dict[str, List[np.array]]:
     '''
     Vectorized version of watch.tasks.tracking.utils.build_heatmap across gids.
 
@@ -671,9 +672,10 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
                                                   gid,
                                                   key,
                                                   space='video',
-                                                  return_chan_probs=True)
+                                                  return_chan_probs=True,
+                                                  _NANS=_NANS)
             # TODO make this more efficient using missing='skip'
-            if any(np.flatnonzero(img_probs)):  # 92% of runtime
+            if np.any(img_probs):
                 heatmaps_dct[group].append(img_probs)
             elif skipped == 'interpolate':
                 heatmaps_dct[group].append(prev_heatmap_dct[group])
@@ -704,7 +706,8 @@ def build_heatmap(dset,
                   key,
                   return_chan_probs=False,
                   space='video',
-                  missing='fill'):
+                  missing='fill',
+                  _NANS=False):
     """
     Find the total heatmap of key within gid
 
@@ -759,7 +762,8 @@ def build_heatmap(dset,
     # FIXME!
     # Curently hacking all nans to zero! Instead we should use the fact
     # That we don't have an observation in later stages!
-    key_img_probs = np.nan_to_num(key_img_probs)
+    if not _NANS:
+        key_img_probs = np.nan_to_num(key_img_probs)
 
     # Not sure about that sum axis=-1 here
     fg_img_probs = key_img_probs.sum(axis=-1)
