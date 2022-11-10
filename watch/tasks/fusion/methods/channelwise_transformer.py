@@ -990,10 +990,10 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> loader = datamodule.train_dataloader()
             >>> batch = next(iter(loader))
             >>> # Test with "failed samples"
-            >>> #batch[0] = None
-            >>> #batch[2] = None
-            >>> #batch[3] = None
-            >>> #batch[4] = None
+            >>> batch[0] = None
+            >>> batch[2] = None
+            >>> batch[3] = None
+            >>> batch[4] = None
             >>> if 1:
             >>>   print(nh.data.collate._debug_inbatch_shapes(batch))
             >>> # Choose subclass to test this with (does not cover all cases)
@@ -1035,19 +1035,22 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             # Skip
             if item is None:
                 skip_flags.append(True)
-                continue
-            skip_flags.append(False)
-            probs, item_loss_parts, item_truths = self.forward_item(item, with_loss=with_loss)
+                probs, item_loss_parts, item_truths = {}, {}, {}
+            else:
+                skip_flags.append(False)
+                probs, item_loss_parts, item_truths = self.forward_item(item, with_loss=with_loss)
+
             # with xdev.embed_on_exception_context:
             if with_loss:
                 item_losses.append(item_loss_parts)
                 if not self.hparams.decouple_resolution:
                     # TODO: fixme decouple_res
-                    for k, v in batch_head_truths.items():
-                        v.append(item_truths[k])
+                    for head_name, head_truths in batch_head_truths.items():
+                        head_truths.append(item_truths.get(head_name, None))
+
             # Append the item result to the batch outputs
-            for k, v in probs.items():
-                batch_head_probs[k].append(v)
+            for head_name, head_probs in batch_head_probs.items():
+                head_probs.append(probs.get(head_name, None))
 
         if all(skip_flags):
             return None
@@ -1060,30 +1063,40 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             outputs['saliency_probs'] = batch_head_probs['saliency']
 
         if with_loss:
+            valid_batch_head_probs = {
+                head_name: [p for p in head_values if p is not None]
+                for head_name, head_values in batch_head_probs.items()
+            }
+            valid_batch_head_truths = {
+                head_name: [p for p in head_values if p is not None]
+                for head_name, head_values in batch_head_truths.items()
+            }
+
             total_loss = sum(
-                val for parts in item_losses for val in parts.values())
+                val for parts in item_losses for val in parts.values()
+            )
 
             if not self.hparams.decouple_resolution:
                 # TODO: fixme decouple_res
 
                 to_compare = {}
                 # Flatten everything for pixelwise comparisons
-                if 'change' in batch_head_truths:
-                    _true = torch.cat([x.contiguous().view(-1) for x in batch_head_truths['change']], dim=0)
-                    _pred = torch.cat([x.contiguous().view(-1) for x in batch_head_probs['change']], dim=0)
+                if 'change' in valid_batch_head_truths:
+                    _true = torch.cat([x.contiguous().view(-1) for x in valid_batch_head_truths['change']], dim=0)
+                    _pred = torch.cat([x.contiguous().view(-1) for x in valid_batch_head_probs['change']], dim=0)
                     to_compare['change'] = (_true, _pred)
 
-                if 'class' in batch_head_truths:
+                if 'class' in valid_batch_head_truths:
                     c = self.num_classes
                     # Truth is index-based (todo: per class binary maps)
-                    _true = torch.cat([x.contiguous().view(-1) for x in batch_head_truths['class']], dim=0)
-                    _pred = torch.cat([x.contiguous().view(-1, c) for x in batch_head_probs['class']], dim=0)
+                    _true = torch.cat([x.contiguous().view(-1) for x in valid_batch_head_truths['class']], dim=0)
+                    _pred = torch.cat([x.contiguous().view(-1, c) for x in valid_batch_head_probs['class']], dim=0)
                     to_compare['class'] = (_true, _pred)
 
-                if 'saliency' in batch_head_truths:
+                if 'saliency' in valid_batch_head_truths:
                     c = self.saliency_num_classes
-                    _true = torch.cat([x.contiguous().view(-1) for x in batch_head_truths['saliency']], dim=0)
-                    _pred = torch.cat([x.contiguous().view(-1, c) for x in batch_head_probs['saliency']], dim=0)
+                    _true = torch.cat([x.contiguous().view(-1) for x in valid_batch_head_truths['saliency']], dim=0)
+                    _pred = torch.cat([x.contiguous().view(-1, c) for x in valid_batch_head_probs['saliency']], dim=0)
                     to_compare['saliency'] = (_true, _pred)
 
                 # compute metrics

@@ -95,6 +95,22 @@ Ignore:
     smartwatch stats combo_vali_I.kwcoco.json combo_train_I.kwcoco.json
 
 
+    # Drop 4 SC
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
+    BUNDLE_DPATH=$DATA_DVC_DPATH/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+    KWCOCO_FPATH_PAT=$BUNDLE_DPATH/[KLNPUBAC]*_[RC]*0[1234].kwcoco.json
+    ls $KWCOCO_FPATH_PAT
+    python -m watch.cli.prepare_teamfeats \
+        --base_fpath="$KWCOCO_FPATH_PAT" \
+        --expt_dpath="$EXPT_DVC_DPATH" \
+        --with_landcover=0 \
+        --with_materials=0 \
+        --with_invariants=1 \
+        --with_depth=0 \
+        --do_splits=0 \
+        --skip_existing=0 \
+        --gres=0,1 --workers=2 --backend=tmux --run=0
+
 
 """
 

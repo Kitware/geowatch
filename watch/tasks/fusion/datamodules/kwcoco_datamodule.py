@@ -522,20 +522,27 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             >>> loader = self.train_dataloader()
             >>> batch_iter = iter(loader)
             >>> batch = next(batch_iter)
-            >>> item = batch[0]
+            >>> batch[1] = None  # simulate a dropped batch item
+            >>> batch[0] = None  # simulate a dropped batch item
+            >>> #item = batch[0]
             >>> # Visualize
             >>> B = len(batch)
             >>> outputs = {'change_probs': [], 'class_probs': [], 'saliency_probs': []}
             >>> # Add dummy outputs
             >>> import torch
             >>> for item in batch:
-            >>>     [v.append([]) for v in outputs.values()]
-            >>>     for frame_idx, frame in enumerate(item['frames']):
-            >>>         H, W = frame['class_idxs'].shape
-            >>>         if frame_idx > 0:
-            >>>             outputs['change_probs'][-1].append(torch.rand(H, W))
-            >>>         outputs['class_probs'][-1].append(torch.rand(H, W, 10))
-            >>>         outputs['saliency_probs'][-1].append(torch.rand(H, W, 2))
+            >>>     if item is None:
+            >>>         [v.append([None]) for v in outputs.values()]
+            >>>     else:
+            >>>         [v.append([]) for v in outputs.values()]
+            >>>         for frame_idx, frame in enumerate(item['frames']):
+            >>>             H, W = frame['class_idxs'].shape
+            >>>             if frame_idx > 0:
+            >>>                 outputs['change_probs'][-1].append(torch.rand(H, W))
+            >>>             outputs['class_probs'][-1].append(torch.rand(H, W, 10))
+            >>>             outputs['saliency_probs'][-1].append(torch.rand(H, W, 2))
+            >>> from watch.utils import util_nesting
+            >>> print(ub.repr2(util_nesting.shape_summary(outputs), nl=1, sort=0))
             >>> stage = 'train'
             >>> canvas = self.draw_batch(batch, stage=stage, outputs=outputs, max_items=4)
             >>> # xdoctest: +REQUIRES(--show)
@@ -571,14 +578,23 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             # - [ ] binary probability of change
             # - [ ] fine-grained probability of change
             # - [ ] per-frame semenatic segmentation
-            item_output = {}
+            # - [ ] detections with box results!
+
             if outputs is not None:
+                # Extract outputs only for this specific batch item.
                 item_output = ub.AutoDict()
                 for head_key in KNOWN_HEADS:
                     if head_key in outputs:
                         item_output[head_key] = []
-                        for f in outputs[head_key][item_idx]:
-                            item_output[head_key].append(f.data.cpu().numpy())
+                        head_outputs = outputs[head_key]
+                        head_item_output = head_outputs[item_idx]
+                        for frame_out in head_item_output:
+                            if frame_out is None:
+                                item_output[head_key].append(None)
+                            else:
+                                item_output[head_key].append(frame_out.data.cpu().numpy())
+            else:
+                item_output = {}
 
             part = dataset.draw_item(item, item_output=item_output, overlay_on_image=overlay_on_image, **kwargs)
 
