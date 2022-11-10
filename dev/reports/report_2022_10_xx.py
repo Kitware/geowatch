@@ -363,4 +363,36 @@ python -m watch.tasks.fusion.predict \
 
 
 /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_sc_candidates/pred/act/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1/Drop4-SC_data_vali.kwcoco/act_pxl_d31324d9/_viz_act_pxl_d31324d9_pred.kwcoco_d4d18d08
+
+
+cat ~/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/pred/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_BR_R002.kwcoco/trk_pxl_cf3db277/trk_poly_9f08fb8c/site_tracks_manifest.json
+
+cat ~/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/pred/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_KR_R002.kwcoco/trk_pxl_cf3db277/trk_poly_9f08fb8c/site_tracks_manifest.json
+
+
+
+python -m watch.cli.run_tracker \
+    "$HOME/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/pred/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_BR_R002.kwcoco/trk_pxl_cf3db277/pred.kwcoco.json" \
+    --default_track_fn saliency_heatmaps \
+    --track_kwargs '{"thresh": 0.1, "moving_window_size": null, "polygon_fn": "heatmaps_to_polys"}' \
+    --clear_annots \
+    --out_sites_dir "$HOME/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/pred/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_BR_R002.kwcoco/trk_pxl_cf3db277/trk_poly_9f08fb8c/sites" \
+    --out_site_summaries_dir "$HOME/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/pred/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_BR_R002.kwcoco/trk_pxl_cf3db277/trk_poly_9f08fb8c/site-summaries" \
+    --out_sites_fpath "$HOME/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/pred/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_BR_R002.kwcoco/trk_pxl_cf3db277/trk_poly_9f08fb8c/site_tracks_manifest.json" \
+    --out_site_summaries_fpath "$HOME/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/pred/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_BR_R002.kwcoco/trk_pxl_cf3db277/trk_poly_9f08fb8c/site_summary_tracks_manifest.json" \
+    --out_kwcoco "$HOME/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/pred/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_BR_R002.kwcoco/trk_pxl_cf3db277/trk_poly_9f08fb8c/tracks.kwcoco.json"
+
+
+python -m watch.cli.run_metrics_framework \
+    --merge=True \
+    --name "Drop3_SpotCheck_V323_epoch=18-step=12976.pt-trk_pxl_cf3db277-trk_poly_9f08fb8c" \
+    --true_site_dpath "$HOME/remote/horologic/data/dvc-repos/smart_data_dvc/annotations/site_models" \
+    --true_region_dpath "$HOME/remote/horologic/data/dvc-repos/smart_data_dvc/annotations/region_models" \
+    --pred_sites "$HOME/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/pred/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_BR_R002.kwcoco/trk_pxl_cf3db277/trk_poly_9f08fb8c/site_tracks_manifest.json" \
+    --tmp_dir "$HOME/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/eval/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_BR_R002.kwcoco/trk_pxl_cf3db277/trk_poly_9f08fb8c/_tmp" \
+    --out_dir "$HOME/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/eval/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_BR_R002.kwcoco/trk_pxl_cf3db277/trk_poly_9f08fb8c" \
+    --merge_fpath "$HOME/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/eval/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_BR_R002.kwcoco/trk_pxl_cf3db277/trk_poly_9f08fb8c/merged/summary2.json"
+
+
+
 """
