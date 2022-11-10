@@ -1,6 +1,5 @@
 from watch.utils import kwcoco_extensions
 from watch.heuristics import SITE_SUMMARY_CNAME, CNAMES_DCT
-import kwarray
 import kwimage
 import kwcoco
 import numpy as np
@@ -10,10 +9,10 @@ from typing import Iterable, Tuple, Union, Optional, Literal
 from dataclasses import dataclass
 from shapely.ops import unary_union
 import geopandas as gpd
-from watch.tasks.tracking.utils import (
-    NewTrackFunction, mask_to_polygons, build_heatmap,
-    score_poly, Poly, _validate_keys, pop_tracks,
-    build_heatmaps, trackid_is_default)
+from watch.tasks.tracking.utils import (NewTrackFunction, mask_to_polygons,
+                                        build_heatmap, score_poly, Poly,
+                                        _validate_keys, pop_tracks,
+                                        build_heatmaps, trackid_is_default)
 
 try:
     from xdev import profile
@@ -95,7 +94,6 @@ AGG_FN_REGISTRY = {
     'probs': probs,
 }
 
-
 #
 # --- track/polygon filters ---
 #
@@ -110,15 +108,18 @@ class TimePolygonFilter:
         self.threshold = threshold
 
     def __call__(self, gdf):
+
         def _edit(grp):
             magic_thresh = 0.5
-            (ok_ixs,) = (grp[('fg', self.threshold)] > magic_thresh).values.nonzero()
+            (ok_ixs, ) = (grp[('fg', self.threshold)] >
+                          magic_thresh).values.nonzero()
             if len(ok_ixs) == 0:
                 start_ix, end_ix = len(grp), len(grp)
             else:
                 start_ix, end_ix = ok_ixs[[0, -1]]
             # print(grp.name, start_ix, end_ix+1)
-            return grp.iloc[start_ix:end_ix+1]
+            return grp.iloc[start_ix:end_ix + 1]
+
         return gdf.groupby('track_idx', group_keys=False).apply(_edit)
 
 
@@ -143,10 +144,13 @@ class ResponsePolygonFilter:
         if threshold is None:
             threshold = self.threshold
         if cross:
+
             def _filter(grp):
                 # TODO nanmean
-                this_response = grp[grp['gid'].isin(self.gids)][('fg', None)].mean()
+                this_response = grp[grp['gid'].isin(self.gids)][('fg',
+                                                                 None)].mean()
                 return this_response / self.mean_response > threshold
+
             return gdf.groupby('track_idx', group_keys=False).filter(_filter)
         else:
             cond = (gdf[('fg', None)] / self.mean_response > threshold)
@@ -159,17 +163,16 @@ class ResponsePolygonFilter:
 
 
 @profile
-def add_tracks_to_dset(sub_dset,
-                       tracks,
-                       thresh,
-                       key,
-                       bg_key=None):
+def add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
     key, bg_key = _validate_keys(key, bg_key)
 
     @ub.memoize
     def _heatmap(gid, key, space):
-        probs_tot, probs_dct = build_heatmap(
-            sub_dset, gid, key, return_chan_probs=True, space=space)
+        probs_tot, probs_dct = build_heatmap(sub_dset,
+                                             gid,
+                                             key,
+                                             return_chan_probs=True,
+                                             space=space)
         return probs_dct
 
     @ub.memoize
@@ -217,6 +220,7 @@ def add_tracks_to_dset(sub_dset,
     new_trackids = kwcoco_extensions.TrackidGenerator(sub_dset)
 
     all_new_anns = []
+
     def _add(obs, tid):
         if not trackid_is_default(tid):
             track_id = tid
@@ -234,8 +238,8 @@ def add_tracks_to_dset(sub_dset,
     else:
         # TODO Track only used for SC with bounds=polys, deprecate this
         for track in tracks:
-            _add([(o.gid, o.poly, o.score) for o in track.observations], track.trackid)
-
+            _add([(o.gid, o.poly, o.score) for o in track.observations],
+                 track.trackid)
 
     # TODO: Faster to add annotations in bulk, but we need to construct the
     # "ids" first
@@ -251,24 +255,25 @@ def add_tracks_to_dset(sub_dset,
 
 
 @profile
-def time_aggregated_polys(sub_dset,
-                          thresh,
-                          morph_kernel=3,
-                          key='salient',
-                          bg_key=None,
-                          time_thresh=1,
-                          response_thresh=None,
-                          use_boundaries=False,
-                          norm_ord=1,
-                          agg_fn='probs',
-                          moving_window_size=None,  # 150
-                          min_area_sqkm=0.072,  # 80px@30GSD
-                          # min_area_sqkm=0.018,  # 80px@15GSD
-                          # min_area_sqkm=0.008,  # 80px@10GSD
-                          max_area_sqkm=None,
-                          # max_area_sqkm=2.25,  # ~1.5x upper tail of truth
-                          max_area_behavior='drop',
-                          thresh_hysteresis=None):
+def time_aggregated_polys(
+        sub_dset,
+        thresh,
+        morph_kernel=3,
+        key='salient',
+        bg_key=None,
+        time_thresh=1,
+        response_thresh=None,
+        use_boundaries=False,
+        norm_ord=1,
+        agg_fn='probs',
+        moving_window_size=None,  # 150
+        min_area_sqkm=0.072,  # 80px@30GSD
+        # min_area_sqkm=0.018,  # 80px@15GSD
+        # min_area_sqkm=0.008,  # 80px@10GSD
+        max_area_sqkm=None,
+        # max_area_sqkm=2.25,  # ~1.5x upper tail of truth
+        max_area_behavior='drop',
+        thresh_hysteresis=None):
     '''
     Track function.
 
@@ -301,14 +306,18 @@ def time_aggregated_polys(sub_dset,
         >>> # test interpolation
         >>> from watch.tasks.tracking.from_heatmap import time_aggregated_polys
         >>> from watch.demo import demo_kwcoco_with_heatmaps
-        >>> sub_dset = demo_kwcoco_with_heatmaps(num_frames=5, image_size=(480, 640))
-        >>> orig_track = time_aggregated_polys(sub_dset, thresh=0.15)[0].observations
+        >>> sub_dset = demo_kwcoco_with_heatmaps(
+        >>>                 num_frames=5, image_size=(480, 640))
+        >>> orig_track = time_aggregated_polys(
+        >>>                 sub_dset, thresh=0.15, time_thresh=None)
         >>> skip_gids = [1,3]
         >>> for gid in skip_gids:
         >>>      # remove salient channel
         >>>      sub_dset.imgs[gid]['auxiliary'].pop()
-        >>> inter_track = time_aggregated_polys(sub_dset, thresh=0.15)[0].observations
-        >>> assert inter_track[0].score == 0, inter_track[1].score > 0
+        >>> inter_track = time_aggregated_polys(
+        >>>                 sub_dset, thresh=0.15, time_thresh=None)
+        >>> assert inter_track.iloc[0][('fg', None)] == 0
+        >>> assert inter_track.iloc[1][('fg', None)] > 0
     '''
     #
     # --- input validation ---
@@ -338,7 +347,7 @@ def time_aggregated_polys(sub_dset,
         n_missing = (n_total - n_have)
         print(f'warning: {n_missing} / {n_total} imgs in dset {sub_dset.tag} '
               f'with video {vidname} have no keys {key} or {bg_key}. '
-               'Interpolating...')
+              'Interpolating...')
 
     if norm_ord in {'inf', None}:
         norm_ord = np.inf
@@ -347,10 +356,16 @@ def time_aggregated_polys(sub_dset,
     # --- main logic ---
     #
 
-    gids_polys = _gids_polys(
-        sub_dset, key, agg_fn, thresh, morph_kernel, thresh_hysteresis,
-        norm_ord, moving_window_size, bounds=use_boundaries)
-    gids_polys = list(gids_polys)
+    gids_polys = _gids_polys(sub_dset,
+                             key,
+                             agg_fn,
+                             thresh,
+                             morph_kernel,
+                             thresh_hysteresis,
+                             norm_ord,
+                             moving_window_size,
+                             bounds=use_boundaries)
+    gids_polys = list(gids_polys)  # 26% of runtime
 
     print('time aggregation: number of polygons: ', len(gids_polys))
 
@@ -362,10 +377,10 @@ def time_aggregated_polys(sub_dset,
         default_gsd = 30
         video_gsd = default_gsd
         print(f'warning: video {video["name"]} in dset {sub_dset.tag} '
-              'has no listed GSD; assuming {default_gsd}')
+              f'has no listed GSD; assuming {default_gsd}')
 
     if max_area_sqkm:
-        max_area_px = max_area_sqkm * 1e6 / (video_gsd ** 2)
+        max_area_px = max_area_sqkm * 1e6 / (video_gsd**2)
         n_orig = len(gids_polys)
         if max_area_behavior == 'drop':
             gids_polys = [(t, p) for t, p in gids_polys
@@ -377,7 +392,7 @@ def time_aggregated_polys(sub_dset,
             raise NotImplementedError
 
     if min_area_sqkm:
-        min_area_px = min_area_sqkm * 1e6 / (video_gsd ** 2)
+        min_area_px = min_area_sqkm * 1e6 / (video_gsd**2)
         n_orig = len(gids_polys)
         gids_polys = [(t, p) for t, p in gids_polys
                       if p.to_shapely().area > min_area_px]
@@ -396,7 +411,8 @@ def time_aggregated_polys(sub_dset,
     # ensure index is sorted in video order
     sorted_gids = sub_dset.images(vidid=video['id']).gids
     dct = dict(zip(sorted_gids, range(len(sorted_gids))))
-    assert _TRACKS['gid'].map(dct).groupby(lambda x: x).is_monotonic_increasing.all()
+    assert _TRACKS['gid'].map(dct).groupby(
+        lambda x: x).is_monotonic_increasing.all()
 
     _TRACKS = _TRACKS.reset_index().rename(columns={'index': 'track_idx'})
 
@@ -408,6 +424,9 @@ def time_aggregated_polys(sub_dset,
         # port over better handling from utils.build_heatmaps
         gid = grp['gid'].iloc[0]
         for k in set().union(itertools.chain.from_iterable(ks.values())):
+            # TODO there is a regression here from not using
+            # build_heatmaps(skipped='interpolate'). It will be changed with
+            # nodata handling anyway, and that's easier to implement here.
             heatmap = build_heatmap(sub_dset, gid, k, missing='fill')
             for thr in thrs:
                 s = grp['poly'].map(
@@ -427,28 +446,27 @@ def time_aggregated_polys(sub_dset,
     if time_thresh:
         thrs.add(time_thresh * thresh)
 
-    # TODO speedup
+    # TODO speedup, 73% of runtime
     # https://stackoverflow.com/questions/63254419/pandas-groupby-apply-using-numba
     # https://pandas.pydata.org/docs/user_guide/enhancingperf.html
     # https://github.com/nalepae/pandarallel
     # https://github.com/geopandas/dask-geopandas
-    _TRACKS = _TRACKS.groupby('gid', group_keys=False).apply(
-        compute_scores, thrs=thrs)
+    _TRACKS = _TRACKS.groupby('gid', group_keys=False).apply(compute_scores,
+                                                             thrs=thrs)
 
     # response_thresh = 0.9
     if response_thresh:
 
         n_orig = _len(_TRACKS)
-        rsp_filter = ResponsePolygonFilter(
-            _TRACKS, key, response_thresh)
-        _TRACKS = rsp_filter.on_augmented_polys(_TRACKS)
+        rsp_filter = ResponsePolygonFilter(_TRACKS, key, response_thresh)
+        _TRACKS = rsp_filter(_TRACKS)
         print('after filtering based on per-polygon response: '
               f'{_len(_TRACKS)} / {n_orig}')
 
     # TimePolygonFilter edits tracks instead of removing them
     if time_thresh:  # as a fraction of thresh
-        time_filter = TimePolygonFilter(sub_dset, tuple(key), time_thresh * thresh)
-        _TRACKS = time_filter.on_observations(_TRACKS)
+        time_filter = TimePolygonFilter(time_thresh * thresh)
+        _TRACKS = time_filter(_TRACKS)  # 7% of runtime? could be next line
 
     # try to ignore this error
     _TRACKS['poly'] = _TRACKS['poly'].map(kwimage.Polygon.from_shapely)
@@ -460,6 +478,7 @@ def time_aggregated_polys(sub_dset,
 #
 # --- time_aggregated_polys utilities ---
 #
+
 
 def _merge_polys(p1, p2):
     '''
@@ -519,10 +538,12 @@ def _merge_polys(p1, p2):
                     # Can this ever happen? It seems to have occurred in a test
                     # run. Bowties can cause this.
                     # import warnings
-                    # warnings.warn('Found two intersecting polygons where the union was a multipolygon')
+                    # warnings.warn('Found two intersecting polygons where the
+                    # union was a multipolygon')
                     merged_polys.extend(list(combo.geoms))
                 else:
-                    raise AssertionError(f'Unexpected type {combo.type} from {_p1} and {_p2}')
+                    raise AssertionError(
+                        f'Unexpected type {combo.type} from {_p1} and {_p2}')
 
                 p1_seen.add(j)
                 p2_seen.add(i)
@@ -547,6 +568,7 @@ def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
     '''
     Use parameters: agg_fn, thresh, morph_kernel, thresh_hysteresis, norm_ord
     '''
+
     def convert_to_shapely(polys):
         return [p.to_shapely() for p in polys]
 
@@ -556,15 +578,20 @@ def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
     _agg_fn = AGG_FN_REGISTRY[agg_fn]
 
     def _process_1_step(heatmaps):
-        aggregated = _agg_fn(heatmaps, thresh=thresh, morph_kernel=morph_kernel,
+        aggregated = _agg_fn(heatmaps,
+                             thresh=thresh,
+                             morph_kernel=morph_kernel,
                              norm_ord=norm_ord)
 
-        polygons = list(mask_to_polygons(aggregated, thresh,
-                                         thresh_hysteresis=thresh_hysteresis,
-                                         bounds=bounds))
+        polygons = list(
+            mask_to_polygons(aggregated,
+                             thresh,
+                             thresh_hysteresis=thresh_hysteresis,
+                             bounds=bounds))
         return polygons
 
-    # calculate number of moving-window steps, based on window_size and number of heatmaps
+    # calculate number of moving-window steps, based on window_size and number
+    # of heatmaps
     if moving_window_size is not None:
         total_n = len(heatmaps)
         final_size = int(total_n // np.ceil((total_n / moving_window_size)))
@@ -591,15 +618,16 @@ def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
     return polys_final
 
 
-def _gids_polys(sub_dset,
-                key,
-                agg_fn,
-                thresh,
-                morph_kernel,
-                thresh_hysteresis,
-                norm_ord,
-                moving_window_size=None,  # 150
-                bounds=False) -> Iterable[Union[int, Poly]]:
+def _gids_polys(
+        sub_dset,
+        key,
+        agg_fn,
+        thresh,
+        morph_kernel,
+        thresh_hysteresis,
+        norm_ord,
+        moving_window_size=None,  # 150
+        bounds=False) -> Iterable[Union[int, Poly]]:
     if bounds:  # for SC
         boundary_tracks = list(pop_tracks(sub_dset, [SITE_SUMMARY_CNAME]))
         assert len(boundary_tracks) > 0, 'need valid site boundaries!'
@@ -617,10 +645,9 @@ def _gids_polys(sub_dset,
         vidid = list(sub_dset.index.vidid_to_gids.keys())[0]
         gids = sub_dset.images(vidid=vidid).gids
 
-    _heatmaps = build_heatmaps(
-        sub_dset,
-        gids, {'fg': key},
-        skipped='interpolate')['fg']
+    _heatmaps = build_heatmaps(sub_dset,
+                               gids, {'fg': key},
+                               skipped='interpolate')['fg']
 
     for track in boundary_tracks:
 
@@ -639,28 +666,22 @@ def _gids_polys(sub_dset,
                                              _heatmaps,
                                              axis=0)
 
-        track_polys = heatmaps_to_polys(_heatmaps_in_track,
-                                        track_bounds,
-                                        agg_fn,
-                                        thresh, morph_kernel,
-                                        thresh_hysteresis,
-                                        norm_ord,
+        track_polys = heatmaps_to_polys(_heatmaps_in_track, track_bounds,
+                                        agg_fn, thresh, morph_kernel,
+                                        thresh_hysteresis, norm_ord,
                                         moving_window_size)
         if track is None:
             yield from zip(itertools.repeat(gids), track_polys)
             # for poly in polys:  # convert to shapely to check this
-                # if poly.is_valid and not poly.is_empty:
-                    # yield (gids, poly)
+            # if poly.is_valid and not poly.is_empty:
+            # yield (gids, poly)
         else:
-            poly = unary_union(
-                [p.to_shapely() for p in track_polys])
+            poly = unary_union([p.to_shapely() for p in track_polys])
 
             if poly.is_valid and not poly.is_empty:
 
-                yield (
-                    [obs.gid for obs in track.observations],
-                    kwimage.MultiPolygon.from_shapely(poly)
-                )
+                yield ([obs.gid for obs in track.observations],
+                       kwimage.MultiPolygon.from_shapely(poly))
 
 
 #
@@ -705,8 +726,7 @@ class TimeAggregatedBAS(NewTrackFunction):
         return tracks
 
     def add_tracks_to_dset(self, sub_dset, tracks):
-        sub_dset = add_tracks_to_dset(sub_dset, tracks, self.thresh,
-                                      self.key)
+        sub_dset = add_tracks_to_dset(sub_dset, tracks, self.thresh, self.key)
         return sub_dset
 
 
@@ -741,20 +761,22 @@ class TimeAggregatedSC(NewTrackFunction):
         '''
         # TODO last use of Track here
         if self.boundaries_as == 'polys':
-            tracks = list(pop_tracks(
-                sub_dset,
-                cnames=[SITE_SUMMARY_CNAME],
-                # these are SC scores, not BAS, so this is not a
-                # true reproduction of hybrid.
-                score_chan=kwcoco.ChannelSpec('|'.join(self.key))))
+            tracks = list(
+                pop_tracks(
+                    sub_dset,
+                    cnames=[SITE_SUMMARY_CNAME],
+                    # these are SC scores, not BAS, so this is not a
+                    # true reproduction of hybrid.
+                    score_chan=kwcoco.ChannelSpec('|'.join(self.key))))
             # hack in always-foreground instead
             if 0:  # TODO
                 for track in list(tracks):
                     for obs in track.observations:
                         obs.score = 1
 
-            tracks = list(filter(
-                lambda track: len(list(track.observations)) > 0, tracks))
+            tracks = list(
+                filter(lambda track: len(list(track.observations)) > 0,
+                       tracks))
         else:
             tracks = time_aggregated_polys(
                 sub_dset,

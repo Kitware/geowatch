@@ -3,14 +3,13 @@ import numpy as np
 import kwcoco
 from rasterio import features
 import shapely.geometry
-import geopandas as gpd
 import ubelt as ub
-from dataclasses import dataclass, astuple
+from dataclasses import dataclass
 # import functools
 import itertools
 import collections
 from abc import abstractmethod
-from typing import Union, Iterable, Optional, Any, Tuple, List, Dict
+from typing import Union, Iterable, Optional, Any, List, Dict
 import warnings
 
 try:
@@ -39,7 +38,6 @@ try:
 except Exception:
     profile = ub.identity
 
-
 Poly = Union[kwimage.Polygon, kwimage.MultiPolygon]
 
 
@@ -67,12 +65,20 @@ class Observation:
 class Track:
     observations: Iterable[Observation]
     # dset: Optional[kwcoco.CocoDataset]
-    dset: Any  # omg, I can't believe type errors are breaking runtime now. I must have some weird IPython package installed that does that.
+    # omg, I can't believe type errors are breaking runtime now. I must have
+    # some weird IPython package installed that does that.
+    dset: Any
     vidid: Optional[int] = None
     track_id: Optional[int] = None
 
     @classmethod
-    def from_polys(cls, polys, dset, probs=None, vidid=None, scores=None, **kwargs):
+    def from_polys(cls,
+                   polys,
+                   dset,
+                   probs=None,
+                   vidid=None,
+                   scores=None,
+                   **kwargs):
         if vidid is not None:
             gids = dset.index.vidid_to_gids[vidid]
         else:
@@ -84,7 +90,8 @@ class Track:
                 for poly, gid, prob in zip(polys, gids, probs)
             ]
         elif scores is not None:
-            obs = list(itertools.starmap(Observation, zip(polys, gids, scores)))
+            obs = list(itertools.starmap(Observation, zip(polys, gids,
+                                                          scores)))
         else:
             obs = list(itertools.starmap(Observation, zip(polys, gids)))
 
@@ -95,6 +102,7 @@ class TrackFunction(collections.abc.Callable):
     '''
     Abstract class that all track functions should inherit from.
     '''
+
     @abstractmethod
     def __call__(self, sub_dset) -> kwcoco.CocoDataset:
         '''
@@ -111,8 +119,14 @@ class TrackFunction(collections.abc.Callable):
         tracked_subdsets = []
         vid_gids = coco_dset.index.vidid_to_gids.values()
         total = len(coco_dset.index.vidid_to_gids)
-        for gids in ub.ProgIter(vid_gids, total=total, desc='apply_per_video', verbose=3):
-            sub_dset = self.safe_apply(coco_dset, gids, overwrite, legacy=legacy)
+        for gids in ub.ProgIter(vid_gids,
+                                total=total,
+                                desc='apply_per_video',
+                                verbose=3):
+            sub_dset = self.safe_apply(coco_dset,
+                                       gids,
+                                       overwrite,
+                                       legacy=legacy)
             if legacy:
                 coco_dset = sub_dset
             else:
@@ -128,7 +142,9 @@ class TrackFunction(collections.abc.Callable):
             from watch.utils import kwcoco_extensions
             new_trackids = kwcoco_extensions.TrackidGenerator(None)
             fixed_subdataset = []
-            for sub_dset in ub.ProgIter(tracked_subdsets, desc='Ensure ok tracks', verbose=3):
+            for sub_dset in ub.ProgIter(tracked_subdsets,
+                                        desc='Ensure ok tracks',
+                                        verbose=3):
 
                 if _debug:
                     sub_dset = sub_dset.copy()
@@ -170,8 +186,8 @@ class TrackFunction(collections.abc.Callable):
                 fixed_subdataset.append(sub_dset)
 
             # Is this safe to do? It would be more efficient
-            coco_dset = kwcoco.CocoDataset.union(
-                *fixed_subdataset, disjoint_tracks=False)
+            coco_dset = kwcoco.CocoDataset.union(*fixed_subdataset,
+                                                 disjoint_tracks=False)
 
             if _debug:
                 x = coco_dset.annots().images.get('video_id')
@@ -179,8 +195,7 @@ class TrackFunction(collections.abc.Callable):
                 z = ub.group_items(x, y)
                 track_to_num_videos = ub.map_vals(set, z)
                 assert max(map(len, track_to_num_videos.values())) == 1, (
-                    'track belongs to multiple videos!'
-                )
+                    'track belongs to multiple videos!')
         return coco_dset
 
     @profile
@@ -190,10 +205,13 @@ class TrackFunction(collections.abc.Callable):
             from watch.utils.util_json import debug_json_unserializable
 
         if DEBUG_JSON_SERIALIZABLE:
-            debug_json_unserializable(coco_dset.dataset, 'Input to safe_apply: ')
+            debug_json_unserializable(coco_dset.dataset,
+                                      'Input to safe_apply: ')
 
         if legacy:
-            sub_dset, rest_dset = self.safe_partition(coco_dset, gids, remove=True)
+            sub_dset, rest_dset = self.safe_partition(coco_dset,
+                                                      gids,
+                                                      remove=True)
         else:
             sub_dset = self.safe_partition(coco_dset, gids, remove=False)
 
@@ -202,7 +220,8 @@ class TrackFunction(collections.abc.Callable):
         if overwrite:
             sub_dset = self(sub_dset)
             if DEBUG_JSON_SERIALIZABLE:
-                debug_json_unserializable(sub_dset.dataset, 'After __call__ (overwrite)')
+                debug_json_unserializable(sub_dset.dataset,
+                                          'After __call__ (overwrite)')
         else:
             orig_annots = sub_dset.annots()
             orig_tids = orig_annots.get('track_id', None)
@@ -223,6 +242,7 @@ class TrackFunction(collections.abc.Callable):
 
                 # Ensure types are json serializable
                 import numbers
+
                 def _fixtype(tid):
                     # need to keep strings the same, but integers need to be
                     # case from numpy to python ints.
@@ -230,6 +250,7 @@ class TrackFunction(collections.abc.Callable):
                         return int(tid)
                     else:
                         return tid
+
                 new_tids = list(map(_fixtype, new_tids))
 
                 new_annots.set('track_id', new_tids)
@@ -243,7 +264,8 @@ class TrackFunction(collections.abc.Callable):
             out_dset = sub_dset
 
         if DEBUG_JSON_SERIALIZABLE:
-            debug_json_unserializable(out_dset.dataset, 'Output of safe_apply: ')
+            debug_json_unserializable(out_dset.dataset,
+                                      'Output of safe_apply: ')
         return out_dset
 
     @staticmethod
@@ -306,7 +328,7 @@ class NewTrackFunction(TrackFunction):
 
 
 def check_only_bg(category_sequence, bg_name=['No Activity']):
-    if len( set(category_sequence) - set(bg_name) ) == 0:
+    if len(set(category_sequence) - set(bg_name)) == 0:
         return True
     else:
         return False
@@ -373,7 +395,8 @@ def pop_tracks(
 
     for track_id, track_info in _tid_to_info.items():
         track_polys, track_gids, track_scores = zip(*track_info)
-        observations = list(map(Observation, track_polys, track_gids, track_scores))
+        observations = list(
+            map(Observation, track_polys, track_gids, track_scores))
         track = Track(observations, dset=coco_dset, track_id=track_id)
         yield track
 
@@ -394,7 +417,7 @@ def score_poly(poly, probs, threshold=None, use_rasterio=True):
     # try converting from shapely
     # TODO standard coerce fns between kwimage, shapely, and __geo_interface__
     if not isinstance(poly, (kwimage.Polygon, kwimage.MultiPolygon)):
-        poly = kwimage.MultiPolygon.from_shapely(poly)
+        poly = kwimage.MultiPolygon.from_shapely(poly)  # 2.4% of runtime
     if 0:
         # naive computation across the whole image
         poly_mask = poly.to_mask(probs.shape).numpy().data
@@ -416,6 +439,7 @@ def score_poly(poly, probs, threshold=None, use_rasterio=True):
             # TODO verify this works with shapely polys too
             # or implement geo_interface in kwimage
             # https://shapely.readthedocs.io/en/stable/manual.html#python-geo-interface
+            # 95% of runtime... would batch be faster?
             rel_mask = features.rasterize([rel_poly.to_geojson()],
                                           out_shape=(h, w))
         else:  # kwimage inverse
@@ -474,12 +498,17 @@ def mask_to_polygons(probs,
     Ignore:
         >>> from watch.tasks.tracking.utils import mask_to_polygons
         >>> import kwimage
-        >>> probs = kwimage.Heatmap.random(dims=(128, 128)).data['class_probs'][0]
+        >>> probs = kwimage.Heatmap.random(dims=(128, 128)
+        >>>                                 ).data['class_probs'][0]
         >>> thresh = 0.5
-        >>> polys1 = list(mask_to_polygons(probs, thresh, scored=0, use_rasterio=0))
-        >>> polys2 = list(mask_to_polygons(probs, thresh, scored=0, use_rasterio=1))
-        >>> polys3 = list(mask_to_polygons(probs, thresh, scored=1, use_rasterio=0))
-        >>> polys4 = list(mask_to_polygons(probs, thresh, scored=1, use_rasterio=1))
+        >>> polys1 = list(mask_to_polygons(
+        >>>             probs, thresh, scored=0, use_rasterio=0))
+        >>> polys2 = list(mask_to_polygons(
+        >>>             probs, thresh, scored=0, use_rasterio=1))
+        >>> polys3 = list(mask_to_polygons(
+        >>>             probs, thresh, scored=1, use_rasterio=0))
+        >>> polys4 = list(mask_to_polygons(
+        >>>             probs, thresh, scored=1, use_rasterio=1))
         >>> # xdoctest: +IGNORE_WANT
         >>> import kwplot
         >>> kwplot.autompl()
@@ -568,7 +597,8 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
             'key2': heats2,
             'key3': heats3
         }
-        build_heatmaps(dset, gids=[1,2], {'group1': ['key1', 'key2', 'key3']}) == {
+        build_heatmaps(dset, gids=[1,2],
+                       {'group1': ['key1', 'key2', 'key3']}) == {
             'key1': heats1,
             'key2': heats2,
             'key3': heats3,
@@ -632,11 +662,13 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
         for group, key in key_groups.items():
 
             # we are working only in vid space, so forget about warping
-            img_probs, chan_probs = build_heatmap(sub_dset, gid, key,
+            img_probs, chan_probs = build_heatmap(sub_dset,
+                                                  gid,
+                                                  key,
                                                   space='video',
                                                   return_chan_probs=True)
             # TODO make this more efficient using missing='skip'
-            if any(np.flatnonzero(img_probs)):
+            if any(np.flatnonzero(img_probs)):  # 92% of runtime
                 heatmaps_dct[group].append(img_probs)
             elif skipped == 'interpolate':
                 heatmaps_dct[group].append(prev_heatmap_dct[group])
@@ -662,7 +694,11 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
 
 
 @profile
-def build_heatmap(dset, gid, key, return_chan_probs=False, space='video',
+def build_heatmap(dset,
+                  gid,
+                  key,
+                  return_chan_probs=False,
+                  space='video',
                   missing='fill'):
     """
     Find the total heatmap of key within gid
@@ -687,8 +723,8 @@ def build_heatmap(dset, gid, key, return_chan_probs=False, space='video',
 
     if missing == 'raise':
         if channels_have.numel() != channels_request.numel():
-            raise ValueError(ub.paragraph(
-                f'''
+            raise ValueError(
+                ub.paragraph(f'''
                 Requested {channels_request=} in the image {gid=} of {dset=}
                 but only {channels_have=} existed.
                 '''))
@@ -712,11 +748,12 @@ def build_heatmap(dset, gid, key, return_chan_probs=False, space='video',
             print('WARNING: Im not sure about that sum axis=-1, '
                   'I hope there is only ever one channel here')
 
-    key_img_probs = coco_img.delay(channels=common, space=space).finalize(nodata='float')
+    key_img_probs = coco_img.delay(channels=common,
+                                   space=space).finalize(nodata='float')
 
-    #### FIXME!
-    #### Curently hacking all nans to zero! Instead we should use the fact
-    #### That we don't have an observation in later stages!
+    # FIXME!
+    # Curently hacking all nans to zero! Instead we should use the fact
+    # That we don't have an observation in later stages!
     key_img_probs = np.nan_to_num(key_img_probs)
 
     # Not sure about that sum axis=-1 here
