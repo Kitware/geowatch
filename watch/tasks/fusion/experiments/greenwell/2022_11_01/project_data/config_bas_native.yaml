@@ -23,6 +23,7 @@ data:
   input_space_scale: native # 30GSD
 trainer:
   callbacks:
+    # - class_path: watch.utils.lightning_ext.callbacks.AutoResumer
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
         monitor: val_saliency_f1
