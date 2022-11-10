@@ -149,8 +149,8 @@ class GriddedDataset(torch.utils.data.Dataset):
         window_dims = [num_images, patch_size, patch_size]
 
         print('make grid')
-        from watch.tasks.fusion.datamodules.kwcoco_video_data import sample_video_spacetime_targets
-        sample_grid = sample_video_spacetime_targets(
+        from watch.tasks.fusion.datamodules import spacetime_grid_builder
+        builder = spacetime_grid_builder.SpacetimeGridBuilder(
             self.coco_dset, window_dims=window_dims,
             window_overlap=patch_overlap,
             time_sampling='hardish3', time_span='1y',
@@ -164,9 +164,8 @@ class GriddedDataset(torch.utils.data.Dataset):
             workers=0,
             window_space_scale=window_space_scale,
         )
-        import xdev
-        with xdev.embed_on_exception_context:
-            vidid_to_new_samples = fixup_samples(coco_dset, sample_grid)
+        sample_grid = builder.build()
+        vidid_to_new_samples = fixup_samples(coco_dset, sample_grid)
 
         # Sort the patches into an order where we can
         self.patches = []

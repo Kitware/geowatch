@@ -100,8 +100,10 @@ Ignore:
 
     # Drop 4 SC
 
+
     DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
     BUNDLE_DPATH=$DATA_DVC_DPATH/Drop4-SC
+    #KWCOCO_FPATH_PAT=$BUNDLE_DPATH/data_vali.kwcoco.json
     KWCOCO_FPATH_PAT=$BUNDLE_DPATH/data_train.kwcoco.json
     ls $KWCOCO_FPATH_PAT
     python -m watch.cli.prepare_teamfeats \
@@ -113,7 +115,7 @@ Ignore:
         --with_depth=0 \
         --do_splits=0 \
         --skip_existing=0 \
-        --gres=1, --workers=1 --backend=serial --run=1
+        --gres=1, --workers=1 --backend=serial --run=0
 
 
 """
@@ -468,8 +470,8 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
                 --output_kwcoco "{task['output_fpath']}" \
                 --pretext_package_path "{model_fpaths['uky_pretext']}" \
                 --pca_projection_path  "{model_fpaths['uky_pca']}" \
-                --input_space_scale=30GSD \
-                --window_space_scale=30GSD \
+                --input_space_scale=10GSD \
+                --window_space_scale=10GSD \
                 --patch_size=256 \
                 --do_pca {config['invariant_pca']} \
                 --patch_overlap=0.3 \

@@ -344,10 +344,15 @@ python -m watch.mlops.schedule_evaluation \
 
 
 
+kwcoco subset \
+        --src ~/data/dvc-repos/smart_data_dvc-ssd/Drop4-SC/data_vali.kwcoco.json \
+        --dst ~/data/dvc-repos/smart_data_dvc-ssd/Drop4-SC/US_R007_0055_box.kwcoco.json \
+        --select_videos '.name == "US_R007_0055_box"'
+
 python -m watch.tasks.fusion.predict \
-    --package_fpath=~/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_invar_scratch_V030/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt \
-    --test_dataset=~/data/dvc-repos/smart_data_dvc-ssd/Drop4-SC/data_vali.kwcoco.json \
-    --pred_dataset=~/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_sc_candidates/pred/act/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1/Drop4-SC_data_vali.kwcoco/act_pxl_d31324d9/pred.kwcoco.json \
+    --package_fpath ~/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_invar_scratch_V030/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt \
+    --test_dataset ~/data/dvc-repos/smart_data_dvc-ssd/Drop4-SC/US_R007_0055_box.kwcoco.json \
+    --pred_dataset ~/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_sc_candidates/pred/act/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1/Drop4-SC_data_vali.kwcoco/act_pxl_d31324d9/test/pred.kwcoco.json \
     --input_scale_space=3GSD \
     --time_steps=12 \
     --chip_overlap=0.3  \

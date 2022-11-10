@@ -28,7 +28,7 @@ from watch.tasks.fusion import utils
 from watch.tasks.fusion.datamodules import data_utils
 from watch.tasks.fusion.datamodules.data_augment import SpacetimeAugmentMixin
 from watch.tasks.fusion.datamodules.smart_mixins import SMARTDataMixin
-from watch.tasks.fusion.datamodules.spacetime_grid_builder import sample_video_spacetime_targets
+from watch.tasks.fusion.datamodules import spacetime_grid_builder
 
 try:
     import xdev
@@ -387,8 +387,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         elif mode == 'test':
             # In test mode we have to sample everything for BAS
             # (TODO: for activity clf, we should only focus on candidate regions)
-            new_sample_grid = sample_video_spacetime_targets(
-                sampler.dset, window_dims=window_dims,
+            builder = spacetime_grid_builder.SpacetimeGridBuilder(
+                dset=sampler.dset, window_dims=window_dims,
                 window_overlap=window_overlap,
                 keepbound=True,
                 use_annot_info=False,
@@ -399,11 +399,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 set_cover_algo=set_cover_algo,
                 # workers='max(avail, 8)',  # could configure this
             )
+            new_sample_grid = builder.build()
             self.length = len(new_sample_grid['targets'])
         else:
             negative_classes = (
                 self.ignore_classes | self.background_classes | self.negative_classes)
-            new_sample_grid = sample_video_spacetime_targets(
+            builder = spacetime_grid_builder.SpacetimeGridBuilder(
                 sampler.dset, window_dims=window_dims,
                 window_overlap=window_overlap,
                 negative_classes=negative_classes,
@@ -418,6 +419,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 set_cover_algo=set_cover_algo,
                 # workers='max(avail, 8)',   # could configure this
             )
+            new_sample_grid = builder.build()
 
             n_pos = len(new_sample_grid['positives_indexes'])
             n_neg = len(new_sample_grid['negatives_indexes'])
@@ -1929,3 +1931,6 @@ def worker_init_fn(worker_id):
 
 class FailedSample(Exception):
     ...
+
+# Backwards compat
+sample_video_spacetime_targets = spacetime_grid_builder.sample_video_spacetime_targets

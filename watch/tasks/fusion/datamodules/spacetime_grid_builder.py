@@ -6,14 +6,82 @@ from watch.utils import util_kwimage
 from watch import heuristics
 
 
-# class DatasetSpacetimeTargetSampler:
-#     def __init__(self, dset, window_dims, window_overlap=0.0,
-#                  negative_classes=None, keepbound=False, exclude_sensors=None,
-#                  time_sampling='hard+distribute', time_span='2y',
-#                  use_annot_info=True, use_grid_positives=True,
-#                  use_centered_positives=True, window_space_scale=None,
-#                  set_cover_algo=None, workers=0, use_cache=1):
-#         # TODO: classify this nonsense
+class SpacetimeGridBuilder:
+    """
+    A helper class to help build a grid of spacetime windows for a coco
+    dataset.
+
+    See :func:`sample_video_spacetime_targets` for the main implementation.
+    This will move to a class based approach and ideally be cleaned up as time
+    moves on.
+    """
+    def __init__(
+        builder,
+        dset,
+        window_dims,
+        window_overlap=0.0,
+        negative_classes=None,
+        keepbound=False,
+        exclude_sensors=None,
+        time_sampling='hard+distribute',
+        time_span='2y',
+        use_annot_info=True,
+        use_grid_positives=True,
+        use_centered_positives=True,
+        window_space_scale=None,
+        set_cover_algo=None,
+        workers=0,
+        use_cache=1
+    ):
+        builder.dset = dset
+        builder.window_dims = window_dims
+        builder.window_overlap = window_overlap
+        builder.negative_classes = negative_classes
+        builder.keepbound = keepbound
+        builder.exclude_sensors = exclude_sensors
+        builder.time_sampling = time_sampling
+        builder.time_span = time_span
+        builder.use_annot_info = use_annot_info
+        builder.use_grid_positives = use_grid_positives
+        builder.use_centered_positives = use_centered_positives
+        builder.window_space_scale = window_space_scale
+        builder.set_cover_algo = set_cover_algo
+        builder.workers = workers
+        builder.use_cache = use_cache
+
+    def build(builder):
+        dset = builder.dset
+        window_dims = builder.window_dims
+        window_overlap = builder.window_overlap
+        negative_classes = builder.negative_classes
+        keepbound = builder.keepbound
+        exclude_sensors = builder.exclude_sensors
+        time_sampling = builder.time_sampling
+        time_span = builder.time_span
+        use_annot_info = builder.use_annot_info
+        use_grid_positives = builder.use_grid_positives
+        use_centered_positives = builder.use_centered_positives
+        window_space_scale = builder.window_space_scale
+        set_cover_algo = builder.set_cover_algo
+        workers = builder.workers
+        use_cache = builder.use_cache
+
+        return sample_video_spacetime_targets(
+            dset=dset,
+            window_dims=window_dims,
+            window_overlap=window_overlap,
+            negative_classes=negative_classes, keepbound=keepbound,
+            exclude_sensors=exclude_sensors,
+            time_sampling=time_sampling,
+            time_span=time_span,
+            use_annot_info=use_annot_info,
+            use_grid_positives=use_grid_positives,
+            use_centered_positives=use_centered_positives,
+            window_space_scale=window_space_scale,
+            set_cover_algo=set_cover_algo,
+            workers=workers,
+            use_cache=use_cache,
+        )
 
 
 def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
@@ -230,6 +298,13 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     # Given an video
     all_vid_ids = list(dset.index.videos.keys())
 
+    # Intersection over smaller area wrt to window vs valid regions.
+    refine_iosa_thresh = 0.2  # parametarize?
+
+    # TODO: we can disable respect valid regions here and then just do it on
+    # the fly in the dataloader, but it is unclear which is more efficient.
+    respect_valid_regions = True
+
     depends = [
         dset_hashid,
         negative_classes,
@@ -245,7 +320,9 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         set_cover_algo,
         use_grid_positives,
         use_centered_positives,
-        'cache_v8',
+        refine_iosa_thresh,
+        respect_valid_regions,
+        'cache_v9',
     ]
     # Higher level cacher (not sure if adding this secondary level of caching
     # is faster or not).
@@ -272,7 +349,8 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                 window_overlap, negative_classes, keepbound, exclude_sensors,
                 affinity_type, update_rule, time_span, use_annot_info,
                 use_grid_positives, use_centered_positives, window_space_scale,
-                set_cover_algo, use_cache, verbose)
+                set_cover_algo, use_cache, respect_valid_regions,
+                refine_iosa_thresh, verbose)
             job.video_id = video_id
 
         targets = []
@@ -317,7 +395,8 @@ def _sample_single_video_spacetime_targets(
         window_dims, window_overlap, negative_classes,
         keepbound, exclude_sensors, affinity_type, update_rule, time_span,
         use_annot_info, use_grid_positives, use_centered_positives,
-        window_space_scale, set_cover_algo, use_cache, verbose):
+        window_space_scale, set_cover_algo, use_cache, respect_valid_regions,
+        refine_iosa_thresh, verbose):
     """
     Do this for a single video so we can parallelize.
 
@@ -353,12 +432,6 @@ def _sample_single_video_spacetime_targets(
             kw_poly_vid = kw_poly_img.warp(warp_vid_from_img)
             sh_poly_vid = kw_poly_vid.to_shapely()
         return sh_poly_vid
-
-    refine_iooa_thresh = 0.2  # parametarize?
-
-    # TODO: we can disable respect valid regions here and then just do it on
-    # the fly in the dataloader, but it is unclear which is more efficient.
-    respect_valid_regions = True
 
     # It is important that keepbound is True at test time, otherwise we may not
     # predict on the bottom right of the image.
@@ -423,7 +496,9 @@ def _sample_single_video_spacetime_targets(
         time_span, use_annot_info,
         use_grid_positives,
         use_centered_positives,
-        'cache_v8',
+        respect_valid_regions,
+        refine_iosa_thresh,
+        'cache_v9',
     ]
     cache_dpath = ub.Path.appdir('watch', 'grid_cache').ensuredir()
     cacher = ub.Cacher('sliding-window-cache', dpath=cache_dpath,
@@ -464,7 +539,7 @@ def _sample_single_video_spacetime_targets(
 
             new_targets = _build_targets_in_spatial_region(
                 dset, video_id, vidspace_region, use_annot_info, qtree,
-                main_idx_to_gids, refine_iooa_thresh, time_sampler,
+                main_idx_to_gids, refine_iosa_thresh, time_sampler,
                 get_image_valid_region_in_vidspace, respect_valid_regions,
                 set_cover_algo)
 
@@ -549,7 +624,7 @@ def _build_targets_around_track(video_id, tid, infos, video_gids,
 
 def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
                                      use_annot_info, qtree, main_idx_to_gids,
-                                     refine_iooa_thresh, time_sampler,
+                                     refine_iosa_thresh, time_sampler,
                                      get_image_valid_region_in_vidspace,
                                      respect_valid_regions, set_cover_algo):
     """
@@ -575,7 +650,7 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
         try:
             main_idx_to_gids2, resampled = _refine_time_sample(
                 dset, main_idx_to_gids, vidspace_box,
-                refine_iooa_thresh, time_sampler,
+                refine_iosa_thresh, time_sampler,
                 get_image_valid_region_in_vidspace)
         except tsm.TimeSampleError:
             # Hack, just skip the region
@@ -672,7 +747,7 @@ def _build_vidspace_track_qtree(dset, video_gids, negative_classes,
     return qtree, tid_to_infos
 
 
-def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, iooa_thresh, time_sampler, get_image_valid_region_in_vidspace):
+def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, refine_iosa_thresh, time_sampler, get_image_valid_region_in_vidspace):
     """
     Refine the time sample based on spatial information
     """
@@ -681,15 +756,20 @@ def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, iooa_thresh, time_
 
     gid_to_isbad = {}
     for gid in video_gids:
-        vidspace_valid_poly = get_image_valid_region_in_vidspace(gid)
-        gid_to_isbad[gid] = False
-        if vidspace_valid_poly is not None:
-            vidspace_box_poly = vidspace_box.to_shapley()[0]
-            # flag = winspace_valid_poly.intersects(vidspace_box_poly)
-            isect = vidspace_valid_poly.intersection(vidspace_box_poly)
-            iooa = isect.area / vidspace_box_poly.area
-            if iooa < iooa_thresh:
-                gid_to_isbad[gid] = True
+        import xdev
+        with xdev.embed_on_exception_context:
+            vidspace_valid_poly = get_image_valid_region_in_vidspace(gid)
+            gid_to_isbad[gid] = False
+            # If the area is of the valid polygon is less than zero, there was
+            # probably an issue. treat it as if it didn't specify a valid
+            # region.
+            if vidspace_valid_poly is not None and vidspace_valid_poly.area > 0:
+                vidspace_box_poly = vidspace_box.to_shapley()[0]
+                # Intersection over smaller area
+                isect = vidspace_valid_poly.intersection(vidspace_box_poly)
+                iosa = isect.area / min(vidspace_box_poly.area, vidspace_valid_poly.area)
+                if iosa < refine_iosa_thresh:
+                    gid_to_isbad[gid] = True
 
     all_bad_gids = [gid for gid, flag in gid_to_isbad.items() if flag]
 

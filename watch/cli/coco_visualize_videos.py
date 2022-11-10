@@ -98,8 +98,6 @@ class CocoVisualizeConfig(scfg.Config):
             TODO: deprecate?
             ''')),
 
-        'fast': scfg.Value(False, isflag=True, help='if True, override other params to go fast and use more resources'),
-
         'draw_imgs': scfg.Value(True, isflag=True),
         'draw_anns': scfg.Value('auto', isflag=True, help='auto means only draw anns if they exist'),
 
@@ -176,7 +174,9 @@ class CocoVisualizeConfig(scfg.Config):
 
         'verbose': scfg.Value(0, isflag=True, help='verbosity level'),
 
-        'stack': scfg.Value(False, isflag=True, help='if True stack late fused channels in the same image')
+        'stack': scfg.Value(False, isflag=True, help='if True stack late fused channels in the same image'),
+
+        'fast': scfg.Value(False, isflag=True, help='if True, override other params to go fast and use more resources'),
     }
 
 
@@ -266,6 +266,23 @@ def main(cmdline=True, **kwargs):
             chosen = ub.oset(['red|green|blue']) | (chosen - {'red|green|blue'})
         channels = ','.join(chosen)
         print(f'AUTO channels={channels}')
+
+    # Expand certain channels
+    requested_sensorchan = kwcoco.SensorChanSpec.coerce(channels)
+    requested_sensorchan.streams()
+    expanded_streams = []
+    chan_alias = {
+        'rgb': 'red|green|blue',
+        'sc': 'No Activity|Site Preparation|Active Construction|Post Construction',
+        'bas': 'salient',
+    }
+    for fused_sensorchan in requested_sensorchan.streams():
+        chan = fused_sensorchan.chans.spec
+        chan = chan_alias.get(chan, chan)
+        # TODO: handle the sensor part
+        # expanded_streams.append(fused_sensorchan.sensor.spec + ':' + chan)
+        expanded_streams.append(chan)
+    channels = (','.join(expanded_streams))
 
     if config['draw_anns'] == 'auto':
         config['draw_anns'] = coco_dset.n_annots > 0

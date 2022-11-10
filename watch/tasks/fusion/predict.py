@@ -568,7 +568,7 @@ def predict(cmdline=False, **kwargs):
         raise ValueError(
             f'Must specify path to the output (predicted) kwcoco file. '
             f'Got {config["pred_dataset"]=}')
-    result_dataset.fpath = str(config['pred_dataset'])
+    result_dataset.fpath = str(ub.Path(config['pred_dataset']).expand())
     result_fpath = util_path.coercepath(result_dataset.fpath)
 
     from watch.utils.lightning_ext import util_device
