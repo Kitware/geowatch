@@ -614,9 +614,10 @@ def _gids_polys(
         gids = boundary_tracks['gid'].unique()
         print('generating polys in bounds: number of bounds: ',
               gpd_len(boundary_tracks))
+        boundary_tracks = boundary_tracks.groupby('track_idx')
 
     else:
-        boundary_tracks = [None]
+        boundary_tracks = [(None, None)]
         # TODO WARNING this is wrong!!! need to make sure this is never used.
         # The gids are lexically sorted, not sorted by order in video!
         # gids = list(sub_dset.imgs.keys())
@@ -629,7 +630,7 @@ def _gids_polys(
                                _NANS=True)['fg']
 
     # TODO parallelize
-    for _, track in boundary_tracks.groupby('track_idx'):
+    for _, track in boundary_tracks:
 
         # TODO when bounds are time-varying, this lets individual frames
         # go outside them; only enforces the union. Problem?
