@@ -3,6 +3,7 @@ import torch
 from torch import nn
 import torchmetrics
 import einops
+from einops.layers.torch import Rearrange
 from torchvision import models as tv_models
 from torchvision.models import feature_extraction
 
@@ -128,6 +129,45 @@ class NanToNum(nn.Module):
 
     def forward(self, x):
         return torch.nan_to_num(x, self.num)
+
+
+class ShapePreservingTransformerEncoder(nn.TransformerEncoder):
+    def __init__(
+        self, 
+        encoder_layer, 
+        num_layers, 
+        norm=None, 
+        enable_nested_tensor=True, 
+        batch_dim=0,
+        chan_dim=1,
+    ):
+        super().__init__(encoder_layer, num_layers, norm, enable_nested_tensor)
+        self.batch_dim = batch_dim
+        self.chan_dim = chan_dim
+
+    def forward(self, src, mask=None, src_key_padding_mask=None):
+        assert mask is None
+        assert src_key_padding_mask is None
+
+        num_dims = len(src.shape)
+        shape_codes = [f"shape_{idx}" for idx in range(num_dims)]
+        shape_codes[self.batch_dim] = "batch"
+        shape_codes[self.chan_dim] = "chan"
+
+        input_shape_code = " ".join(shape_codes)
+        output_shape_code = " ".join([
+            "batch", 
+            f"({' '.join([code for code in shape_codes if code.startswith('shape_')])})",
+            "chan",
+        ])
+
+        shape_hints = einops.parse_shape(src, input_shape_code)
+
+        src = einops.rearrange(src, f"{input_shape_code} -> {output_shape_code}")
+        src = super().forward(src, mask, src_key_padding_mask)
+        src = einops.rearrange(src, f"{output_shape_code} -> {input_shape_code}", **shape_hints)
+
+        return src
 
 
 class ScaleAwarePositionalEncoder(metaclass = ABCMeta):
@@ -571,10 +611,27 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                         nn.Conv2d(
                             token_dim,
                             prop['channels'],
-                            # kernel_size=5,
-                            kernel_size=1,
+                            kernel_size=5,
                             padding="same",
                             bias=False),
+                    )
+                elif self.hparams.decoder == "simple_conv":
+                    self.heads[head_name] = nn.Sequential(
+                        ShapePreservingTransformerEncoder(
+                            nn.TransformerEncoderLayer(token_dim, 8, dim_feedforward=512, dropout=0.1, activation="gelu", batch_first=True, norm_first=True),
+                            num_layers=2,
+                        ),
+                        nn.Conv2d(token_dim, token_width*token_width*prop['channels'], 1, bias=False),
+                        Rearrange(
+                            "batch (chan dh dw) height width -> batch chan (height dh) (width dw)",
+                            dh=token_width, dw=token_width),
+                    )
+                elif self.hparams.decoder == "trans_conv":
+                    self.heads[head_name] = nn.Sequential(
+                        nn.Conv2d(token_dim, token_width*token_width*prop['channels'], 1, bias=False),
+                        Rearrange(
+                            "batch (chan dh dw) height width -> batch chan (height dh) (width dw)",
+                            dh=token_width, dw=token_width),
                     )
                 else:
                     raise NotImplementedError(decoder)
@@ -761,6 +818,48 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>>     dataset_stats=dataset_stats,
             >>>     input_sensorchan=channels,
             >>>     position_encoder=fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>> )
+            >>> batch = model.demo_batch(width=64, height=65)
+            >>> batch += model.demo_batch(width=55, height=75)
+            >>> outputs = model.forward(batch)
+            >>> for task_key, task_outputs in outputs.items():
+            >>>     if "probs" in task_key: continue
+            >>>     if task_key == "class": task_key = "class_idxs"
+            >>>     for task_pred, example in zip(task_outputs, batch):
+            >>>         for frame_idx, (frame_pred, frame) in enumerate(zip(task_pred, example["frames"])):
+            >>>             if (frame_idx == 0) and task_key.startswith("change"): continue
+            >>>             assert frame_pred.shape[1:] == frame[task_key].shape, f"{frame_pred.shape} should equal {frame[task_key].shape} for task '{task_key}'"
+
+        Example:
+            >>> from watch.tasks import fusion
+            >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
+            >>> model = fusion.methods.HeterogeneousModel(
+            >>>     classes=classes,
+            >>>     dataset_stats=dataset_stats,
+            >>>     input_sensorchan=channels,
+            >>>     position_encoder=fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>>     decoder="simple_conv",
+            >>> )
+            >>> batch = model.demo_batch(width=64, height=65)
+            >>> batch += model.demo_batch(width=55, height=75)
+            >>> outputs = model.forward(batch)
+            >>> for task_key, task_outputs in outputs.items():
+            >>>     if "probs" in task_key: continue
+            >>>     if task_key == "class": task_key = "class_idxs"
+            >>>     for task_pred, example in zip(task_outputs, batch):
+            >>>         for frame_idx, (frame_pred, frame) in enumerate(zip(task_pred, example["frames"])):
+            >>>             if (frame_idx == 0) and task_key.startswith("change"): continue
+            >>>             assert frame_pred.shape[1:] == frame[task_key].shape, f"{frame_pred.shape} should equal {frame[task_key].shape} for task '{task_key}'"
+
+        Example:
+            >>> from watch.tasks import fusion
+            >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
+            >>> model = fusion.methods.HeterogeneousModel(
+            >>>     classes=classes,
+            >>>     dataset_stats=dataset_stats,
+            >>>     input_sensorchan=channels,
+            >>>     position_encoder=fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>>     decoder="trans_conv",
             >>> )
             >>> batch = model.demo_batch(width=64, height=65)
             >>> batch += model.demo_batch(width=55, height=75)
