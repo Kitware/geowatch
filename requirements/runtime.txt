@@ -95,12 +95,13 @@ kwarray>=0.6.4
 xarray>=0.17.0
 filterpy>=1.4.5
 einops>=0.3.0
-dask[array]>=2021.12.0
+dask[array]>=2022.10.2
 
 # Dask related
 # cytoolz>=0.11.2
 # xxhash>=3.0.0
 # cityhash>=0.4.1
+dask-geopandas>=0.2.0
 
 # Utilities
 rich>=12.3.0
