@@ -8,11 +8,14 @@ import itertools
 from typing import Iterable, Tuple, Union, Optional, Literal
 from dataclasses import dataclass
 from shapely.ops import unary_union
+import pandas as pd
 import geopandas as gpd
 from watch.tasks.tracking.utils import (NewTrackFunction, mask_to_polygons,
                                         build_heatmap, score_poly, Poly,
                                         _validate_keys, pop_tracks,
                                         build_heatmaps, trackid_is_default)
+
+import dask_geopandas
 
 try:
     from xdev import profile
@@ -26,23 +29,17 @@ except Exception:
 
 def _norm(heatmaps, norm_ord):
     heatmaps = np.array(heatmaps)
-    if 0:
-        heatmaps = np.nan_to_num(heatmaps)
-        probs = np.linalg.norm(heatmaps, norm_ord, axis=0)
-        if 0 < norm_ord < np.inf:
-            probs /= np.power(len(heatmaps), 1. / norm_ord)
+    if norm_ord == np.inf:
+        probs = np.nansum(heatmaps)
     else:
-        # heatmaps = np.ma.array(heatmaps, mask=np.isnan(heatmaps))
-        if norm_ord == np.inf:
-            probs = np.nansum(heatmaps)
-        else:
-            probs = np.power(np.nansum(np.power(heatmaps, norm_ord), axis=0),
-                             1. / norm_ord)
-            if norm_ord > 0:
-                n_nonzero = np.count_nonzero(~np.isnan(heatmaps), axis=0)
-                n_nonzero[n_nonzero == 0] = 1
-                probs /= np.power(n_nonzero, 1. / norm_ord)
+        probs = np.power(np.nansum(np.power(heatmaps, norm_ord), axis=0),
+                         1. / norm_ord)
+        if norm_ord > 0:
+            n_nonzero = np.count_nonzero(~np.isnan(heatmaps), axis=0)
+            n_nonzero[n_nonzero == 0] = 1
+            probs /= np.power(n_nonzero, 1. / norm_ord)
     return probs
+
 
 # give all these the same signature so they can be swapped out
 
@@ -158,7 +155,6 @@ class ResponsePolygonFilter:
         if cross:
 
             def _filter(grp):
-                # TODO nanmean
                 this_response = grp[grp['gid'].isin(self.gids)][('fg',
                                                                  None)].mean()
                 return this_response / self.mean_response > threshold
@@ -282,7 +278,7 @@ def time_aggregated_polys(
         min_area_sqkm=0.072,  # 80px@30GSD
         # min_area_sqkm=0.018,  # 80px@15GSD
         # min_area_sqkm=0.008,  # 80px@10GSD
-        max_area_sqkm=None,
+    max_area_sqkm=None,
         # max_area_sqkm=2.25,  # ~1.5x upper tail of truth
         max_area_behavior='drop',
         thresh_hysteresis=None):
@@ -423,18 +419,24 @@ def time_aggregated_polys(
     # ensure index is sorted in video order
     sorted_gids = sub_dset.images(vidid=video['id']).gids
     dct = dict(zip(sorted_gids, range(len(sorted_gids))))
+    _TRACKS['gid_order'] = _TRACKS['gid'].map(dct)
     assert _TRACKS['gid'].map(dct).groupby(
         lambda x: x).is_monotonic_increasing.all()
+
+    def _sort_by_gid(gdf):
+        return gdf.groupby('track_idx', group_keys=False).apply(
+            lambda x: x.sort_values('gid_order')).reset_index(drop=True)
 
     _TRACKS = _TRACKS.reset_index().rename(columns={'index': 'track_idx'})
 
     def _len(_TRACKS):
         return _TRACKS['track_idx'].nunique()
 
-    def compute_scores(grp, thrs=[], ks=dict(fg=key, bg=bg_key)):
+    def compute_scores(grp, thrs=[], ks={}):
         # TODO handle keys as channelcodes
         # port over better handling from utils.build_heatmaps
-        gid = grp['gid'].iloc[0]
+        # gid = grp['gid'].iloc[0]
+        gid = grp.name
         for k in set().union(itertools.chain.from_iterable(ks.values())):
             # TODO there is a regression here from not using
             # build_heatmaps(skipped='interpolate'). It will be changed with
@@ -458,13 +460,41 @@ def time_aggregated_polys(
         thrs.add(time_thresh * thresh)
     thrs = list(thrs)
 
-    # TODO speedup, 73% of runtime
-    # https://stackoverflow.com/questions/63254419/pandas-groupby-apply-using-numba
-    # https://pandas.pydata.org/docs/user_guide/enhancingperf.html
-    # https://github.com/nalepae/pandarallel
-    # https://github.com/geopandas/dask-geopandas
-    _TRACKS = _TRACKS.groupby('gid', group_keys=False).apply(compute_scores,
-                                                             thrs=thrs)
+    ks = {'fg': key, 'bg': bg_key}
+    ks = {k: v for k, v in ks.items() if v}
+    _valid_keys = set().union(itertools.chain.from_iterable(
+        ks.values())) | ks.keys()
+
+    USE_DASK = 0
+    if USE_DASK:  # 63% runtime
+        # https://github.com/geopandas/dask-geopandas
+        # _col_order = _TRACKS.columns  # doesn't matter
+        _TRACKS = _TRACKS.set_index('gid')
+        # npartitions and chunksize are mutually exclusive
+        _TRACKS = dask_geopandas.from_geopandas(_TRACKS, npartitions=8)
+        meta = _TRACKS._meta.join(
+            pd.DataFrame(columns=list(itertools.product(_valid_keys, thrs)),
+                         dtype=float))
+        _TRACKS = _TRACKS.groupby('gid',
+                                  group_keys=False).apply(compute_scores,
+                                                          thrs=thrs,
+                                                          ks=ks,
+                                                          meta=meta)
+        # raises this, which is probably fine:
+        # /home/local/KHQ/matthew.bernstein/.local/conda/envs/watch/lib/python3.9/site-packages/rasterio/features.py:362:
+        # NotGeoreferencedWarning: Dataset has no geotransform, gcps, or rpcs.
+        # The identity matrix will be returned.
+        # _rasterize(valid_shapes, out, transform, all_touched, merge_alg)
+
+        _TRACKS = _TRACKS.compute()  # _tracks is now a gdf again
+        _TRACKS = _sort_by_gid(_TRACKS.reset_index())
+        # _TRACKS = _TRACKS.reindex(columns=_col_order)
+
+    else:  # 95% runtime
+        _TRACKS = _TRACKS.groupby('gid',
+                                  group_keys=False).apply(compute_scores,
+                                                          thrs=thrs,
+                                                          ks=ks)
 
     # response_thresh = 0.9
     if response_thresh:
