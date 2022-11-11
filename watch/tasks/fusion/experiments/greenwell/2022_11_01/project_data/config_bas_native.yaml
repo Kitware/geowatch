@@ -17,11 +17,13 @@ model:
     global_saliency_weight: 1.0
     saliency_loss: focal
 data:
+  batch_size: 8
   time_steps: 1
   chip_dims: 192
   channels: red|green|blue|nir,swir16|swir22 
   input_space_scale: native # 30GSD
 trainer:
+  accumulate_grad_batches: 2
   callbacks:
     # - class_path: watch.utils.lightning_ext.callbacks.AutoResumer
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
