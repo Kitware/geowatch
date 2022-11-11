@@ -291,18 +291,10 @@ python -m watch.tasks.fusion.fit \
 
 
 #### YARDRAT
-
-
-###  Use 
-###  dvc pull -r horologic models/fusion/*/packages/*/*.dvc
-
-
-export CUDA_VISIBLE_DEVICES=1
-PHASE1_DATA_DPATH=$(smartwatch_dvc --tags="phase1_data" --hardware="hdd")
-INITIAL_STATE_SC_V006="$PHASE1_DATA_DPATH"/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_V006/CropDrop3_SC_V006_epoch=71-step=18431.pt
+export CUDA_VISIBLE_DEVICES=0
 PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="hdd")
 PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
-DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC
+DATASET_CODE=Drop4-SC
 TRAIN_FNAME=data_train.kwcoco.json
 VALI_FNAME=data_vali.kwcoco.json
 TEST_FNAME=data_vali.kwcoco.json
@@ -311,11 +303,11 @@ KWCOCO_BUNDLE_DPATH=$PHASE2_DATA_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/$TRAIN_FNAME
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/$VALI_FNAME
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
-INITIAL_STATE=models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_invar_scratch_V030/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt
-EXPERIMENT_NAME=Drop4_SC_RGB_from_sc006_V003_cont2
+INITIAL_STATE=$PHASE2_EXPT_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_invar_scratch_V030/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt
+CHANNELS="(S2,WV):blue|green|red"
+EXPERIMENT_NAME=Drop4_tune_V30_V1
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-python -m watch.tasks.fusion.fit \
-    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+WATCH_GRID_WORKERS=8 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -347,22 +339,60 @@ python -m watch.tasks.fusion.fit \
     --normalize_inputs=1024 \
     --stream_channels=16 \
     --temporal_dropout=0.5 \
-    --init="noop"
+    --init="$INITIAL_STATE"
 
 
-
-#export CUDA_VISIBLE_DEVICES=0
-#DVC_DPATH=$(smartwatch_dvc --hardware="ssd")
-#WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
-#DATASET_CODE=Cropped-Drop3-TA1-2022-03-10
-#KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-#TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_s2_wv_train.kwcoco.json
-#VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_s2_wv_vali.kwcoco.json
-#TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_s2_wv_vali.kwcoco.json
+#### Toothbrush
+export CUDA_VISIBLE_DEVICES=1
+PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
+PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DATASET_CODE=Drop4-SC
+TRAIN_FNAME=data_train.kwcoco.json
+VALI_FNAME=data_vali.kwcoco.json
+TEST_FNAME=data_vali.kwcoco.json
+WORKDIR=$PHASE2_EXPT_DPATH/training/$HOSTNAME/$USER
+KWCOCO_BUNDLE_DPATH=$PHASE2_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/$TRAIN_FNAME
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/$VALI_FNAME
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
 #CHANNELS="blue|green|red,invariants:0:16"
-#EXPERIMENT_NAME=CropDrop3_SC_s2wv_invar_scratch_V030
-#DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-##true || \
-##    smartwatch stats "$VALI_FPATH"
-##true || \
-##    kwcoco validate "$VALI_FPATH" --require_relative=True
+CHANNELS="(S2,WV):blue|green|red"
+INITIAL_STATE=$PHASE2_EXPT_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_invar_scratch_V030/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt
+EXPERIMENT_NAME=Drop4_tune_V30_V2
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+WATCH_GRID_WORKERS=8 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=0.00 \
+    --accumulate_grad_batches=3 \
+    --saliency_loss='focal' \
+    --class_loss='dicefocal' \
+    --input_space_scale="5GSD" \
+    --window_space_scale="5GSD" \
+    --output_space_scale="5GSD" \
+    --chip_size=256 \
+    --time_steps=12 \
+    --learning_rate=3e-5 \
+    --num_workers=4 \
+    --max_epochs=160 \
+    --patience=160 \
+    --dist_weights=True \
+    --time_sampling=soft2 \
+    --time_span=7m \
+    --channels="$CHANNELS" \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --use_centered_positives=False \
+    --num_draw=8 \
+    --normalize_inputs=1024 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --init="$INITIAL_STATE"
