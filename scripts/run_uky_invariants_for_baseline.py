@@ -71,20 +71,11 @@ def main():
     return 0
 
 
-def _download_region(input_region_path,
+def _download_region(aws_base_command,
+                     input_region_path,
                      output_region_path,
-                     aws_profile=None,
-                     dryrun=False,
-                     strip_nonregions=False):
-    if aws_profile is not None:
-        aws_base_command =\
-            ['aws', 's3', '--profile', aws_profile, 'cp']
-    else:
-        aws_base_command = ['aws', 's3', 'cp']
-
-    if dryrun:
-        aws_base_command.append('--dryrun')
-
+                     strip_nonregions=False,
+                     replace_originator=True):
     scheme, *_ = urlparse(input_region_path)
     if scheme == 's3':
         with tempfile.NamedTemporaryFile() as temporary_file:
@@ -112,10 +103,22 @@ def _download_region(input_region_path,
              if ('properties' in feature
                  and feature['properties'].get('type') == 'region')]
 
+    if replace_originator:
+        for feature in out_region_data.get('features', ()):
+            if feature['properties']['type'] == 'region':
+                feature['properties']['originator'] = 'kit'
+
+    region_id = None
+    for feature in out_region_data.get('features', ()):
+        props = feature['properties']
+        if props['type'] == 'region':
+            region_id = props.get('region_model_id', props.get('region_id'))
+            break
+
     with open(output_region_path, 'w') as f:
         print(json.dumps(out_region_data, indent=2), file=f)
 
-    return output_region_path
+    return output_region_path, region_id
 
 
 def run_uky_invariants_for_baseline(input_path,
