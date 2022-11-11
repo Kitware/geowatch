@@ -74,6 +74,32 @@ class PadToMultiple(nn.Module):
             >>> inputs = torch.randn(1, 3, 10, 11)
             >>> outputs = pad_module(inputs)
             >>> assert outputs.shape == (1, 3, 12, 12), f"outputs.shape actually {outputs.shape}"
+
+        Example:
+            >>> from watch.tasks.fusion.methods.heterogeneous import PadToMultiple
+            >>> import torch
+            >>> pad_module = PadToMultiple(4)
+            >>> inputs = torch.randn(3, 10, 11)
+            >>> outputs = pad_module(inputs)
+            >>> assert outputs.shape == (3, 12, 12), f"outputs.shape actually {outputs.shape}"
+
+        Example:
+            >>> from watch.tasks.fusion.methods.heterogeneous import PadToMultiple
+            >>> from torch import nn
+            >>> import torch
+            >>> token_width = 10
+            >>> pad_module = nn.Sequential(
+            >>>         PadToMultiple(token_width, value=0.0),
+            >>>         nn.Conv2d(
+            >>>             3,
+            >>>             16,
+            >>>             kernel_size=token_width,
+            >>>             stride=token_width,
+            >>>         )
+            >>> )
+            >>> inputs = torch.randn(3, 64, 65)
+            >>> outputs = pad_module(inputs)
+            >>> assert outputs.shape == (16, 7, 7), f"outputs.shape actually {outputs.shape}"
         """
 
         super().__init__()
@@ -248,6 +274,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         class_loss: str = "focal",  # TODO: replace control string with a module, possibly a subclass
         saliency_loss: str = "focal",  # TODO: replace control string with a module, possibly a subclass
         tokenizer: str = "simple_conv", # TODO: replace control string with a module, possibly a subclass
+        decoder: str = "upsample", # TODO: replace control string with a module, possibly a subclass
     ):
         """
         Args:
@@ -261,10 +288,15 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
         Example:
             >>> # Note: it is important that the non-kwargs are saved as hyperparams
-            >>> from watch.tasks.fusion.methods.heterogeneous import HeterogeneousModel
-            >>> model = HeterogeneousModel(input_sensorchan='r|g|b')
+            >>> from watch.tasks.fusion.methods.heterogeneous import HeterogeneousModel, ScaleAgnostictPositionalEncoder
+            >>> model = HeterogeneousModel(
+            >>>   input_sensorchan='r|g|b',
+            >>>   position_encoder=ScaleAgnostictPositionalEncoder(3),
+            >>> )
         """
+        assert position_encoder is not None
         assert tokenizer in {"simple_conv", "resnet18"}, "Tokenizer not implemented yet."
+        assert decoder in {"upsample", "simple_conv", "trans_conv"}, "Decoder not implemented yet."
 
         super().__init__()
         self.save_hyperparameters(ignore=["position_encoder"])
@@ -532,12 +564,20 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             global_weight = self.global_head_weights[head_name]
             if global_weight > 0:
                 self.criterions[head_name] = coerce_criterion(prop['loss'], prop['weights'])
-                self.heads[head_name] = nn.Conv2d(
-                    token_dim,
-                    prop['channels'],
-                    kernel_size=5,
-                    padding="same",
-                    bias=False)
+
+                if self.hparams.decoder == "upsample":
+                    self.heads[head_name] = nn.Sequential(
+                        nn.Upsample(scale_factor=(token_width, token_width), mode="bilinear"),
+                        nn.Conv2d(
+                            token_dim,
+                            prop['channels'],
+                            # kernel_size=5,
+                            kernel_size=1,
+                            padding="same",
+                            bias=False),
+                    )
+                else:
+                    raise NotImplementedError(decoder)
 
         FBetaScore = torchmetrics.FBetaScore
         class_metrics = torchmetrics.MetricCollection({
@@ -572,7 +612,9 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>> model = fusion.methods.HeterogeneousModel(
             >>>     classes=classes,
             >>>     dataset_stats=dataset_stats,
-            >>>     input_sensorchan=channels)
+            >>>     input_sensorchan=channels,
+            >>>     position_encoder=fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>> )
             >>> example = model.demo_batch(width=64, height=65)[0]
             >>> input_tokens = model.process_input_tokens(example)
             >>> assert len(input_tokens) == len(example["frames"])
@@ -648,7 +690,9 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>> model = fusion.methods.HeterogeneousModel(
             >>>     classes=classes,
             >>>     dataset_stats=dataset_stats,
-            >>>     input_sensorchan=channels)
+            >>>     input_sensorchan=channels,
+            >>>     position_encoder=fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>> )
             >>> example = model.demo_batch(width=64, height=65)[0]
             >>> query_tokens = model.process_query_tokens(example)
             >>> assert len(query_tokens) == len(example["frames"])
@@ -658,6 +702,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
             # space
             height, width = frame["output_dims"]
+            height = height + to_next_multiple(height, self.hparams.token_width)
+            width = width + to_next_multiple(width, self.hparams.token_width)
             height, width = tokens_shape = (height // self.hparams.token_width, width // self.hparams.token_width)
             token_positions = positions_from_shape(
                 tokens_shape,
@@ -713,7 +759,9 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>> model = fusion.methods.HeterogeneousModel(
             >>>     classes=classes,
             >>>     dataset_stats=dataset_stats,
-            >>>     input_sensorchan=channels)
+            >>>     input_sensorchan=channels,
+            >>>     position_encoder=fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>> )
             >>> batch = model.demo_batch(width=64, height=65)
             >>> batch += model.demo_batch(width=55, height=75)
             >>> outputs = model.forward(batch)
@@ -723,7 +771,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>>     for task_pred, example in zip(task_outputs, batch):
             >>>         for frame_idx, (frame_pred, frame) in enumerate(zip(task_pred, example["frames"])):
             >>>             if (frame_idx == 0) and task_key.startswith("change"): continue
-            >>>             assert frame_pred.shape[1:] == frame[task_key].shape
+            >>>             assert frame_pred.shape[1:] == frame[task_key].shape, f"{frame_pred.shape} should equal {frame[task_key].shape} for task '{task_key}'"
         """
 
         # input sequences
@@ -800,13 +848,9 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                         "(height width) chan -> chan height width",
                         height=height, width=width,
                     )
-                    target_size = frame["output_dims"]
-                    output = nn.functional.interpolate(
-                        output[None],
-                        size=target_size,
-                        mode="bilinear",
-                    )[0]
-                    output = task_head(output)
+                    tar_height, tar_width = target_size = frame["output_dims"]
+                    output = task_head(output[None])[0]
+                    output = output[:, :tar_height, :tar_width]
 
                     probs = einops.rearrange(output, "chan height width -> height width chan")
                     if task_name == "change":
@@ -966,6 +1010,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
             >>> model = self = methods.HeterogeneousModel(
+            >>>     position_encoder=methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
             >>>     input_sensorchan=5)
 
             >>> # Save the model (TODO: need to save datamodule as well)
@@ -1004,6 +1049,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>> # Use one of our fusion.architectures in a test
             >>> self = methods.HeterogeneousModel(
             >>>     classes=classes,
+            >>>     position_encoder=methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
             >>>     dataset_stats=dataset_stats, input_sensorchan=datamodule.input_sensorchan)
 
             >>> from types import MethodType
@@ -1012,7 +1058,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>> self.configure_optimizers = MethodType(configure_optimizers, self)
 
             >>> # We have to run an input through the module because it is lazy
-            >>> batch = ub.peek(iter(datamodule.train_dataloader()))
+            >>> batch = next(iter(datamodule.train_dataloader()))
             >>> outputs = self.training_step(batch)
 
             >>> trainer = pl.Trainer(max_steps=1)
