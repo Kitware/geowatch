@@ -456,8 +456,12 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     info = initializer.forward(model)  # NOQA
 
     if info:
-        mapping = info['mapping']
+        mapping = info.get('mapping', None)
+        unset = info.get('self_unset', None)
+        unused = info.get('self_unused', None)
         print('mapping = {}'.format(ub.repr2(mapping, nl=1)))
+        print(f'unused={unused}')
+        print(f'unset={unset}')
 
     print('Finalize initialization')
     updated = model.state_dict() | to_preserve

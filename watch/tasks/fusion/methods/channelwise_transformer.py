@@ -1063,14 +1063,6 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             outputs['saliency_probs'] = batch_head_probs['saliency']
 
         if with_loss:
-            valid_batch_head_probs = {
-                head_name: [p for p in head_values if p is not None]
-                for head_name, head_values in batch_head_probs.items()
-            }
-            valid_batch_head_truths = {
-                head_name: [p for p in head_values if p is not None]
-                for head_name, head_values in batch_head_truths.items()
-            }
 
             total_loss = sum(
                 val for parts in item_losses for val in parts.values()
@@ -1078,37 +1070,44 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
             if not self.hparams.decouple_resolution:
                 # TODO: fixme decouple_res
-
                 to_compare = {}
-                # Flatten everything for pixelwise comparisons
-                if 'change' in valid_batch_head_truths:
-                    _true = torch.cat([x.contiguous().view(-1) for x in valid_batch_head_truths['change']], dim=0)
-                    _pred = torch.cat([x.contiguous().view(-1) for x in valid_batch_head_probs['change']], dim=0)
-                    to_compare['change'] = (_true, _pred)
-
-                if 'class' in valid_batch_head_truths:
-                    c = self.num_classes
-                    # Truth is index-based (todo: per class binary maps)
-                    _true = torch.cat([x.contiguous().view(-1) for x in valid_batch_head_truths['class']], dim=0)
-                    _pred = torch.cat([x.contiguous().view(-1, c) for x in valid_batch_head_probs['class']], dim=0)
-                    to_compare['class'] = (_true, _pred)
-
-                if 'saliency' in valid_batch_head_truths:
-                    c = self.saliency_num_classes
-                    _true = torch.cat([x.contiguous().view(-1) for x in valid_batch_head_truths['saliency']], dim=0)
-                    _pred = torch.cat([x.contiguous().view(-1, c) for x in valid_batch_head_probs['saliency']], dim=0)
-                    to_compare['saliency'] = (_true, _pred)
-
                 # compute metrics
                 if self.has_trainer:
                     item_metrics = {}
+                    ENABLE_METRICS = 0
+                    if ENABLE_METRICS:
+                        valid_batch_head_probs = {
+                            head_name: [p for p in head_values if p is not None]
+                            for head_name, head_values in batch_head_probs.items()
+                        }
+                        valid_batch_head_truths = {
+                            head_name: [p for p in head_values if p is not None]
+                            for head_name, head_values in batch_head_truths.items()
+                        }
+                        # Flatten everything for pixelwise comparisons
+                        if 'change' in valid_batch_head_truths:
+                            _true = torch.cat([x.contiguous().view(-1) for x in valid_batch_head_truths['change']], dim=0)
+                            _pred = torch.cat([x.contiguous().view(-1) for x in valid_batch_head_probs['change']], dim=0)
+                            to_compare['change'] = (_true, _pred)
 
-                    for head_key in to_compare.keys():
-                        _true, _pred = to_compare[head_key]
-                        # Dont log unless a trainer is attached
-                        for metric_key, metric in self.head_metrics[head_key].items():
-                            val = metric(_pred, _true)
-                            item_metrics[f'{stage}_{head_key}_{metric_key}'] = val
+                        if 'class' in valid_batch_head_truths:
+                            c = self.num_classes
+                            # Truth is index-based (todo: per class binary maps)
+                            _true = torch.cat([x.contiguous().view(-1) for x in valid_batch_head_truths['class']], dim=0)
+                            _pred = torch.cat([x.contiguous().view(-1, c) for x in valid_batch_head_probs['class']], dim=0)
+                            to_compare['class'] = (_true, _pred)
+
+                        if 'saliency' in valid_batch_head_truths:
+                            c = self.saliency_num_classes
+                            _true = torch.cat([x.contiguous().view(-1) for x in valid_batch_head_truths['saliency']], dim=0)
+                            _pred = torch.cat([x.contiguous().view(-1, c) for x in valid_batch_head_probs['saliency']], dim=0)
+                            to_compare['saliency'] = (_true, _pred)
+                        for head_key in to_compare.keys():
+                            _true, _pred = to_compare[head_key]
+                            # Dont log unless a trainer is attached
+                            for metric_key, metric in self.head_metrics[head_key].items():
+                                val = metric(_pred, _true)
+                                item_metrics[f'{stage}_{head_key}_{metric_key}'] = val
 
                     for key, val in item_metrics.items():
                         self.log(key, val, prog_bar=True)
@@ -1481,6 +1480,12 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         criterion = self.criterions[head_key]
         global_head_weight = self.global_head_weights[head_key]
 
+        HACK = 1
+        if HACK:
+            head_truth, head_weights = slice_to_agree(head_truth, head_weights, axes=[0, 1, 2, 3])
+            head_truth, head_logits = slice_to_agree(head_truth, head_logits, axes=[0, 1, 2, 3])
+            head_weights, head_logits = slice_to_agree(head_weights, head_logits, axes=[0, 1, 2, 3])
+
         head_pred_input = einops.rearrange(head_logits, 'b t h w c -> ' + criterion.logit_shape).contiguous()
         head_weights_input = einops.rearrange(head_weights[..., None], 'b t h w c -> ' + criterion.logit_shape).contiguous()
 
@@ -1494,10 +1499,12 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             head_true_input = einops.rearrange(head_true_ohe, 'b t h w c -> ' + criterion.target_shape).contiguous()
         else:
             raise KeyError(criterion.target_encoding)
+
         unreduced_head_loss = criterion(head_pred_input, head_true_input)
+
         full_head_weight = torch.broadcast_to(head_weights_input, unreduced_head_loss.shape)
         # Weighted reduction
-        EPS_F32 = 1e-9
+        EPS_F32 = 1.1920929e-07
         weighted_head_loss = (full_head_weight * unreduced_head_loss).sum() / (full_head_weight.sum() + EPS_F32)
         head_loss = global_head_weight * weighted_head_loss
         return head_loss
@@ -1815,3 +1822,34 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> self.forward(images)
         """
         raise NotImplementedError('see forward_step instad')
+
+
+def slice_to_agree(a1, a2, axes=None):
+    """
+    Example:
+        from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+        a1 = np.random.rand(3, 5, 7, 9, 3)
+        a2 = np.random.rand(3, 5, 6, 9, 3)
+        b1, b2 = slice_to_agree(a1, a2)
+        print(f'{a1.shape=} {a2.shape=}')
+        print(f'{b1.shape=} {b2.shape=}')
+
+        a1 = np.random.rand(3, 5, 7, 9, 1)
+        a2 = np.random.rand(3, 1, 6, 9, 3)
+        b1, b2 = slice_to_agree(a1, a2, axes=[0, 1, 2, 3])
+        print(f'{a1.shape=} {a2.shape=}')
+        print(f'{b1.shape=} {b2.shape=}')
+    """
+    if a1.shape != a2.shape:
+        shape1 = a1.shape
+        shape2 = a2.shape
+        if axes is not None:
+            shape1 = [shape1[i] for i in axes]
+            shape2 = [shape2[i] for i in axes]
+        # ndim1 = len(shape1)
+        # ndim2 = len(shape2)
+        min_shape = np.minimum(np.array(shape1), np.array(shape2))
+        sl = tuple([slice(0, s) for s in min_shape])
+        a1 = a1[sl]
+        a2 = a2[sl]
+    return a1, a2

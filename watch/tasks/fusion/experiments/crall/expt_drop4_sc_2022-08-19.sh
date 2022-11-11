@@ -307,12 +307,13 @@ INITIAL_STATE=$PHASE2_EXPT_DPATH/models/fusion/eval3_sc_candidates/packages/Crop
 CHANNELS="(S2,WV):blue|green|red"
 EXPERIMENT_NAME=Drop4_tune_V30_V1
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-WATCH_GRID_WORKERS=8 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
+WATCH_GRID_WORKERS=0 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
     --vali_dataset="$VALI_FPATH" \
     --test_dataset="$TEST_FPATH" \
+    --neg_to_pos_ratio=0.25 \
     --global_change_weight=0.00 \
     --global_class_weight=1.00 \
     --global_saliency_weight=0.00 \
@@ -321,7 +322,7 @@ WATCH_GRID_WORKERS=8 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
     --class_loss='dicefocal' \
     --chip_size=256 \
     --time_steps=12 \
-    --learning_rate=3e-4 \
+    --learning_rate=1e-4 \
     --num_workers=4 \
     --max_epochs=160 \
     --patience=160 \
@@ -339,6 +340,10 @@ WATCH_GRID_WORKERS=8 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
     --normalize_inputs=1024 \
     --stream_channels=16 \
     --temporal_dropout=0.5 \
+    --accelerator="gpu" \
+    --devices "0," \
+    --amp_backend=apex \
+    --num_sanity_val_steps=0 \
     --init="$INITIAL_STATE"
 
 
@@ -360,7 +365,7 @@ CHANNELS="(S2,WV):blue|green|red"
 INITIAL_STATE=$PHASE2_EXPT_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_invar_scratch_V030/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt
 EXPERIMENT_NAME=Drop4_tune_V30_V2
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-WATCH_GRID_WORKERS=8 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
+WATCH_GRID_WORKERS=0 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
