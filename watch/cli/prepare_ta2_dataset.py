@@ -91,6 +91,9 @@ class PrepareTA2Config(scfg.Config):
         'collated': scfg.Value([True], nargs='+', help='set to false if the input data is not collated'),
 
         'backend': scfg.Value('serial', help='can be serial, tmux, or slurm. Using tmux is recommended.'),
+
+        'serial': scfg.Value(False, isflag=True, help='if True, override other settings to disable parallelism'),
+
         'max_queue_size': scfg.Value(10, help='the number of regions allowed to be processed in parallel with tmux backend'),
         'max_regions': None,
 
@@ -165,6 +168,13 @@ def main(cmdline=False, **kwargs):
     # import shlex
     config = PrepareTA2Config(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+
+    if config['serial']:
+        config['backend'] = 'serial'
+        config['convert_workers'] = 0
+        config['fields_workers'] = 0
+        config['align_workers'] = 0
+        config['align_aux_workers'] = 0
 
     dvc_dpath = config['dvc_dpath']
     if dvc_dpath == 'auto':

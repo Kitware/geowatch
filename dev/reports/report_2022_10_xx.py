@@ -197,6 +197,7 @@ python -m watch.mlops.schedule_evaluation \
         matrix:
             trk.pxl.model:
                 - $DVC_EXPT_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+                - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Continue_15GSD_BGR_V004/Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt.pt
             trk.pxl.data.test_dataset:
                 - $DATA_DVC_DPATH/$DATASET_CODE/BR_R002.kwcoco.json
                 - $DATA_DVC_DPATH/$DATASET_CODE/KR_R001.kwcoco.json
@@ -256,8 +257,8 @@ python -m watch.mlops.schedule_evaluation \
     --enable_viz_pred_trk_poly=0 \
     --enable_viz_pred_act_poly=0 \
     --enable_links=1 \
-    --devices="1," --queue_size=2 \
-    --queue_name='nov-eval' \
+    --devices="1," --queue_size=1 \
+    --queue_name='new-eval' \
     --backend=tmux --skip_existing=1 \
     --run=1
 
