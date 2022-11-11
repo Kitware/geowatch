@@ -343,8 +343,8 @@ def coerce_initializer(init):
 
     if initializer is None:
         # Try a netharn method (todo: port to watch to remove netharn deps)
-        import netharn as nh
-        init_cls, init_kw = nh.api.Initializer.coerce(init=init)
+        from watch.utils import util_netharn
+        init_cls, init_kw = util_netharn.Initializer.coerce(init=init)
         initializer = init_cls(**init_kw)
 
     return initializer

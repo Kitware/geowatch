@@ -287,3 +287,7 @@ python -m watch.tasks.fusion.fit \
     --max_epochs=240 \
     --stream_channels=32 \
     --patience=240 --sqlview=True --torch_sharing_strategy=file_system
+
+
+
+#### YARDRAT
