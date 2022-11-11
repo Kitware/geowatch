@@ -961,7 +961,7 @@ rsync -avp "$PHASE2_DATA_DPATH_HDD"/Drop4-SC/*.kwcoco.json "$PHASE2_DATA_DPATH_S
 
 ### Run on OOO
 
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='hdd')
 EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt')
 WORKDIR=$EXPT_DVC_DPATH/training/$HOSTNAME/$USER
@@ -1009,10 +1009,12 @@ python -m watch.tasks.fusion.fit \
     --normalize_inputs=2048 \
     --stream_channels=16 \
     --temporal_dropout=0.5 \
+    --accelerator="gpu" \
+    --devices "0," \
+    --amp_backend=apex \
+    --num_sanity_val_steps=0 \
     --init="$INITIAL_STATE_V323"
-
-
-    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    #--config="$WORKDIR/configs/drop3_abalate1.yaml" \
 
 
 
@@ -1064,9 +1066,13 @@ python -m watch.tasks.fusion.fit \
     --draw_interval=5m \
     --num_draw=4 \
     --use_centered_positives=False \
-    --normalize_inputs=2048 \
+    --normalize_inputs=128 \
     --stream_channels=16 \
     --temporal_dropout=0.5 \
+    --accelerator="gpu" \
+    --devices "0," \
+    --amp_backend=apex \
+    --num_sanity_val_steps=0 \
     --init="$INITIAL_STATE_V323"
 
 

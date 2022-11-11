@@ -321,9 +321,9 @@ WATCH_GRID_WORKERS=0 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
     --saliency_loss='focal' \
     --class_loss='dicefocal' \
     --chip_size=256 \
-    --time_steps=12 \
+    --time_steps=7 \
     --learning_rate=1e-4 \
-    --num_workers=4 \
+    --num_workers=0 \
     --max_epochs=160 \
     --patience=160 \
     --dist_weights=True \
@@ -344,7 +344,14 @@ WATCH_GRID_WORKERS=0 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
     --devices "0," \
     --amp_backend=apex \
     --num_sanity_val_steps=0 \
-    --init="$INITIAL_STATE"
+    --init=/home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_4/package-interupt/package_epoch1_step16514.pt 
+
+#--init="$INITIAL_STATE"
+
+
+    #--sqlview=sqlite --torch_sharing_strategy=file_system \
+
+    #--init=/home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_2/package-interupt/package_epoch0_step3819.pt 
 
 
 #### Toothbrush
@@ -375,6 +382,7 @@ WATCH_GRID_WORKERS=0 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
     --global_class_weight=1.00 \
     --global_saliency_weight=0.00 \
     --accumulate_grad_batches=3 \
+    --batch_size=4 \
     --saliency_loss='focal' \
     --class_loss='dicefocal' \
     --input_space_scale="5GSD" \
@@ -400,4 +408,10 @@ WATCH_GRID_WORKERS=0 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
     --normalize_inputs=1024 \
     --stream_channels=16 \
     --temporal_dropout=0.5 \
+    --accelerator="gpu" \
+    --devices "0," \
+    --amp_backend=apex \
+    --num_sanity_val_steps=0 \
+    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-SC/runs/Drop4_tune_V30_V2/lightning_logs/version_4/package-interupt/package_epoch0_step11970.pt
+
     --init="$INITIAL_STATE"
