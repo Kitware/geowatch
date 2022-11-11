@@ -66,6 +66,10 @@ def load_model_from_package(package_path):
     arch_name = package_header['arch_name']
     module_name = package_header['module_name']
 
+    # MONKEYPATCH: FIXME
+    import kwcoco
+    kwcoco._helpers.SortedSetQuiet = kwcoco._helpers.SortedSet
+
     model = imp.load_pickle(module_name, arch_name)
 
     try:
