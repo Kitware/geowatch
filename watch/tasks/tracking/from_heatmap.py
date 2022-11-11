@@ -247,7 +247,7 @@ def add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
         # TODO Track only used for SC with bounds=polys, deprecate this
         for track in tracks:
             _add([(o.gid, o.poly, o.score) for o in track.observations],
-                 track.trackid)
+                 track.track_id)
 
     # TODO: Faster to add annotations in bulk, but we need to construct the
     # "ids" first
@@ -278,7 +278,7 @@ def time_aggregated_polys(
         min_area_sqkm=0.072,  # 80px@30GSD
         # min_area_sqkm=0.018,  # 80px@15GSD
         # min_area_sqkm=0.008,  # 80px@10GSD
-    max_area_sqkm=None,
+        max_area_sqkm=None,
         # max_area_sqkm=2.25,  # ~1.5x upper tail of truth
         max_area_behavior='drop',
         thresh_hysteresis=None):
@@ -603,6 +603,7 @@ def _merge_polys(p1, p2):
     return merged_polys
 
 
+@profile
 def heatmaps_to_polys(heatmaps, bounds, agg_fn, thresh, morph_kernel,
                       thresh_hysteresis, norm_ord, moving_window_size):
     '''
@@ -708,6 +709,8 @@ def _gids_polys(
                                              _heatmaps,
                                              axis=0)
 
+        # this is another hot spot, heatmaps_to_polys -> mask_to_polygons ->
+        # rasterize. Figure out how to vectorize over bounds.
         track_polys = heatmaps_to_polys(_heatmaps_in_track, track_bounds,
                                         agg_fn, thresh, morph_kernel,
                                         thresh_hysteresis, norm_ord,

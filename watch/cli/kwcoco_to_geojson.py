@@ -690,9 +690,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
             video_rows.append(row)
         video_gdf = gpd.GeoDataFrame(video_rows, crs=util_gis._get_crs84())
 
-        import xdev
-        with xdev.embed_on_exception_context:
-            sitesum_gdf = gpd.GeoDataFrame.from_features([t[1] for t in site_summaries], crs=util_gis._get_crs84())
+        sitesum_gdf = gpd.GeoDataFrame.from_features([t[1] for t in site_summaries], crs=util_gis._get_crs84(), columns=['geometry'])
 
         site_idx_to_video_idx = util_gis.geopandas_pairwise_overlaps(sitesum_gdf, video_gdf)
 

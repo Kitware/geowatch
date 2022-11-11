@@ -468,6 +468,7 @@ def score_poly(poly, probs, threshold=None, use_rasterio=True):
     return result if _return_list else result[0]
 
 
+@profile
 def mask_to_polygons(probs,
                      thresh,
                      bounds=None,
