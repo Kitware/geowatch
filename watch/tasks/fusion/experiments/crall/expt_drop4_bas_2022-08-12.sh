@@ -959,8 +959,10 @@ rsync -avp "$PHASE2_DATA_DPATH_HDD"/Drop4-SC/*.kwcoco.json "$PHASE2_DATA_DPATH_S
 
 ### Another attempt to resurect v323
 
-export CUDA_VISIBLE_DEVICES=1
-DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data')
+### Run on OOO
+
+export CUDA_VISIBLE_DEVICES=0
+DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='hdd')
 EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt')
 WORKDIR=$EXPT_DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
@@ -973,7 +975,6 @@ EXPERIMENT_NAME=Drop4_TuneV323_BAS_BGRNSH_V1
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 INITIAL_STATE_V323="$EXPT_DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
 python -m watch.tasks.fusion.fit \
-    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -1009,3 +1010,64 @@ python -m watch.tasks.fusion.fit \
     --stream_channels=16 \
     --temporal_dropout=0.5 \
     --init="$INITIAL_STATE_V323"
+
+
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+
+
+
+### Run on Namek
+
+export CUDA_VISIBLE_DEVICES=0
+DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='hdd')
+EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='hdd')
+echo "EXPT_DVC_DPATH = $EXPT_DVC_DPATH"
+WORKDIR=$EXPT_DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop4-BAS
+KWCOCO_BUNDLE_DPATH=$DATA_DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22"
+EXPERIMENT_NAME=Drop4_TuneV323_BAS_30GSD_BGRNSH_V2
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+INITIAL_STATE_V323="$EXPT_DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+python -m watch.tasks.fusion.fit \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --class_loss='focal' \
+    --saliency_loss='focal' \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.00 \
+    --global_saliency_weight=1.00 \
+    --learning_rate=1e-5 \
+    --weight_decay=1e-5 \
+    --input_space_scale="30GSD" \
+    --window_space_scale="30GSD" \
+    --output_space_scale="30GSD" \
+    --accumulate_grad_batches=4 \
+    --max_epochs=160 \
+    --patience=160 \
+    --num_workers=4 \
+    --dist_weights=True \
+    --time_steps=11 \
+    --channels="$CHANNELS" \
+    --time_sampling=soft2+distribute \
+    --time_span=6m \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5m \
+    --num_draw=4 \
+    --use_centered_positives=False \
+    --normalize_inputs=2048 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --init="$INITIAL_STATE_V323"
+
+
+    --config="$WORKDIR/configs/drop3_abalate1.yaml" \

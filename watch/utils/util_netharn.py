@@ -107,6 +107,9 @@ class Initializer(object):
         if pretrained_fpath is not None:
             config['init'] = 'pretrained'
 
+        import os
+        init_verbose = int(os.environ.get('WATCH_INIT_VERBOSE', 4))
+
         # ---
         initializer_ = None
         if config['init'].lower() in ['kaiming_normal']:
@@ -124,6 +127,7 @@ class Initializer(object):
                 'leftover': kw.get('leftover', None),
                 'mangle': kw.get('mangle', False),
                 'association': kw.get('association', None),
+                'verbose': init_verbose,
             })
         elif config['init'] == 'cls':
             # Indicate that the model will initialize itself

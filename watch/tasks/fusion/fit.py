@@ -398,8 +398,12 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     method_var_dict = method_class.compatible(method_var_dict)
 
     # _needs_transfer = False
+
     if args.resume_from_checkpoint is None:
         initializer = coerce_initializer(args.init)
+    else:
+        # Let lightning do it?
+        initializer = coerce_initializer('noop')
 
     if hasattr(datamodule, 'dataset_stats'):
         # TODO: Allow manual override of any of the dataset stats or allow them
@@ -449,8 +453,12 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     # for k in ignore_keys:
     #     state_dict.pop(k)
     print(f'initializer={initializer}')
-    initializer = coerce_initializer('noop')
     info = initializer.forward(model)  # NOQA
+
+    if info:
+        mapping = info['mapping']
+        print('mapping = {}'.format(ub.repr2(mapping, nl=1)))
+
     print('Finalize initialization')
     updated = model.state_dict() | to_preserve
     model.load_state_dict(updated)

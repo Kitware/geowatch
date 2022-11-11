@@ -381,6 +381,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         if time_sampling == 'auto':
             time_sampling = 'hard+distribute'
 
+        import os
+        grid_workers = int(os.environ.get('WATCH_GRID_WORKERS', 0))
+
         if mode == 'custom':
             new_sample_grid = None
             self.length = 1
@@ -397,7 +400,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 time_span=time_span,
                 window_space_scale=window_space_scale,
                 set_cover_algo=set_cover_algo,
-                # workers='max(avail, 8)',  # could configure this
+                workers=grid_workers,  # could configure this
             )
             new_sample_grid = builder.build()
             self.length = len(new_sample_grid['targets'])
@@ -417,7 +420,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 use_grid_positives=use_grid_positives,
                 window_space_scale=window_space_scale,
                 set_cover_algo=set_cover_algo,
-                # workers='max(avail, 8)',   # could configure this
+                workers=grid_workers,
             )
             new_sample_grid = builder.build()
 
