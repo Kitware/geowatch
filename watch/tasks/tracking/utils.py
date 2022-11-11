@@ -4,14 +4,13 @@ import kwcoco
 from rasterio import features
 import shapely.geometry
 import ubelt as ub
-from dataclasses import dataclass
 import pandas as pd
 import geopandas as gpd
 import dask_geopandas
 import itertools
 import collections
 from abc import abstractmethod
-from typing import Union, Iterable, Optional, Any, List, Dict
+from typing import Union, Iterable, Optional, List, Dict
 import warnings
 
 try:
@@ -41,63 +40,6 @@ except Exception:
     profile = ub.identity
 
 Poly = Union[kwimage.Polygon, kwimage.MultiPolygon]
-
-
-# TODO use geopandas for this instead?
-# Pros:
-# - vectorization
-# - geometry handling
-# - table structure/row-col slicing
-# Cons:
-# - geopandas
-#
-# store these in a Track as a geodataframe, then instantiate as Obs as needed?
-# this avoids generators everywhere on access
-@dataclass
-class Observation:
-    poly: Poly
-    gid: Optional[int] = None
-    # As of now, scores are mostly recalculated every time they are needed
-    # for a different gid, key, etc. There's potential to store them
-    # here instead.
-    score: Optional[int] = None  # TODO restrict this to [0,1]
-
-
-@dataclass
-class Track:
-    observations: Iterable[Observation]
-    # dset: Optional[kwcoco.CocoDataset]
-    # omg, I can't believe type errors are breaking runtime now. I must have
-    # some weird IPython package installed that does that.
-    dset: Any
-    vidid: Optional[int] = None
-    track_id: Optional[int] = None
-
-    @classmethod
-    def from_polys(cls,
-                   polys,
-                   dset,
-                   probs=None,
-                   vidid=None,
-                   scores=None,
-                   **kwargs):
-        if vidid is not None:
-            gids = dset.index.vidid_to_gids[vidid]
-        else:
-            gids = dset.imgs.keys()
-
-        if probs is not None:
-            obs = [
-                Observation(poly, gid, score_poly(poly, prob))
-                for poly, gid, prob in zip(polys, gids, probs)
-            ]
-        elif scores is not None:
-            obs = list(itertools.starmap(Observation, zip(polys, gids,
-                                                          scores)))
-        else:
-            obs = list(itertools.starmap(Observation, zip(polys, gids)))
-
-        return cls(observations=obs, dset=dset, vidid=vidid, **kwargs)
 
 
 class TrackFunction(collections.abc.Callable):
@@ -320,12 +262,12 @@ class NewTrackFunction(TrackFunction):
         return sub_dset
 
     @abstractmethod
-    def create_tracks(self, sub_dset) -> Iterable[Track]:
+    def create_tracks(self, sub_dset) -> gpd.GeoDataFrame:
         raise NotImplementedError('must be implemented by subclasses')
 
     @abstractmethod
     def add_tracks_to_dset(self, sub_dset,
-                           tracks: Iterable[Track]) -> kwcoco.CocoDataset:
+                           tracks: gpd.GeoDataFrame) -> kwcoco.CocoDataset:
         raise NotImplementedError('must be implemented by subclasses')
 
 
@@ -337,6 +279,7 @@ def check_only_bg(category_sequence, bg_name=['No Activity']):
 
 
 # --- geopandas utils ---
+# make this a class?
 
 
 def gpd_sort_by_gid(gdf, sorted_gids):
@@ -419,13 +362,12 @@ def gpd_compute_scores(gdf,
 # -----------------------
 
 
-def pop_tracks(
-        coco_dset: kwcoco.CocoDataset,
-        cnames: Iterable[str],
-        remove: bool = True,
-        score_chan: Optional[kwcoco.ChannelSpec] = None) -> Iterable[Track]:
+def pop_tracks(coco_dset: kwcoco.CocoDataset,
+               cnames: Iterable[str],
+               remove: bool = True,
+               score_chan: Optional[kwcoco.ChannelSpec] = None):
     '''
-    Convert kwcoco annotations into Track objects.
+    Convert kwcoco annotations into tracks.
 
     Args:
         coco_dset
@@ -455,56 +397,22 @@ def pop_tracks(
 
     assert len(polys) == len(annots), ('TODO handle multipolygon boundaries')
 
-    if 0:
-        if score_chan is not None:
-            # bookkeep unique gids only
-            # hackish, pretend it's all one big track for efficient interpolation
-            # TODO make this work for multiple videos
-            gids = coco_dset.index._set_sorted_by_frame_index(annots.gids)
-            keys = {score_chan.spec: list(score_chan.unique())}
-            heatmaps = build_heatmaps(coco_dset, gids, keys)[score_chan.spec]
-            heatmaps_by_gid = dict(zip(gids, heatmaps))
-            scores = [
-                score_poly(poly, heatmaps_by_gid[gid])
-                for poly, gid in zip(polys, annots.gids)
-            ]
-        else:
-            scores = [None] * len(annots)
-            # scores = annots.get('score', None)
+    polys = [p.to_shapely() for p in polys]
+    gdf = gpd.GeoDataFrame(dict(gid=annots.gids, poly=polys), geometry='poly')
+    gdf = gdf.reset_index().rename(columns={'index': 'track_idx'})
+    gdf = gdf.explode('gid')
+    if score_chan is not None:
+        keys = {score_chan.spec: list(score_chan.unique())}
+        gdf = gpd_compute_scores(gdf, coco_dset, [None], keys, USE_DASK=False)
+    # TODO standard way to access sorted_gids
+    sorted_gids = coco_dset.index._set_sorted_by_frame_index(
+        np.unique(annots.gids))
+    gdf = gpd_sort_by_gid(gdf, sorted_gids)
 
-        _track_infos = zip(polys, annots.gids, scores)
-        _track_ids = annots.get('track_id', None)
-        _tid_to_info = ub.group_items(_track_infos, _track_ids)
+    if remove:
+        coco_dset.remove_categories(cnames, keep_annots=False)
 
-        if remove:
-            coco_dset.remove_categories(cnames, keep_annots=False)
-
-        for track_id, track_info in _tid_to_info.items():
-            track_polys, track_gids, track_scores = zip(*track_info)
-            observations = list(
-                map(Observation, track_polys, track_gids, track_scores))
-            track = Track(observations, dset=coco_dset, track_id=track_id)
-            return track
-    else:
-        polys = [p.to_shapely() for p in polys]
-        gdf = gpd.GeoDataFrame(dict(gid=annots.gids, poly=polys),
-                               geometry='poly')
-        gdf = gdf.reset_index().rename(columns={'index': 'track_idx'})
-        gdf = gdf.explode('gid')
-        if score_chan is not None:
-            keys = {score_chan.spec: list(score_chan.unique())}
-            gdf = gpd_compute_scores(gdf,
-                                     coco_dset, [None],
-                                     keys,
-                                     USE_DASK=False)
-        # TODO standard way to access sorted_gids
-        sorted_gids = coco_dset.index._set_sorted_by_frame_index(np.unique(annots.gids))
-        gdf = gpd_sort_by_gid(gdf, sorted_gids)
-
-        if remove:
-            coco_dset.remove_categories(cnames, keep_annots=False)
-
-        return gdf
+    return gdf
 
 
 @profile

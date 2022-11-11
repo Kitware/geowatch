@@ -16,7 +16,6 @@ from watch.tasks.tracking.utils import (NewTrackFunction, mask_to_polygons,
                                         gpd_sort_by_gid, gpd_len,
                                         gpd_compute_scores)
 
-
 try:
     from xdev import profile
 except Exception:
@@ -240,15 +239,9 @@ def add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
             new_ann = make_new_annotation(*o, track_id)
             all_new_anns.append(new_ann)
 
-    if isinstance(tracks, gpd.GeoDataFrame):
-        for tid, grp in tracks.groupby('track_idx'):
-            score_chan = kwcoco.ChannelSpec('|'.join(key))
-            _add(zip(grp['gid'], grp['poly'], grp[(score_chan.spec, None)]), tid)
-    else:
-        # TODO Track only used for SC with bounds=polys, deprecate this
-        for track in tracks:
-            _add([(o.gid, o.poly, o.score) for o in track.observations],
-                 track.track_id)
+    for tid, grp in tracks.groupby('track_idx'):
+        score_chan = kwcoco.ChannelSpec('|'.join(key))
+        _add(zip(grp['gid'], grp['poly'], grp[(score_chan.spec, None)]), tid)
 
     # TODO: Faster to add annotations in bulk, but we need to construct the
     # "ids" first
@@ -616,22 +609,11 @@ def _gids_polys(
         moving_window_size=None,  # 150
         bounds=False) -> Iterable[Union[int, Poly]]:
     if bounds:  # for SC
-        if 0:
-            boundary_tracks = list(pop_tracks(sub_dset, [SITE_SUMMARY_CNAME]))
-            assert len(boundary_tracks) > 0, 'need valid site boundaries!'
-            gids = list(
-                np.unique(
-                    np.concatenate([[obs.gid for obs in track.observations]
-                                    for track in boundary_tracks])))
-            print('generating polys in bounds: number of bounds: ',
-                  len(boundary_tracks))
-        else:
-            boundary_tracks = pop_tracks(sub_dset, [SITE_SUMMARY_CNAME])
-            assert len(boundary_tracks) > 0, 'need valid site boundaries!'
-            gids = boundary_tracks['gid'].unique()
-            print('generating polys in bounds: number of bounds: ',
-                  gpd_len(boundary_tracks))
-            boundary_tracks = boundary_tracks.groupby('track_idx')
+        boundary_tracks = pop_tracks(sub_dset, [SITE_SUMMARY_CNAME])
+        assert len(boundary_tracks) > 0, 'need valid site boundaries!'
+        gids = boundary_tracks['gid'].unique()
+        print('generating polys in bounds: number of bounds: ',
+              gpd_len(boundary_tracks))
 
     else:
         boundary_tracks = [None]
@@ -647,7 +629,7 @@ def _gids_polys(
                                _NANS=True)['fg']
 
     # TODO parallelize
-    for track in boundary_tracks:
+    for _, track in boundary_tracks.groupby('track_idx'):
 
         # TODO when bounds are time-varying, this lets individual frames
         # go outside them; only enforces the union. Problem?
@@ -657,18 +639,10 @@ def _gids_polys(
             track_bounds = None
             _heatmaps_in_track = _heatmaps
         else:
-            if isinstance(track, tuple):
-                track_bounds = track[1]['poly'].unary_union
-                _heatmaps_in_track = np.compress(np.in1d(gids, track[1]['gid']),
-                                                 _heatmaps,
-                                                 axis=0)
-            else:
-                track_bounds = unary_union(
-                    [obs.poly.to_shapely() for obs in track.observations])
-                _heatmaps_in_track = np.compress(np.in1d(
-                    gids, [obs.gid for obs in track.observations]),
-                                                 _heatmaps,
-                                                 axis=0)
+            track_bounds = track['poly'].unary_union
+            _heatmaps_in_track = np.compress(np.in1d(gids, track[1]['gid']),
+                                             _heatmaps,
+                                             axis=0)
 
         # this is another hot spot, heatmaps_to_polys -> mask_to_polygons ->
         # rasterize. Figure out how to vectorize over bounds.
@@ -686,8 +660,7 @@ def _gids_polys(
 
             if poly.is_valid and not poly.is_empty:
 
-                yield (track[1]['gid'],
-                       kwimage.MultiPolygon.from_shapely(poly))
+                yield (track['gid'], kwimage.MultiPolygon.from_shapely(poly))
 
 
 #
@@ -767,35 +740,18 @@ class TimeAggregatedSC(NewTrackFunction):
         '''
         # TODO last use of Track here
         if self.boundaries_as == 'polys':
-            if 0:
-                tracks = list(
-                    pop_tracks(
-                        sub_dset,
-                        cnames=[SITE_SUMMARY_CNAME],
-                        # these are SC scores, not BAS, so this is not a
-                        # true reproduction of hybrid.
-                        score_chan=kwcoco.ChannelSpec('|'.join(self.key))))
-                # hack in always-foreground instead
-                if 0:  # TODO
-                    for track in list(tracks):
-                        for obs in track.observations:
-                            obs.score = 1
+            tracks = pop_tracks(
+                sub_dset,
+                cnames=[SITE_SUMMARY_CNAME],
+                # these are SC scores, not BAS, so this is not a
+                # true reproduction of hybrid.
+                score_chan=kwcoco.ChannelSpec('|'.join(self.key)))
+            # hack in always-foreground instead
+            # tracks[(score_chan, None)] = 1
 
-                tracks = list(
-                    filter(lambda track: len(list(track.observations)) > 0,
-                           tracks))
-            else:
-                tracks = pop_tracks(
-                    sub_dset,
-                    cnames=[SITE_SUMMARY_CNAME],
-                    # these are SC scores, not BAS, so this is not a
-                    # true reproduction of hybrid.
-                    score_chan=kwcoco.ChannelSpec('|'.join(self.key)))
-                # hack in always-foreground instead
-                # tracks[(score_chan, None)] = 1
-
-                # try to ignore this error
-                tracks['poly'] = tracks['poly'].map(kwimage.MultiPolygon.from_shapely)
+            # try to ignore this error
+            tracks['poly'] = tracks['poly'].map(
+                kwimage.MultiPolygon.from_shapely)
 
         else:
             tracks = time_aggregated_polys(
