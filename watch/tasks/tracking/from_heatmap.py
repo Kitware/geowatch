@@ -4,18 +4,18 @@ import kwimage
 import kwcoco
 import numpy as np
 import ubelt as ub
+import geopandas as gpd
 import itertools
 from typing import Iterable, Tuple, Union, Optional, Literal
 from dataclasses import dataclass
 from shapely.ops import unary_union
-import pandas as pd
-import geopandas as gpd
 from watch.tasks.tracking.utils import (NewTrackFunction, mask_to_polygons,
                                         build_heatmap, score_poly, Poly,
                                         _validate_keys, pop_tracks,
-                                        build_heatmaps, trackid_is_default)
+                                        build_heatmaps, trackid_is_default,
+                                        gpd_sort_by_gid, gpd_len,
+                                        gpd_compute_scores)
 
-import dask_geopandas
 
 try:
     from xdev import profile
@@ -242,7 +242,8 @@ def add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
 
     if isinstance(tracks, gpd.GeoDataFrame):
         for tid, grp in tracks.groupby('track_idx'):
-            _add(zip(grp['gid'], grp['poly'], grp[('fg', None)]), tid)
+            score_chan = kwcoco.ChannelSpec('|'.join(key))
+            _add(zip(grp['gid'], grp['poly'], grp[(score_chan.spec, None)]), tid)
     else:
         # TODO Track only used for SC with bounds=polys, deprecate this
         for track in tracks:
@@ -414,43 +415,12 @@ def time_aggregated_polys(
     polys = [p.to_shapely() for p in polys]
     _TRACKS = gpd.GeoDataFrame(dict(gid=gids, poly=polys), geometry='poly')
     # _TRACKS['track_idx'] = range(len(_TRACKS))
+    _TRACKS = _TRACKS.reset_index().rename(columns={'index': 'track_idx'})
     _TRACKS = _TRACKS.explode('gid')
 
     # ensure index is sorted in video order
     sorted_gids = sub_dset.images(vidid=video['id']).gids
-    dct = dict(zip(sorted_gids, range(len(sorted_gids))))
-    _TRACKS['gid_order'] = _TRACKS['gid'].map(dct)
-    assert _TRACKS['gid'].map(dct).groupby(
-        lambda x: x).is_monotonic_increasing.all()
-
-    def _sort_by_gid(gdf):
-        return gdf.groupby('track_idx', group_keys=False).apply(
-            lambda x: x.sort_values('gid_order')).reset_index(drop=True)
-
-    _TRACKS = _TRACKS.reset_index().rename(columns={'index': 'track_idx'})
-
-    def _len(_TRACKS):
-        return _TRACKS['track_idx'].nunique()
-
-    def compute_scores(grp, thrs=[], ks={}):
-        # TODO handle keys as channelcodes
-        # port over better handling from utils.build_heatmaps
-        # gid = grp['gid'].iloc[0]
-        gid = grp.name
-        for k in set().union(itertools.chain.from_iterable(ks.values())):
-            # TODO there is a regression here from not using
-            # build_heatmaps(skipped='interpolate'). It will be changed with
-            # nodata handling anyway, and that's easier to implement here.
-            heatmap = build_heatmap(sub_dset, gid, k, missing='fill')
-            scores = grp['poly'].map(
-                lambda p: score_poly(p, heatmap, threshold=thrs))
-            grp[[(k, thr) for thr in thrs]] = scores.to_list()
-        for thr in thrs:
-            for k, kk in ks.items():
-                if kk:
-                    # TODO nansum
-                    grp[(k, thr)] = grp[[(ki, thr) for ki in kk]].sum(axis=1)
-        return grp
+    _TRACKS = gpd_sort_by_gid(_TRACKS, sorted_gids)
 
     # awk, find better way of bookkeeping and indexing into scores needed
     thrs = {None}
@@ -461,57 +431,33 @@ def time_aggregated_polys(
     thrs = list(thrs)
 
     ks = {'fg': key, 'bg': bg_key}
-    ks = {k: v for k, v in ks.items() if v}
-    _valid_keys = set().union(itertools.chain.from_iterable(
-        ks.values())) | ks.keys()
 
-    USE_DASK = 0
-    if USE_DASK:  # 63% runtime
-        # https://github.com/geopandas/dask-geopandas
-        # _col_order = _TRACKS.columns  # doesn't matter
-        _TRACKS = _TRACKS.set_index('gid')
-        # npartitions and chunksize are mutually exclusive
-        _TRACKS = dask_geopandas.from_geopandas(_TRACKS, npartitions=8)
-        meta = _TRACKS._meta.join(
-            pd.DataFrame(columns=list(itertools.product(_valid_keys, thrs)),
-                         dtype=float))
-        _TRACKS = _TRACKS.groupby('gid',
-                                  group_keys=False).apply(compute_scores,
-                                                          thrs=thrs,
-                                                          ks=ks,
-                                                          meta=meta)
-        # raises this, which is probably fine:
-        # /home/local/KHQ/matthew.bernstein/.local/conda/envs/watch/lib/python3.9/site-packages/rasterio/features.py:362:
-        # NotGeoreferencedWarning: Dataset has no geotransform, gcps, or rpcs.
-        # The identity matrix will be returned.
-        # _rasterize(valid_shapes, out, transform, all_touched, merge_alg)
-
-        _TRACKS = _TRACKS.compute()  # _tracks is now a gdf again
-        _TRACKS = _sort_by_gid(_TRACKS.reset_index())
-        # _TRACKS = _TRACKS.reindex(columns=_col_order)
-
-    else:  # 95% runtime
-        _TRACKS = _TRACKS.groupby('gid',
-                                  group_keys=False).apply(compute_scores,
-                                                          thrs=thrs,
-                                                          ks=ks)
+    # 95% of runtime
+    _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=False)
+    # 63% of runtime
+    # _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=True)
+    # dask could unsort
+    # _TRACKS = gpd_sort_by_gid(_TRACKS.reset_index(), sorted_gids)
 
     # response_thresh = 0.9
     if response_thresh:
 
-        n_orig = _len(_TRACKS)
+        n_orig = gpd_len(_TRACKS)
         rsp_filter = ResponsePolygonFilter(_TRACKS, key, response_thresh)
         _TRACKS = rsp_filter(_TRACKS)
         print('after filtering based on per-polygon response: '
-              f'{_len(_TRACKS)} / {n_orig}')
+              f'{gpd_len(_TRACKS)} / {n_orig}')
 
     # TimePolygonFilter edits tracks instead of removing them
     if time_thresh:  # as a fraction of thresh
         time_filter = TimePolygonFilter(time_thresh * thresh)
+        n_orig = gpd_len(_TRACKS)
         _TRACKS = time_filter(_TRACKS)  # 7% of runtime? could be next line
+        print('after filtering based on time overlap: '
+              f'{gpd_len(_TRACKS)} / {n_orig}')
 
     # try to ignore this error
-    _TRACKS['poly'] = _TRACKS['poly'].map(kwimage.Polygon.from_shapely)
+    _TRACKS['poly'] = _TRACKS['poly'].map(kwimage.MultiPolygon.from_shapely)
     return _TRACKS
 
 
@@ -670,14 +616,23 @@ def _gids_polys(
         moving_window_size=None,  # 150
         bounds=False) -> Iterable[Union[int, Poly]]:
     if bounds:  # for SC
-        boundary_tracks = list(pop_tracks(sub_dset, [SITE_SUMMARY_CNAME]))
-        assert len(boundary_tracks) > 0, 'need valid site boundaries!'
-        gids = list(
-            np.unique(
-                np.concatenate([[obs.gid for obs in track.observations]
-                                for track in boundary_tracks])))
-        print('generating polys in bounds: number of bounds: ',
-              len(boundary_tracks))
+        if 0:
+            boundary_tracks = list(pop_tracks(sub_dset, [SITE_SUMMARY_CNAME]))
+            assert len(boundary_tracks) > 0, 'need valid site boundaries!'
+            gids = list(
+                np.unique(
+                    np.concatenate([[obs.gid for obs in track.observations]
+                                    for track in boundary_tracks])))
+            print('generating polys in bounds: number of bounds: ',
+                  len(boundary_tracks))
+        else:
+            boundary_tracks = pop_tracks(sub_dset, [SITE_SUMMARY_CNAME])
+            assert len(boundary_tracks) > 0, 'need valid site boundaries!'
+            gids = boundary_tracks['gid'].unique()
+            print('generating polys in bounds: number of bounds: ',
+                  gpd_len(boundary_tracks))
+            boundary_tracks = boundary_tracks.groupby('track_idx')
+
     else:
         boundary_tracks = [None]
         # TODO WARNING this is wrong!!! need to make sure this is never used.
@@ -702,12 +657,18 @@ def _gids_polys(
             track_bounds = None
             _heatmaps_in_track = _heatmaps
         else:
-            track_bounds = unary_union(
-                [obs.poly.to_shapely() for obs in track.observations])
-            _heatmaps_in_track = np.compress(np.in1d(
-                gids, [obs.gid for obs in track.observations]),
-                                             _heatmaps,
-                                             axis=0)
+            if isinstance(track, tuple):
+                track_bounds = track[1]['poly'].unary_union
+                _heatmaps_in_track = np.compress(np.in1d(gids, track[1]['gid']),
+                                                 _heatmaps,
+                                                 axis=0)
+            else:
+                track_bounds = unary_union(
+                    [obs.poly.to_shapely() for obs in track.observations])
+                _heatmaps_in_track = np.compress(np.in1d(
+                    gids, [obs.gid for obs in track.observations]),
+                                                 _heatmaps,
+                                                 axis=0)
 
         # this is another hot spot, heatmaps_to_polys -> mask_to_polygons ->
         # rasterize. Figure out how to vectorize over bounds.
@@ -725,7 +686,7 @@ def _gids_polys(
 
             if poly.is_valid and not poly.is_empty:
 
-                yield ([obs.gid for obs in track.observations],
+                yield (track[1]['gid'],
                        kwimage.MultiPolygon.from_shapely(poly))
 
 
@@ -806,22 +767,36 @@ class TimeAggregatedSC(NewTrackFunction):
         '''
         # TODO last use of Track here
         if self.boundaries_as == 'polys':
-            tracks = list(
-                pop_tracks(
+            if 0:
+                tracks = list(
+                    pop_tracks(
+                        sub_dset,
+                        cnames=[SITE_SUMMARY_CNAME],
+                        # these are SC scores, not BAS, so this is not a
+                        # true reproduction of hybrid.
+                        score_chan=kwcoco.ChannelSpec('|'.join(self.key))))
+                # hack in always-foreground instead
+                if 0:  # TODO
+                    for track in list(tracks):
+                        for obs in track.observations:
+                            obs.score = 1
+
+                tracks = list(
+                    filter(lambda track: len(list(track.observations)) > 0,
+                           tracks))
+            else:
+                tracks = pop_tracks(
                     sub_dset,
                     cnames=[SITE_SUMMARY_CNAME],
                     # these are SC scores, not BAS, so this is not a
                     # true reproduction of hybrid.
-                    score_chan=kwcoco.ChannelSpec('|'.join(self.key))))
-            # hack in always-foreground instead
-            if 0:  # TODO
-                for track in list(tracks):
-                    for obs in track.observations:
-                        obs.score = 1
+                    score_chan=kwcoco.ChannelSpec('|'.join(self.key)))
+                # hack in always-foreground instead
+                # tracks[(score_chan, None)] = 1
 
-            tracks = list(
-                filter(lambda track: len(list(track.observations)) > 0,
-                       tracks))
+                # try to ignore this error
+                tracks['poly'] = tracks['poly'].map(kwimage.MultiPolygon.from_shapely)
+
         else:
             tracks = time_aggregated_polys(
                 sub_dset,
@@ -844,6 +819,19 @@ class TimeAggregatedSC(NewTrackFunction):
         return tracks
 
     def add_tracks_to_dset(self, sub_dset, tracks, **kwargs):
+        if self.boundaries_as != 'polys':
+            col_map = {}
+            for c in tracks.columns:
+                if c[0] == 'fg':
+                    k = kwcoco.ChannelSpec('|'.join(self.key)).spec
+                    col_map[c] = (k, *c[1:])
+                elif c[0] == 'bg':
+                    k = kwcoco.ChannelSpec('|'.join(self.bg_key)).spec
+                    col_map[c] = (k, *c[1:])
+            # weird effect here - reassignment casts from GeoDataFrame to
+            # DataFrame. Related to invalid geometry column?
+            # tracks = tracks.rename(columns=col_map)
+            tracks.rename(columns=col_map, inplace=True)
         sub_dset = add_tracks_to_dset(sub_dset, tracks, self.thresh, self.key,
                                       self.bg_key, **kwargs)
 

@@ -5,7 +5,9 @@ from rasterio import features
 import shapely.geometry
 import ubelt as ub
 from dataclasses import dataclass
-# import functools
+import pandas as pd
+import geopandas as gpd
+import dask_geopandas
 import itertools
 import collections
 from abc import abstractmethod
@@ -334,6 +336,89 @@ def check_only_bg(category_sequence, bg_name=['No Activity']):
         return False
 
 
+# --- geopandas utils ---
+
+
+def gpd_sort_by_gid(gdf, sorted_gids):
+
+    dct = dict(zip(sorted_gids, range(len(sorted_gids))))
+    gdf['gid_order'] = gdf['gid'].map(dct)
+
+    # assert gdf['gid'].map(dct).groupby(
+    # lambda x: x).is_monotonic_increasing.all()
+
+    return gdf.groupby('track_idx', group_keys=False).apply(
+        lambda x: x.sort_values('gid_order')).reset_index(drop=True).drop(
+            columns=['gid_order'])
+
+
+def gpd_len(gdf):
+    return gdf['track_idx'].nunique()
+
+
+def gpd_compute_scores(gdf,
+                       sub_dset,
+                       thrs: Iterable,
+                       ks: Dict,
+                       USE_DASK=False):
+
+    def compute_scores(grp, thrs=[], ks={}):
+        # TODO handle keys as channelcodes
+        # port over better handling from utils.build_heatmaps
+        # gid = grp['gid'].iloc[0]
+        gid = grp.name
+        for k in set().union(itertools.chain.from_iterable(ks.values())):
+            # TODO there is a regression here from not using
+            # build_heatmaps(skipped='interpolate'). It will be changed with
+            # nodata handling anyway, and that's easier to implement here.
+            heatmap = build_heatmap(sub_dset, gid, k, missing='fill')
+            scores = grp['poly'].map(
+                lambda p: score_poly(p, heatmap, threshold=thrs))
+            grp[[(k, thr) for thr in thrs]] = scores.to_list()
+        for thr in thrs:
+            for k, kk in ks.items():
+                if kk:
+                    # TODO nansum
+                    grp[(k, thr)] = grp[[(ki, thr) for ki in kk]].sum(axis=1)
+        return grp
+
+    ks = {k: v for k, v in ks.items() if v}
+    _valid_keys = set().union(itertools.chain.from_iterable(
+        ks.values())) | ks.keys()
+
+    USE_DASK = 0
+    if USE_DASK:  # 63% runtime
+        # https://github.com/geopandas/dask-geopandas
+        # _col_order = gdf.columns  # doesn't matter
+        gdf = gdf.set_index('gid')
+        # npartitions and chunksize are mutually exclusive
+        gdf = dask_geopandas.from_geopandas(gdf, npartitions=8)
+        meta = gdf._meta.join(
+            pd.DataFrame(columns=list(itertools.product(_valid_keys, thrs)),
+                         dtype=float))
+        gdf = gdf.groupby('gid', group_keys=False).apply(compute_scores,
+                                                         thrs=thrs,
+                                                         ks=ks,
+                                                         meta=meta)
+        # raises this, which is probably fine:
+        # /home/local/KHQ/matthew.bernstein/.local/conda/envs/watch/lib/python3.9/site-packages/rasterio/features.py:362:
+        # NotGeoreferencedWarning: Dataset has no geotransform, gcps, or rpcs.
+        # The identity matrix will be returned.
+        # _rasterize(valid_shapes, out, transform, all_touched, merge_alg)
+
+        gdf = gdf.compute()  # _tracks is now a gdf again
+        # gdf = gdf.reindex(columns=_col_order)
+
+    else:  # 95% runtime
+        gdf = gdf.groupby('gid', group_keys=False).apply(compute_scores,
+                                                         thrs=thrs,
+                                                         ks=ks)
+    return gdf
+
+
+# -----------------------
+
+
 def pop_tracks(
         coco_dset: kwcoco.CocoDataset,
         cnames: Iterable[str],
@@ -349,7 +434,7 @@ def pop_tracks(
         score_chan: score the track polygons by image overlap with this channel
 
     Returns:
-        Track objects.
+        gpd dataframe.
         Mutates coco_dset if remove=True.
     '''
     # TODO could refactor to work on coco_dset.annots() and integrate
@@ -370,35 +455,56 @@ def pop_tracks(
 
     assert len(polys) == len(annots), ('TODO handle multipolygon boundaries')
 
-    if score_chan is not None:
-        # bookkeep unique gids only
-        # hackish, pretend it's all one big track for efficient interpolation
-        # TODO make this work for multiple videos
-        gids = coco_dset.index._set_sorted_by_frame_index(annots.gids)
-        keys = {score_chan.spec: list(score_chan.unique())}
-        heatmaps = build_heatmaps(coco_dset, gids, keys)[score_chan.spec]
-        heatmaps_by_gid = dict(zip(gids, heatmaps))
-        scores = [
-            score_poly(poly, heatmaps_by_gid[gid])
-            for poly, gid in zip(polys, annots.gids)
-        ]
+    if 0:
+        if score_chan is not None:
+            # bookkeep unique gids only
+            # hackish, pretend it's all one big track for efficient interpolation
+            # TODO make this work for multiple videos
+            gids = coco_dset.index._set_sorted_by_frame_index(annots.gids)
+            keys = {score_chan.spec: list(score_chan.unique())}
+            heatmaps = build_heatmaps(coco_dset, gids, keys)[score_chan.spec]
+            heatmaps_by_gid = dict(zip(gids, heatmaps))
+            scores = [
+                score_poly(poly, heatmaps_by_gid[gid])
+                for poly, gid in zip(polys, annots.gids)
+            ]
+        else:
+            scores = [None] * len(annots)
+            # scores = annots.get('score', None)
+
+        _track_infos = zip(polys, annots.gids, scores)
+        _track_ids = annots.get('track_id', None)
+        _tid_to_info = ub.group_items(_track_infos, _track_ids)
+
+        if remove:
+            coco_dset.remove_categories(cnames, keep_annots=False)
+
+        for track_id, track_info in _tid_to_info.items():
+            track_polys, track_gids, track_scores = zip(*track_info)
+            observations = list(
+                map(Observation, track_polys, track_gids, track_scores))
+            track = Track(observations, dset=coco_dset, track_id=track_id)
+            return track
     else:
-        scores = [None] * len(annots)
-        # scores = annots.get('score', None)
+        polys = [p.to_shapely() for p in polys]
+        gdf = gpd.GeoDataFrame(dict(gid=annots.gids, poly=polys),
+                               geometry='poly')
+        gdf = gdf.reset_index().rename(columns={'index': 'track_idx'})
+        gdf = gdf.explode('gid')
+        if score_chan is not None:
+            keys = {score_chan.spec: list(score_chan.unique())}
+            gdf = gpd_compute_scores(gdf,
+                                     coco_dset, [None],
+                                     keys,
+                                     USE_DASK=False)
+        # TODO standard way to access sorted_gids
+        sorted_gids = coco_dset.index._set_sorted_by_frame_index(np.unique(annots.gids))
+        gdf = gpd_sort_by_gid(gdf, sorted_gids)
 
-    _track_infos = zip(polys, annots.gids, scores)
-    _track_ids = annots.get('track_id', None)
-    _tid_to_info = ub.group_items(_track_infos, _track_ids)
+        if remove:
+            coco_dset.remove_categories(cnames, keep_annots=False)
 
-    if remove:
-        coco_dset.remove_categories(cnames, keep_annots=False)
-
-    for track_id, track_info in _tid_to_info.items():
-        track_polys, track_gids, track_scores = zip(*track_info)
-        observations = list(
-            map(Observation, track_polys, track_gids, track_scores))
-        track = Track(observations, dset=coco_dset, track_id=track_id)
-        yield track
+        return gdf
 
 
 @profile
