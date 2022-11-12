@@ -372,7 +372,7 @@ CHANNELS="(S2,WV):blue|green|red"
 INITIAL_STATE=$PHASE2_EXPT_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_invar_scratch_V030/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt
 EXPERIMENT_NAME=Drop4_tune_V30_V2
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-WATCH_GRID_WORKERS=0 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
+WATCH_GRID_WORKERS=1 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
     --train_dataset="$TRAIN_FPATH" \
@@ -391,7 +391,7 @@ WATCH_GRID_WORKERS=0 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
     --chip_size=256 \
     --time_steps=12 \
     --learning_rate=3e-5 \
-    --num_workers=4 \
+    --num_workers=2 \
     --max_epochs=160 \
     --patience=160 \
     --dist_weights=True \
@@ -412,6 +412,7 @@ WATCH_GRID_WORKERS=0 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
     --devices "0," \
     --amp_backend=apex \
     --num_sanity_val_steps=0 \
-    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-SC/runs/Drop4_tune_V30_V2/lightning_logs/version_4/package-interupt/package_epoch0_step11970.pt
+    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-SC/runs/Drop4_tune_V30_V2/lightning_logs/version_11/package-interupt/package_epoch0_step1661.pt \
+    --sqlview=sqlite
 
-    --init="$INITIAL_STATE"
+    #--init="$INITIAL_STATE"

@@ -388,6 +388,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             new_sample_grid = None
             self.length = 1
         elif mode == 'test':
+
+            # FIXME: something is wrong with the cache when using an sqlview.
+
             # In test mode we have to sample everything for BAS
             # (TODO: for activity clf, we should only focus on candidate regions)
             builder = spacetime_grid_builder.SpacetimeGridBuilder(
@@ -421,6 +424,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 window_space_scale=window_space_scale,
                 set_cover_algo=set_cover_algo,
                 workers=grid_workers,
+                use_cache=1,
             )
             new_sample_grid = builder.build()
 
@@ -435,7 +439,19 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 len(new_sample_grid['targets']))
 
             if 1:
-                vidnames = self.sampler.dset.videos(target_vidids).lookup('name')
+                import xdev
+                with xdev.embed_on_exception_context:
+                    vidnames = self.sampler.dset.videos(target_vidids).lookup('name')
+
+                if 0:
+                    # DEBUG postgres
+                    # all_vidids = self.sampler.dset.videos()
+                    # all_vidids = set(all_vidids)
+                    # len(set(target_vidids) & all_vidids)
+                    # len(set(target_vidids) - all_vidids)
+                    # len(all_vidids - set(target_vidids))
+                    vid_table = self.sampler.dset.raw_table('videos')
+
                 df = pd.DataFrame({
                     'vidid': target_vidids,
                     'vidname': vidnames,

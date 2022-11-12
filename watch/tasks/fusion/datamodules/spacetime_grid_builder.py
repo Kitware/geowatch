@@ -322,13 +322,15 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         use_centered_positives,
         refine_iosa_thresh,
         respect_valid_regions,
-        'cache_v9',
+        'cache_v10',
     ]
     # Higher level cacher (not sure if adding this secondary level of caching
     # is faster or not).
+    dset_name = ub.Path(dset.fpath).name
     cache_dpath = ub.Path.appdir('watch', 'grid_cache').ensuredir()
-    cacher = ub.Cacher('sample_grid-dataset-cache', dpath=cache_dpath,
-                       depends=depends, enabled=use_cache)
+    cacher = ub.Cacher('sample_grid-dataset-cache_' + dset_name,
+                       dpath=cache_dpath, depends=depends, enabled=use_cache,
+                       verbose=4)
     sample_grid = cacher.tryload()
     if sample_grid is None:
         from watch.utils.lightning_ext import util_globals
@@ -386,7 +388,8 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         }
         cacher.save(sample_grid)
     vidid_to_meta = sample_grid['vidid_to_meta']
-    print('vidid_to_meta = {}'.format(ub.repr2(vidid_to_meta, nl=-1)))
+    from watch.utils.slugify_ext import smart_truncate
+    print('vidid_to_meta = {}'.format(smart_truncate(ub.repr2(vidid_to_meta, nl=-1), max_length=1000)))
     return sample_grid
 
 
@@ -496,13 +499,14 @@ def _sample_single_video_spacetime_targets(
         time_span, use_annot_info,
         use_grid_positives,
         use_centered_positives,
-        respect_valid_regions,
         refine_iosa_thresh,
-        'cache_v9',
+        respect_valid_regions,
+        set_cover_algo,
+        'cache_v10',
     ]
     cache_dpath = ub.Path.appdir('watch', 'grid_cache').ensuredir()
-    cacher = ub.Cacher('sliding-window-cache', dpath=cache_dpath,
-                       depends=depends, enabled=use_cache)
+    cacher = ub.Cacher('sliding-window-cache-' + video_name,
+                       dpath=cache_dpath, depends=depends, enabled=use_cache)
     _cached = cacher.tryload()
     if _cached is None:
 
@@ -582,6 +586,7 @@ def _sample_single_video_spacetime_targets(
         'vidspace_window_space_dims': vidspace_window_dims,
         'winspace_window_space_dims': winspace_space_dims,
         'vidspace_full_dims': vidspace_full_dims,
+        'num_available_frames': len(time_sampler.indexes),
     }
     return _cached, meta, time_sampler, video_gids
 

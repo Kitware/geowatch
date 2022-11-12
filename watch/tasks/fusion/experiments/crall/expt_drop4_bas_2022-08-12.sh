@@ -1073,7 +1073,9 @@ python -m watch.tasks.fusion.fit \
     --devices "0," \
     --amp_backend=apex \
     --num_sanity_val_steps=0 \
-    --init="$INITIAL_STATE_V323"
+    --init=/home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/training/namek/joncrall/Drop4-BAS/runs/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/lightning_logs/version_1/package-interupt/package_epoch0_step7501.pt
+
+    #--init="$INITIAL_STATE_V323"
 
 
     --config="$WORKDIR/configs/drop3_abalate1.yaml" \
