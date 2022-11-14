@@ -115,10 +115,37 @@ class S2SubsetRemapModelInfo(ModelInfo):
                                    device=device)
 
 
+class S2ESAWorldCoverModelInfo(ModelInfo):
+    """
+    This model was trained on the 6 bands that Sentinel 2
+    and Landsat 8 have in common and 11 segmentation classes.
+    """
+
+    def create_dataset(self, coco_dset):
+        return S2L8CommonChannelsDataset(coco_dset)
+
+    @property
+    def model_outputs(self):
+        return [
+            'tree_cover', 'shrubland', 'grassland',
+            'cropland', 'built_up', 'bare_sparse_vegetation',
+            'snow_ice', 'water', 'herbaceous_wetland',
+            'mangroves', 'moss_lichen'
+        ]
+
+    def load_model(self, weights_filename, device):
+        assert len(self.model_outputs) == 11
+        return detector.load_model(weights_filename,
+                                   num_outputs=11,
+                                   num_channels=6,
+                                   device=device)
+
+
 __mapping = {
     'visnav_osm': WV3ModelInfo,
     'visnav_sentinel2': S2ModelInfo,
-    'visnav_remap_s2_subset': S2SubsetRemapModelInfo
+    'visnav_remap_s2_subset': S2SubsetRemapModelInfo,
+    'esa_worldcover_s2': S2ESAWorldCoverModelInfo
 }
 
 
