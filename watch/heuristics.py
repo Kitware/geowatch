@@ -557,8 +557,10 @@ QUALITY_BITS = ub.udict({
 
 # The main dataset codes currently in use.
 DATASET_CODES = [
-    'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC',
-    'Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC',
+    # 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC',
+    # 'Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC',
+    'Drop4-BAS',
+    'Drop4-SC',
 ]
 
 

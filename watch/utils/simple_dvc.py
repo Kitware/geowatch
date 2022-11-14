@@ -1,5 +1,9 @@
 """
 A simplified Python DVC API
+
+TODO:
+    - [ ] Replace "jobs" with "workers" to keep variables consistent across the
+          project? Or keep "jobs" because that's what DVC uses?
 """
 import ubelt as ub
 import os
@@ -166,6 +170,23 @@ class SimpleDVC(ub.NiceRepr):
                     raise
 
     def push(self, path, remote=None, recursive=False, jobs=None):
+        """
+        Push the content tracked by .dvc files to remote storage.
+
+        Args:
+            path (Path | List[Path):
+                one or more file paths that should have an associated .dvc
+                sidecar file or if recursive is true, a directory containing
+                multiple tracked files.
+
+            remote (str):
+                the name of the remote registered in the .dvc/config to push to
+
+            recursive (bool):
+                if True, then items in ``path`` can be a directory.
+
+            jobs (int): number of parallel workers
+        """
         from dvc import main as dvc_main
         paths = list(map(ub.Path, _ensure_iterable(path)))
         if len(paths) == 0:

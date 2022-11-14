@@ -1,3 +1,11 @@
+"""
+
+python -m watch mlops "status" --dataset_codes Drop4-SC
+python -m watch mlops "pull packages" --dataset_codes Drop4-SC
+
+"""
+
+
 def main():
     """
     import sys, ubelt

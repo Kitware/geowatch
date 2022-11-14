@@ -415,4 +415,128 @@ WATCH_GRID_WORKERS=1 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
     --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-SC/runs/Drop4_tune_V30_V2/lightning_logs/version_11/package-interupt/package_epoch0_step1661.pt \
     --sqlview=sqlite
 
+
+
+export CUDA_VISIBLE_DEVICES=1
+PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
+PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DATASET_CODE=Drop4-SC
+TRAIN_FNAME=data_train.kwcoco.json
+VALI_FNAME=data_vali.kwcoco.json
+TEST_FNAME=data_vali.kwcoco.json
+WORKDIR=$PHASE2_EXPT_DPATH/training/$HOSTNAME/$USER
+KWCOCO_BUNDLE_DPATH=$PHASE2_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/$TRAIN_FNAME
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/$VALI_FNAME
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
+#CHANNELS="blue|green|red,invariants:0:16"
+CHANNELS="(S2,WV):blue|green|red"
+INITIAL_STATE=$PHASE2_EXPT_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_invar_scratch_V030/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt
+EXPERIMENT_NAME=Drop4_tune_V30_8GSD_V3
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+WATCH_GRID_WORKERS=2 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=0.00 \
+    --accumulate_grad_batches=3 \
+    --batch_size=8 \
+    --saliency_loss='focal' \
+    --class_loss='dicefocal' \
+    --input_space_scale="8GSD" \
+    --window_space_scale="8GSD" \
+    --output_space_scale="8GSD" \
+    --chip_size=128 \
+    --time_steps=12 \
+    --learning_rate=3e-5 \
+    --num_workers=2 \
+    --max_epochs=160 \
+    --patience=160 \
+    --dist_weights=True \
+    --time_sampling=soft2 \
+    --time_span=7m \
+    --channels="$CHANNELS" \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --use_centered_positives=False \
+    --num_draw=8 \
+    --normalize_inputs=1024 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --accelerator="gpu" \
+    --devices "0," \
+    --amp_backend=apex \
+    --num_sanity_val_steps=0 \
+    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-SC/runs/Drop4_tune_V30_V2/lightning_logs/version_13/package-interupt/package_epoch7_step95760.pt \
+    --sqlview=sqlite
+
     #--init="$INITIAL_STATE"
+
+export CUDA_VISIBLE_DEVICES=1
+PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
+PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DATASET_CODE=Drop4-SC
+TRAIN_FNAME=data_train.kwcoco.json
+VALI_FNAME=data_vali.kwcoco.json
+TEST_FNAME=data_vali.kwcoco.json
+WORKDIR=$PHASE2_EXPT_DPATH/training/$HOSTNAME/$USER
+KWCOCO_BUNDLE_DPATH=$PHASE2_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/$TRAIN_FNAME
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/$VALI_FNAME
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
+#CHANNELS="blue|green|red,invariants:0:16"
+CHANNELS="(S2,WV):blue|green|red"
+INITIAL_STATE=$PHASE2_EXPT_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_invar_scratch_V030/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt
+EXPERIMENT_NAME=Drop4_tune_V30_2GSD_V3
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+WATCH_GRID_WORKERS=0 WATCH_INIT_VERBOSE=100 python -m watch.tasks.fusion.fit \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.00 \
+    --global_saliency_weight=0.00 \
+    --accumulate_grad_batches=3 \
+    --batch_size=16 \
+    --saliency_loss='focal' \
+    --class_loss='dicefocal' \
+    --input_space_scale="2GSD" \
+    --window_space_scale="2GSD" \
+    --output_space_scale="2GSD" \
+    --chip_size=256 \
+    --time_steps=12 \
+    --learning_rate=3e-5 \
+    --num_workers=2 \
+    --max_epochs=160 \
+    --patience=160 \
+    --dist_weights=True \
+    --time_sampling=soft2 \
+    --time_span=7m \
+    --channels="$CHANNELS" \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --use_centered_positives=False \
+    --num_draw=2 \
+    --normalize_inputs=1024 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --accelerator="gpu" \
+    --devices "0," \
+    --amp_backend=apex \
+    --num_sanity_val_steps=0 \
+    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-SC/runs/Drop4_tune_V30_2GSD_V3/lightning_logs/version_0/package-interupt/package_epoch0_step57.pt \
+    --sqlview=sqlite
+
+    #--init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-SC/runs/Drop4_tune_V30_8GSD_V3/lightning_logs/version_0/package-interupt/package_epoch3_step22551.pt \

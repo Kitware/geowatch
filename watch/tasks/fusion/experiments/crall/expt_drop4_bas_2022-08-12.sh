@@ -1045,17 +1045,17 @@ python -m watch.tasks.fusion.fit \
     --global_change_weight=0.00 \
     --global_class_weight=0.00 \
     --global_saliency_weight=1.00 \
-    --learning_rate=1e-5 \
+    --learning_rate=3e-4 \
     --weight_decay=1e-5 \
-    --input_space_scale="30GSD" \
-    --window_space_scale="30GSD" \
-    --output_space_scale="30GSD" \
+    --input_space_scale="15GSD" \
+    --window_space_scale="15GSD" \
+    --output_space_scale="15GSD" \
     --accumulate_grad_batches=4 \
     --max_epochs=160 \
     --patience=160 \
     --num_workers=4 \
     --dist_weights=True \
-    --time_steps=11 \
+    --time_steps=5 \
     --channels="$CHANNELS" \
     --time_sampling=soft2+distribute \
     --time_span=6m \
@@ -1073,9 +1073,8 @@ python -m watch.tasks.fusion.fit \
     --devices "0," \
     --amp_backend=apex \
     --num_sanity_val_steps=0 \
-    --init=/home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/training/namek/joncrall/Drop4-BAS/runs/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/lightning_logs/version_1/package-interupt/package_epoch0_step7501.pt
-
+    --init=/home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/training/namek/joncrall/Drop4-BAS/runs/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/lightning_logs/version_3/package-interupt/package_epoch0_step41.pt
+    #--init=/home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/training/namek/joncrall/Drop4-BAS/runs/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/lightning_logs/version_2/package-interupt/package_epoch0_step23012.pt 
+    #--init=/home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/training/namek/joncrall/Drop4-BAS/runs/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/lightning_logs/version_1/package-interupt/package_epoch0_step7501.pt
     #--init="$INITIAL_STATE_V323"
-
-
-    --config="$WORKDIR/configs/drop3_abalate1.yaml" \
+    #--config="$WORKDIR/configs/drop3_abalate1.yaml" \

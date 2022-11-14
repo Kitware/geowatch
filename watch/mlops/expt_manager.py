@@ -14,7 +14,7 @@ Example:
     python -m watch mlops "pull packages evals" --dataset_codes "Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC"
     python -m watch mlops "push packages evals"
 
-    python -m watch mlops "status"
+    python -m watch mlops "status" --dataset_codes Drop4-SC
 
     python -m watch mlops "list"
 
@@ -434,6 +434,8 @@ class DVCExptManager(ub.NiceRepr):
 
     def pull_packages(manager):
         # TODO: git pull
+        import xdev
+        xdev.embed()
         pkg_df = manager.versioned_table(types=['pkg_fpath'])
         pull_df = pkg_df[pkg_df['needs_pull'].astype(bool)]
         pull_fpaths = pull_df['dvc'].tolist()
@@ -504,6 +506,7 @@ class ExperimentState(ub.NiceRepr):
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
         >>> dataset_code = 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC'
         >>> dataset_code = '*'
+        >>> dataset_code = 'Drop4-SC'
         >>> dvc_remote = 'aws'
         >>> self = ExperimentState(expt_dvc_dpath, dataset_code, dvc_remote, data_dvc_dpath)
         >>> self.summarize()
@@ -609,8 +612,14 @@ class ExperimentState(ub.NiceRepr):
         }
 
         self.staging_templates = {
+            # Staged checkpoint
             'ckpt': 'runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{checkpoint}.ckpt',
+
+            # Staged package
             'spkg': 'runs/{expt}/lightning_logs/{lightning_version}/checkpoints/{model}.pt',
+
+            # Interrupted models
+            'ipkg': 'runs/{expt}/lightning_logs/{lightning_version}/package-interupt/{model}.pt',
         }
 
         # directory suffixes after the pred/eval type
@@ -843,6 +852,31 @@ class ExperimentState(ub.NiceRepr):
                     row['ckpt_exists'] = False
                     row['type'] = 'ckpt'
                     rows.append(row)
+                row['spkg_fpath'] = spkg_fpath
+                row['is_packaged'] = True
+                row.update(_attrs)
+
+        # Find interrupted checkpoints
+        key = 'ipkg'  # stands for staged package
+        for pat in [p[key] for p in self.path_patterns_matrix]:
+            mpat = util_pattern.Pattern.coerce(pat)
+            for spkg_fpath in list(mpat.paths()):
+                # Does this correspond to an existing checkpoint?
+                _attrs = self._parse_pattern_attrs(self.templates[key], spkg_fpath)
+
+                # Hack: making assumption about naming pattern
+                spkg_stem = spkg_fpath.stem
+                ckpt_stem = ''.join(spkg_stem.partition('_epoch')[-2:])[1:]
+                ckpt_path = spkg_fpath.parent / (ckpt_stem + '.ckpt')
+
+                # The checkpoint itself wont exist in this case
+                # Always add a new row
+                row = default.copy()
+                row['checkpoint'] = ckpt_stem
+                row['ckpt_exists'] = False
+                row['type'] = 'ckpt'
+                rows.append(row)
+
                 row['spkg_fpath'] = spkg_fpath
                 row['is_packaged'] = True
                 row.update(_attrs)
@@ -1159,6 +1193,10 @@ class ExperimentState(ub.NiceRepr):
         """
         from rich.prompt import Confirm
 
+        perf_config = {
+            'push_workers': 8,
+        }
+
         mode = 'all'
 
         staging_df = self.staging_table()
@@ -1174,7 +1212,7 @@ class ExperimentState(ub.NiceRepr):
             to_repackage = needs_package['ckpt_path'].values.tolist()
         else:
             to_repackage = []
-        print(to_repackage)
+        print('to_repackage = {}'.format(ub.repr2(to_repackage, nl=1)))
         if to_repackage:
             # NOTE: THIS RELIES ON KNOWING ABOUT THE SPECIFIC MODEL CODE.
             # IT WOULD BE NICE IF WE DIDN'T NEED THAT HERE.
@@ -1218,9 +1256,10 @@ class ExperimentState(ub.NiceRepr):
             dvc_api = SimpleDVC(self.expt_dvc_dpath)
             toadd_pkg_fpaths = needs_dvc_add['raw'].to_list()
             dvc_api.add(toadd_pkg_fpaths)
-            push_jobs = 8
-            dvc_api.push(toadd_pkg_fpaths, remote=self.dvc_remote,
-                         jobs=push_jobs, recursive=True)
+            dvc_api.push(
+                toadd_pkg_fpaths, remote=self.dvc_remote,
+                jobs=perf_config['push_workers'],
+                recursive=True)
 
             import platform
             hostname = platform.node()
@@ -1439,6 +1478,7 @@ def checkpoint_filepath_info(fname):
     Example:
         >>> from watch.mlops.expt_manager import *  # NOQA
         >>> fnames = [
+        >>>     'epoch1_step10.foo',
         >>>     'epoch=1-step=10.foo',
         >>>     'epoch=1-step=10-v2.foo',
         >>>     'epoch=1-step=10',
@@ -1461,13 +1501,15 @@ def checkpoint_filepath_info(fname):
         info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v2'}
     """
     # We assume it must have this
-    suffix = ''.join(fname.partition('epoch=')[1:])
+    suffix = ''.join(fname.partition('epoch')[1:])
     # Hack: making name assumptions
     parsers = [
         parse.Parser('epoch={epoch:d}-step={step:d}-{ckpt_ver}.{ext}'),
         parse.Parser('epoch={epoch:d}-step={step:d}.{ext}'),
         parse.Parser('epoch={epoch:d}-step={step:d}-{ckpt_ver}'),
         parse.Parser('epoch={epoch:d}-step={step:d}'),
+        parse.Parser('epoch{epoch:d}_step{step:d}.{ext}'),
+        parse.Parser('epoch{epoch:d}_step{step:d}'),
     ]
     # results = parser.parse(str(path))
     info = None
