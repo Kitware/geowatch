@@ -1,7 +1,51 @@
 """
 
 python -m watch mlops "status" --dataset_codes Drop4-SC
+python -m watch mlops "push packages" --dataset_codes Drop4-SC
 python -m watch mlops "pull packages" --dataset_codes Drop4-SC
+
+
+
+models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=6-step=83790.pt.pt
+models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/package_epoch3_step22551.pt.pt
+models/fusion/Drop4-SC/packages/Drop4_tune_V30_2GSD_V3/package_epoch0_step57.pt.pt
+
+
+
+# Quick validation sites
+KR_R001_0000_box
+KR_R001_0015_box
+KR_R002_0025_box
+KR_R002_0030_box  # negative
+US_R007_0045_box
+US_R007_0015_box
+
+
+python -m watch find_dvc   --hardware=auto --tags=phase2_expt
+
+DATASET_CODE=Drop4-SC
+DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="auto")
+EXPT_DVC_DPATH=$(smartwatch_dvc --tags="phase2_expt" --hardware="auto")
+
+echo "
+DATA_DVC_DPATH = $DATA_DVC_DPATH
+EXPT_DVC_DPATH = $EXPT_DVC_DPATH
+"
+
+# Setup the small dataset
+kwcoco subset \
+    --src $DATA_DVC_DPATH/Drop4-SC/data_vali.kwcoco.json \
+    --dst $DATA_DVC_DPATH/Drop4-SC/data_vali_small.kwcoco.json \
+    --select_videos '((.name == "KR_R001_0000_box") ||
+                      (.name == "KR_R001_0015_box") ||
+                      (.name == "KR_R002_0025_box") ||
+                      (.name == "KR_R002_0030_box") ||
+                      (.name == "US_R007_0045_box") ||
+                      (.name == "US_R007_0015_box"))'
+
+
+
+TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/BR_R001.kwcoco.json
 
 """
 
@@ -125,7 +169,7 @@ Test connors models:
 
 DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
 DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+EXPT_DVC_DPATH=$(smartwatch_dvc --tags="phase2_expt")
 # TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data.kwcoco.json
 TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/BR_R001.kwcoco.json
 
@@ -134,9 +178,9 @@ python -m watch.mlops.schedule_evaluation \
     --params="
         matrix:
             trk.pxl.model:
-                # - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Multi_Native/package_epoch10_step200000.pt
+                # - $EXPT_DVC_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Multi_Native/package_epoch10_step200000.pt
                 - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_invariants_30GSD_V016/lightning_logs/version_4/checkpoints/Drop4_BAS_invariants_30GSD_V016_epoch=10-step=5632.pt
-                # - $DVC_EXPT_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+                # - $EXPT_DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
             trk.pxl.data.test_dataset:
                 - $DATA_DVC_DPATH/$DATASET_CODE/combo_BR_R001_I.kwcoco.json
                 - $DATA_DVC_DPATH/$DATASET_CODE/combo_KR_R001_I.kwcoco.json
@@ -167,7 +211,7 @@ python -m watch.mlops.schedule_evaluation \
             act.poly.use_viterbi:
                 - 0
             act.pxl.model:
-                - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
         include:
             - act.pxl.data.chip_dims: 256,256
               act.pxl.data.window_scale_space: 3GSD
@@ -197,15 +241,15 @@ python -m watch.mlops.schedule_evaluation \
 # HOROLOGIC
 DATASET_CODE=Drop4-BAS
 DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+EXPT_DVC_DPATH=$(smartwatch_dvc --tags="phase2_expt")
 # TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data.kwcoco.json
 TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/BR_R001.kwcoco.json
 python -m watch.mlops.schedule_evaluation \
     --params="
         matrix:
             trk.pxl.model:
-                - $DVC_EXPT_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
-                - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Continue_15GSD_BGR_V004/Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+                - $EXPT_DVC_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Continue_15GSD_BGR_V004/Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt.pt
             trk.pxl.data.test_dataset:
                 - $DATA_DVC_DPATH/$DATASET_CODE/BR_R002.kwcoco.json
                 - $DATA_DVC_DPATH/$DATASET_CODE/KR_R001.kwcoco.json
@@ -237,7 +281,7 @@ python -m watch.mlops.schedule_evaluation \
             act.poly.use_viterbi:
                 - 0
             act.pxl.model:
-                - $DVC_EXPT_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
         include:
             - act.pxl.data.chip_dims: 256,256
               act.pxl.data.window_scale_space: 3GSD
@@ -291,7 +335,7 @@ SC
 
 DATASET_CODE=Drop4-SC
 DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+EXPT_DVC_DPATH=$(smartwatch_dvc --tags="phase2_expt")
 ls $DATA_DVC_DPATH/$DATASET_CODE
 TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data_vali.kwcoco.json
 python -m watch.mlops.schedule_evaluation \
@@ -326,7 +370,7 @@ python -m watch.mlops.schedule_evaluation \
             act.poly.use_viterbi:
                 - 0
             act.pxl.model:
-                - $DVC_EXPT_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_invar_scratch_V030/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt
+                - $EXPT_DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_invar_scratch_V030/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt
         include:
             - act.pxl.data.chip_dims: 256,256
               act.pxl.data.window_scale_space: 3GSD

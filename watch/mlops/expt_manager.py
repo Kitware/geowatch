@@ -413,8 +413,8 @@ class DVCExptManager(ub.NiceRepr):
             dvc.push(to_push_fpaths)
 
     def pull_evals(manager):
-        dvc = manager.dvc
-        dvc.git_pull()
+        manager.dvc.git_pull()
+
         eval_df = manager.evaluation_table()
         summarize_tables({'versioned': eval_df})
 
@@ -430,12 +430,12 @@ class DVCExptManager(ub.NiceRepr):
         print(f'{len(pull_fpaths)=}')
         for p in pull_fpaths:
             assert p.exists()
-        dvc.pull(pull_fpaths)
+        manager.dvc.pull(pull_fpaths)
 
     def pull_packages(manager):
-        # TODO: git pull
-        import xdev
-        xdev.embed()
+        # Assume just one git repo and manually pull
+        manager.dvc.git_pull()
+
         pkg_df = manager.versioned_table(types=['pkg_fpath'])
         pull_df = pkg_df[pkg_df['needs_pull'].astype(bool)]
         pull_fpaths = pull_df['dvc'].tolist()
@@ -453,6 +453,7 @@ class DVCExptManager(ub.NiceRepr):
     def push(manager, targets):
         if 'packages' in targets:
             manager.push_packages()
+
         if 'evals' in targets:
             manager.push_evals()
 
