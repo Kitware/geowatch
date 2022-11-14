@@ -439,18 +439,15 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 len(new_sample_grid['targets']))
 
             if 1:
-                import xdev
-                with xdev.embed_on_exception_context:
-                    vidnames = self.sampler.dset.videos(target_vidids).lookup('name')
-
-                if 0:
-                    # DEBUG postgres
-                    # all_vidids = self.sampler.dset.videos()
-                    # all_vidids = set(all_vidids)
-                    # len(set(target_vidids) & all_vidids)
-                    # len(set(target_vidids) - all_vidids)
-                    # len(all_vidids - set(target_vidids))
-                    vid_table = self.sampler.dset.raw_table('videos')
+                vidnames = self.sampler.dset.videos(target_vidids).lookup('name')
+                # if 0:
+                #     # DEBUG postgres
+                #     # all_vidids = self.sampler.dset.videos()
+                #     # all_vidids = set(all_vidids)
+                #     # len(set(target_vidids) & all_vidids)
+                #     # len(set(target_vidids) - all_vidids)
+                #     # len(all_vidids - set(target_vidids))
+                #     vid_table = self.sampler.dset.raw_table('videos')
 
                 df = pd.DataFrame({
                     'vidid': target_vidids,

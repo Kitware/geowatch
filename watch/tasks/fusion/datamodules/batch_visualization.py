@@ -644,9 +644,8 @@ class BatchVisualizationBuilder:
             })
 
         if 0:
-            for m in frame_metas:
-                print(m['frame_idx'])
-
+            # for m in frame_metas:
+            #     print(m['frame_idx'])
             for k, v in item_output.items():
                 print([z.shape for z in v])
 
