@@ -36,13 +36,79 @@ EXPT_DVC_DPATH = $EXPT_DVC_DPATH
 kwcoco subset \
     --src $DATA_DVC_DPATH/Drop4-SC/data_vali.kwcoco.json \
     --dst $DATA_DVC_DPATH/Drop4-SC/data_vali_small.kwcoco.json \
-    --select_videos '((.name == "KR_R001_0000_box") ||
-                      (.name == "KR_R001_0015_box") ||
-                      (.name == "KR_R002_0025_box") ||
-                      (.name == "KR_R002_0030_box") ||
-                      (.name == "US_R007_0045_box") ||
+    --select_videos '((.name == "KR_R001_0000_box") or
+                      (.name == "KR_R001_0015_box") or
+                      (.name == "KR_R002_0025_box") or
+                      (.name == "KR_R002_0030_box") or
+                      (.name == "US_R007_0045_box") or
                       (.name == "US_R007_0015_box"))'
 
+
+DATASET_CODE=Drop4-SC
+DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="auto")
+EXPT_DVC_DPATH=$(smartwatch_dvc --tags="phase2_expt" --hardware="auto")
+
+python -m watch.mlops.schedule_evaluation \
+    --params="
+        matrix:
+            trk.pxl.model:
+                - foo
+            trk.pxl.data.test_dataset:
+                - $DATA_DVC_DPATH/$DATASET_CODE/combo_US_R007_I.kwcoco.json
+            trk.pxl.data.window_scale_space:
+                - "auto"
+            trk.pxl.data.time_sampling:
+                - "auto"
+            trk.pxl.data.input_scale_space:
+                - "auto"
+            trk.poly.thresh:
+                - 0.1
+            crop.src:
+                - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/online_v1/kwcoco_for_sc_fielded.json
+            crop.regions:
+                # - trk.poly.output
+                - truth
+            act.pxl.data.test_dataset:
+                - $DATA_DVC_DPATH/$DATASET_CODE/data_vali_small.kwcoco.json
+            act.pxl.data.input_scale_space:
+                - auto
+            act.pxl.data.time_steps:
+                - auto
+            act.pxl.data.chip_overlap:
+                - 0.3
+            act.poly.thresh:
+                - 0.1
+            act.poly.use_viterbi:
+                - 0
+            act.pxl.model:
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=6-step=83790.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/package_epoch3_step22551.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_2GSD_V3/package_epoch0_step57.pt.pt
+        include:
+            - act.pxl.data.chip_dims: 256,256
+              act.pxl.data.window_scale_space: 3GSD
+              act.pxl.data.input_scale_space: 3GSD
+              act.pxl.data.output_scale_space: 3GSD
+    " \
+    --enable_pred_trk_pxl=0 \
+    --enable_pred_trk_poly=0 \
+    --enable_eval_trk_pxl=0 \
+    --enable_eval_trk_poly=0 \
+    --enable_crop=0 \
+    --enable_pred_act_pxl=1 \
+    --enable_pred_act_poly=1 \
+    --enable_eval_act_pxl=1 \
+    --enable_eval_act_poly=1 \
+    --enable_viz_pred_trk_poly=0 \
+    --enable_viz_pred_act_poly=0 \
+    --enable_links=1 \
+    --devices="1," --queue_size=2 \
+    --queue_name='nov-eval' \
+    --backend=tmux --skip_existing=1 \
+    --run=1
+
+
+python -m watch.cli.run_tracker /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/pred/act/package_epoch3_step22551.pt/Drop4-SC_data_vali_small.kwcoco/act_pxl_e836a34c/pred.kwcoco.json --default_track_fn class_heatmaps --track_kwargs '{"boundaries_as": "polys", "thresh": 0.1, "use_viterbi": 0}' --site_summary /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/dset_code_unknown/pred/trk/foo/Drop4-SC_combo_US_R007_I.kwcoco/trk_pxl_ca8e6033/trk_poly_9f08fb8c/site_summary_tracks_manifest.json --out_sites_fpath /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/pred/act/package_epoch3_step22551.pt/Drop4-SC_data_vali_small.kwcoco/act_pxl_e836a34c/act_poly_e50c1c4f/site_activity_manifest.json --out_sites_dir /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/pred/act/package_epoch3_step22551.pt/Drop4-SC_data_vali_small.kwcoco/act_pxl_e836a34c/act_poly_e50c1c4f/sites --out_kwcoco /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/pred/act/package_epoch3_step22551.pt/Drop4-SC_data_vali_small.kwcoco/act_pxl_e836a34c/act_poly_e50c1c4f/activity_tracks.kwcoco.json
 
 
 TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/BR_R001.kwcoco.json
@@ -68,7 +134,7 @@ def main():
     # it is marked as train, but it should have been vali.
 
     # dataset_code = 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC'
-    dataset_code = '*'
+    dataset_code = 'Drop4-SC'
 
     state = expt_manager.ExperimentState(
         expt_dvc_dpath, dataset_code=dataset_code,

@@ -1493,6 +1493,7 @@ def checkpoint_filepath_info(fname):
         >>>     info = checkpoint_filepath_info(fname)
         >>>     print(f'info={info}')
         info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v0'}
+        info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v0'}
         info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v2'}
         info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v0'}
         info={'epoch': 1, 'step': 10, 'ckpt_ver': 'v2'}

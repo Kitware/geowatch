@@ -355,7 +355,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     """
 
     CommandLine:
-        xdoctest -m /home/joncrall/code/watch/watch/tasks/fusion/fit.py make_lightning_modules
+        xdoctest -m watch.tasks.fusion.fit make_lightning_modules
 
     Example:
         >>> from watch.tasks.fusion.fit import *  # NOQA
@@ -367,7 +367,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         ... }
         >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
         >>> disable_lightning_hardware_warnings()
-        >>> modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
+        >>> modules = make_lightning_modules(args=args, cmdline=cmdline, **kwargs)
     """
     from watch.tasks.fusion import datamodules
     from watch.tasks.fusion import methods

@@ -131,8 +131,8 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
             '''
             A filepath glob or json blob containing either a
             site_summary or a region_model that includes site summaries.
-            Each summary found will be added to in_file as 'Site
-            Boundary' annotations.
+            Each summary found will be added to in_file as
+            'Site Boundary' annotations.
             '''), group='behavior')
     clear_annots = scfg.Value(False, isflag=True, help=ub.paragraph(
             '''
@@ -690,7 +690,9 @@ def add_site_summary_to_kwcoco(possible_summaries,
             video_rows.append(row)
         video_gdf = gpd.GeoDataFrame(video_rows, crs=util_gis._get_crs84())
 
-        sitesum_gdf = gpd.GeoDataFrame.from_features([t[1] for t in site_summaries], crs=util_gis._get_crs84())
+        import xdev
+        with xdev.embed_on_exception_context:
+            sitesum_gdf = gpd.GeoDataFrame.from_features([t[1] for t in site_summaries], crs=util_gis._get_crs84())
 
         site_idx_to_video_idx = util_gis.geopandas_pairwise_overlaps(sitesum_gdf, video_gdf)
 

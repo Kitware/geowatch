@@ -288,54 +288,42 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         })
         sqlview = self.config['sqlview']
 
-        vali_coco_dset = None
-        train_coco_dset = None
-        test_coco_dset = None
+        # Clear existing coco datasets so a reload occurs (should never happen
+        # if the user doesnt touch `self.did_setup`).
+        self.coco_datasets.clear()
+        # make a temp mapping from train/vali/test to the specified coco inputs
+        _coco_inputs = {
+            'train': self.train_kwcoco,
+            'vali': self.vali_kwcoco,
+            'test': self.test_kwcoco,
+        }
 
-        def read_train_kwcoco():
-            nonlocal train_coco_dset
-            if train_coco_dset is None:
-                train_data = self.train_kwcoco
-                if isinstance(train_data, pathlib.Path):
-                    train_data = os.fspath(train_data.expanduser())
+        def _read_kwcoco_split(_key):
+            """
+            Quick and dirty helper originally used to debug an issue. Keeping
+            something similar to ensure train/test/vali kwcoco are read in the
+            same way.
 
+            This modifies the self.coco_datasets attribute.
+            """
+            _coco_input = _coco_inputs[_key]
+            _coco_output = self.coco_datasets.get(_key, None)
+            if _coco_output is None and _coco_input is not None:
                 if self.verbose:
-                    print('Read train kwcoco dataset')
-                train_coco_dset = watch.demo.coerce_kwcoco(train_data,
-                                                           sqlview=sqlview)
-            return train_coco_dset
-
-        def read_vali_kwcoco():
-            nonlocal vali_coco_dset
-            if vali_coco_dset is None:
-                vali_data = self.vali_kwcoco
-                if isinstance(vali_data, pathlib.Path):
-                    vali_data = os.fspath(vali_data.expanduser())
-                if self.verbose:
-                    print('Read validation kwcoco dataset')
-                vali_coco_dset = watch.demo.coerce_kwcoco(vali_data,
-                                                          sqlview=sqlview)
-            return vali_coco_dset
-
-        def read_test_kwcoco():
-            nonlocal test_coco_dset
-            if test_coco_dset is None:
-                test_data = self.test_kwcoco
-                if isinstance(test_data, pathlib.Path):
-                    test_data = os.fspath(test_data.expanduser())
-                if self.verbose:
-                    print('Read test kwcoco dataset')
-                test_coco_dset = watch.demo.coerce_kwcoco(test_data,
-                                                          sqlview=sqlview)
-            return test_coco_dset
+                    print(f'Read {_key} kwcoco dataset')
+                # Use the demo coerce function to read the kwcoco file because
+                # it allows for special demo inputs useful in doctests.
+                _coco_output = watch.demo.coerce_kwcoco(_coco_input, sqlview=sqlview)
+                self.coco_datasets[_key] = _coco_output
+            return _coco_output
 
         if stage == 'fit' or stage is None:
-            train_coco_dset = read_train_kwcoco()
+            train_coco_dset = _read_kwcoco_split('train')
             self.coco_datasets['train'] = train_coco_dset
 
             # HACK: load the validation kwcoco before we do any further
             # processing.
-            vali_coco_dset = read_vali_kwcoco()
+            _read_kwcoco_split('vali')
 
             if self.verbose:
                 print('Build train kwcoco dataset')
@@ -352,9 +340,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             self.classes = train_dataset.classes
             self.torch_datasets['train'] = train_dataset
             ub.inject_method(self, lambda self: self._make_dataloader('train', shuffle=True), 'train_dataloader')
-
-            # if self.input_channels is None:
-            #     self.input_channels = train_dataset.input_channels
 
             if self.input_sensorchan is None:
                 self.input_sensorchan = train_dataset.input_sensorchan
@@ -391,7 +376,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 self.dataset_stats = train_dataset.cached_dataset_stats(**stats_params)
 
             if self.vali_kwcoco is not None:
-                vali_coco_dset = read_vali_kwcoco()
+                vali_coco_dset = _read_kwcoco_split('vali')
                 if self.verbose:
                     print('Build validation kwcoco dataset')
                 vali_coco_sampler = ndsampler.CocoSampler(vali_coco_dset)
@@ -401,7 +386,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 ub.inject_method(self, lambda self: self._make_dataloader('vali', shuffle=False), 'val_dataloader')
 
         if stage == 'test' or stage is None:
-            test_coco_dset = read_test_kwcoco()
+            test_coco_dset = _read_kwcoco_split('test')
             if self.verbose:
                 print('Build test kwcoco dataset')
             test_coco_sampler = ndsampler.CocoSampler(test_coco_dset)
