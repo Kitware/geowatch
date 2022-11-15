@@ -20,7 +20,6 @@ KR_R002_0030_box  # negative
 US_R007_0045_box
 US_R007_0015_box
 
-
 python -m watch find_dvc   --hardware=auto --tags=phase2_expt
 
 DATASET_CODE=Drop4-SC
@@ -43,52 +42,66 @@ kwcoco subset \
                       (.name == "US_R007_0045_box") or
                       (.name == "US_R007_0015_box"))'
 
-
 DATASET_CODE=Drop4-SC
 DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="auto")
 EXPT_DVC_DPATH=$(smartwatch_dvc --tags="phase2_expt" --hardware="auto")
-
 python -m watch.mlops.schedule_evaluation \
     --params="
         matrix:
-            trk.pxl.model:
-                - foo
-            trk.pxl.data.test_dataset:
-                - $DATA_DVC_DPATH/$DATASET_CODE/combo_US_R007_I.kwcoco.json
-            trk.pxl.data.window_scale_space:
-                - "auto"
-            trk.pxl.data.time_sampling:
-                - "auto"
-            trk.pxl.data.input_scale_space:
-                - "auto"
-            trk.poly.thresh:
-                - 0.1
-            crop.src:
-                - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/online_v1/kwcoco_for_sc_fielded.json
-            crop.regions:
-                # - trk.poly.output
-                - truth
+            trk.pxl.model: unused
+            trk.pxl.data.test_dataset: unused
+            trk.pxl.data.window_scale_space: unused
+            trk.pxl.data.time_sampling: unused
+            trk.pxl.data.input_scale_space: unused
+            trk.poly.thresh: unused
+            crop.src: unused
+            crop.regions: truth
             act.pxl.data.test_dataset:
                 - $DATA_DVC_DPATH/$DATASET_CODE/data_vali_small.kwcoco.json
             act.pxl.data.input_scale_space:
                 - auto
+                - 8GSD
             act.pxl.data.time_steps:
                 - auto
             act.pxl.data.chip_overlap:
                 - 0.3
             act.poly.thresh:
+                - 0.07
                 - 0.1
+                - 0.13
             act.poly.use_viterbi:
                 - 0
             act.pxl.model:
                 - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=6-step=83790.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=0-step=11970.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=1-step=23940.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=2-step=35910-v1.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=3-step=47880-v1.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=4-step=59850.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=5-step=71820.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/package_epoch0_step0.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/package_epoch0_step11970.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/package_epoch0_step1661.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/package_epoch0_step171.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/package_epoch0_step6587.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/package_epoch7_step95760.pt.pt
+
                 - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/package_epoch3_step22551.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=0-step=5778-v1.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=1-step=11556.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/package_epoch3_step22551.pt.pt
+
                 - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_2GSD_V3/package_epoch0_step57.pt.pt
         include:
             - act.pxl.data.chip_dims: 256,256
-              act.pxl.data.window_scale_space: 3GSD
-              act.pxl.data.input_scale_space: 3GSD
-              act.pxl.data.output_scale_space: 3GSD
+              act.pxl.data.window_scale_space: 8GSD
+              act.pxl.data.input_scale_space: 8GSD
+              act.pxl.data.output_scale_space: 8GSD
+            - act.pxl.data.chip_dims: 256,256
+              act.pxl.data.window_scale_space: 4GSD
+              act.pxl.data.input_scale_space: 4GSD
+              act.pxl.data.output_scale_space: 4GSD
     " \
     --enable_pred_trk_pxl=0 \
     --enable_pred_trk_poly=0 \
@@ -102,8 +115,8 @@ python -m watch.mlops.schedule_evaluation \
     --enable_viz_pred_trk_poly=0 \
     --enable_viz_pred_act_poly=0 \
     --enable_links=1 \
-    --devices="1," --queue_size=2 \
-    --queue_name='nov-eval' \
+    --devices="0,1" --queue_size=2 \
+    --queue_name='nov-sc-eval2' \
     --backend=tmux --skip_existing=1 \
     --run=1
 
@@ -125,7 +138,7 @@ def main():
     import ubelt as ub
     import pandas as pd  # NOQA
     from watch import heuristics
-    from watch.mlops import expt_manager
+    from watch.mlops import expt_state
     from watch.mlops import expt_report
     expt_dvc_dpath = heuristics.auto_expt_dvc()
     data_dvc_dpath = heuristics.auto_expt_dvc()
@@ -133,7 +146,7 @@ def main():
     # I messed up the name of the dataset I was working on.
     # it is marked as train, but it should have been vali.
     dataset_code = 'Drop4-SC'
-    state = expt_manager.ExperimentState(
+    state = expt_state.ExperimentState(
         expt_dvc_dpath, dataset_code=dataset_code,
         data_dvc_dpath=data_dvc_dpath, model_pattern='*')
     self = state  # NOQA
@@ -147,6 +160,8 @@ def main():
     reporter.state.summarize()
     df = reporter.orig_merged_df
 
+    groupid_to_shortlist = reporter.report_best(show_configs=True, verbose=1, top_k=4)
+
     non_dotted_cols = ub.oset([c for c in df.columns if '.' not in c])
     non_dotted_cols = non_dotted_cols - {
         'expt_dvc_dpath', 'raw', 'dvc', 'has_dvc', 'has_raw', 'needs_pull',
@@ -155,7 +170,7 @@ def main():
         'crop_id', 'crop_cfg',
     }
     print(df[list(non_dotted_cols)].to_string())
-    print(df[['type', 'trk.poly.thresh']].value_counts(dropna=False))
+    # print(df[['type', 'trk.poly.thresh']].value_counts(dropna=False))
 
     # dpath = reporter.dpath
     dpath = ub.Path.appdir('watch/expt-report/2022-10-xx').ensuredir()
@@ -163,7 +178,6 @@ def main():
     # Dump details out about the best models
     cohort = ub.timestamp()
     best_models_dpath = (dpath / 'best_models' / cohort).ensuredir()
-    groupid_to_shortlist = reporter.report_best(show_configs=True, verbose=1, top_k=4)
 
     viz_cmds = []
 

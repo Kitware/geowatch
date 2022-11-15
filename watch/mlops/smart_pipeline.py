@@ -138,12 +138,20 @@ def load_eval_trk_poly(fpath, expt_dvc_dpath):
 def load_eval_act_poly(fpath, expt_dvc_dpath):
     arg_prefix = 'act.'
     metrics, iarpa_info = load_iarpa_evaluation(fpath)
-    tracker_info = iarpa_info['parent_info']
-    param_types = parse_tracker_params(tracker_info, expt_dvc_dpath, arg_prefix=arg_prefix)
+
+    tracker_info = iarpa_info.get('parent_info', None)
+    if tracker_info is not None:
+        param_types = parse_tracker_params(tracker_info, expt_dvc_dpath, arg_prefix=arg_prefix)
+    else:
+        param_types = {}
     # Hack to grab information that we should have already had.
     HACK_HANDLE_CROPPED_AND_TRACK_PARAMS = 1
     if HACK_HANDLE_CROPPED_AND_TRACK_PARAMS:
-        trk_param_types, extra_attrs = _handle_crop_and_trk_params(param_types, expt_dvc_dpath)
+        try:
+            trk_param_types, extra_attrs = _handle_crop_and_trk_params(param_types, expt_dvc_dpath)
+        except Exception:
+            trk_param_types = {}
+            extra_attrs = {}
         param_types.update(trk_param_types)
     else:
         extra_attrs = {}
@@ -162,32 +170,47 @@ def load_eval_act_poly(fpath, expt_dvc_dpath):
 
 def _handle_crop_and_trk_params(param_types, expt_dvc_dpath):
     from watch.mlops import expt_manager
-    crop_fpath = param_types['act.pxl']['act.pxl.test_dataset']
+    act_pxl_test_dset = param_types['act.pxl']['act.pxl.test_dataset']
     state = expt_manager.ExperimentState('*', '*')
-    crop_attrs = ub.udict(state._parse_pattern_attrs(
-        state.templates['crop_fpath'], crop_fpath))
 
-    crop_dataset = _load_json(crop_fpath)
+    dset_source = None
+    try:
+        crop_attrs = ub.udict(state._parse_pattern_attrs(
+            state.templates['crop_fpath'], act_pxl_test_dset))
+    except RuntimeError:
+        # Probably because we used the truth
+        dset_source = 'truth'
+    else:
+        crop_attrs = {}
+        dset_source = 'tracker'
+
+    crop_dataset = _load_json(act_pxl_test_dset)
     crop_item = list(
         find_info_items(crop_dataset['info'], 'process', 'coco_align_geotiffs'))[-1]
-
     # This is the path to either truth or the tracks we cropped from
     region_fpath = crop_item['properties']['args']['regions']
 
-    try:
-        trk_attrs = ub.udict(state._parse_pattern_attrs(
-            state.templates['pred_trk_poly_site_summaries_fpath'],
-            region_fpath))
-    except Exception:
-        trk_attrs = ub.udict(state._parse_pattern_attrs(
-            state.templates['pred_trk_poly_sites_fpath'],
-            region_fpath))
+    if dset_source == 'tracker':
+        # Our input was a bas tracking output
+        try:
+            trk_attrs = ub.udict(state._parse_pattern_attrs(
+                state.templates['pred_trk_poly_site_summaries_fpath'],
+                region_fpath))
+        except Exception:
+            trk_attrs = ub.udict(state._parse_pattern_attrs(
+                state.templates['pred_trk_poly_sites_fpath'],
+                region_fpath))
+    else:
+        trk_attrs = {}
 
     extra_attrs = ub.udict(crop_attrs) | ub.udict(trk_attrs)
 
-    trk_poly_data = _load_json(region_fpath)
-    trk_poly_info = trk_poly_data['info']
-    trk_param_types = parse_tracker_params(trk_poly_info, expt_dvc_dpath, arg_prefix='trk.')
+    if dset_source == 'tracker':
+        trk_poly_data = _load_json(region_fpath)
+        trk_poly_info = trk_poly_data['info']
+        trk_param_types = parse_tracker_params(trk_poly_info, expt_dvc_dpath, arg_prefix='trk.')
+    else:
+        trk_param_types = {}
     return trk_param_types, extra_attrs
 
 
@@ -321,10 +344,12 @@ def load_pxl_eval(fpath, expt_dvc_dpath=None, arg_prefix=''):
 
     HACK_HANDLE_CROPPED_AND_TRACK_PARAMS = 1
     if HACK_HANDLE_CROPPED_AND_TRACK_PARAMS and arg_prefix == 'act.':
-        trk_param_types, extra_attrs = _handle_crop_and_trk_params(
-            param_types, expt_dvc_dpath)
-        param_types.update(trk_param_types)
-
+        try:
+            trk_param_types, extra_attrs = _handle_crop_and_trk_params(
+                param_types, expt_dvc_dpath)
+            param_types.update(trk_param_types)
+        except Exception:
+            extra_attrs = {}
     else:
         extra_attrs = {}
     extra_attrs.update(_add_prefix(arg_prefix + 'pxl.metrics.', metrics))

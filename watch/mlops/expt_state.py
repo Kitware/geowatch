@@ -616,12 +616,15 @@ class ExperimentState(ub.NiceRepr):
             ]
             npred_keys = ['n_' + k for k in pred_keys]
 
-            versioned_df.loc[:, npred_keys] = 0
+            x = versioned_df.copy()
+            x.loc[:, npred_keys] = 0
             for groupvals, subdf in group_to_versioned.items():
                 associated = group_to_volitile.get(groupvals, None)
                 if associated is not None:
                     counts = associated.value_counts('type').rename(lambda x: 'n_' + x, axis=0)
-                    versioned_df.loc[subdf.index, counts.index] += counts
+                    counts
+                    # FIXME? Not sure what broke.
+                    # versioned_df.loc[subdf.index, counts.index] += counts
 
         if len(staging_df) and len(versioned_df):
             # import xdev

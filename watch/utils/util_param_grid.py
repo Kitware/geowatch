@@ -123,11 +123,12 @@ def prevalidate_param_grid(arg):
     for item in action_matrices:
         matrix = item['matrix']
         for k in src_pathlike_keys:
-            v = matrix[k]
-            v = [v] if not ub.iterable(v) else v
-            for p in v:
-                if not validate_pathlike(p):
-                    log_issue(k, p, 'might not be a valid path')
+            if k in matrix:
+                v = matrix[k]
+                v = [v] if not ub.iterable(v) else v
+                for p in v:
+                    if not validate_pathlike(p):
+                        log_issue(k, p, 'might not be a valid path')
 
 
 def expand_param_grid(arg):
