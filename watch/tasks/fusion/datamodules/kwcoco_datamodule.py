@@ -265,9 +265,12 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             print('self.train_kwcoco = {!r}'.format(self.train_kwcoco))
             print('self.vali_kwcoco = {!r}'.format(self.vali_kwcoco))
             print('self.test_kwcoco = {!r}'.format(self.test_kwcoco))
+            print('self.input_sensorchan = {!r}'.format(self.input_sensorchan))
             print('self.time_steps = {!r}'.format(self.time_steps))
             print('self.chip_dims = {!r}'.format(self.chip_dims))
-            print('self.input_sensorchan = {!r}'.format(self.input_sensorchan))
+            print('self.window_space_scale = {!r}'.format(self.window_space_scale))
+            print('self.input_space_scale = {!r}'.format(self.input_space_scale))
+            print('self.output_space_scale = {!r}'.format(self.output_space_scale))
 
     def setup(self, stage):
 

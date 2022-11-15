@@ -121,7 +121,7 @@ python -m watch.mlops.schedule_evaluation \
     --enable_eval_trk_pxl=0 \
     --enable_eval_trk_poly=0 \
     --enable_crop=0 \
-    --enable_pred_act_pxl=1 \
+    --enable_pred_act_pxl=0 \
     --enable_pred_act_poly=1 \
     --enable_eval_act_pxl=1 \
     --enable_eval_act_poly=1 \
@@ -339,23 +339,33 @@ python -m watch.mlops.schedule_evaluation \
 
 
 
-# HOROLOGIC
+# BAS TUNING
+
+
+
+
 DATASET_CODE=Drop4-BAS
-DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags="phase2_expt")
-# TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data.kwcoco.json
-TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/BR_R001.kwcoco.json
+DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="auto")
+EXPT_DVC_DPATH=$(smartwatch_dvc --tags="phase2_expt" --hardware="auto")
 python -m watch.mlops.schedule_evaluation \
     --params="
         matrix:
             trk.pxl.model:
                 - $EXPT_DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
                 - $EXPT_DVC_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Continue_15GSD_BGR_V004/Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step23012.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step7501.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=7501.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=23012.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step24.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=7501-v1.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=23012-v1.pt.pt
             trk.pxl.data.test_dataset:
-                - $DATA_DVC_DPATH/$DATASET_CODE/BR_R002.kwcoco.json
                 - $DATA_DVC_DPATH/$DATASET_CODE/KR_R001.kwcoco.json
-                - $DATA_DVC_DPATH/$DATASET_CODE/KR_R002.kwcoco.json
-                - $DATA_DVC_DPATH/$DATASET_CODE/US_R007.kwcoco.json
+                # - $DATA_DVC_DPATH/$DATASET_CODE/BR_R002.kwcoco.json
+                # - $DATA_DVC_DPATH/$DATASET_CODE/KR_R002.kwcoco.json
+                # - $DATA_DVC_DPATH/$DATASET_CODE/US_R007.kwcoco.json
             trk.pxl.data.window_space_scale:
                 - "auto"
             trk.pxl.data.input_space_scale:
@@ -384,16 +394,12 @@ python -m watch.mlops.schedule_evaluation \
             act.pxl.model:
                 - $EXPT_DVC_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
         include:
-            - act.pxl.data.chip_dims: 256,256
-              act.pxl.data.window_space_scale: 3GSD
-              act.pxl.data.input_space_scale: 3GSD
-              act.pxl.data.output_space_scale: 3GSD
-            - trk.pxl.data.window_space_scale: 10GSD
-              trk.pxl.data.input_space_scale: 10GSD
-              trk.pxl.data.output_space_scale: 10GSD
-            - trk.pxl.data.window_space_scale: 15GSD
-              trk.pxl.data.input_space_scale: 15GSD
-              trk.pxl.data.output_space_scale: 15GSD
+            # - trk.pxl.data.window_space_scale: 10GSD
+            #   trk.pxl.data.input_space_scale: 10GSD
+            #   trk.pxl.data.output_space_scale: 10GSD
+            # - trk.pxl.data.window_space_scale: 15GSD
+            #   trk.pxl.data.input_space_scale: 15GSD
+            #   trk.pxl.data.output_space_scale: 15GSD
             - trk.pxl.data.window_space_scale: auto
               trk.pxl.data.input_space_scale: auto
               trk.pxl.data.output_space_scale: auto
@@ -410,20 +416,10 @@ python -m watch.mlops.schedule_evaluation \
     --enable_viz_pred_trk_poly=0 \
     --enable_viz_pred_act_poly=0 \
     --enable_links=1 \
-    --devices="1," --queue_size=1 \
-    --queue_name='new-eval' \
+    --devices="0,1" --queue_size=2 \
+    --queue_name='bas-eval' \
     --backend=tmux --skip_existing=1 \
     --run=1
-
-
-python -m watch.cli.run_metrics_framework --merge=True --name Drop4_BAS_invariants_30GSD_V016_epoch=10-step=5632.pt-trk_pxl_ca8e6033-trk_poly_9f08fb8c \
-    --true_site_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/annotations/site_models \
-    --true_region_dpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/annotations/region_models \
-    --pred_sites /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/dset_code_unknown/pred/trk/Drop4_BAS_invariants_30GSD_V016_epoch=10-step=5632.pt/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_combo_KR_R001_I.kwcoco/trk_pxl_ca8e6033/trk_poly_9f08fb8c/site_tracks_manifest.json \
-    --tmp_dir /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/dset_code_unknown/eval/trk/Drop4_BAS_invariants_30GSD_V016_epoch=10-step=5632.pt/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_combo_KR_R001_I.kwcoco/trk_pxl_ca8e6033/trk_poly_9f08fb8c/_tmp \
-    --out_dir /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/dset_code_unknown/eval/trk/Drop4_BAS_invariants_30GSD_V016_epoch=10-step=5632.pt/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_combo_KR_R001_I.kwcoco/trk_pxl_ca8e6033/trk_poly_9f08fb8c \
-    --merge_fpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/dset_code_unknown/eval/trk/Drop4_BAS_invariants_30GSD_V016_epoch=10-step=5632.pt/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_combo_KR_R001_I.kwcoco/trk_pxl_ca8e6033/trk_poly_9f08fb8c/merged/summary2.json
-
 
 
 
@@ -432,121 +428,11 @@ python -m watch.cli.run_metrics_framework --merge=True --name Drop4_BAS_invarian
 # ------
 
 """
-SC
 
-DATASET_CODE=Drop4-SC
-DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags="phase2_expt")
-ls $DATA_DVC_DPATH/$DATASET_CODE
-TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/data_vali.kwcoco.json
-python -m watch.mlops.schedule_evaluation \
-    --params="
-        matrix:
-            trk.pxl.model:
-                - foo
-            trk.pxl.data.test_dataset:
-                - $DATA_DVC_DPATH/$DATASET_CODE/combo_US_R007_I.kwcoco.json
-            trk.pxl.data.window_space_scale:
-                - "auto"
-            trk.pxl.data.time_sampling:
-                - "auto"
-            trk.pxl.data.input_space_scale:
-                - "auto"
-            trk.poly.thresh:
-                - 0.1
-            crop.src:
-                - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/online_v1/kwcoco_for_sc_fielded.json
-            crop.regions:
-                - trk.poly.output
-            act.pxl.data.test_dataset:
-                - $DATA_DVC_DPATH/$DATASET_CODE/data_vali.kwcoco.json
-            act.pxl.data.input_space_scale:
-                - 3GSD
-            act.pxl.data.time_steps:
-                - 12
-            act.pxl.data.chip_overlap:
-                - 0.3
-            act.poly.thresh:
-                - 0.01
-            act.poly.use_viterbi:
-                - 0
-            act.pxl.model:
-                - $EXPT_DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_invar_scratch_V030/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt
-        include:
-            - act.pxl.data.chip_dims: 256,256
-              act.pxl.data.window_space_scale: 3GSD
-              act.pxl.data.input_space_scale: 3GSD
-              act.pxl.data.output_space_scale: 3GSD
-    " \
-    --enable_pred_trk_pxl=0 \
-    --enable_pred_trk_poly=0 \
-    --enable_eval_trk_pxl=0 \
-    --enable_eval_trk_poly=0 \
-    --enable_crop=0 \
-    --enable_pred_act_pxl=1 \
-    --enable_pred_act_poly=1 \
-    --enable_eval_act_pxl=1 \
-    --enable_eval_act_poly=1 \
-    --enable_viz_pred_trk_poly=0 \
-    --enable_viz_pred_act_poly=0 \
-    --enable_links=1 \
-    --devices="1," --queue_size=2 \
-    --queue_name='nov-eval' \
-    --backend=tmux --skip_existing=1 \
-    --run=0
+#### BAS CHECKS
 
-
-
-
-kwcoco subset \
-        --src ~/data/dvc-repos/smart_data_dvc-ssd/Drop4-SC/data_vali.kwcoco.json \
-        --dst ~/data/dvc-repos/smart_data_dvc-ssd/Drop4-SC/US_R007_0055_box.kwcoco.json \
-        --select_videos '.name == "US_R007_0055_box"'
-
-python -m watch.tasks.fusion.predict \
-    --package_fpath ~/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_invar_scratch_V030/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt \
-    --test_dataset ~/data/dvc-repos/smart_data_dvc-ssd/Drop4-SC/US_R007_0055_box.kwcoco.json \
-    --pred_dataset ~/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_sc_candidates/pred/act/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1/Drop4-SC_data_vali.kwcoco/act_pxl_d31324d9/test/pred.kwcoco.json \
-    --input_space_scale=3GSD \
-    --time_steps=12 \
-    --chip_overlap=0.3  \
-    --num_workers=4 \
-    --devices=0, \
-    --accelerator=gpu \
-    --batch_size=1
-
-
-/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_sc_candidates/pred/act/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1/Drop4-SC_data_vali.kwcoco/act_pxl_d31324d9/_viz_act_pxl_d31324d9_pred.kwcoco_d4d18d08
-
-
-cat ~/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/pred/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_BR_R002.kwcoco/trk_pxl_cf3db277/trk_poly_9f08fb8c/site_tracks_manifest.json
-
-cat ~/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/pred/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_KR_R002.kwcoco/trk_pxl_cf3db277/trk_poly_9f08fb8c/site_tracks_manifest.json
-
-
-
-python -m watch.cli.run_tracker \
-    "$HOME/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/pred/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_BR_R002.kwcoco/trk_pxl_cf3db277/pred.kwcoco.json" \
-    --default_track_fn saliency_heatmaps \
-    --track_kwargs '{"thresh": 0.1, "moving_window_size": null, "polygon_fn": "heatmaps_to_polys"}' \
-    --clear_annots \
-    --out_sites_dir "$HOME/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/pred/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_BR_R002.kwcoco/trk_pxl_cf3db277/trk_poly_9f08fb8c/sites" \
-    --out_site_summaries_dir "$HOME/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/pred/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_BR_R002.kwcoco/trk_pxl_cf3db277/trk_poly_9f08fb8c/site-summaries" \
-    --out_sites_fpath "$HOME/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/pred/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_BR_R002.kwcoco/trk_pxl_cf3db277/trk_poly_9f08fb8c/site_tracks_manifest.json" \
-    --out_site_summaries_fpath "$HOME/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/pred/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_BR_R002.kwcoco/trk_pxl_cf3db277/trk_poly_9f08fb8c/site_summary_tracks_manifest.json" \
-    --out_kwcoco "$HOME/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/pred/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_BR_R002.kwcoco/trk_pxl_cf3db277/trk_poly_9f08fb8c/tracks.kwcoco.json"
-
-
-python -m watch.cli.run_metrics_framework \
-    --merge=True \
-    --name "Drop3_SpotCheck_V323_epoch=18-step=12976.pt-trk_pxl_cf3db277-trk_poly_9f08fb8c" \
-    --true_site_dpath "$HOME/remote/horologic/data/dvc-repos/smart_data_dvc/annotations/site_models" \
-    --true_region_dpath "$HOME/remote/horologic/data/dvc-repos/smart_data_dvc/annotations/region_models" \
-    --pred_sites "$HOME/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/pred/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_BR_R002.kwcoco/trk_pxl_cf3db277/trk_poly_9f08fb8c/site_tracks_manifest.json" \
-    --tmp_dir "$HOME/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/eval/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_BR_R002.kwcoco/trk_pxl_cf3db277/trk_poly_9f08fb8c/_tmp" \
-    --out_dir "$HOME/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/eval/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_BR_R002.kwcoco/trk_pxl_cf3db277/trk_poly_9f08fb8c" \
-    --merge_fpath "$HOME/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_candidates/eval/trk/Drop3_SpotCheck_V323_epoch=18-step=12976.pt/Drop4-BAS_BR_R002.kwcoco/trk_pxl_cf3db277/trk_poly_9f08fb8c/merged/summary2.json"
-
-
+python -m watch mlops "status" --dataset_codes Drop4-BAS
+python -m watch mlops "push packages" --dataset_codes Drop4-BAS
+python -m watch mlops "pull packages" --dataset_codes Drop4-BAS
 
 """
