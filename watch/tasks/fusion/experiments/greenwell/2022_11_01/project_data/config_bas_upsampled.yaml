@@ -17,13 +17,12 @@ model:
     global_saliency_weight: 1.0
     saliency_loss: focal
 data:
-  time_steps: 1
-  chip_dims: 192
-  channels: red|green|blue|nir|swir16|swir22 
+  time_steps: 3
+  chip_dims: 192 
   input_space_scale: 10GSD
 trainer:
   callbacks:
-    - class_path: watch.utils.lightning_ext.callbacks.AutoResumer
+    # - class_path: watch.utils.lightning_ext.callbacks.AutoResumer
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
         monitor: val_saliency_f1

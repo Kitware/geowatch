@@ -20,7 +20,6 @@ python -m watch.tasks.fusion fit \
     --data.train_dataset="$TRAIN_FPATH" \
     --data.vali_dataset="$VALI_FPATH" \
     --data.num_workers=8 \
-    --data.batch_size=16 \
     --trainer.default_root_dir="$DEFAULT_ROOT_DIR" \
     --trainer.accelerator="gpu" \
     --trainer.devices=1 \

@@ -1,9 +1,11 @@
 data:
-  batch_size: 16
+  channels: red|green|blue 
+  batch_size: 64
   chip_overlap: 0
+  decoder: simple_conv
   dist_weights: 0
   exclude_sensors: null
-  neg_to_pos_ratio: 0.25
+  neg_to_pos_ratio: 0.
   normalize_inputs: true
   normalize_perframe: false
   resample_invalid_frames: true 
@@ -15,11 +17,12 @@ data:
   use_cloudmask: false
   use_grid_positives: true
   verbose: 1
+  window_space_scale: 10GSD
 optimizer:
   class_path: torch.optim.AdamW
   init_args:
     lr: 1e-4
-    weight_decay: 0.01
+    weight_decay: 1e-3
 profile: false
 seed_everything: true
 trainer:
