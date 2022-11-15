@@ -204,6 +204,9 @@ def main():
 
     groupid_to_shortlist = reporter.report_best(show_configs=True, verbose=1, top_k=4)
 
+    from watch.utils.util_param_grid import DotDictDataFrame
+    sdf = DotDictDataFrame(groupid_to_shortlist[('Drop4-SC_data_vali_small.kwcoco', 'eval_act_poly_fpath')])
+
     keepers = []
     for x in groupid_to_shortlist.values():
         keepers.extend(x['act_model'])

@@ -1139,3 +1139,4 @@ python -m watch.tasks.fusion.fit \
     #--init=/home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/training/namek/joncrall/Drop4-BAS/runs/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/lightning_logs/version_1/package-interupt/package_epoch0_step7501.pt
     #--init="$INITIAL_STATE_V323"
     #--config="$WORKDIR/configs/drop3_abalate1.yaml" \
+

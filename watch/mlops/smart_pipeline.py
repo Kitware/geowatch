@@ -111,7 +111,7 @@ def load_iarpa_evaluation(fpath):
             'tau': bas_row['tau'],
         })
         alpha = 1.0
-        metrics['bas_f1ffpa'] = metrics['bas_f1'] * (1 - metrics['bas_ffpa']) ** alpha
+        metrics['bas_ffa_f1'] = metrics['bas_f1'] * (1 - metrics['bas_ffpa']) ** alpha
 
     if 'sc_df' in iarpa_info:
         sc_df = pd.read_json(io.StringIO(json.dumps(iarpa_info['sc_df'])), orient='table')
