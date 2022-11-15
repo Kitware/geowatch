@@ -1,4 +1,6 @@
 import ubelt as ub
+import pandas as pd
+import pygtrie
 
 
 def handle_yaml_grid(default, auto, arg):
@@ -341,3 +343,107 @@ def github_action_matrix(arg):
     grid_items = grid_stage1 + appended_items
 
     return grid_items
+
+
+class DotDictDataFrame(pd.DataFrame):
+    """
+    A proof-of-concept wrapper around pandas that lets us walk down the nested
+    structure a little easier.
+
+    The API is a bit weird, and the caches are not invalidated if any column
+    changes, but it does a reasonable job otherwise.
+
+    Is there another library out there that does this?
+
+    Example:
+        >>> from watch.utils.util_param_grid import *  # NOQA
+        >>> rows = [
+        >>>     {'node1.id': 1, 'node2.id': 2, 'node1.metrics.ap': 0.5, 'node2.metrics.ap': 0.8},
+        >>>     {'node1.id': 1, 'node2.id': 2, 'node1.metrics.ap': 0.5, 'node2.metrics.ap': 0.8},
+        >>>     {'node1.id': 1, 'node2.id': 2, 'node1.metrics.ap': 0.5, 'node2.metrics.ap': 0.8},
+        >>>     {'node1.id': 1, 'node2.id': 2, 'node1.metrics.ap': 0.5, 'node2.metrics.ap': 0.8},
+        >>> ]
+        >>> self = DotDictDataFrame(rows)
+        >>> # Test prefix lookup
+        >>> assert set(self['node1'].columns) == {'node1.id', 'node1.metrics.ap'}
+        >>> # Test suffix lookup
+        >>> assert set(self['id'].columns) == {'node1.id', 'node2.id'}
+        >>> # Test mid-node lookup
+        >>> assert set(self['metrics'].columns) == {'node1.metrics.ap', 'node2.metrics.ap'}
+        >>> # Test single lookup
+        >>> assert set(self[['node1.id']].columns) == {'node1.id'}
+        >>> # Test glob
+        >>> assert set(self.find_columns('*metri*')) == {'node1.metrics.ap', 'node2.metrics.ap'}
+    """
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.__dict__['_col_cache'] = {}
+
+    def _clear_column_caches(self):
+        self._col_cache = {}
+
+    @property
+    def _column_prefix_trie(self):
+        # TODO: cache the trie correctly
+        if self._col_cache.get('prefix_trie', None) is None:
+            _trie_data = ub.dzip(self.columns, self.columns)
+            _trie = pygtrie.StringTrie(_trie_data, separator='.')
+            self._col_cache['prefix_trie'] = _trie
+        return self._col_cache['prefix_trie']
+
+    @property
+    def _column_suffix_trie(self):
+        if self._col_cache.get('suffix_trie', None) is None:
+            reversed_columns = ['.'.join(col.split('.')[::-1])
+                                for col in self.columns]
+            _trie_data = ub.dzip(reversed_columns, reversed_columns)
+            _trie = pygtrie.StringTrie(_trie_data, separator='.')
+            self._col_cache['suffix_trie'] = _trie
+        return self._col_cache['suffix_trie']
+
+    @property
+    def _column_node_groups(self):
+        if self._col_cache.get('node_groups', None) is None:
+            paths = [col.split('.') for col in self.columns]
+            lut = ub.ddict(list)
+            for path in paths:
+                col = '.'.join(path)
+                for part in path:
+                    lut[part].append(col)
+            self._col_cache['node_groups'] = lut
+        return self._col_cache['node_groups']
+
+    @property
+    def nested_columns(self):
+        return dotkeys_to_nested(self.columns)
+
+    def resolve_column(self, col):
+        # Might be better to do a globby sort of pattern
+        parts = col.split('.')
+        return ub.oset.intersection(*[self._column_node_groups[p] for p in parts])
+        # try:
+        #     candiates.update(self._column_prefix_trie.values(col))
+        # except KeyError:
+        #     ...
+        # try:
+        #     candiates.update(self._column_suffix_trie.values(col))
+        # except KeyError:
+        #     ...
+        # return candiates
+
+    def lookup_suffix_columns(self, col):
+        return self._column_suffix_trie.values(col)
+
+    def find_columns(self, pat, hint='glob'):
+        from watch.utils import util_pattern
+        pat = util_pattern.Pattern.coerce(pat, hint=hint)
+        found = [c for c in self.columns if pat.match(c)]
+        return found
+
+    def __getitem__(self, cols):
+        if isinstance(cols, str):
+            if cols not in self.columns:
+                cols = self.resolve_column(cols)
+        elif isinstance(cols, list):
+            cols = list(ub.flatten([self.resolve_column(c) for c in cols]))
+        return super().__getitem__(cols)

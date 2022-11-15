@@ -42,6 +42,21 @@ kwcoco subset \
                       (.name == "US_R007_0045_box") or
                       (.name == "US_R007_0015_box"))'
 
+
+
+{'Drop4_tune_V30_8GSD_V3_epoch=0-step=5778-v1.pt',
+ 'Drop4_tune_V30_8GSD_V3_epoch=1-step=11556.pt',
+ 'Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt',
+ 'Drop4_tune_V30_V2_epoch=1-step=23940.pt',
+ 'Drop4_tune_V30_V2_epoch=2-step=35910-v1.pt',
+ 'Drop4_tune_V30_V2_epoch=3-step=47880-v1.pt',
+ 'package_epoch0_step171.pt',
+ 'package_epoch0_step57.pt',
+ 'package_epoch0_step6587.pt',
+ 'package_epoch3_step22551.pt'}
+
+
+
 DATASET_CODE=Drop4-SC
 DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="auto")
 EXPT_DVC_DPATH=$(smartwatch_dvc --tags="phase2_expt" --hardware="auto")
@@ -50,15 +65,15 @@ python -m watch.mlops.schedule_evaluation \
         matrix:
             trk.pxl.model: unused
             trk.pxl.data.test_dataset: unused
-            trk.pxl.data.window_scale_space: unused
+            trk.pxl.data.window_space_scale: unused
             trk.pxl.data.time_sampling: unused
-            trk.pxl.data.input_scale_space: unused
+            trk.pxl.data.input_space_scale: unused
             trk.poly.thresh: unused
             crop.src: unused
             crop.regions: truth
             act.pxl.data.test_dataset:
                 - $DATA_DVC_DPATH/$DATASET_CODE/data_vali_small.kwcoco.json
-            act.pxl.data.input_scale_space:
+            act.pxl.data.input_space_scale:
                 - auto
                 - 8GSD
             act.pxl.data.time_steps:
@@ -72,36 +87,34 @@ python -m watch.mlops.schedule_evaluation \
             act.poly.use_viterbi:
                 - 0
             act.pxl.model:
-                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=6-step=83790.pt.pt
-                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=0-step=11970.pt.pt
                 - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=1-step=23940.pt.pt
                 - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=2-step=35910-v1.pt.pt
                 - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=3-step=47880-v1.pt.pt
-                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=4-step=59850.pt.pt
-                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=5-step=71820.pt.pt
-                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/package_epoch0_step0.pt.pt
-                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/package_epoch0_step11970.pt.pt
-                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/package_epoch0_step1661.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/package_epoch3_step22551.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_2GSD_V3/package_epoch0_step57.pt.pt
                 - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/package_epoch0_step171.pt.pt
                 - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/package_epoch0_step6587.pt.pt
-                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/package_epoch7_step95760.pt.pt
-
-                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/package_epoch3_step22551.pt.pt
                 - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=0-step=5778-v1.pt.pt
                 - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=1-step=11556.pt.pt
                 - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
-                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/package_epoch3_step22551.pt.pt
 
-                - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_2GSD_V3/package_epoch0_step57.pt.pt
+                # - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=4-step=59850.pt.pt
+                # - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=5-step=71820.pt.pt
+                # - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=6-step=83790.pt.pt
+                # - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=0-step=11970.pt.pt
+                # - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/package_epoch0_step0.pt.pt
+                # - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/package_epoch0_step11970.pt.pt
+                # - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/package_epoch0_step1661.pt.pt
+                # - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/package_epoch7_step95760.pt.pt
         include:
             - act.pxl.data.chip_dims: 256,256
-              act.pxl.data.window_scale_space: 8GSD
-              act.pxl.data.input_scale_space: 8GSD
-              act.pxl.data.output_scale_space: 8GSD
+              act.pxl.data.window_space_scale: 8GSD
+              act.pxl.data.input_space_scale: 8GSD
+              act.pxl.data.output_space_scale: 8GSD
             - act.pxl.data.chip_dims: 256,256
-              act.pxl.data.window_scale_space: 4GSD
-              act.pxl.data.input_scale_space: 4GSD
-              act.pxl.data.output_scale_space: 4GSD
+              act.pxl.data.window_space_scale: 4GSD
+              act.pxl.data.input_space_scale: 4GSD
+              act.pxl.data.output_space_scale: 4GSD
     " \
     --enable_pred_trk_pxl=0 \
     --enable_pred_trk_poly=0 \
@@ -162,33 +175,20 @@ def main():
 
     groupid_to_shortlist = reporter.report_best(show_configs=True, verbose=1, top_k=4)
 
-    non_dotted_cols = ub.oset([c for c in df.columns if '.' not in c])
-    non_dotted_cols = non_dotted_cols - {
-        'expt_dvc_dpath', 'raw', 'dvc', 'has_dvc', 'has_raw', 'needs_pull',
-        'is_link', 'is_broken', 'unprotected', 'needs_push',
-        'dataset_code', 'has_teamfeat',
-        'crop_id', 'crop_cfg',
-    }
-    print(df[list(non_dotted_cols)].to_string())
-    # print(df[['type', 'trk.poly.thresh']].value_counts(dropna=False))
+    keepers = []
+    for x in groupid_to_shortlist.values():
+        keepers.extend(x['act_model'])
 
-    # dpath = reporter.dpath
-    dpath = ub.Path.appdir('watch/expt-report/2022-10-xx').ensuredir()
+    from watch.utils import util_param_grid
+    df = util_param_grid.DotDictDataFrame(df)
+    print('df.nested_columns = {}'.format(ub.repr2(df.nested_columns, nl=1)))
 
-    # Dump details out about the best models
-    cohort = ub.timestamp()
-    best_models_dpath = (dpath / 'best_models' / cohort).ensuredir()
+    dotted = df.find_columns('*.*')
+    metric_cols = df.find_columns('*metrics.*')
+    meta_cols = df.find_columns('*meta.*')
+    resource_cols = df.find_columns('*resource.*')
+    fit_cols = df.find_columns('*fit.*')
 
-    viz_cmds = []
-
-    # from watch.utils import util_param_grid
-    colnames = ub.oset(reporter.orig_merged_df.columns)
-    # column_nestings = util_param_grid.dotkeys_to_nested(colnames)
-    dotted = ub.oset([c for c in colnames if '.' in c])
-    metric_cols = ub.oset([c for c in dotted if 'metrics.' in c])
-    meta_cols = ub.oset([c for c in dotted if 'meta.' in c])
-    resource_cols = ub.oset([c for c in dotted if 'resource.' in c])
-    fit_cols = ub.oset([c for c in dotted if 'fit.' in c])
     param_cols = dotted - (metric_cols | fit_cols | resource_cols | meta_cols)
 
     # df['trk.pxl.properties.test_dataset_fname'] = df['trk.pxl.test_dataset'].apply(lambda x: ub.Path(x).name)
@@ -202,14 +202,44 @@ def main():
     # trk.poly.metrics.]]
     # df[~df['trk.poly.thresh'].isnull()]
 
-    cols_of_interest = ['trk.poly.thresh', 'trk.poly.metrics.bas_f1', 'trk.poly.metrics.bas_tp', 'trk.poly.metrics.bas_fp', 'trk.poly.metrics.bas_fn', 'trk.poly.metrics.bas_ppv', 'trk.poly.metrics.bas_tpr']
+    cols_of_interest = [
+        'trk.poly.thresh',
+        'trk.poly.metrics.bas_f1',
+        'trk.poly.metrics.bas_tp',
+        'trk.poly.metrics.bas_fp',
+        'trk.poly.metrics.bas_fn',
+        'trk.poly.metrics.bas_ppv',
+        'trk.poly.metrics.bas_tpr',
+        'act.poly.metrics.macro_f1',
+        'act.poly.resource.total_hours',
+        'act.pxl.resource.total_hours',
+        'act.fit.input_space_scale',
+        'act.pxl.model',
+
+        'act.fit.input_space_scale',
+        'act.poly.pxl.input_space_scale',
+    ]
     col_order = (ub.oset(cols_of_interest) | metric_cols) & ub.oset(df.columns)
     import rich
-    df2 = df[cols_of_interest].sort_values('trk.poly.thresh')
+    df2 = df[col_order]
+
+    df['total_hours']
+    df['act.total_hours'] = df['act.resource.total_hours'].sum(axis=1)
+    df._clear_column_caches()
+    df['act.pxl.model_name'] = df['act.pxl.package_fpath'].apply(lambda x: ub.Path(x).name)
+    df['act.pxl.properties.step']
+
     rich.print(df2)
 
     import kwplot
     sns = kwplot.autosns()
+    sns.scatterplot(data=df, x='act.pxl.properties.step', y='act.poly.metrics.macro_f1', hue='act.pxl.model_name')
+    sns.scatterplot(data=df, x='act.pxl.input_space_scale', y='act.poly.metrics.macro_f1', hue='act.pxl.model_name')
+    sns.scatterplot(data=df, x='act.total_hours', y='act.poly.metrics.macro_f1', hue='act.pxl.model_name')
+
+    (df['act.fit.input_space_scale'] != df['act.pxl.input_space_scale'])
+    (df['act.fit.input_space_scale'] != df['act.pxl.input_space_scale'])
+
     sns.lineplot(data=df2, x='trk.poly.metrics.bas_fp', y='trk.poly.metrics.bas_fp')
     sns.lineplot(data=df2, x='trk.poly.metrics.bas_tpr', y='trk.poly.metrics.bas_ppv')
     sns.lineplot(data=df2, x='trk.poly.thresh', y='trk.poly.metrics.bas_f1')
@@ -219,6 +249,13 @@ def main():
     # hue='trk.poly.thresh')
 
     df.loc[:, df.columns & (list(metric_cols) + ['trk.poly.thresh'])]
+
+    # dpath = reporter.dpath
+    dpath = ub.Path.appdir('watch/expt-report/2022-10-xx').ensuredir()
+
+    # Dump details out about the best models
+    cohort = ub.timestamp()
+    best_models_dpath = (dpath / 'best_models' / cohort).ensuredir()
 
 
 def shrink_na_cols(df):
@@ -250,11 +287,11 @@ python -m watch.mlops.schedule_evaluation \
                 - $DATA_DVC_DPATH/$DATASET_CODE/combo_KR_R001_I.kwcoco.json
                 - $DATA_DVC_DPATH/$DATASET_CODE/combo_KR_R002_I.kwcoco.json
                 - $DATA_DVC_DPATH/$DATASET_CODE/combo_US_R007_I.kwcoco.json
-            trk.pxl.data.window_scale_space:
+            trk.pxl.data.window_space_scale:
                 - "auto"
             trk.pxl.data.time_sampling:
                 - "auto"
-            trk.pxl.data.input_scale_space:
+            trk.pxl.data.input_space_scale:
                 - "auto"
             trk.poly.thresh:
                 - 0.1
@@ -264,7 +301,7 @@ python -m watch.mlops.schedule_evaluation \
                 - trk.poly.output
             act.pxl.data.test_dataset:
                 - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/crop/online_v1_kwcoco_for_sc_fielded/trk_poly_id_0408400f/crop_f64d5b9a/crop_id_59ed6e1b/crop.kwcoco.json
-            act.pxl.data.input_scale_space:
+            act.pxl.data.input_space_scale:
                 - 3GSD
             act.pxl.data.time_steps:
                 - 3
@@ -278,9 +315,9 @@ python -m watch.mlops.schedule_evaluation \
                 - $EXPT_DVC_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
         include:
             - act.pxl.data.chip_dims: 256,256
-              act.pxl.data.window_scale_space: 3GSD
-              act.pxl.data.input_scale_space: 3GSD
-              act.pxl.data.output_scale_space: 3GSD
+              act.pxl.data.window_space_scale: 3GSD
+              act.pxl.data.input_space_scale: 3GSD
+              act.pxl.data.output_space_scale: 3GSD
     " \
     --enable_pred_trk_pxl=1 \
     --enable_pred_trk_poly=1 \
@@ -319,9 +356,9 @@ python -m watch.mlops.schedule_evaluation \
                 - $DATA_DVC_DPATH/$DATASET_CODE/KR_R001.kwcoco.json
                 - $DATA_DVC_DPATH/$DATASET_CODE/KR_R002.kwcoco.json
                 - $DATA_DVC_DPATH/$DATASET_CODE/US_R007.kwcoco.json
-            trk.pxl.data.window_scale_space:
+            trk.pxl.data.window_space_scale:
                 - "auto"
-            trk.pxl.data.input_scale_space:
+            trk.pxl.data.input_space_scale:
                 # - "auto"
                 - 10GSD
             trk.pxl.data.time_sampling:
@@ -334,7 +371,7 @@ python -m watch.mlops.schedule_evaluation \
                 - trk.poly.output
             act.pxl.data.test_dataset:
                 - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/crop/online_v1_kwcoco_for_sc_fielded/trk_poly_id_0408400f/crop_f64d5b9a/crop_id_59ed6e1b/crop.kwcoco.json
-            act.pxl.data.input_scale_space:
+            act.pxl.data.input_space_scale:
                 - 3GSD
             act.pxl.data.time_steps:
                 - 3
@@ -348,18 +385,18 @@ python -m watch.mlops.schedule_evaluation \
                 - $EXPT_DVC_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
         include:
             - act.pxl.data.chip_dims: 256,256
-              act.pxl.data.window_scale_space: 3GSD
-              act.pxl.data.input_scale_space: 3GSD
-              act.pxl.data.output_scale_space: 3GSD
-            - trk.pxl.data.window_scale_space: 10GSD
-              trk.pxl.data.input_scale_space: 10GSD
-              trk.pxl.data.output_scale_space: 10GSD
-            - trk.pxl.data.window_scale_space: 15GSD
-              trk.pxl.data.input_scale_space: 15GSD
-              trk.pxl.data.output_scale_space: 15GSD
-            - trk.pxl.data.window_scale_space: auto
-              trk.pxl.data.input_scale_space: auto
-              trk.pxl.data.output_scale_space: auto
+              act.pxl.data.window_space_scale: 3GSD
+              act.pxl.data.input_space_scale: 3GSD
+              act.pxl.data.output_space_scale: 3GSD
+            - trk.pxl.data.window_space_scale: 10GSD
+              trk.pxl.data.input_space_scale: 10GSD
+              trk.pxl.data.output_space_scale: 10GSD
+            - trk.pxl.data.window_space_scale: 15GSD
+              trk.pxl.data.input_space_scale: 15GSD
+              trk.pxl.data.output_space_scale: 15GSD
+            - trk.pxl.data.window_space_scale: auto
+              trk.pxl.data.input_space_scale: auto
+              trk.pxl.data.output_space_scale: auto
     " \
     --enable_pred_trk_pxl=1 \
     --enable_pred_trk_poly=1 \
@@ -409,11 +446,11 @@ python -m watch.mlops.schedule_evaluation \
                 - foo
             trk.pxl.data.test_dataset:
                 - $DATA_DVC_DPATH/$DATASET_CODE/combo_US_R007_I.kwcoco.json
-            trk.pxl.data.window_scale_space:
+            trk.pxl.data.window_space_scale:
                 - "auto"
             trk.pxl.data.time_sampling:
                 - "auto"
-            trk.pxl.data.input_scale_space:
+            trk.pxl.data.input_space_scale:
                 - "auto"
             trk.poly.thresh:
                 - 0.1
@@ -423,7 +460,7 @@ python -m watch.mlops.schedule_evaluation \
                 - trk.poly.output
             act.pxl.data.test_dataset:
                 - $DATA_DVC_DPATH/$DATASET_CODE/data_vali.kwcoco.json
-            act.pxl.data.input_scale_space:
+            act.pxl.data.input_space_scale:
                 - 3GSD
             act.pxl.data.time_steps:
                 - 12
@@ -437,9 +474,9 @@ python -m watch.mlops.schedule_evaluation \
                 - $EXPT_DVC_DPATH/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_invar_scratch_V030/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt
         include:
             - act.pxl.data.chip_dims: 256,256
-              act.pxl.data.window_scale_space: 3GSD
-              act.pxl.data.input_scale_space: 3GSD
-              act.pxl.data.output_scale_space: 3GSD
+              act.pxl.data.window_space_scale: 3GSD
+              act.pxl.data.input_space_scale: 3GSD
+              act.pxl.data.output_space_scale: 3GSD
     " \
     --enable_pred_trk_pxl=0 \
     --enable_pred_trk_poly=0 \
@@ -470,7 +507,7 @@ python -m watch.tasks.fusion.predict \
     --package_fpath ~/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_sc_candidates/packages/CropDrop3_SC_s2wv_invar_scratch_V030/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1.pt \
     --test_dataset ~/data/dvc-repos/smart_data_dvc-ssd/Drop4-SC/US_R007_0055_box.kwcoco.json \
     --pred_dataset ~/data/dvc-repos/smart_expt_dvc/models/fusion/eval3_sc_candidates/pred/act/CropDrop3_SC_s2wv_invar_scratch_V030_epoch=78-step=53956-v1/Drop4-SC_data_vali.kwcoco/act_pxl_d31324d9/test/pred.kwcoco.json \
-    --input_scale_space=3GSD \
+    --input_space_scale=3GSD \
     --time_steps=12 \
     --chip_overlap=0.3  \
     --num_workers=4 \
