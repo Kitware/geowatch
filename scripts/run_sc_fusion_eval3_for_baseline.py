@@ -255,16 +255,13 @@ def run_sc_fusion_for_baseline(
       "tta_fliprot": 0.0,
       "tta_time": 0.0,
       "chip_overlap": 0.3,
-      "input_space_scale": "4GSD",
-      "window_space_scale": "4GSD",
-      "output_space_scale": "4GSD",
+      "input_space_scale": "auto",
+      "window_space_scale": "auto",
+      "output_space_scale": "auto",
       "time_span": "6m",
-      "time_sampling": "soft2+distribute",
+      "time_sampling": "auto",
       "time_steps": 12.0,
-      "chip_dims": [
-         128,
-         128
-      ],
+      "chip_dims": "auto",
       "set_cover_algo": "approx",
       "resample_invalid_frames": true,
       "use_cloudmask": 1.0
