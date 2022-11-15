@@ -484,7 +484,10 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
         ...  # user specified a custom model
         condensed['dataset_code'] = 'dset_code_unknown'
         condensed['trk_expt'] = 'trk_expt_unknown'
-        condensed['trk_model'] = ub.Path(item['trk.pxl.model']).name
+        if item['trk.pxl.model'] is not None:
+            condensed['trk_model'] = ub.Path(item['trk.pxl.model']).name
+        else:
+            condensed['trk_model'] = 'None'
     else:
         # fixme: dataset code is ambiguous between BAS and SC
         # pkg_trk_pixel_pathcfg.pop('dataset_code', None)
