@@ -223,15 +223,15 @@ def run_bas_fusion_for_baseline(
       "tta_fliprot": 0,
       "tta_time": 0,
       "chip_overlap": 0.3,
-      "input_space_scale": "auto",
-      "window_space_scale": "10GSD",
-      "output_space_scale": "auto",
+      "input_space_scale": "15GSD",
+      "window_space_scale": "15GSD",
+      "output_space_scale": "15GSD",
       "time_span": "6m",
       "time_sampling": "contiguous",
-      "time_steps": 8,
+      "time_steps": 11,
       "chip_dims": [
-         192,
-         192
+         380,
+         380
       ],
       "set_cover_algo": "approx",
       "resample_invalid_frames": true,
