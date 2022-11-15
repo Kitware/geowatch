@@ -132,29 +132,13 @@ def main():
 
     # I messed up the name of the dataset I was working on.
     # it is marked as train, but it should have been vali.
-
-    # dataset_code = 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC'
     dataset_code = 'Drop4-SC'
-
     state = expt_manager.ExperimentState(
         expt_dvc_dpath, dataset_code=dataset_code,
         data_dvc_dpath=data_dvc_dpath, model_pattern='*')
     self = state  # NOQA
-
-    # state.patterns['test_dset'] = 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_train_subset.kwcoco'
-    # state.patterns['test_dset'] = (
-    #     'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_vali_10GSD_KR_R001.kwcoco')
-    # state.patterns['test_dset'] = (
-    #     'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_septest.kwcoco')
-    # state.patterns['test_dset'] = ('Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data_kr1br2.kwcoco')
-    state.patterns['test_trk_dset'] = 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC_data.kwcoco'
-    state.patterns['test_act_dset'] = 'NA'
-    # state.patterns['test_dset'] = ('*')
-
     state._build_path_patterns()
     state.summarize()
-    # state._make_cross_links()
-    # state._block_non_existing_rhashes()
 
     reporter = expt_report.EvaluationReporter(state)
     reporter.load1()
