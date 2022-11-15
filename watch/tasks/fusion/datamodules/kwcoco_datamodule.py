@@ -4,20 +4,18 @@ Defines a lightning DataModule for kwcoco video data.
 The parameters to each are handled by scriptconfig objects, which prevents us
 from needing to specify what the available options are in multiple places.
 """
-import os
 import kwcoco
 import kwimage
 import ndsampler
-import pathlib
 import pytorch_lightning as pl
 import ubelt as ub
-from typing import Dict, List  # NOQA
 import scriptconfig as scfg
-
 
 from watch.utils.lightning_ext import util_globals
 from watch.tasks.fusion import utils
 from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDatasetConfig, KWCocoVideoDataset
+
+from typing import Dict, List  # NOQA
 
 try:
     import xdev
