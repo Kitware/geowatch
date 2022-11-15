@@ -288,6 +288,37 @@ def github_action_matrix(arg):
             {'environment': 'staging', 'os': 'windows-latest', 'version': 14},
             {'environment': 'production', 'os': 'windows-latest', 'version': 14},
         ]
+
+    Ignore:
+
+        arg = {'matrix': {'trk.pxl.model': 'unused',
+          'trk.pxl.data.test_dataset': 'unused',
+          'trk.pxl.data.window_space_scale': 'unused',
+          'trk.pxl.data.time_sampling': 'unused',
+          'trk.pxl.data.input_space_scale': 'unused',
+          'trk.poly.thresh': 'unused',
+          'crop.src': 'unused',
+          'crop.regions': 'truth',
+          'act.pxl.data.test_dataset': ['/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Drop4-SC/data_vali_small.kwcoco.json'],
+          'act.pxl.data.input_space_scale': ['8GSD'],
+          'act.pxl.data.time_steps': ['auto'],
+          'act.pxl.data.chip_overlap': [0.3],
+          'act.poly.thresh': [0.07, 0.1, 0.13],
+          'act.poly.use_viterbi': [0],
+          'act.pxl.model': ['/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=1-step=23940.pt.pt',
+           '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=2-step=35910-v1.pt.pt',
+           '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt'],
+          'include': [
+               {'act.pxl.data.chip_dims': '256,256',
+                'act.pxl.data.window_space_scale': '8GSD',
+                'act.pxl.data.input_space_scale': '8GSD',
+                'act.pxl.data.output_space_scale': '8GSD'},
+               # {'act.pxl.data.chip_dims': '256,256',
+               #  'act.pxl.data.window_space_scale': '4GSD',
+               #  'act.pxl.data.input_space_scale': '4GSD',
+               #  'act.pxl.data.output_space_scale': '4GSD'}
+            ]}}
+
     """
     import ruamel.yaml
     if isinstance(arg, str):
@@ -295,7 +326,7 @@ def github_action_matrix(arg):
     else:
         data = arg.copy()
 
-    matrix = data.pop('matrix')
+    matrix = data.pop('matrix').copy()
     include = [ub.udict(p) for p in matrix.pop('include', [])]
     exclude = [ub.udict(p) for p in matrix.pop('exclude', [])]
 
@@ -324,6 +355,7 @@ def github_action_matrix(arg):
 
     # For each object in the include list
     for include_item in include:
+        ...
         any_updated = False
         for grid_item in grid_stage1:
             common_orig1 = (grid_item & include_item) & orig_keys

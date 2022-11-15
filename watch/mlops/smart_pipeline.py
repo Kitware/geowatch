@@ -84,11 +84,17 @@ def trace_json_lineage(fpath):
 
 # def trace_kwcoco_lineage(fpath):
 def load_iarpa_evaluation(fpath):
+    """
+    Ignore:
+        fpath = '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/eval/trk/package_epoch0_step41.pt.pt/Drop4-BAS_KR_R001.kwcoco/trk_pxl_fd9e1a95/trk_poly_9f08fb8c/merged/summary2.json'
+    """
     print(f'fpath={fpath}')
     iarpa_info = _load_json(fpath)
     metrics = {}
     if 'best_bas_rows' in iarpa_info:
-        best_bas_rows = pd.read_json(io.StringIO(json.dumps(iarpa_info['best_bas_rows'])), orient='table')
+        best_bas_rows = pd.read_json(
+            io.StringIO(json.dumps(iarpa_info['best_bas_rows'])),
+            orient='table')
         bas_row = best_bas_rows.loc['__macro__'].reset_index().iloc[0]
 
         metrics.update({
@@ -99,18 +105,20 @@ def load_iarpa_evaluation(fpath):
             'bas_npred': bas_row['proposed slices'],
             'bas_ppv': bas_row['precision'],
             'bas_tpr': bas_row['recall (PD)'],
-        })
-        metrics.update({
+            'bas_ffpa': bas_row['ffpa'],
             'bas_f1': bas_row['F1'],
             'rho': bas_row['rho'],
             'tau': bas_row['tau'],
         })
+        alpha = 1.0
+        metrics['bas_f1ffpa'] = metrics['bas_f1'] * (1 - metrics['bas_ffpa']) ** alpha
+
     if 'sc_df' in iarpa_info:
         sc_df = pd.read_json(io.StringIO(json.dumps(iarpa_info['sc_df'])), orient='table')
         metrics.update({
             # 'mean_f1': sc_df.loc['F1'].mean(),
-            'macro_f1': sc_df.loc['__macro__']['F1'].mean(),
-            'micro_f1': sc_df.loc['__micro__']['F1'].mean(),
+            'sc_macro_f1': sc_df.loc['__macro__']['F1'].mean(),
+            'sc_micro_f1': sc_df.loc['__micro__']['F1'].mean(),
             'macro_f1_siteprep': sc_df.loc['__macro__', 'Site Preparation']['F1'],
             'macro_f1_active': sc_df.loc['__macro__', 'Site Preparation']['F1'],
         })

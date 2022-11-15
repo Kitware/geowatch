@@ -111,10 +111,10 @@ python -m watch.mlops.schedule_evaluation \
                   act.pxl.data.window_space_scale: 8GSD
                   act.pxl.data.input_space_scale: 8GSD
                   act.pxl.data.output_space_scale: 8GSD
-                - act.pxl.data.chip_dims: 256,256
-                  act.pxl.data.window_space_scale: 4GSD
-                  act.pxl.data.input_space_scale: 4GSD
-                  act.pxl.data.output_space_scale: 4GSD
+                # - act.pxl.data.chip_dims: 256,256
+                #   act.pxl.data.window_space_scale: 4GSD
+                #   act.pxl.data.input_space_scale: 4GSD
+                #   act.pxl.data.output_space_scale: 4GSD
     " \
     --enable_pred_trk_pxl=0 \
     --enable_pred_trk_poly=0 \
@@ -122,16 +122,16 @@ python -m watch.mlops.schedule_evaluation \
     --enable_eval_trk_poly=0 \
     --enable_crop=0 \
     --enable_pred_act_pxl=1 \
-    --enable_pred_act_poly=0 \
-    --enable_eval_act_pxl=0 \
-    --enable_eval_act_poly=0 \
+    --enable_pred_act_poly=1 \
+    --enable_eval_act_pxl=1 \
+    --enable_eval_act_poly=1 \
     --enable_viz_pred_trk_poly=0 \
     --enable_viz_pred_act_poly=0 \
     --enable_links=1 \
     --devices="0,1" --queue_size=2 \
     --queue_name='nov-sc-eval2' \
     --backend=tmux --skip_existing=1 \
-    --run=0
+    --run=1
 
 
 python -m watch.cli.run_tracker /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/pred/act/package_epoch3_step22551.pt/Drop4-SC_data_vali_small.kwcoco/act_pxl_e836a34c/pred.kwcoco.json --default_track_fn class_heatmaps --track_kwargs '{"boundaries_as": "polys", "thresh": 0.1, "use_viterbi": 0}' --site_summary /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/dset_code_unknown/pred/trk/foo/Drop4-SC_combo_US_R007_I.kwcoco/trk_pxl_ca8e6033/trk_poly_9f08fb8c/site_summary_tracks_manifest.json --out_sites_fpath /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/pred/act/package_epoch3_step22551.pt/Drop4-SC_data_vali_small.kwcoco/act_pxl_e836a34c/act_poly_e50c1c4f/site_activity_manifest.json --out_sites_dir /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/pred/act/package_epoch3_step22551.pt/Drop4-SC_data_vali_small.kwcoco/act_pxl_e836a34c/act_poly_e50c1c4f/sites --out_kwcoco /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/pred/act/package_epoch3_step22551.pt/Drop4-SC_data_vali_small.kwcoco/act_pxl_e836a34c/act_poly_e50c1c4f/activity_tracks.kwcoco.json
@@ -140,6 +140,34 @@ python -m watch.cli.run_tracker /home/joncrall/remote/Ooo/data/dvc-repos/smart_e
 TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/BR_R001.kwcoco.json
 
 """
+
+
+def bas_report():
+    import rich  # NOQA
+    import ubelt as ub  # NOQA
+    import pandas as pd  # NOQA
+    from watch import heuristics
+    from watch.mlops import expt_state
+    from watch.mlops import expt_report
+    expt_dvc_dpath = heuristics.auto_expt_dvc()
+    data_dvc_dpath = heuristics.auto_expt_dvc()
+
+    # I messed up the name of the dataset I was working on.
+    # it is marked as train, but it should have been vali.
+    dataset_code = 'Drop4-BAS'
+    state = expt_state.ExperimentState(
+        expt_dvc_dpath, dataset_code=dataset_code,
+        data_dvc_dpath=data_dvc_dpath, model_pattern='*')
+    self = state  # NOQA
+    state._build_path_patterns()
+    state.summarize()
+
+    reporter = expt_report.EvaluationReporter(state)
+    reporter.load1()
+    reporter.load2()
+
+    df = reporter.orig_merged_df
+    groupid_to_shortlist = reporter.report_best(show_configs=True, verbose=1, top_k=10)
 
 
 def main():
@@ -189,7 +217,7 @@ def main():
 
     act_poly_df = DotDictDataFrame(df[df['type'] == 'eval_act_poly_fpath'])
 
-    rich.print(act_poly_df.sort_values('act.poly.metrics.macro_f1').iloc[-3:].drop(['raw'], axis=1).T.to_string())
+    rich.print(act_poly_df.sort_values('act.poly.metrics.sc_macro_f1').iloc[-3:].drop(['raw'], axis=1).T.to_string())
 
     dotted = df.find_columns('*.*')
     metric_cols = df.find_columns('*metrics.*')
@@ -218,7 +246,7 @@ def main():
         'trk.poly.metrics.bas_fn',
         'trk.poly.metrics.bas_ppv',
         'trk.poly.metrics.bas_tpr',
-        'act.poly.metrics.macro_f1',
+        'act.poly.metrics.sc_macro_f1',
         'act.poly.resource.total_hours',
         'act.pxl.resource.total_hours',
         'act.fit.input_space_scale',
@@ -240,9 +268,9 @@ def main():
 
     import kwplot
     sns = kwplot.autosns()
-    sns.scatterplot(data=df, x='act.pxl.properties.step', y='act.poly.metrics.macro_f1', hue='act.pxl.model_name')
-    sns.scatterplot(data=df, x='act.pxl.input_space_scale', y='act.poly.metrics.macro_f1', hue='act.pxl.model_name')
-    sns.scatterplot(data=df, x='act.total_hours', y='act.poly.metrics.macro_f1', hue='act.pxl.model_name')
+    sns.scatterplot(data=df, x='act.pxl.properties.step', y='act.poly.metrics.sc_macro_f1', hue='act.pxl.model_name')
+    sns.scatterplot(data=df, x='act.pxl.input_space_scale', y='act.poly.metrics.sc_macro_f1', hue='act.pxl.model_name')
+    sns.scatterplot(data=df, x='act.total_hours', y='act.poly.metrics.sc_macro_f1', hue='act.pxl.model_name')
 
     (df['act.fit.input_space_scale'] != df['act.pxl.input_space_scale'])
     (df['act.fit.input_space_scale'] != df['act.pxl.input_space_scale'])
@@ -358,16 +386,14 @@ python -m watch.mlops.schedule_evaluation \
     --params="
         matrix:
             trk.pxl.model:
-                - $EXPT_DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+                # - $EXPT_DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
                 - $EXPT_DVC_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Continue_15GSD_BGR_V004/Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt.pt
-                - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
-                - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step23012.pt.pt
-                - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step7501.pt.pt
                 - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=7501.pt.pt
                 - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=23012.pt.pt
-                - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step24.pt.pt
-                - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=7501-v1.pt.pt
-                - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=23012-v1.pt.pt
+                # - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=7501-v1.pt.pt
+                # - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=23012-v1.pt.pt
+                # - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+                # - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step24.pt.pt
             trk.pxl.data.test_dataset:
                 - $DATA_DVC_DPATH/$DATASET_CODE/KR_R001.kwcoco.json
                 # - $DATA_DVC_DPATH/$DATASET_CODE/BR_R002.kwcoco.json
@@ -376,6 +402,8 @@ python -m watch.mlops.schedule_evaluation \
             trk.pxl.data.window_space_scale:
                 # - "auto"
                 - "10GSD"
+                - "15GSD"
+                - "30GSD"
             # trk.pxl.data.input_space_scale:
             #     # - "auto"
             #     - 10GSD
@@ -405,9 +433,9 @@ python -m watch.mlops.schedule_evaluation \
                 - trk.pxl.data.window_space_scale: 10GSD
                   trk.pxl.data.input_space_scale: 10GSD
                   trk.pxl.data.output_space_scale: 10GSD
-                # - trk.pxl.data.window_space_scale: 15GSD
-                #   trk.pxl.data.input_space_scale: 15GSD
-                #   trk.pxl.data.output_space_scale: 15GSD
+                - trk.pxl.data.window_space_scale: 30GSD
+                  trk.pxl.data.input_space_scale: 30GSD
+                  trk.pxl.data.output_space_scale: 30GSD
                 # - trk.pxl.data.window_space_scale: auto
                 #   trk.pxl.data.input_space_scale: auto
                 #   trk.pxl.data.output_space_scale: auto
@@ -421,7 +449,7 @@ python -m watch.mlops.schedule_evaluation \
     --enable_pred_act_poly=0 \
     --enable_eval_act_pxl=0 \
     --enable_eval_act_poly=0 \
-    --enable_viz_pred_trk_poly=1 \
+    --enable_viz_pred_trk_poly=0 \
     --enable_viz_pred_act_poly=0 \
     --enable_links=1 \
     --devices="0,1" --queue_size=2 \

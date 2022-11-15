@@ -460,6 +460,9 @@ def gdal_single_warp(in_fpath,
         >>> canvas = kwimage.normalize_intensity(data)
         >>> kwplot.imshow(canvas)
 
+    References:
+        https://gdal.org/programs/gdalwarp.html
+
     Ignore:
         from kwcoco.util import util_archive
         sample_zip_fpath = ub.grabdata('https://maxar-marketing.s3.amazonaws.com/product-samples/Rome_Colosseum_2022-03-22_WV03_HD.zip')
@@ -535,6 +538,10 @@ def gdal_single_warp(in_fpath,
 
         builder['-te'] = [f'{xmin}', f'{ymin}', f'{xmax}', f'{ymax}']
         builder['-te_srs'] = crop_coordinate_srs
+
+    if 0:
+        builder['-ts'] = f'{croped_image_size}'
+        builder['-tr'] = f'{croped_pixel_resolution}'
 
     if nodata is not None:
         builder['-srcnodata'] = str(nodata)

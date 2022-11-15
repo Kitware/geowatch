@@ -502,7 +502,9 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
     trk_pxl_params = ub.udict(trk_pxl['data']) - {'test_dataset'}
     trk_poly_params = ub.udict(trk_poly)
 
-    condensed['trk_model'] = state._condense_model(item['trk.pxl.model'])
+    import xdev
+    with xdev.embed_on_exception_context:
+        condensed['trk_model'] = state._condense_model(item['trk.pxl.model'])
     # TODO:
     # based on the model, we should infer if we need team features or not.
 
