@@ -16,10 +16,10 @@ Example:
                     - ./my_bas_model.pt
                 trk.pxl.data.test_dataset:
                     - ./my_test_dataset/bas_ready_data.kwcoco.json
-                trk.pxl.data.window_scale_space: 15GSD
+                trk.pxl.data.window_space_scale: 15GSD
                 trk.pxl.data.time_sampling:
                     - "auto"
-                trk.pxl.data.input_scale_space:
+                trk.pxl.data.input_space_scale:
                     - "15GSD"
                 trk.poly.moving_window_size:
                     - null
@@ -29,7 +29,7 @@ Example:
                     - trk.poly.output
                 act.pxl.data.test_dataset:
                     - crop.dst
-                act.pxl.data.window_scale_space:
+                act.pxl.data.window_space_scale:
                     - auto
                 act.poly.thresh:
                     - 0.1
@@ -142,9 +142,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     - ~/data/dvc-repos/smart_data_dvc/tmp/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco/cropped_kwcoco_for_bas.json
                 trk.pxl.data.tta_time: 0
                 trk.pxl.data.chip_overlap: 0.3
-                trk.pxl.data.window_scale_space: 10GSD
-                trk.pxl.data.input_scale_space: 15GSD
-                trk.pxl.data.output_scale_space: 15GSD
+                trk.pxl.data.window_space_scale: 10GSD
+                trk.pxl.data.input_space_scale: 15GSD
+                trk.pxl.data.output_space_scale: 15GSD
                 trk.pxl.data.time_span: auto
                 trk.pxl.data.time_sampling: auto
                 trk.pxl.data.time_steps: auto
@@ -161,7 +161,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 trk.poly.agg_fn: probs
                 trk.poly.thresh_hysteresis: None
                 trk.poly.moving_window_size: None
-                trk.poly.polygon_fn: heatmaps_to_polys
                 ###
                 ### SC Pixel Prediction
                 ###
@@ -946,10 +945,6 @@ class Pipeline:
         else:
             cfg['moving_window_size'] = None
 
-        if cfg['moving_window_size'] is None:
-            cfg['polygon_fn'] = 'heatmaps_to_polys'
-        else:
-            cfg['polygon_fn'] = 'heatmaps_to_polys_moving_window'
         # kwargs['params_argstr'] = Pipeline(trk_poly_params)
         pred_trk_poly_kw['track_kwargs_str'] = shlex.quote(json.dumps(cfg))
 

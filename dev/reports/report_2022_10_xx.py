@@ -74,7 +74,7 @@ python -m watch.mlops.schedule_evaluation \
             act.pxl.data.test_dataset:
                 - $DATA_DVC_DPATH/$DATASET_CODE/data_vali_small.kwcoco.json
             act.pxl.data.input_space_scale:
-                - auto
+                # - auto
                 - 8GSD
             act.pxl.data.time_steps:
                 - auto
@@ -106,32 +106,32 @@ python -m watch.mlops.schedule_evaluation \
                 # - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/package_epoch0_step11970.pt.pt
                 # - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/package_epoch0_step1661.pt.pt
                 # - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/package_epoch7_step95760.pt.pt
-        include:
-            - act.pxl.data.chip_dims: 256,256
-              act.pxl.data.window_space_scale: 8GSD
-              act.pxl.data.input_space_scale: 8GSD
-              act.pxl.data.output_space_scale: 8GSD
-            - act.pxl.data.chip_dims: 256,256
-              act.pxl.data.window_space_scale: 4GSD
-              act.pxl.data.input_space_scale: 4GSD
-              act.pxl.data.output_space_scale: 4GSD
+            include:
+                - act.pxl.data.chip_dims: 256,256
+                  act.pxl.data.window_space_scale: 8GSD
+                  act.pxl.data.input_space_scale: 8GSD
+                  act.pxl.data.output_space_scale: 8GSD
+                - act.pxl.data.chip_dims: 256,256
+                  act.pxl.data.window_space_scale: 4GSD
+                  act.pxl.data.input_space_scale: 4GSD
+                  act.pxl.data.output_space_scale: 4GSD
     " \
     --enable_pred_trk_pxl=0 \
     --enable_pred_trk_poly=0 \
     --enable_eval_trk_pxl=0 \
     --enable_eval_trk_poly=0 \
     --enable_crop=0 \
-    --enable_pred_act_pxl=0 \
-    --enable_pred_act_poly=1 \
-    --enable_eval_act_pxl=1 \
-    --enable_eval_act_poly=1 \
+    --enable_pred_act_pxl=1 \
+    --enable_pred_act_poly=0 \
+    --enable_eval_act_pxl=0 \
+    --enable_eval_act_poly=0 \
     --enable_viz_pred_trk_poly=0 \
     --enable_viz_pred_act_poly=0 \
     --enable_links=1 \
     --devices="0,1" --queue_size=2 \
     --queue_name='nov-sc-eval2' \
     --backend=tmux --skip_existing=1 \
-    --run=1
+    --run=0
 
 
 python -m watch.cli.run_tracker /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/pred/act/package_epoch3_step22551.pt/Drop4-SC_data_vali_small.kwcoco/act_pxl_e836a34c/pred.kwcoco.json --default_track_fn class_heatmaps --track_kwargs '{"boundaries_as": "polys", "thresh": 0.1, "use_viterbi": 0}' --site_summary /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/dset_code_unknown/pred/trk/foo/Drop4-SC_combo_US_R007_I.kwcoco/trk_pxl_ca8e6033/trk_poly_9f08fb8c/site_summary_tracks_manifest.json --out_sites_fpath /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/pred/act/package_epoch3_step22551.pt/Drop4-SC_data_vali_small.kwcoco/act_pxl_e836a34c/act_poly_e50c1c4f/site_activity_manifest.json --out_sites_dir /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/pred/act/package_epoch3_step22551.pt/Drop4-SC_data_vali_small.kwcoco/act_pxl_e836a34c/act_poly_e50c1c4f/sites --out_kwcoco /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-SC/pred/act/package_epoch3_step22551.pt/Drop4-SC_data_vali_small.kwcoco/act_pxl_e836a34c/act_poly_e50c1c4f/activity_tracks.kwcoco.json
@@ -148,6 +148,7 @@ def main():
     sys.path.append(ubelt.expandpath('~/code/watch/dev/reports'))
     from report_2022_09_xx import *  # NOQA
     """
+    import rich
     import ubelt as ub
     import pandas as pd  # NOQA
     from watch import heuristics
@@ -179,9 +180,16 @@ def main():
     for x in groupid_to_shortlist.values():
         keepers.extend(x['act_model'])
 
-    from watch.utils import util_param_grid
-    df = util_param_grid.DotDictDataFrame(df)
-    print('df.nested_columns = {}'.format(ub.repr2(df.nested_columns, nl=1)))
+    from watch.utils.util_param_grid import DotDictDataFrame
+    df = DotDictDataFrame(df)
+    print('df.nested_columns = {}'.format(ub.repr2(df.nested_columns, nl=True)))
+
+    space = DotDictDataFrame(df['input_space_scale'])
+    (space['act.fit.input_space_scale'] != space['act.pxl.input_space_scale']).sum()
+
+    act_poly_df = DotDictDataFrame(df[df['type'] == 'eval_act_poly_fpath'])
+
+    rich.print(act_poly_df.sort_values('act.poly.metrics.macro_f1').iloc[-3:].drop(['raw'], axis=1).T.to_string())
 
     dotted = df.find_columns('*.*')
     metric_cols = df.find_columns('*metrics.*')
@@ -220,7 +228,6 @@ def main():
         'act.poly.pxl.input_space_scale',
     ]
     col_order = (ub.oset(cols_of_interest) | metric_cols) & ub.oset(df.columns)
-    import rich
     df2 = df[col_order]
 
     df['total_hours']
@@ -367,10 +374,11 @@ python -m watch.mlops.schedule_evaluation \
                 # - $DATA_DVC_DPATH/$DATASET_CODE/KR_R002.kwcoco.json
                 # - $DATA_DVC_DPATH/$DATASET_CODE/US_R007.kwcoco.json
             trk.pxl.data.window_space_scale:
-                - "auto"
-            trk.pxl.data.input_space_scale:
                 # - "auto"
-                - 10GSD
+                - "10GSD"
+            # trk.pxl.data.input_space_scale:
+            #     # - "auto"
+            #     - 10GSD
             trk.pxl.data.time_sampling:
                 - "auto"
             trk.poly.thresh:
@@ -393,16 +401,16 @@ python -m watch.mlops.schedule_evaluation \
                 - 0
             act.pxl.model:
                 - $EXPT_DVC_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
-        include:
-            # - trk.pxl.data.window_space_scale: 10GSD
-            #   trk.pxl.data.input_space_scale: 10GSD
-            #   trk.pxl.data.output_space_scale: 10GSD
-            # - trk.pxl.data.window_space_scale: 15GSD
-            #   trk.pxl.data.input_space_scale: 15GSD
-            #   trk.pxl.data.output_space_scale: 15GSD
-            - trk.pxl.data.window_space_scale: auto
-              trk.pxl.data.input_space_scale: auto
-              trk.pxl.data.output_space_scale: auto
+            include:
+                - trk.pxl.data.window_space_scale: 10GSD
+                  trk.pxl.data.input_space_scale: 10GSD
+                  trk.pxl.data.output_space_scale: 10GSD
+                # - trk.pxl.data.window_space_scale: 15GSD
+                #   trk.pxl.data.input_space_scale: 15GSD
+                #   trk.pxl.data.output_space_scale: 15GSD
+                # - trk.pxl.data.window_space_scale: auto
+                #   trk.pxl.data.input_space_scale: auto
+                #   trk.pxl.data.output_space_scale: auto
     " \
     --enable_pred_trk_pxl=1 \
     --enable_pred_trk_poly=1 \
@@ -413,12 +421,12 @@ python -m watch.mlops.schedule_evaluation \
     --enable_pred_act_poly=0 \
     --enable_eval_act_pxl=0 \
     --enable_eval_act_poly=0 \
-    --enable_viz_pred_trk_poly=0 \
+    --enable_viz_pred_trk_poly=1 \
     --enable_viz_pred_act_poly=0 \
     --enable_links=1 \
     --devices="0,1" --queue_size=2 \
     --queue_name='bas-eval' \
-    --backend=tmux --skip_existing=1 \
+    --backend=tmux --skip_existing=0 \
     --run=1
 
 

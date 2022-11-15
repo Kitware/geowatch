@@ -464,7 +464,7 @@ class EvaluationReporter:
             'pred_input_space_scale': 'Input Scale',
             'pred_use_cloudmask': 'Cloudmask',
             'pred_resample_invalid_frames': 'Resample Invalid Frames',
-            'pred_window_scale_space': 'Window Scale',
+            'pred_window_space_scale': 'Window Scale',
         }
         reporter.human_mapping = human_mapping
         reporter.iarpa_metric_lut = {
