@@ -967,9 +967,98 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         return outputs
 
     def shared_step(self, batch, batch_idx=None, stage="train", with_loss=True):
+        """
+        Example:
+            >>> from watch.tasks import fusion
+            >>> import torch
+            >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
+            >>> model = fusion.methods.HeterogeneousModel(
+            >>>     classes=classes,
+            >>>     dataset_stats=dataset_stats,
+            >>>     input_sensorchan=channels,
+            >>>     position_encoder=fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>>     decoder="trans_conv",
+            >>> )
+            >>> batch = model.demo_batch(batch_size=2, width=64, height=65, num_timesteps=3)
+            >>> outputs = model.shared_step(batch)
+            >>> optimizer = torch.optim.Adam(model.parameters())
+            >>> optimizer.zero_grad()
+            >>> loss = outputs["loss"]
+            >>> loss.backward()
+            >>> optimizer.step()
+
+        Example:
+            >>> from watch.tasks import fusion
+            >>> import torch
+            >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
+            >>> model = fusion.methods.HeterogeneousModel(
+            >>>     classes=classes,
+            >>>     dataset_stats=dataset_stats,
+            >>>     input_sensorchan=channels,
+            >>>     position_encoder=fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>>     decoder="trans_conv",
+            >>> )
+            >>> batch = model.demo_batch(batch_size=2, width=64, height=65, num_timesteps=3)
+            >>> batch += [None]
+            >>> outputs = model.shared_step(batch)
+            >>> optimizer = torch.optim.Adam(model.parameters())
+            >>> optimizer.zero_grad()
+            >>> loss = outputs["loss"]
+            >>> loss.backward()
+            >>> optimizer.step()
+
+        Example:
+            >>> from watch.tasks import fusion
+            >>> import torch
+            >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
+            >>> model = fusion.methods.HeterogeneousModel(
+            >>>     classes=classes,
+            >>>     dataset_stats=dataset_stats,
+            >>>     input_sensorchan=channels,
+            >>>     position_encoder=fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>>     decoder="trans_conv",
+            >>> )
+            >>> batch = model.demo_batch(width=64, height=65)
+            >>> for cutoff in [-1, -2]:
+            >>>     degraded_example = model.demo_batch(width=55, height=75, num_timesteps=3)[0]
+            >>>     degraded_example["frames"] = degraded_example["frames"][:cutoff]
+            >>>     batch += [degraded_example]
+            >>> outputs = model.shared_step(batch)
+            >>> optimizer = torch.optim.Adam(model.parameters())
+            >>> optimizer.zero_grad()
+            >>> loss = outputs["loss"]
+            >>> loss.backward()
+            >>> optimizer.step()
+
+        Example:
+            >>> from watch.tasks import fusion
+            >>> import torch
+            >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
+            >>> model = fusion.methods.HeterogeneousModel(
+            >>>     classes=classes,
+            >>>     dataset_stats=dataset_stats,
+            >>>     input_sensorchan=channels,
+            >>>     position_encoder=fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>>     decoder="trans_conv",
+            >>> )
+            >>> batch = model.demo_batch(batch_size=1, width=64, height=65, num_timesteps=3, nans=0.1)
+            >>> batch += model.demo_batch(batch_size=1, width=64, height=65, num_timesteps=3, nans=0.5)
+            >>> batch += model.demo_batch(batch_size=1, width=64, height=65, num_timesteps=3, nans=1.0)
+            >>> outputs = model.shared_step(batch)
+            >>> optimizer = torch.optim.Adam(model.parameters())
+            >>> optimizer.zero_grad()
+            >>> loss = outputs["loss"]
+            >>> loss.backward()
+            >>> optimizer.step()
+        """
 
         # FIXME: why are we getting nones here?
-        batch = [ex for ex in batch if ex is not None]
+        batch = [
+            ex 
+            for ex in batch 
+            if (ex is not None)
+            # and (len(ex["frames"]) > 0)
+        ]
 
         outputs = self(batch)
 
@@ -984,6 +1073,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     task_labels_key = self.task_to_keynames[task_name]["labels"]
                     labels = frame[task_labels_key]
 
+                    self.log(f"{stage}_{task_name}_logit_mean", pred.mean())
+
                     if labels is None:
                         continue
 
@@ -995,30 +1086,37 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                             mode="bilinear",
                         )[0]
 
+                    task_weights_key = self.task_to_keynames[task_name]["weights"]
+                    task_weights = frame[task_weights_key]
+
+                    valid_mask = (task_weights > 0.)
+                    pred_ = pred[:, valid_mask]
+                    task_weights_ = task_weights[valid_mask]
+
                     criterion = self.criterions[task_name]
                     if criterion.target_encoding == 'index':
                         loss_labels = labels.long()
+                        loss_labels_ = loss_labels[valid_mask]
                     elif criterion.target_encoding == 'onehot':
                         # Note: 1HE is much easier to work with
                         loss_labels = kwarray.one_hot_embedding(
                             labels.long(),
                             criterion.in_channels,
                             dim=0)
+                        loss_labels_ = loss_labels[:, valid_mask]
                     else:
                         raise KeyError(criterion.target_encoding)
-
-                    task_weights_key = self.task_to_keynames[task_name]["weights"]
-                    task_weights = frame[task_weights_key]
-
-                    valid_mask = task_weights > 0.
-                    pred_ = pred[:, valid_mask]
-                    loss_labels_ = loss_labels[:, valid_mask]
-                    task_weights_ = task_weights[valid_mask]
 
                     loss = criterion(
                         pred_[None],
                         loss_labels_[None],
                     )
+
+                    if loss.isnan().any():
+                        print(loss)
+                        print(pred)
+                        print(frame)
+
                     loss *= task_weights_
                     frame_losses.append(
                         self.global_head_weights[task_name] * loss.mean()
