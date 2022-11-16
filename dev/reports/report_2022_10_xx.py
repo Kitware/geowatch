@@ -154,7 +154,10 @@ def bas_report():
 
     # I messed up the name of the dataset I was working on.
     # it is marked as train, but it should have been vali.
-    dataset_code = 'Drop4-BAS'
+    # dataset_code = ['Drop4-BAS', 'dset_code_unknown', 'eval3_candidates', 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC']
+    dataset_code = ['Drop4-BAS']
+    # 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC']
+    # dataset_code = '*'
     state = expt_state.ExperimentState(
         expt_dvc_dpath, dataset_code=dataset_code,
         data_dvc_dpath=data_dvc_dpath, model_pattern='*')
@@ -167,6 +170,8 @@ def bas_report():
     reporter.load2()
 
     df = reporter.orig_merged_df
+    from watch.utils.util_param_grid import DotDictDataFrame
+    df = DotDictDataFrame(df)
     groupid_to_shortlist = reporter.report_best(show_configs=True, verbose=1, top_k=10)
 
 
@@ -390,11 +395,11 @@ python -m watch.mlops.schedule_evaluation \
         matrix:
             trk.pxl.model:
                 # - $EXPT_DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
-                - $EXPT_DVC_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Continue_15GSD_BGR_V004/Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt.pt
+                # - $EXPT_DVC_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Continue_15GSD_BGR_V004/Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt.pt
                 - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=7501.pt.pt
                 - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=23012.pt.pt
-                # - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=7501-v1.pt.pt
-                # - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=23012-v1.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=7501-v1.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=23012-v1.pt.pt
                 # - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
                 # - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step24.pt.pt
             trk.pxl.data.test_dataset:
@@ -404,16 +409,29 @@ python -m watch.mlops.schedule_evaluation \
                 # - $DATA_DVC_DPATH/$DATASET_CODE/US_R007.kwcoco.json
             trk.pxl.data.window_space_scale:
                 # - "auto"
-                - "10GSD"
+                # - "10GSD"
                 - "15GSD"
                 - "30GSD"
+                - "40GSD"
+                - "60GSD"
+            trk.pxl.data.time_steps:
+                - auto
+                - 2
+                - 3
+                - 4
+                - 5
+                - 6
             # trk.pxl.data.input_space_scale:
             #     # - "auto"
             #     - 10GSD
             trk.pxl.data.time_sampling:
                 - "auto"
             trk.poly.thresh:
+                - 0.07
+                - 0.09
                 - 0.1
+                - 0.11
+                - 0.13
             crop.src:
                 - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/online_v1/kwcoco_for_sc_fielded.json
             crop.regions:
@@ -433,12 +451,21 @@ python -m watch.mlops.schedule_evaluation \
             act.pxl.model:
                 - $EXPT_DVC_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
             include:
-                - trk.pxl.data.window_space_scale: 10GSD
-                  trk.pxl.data.input_space_scale: 10GSD
-                  trk.pxl.data.output_space_scale: 10GSD
+                - trk.pxl.data.window_space_scale: 60GSD
+                  trk.pxl.data.input_space_scale: 60GSD
+                  trk.pxl.data.output_space_scale: 60GSD
+                - trk.pxl.data.window_space_scale: 40GSD
+                  trk.pxl.data.input_space_scale: 40GSD
+                  trk.pxl.data.output_space_scale: 40GSD
                 - trk.pxl.data.window_space_scale: 30GSD
                   trk.pxl.data.input_space_scale: 30GSD
                   trk.pxl.data.output_space_scale: 30GSD
+                - trk.pxl.data.window_space_scale: 15GSD
+                  trk.pxl.data.input_space_scale: 15GSD
+                  trk.pxl.data.output_space_scale: 15GSD
+                # - trk.pxl.data.window_space_scale: 10GSD
+                #   trk.pxl.data.input_space_scale: 10GSD
+                #   trk.pxl.data.output_space_scale: 10GSD
                 # - trk.pxl.data.window_space_scale: auto
                 #   trk.pxl.data.input_space_scale: auto
                 #   trk.pxl.data.output_space_scale: auto

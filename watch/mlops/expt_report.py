@@ -148,7 +148,7 @@ class EvaluationReporter:
         resource_cols = [c for c in resource_cols if '.hardware' not in c]
         resource_cols = list(resource_cols)
 
-        primary_metrics = (ub.oset(['act.poly.metrics.sc_macro_f1', 'trk.poly.metrics.f1']) & metric_cols)
+        primary_metrics = (ub.oset(['act.poly.metrics.sc_macro_f1', 'trk.poly.metrics.bas_faa_f1']) & metric_cols)
         metric_cols = list((metric_cols & primary_metrics) | (metric_cols - primary_metrics))
 
         # print('orig_merged_df.columns = {}'.format(ub.repr2(list(orig_merged_df.columns), nl=1)))
@@ -610,7 +610,7 @@ def load_extended_data(df, expt_dvc_dpath):
     errors = []
 
     import os
-    WATCH_EVAL_LOAD_STRICT = os.environ.get('WATCH_EVAL_LOAD_STRICT', 1)
+    WATCH_EVAL_LOAD_STRICT = os.environ.get('WATCH_EVAL_LOAD_STRICT', 0)
     for row in ub.ProgIter(rows, desc='load'):
         big_row = row.copy()
         fpath = row['raw']
