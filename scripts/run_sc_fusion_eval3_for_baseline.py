@@ -288,7 +288,8 @@ def run_sc_fusion_for_baseline(
         else:
             # 4. Compute tracks (SC)
             print("* Computing tracks (SC) *")
-            sc_track_kwargs = {"thresh": sc_thresh}
+            sc_track_kwargs = {"thresh": sc_thresh,
+                               "boundaries_as": "polys"}
 
             tracked_sc_kwcoco_path = '_tracked'.join(
                 os.path.splitext(sc_fusion_kwcoco_path))
