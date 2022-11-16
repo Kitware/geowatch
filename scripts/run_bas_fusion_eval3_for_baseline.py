@@ -223,17 +223,17 @@ def run_bas_fusion_for_baseline(
       "tta_fliprot": 0,
       "tta_time": 0,
       "chip_overlap": 0.3,
-      "input_space_scale": "10GSD",
-      "window_space_scale": "10GSD",
-      "output_space_scale": "10GSD",
+      "input_space_scale": "15GSD",
+      "window_space_scale": "15GSD",
+      "output_space_scale": "15GSD",
       "time_span": "6m",
       "time_sampling": "auto",
       "time_steps": 11,
       "chip_dims": [
-         380,
-         380
+         128,
+         128
       ],
-      "set_cover_algo": "approx",
+      "set_cover_algo": null,
       "resample_invalid_frames": true,
       "use_cloudmask": 1
 }
@@ -263,7 +263,8 @@ def run_bas_fusion_for_baseline(
         region_models_outdir, '{}.geojson'.format(region_id)))
 
     bas_tracking_config = {"thresh": bas_thresh,
-                           "moving_window_size": None}
+                           "moving_window_size": None,
+                           "polygon_fn": "heatmaps_to_polys"}
 
     tracked_bas_kwcoco_path = '_tracked'.join(
         os.path.splitext(bas_fusion_kwcoco_path))
