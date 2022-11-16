@@ -198,7 +198,7 @@ def run_sc_fusion_for_baseline(
         jobs=1,
         force_zero_num_workers=False,
         ta2_s3_collation_bucket=None,
-        sc_thresh=0.01):
+        sc_thresh=0.07):
     if aws_profile is not None:
         aws_base_command =\
             ['aws', 's3', '--profile', aws_profile, 'cp']
@@ -255,13 +255,13 @@ def run_sc_fusion_for_baseline(
       "tta_fliprot": 0.0,
       "tta_time": 0.0,
       "chip_overlap": 0.3,
-      "input_space_scale": "auto",
-      "window_space_scale": "auto",
-      "output_space_scale": "auto",
+      "input_space_scale": "8GSD",
+      "window_space_scale": "8GSD",
+      "output_space_scale": "8GSD",
       "time_span": "6m",
       "time_sampling": "auto",
-      "time_steps": 12.0,
-      "chip_dims": "auto",
+      "time_steps": "auto",
+      "chip_dims": "256,256",
       "set_cover_algo": "approx",
       "resample_invalid_frames": true,
       "use_cloudmask": 1.0
