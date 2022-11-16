@@ -66,7 +66,7 @@ def main():
                         default=False,
                         help="Force predict scripts to use --num_workers=0")
     parser.add_argument("--sc_thresh",
-                        default=0.01,
+                        default=0.07,
                         type=float,
                         required=False,
                         help="Threshold for SC tracking (kwarg 'thresh')")
@@ -260,9 +260,9 @@ def run_sc_fusion_for_baseline(
       "output_space_scale": "8GSD",
       "time_span": "6m",
       "time_sampling": "auto",
-      "time_steps": "auto",
+      "time_steps": "12",
       "chip_dims": "256,256",
-      "set_cover_algo": "approx",
+      "set_cover_algo": null,
       "resample_invalid_frames": true,
       "use_cloudmask": 1.0
 }
@@ -279,7 +279,7 @@ def run_sc_fusion_for_baseline(
                     package_fpath=sc_fusion_model_path,
                     pred_dataset=sc_fusion_kwcoco_path,
                     num_workers=('0' if force_zero_num_workers else str(jobs)),  # noqa: 501
-                    batch_size=8,
+                    batch_size=1,
                     **predict_config)
         except TimeSampleError:
             print("* Error with time sampling during SC Predict "
@@ -316,7 +316,8 @@ def run_sc_fusion_for_baseline(
                     '--site_models',
                     os.path.join(site_models_outdir, '*.geojson'),
                     '--region_models',
-                    os.path.join(region_models_outdir, '*.geojson'),
+                    os.path.join(region_models_outdir,
+                                 '{}.geojson'.format(region_id)),
                     '--new_site_dpath', cropped_site_models_outdir,
                     '--new_region_dpath', cropped_region_models_outdir],
                    check=True)

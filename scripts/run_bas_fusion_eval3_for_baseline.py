@@ -228,7 +228,7 @@ def run_bas_fusion_for_baseline(
       "output_space_scale": "15GSD",
       "time_span": "6m",
       "time_sampling": "auto",
-      "time_steps": 11,
+      "time_steps": 5,
       "chip_dims": [
          128,
          128
@@ -249,7 +249,7 @@ def run_bas_fusion_for_baseline(
             package_fpath=bas_fusion_model_path,
             pred_dataset=bas_fusion_kwcoco_path,
             num_workers=('0' if force_zero_num_workers else str(jobs)),  # noqa: 501
-            batch_size=8,
+            batch_size=1,
             **predict_config)
 
     # 4. Compute tracks (BAS)
@@ -263,8 +263,7 @@ def run_bas_fusion_for_baseline(
         region_models_outdir, '{}.geojson'.format(region_id)))
 
     bas_tracking_config = {"thresh": bas_thresh,
-                           "moving_window_size": None,
-                           "polygon_fn": "heatmaps_to_polys"}
+                           "moving_window_size": None}
 
     tracked_bas_kwcoco_path = '_tracked'.join(
         os.path.splitext(bas_fusion_kwcoco_path))
