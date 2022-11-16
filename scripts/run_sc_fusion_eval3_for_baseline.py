@@ -288,13 +288,11 @@ def run_sc_fusion_for_baseline(
         else:
             # 4. Compute tracks (SC)
             print("* Computing tracks (SC) *")
-            sc_track_kwargs = {"boundaries_as": "polys",
-                               "use_viterbi": 0.0,
-                               "thresh": sc_thresh}
+            sc_track_kwargs = {"thresh": sc_thresh}
 
             tracked_sc_kwcoco_path = '_tracked'.join(
                 os.path.splitext(sc_fusion_kwcoco_path))
-            subprocess.run(['python', '-m', 'watch.cli.kwcoco_to_geojson',
+            subprocess.run(['python', '-m', 'watch.cli.run_tracker',
                             sc_fusion_kwcoco_path,
                             '--out_site_summaries_dir', region_models_outdir,
                             '--out_sites_dir', site_models_outdir,
