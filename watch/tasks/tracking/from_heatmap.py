@@ -395,7 +395,6 @@ def time_aggregated_polys(
               f'{len(gids_polys)} / {n_orig}')
 
     # now we start needing scores, so bulk-compute them
-    # import xdev; xdev.embed()
 
     gids, polys = zip(*gids_polys)
     polys = [p.to_shapely() for p in polys]
@@ -622,8 +621,7 @@ def _gids_polys(
                                skipped='interpolate',
                                _NANS=True)['fg']
 
-    # TODO parallelize
-    for _, track in boundary_tracks:
+    def _process(track):
 
         # TODO when bounds are time-varying, this lets individual frames
         # go outside them; only enforces the union. Problem?
@@ -656,6 +654,12 @@ def _gids_polys(
 
                 yield (track['gid'], kwimage.MultiPolygon.from_shapely(poly))
 
+    # no benefit so far
+    exc = ub.Executor('serial', max_workers=8)
+    jobs = []
+    for _, track in boundary_tracks:
+        jobs.append(exc.submit(_process, track))
+    return itertools.chain.from_iterable(j.result() for j in jobs)
 
 #
 # --- wrappers ---

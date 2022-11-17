@@ -487,6 +487,7 @@ def site_feature(coco_dset, region_id, site_id, trackid, gids, features, as_summ
     return geojson.Feature(geometry=geometry, properties=properties)
 
 
+@profile
 def convert_kwcoco_to_iarpa(coco_dset,
                             default_region_id=None,
                             as_summary=False):
