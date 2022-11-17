@@ -6,7 +6,6 @@ import shapely.geometry
 import ubelt as ub
 import pandas as pd
 import geopandas as gpd
-import dask_geopandas
 import itertools
 import collections
 from abc import abstractmethod
@@ -331,6 +330,7 @@ def gpd_compute_scores(gdf,
 
     USE_DASK = 0
     if USE_DASK:  # 63% runtime
+        import dask_geopandas
         # https://github.com/geopandas/dask-geopandas
         # _col_order = gdf.columns  # doesn't matter
         gdf = gdf.set_index('gid')
