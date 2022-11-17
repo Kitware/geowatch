@@ -213,6 +213,12 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             Only applies to training dataset when used in the data module.
             Validation/test dataset defaults to zero.
             ''')),
+
+        'use_grid_cache': scfg.Value(True, help=ub.paragraph(
+            '''
+            If true, will cache the spacetime grid to make multiple
+            runs quicker.
+            '''))
     }
 
     def normalize(self):
@@ -418,6 +424,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 window_space_scale=window_space_scale,
                 set_cover_algo=set_cover_algo,
                 workers=grid_workers,  # could configure this
+                use_cache=self.config['use_grid_cache']
             )
             new_sample_grid = builder.build()
             self.length = len(new_sample_grid['targets'])
@@ -438,7 +445,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 window_space_scale=window_space_scale,
                 set_cover_algo=set_cover_algo,
                 workers=grid_workers,
-                use_cache=1,
+                use_cache=self.config['use_grid_cache']
             )
             new_sample_grid = builder.build()
 

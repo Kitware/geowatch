@@ -296,6 +296,12 @@ def main(cmdline=True, **kwargs):
         from matplotlib import pyplot as plt
         plt.show()
 
+    results = {
+        'sensor_chan_stats': sensor_chan_stats,
+        'distance_metrics': distance_metrics,
+    }
+    return results
+
 
 # def try_with_statsmodels():
 #     import statsmodels.api as sm
