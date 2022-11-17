@@ -147,7 +147,8 @@ def bas_report():
     import ubelt as ub  # NOQA
     import pandas as pd  # NOQA
     from watch import heuristics
-    from watch.mlops import expt_state
+    # from watch.mlops import expt_state
+    from watch.mlops import expt_manager as expt_state
     from watch.mlops import expt_report
     expt_dvc_dpath = heuristics.auto_expt_dvc()
     data_dvc_dpath = heuristics.auto_expt_dvc()
@@ -160,7 +161,10 @@ def bas_report():
     # dataset_code = '*'
     state = expt_state.ExperimentState(
         expt_dvc_dpath, dataset_code=dataset_code,
-        data_dvc_dpath=data_dvc_dpath, model_pattern='*')
+        data_dvc_dpath=data_dvc_dpath,
+        model_pattern='*'
+        # model_pattern='*'
+    )
     self = state  # NOQA
     state._build_path_patterns()
     state.summarize()
@@ -170,9 +174,53 @@ def bas_report():
     reporter.load2()
 
     df = reporter.orig_merged_df
-    from watch.utils.util_param_grid import DotDictDataFrame
-    df = DotDictDataFrame(df)
+
+    # from watch.utils.util_param_grid import DotDictDataFrame
+    # df = DotDictDataFrame(df)
     groupid_to_shortlist = reporter.report_best(show_configs=True, verbose=1, top_k=10)
+
+    if 1:
+        df2 = df[df['type'] == 'eval_trk_poly_fpath']
+        df2 = df2.sort_values('trk.poly.metrics.bas_f1')
+        rich.print(df2[[
+            'trk_model',
+            'type',
+            # 'trk.pxl.metrics.salient_AP',
+            'trk.poly.metrics.bas_f1',
+            'trk.pxl.input_space_scale',
+            'trk.pxl.window_space_scale',
+            'trk.pxl.output_space_scale',
+            # 'trk.pxl.tta_time',
+            # 'trk.pxl.tta_fliprot',
+            'trk.pxl.chip_dims',
+            'trk.pxl.time_steps',
+            # 'trk.pxl.time_span',
+            # 'trk.pxl.time_sampling',
+            'trk.pxl.set_cover_algo',
+            # 'trk.pxl.resample_invalid_frames',
+            # 'trk.pxl.use_cloudmask',
+            'trk.pxl.resource.total_hours',
+            'trk.pxl.resource.gpu_name',
+            'trk.poly.thresh',
+            'trk.poly.moving_window_size',
+            # 'trk.poly.polygon_fn',
+        ]].to_string())
+
+
+    if 0:
+        g = groupid_to_shortlist[('Drop4-BAS_KR_R001.kwcoco', 'eval_trk_poly_fpath')]
+        g = DotDictDataFrame(g)
+
+    import kwplot
+    sns = kwplot.autosns()
+
+    df['trk.pxl.model'] = df['trk.pxl.package_fpath'].apply(lambda x: ub.Path(x).name)
+    df['trk.pxl.model'] = df['trk.pxl.package_fpath'].apply(lambda x: ub.Path(x).name)
+
+    df['trk.both.total_hours'] = df[['trk.pxl.resource.total_hours', 'trk.poly.resource.total_hours']].sum(axis=1)
+    # sns.scatterplot(data=df, x='trk.pxl.input_space_scale', y='trk.poly.metrics.bas_faa_f1', hue='trk.pxl.model')
+    sns.scatterplot(data=df, x='trk.pxl.input_space_scale', y='trk.both.total_hours', hue='trk.pxl.model')
+    # sns.scatterplot(data=df, x='trk.pxl.properties.step', y='act.poly.metrics.sc_macro_f1', hue='act.pxl.model_name')
 
 
 def main():
@@ -195,7 +243,10 @@ def main():
     dataset_code = 'Drop4-SC'
     state = expt_state.ExperimentState(
         expt_dvc_dpath, dataset_code=dataset_code,
-        data_dvc_dpath=data_dvc_dpath, model_pattern='*')
+        data_dvc_dpath=data_dvc_dpath,
+        # model_pattern='*'
+        model_pattern='*Drop4_tune_V30_8GSD_V3_epoch=2-step=17334*'
+    )
     self = state  # NOQA
     state._build_path_patterns()
     state.summarize()
@@ -208,6 +259,33 @@ def main():
     df = reporter.orig_merged_df
 
     groupid_to_shortlist = reporter.report_best(show_configs=True, verbose=1, top_k=4)
+
+    if 1:
+        df2 = df[df['type'] == 'eval_act_poly_fpath']
+        df2 = df2.sort_values('act.poly.metrics.sc_macro_f1')
+        rich.print(df2[[
+            'act_model',
+            # 'type',
+            'act.poly.metrics.sc_macro_f1',
+            'act.pxl.input_space_scale',
+            'act.pxl.window_space_scale',
+            'act.pxl.output_space_scale',
+            # 'act.pxl.tta_time',
+            # 'act.pxl.tta_fliprot',
+            'act.pxl.chip_dims',
+            'act.pxl.time_steps',
+            # 'act.pxl.time_span',
+            # 'act.pxl.time_sampling',
+            # 'act.pxl.set_cover_algo',
+            # 'act.pxl.resample_invalid_frames',
+            'act.pxl.use_cloudmask',
+            'act.pxl.resource.total_hours',
+            'act.poly.resource.total_hours',
+            'act.pxl.resource.gpu_name',
+            'act.poly.thresh',
+            # 'act.poly.moving_window_size',
+            'act.poly.boundaries_as',
+        ]].iloc[-100:].to_string())
 
     from watch.utils.util_param_grid import DotDictDataFrame
     sdf = DotDictDataFrame(groupid_to_shortlist[('Drop4-SC_data_vali_small.kwcoco', 'eval_act_poly_fpath')])
@@ -257,6 +335,7 @@ def main():
         'act.poly.metrics.sc_macro_f1',
         'act.poly.resource.total_hours',
         'act.pxl.resource.total_hours',
+
         'act.fit.input_space_scale',
         'act.pxl.model',
 
@@ -385,8 +464,6 @@ python -m watch.mlops.schedule_evaluation \
 # BAS TUNING
 
 
-
-
 DATASET_CODE=Drop4-BAS
 DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="auto")
 EXPT_DVC_DPATH=$(smartwatch_dvc --tags="phase2_expt" --hardware="auto")
@@ -396,11 +473,11 @@ python -m watch.mlops.schedule_evaluation \
             trk.pxl.model:
                 # - $EXPT_DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
                 # - $EXPT_DVC_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Continue_15GSD_BGR_V004/Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt.pt
-                - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=7501.pt.pt
-                - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=23012.pt.pt
-                - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=7501-v1.pt.pt
-                - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=23012-v1.pt.pt
-                # - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+                # - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=7501.pt.pt
+                # - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=23012.pt.pt
+                # - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=7501-v1.pt.pt
+                # - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=23012-v1.pt.pt
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
                 # - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step24.pt.pt
             trk.pxl.data.test_dataset:
                 - $DATA_DVC_DPATH/$DATASET_CODE/KR_R001.kwcoco.json
@@ -409,29 +486,31 @@ python -m watch.mlops.schedule_evaluation \
                 # - $DATA_DVC_DPATH/$DATASET_CODE/US_R007.kwcoco.json
             trk.pxl.data.window_space_scale:
                 # - "auto"
-                # - "10GSD"
+                - "10GSD"
                 - "15GSD"
-                - "30GSD"
-                - "40GSD"
-                - "60GSD"
+                # - "30GSD"
+                # - "40GSD"
+                # - "60GSD"
+            trk.pxl.data.set_cover_algo:
+                - null
+                - approx
             trk.pxl.data.time_steps:
-                - auto
-                - 2
-                - 3
-                - 4
+                - 11
                 - 5
-                - 6
-            # trk.pxl.data.input_space_scale:
-            #     # - "auto"
-            #     - 10GSD
+                # - auto
+                # - 2
+                # - 3
+                # - 4
+                # - 5
+                # - 6
             trk.pxl.data.time_sampling:
                 - "auto"
             trk.poly.thresh:
-                - 0.07
-                - 0.09
+                # - 0.07
+                # - 0.09
                 - 0.1
-                - 0.11
-                - 0.13
+                # - 0.11
+                # - 0.13
             crop.src:
                 - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/online_v1/kwcoco_for_sc_fielded.json
             crop.regions:
@@ -451,21 +530,21 @@ python -m watch.mlops.schedule_evaluation \
             act.pxl.model:
                 - $EXPT_DVC_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
             include:
-                - trk.pxl.data.window_space_scale: 60GSD
-                  trk.pxl.data.input_space_scale: 60GSD
-                  trk.pxl.data.output_space_scale: 60GSD
-                - trk.pxl.data.window_space_scale: 40GSD
-                  trk.pxl.data.input_space_scale: 40GSD
-                  trk.pxl.data.output_space_scale: 40GSD
-                - trk.pxl.data.window_space_scale: 30GSD
-                  trk.pxl.data.input_space_scale: 30GSD
-                  trk.pxl.data.output_space_scale: 30GSD
+                # - trk.pxl.data.window_space_scale: 60GSD
+                #   trk.pxl.data.input_space_scale: 60GSD
+                #   trk.pxl.data.output_space_scale: 60GSD
+                # - trk.pxl.data.window_space_scale: 40GSD
+                #   trk.pxl.data.input_space_scale: 40GSD
+                #   trk.pxl.data.output_space_scale: 40GSD
+                # - trk.pxl.data.window_space_scale: 30GSD
+                #   trk.pxl.data.input_space_scale: 30GSD
+                #   trk.pxl.data.output_space_scale: 30GSD
                 - trk.pxl.data.window_space_scale: 15GSD
                   trk.pxl.data.input_space_scale: 15GSD
                   trk.pxl.data.output_space_scale: 15GSD
-                # - trk.pxl.data.window_space_scale: 10GSD
-                #   trk.pxl.data.input_space_scale: 10GSD
-                #   trk.pxl.data.output_space_scale: 10GSD
+                - trk.pxl.data.window_space_scale: 10GSD
+                  trk.pxl.data.input_space_scale: 10GSD
+                  trk.pxl.data.output_space_scale: 10GSD
                 # - trk.pxl.data.window_space_scale: auto
                 #   trk.pxl.data.input_space_scale: auto
                 #   trk.pxl.data.output_space_scale: auto
@@ -502,3 +581,32 @@ python -m watch mlops "push packages" --dataset_codes Drop4-BAS
 python -m watch mlops "pull packages" --dataset_codes Drop4-BAS
 
 """
+
+
+python -m watch.tasks.fusion.predict \
+    --package_fpath=/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt \
+    --test_dataset=/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_data_dvc/Drop4-BAS/KR_R001.kwcoco.json \
+    --pred_dataset=/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/pred/trk/package_epoch0_step41.pt.pt/Drop4-BAS_KR_R001.kwcoco/trk_pxl_16f221bd/pred.kwcoco.json \
+    --time_steps=auto \
+    --time_sampling=auto \
+    --window_space_scale=15GSD \
+    --input_space_scale=15GSD \
+    --output_space_scale=15GSD  \
+    --num_workers=4 \
+    --devices=0, \
+    --accelerator=gpu \
+    --batch_size=1
+
+
+
+python -m watch.cli.run_tracker \
+    "/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/pred/trk/package_epoch0_step41.pt.pt/Drop4-BAS_KR_R001.kwcoco/trk_pxl_16f221bd/pred.kwcoco.json" \
+    --default_track_fn saliency_heatmaps \
+    --track_kwargs '{"thresh": 0.1, "moving_window_size": null, "polygon_fn": "heatmaps_to_polys"}' \
+    --clear_annots \
+    --out_sites_dir "/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/pred/trk/package_epoch0_step41.pt.pt/Drop4-BAS_KR_R001.kwcoco/trk_pxl_16f221bd/trk_poly_9f08fb8c/sites" \
+    --out_site_summaries_dir "/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/pred/trk/package_epoch0_step41.pt.pt/Drop4-BAS_KR_R001.kwcoco/trk_pxl_16f221bd/trk_poly_9f08fb8c/site-summaries" \
+    --out_sites_fpath "/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/pred/trk/package_epoch0_step41.pt.pt/Drop4-BAS_KR_R001.kwcoco/trk_pxl_16f221bd/trk_poly_9f08fb8c/site_tracks_manifest.json" \
+    --out_site_summaries_fpath "/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/pred/trk/package_epoch0_step41.pt.pt/Drop4-BAS_KR_R001.kwcoco/trk_pxl_16f221bd/trk_poly_9f08fb8c/site_summary_tracks_manifest.json" \
+    --out_kwcoco "/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/pred/trk/package_epoch0_step41.pt.pt/Drop4-BAS_KR_R001.kwcoco/trk_pxl_16f221bd/trk_poly_9f08fb8c/tracks.kwcoco.json"
+

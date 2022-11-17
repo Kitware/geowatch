@@ -88,7 +88,6 @@ def load_iarpa_evaluation(fpath):
     Ignore:
         fpath = '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/eval/trk/package_epoch0_step41.pt.pt/Drop4-BAS_KR_R001.kwcoco/trk_pxl_fd9e1a95/trk_poly_9f08fb8c/merged/summary2.json'
     """
-    print(f'fpath={fpath}')
     iarpa_info = _load_json(fpath)
     metrics = {}
     if 'best_bas_rows' in iarpa_info:
@@ -109,19 +108,44 @@ def load_iarpa_evaluation(fpath):
             'bas_f1': bas_row['F1'],
             'rho': bas_row['rho'],
             'tau': bas_row['tau'],
+            'bas_space_FAR': bas_row['spatial FAR'],
+            'bas_time_FAR': bas_row['temporal FAR'],
+            'bas_image_FAR': bas_row['images FAR'],
         })
         alpha = 1.0
         metrics['bas_faa_f1'] = metrics['bas_f1'] * (1 - metrics['bas_ffpa']) ** alpha
 
     if 'sc_df' in iarpa_info:
-        sc_df = pd.read_json(io.StringIO(json.dumps(iarpa_info['sc_df'])), orient='table')
+        sc_json_data = iarpa_info['sc_df']
+        sc_json_text = json.dumps(sc_json_data)
+        try:
+            sc_df = pd.read_json(io.StringIO(sc_json_text), orient='table')
+        except pd.errors.IntCastingNaNError:
+            # This seems like a pandas bug. It looks like it can save a Int64
+            # with NaN exteions, but it can't load it back in.
+            sc_json_data = iarpa_info['sc_df']
+            walker = ub.IndexableWalker(sc_json_data)
+            for path, val in walker:
+                if path[-1] == 'extDtype' and val == 'Int64':
+                    walker[path] = 'number'
+                if path[-1] == 'type' and val == 'integer':
+                    walker[path] = 'number'
+            sc_json_text = json.dumps(sc_json_data)
+            sc_df = pd.read_json(io.StringIO(sc_json_text), orient='table')
+
         metrics.update({
             # 'mean_f1': sc_df.loc['F1'].mean(),
             'sc_macro_f1': sc_df.loc['__macro__']['F1'].mean(),
-            'sc_micro_f1': sc_df.loc['__micro__']['F1'].mean(),
             'macro_f1_siteprep': sc_df.loc['__macro__', 'Site Preparation']['F1'],
             'macro_f1_active': sc_df.loc['__macro__', 'Site Preparation']['F1'],
         })
+
+        if '__micro__' in sc_df.index:
+            # Not sure why micro sometimes is not included.
+            metrics['sc_micro_f1'] = sc_df.loc['__micro__']['F1'].mean()
+        else:
+            metrics['sc_micro_f1'] = np.nan
+
     return metrics, iarpa_info
 
 

@@ -1,3 +1,9 @@
+"""
+TODO:
+    each unique run needs a pipeline-UUID so we can run the same experiment
+    multiple times and not break the data model. We should be able to tell it
+    to use any of the pre-existing variants with the same configuration though.
+"""
 import warnings
 import parse
 import pandas as pd

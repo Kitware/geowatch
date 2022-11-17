@@ -1041,8 +1041,12 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                 channel_colors.append(None)
 
         if any(c is not None for c in channel_colors):
-            canvas = util_kwimage.perchannel_colorize(canvas, channel_colors=channel_colors)
-            canvas = canvas[..., 0:3]
+            # This flag makes it so 1 channel outputs always use cmap.
+            # not sure if I like that or not, probably needs to be configurable
+            _flag = kwimage.num_channels(canvas) != 1
+            if _flag:
+                canvas = util_kwimage.perchannel_colorize(canvas, channel_colors=channel_colors)
+                canvas = canvas[..., 0:3]
 
         if cmap is not None:
             if kwimage.num_channels(canvas) == 1:

@@ -46,6 +46,20 @@ class KWCocoVideoDatasetConfig(scfg.Config):
     train, test, or validation.
 
     In the future this might be convertable to, or handled by omegaconfig
+
+    The core spacetime parameters are:
+
+        * window_space_scale
+        * input_space_scale
+        * output_space_scale
+        * time_steps
+        * time_sampling
+        * chip_dims
+
+    Also:
+
+        * set_cover_algo
+
     """
     default = {
         'time_steps': scfg.Value(2, help='number of temporal sampler per batch'),
