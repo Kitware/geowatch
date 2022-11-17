@@ -217,10 +217,21 @@ def bas_report():
     df['trk.pxl.model'] = df['trk.pxl.package_fpath'].apply(lambda x: ub.Path(x).name)
     df['trk.pxl.model'] = df['trk.pxl.package_fpath'].apply(lambda x: ub.Path(x).name)
 
-    df['trk.both.total_hours'] = df[['trk.pxl.resource.total_hours', 'trk.poly.resource.total_hours']].sum(axis=1)
-    # sns.scatterplot(data=df, x='trk.pxl.input_space_scale', y='trk.poly.metrics.bas_faa_f1', hue='trk.pxl.model')
-    sns.scatterplot(data=df, x='trk.pxl.input_space_scale', y='trk.both.total_hours', hue='trk.pxl.model')
+    df['trk.pxl.model'] = df['trk.pxl.package_fpath'].apply(lambda x: ub.Path(x).name)
+
+    df['trk.gsd'] = df['trk.pxl.input_space_scale'].apply(lambda x: int(x[:-3]))
+
+    df['trk.efficiency'] = df['trk.poly.metrics.bas_faa_f1'] / df['trk.both.total_hours']
+
+    fig = kwplot.figure(fnum=1, doclf=True)
+    sns.scatterplot(data=df, x='trk.gsd', y='trk.both.total_hours', hue='trk.pxl.model', ax=fig.gca())
     # sns.scatterplot(data=df, x='trk.pxl.properties.step', y='act.poly.metrics.sc_macro_f1', hue='act.pxl.model_name')
+
+    fig = kwplot.figure(fnum=2, doclf=True)
+    sns.scatterplot(data=df, x='trk.gsd', y='trk.poly.metrics.bas_faa_f1', hue='trk.pxl.model', legend=False)
+
+    fig = kwplot.figure(fnum=3, doclf=True)
+    sns.scatterplot(data=df, x='trk.gsd', y='trk.efficiency', hue='trk.pxl.model', legend=False)
 
 
 def main():
@@ -244,8 +255,8 @@ def main():
     state = expt_state.ExperimentState(
         expt_dvc_dpath, dataset_code=dataset_code,
         data_dvc_dpath=data_dvc_dpath,
-        # model_pattern='*'
-        model_pattern='*Drop4_tune_V30_8GSD_V3_epoch=2-step=17334*'
+        model_pattern='*'
+        # model_pattern='*Drop4_tune_V30_8GSD_V3_epoch=2-step=17334*'
     )
     self = state  # NOQA
     state._build_path_patterns()

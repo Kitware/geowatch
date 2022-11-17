@@ -610,7 +610,7 @@ def load_extended_data(df, expt_dvc_dpath):
     errors = []
 
     import os
-    WATCH_EVAL_LOAD_STRICT = os.environ.get('WATCH_EVAL_LOAD_STRICT', 0)
+    WATCH_EVAL_LOAD_STRICT = os.environ.get('WATCH_EVAL_LOAD_STRICT', 1)
     for row in ub.ProgIter(rows, desc='load'):
         big_row = row.copy()
         fpath = row['raw']
