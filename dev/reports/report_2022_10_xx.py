@@ -162,7 +162,8 @@ def bas_report():
     state = expt_state.ExperimentState(
         expt_dvc_dpath, dataset_code=dataset_code,
         data_dvc_dpath=data_dvc_dpath,
-        model_pattern='*'
+        # model_pattern='*'
+        model_pattern='package_epoch0_step41.pt.pt',
         # model_pattern='*'
     )
     self = state  # NOQA
@@ -216,11 +217,8 @@ def bas_report():
 
     df['trk.pxl.model'] = df['trk.pxl.package_fpath'].apply(lambda x: ub.Path(x).name)
     df['trk.pxl.model'] = df['trk.pxl.package_fpath'].apply(lambda x: ub.Path(x).name)
-
     df['trk.pxl.model'] = df['trk.pxl.package_fpath'].apply(lambda x: ub.Path(x).name)
-
     df['trk.gsd'] = df['trk.pxl.input_space_scale'].apply(lambda x: int(x[:-3]))
-
     df['trk.efficiency'] = df['trk.poly.metrics.bas_faa_f1'] / df['trk.both.total_hours']
 
     fig = kwplot.figure(fnum=1, doclf=True)
@@ -268,6 +266,8 @@ def main():
 
     reporter.state.summarize()
     df = reporter.orig_merged_df
+    from watch.utils.util_param_grid import DotDictDataFrame
+    df = DotDictDataFrame(df)
 
     groupid_to_shortlist = reporter.report_best(show_configs=True, verbose=1, top_k=4)
 
@@ -297,6 +297,30 @@ def main():
             # 'act.poly.moving_window_size',
             'act.poly.boundaries_as',
         ]].iloc[-100:].to_string())
+
+    if 1:
+        import kwplot
+        sns = kwplot.autosns()
+        df['act.pxl.model'] = df['act.pxl.package_fpath'].apply(lambda x: ub.Path(x).name)
+        df['act.gsd'] = df['act.pxl.input_space_scale'].apply(lambda x: int(x[:-3]))
+        df['act.both.total_hours'] = df[['act.pxl.resource.total_hours', 'act.poly.resource.total_hours']].sum(axis=1)
+        df['act.efficiency'] = df['act.poly.metrics.sc_macro_f1'] / df['act.both.total_hours']
+
+        fig = kwplot.figure(fnum=1, doclf=True)
+        sns.scatterplot(data=df, x='act.gsd', y='act.both.total_hours', hue='act.pxl.model', ax=fig.gca(), legend=False)
+        fig.set_size_inches([6, 3])
+        fig.subplots_adjust(bottom=0.2)
+        # sns.scatterplot(data=df, x='act.pxl.properties.step', y='act.poly.metrics.sc_macro_f1', hue='act.pxl.model_name')
+
+        fig = kwplot.figure(fnum=2, doclf=True)
+        sns.scatterplot(data=df, x='act.gsd', y='act.poly.metrics.sc_macro_f1', hue='act.pxl.model', legend=False)
+        fig.set_size_inches([6, 3])
+        fig.subplots_adjust(bottom=0.2)
+
+        fig = kwplot.figure(fnum=3, doclf=True)
+        sns.scatterplot(data=df, x='act.gsd', y='act.efficiency', hue='act.pxl.model', legend=False)
+        fig.set_size_inches([6, 3])
+        fig.subplots_adjust(bottom=0.2)
 
     from watch.utils.util_param_grid import DotDictDataFrame
     sdf = DotDictDataFrame(groupid_to_shortlist[('Drop4-SC_data_vali_small.kwcoco', 'eval_act_poly_fpath')])

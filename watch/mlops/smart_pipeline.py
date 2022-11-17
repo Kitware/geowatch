@@ -246,7 +246,7 @@ def _handle_crop_and_trk_params(param_types, expt_dvc_dpath):
     return trk_param_types, extra_attrs
 
 
-def parse_tracker_params(tracker_info, expt_dvc_dpath, arg_prefix=''):
+def parse_tracker_params(tracker_info, expt_dvc_dpath=None, arg_prefix=''):
     """
     Note:
         This is tricky because we need to find a way to differentiate if this
@@ -485,25 +485,25 @@ def _add_prefix(prefix, dict_):
     return {prefix + k: v for k, v in dict_.items()}
 
 
-def relevant_pred_pxl_config(pred_args, dvc_dpath, arg_prefix=''):
+def relevant_pred_pxl_config(pred_pxl_config, dvc_dpath=None, arg_prefix=''):
     # TODO: better way of inferring what params are relevant
     # This should be metadata a scriptconfig object can hold.
     pred_config = {}
-    pred_config['tta_fliprot'] = pred_args.get('tta_fliprot', 0)
-    pred_config['tta_time'] = pred_args.get('tta_time', 0)
-    pred_config['chip_overlap'] = pred_args['chip_overlap']
-    pred_config['input_space_scale'] = pred_args.get('input_space_scale', None)
-    pred_config['window_space_scale'] = pred_args.get('window_space_scale', None)
-    pred_config['output_space_scale'] = pred_args.get('output_space_scale', None)
-    pred_config['time_span'] = pred_args.get('time_span', None)
-    pred_config['time_sampling'] = pred_args.get('time_sampling', None)
-    pred_config['time_steps'] = pred_args.get('time_steps', None)
-    pred_config['chip_dims'] = pred_args.get('chip_dims', None)
-    pred_config['set_cover_algo'] = pred_args.get('set_cover_algo', None)
-    pred_config['resample_invalid_frames'] = pred_args.get('resample_invalid_frames', None)
-    pred_config['use_cloudmask'] = pred_args.get('use_cloudmask', None)
-    package_fpath = pred_args['package_fpath']
-    test_dataset = pred_args['test_dataset']
+    pred_config['tta_fliprot'] = pred_pxl_config.get('tta_fliprot', 0)
+    pred_config['tta_time'] = pred_pxl_config.get('tta_time', 0)
+    pred_config['chip_overlap'] = pred_pxl_config['chip_overlap']
+    pred_config['input_space_scale'] = pred_pxl_config.get('input_space_scale', None)
+    pred_config['window_space_scale'] = pred_pxl_config.get('window_space_scale', None)
+    pred_config['output_space_scale'] = pred_pxl_config.get('output_space_scale', None)
+    pred_config['time_span'] = pred_pxl_config.get('time_span', None)
+    pred_config['time_sampling'] = pred_pxl_config.get('time_sampling', None)
+    pred_config['time_steps'] = pred_pxl_config.get('time_steps', None)
+    pred_config['chip_dims'] = pred_pxl_config.get('chip_dims', None)
+    pred_config['set_cover_algo'] = pred_pxl_config.get('set_cover_algo', None)
+    pred_config['resample_invalid_frames'] = pred_pxl_config.get('resample_invalid_frames', None)
+    pred_config['use_cloudmask'] = pred_pxl_config.get('use_cloudmask', None)
+    package_fpath = pred_pxl_config['package_fpath']
+    test_dataset = pred_pxl_config['test_dataset']
     if dvc_dpath is not None:
         package_fpath = resolve_cross_machine_path(package_fpath, dvc_dpath)
         test_dataset = resolve_cross_machine_path(test_dataset, dvc_dpath)
@@ -513,6 +513,8 @@ def relevant_pred_pxl_config(pred_args, dvc_dpath, arg_prefix=''):
     pred_config['package_fpath'] = package_fpath
     pred_config['test_dataset'] = test_dataset
 
+    # FIXME: use a common heuristic to transform a path into a model.
+    test_dataset = ub.Path(test_dataset)
     pred_config['properties.model_name'] = model_name = ub.Path(package_fpath).name
     pred_config['properties.dataset_name'] = str(ub.Path(*test_dataset.parts[-2:]))
 
@@ -652,7 +654,7 @@ def find_info_items(info, query_type, query_name=None):
                 yield item
 
 
-def parse_pred_pxl_params(pred_info, expt_dvc_dpath, arg_prefix=''):
+def parse_pred_pxl_params(pred_info, expt_dvc_dpath=None, arg_prefix=''):
     pred_item = find_pred_pxl_item(pred_info)
     pred_item = _handle_process_item(pred_item)
 

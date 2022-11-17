@@ -1003,7 +1003,8 @@ def main(args):
     from watch.utils.process_context import ProcessContext
     proc_context = ProcessContext(
         name='watch.cli.kwcoco_to_geojson', type='process',
-        args=jsonified_args,
+        # args=jsonified_args,
+        args=sys.argv,
         config=jsonified_args,
         extra={'pred_info': pred_info},
         track_emissions=False,
@@ -1071,6 +1072,9 @@ def main(args):
 
     if out_kwcoco is not None:
         coco_dset = coco_dset.reroot(absolute=True)
+        # Add tracking audit data to the kwcoco file
+        coco_info = coco_dset.dataset.get('info', [])
+        coco_info.append(proc_context.obj)
         coco_dset.fpath = out_kwcoco
         ub.Path(out_kwcoco).parent.ensuredir()
         print(f'write to coco_dset.fpath={coco_dset.fpath}')
