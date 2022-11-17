@@ -398,9 +398,9 @@ def pop_tracks(coco_dset: kwcoco.CocoDataset,
     assert len(polys) == len(annots), ('TODO handle multipolygon boundaries')
 
     polys = [p.to_shapely() for p in polys]
-    gdf = gpd.GeoDataFrame(dict(gid=annots.gids, poly=polys), geometry='poly')
-    gdf = gdf.reset_index().rename(columns={'index': 'track_idx'})
-    gdf = gdf.explode('gid')
+    gdf = gpd.GeoDataFrame(dict(gid=annots.gids, poly=polys,
+                                track_idx=annots.get('track_id')),
+                           geometry='poly')
     if score_chan is not None:
         keys = {score_chan.spec: list(score_chan.unique())}
         gdf = gpd_compute_scores(gdf, coco_dset, [None], keys, USE_DASK=False)
