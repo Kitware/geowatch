@@ -316,17 +316,14 @@ def gpd_compute_scores(gdf,
             heatmap = build_heatmap(sub_dset, gid, k, missing='fill')
             scores = grp['poly'].map(
                 lambda p: score_poly(p, heatmap, threshold=thrs))
+
             grp[[(k, thr) for thr in thrs]] = scores.to_list()
-        for thr in thrs:
-            for k, kk in ks.items():
-                if kk:
-                    # TODO nansum
-                    grp[(k, thr)] = grp[[(ki, thr) for ki in kk]].sum(axis=1)
         return grp
 
     ks = {k: v for k, v in ks.items() if v}
     _valid_keys = set().union(itertools.chain.from_iterable(
-        ks.values())) | ks.keys()
+        ks.values()))  # | ks.keys()
+    score_cols = list(itertools.product(_valid_keys, thrs))
 
     USE_DASK = 0
     if USE_DASK:  # 63% runtime
@@ -337,8 +334,7 @@ def gpd_compute_scores(gdf,
         # npartitions and chunksize are mutually exclusive
         gdf = dask_geopandas.from_geopandas(gdf, npartitions=8)
         meta = gdf._meta.join(
-            pd.DataFrame(columns=list(itertools.product(_valid_keys, thrs)),
-                         dtype=float))
+            pd.DataFrame(columns=score_cols, dtype=float))
         gdf = gdf.groupby('gid', group_keys=False).apply(compute_scores,
                                                          thrs=thrs,
                                                          ks=ks,
@@ -356,6 +352,21 @@ def gpd_compute_scores(gdf,
         gdf = gdf.groupby('gid', group_keys=False).apply(compute_scores,
                                                          thrs=thrs,
                                                          ks=ks)
+
+    # fill nan scores from nodata pxls
+    def _fillna(grp):
+        grp[score_cols] = grp[score_cols].fillna(method='ffill').fillna(0)
+        return grp
+
+    gdf = gdf.groupby('track_idx', group_keys=False).apply(_fillna)
+
+    # copy over to summed fg/bg channels
+    for thr in thrs:
+        for k, kk in ks.items():
+            if kk:
+                # https://github.com/pandas-dev/pandas/issues/20824#issuecomment-384432277
+                gdf[(k, thr)] = gdf[[(ki, thr) for ki in kk]].sum(axis=1)
+
     return gdf
 
 
@@ -428,6 +439,7 @@ def score_poly(poly, probs, threshold=None, use_rasterio=True):
         threshold: if not None, return fraction of poly with probs > threshold.
         Else, return average value of probs in poly. Can be a list of values,
         in which case returns all of them.
+
     '''
     # try converting from shapely
     # TODO standard coerce fns between kwimage, shapely, and __geo_interface__
@@ -466,18 +478,25 @@ def score_poly(poly, probs, threshold=None, use_rasterio=True):
         if len(rel_probs.shape) == 3:
             rel_probs = rel_probs[:, :, 0]
 
-    total = rel_mask.sum()
+    # handle nans
+    # TODO figure out np.ma to reduce redundancy
+    # msk_rel_probs = np.ma.masked_where(~np.isfinite(rel_probs) | rel_mask,
+    #                                      rel_probs, copy=False)
+
+    total = (rel_mask * np.isfinite(rel_probs)).sum()
     _return_list = isinstance(threshold, Iterable)
     if not _return_list:
         threshold = [threshold]
     result = []
     for t in threshold:
-        if t is None:
-            score = 0 if total == 0 else (rel_mask * rel_probs).sum() / total
+        if total == 0:
+            result.append(np.nan)
+        elif t is None:
+            score = np.nansum(rel_mask * rel_probs) / total
             result.append(score)
         else:
             hard_prob = rel_probs > t
-            overlap = (hard_prob * rel_mask).sum()
+            overlap = np.nansum(hard_prob * rel_mask)
             result.append(overlap / total)
     return result if _return_list else result[0]
 
@@ -605,8 +624,7 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
                    keys: Union[List[str], Dict[str, List[str]]],
                    missing='fill',
                    skipped='interpolate',
-                   video_id=None,
-                   _NANS=False) -> Dict[str, List[np.array]]:
+                   video_id=None) -> Dict[str, List[np.array]]:
     '''
     Vectorized version of watch.tasks.tracking.utils.build_heatmap across gids.
 
@@ -687,8 +705,7 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
                                                   gid,
                                                   key,
                                                   space='video',
-                                                  return_chan_probs=True,
-                                                  _NANS=_NANS)
+                                                  return_chan_probs=True)
             # TODO make this more efficient using missing='skip'
             if np.any(img_probs):
                 heatmaps_dct[group].append(img_probs)
@@ -721,8 +738,7 @@ def build_heatmap(dset,
                   key,
                   return_chan_probs=False,
                   space='video',
-                  missing='fill',
-                  _NANS=False):
+                  missing='fill'):
     """
     Find the total heatmap of key within gid
 
@@ -773,12 +789,6 @@ def build_heatmap(dset,
 
     key_img_probs = coco_img.delay(channels=common,
                                    space=space).finalize(nodata='float')
-
-    # FIXME!
-    # Curently hacking all nans to zero! Instead we should use the fact
-    # That we don't have an observation in later stages!
-    if not _NANS:
-        key_img_probs = np.nan_to_num(key_img_probs)
 
     # Not sure about that sum axis=-1 here
     fg_img_probs = key_img_probs.sum(axis=-1)

@@ -10,8 +10,7 @@ from typing import Iterable, Tuple, Union, Optional, Literal
 from dataclasses import dataclass
 from shapely.ops import unary_union
 from watch.tasks.tracking.utils import (NewTrackFunction, mask_to_polygons,
-                                        build_heatmap, score_poly, Poly,
-                                        _validate_keys, pop_tracks,
+                                        Poly, _validate_keys, pop_tracks,
                                         build_heatmaps, trackid_is_default,
                                         gpd_sort_by_gid, gpd_len,
                                         gpd_compute_scores)
@@ -618,8 +617,7 @@ def _gids_polys(
 
     _heatmaps = build_heatmaps(sub_dset,
                                gids, {'fg': key},
-                               skipped='interpolate',
-                               _NANS=True)['fg']
+                               skipped='interpolate')['fg']
 
     def _process(track):
 
