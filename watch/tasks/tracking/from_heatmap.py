@@ -174,22 +174,14 @@ def add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
     key, bg_key = _validate_keys(key, bg_key)
 
     @ub.memoize
-    def _heatmap(gid, key, space):
-        probs_tot, probs_dct = build_heatmap(sub_dset,
-                                             gid,
-                                             key,
-                                             return_chan_probs=True,
-                                             space=space)
-        return probs_dct
-
-    @ub.memoize
     def _warp_img_from_vid(gid):
         # Memoize the conversion to a matrix
         coco_img = sub_dset.coco_image(gid)
         img_from_vid = coco_img.warp_img_from_vid
         return img_from_vid
 
-    def make_new_annotation(gid, poly, this_score, track_id, space='video'):
+    def make_new_annotation(gid, poly, this_score, scores_dct, track_id,
+                            space='video'):
 
         # assign category (key) from max score
         if this_score > thresh or len(bg_key) == 0:
@@ -197,11 +189,8 @@ def add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
         else:
             cand_keys = bg_key
         if len(cand_keys) > 1:
-            cand_scores = [
-                score_poly(poly, probs)  # awk, this could be a class
-                for probs in _heatmap(gid, key, space).values()
-            ]
-            cat_name = cand_keys[np.argmax(cand_scores)]
+            # TODO ensure bg classes are scored if there are >1 of them
+            cat_name = cand_keys[np.argmax([scores_dct[k] for k in cand_keys])]
         else:
             cat_name = cand_keys[0]
         cid = sub_dset.ensure_category(cat_name)
@@ -241,7 +230,11 @@ def add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
 
     for tid, grp in tracks.groupby('track_idx'):
         score_chan = kwcoco.ChannelSpec('|'.join(key))
-        _add(zip(grp['gid'], grp['poly'], grp[(score_chan.spec, None)]), tid)
+        this_score = grp[(score_chan.spec, None)]
+        scores_dct = {k: grp[(k, None)] for k in score_chan.unique()}
+        scores_dct = [dict(zip(scores_dct, t))
+                      for t in zip(*scores_dct.values())]
+        _add(zip(grp['gid'], grp['poly'], this_score, scores_dct), tid)
 
     # TODO: Faster to add annotations in bulk, but we need to construct the
     # "ids" first
