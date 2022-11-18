@@ -527,6 +527,7 @@ def main(cmdline=True, **kw):
             force_nodata=config['force_nodata'],
         )
 
+    kwcoco_extensions.reorder_video_frames(new_dset)
     new_dset.fpath = dst_fpath
     print('Dumping new_dset.fpath = {!r}'.format(new_dset.fpath))
     try:
@@ -1375,6 +1376,9 @@ class SimpleDataCube(object):
             sub_dset = new_dset.subset(sub_new_gids, copy=True)
             sub_dset.fpath = join(sub_bundle_dpath, 'subdata.kwcoco.json')
             sub_dset.reroot(new_root=sub_bundle_dpath, absolute=False)
+
+            kwcoco_extensions.reorder_video_frames(sub_dset)
+
             sub_dset.dump(sub_dset.fpath, newlines=True)
         return new_dset
 

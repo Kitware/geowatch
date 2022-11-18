@@ -2366,3 +2366,46 @@ def associate_images(dset1, dset2, key_fallback=None):
         'video': video_matches,
     }
     return matches
+
+
+def reorder_video_frames(dset):
+    """
+    Reorder the image indexes in each video to ensure temporal ordering
+    """
+    from watch.utils import util_time
+    videos = dset.videos()
+    info = []
+    for video, images in zip(videos.objs, videos.images):
+        date_captured_list = images.lookup('date_captured')
+        dt_list = [util_time.coerce_datetime(d) for d in date_captured_list]
+        frame_index_list = images.lookup('frame_index')
+
+        video_report = {
+            'name': video['name'],
+            'status': 'ok',
+        }
+        errors = []
+
+        # This should never happen due to kwcoco assumptions
+        had_bad_index_order = (np.diff(frame_index_list) < 1).any()
+        if had_bad_index_order:
+            errors.append('had a critical error')
+
+        new_frame_indexes = ub.argsort(dt_list)
+
+        # This might happen, and we should fix it.
+        had_bad_date_order = (np.diff(new_frame_indexes) < 1).any()
+        if had_bad_date_order:
+            errors.append('had a bad date ordering')
+
+        if errors:
+            new_image_order = images.take(new_frame_indexes)
+            for new_frame_index, img in enumerate(new_image_order.objs):
+                img['frame_index'] = new_frame_index
+            video_report['errors'] = errors
+            video_report['stats'] = 'fixed'
+        info.append(video_report)
+
+    dset._build_index()
+    print('reorder check info = {}'.format(ub.repr2(info, nl=1)))
+    return info
