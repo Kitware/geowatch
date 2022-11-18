@@ -801,6 +801,7 @@ def predict(cmdline=False, **kwargs):
                 print(msg)
                 import warnings
                 warnings.warn(msg)
+                continue
 
             outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
 
