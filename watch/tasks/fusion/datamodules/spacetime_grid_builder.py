@@ -761,20 +761,18 @@ def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, refine_iosa_thresh
 
     gid_to_isbad = {}
     for gid in video_gids:
-        import xdev
-        with xdev.embed_on_exception_context:
-            vidspace_valid_poly = get_image_valid_region_in_vidspace(gid)
-            gid_to_isbad[gid] = False
-            # If the area is of the valid polygon is less than zero, there was
-            # probably an issue. treat it as if it didn't specify a valid
-            # region.
-            if vidspace_valid_poly is not None and vidspace_valid_poly.area > 0:
-                vidspace_box_poly = vidspace_box.to_shapley()[0]
-                # Intersection over smaller area
-                isect = vidspace_valid_poly.intersection(vidspace_box_poly)
-                iosa = isect.area / min(vidspace_box_poly.area, vidspace_valid_poly.area)
-                if iosa < refine_iosa_thresh:
-                    gid_to_isbad[gid] = True
+        vidspace_valid_poly = get_image_valid_region_in_vidspace(gid)
+        gid_to_isbad[gid] = False
+        # If the area is of the valid polygon is less than zero, there was
+        # probably an issue. treat it as if it didn't specify a valid
+        # region.
+        if vidspace_valid_poly is not None and vidspace_valid_poly.area > 0:
+            vidspace_box_poly = vidspace_box.to_shapley()[0]
+            # Intersection over smaller area
+            isect = vidspace_valid_poly.intersection(vidspace_box_poly)
+            iosa = isect.area / min(vidspace_box_poly.area, vidspace_valid_poly.area)
+            if iosa < refine_iosa_thresh:
+                gid_to_isbad[gid] = True
 
     all_bad_gids = [gid for gid, flag in gid_to_isbad.items() if flag]
 
