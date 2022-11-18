@@ -4,6 +4,12 @@ import json
 import kwcoco
 from watch.utils import kwcoco_extensions
 from watch.mlops import smart_pipeline
+from watch.cli import coco_intensity_histograms
+import rich
+from watch.utils import util_time
+from watch.tasks.fusion.datamodules import kwcoco_datamodule
+import cmd_queue
+from watch.mlops import schedule_evaluation
 
 
 def check_crop():
@@ -43,8 +49,6 @@ def audit():
     """
 
     dev_fpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/pred/trk/package_epoch0_step41.pt.pt/Drop4-BAS_KR_R001.kwcoco/trk_pxl_16f221bd/trk_poly_9f08fb8c/tracks.kwcoco.json')
-    dev_ss_manifest_fpath = (dev_fpath.parent / 'site_summary_tracks_manifest.json')
-    dev_manifest_data = json.loads(dev_ss_manifest_fpath.read_text())
 
     audit_root = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/nov-one/debug13_KIT_TA2_20221121_KR_R001')
     bas_bundle = audit_root / 'bas-fusion'
@@ -66,7 +70,7 @@ def audit():
     dev_dset = kwcoco.CocoDataset(dev_fpath)
 
     ### Start AUDIT
-    pro_input_audit_info = audit_dataset(pro_input_dset)
+    # pro_input_audit_info = audit_dataset(pro_input_dset)
     pro_tracked_audit_info = audit_dataset(pro_tracked_dset)
     dev_audit_info = audit_dataset(dev_dset)
 
@@ -86,11 +90,9 @@ def audit():
     bas_model_fpath = dev_pxl_params['pxl.package_fpath']
 
     dev_input_dset_fpath = dev_pxl_params['pxl.test_dataset']
-    dev_input_dset = kwcoco.CocoDataset(dev_input_dset_fpath)
+    # dev_input_dset = kwcoco.CocoDataset(dev_input_dset_fpath)
 
     #### Pixel Prediciton AUDIT
-    smart_pipeline.parse_tracker_params(dev_manifest_data['info'])
-
     # Rerun pixel prediction on the production dataset
     trk_pxl_params_parsed = ub.udict({
         k.split('.')[1]: v for k, v in pro_pxl_params.items() if 'properties' not in k
@@ -98,7 +100,7 @@ def audit():
     trk_pxl_params_parsed['chip_dims'] = ','.join(list(map(str, trk_pxl_params_parsed['chip_dims'])))
 
     from watch.mlops import schedule_evaluation
-    audit_fpath = (dev_fpath.parent / 'audit').ensuredir()
+    audit_fpath = (audit_root / 'audit').ensuredir()
 
     redev_audit_fpath_list = [
         audit_fpath / 'redo_dev_v1' / 'redo_dev_v1.kwcoco.json',
@@ -164,7 +166,6 @@ def audit():
         'workers': 4,
     }))
 
-    import rich
     rich.print('\n\n[yellow] Development Input Stats:')
     rich.print(dev_input_results['sensor_chan_stats'])
     rich.print('\n\n[green] Production Input Stats:')
@@ -199,7 +200,6 @@ def audit():
         }))
         repro_results.append(repro_result)
 
-    import rich
     rich.print('\n\n[yellow] Development Stats:')
     rich.print(dev_results['sensor_chan_stats'])
 
@@ -220,7 +220,6 @@ def check_dataset_differences(dev_input_dset, pro_input_dset, trk_pxl_params, au
     names2 = set(pro_input_dset.index.name_to_img.keys())
     missing1 = names1 - names2
     missing2 = names2 - names1
-    import rich
     rich.print('missing1 = {}'.format(ub.repr2(missing1, nl=1)))
     rich.print('missing2 = {}'.format(ub.repr2(missing2, nl=1)))
 
@@ -331,8 +330,11 @@ def check_dataset_differences(dev_input_dset, pro_input_dset, trk_pxl_params, au
     clean_pro_input_dset = pro_input_dset.copy()
     clean_dev_input_dset = dev_input_dset.copy()
 
-    clean_pro_input_dset.remove_images(bad_gids2)
-    clean_dev_input_dset.remove_images(bad_gids1)
+    kwcoco_extensions.reorder_video_frames(clean_pro_input_dset)
+    kwcoco_extensions.reorder_video_frames(clean_dev_input_dset)
+
+    # clean_pro_input_dset.remove_images(bad_gids2)
+    # clean_dev_input_dset.remove_images(bad_gids1)
 
     clean_pro_input_dset.reroot(absolute=True)
     clean_dev_input_dset.reroot(absolute=True)
@@ -349,18 +351,16 @@ def check_dataset_differences(dev_input_dset, pro_input_dset, trk_pxl_params, au
 
     # Try the clean datasets
 
-    import cmd_queue
-    from watch.mlops import schedule_evaluation
     queue = cmd_queue.Queue.create(backend='tmux', gres=[0, 1], size=2)
 
     clean_redev_audit_fpath_list = [
-        audit_fpath / 'redo_clean_dev_v1' / 'redo_clean_dev_v1.kwcoco.json',
-        # audit_fpath / 'redo_clean_dev_v2' / 'redo_clean_dev_v2.kwcoco.json',
+        # audit_fpath / 'redo_clean_dev_v1' / 'redo_clean_dev_v1.kwcoco.json',
+        audit_fpath / 'redo_clean_dev_v2' / 'redo_clean_dev_v2.kwcoco.json',
         # audit_fpath / 'redo_clean_dev_v3' / 'redo_clean_dev_v3.kwcoco.json',
     ]
     clean_repro_audit_fpath_list = [
-        audit_fpath / 'redo_clean_pro_v1' / 'redo_clean_pro_v1.kwcoco.json',
-        # audit_fpath / 'redo_clean_pro_v2' / 'redo_clean_pro_v2.kwcoco.json',
+        # audit_fpath / 'redo_clean_pro_v1' / 'redo_clean_pro_v1.kwcoco.json',
+        audit_fpath / 'redo_clean_pro_v2' / 'redo_clean_pro_v2.kwcoco.json',
         # audit_fpath / 'redo_clean_pro_v3' / 'redo_clean_pro_v3.kwcoco.json',
     ]
     perf_params = {
@@ -405,7 +405,6 @@ def check_dataset_differences(dev_input_dset, pro_input_dset, trk_pxl_params, au
     # new development: -2439, 368.6
     # new production: -2441, 373.6
 
-    from watch.cli import coco_intensity_histograms
     spectra_defaults = ub.udict({
         'include_channels': 'salient',
         'workers': 4,
@@ -426,7 +425,6 @@ def check_dataset_differences(dev_input_dset, pro_input_dset, trk_pxl_params, au
         }))
         repro_results.append(repro_result)
 
-    import rich
     for idx, results in enumerate(redev_results):
         rich.print(f'\n\n[yellow] Reproduced Development Stats (V{idx}):')
         rich.print(results['sensor_chan_stats'])
@@ -437,10 +435,8 @@ def check_dataset_differences(dev_input_dset, pro_input_dset, trk_pxl_params, au
 
 
 def check_datamodule_consistency(dev_input_dset_, pro_input_dset_, trk_pxl_params):
-    from watch.tasks.fusion.datamodules import kwcoco_datamodule
     dataset_params = ub.udict(trk_pxl_params) - {'tta_fliprot', 'tta_time'}
 
-    from watch.utils import util_time
     images1 = dev_input_dset_.videos().images[0]
     images2 = pro_input_dset_.videos().images[0]
     dates1 = images1.lookup('date_captured')
@@ -457,10 +453,12 @@ def check_datamodule_consistency(dev_input_dset_, pro_input_dset_, trk_pxl_param
     pro_dmod = kwcoco_datamodule.KWCocoVideoDataModule(**dict(
         test_dataset=pro_input_dset_, **dataset_params,
         use_grid_cache=False,
+        use_grid_valid_regions=True,
     ))
     dev_dmod = kwcoco_datamodule.KWCocoVideoDataModule(**dict(
         test_dataset=dev_input_dset_, **dataset_params,
         use_grid_cache=False,
+        use_grid_valid_regions=True,
     ))
     pro_dmod.setup('test')
     dev_dmod.setup('test')
@@ -477,7 +475,8 @@ def check_datamodule_consistency(dev_input_dset_, pro_input_dset_, trk_pxl_param
     for i in range(pro_sampler.num_frames):
         a = pro_sampler.sample(i)
         b = dev_sampler.sample(i)
-        assert a == b
+        if a != b:
+            print(f'Problem in frame {i}')
 
     affinity_diff = pro_sampler.affinity - dev_sampler.affinity
     diff_pairs = (affinity_diff > 0).sum()
@@ -507,6 +506,111 @@ def check_datamodule_consistency(dev_input_dset_, pro_input_dset_, trk_pxl_param
     pro_dmod.test_dataset.new_sample_grid
     print(len(pro_dmod.test_dataset))
     print(len(dev_dmod.test_dataset))
+
+
+def test_tracker(pro_tracked_dset):
+
+    #### Pixel Prediciton AUDIT
+    dev_fpath = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/pred/trk/package_epoch0_step41.pt.pt/Drop4-BAS_KR_R001.kwcoco/trk_pxl_16f221bd/trk_poly_9f08fb8c/tracks.kwcoco.json')
+    dev_ss_manifest_fpath = (dev_fpath.parent / 'site_summary_tracks_manifest.json')
+    dev_manifest_data = json.loads(dev_ss_manifest_fpath.read_text())
+
+    dev_trk_params_info = smart_pipeline.parse_tracker_params(dev_manifest_data['info'])
+
+    audit_fpath = (pro_tracked_dset.parent / 'audit' / 'tracker').ensuredir()
+    repro_pro_trk_dpath = audit_fpath
+
+    # from watch.cli import kwcoco_to_geojson
+    from watch.cli import run_tracker
+    run_tracker.__config__.__default__
+
+    tracker_dpath = audit_fpath / 'repro_pro_tracker'
+
+    trk_poly_params = ub.udict({
+        'thresh': dev_trk_params_info['poly']['poly.thresh'],
+        'moving_window_size': dev_trk_params_info['poly']['poly.moving_window_size']
+    })
+
+    pro_tracked_dset_copy = pro_tracked_dset.copy()
+    pro_tracked_dset_copy.reroot(old_prefix='/tmp/ingress/', new_prefix='', absolute=True, verbose=3)
+    pro_tracked_dset_copy.reroot(absolute=True)
+    pro_tracked_dset_copy.fpath = audit_fpath / 'tracker_input.kwcoco.json'
+    pro_tracked_dset_copy.dump()
+
+    import watch
+    expt_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    true_site_dpath = expt_dpath / 'annotations' / 'site_models'
+    true_region_dpath = expt_dpath / 'annotations' / 'region_models'
+    assert true_site_dpath.exists()
+    assert true_region_dpath.exists()
+    paths = ub.udict({
+        'pred_trk_pxl_fpath': pro_tracked_dset_copy.fpath,
+        'pred_trk_poly_sites_dpath': tracker_dpath / 'site',
+        'pred_trk_poly_site_summaries_dpath': tracker_dpath / 'site_summary',
+        'pred_trk_poly_sites_fpath': tracker_dpath / 'site_manifest.json',
+        'pred_trk_poly_site_summaries_fpath': tracker_dpath / 'site_summary_manifest.json',
+        'pred_trk_poly_kwcoco': tracker_dpath / 'tracks.kwcoco.json',
+    })
+    paths.update({
+        'eval_trk_poly_dpath': tracker_dpath / 'eval',
+        'eval_trk_poly_fpath': tracker_dpath / 'eval' / 'merged4.json',
+        'true_site_dpath': true_site_dpath,
+        'true_region_dpath': true_region_dpath,
+    })
+    step = schedule_evaluation.Pipeline.pred_trk_poly(trk_poly_params, **paths)
+    print(step.command)
+    step = schedule_evaluation.Pipeline.eval_trk_poly({}, **paths)
+    print(step.command)
+
+
+def test_sc_results(pro_tracked_dset):
+    audit_root = ub.Path('/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/nov-one/debug13_KIT_TA2_20221121_KR_R001')
+    sc_bundle = audit_root / 'sc-fusion'
+    sc_audit_dpath = sc_bundle / 'audit'
+    bas_fnames = [
+        'sc_fusion_kwcoco_tracked.json',
+    ]
+    bas_fpaths = {n.split('.')[0]: sc_bundle / n for n in bas_fnames}
+    pro_classified_dset = kwcoco.CocoDataset(bas_fpaths['sc_fusion_kwcoco_tracked'])
+    # pro_input_dset = kwcoco.CocoDataset(bas_fpaths['cropped_kwcoco_for_bas'])
+
+    pro_classified_dset.reroot(old_prefix='/tmp/ingress/', new_prefix='', absolute=False, verbose=3)
+    pro_classified_dset.validate()
+
+    pro_classified_dset.reroot(absolute=True)
+    pro_classified_dset.fpath = (sc_audit_dpath / 'pro_classified').ensuredir() / 'site_output.kwcoco.json'
+    pro_classified_dset.dump()
+
+    # kwcoco_extensions.coco_channel_stats(pro_classified_dset)
+    import watch
+    expt_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    true_site_dpath = expt_dpath / 'annotations' / 'site_models'
+    true_region_dpath = expt_dpath / 'annotations' / 'region_models'
+    assert true_site_dpath.exists()
+    assert true_region_dpath.exists()
+    # paths = ub.udict({
+    #     'pred_trk_pxl_fpath': pro_tracked_dset_copy.fpath,
+    #     'pred_trk_poly_sites_dpath': tracker_dpath / 'site',
+    #     'pred_trk_poly_site_summaries_dpath': tracker_dpath / 'site_summary',
+    #     'pred_trk_poly_sites_fpath': tracker_dpath / 'site_manifest.json',
+    #     'pred_trk_poly_site_summaries_fpath': tracker_dpath / 'site_summary_manifest.json',
+    #     'pred_trk_poly_kwcoco': tracker_dpath / 'tracks.kwcoco.json',
+    # })
+
+    reproduce_scores_dpath  = sc_audit_dpath / 'redo_scores_production_sites'
+    paths = {}
+    paths.update({
+        'pred_act_poly_sites_fpath': sc_bundle / 'sc_out_site_models',
+        'eval_act_poly_dpath': reproduce_scores_dpath / 'eval',
+        'eval_act_poly_fpath': reproduce_scores_dpath / 'eval' / 'merged4.json',
+        'true_site_dpath': true_site_dpath,
+        'true_region_dpath': true_region_dpath,
+    })
+    # step = schedule_evaluation.Pipeline.pred_trk_poly(trk_poly_params, **paths)
+    # print(step.command)
+    step = schedule_evaluation.Pipeline.eval_act_poly({}, **paths)
+    print(step.command)
+
 
 
 def audit_dataset(coco_dset):

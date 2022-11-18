@@ -1117,9 +1117,9 @@ class Pipeline:
         eval_trk_poly_kw['eval_trk_poly_dpath'] = eval_trk_poly_kw['eval_trk_poly_dpath']
         eval_trk_poly_kw['eval_trk_poly_tmp_dpath'] = eval_trk_poly_kw['eval_trk_poly_dpath'] / '_tmp'
         eval_trk_poly_kw['name_suffix'] = '-'.join([
-            condensed['trk_model'],
-            condensed['trk_pxl_cfg'],
-            condensed['trk_poly_cfg'],
+            condensed.get('trk_model', 'unk_trk_model'),
+            condensed.get('trk_pxl_cfg', 'unk_trk_pxl_cfg'),
+            condensed.get('trk_poly_cfg', 'unk_trk_poly_cfg'),
         ])
         command = ub.codeblock(
             r'''
@@ -1155,10 +1155,10 @@ class Pipeline:
         eval_act_poly_kw = paths.copy()
         eval_act_poly_kw['name_suffix'] = '-'.join([
             # condensed['crop_dst_dset']
-            condensed['test_act_dset'],
-            condensed['act_model'],
-            condensed['act_pxl_cfg'],
-            condensed['act_poly_cfg'],
+            condensed.get('test_act_dset', 'unk_act_dset'),
+            condensed.get('act_model', 'unk_act_model'),
+            condensed.get('act_pxl_cfg', 'unk_act_pxl_cfg'),
+            condensed.get('act_poly_cfg', 'unk_act_poly_cfg'),
         ])
         eval_act_poly_kw['eval_act_poly_dpath'] = eval_act_poly_kw['eval_act_poly_dpath']
         eval_act_poly_kw['eval_act_poly_tmp_dpath'] = eval_act_poly_kw['eval_act_poly_dpath'] / '_tmp'
@@ -1172,7 +1172,7 @@ class Pipeline:
                 --pred_sites "{pred_act_poly_sites_fpath}" \
                 --tmp_dir "{eval_act_poly_tmp_dpath}" \
                 --out_dir "{eval_act_poly_dpath}" \
-                --merge_fpath "{eval_act_poly_fpath}" \
+                --merge_fpath "{eval_act_poly_fpath}"
             ''').format(**eval_act_poly_kw)
         name = 'eval_act_poly'
         step = Step(name, command,

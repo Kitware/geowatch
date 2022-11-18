@@ -205,6 +205,11 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             Validation/test dataset defaults to True.
             ''')),
 
+        'use_grid_valid_regions': scfg.Value(True, help=ub.paragraph(
+            '''
+            If True, the initial grid will only place windows in valid regions.
+            ''')),
+
         # Overwritten for non-train
         'neg_to_pos_ratio': scfg.Value(1.0, type=float, help=ub.paragraph(
             '''
@@ -424,7 +429,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 window_space_scale=window_space_scale,
                 set_cover_algo=set_cover_algo,
                 workers=grid_workers,  # could configure this
-                use_cache=self.config['use_grid_cache']
+                use_cache=self.config['use_grid_cache'],
+                respect_valid_regions=self.config['use_grid_valid_regions'],
             )
             new_sample_grid = builder.build()
             self.length = len(new_sample_grid['targets'])
@@ -445,7 +451,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 window_space_scale=window_space_scale,
                 set_cover_algo=set_cover_algo,
                 workers=grid_workers,
-                use_cache=self.config['use_grid_cache']
+                use_cache=self.config['use_grid_cache'],
+                respect_valid_regions=self.config['use_grid_valid_regions'],
             )
             new_sample_grid = builder.build()
 
