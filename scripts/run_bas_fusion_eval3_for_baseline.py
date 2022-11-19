@@ -7,6 +7,7 @@ import tempfile
 import json
 from glob import glob
 import shutil
+from distutils import dir_util
 
 from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
 from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress  # noqa: 501
@@ -279,6 +280,10 @@ def run_bas_fusion_for_baseline(
             concat_kwcoco_datasets(
                 (previous_bas_fusion_kwcoco_path, bas_fusion_kwcoco_path),
                 combined_bas_fusion_kwcoco_path)
+            # Copy saliency assets from previous bas fusion
+            dir_util.copy_tree(
+                os.path.join(previous_ingress_dir, '_assets', 'pred_saliency'),
+                os.path.join(ingress_dir, '_assets', 'pred_saliency'))
         else:
             # Copy current bas_fusion_kwcoco_path to combined path as
             # this is the first interval
