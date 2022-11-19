@@ -292,6 +292,7 @@ def run_bas_fusion_for_baseline(
                         src_path = os.path.join(root, file)
                         dst_path = src_path.replace(previous_ingress_dir,
                                                     ingress_dir)
+                        os.makedirs(os.path.dirname(dst_path), exist_ok=True)
                         shutil.copy(src_path, dst_path)
         else:
             # Copy current bas_fusion_kwcoco_path to combined path as
