@@ -278,6 +278,8 @@ def run_bas_fusion_for_baseline(
             concat_kwcoco_datasets(
                 (previous_bas_fusion_kwcoco_path, bas_fusion_kwcoco_path),
                 combined_bas_fusion_kwcoco_path)
+        else:
+            combined_bas_fusion_kwcoco_path = bas_fusion_kwcoco_path
     else:
         combined_bas_fusion_kwcoco_path = bas_fusion_kwcoco_path
 

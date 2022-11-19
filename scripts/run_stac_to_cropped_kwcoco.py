@@ -83,7 +83,7 @@ def main():
 def build_combined_kwcoco(input_path,
                           previous_input_path,
                           aws_profile,
-                          ingress_dir,
+                          ta1_cropped_dir,
                           dryrun=False,
                           requester_pays=False,
                           jobs=1,
@@ -102,7 +102,7 @@ def build_combined_kwcoco(input_path,
     input_stac_items = load_input_stac_items(input_path, aws_cp_command)
 
     combined_stac_items_path = os.path.join(
-        ingress_dir, 'combined_input_stac_items.jsonl')
+        ta1_cropped_dir, 'combined_input_stac_items.jsonl')
 
     # Confirm that the previous interval input path actually exists on
     # S3 (for first iteration it will not)
@@ -240,7 +240,7 @@ def run_stac_to_cropped_kwcoco(input_path,
             input_path,
             previous_input_path,
             aws_profile,
-            ingress_dir,
+            ta1_cropped_dir,
             dryrun=dryrun,
             requester_pays=requester_pays,
             jobs=jobs,
