@@ -42,6 +42,11 @@ def main():
                         type=str,
                         help="Path to TA2 collated output dir for "
                              "current iteration")
+    parser.add_argument('--just-deconflict',
+                        action='store_true',
+                        default=False,
+                        help="Don't copy previous sites, just deconflict "
+                             "current site IDs with respect to previous")
 
     pseudolive_consolidate(**vars(parser.parse_args()))
 
@@ -98,7 +103,8 @@ def pseudolive_consolidate(region_id,
                            ta2_collated_dir_current,
                            outdir,
                            iou_threshold,
-                           performer_suffix=None):
+                           performer_suffix=None,
+                           just_deconflict=False):
     os.makedirs(os.path.join(outdir, 'region_models'), exist_ok=True)
     os.makedirs(os.path.join(outdir, 'site_models'), exist_ok=True)
 
@@ -138,20 +144,8 @@ def pseudolive_consolidate(region_id,
         with _yield_first_feature(current_region, type_='region') as cr:
             outr['properties']['end_date'] = cr['properties']['end_date']
 
-    matched_previous_sites = set()
-    matched_current_sites = set()
-    for iou, psid, csid in sorted_overlaps:
-        # Only doing one-to-one site matching for now
-        if(psid in matched_previous_sites
-           or csid in matched_current_sites):
-            continue
-
-        print("Matched site {} (previous) to {} (current)"
-              " with {:.2f} IOU".format(psid, csid, iou))
-
-        matched_previous_sites.add(psid)
-        matched_current_sites.add(csid)
-
+    # TODO: Move this function to top-level scope
+    def _combine_sites(psid, csid):
         pss = previous_sites_by_id[psid]
         css = current_sites_by_id[csid]
 
@@ -162,8 +156,6 @@ def pseudolive_consolidate(region_id,
         new_site_geometry = mapping(
             shape(pss['geometry']).union(shape(css['geometry'])))
         new_site_summary['geometry'] = new_site_geometry
-
-        output_region['features'].append(new_site_summary)
 
         # Merge sites
         prev_site = _load_site_data(
@@ -188,6 +180,50 @@ def pseudolive_consolidate(region_id,
 
         reindex_ids(new_site)
 
+        return new_site_summary, new_site
+
+    # TODO: Move this function to top-level scope
+    def _deconflict_new_site(psid, csid):
+        # Just copy new site over and re-use previous ID
+        css = current_sites_by_id[csid]
+
+        # Use current instead of previous as starting point
+        new_site_summary = copy.deepcopy(css)
+        new_site_summary['properties']['site_id'] = psid
+
+        curr_site = _load_site_data(
+            csid, ta2_collated_dir_current, performer_suffix)
+
+        # Again starting with current instead of previous site
+        new_site = copy.deepcopy(curr_site)
+        # Set the end date of the previous (to be re-used site to the
+        # end of the current matching site)
+        with _yield_first_feature(new_site, type_='site') as nssf:
+            nssf['properties']['site_id'] = psid
+
+        return new_site_summary, new_site
+
+    matched_previous_sites = set()
+    matched_current_sites = set()
+    for iou, psid, csid in sorted_overlaps:
+        # Only doing one-to-one site matching for now
+        if(psid in matched_previous_sites
+           or csid in matched_current_sites):
+            continue
+
+        print("Matched site {} (previous) to {} (current)"
+              " with {:.2f} IOU".format(psid, csid, iou))
+
+        matched_previous_sites.add(psid)
+        matched_current_sites.add(csid)
+
+        if just_deconflict:
+            new_site_summary, new_site = _deconflict_new_site(psid, csid)
+        else:
+            new_site_summary, new_site = _combine_sites(psid, csid)
+
+        output_region['features'].append(new_site_summary)
+
         if performer_suffix is None:
             output_path = os.path.join(
                 outdir, 'site_models', "{}.geojson".format(psid))
@@ -210,8 +246,9 @@ def pseudolive_consolidate(region_id,
         if psid_value > highest_psid_value:
             highest_psid_value = psid_value
 
-        if psid in matched_previous_sites:
-            # Already added during merging
+        if(psid in matched_previous_sites
+           or just_deconflict):
+            # Already added during merging; or just deconflicting current sites
             continue
         else:
             output_region['features'].append(ps)
