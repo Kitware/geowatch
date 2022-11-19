@@ -40,6 +40,11 @@ def main():
                         default=0.5,
                         help="IOU Threshold for determining duplicates"
                              "(default: 0.5)")
+    parser.add_argument('--just-deconflict',
+                        action='store_true',
+                        default=False,
+                        help="Don't copy previous sites, just deconflict "
+                             "current site IDs with respect to previous")
 
     run_pseudolive_consolidate(**vars(parser.parse_args()))
 
@@ -52,7 +57,8 @@ def run_pseudolive_consolidate(region_id,
                                outbucket,
                                iou_threshold,
                                aws_profile=None,
-                               performer_suffix=None):
+                               performer_suffix=None,
+                               just_deconflict=False):
     if aws_profile is not None:
         aws_base_command =\
             ['aws', 's3', '--profile', aws_profile, 'cp']
