@@ -284,6 +284,15 @@ def run_bas_fusion_for_baseline(
             dir_util.copy_tree(
                 os.path.join(previous_ingress_dir, '_assets', 'pred_saliency'),
                 os.path.join(ingress_dir, '_assets', 'pred_saliency'))
+            # Copy quality assets from previous bas fusion
+            for root, dirs, files in os.walk(
+                    os.path.join(previous_ingress_dir, region_id)):
+                for file in files:
+                    if file.endswith('_quality.tif'):
+                        src_path = os.path.join(root, file)
+                        dst_path = src_path.replace(previous_ingress_dir,
+                                                    ingress_dir)
+                        shutil.copy(src_path, dst_path)
         else:
             # Copy current bas_fusion_kwcoco_path to combined path as
             # this is the first interval
