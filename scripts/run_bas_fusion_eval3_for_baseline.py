@@ -262,6 +262,9 @@ def run_bas_fusion_for_baseline(
     # 3.1. If a previous interval was run; concatenate BAS fusion
     # output KWCOCO files for tracking
     if previous_bas_outbucket is not None:
+        combined_bas_fusion_kwcoco_path = os.path.join(
+                ingress_dir, 'combined_bas_fusion_kwcoco.json')
+
         previous_ingress_dir = '/tmp/ingress_previous'
         subprocess.run([*aws_base_command, '--recursive',
                         previous_bas_outbucket, previous_ingress_dir],
@@ -273,13 +276,14 @@ def run_bas_fusion_for_baseline(
         # On first interval nothing will be copied down so need to
         # check that we have the input explicitly
         if os.path.isfile(previous_bas_fusion_kwcoco_path):
-            combined_bas_fusion_kwcoco_path = os.path.join(
-                ingress_dir, 'combined_bas_fusion_kwcoco.json')
             concat_kwcoco_datasets(
                 (previous_bas_fusion_kwcoco_path, bas_fusion_kwcoco_path),
                 combined_bas_fusion_kwcoco_path)
         else:
-            combined_bas_fusion_kwcoco_path = bas_fusion_kwcoco_path
+            # Copy current bas_fusion_kwcoco_path to combined path as
+            # this is the first interval
+            shutil.copy(bas_fusion_kwcoco_path,
+                        combined_bas_fusion_kwcoco_path)
     else:
         combined_bas_fusion_kwcoco_path = bas_fusion_kwcoco_path
 
