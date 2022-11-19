@@ -119,12 +119,11 @@ def build_combined_kwcoco(input_path,
 
     previous_input_stac_items = load_input_stac_items(previous_input_path,
                                                       aws_cp_command)
-    combined_stac_items = input_stac_items.extend(
-        previous_input_stac_items)
+    input_stac_items.extend(previous_input_stac_items)
 
     with open(combined_stac_items_path, 'w') as f:
         print('\n'.join((json.dumps(item)
-                         for item in combined_stac_items)), file=f)
+                         for item in input_stac_items)), file=f)
 
     combined_working_dir = '/tmp/combined'
     os.makedirs(combined_working_dir, exist_ok=True)
