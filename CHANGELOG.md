@@ -21,7 +21,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Improved determinism in the time sampler.
 * Can now control the kwcoco datamodule grid cache via the CLI.
 * Minor cleanup to the tracker CLI.
-* Tracker speeded 
+* Tracker speed optimizations 
 * Tracker now has better nodata handling.
 
 
