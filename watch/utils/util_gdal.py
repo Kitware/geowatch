@@ -539,9 +539,9 @@ def gdal_single_warp(in_fpath,
         builder['-te'] = [f'{xmin}', f'{ymin}', f'{xmax}', f'{ymax}']
         builder['-te_srs'] = crop_coordinate_srs
 
-    if 0:
-        builder['-ts'] = f'{croped_image_size}'
-        builder['-tr'] = f'{croped_pixel_resolution}'
+    # if 0:
+    #     builder['-ts'] = f'{croped_image_size}'
+    #     builder['-tr'] = f'{croped_pixel_resolution}'
 
     if nodata is not None:
         builder['-srcnodata'] = str(nodata)
