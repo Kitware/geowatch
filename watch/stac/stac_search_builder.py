@@ -47,6 +47,16 @@ _KITWARE_PHASE1_TA1_PRODUCTS = {
     },
 }
 
+"""
+Accenture Notes:
+
+    New Procesing 2022-11-21:
+        https://smart-research.slack.com/?redir=%2Ffiles%2FU028UQGN1N0%2FF04B998ANRL%2Faccenture_ta1_productdoc_phaseii_20211117.pptx%3Forigin_team%3DTN3QR7WAH%26origin_channel%3DC03QTAXU7GF
+
+        https://smartgitlab.com/TE/evaluations/-/wikis/Accenture-TA-1-Processing-Status
+
+"""
+
 _ACCENTURE_PHASE2_TA1_PRODUCTS = {
     # Accenture Phase 2 TA-1 Products
     'ta1-s2-acc': {
