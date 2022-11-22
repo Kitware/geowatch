@@ -23,10 +23,10 @@ train a fusion model on RGB data.
 # In this example we are not using any DVC directories, but we will use DVC in
 # the variable names to be consistent with future tutorials.
 
-#DVC_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="hdd")
-DVC_DATA_DPATH=/home/local/KHQ/connor.greenwell/Projects/SMART/smart_watch_dvc
-# DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
-DVC_EXPT_DPATH=/home/local/KHQ/connor.greenwell/data/dvc-repos/smart_expt_dvc
+DVC_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="hdd")
+# DVC_DATA_DPATH=$HOME/Projects/SMART/smart_watch_dvc
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+# DVC_EXPT_DPATH=$HOME/data/dvc-repos/smart_expt_dvc
 WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 
 mkdir -p "$DVC_DATA_DPATH"
