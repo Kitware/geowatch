@@ -916,74 +916,76 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
         }
 
     sorted_gids = ub.argsort(frame_infos, key=lambda x: x['approx_meter_gsd'])
-    min_gsd_gid = sorted_gids[0]
-    max_gsd_gid = sorted_gids[-1]
-    max_example = frame_infos[max_gsd_gid]
-    min_example = frame_infos[min_gsd_gid]
-    max_gsd = max_example['approx_meter_gsd']
-    min_gsd = min_example['approx_meter_gsd']
+    if sorted_gids:
+        min_gsd_gid = sorted_gids[0]
+        max_gsd_gid = sorted_gids[-1]
+        max_example = frame_infos[max_gsd_gid]
+        min_example = frame_infos[min_gsd_gid]
+        max_gsd = max_example['approx_meter_gsd']
+        min_gsd = min_example['approx_meter_gsd']
 
-    # TODO: coerce datetime via kwcoco API
-    if target_gsd == 'max-resolution':
-        target_gsd_ = min_gsd
-    elif target_gsd == 'min-resolution':
-        target_gsd_ = max_gsd
-    else:
-        target_gsd_ = target_gsd
-        if not isinstance(target_gsd, numbers.Number):
-            raise TypeError('target_gsd must be a code or number = {}'.format(type(target_gsd)))
-    target_gsd_ = float(target_gsd_)
+        # TODO: coerce datetime via kwcoco API
+        if target_gsd == 'max-resolution':
+            target_gsd_ = min_gsd
+        elif target_gsd == 'min-resolution':
+            target_gsd_ = max_gsd
+        else:
+            target_gsd_ = target_gsd
+            if not isinstance(target_gsd, numbers.Number):
+                raise TypeError('target_gsd must be a code or number = {}'.format(type(target_gsd)))
+        target_gsd_ = float(target_gsd_)
 
-    # Compute the scale factor needed to be applied to each image to achieve
-    # the target videospace GSD.
-    for info in frame_infos.values():
-        info['target_gsd'] = target_gsd_
-        info['to_target_scale_factor'] = info['approx_meter_gsd'] / target_gsd_
+        # Compute the scale factor needed to be applied to each image to achieve
+        # the target videospace GSD.
+        for info in frame_infos.values():
+            info['target_gsd'] = target_gsd_
+            info['to_target_scale_factor'] = info['approx_meter_gsd'] / target_gsd_
 
-    available_channels = set()
-    available_gsds = set()
-    for gid in gids:
-        img = coco_dset.index.imgs[gid]
-        for obj in coco_img.iter_asset_objs():
-            available_channels.add(obj.get('channels', None))
-            _gsd = obj.get('approx_meter_gsd')
-            if _gsd is not None:
-                available_gsds.add(round(_gsd, 1))
+        available_channels = set()
+        available_gsds = set()
+        for gid in gids:
+            img = coco_dset.index.imgs[gid]
+            for obj in coco_img.iter_asset_objs():
+                available_channels.add(obj.get('channels', None))
+                _gsd = obj.get('approx_meter_gsd')
+                if _gsd is not None:
+                    available_gsds.add(round(_gsd, 1))
 
-    # Align to frame closest to the target GSD, which is the frame that has the
-    # "to_target_scale_factor" that is closest to 1.0
-    base_gid, base_info = min(
-        frame_infos.items(),
-        key=lambda kv: abs(1 - kv[1]['to_target_scale_factor'])
-    )
-    scale = base_info['to_target_scale_factor']
-    base_wld_crs_info = base_info['wld_crs_info']
+        # Align to frame closest to the target GSD, which is the frame that has the
+        # "to_target_scale_factor" that is closest to 1.0
+        base_gid, base_info = min(
+            frame_infos.items(),
+            key=lambda kv: abs(1 - kv[1]['to_target_scale_factor'])
+        )
+        scale = base_info['to_target_scale_factor']
+        base_wld_crs_info = base_info['wld_crs_info']
 
-    # Can add an extra transform here if the video is not exactly in
-    # any specific image space
-    baseimg_from_wld = base_info['img_to_wld'].inv()
-    vid_from_wld = kwimage.Affine.scale(scale) @ baseimg_from_wld
-    video['width'] = int(np.ceil(base_info['width'] * scale))
-    video['height'] = int(np.ceil(base_info['height'] * scale))
-    video['wld_crs_info'] = base_wld_crs_info
+        # Can add an extra transform here if the video is not exactly in
+        # any specific image space
+        baseimg_from_wld = base_info['img_to_wld'].inv()
+        vid_from_wld = kwimage.Affine.scale(scale) @ baseimg_from_wld
+        video['width'] = int(np.ceil(base_info['width'] * scale))
+        video['height'] = int(np.ceil(base_info['height'] * scale))
+        video['wld_crs_info'] = base_wld_crs_info
 
-    if 'valid_region_geos' in video:
-        import geopandas as gpd
-        from watch.utils import util_gis
-        # Project the valid region onto video space
-        valid_region_crs84 = kwimage.MultiPolygon.coerce(video['valid_region_geos'])
-        wld_crs = base_wld_crs_info['auth']
-        crs84 = util_gis._get_crs84()
-        wld_region_poly = gpd.GeoDataFrame({'geometry': [valid_region_crs84.to_shapely()]}, crs=crs84).to_crs(wld_crs)['geometry'].iloc[0]
-        valid_region = kwimage.MultiPolygon.from_shapely(wld_region_poly).warp(vid_from_wld).to_geojson()
-        video['valid_region'] = valid_region
+        if 'valid_region_geos' in video:
+            import geopandas as gpd
+            from watch.utils import util_gis
+            # Project the valid region onto video space
+            valid_region_crs84 = kwimage.MultiPolygon.coerce(video['valid_region_geos'])
+            wld_crs = base_wld_crs_info['auth']
+            crs84 = util_gis._get_crs84()
+            wld_region_poly = gpd.GeoDataFrame({'geometry': [valid_region_crs84.to_shapely()]}, crs=crs84).to_crs(wld_crs)['geometry'].iloc[0]
+            valid_region = kwimage.MultiPolygon.from_shapely(wld_region_poly).warp(vid_from_wld).to_geojson()
+            video['valid_region'] = valid_region
 
-    # Store metadata in the video
+        # Store metadata in the video
+        video['warp_wld_to_vid'] = vid_from_wld.__json__()
+        video['target_gsd'] = target_gsd_
+        video['min_gsd'] = min_gsd
+        video['max_gsd'] = max_gsd
+
     video['num_frames'] = len(gids)
-    video['warp_wld_to_vid'] = vid_from_wld.__json__()
-    video['target_gsd'] = target_gsd_
-    video['min_gsd'] = min_gsd
-    video['max_gsd'] = max_gsd
 
     # Remove old cruft (can remove in future versions)
     video.pop('available_channels', None)
