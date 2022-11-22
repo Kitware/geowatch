@@ -2,15 +2,15 @@ data:
   channels: red|green|blue 
   batch_size: 64
   chip_overlap: 0
-  decoder: simple_conv
   dist_weights: 0
   exclude_sensors: null
-  neg_to_pos_ratio: 0.
+  min_spacetime_weight: 0.5
+  neg_to_pos_ratio: 0.25
   normalize_inputs: true
   normalize_perframe: false
-  resample_invalid_frames: true 
-  temporal_dropout: 0.0
-  time_sampling: auto
+  resample_invalid_frames: false
+  temporal_dropout: 0.5
+  time_sampling: soft2+distribute
   time_span: 6m
   upweight_centers: true
   use_centered_positives: true
@@ -18,13 +18,14 @@ data:
   use_grid_positives: true
   verbose: 1
   window_space_scale: 10GSD
+  output_space_scale: 10GSD
 optimizer:
   class_path: torch.optim.AdamW
   init_args:
     lr: 1e-4
     weight_decay: 1e-3
 profile: false
-seed_everything: true
+seed_everything: 1234
 trainer:
   callbacks: null
   check_val_every_n_epoch: 1
@@ -33,7 +34,7 @@ trainer:
   enable_progress_bar: true
   gradient_clip_algorithm: norm
   gradient_clip_val: 2
-  log_every_n_steps: 50
+  log_every_n_steps: 5
   logger: true
   max_steps: 200000
   num_sanity_val_steps: 2

@@ -16,6 +16,7 @@ model:
     global_class_weight: 0.0
     global_saliency_weight: 1.0
     saliency_loss: focal
+    decoder: simple_conv
 data:
   time_steps: 3
   chip_dims: 192 

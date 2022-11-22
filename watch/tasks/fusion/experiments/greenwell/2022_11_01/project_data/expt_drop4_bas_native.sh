@@ -24,6 +24,5 @@ python -m watch.tasks.fusion fit \
     --trainer.accelerator="gpu" \
     --trainer.devices=1 \
     --trainer.precision=16 \
-    --trainer.detect_anomaly=true \
     --trainer.max_steps=200000
-    #--trainer.accumulate_grad_batches=1 \
+    # --trainer.detect_anomaly=true \

@@ -1097,7 +1097,7 @@ class TransformerEncoderDecoder(nn.Module):
 
         # layers
         for self_attn, self_ff in self.encoder_layers:
-            x = self_attn(x) + x
+            x = self_attn(x, mask = mask) + x
             x = self_ff(x) + x
 
         if not exists(queries):
