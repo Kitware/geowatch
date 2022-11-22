@@ -484,26 +484,24 @@ def score_poly(poly, probs, threshold=None, use_rasterio=True):
     if len(rel_probs.shape) == 3:
         rel_probs = rel_probs[:, :, 0]
 
-    # handle nans
-    # TODO figure out np.ma to reduce redundancy
-    # msk_rel_probs = np.ma.masked_where(~np.isfinite(rel_probs) | rel_mask,
-    #                                      rel_probs, copy=False)
-
-    total = (rel_mask * np.isfinite(rel_probs)).sum()
     _return_list = isinstance(threshold, Iterable)
     if not _return_list:
         threshold = [threshold]
     result = []
+
+    # handle nans
+    msk = (np.isfinite(rel_probs) * rel_mask).astype(bool)
     for t in threshold:
-        if total == 0:
+        if not msk.any():
             result.append(np.nan)
         elif t is None:
-            score = np.nansum(rel_mask * rel_probs) / total
-            result.append(score)
+            mskd = np.ma.masked_where(~msk, rel_probs, copy=False)
+            result.append(mskd.mean())
         else:
             hard_prob = rel_probs > t
-            overlap = np.nansum(hard_prob * rel_mask)
-            result.append(overlap / total)
+            mskd = np.ma.masked_where(~msk, hard_prob, copy=False)
+            result.append(mskd.mean())
+
     return result if _return_list else result[0]
 
 
