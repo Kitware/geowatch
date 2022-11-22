@@ -12,6 +12,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Fixed
 * The `coco_align_geotiffs` will now skip images if it contains no requested bands.
 * `coco_align_geotiffs` now ensures image frames are in the correct temporal order.
+* Fixed issue in fusion.fit where weight transfer did not work.
 
 ### Changed
 * Update requirements to support Python 3.11
