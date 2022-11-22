@@ -61,7 +61,7 @@ def main(cmdline=True, **kw):
         'watch.cli.coco_align_geotiffs': ['align'],
         'watch.cli.project_annotations': ['project'],
         'watch.cli.coco_add_watch_fields': ['add_fields'],
-        'watch.cli.coco_intensity_histograms': ['intensity_histograms'],
+        'watch.cli.coco_intensity_histograms': ['spectra', 'intensity_histograms'],
         'watch.cli.mlops_cli': ['mlops'],
         'watch.cli.run_metrics_framework': ['iarpa_eval'],
         'watch.cli.kwcoco_to_geojson': [],

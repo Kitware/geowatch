@@ -84,11 +84,16 @@ def trace_json_lineage(fpath):
 
 # def trace_kwcoco_lineage(fpath):
 def load_iarpa_evaluation(fpath):
-    print(f'fpath={fpath}')
+    """
+    Ignore:
+        fpath = '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/eval/trk/package_epoch0_step41.pt.pt/Drop4-BAS_KR_R001.kwcoco/trk_pxl_fd9e1a95/trk_poly_9f08fb8c/merged/summary2.json'
+    """
     iarpa_info = _load_json(fpath)
     metrics = {}
     if 'best_bas_rows' in iarpa_info:
-        best_bas_rows = pd.read_json(io.StringIO(json.dumps(iarpa_info['best_bas_rows'])), orient='table')
+        best_bas_rows = pd.read_json(
+            io.StringIO(json.dumps(iarpa_info['best_bas_rows'])),
+            orient='table')
         bas_row = best_bas_rows.loc['__macro__'].reset_index().iloc[0]
 
         metrics.update({
@@ -99,21 +104,48 @@ def load_iarpa_evaluation(fpath):
             'bas_npred': bas_row['proposed slices'],
             'bas_ppv': bas_row['precision'],
             'bas_tpr': bas_row['recall (PD)'],
-        })
-        metrics.update({
+            'bas_ffpa': bas_row['ffpa'],
             'bas_f1': bas_row['F1'],
             'rho': bas_row['rho'],
             'tau': bas_row['tau'],
+            'bas_space_FAR': bas_row['spatial FAR'],
+            'bas_time_FAR': bas_row['temporal FAR'],
+            'bas_image_FAR': bas_row['images FAR'],
         })
+        alpha = 1.0
+        metrics['bas_faa_f1'] = metrics['bas_f1'] * (1 - metrics['bas_ffpa']) ** alpha
+
     if 'sc_df' in iarpa_info:
-        sc_df = pd.read_json(io.StringIO(json.dumps(iarpa_info['sc_df'])), orient='table')
+        sc_json_data = iarpa_info['sc_df']
+        sc_json_text = json.dumps(sc_json_data)
+        try:
+            sc_df = pd.read_json(io.StringIO(sc_json_text), orient='table')
+        except pd.errors.IntCastingNaNError:
+            # This seems like a pandas bug. It looks like it can save a Int64
+            # with NaN exteions, but it can't load it back in.
+            sc_json_data = iarpa_info['sc_df']
+            walker = ub.IndexableWalker(sc_json_data)
+            for path, val in walker:
+                if path[-1] == 'extDtype' and val == 'Int64':
+                    walker[path] = 'number'
+                if path[-1] == 'type' and val == 'integer':
+                    walker[path] = 'number'
+            sc_json_text = json.dumps(sc_json_data)
+            sc_df = pd.read_json(io.StringIO(sc_json_text), orient='table')
+
         metrics.update({
             # 'mean_f1': sc_df.loc['F1'].mean(),
-            'macro_f1': sc_df.loc['__macro__']['F1'].mean(),
-            'micro_f1': sc_df.loc['__micro__']['F1'].mean(),
+            'sc_macro_f1': sc_df.loc['__macro__']['F1'].mean(),
             'macro_f1_siteprep': sc_df.loc['__macro__', 'Site Preparation']['F1'],
             'macro_f1_active': sc_df.loc['__macro__', 'Site Preparation']['F1'],
         })
+
+        if '__micro__' in sc_df.index:
+            # Not sure why micro sometimes is not included.
+            metrics['sc_micro_f1'] = sc_df.loc['__micro__']['F1'].mean()
+        else:
+            metrics['sc_micro_f1'] = np.nan
+
     return metrics, iarpa_info
 
 
@@ -138,12 +170,20 @@ def load_eval_trk_poly(fpath, expt_dvc_dpath):
 def load_eval_act_poly(fpath, expt_dvc_dpath):
     arg_prefix = 'act.'
     metrics, iarpa_info = load_iarpa_evaluation(fpath)
-    tracker_info = iarpa_info['parent_info']
-    param_types = parse_tracker_params(tracker_info, expt_dvc_dpath, arg_prefix=arg_prefix)
+
+    tracker_info = iarpa_info.get('parent_info', None)
+    if tracker_info is not None:
+        param_types = parse_tracker_params(tracker_info, expt_dvc_dpath, arg_prefix=arg_prefix)
+    else:
+        param_types = {}
     # Hack to grab information that we should have already had.
     HACK_HANDLE_CROPPED_AND_TRACK_PARAMS = 1
     if HACK_HANDLE_CROPPED_AND_TRACK_PARAMS:
-        trk_param_types, extra_attrs = _handle_crop_and_trk_params(param_types, expt_dvc_dpath)
+        try:
+            trk_param_types, extra_attrs = _handle_crop_and_trk_params(param_types, expt_dvc_dpath)
+        except Exception:
+            trk_param_types = {}
+            extra_attrs = {}
         param_types.update(trk_param_types)
     else:
         extra_attrs = {}
@@ -162,36 +202,51 @@ def load_eval_act_poly(fpath, expt_dvc_dpath):
 
 def _handle_crop_and_trk_params(param_types, expt_dvc_dpath):
     from watch.mlops import expt_manager
-    crop_fpath = param_types['act.pxl']['act.pxl.test_dataset']
+    act_pxl_test_dset = param_types['act.pxl']['act.pxl.test_dataset']
     state = expt_manager.ExperimentState('*', '*')
-    crop_attrs = ub.udict(state._parse_pattern_attrs(
-        state.templates['crop_fpath'], crop_fpath))
 
-    crop_dataset = _load_json(crop_fpath)
+    dset_source = None
+    try:
+        crop_attrs = ub.udict(state._parse_pattern_attrs(
+            state.templates['crop_fpath'], act_pxl_test_dset))
+    except RuntimeError:
+        # Probably because we used the truth
+        dset_source = 'truth'
+    else:
+        crop_attrs = {}
+        dset_source = 'tracker'
+
+    crop_dataset = _load_json(act_pxl_test_dset)
     crop_item = list(
         find_info_items(crop_dataset['info'], 'process', 'coco_align_geotiffs'))[-1]
-
     # This is the path to either truth or the tracks we cropped from
     region_fpath = crop_item['properties']['args']['regions']
 
-    try:
-        trk_attrs = ub.udict(state._parse_pattern_attrs(
-            state.templates['pred_trk_poly_site_summaries_fpath'],
-            region_fpath))
-    except Exception:
-        trk_attrs = ub.udict(state._parse_pattern_attrs(
-            state.templates['pred_trk_poly_sites_fpath'],
-            region_fpath))
+    if dset_source == 'tracker':
+        # Our input was a bas tracking output
+        try:
+            trk_attrs = ub.udict(state._parse_pattern_attrs(
+                state.templates['pred_trk_poly_site_summaries_fpath'],
+                region_fpath))
+        except Exception:
+            trk_attrs = ub.udict(state._parse_pattern_attrs(
+                state.templates['pred_trk_poly_sites_fpath'],
+                region_fpath))
+    else:
+        trk_attrs = {}
 
     extra_attrs = ub.udict(crop_attrs) | ub.udict(trk_attrs)
 
-    trk_poly_data = _load_json(region_fpath)
-    trk_poly_info = trk_poly_data['info']
-    trk_param_types = parse_tracker_params(trk_poly_info, expt_dvc_dpath, arg_prefix='trk.')
+    if dset_source == 'tracker':
+        trk_poly_data = _load_json(region_fpath)
+        trk_poly_info = trk_poly_data['info']
+        trk_param_types = parse_tracker_params(trk_poly_info, expt_dvc_dpath, arg_prefix='trk.')
+    else:
+        trk_param_types = {}
     return trk_param_types, extra_attrs
 
 
-def parse_tracker_params(tracker_info, expt_dvc_dpath, arg_prefix=''):
+def parse_tracker_params(tracker_info, expt_dvc_dpath=None, arg_prefix=''):
     """
     Note:
         This is tricky because we need to find a way to differentiate if this
@@ -321,10 +376,12 @@ def load_pxl_eval(fpath, expt_dvc_dpath=None, arg_prefix=''):
 
     HACK_HANDLE_CROPPED_AND_TRACK_PARAMS = 1
     if HACK_HANDLE_CROPPED_AND_TRACK_PARAMS and arg_prefix == 'act.':
-        trk_param_types, extra_attrs = _handle_crop_and_trk_params(
-            param_types, expt_dvc_dpath)
-        param_types.update(trk_param_types)
-
+        try:
+            trk_param_types, extra_attrs = _handle_crop_and_trk_params(
+                param_types, expt_dvc_dpath)
+            param_types.update(trk_param_types)
+        except Exception:
+            extra_attrs = {}
     else:
         extra_attrs = {}
     extra_attrs.update(_add_prefix(arg_prefix + 'pxl.metrics.', metrics))
@@ -428,25 +485,25 @@ def _add_prefix(prefix, dict_):
     return {prefix + k: v for k, v in dict_.items()}
 
 
-def relevant_pred_pxl_config(pred_args, dvc_dpath, arg_prefix=''):
+def relevant_pred_pxl_config(pred_pxl_config, dvc_dpath=None, arg_prefix=''):
     # TODO: better way of inferring what params are relevant
     # This should be metadata a scriptconfig object can hold.
     pred_config = {}
-    pred_config['tta_fliprot'] = pred_args.get('tta_fliprot', 0)
-    pred_config['tta_time'] = pred_args.get('tta_time', 0)
-    pred_config['chip_overlap'] = pred_args['chip_overlap']
-    pred_config['input_space_scale'] = pred_args.get('input_space_scale', None)
-    pred_config['window_space_scale'] = pred_args.get('window_space_scale', None)
-    pred_config['output_space_scale'] = pred_args.get('output_space_scale', None)
-    pred_config['time_span'] = pred_args.get('time_span', None)
-    pred_config['time_sampling'] = pred_args.get('time_sampling', None)
-    pred_config['time_steps'] = pred_args.get('time_steps', None)
-    pred_config['chip_dims'] = pred_args.get('chip_dims', None)
-    pred_config['set_cover_algo'] = pred_args.get('set_cover_algo', None)
-    pred_config['resample_invalid_frames'] = pred_args.get('resample_invalid_frames', None)
-    pred_config['use_cloudmask'] = pred_args.get('use_cloudmask', None)
-    package_fpath = pred_args['package_fpath']
-    test_dataset = pred_args['test_dataset']
+    pred_config['tta_fliprot'] = pred_pxl_config.get('tta_fliprot', 0)
+    pred_config['tta_time'] = pred_pxl_config.get('tta_time', 0)
+    pred_config['chip_overlap'] = pred_pxl_config['chip_overlap']
+    pred_config['input_space_scale'] = pred_pxl_config.get('input_space_scale', None)
+    pred_config['window_space_scale'] = pred_pxl_config.get('window_space_scale', None)
+    pred_config['output_space_scale'] = pred_pxl_config.get('output_space_scale', None)
+    pred_config['time_span'] = pred_pxl_config.get('time_span', None)
+    pred_config['time_sampling'] = pred_pxl_config.get('time_sampling', None)
+    pred_config['time_steps'] = pred_pxl_config.get('time_steps', None)
+    pred_config['chip_dims'] = pred_pxl_config.get('chip_dims', None)
+    pred_config['set_cover_algo'] = pred_pxl_config.get('set_cover_algo', None)
+    pred_config['resample_invalid_frames'] = pred_pxl_config.get('resample_invalid_frames', None)
+    pred_config['use_cloudmask'] = pred_pxl_config.get('use_cloudmask', None)
+    package_fpath = pred_pxl_config['package_fpath']
+    test_dataset = pred_pxl_config['test_dataset']
     if dvc_dpath is not None:
         package_fpath = resolve_cross_machine_path(package_fpath, dvc_dpath)
         test_dataset = resolve_cross_machine_path(test_dataset, dvc_dpath)
@@ -456,6 +513,8 @@ def relevant_pred_pxl_config(pred_args, dvc_dpath, arg_prefix=''):
     pred_config['package_fpath'] = package_fpath
     pred_config['test_dataset'] = test_dataset
 
+    # FIXME: use a common heuristic to transform a path into a model.
+    test_dataset = ub.Path(test_dataset)
     pred_config['properties.model_name'] = model_name = ub.Path(package_fpath).name
     pred_config['properties.dataset_name'] = str(ub.Path(*test_dataset.parts[-2:]))
 
@@ -595,7 +654,7 @@ def find_info_items(info, query_type, query_name=None):
                 yield item
 
 
-def parse_pred_pxl_params(pred_info, expt_dvc_dpath, arg_prefix=''):
+def parse_pred_pxl_params(pred_info, expt_dvc_dpath=None, arg_prefix=''):
     pred_item = find_pred_pxl_item(pred_info)
     pred_item = _handle_process_item(pred_item)
 

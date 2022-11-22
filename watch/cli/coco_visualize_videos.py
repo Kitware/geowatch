@@ -711,6 +711,94 @@ def _resolve_channel_groups(coco_img, channels, verbose, request_grouped_bands,
     return chan_groups
 
 
+def __default_kwcoco_build_image_header_text(**kwargs):
+    """
+    TODO: non watch dependant version
+
+    A heuristic for what sort of info is useful to plot on the header of an
+    image.
+
+    Kwargs:
+        img
+        coco_dset
+        vidname,
+        _header_extra
+
+        gid,
+        frame_index,
+        dset_idstr,
+        name,
+        sensor_coarse,
+        date_captured
+
+    Example:
+        >>> from watch.heuristics import *  # NOQA
+        >>> img = {
+        >>>     'id': 1,
+        >>>     'frame_index': 0,
+        >>>     'date_captured': '2020-01-01',
+        >>>     'name': 'BLARG',
+        >>>     'sensor_coarse': 'Sensor1',
+        >>> }
+        >>> kwargs = {
+        >>>     'img': img,
+        >>>     'dset_idstr': '',
+        >>>     'name': '',
+        >>>     '_header_extra': None,
+        >>> }
+        >>> header_lines = build_image_header_text(**kwargs)
+        >>> print('header_lines = {}'.format(ub.repr2(header_lines, nl=1)))
+    """
+    img = kwargs.get('img', {})
+    _header_extra = kwargs.get('_header_extra', None)
+    dset_idstr = kwargs.get('dset_idstr', '')
+
+    def _multi_get(key, default=ub.NoParam, *dicts):
+        # try to lookup from multiple dictionaries
+        found = default
+        for d in dicts:
+            if key in d:
+                found = d[key]
+                break
+        if found is ub.NoParam:
+            raise Exception
+        return found
+
+    sensor_coarse = _multi_get('sensor_coarse', 'unknown', kwargs, img)
+    # name = _multi_get('name', 'unknown', kwargs, img)
+
+    date_captured = _multi_get('date_captured', '', kwargs, img)
+    frame_index = _multi_get('frame_index', None, kwargs, img)
+    gid = _multi_get('id', None, kwargs, img)
+    image_name = _multi_get('name', '', kwargs, img)
+
+    vidname = None
+    if 'vidname' in kwargs:
+        vidname = kwargs['vidname']
+    else:
+        coco_dset = kwargs.get('coco_dset', None)
+        if coco_dset is not None:
+            vidname = coco_dset.index.videos[img['video_id']]['name']
+
+    image_id_parts = []
+    image_id_parts.append(f'gid={gid}')
+    image_id_parts.append(f'frame_index={frame_index}')
+    image_id_part = ', '.join(image_id_parts)
+
+    header_line_infos = []
+    header_line_infos.append([vidname, image_id_part, _header_extra])
+    header_line_infos.append([dset_idstr])
+    header_line_infos.append([image_name])
+    header_line_infos.append([sensor_coarse, date_captured])
+    header_lines = []
+    for line_info in header_line_infos:
+        header_line = ' '.join([p for p in line_info if p])
+        header_line = header_line.replace('\\n', '\n')  # hack
+        if header_line:
+            header_lines.append(header_line)
+    return header_lines
+
+
 def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                img : dict,
                                anns : list,
@@ -953,8 +1041,12 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                 channel_colors.append(None)
 
         if any(c is not None for c in channel_colors):
-            canvas = util_kwimage.perchannel_colorize(canvas, channel_colors=channel_colors)
-            canvas = canvas[..., 0:3]
+            # This flag makes it so 1 channel outputs always use cmap.
+            # not sure if I like that or not, probably needs to be configurable
+            _flag = kwimage.num_channels(canvas) != 1
+            if _flag:
+                canvas = util_kwimage.perchannel_colorize(canvas, channel_colors=channel_colors)
+                canvas = canvas[..., 0:3]
 
         if cmap is not None:
             if kwimage.num_channels(canvas) == 1:

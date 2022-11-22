@@ -449,7 +449,7 @@ class Plotter:
         ]
 
         metrics = [
-            'trk.poly.metrics.macro_f1',
+            'trk.poly.metrics.sc_macro_f1',
         ]
 
         for resource_type in resources_of_interest:

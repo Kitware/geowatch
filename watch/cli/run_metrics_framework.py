@@ -64,10 +64,13 @@ class MetricsConfig(scfg.DataConfig):
         Output directory where scores will be written. Each
         region will have. Defaults to ./iarpa-metrics-output/
         '''))
-    merge = scfg.Value(False, isflag=1, help=ub.paragraph(
+    merge = scfg.Value('overwrite', help=ub.paragraph(
         '''
         Merge BAS and SC metrics from all regions and output to
-        {out_dir}/merged/
+        {out_dir}/merged/.
+        'overwrite' = rerun IARPA metrics,
+        'read' = assume they exist on disk,
+        (TODO 'write' = rerun IARPA metrics if needed.)
         '''))
     merge_fpath = scfg.Value(None, help=ub.paragraph(
         '''
@@ -926,11 +929,15 @@ def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath,
     # assert merge_dpath not in region_dpaths
     # merge_dpath.delete().ensuredir()
 
-    results = [
-        RegionResult.from_dpath_and_anns_root(
-            pth, true_site_dpath, true_region_dpath)
-        for pth in region_dpaths
-    ]
+    results = []
+    for pth in region_dpaths:
+        try:
+            results.append(
+                RegionResult.from_dpath_and_anns_root(
+                    pth, true_site_dpath, true_region_dpath)
+            )
+        except FileNotFoundError:
+            print(f'warning: missing region {pth}')
 
     # merge BAS
     bas_results = [r for r in results if r.bas_dpath]
@@ -960,7 +967,7 @@ def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath,
          'proposed sites': 'proposed',
          'total sites': 'total'}, axis=1)
     concise_best_bas_rows = concise_best_bas_rows[
-        ['tp', 'fp', 'fn', 'truth', 'proposed'] +
+        ['tp', 'fp', 'fn', 'truth', 'proposed', 'ffpa'] +
         [c for c in best_bas_rows.columns if c.startswith('F')]
     ]
     print(concise_best_bas_rows.to_string())
@@ -1014,7 +1021,7 @@ def merge_metrics_results(region_dpaths, true_site_dpath, true_region_dpath,
     # Symlink to visualizations
     for dpath in region_dpaths:
         overall_dpath = dpath / 'overall'
-        viz_dpath = overall_dpath / 'bas' / 'region'
+        viz_dpath = (overall_dpath / 'bas' / 'region').ensuredir()
 
         for viz_fpath in viz_dpath.iterdir():
             viz_link = viz_fpath.augment(dpath=region_viz_dpath)
@@ -1300,7 +1307,7 @@ def main(cmdline=True, **kwargs):
         pred_site_sub_dpath = site_dpath / 'latest' / region_id
         pred_site_sub_dpath.ensuredir()
 
-        # copy site models to site_dpat/e
+        # copy site models to site_dpath
         for site in region_sites:
             geojson_fpath = pred_site_sub_dpath / (
                 site['features'][0]['properties']['site_id'] + '.geojson'
@@ -1368,11 +1375,12 @@ def main(cmdline=True, **kwargs):
     else:
         import subprocess
         for cmd in commands:
-            try:
-                ub.cmd(cmd, verbose=3, check=True, shell=True)
-            except subprocess.CalledProcessError:
-                print('error in metrics framework, probably due to zero '
-                      'TP site matches or a region without site truth.')
+            if args.merge != 'read':
+                try:
+                    ub.cmd(cmd, verbose=3, check=True, shell=True)
+                except subprocess.CalledProcessError:
+                    print('error in metrics framework, probably due to zero '
+                          'TP site matches or a region without site truth.')
 
     print('out_dirs = {}'.format(ub.repr2(out_dirs, nl=1)))
     if args.merge and out_dirs:

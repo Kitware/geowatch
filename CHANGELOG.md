@@ -4,17 +4,26 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.3.7 - Target 2022-11-xx
+## Version 0.3.7 - Target 2022-11-21
+
+### Added
+* min / max world area threshold in tracker
 
 ### Fixed
 * The `coco_align_geotiffs` will now skip images if it contains no requested bands.
-
+* `coco_align_geotiffs` now ensures image frames are in the correct temporal order.
+* Fixed issue in fusion.fit where weight transfer did not work.
 
 ### Changed
 * Update requirements to support Python 3.11
 * Improved the reported information in `smartwatch stats` (i.e. `watch.cli.watch_coco_stats`)
 * The invariants and fusion module now reuse the same stitching manager code.
 * The invariants can now use dynamic fixed GSDs.
+* Improved determinism in the time sampler.
+* Can now control the kwcoco datamodule grid cache via the CLI.
+* Minor cleanup to the tracker CLI.
+* Tracker speed optimizations 
+* Tracker now has better nodata handling.
 
 
 ## Version 0.3.6 - Finalized 2022-11-01

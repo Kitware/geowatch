@@ -180,6 +180,12 @@ def _time_unit_registery():
     ureg.define('y = year')
 
     ureg.define('s = second')
+
+    ureg.define('millisecond = second / 1000')
+    ureg.define('microsecond = second / 1000000')
+
+    ureg.define('ms = millisecond')
+    ureg.define('us = microsecond')
     return ureg
 
 
@@ -187,6 +193,11 @@ def coerce_timedelta(delta):
     """
     TODO:
         move to a util
+
+    Args:
+        delta (str | int | float):
+            If given as a string, attempt to parse out a time duration.
+            Otherwise, interpret pure magnitudes in seconds.
 
     Example:
         >>> from watch.utils.util_time import *  # NOQA
@@ -221,6 +232,10 @@ def coerce_timedelta(delta):
         >>> print(coerce_timedelta('1hour'))
         >>> print(coerce_timedelta('1min'))
         >>> print(coerce_timedelta('1sec'))
+        >>> print(coerce_timedelta('1microsecond'))
+        >>> print(coerce_timedelta('1milliseconds'))
+        >>> print(coerce_timedelta('1ms'))
+        >>> print(coerce_timedelta('1us'))
 
     References:
         https://docs.python.org/3.4/library/datetime_mod.html#strftime-strptime-behavior
@@ -232,21 +247,39 @@ def coerce_timedelta(delta):
         try:
             ureg = _time_unit_registery()
             seconds = ureg.parse_expression(delta).to('seconds').m
+            # timedelta apparently does not have resolution higher than
+            # microseconds.
+            # https://stackoverflow.com/questions/10611328/strings-ns
+            # https://bugs.python.org/issue15443
             delta = datetime_mod.timedelta(seconds=seconds)
         except Exception:
-            # TODO: better coercion function
-            if delta.endswith('y'):
-                delta = datetime_mod.timedelta(days=365 * float(delta[:-1]))
-            elif delta.endswith('d'):
-                delta = datetime_mod.timedelta(days=1 * float(delta[:-1]))
-            elif delta.endswith('m'):
-                delta = datetime_mod.timedelta(days=30.437 * float(delta[:-1]))
-            elif delta.endswith('H'):
-                delta = datetime_mod.timedelta(hours=float(delta[:-1]))
-            elif delta.endswith('M'):
-                delta = datetime_mod.timedelta(minutes=float(delta[:-1]))
-            elif delta.endswith('S'):
-                delta = datetime_mod.timedelta(seconds=float(delta[:-1]))
+            # Separate the expression into a magnitude and a unit
+            import re
+            expr_pat = re.compile(
+                r'^(?P<magnitude>[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?)'
+                '(?P<spaces> *)'
+                '(?P<unit>.*)$')
+            match = expr_pat.match(delta.strip())
+            if match:
+                parsed = match.groupdict()
+                unit = parsed.get('unit', '')
+                magnitude = parsed.get('magnitude', '')
+            else:
+                unit = None
+                magnitude = None
+
+            if unit == 'y':
+                delta = datetime_mod.timedelta(days=365 * float(magnitude))
+            elif unit == 'd':
+                delta = datetime_mod.timedelta(days=1 * float(magnitude))
+            elif unit == 'm':
+                delta = datetime_mod.timedelta(days=30.437 * float(magnitude))
+            elif unit == 'H':
+                delta = datetime_mod.timedelta(hours=float(magnitude))
+            elif unit == 'M':
+                delta = datetime_mod.timedelta(minutes=float(magnitude))
+            elif unit == 'S':
+                delta = datetime_mod.timedelta(seconds=float(magnitude))
             else:
                 import pytimeparse  #
                 print('warning: pytimeparse fallback')

@@ -129,15 +129,26 @@ class EvaluationReporter:
 
         # metric_names = reporter.metric_registry.name
         metric_names = [c for c in orig_merged_df.columns if 'metrics.' in c]
+        resource_names = [c for c in orig_merged_df.columns if 'resource.' in c]
         metric_cols = (ub.oset(metric_names) & orig_merged_df.columns)
+        resource_cols = (ub.oset(resource_names) & orig_merged_df.columns)
 
         metric_cols = [c for c in metric_cols if '.tau' not in c and '.rho' not in c]
         metric_cols = [c for c in metric_cols if '.salient_AUC' not in c]
         metric_cols = [c for c in metric_cols if '.salient_APUC' not in c]
         metric_cols = [c for c in metric_cols if '.macro_f1_active' not in c]
         metric_cols = [c for c in metric_cols if '.macro_f1_siteprep' not in c]
+        metric_cols = [c for c in metric_cols if '.sc_micro_f1' not in c]
+        metric_cols = [c for c in metric_cols if '.bas_ppv' not in c]
+        metric_cols = [c for c in metric_cols if '.bas_tpr' not in c]
+        metric_cols = [c for c in metric_cols if '.mAPUC' not in c]
+        metric_cols = [c for c in metric_cols if '.mAUC' not in c]
+        metric_cols = [c for c in metric_cols if ' ' not in c]
+        # resource_cols = [c for c in resource_cols if 'total' in c or 'kwh' in c]
+        resource_cols = [c for c in resource_cols if '.hardware' not in c]
+        resource_cols = list(resource_cols)
 
-        primary_metrics = (ub.oset(['act.poly.metrics.macro_f1', 'trk.poly.metrics.f1']) & metric_cols)
+        primary_metrics = (ub.oset(['act.poly.metrics.sc_macro_f1', 'trk.poly.metrics.bas_faa_f1']) & metric_cols)
         metric_cols = list((metric_cols & primary_metrics) | (metric_cols - primary_metrics))
 
         # print('orig_merged_df.columns = {}'.format(ub.repr2(list(orig_merged_df.columns), nl=1)))
@@ -149,25 +160,45 @@ class EvaluationReporter:
         #     print('test_datasets = {}'.format(ub.repr2(test_datasets, nl=1)))
 
         grouped_shortlists = {}
-        group_keys = ['test_trk_dset', 'type']
+        group_keys = ub.oset(['test_trk_dset', 'test_act_dset', 'type'])
+        group_keys = list(group_keys & orig_merged_df.columns.intersection(group_keys))
 
         def _condense_report_df(df):
             col_mapper = {c: c for c in df.columns}
-            metric_cols = []
+            _metric_cols = []
             for k in col_mapper.keys():
                 k2 = k.replace('metrics.', '')
+                k2 = k2.replace('resource.', '')
                 col_mapper[k] = k2
-                metric_cols.append(k2)
+                _metric_cols.append(k2)
             df = df.rename(col_mapper, axis=1)
-
-            drop_cols = [k for k in metric_cols if df[k].isnull().all()]
+            drop_cols = [k for k in _metric_cols if df[k].isnull().all()]
             df = df.drop(drop_cols, axis=1)
+
+            cpu_cols = [c for c in df.columns if '.cpu_name' in c]
+            gpu_cols = [c for c in df.columns if '.gpu_name' in c]
+            for c in cpu_cols:
+                df[c] = df[c].apply(lambda x: x if not isinstance(x, str) else x.replace('Intel(R) Core(TM) ', ''))
+            for c in gpu_cols:
+                df[c] = df[c].apply(lambda x: x if not isinstance(x, str) else x.replace('NVIDIA GeForce ', ''))
+
+            def collapse_redundant_columns(df, check_cols, new_name='cpu_name'):
+                check_cols = df.columns.intersection(check_cols)
+                if len(check_cols) > 0:
+                    collapse_cpu_col = df[check_cols].apply(ub.allsame, axis=1).all()
+                    if collapse_cpu_col:
+                        df[new_name] = df[check_cols[0]]
+                        df = df.drop(check_cols, axis=1)
+                return df
+            df = collapse_redundant_columns(df, cpu_cols, 'cpu')
+            df = collapse_redundant_columns(df, gpu_cols, 'gpu')
+            df = collapse_redundant_columns(df, ['trk.pxl.disk_type', 'act.pxl.disk_type'], 'disk_type')
             return df
 
         for groupid, subdf in orig_merged_df.groupby(group_keys):
-            group_row = ub.dzip(group_keys, groupid)
-            if '_poly_' not in group_row['type']:
-                continue
+            # group_row = ub.dzip(group_keys, groupid)
+            # if '_poly_' not in group_row['type']:
+            #     continue
             if verbose:
                 print('')
                 rich.print(f'[orange1] -- <BEST ON: {groupid}> --')
@@ -195,8 +226,9 @@ class EvaluationReporter:
 
             # test_dset_to_best[test_dset] =
             if verbose:
-                shortlist_small = shortlist[id_cols + metric_cols]
+                shortlist_small = shortlist[id_cols + metric_cols + resource_cols]
                 shortlist_small = _condense_report_df(shortlist_small)
+                # rich.print(shortlist_small.T.to_string())
                 rich.print(shortlist_small.to_string())
                 print('')
                 rich.print(f'[orange1] -- </BEST ON: {groupid}> --')
@@ -260,11 +292,11 @@ class EvaluationReporter:
             results,
             metric_objectives={
                 'act.poly.metrics.bas_f1': 'max',
-                'act.poly.metrics.macro_f1': 'max'
+                'act.poly.metrics.sc_macro_f1': 'max'
             },
             metrics=[
                 # 'act.poly.metrics.bas_f1',
-                'act.poly.metrics.macro_f1'
+                'act.poly.metrics.sc_macro_f1'
             ]
         )
         analysis.build()
@@ -364,11 +396,10 @@ class EvaluationReporter:
         if 1:
             # Merge rows from earlier pipeline steps to all of the descendant
             # rows that depend on it.
-            from watch.utils import util_param_grid
-            colnames = ub.oset(cleaned_df.columns)
-            column_nestings = util_param_grid.dotkeys_to_nested(colnames)
+            # from watch.utils import util_param_grid
+            # colnames = ub.oset(cleaned_df.columns)
+            # column_nestings = util_param_grid.dotkeys_to_nested(colnames)
             # non_nested = [k for k, v in column_nestings.items() if k == v]
-            print(ub.repr2(column_nestings, sort=0))
             # column_nestings['trk']
             # column_nestings['act']
 
@@ -380,32 +411,41 @@ class EvaluationReporter:
             metric_names = [c for c in cleaned_df.columns if 'metrics.' in c]
             metric_cols = (ub.oset(metric_names) & cleaned_df.columns)
 
+            def link_types(smaller_row_type, larger_row_type, col_prefix):
+                move_cols = [c for c in metric_cols if col_prefix in c]
+                if move_cols:
+                    smaller_keys = type_to_idkeys[smaller_row_type]
+                    smaller = cleaned_df[cleaned_df.type == smaller_row_type]
+                    larger = cleaned_df[cleaned_df.type == larger_row_type]
+                    new_larger = my_nonstandard_merge(smaller, larger, smaller_keys, move_cols)
+                    cleaned_df.loc[new_larger.index, move_cols] = new_larger.loc[:, move_cols].values
+
             smaller_row_type = 'eval_trk_pxl_fpath'
             larger_row_type = 'eval_trk_poly_fpath'
-            move_cols = [c for c in metric_cols if 'trk.pxl' in c]
-            smaller_keys = type_to_idkeys[smaller_row_type]
-            smaller = cleaned_df[cleaned_df.type == smaller_row_type]
-            larger = cleaned_df[cleaned_df.type == larger_row_type]
-            new_larger = my_nonstandard_merge(smaller, larger, smaller_keys, move_cols)
-            cleaned_df.loc[new_larger.index, move_cols] = new_larger.loc[:, move_cols].values
+            col_prefix = 'trk.pxl'
+            link_types(smaller_row_type, larger_row_type, col_prefix)
 
             smaller_row_type = 'eval_trk_pxl_fpath'
             larger_row_type = 'eval_act_poly_fpath'
-            move_cols = [c for c in metric_cols if 'trk.pxl' in c]
-            smaller_keys = type_to_idkeys[smaller_row_type]
-            smaller = cleaned_df[cleaned_df.type == smaller_row_type]
-            larger = cleaned_df[cleaned_df.type == larger_row_type]
-            new_larger = my_nonstandard_merge(smaller, larger, smaller_keys, move_cols)
-            cleaned_df.loc[new_larger.index, move_cols] = new_larger.loc[:, move_cols].values
+            col_prefix = 'trk.pxl'
+            link_types(smaller_row_type, larger_row_type, col_prefix)
+            # move_cols = [c for c in metric_cols if col_prefix in c]
+            # smaller_keys = type_to_idkeys[smaller_row_type]
+            # smaller = cleaned_df[cleaned_df.type == smaller_row_type]
+            # larger = cleaned_df[cleaned_df.type == larger_row_type]
+            # new_larger = my_nonstandard_merge(smaller, larger, smaller_keys, move_cols)
+            # cleaned_df.loc[new_larger.index, move_cols] = new_larger.loc[:, move_cols].values
 
             smaller_row_type = 'eval_trk_poly_fpath'
             larger_row_type = 'eval_act_poly_fpath'
-            move_cols = [c for c in metric_cols if 'trk.poly' in c]
-            smaller_keys = type_to_idkeys[smaller_row_type]
-            smaller = cleaned_df[cleaned_df.type == smaller_row_type]
-            larger = cleaned_df[cleaned_df.type == larger_row_type]
-            new_larger = my_nonstandard_merge(smaller, larger, smaller_keys, move_cols)
-            cleaned_df.loc[new_larger.index, move_cols] = new_larger.loc[:, move_cols].values
+            col_prefix = 'trk.poly'
+            link_types(smaller_row_type, larger_row_type, col_prefix)
+            # move_cols = [c for c in metric_cols if col_prefix in c]
+            # smaller_keys = type_to_idkeys[smaller_row_type]
+            # smaller = cleaned_df[cleaned_df.type == smaller_row_type]
+            # larger = cleaned_df[cleaned_df.type == larger_row_type]
+            # new_larger = my_nonstandard_merge(smaller, larger, smaller_keys, move_cols)
+            # cleaned_df.loc[new_larger.index, move_cols] = new_larger.loc[:, move_cols].values
 
             # larger[larger['type'] == 'eval_act_poly_fpath']
             cleaned_df[cleaned_df['type'] == 'eval_trk_pxl_fpath'][metric_cols]
@@ -416,8 +456,6 @@ class EvaluationReporter:
         # import xdev
         # xdev.search_replace
         # xdev.set_overlaps(a1['trk_poly_id'], a2['trk_poly_id'])
-
-        reporter.orig_merged_df
 
         # hard coded values
         human_mapping = {
@@ -439,7 +477,7 @@ class EvaluationReporter:
             'pred_input_space_scale': 'Input Scale',
             'pred_use_cloudmask': 'Cloudmask',
             'pred_resample_invalid_frames': 'Resample Invalid Frames',
-            'pred_window_scale_space': 'Window Scale',
+            'pred_window_space_scale': 'Window Scale',
         }
         reporter.human_mapping = human_mapping
         reporter.iarpa_metric_lut = {
@@ -570,6 +608,9 @@ def load_extended_data(df, expt_dvc_dpath):
     rows = df.to_dict('records')
     big_rows = []
     errors = []
+
+    import os
+    WATCH_EVAL_LOAD_STRICT = os.environ.get('WATCH_EVAL_LOAD_STRICT', 1)
     for row in ub.ProgIter(rows, desc='load'):
         big_row = row.copy()
         fpath = row['raw']
@@ -591,6 +632,9 @@ def load_extended_data(df, expt_dvc_dpath):
             big_rows.append(big_row)
         except Exception as ex:
             errors.append((ex, row))
+            if WATCH_EVAL_LOAD_STRICT:
+                raise
+
     import rich
     if len(errors):
         rich.print('[red] ' + repr(errors[0]))
@@ -665,8 +709,11 @@ def clean_loaded_data(big_rows, expt_dvc_dpath):
                         row[k] = v
 
             if row['type'] == 'eval_act_poly_fpath':
-                if row['regions_id'].startswith('trk_poly_id'):
-                    row['trk_poly_id'] = row['regions_id']
+                try:
+                    if row['regions_id'].startswith('trk_poly_id'):
+                        row['trk_poly_id'] = row['regions_id']
+                except KeyError:
+                    ...
 
         FIX_FOR_POSTLOAD_TRK_INFO = 1
         if FIX_FOR_POSTLOAD_TRK_INFO:

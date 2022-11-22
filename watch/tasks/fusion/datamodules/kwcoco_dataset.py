@@ -46,6 +46,20 @@ class KWCocoVideoDatasetConfig(scfg.Config):
     train, test, or validation.
 
     In the future this might be convertable to, or handled by omegaconfig
+
+    The core spacetime parameters are:
+
+        * window_space_scale
+        * input_space_scale
+        * output_space_scale
+        * time_steps
+        * time_sampling
+        * chip_dims
+
+    Also:
+
+        * set_cover_algo
+
     """
     default = {
         'time_steps': scfg.Value(2, help='number of temporal sampler per batch'),
@@ -191,6 +205,11 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             Validation/test dataset defaults to True.
             ''')),
 
+        'use_grid_valid_regions': scfg.Value(True, help=ub.paragraph(
+            '''
+            If True, the initial grid will only place windows in valid regions.
+            ''')),
+
         # Overwritten for non-train
         'neg_to_pos_ratio': scfg.Value(1.0, type=float, help=ub.paragraph(
             '''
@@ -199,6 +218,12 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             Only applies to training dataset when used in the data module.
             Validation/test dataset defaults to zero.
             ''')),
+
+        'use_grid_cache': scfg.Value(True, help=ub.paragraph(
+            '''
+            If true, will cache the spacetime grid to make multiple
+            runs quicker.
+            '''))
     }
 
     def normalize(self):
@@ -404,6 +429,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 window_space_scale=window_space_scale,
                 set_cover_algo=set_cover_algo,
                 workers=grid_workers,  # could configure this
+                use_cache=self.config['use_grid_cache'],
+                respect_valid_regions=self.config['use_grid_valid_regions'],
             )
             new_sample_grid = builder.build()
             self.length = len(new_sample_grid['targets'])
@@ -424,7 +451,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 window_space_scale=window_space_scale,
                 set_cover_algo=set_cover_algo,
                 workers=grid_workers,
-                use_cache=1,
+                use_cache=self.config['use_grid_cache'],
+                respect_valid_regions=self.config['use_grid_valid_regions'],
             )
             new_sample_grid = builder.build()
 

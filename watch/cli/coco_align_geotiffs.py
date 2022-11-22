@@ -192,7 +192,11 @@ class CocoAlignGeotiffConfig(scfg.Config):
 
         'max_frames': scfg.Value(None),
 
-        'warp_tries': scfg.Value(10, help='The maximum number of times to retry failed gdal warp commands before stopping.'),
+        'warp_tries': scfg.Value(2, help='The maximum number of times to retry failed gdal warp commands before stopping.'),
+
+        # FIXME: asset and image timeouts are not handled correctly.
+        'image_timeout': scfg.Value('8hours', help='The maximum amount of time to spend pulling down a all image assets before giving up'),
+        'asset_timeout': scfg.Value('4hours', help='The maximum amount of time to spend pulling down a single image asset before giving up'),
 
         'include_channels': scfg.Value(None, help='If specified only align the given channels'),
         'exclude_channels': scfg.Value(None, help='If specified ignore these channels'),
@@ -246,6 +250,9 @@ def main(cmdline=True, **kw):
             'keep': 'none',
         }
 
+    CommandLine:
+        xdoctest -m watch.cli.coco_align_geotiffs main:0
+
     Example:
         >>> from watch.cli.coco_align_geotiffs import *  # NOQA
         >>> from watch.demo.landsat_demodata import grab_landsat_product
@@ -279,9 +286,11 @@ def main(cmdline=True, **kw):
         >>>     'src': coco_dset,
         >>>     'dst': dst,
         >>>     'regions': 'annots',
-        >>>     'max_workers': 0,
-        >>>     'aux_workers': 0,
+        >>>     'workers': 2,
+        >>>     'aux_workers': 2,
         >>>     'convexify_regions': True,
+        >>>     #'image_timeout': '1 microsecond',
+        >>>     #'asset_timeout': '1 microsecond',
         >>>     'visualize': True,
         >>> }
         >>> cmdline = False
@@ -523,10 +532,13 @@ def main(cmdline=True, **kw):
             include_channels=config['include_channels'],
             exclude_channels=config['exclude_channels'],
             tries=config['warp_tries'],
+            image_timeout=config['image_timeout'],
+            asset_timeout=config['asset_timeout'],
             verbose=config['verbose'],
             force_nodata=config['force_nodata'],
         )
 
+    kwcoco_extensions.reorder_video_frames(new_dset)
     new_dset.fpath = dst_fpath
     print('Dumping new_dset.fpath = {!r}'.format(new_dset.fpath))
     try:
@@ -880,7 +892,10 @@ class SimpleDataCube(object):
                          aux_workers=0, keep='none', target_gsd=10,
                          max_frames=None, debug_valid_regions=False,
                          include_channels=None, exclude_channels=None,
-                         tries=10, force_nodata=None, verbose=0):
+                         tries=2,
+                         image_timeout=None,
+                         asset_timeout=None,
+                         force_nodata=None, verbose=0):
         """
         Given a region of interest, extract an aligned temporal sequence
         of data to a specified directory.
@@ -1253,7 +1268,10 @@ class SimpleDataCube(object):
                     include_channels=include_channels,
                     exclude_channels=exclude_channels,
                     force_nodata=force_nodata,
-                    tries=tries, verbose=verbose)
+                    tries=tries,
+                    image_timeout=image_timeout,
+                    asset_timeout=asset_timeout,
+                    verbose=verbose)
                 start_gid = start_gid + 1
                 start_aid = start_aid + len(anns)
                 frame_index = frame_index + 1
@@ -1262,15 +1280,19 @@ class SimpleDataCube(object):
 
         sub_new_gids = []
         sub_new_aids = []
-        # TODO: parametarize
-        image_timeout = util_time.coerce_timedelta('8 hours').total_seconds()
+        if image_timeout is not None:
+            image_timeout = util_time.coerce_timedelta(image_timeout).total_seconds()
+
+        from concurrent.futures import TimeoutError
         for job in image_jobs.as_completed(desc='collect extract jobs',
-                                           timeout=image_timeout,
                                            progkw=dict(freq=1)):
 
             try:
-                new_img, new_anns = job.result()
+                new_img, new_anns = job.result(timeout=image_timeout)
             except SkipImage:
+                continue
+            except TimeoutError:
+                print('\n\nAn image job timed out!\n\n')
                 continue
 
             # Hack, the next ids dont update when new images are added
@@ -1375,6 +1397,9 @@ class SimpleDataCube(object):
             sub_dset = new_dset.subset(sub_new_gids, copy=True)
             sub_dset.fpath = join(sub_bundle_dpath, 'subdata.kwcoco.json')
             sub_dset.reroot(new_root=sub_bundle_dpath, absolute=False)
+
+            kwcoco_extensions.reorder_video_frames(sub_dset)
+
             sub_dset.dump(sub_dset.fpath, newlines=True)
         return new_dset
 
@@ -1388,7 +1413,10 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
                       include_channels=None,
                       exclude_channels=None,
                       force_nodata=None,
-                      tries=10, verbose=0):
+                      tries=2,
+                      asset_timeout=None,
+                      image_timeout=None,
+                      verbose=0):
     """
     Threaded worker function for :func:`SimpleDataCube.extract_overlaps`.
 
@@ -1470,6 +1498,11 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
     # images instead
     asset_jobs = ub.JobPool(mode='thread', max_workers=aux_workers)
 
+    if image_timeout is not None:
+        image_timeout = util_time.coerce_timedelta(image_timeout).total_seconds()
+    if asset_timeout is not None:
+        asset_timeout = util_time.coerce_timedelta(asset_timeout).total_seconds()
+
     aux_verbose = verbose > 3 or (verbose > 1 and (aux_workers == 0))
     for obj_group in ub.ProgIter(obj_groups, desc='submit warp assets', verbose=verbose):
         job = asset_jobs.submit(
@@ -1479,19 +1512,22 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
             include_channels=include_channels,
             exclude_channels=exclude_channels,
             force_nodata=force_nodata,
-            tries=tries, verbose=aux_verbose)
+            tries=tries,
+            asset_timeout=asset_timeout,
+            verbose=aux_verbose)
         job_list.append(job)
 
     dst_list = []
-    # TODO: parametarize
-    asset_timeout = util_time.coerce_timedelta('4 hours').total_seconds()
     for job in asset_jobs.as_completed(desc='collect warp assets {}'.format(name),
-                                       timeout=asset_timeout,
+                                       timeout=image_timeout,
                                        progkw=dict(enabled=DEBUG, verbose=verbose)):
-        dst = job.result()
+        dst = job.result(timeout=asset_timeout)
         dst_list.append(dst)
 
     new_gid = start_gid
+
+    for i in range(100000000):
+        i += 1
 
     if verbose > 2:
         print(f'Finish channel crop jobs: {new_gid}')
@@ -1707,8 +1743,8 @@ def _fix_geojson_poly(geo):
 @profile
 def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
                space_box, align_method, is_multi_image, keep, local_epsg=None,
-               include_channels=None, exclude_channels=None, tries=10,
-               force_nodata=None, verbose=0):
+               include_channels=None, exclude_channels=None, tries=2,
+               asset_timeout=None, force_nodata=None, verbose=0):
     import watch
 
     # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
@@ -1826,6 +1862,9 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     # Uncomment to suppress warnings for debug purposes
     #
     # error_logfile = '/dev/null'
+
+    # TODO: add a timeout argument to the gdal calls and pass down the asset
+    # timeout.
 
     # Note: these methods take care of retries and checking that the
     # data is valid.

@@ -217,6 +217,7 @@ class DataRegistry:
 
                 for row in hardware_to_results.get('ssd', []):
                     row['priority'] = (row.get('priority', 0) or 0) - min_ssd_priority + non_ssd_priority * 2
+                # print('hardware_to_results = {}'.format(ub.repr2(hardware_to_results, nl=2)))
 
         HACK_JONS_REMOTE_PATTERN = 1
         if HACK_JONS_REMOTE_PATTERN:
@@ -234,6 +235,13 @@ class DataRegistry:
                     remote_alt = path.shrinkuser(home=remote_base)
                     if remote_alt.exists():
                         row['path'] = os.fspath(remote_alt)
+
+        results = sorted(
+            results,
+            key=lambda r:
+                r['priority']
+                if r.get('priority', None) is not None else
+                -float('inf'))[::-1]
         return results
 
     def find(self, on_error="raise", envvar='DVC_DPATH', **kwargs):

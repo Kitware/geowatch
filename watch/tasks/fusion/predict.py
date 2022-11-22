@@ -794,7 +794,14 @@ def predict(cmdline=False, **kwargs):
                 print(nh.data.collate._debug_inbatch_shapes(batch))
 
             # Predict on the batch: todo: rename to predict_step
-            outputs = method.forward_step(batch, with_loss=False)
+            try:
+                outputs = method.forward_step(batch, with_loss=False)
+            except RuntimeError as ex:
+                msg = ('A predict batch failed ex = {}'.format(ub.repr2(ex, nl=1)))
+                print(msg)
+                import warnings
+                warnings.warn(msg)
+                continue
 
             outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
 

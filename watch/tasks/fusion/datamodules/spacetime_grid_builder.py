@@ -30,6 +30,7 @@ class SpacetimeGridBuilder:
         use_centered_positives=True,
         window_space_scale=None,
         set_cover_algo=None,
+        respect_valid_regions=True,
         workers=0,
         use_cache=1
     ):
@@ -48,6 +49,7 @@ class SpacetimeGridBuilder:
         builder.set_cover_algo = set_cover_algo
         builder.workers = workers
         builder.use_cache = use_cache
+        builder.respect_valid_regions = respect_valid_regions
 
     def build(builder):
         dset = builder.dset
@@ -65,6 +67,7 @@ class SpacetimeGridBuilder:
         set_cover_algo = builder.set_cover_algo
         workers = builder.workers
         use_cache = builder.use_cache
+        respect_valid_regions = builder.respect_valid_regions
 
         return sample_video_spacetime_targets(
             dset=dset,
@@ -79,6 +82,7 @@ class SpacetimeGridBuilder:
             use_centered_positives=use_centered_positives,
             window_space_scale=window_space_scale,
             set_cover_algo=set_cover_algo,
+            respect_valid_regions=respect_valid_regions,
             workers=workers,
             use_cache=use_cache,
         )
@@ -94,6 +98,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                                    use_centered_positives=True,
                                    window_space_scale=None,
                                    set_cover_algo=None,
+                                   respect_valid_regions=True,
                                    workers=0,
                                    use_cache=1):
     """
@@ -153,6 +158,9 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         negative_classes (List[str]):
             indicate class names that should not count towards a region being
             marked as positive.
+
+        respect_valid_regions (bool):
+            if True, only place windows in valid regions
 
         workers (int): parallel workers
 
@@ -303,7 +311,6 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
 
     # TODO: we can disable respect valid regions here and then just do it on
     # the fly in the dataloader, but it is unclear which is more efficient.
-    respect_valid_regions = True
 
     depends = [
         dset_hashid,
@@ -517,9 +524,19 @@ def _sample_single_video_spacetime_targets(
         # supporting frames we will look at when making a prediction for the
         # "main" frame. Initially this is only based on temporal metadata.  We
         # may modify this later depending on spatial properties.
-        main_idx_to_gids = {
-            main_idx: list(ub.take(video_gids, time_sampler.sample(main_idx)))
+        main_idx_to_sample_idxs = {
+            main_idx: time_sampler.sample(main_idx)
             for main_idx in time_sampler.indexes
+        }
+        # print('Time index hash: ' + ub.hash_data(time_sampler.indexes))
+        # print('Time affinity hash: ' + ub.hash_data(time_sampler.affinity))
+        # print('Time time hash: ' + ub.hash_data(time_sampler.unixtimes))
+        # print('Time sensor hash: ' + ub.hash_data(time_sampler.sensors))
+        # print('First sample hash: ' + ub.hash_data(main_idx_to_sample_idxs))
+
+        main_idx_to_gids = {
+            main_idx: list(ub.take(video_gids, sample_idxs))
+            for main_idx, sample_idxs in main_idx_to_sample_idxs.items()
         }
 
         if use_annot_info:
@@ -657,9 +674,10 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
                 dset, main_idx_to_gids, vidspace_box,
                 refine_iosa_thresh, time_sampler,
                 get_image_valid_region_in_vidspace)
-        except tsm.TimeSampleError:
+        except tsm.TimeSampleError as ex:
             # Hack, just skip the region
             # We might be able to sample less and still be ok
+            print(f'TSM ex={ex}')
             raise
             # continue
     else:
@@ -761,22 +779,22 @@ def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, refine_iosa_thresh
 
     gid_to_isbad = {}
     for gid in video_gids:
-        import xdev
-        with xdev.embed_on_exception_context:
-            vidspace_valid_poly = get_image_valid_region_in_vidspace(gid)
-            gid_to_isbad[gid] = False
-            # If the area is of the valid polygon is less than zero, there was
-            # probably an issue. treat it as if it didn't specify a valid
-            # region.
-            if vidspace_valid_poly is not None and vidspace_valid_poly.area > 0:
-                vidspace_box_poly = vidspace_box.to_shapley()[0]
-                # Intersection over smaller area
-                isect = vidspace_valid_poly.intersection(vidspace_box_poly)
-                iosa = isect.area / min(vidspace_box_poly.area, vidspace_valid_poly.area)
-                if iosa < refine_iosa_thresh:
-                    gid_to_isbad[gid] = True
+        vidspace_valid_poly = get_image_valid_region_in_vidspace(gid)
+        gid_to_isbad[gid] = False
+        # If the area is of the valid polygon is less than zero, there was
+        # probably an issue. treat it as if it didn't specify a valid
+        # region.
+        if vidspace_valid_poly is not None and vidspace_valid_poly.area > 0:
+            vidspace_box_poly = vidspace_box.to_shapley()[0]
+            # Intersection over smaller area
+            isect = vidspace_valid_poly.intersection(vidspace_box_poly)
+            iosa = isect.area / min(vidspace_box_poly.area, vidspace_valid_poly.area)
+            if iosa < refine_iosa_thresh:
+                gid_to_isbad[gid] = True
 
     all_bad_gids = [gid for gid, flag in gid_to_isbad.items() if flag]
+
+    rng = kwarray.ensure_rng(1093881655714)
 
     try:
         resampled = 0
@@ -789,7 +807,9 @@ def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, refine_iosa_thresh
                 if good_gids != gids:
                     include_idxs = np.where(kwarray.isect_flags(video_gids, good_gids))[0]
                     exclude_idxs = np.where(kwarray.isect_flags(video_gids, all_bad_gids))[0]
-                    chosen = time_sampler.sample(include=include_idxs, exclude=exclude_idxs, error_level=1, return_info=False)
+                    chosen = time_sampler.sample(
+                        include=include_idxs, exclude=exclude_idxs,
+                        error_level=1, return_info=False, rng=rng)
                     new_gids = list(ub.take(video_gids, chosen))
                     # Are we allowed to return less than the initial expected
                     # number of frames? For transformers yes, but we should be
@@ -801,8 +821,10 @@ def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, refine_iosa_thresh
                 else:
                     refined_sample[main_idx] = gids
     except tsm.TimeSampleError:
+        print('had a hard time resampling')
         raise
 
+    # print(f'number of resampled grid cells={resampled}')
     return refined_sample, resampled
 
 

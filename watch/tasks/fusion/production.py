@@ -146,6 +146,19 @@ PRODUCTION_MODELS = [
         'tags': 'phase2_expt',
         'file_name': 'models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt',
         'task': 'SC',
+    },
+    # Phase2 Eval: 2020-11-21
+    {
+        'name': 'package_epoch0_step41.pt.pt',
+        'tags': 'phase2_expt',
+        'file_name': 'models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt',
+        'task': 'BAS',
+    },
+    {
+        'name': 'Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt',
+        'tags': 'phase2_expt',
+        'file_name': 'models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt',
+        'task': 'SC',
     }
 ]
 
