@@ -78,29 +78,30 @@ kwcoco stats "$TRAIN_FPATH" "$VALI_FPATH" "$TEST_FPATH"
 smartwatch stats "$TRAIN_FPATH"
 
 
-echo "
+if [ -n "$DISPLAY" ]; then
+    echo "
 
-Another important CLI tool is 'smartwatch visualize' which can be used to
-visually inspect the contents of a kwcoco file. It does this by simply dumping
-image files to disk.  This is most useful when the underlying dataset has data
-outside of the visual range, but it will work on 'regular' rgb data too!
+    Another important CLI tool is 'smartwatch visualize' which can be used to
+    visually inspect the contents of a kwcoco file. It does this by simply dumping
+    image files to disk.  This is most useful when the underlying dataset has data
+    outside of the visual range, but it will work on 'regular' rgb data too!
 
-Running visualize by default will write images for all channels in the exiting
-'kwcoco bundle' (i.e. the directory that contains the kwcoco json file) with a
-hash corresponding to the state of the kwcoco file. It will also output all the
-channels by default. Use 'smartwatch visualize --help' for a list of additional
-options. 
+    Running visualize by default will write images for all channels in the exiting
+    'kwcoco bundle' (i.e. the directory that contains the kwcoco json file) with a
+    hash corresponding to the state of the kwcoco file. It will also output all the
+    channels by default. Use 'smartwatch visualize --help' for a list of additional
+    options. 
 
-Some useful options are:
+    Some useful options are:
 
-    * '--channels' to view only specific channels
-    * '--animate' create animated gifs from the sequence
-    * '--viz_dpath' specify a custom output directory
-"
+        * '--channels' to view only specific channels
+        * '--animate' create animated gifs from the sequence
+        * '--viz_dpath' specify a custom output directory
+    "
 
-# Try visualizing the training path
-smartwatch visualize "$TRAIN_FPATH"
-
+    # Try visualizing the training path
+    smartwatch visualize "$TRAIN_FPATH"
+fi
 
 echo "
 
@@ -231,19 +232,21 @@ the "smartwatch stats" command to inspect what these new channels are.
 # Inspect the channels in the prediction file
 smartwatch stats "$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
 
-
-echo '
-Running this command you can see that images now have a channels "salient",
-which corresponds to the BAS saliency task, and "star", "eff", and "superstar"
-which correspond to the classification head (for SC), and lastly the "change"
-channel, which is from the change head.
-
-Because these are just rasters, we can visualize them using "smartwatch
-visualize"
-'
-
 # Visualize the channels in the prediction file
-smartwatch visualize "$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
+if [ -n "$DISPLAY" ]; then
+
+    echo '
+    Running this command you can see that images now have a channels "salient",
+    which corresponds to the BAS saliency task, and "star", "eff", and "superstar"
+    which correspond to the classification head (for SC), and lastly the "change"
+    channel, which is from the change head.
+
+    Because these are just rasters, we can visualize them using "smartwatch
+    visualize"
+    '
+
+    smartwatch visualize "$DVC_EXPT_DPATH"/predictions/pred.kwcoco.json
+fi
 
 
 echo '
