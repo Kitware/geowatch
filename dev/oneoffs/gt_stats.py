@@ -33,7 +33,7 @@ def geopandas_shape_stats(df):
 def main():
     data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
 
-    from watch.mlops import smart_pipeline
+    from watch.mlops import smart_result_parser
 
     # MODE = 'pred'
     MODE = 'true'
@@ -76,7 +76,7 @@ def main():
         pred_info_fpath = site_info['fpath'].parent.parent / 'site_tracks_manifest.json'
         if pred_info_fpath.exists():
             import json
-            info_section = smart_pipeline.parse_json_header(pred_info_fpath)
+            info_section = smart_result_parser.parse_json_header(pred_info_fpath)
             track_kw = json.loads(info_section[-1]['properties']['args']['track_kwargs'])
             stats_df.loc[:, 'thresh'] = track_kw['thresh']
         site_stats_accum.append(stats_df)

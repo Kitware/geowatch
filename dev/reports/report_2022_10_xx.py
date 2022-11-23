@@ -63,7 +63,7 @@ EXPT_DVC_DPATH=$(smartwatch_dvc --tags="phase2_expt" --hardware="auto")
 python -m watch.mlops.schedule_evaluation \
     --params="
         matrix:
-            trk.pxl.model: unused
+            trk.pxl.package_fpath: unused
             trk.pxl.data.test_dataset: unused
             trk.pxl.data.window_space_scale: unused
             trk.pxl.data.time_sampling: unused
@@ -86,7 +86,7 @@ python -m watch.mlops.schedule_evaluation \
                 - 0.13
             act.poly.use_viterbi:
                 - 0
-            act.pxl.model:
+            act.pxl.package_fpath:
                 - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=1-step=23940.pt.pt
                 - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=2-step=35910-v1.pt.pt
                 - $EXPT_DVC_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_V2/Drop4_tune_V30_V2_epoch=3-step=47880-v1.pt.pt
@@ -222,14 +222,14 @@ def bas_report():
     df['trk.efficiency'] = df['trk.poly.metrics.bas_faa_f1'] / df['trk.both.total_hours']
 
     fig = kwplot.figure(fnum=1, doclf=True)
-    sns.scatterplot(data=df, x='trk.gsd', y='trk.both.total_hours', hue='trk.pxl.model', ax=fig.gca())
+    sns.scatterplot(data=df, x='trk.gsd', y='trk.both.total_hours', hue='trk.pxl.package_fpath', ax=fig.gca())
     # sns.scatterplot(data=df, x='trk.pxl.properties.step', y='act.poly.metrics.sc_macro_f1', hue='act.pxl.model_name')
 
     fig = kwplot.figure(fnum=2, doclf=True)
-    sns.scatterplot(data=df, x='trk.gsd', y='trk.poly.metrics.bas_faa_f1', hue='trk.pxl.model', legend=False)
+    sns.scatterplot(data=df, x='trk.gsd', y='trk.poly.metrics.bas_faa_f1', hue='trk.pxl.package_fpath', legend=False)
 
     fig = kwplot.figure(fnum=3, doclf=True)
-    sns.scatterplot(data=df, x='trk.gsd', y='trk.efficiency', hue='trk.pxl.model', legend=False)
+    sns.scatterplot(data=df, x='trk.gsd', y='trk.efficiency', hue='trk.pxl.package_fpath', legend=False)
 
 
 def main():
@@ -301,24 +301,24 @@ def main():
     if 1:
         import kwplot
         sns = kwplot.autosns()
-        df['act.pxl.model'] = df['act.pxl.package_fpath'].apply(lambda x: ub.Path(x).name)
+        df['act.pxl.package_fpath'] = df['act.pxl.package_fpath'].apply(lambda x: ub.Path(x).name)
         df['act.gsd'] = df['act.pxl.input_space_scale'].apply(lambda x: int(x[:-3]))
         df['act.both.total_hours'] = df[['act.pxl.resource.total_hours', 'act.poly.resource.total_hours']].sum(axis=1)
         df['act.efficiency'] = df['act.poly.metrics.sc_macro_f1'] / df['act.both.total_hours']
 
         fig = kwplot.figure(fnum=1, doclf=True)
-        sns.scatterplot(data=df, x='act.gsd', y='act.both.total_hours', hue='act.pxl.model', ax=fig.gca(), legend=False)
+        sns.scatterplot(data=df, x='act.gsd', y='act.both.total_hours', hue='act.pxl.package_fpath', ax=fig.gca(), legend=False)
         fig.set_size_inches([6, 3])
         fig.subplots_adjust(bottom=0.2)
         # sns.scatterplot(data=df, x='act.pxl.properties.step', y='act.poly.metrics.sc_macro_f1', hue='act.pxl.model_name')
 
         fig = kwplot.figure(fnum=2, doclf=True)
-        sns.scatterplot(data=df, x='act.gsd', y='act.poly.metrics.sc_macro_f1', hue='act.pxl.model', legend=False)
+        sns.scatterplot(data=df, x='act.gsd', y='act.poly.metrics.sc_macro_f1', hue='act.pxl.package_fpath', legend=False)
         fig.set_size_inches([6, 3])
         fig.subplots_adjust(bottom=0.2)
 
         fig = kwplot.figure(fnum=3, doclf=True)
-        sns.scatterplot(data=df, x='act.gsd', y='act.efficiency', hue='act.pxl.model', legend=False)
+        sns.scatterplot(data=df, x='act.gsd', y='act.efficiency', hue='act.pxl.package_fpath', legend=False)
         fig.set_size_inches([6, 3])
         fig.subplots_adjust(bottom=0.2)
 
@@ -372,7 +372,7 @@ def main():
         'act.pxl.resource.total_hours',
 
         'act.fit.input_space_scale',
-        'act.pxl.model',
+        'act.pxl.package_fpath',
 
         'act.fit.input_space_scale',
         'act.poly.pxl.input_space_scale',
@@ -435,7 +435,7 @@ TEST_DATASET=$DATA_DVC_DPATH/$DATASET_CODE/BR_R001.kwcoco.json
 python -m watch.mlops.schedule_evaluation \
     --params="
         matrix:
-            trk.pxl.model:
+            trk.pxl.package_fpath:
                 # - $EXPT_DVC_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Multi_Native/package_epoch10_step200000.pt
                 - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_invariants_30GSD_V016/lightning_logs/version_4/checkpoints/Drop4_BAS_invariants_30GSD_V016_epoch=10-step=5632.pt
                 # - $EXPT_DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
@@ -468,7 +468,7 @@ python -m watch.mlops.schedule_evaluation \
                 - 0.01
             act.poly.use_viterbi:
                 - 0
-            act.pxl.model:
+            act.pxl.package_fpath:
                 - $EXPT_DVC_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
         include:
             - act.pxl.data.chip_dims: 256,256
@@ -505,7 +505,7 @@ EXPT_DVC_DPATH=$(smartwatch_dvc --tags="phase2_expt" --hardware="auto")
 python -m watch.mlops.schedule_evaluation \
     --params="
         matrix:
-            trk.pxl.model:
+            trk.pxl.package_fpath:
                 # - $EXPT_DVC_DPATH/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
                 # - $EXPT_DVC_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Continue_15GSD_BGR_V004/Drop4_BAS_Continue_15GSD_BGR_V004_epoch=78-step=323584.pt.pt
                 # - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2_epoch=0-step=7501.pt.pt
@@ -562,7 +562,7 @@ python -m watch.mlops.schedule_evaluation \
                 - 0.01
             act.poly.use_viterbi:
                 - 0
-            act.pxl.model:
+            act.pxl.package_fpath:
                 - $EXPT_DVC_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
             include:
                 # - trk.pxl.data.window_space_scale: 60GSD
@@ -599,7 +599,7 @@ python -m watch.mlops.schedule_evaluation \
     --devices="0,1" --queue_size=2 \
     --queue_name='bas-eval' \
     --backend=tmux --skip_existing=0 \
-    --run=1
+    --run=0
 
 
 
@@ -615,7 +615,6 @@ python -m watch mlops "status" --dataset_codes Drop4-BAS
 python -m watch mlops "push packages" --dataset_codes Drop4-BAS
 python -m watch mlops "pull packages" --dataset_codes Drop4-BAS
 
-"""
 
 
 python -m watch.tasks.fusion.predict \
@@ -645,3 +644,86 @@ python -m watch.cli.run_tracker \
     --out_site_summaries_fpath "/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/pred/trk/package_epoch0_step41.pt.pt/Drop4-BAS_KR_R001.kwcoco/trk_pxl_16f221bd/trk_poly_9f08fb8c/site_summary_tracks_manifest.json" \
     --out_kwcoco "/home/local/KHQ/jon.crall/remote/horologic/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/pred/trk/package_epoch0_step41.pt.pt/Drop4-BAS_KR_R001.kwcoco/trk_pxl_16f221bd/trk_poly_9f08fb8c/tracks.kwcoco.json"
 
+
+
+# END_TO_END TUNING
+
+
+DATASET_CODE=Drop4-BAS
+DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="auto")
+EXPT_DVC_DPATH=$(smartwatch_dvc --tags="phase2_expt" --hardware="auto")
+python -m watch.mlops.schedule_evaluation \
+    --params="
+        matrix:
+            trk.pxl.package_fpath:
+                - $EXPT_DVC_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+            trk.pxl.data.test_dataset:
+                # - $DATA_DVC_DPATH/$DATASET_CODE/KR_R001.kwcoco.json
+                # - $DATA_DVC_DPATH/$DATASET_CODE/BR_R002.kwcoco.json
+                - $DATA_DVC_DPATH/$DATASET_CODE/KR_R002.kwcoco.json
+                # - $DATA_DVC_DPATH/$DATASET_CODE/US_R007.kwcoco.json
+            trk.pxl.data.window_space_scale:
+                # - "auto"
+                # - "10GSD"
+                - "15GSD"
+                # - "30GSD"
+                # - "40GSD"
+                # - "60GSD"
+            trk.pxl.data.set_cover_algo:
+                - null
+                - approx
+            trk.pxl.data.time_steps:
+                - 11
+                # - 5
+                # - auto
+                # - 2
+            trk.pxl.data.time_sampling:
+                - "auto"
+            trk.poly.thresh:
+                # - 0.07
+                # - 0.09
+                - 0.1
+                # - 0.11
+                # - 0.13
+            crop.src:
+                - /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/online_v1/kwcoco_for_sc_fielded.json
+            crop.regions:
+                - trk.poly.output
+            act.pxl.data.test_dataset:
+                - crop.dst
+            act.pxl.data.input_space_scale:
+                - 8GSD
+            act.pxl.data.time_steps:
+                - 3
+            act.pxl.data.chip_overlap:
+                - 0.3
+            act.poly.thresh:
+                - 0.1
+            act.poly.use_viterbi:
+                - 0
+            act.pxl.package_fpath:
+                - $EXPT_DVC_DPATH/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
+    " \
+    --out_dpath=$EXPT_DVC_DPATH/tmp \
+    --enable_pred_trk_pxl=1 \
+    --enable_pred_trk_poly=1 \
+    --enable_eval_trk_pxl=1 \
+    --enable_eval_trk_poly=1 \
+    --enable_crop=1 \
+    --enable_pred_act_pxl=1 \
+    --enable_pred_act_poly=1 \
+    --enable_eval_act_pxl=1 \
+    --enable_eval_act_poly=1 \
+    --enable_viz_pred_trk_poly=1 \
+    --enable_viz_pred_act_poly=1 \
+    --enable_links=1 \
+    --devices="0,1" --queue_size=2 \
+    --queue_name='bas-eval' \
+    --backend=serial --skip_existing=0 \
+    --run=0
+
+
+    python -m watch.cli.run_tracker /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/fixme/pred/trk/package_epoch0_step41.pt/Drop4-BAS_KR_R002.kwcoco/trk_pxl_77402b79/pred.kwcoco.json --default_track_fn saliency_heatmaps --track_kwargs '{"thresh": 0.1, "moving_window_size": null}' --clear_annots --out_sites_dir /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/fixme/pred/trk/package_epoch0_step41.pt/Drop4-BAS_KR_R002.kwcoco/trk_pxl_77402b79/trk_poly_9f08fb8c/sites --out_site_summaries_dir /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/fixme/pred/trk/package_epoch0_step41.pt/Drop4-BAS_KR_R002.kwcoco/trk_pxl_77402b79/trk_poly_9f08fb8c/site-summaries --out_sites_fpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/fixme/pred/trk/package_epoch0_step41.pt/Drop4-BAS_KR_R002.kwcoco/trk_pxl_77402b79/trk_poly_9f08fb8c/site_tracks_manifest.json --out_site_summaries_fpath /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/fixme/pred/trk/package_epoch0_step41.pt/Drop4-BAS_KR_R002.kwcoco/trk_pxl_77402b79/trk_poly_9f08fb8c/site_summary_tracks_manifest.json --out_kwcoco /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/fixme/pred/trk/package_epoch0_step41.pt/Drop4-BAS_KR_R002.kwcoco/trk_pxl_77402b79/trk_poly_9f08fb8c/tracks.kwcoco.json
+
+
+"""

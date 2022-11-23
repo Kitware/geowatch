@@ -9,7 +9,7 @@ def main():
     from watch.utils import util_gis
     import ubelt as ub
     import numpy as np
-    # from watch.mlops import smart_pipeline
+    # from watch.mlops import smart_result_parser
 
     data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
 

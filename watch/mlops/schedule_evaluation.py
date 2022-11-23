@@ -12,7 +12,7 @@ Example:
     python -m watch.mlops.schedule_evaluation \
         --params="
             matrix:
-                trk.pxl.model:
+                trk.pxl.package_fpath:
                     - ./my_bas_model.pt
                 trk.pxl.data.test_dataset:
                     - ./my_test_dataset/bas_ready_data.kwcoco.json
@@ -35,7 +35,7 @@ Example:
                     - 0.1
                 act.poly.use_viterbi:
                     - 0
-                act.pxl.model:
+                act.pxl.package_fpath:
                     - my_sc_model.pt
         " \
         --expt_dvc_dpath=./my_expt_dir \
@@ -95,6 +95,8 @@ class ScheduleEvaluationConfig(scfg.Config):
         'check_other_sessions': scfg.Value('auto', help='if True, will ask to kill other sessions that might exist'),
         'queue_size': scfg.Value('auto', help='if auto, defaults to number of GPUs'),
 
+        'out_dpath': scfg.Value('auto', help='The location where predictions / evals will be stored. If "auto", uses teh expt_dvc_dpath'),
+
         # These enabled flags should probably be pushed off to params
         'enable_pred_trk_pxl': scfg.Value(True, isflag=True, help='BAS heatmap'),
         'enable_pred_trk_poly': scfg.Value(True, isflag=True, help='BAS tracking'),
@@ -135,7 +137,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 ###
                 ### BAS Pixel Prediction
                 ###
-                trk.pxl.model:
+                trk.pxl.package_fpath:
                     - ~/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt
                     - ~/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=73-step=37888.pt.pt
                 trk.pxl.data.test_dataset:
@@ -171,7 +173,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 act.pxl.data.test_dataset:
                     - crop.dst
                     # - ~/data/dvc-repos/smart_data_dvc/tmp/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco/cropped_kwcoco_for_sc.json
-                act.pxl.model:
+                act.pxl.package_fpath:
                     - ~/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
             ''')}
         cmdline = 0
@@ -192,7 +194,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
     from watch.mlops.expt_manager import ExperimentState
     # start using the experiment state logic as the path and metadata
     # organization logic
-    state = ExperimentState(expt_dvc_dpath, '*')
+
+    out_dpath = config['out_dpath']
+    state = ExperimentState(expt_dvc_dpath, '*', storage_dpath=out_dpath)
 
     # Get truth annotations
     annotations_dpath = config['annotations_dpath']
@@ -206,7 +210,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     all_param_grid = expand_param_grid(config['params'])
 
     grid_item_defaults = ub.udict({
-        'trk.pxl.model': None,
+        'trk.pxl.package_fpath': None,
         'trk.pxl.data.test_dataset': None,
         'trk.poly.thresh': 0.1,
 
@@ -214,7 +218,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
         'crop.context_factor': 1.5,
         'crop.regions': 'truth',
 
-        'act.pxl.model': None,
+        'act.pxl.package_fpath': None,
         'act.pxl.data.test_dataset': None,
         'act.poly.thresh': 0.1,
     })
@@ -222,6 +226,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     resolved_rows = []
     # Resolve parameters for each row
     for item in ub.ProgIter(all_param_grid, desc='resolving row'):
+        print('item = {}'.format(ub.repr2(item, nl=1)))
         row = resolve_pipeline_row(grid_item_defaults, state,
                                    region_model_dpath, expt_dvc_dpath, item)
         resolved_rows.append(row)
@@ -477,23 +482,26 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
     paths = {}
 
     # Might not need this exactly
-    try:
-        pkg_trk_pixel_pathcfg = state._parse_pattern_attrs(
-            state.templates['pkg_trk_pxl_fpath'], item['trk.pxl.model'])
-    except RuntimeError:
-        ...  # user specified a custom model
-        condensed['dataset_code'] = 'dset_code_unknown'
-        condensed['trk_expt'] = 'trk_expt_unknown'
-        if item['trk.pxl.model'] is not None:
-            condensed['trk_model'] = ub.Path(item['trk.pxl.model']).name
-        else:
-            condensed['trk_model'] = 'None'
-    else:
-        # fixme: dataset code is ambiguous between BAS and SC
-        # pkg_trk_pixel_pathcfg.pop('dataset_code', None)
+    import xdev
+    with xdev.embed_on_exception_context:
+        try:
+            pkg_trk_pixel_pathcfg = state._parse_pattern_attrs(
+                state.templates['pkg_trk_pxl_fpath'], item['trk.pxl.package_fpath'])
+            pkg_trk_pixel_pathcfg.pop('dataset_code')
+            pkg_trk_pixel_pathcfg.pop('storage_dpath')
+        except RuntimeError:
+            ...  # user specified a custom package_fpath
+            pkg_trk_pixel_pathcfg = {
+                'trk_expt': 'trk_expt_unknown',
+                'trk_model': ub.Path(item['trk.pxl.package_fpath']).name,
+            }
         condensed.update(pkg_trk_pixel_pathcfg)
 
+    condensed['storage_dpath'] = state.storage_dpath
     condensed['expt_dvc_dpath'] = expt_dvc_dpath
+
+    # might ultimately not be needed.
+    condensed['dataset_code'] = 'fixme'
 
     ### BAS / TRACKING ###
 
@@ -502,17 +510,15 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
     trk_pxl_params = ub.udict(trk_pxl['data']) - {'test_dataset'}
     trk_poly_params = ub.udict(trk_poly)
 
-    import xdev
-    with xdev.embed_on_exception_context:
-        condensed['trk_model'] = state._condense_model(item['trk.pxl.model'])
+    # condensed['trk_model'] = state._condense_model(item['trk.pxl.package_fpath'])
     # TODO:
-    # based on the model, we should infer if we need team features or not.
+    # based on the package_fpath, we should infer if we need team features or not.
 
     condensed['test_trk_dset'] = state._condense_test_dset(item['trk.pxl.data.test_dataset'])
     condensed['trk_pxl_cfg'] = state._condense_cfg(trk_pxl_params, 'trk_pxl')
     condensed['trk_poly_cfg'] = state._condense_cfg(trk_poly_params, 'trk_poly')
 
-    paths['pkg_trk_pxl_fpath'] = ub.Path(item['trk.pxl.model'])
+    paths['pkg_trk_pxl_fpath'] = ub.Path(item['trk.pxl.package_fpath'])
     paths['trk_test_dataset_fpath'] = item['trk.pxl.data.test_dataset']
     paths['pred_trk_pxl_dpath'] = ub.Path(state.templates['pred_trk_pxl_dpath'].format(**condensed))
     paths['pred_trk_pxl_fpath'] = ub.Path(state.templates['pred_trk_pxl_fpath'].format(**condensed))
@@ -569,21 +575,34 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
     act_poly_params = ub.udict(act_poly)
     act_poly_params['site_summary'] = site_summary
 
-    condensed['act_model'] = state._condense_model(item['act.pxl.model'])
+    condensed['act_model'] = state._condense_model(item['act.pxl.package_fpath'])
     # TODO:
-    # based on the model, we should infer if we need team features or not.
+    # based on the package_fpath, we should infer if we need team features or not.
     condensed['act_pxl_cfg'] = state._condense_cfg(act_pxl_params, 'act_pxl')
     condensed['act_poly_cfg'] = state._condense_cfg(act_poly_params, 'act_poly')
 
+    # try:
+    #     pkg_act_pixel_pathcfg = state._parse_pattern_attrs(state.templates['pkg_act_pxl_fpath'], item['act.pxl.package_fpath'])
+    # except RuntimeError:
+    #     ...  # user specified a custom package_fpath
+    #     condensed['dataset_code'] = 'dset_code_unknown'
+    #     condensed['act_expt'] = 'act_expt_unknown'
+    #     condensed['act_model'] = ub.Path(item['act.pxl.package_fpath']).name
+    # else:
+    #     condensed.update(pkg_act_pixel_pathcfg)
+
     try:
-        pkg_act_pixel_pathcfg = state._parse_pattern_attrs(state.templates['pkg_act_pxl_fpath'], item['act.pxl.model'])
+        pkg_act_pixel_pathcfg = state._parse_pattern_attrs(
+            state.templates['pkg_act_pxl_fpath'], item['act.pxl.package_fpath'])
+        pkg_act_pixel_pathcfg.pop('dataset_code')
+        pkg_act_pixel_pathcfg.pop('storage_dpath')
     except RuntimeError:
-        ...  # user specified a custom model
-        condensed['dataset_code'] = 'dset_code_unknown'
-        condensed['act_expt'] = 'act_expt_unknown'
-        condensed['act_model'] = ub.Path(item['act.pxl.model']).name
-    else:
-        condensed.update(pkg_act_pixel_pathcfg)
+        ...  # user specified a custom package_fpath
+        pkg_act_pixel_pathcfg = {
+            'act_expt': 'act_expt_unknown',
+            'act_model': ub.Path(item['act.pxl.package_fpath']).name,
+        }
+    condensed.update(pkg_act_pixel_pathcfg)
 
     # paths['act_test_dataset_fpath'] = item['act.pxl.data.test_dataset']
     if item['act.pxl.data.test_dataset'] == 'crop.dst':
@@ -594,7 +613,7 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
         paths['act_test_dataset_fpath'] = item['act.pxl.data.test_dataset']
     condensed['test_act_dset'] = state._condense_test_dset(paths['act_test_dataset_fpath'])
 
-    paths['pkg_act_pxl_fpath'] = ub.Path(item['act.pxl.model'])
+    paths['pkg_act_pxl_fpath'] = ub.Path(item['act.pxl.package_fpath'])
 
     paths['pred_act_poly_sites_fpath'] = ub.Path(state.templates['pred_act_poly_sites_fpath'].format(**condensed))
     # paths['pred_act_poly_site_summaries_fpath'] = ub.Path(state.templates['pred_act_poly_site_summaries_fpath'].format(**condensed))

@@ -40,7 +40,7 @@ class ExperimentState(ub.NiceRepr):
     """
 
     def __init__(self, expt_dvc_dpath, dataset_code='*', dvc_remote=None,
-                 data_dvc_dpath=None, model_pattern='*'):
+                 data_dvc_dpath=None, model_pattern='*', storage_dpath=None):
 
         if isinstance(model_pattern, str) and model_pattern.endswith('.txt') and ub.Path(model_pattern).exists():
             model_pattern = [
@@ -94,9 +94,14 @@ class ExperimentState(ub.NiceRepr):
             'crop_id': ['regions_id', 'crop_cfg', 'crop_src_dset']
         }
 
+        if storage_dpath is None or storage_dpath == 'auto':
+            storage_dpath = expt_dvc_dpath / 'models/fusion'
+
         ### Experimental, add in SC dependencies
         self.staging_template_prefix = '{expt_dvc_dpath}/training/{host}/{user}/{dataset_code}/'
-        self.storage_template_prefix = '{expt_dvc_dpath}/models/fusion/{dataset_code}/'
+        self.storage_template_prefix = '{storage_dpath}/{dataset_code}/'
+
+        self.storage_dpath = storage_dpath
 
         self.patterns = {
             # General
@@ -104,6 +109,7 @@ class ExperimentState(ub.NiceRepr):
             'act_expt': '*',
             'expt_dvc_dpath': expt_dvc_dpath,
             'dataset_code': dataset_code,
+            'storage_dpath': storage_dpath,
             ### Versioned
             'test_trk_dset': '*',
             'test_act_dset': '*',
@@ -902,6 +908,8 @@ class ExperimentState(ub.NiceRepr):
         return trk_cfg_dname
 
     def _condense_model(self, model):
+        if model is None:
+            return None
         return ub.Path(model).name
 
     def _condense_act_cfg(self, act_cfg):

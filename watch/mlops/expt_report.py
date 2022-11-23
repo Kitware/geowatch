@@ -19,7 +19,7 @@ import functools  # NOQA
 # APPLY Monkey Patches
 from watch.tasks.fusion import monkey  # NOQA
 from watch import heuristics
-from watch.mlops import smart_pipeline as smart
+from watch.mlops import smart_result_parser as smart
 
 
 fit_param_keys = heuristics.fit_param_keys
@@ -604,7 +604,7 @@ def unique_col_stats(df):
 def load_extended_data(df, expt_dvc_dpath):
     """
     """
-    from watch.mlops import smart_pipeline as frp
+    from watch.mlops import smart_result_parser as frp
     rows = df.to_dict('records')
     big_rows = []
     errors = []
