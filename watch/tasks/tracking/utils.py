@@ -311,23 +311,26 @@ def gpd_compute_scores(gdf,
     def compute_scores(grp, thrs=[], ks={}):
         # TODO handle keys as channelcodes
         # port over better handling from utils.build_heatmaps
-        # gid = grp['gid'].iloc[0]
         gid = getattr(grp, 'name', None)
-        for k in set().union(itertools.chain.from_iterable(ks.values())):
-            # TODO there is a regression here from not using
-            # build_heatmaps(skipped='interpolate'). It will be changed with
-            # nodata handling anyway, and that's easier to implement here.
-
-            if gid is None:
-                scores = pd.Series(np.array([0] * len(thrs)))
-            else:
+        if gid is None:
+            for thr in thrs:
+                grp[[(k, thr) for k in keys]] = 0
+        else:
+            heatmaps = []
+            keys = list(set().union(itertools.chain.from_iterable(ks.values())))
+            for k in keys:
+                # TODO use nans instead of fill
                 heatmap = build_heatmap(sub_dset, gid, k, missing='fill',
-                                        resolution=resolution)
-                scores = grp['poly'].map(
-                    lambda p: score_poly(p, heatmap, threshold=thrs))
+                                       resolution=resolution)
+                heatmaps.append(heatmap)
+            heatmaps = np.stack(heatmaps, axis=0)
+            scores = grp['poly'].map(
+                lambda p: score_poly(p, heatmaps, threshold=thrs))
 
-            cols = [(k, thr) for thr in thrs]
-            grp[cols] = scores.to_list()
+            score_df = pd.DataFrame(dict(zip(thrs, scores.to_list())),
+                                    index=grp.index)
+            for thr, s in score_df.items():
+                grp[[(k, thr) for k in keys]] = s.to_list()
         return grp
 
     ks = {k: v for k, v in ks.items() if v}
