@@ -4,13 +4,18 @@ def coerce_devices(gpus):
     Coerce a command line argument for GPUs into a valid set of torch devices
 
     This is a wrapper around lightning
-    :func:`pytorch_lightning.utilities.parse_gpu_ids`. It extends the cases
+    :func:`pytorch_lightning.utilities.parse_gpu_ids` (which was deprecated in
+    lighting 1.8 so we have to vendor it)
+
+    It extends the cases
     that it can handle and is specific to torch devices. As of lightning 1.6
     their own device parsing is pretty good, so this may not be necessary.
 
     If `gpus` is a list of integers, then those devices are used.
 
     If `gpus` is None or "cpu", then the CPU is used.
+
+    If `gpus` is "cuda", that is equivalent to `gpus=[0]`.
 
     If `gpus` is a string without commas, then the string should be of a number
         indicating how many gpus should be used.
@@ -54,6 +59,9 @@ def coerce_devices(gpus):
     if isinstance(gpus, str):
         if gpus == 'cpu':
             gpu_ids = None
+            needs_gpu_coerce = False
+        elif gpus == 'cuda':
+            gpu_ids = [0]
             needs_gpu_coerce = False
         elif gpus.startswith('auto'):
             auto_select_gpus = True
@@ -140,3 +148,17 @@ def _test_coerce_is_sane():
         assert coerce_devices([0 , 1]) == [torch.device(0), torch.device(1)]
         assert coerce_devices('0, 1') == [torch.device(0), torch.device(1)]
         assert coerce_devices('auto:2') == [torch.device(0), torch.device(1)]
+
+
+def parse_gpu_ids(x):
+    """
+    import liberator
+    lib = liberator.Liberator()
+    from pytorch_lightning.utilities import device_parser
+    from lightning_lite.utilities.device_parser import _parse_gpu_ids
+
+    lib.add_dynamic(_parse_gpu_ids)
+    lib.expand(['lightning_lite'])
+
+    print(lib.current_sourcecode())
+    """

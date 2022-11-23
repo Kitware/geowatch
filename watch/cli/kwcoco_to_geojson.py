@@ -131,8 +131,8 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
             '''
             A filepath glob or json blob containing either a
             site_summary or a region_model that includes site summaries.
-            Each summary found will be added to in_file as 'Site
-            Boundary' annotations.
+            Each summary found will be added to in_file as
+            'Site Boundary' annotations.
             '''), group='behavior')
     clear_annots = scfg.Value(False, isflag=True, help=ub.paragraph(
             '''
@@ -487,6 +487,7 @@ def site_feature(coco_dset, region_id, site_id, trackid, gids, features, as_summ
     return geojson.Feature(geometry=geometry, properties=properties)
 
 
+@profile
 def convert_kwcoco_to_iarpa(coco_dset,
                             default_region_id=None,
                             as_summary=False):
@@ -509,7 +510,7 @@ def convert_kwcoco_to_iarpa(coco_dset,
         >>> from watch.demo import smart_kwcoco_demodata
         >>> import ubelt as ub
         >>> coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
-        >>> coco_dset = normalize(coco_dset, track_fn=MonoTrack, overwrite=False, polygon_fn='heatmaps_to_polys')
+        >>> coco_dset = normalize(coco_dset, track_fn=MonoTrack, overwrite=False)
         >>> region_ids = ['KR_R001', 'KR_R002']
         >>> coco_dset.videos().set('name', region_ids)
         >>> sites = convert_kwcoco_to_iarpa(coco_dset)
@@ -690,7 +691,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
             video_rows.append(row)
         video_gdf = gpd.GeoDataFrame(video_rows, crs=util_gis._get_crs84())
 
-        sitesum_gdf = gpd.GeoDataFrame.from_features([t[1] for t in site_summaries], crs=util_gis._get_crs84())
+        sitesum_gdf = gpd.GeoDataFrame.from_features([t[1] for t in site_summaries], crs=util_gis._get_crs84(), columns=['geometry'])
 
         site_idx_to_video_idx = util_gis.geopandas_pairwise_overlaps(sitesum_gdf, video_gdf)
 
@@ -1001,7 +1002,8 @@ def main(args):
     from watch.utils.process_context import ProcessContext
     proc_context = ProcessContext(
         name='watch.cli.kwcoco_to_geojson', type='process',
-        args=jsonified_args,
+        # args=jsonified_args,
+        args=sys.argv,
         config=jsonified_args,
         extra={'pred_info': pred_info},
         track_emissions=False,
@@ -1069,6 +1071,9 @@ def main(args):
 
     if out_kwcoco is not None:
         coco_dset = coco_dset.reroot(absolute=True)
+        # Add tracking audit data to the kwcoco file
+        coco_info = coco_dset.dataset.get('info', [])
+        coco_info.append(proc_context.obj)
         coco_dset.fpath = out_kwcoco
         ub.Path(out_kwcoco).parent.ensuredir()
         print(f'write to coco_dset.fpath={coco_dset.fpath}')
@@ -1155,8 +1160,7 @@ def demo(coco_dset,
          regions_dir,
          coco_dset_sc,
          sites_dir,
-         cleanup=True,
-         hybrid=False):
+         cleanup=True):
     bas_args = [
         coco_dset.fpath,
         '--out_site_summaries_dir',
@@ -1169,41 +1173,32 @@ def demo(coco_dset,
     # reload it with tracks
     # coco_dset = kwcoco.CocoDataset(coco_dset.fpath)
     # run SC on both of them
-    if hybrid:  # hybrid approach
-        sc_args = [
-            coco_dset.fpath, '--out_site_sites_dir', sites_dir, '--track_fn',
-            'watch.tasks.tracking.from_heatmap.'
-            'TimeAggregatedHybrid', '--track_kwargs',
-            ('{"coco_dset_sc": "' + coco_dset_sc.fpath + '"}')
-        ]
-        main(sc_args)
-    else:  # true per-site SC
-        import json
-        from tempfile import NamedTemporaryFile
-        sc_args = [
-            '--out_site_sites_dir',
-            sites_dir,
-            '--track_fn',
-            'watch.tasks.tracking.from_heatmap.TimeAggregatedSC',
-        ]
-        for vid_name, vid in coco_dset_sc.index.name_to_video.items():
-            gids = coco_dset_sc.index.vidid_to_gids[vid['id']]
-            sub_dset = coco_dset_sc.subset(gids)
-            tmpfile = NamedTemporaryFile()
-            sub_dset.fpath = tmpfile.name
-            sub_dset.dump(sub_dset.fpath)
-            region = json.load(
-                open(os.path.join(regions_dir, f'{vid_name}.geojson')))
-            for site in [
-                    f for f in region['features']
-                    if f['properties']['type'] == 'site_summary'
-            ]:
-                print('running site ' + site['properties']['site_id'])
-                main([
-                    sub_dset.fpath, '--track_kwargs',
-                    '{"boundaries_as": "none"}'
-                ] + sc_args)
-                # '--site_summary', json.dumps(site)])
+    import json
+    from tempfile import NamedTemporaryFile
+    sc_args = [
+        '--out_site_sites_dir',
+        sites_dir,
+        '--track_fn',
+        'watch.tasks.tracking.from_heatmap.TimeAggregatedSC',
+    ]
+    for vid_name, vid in coco_dset_sc.index.name_to_video.items():
+        gids = coco_dset_sc.index.vidid_to_gids[vid['id']]
+        sub_dset = coco_dset_sc.subset(gids)
+        tmpfile = NamedTemporaryFile()
+        sub_dset.fpath = tmpfile.name
+        sub_dset.dump(sub_dset.fpath)
+        region = json.load(
+            open(os.path.join(regions_dir, f'{vid_name}.geojson')))
+        for site in [
+                f for f in region['features']
+                if f['properties']['type'] == 'site_summary'
+        ]:
+            print('running site ' + site['properties']['site_id'])
+            main([
+                sub_dset.fpath, '--track_kwargs',
+                '{"boundaries_as": "none"}'
+            ] + sc_args)
+            # '--site_summary', json.dumps(site)])
     if cleanup:
         for pth in os.listdir(regions_dir):
             os.remove(os.path.join(regions_dir, pth))

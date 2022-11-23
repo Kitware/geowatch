@@ -4,20 +4,18 @@ Defines a lightning DataModule for kwcoco video data.
 The parameters to each are handled by scriptconfig objects, which prevents us
 from needing to specify what the available options are in multiple places.
 """
-import os
 import kwcoco
 import kwimage
 import ndsampler
-import pathlib
 import pytorch_lightning as pl
 import ubelt as ub
-from typing import Dict, List  # NOQA
 import scriptconfig as scfg
-
 
 from watch.utils.lightning_ext import util_globals
 from watch.tasks.fusion import utils
 from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDatasetConfig, KWCocoVideoDataset
+
+from typing import Dict, List  # NOQA
 
 try:
     import xdev
@@ -267,11 +265,19 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             print('self.train_kwcoco = {!r}'.format(self.train_kwcoco))
             print('self.vali_kwcoco = {!r}'.format(self.vali_kwcoco))
             print('self.test_kwcoco = {!r}'.format(self.test_kwcoco))
+            print('self.input_sensorchan = {!r}'.format(self.input_sensorchan))
             print('self.time_steps = {!r}'.format(self.time_steps))
             print('self.chip_dims = {!r}'.format(self.chip_dims))
-            print('self.input_sensorchan = {!r}'.format(self.input_sensorchan))
+            print('self.window_space_scale = {!r}'.format(self.window_space_scale))
+            print('self.input_space_scale = {!r}'.format(self.input_space_scale))
+            print('self.output_space_scale = {!r}'.format(self.output_space_scale))
 
     def setup(self, stage):
+
+        if self.did_setup:
+            print('datamodules are already setup. Ignoring extra setup call')
+            return
+
         import watch
         if self.verbose:
             print('Setup DataModule: stage = {!r}'.format(stage))
@@ -283,16 +289,45 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         })
         sqlview = self.config['sqlview']
 
+        # Clear existing coco datasets so a reload occurs (should never happen
+        # if the user doesnt touch `self.did_setup`).
+        self.coco_datasets.clear()
+        # make a temp mapping from train/vali/test to the specified coco inputs
+        _coco_inputs = {
+            'train': self.train_kwcoco,
+            'vali': self.vali_kwcoco,
+            'test': self.test_kwcoco,
+        }
+
+        def _read_kwcoco_split(_key):
+            """
+            Quick and dirty helper originally used to debug an issue. Keeping
+            something similar to ensure train/test/vali kwcoco are read in the
+            same way.
+
+            This modifies the self.coco_datasets attribute.
+            """
+            _coco_input = _coco_inputs[_key]
+            _coco_output = self.coco_datasets.get(_key, None)
+            if _coco_output is None and _coco_input is not None:
+                if self.verbose:
+                    print(f'Read {_key} kwcoco dataset')
+                # Use the demo coerce function to read the kwcoco file because
+                # it allows for special demo inputs useful in doctests.
+                _coco_output = watch.demo.coerce_kwcoco(_coco_input, sqlview=sqlview)
+                self.coco_datasets[_key] = _coco_output
+            return _coco_output
+
         if stage == 'fit' or stage is None:
-            train_data = self.train_kwcoco
-            if isinstance(train_data, pathlib.Path):
-                train_data = os.fspath(train_data.expanduser())
+            train_coco_dset = _read_kwcoco_split('train')
+            self.coco_datasets['train'] = train_coco_dset
+
+            # HACK: load the validation kwcoco before we do any further
+            # processing.
+            _read_kwcoco_split('vali')
 
             if self.verbose:
                 print('Build train kwcoco dataset')
-            train_coco_dset = watch.demo.coerce_kwcoco(train_data,
-                                                       sqlview=sqlview)
-            self.coco_datasets['train'] = train_coco_dset
 
             print('self.exclude_sensors', self.exclude_sensors)
             coco_train_sampler = ndsampler.CocoSampler(train_coco_dset)
@@ -306,9 +341,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             self.classes = train_dataset.classes
             self.torch_datasets['train'] = train_dataset
             ub.inject_method(self, lambda self: self._make_dataloader('train', shuffle=True), 'train_dataloader')
-
-            # if self.input_channels is None:
-            #     self.input_channels = train_dataset.input_channels
 
             if self.input_sensorchan is None:
                 self.input_sensorchan = train_dataset.input_sensorchan
@@ -345,28 +377,19 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 self.dataset_stats = train_dataset.cached_dataset_stats(**stats_params)
 
             if self.vali_kwcoco is not None:
-                # Explicit validation dataset should be prefered
-                vali_data = self.vali_kwcoco
-                if isinstance(vali_data, pathlib.Path):
-                    vali_data = os.fspath(vali_data.expanduser())
+                vali_coco_dset = _read_kwcoco_split('vali')
                 if self.verbose:
                     print('Build validation kwcoco dataset')
-                kwcoco_ds = watch.demo.coerce_kwcoco(vali_data,
-                                                     sqlview=sqlview)
-                vali_coco_sampler = ndsampler.CocoSampler(kwcoco_ds)
+                vali_coco_sampler = ndsampler.CocoSampler(vali_coco_dset)
                 vali_dataset = KWCocoVideoDataset(
                     vali_coco_sampler, mode='vali', **self.vali_dataset_config)
                 self.torch_datasets['vali'] = vali_dataset
                 ub.inject_method(self, lambda self: self._make_dataloader('vali', shuffle=False), 'val_dataloader')
 
         if stage == 'test' or stage is None:
-            test_data = self.test_kwcoco
-            if isinstance(test_data, pathlib.Path):
-                test_data = os.fspath(test_data.expanduser())
+            test_coco_dset = _read_kwcoco_split('test')
             if self.verbose:
                 print('Build test kwcoco dataset')
-            test_coco_dset = watch.demo.coerce_kwcoco(test_data,
-                                                      sqlview=sqlview)
             test_coco_sampler = ndsampler.CocoSampler(test_coco_dset)
             self.coco_datasets['test'] = test_coco_dset
             self.torch_datasets['test'] = KWCocoVideoDataset(
@@ -489,7 +512,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             >>> from watch.tasks.fusion.datamodules.kwcoco_datamodule import *  # NOQA
             >>> from watch.tasks.fusion import datamodules
             >>> self = datamodules.KWCocoVideoDataModule(
-            >>>     train_dataset='special:vidshapes8-multispectral', num_workers=0)
+            >>>     train_dataset='special:vidshapes8-multispectral', channels='auto', num_workers=0)
             >>> self.setup('fit')
             >>> loader = self.train_dataloader()
             >>> batch = next(iter(loader))
@@ -522,20 +545,27 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             >>> loader = self.train_dataloader()
             >>> batch_iter = iter(loader)
             >>> batch = next(batch_iter)
-            >>> item = batch[0]
+            >>> batch[1] = None  # simulate a dropped batch item
+            >>> batch[0] = None  # simulate a dropped batch item
+            >>> #item = batch[0]
             >>> # Visualize
             >>> B = len(batch)
             >>> outputs = {'change_probs': [], 'class_probs': [], 'saliency_probs': []}
             >>> # Add dummy outputs
             >>> import torch
             >>> for item in batch:
-            >>>     [v.append([]) for v in outputs.values()]
-            >>>     for frame_idx, frame in enumerate(item['frames']):
-            >>>         H, W = frame['class_idxs'].shape
-            >>>         if frame_idx > 0:
-            >>>             outputs['change_probs'][-1].append(torch.rand(H, W))
-            >>>         outputs['class_probs'][-1].append(torch.rand(H, W, 10))
-            >>>         outputs['saliency_probs'][-1].append(torch.rand(H, W, 2))
+            >>>     if item is None:
+            >>>         [v.append([None]) for v in outputs.values()]
+            >>>     else:
+            >>>         [v.append([]) for v in outputs.values()]
+            >>>         for frame_idx, frame in enumerate(item['frames']):
+            >>>             H, W = frame['class_idxs'].shape
+            >>>             if frame_idx > 0:
+            >>>                 outputs['change_probs'][-1].append(torch.rand(H, W))
+            >>>             outputs['class_probs'][-1].append(torch.rand(H, W, 10))
+            >>>             outputs['saliency_probs'][-1].append(torch.rand(H, W, 2))
+            >>> from watch.utils import util_nesting
+            >>> print(ub.repr2(util_nesting.shape_summary(outputs), nl=1, sort=0))
             >>> stage = 'train'
             >>> canvas = self.draw_batch(batch, stage=stage, outputs=outputs, max_items=4)
             >>> # xdoctest: +REQUIRES(--show)
@@ -552,6 +582,17 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         # assume collation is disabled
         batch_items = batch
 
+        DEBUG_INCOMING_DATA = 1
+        if DEBUG_INCOMING_DATA:
+            stats = {}
+            stats['batch_size'] = len(batch_items)
+            stats['num_None_batch_items'] = 0
+            for item_idx, item in enumerate(batch_items):
+                if item is None:
+                    stats['num_None_batch_items'] += 1
+
+        KNOWN_HEADS = ['change_probs', 'class_probs', 'saliency_probs']
+
         canvas_list = []
         for item_idx, item in zip(range(max_items), batch_items):
             # HACK: I'm not sure how general accepting outputs is
@@ -560,14 +601,26 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             # - [ ] binary probability of change
             # - [ ] fine-grained probability of change
             # - [ ] per-frame semenatic segmentation
-            item_output = {}
+            # - [ ] detections with box results!
+
             if outputs is not None:
+                # Extract outputs only for this specific batch item.
                 item_output = ub.AutoDict()
-                for head_key in ['change_probs', 'class_probs', 'saliency_probs']:
+                for head_key in KNOWN_HEADS:
                     if head_key in outputs:
-                        item_output[head_key] = [f.data.cpu().numpy() for f in outputs[head_key][item_idx]]
+                        item_output[head_key] = []
+                        head_outputs = outputs[head_key]
+                        head_item_output = head_outputs[item_idx]
+                        if head_item_output is not None:
+                            for frame_out in head_item_output:
+                                item_output[head_key].append(frame_out.data.cpu().numpy())
+                        else:
+                            item_output[head_key].append(None)
+            else:
+                item_output = {}
 
             part = dataset.draw_item(item, item_output=item_output, overlay_on_image=overlay_on_image, **kwargs)
+
             canvas_list.append(part)
         canvas = kwimage.stack_images_grid(
             canvas_list, axis=1, overlap=-12, bg_value=[64, 60, 60])

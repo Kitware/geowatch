@@ -44,7 +44,7 @@ class IntensityHistogramConfig(scfg.Config):
         'workers': scfg.Value(0, help='number of io workers'),
         'mode': scfg.Value('process', help='type of parallelism'),
 
-        'include_channels': scfg.Value(None, help='if specified can be | separated valid channels'),
+        'include_channels': scfg.Value(None, help='if specified can be | separated valid channels', alias=['channels']),
         'exclude_channels': scfg.Value(None, help='if specified can be | separated invalid channels'),
 
         'include_sensors': scfg.Value(None, help='if specified can be comma separated valid sensors'),
@@ -295,6 +295,12 @@ def main(cmdline=True, **kwargs):
     if config['show']:
         from matplotlib import pyplot as plt
         plt.show()
+
+    results = {
+        'sensor_chan_stats': sensor_chan_stats,
+        'distance_metrics': distance_metrics,
+    }
+    return results
 
 
 # def try_with_statsmodels():

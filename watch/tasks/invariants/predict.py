@@ -1,10 +1,12 @@
-import kwimage
-import kwarray
+"""
+SeeAlso:
+    ~/code/watch/watch/cli/prepare_teamfeats.py
+"""
+# import kwimage
+# import kwarray
 import torch
 import ubelt as ub
-from argparse import ArgumentParser, RawTextHelpFormatter
-from tqdm import tqdm
-import os
+# import os
 # local imports
 from .pretext_model import pretext
 from .data.datasets import gridded_dataset
@@ -13,12 +15,77 @@ from watch.utils.lightning_ext import util_device
 from .segmentation_model import segmentation_model as seg_model
 from watch.utils import util_kwimage  # NOQA
 
+from watch.tasks.fusion.predict import CocoStitchingManager
+# from watch.tasks.fusion.predict import quantize_float01
 
-class predict(object):
+import scriptconfig as scfg
+
+
+class InvariantPredictConfig(scfg.DataConfig):
+    """
+    Configuration for UKY invariant models
+    """
+    device = scfg.Value('cuda', type=str)
+    pretext_ckpt_path = scfg.Value(None, type=str)
+    segmentation_ckpt_path = scfg.Value(None, type=str)
+    pretext_package_path = scfg.Value(None, type=str)
+    segmentation_package_path = scfg.Value(None, type=str)
+    batch_size = scfg.Value(1, type=int)
+    num_workers = scfg.Value(4, help=ub.paragraph(
+            '''
+            number of background data loading workers
+            '''))
+    write_workers = scfg.Value(0, help=ub.paragraph(
+            '''
+            number of background data writing workers
+            '''))
+
+    window_space_scale = scfg.Value('10GSD', help='The window GSD to build the grid at')
+    input_space_scale = scfg.Value('10GSD', help='The input GSD to sample the grid at')
+
+    sensor = scfg.Value(['S2', 'L8'], nargs='+')
+    bands = scfg.Value(['shared'], type=str, help=ub.paragraph(
+            '''
+            Choose bands on which to train. Can specify 'all' for all
+            bands from given sensor, or 'share' to use common bands when
+            using both S2 and L8 sensors
+            '''), nargs='+')
+    patch_size = scfg.Value(256, type=int)
+    patch_overlap = scfg.Value(0.25, type=float)
+    input_kwcoco = scfg.Value(None, type=str, required=True, help=ub.paragraph(
+            '''
+            Path to kwcoco dataset with images to generate feature for
+            '''))
+    output_kwcoco = scfg.Value(None, type=str, required=True, help=ub.paragraph(
+            '''
+            Path to write an output kwcoco file. Output file will be a
+            copy of input_kwcoco with addition feature fields generated
+            by predict.py rerooted to point to the original data.
+            '''))
+    tasks = scfg.Value(['all'], help=ub.paragraph(
+            '''
+            Specify which tasks to choose from (segmentation,
+            before_after, or pretext. Can also specify 'all')
+            '''), nargs='+')
+    do_pca = scfg.Value(1, type=int, help=ub.paragraph(
+            '''
+            Set to 1 to perform pca. Choose output dimension in num_dim
+            argument.
+            '''))
+    pca_projection_path = scfg.Value('', type=str, help='Path to pca projection matrix')
+
+    track_emissions = scfg.Value(True, help='Set to false to disable codecarbon')
+
+    def normalize(self):
+        if 'all' in self.tasks:
+            self['tasks'] = ['segmentation', 'before_after', 'pretext']
+
+
+class Predictor(object):
     """
     CommandLine:
         DVC_DPATH=$(smartwatch_dvc)
-        DVC_DPATH=$DVC_DPATH xdoctest -m watch.tasks.invariants.predict predict
+        DVC_DPATH=$DVC_DPATH xdoctest -m watch.tasks.invariants.predict Predictor
 
         python -m watch visualize $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/test_uky.kwcoco.json \
             --channels='invariants.0:3' --animate=True --with_anns=False
@@ -51,8 +118,8 @@ class predict(object):
         >>> argv += ['--num_workers', '2']
         >>> argv += ['--tasks', 'all']
         >>> argv += ['--do_pca', '1']
-        >>> args = parse_args(argv)
-        >>> self = predict(args)
+        >>> args = InvariantPredictConfig.cli(argv=argv)
+        >>> self = Predictor(args)
         >>> self.forward(args)
     """
 
@@ -63,10 +130,80 @@ class predict(object):
         # the cache misses. See dzyne and rutgers predictors for example
         # implementations.
 
+        # Doesnt work?
+        # FIX_ALBUMENTATIONS_HACK = 0
+        # if FIX_ALBUMENTATIONS_HACK:
+        #     from albumentations.core import composition
+        #     composition.Transforms = composition.TransformType
+
+        self.batch_size = args.batch_size
+        self.do_pca = args.do_pca
+
+        self.tasks = args.tasks
+
+        self.num_workers = util_globals.coerce_num_workers(args.num_workers)
+        print('self.num_workers = {!r}'.format(self.num_workers))
+
+        self.write_workers = util_globals.coerce_num_workers(args.write_workers)
+        print(f'self.write_workers={self.write_workers}')
+
+        self.devices = util_device.coerce_devices(args.device)
+        assert len(self.devices) == 1, 'only 1 for now'
+        self.device = device = self.devices[0]
+        print('device = {!r}'.format(device))
+
+        # Initialize models
+        print('Initialize models')
+        if 'all' in args.tasks:
+            self.tasks = ['segmentation', 'before_after', 'pretext']
+        else:
+            self.tasks = args.tasks
+        ### Define tasks
+        if 'segmentation' in self.tasks:
+            if args.segmentation_package_path:
+                print('Initialize segmentation model from package')
+                self.segmentation_model = seg_model.load_package(args.segmentation_package_path)
+            else:
+                print('Initialize segmentation model from checkpoint')
+                self.segmentation_model = seg_model.load_from_checkpoint(args.segmentation_ckpt_path, dataset=None)
+            self.segmentation_model = self.segmentation_model.to(device)
+
+        if 'pretext' in self.tasks:
+            if args.pretext_package_path:
+                print('Initialize pretext model from package')
+                self.pretext_model = pretext.load_package(args.pretext_package_path)
+            else:
+                print('Initialize pretext model from checkpoint')
+                self.pretext_model = pretext.load_from_checkpoint(args.pretext_ckpt_path, train_dataset=None, vali_dataset=None)
+            self.pretext_model = self.pretext_model.eval().to(device)
+            # pretext_hparams = pretext_model.hparams
+
+            try:
+                # Hack
+                self.pretext_model.sort_accuracy = None
+            except Exception:
+                pass
+            self.pretext_model.__dict__['sort_accuracy'] = ub.identity  # HUGE HACK
+
+        self.in_feature_dims = self.pretext_model.hparams.feature_dim_shared
+        if args.do_pca:
+            print('Initialize PCA model')
+            self.pca_projector = torch.load(args.pca_projection_path).to(device)
+            self.out_feature_dims = self.pca_projector.shape[0]
+        else:
+            self.out_feature_dims = self.in_feature_dims
+
+        self.num_out_channels = self.out_feature_dims
+        if 'segmentation' in self.tasks:
+            self.num_out_channels += 1
+        if 'before_after' in self.tasks:
+            self.num_out_channels += 1
+
         # initialize dataset
         import kwcoco
         print('load coco dataset')
         self.coco_dset = kwcoco.CocoDataset = kwcoco.CocoDataset.coerce(args.input_kwcoco)
+        # self.coco_dset = self.coco_dset.subset(list(self.coco_dset.images()[0:20]))
 
         ###
         print('build grid dataset')
@@ -82,53 +219,8 @@ class predict(object):
         self.output_dset.reroot(absolute=True)  # Make all paths absolute
         self.output_dset.fpath = args.output_kwcoco  # Change output file path and bundle path
         self.output_dset.reroot(absolute=False)  # Reroot in the new bundle path
-
-        self.devices = util_device.coerce_devices(args.device)
-        assert len(self.devices) == 1, 'only 1 for now'
-        self.device = device = self.devices[0]
-        print('device = {!r}'.format(device))
-
         self.finalized_gids = set()
-        self.stitcher_dict = {}
-        if 'all' in args.tasks:
-            self.tasks = ['segmentation', 'before_after', 'pretext']
-        else:
-            self.tasks = args.tasks
-        ### Define tasks
-        if 'segmentation' in self.tasks:
-            if args.segmentation_package_path:
-                self.segmentation_model = seg_model.load_package(args.segmentation_package_path)
-            else:
-                self.segmentation_model = seg_model.load_from_checkpoint(args.segmentation_ckpt_path, dataset=None)
-            self.segmentation_model = self.segmentation_model.to(device)
-
-        if 'pretext' in self.tasks:
-            if args.pretext_package_path:
-                self.pretext_model = pretext.load_package(args.pretext_package_path)
-            else:
-                self.pretext_model = pretext.load_from_checkpoint(args.pretext_ckpt_path, train_dataset=None, vali_dataset=None)
-            self.pretext_model = self.pretext_model.eval().to(device)
-            # pretext_hparams = pretext_model.hparams
-
-            try:
-                # Hack
-                self.pretext_model.sort_accuracy = None
-            except Exception:
-                pass
-            self.pretext_model.__dict__['sort_accuracy'] = ub.identity  # HUGE HACK
-
-        self.in_feature_dims = self.pretext_model.hparams.feature_dim_shared
-        if args.do_pca:
-            self.pca_projector = torch.load(args.pca_projection_path).to(device)
-            self.out_feature_dims = self.pca_projector.shape[0]
-        else:
-            self.out_feature_dims = self.in_feature_dims
-
-        self.num_out_channels = self.out_feature_dims
-        if 'segmentation' in self.tasks:
-            self.num_out_channels += 1
-        if 'before_after' in self.tasks:
-            self.num_out_channels += 1
+        # self.stitcher_dict = {}
 
         self.save_channels = f'invariants:{self.num_out_channels}'
         self.output_kwcoco_path = ub.Path(args.output_kwcoco)
@@ -141,75 +233,102 @@ class predict(object):
             'blocksize': 128,
         }
 
-    def _build_img_fpath(self, gid):
-        save_path = self.output_feat_dpath / f'invariants_{gid}.tif'
-        return save_path
+        self.stitch_manager = CocoStitchingManager(
+            result_dataset=self.output_dset,
+            short_code='pred_invariants',
+            chan_code=self.save_channels,
+            stiching_space='video',
+            prob_compress=self.imwrite_kw['compress'],
+            quantize=True,
+        )
 
-    def finalize_image(self, gid):
-        self.finalized_gids.add(gid)
-        stitcher = self.stitcher_dict[gid]
+        from watch.utils import process_context
+        import sys
+        self.proc_context = process_context.ProcessContext(
+            args=sys.argv,
+            type='process',
+            name='watch.tasks.invariants.predict',
+            config=args.to_dict(),
+            track_emissions=args.track_emissions,
+        )
 
-        import warnings
-        with warnings.catch_warnings():
-            warnings.filterwarnings('ignore', category=RuntimeWarning)
-            recon = stitcher.finalize()
+    # def _build_img_fpath(self, gid):
+    #     save_path = self.output_feat_dpath / f'invariants_{gid}.tif'
+    #     return save_path
 
-        self.stitcher_dict.pop(gid)
+    # def finalize_image(self, gid):
+    #     self.finalized_gids.add(gid)
+    #     stitcher = self.stitcher_dict[gid]
 
-        from watch.tasks.fusion.predict import quantize_float01
-        quant_recon, quantization = quantize_float01(recon)
+    #     import warnings
+    #     with warnings.catch_warnings():
+    #         warnings.filterwarnings('ignore', category=RuntimeWarning)
+    #         recon = stitcher.finalize()
 
-        save_path = self._build_img_fpath(gid)
-        save_path = self.output_feat_dpath / f'invariants_{gid}.tif'
-        save_path = os.fspath(save_path)
-        kwimage.imwrite(save_path, quant_recon, space=None,
-                        nodata=quantization['nodata'], **self.imwrite_kw)
+    #     self.stitcher_dict.pop(gid)
 
-        aux_height, aux_width = recon.shape[0:2]
-        img = self.output_dset.index.imgs[gid]
-        warp_aux_to_img = kwimage.Affine.scale(
-            (img['width'] / aux_width,
-             img['height'] / aux_height))
+    #     quant_recon, quantization = quantize_float01(recon)
 
-        aux = {
-            'file_name': save_path,
-            'height': aux_height,
-            'width': aux_width,
-            'channels': self.save_channels,
-            'warp_aux_to_img': warp_aux_to_img.concise(),
-            'quantization': quantization,
-        }
-        if 'auxiliary' not in img:
-            img['auxiliary'] = []
-        auxiliary = img['auxiliary']
-        auxiliary.append(aux)
+    #     save_path = self._build_img_fpath(gid)
+    #     kwimage.imwrite(save_path, quant_recon, space=None,
+    #                     nodata=quantization['nodata'], **self.imwrite_kw)
 
-    def forward(self, args):
+    #     aux_height, aux_width = recon.shape[0:2]
+    #     img = self.output_dset.index.imgs[gid]
+    #     warp_aux_to_img = kwimage.Affine.scale(
+    #         (img['width'] / aux_width,
+    #          img['height'] / aux_height))
+
+    #     aux = {
+    #         'file_name': os.fspath(save_path),
+    #         'height': aux_height,
+    #         'width': aux_width,
+    #         'channels': self.save_channels,
+    #         'warp_aux_to_img': warp_aux_to_img.concise(),
+    #         'quantization': quantization,
+    #     }
+    #     if 'auxiliary' not in img:
+    #         img['auxiliary'] = []
+    #     auxiliary = img['auxiliary']
+    #     auxiliary.append(aux)
+
+    # def ensure_stitcher(self, gid):
+    #     """
+    #     Create a stitcher for an image if it doesnt exist
+    #     """
+    #     if gid not in self.stitcher_dict:
+    #         img = self.dataset.coco_dset.index.imgs[gid]
+    #         space_dims = (img['height'], img['width'])
+    #         self.stitcher_dict[gid] = kwarray.Stitcher(
+    #             space_dims + (self.num_out_channels,), device='numpy')
+    #     return self.stitcher_dict[gid]
+
+    def forward(self):
         device = self.device
-        print('device = {!r}'.format(device))
-        num_workers = util_globals.coerce_num_workers(args.num_workers)
-        print('num_workers = {!r}'.format(num_workers))
 
         loader = torch.utils.data.DataLoader(
-            self.dataset, num_workers=num_workers, batch_size=args.batch_size, shuffle=False)
+            self.dataset, num_workers=self.num_workers,
+            batch_size=self.batch_size, shuffle=False)
         num_batches = len(loader)
 
         # Start background processes
-        # Build a task queue for background write results workers (Not currently using this)
-        # queue = util_parallel.BlockingJobQueue(max_workers=0)
+        # Build a task queue for background write results workers
         from watch.utils import util_parallel
-        write_workers = util_globals.coerce_num_workers(args.write_workers)
-        writer = util_parallel.BlockingJobQueue(max_workers=write_workers)
+        writer_queue = util_parallel.BlockingJobQueue(max_workers=self.write_workers)
+        self.stitch_manager.writer_queue = writer_queue
 
-        # bundle_dpath = ub.Path(self.output_dset.bundle_dpath)
-        # save_dpath = (bundle_dpath / 'uky_invariants').ensuredir()
+        self.proc_context.start()
+
+        self.proc_context.add_disk_info(ub.Path(self.output_dset.fpath).parent)
+        self.output_dset.dataset.setdefault('info', [])
+        self.output_dset.dataset['info'].append(self.proc_context.obj)
 
         print('Evaluating and saving features')
 
         with torch.set_grad_enabled(False):
             seen_images = set()
-            current_gids = set()
-            for idx, batch in tqdm(enumerate(loader), total=num_batches, desc='Compute features'):
+            prog = ub.ProgIter(enumerate(loader), total=num_batches, desc='Compute features', verbose=1)
+            for idx, batch in prog:
                 save_feat = []
                 save_feat2 = []
 
@@ -227,7 +346,7 @@ class predict(object):
                 batch['offset_image1'] = torch.nan_to_num(offset_image1).to(device)
                 batch['augmented_image1'] = torch.nan_to_num(augmented_image1).to(device)
 
-                if 'pretext' in args.tasks:
+                if 'pretext' in self.tasks:
 
                     image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
                     image_stack = image_stack.to(device)
@@ -239,7 +358,7 @@ class predict(object):
                     features = self.pretext_model(image_stack)[:, 0, :, :, :]
                     #select features corresponding to second image
                     features2 = self.pretext_model(image_stack)[:, 1, :, :, :]
-                    if args.do_pca:
+                    if self.do_pca:
                         features = torch.einsum('xy,byhw->bxhw', self.pca_projector, features)
                         features2 = torch.einsum('xy,byhw->bxhw', self.pca_projector, features2)
 
@@ -252,7 +371,7 @@ class predict(object):
                     save_feat.append(features)
                     save_feat2.append(features2)
 
-                if 'before_after' in args.tasks:
+                if 'before_after' in self.tasks:
                     ### TO DO: Set to output of separate model.
                     before_after_heatmap = self.pretext_model.shared_step(batch)['before_after_heatmap'][0].permute(1, 2, 0)
                     before_after_heatmap = torch.sigmoid(torch.exp(before_after_heatmap[:, :, 1]) - torch.exp(before_after_heatmap[:, :, 0])).unsqueeze(-1).cpu()
@@ -263,9 +382,9 @@ class predict(object):
                     save_feat.append(before_after_heatmap)
                     save_feat2.append(before_after_heatmap)
 
-                if 'segmentation' in args.tasks:
+                if 'segmentation' in self.tasks:
                     image_stack = [batch[key] for key in batch if key.startswith('image')]
-                    image_stack = torch.stack(image_stack, dim=1).to(args.device)
+                    image_stack = torch.stack(image_stack, dim=1).to(self.device)
                     predictions = torch.exp(self.segmentation_model(image_stack)['predictions'])
 
                     segmentation_heatmap = torch.sigmoid(predictions[0, 0, 1, :, :] - predictions[0, 0, 0, :, :]).unsqueeze(0).permute(1, 2, 0).cpu()
@@ -282,153 +401,74 @@ class predict(object):
                 save_feat2 = torch.cat(save_feat2, dim=-1)
                 save_feat2 = save_feat2.numpy()
 
-                # image_id = int(batch['img1_id'].item())
-                # image_info = output_dset.index.imgs[image_id]
-                # video_info = output_dset.index.videos[image_info['video_id']]
+                target = self.dataset.patches[idx]
 
-                # video_folder = (save_dpath / video_info['name']).ensuredir()
-
-                # # Predictions are saved in 'video space', so warp_aux_to_img is the inverse of warp_img_to_vid
-                # warp_img_to_vid = kwimage.Affine.coerce(image_info.get('warp_img_to_vid', None))
-                # warp_aux_to_img = warp_img_to_vid.inv().concise()
-
-                # # Get the output image dictionary to be added to
-                # output_img = output_dset.index.imgs[image_id]
-
-                tr = self.dataset.patches[idx]
-                # sample = self.dataset.sampler.load_sample(tr)
-                # tr = sample['tr']
-
-                if len(current_gids) == 0:
-                    current_gids = tr['gids']
-                previous_gids = current_gids
-                current_gids = tr['gids']
-
-                # If we start looking at a new image, that means the
-                # previous image must be done (because we assume sorted
-                # batches). Thus we can finalize the previous image and
-                # free any memory used by its stitcher
-                mutually_exclusive = (set(previous_gids) - set(current_gids))
-                for gid in mutually_exclusive:
+                # These dataloader has told us that these iamges are now
+                # complete, and thus can be finalized free any memory used by
+                # its stitcher
+                new_complete_gids = target.get('new_complete_gids', [])
+                for gid in new_complete_gids:
+                    assert gid not in seen_images
                     seen_images.add(gid)
-                    writer.submit(self.finalize_image, gid)
+                    # if 1:
+                    #     img = self.dataset.coco_dset.index.imgs[gid]
+                    #     frame_index = img['frame_index']
+                    #     video_id = img['video_id']
+                    #     prog.ensure_newline()
+                    #     print(f'finalize {video_id=}, {gid=}, {frame_index=}')
+                    # writer_queue.submit(self.stitch_manager.finalize, gid)
+                    self.stitch_manager.submit_finalize_image(gid)
 
-                gid1, gid2 = current_gids
-                if gid1 not in self.stitcher_dict.keys():
-                    img1 = self.dataset.coco_dset.index.imgs[gid1]
-                    space_dims = (img1['height'], img1['width'])
-                    self.stitcher_dict[gid1] = kwarray.Stitcher(
-                        space_dims + (self.num_out_channels,), device='numpy')
-                if gid2 not in self.stitcher_dict.keys():
-                    img2 = self.dataset.coco_dset.index.imgs[gid2]
-                    space_dims = (img2['height'], img2['width'])
-                    self.stitcher_dict[gid2] = kwarray.Stitcher(
-                        space_dims + (self.num_out_channels,), device='numpy')
+                gid1, gid2 = target['gids']
+                # slice_ = target['space_slice']
+                # stitcher1 = self.ensure_stitcher(gid1)
+                # stitcher2 = self.ensure_stitcher(gid2)
+                # CocoStitchingManager._stitcher_center_weighted_add(
+                #     stitcher1, slice_, save_feat)
+                # CocoStitchingManager._stitcher_center_weighted_add(
+                #     stitcher2, slice_, save_feat2)
 
-                slice_ = tr['space_slice']
-                # weights = util_kwimage.upweight_center_mask(save_feat.shape[0:2])[..., None]
-                # weights1 = weights.copy()
-                # weights2 = weights.copy()
-                # invalid_mask1_np = invalid_mask1.numpy()
-                # invalid_mask2_np = invalid_mask2.numpy()
-                # if invalid_mask1_np.any():
-                #     spatial_valid_mask1 = (1 - invalid_mask1_np)[..., None]
-                #     weights1 = weights1 * spatial_valid_mask1
-                #     save_feat[invalid_mask1_np] = 0
-                # if invalid_mask2_np.any():
-                #     spatial_valid_mask2 = (1 - invalid_mask2_np)[..., None]
-                #     weights2 = weights2 * spatial_valid_mask2
-                #     save_feat[invalid_mask2_np] = 0
+                sample_outspace_ltrb = util_kwimage.Box.coerce(batch['sample_outspace_ltrb'].numpy(), format='ltrb')
+                full_stitch_outspace_box = util_kwimage.Box.coerce(batch['full_stitch_outspace_ltrb'].numpy(), format='ltrb')
+                scale_outspace_from_vid = batch['scale_outspace_from_vid'].numpy()[0]
+                outspace_slice = sample_outspace_ltrb.to_slice()
+                outspace_dsize = full_stitch_outspace_box.dsize
 
-                # TODO: refactor and make a good CocoStitchingManager
-                from watch.tasks.fusion.predict import CocoStitchingManager
-                stitcher1 = self.stitcher_dict[gid1]
-                stitcher2 = self.stitcher_dict[gid2]
-                CocoStitchingManager._stitcher_center_weighted_add(
-                    stitcher1, slice_, save_feat)
-                CocoStitchingManager._stitcher_center_weighted_add(
-                    stitcher2, slice_, save_feat2)
+                self.stitch_manager.accumulate_image(
+                    gid1, outspace_slice, save_feat,
+                    dsize=outspace_dsize,
+                    scale=scale_outspace_from_vid)
 
-                # self.stitcher_dict[gid1].add(slice_, save_feat, weight=weights1)
-                # self.stitcher_dict[gid2].add(slice_, save_feat2, weight=weights2)
+                self.stitch_manager.accumulate_image(
+                    gid2, outspace_slice, save_feat2,
+                    dsize=outspace_dsize,
+                    scale=scale_outspace_from_vid)
 
-            writer.wait_until_finished()
+            print('Finalize already compelted jobs')
+            writer_queue.wait_until_finished(desc='Finalize submitted jobs')
 
-            for gid in list(self.stitcher_dict.keys()):
-                writer.submit(self.finalize_image, gid)
+            # Finalize everything else that hasn't completed
+            for gid in ub.ProgIter(list(self.stitch_manager.image_stitchers.keys()), desc='submit loose write jobs'):
+                if gid not in seen_images:
+                    seen_images.add(gid)
+                    self.stitch_manager.submit_finalize_image(gid)
+                    # writer_queue.submit(self.stitch_manager.finalize, gid)
 
-            writer.wait_until_finished()
+            print('Finalize loose jobs')
+            writer_queue.wait_until_finished()
+
+        print('Finish process context')
+        self.proc_context.add_device_info(device)
+        self.proc_context.stop()
 
         print('Write to dset.fpath = {!r}'.format(self.output_dset.fpath))
         self.output_dset.dump(self.output_dset.fpath, newlines=True)
         print('Done')
 
 
-def parse_args(argv=None):
-    """
-    Example:
-        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.tasks.invariants.predict import *  # NOQA
-        >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
-        >>> pretext_package_path = dvc_dpath / 'models/uky/uky_invariants_2022_03_11/TA1_pretext_model/pretext_package.pt'
-        >>> pca_projection_path = dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pca_projection_matrix.pt'
-        >>> segmentation_package_path = dvc_dpath / 'models/uky/uky_invariants_2022_03_11/TA1_segmentation_model/segmentation_package.pt'
-        >>> input_kwcoco = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
-        >>> output_kwcoco = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/test_uky.kwcoco.json'
-        >>> argv = []
-        >>> argv += ['--input_kwcoco', f'{input_kwcoco}']
-        >>> argv += ['--output_kwcoco', f'{output_kwcoco}']
-        >>> argv += ['--pca_projection_path', f'{pca_projection_path}']
-        >>> argv += ['--pretext_package_path', f'{pretext_package_path}']
-        >>> argv += ['--segmentation_package_path', f'{segmentation_package_path}']
-        >>> argv += ['--patch_overlap', '0']
-        >>> argv += ['--num_workers', '2']
-        >>> argv += ['--tasks', 'all']
-        >>> argv += ['--do_pca', '1']
-        >>> args = parse_args(argv)
-    """
-
-    parser = ArgumentParser(description='', formatter_class=RawTextHelpFormatter)
-    from scriptconfig.smartcast import smartcast
-    parser.add_argument('--device', type=str, default='cuda')
-
-    # pytorch lightning checkpoint
-    parser.add_argument('--pretext_ckpt_path', type=str, default=None)
-    parser.add_argument('--segmentation_ckpt_path', type=str, default=None)
-    parser.add_argument('--pretext_package_path', type=str, default=None)
-    parser.add_argument('--segmentation_package_path', type=str, default=None)
-    parser.add_argument('--batch_size', type=int, default=1)
-    parser.add_argument('--num_workers', default=4, help='number of background data loading workers')
-    parser.add_argument('--write_workers', default=0, help='number of background data writing workers')
-
-    # data flags - make sure these match the trained checkpoint
-    parser.add_argument('--sensor', type=smartcast, nargs='+', default=['S2', 'L8'])
-    parser.add_argument('--bands', type=str, help='Choose bands on which to train. Can specify \'all\' for all bands from given sensor, or \'share\' to use common bands when using both S2 and L8 sensors', nargs='+', default=['shared'])
-    # output flags
-    parser.add_argument('--patch_size', type=int, default=256)
-    parser.add_argument('--patch_overlap', type=float, default=.25)
-    parser.add_argument('--input_kwcoco', type=str, help='Path to kwcoco dataset with images to generate feature for', required=True)
-    parser.add_argument('--output_kwcoco', type=str, help='Path to write an output kwcoco file. Output file will be a copy of input_kwcoco with addition feature fields generated by predict.py rerooted to point to the original data.', required=True)
-    parser.add_argument('--tasks', nargs='+', help='Specify which tasks to choose from (segmentation, before_after, or pretext. Can also specify \'all\')', default=['all'])
-    parser.add_argument('--do_pca', type=int, help='Set to 1 to perform pca. Choose output dimension in num_dim argument.', default=1)
-    parser.add_argument('--pca_projection_path', type=str, help='Path to pca projection matrix', default='')
-
-    parser.set_defaults(
-        terminate_on_nan=True
-        )
-
-    args = parser.parse_args(args=argv)
-
-    if 'all' in args.tasks:
-        args.tasks = ['segmentation', 'before_after', 'pretext']
-
-    return args
-
-
 def main():
-    args = parse_args()
-    predict(args).forward(args)
+    args = InvariantPredictConfig.cli()
+    Predictor(args).forward()
 
 
 if __name__ == '__main__':
@@ -472,5 +512,42 @@ if __name__ == '__main__':
         python -m watch visualize $KWCOCO_BUNDLE_DPATH/uky_invariants/invariants_nowv_vali.kwcoco.json \
             --channels "invariants.7,invariants.6,invariants.5" --animate=True \
             --select_images '.sensor_coarse != "WV"' --draw_anns=False
+
+    Ignore:
+        ### Command 1 / 2 - watch-teamfeat-job-0
+        python -m watch.tasks.invariants.predict \
+            --input_kwcoco "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_kr1br2.kwcoco.json" \
+            --output_kwcoco "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_kr1br2_uky_invariants.kwcoco.json" \
+            --pretext_package_path "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_03_21/pretext_model/pretext_package.pt" \
+            --pca_projection_path  "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_03_21/pretext_model/pretext_pca_104.pt" \
+            --do_pca 0 \
+            --patch_overlap=0.0 \
+            --num_workers="2" \
+            --write_workers 0 \
+            --tasks before_after pretext
+
+        cd /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+        kwcoco subset --src=data.kwcoco.json --dst=AE_R001.kwcoco.json --select_videos='.name == "AE_R001"'
+        kwcoco subset --src=data.kwcoco.json --dst=NZ_R001.kwcoco.json --select_videos='.name == "NZ_R001"'
+
+        python -m watch.tasks.invariants.predict \
+            --input_kwcoco "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/KR_R001.kwcoco.json" \
+            --output_kwcoco "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/KR_R001_invariants.kwcoco.json" \
+            --pretext_package_path "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_03_21/pretext_model/pretext_package.pt" \
+            --pca_projection_path  "/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/uky/uky_invariants_2022_03_21/pretext_model/pretext_pca_104.pt" \
+            --input_space_scale=30GSD \
+            --window_space_scale=30GSD \
+            --patch_size=256 \
+            --do_pca 0 \
+            --patch_overlap=0.0 \
+            --num_workers="2" \
+            --write_workers 2 \
+            --tasks before_after pretext
+
+        python -m watch visualize KR_R001_invariants.kwcoco.json \
+            --channels "invariants.5:8,invariants.8:11,invariants.14:17" --stack=only --workers=avail --animate=True \
+            --draw_anns=False
+
+
     """
     main()

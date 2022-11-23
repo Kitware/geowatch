@@ -47,6 +47,16 @@ _KITWARE_PHASE1_TA1_PRODUCTS = {
     },
 }
 
+"""
+Accenture Notes:
+
+    New Procesing 2022-11-21:
+        https://smart-research.slack.com/?redir=%2Ffiles%2FU028UQGN1N0%2FF04B998ANRL%2Faccenture_ta1_productdoc_phaseii_20211117.pptx%3Forigin_team%3DTN3QR7WAH%26origin_channel%3DC03QTAXU7GF
+
+        https://smartgitlab.com/TE/evaluations/-/wikis/Accenture-TA-1-Processing-Status
+
+"""
+
 _ACCENTURE_PHASE2_TA1_PRODUCTS = {
     # Accenture Phase 2 TA-1 Products
     'ta1-s2-acc': {
@@ -70,6 +80,30 @@ _ACCENTURE_PHASE2_TA1_PRODUCTS = {
             },
         }
     },
+
+    # Accenture Phase 2 TA-1 Products
+    'ta1-s2-acc-1': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['ta1-s2-acc-1'],
+    },
+    'ta1-ls-acc-1': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['ta1-ls-acc-1'],
+    },
+    'ta1-pd-acc-1': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['ta1-pd-acc'],
+    },
+    'ta1-wv-acc-1': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['ta1-wv-acc-1'],
+        "query": {
+            "nitf:imd": {
+                "eq": "true"
+            },
+        }
+    },
+
 }
 
 
@@ -216,6 +250,9 @@ def _devcheck_providers_exist():
     catalog = pystac_client.Client.open(provider, headers=headers)
     print(ub.repr2(list(catalog.get_collections())))
 
+    # item_search = catalog.search(collections=["ta1-mixedgsd-acc-1"])
+    # print(f'item_search={item_search}')
+
     item_search = catalog.search(collections=["ta1-s2-acc"])
     item_search = catalog.search(collections=["ta1-wv-acc"])
     if 1:
@@ -356,6 +393,12 @@ CONVINIENCE_SENSOR_GROUPS = {
     'TA1-S2-L8-ACC': [
         'ta1-s2-acc',
         'ta1-ls-acc',
+    ],
+    'TA1-S2-L8-WV-PD-ACC-1': [
+        'ta1-s2-acc-1',
+        'ta1-ls-acc-1',
+        'ta1-pd-acc-1',
+        'ta1-wv-acc-1',
     ],
     'TA1-S2-L8-WV-PD-ACC': [
         'ta1-s2-acc',

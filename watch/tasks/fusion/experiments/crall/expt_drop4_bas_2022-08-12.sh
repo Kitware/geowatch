@@ -851,3 +851,292 @@ python -m watch.tasks.fusion.fit \
     --draw_interval=1year \
     --num_draw=0 \
     --init=/home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_BGR_10GSD_V015/lightning_logs/version_0/checkpoints/epoch=43-step=2772.ckpt 
+
+
+
+# Fit 
+export CUDA_VISIBLE_DEVICES=1
+PHASE2_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
+PHASE2_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+TRAIN_FNAME=combo_train_I.kwcoco.json
+VALI_FNAME=combo_vali_I.kwcoco.json
+TEST_FNAME=combo_vali_I.kwcoco.json
+WORKDIR=$PHASE2_EXPT_DPATH/training/$HOSTNAME/$USER
+KWCOCO_BUNDLE_DPATH=$PHASE2_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/$TRAIN_FNAME
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/$VALI_FNAME
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/$TEST_FNAME
+INITIAL_STATE=noop
+EXPERIMENT_NAME=Drop4_BAS_invariants_30GSD_V016
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion fit \
+    --trainer.default_root_dir="$DEFAULT_ROOT_DIR" \
+    --data.train_dataset="$TRAIN_FPATH" \
+    --data.vali_dataset="$VALI_FPATH" \
+    --data.time_steps=3 \
+    --data.chip_size=96 \
+    --data.batch_size=2 \
+    --data.input_space_scale=30GSD \
+    --data.window_space_scale=30GSD \
+    --data.output_space_scale=30GSD \
+    --model=watch.tasks.fusion.methods.HeterogeneousModel \
+    --model.name="$EXPERIMENT_NAME" \
+    --optimizer=torch.optim.AdamW \
+    --optimizer.lr=1e-3 \
+    --trainer.accelerator="gpu" \
+    --trainer.devices="0," \
+    --data.channels="red|green|blue,invariants:17" 
+
+python -m watch.tasks.fusion.fit \
+    --config="$WORKDIR/configs/drop4_BAS_baseline_20220812.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --arch_name=smt_it_stm_p8 \
+    --channels="L8:(red|green|blue,invariants:17)" \
+    --num_workers=6 \
+    --global_saliency_weight=1.00 \
+    --saliency_loss='dicefocal' \
+    --class_loss='dicefocal' \
+    --change_loss='dicefocal' \
+    --dist_weights=0 \
+    --input_space_scale="30GSD" \
+    --window_space_scale="30GSD" \
+    --output_space_scale="30GSD" \
+    --chip_dims=192,192 \
+    --time_steps=8 \
+    --batch_size=8 \
+    --change_head_hidden=4 \
+    --class_head_hidden=4 \
+    --saliency_head_hidden=4 \
+    --stream_channels=32 \
+    --in_features_pos=128 \
+    --learning_rate=3e-4 \
+    --max_epoch_length=16384 \
+    --resample_invalid_frames=0 \
+    --use_cloudmask=0 \
+    --max_epochs=640 \
+    --patience=340 \
+    --decouple_resolution=0 \
+    --draw_interval=10minutes \
+    --num_draw=2 \
+    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_invariants_30GSD_V016/lightning_logs/version_4/checkpoints/epoch=15-step=8192.ckpt
+
+#--init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_invariants_30GSD_V016/lightning_logs/version_2/checkpoints/epoch=1-step=1024-v2.ckpt
+
+#--init=/home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_BGR_10GSD_V015/lightning_logs/version_0/checkpoints/epoch=43-step=2772.ckpt 
+#--init=/home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_BGR_10GSD_V015/lightning_logs/version_0/checkpoints/epoch=43-step=2772.ckpt 
+#ls /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_invariants_30GSD_V016/lightning_logs/version_2/checkpoints/1024-v1.ckpt
+
+
+
+### AAGGG FLASHFS!
+
+PHASE2_DATA_DPATH_HDD=$(smartwatch_dvc --tags="phase2_data" --hardware="hdd")
+echo "PHASE2_DATA_DPATH_HDD = $PHASE2_DATA_DPATH_HDD"
+PHASE2_DATA_DPATH_SSD=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
+rsync -avprPR "$PHASE2_DATA_DPATH_SSD"/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/./_assets "$PHASE2_DATA_DPATH_HDD"/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/
+rsync -avp "$PHASE2_DATA_DPATH_SSD"/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/*.kwcoco.json "$PHASE2_DATA_DPATH_HDD"/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/
+
+
+rsync -avprPR toothbrush:data/dvc-repos/smart_data_dvc/.dvc/./cache "$HOME"/data/dvc-repos/smart_data_dvc/.dvc/
+
+
+rsync -avprPR "$PHASE2_DATA_DPATH_HDD"/Drop4-BAS/./_assets "$PHASE2_DATA_DPATH_SSD"/Drop4-BAS
+rsync -avp "$PHASE2_DATA_DPATH_HDD"/Drop4-BAS/*.kwcoco.json "$PHASE2_DATA_DPATH_SSD"/Drop4-BAS
+
+
+PHASE2_DATA_DPATH_HDD=$(smartwatch_dvc --tags="phase2_data" --hardware="hdd")
+PHASE2_DATA_DPATH_SSD=$(smartwatch_dvc --tags="phase2_data" --hardware="ssd")
+rsync -avprPR "$PHASE2_DATA_DPATH_HDD"/Drop4-SC/./_assets "$PHASE2_DATA_DPATH_SSD"/Drop4-SC
+rsync -avp "$PHASE2_DATA_DPATH_HDD"/Drop4-SC/*.kwcoco.json "$PHASE2_DATA_DPATH_SSD"/Drop4-SC
+
+
+
+
+### Another attempt to resurect v323
+
+### Run on OOO
+
+export CUDA_VISIBLE_DEVICES=1
+DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='hdd')
+EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt')
+WORKDIR=$EXPT_DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop4-BAS
+KWCOCO_BUNDLE_DPATH=$DATA_DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22"
+EXPERIMENT_NAME=Drop4_TuneV323_BAS_BGRNSH_V1
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+INITIAL_STATE_V323="$EXPT_DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+python -m watch.tasks.fusion.fit \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --class_loss='focal' \
+    --saliency_loss='focal' \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.00 \
+    --global_saliency_weight=1.00 \
+    --learning_rate=1e-5 \
+    --weight_decay=1e-5 \
+    --input_space_scale="10GSD" \
+    --window_space_scale="10GSD" \
+    --output_space_scale="10GSD" \
+    --accumulate_grad_batches=4 \
+    --max_epochs=160 \
+    --patience=160 \
+    --num_workers=4 \
+    --dist_weights=True \
+    --time_steps=11 \
+    --channels="$CHANNELS" \
+    --time_sampling=soft2+distribute \
+    --time_span=6m \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5m \
+    --num_draw=4 \
+    --use_centered_positives=False \
+    --normalize_inputs=2048 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --accelerator="gpu" \
+    --devices "0," \
+    --amp_backend=apex \
+    --num_sanity_val_steps=0 \
+    --init="$INITIAL_STATE_V323"
+    #--config="$WORKDIR/configs/drop3_abalate1.yaml" \
+
+
+
+### Run on Namek
+
+export CUDA_VISIBLE_DEVICES=0
+DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='hdd')
+EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='hdd')
+echo "EXPT_DVC_DPATH = $EXPT_DVC_DPATH"
+WORKDIR=$EXPT_DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop4-BAS
+KWCOCO_BUNDLE_DPATH=$DATA_DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22"
+EXPERIMENT_NAME=Drop4_TuneV323_BAS_30GSD_BGRNSH_V2
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+INITIAL_STATE_V323="$EXPT_DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+python -m watch.tasks.fusion.fit \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --class_loss='focal' \
+    --saliency_loss='focal' \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.00 \
+    --global_saliency_weight=1.00 \
+    --learning_rate=3e-4 \
+    --weight_decay=1e-5 \
+    --input_space_scale="15GSD" \
+    --window_space_scale="15GSD" \
+    --output_space_scale="15GSD" \
+    --accumulate_grad_batches=4 \
+    --max_epochs=160 \
+    --patience=160 \
+    --num_workers=4 \
+    --dist_weights=True \
+    --time_steps=5 \
+    --channels="$CHANNELS" \
+    --time_sampling=soft2+distribute \
+    --time_span=6m \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5m \
+    --num_draw=4 \
+    --use_centered_positives=False \
+    --normalize_inputs=128 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --accelerator="gpu" \
+    --devices "0," \
+    --amp_backend=apex \
+    --num_sanity_val_steps=0 \
+    --init=/home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/training/namek/joncrall/Drop4-BAS/runs/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/lightning_logs/version_3/package-interupt/package_epoch0_step41.pt
+    #--init=/home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/training/namek/joncrall/Drop4-BAS/runs/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/lightning_logs/version_2/package-interupt/package_epoch0_step23012.pt 
+    #--init=/home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/training/namek/joncrall/Drop4-BAS/runs/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/lightning_logs/version_1/package-interupt/package_epoch0_step7501.pt
+    #--init="$INITIAL_STATE_V323"
+    #--config="$WORKDIR/configs/drop3_abalate1.yaml" \
+
+
+export CUDA_VISIBLE_DEVICES=1
+DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "EXPT_DVC_DPATH = $EXPT_DVC_DPATH"
+WORKDIR=$EXPT_DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop4-BAS
+KWCOCO_BUNDLE_DPATH=$DATA_DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22"
+EXPERIMENT_NAME=Drop4_TuneV323_BAS_10GSD_BGRNSH_V3
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+INITIAL_STATE_V323="$EXPT_DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+python -m watch.tasks.fusion.fit \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --class_loss='focal' \
+    --saliency_loss='focal' \
+    --global_change_weight=0.00 \
+    --global_class_weight=0.00 \
+    --global_saliency_weight=1.00 \
+    --learning_rate=3e-4 \
+    --weight_decay=1e-5 \
+    --input_space_scale="10GSD" \
+    --window_space_scale="10GSD" \
+    --output_space_scale="10GSD" \
+    --accumulate_grad_batches=4 \
+    --max_epochs=160 \
+    --patience=160 \
+    --num_workers=4 \
+    --dist_weights=True \
+    --time_steps=5 \
+    --channels="$CHANNELS" \
+    --time_sampling=soft2+distribute \
+    --time_span=6m \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5m \
+    --num_draw=4 \
+    --use_centered_positives=False \
+    --normalize_inputs=128 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --accelerator="gpu" \
+    --devices "0," \
+    --amp_backend=apex \
+    --num_sanity_val_steps=0 \
+    --init=/home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/training/namek/joncrall/Drop4-BAS/runs/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/lightning_logs/version_4/package-interupt/package_epoch0_step23012.pt
+    #--init=/home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/training/namek/joncrall/Drop4-BAS/runs/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/lightning_logs/version_3/package-interupt/package_epoch0_step41.pt
+    #--init=/home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/training/namek/joncrall/Drop4-BAS/runs/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/lightning_logs/version_2/package-interupt/package_epoch0_step23012.pt 
+    #--init=/home/joncrall/remote/namek/data/dvc-repos/smart_expt_dvc/training/namek/joncrall/Drop4-BAS/runs/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/lightning_logs/version_1/package-interupt/package_epoch0_step7501.pt
+    #--init="$INITIAL_STATE_V323"
+    #--config="$WORKDIR/configs/drop3_abalate1.yaml" \
+

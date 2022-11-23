@@ -68,6 +68,8 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
     from watch.tasks.fusion import utils
     import netharn as nh
     import xdev
+    from watch.tasks.fusion import monkey  # NOQA
+    monkey.torchmetrics_compat_hack()
 
     package_fpath = ub.Path(package_fpath)
 
@@ -152,11 +154,14 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
         train_dataset = ub.Path(fit_config['train_dataset'])
 
         if dvc_dpath is not None:
-            if str(train_dataset).startswith(str(dvc_dpath)):
-                train_dataset = train_dataset.relative_to(dvc_dpath)
+            try:
+                if str(train_dataset).startswith(str(dvc_dpath)):
+                    train_dataset = train_dataset.relative_to(dvc_dpath)
 
-            if str(package_fpath).startswith(str(dvc_dpath)):
-                package_fpath = package_fpath.relative_to(dvc_dpath)
+                if str(package_fpath).startswith(str(dvc_dpath)):
+                    package_fpath = package_fpath.relative_to(dvc_dpath)
+            except Exception:
+                ...
 
         heads = []
         if fit_config['global_class_weight']:

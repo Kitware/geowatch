@@ -211,7 +211,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         >>> from watch.tasks.fusion import datamodules
         >>> print('(STEP 0): SETUP THE DATA MODULE')
         >>> datamodule = datamodules.KWCocoVideoDataModule(
-        >>>     train_dataset='special:vidshapes-watch', num_workers=4)
+        >>>     train_dataset='special:vidshapes-watch', num_workers=4, channels='auto')
         >>> datamodule.setup('fit')
         >>> dataset = datamodule.torch_datasets['train']
         >>> print('(STEP 1): ESTIMATE DATASET STATS')
@@ -682,6 +682,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         Example:
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # noqa
+            >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+            >>> disable_lightning_hardware_warnings()
             >>> self = MultimodalTransformer(arch_name="smt_it_joint_p2", input_sensorchan='r|g|b')
             >>> max_epochs = 80
             >>> self.trainer = pl.Trainer(max_epochs=max_epochs)
@@ -690,7 +692,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> # Insepct what the LR curve will look like
             >>> for _ in range(max_epochs):
             ...     sched.last_epoch += 1
-            ...     lr = sched.get_lr()[0]
+            ...     lr = sched.get_last_lr()[0]
             ...     rows.append({'lr': lr, 'last_epoch': sched.last_epoch})
             >>> # xdoctest: +REQUIRES(--show)
             >>> import kwplot
@@ -980,12 +982,18 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='special:vidshapes-watch',
             >>>     num_workers='avail / 2', chip_size=96, time_steps=4,
-            >>>     normalize_inputs=8, neg_to_pos_ratio=0, batch_size=1,
+            >>>     normalize_inputs=8, neg_to_pos_ratio=0, batch_size=5,
+            >>>     channels='auto',
             >>> )
             >>> datamodule.setup('fit')
             >>> train_dset = datamodule.torch_datasets['train']
             >>> loader = datamodule.train_dataloader()
             >>> batch = next(iter(loader))
+            >>> # Test with "failed samples"
+            >>> batch[0] = None
+            >>> batch[2] = None
+            >>> batch[3] = None
+            >>> batch[4] = None
             >>> if 1:
             >>>   print(nh.data.collate._debug_inbatch_shapes(batch))
             >>> # Choose subclass to test this with (does not cover all cases)
@@ -1027,19 +1035,22 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             # Skip
             if item is None:
                 skip_flags.append(True)
-                continue
-            skip_flags.append(False)
-            probs, item_loss_parts, item_truths = self.forward_item(item, with_loss=with_loss)
+                probs, item_loss_parts, item_truths = {}, {}, {}
+            else:
+                skip_flags.append(False)
+                probs, item_loss_parts, item_truths = self.forward_item(item, with_loss=with_loss)
+
             # with xdev.embed_on_exception_context:
             if with_loss:
                 item_losses.append(item_loss_parts)
                 if not self.hparams.decouple_resolution:
                     # TODO: fixme decouple_res
-                    for k, v in batch_head_truths.items():
-                        v.append(item_truths[k])
+                    for head_name, head_truths in batch_head_truths.items():
+                        head_truths.append(item_truths.get(head_name, None))
+
             # Append the item result to the batch outputs
-            for k, v in probs.items():
-                batch_head_probs[k].append(v)
+            for head_name, head_probs in batch_head_probs.items():
+                head_probs.append(probs.get(head_name, None))
 
         if all(skip_flags):
             return None
@@ -1052,42 +1063,51 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             outputs['saliency_probs'] = batch_head_probs['saliency']
 
         if with_loss:
+
             total_loss = sum(
-                val for parts in item_losses for val in parts.values())
+                val for parts in item_losses for val in parts.values()
+            )
 
             if not self.hparams.decouple_resolution:
                 # TODO: fixme decouple_res
-
                 to_compare = {}
-                # Flatten everything for pixelwise comparisons
-                if 'change' in batch_head_truths:
-                    _true = torch.cat([x.contiguous().view(-1) for x in batch_head_truths['change']], dim=0)
-                    _pred = torch.cat([x.contiguous().view(-1) for x in batch_head_probs['change']], dim=0)
-                    to_compare['change'] = (_true, _pred)
-
-                if 'class' in batch_head_truths:
-                    c = self.num_classes
-                    # Truth is index-based (todo: per class binary maps)
-                    _true = torch.cat([x.contiguous().view(-1) for x in batch_head_truths['class']], dim=0)
-                    _pred = torch.cat([x.contiguous().view(-1, c) for x in batch_head_probs['class']], dim=0)
-                    to_compare['class'] = (_true, _pred)
-
-                if 'saliency' in batch_head_truths:
-                    c = self.saliency_num_classes
-                    _true = torch.cat([x.contiguous().view(-1) for x in batch_head_truths['saliency']], dim=0)
-                    _pred = torch.cat([x.contiguous().view(-1, c) for x in batch_head_probs['saliency']], dim=0)
-                    to_compare['saliency'] = (_true, _pred)
-
                 # compute metrics
                 if self.has_trainer:
                     item_metrics = {}
+                    ENABLE_METRICS = 0
+                    if ENABLE_METRICS:
+                        valid_batch_head_probs = {
+                            head_name: [p for p in head_values if p is not None]
+                            for head_name, head_values in batch_head_probs.items()
+                        }
+                        valid_batch_head_truths = {
+                            head_name: [p for p in head_values if p is not None]
+                            for head_name, head_values in batch_head_truths.items()
+                        }
+                        # Flatten everything for pixelwise comparisons
+                        if 'change' in valid_batch_head_truths:
+                            _true = torch.cat([x.contiguous().view(-1) for x in valid_batch_head_truths['change']], dim=0)
+                            _pred = torch.cat([x.contiguous().view(-1) for x in valid_batch_head_probs['change']], dim=0)
+                            to_compare['change'] = (_true, _pred)
 
-                    for head_key in to_compare.keys():
-                        _true, _pred = to_compare[head_key]
-                        # Dont log unless a trainer is attached
-                        for metric_key, metric in self.head_metrics[head_key].items():
-                            val = metric(_pred, _true)
-                            item_metrics[f'{stage}_{head_key}_{metric_key}'] = val
+                        if 'class' in valid_batch_head_truths:
+                            c = self.num_classes
+                            # Truth is index-based (todo: per class binary maps)
+                            _true = torch.cat([x.contiguous().view(-1) for x in valid_batch_head_truths['class']], dim=0)
+                            _pred = torch.cat([x.contiguous().view(-1, c) for x in valid_batch_head_probs['class']], dim=0)
+                            to_compare['class'] = (_true, _pred)
+
+                        if 'saliency' in valid_batch_head_truths:
+                            c = self.saliency_num_classes
+                            _true = torch.cat([x.contiguous().view(-1) for x in valid_batch_head_truths['saliency']], dim=0)
+                            _pred = torch.cat([x.contiguous().view(-1, c) for x in valid_batch_head_probs['saliency']], dim=0)
+                            to_compare['saliency'] = (_true, _pred)
+                        for head_key in to_compare.keys():
+                            _true, _pred = to_compare[head_key]
+                            # Dont log unless a trainer is attached
+                            for metric_key, metric in self.head_metrics[head_key].items():
+                                val = metric(_pred, _true)
+                                item_metrics[f'{stage}_{head_key}_{metric_key}'] = val
 
                     for key, val in item_metrics.items():
                         self.log(key, val, prog_bar=True)
@@ -1460,6 +1480,12 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         criterion = self.criterions[head_key]
         global_head_weight = self.global_head_weights[head_key]
 
+        HACK = 1
+        if HACK:
+            head_truth, head_weights = slice_to_agree(head_truth, head_weights, axes=[0, 1, 2, 3])
+            head_truth, head_logits = slice_to_agree(head_truth, head_logits, axes=[0, 1, 2, 3])
+            head_weights, head_logits = slice_to_agree(head_weights, head_logits, axes=[0, 1, 2, 3])
+
         head_pred_input = einops.rearrange(head_logits, 'b t h w c -> ' + criterion.logit_shape).contiguous()
         head_weights_input = einops.rearrange(head_weights[..., None], 'b t h w c -> ' + criterion.logit_shape).contiguous()
 
@@ -1473,10 +1499,12 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             head_true_input = einops.rearrange(head_true_ohe, 'b t h w c -> ' + criterion.target_shape).contiguous()
         else:
             raise KeyError(criterion.target_encoding)
+
         unreduced_head_loss = criterion(head_pred_input, head_true_input)
+
         full_head_weight = torch.broadcast_to(head_weights_input, unreduced_head_loss.shape)
         # Weighted reduction
-        EPS_F32 = 1e-9
+        EPS_F32 = 1.1920929e-07
         weighted_head_loss = (full_head_weight * unreduced_head_loss).sum() / (full_head_weight.sum() + EPS_F32)
         head_loss = global_head_weight * weighted_head_loss
         return head_loss
@@ -1624,12 +1652,14 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> from watch.tasks.fusion import datamodules
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+            >>> disable_lightning_hardware_warnings()
             >>> dpath = ub.Path.appdir('watch/tests/package').ensuredir()
             >>> package_path = dpath / 'my_package.pt'
 
             >>> datamodule = datamodules.kwcoco_video_data.KWCocoVideoDataModule(
             >>>     train_dataset='special:vidshapes8-multispectral-multisensor', chip_size=32,
-            >>>     batch_size=1, time_steps=2, num_workers=2, normalize_inputs=10)
+            >>>     batch_size=1, time_steps=2, num_workers=2, normalize_inputs=10, channels='auto')
             >>> datamodule.setup('fit')
             >>> dataset_stats = datamodule.torch_datasets['train'].cached_dataset_stats(num=3)
             >>> classes = datamodule.torch_datasets['train'].classes
@@ -1792,3 +1822,34 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> self.forward(images)
         """
         raise NotImplementedError('see forward_step instad')
+
+
+def slice_to_agree(a1, a2, axes=None):
+    """
+    Example:
+        from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+        a1 = np.random.rand(3, 5, 7, 9, 3)
+        a2 = np.random.rand(3, 5, 6, 9, 3)
+        b1, b2 = slice_to_agree(a1, a2)
+        print(f'{a1.shape=} {a2.shape=}')
+        print(f'{b1.shape=} {b2.shape=}')
+
+        a1 = np.random.rand(3, 5, 7, 9, 1)
+        a2 = np.random.rand(3, 1, 6, 9, 3)
+        b1, b2 = slice_to_agree(a1, a2, axes=[0, 1, 2, 3])
+        print(f'{a1.shape=} {a2.shape=}')
+        print(f'{b1.shape=} {b2.shape=}')
+    """
+    if a1.shape != a2.shape:
+        shape1 = a1.shape
+        shape2 = a2.shape
+        if axes is not None:
+            shape1 = [shape1[i] for i in axes]
+            shape2 = [shape2[i] for i in axes]
+        # ndim1 = len(shape1)
+        # ndim2 = len(shape2)
+        min_shape = np.minimum(np.array(shape1), np.array(shape2))
+        sl = tuple([slice(0, s) for s in min_shape])
+        a1 = a1[sl]
+        a2 = a2[sl]
+    return a1, a2

@@ -21,13 +21,14 @@ class StateLogger(pl.callbacks.Callback):
         if 0:
             print('teardown state logger')
 
-    def on_init_start(self, trainer: 'pl.Trainer') -> None:
-        if 0:
-            print('on_init_start')
+    if 0:
+        def on_init_start(self, trainer: 'pl.Trainer') -> None:
+            if 0:
+                print('on_init_start')
 
-    def on_init_end(self, trainer: 'pl.Trainer') -> None:
-        if 0:
-            print('on_init_start')
+        def on_init_end(self, trainer: 'pl.Trainer') -> None:
+            if 0:
+                print('on_init_start')
 
     def on_fit_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         if 0:
@@ -47,9 +48,10 @@ class StateLogger(pl.callbacks.Callback):
         if 0:
             print('on_save_checkpoint - checkpoint = {}'.format(ub.repr2(checkpoint.keys(), nl=1)))
 
-    def on_load_checkpoint(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', callback_state: Dict[str, Any]) -> None:
-        if 0:
-            print('on_load_checkpoint - callback_state = {}'.format(ub.repr2(callback_state.keys(), nl=1)))
+    # def load_state_dict...
+    # def on_load_checkpoint(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', callback_state: Dict[str, Any]) -> None:
+    #     if 0:
+    #         print('on_load_checkpoint - callback_state = {}'.format(ub.repr2(callback_state.keys(), nl=1)))
 
     def on_sanity_check_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         if 0:

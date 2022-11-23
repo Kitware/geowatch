@@ -112,12 +112,8 @@ echo "
 cd $HOME/code/watch
 
 DOCKER_BUILDKIT=1 docker build --progress=plain \
-    -t "pyenv:310" \
-    --build-arg PYTHON_VERSION=3.10.5 \
-    -f ./dockerfiles/pyenv.Dockerfile .
-
-DOCKER_BUILDKIT=1 docker build --progress=plain \
     -t "watch:310" \
+    --build-arg PYTHON_VERSION=3.10.5 \
     -f ./dockerfiles/watch.Dockerfile .
 
 docker run --runtime=nvidia -it watch:310 bash

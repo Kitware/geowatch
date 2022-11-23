@@ -1423,13 +1423,31 @@ def find_low_overlap_covering_boxes_optimize(polygons, scale, min_box_dim, max_b
 
 class Box(ub.NiceRepr):
     """
-    Like kwimage.Boxes, but only one of t/em.
+    Represents a single Box.
+
+    For multiple boxes use kwimage.Boxes, which is more efficient.
+    This is a convinience class.
 
     Currently implemented by storing a Boxes object with one item and indexing
     into it. Could be done more efficiently
+
+    Example:
+        >>> from watch.utils import util_kwimage
+        >>> box = util_kwimage.Box.random()
+        >>> print(f'box={box}')
+        >>> #
+        >>> box.scale(10).quantize().to_slice()
+        >>> #
+        >>> sl = (slice(0, 10), slice(0, 30))
+        >>> box = util_kwimage.Box.from_slice(sl)
+        >>> print(f'box={box}')
     """
 
-    def __init__(self, boxes):
+    def __init__(self, boxes, _check: bool = False):
+        if _check:
+            raise Exception(
+                'For now, only construct an instance of this using a class '
+                ' method, like coerce, from_slice, from_shapely, etc...')
         self.boxes = boxes
 
     @property
@@ -1448,17 +1466,24 @@ class Box(ub.NiceRepr):
         return nice
 
     @classmethod
+    def random(self, *args, **kwargs):
+        import kwimage
+        boxes = kwimage.Boxes.random(*args, **kwargs)
+        self = Box(boxes, _check=False)
+        return self
+
+    @classmethod
     def from_slice(self, slice_):
         import kwimage
         boxes = kwimage.Boxes.from_slice(slice_)
-        self = Box(boxes)
+        self = Box(boxes, _check=False)
         return self
 
     @classmethod
     def from_shapely(self, geom):
         import kwimage
         boxes = kwimage.Boxes.from_shapely(geom)
-        self = Box(boxes)
+        self = Box(boxes, _check=False)
         return self
 
     @classmethod
@@ -1466,16 +1491,46 @@ class Box(ub.NiceRepr):
         width, height = dsize
         import kwimage
         boxes = kwimage.Boxes([[0, 0, width, height]], 'ltrb')
-        self = Box(boxes)
+        self = Box(boxes, _check=False)
         return self
 
     @classmethod
-    def coerce(cls, data):
+    def coerce(cls, data, **kwargs):
         if isinstance(data, Box):
             return data
         else:
-            import kwimage
-            return cls(kwimage.Boxes.coerce(data))
+            import numbers
+            # import kwimage
+            from kwarray.arrayapi import torch
+            if isinstance(data, list):
+                if data and isinstance(data[0], numbers.Number):
+                    data = np.array(data)[None, :]
+            if isinstance(data, np.ndarray) or torch and torch.is_tensor(data):
+                if len(data.shape) == 1:
+                    data = data[None, :]
+            # return cls(kwimage.Boxes.coerce(data, **kwargs))
+            # inline new coerce code until new version lands
+            from kwimage import Boxes
+            from shapely.geometry import Polygon
+            if isinstance(data, Boxes):
+                self = data
+            elif isinstance(data, Polygon):
+                self = Boxes.from_shapely(data)
+            else:
+                _arr_data = None
+                if isinstance(data, np.ndarray):
+                    _arr_data = np.array(data)
+                elif isinstance(data, list):
+                    _arr_data = np.array(data)
+
+                if _arr_data is not None:
+                    format = kwargs.get('format', None)
+                    if format is None:
+                        raise Exception('ambiguous, specify Box format')
+                    self = Boxes(_arr_data, format=format)
+                else:
+                    raise NotImplementedError
+            return cls(self)
 
     @property
     def dsize(self):
@@ -1538,8 +1593,14 @@ class Box(ub.NiceRepr):
     def toformat(self, *args, **kwargs):
         return self.__class__(self.boxes.toformat(*args, **kwargs))
 
+    def astype(self, *args, **kwargs):
+        return self.__class__(self.boxes.astype(*args, **kwargs))
+
     def corners(self, *args, **kwargs):
         return self.boxes.corners(*args, **kwargs)[0]
+
+    def to_boxes(self):
+        return self.boxes
 
     @property
     def width(self):

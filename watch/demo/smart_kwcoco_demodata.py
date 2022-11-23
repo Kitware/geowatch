@@ -543,9 +543,27 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
 def coerce_kwcoco(data='watch-msi', **kwargs):
     """
     coerce with watch special datasets
+
+    Calls `kwcoco.CocoDataset.coerce` unless the code is `watch-msi`, and then
+    we construct a special dataset with extra variables expected by the watch
+    project.
+
+    Args:
+        data (str | Coercable[kwcoco.CocoDataset]):
+            the special code to coerce
+
+        **kwargs:
+            modify how the demodata is created. For `watch-msi`, see
+            :func:`demo_kwcoco_multisensor`, which has args like: `dates`,
+            `geodata`, `heatmap`.
     """
     if isinstance(data, str) and 'watch' in data.split('-'):
         kwargs.pop('sqlview', None)
         return demo_kwcoco_multisensor(**kwargs)
     else:
+        import os
+        if isinstance(data, (str, os.PathLike)):
+            expanded = ub.Path(data).expand()
+            if str(expanded) != str(data):
+                data = expanded
         return kwcoco.CocoDataset.coerce(data, **kwargs)

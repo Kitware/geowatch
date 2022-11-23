@@ -6,6 +6,88 @@ from watch.utils import util_kwimage
 from watch import heuristics
 
 
+class SpacetimeGridBuilder:
+    """
+    A helper class to help build a grid of spacetime windows for a coco
+    dataset.
+
+    See :func:`sample_video_spacetime_targets` for the main implementation.
+    This will move to a class based approach and ideally be cleaned up as time
+    moves on.
+    """
+    def __init__(
+        builder,
+        dset,
+        window_dims,
+        window_overlap=0.0,
+        negative_classes=None,
+        keepbound=False,
+        exclude_sensors=None,
+        time_sampling='hard+distribute',
+        time_span='2y',
+        use_annot_info=True,
+        use_grid_positives=True,
+        use_centered_positives=True,
+        window_space_scale=None,
+        set_cover_algo=None,
+        respect_valid_regions=True,
+        workers=0,
+        use_cache=1
+    ):
+        builder.dset = dset
+        builder.window_dims = window_dims
+        builder.window_overlap = window_overlap
+        builder.negative_classes = negative_classes
+        builder.keepbound = keepbound
+        builder.exclude_sensors = exclude_sensors
+        builder.time_sampling = time_sampling
+        builder.time_span = time_span
+        builder.use_annot_info = use_annot_info
+        builder.use_grid_positives = use_grid_positives
+        builder.use_centered_positives = use_centered_positives
+        builder.window_space_scale = window_space_scale
+        builder.set_cover_algo = set_cover_algo
+        builder.workers = workers
+        builder.use_cache = use_cache
+        builder.respect_valid_regions = respect_valid_regions
+
+    def build(builder):
+        dset = builder.dset
+        window_dims = builder.window_dims
+        window_overlap = builder.window_overlap
+        negative_classes = builder.negative_classes
+        keepbound = builder.keepbound
+        exclude_sensors = builder.exclude_sensors
+        time_sampling = builder.time_sampling
+        time_span = builder.time_span
+        use_annot_info = builder.use_annot_info
+        use_grid_positives = builder.use_grid_positives
+        use_centered_positives = builder.use_centered_positives
+        window_space_scale = builder.window_space_scale
+        set_cover_algo = builder.set_cover_algo
+        workers = builder.workers
+        use_cache = builder.use_cache
+        respect_valid_regions = builder.respect_valid_regions
+
+        return sample_video_spacetime_targets(
+            dset=dset,
+            window_dims=window_dims,
+            window_overlap=window_overlap,
+            negative_classes=negative_classes, keepbound=keepbound,
+            exclude_sensors=exclude_sensors,
+            time_sampling=time_sampling,
+            time_span=time_span,
+            use_annot_info=use_annot_info,
+            use_grid_positives=use_grid_positives,
+            use_centered_positives=use_centered_positives,
+            window_space_scale=window_space_scale,
+            set_cover_algo=set_cover_algo,
+            respect_valid_regions=respect_valid_regions,
+            workers=workers,
+            use_cache=use_cache,
+        )
+
+
 def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                                    negative_classes=None, keepbound=False,
                                    exclude_sensors=None,
@@ -16,6 +98,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                                    use_centered_positives=True,
                                    window_space_scale=None,
                                    set_cover_algo=None,
+                                   respect_valid_regions=True,
                                    workers=0,
                                    use_cache=1):
     """
@@ -46,7 +129,8 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
             method requires the packe pulp, available at PyPi.
 
         window_space_scale (str):
-            Code indicating the scale at which to sample.
+            Code indicating the scale at which to sample. If None uses the
+            videospace GSD.
 
         use_grid_positives (bool):
             if False, will remove any grid sample that contains a positive
@@ -74,6 +158,9 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         negative_classes (List[str]):
             indicate class names that should not count towards a region being
             marked as positive.
+
+        respect_valid_regions (bool):
+            if True, only place windows in valid regions
 
         workers (int): parallel workers
 
@@ -219,6 +306,12 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     # Given an video
     all_vid_ids = list(dset.index.videos.keys())
 
+    # Intersection over smaller area wrt to window vs valid regions.
+    refine_iosa_thresh = 0.2  # parametarize?
+
+    # TODO: we can disable respect valid regions here and then just do it on
+    # the fly in the dataloader, but it is unclear which is more efficient.
+
     depends = [
         dset_hashid,
         negative_classes,
@@ -234,13 +327,17 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         set_cover_algo,
         use_grid_positives,
         use_centered_positives,
-        'cache_v7',
+        refine_iosa_thresh,
+        respect_valid_regions,
+        'cache_v10',
     ]
     # Higher level cacher (not sure if adding this secondary level of caching
     # is faster or not).
+    dset_name = ub.Path(dset.fpath).name
     cache_dpath = ub.Path.appdir('watch', 'grid_cache').ensuredir()
-    cacher = ub.Cacher('sample_grid-dataset-cache', dpath=cache_dpath,
-                       depends=depends, enabled=use_cache)
+    cacher = ub.Cacher('sample_grid-dataset-cache_' + dset_name,
+                       dpath=cache_dpath, depends=depends, enabled=use_cache,
+                       verbose=4)
     sample_grid = cacher.tryload()
     if sample_grid is None:
         from watch.utils.lightning_ext import util_globals
@@ -261,7 +358,8 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                 window_overlap, negative_classes, keepbound, exclude_sensors,
                 affinity_type, update_rule, time_span, use_annot_info,
                 use_grid_positives, use_centered_positives, window_space_scale,
-                set_cover_algo, use_cache, verbose)
+                set_cover_algo, use_cache, respect_valid_regions,
+                refine_iosa_thresh, verbose)
             job.video_id = video_id
 
         targets = []
@@ -297,7 +395,8 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         }
         cacher.save(sample_grid)
     vidid_to_meta = sample_grid['vidid_to_meta']
-    print('vidid_to_meta = {}'.format(ub.repr2(vidid_to_meta, nl=-1)))
+    from watch.utils.slugify_ext import smart_truncate
+    print('vidid_to_meta = {}'.format(smart_truncate(ub.repr2(vidid_to_meta, nl=-1), max_length=1000)))
     return sample_grid
 
 
@@ -306,7 +405,8 @@ def _sample_single_video_spacetime_targets(
         window_dims, window_overlap, negative_classes,
         keepbound, exclude_sensors, affinity_type, update_rule, time_span,
         use_annot_info, use_grid_positives, use_centered_positives,
-        window_space_scale, set_cover_algo, use_cache, verbose):
+        window_space_scale, set_cover_algo, use_cache, respect_valid_regions,
+        refine_iosa_thresh, verbose):
     """
     Do this for a single video so we can parallelize.
 
@@ -343,12 +443,6 @@ def _sample_single_video_spacetime_targets(
             sh_poly_vid = kw_poly_vid.to_shapely()
         return sh_poly_vid
 
-    refine_iooa_thresh = 0.2  # parametarize?
-
-    # TODO: we can disable respect valid regions here and then just do it on
-    # the fly in the dataloader, but it is unclear which is more efficient.
-    respect_valid_regions = True
-
     # It is important that keepbound is True at test time, otherwise we may not
     # predict on the bottom right of the image.
     keepbound = True
@@ -380,6 +474,7 @@ def _sample_single_video_spacetime_targets(
         affinity_type=affinity_type, update_rule=update_rule,
         name=video_name, time_span=time_span)
     time_sampler.video_gids = np.array(video_gids)
+    time_sampler.gid_to_index = ub.udict(enumerate(time_sampler.video_gids)).invert()
     time_sampler.determenistic = True
 
     # Convert winspace to vidspace and use that for the rest of the function
@@ -411,11 +506,14 @@ def _sample_single_video_spacetime_targets(
         time_span, use_annot_info,
         use_grid_positives,
         use_centered_positives,
-        'cache_v5',
+        refine_iosa_thresh,
+        respect_valid_regions,
+        set_cover_algo,
+        'cache_v10',
     ]
     cache_dpath = ub.Path.appdir('watch', 'grid_cache').ensuredir()
-    cacher = ub.Cacher('sliding-window-cache', dpath=cache_dpath,
-                       depends=depends, enabled=use_cache)
+    cacher = ub.Cacher('sliding-window-cache-' + video_name,
+                       dpath=cache_dpath, depends=depends, enabled=use_cache)
     _cached = cacher.tryload()
     if _cached is None:
 
@@ -426,9 +524,19 @@ def _sample_single_video_spacetime_targets(
         # supporting frames we will look at when making a prediction for the
         # "main" frame. Initially this is only based on temporal metadata.  We
         # may modify this later depending on spatial properties.
+        main_idx_to_sample_idxs = {
+            main_idx: time_sampler.sample(main_idx)
+            for main_idx in time_sampler.indexes
+        }
+        # print('Time index hash: ' + ub.hash_data(time_sampler.indexes))
+        # print('Time affinity hash: ' + ub.hash_data(time_sampler.affinity))
+        # print('Time time hash: ' + ub.hash_data(time_sampler.unixtimes))
+        # print('Time sensor hash: ' + ub.hash_data(time_sampler.sensors))
+        # print('First sample hash: ' + ub.hash_data(main_idx_to_sample_idxs))
+
         main_idx_to_gids = {
-            main_idx: list(ub.take(video_gids, time_sampler.sample(main_idx)))
-            for main_idx in time_sampler.main_indexes
+            main_idx: list(ub.take(video_gids, sample_idxs))
+            for main_idx, sample_idxs in main_idx_to_sample_idxs.items()
         }
 
         if use_annot_info:
@@ -452,7 +560,7 @@ def _sample_single_video_spacetime_targets(
 
             new_targets = _build_targets_in_spatial_region(
                 dset, video_id, vidspace_region, use_annot_info, qtree,
-                main_idx_to_gids, refine_iooa_thresh, time_sampler,
+                main_idx_to_gids, refine_iosa_thresh, time_sampler,
                 get_image_valid_region_in_vidspace, respect_valid_regions,
                 set_cover_algo)
 
@@ -495,6 +603,7 @@ def _sample_single_video_spacetime_targets(
         'vidspace_window_space_dims': vidspace_window_dims,
         'winspace_window_space_dims': winspace_space_dims,
         'vidspace_full_dims': vidspace_full_dims,
+        'num_available_frames': len(time_sampler.indexes),
     }
     return _cached, meta, time_sampler, video_gids
 
@@ -517,15 +626,6 @@ def _build_targets_around_track(video_id, tid, infos, video_gids,
         _hack_main_idx = np.where(time_sampler.video_gids == main_gid)[0][0]
         sample_gids = list(ub.take(video_gids, time_sampler.sample(_hack_main_idx)))
         _hack = {_hack_main_idx: sample_gids}
-        # if 0:
-        #     # Too slow to handle here, will have to handle
-        #     # in getitem or be more efficient
-        #     # 86% of the time is spent here
-        #     _hack2, _ = _refine_time_sample(
-        #         dset, _hack, winspace_box,
-        #         refine_iooa_thresh, time_sampler,
-        #         get_image_valid_region_in_vidspace)
-        # else:
         _hack2 = _hack
         if _hack2:
             gids = _hack2[_hack_main_idx]
@@ -546,7 +646,7 @@ def _build_targets_around_track(video_id, tid, infos, video_gids,
 
 def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
                                      use_annot_info, qtree, main_idx_to_gids,
-                                     refine_iooa_thresh, time_sampler,
+                                     refine_iosa_thresh, time_sampler,
                                      get_image_valid_region_in_vidspace,
                                      respect_valid_regions, set_cover_algo):
     """
@@ -557,7 +657,6 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
     """
     from watch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
     y_sl, x_sl = vidspace_region
-
     vidspace_box = kwimage.Boxes.from_slice(vidspace_region).to_ltrb()
 
     # Find all annotations that pass through this spatial region
@@ -573,11 +672,12 @@ def _build_targets_in_spatial_region(dset, video_id, vidspace_region,
         try:
             main_idx_to_gids2, resampled = _refine_time_sample(
                 dset, main_idx_to_gids, vidspace_box,
-                refine_iooa_thresh, time_sampler,
+                refine_iosa_thresh, time_sampler,
                 get_image_valid_region_in_vidspace)
-        except tsm.TimeSampleError:
+        except tsm.TimeSampleError as ex:
             # Hack, just skip the region
             # We might be able to sample less and still be ok
+            print(f'TSM ex={ex}')
             raise
             # continue
     else:
@@ -670,7 +770,7 @@ def _build_vidspace_track_qtree(dset, video_gids, negative_classes,
     return qtree, tid_to_infos
 
 
-def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, iooa_thresh, time_sampler, get_image_valid_region_in_vidspace):
+def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, refine_iosa_thresh, time_sampler, get_image_valid_region_in_vidspace):
     """
     Refine the time sample based on spatial information
     """
@@ -681,15 +781,20 @@ def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, iooa_thresh, time_
     for gid in video_gids:
         vidspace_valid_poly = get_image_valid_region_in_vidspace(gid)
         gid_to_isbad[gid] = False
-        if vidspace_valid_poly is not None:
+        # If the area is of the valid polygon is less than zero, there was
+        # probably an issue. treat it as if it didn't specify a valid
+        # region.
+        if vidspace_valid_poly is not None and vidspace_valid_poly.area > 0:
             vidspace_box_poly = vidspace_box.to_shapley()[0]
-            # flag = winspace_valid_poly.intersects(vidspace_box_poly)
+            # Intersection over smaller area
             isect = vidspace_valid_poly.intersection(vidspace_box_poly)
-            iooa = isect.area / vidspace_box_poly.area
-            if iooa < iooa_thresh:
+            iosa = isect.area / min(vidspace_box_poly.area, vidspace_valid_poly.area)
+            if iosa < refine_iosa_thresh:
                 gid_to_isbad[gid] = True
 
     all_bad_gids = [gid for gid, flag in gid_to_isbad.items() if flag]
+
+    rng = kwarray.ensure_rng(1093881655714)
 
     try:
         resampled = 0
@@ -702,7 +807,9 @@ def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, iooa_thresh, time_
                 if good_gids != gids:
                     include_idxs = np.where(kwarray.isect_flags(video_gids, good_gids))[0]
                     exclude_idxs = np.where(kwarray.isect_flags(video_gids, all_bad_gids))[0]
-                    chosen = time_sampler.sample(include=include_idxs, exclude=exclude_idxs, error_level=1, return_info=False)
+                    chosen = time_sampler.sample(
+                        include=include_idxs, exclude=exclude_idxs,
+                        error_level=1, return_info=False, rng=rng)
                     new_gids = list(ub.take(video_gids, chosen))
                     # Are we allowed to return less than the initial expected
                     # number of frames? For transformers yes, but we should be
@@ -714,8 +821,10 @@ def _refine_time_sample(dset, main_idx_to_gids, vidspace_box, iooa_thresh, time_
                 else:
                     refined_sample[main_idx] = gids
     except tsm.TimeSampleError:
+        print('had a hard time resampling')
         raise
 
+    # print(f'number of resampled grid cells={resampled}')
     return refined_sample, resampled
 
 

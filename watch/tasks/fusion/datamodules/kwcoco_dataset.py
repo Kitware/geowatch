@@ -28,7 +28,7 @@ from watch.tasks.fusion import utils
 from watch.tasks.fusion.datamodules import data_utils
 from watch.tasks.fusion.datamodules.data_augment import SpacetimeAugmentMixin
 from watch.tasks.fusion.datamodules.smart_mixins import SMARTDataMixin
-from watch.tasks.fusion.datamodules.spacetime_grid_builder import sample_video_spacetime_targets
+from watch.tasks.fusion.datamodules import spacetime_grid_builder
 
 try:
     import xdev
@@ -46,6 +46,20 @@ class KWCocoVideoDatasetConfig(scfg.Config):
     train, test, or validation.
 
     In the future this might be convertable to, or handled by omegaconfig
+
+    The core spacetime parameters are:
+
+        * window_space_scale
+        * input_space_scale
+        * output_space_scale
+        * time_steps
+        * time_sampling
+        * chip_dims
+
+    Also:
+
+        * set_cover_algo
+
     """
     default = {
         'time_steps': scfg.Value(2, help='number of temporal sampler per batch'),
@@ -191,6 +205,11 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             Validation/test dataset defaults to True.
             ''')),
 
+        'use_grid_valid_regions': scfg.Value(True, help=ub.paragraph(
+            '''
+            If True, the initial grid will only place windows in valid regions.
+            ''')),
+
         # Overwritten for non-train
         'neg_to_pos_ratio': scfg.Value(1.0, type=float, help=ub.paragraph(
             '''
@@ -199,6 +218,12 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             Only applies to training dataset when used in the data module.
             Validation/test dataset defaults to zero.
             ''')),
+
+        'use_grid_cache': scfg.Value(True, help=ub.paragraph(
+            '''
+            If true, will cache the spacetime grid to make multiple
+            runs quicker.
+            '''))
     }
 
     def normalize(self):
@@ -265,6 +290,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         >>>                           input_space_scale='native',
         >>>                           window_space_scale='0.7GSD',
         >>>                           output_space_scale='native',
+        >>>                           channels='auto',
         >>> )
         >>> self.disable_augmenter = True
         >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
@@ -294,6 +320,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         >>>                           input_space_scale='0.35GSD',
         >>>                           window_space_scale='0.7GSD',
         >>>                           output_space_scale='0.2GSD',
+        >>>                           channels='auto',
         >>> )
         >>> self.disable_augmenter = True
         >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
@@ -379,14 +406,20 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         if time_sampling == 'auto':
             time_sampling = 'hard+distribute'
 
+        import os
+        grid_workers = int(os.environ.get('WATCH_GRID_WORKERS', 0))
+
         if mode == 'custom':
             new_sample_grid = None
             self.length = 1
         elif mode == 'test':
+
+            # FIXME: something is wrong with the cache when using an sqlview.
+
             # In test mode we have to sample everything for BAS
             # (TODO: for activity clf, we should only focus on candidate regions)
-            new_sample_grid = sample_video_spacetime_targets(
-                sampler.dset, window_dims=window_dims,
+            builder = spacetime_grid_builder.SpacetimeGridBuilder(
+                dset=sampler.dset, window_dims=window_dims,
                 window_overlap=window_overlap,
                 keepbound=True,
                 use_annot_info=False,
@@ -395,13 +428,16 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 time_span=time_span,
                 window_space_scale=window_space_scale,
                 set_cover_algo=set_cover_algo,
-                # workers='max(avail, 8)',  # could configure this
+                workers=grid_workers,  # could configure this
+                use_cache=self.config['use_grid_cache'],
+                respect_valid_regions=self.config['use_grid_valid_regions'],
             )
+            new_sample_grid = builder.build()
             self.length = len(new_sample_grid['targets'])
         else:
             negative_classes = (
                 self.ignore_classes | self.background_classes | self.negative_classes)
-            new_sample_grid = sample_video_spacetime_targets(
+            builder = spacetime_grid_builder.SpacetimeGridBuilder(
                 sampler.dset, window_dims=window_dims,
                 window_overlap=window_overlap,
                 negative_classes=negative_classes,
@@ -414,8 +450,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 use_grid_positives=use_grid_positives,
                 window_space_scale=window_space_scale,
                 set_cover_algo=set_cover_algo,
-                # workers='max(avail, 8)',   # could configure this
+                workers=grid_workers,
+                use_cache=self.config['use_grid_cache'],
+                respect_valid_regions=self.config['use_grid_valid_regions'],
             )
+            new_sample_grid = builder.build()
 
             n_pos = len(new_sample_grid['positives_indexes'])
             n_neg = len(new_sample_grid['negatives_indexes'])
@@ -429,6 +468,15 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
             if 1:
                 vidnames = self.sampler.dset.videos(target_vidids).lookup('name')
+                # if 0:
+                #     # DEBUG postgres
+                #     # all_vidids = self.sampler.dset.videos()
+                #     # all_vidids = set(all_vidids)
+                #     # len(set(target_vidids) & all_vidids)
+                #     # len(set(target_vidids) - all_vidids)
+                #     # len(all_vidids - set(target_vidids))
+                #     vid_table = self.sampler.dset.raw_table('videos')
+
                 df = pd.DataFrame({
                     'vidid': target_vidids,
                     'vidname': vidnames,
@@ -507,16 +555,19 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         self.special_inputs = {}
 
-        if channels is None:
-            # If channels is not specified, attempt to determine a something
-            # sensible from the dataset statistics
+        if channels is None or channels == 'auto':
+            # Find reasonable channel defaults if channels is not specified.
+            # Use dataset stats to determine something sensible.
             sensorchan_hist = kwcoco_extensions.coco_channel_stats(sampler.dset)['sensorchan_hist']
-            sensorchans = ','.join(sorted([
-                f'{sensor}:{chans}'
-                for sensor, chan_hist in sensorchan_hist.items()
-                for chans in chan_hist.keys()]))
+            parts = []
+            for sensor, chan_hist in sensorchan_hist.items():
+                for c in chan_hist.keys():
+                    chancode = kwcoco.ChannelSpec.coerce(c).fuse().spec
+                    parts.append(f'{sensor}:{chancode}')
+            sensorchans = ','.join(sorted(parts))
             sensorchans = kwcoco.SensorChanSpec.coerce(sensorchans)
-            if len(sensorchan_hist) > 0:
+            if len(sensorchan_hist) > 0 and channels is None:
+                # Only warn if not explicitly in auto mode
                 warnings.warn(
                     'Channels are unspecified, but the dataset has a complex '
                     'set of channels with multiple sensors. '
@@ -546,7 +597,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     for cand_sensor, cand_chans in sensorchan_hist.items():
                         valid_chan_cands = []
                         for cand_chan_group in cand_chans:
-                            cand_chan_group = kwcoco.FusedChannelSpec.coerce(cand_chan_group)
+                            cand_chan_group = kwcoco.ChannelSpec.coerce(cand_chan_group).fuse()
                             chan_isect = chans & cand_chan_group
                             if chan_isect.spec == chans.spec:
                                 valid_chan_cands.append(valid_chan_cands)
@@ -767,7 +818,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> coco_dset = watch.demo.demo_kwcoco_multisensor()
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> # Each sensor uses all of its own channels
-            >>> channels = None
+            >>> channels = 'auto'
             >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 256, 256), channels=channels, normalize_perframe=False)
             >>> self.disable_augmenter = False
             >>> index = 0
@@ -1535,7 +1586,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> dct_dset = coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=3)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (2, 256, 256)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels='auto')
             >>> self.compute_dataset_stats(num_workers=2)
 
         Example:
@@ -1545,7 +1596,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2')
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (2, 256, 256)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels='auto')
             >>> stats = self.compute_dataset_stats()
             >>> assert stats['class_freq']['star'] > 0 or stats['class_freq']['superstar'] > 0 or stats['class_freq']['eff'] > 0
             >>> assert stats['class_freq']['background'] > 0
@@ -1557,7 +1608,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> num = 10
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='vidshapes-watch', chip_size=64, time_steps=3,
-            >>>     num_workers=0, batch_size=3,
+            >>>     num_workers=0, batch_size=3, channels='auto',
             >>>     normalize_inputs=num)
             >>> datamodule.setup('fit')
             >>> self = datamodule.torch_datasets['train']
@@ -1818,10 +1869,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 color='red')
             return bad_canvas
 
+        default_combinable_channels = self.default_combinable_channels
+
         from watch.tasks.fusion.datamodules.batch_visualization import BatchVisualizationBuilder
         builder = BatchVisualizationBuilder(
             item=item, item_output=item_output,
-            default_combinable_channels=self.default_combinable_channels,
+            default_combinable_channels=default_combinable_channels,
             norm_over_time=norm_over_time, max_dim=max_dim,
             max_channels=max_channels, overlay_on_image=overlay_on_image,
             draw_weights=draw_weights, combinable_extra=combinable_extra,
@@ -1893,7 +1946,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=(3, 530, 610))
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=(3, 530, 610), channels='auto')
             >>> loader = self.make_loader(batch_size=2)
             >>> batch = next(iter(loader))
         """
@@ -1922,3 +1975,6 @@ def worker_init_fn(worker_id):
 
 class FailedSample(Exception):
     ...
+
+# Backwards compat
+sample_video_spacetime_targets = spacetime_grid_builder.sample_video_spacetime_targets

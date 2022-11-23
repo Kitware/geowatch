@@ -49,6 +49,8 @@ class Packager(pl.callbacks.Callback):
         >>> from watch.utils.lightning_ext.demo import LightningToyNet2d
         >>> from watch.utils.lightning_ext.callbacks import StateLogger
         >>> import ubelt as ub
+        >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+        >>> disable_lightning_hardware_warnings()
         >>> default_root_dir = ub.Path.appdir('lightning_ext/test/packager')
         >>> default_root_dir.delete().ensuredir()
         >>> # Test starting a model without any existing checkpoints

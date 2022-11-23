@@ -606,7 +606,6 @@ def normalize(
         coco_dset,
         track_fn,
         overwrite,
-        polygon_fn='heatmaps_to_polys',
         gt_dset=None,
         viz_sc_bounds=False,
         viz_videos=False,
@@ -699,7 +698,7 @@ def normalize(
     if DEBUG_JSON_SERIALIZABLE:
         debug_json_unserializable(coco_dset.dataset, 'Before apply_per_video: ')
 
-    tracker: TrackFunction = track_fn(polygon_fn=polygon_fn, **track_kwargs)
+    tracker: TrackFunction = track_fn(**track_kwargs)
     out_dset = tracker.apply_per_video(coco_dset)
 
     if DEBUG_JSON_SERIALIZABLE:

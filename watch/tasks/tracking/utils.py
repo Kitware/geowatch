@@ -4,12 +4,12 @@ import kwcoco
 from rasterio import features
 import shapely.geometry
 import ubelt as ub
-from dataclasses import dataclass, astuple
-# import functools
+import pandas as pd
+import geopandas as gpd
 import itertools
 import collections
 from abc import abstractmethod
-from typing import Union, Iterable, Optional, Any, Tuple, List, Dict
+from typing import Union, Iterable, Optional, List, Dict
 import warnings
 
 try:
@@ -38,149 +38,14 @@ try:
 except Exception:
     profile = ub.identity
 
-
 Poly = Union[kwimage.Polygon, kwimage.MultiPolygon]
-
-
-# TODO use geopandas for this instead?
-# Pros:
-# - vectorization
-# - geometry handling
-# - table structure/row-col slicing
-# Cons:
-# - geopandas
-#
-# store these in a Track as a geodataframe, then instantiate as Obs as needed?
-# this avoids generators everywhere on access
-@dataclass
-class Observation:
-    poly: Poly
-    gid: Optional[int] = None
-    # As of now, scores are mostly recalculated every time they are needed
-    # for a different gid, key, etc. There's potential to store them
-    # here instead.
-    score: Optional[int] = None  # TODO restrict this to [0,1]
-
-
-@dataclass
-class Track:
-    observations: Iterable[Observation]
-    # dset: Optional[kwcoco.CocoDataset]
-    dset: Any  # omg, I can't believe type errors are breaking runtime now. I must have some weird IPython package installed that does that.
-    vidid: Optional[int] = None
-    track_id: Optional[int] = None
-
-    @classmethod
-    def from_polys(cls, polys, dset, probs=None, vidid=None, **kwargs):
-        if vidid is not None:
-            gids = dset.index.vidid_to_gids[vidid]
-        else:
-            gids = dset.imgs.keys()
-
-        if probs is not None:
-            obs = [
-                Observation(poly, gid, score_poly(poly, prob))
-                for poly, gid, prob in zip(polys, gids, probs)
-            ]
-        else:
-            obs = [Observation(poly, gid) for poly, gid in zip(polys, gids)]
-
-        return cls(observations=obs, dset=dset, vidid=vidid, **kwargs)
-
-
-class PolygonFilter(collections.abc.Callable):
-    '''
-    The type signatures are not enforced by python in child classes, but this
-    is the intended use.
-    TODO use mypy to enforce this? https://stackoverflow.com/q/25183424
-
-    Many filters will only need polygons, but we could be keeping track of
-    stuff along with it, such as "enumerate(polys)". The core function here
-    is a "lifted" filter function that operates on a "polygon plus stuff".
-
-    Given that assumption, PolygonFilters can be called on any supported type
-    containing polygons and return a filtered version of it.
-    '''
-    # @functools.singledispatchmethod
-    '''
-    singledispatch does not work on parameterized container types until
-    collections.abc.*[] is supported in Python 3.9; see:
-    https://bugs.python.org/issue34499
-    https://bugs.python.org/issue34498
-
-    So, do this by hand instead.
-    '''
-
-    def __call__(self, obj):
-        if isinstance(obj, Track):
-            return self.on_track(obj)
-        # could use more_itertools.peekable instead
-        obj, obj2 = itertools.tee(obj)
-        try:
-            sample_object = next(obj2)
-        except StopIteration:
-            return obj
-        if isinstance(sample_object, Observation):
-            return self.on_observations(obj)
-        # 'TypeError: Subscripted generics cannot be used with class and
-        # instance checks'
-        # breaking change in py3.7...
-        # if isinstance(sample_object, Poly):
-        if isinstance(sample_object, (kwimage.Polygon, kwimage.MultiPolygon)):
-            return self.on_polys(obj)
-        if isinstance(sample_object[1],
-                      (kwimage.Polygon, kwimage.MultiPolygon)):
-            return self.on_augmented_polys(obj)
-        raise NotImplementedError(
-            f'cannot filter polys like {sample_object}: unsupported type')
-
-    # @__call__.register
-    def on_track(self, track: Track):
-        track.observations = self.on_observations(track.observations)
-        return track
-
-    # @__call__.register
-    def on_observations(self, observations: Iterable[Observation]):
-        # extract the polygon from each Observation to operate on
-        augmented_polys = ((astuple(obs), obs.poly) for obs in observations)
-        # filter them and rebuild them
-        return (Observation(**obs)
-                for obs, _ in self.on_augmented_polys(augmented_polys))
-
-    # @__call__.register
-    def on_polys(self, polys: Iterable[Poly]):
-        augmented_polys = ((None, p) for p in polys)
-        return (poly for _, poly in self.on_augmented_polys(augmented_polys))
-
-    # @__call__.register
-    @abstractmethod
-    def on_augmented_polys(self, aug_polys: Iterable[Tuple[Any, Poly]]):
-        raise NotImplementedError('must be implemented by subclasses')
-
-
-@dataclass(frozen=True)  # to prevent cache invalidation
-class CocoDsetFilter(PolygonFilter):
-    '''
-    Specialization of PolygonFilter for polygons that are tied to images,
-    registered as gids in a CocoDataset
-    '''
-    dset: kwcoco.CocoDataset
-    key: Tuple[str]
-    threshold: float
-
-    @ub.memoize_method
-    def _heatmap(self, gid):
-        return build_heatmap(self.dset, gid, self.key)
-
-    @ub.memoize_method
-    def score(self, poly, gid, mode, threshold=None):
-        return score_poly(poly, self._heatmap(gid), mode=mode, threshold=threshold)
 
 
 class TrackFunction(collections.abc.Callable):
     '''
     Abstract class that all track functions should inherit from.
     '''
+
     @abstractmethod
     def __call__(self, sub_dset) -> kwcoco.CocoDataset:
         '''
@@ -197,8 +62,14 @@ class TrackFunction(collections.abc.Callable):
         tracked_subdsets = []
         vid_gids = coco_dset.index.vidid_to_gids.values()
         total = len(coco_dset.index.vidid_to_gids)
-        for gids in ub.ProgIter(vid_gids, total=total, desc='apply_per_video', verbose=3):
-            sub_dset = self.safe_apply(coco_dset, gids, overwrite, legacy=legacy)
+        for gids in ub.ProgIter(vid_gids,
+                                total=total,
+                                desc='apply_per_video',
+                                verbose=3):
+            sub_dset = self.safe_apply(coco_dset,
+                                       gids,
+                                       overwrite,
+                                       legacy=legacy)
             if legacy:
                 coco_dset = sub_dset
             else:
@@ -214,7 +85,9 @@ class TrackFunction(collections.abc.Callable):
             from watch.utils import kwcoco_extensions
             new_trackids = kwcoco_extensions.TrackidGenerator(None)
             fixed_subdataset = []
-            for sub_dset in ub.ProgIter(tracked_subdsets, desc='Ensure ok tracks', verbose=3):
+            for sub_dset in ub.ProgIter(tracked_subdsets,
+                                        desc='Ensure ok tracks',
+                                        verbose=3):
 
                 if _debug:
                     sub_dset = sub_dset.copy()
@@ -256,8 +129,8 @@ class TrackFunction(collections.abc.Callable):
                 fixed_subdataset.append(sub_dset)
 
             # Is this safe to do? It would be more efficient
-            coco_dset = kwcoco.CocoDataset.union(
-                *fixed_subdataset, disjoint_tracks=False)
+            coco_dset = kwcoco.CocoDataset.union(*fixed_subdataset,
+                                                 disjoint_tracks=False)
 
             if _debug:
                 x = coco_dset.annots().images.get('video_id')
@@ -265,8 +138,7 @@ class TrackFunction(collections.abc.Callable):
                 z = ub.group_items(x, y)
                 track_to_num_videos = ub.map_vals(set, z)
                 assert max(map(len, track_to_num_videos.values())) == 1, (
-                    'track belongs to multiple videos!'
-                )
+                    'track belongs to multiple videos!')
         return coco_dset
 
     @profile
@@ -276,10 +148,13 @@ class TrackFunction(collections.abc.Callable):
             from watch.utils.util_json import debug_json_unserializable
 
         if DEBUG_JSON_SERIALIZABLE:
-            debug_json_unserializable(coco_dset.dataset, 'Input to safe_apply: ')
+            debug_json_unserializable(coco_dset.dataset,
+                                      'Input to safe_apply: ')
 
         if legacy:
-            sub_dset, rest_dset = self.safe_partition(coco_dset, gids, remove=True)
+            sub_dset, rest_dset = self.safe_partition(coco_dset,
+                                                      gids,
+                                                      remove=True)
         else:
             sub_dset = self.safe_partition(coco_dset, gids, remove=False)
 
@@ -288,7 +163,8 @@ class TrackFunction(collections.abc.Callable):
         if overwrite:
             sub_dset = self(sub_dset)
             if DEBUG_JSON_SERIALIZABLE:
-                debug_json_unserializable(sub_dset.dataset, 'After __call__ (overwrite)')
+                debug_json_unserializable(sub_dset.dataset,
+                                          'After __call__ (overwrite)')
         else:
             orig_annots = sub_dset.annots()
             orig_tids = orig_annots.get('track_id', None)
@@ -309,6 +185,7 @@ class TrackFunction(collections.abc.Callable):
 
                 # Ensure types are json serializable
                 import numbers
+
                 def _fixtype(tid):
                     # need to keep strings the same, but integers need to be
                     # case from numpy to python ints.
@@ -316,6 +193,7 @@ class TrackFunction(collections.abc.Callable):
                         return int(tid)
                     else:
                         return tid
+
                 new_tids = list(map(_fixtype, new_tids))
 
                 new_annots.set('track_id', new_tids)
@@ -329,7 +207,8 @@ class TrackFunction(collections.abc.Callable):
             out_dset = sub_dset
 
         if DEBUG_JSON_SERIALIZABLE:
-            debug_json_unserializable(out_dset.dataset, 'Output of safe_apply: ')
+            debug_json_unserializable(out_dset.dataset,
+                                      'Output of safe_apply: ')
         return out_dset
 
     @staticmethod
@@ -382,29 +261,124 @@ class NewTrackFunction(TrackFunction):
         return sub_dset
 
     @abstractmethod
-    def create_tracks(self, sub_dset) -> Iterable[Track]:
+    def create_tracks(self, sub_dset) -> gpd.GeoDataFrame:
         raise NotImplementedError('must be implemented by subclasses')
 
     @abstractmethod
     def add_tracks_to_dset(self, sub_dset,
-                           tracks: Iterable[Track]) -> kwcoco.CocoDataset:
+                           tracks: gpd.GeoDataFrame) -> kwcoco.CocoDataset:
         raise NotImplementedError('must be implemented by subclasses')
 
 
 def check_only_bg(category_sequence, bg_name=['No Activity']):
-    if len( set(category_sequence) - set(bg_name) ) == 0:
+    if len(set(category_sequence) - set(bg_name)) == 0:
         return True
     else:
         return False
 
 
-def pop_tracks(
-        coco_dset: kwcoco.CocoDataset,
-        cnames: Iterable[str],
-        remove: bool = True,
-        score_chan: Optional[kwcoco.ChannelSpec] = None) -> Iterable[Track]:
+# --- geopandas utils ---
+# make this a class?
+
+
+def gpd_sort_by_gid(gdf, sorted_gids):
+
+    dct = dict(zip(sorted_gids, range(len(sorted_gids))))
+    gdf['gid_order'] = gdf['gid'].map(dct)
+
+    # assert gdf['gid'].map(dct).groupby(
+    # lambda x: x).is_monotonic_increasing.all()
+
+    return gdf.groupby('track_idx', group_keys=False).apply(
+        lambda x: x.sort_values('gid_order')).reset_index(drop=True).drop(
+            columns=['gid_order'])
+
+
+def gpd_len(gdf):
+    return gdf['track_idx'].nunique()
+
+
+def gpd_compute_scores(gdf,
+                       sub_dset,
+                       thrs: Iterable,
+                       ks: Dict,
+                       USE_DASK=False):
+
+    def compute_scores(grp, thrs=[], ks={}):
+        # TODO handle keys as channelcodes
+        # port over better handling from utils.build_heatmaps
+        # gid = grp['gid'].iloc[0]
+        gid = grp.name
+        for k in set().union(itertools.chain.from_iterable(ks.values())):
+            # TODO there is a regression here from not using
+            # build_heatmaps(skipped='interpolate'). It will be changed with
+            # nodata handling anyway, and that's easier to implement here.
+            heatmap = build_heatmap(sub_dset, gid, k, missing='fill')
+            scores = grp['poly'].map(
+                lambda p: score_poly(p, heatmap, threshold=thrs))
+
+            grp[[(k, thr) for thr in thrs]] = scores.to_list()
+        return grp
+
+    ks = {k: v for k, v in ks.items() if v}
+    _valid_keys = set().union(itertools.chain.from_iterable(
+        ks.values()))  # | ks.keys()
+    score_cols = list(itertools.product(_valid_keys, thrs))
+
+    USE_DASK = 0
+    if USE_DASK:  # 63% runtime
+        import dask_geopandas
+        # https://github.com/geopandas/dask-geopandas
+        # _col_order = gdf.columns  # doesn't matter
+        gdf = gdf.set_index('gid')
+        # npartitions and chunksize are mutually exclusive
+        gdf = dask_geopandas.from_geopandas(gdf, npartitions=8)
+        meta = gdf._meta.join(
+            pd.DataFrame(columns=score_cols, dtype=float))
+        gdf = gdf.groupby('gid', group_keys=False).apply(compute_scores,
+                                                         thrs=thrs,
+                                                         ks=ks,
+                                                         meta=meta)
+        # raises this, which is probably fine:
+        # /home/local/KHQ/matthew.bernstein/.local/conda/envs/watch/lib/python3.9/site-packages/rasterio/features.py:362:
+        # NotGeoreferencedWarning: Dataset has no geotransform, gcps, or rpcs.
+        # The identity matrix will be returned.
+        # _rasterize(valid_shapes, out, transform, all_touched, merge_alg)
+
+        gdf = gdf.compute()  # _tracks is now a gdf again
+        # gdf = gdf.reindex(columns=_col_order)
+
+    else:  # 95% runtime
+        gdf = gdf.groupby('gid', group_keys=False).apply(compute_scores,
+                                                         thrs=thrs,
+                                                         ks=ks)
+
+    # fill nan scores from nodata pxls
+    def _fillna(grp):
+        grp[score_cols] = grp[score_cols].fillna(method='ffill').fillna(0)
+        return grp
+
+    gdf = gdf.groupby('track_idx', group_keys=False).apply(_fillna)
+
+    # copy over to summed fg/bg channels
+    for thr in thrs:
+        for k, kk in ks.items():
+            if kk:
+                # https://github.com/pandas-dev/pandas/issues/20824#issuecomment-384432277
+                gdf[(k, thr)] = gdf[[(ki, thr) for ki in kk]].sum(axis=1)
+
+    return gdf
+
+
+# -----------------------
+
+
+def pop_tracks(coco_dset: kwcoco.CocoDataset,
+               cnames: Iterable[str],
+               remove: bool = True,
+               score_chan: Optional[kwcoco.ChannelSpec] = None):
     '''
-    Convert kwcoco annotations into Track objects.
+    Convert kwcoco annotations into tracks.
 
     Args:
         coco_dset
@@ -413,7 +387,7 @@ def pop_tracks(
         score_chan: score the track polygons by image overlap with this channel
 
     Returns:
-        Track objects.
+        gpd dataframe.
         Mutates coco_dset if remove=True.
     '''
     # TODO could refactor to work on coco_dset.annots() and integrate
@@ -434,56 +408,43 @@ def pop_tracks(
 
     assert len(polys) == len(annots), ('TODO handle multipolygon boundaries')
 
+    polys = [p.to_shapely() for p in polys]
+    gdf = gpd.GeoDataFrame(dict(gid=annots.gids, poly=polys,
+                                track_idx=annots.get('track_id')),
+                           geometry='poly')
     if score_chan is not None:
-        # bookkeep unique gids only
-        # hackish, pretend it's all one big track for efficient interpolation
-        # TODO make this work for multiple videos
-        gids = coco_dset.index._set_sorted_by_frame_index(annots.gids)
         keys = {score_chan.spec: list(score_chan.unique())}
-        heatmaps = build_heatmaps(coco_dset, gids, keys)[score_chan.spec]
-        heatmaps_by_gid = dict(zip(gids, heatmaps))
-        scores = [
-            score_poly(poly, heatmaps_by_gid[gid])
-            for poly, gid in zip(polys, annots.gids)
-        ]
-    else:
-        scores = [None] * len(annots)
-        # scores = annots.get('score', None)
-
-    _track_infos = zip(polys, annots.gids, scores)
-    _track_ids = annots.get('track_id', None)
-    _tid_to_info = ub.group_items(_track_infos, _track_ids)
+        gdf = gpd_compute_scores(gdf, coco_dset, [None], keys, USE_DASK=False)
+    # TODO standard way to access sorted_gids
+    sorted_gids = coco_dset.index._set_sorted_by_frame_index(
+        np.unique(annots.gids))
+    gdf = gpd_sort_by_gid(gdf, sorted_gids)
 
     if remove:
         coco_dset.remove_categories(cnames, keep_annots=False)
 
-    for track_id, track_info in _tid_to_info.items():
-        track_polys, track_gids, track_scores = zip(*track_info)
-        observations = list(map(Observation, track_polys, track_gids, track_scores))
-        track = Track(observations, dset=coco_dset, track_id=track_id)
-        yield track
+    return gdf
 
 
-def score_poly(poly, probs, mode='score', threshold=0, use_rasterio=True):
+@profile
+def score_poly(poly, probs, threshold=None, use_rasterio=True):
     '''
     Args:
         poly: kwimage.Polygon or MultiPolygon in pixel coords
 
         probs: heatmap to compare poly against
 
-        mode: return value.
-            'score': fraction of probs contained in poly
-            'response': average value of probs in poly
-            'overlap': fraction of poly with probs > threshold
-
         use_rasterio: use rasterio.features module instead of kwimage
 
-        threshold: only used for mode='overlap'
+        threshold: if not None, return fraction of poly with probs > threshold.
+        Else, return average value of probs in poly. Can be a list of values,
+        in which case returns all of them.
+
     '''
     # try converting from shapely
     # TODO standard coerce fns between kwimage, shapely, and __geo_interface__
     if not isinstance(poly, (kwimage.Polygon, kwimage.MultiPolygon)):
-        poly = kwimage.MultiPolygon.from_shapely(poly)
+        poly = kwimage.MultiPolygon.from_shapely(poly)  # 2.4% of runtime
     if 0:
         # naive computation across the whole image
         poly_mask = poly.to_mask(probs.shape).numpy().data
@@ -496,11 +457,16 @@ def score_poly(poly, probs, mode='score', threshold=0, use_rasterio=True):
         ymax, xmax = probs.shape[:2]
         box = box.clip(0, 0, xmax, ymax).to_xywh()
         if box.area[0][0] == 0:
-            warnings.warn('warning: scoring a polygon against an img with no overlap!')
+            warnings.warn(
+                'warning: scoring a polygon against an img with no overlap!')
             return 0
         x, y, w, h = box.data[0]
         if use_rasterio:  # rasterio inverse
             rel_poly = poly.translate((0.5 - x, 0.5 - y))
+            # TODO verify this works with shapely polys too
+            # or implement geo_interface in kwimage
+            # https://shapely.readthedocs.io/en/stable/manual.html#python-geo-interface
+            # 95% of runtime... would batch be faster?
             rel_mask = features.rasterize([rel_poly.to_geojson()],
                                           out_shape=(h, w))
         else:  # kwimage inverse
@@ -512,24 +478,30 @@ def score_poly(poly, probs, mode='score', threshold=0, use_rasterio=True):
         if len(rel_probs.shape) == 3:
             rel_probs = rel_probs[:, :, 0]
 
-    # TODO these are preserved for backwards compatibility, but they should
-    # actually be the same. Test and remove them.
-    if mode == 'response':
-        response = (rel_mask * rel_probs).mean()
-        return response
-    elif mode == 'score':
-        total = rel_mask.sum()
-        score = 0 if total == 0 else (rel_mask * rel_probs).sum() / total
-        return score
-    elif mode == 'overlap':
-        hard_prob = rel_probs > threshold
-        overlap = (hard_prob * rel_mask).sum()
-        total_poly_area = rel_mask.sum()
-        return overlap / total_poly_area
-    else:
-        raise ValueError(mode)
+    # handle nans
+    # TODO figure out np.ma to reduce redundancy
+    # msk_rel_probs = np.ma.masked_where(~np.isfinite(rel_probs) | rel_mask,
+    #                                      rel_probs, copy=False)
+
+    total = (rel_mask * np.isfinite(rel_probs)).sum()
+    _return_list = isinstance(threshold, Iterable)
+    if not _return_list:
+        threshold = [threshold]
+    result = []
+    for t in threshold:
+        if total == 0:
+            result.append(np.nan)
+        elif t is None:
+            score = np.nansum(rel_mask * rel_probs) / total
+            result.append(score)
+        else:
+            hard_prob = rel_probs > t
+            overlap = np.nansum(hard_prob * rel_mask)
+            result.append(overlap / total)
+    return result if _return_list else result[0]
 
 
+@profile
 def mask_to_polygons(probs,
                      thresh,
                      bounds=None,
@@ -565,12 +537,17 @@ def mask_to_polygons(probs,
     Ignore:
         >>> from watch.tasks.tracking.utils import mask_to_polygons
         >>> import kwimage
-        >>> probs = kwimage.Heatmap.random(dims=(128, 128)).data['class_probs'][0]
+        >>> probs = kwimage.Heatmap.random(dims=(128, 128)
+        >>>                                 ).data['class_probs'][0]
         >>> thresh = 0.5
-        >>> polys1 = list(mask_to_polygons(probs, thresh, scored=0, use_rasterio=0))
-        >>> polys2 = list(mask_to_polygons(probs, thresh, scored=0, use_rasterio=1))
-        >>> polys3 = list(mask_to_polygons(probs, thresh, scored=1, use_rasterio=0))
-        >>> polys4 = list(mask_to_polygons(probs, thresh, scored=1, use_rasterio=1))
+        >>> polys1 = list(mask_to_polygons(
+        >>>             probs, thresh, scored=0, use_rasterio=0))
+        >>> polys2 = list(mask_to_polygons(
+        >>>             probs, thresh, scored=0, use_rasterio=1))
+        >>> polys3 = list(mask_to_polygons(
+        >>>             probs, thresh, scored=1, use_rasterio=0))
+        >>> polys4 = list(mask_to_polygons(
+        >>>             probs, thresh, scored=1, use_rasterio=1))
         >>> # xdoctest: +IGNORE_WANT
         >>> import kwplot
         >>> kwplot.autompl()
@@ -641,6 +618,7 @@ def _validate_keys(key, bg_key):
     return key, bg_key
 
 
+@profile
 def build_heatmaps(sub_dset: kwcoco.CocoDataset,
                    gids: List[int],
                    keys: Union[List[str], Dict[str, List[str]]],
@@ -658,7 +636,8 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
             'key2': heats2,
             'key3': heats3
         }
-        build_heatmaps(dset, gids=[1,2], {'group1': ['key1', 'key2', 'key3']}) == {
+        build_heatmaps(dset, gids=[1,2],
+                       {'group1': ['key1', 'key2', 'key3']}) == {
             'key1': heats1,
             'key2': heats2,
             'key3': heats3,
@@ -722,11 +701,13 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
         for group, key in key_groups.items():
 
             # we are working only in vid space, so forget about warping
-            img_probs, chan_probs = build_heatmap(sub_dset, gid, key,
+            img_probs, chan_probs = build_heatmap(sub_dset,
+                                                  gid,
+                                                  key,
                                                   space='video',
                                                   return_chan_probs=True)
             # TODO make this more efficient using missing='skip'
-            if any(np.flatnonzero(img_probs)):
+            if np.any(img_probs):
                 heatmaps_dct[group].append(img_probs)
             elif skipped == 'interpolate':
                 heatmaps_dct[group].append(prev_heatmap_dct[group])
@@ -751,7 +732,12 @@ def build_heatmaps(sub_dset: kwcoco.CocoDataset,
     return heatmaps_dct
 
 
-def build_heatmap(dset, gid, key, return_chan_probs=False, space='video',
+@profile
+def build_heatmap(dset,
+                  gid,
+                  key,
+                  return_chan_probs=False,
+                  space='video',
                   missing='fill'):
     """
     Find the total heatmap of key within gid
@@ -776,8 +762,8 @@ def build_heatmap(dset, gid, key, return_chan_probs=False, space='video',
 
     if missing == 'raise':
         if channels_have.numel() != channels_request.numel():
-            raise ValueError(ub.paragraph(
-                f'''
+            raise ValueError(
+                ub.paragraph(f'''
                 Requested {channels_request=} in the image {gid=} of {dset=}
                 but only {channels_have=} existed.
                 '''))
@@ -801,12 +787,8 @@ def build_heatmap(dset, gid, key, return_chan_probs=False, space='video',
             print('WARNING: Im not sure about that sum axis=-1, '
                   'I hope there is only ever one channel here')
 
-    key_img_probs = coco_img.delay(channels=common, space=space).finalize(nodata='float')
-
-    #### FIXME!
-    #### Curently hacking all nans to zero! Instead we should use the fact
-    #### That we don't have an observation in later stages!
-    key_img_probs = np.nan_to_num(key_img_probs)
+    key_img_probs = coco_img.delay(channels=common,
+                                   space=space).finalize(nodata='float')
 
     # Not sure about that sum axis=-1 here
     fg_img_probs = key_img_probs.sum(axis=-1)

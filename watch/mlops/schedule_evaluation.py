@@ -16,18 +16,20 @@ Example:
                     - ./my_bas_model.pt
                 trk.pxl.data.test_dataset:
                     - ./my_test_dataset/bas_ready_data.kwcoco.json
-                trk.pxl.data.window_scale_space: 15GSD
+                trk.pxl.data.window_space_scale: 15GSD
                 trk.pxl.data.time_sampling:
                     - "auto"
-                trk.pxl.data.input_scale_space:
+                trk.pxl.data.input_space_scale:
                     - "15GSD"
+                trk.poly.moving_window_size:
+                    - null
                 crop.src:
                     - ./my_test_dataset/sc_query_data.kwcoco.json
                 crop.regions:
                     - trk.poly.output
                 act.pxl.data.test_dataset:
                     - crop.dst
-                act.pxl.data.window_scale_space:
+                act.pxl.data.window_space_scale:
                     - auto
                 act.poly.thresh:
                     - 0.1
@@ -140,9 +142,9 @@ def schedule_evaluation(cmdline=False, **kwargs):
                     - ~/data/dvc-repos/smart_data_dvc/tmp/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco/cropped_kwcoco_for_bas.json
                 trk.pxl.data.tta_time: 0
                 trk.pxl.data.chip_overlap: 0.3
-                trk.pxl.data.window_scale_space: 10GSD
-                trk.pxl.data.input_scale_space: 15GSD
-                trk.pxl.data.output_scale_space: 15GSD
+                trk.pxl.data.window_space_scale: 10GSD
+                trk.pxl.data.input_space_scale: 15GSD
+                trk.pxl.data.output_space_scale: 15GSD
                 trk.pxl.data.time_span: auto
                 trk.pxl.data.time_sampling: auto
                 trk.pxl.data.time_steps: auto
@@ -159,7 +161,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 trk.poly.agg_fn: probs
                 trk.poly.thresh_hysteresis: None
                 trk.poly.moving_window_size: None
-                trk.poly.polygon_fn: heatmaps_to_polys
                 ###
                 ### SC Pixel Prediction
                 ###
@@ -422,7 +423,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # print(f'{len(queue)=}')
     with_status = 0
     with_rich = 0
-    # queue.write_network_text()  # not in cmd_queue 0.1.2?
+    queue.write_network_text()
     queue.rprint(with_status=with_status, with_rich=with_rich)
 
     for job in queue.jobs:
@@ -483,7 +484,10 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
         ...  # user specified a custom model
         condensed['dataset_code'] = 'dset_code_unknown'
         condensed['trk_expt'] = 'trk_expt_unknown'
-        condensed['trk_model'] = ub.Path(item['trk.pxl.model']).name
+        if item['trk.pxl.model'] is not None:
+            condensed['trk_model'] = ub.Path(item['trk.pxl.model']).name
+        else:
+            condensed['trk_model'] = 'None'
     else:
         # fixme: dataset code is ambiguous between BAS and SC
         # pkg_trk_pixel_pathcfg.pop('dataset_code', None)
@@ -498,7 +502,9 @@ def resolve_pipeline_row(grid_item_defaults, state, region_model_dpath, expt_dvc
     trk_pxl_params = ub.udict(trk_pxl['data']) - {'test_dataset'}
     trk_poly_params = ub.udict(trk_poly)
 
-    condensed['trk_model'] = state._condense_model(item['trk.pxl.model'])
+    import xdev
+    with xdev.embed_on_exception_context:
+        condensed['trk_model'] = state._condense_model(item['trk.pxl.model'])
     # TODO:
     # based on the model, we should infer if we need team features or not.
 
@@ -944,10 +950,6 @@ class Pipeline:
         else:
             cfg['moving_window_size'] = None
 
-        if cfg['moving_window_size'] is None:
-            cfg['polygon_fn'] = 'heatmaps_to_polys'
-        else:
-            cfg['polygon_fn'] = 'heatmaps_to_polys_moving_window'
         # kwargs['params_argstr'] = Pipeline(trk_poly_params)
         pred_trk_poly_kw['track_kwargs_str'] = shlex.quote(json.dumps(cfg))
 
@@ -1115,9 +1117,9 @@ class Pipeline:
         eval_trk_poly_kw['eval_trk_poly_dpath'] = eval_trk_poly_kw['eval_trk_poly_dpath']
         eval_trk_poly_kw['eval_trk_poly_tmp_dpath'] = eval_trk_poly_kw['eval_trk_poly_dpath'] / '_tmp'
         eval_trk_poly_kw['name_suffix'] = '-'.join([
-            condensed['trk_model'],
-            condensed['trk_pxl_cfg'],
-            condensed['trk_poly_cfg'],
+            condensed.get('trk_model', 'unk_trk_model'),
+            condensed.get('trk_pxl_cfg', 'unk_trk_pxl_cfg'),
+            condensed.get('trk_poly_cfg', 'unk_trk_poly_cfg'),
         ])
         command = ub.codeblock(
             r'''
@@ -1153,10 +1155,10 @@ class Pipeline:
         eval_act_poly_kw = paths.copy()
         eval_act_poly_kw['name_suffix'] = '-'.join([
             # condensed['crop_dst_dset']
-            condensed['test_act_dset'],
-            condensed['act_model'],
-            condensed['act_pxl_cfg'],
-            condensed['act_poly_cfg'],
+            condensed.get('test_act_dset', 'unk_act_dset'),
+            condensed.get('act_model', 'unk_act_model'),
+            condensed.get('act_pxl_cfg', 'unk_act_pxl_cfg'),
+            condensed.get('act_poly_cfg', 'unk_act_poly_cfg'),
         ])
         eval_act_poly_kw['eval_act_poly_dpath'] = eval_act_poly_kw['eval_act_poly_dpath']
         eval_act_poly_kw['eval_act_poly_tmp_dpath'] = eval_act_poly_kw['eval_act_poly_dpath'] / '_tmp'
@@ -1170,7 +1172,7 @@ class Pipeline:
                 --pred_sites "{pred_act_poly_sites_fpath}" \
                 --tmp_dir "{eval_act_poly_tmp_dpath}" \
                 --out_dir "{eval_act_poly_dpath}" \
-                --merge_fpath "{eval_act_poly_fpath}" \
+                --merge_fpath "{eval_act_poly_fpath}"
             ''').format(**eval_act_poly_kw)
         name = 'eval_act_poly'
         step = Step(name, command,
@@ -1204,7 +1206,7 @@ Ignore:
     from watch.tasks.tracking.from_heatmap import NewTrackFunction
     from watch.tasks.tracking.from_heatmap import TimeAggregatedBAS
     from watch.tasks.tracking.from_heatmap import TimeAggregatedSC
-    from watch.tasks.tracking.from_heatmap import TimeAggregatedHybrid
+    # from watch.tasks.tracking.from_heatmap import TimeAggregatedHybrid
 
     import jsonargparse
     parser = jsonargparse.ArgumentParser()

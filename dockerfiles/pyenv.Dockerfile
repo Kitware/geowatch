@@ -113,7 +113,7 @@ DOCKER_BUILDKIT=1 docker build --progress=plain \
     --build-arg PYTHON_VERSION=3.10.5 \
     -f ./dockerfiles/pyenv.Dockerfile .
 
-docker run --runtime=nvidia -it pyenv:310 bash  .
+docker run --runtime=nvidia -it pyenv:310 bash  
 # docker buildx build -t "pyenv3.10" -f ./pyenv.Dockerfile --build-arg BUILD_STRICT=1 .
 "
 

@@ -6,7 +6,7 @@ import ubelt as ub
 import warnings
 
 
-__version__ = '0.3.6'
+__version__ = '0.3.7'
 # git shortlog -e --summary --numbered
 __author__ = 'WATCH Developers, Kitware Inc., Jon Crall, David Joy, Matthew Bernstein, Benjamin Brodie, Usman Rafique, Jacob DeRosa, Connor Greenwell, Peri Akiva, Matthew Purri, Ajay Upadhyaya'
 __author_email__ = 'kitware@kitware.com, jon.crall@kitware.com'

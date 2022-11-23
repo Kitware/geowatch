@@ -557,13 +557,17 @@ QUALITY_BITS = ub.udict({
 
 # The main dataset codes currently in use.
 DATASET_CODES = [
-    'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC',
-    'Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC',
+    # 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC',
+    # 'Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC',
+    'Drop4-BAS',
+    'Drop4-SC',
 ]
 
 
-DVC_FIND_EXPT_KWARGS = {'tags': 'phase2_expt', 'envvar': 'EXPT_DVC_DPATH'}
-DVC_FIND_DATA_KWARGS = {'tags': 'phase2_data', 'envvar': 'DATA_DVC_DPATH'}
+DVC_FIND_EXPT_KWARGS = {
+    'tags': 'phase2_expt', 'envvar': 'EXPT_DVC_DPATH', 'hardware': 'auto'}
+DVC_FIND_DATA_KWARGS = {
+    'tags': 'phase2_data', 'envvar': 'DATA_DVC_DPATH', 'hardware': 'auto'}
 
 
 def auto_expt_dvc():

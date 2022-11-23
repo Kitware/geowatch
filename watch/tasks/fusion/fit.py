@@ -61,6 +61,8 @@ Example:
     ...     'devices': 1,
     ... }
     >>> #modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
+    >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+    >>> disable_lightning_hardware_warnings()
     >>> fit_model(cmdline=cmdline, **kwargs)
 """
 import pytorch_lightning as pl
@@ -341,8 +343,8 @@ def coerce_initializer(init):
 
     if initializer is None:
         # Try a netharn method (todo: port to watch to remove netharn deps)
-        import netharn as nh
-        init_cls, init_kw = nh.api.Initializer.coerce(init=init)
+        from watch.utils import util_netharn
+        init_cls, init_kw = util_netharn.Initializer.coerce(init=init)
         initializer = init_cls(**init_kw)
 
     return initializer
@@ -353,7 +355,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     """
 
     CommandLine:
-        xdoctest -m /home/joncrall/code/watch/watch/tasks/fusion/fit.py make_lightning_modules
+        xdoctest -m watch.tasks.fusion.fit make_lightning_modules
 
     Example:
         >>> from watch.tasks.fusion.fit import *  # NOQA
@@ -363,7 +365,9 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         ...     'train_dataset': 'special:vidshapes8-multispectral',
         ...     'datamodule': 'KWCocoVideoDataModule',
         ... }
-        >>> modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
+        >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+        >>> disable_lightning_hardware_warnings()
+        >>> modules = make_lightning_modules(args=args, cmdline=cmdline, **kwargs)
     """
     from watch.tasks.fusion import datamodules
     from watch.tasks.fusion import methods
@@ -394,8 +398,12 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     method_var_dict = method_class.compatible(method_var_dict)
 
     # _needs_transfer = False
+
     if args.resume_from_checkpoint is None:
         initializer = coerce_initializer(args.init)
+    else:
+        # Let lightning do it?
+        initializer = coerce_initializer('noop')
 
     if hasattr(datamodule, 'dataset_stats'):
         # TODO: Allow manual override of any of the dataset stats or allow them
@@ -445,8 +453,16 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     # for k in ignore_keys:
     #     state_dict.pop(k)
     print(f'initializer={initializer}')
-    initializer = coerce_initializer('noop')
     info = initializer.forward(model)  # NOQA
+
+    if info:
+        mapping = info.get('mapping', None)
+        unset = info.get('self_unset', None)
+        unused = info.get('self_unused', None)
+        print('mapping = {}'.format(ub.repr2(mapping, nl=1)))
+        print(f'unused={unused}')
+        print(f'unset={unset}')
+
     print('Finalize initialization')
     updated = model.state_dict() | to_preserve
     model.load_state_dict(updated)
@@ -490,7 +506,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
                     monitor='val_saliency_f1', mode='max', save_top_k=4),
             ]
 
-        if datamodule.requested_tasks['class']:
+        if datamodule.requested_tasks['class'] and 0:
             callbacks += [
                 pl.callbacks.ModelCheckpoint(
                     monitor='val_class_f1_micro', mode='max', save_top_k=4),
@@ -563,6 +579,8 @@ def fit_model(args=None, cmdline=False, **kwargs):
         ...     'auto_lr_find': False,
         ...     'num_workers': 2,
         ... }
+        >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+        >>> disable_lightning_hardware_warnings()
         >>> fit_model(**kwargs)
     """
     # cv2.setNumThreads(0)
@@ -736,3 +754,10 @@ if __name__ == '__main__':
     # from watch.tasks.fusion import fit as this_module
     # this_module.main()
     main()
+
+
+"""
+Ignore:
+
+
+"""

@@ -1,12 +1,22 @@
 #!/usr/bin/env python
 import scriptconfig as scfg
 import ubelt as ub
+import rich
 from watch.utils import kwcoco_extensions  # NOQA
 
 
 class WatchCocoStats(scfg.Config):
     """
-    Print watch-relevant information about a kwcoco dataset
+    Print watch-relevant information about a kwcoco dataset.
+
+    This provides summary information about:
+
+        * Basic kwcoco stats (number of annotations / images / videos / categories)
+        * Average GSDs
+        * sensor / channel histograms
+        * image / annotation / video attribute historams
+        * Breakdowns over sensor / channel / video / dataset
+        * Per video summaries
 
     CommandLine:
         smartwatch stats special:shapes8 vidshapes vidshapes-msi vidshapes-watch
@@ -35,7 +45,7 @@ class WatchCocoStats(scfg.Config):
         config = WatchCocoStats(kw, cmdline=cmdline)
 
         fpaths = config['src']
-        print('config = {}'.format(ub.repr2(config, nl=1)))
+        rich.print('config = {}'.format(ub.repr2(config, nl=1, sort=0)))
 
         if isinstance(fpaths, str):
             if ',' in fpaths:
@@ -45,10 +55,8 @@ class WatchCocoStats(scfg.Config):
         # TODO: tabulate stats when possible.
         import watch
         collatables = []
-        # video_info_rows = []
         video_sensor_rows = []
         all_sensors = set()
-        # print('collatables = {!r}'.format(collatables))
         for fpath in ub.ProgIter(fpaths, verbose=3, desc='Load dataset stats'):
             print('\n--- Single Dataset Stats ---')
             dset = watch.demo.coerce_kwcoco(fpath)
@@ -86,11 +94,11 @@ class WatchCocoStats(scfg.Config):
             piv = piv.applymap(lambda x: None if math.isnan(x) else int(x))
             piv['total'] = piv.sum(axis=1)
             print('Per-Video Sensor Frequency')
-            print(piv.to_string(float_format='%0.0f'))
+            rich.print(piv.to_string(float_format='%0.0f'))
         else:
             print('No per-video stats')
 
-        print('collatables = {}'.format(ub.repr2(collatables, nl=2)))
+        print('collatables = {}'.format(ub.repr2(collatables, nl=2, sort=0)))
         summary = pd.DataFrame(collatables)
 
         from watch.utils import slugify_ext
@@ -104,10 +112,16 @@ class WatchCocoStats(scfg.Config):
         if col_name_map:
             print('Remap names for readability:')
             print('col_name_map = {}'.format(ub.repr2(
-                ub.invert_dict(col_name_map), nl=1)))
+                ub.invert_dict(col_name_map), nl=1, sort=0)))
 
         summary = summary.rename(col_name_map, axis=1)
-        print(summary.to_string())
+        summary_string = summary.to_string()
+        max_colwidth = max(map(len, summary_string.split('\n')))
+        COLWIDTH_LIMIT = 1600
+        if max_colwidth > COLWIDTH_LIMIT:
+            rich.print(summary)
+        else:
+            rich.print(summary_string)
 
         print('Other helpful commands:')
         for fpath in fpaths:
@@ -129,7 +143,7 @@ def coco_watch_stats(dset):
     from kwcoco.util import util_truncate
     import dateutil
     num_videos = len(dset.index.videos)
-    print('num_videos = {!r}'.format(num_videos))
+    rich.print('num_videos = {!r}'.format(num_videos))
     print('Per-video stats summary')
 
     video_summary_rows = []
@@ -156,43 +170,45 @@ def coco_watch_stats(dset):
         else:
             date_range = None
 
-        video_info = ub.dict_union({
+        video_info = ub.udict({
             'name': video['name'],
             **ub.dict_isect(video, ['width', 'height']),
             'num_frames': len(gids),
             'sensor_freq': sensor_freq,
             'date_range': date_range,
-        }, video)
+        }) | video
         video_info.pop('regions', None)
         video_info.pop('properties', None)
         vid_info_str = ub.repr2(video_info, nl=-1, sort=False)
         vid_info_str = util_truncate.smart_truncate(
             vid_info_str, max_length=512, trunc_loc=0.6)
         print('video_info = {}'.format(vid_info_str))
-        all_sensor_entries.extend(all_sensor_entries)
+        all_sensor_entries.extend(avail_sensors)
         # video_summary_rows.append(ub.dict_diff(video_info, {'sensor_freq', 'warp_wld_to_vid'}))
-        video_summary_rows.append(ub.dict_diff(ub.odict(video_info), {'warp_wld_to_vid'}))
+        video_summary_rows.append(video_info - {'warp_wld_to_vid'})
 
     print('dset.tag = {!r}'.format(dset.tag))
 
     basic_stats = dset.basic_stats()
     ext_stats = dset.extended_stats()
-    print('basic_stats = {}'.format(ub.repr2(basic_stats, nl=1)))
-    print('ext_stats = {}'.format(ub.repr2(ext_stats, nl=1, align=':', precision=3)))
+    rich.print('basic_stats = {}'.format(ub.repr2(basic_stats, nl=1, sort=0)))
+    rich.print('ext_stats = {}'.format(ub.repr2(ext_stats, nl=1, align=':', precision=3)))
 
     attrs = dset.videos().attribute_frequency()
-    print('video_attrs = {}'.format(ub.repr2(attrs, nl=1)))
+    rich.print('video_attrs = {}'.format(ub.repr2(attrs, nl=1, sort=0)))
     attrs = dset.images().attribute_frequency()
-    print('image_attrs = {}'.format(ub.repr2(attrs, nl=1)))
+    rich.print('image_attrs = {}'.format(ub.repr2(attrs, nl=1, sort=0)))
     attrs = dset.annots().attribute_frequency()
-    print('annot_attrs = {}'.format(ub.repr2(attrs, nl=1)))
+    rich.print('annot_attrs = {}'.format(ub.repr2(attrs, nl=1, sort=0)))
 
     loose_image_ids = sorted(all_image_ids - all_image_ids_with_video)
-    print('len(loose_image_ids) = {!r}'.format(len(loose_image_ids)))
+    rich.print('len(loose_image_ids) = {!r}'.format(len(loose_image_ids)))
 
     import pandas as pd
     video_summary = pd.DataFrame(video_summary_rows)
-    print(video_summary)
+    video_summary = video_summary.drop(video_summary.columns & [
+        'valid_region_geos', 'wld_crs_info', 'valid_region'], axis=1)
+    rich.print(video_summary)
 
     # coco_dset = dset
     # all_images = coco_dset.images()
@@ -206,14 +222,15 @@ def coco_watch_stats(dset):
     # fpath = coco_img.primary_image_filepath()
     # _ = ub.cmd('gdalinfo {}'.format(fpath), verbose=3)
 
-    print(coco_sensorchan_gsd_stats(dset))
+    sensorchan_gsd_stats = coco_sensorchan_gsd_stats(dset)
+    rich.print(sensorchan_gsd_stats)
 
     sensor_hist = ub.dict_hist(all_sensor_entries)
-    print('Sensor Histogram = {}'.format(ub.repr2(sensor_hist, nl=1)))
+    rich.print('Sensor Histogram = {}'.format(ub.repr2(sensor_hist, nl=1, sort=0)))
 
     print('MSI channel stats')
     info = kwcoco_extensions.coco_channel_stats(dset)
-    print(ub.repr2(info, nl=4))
+    rich.print(ub.repr2(info, nl=4, sort=0))
 
     dset_bundle_suffix = '/'.join(ub.Path(dset.fpath).parts[-2:])
 

@@ -39,6 +39,8 @@ class BatchPlotter(pl.callbacks.Callback):
         >>> #
         >>> from watch.utils.lightning_ext.callbacks.batch_plotter import *  # NOQA
         >>> from watch.utils.lightning_ext import demo
+        >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
+        >>> disable_lightning_hardware_warnings()
         >>> model = demo.LightningToyNet2d(num_train=55)
         >>> default_root_dir = ub.Path.appdir('lightning_ext/tests/BatchPlotter').ensuredir()
         >>> #

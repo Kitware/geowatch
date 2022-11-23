@@ -1,9 +1,13 @@
 """
 TODO:
     - [ ] make a nicer DVC registry API and CLI
+    - [ ] rename
 
 SeeAlso:
     ../cli/find_dvc.py
+    python -m watch find_dvc list --hardware=ssd --tags=phase2_data
+    python -m watch find_dvc list --hardware=hdd --tags=phase2_data
+    python -m watch find_dvc list --hardware=auto --tags=phase2_data
 """
 import ubelt as ub
 import warnings
@@ -179,6 +183,13 @@ class DataRegistry:
                     ub.repr2(list(self._expected_attrs.keys()), nl=0),
                 ))
         query = ub.udict({k: v for k, v in kwargs.items() if v is not None})
+
+        ENABLE_EXPERIMENTAL_SPECIAL_QUERY_LOGIC = 1
+        if ENABLE_EXPERIMENTAL_SPECIAL_QUERY_LOGIC:
+            special_query = {}
+            if query.get('hardware', None) == 'auto':
+                special_query['hardware'] = query.pop('hardware')
+
         results = []
         candidate_rows = self.read()
         for row in candidate_rows:
@@ -192,6 +203,21 @@ class DataRegistry:
                     flag = False
             if flag:
                 results.append(row)
+
+        if ENABLE_EXPERIMENTAL_SPECIAL_QUERY_LOGIC:
+
+            if special_query.get('hardware') == 'auto':
+                # Make SSDs have higher priority than everything else
+                hardware_to_results = ub.group_items(results, lambda x: x.get('hardware', None))
+                hardware_to_max_priority = ub.udict()
+                for hardware, subs in hardware_to_results.items():
+                    hardware_to_max_priority[hardware] = max([s.get('priority', 0) or 0 for s in subs])
+                non_ssd_priority = max(1, 1, *(hardware_to_max_priority - {'ssd'}).values())
+                min_ssd_priority = min(0, 0, *(hardware_to_max_priority & {'ssd'}).values())
+
+                for row in hardware_to_results.get('ssd', []):
+                    row['priority'] = (row.get('priority', 0) or 0) - min_ssd_priority + non_ssd_priority * 2
+                # print('hardware_to_results = {}'.format(ub.repr2(hardware_to_results, nl=2)))
 
         HACK_JONS_REMOTE_PATTERN = 1
         if HACK_JONS_REMOTE_PATTERN:
@@ -209,6 +235,13 @@ class DataRegistry:
                     remote_alt = path.shrinkuser(home=remote_base)
                     if remote_alt.exists():
                         row['path'] = os.fspath(remote_alt)
+
+        results = sorted(
+            results,
+            key=lambda r:
+                r['priority']
+                if r.get('priority', None) is not None else
+                -float('inf'))[::-1]
         return results
 
     def find(self, on_error="raise", envvar='DVC_DPATH', **kwargs):

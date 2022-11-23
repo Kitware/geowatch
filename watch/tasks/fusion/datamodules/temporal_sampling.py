@@ -203,14 +203,17 @@ class TimeWindowSampler:
             attribute, which can be modified to change behavior (not thread
             safe).
 
+    Attributes:
+        main_indexes
+
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> import os
         >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
-        >>> import watch
         >>> import kwcoco
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
-        >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
+        >>> import watch
+        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> coco_fpath = dvc_dpath / 'Drop4-SC/data_vali.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> vidid = dset.dataset['videos'][0]['id']
         >>> self = TimeWindowSampler.from_coco_video(
@@ -278,9 +281,9 @@ class TimeWindowSampler:
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
             >>> import os
             >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
-            >>> from watch.utils.util_data import find_smart_dvc_dpath
-            >>> dvc_dpath = find_smart_dvc_dpath()
-            >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
+            >>> import watch
+            >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>> coco_fpath = dvc_dpath / 'Drop4-SC/data_vali.kwcoco.json'
             >>> dset = kwcoco.CocoDataset(coco_fpath)
             >>> vidid = dset.dataset['videos'][0]['id']
             >>> self = TimeWindowSampler.from_coco_video(
@@ -377,7 +380,13 @@ class TimeWindowSampler:
         else:
             raise KeyError(self.affinity_type)
 
-        self.main_indexes = np.arange(self.affinity.shape[0])
+        self.indexes = np.arange(self.affinity.shape[0])
+
+    @property
+    def main_indexes(self):
+        ub.schedule_deprecation(
+            'watch', 'main_indexes', 'use indexes instead', deprecate='now')
+        return self.indexes
 
     def sample(self, main_frame_idx=None, include=None, exclude=None,
                return_info=False, error_level=0, rng=None):
@@ -531,7 +540,7 @@ class TimeWindowSampler:
 
         if with_temporal:
             kwplot.figure(fnum=fnum, pnum=pnum_())
-            plot_temporal_sample_indices(sample_idxs, self.unixtimes)
+            plot_temporal_sample_indices(sample_idxs, self.unixtimes, sensors=self.sensors)
         fig.suptitle(title_info)
 
     def show_affinity(self, fnum=3):
@@ -1517,7 +1526,7 @@ def plot_dense_sample_indices(sample_idxs, unixtimes, title_suffix='', linewidth
     return ax
 
 
-def plot_temporal_sample_indices(sample_idxs, unixtimes, title_suffix=''):
+def plot_temporal_sample_indices(sample_idxs, unixtimes, sensors=None, title_suffix=''):
     """
     Visualization helper
     """
@@ -1527,8 +1536,19 @@ def plot_temporal_sample_indices(sample_idxs, unixtimes, title_suffix=''):
     # =====================
     # Show Sample Pattern WRT to time
     ax = plt.gca()
-    for t in datetimes:
-        ax.plot([t, t], [0, len(sample_idxs) + 1], color='darkblue', alpha=0.5)
+
+    import kwimage
+    if sensors:
+        unique_sensors = set(sensors)
+        unique_colors = kwimage.Color.distinct(len(unique_sensors))
+        sensor_to_color = ub.dzip(unique_sensors, unique_colors)
+        colors = [sensor_to_color[s] for s in sensors]
+    else:
+        colors = ['darkblue'] * len(datetimes)
+
+    for t, color in zip(datetimes, colors):
+        ax.plot([t, t], [0, len(sample_idxs) + 1], color=color, alpha=0.5)
+
     for sample_ypos, sample in enumerate(sample_idxs, start=1):
         ax.plot(datetimes[sample], [sample_ypos] * len(sample), '-x')
 
@@ -1542,7 +1562,7 @@ def plot_temporal_sample_indices(sample_idxs, unixtimes, title_suffix=''):
     # ax.figure.autofmt_xdate()
 
 
-def plot_temporal_sample(affinity, sample_idxs, unixtimes, fnum=1):
+def plot_temporal_sample(affinity, sample_idxs, unixtimes, sensors=None, fnum=1):
     """
     Visualization helper
     """
@@ -1557,7 +1577,7 @@ def plot_temporal_sample(affinity, sample_idxs, unixtimes, fnum=1):
     # =====================
     # Show Sample Pattern WRT to time
     kwplot.figure(fnum=fnum, pnum=(2, 1, 2))
-    plot_temporal_sample_indices(sample_idxs, unixtimes)
+    plot_temporal_sample_indices(sample_idxs, unixtimes, sensors=sensors)
 
 
 def _dev_1darray_sample():
