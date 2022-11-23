@@ -1,10 +1,14 @@
 from airflow import DAG
 from airflow.models import Param
 from airflow.kubernetes.secret import Secret
+from kubernetes.client import models as k8s
 from smartflow.operators.pod import create_pod_task
 
 from datetime import datetime
 from textwrap import dedent
+
+DVC_DATA_DPATH = "/efs/work/greenwell/data/toy2_data_dvc"
+DVC_EXPT_DPATH = "/efs/work/greenwell/data/toy2_expt_dvc"
 
 with DAG(
     dag_id=f"KIT_DEMO_TRAIN",
@@ -21,10 +25,6 @@ with DAG(
     tags=["demo", "watch", "training"],
     start_date=datetime(2022, 3, 1),
 ) as dag:
-
-    DVC_DATA_DPATH = "/efs/work/smart_watch_dvc"
-    DVC_EXPT_DPATH = "/efs/work/smart_expt_dvc"
-    WORKDIR = f"{DVC_EXPT_DPATH}/training/smartflow/smartflow"
 
     # """
     # Downloads (if necessary) the prescribed dataset from the DVC cache to the EFS work mount.
@@ -61,6 +61,10 @@ with DAG(
             Secret('env', 'WATCH_GITLAB_USERNAME', 'watch-gitlab-repo', 'username'),
             Secret('env', 'WATCH_GITLAB_PASSWORD', 'watch-gitlab-repo', 'password'),
         ],
+        env_vars=[
+            k8s.V1EnvVar(name="DVC_DATA_DPATH", value=DVC_DATA_DPATH),
+            k8s.V1EnvVar(name="DVC_EXPT_DPATH", value=DVC_EXPT_DPATH),
+        ],
         cmds=["bash", "-exc"],
         arguments=[
             dedent(
@@ -69,12 +73,22 @@ with DAG(
                 git clone https://$WATCH_GITLAB_USERNAME:$WATCH_GITLAB_PASSWORD@gitlab.kitware.com/smart/watch.git /root/code/watch
                 cd /root/code/watch
                 git remote update; git checkout {{ params.smart_version_tag }}
-                # ./run_developer_setup.py
+
+                # source run_developer_setup.sh
+                pip install -r requirements.txt -v
+                pip install -r requirements/gdal.txt
+                # pip install -r requirements/headless.txt
                 pip install -e .
-                smartwatch_dvc add --name=toy_data_hdd --path=/efs/work/greenwell/data/toy_data_dvc --hardware=hdd --priority=100 --tags=toy_data_hdd
-                mkdir -p /efs/work/greenwell/data/toy_data_dvc
-                smartwatch_dvc add --name=toy_expt_hdd --path=/efs/work/greenwell/data/toy_data_dvc --hardware=hdd --priority=100 --tags=toy_expt_hdd
-                mkdir -p /efs/work/greenwell/data/toy_data_dvc
+
+                pip install -U delayed-image
+                python -c "import delayed_image; print('delayed_image.version = ', delayed_image.__version__)"
+
+                smartwatch_dvc add --name=toy_data_hdd --path=$DVC_DATA_DPATH --hardware=hdd --priority=100 --tags=toy_data_hdd
+                mkdir -p $DVC_DATA_DPATH
+                smartwatch_dvc add --name=toy_expt_hdd --path=$DVC_EXPT_DPATH --hardware=hdd --priority=100 --tags=toy_expt_hdd
+                mkdir -p $DVC_EXPT_DPATH
+
+                USER=airflow_root
                 source /root/code/watch/watch/tasks/fusion/experiments/greenwell/examples/heterogeneous_native_msi.sh
                 """
             )
