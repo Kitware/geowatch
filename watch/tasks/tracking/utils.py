@@ -300,6 +300,7 @@ def gpd_len(gdf):
     return gdf['track_idx'].nunique()
 
 
+@profile
 def gpd_compute_scores(gdf,
                        sub_dset,
                        thrs: Iterable,
@@ -334,7 +335,6 @@ def gpd_compute_scores(gdf,
         ks.values()))  # | ks.keys()
     score_cols = list(itertools.product(_valid_keys, thrs))
 
-    USE_DASK = 0
     if USE_DASK:  # 63% runtime
         import dask_geopandas
         # https://github.com/geopandas/dask-geopandas
@@ -354,7 +354,8 @@ def gpd_compute_scores(gdf,
         # The identity matrix will be returned.
         # _rasterize(valid_shapes, out, transform, all_touched, merge_alg)
 
-        gdf = gdf.compute()  # _tracks is now a gdf again
+        gdf = gdf.compute()  # gdf is now a GeoDataFrame again
+        gdf = gdf.reset_index()
         # gdf = gdf.reindex(columns=_col_order)
 
     else:  # 95% runtime
@@ -387,6 +388,7 @@ def gpd_compute_scores(gdf,
 # -----------------------
 
 
+@profile
 def pop_tracks(coco_dset: kwcoco.CocoDataset,
                cnames: Iterable[str],
                remove: bool = True,
@@ -429,7 +431,7 @@ def pop_tracks(coco_dset: kwcoco.CocoDataset,
                            geometry='poly')
     if score_chan is not None:
         keys = {score_chan.spec: list(score_chan.unique())}
-        gdf = gpd_compute_scores(gdf, coco_dset, [None], keys, USE_DASK=False,
+        gdf = gpd_compute_scores(gdf, coco_dset, [None], keys, USE_DASK=True,
                                  resolution=resolution)
     # TODO standard way to access sorted_gids
     sorted_gids = coco_dset.index._set_sorted_by_frame_index(
@@ -448,7 +450,8 @@ def score_poly(poly, probs, threshold=None, use_rasterio=True):
     Args:
         poly: kwimage.Polygon or MultiPolygon in pixel coords
 
-        probs: heatmap to compare poly against
+        probs: heatmap to compare poly against. Any leading batch dimensions
+        will be preserved in output, e.g. (gid chan w h) -> (gid chan)
 
         use_rasterio: use rasterio.features module instead of kwimage
 
@@ -480,9 +483,6 @@ def score_poly(poly, probs, threshold=None, use_rasterio=True):
     rel_mask = rel_poly.to_mask((h, w), pixels_are=pixels_are).data
     # Slice out the corresponding region of probabilities
     rel_probs = probs[y:y + h, x:x + w]
-    # hacking to solve a bug: sometimes shape of rel_probs is x,y,1
-    if len(rel_probs.shape) == 3:
-        rel_probs = rel_probs[:, :, 0]
 
     _return_list = isinstance(threshold, Iterable)
     if not _return_list:
@@ -495,12 +495,12 @@ def score_poly(poly, probs, threshold=None, use_rasterio=True):
         if not msk.any():
             result.append(np.nan)
         elif t is None:
-            mskd = np.ma.masked_where(~msk, rel_probs, copy=False)
-            result.append(mskd.mean())
+            mskd = np.ma.array(rel_probs, mask=~msk)
+            result.append(mskd.mean(axis=(-2, -1)))
         else:
             hard_prob = rel_probs > t
-            mskd = np.ma.masked_where(~msk, hard_prob, copy=False)
-            result.append(mskd.mean())
+            mskd = np.ma.array(hard_prob, mask=~msk)
+            result.append(mskd.mean(axis=(-2, -1)))
 
     return result if _return_list else result[0]
 

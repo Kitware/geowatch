@@ -617,12 +617,11 @@ def time_aggregated_polys(
     ks = {'fg': key, 'bg': bg_key}
 
     # 95% of runtime
-    _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=False,
-                                 resolution=resolution)
+    # _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=False)
     # 63% of runtime
-    # _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=True)
+    _TRACKS = gpd_compute_scores(_TRACKS, sub_dset, thrs, ks, USE_DASK=True)
     # dask could unsort
-    # _TRACKS = gpd_sort_by_gid(_TRACKS.reset_index(), sorted_gids)
+    _TRACKS = gpd_sort_by_gid(_TRACKS.reset_index(), sorted_gids)
 
     # response_thresh = 0.9
     if response_thresh:
