@@ -512,7 +512,6 @@ def score_poly(poly, probs, threshold=None, use_rasterio=True):
 def mask_to_polygons(probs,
                      thresh,
                      bounds=None,
-                     scored=False,
                      use_rasterio=True,
                      thresh_hysteresis=None):
     """
@@ -520,7 +519,6 @@ def mask_to_polygons(probs,
         probs: aka heatmap, image of probability values
         thresh: to turn probs into a hard mask
         bounds: a kwimage or shapely polygon to crop the results to
-        scored: return Iterable[Tuple[score, poly]] instead of Iterable[Poly]
         use_rasterio: use rasterio.features module instead of kwimage
         thresh_hysteresis: if not None, only keep polygons with at least one
             pixel of score >= thresh_hysteresis
@@ -534,8 +532,8 @@ def mask_to_polygons(probs,
         >>> probs = kwimage.Heatmap.random(dims=(64, 64),
         >>>                                rng=0).data['class_probs'][0]
         >>> thresh = 0.5
-        >>> polys = mask_to_polygons(probs, thresh, scored=True)
-        >>> score1, poly1 = list(polys)[0]
+        >>> polys = mask_to_polygons(probs, thresh)
+        >>> poly1 = list(polys)[0]
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
@@ -550,32 +548,20 @@ def mask_to_polygons(probs,
         >>>                                 ).data['class_probs'][0]
         >>> thresh = 0.5
         >>> polys1 = list(mask_to_polygons(
-        >>>             probs, thresh, scored=0, use_rasterio=0))
+        >>>             probs, thresh, use_rasterio=0))
         >>> polys2 = list(mask_to_polygons(
-        >>>             probs, thresh, scored=0, use_rasterio=1))
-        >>> polys3 = list(mask_to_polygons(
-        >>>             probs, thresh, scored=1, use_rasterio=0))
-        >>> polys4 = list(mask_to_polygons(
-        >>>             probs, thresh, scored=1, use_rasterio=1))
+        >>>             probs, thresh, use_rasterio=1))
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
         >>> plt = kwplot.autoplt()
         >>> pnum_ = kwplot.PlotNums(nSubplots=4)
-        >>> kwplot.imshow(probs, pnum=pnum_(), title='pixels_are=points, scored=0')
+        >>> kwplot.imshow(probs, pnum=pnum_(), title='pixels_are=points')
         >>> for poly in polys1:
         >>>     poly.draw(facecolor='none', edgecolor='kitware_blue', alpha=0.5, linewidth=8)
-        >>> kwplot.imshow(probs, pnum=pnum_(), title='pixels_are=areas, scored=0')
+        >>> kwplot.imshow(probs, pnum=pnum_(), title='pixels_are=areas')
         >>> for poly in polys2:
         >>>     poly.draw(facecolor='none', edgecolor='kitware_green', alpha=0.5, linewidth=8)
-        >>> kwplot.imshow(probs, pnum=pnum_(), title='pixels_are=points, scored=1')
-        >>> for score, poly in polys3:
-        >>>     poly.draw(facecolor='none', edgecolor='kitware_blue', alpha=0.5, linewidth=8)
-        >>>     plt.text(*poly.centroid, f'{score:0.2f}', color='orange', fontdict={'size': 'large', 'weight': 'bold'})
-        >>> kwplot.imshow(probs, pnum=pnum_(), title='pixels_are=areas, scored=1')
-        >>> for score, poly in polys4:
-        >>>     poly.draw(facecolor='none', edgecolor='kitware_green', alpha=0.5, linewidth=8)
-        >>>     plt.text(*poly.centroid, f'{score:0.2f}', color='orange', fontdict={'size': 'large', 'weight': 'bold'})
     """
     # Threshold scores
     if thresh_hysteresis is None:
@@ -602,12 +588,7 @@ def mask_to_polygons(probs,
     polygons = kwimage.Mask(
         binary_mask, 'c_mask').to_multi_polygon(pixels_are=pixels_are)
 
-    if scored:
-        for poly in polygons:
-            score = score_poly(poly, probs, use_rasterio=use_rasterio)
-            yield score, poly
-    else:
-        yield from polygons
+    yield from polygons
 
 
 def _validate_keys(key, bg_key):
