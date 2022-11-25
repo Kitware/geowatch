@@ -167,6 +167,8 @@ class ExptManagerConfig(scfg.Config):
 
                 # Evaluations go here.
                 <expt_dvc_dpath>/models/fusion/<dataset_code>/eval
+
+            NOTE: THIS SPECIFIC FORMAT IS IN HIGH FLUX. DOCS MAY BE OUTDATED
             ''')),
     }
 
