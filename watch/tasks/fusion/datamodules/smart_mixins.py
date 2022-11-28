@@ -170,6 +170,12 @@ class SMARTDataMixin:
             # if tr_cloud.get('use_native_scale', None):
             # cloud_im = cloud_im[0][0]
 
+            # TODO: Ensure we are using the correct QA spec from
+            # ~/code/watch/watch/tasks/fusion/datamodules/qa_bands.py
+            # from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+            # TODO:
+            # QA_SPECS.query_table(spec_name, sensor)
+
             iffy_bits = functools.reduce(
                 op.or_, ub.take(heuristics.QUALITY_BITS,
                                 ['dilated_cloud', 'cirrus', 'cloud']))
