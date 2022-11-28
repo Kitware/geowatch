@@ -608,7 +608,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             dataset = dataset.dataset
 
         # assume collation is disabled
-        batch_items = [ex for ex in batch if (ex is not None)]
+        batch_items = batch
+        # batch_items = [ex for ex in batch if (ex is not None)]
 
         DEBUG_INCOMING_DATA = 1
         if DEBUG_INCOMING_DATA:
@@ -630,6 +631,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             # - [ ] fine-grained probability of change
             # - [ ] per-frame semenatic segmentation
             # - [ ] detections with box results!
+            
+            if item is None: continue
 
             if outputs is not None:
                 # Extract outputs only for this specific batch item.

@@ -131,23 +131,49 @@ class NanToNum(nn.Module):
         return torch.nan_to_num(x, self.num)
 
 
-class ShapePreservingTransformerEncoder(nn.TransformerEncoder):
+class ShapePreservingTransformerEncoder(nn.Module):
     def __init__(
         self, 
-        encoder_layer, 
+        token_dim, 
         num_layers, 
-        norm=None, 
-        enable_nested_tensor=True, 
+        # norm=None, 
+        # enable_nested_tensor=True, 
         batch_dim=0,
         chan_dim=1,
     ):
-        super().__init__(encoder_layer, num_layers, norm, enable_nested_tensor)
+        super().__init__()
+        # self.encoder = nn.TransformerEncoder(
+        #     nn.TransformerEncoderLayer(
+        #         token_dim, 
+        #         8, 
+        #         dim_feedforward=512, 
+        #         dropout=0.1, 
+        #         activation="gelu", 
+        #         batch_first=True, 
+        #         norm_first=True,
+        #     ), 
+        #     num_layers, 
+        #     norm, 
+        #     enable_nested_tensor,
+        # )
+        self.encoder = TransformerEncoderDecoder(
+            encoder_depth=num_layers,
+            decoder_depth=1,
+            dim=token_dim,
+            queries_dim=token_dim,
+            logits_dim=None,
+            decode_cross_every=1,
+            cross_heads=1,
+            latent_heads=8,
+            cross_dim_head=64,
+            latent_dim_head=64,
+            weight_tie_layers=False,
+        )
         self.batch_dim = batch_dim
         self.chan_dim = chan_dim
 
-    def forward(self, src, mask=None, src_key_padding_mask=None):
+    def forward(self, src, mask=None):
         assert mask is None
-        assert src_key_padding_mask is None
 
         num_dims = len(src.shape)
         shape_codes = [f"shape_{idx}" for idx in range(num_dims)]
@@ -164,7 +190,7 @@ class ShapePreservingTransformerEncoder(nn.TransformerEncoder):
         shape_hints = einops.parse_shape(src, input_shape_code)
 
         src = einops.rearrange(src, f"{input_shape_code} -> {output_shape_code}")
-        src = super().forward(src, mask, src_key_padding_mask)
+        src = self.encoder.forward(src, mask=mask)
         src = einops.rearrange(src, f"{output_shape_code} -> {input_shape_code}", **shape_hints)
 
         return src
@@ -615,18 +641,24 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                             padding="same",
                             bias=False),
                     )
-                elif self.hparams.decoder == "simple_conv":
+                elif self.hparams.decoder == "trans_conv":
                     self.heads[head_name] = nn.Sequential(
+                        # ShapePreservingTransformerEncoder(
+                        #     nn.TransformerEncoderLayer(token_dim, 8, dim_feedforward=512, dropout=0.1, activation="gelu", batch_first=True, norm_first=True),
+                        #     num_layers=2,
+                        # ),
                         ShapePreservingTransformerEncoder(
-                            nn.TransformerEncoderLayer(token_dim, 8, dim_feedforward=512, dropout=0.1, activation="gelu", batch_first=True, norm_first=True),
-                            num_layers=2,
+                            token_dim, 
+                            num_layers=2, 
+                            batch_dim=0,
+                            chan_dim=1,
                         ),
                         nn.Conv2d(token_dim, token_width*token_width*prop['channels'], 1, bias=False),
                         Rearrange(
                             "batch (chan dh dw) height width -> batch chan (height dh) (width dw)",
                             dh=token_width, dw=token_width),
                     )
-                elif self.hparams.decoder == "trans_conv":
+                elif self.hparams.decoder == "simple_conv":
                     self.heads[head_name] = nn.Sequential(
                         nn.Conv2d(token_dim, token_width*token_width*prop['channels'], 1, bias=False),
                         Rearrange(
@@ -1208,7 +1240,9 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>> from watch.tasks.fusion import datamodules
             >>> model = self = methods.HeterogeneousModel(
             >>>     position_encoder=methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
-            >>>     input_sensorchan=5)
+            >>>     input_sensorchan=5,
+            >>>     decoder="upsample",
+            >>> )
 
             >>> # Save the model (TODO: need to save datamodule as well)
             >>> model.save_package(package_path)
@@ -1227,59 +1261,70 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>>     assert model_state[key] is not recon_state[key]
 
         Example:
-            >>> # Test with datamodule
+            >>> # Test without datamodule
             >>> import ubelt as ub
             >>> from os.path import join
-            >>> from watch.tasks.fusion import datamodules
-            >>> from watch.tasks.fusion import methods
-            >>> from watch.tasks.fusion.methods.heterogeneous import *  # NOQA
+            >>> #from watch.tasks.fusion.methods.heterogeneous import *  # NOQA
             >>> dpath = ub.Path.appdir('watch/tests/package').ensuredir()
-            >>> package_path = dpath / 'my_package.pt'
-
-            >>> datamodule = datamodules.kwcoco_video_data.KWCocoVideoDataModule(
-            >>>     train_dataset='special:vidshapes8-multispectral-multisensor', chip_size=32,
-            >>>     batch_size=1, time_steps=2, num_workers=2, normalize_inputs=10)
-            >>> datamodule.setup('fit')
-            >>> dataset_stats = datamodule.torch_datasets['train'].cached_dataset_stats(num=3)
-            >>> classes = datamodule.torch_datasets['train'].classes
+            >>> package_path = join(dpath, 'my_package.pt')
 
             >>> # Use one of our fusion.architectures in a test
-            >>> self = methods.HeterogeneousModel(
-            >>>     classes=classes,
+            >>> from watch.tasks.fusion import methods
+            >>> from watch.tasks.fusion import datamodules
+            >>> model = self = methods.HeterogeneousModel(
             >>>     position_encoder=methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
-            >>>     dataset_stats=dataset_stats, input_sensorchan=datamodule.input_sensorchan)
+            >>>     input_sensorchan=5,
+            >>>     decoder="simple_conv",
+            >>> )
 
-            >>> from types import MethodType
-            >>> def configure_optimizers(self):
-            >>>     return torch.optim.Adam(self.parameters())
-            >>> self.configure_optimizers = MethodType(configure_optimizers, self)
-
-            >>> # We have to run an input through the module because it is lazy
-            >>> batch = next(iter(datamodule.train_dataloader()))
-            >>> outputs = self.training_step(batch)
-
-            >>> trainer = pl.Trainer(max_steps=1)
-            >>> trainer.fit(model=self, datamodule=datamodule)
-
-            >>> # Save the self
-            >>> self.save_package(package_path)
+            >>> # Save the model (TODO: need to save datamodule as well)
+            >>> model.save_package(package_path)
 
             >>> # Test that the package can be reloaded
-            >>> recon = methods.HeterogeneousModel.load_package(package_path)
-
+            >>> #recon = methods.HeterogeneousModel.load_package(package_path)
+            >>> from watch.tasks.fusion.utils import load_model_from_package
+            >>> recon = load_model_from_package(package_path)
             >>> # Check consistency and data is actually different
             >>> recon_state = recon.state_dict()
-            >>> model_state = self.state_dict()
-            >>> assert recon is not self
+            >>> model_state = model.state_dict()
+            >>> assert recon is not model
             >>> assert set(recon_state) == set(recon_state)
             >>> for key in recon_state.keys():
-            >>>     v1 = model_state[key]
-            >>>     v2 = recon_state[key]
-            >>>     if not (v1 == v2).all():
-            >>>         print('v1 = {}'.format(ub.repr2(v1, nl=1)))
-            >>>         print('v2 = {}'.format(ub.repr2(v2, nl=1)))
-            >>>         raise AssertionError(f'Difference in key={key}')
-            >>>     assert v1 is not v2, 'should be distinct copies'
+            >>>     assert (model_state[key] == recon_state[key]).all()
+            >>>     assert model_state[key] is not recon_state[key]
+
+        Example:
+            >>> # Test without datamodule
+            >>> import ubelt as ub
+            >>> from os.path import join
+            >>> #from watch.tasks.fusion.methods.heterogeneous import *  # NOQA
+            >>> dpath = ub.Path.appdir('watch/tests/package').ensuredir()
+            >>> package_path = join(dpath, 'my_package.pt')
+
+            >>> # Use one of our fusion.architectures in a test
+            >>> from watch.tasks.fusion import methods
+            >>> from watch.tasks.fusion import datamodules
+            >>> model = self = methods.HeterogeneousModel(
+            >>>     position_encoder=methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>>     input_sensorchan=5,
+            >>>     decoder="trans_conv",
+            >>> )
+
+            >>> # Save the model (TODO: need to save datamodule as well)
+            >>> model.save_package(package_path)
+
+            >>> # Test that the package can be reloaded
+            >>> #recon = methods.HeterogeneousModel.load_package(package_path)
+            >>> from watch.tasks.fusion.utils import load_model_from_package
+            >>> recon = load_model_from_package(package_path)
+            >>> # Check consistency and data is actually different
+            >>> recon_state = recon.state_dict()
+            >>> model_state = model.state_dict()
+            >>> assert recon is not model
+            >>> assert set(recon_state) == set(recon_state)
+            >>> for key in recon_state.keys():
+            >>>     assert (model_state[key] == recon_state[key]).all()
+            >>>     assert model_state[key] is not recon_state[key]
 
         Ignore:
             7z l $HOME/.cache/watch/tests/package/my_package.pt
