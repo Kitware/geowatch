@@ -303,6 +303,7 @@ def run_sc_fusion_for_baseline(
                             '--site_summary',
                             os.path.join(cropped_region_models_bas,
                                          '*.geojson'),
+                            '--append_mode', 'True',
                             '--track_kwargs', json.dumps(sc_track_kwargs)],
                            check=True)
 

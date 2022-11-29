@@ -319,6 +319,7 @@ def run_bas_fusion_for_baseline(
                     '--out_site_summaries_dir', region_models_outdir,
                     '--out_kwcoco', tracked_bas_kwcoco_path,
                     '--default_track_fn', 'saliency_heatmaps',
+                    '--append_mode', 'True',
                     '--track_kwargs', json.dumps(bas_tracking_config)],
                    check=True)
 
