@@ -2,6 +2,8 @@ import ubelt as ub
 import os
 import scriptconfig as scfg
 
+import importlib
+import yaml
 
 class RepackageConfig(scfg.DataConfig):
     r"""
@@ -49,6 +51,32 @@ def main(**kwargs):
     repackage(checkpoint_fpath, force=config['force'])
 
 
+def parse_and_init_config(config):
+    assert isinstance(config, dict)
+
+    if ("class_path" in config) and ("init_args" in config):
+        class_path = config["class_path"]
+        init_args = config["init_args"]
+
+        init_args = parse_and_init_config(init_args)
+
+        # https://stackoverflow.com/a/8719100
+        package_name, method_name = class_path.rsplit(".", 1)
+        package = importlib.import_module(package_name)
+        method = getattr(package, method_name)
+        module = method(**init_args)
+        return module
+
+    return {
+        key: (
+            parse_and_init_config(value)
+            if isinstance(value, dict)
+            else value
+        )
+        for key, value in config.items()
+    }
+
+
 def repackage(checkpoint_fpath, force=False, dry=False):
     """
     Logic for handling multiple checkpoint repackages at a time.
@@ -70,15 +98,120 @@ def repackage(checkpoint_fpath, force=False, dry=False):
     for checkpoint_fpath in checkpoint_fpaths:
         # If we have a checkpoint path we can load it if we make assumptions
         # init method from checkpoint.
-        checkpoint_fpath = ub.Path(checkpoint_fpath)
-        context = inspect_checkpoint_context(checkpoint_fpath)
-        package_name = suggest_package_name_for_checkpoint(context)
-        package_fpath = checkpoint_fpath.parent / package_name
+
+        checkpoint_fpath = os.fspath(checkpoint_fpath)
+        print(checkpoint_fpath)
+
+        x = ub.Path(ub.augpath(checkpoint_fpath, ext='.pt'))
+        package_name = x.name
+
+        # Can we precompute the package name of this checkpoint?
+        train_dpath_hint = None
+        if checkpoint_fpath.endswith('.ckpt'):
+            # .resolve() is necessary if we are running within the checkpoint dir
+            path_ = ub.Path(checkpoint_fpath).resolve()
+            if path_.parent.stem == 'checkpoints':
+                train_dpath_hint = path_.parent.parent
+
+        model_config = None
+        meta_fpath = None
+        if train_dpath_hint is not None:
+            candidates = list(train_dpath_hint.glob('config.yaml'))
+            if len(candidates) == 1:
+                meta_fpath = candidates[0]
+                data = load_meta(meta_fpath)
+
+                if "model" in data:
+                    model_config = data["model"]
+
+            # Look at the training config file to get info about this
+            # experiment
+            candidates = list(train_dpath_hint.glob('fit_config.yaml'))
+            if len(candidates) == 1:
+                meta_fpath = candidates[0]
+                data = load_meta(meta_fpath)
+                if 'name' in data:
+                    # Use the metadata package name if it exists
+                    expt_name = data['name']
+                else:
+                    # otherwise, hack to put experiment name in package name
+                    # based on an assumed directory structure
+                    expt_name = ub.Path(data['default_root_dir']).name
+                if expt_name not in package_name:
+                    package_name = expt_name + '_' + package_name
+
+        package_fpath = x.parent / package_name
+
         if force or not package_fpath.exists():
             if not dry:
-                train_dpath_hint = context['train_dpath_hint']
-                repackage_single_checkpoint(checkpoint_fpath, package_fpath,
-                                            train_dpath_hint)
+                import netharn as nh
+                xpu = nh.XPU.coerce('cpu')
+                checkpoint = xpu.load(checkpoint_fpath)
+
+                # checkpoint = torch.load(checkpoint_fpath)
+                print(list(checkpoint.keys()))
+                hparams = checkpoint['hyper_parameters']
+
+                if 'input_sensorchan' not in hparams:
+                    # HACK: we had old models that did not save their hparams
+                    # correctly. Try to fix them up here. The best we can do
+                    # is try to start a small training run with the exact same
+                    # settings and capture fixed model state from that.
+                    if meta_fpath is None:
+                        raise Exception('we cant do a fix without the meta fpath')
+
+                    hackfix_hparams_fpath = meta_fpath.augment(prefix='hackfix_')
+                    if not hackfix_hparams_fpath.exists():
+                        # Do this once per experiment group to save time.
+                        import tempfile
+                        tmp_dpath = ub.Path(tempfile.mkdtemp())
+                        tmp_root = (tmp_dpath / package_name)
+                        ub.cmd(f'python -m watch.tasks.fusion.fit '
+                               f'--config "{meta_fpath}" --default_root_dir "{tmp_root}" '
+                               f'--max_epochs=0 --max_epoch_length=1', system=1, verbose=3)
+                        tmp_llogs_dpaths = sorted((tmp_root / 'lightning_logs').glob('*'))
+                        assert tmp_llogs_dpaths, 'cannot fix this model'
+                        tmp_hparams_fpath = tmp_llogs_dpaths[-1] / 'hparams.yaml'
+                        import shutil
+                        shutil.copy(tmp_hparams_fpath, hackfix_hparams_fpath)
+
+                    import yaml
+                    with open(hackfix_hparams_fpath, 'r') as file:
+                        hacked_hparams = yaml.load(file, yaml.Loader)
+                    hacked_hparams = ub.udict(hacked_hparams)
+                    # Select the known problematic variables
+                    problem_hparams = hacked_hparams.subdict([
+                        'classes', 'dataset_stats', 'input_sensorchan',
+                        'input_channels'])
+                    hparams.update(problem_hparams)
+                    # hacked_hparams - hparams
+
+                if 'input_channels' in hparams:
+                    import kwcoco
+                    # Hack for strange pickle issue
+                    chan = hparams['input_channels']
+                    if chan is not None:
+                        if not hasattr(chan, '_spec') and hasattr(chan, '_info'):
+                            chan = kwcoco.ChannelSpec.coerce(chan._info['spec'])
+                            hparams['input_channels'] = chan
+                        else:
+                            hparams['input_channels'] = kwcoco.ChannelSpec.coerce(chan.spec)
+
+                if model_config is None:
+                    model = methods.MultimodalTransformer(**hparams)
+                else:
+                    model_config["init_args"] = hparams | model_config["init_args"]
+                    model = parse_and_init_config(model_config)
+
+                state_dict = checkpoint['state_dict']
+                model.load_state_dict(state_dict)
+
+                if train_dpath_hint is not None:
+                    model.train_dpath_hint = train_dpath_hint
+
+                model.save_package(os.fspath(package_fpath))
+                print(f'wrote: package_fpath={package_fpath}')
+
         package_fpaths.append(os.fspath(package_fpath))
     print('package_fpaths = {}'.format(ub.repr2(package_fpaths, nl=1)))
     from watch.utils import util_yaml
