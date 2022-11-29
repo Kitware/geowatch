@@ -207,7 +207,7 @@ def pseudolive_consolidate(region_id,
     matched_current_sites = set()
     for iou, psid, csid in sorted_overlaps:
         # Only doing one-to-one site matching for now
-        if(psid in matched_previous_sites
+        if(psid in matched_previous_sites  # noqa: E275
            or csid in matched_current_sites):
             continue
 
@@ -246,7 +246,7 @@ def pseudolive_consolidate(region_id,
         if psid_value > highest_psid_value:
             highest_psid_value = psid_value
 
-        if(psid in matched_previous_sites
+        if(psid in matched_previous_sites  # noqa: E275
            or just_deconflict):
             # Already added during merging; or just deconflicting current sites
             continue
