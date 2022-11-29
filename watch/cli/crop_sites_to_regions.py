@@ -65,14 +65,11 @@ def main(cmdline=False, **kwargs):
     assert new_region_dpath is not None, 'must specify new_region_dpath'
     new_region_dpath = ub.Path(new_region_dpath)
 
-    if config['site_models'] is None:
-        site_geojson_fpaths = []
-    else:
-        site_geojson_fpaths: list[ub.Path] = util_gis.coerce_geojson_paths(
-            config['site_models'])
+    site_geojson_fpaths: list[ub.Path] = util_gis.coerce_geojson_paths(
+        config.get('site_models'))
 
     region_geojson_fpaths: list[ub.Path] = util_gis.coerce_geojson_paths(
-        config['region_models'])
+        config.get('region_models'))
 
     # Load a single region
     if len(region_geojson_fpaths) != 1:
