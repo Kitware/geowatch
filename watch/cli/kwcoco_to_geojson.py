@@ -139,6 +139,10 @@ class KWCocoToGeoJSONConfig(scfg.DataConfig):
             Clears all annotations before running tracking, so it starts
             from a clean slate.
             '''), group='behavior')
+    append_mode = scfg.Value(False, isflag=True, help=ub.paragraph(
+            '''
+            Append sites to existing region GeoJSON.
+            '''), group='behavior')
 
 
 __config__ = KWCocoToGeoJSONConfig
@@ -1117,16 +1121,11 @@ def main(args):
         # write sites to region models on disk
         groups = ub.group_items(sites, lambda site: site['properties'].pop('region_id'))
 
-        # TODO / FIXME:
-        # The script should control if you are in "write" or "append" mode.
-        # Often I don't want to append to existing files.
-        APPEND_MODE = 1
-
         site_summary_fpaths = []
         for region_id, site_summaries in groups.items():
 
             region_fpath = site_summary_dir / (region_id + '.geojson')
-            if APPEND_MODE and region_fpath.is_file():
+            if args.append_mode and region_fpath.is_file():
                 with open(region_fpath, 'r') as f:
                     region = geojson.load(f)
                 if verbose:
