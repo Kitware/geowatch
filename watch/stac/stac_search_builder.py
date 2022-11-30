@@ -376,6 +376,152 @@ def print_provider_debug_information():
     print(new_df.to_string())
 
 
+def check_processed_regions():
+    """
+    Print out a table of how many images / region / collection there are.
+
+    CommandLine:
+        xdoctest -m watch.stac.stac_search_builder check_processed_regions
+    """
+    import json
+    import pystac_client
+    from datetime import datetime as datetime_cls
+    import watch
+
+    dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+
+    # MODIFY AS NEEDED
+    headers = {
+        'x-api-key': os.environ['SMART_STAC_API_KEY']
+    }
+    region_dpath = dvc_data_dpath / 'annotations/region_models'
+
+    provider = "https://api.smart-stac.com"
+    catalog = pystac_client.Client.open(provider, headers=headers)
+    region_fpaths = list(region_dpath.glob('*.geojson'))
+
+    all_collections = list(catalog.get_collections())
+
+    collections_of_interest = ['planet-dove', 'ta1-pd-acc', 'ta1-pd-ara', 'ta1-pd-str']
+
+    from watch.utils import util_pattern
+    pat = util_pattern.Pattern.coerce('ta1-*-acc*').to_regex()
+    collections_of_interest = [c.id for c in all_collections if pat.match(c.id)]
+
+    # collections_of_interest = [
+    #     # 'ta1-s2-acc',
+    #     # 'ta1-s2-acc-1',
+    #     # 'ta1-s2-acc-2',
+
+    #     # 'ta1-ls-acc',
+    #     # 'ta1-ls-acc-1',
+    #     # 'ta1-ls-acc-2',
+
+    #     'ta1-wv-acc',
+    #     'ta1-wv-acc-1',
+    #     'ta1-wv-acc-2',
+
+    #     'ta1-pd-acc',
+    #     'ta1-pd-acc-1',
+    #     'ta1-mixedgsd-acc-1',
+    #     'ta1-30m-acc-1'
+    # ]
+    rows = []
+
+    import rich
+    import rich.progress
+    progress = rich.progress.Progress(
+        "[progress.description]{task.description}",
+        rich.progress.BarColumn(),
+        rich.progress.MofNCompleteColumn(),
+        # "[progress.percentage]{task.percentage:>3.0f}%",
+        rich.progress.TimeRemainingColumn(),
+        rich.progress.TimeElapsedColumn(),
+    )
+    with progress:
+        collection_task = progress.add_task("[cyan] Query Collection...", total=len(collections_of_interest))
+        region_task = None
+
+        # Check that planet items exist
+        for collection in collections_of_interest:
+
+            if region_task is not None:
+                progress.remove_task(region_task)
+            progress.update(collection_task, advance=1)
+            region_task = progress.add_task("[green] Query Regions...", total=len(region_fpaths))
+
+            # Check that planet items exist in our regions
+            region_to_results = {}
+            for region_fpath in region_fpaths:
+
+                progress.update(region_task, advance=1)
+
+                with open(region_fpath) as file:
+                    region_data = json.load(file)
+                region_row = [f for f in region_data['features'] if f['properties']['type'] == 'region'][0]
+                region_id = region_row['properties']['region_id']
+                geom = region_row['geometry']
+                start = region_row['properties']['start_date']
+                end = region_row['properties']['end_date']
+                if end is None:
+                    # end = datetime_cls.utcnow().date()
+                    end = datetime_cls.now().date().isoformat()
+
+                item_search = catalog.search(
+                    collections=[collection],
+                    datetime=(start, end),
+                    intersects=geom,
+                    max_items=1000,
+                )
+                search_iter = item_search.items()
+                # result0 = next(search_iter)
+                results = list(search_iter)
+                region_to_results[region_id] = results
+
+                rows.append({
+                    'collection': collection,
+                    'region_id': region_id,
+                    'num_results': len(results),
+                    'start_date': start,
+                    'end_date': end,
+                })
+
+    for row in rows:
+        if row['collection'].endswith('acc-2'):
+            row['processing'] = 'acc-2'
+        elif row['collection'].endswith('acc-1'):
+            row['processing'] = 'acc-1'
+        elif row['collection'].endswith('acc'):
+            row['processing'] = 'acc'
+
+        if '-ls' in row['collection']:
+            row['sensor'] = 'L8'
+        elif '-s2' in row['collection']:
+            row['sensor'] = 'S2'
+        elif '-wv' in row['collection']:
+            row['sensor'] = 'WV'
+        elif '-pd' in row['collection']:
+            row['sensor'] = 'PD'
+
+    import pandas as pd
+    df = pd.DataFrame(rows)
+    print(df.to_string())
+
+    # df = df.sort_values(['processing', 'sensor', 'collection'])
+    # piv = df.pivot(['region_id'], ['processing', 'sensor', 'collection'], ['num_results'])
+
+    df = df.sort_values(['sensor', 'processing', 'collection'])
+    piv = df.pivot(['region_id'], ['sensor', 'processing', 'collection'], ['num_results'])
+    # piv = piv.astype(bool)
+    print(piv.to_string())
+
+    print(df.to_string())
+    # print(f'region_id={region_id}')
+    # print(f'results={results}')
+    print(f'collection={collection}')
+    print('region_to_results = {}'.format(ub.repr2(region_to_results, nl=1)))
+
+
 def _devcheck_providers_exist():
     """
     develoepr logic to test to see if providers are working
@@ -417,54 +563,6 @@ def _devcheck_providers_exist():
     item_search = catalog.search(collections=["ta1-pd-ara"])
     item_search = catalog.search(collections=["ta1-pd-str"])
     print(f'item_search={item_search}')
-
-
-def _mwe_check_planet_processed():
-    import json
-    import pystac_client
-    import pathlib
-    from datetime import datetime as datetime_cls
-
-    # MODIFY AS NEEDED
-    headers = {
-        'x-api-key': os.environ['SMART_STAC_API_KEY']
-    }
-    region_dpath = pathlib.Path('~/data/dvc-repos/smart_watch_dvc/annotations/region_models').expanduser()
-
-    provider = "https://api.smart-stac.com"
-    catalog = pystac_client.Client.open(provider, headers=headers)
-    region_fpaths = list(region_dpath.glob('*.geojson'))
-
-    # Check that planet items exist
-    for collection in ['planet-dove', 'ta1-pd-acc', 'ta1-pd-ara', 'ta1-pd-str']:
-        # Check that planet items exist in our regions
-        region_to_results = {}
-        for region_fpath in region_fpaths:
-            with open(region_fpath) as file:
-                region_data = json.load(file)
-            region_row = [f for f in region_data['features'] if f['properties']['type'] == 'region'][0]
-            region_id = region_row['properties']['region_id']
-            geom = region_row['geometry']
-            start = region_row['properties']['start_date']
-            end = region_row['properties']['end_date']
-            if end is None:
-                # end = datetime_cls.utcnow().date()
-                end = datetime_cls.now().date().isoformat()
-
-            item_search = catalog.search(
-                collections=[collection],
-                datetime=(start, end),
-                intersects=geom,
-                max_items=1
-            )
-            search_iter = item_search.items()
-            # result0 = next(search_iter)
-            results = list(search_iter)
-            region_to_results[region_id] = results
-            # print(f'region_id={region_id}')
-            # print(f'results={results}')
-        print(f'collection={collection}')
-        print('region_to_results = {}'.format(ub.repr2(region_to_results, nl=1)))
 
 
 ### Available smartstac collections:

@@ -130,7 +130,7 @@ CommandLine:
         --max_products_per_region "None" \
         --append_mode=False \
         --mode area \
-        --verbose 100 \
+        --verbose 100000 \
         --outfile "./test_result.input"
 """
 import json
