@@ -2,7 +2,7 @@
 
 source "$HOME"/code/watch/secrets/secrets
 
-DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
+DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
 SENSORS=TA1-S2-L8-WV-PD-ACC-2
 DATASET_SUFFIX=Drop5-2022-11-07-c30-$SENSORS
 REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/*.geojson"

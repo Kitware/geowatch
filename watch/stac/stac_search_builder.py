@@ -104,6 +104,28 @@ _ACCENTURE_PHASE2_TA1_PRODUCTS = {
         }
     },
 
+    'ta1-s2-acc-2': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['ta1-s2-acc-2'],
+    },
+    'ta1-ls-acc-2': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['ta1-ls-acc-2'],
+    },
+    'ta1-pd-acc-2': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['ta1-pd-acc-2'],
+    },
+    'ta1-wv-acc-2': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['ta1-wv-acc-2'],
+        "query": {
+            "nitf:imd": {
+                "eq": "true"
+            },
+        }
+    },
+
 }
 
 
