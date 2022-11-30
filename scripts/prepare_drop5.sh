@@ -3,7 +3,7 @@
 source "$HOME"/code/watch/secrets/secrets
 
 DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="hdd")
-SENSORS=TA1-S2-L8-WV-PD-ACC-1
+SENSORS=TA1-S2-L8-WV-PD-ACC-2
 DATASET_SUFFIX=Drop5-2022-11-07-c30-$SENSORS
 REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/*.geojson"
 SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
@@ -44,10 +44,8 @@ python -m watch.cli.prepare_ta2_dataset \
 #--include_channels="blue|green|red|nir|swir16|swir22" \
 
 
-smartwatch stats "$DATA_DVC_DPATH"/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC/data.kwcoco.json "$DATA_DVC_DPATH"/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data.kwcoco.json
-
-
-cd "$DATA_DVC_DPATH"/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC-1
+#smartwatch stats "$DATA_DVC_DPATH"/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC/data.kwcoco.json "$DATA_DVC_DPATH"/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data.kwcoco.json
+#cd "$DATA_DVC_DPATH"/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC-1
 
 codeblock  "
 
