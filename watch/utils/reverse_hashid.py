@@ -114,3 +114,27 @@ class ReverseHashTable:
             print(f'Found {len(candidates)} entries for key={key}')
             print('candidates = {}'.format(ub.repr2(candidates, nl=5)))
         return candidates
+
+
+def condense_config(params, type, human_opts=None):
+    """
+    Given a dictionary of parameters and a type, makes a hash of the params
+    prefixes it with a type and ensures it is registered in the global system
+    reverse hash lookup table. Some config parts can be given human readable
+    descriptions.
+    """
+    from watch.utils.reverse_hashid import ReverseHashTable
+    if human_opts is None:
+        human_opts = {}
+    params = ub.udict(params)
+    human_opts = params & human_opts
+    other_opts = params - human_opts
+    if len(human_opts):
+        human_part = ub.repr2(human_opts, compact=1) + '_'
+    else:
+        human_part = ''
+    cfgstr_suffix = human_part + ub.hash_data(other_opts)[0:8]
+    cfgstr = f'{type}_{cfgstr_suffix}'
+    rhash = ReverseHashTable(type=type)
+    rhash.register(cfgstr, params)
+    return cfgstr

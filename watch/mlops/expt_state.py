@@ -860,17 +860,8 @@ class ExperimentState(ub.NiceRepr):
         return test_dset_name
 
     def _condense_cfg(self, params, type):
-        human_opts = ub.dict_isect(params, {})
-        other_opts = ub.dict_diff(params, human_opts)
-        if len(human_opts):
-            human_part = ub.repr2(human_opts, compact=1) + '_'
-        else:
-            human_part = ''
-        cfgstr_suffix = human_part + ub.hash_data(other_opts)[0:8]
-        cfgstr = f'{type}_{cfgstr_suffix}'
-        from watch.utils.reverse_hashid import ReverseHashTable
-        rhash = ReverseHashTable(type=type)
-        rhash.register(cfgstr, params)
+        from watch.utils.reverse_hashid import condense_config
+        cfgstr = condense_config(params, type)
         return cfgstr
 
     def _condense_pred_cfg(self, pred_cfg):

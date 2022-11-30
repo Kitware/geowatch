@@ -33,8 +33,8 @@ python -m watch.cli.prepare_ta2_dataset \
     --separate_align_jobs=1 \
     --visualize=0 \
     --target_gsd=10 \
-    --cache=1 \
-    --skip_existing=1 \
+    --cache=0 \
+    --skip_existing=0 \
     --warp_tries=2 \
     --asset_timeout="1hour" \
     --image_timeout="1hour" \
