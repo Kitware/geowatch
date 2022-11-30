@@ -92,7 +92,7 @@ _ACCENTURE_PHASE2_TA1_PRODUCTS = {
     },
     'ta1-pd-acc-1': {
         'endpoint': "https://api.smart-stac.com",
-        'collections': ['ta1-pd-acc'],
+        'collections': ['ta1-pd-acc-1'],
     },
     'ta1-wv-acc-1': {
         'endpoint': "https://api.smart-stac.com",
@@ -333,6 +333,8 @@ def print_provider_debug_information():
         if endpoint in found_endpoint_to_collections:
             name_to_col = {c.id: c for c in found_endpoint_to_collections[endpoint]}
             if collection_name in name_to_col:
+                catalog = found_endpoint_to_catalog[endpoint]
+                collection = name_to_col[collection_name]
                 row['title'] = collection.title
 
                 is_unregistered = (unregistered_df[['endpoint', 'collection']] == [endpoint, collection_name]).all(axis=1).sum()
@@ -343,8 +345,6 @@ def print_provider_debug_information():
                 assert not is_bad
                 row['registered'] = bool(is_registered)
 
-                catalog = found_endpoint_to_catalog[endpoint]
-                collection = name_to_col[collection_name]
                 result = catalog.search(
                     collections=[collection_name],
                     max_items=1
@@ -355,9 +355,24 @@ def print_provider_debug_information():
                 print(row)
                 print(collection.summaries.lists)
 
+    for row in new_rows:
+        if 'smart-stac' in row['endpoint']:
+            collection_name = row['collection']
+            if collection_name.startswith('ta1-'):
+                parts = collection_name.split('-')
+                if parts[-1] in {'1', '2', '3'}:
+                    processing = '-'.join(parts[-2:])
+                else:
+                    processing = parts[-1]
+                row['processing'] = processing
+
     new_df = pd.DataFrame(new_rows)
-    new_df = new_df.sort_values(['endpoint', 'collection'])
-    new_df['has_items'] = new_df['has_items'].fillna(False)
+    new_df = new_df.sort_values(['processing', 'endpoint', 'collection'])
+    # new_df['has_items'] = new_df['has_items'].fillna(False)
+    new_df.loc[new_df['has_items'] == 1, 'has_items'] = True
+    new_df.loc[new_df['has_items'] == 0, 'has_items'] = False
+    new_df.loc[new_df['registered'] == 1, 'registered'] = True
+    new_df.loc[new_df['registered'] == 0, 'registered'] = False
     print(new_df.to_string())
 
 
