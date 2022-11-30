@@ -39,6 +39,10 @@ def main():
                         action='store_true',
                         default=False,
                         help="Output as simple newline separated STAC items")
+    parser.add_argument('-s', '--show-progress',
+                        action='store_true',
+                        default=False,
+                        help='Show progress for AWS CLI commands')
 
     baseline_framework_kwcoco_egress(**vars(parser.parse_args()))
 
@@ -92,7 +96,8 @@ def baseline_framework_kwcoco_egress(kwcoco_dataset_path,
                                      outbucket,
                                      aws_profile=None,
                                      dryrun=False,
-                                     newline=False):
+                                     newline=False,
+                                     show_progress=False):
     if aws_profile is not None:
         aws_base_command =\
             ['aws', 's3', '--profile', aws_profile, 'cp']
@@ -101,6 +106,9 @@ def baseline_framework_kwcoco_egress(kwcoco_dataset_path,
 
     if dryrun:
         aws_base_command.append('--dryrun')
+
+    if not show_progress:
+        aws_base_command.append('--only-show-errors')
 
     item_id, _ = os.path.splitext(os.path.basename(kwcoco_dataset_path))
     self_s3_outpath = os.path.join(

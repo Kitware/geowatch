@@ -7,9 +7,12 @@ import tempfile
 import json
 from glob import glob
 import shutil
+from distutils import dir_util
 
 from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
 from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress  # noqa: 501
+from watch.tasks.fusion.predict import predict
+from watch.cli.concat_kwcoco_videos import concat_kwcoco_datasets
 
 
 def main():
@@ -62,6 +65,11 @@ def main():
                         type=float,
                         required=False,
                         help="Threshold for BAS tracking (kwarg 'thresh')")
+    parser.add_argument("--previous_bas_outbucket",
+                        type=str,
+                        required=False,
+                        help="S3 Output directory for previous interval BAS "
+                             "fusion output")
 
     run_bas_fusion_for_baseline(**vars(parser.parse_args()))
 
@@ -184,7 +192,8 @@ def run_bas_fusion_for_baseline(
         newline=False,
         jobs=1,
         force_zero_num_workers=False,
-        bas_thresh=0.1):
+        bas_thresh=0.1,
+        previous_bas_outbucket=None):
     if aws_profile is not None:
         aws_base_command =\
             ['aws', 's3', '--profile', aws_profile, 'cp']
@@ -217,22 +226,76 @@ def run_bas_fusion_for_baseline(
     bas_fusion_kwcoco_path = os.path.join(
         ingress_dir, 'bas_fusion_kwcoco.json')
 
-    subprocess.run(['python', '-m', 'watch.tasks.fusion.predict',
-                    '--devices', '0,',
-                    '--write_preds', 'False',
-                    '--write_probs', 'True',
-                    '--with_change', 'False',
-                    '--with_saliency', 'True',
-                    '--with_class', 'False',
-                    '--test_dataset', ingress_kwcoco_path,
-                    '--package_fpath', bas_fusion_model_path,
-                    '--pred_dataset', bas_fusion_kwcoco_path,
-                    '--num_workers', '0' if force_zero_num_workers else str(jobs),  # noqa: 501
-                    '--set_cover_algo', 'approx',
-                    '--batch_size', '8',
-                    '--tta_time', '1',
-                    '--tta_fliprot', '0',
-                    '--chip_overlap', '0.3'], check=True)
+    predict_config = json.loads("""
+{
+      "tta_fliprot": 0,
+      "tta_time": 0,
+      "chip_overlap": 0.3,
+      "input_space_scale": "15GSD",
+      "window_space_scale": "15GSD",
+      "output_space_scale": "15GSD",
+      "time_span": "6m",
+      "time_sampling": "auto",
+      "time_steps": 5,
+      "chip_dims": [
+         128,
+         128
+      ],
+      "set_cover_algo": null,
+      "resample_invalid_frames": true,
+      "use_cloudmask": 1
+}
+    """)
+
+    predict(devices='0,',
+            write_preds=False,
+            write_probs=True,
+            with_change=False,
+            with_saliency=True,
+            with_class=False,
+            test_dataset=ingress_kwcoco_path,
+            package_fpath=bas_fusion_model_path,
+            pred_dataset=bas_fusion_kwcoco_path,
+            num_workers=('0' if force_zero_num_workers else str(jobs)),  # noqa: 501
+            batch_size=1,
+            **predict_config)
+
+    # 3.1. If a previous interval was run; concatenate BAS fusion
+    # output KWCOCO files for tracking
+    if previous_bas_outbucket is not None:
+        combined_bas_fusion_kwcoco_path = os.path.join(
+                ingress_dir, 'combined_bas_fusion_kwcoco.json')
+
+        previous_ingress_dir = '/tmp/ingress_previous'
+        subprocess.run([*aws_base_command, '--recursive',
+                        previous_bas_outbucket, previous_ingress_dir],
+                       check=True)
+
+        previous_bas_fusion_kwcoco_path = os.path.join(
+            previous_ingress_dir, 'combined_bas_fusion_kwcoco.json')
+
+        # On first interval nothing will be copied down so need to
+        # check that we have the input explicitly
+        if os.path.isfile(previous_bas_fusion_kwcoco_path):
+            concat_kwcoco_datasets(
+                (previous_bas_fusion_kwcoco_path, bas_fusion_kwcoco_path),
+                combined_bas_fusion_kwcoco_path)
+            # Copy saliency assets from previous bas fusion
+            dir_util.copy_tree(
+                os.path.join(previous_ingress_dir, '_assets', 'pred_saliency'),
+                os.path.join(ingress_dir, '_assets', 'pred_saliency'))
+
+            # Copy original assets from previous bas rusion
+            dir_util.copy_tree(
+                os.path.join(previous_ingress_dir, region_id),
+                os.path.join(ingress_dir, region_id))
+        else:
+            # Copy current bas_fusion_kwcoco_path to combined path as
+            # this is the first interval
+            shutil.copy(bas_fusion_kwcoco_path,
+                        combined_bas_fusion_kwcoco_path)
+    else:
+        combined_bas_fusion_kwcoco_path = bas_fusion_kwcoco_path
 
     # 4. Compute tracks (BAS)
     print("* Computing tracks (BAS) *")
@@ -244,19 +307,29 @@ def run_bas_fusion_for_baseline(
     shutil.copy(local_region_path, os.path.join(
         region_models_outdir, '{}.geojson'.format(region_id)))
 
-    bas_track_kwargs = {'use_viterbi': False,
-                        'thresh': bas_thresh,
-                        'morph_kernel': 3,
-                        'time_filtering': True,
-                        'response_filtering': False,
-                        'norm_ord': 1,
-                        'moving_window_size': 150}
+    bas_tracking_config = {
+        "thresh": bas_thresh,
+        "polygon_fn": "heatmaps_to_polys",
+        "agg_fn": "probs"}
+
+    tracked_bas_kwcoco_path = '_tracked'.join(
+        os.path.splitext(bas_fusion_kwcoco_path))
     subprocess.run(['python', '-m', 'watch.cli.kwcoco_to_geojson',
-                    bas_fusion_kwcoco_path,
-                    '--out_dir', region_models_outdir,
-                    '--bas_mode',
+                    combined_bas_fusion_kwcoco_path,
+                    '--out_site_summaries_dir', region_models_outdir,
+                    '--out_kwcoco', tracked_bas_kwcoco_path,
                     '--default_track_fn', 'saliency_heatmaps',
-                    '--track_kwargs', json.dumps(bas_track_kwargs)],
+                    '--append_mode', 'True',
+                    '--track_kwargs', json.dumps(bas_tracking_config)],
+                   check=True)
+
+    cropped_region_models_outdir = os.path.join(ingress_dir,
+                                                'cropped_region_models_bas')
+    subprocess.run(['python', '-m', 'watch.cli.crop_sites_to_regions',
+                    '--region_models',
+                    os.path.join(region_models_outdir, '*.geojson'),
+                    '--new_site_dpath', cropped_region_models_outdir,
+                    '--new_region_dpath', cropped_region_models_outdir],
                    check=True)
 
     # 6. Egress (envelop KWCOCO dataset in a STAC item and egress;

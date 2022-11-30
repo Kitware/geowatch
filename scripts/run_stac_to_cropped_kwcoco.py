@@ -2,8 +2,9 @@ import argparse
 import sys
 import os
 import subprocess
+import json
 
-from watch.cli.baseline_framework_ingress import baseline_framework_ingress
+from watch.cli.baseline_framework_ingress import baseline_framework_ingress, load_input_stac_items  # noqa: 501
 from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
 from watch.cli.ta1_stac_to_kwcoco import ta1_stac_to_kwcoco
 from watch.utils.util_framework import download_region
@@ -69,10 +70,86 @@ def main():
                         action='store_true',
                         default=False,
                         help="Force jobs=1 for cropping")
+    parser.add_argument("--previous_input_path",
+                        type=str,
+                        required=False,
+                        help="STAC json input file for previous interval")
 
     run_stac_to_cropped_kwcoco(**vars(parser.parse_args()))
 
     return 0
+
+
+def build_combined_kwcoco(input_path,
+                          previous_input_path,
+                          aws_profile,
+                          ta1_cropped_dir,
+                          dryrun=False,
+                          requester_pays=False,
+                          jobs=1,
+                          virtual=False,
+                          from_collated=False):
+    if aws_profile is not None:
+        aws_ls_command = ['aws', 's3', '--profile', aws_profile, 'ls']
+    else:
+        aws_ls_command = ['aws', 's3', 'ls']
+
+    if aws_profile is not None:
+        aws_cp_command = ['aws', 's3', '--profile', aws_profile, 'cp']
+    else:
+        aws_cp_command = ['aws', 's3', 'cp']
+
+    input_stac_items = load_input_stac_items(input_path, aws_cp_command)
+
+    combined_stac_items_path = os.path.join(
+        ta1_cropped_dir, 'combined_input_stac_items.jsonl')
+
+    # Confirm that the previous interval input path actually exists on
+    # S3 (for first iteration it will not)
+    try:
+        subprocess.run([*aws_ls_command,
+                        previous_input_path], check=True)
+    except subprocess.CalledProcessError:
+        # If we don't have previous interval input path, set the input
+        # as the "combined" for next interval
+        with open(combined_stac_items_path, 'w') as f:
+            print('\n'.join((json.dumps(item)
+                             for item in input_stac_items)), file=f)
+        return
+
+    previous_input_stac_items = load_input_stac_items(previous_input_path,
+                                                      aws_cp_command)
+    input_stac_items.extend(previous_input_stac_items)
+
+    with open(combined_stac_items_path, 'w') as f:
+        print('\n'.join((json.dumps(item)
+                         for item in input_stac_items)), file=f)
+
+    combined_working_dir = '/tmp/combined'
+    os.makedirs(combined_working_dir, exist_ok=True)
+    combined_ingress_catalog = baseline_framework_ingress(
+        combined_stac_items_path,
+        combined_working_dir,
+        aws_profile=aws_profile,
+        dryrun=dryrun,
+        requester_pays=requester_pays,
+        relative=False,
+        jobs=jobs,
+        virtual=virtual)
+
+    # 3. Convert ingressed STAC catalog to KWCOCO
+    print("* Converting STAC to KWCOCO *")
+    ta1_kwcoco_path_for_sc = os.path.join(combined_working_dir,
+                                          'combined_ingress_kwcoco.json')
+    ta1_stac_to_kwcoco(combined_ingress_catalog,
+                       ta1_kwcoco_path_for_sc,
+                       assume_relative=False,
+                       populate_watch_fields=True,
+                       jobs=jobs,
+                       from_collated=from_collated,
+                       ignore_duplicates=True)
+
+    return ta1_kwcoco_path_for_sc
 
 
 def run_stac_to_cropped_kwcoco(input_path,
@@ -87,13 +164,14 @@ def run_stac_to_cropped_kwcoco(input_path,
                                jobs=1,
                                virtual=False,
                                dont_recompute=False,
-                               force_one_job_for_cropping=False):
-    if dont_recompute:
-        if aws_profile is not None:
-            aws_ls_command = ['aws', 's3', '--profile', aws_profile, 'ls']
-        else:
-            aws_ls_command = ['aws', 's3', 'ls']
+                               force_one_job_for_cropping=False,
+                               previous_input_path=None):
+    if aws_profile is not None:
+        aws_ls_command = ['aws', 's3', '--profile', aws_profile, 'ls']
+    else:
+        aws_ls_command = ['aws', 's3', 'ls']
 
+    if dont_recompute:
         try:
             subprocess.run([*aws_ls_command, output_path], check=True)
         except subprocess.CalledProcessError:
@@ -154,12 +232,33 @@ def run_stac_to_cropped_kwcoco(input_path,
                     '.sensor_coarse == "L8" or .sensor_coarse == "S2"'],
                    check=True)
 
+    # 3.1. Combine previous interval `kwcoco_for_sc.json` if provided
+    # such that SC has full time range of data to work with
+    if previous_input_path is not None:
+        combined_kwcoco_path = build_combined_kwcoco(
+            input_path,
+            previous_input_path,
+            aws_profile,
+            ta1_cropped_dir,
+            dryrun=dryrun,
+            requester_pays=requester_pays,
+            jobs=jobs,
+            virtual=virtual,
+            from_collated=from_collated)
+
+        if combined_kwcoco_path is None:
+            ta1_kwcoco_path_for_sc = ta1_kwcoco_path
+        else:
+            ta1_kwcoco_path_for_sc = combined_kwcoco_path
+    else:
+        ta1_kwcoco_path_for_sc = ta1_kwcoco_path
+
     # 3a. Filter KWCOCO dataset by sensors used for BAS
     print("* Filtering KWCOCO dataset for SC")
     ta1_sc_kwcoco_path = os.path.join(ta1_cropped_dir,
                                       'kwcoco_for_sc.json')
     subprocess.run(['kwcoco', 'subset',
-                    '--src', ta1_kwcoco_path,
+                    '--src', ta1_kwcoco_path_for_sc,
                     '--dst', ta1_sc_kwcoco_path,
                     '--absolute', 'False',
                     '--select_images',
@@ -170,19 +269,20 @@ def run_stac_to_cropped_kwcoco(input_path,
     print("* Cropping KWCOCO dataset to region for BAS*")
     ta1_cropped_kwcoco_path = os.path.join(ta1_cropped_dir,
                                            'cropped_kwcoco_for_bas.json')
+    include_channels = 'blue|green|red|nir|swir16|swir22|quality'
     subprocess.run(['python', '-m', 'watch.cli.coco_align_geotiffs',
                     '--visualize', 'False',
                     '--src', ta1_bas_kwcoco_path,
                     '--dst', ta1_cropped_kwcoco_path,
                     '--regions', local_region_path,
                     '--force_nodata', '-9999',
-                    '--include_channels', 'red|green|blue|cloudmask',
+                    '--include_channels', include_channels,  # noqa
                     '--geo_preprop', 'auto',
                     '--keep', 'none',
-                    '--target_gsd', '15',  # TODO: Expose as cli parameter
+                    '--target_gsd', '30',  # TODO: Expose as cli parameter
                     '--context_factor', '1',
                     '--workers', '1' if force_one_job_for_cropping else str(jobs),  # noqa: 501
-                    '--aux_workers', '4',
+                    '--aux_workers', str(include_channels.count('|') + 1),
                     '--rpc_align_method', 'affine_warp'], check=True)
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;

@@ -48,6 +48,7 @@ __getattr__ = lazy_import(
         'normalize',
         'from_heatmap',
         'from_polygon',
+        'utils',
     },
     submod_attrs={},
 )

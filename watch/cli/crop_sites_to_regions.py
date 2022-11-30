@@ -66,16 +66,17 @@ def main(cmdline=False, **kwargs):
     new_region_dpath = ub.Path(new_region_dpath)
 
     site_geojson_fpaths: list[ub.Path] = util_gis.coerce_geojson_paths(
-        config['site_models'])
+        config.get('site_models'))
+
     region_geojson_fpaths: list[ub.Path] = util_gis.coerce_geojson_paths(
-        config['region_models'])
+        config.get('region_models'))
 
     # Load a single region
     if len(region_geojson_fpaths) != 1:
         raise ValueError(f'Must specify exactly one region file, Got: {region_geojson_fpaths}')
 
-    regions = util_gis.load_geojson_datas(
-        region_geojson_fpaths, workers=0, desc='load geojson region-models')
+    regions = list(util_gis.load_geojson_datas(
+        region_geojson_fpaths, workers=0, desc='load geojson region-models'))
     old_region_fpath = regions[0]['fpath']
     region_gdf_crs84: gpd.GeoDataFrame = regions[0]['data']
 

@@ -92,10 +92,22 @@ def coerce_patterned_paths(data, expected_extension=None):
         dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
         data = [ub.Path(dvc_dpath / 'annotations/region_models')]
         expected_extension = ['*.geojson', '*.txt']
+
+    Example:
+        >>> import watch
+        >>> empty_fpaths = coerce_patterned_paths(None)
+        >>> assert len(empty_fpaths) == 0
     """
     from os.path import isdir, join
     import glob
-    datas = data if ub.iterable(data) else [data]
+
+    if data is None:
+        datas = []
+    elif ub.iterable(data):
+        datas = data
+    else:
+        datas = [data]
+
     datas = list(map(os.fspath, datas))
     paths = []
     for data_ in datas:
