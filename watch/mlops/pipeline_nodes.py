@@ -278,7 +278,8 @@ class ProcessNode(Node):
         >>>     in_paths={'src'},
         >>>     out_paths={'dst': 'there.txt'},
         >>>     perf_params={'workers'},
-        >>>     output_dname='proc1/{proc1_algo_id}/{proc1_id}',
+        >>>     group_dname='predictions',
+        >>>     node_dname='proc1/{proc1_algo_id}/{proc1_id}',
         >>>     executable=f'python -c "{chr(10)}{pycode}{chr(10)}"',
         >>>     root_dpath=dpath,
         >>> )
@@ -286,16 +287,18 @@ class ProcessNode(Node):
         >>> print('self.command = {}'.format(ub.repr2(self.command, nl=1, sv=1)))
         >>> print(f'self.algo_id={self.algo_id}')
         >>> print(f'self.root_dpath={self.root_dpath}')
-        >>> print(f'self.output_dpath={self.output_dpath}')
+        >>> print(f'self.node_dpath={self.node_dpath}')
         >>> print('self.templates = {}'.format(ub.repr2(self.templates, nl=2)))
         >>> print('self.resolved = {}'.format(ub.repr2(self.resolved, nl=2)))
         >>> print('self.condensed = {}'.format(ub.repr2(self.condensed, nl=2)))
     """
     name : Optional[str] = None
 
+    # A path that will specified directly after the DAG root dpath.
+    group_dname : Optional[str] = None
+
     # A path relative to a prefix used to construct an output directory.
-    # Unsure if this is necessary.
-    output_dname : Optional[str] = None
+    node_dname : Optional[str] = None
 
     resources : Collection = None
 
@@ -322,7 +325,8 @@ class ProcessNode(Node):
                  resources=None,
                  in_paths=None,
                  out_paths=None,
-                 output_dname=None,
+                 group_dname=None,
+                 node_dname=None,
                  root_dpath=None,
                  config=None):
         args = locals()
@@ -347,9 +351,12 @@ class ProcessNode(Node):
             )
             self.algo_params = set(self.config) - non_algo_keys
 
-        if self.output_dname is None:
-            self.output_dname = '.'
-        self.output_dname = ub.Path(self.output_dname)
+        if self.node_dname is None:
+            self.node_dname = '.'
+        self.node_dname = ub.Path(self.node_dname)
+
+        if self.group_dname is None:
+            self.group_dname = '.'
 
         if self.root_dpath is None:
             self.root_dpath = '.'
@@ -368,14 +375,12 @@ class ProcessNode(Node):
 
     def build_templates(self):
         templates = {}
-        templates['output_dpath'] = str(self.root_dpath / self.output_dname)
+        templates['node_dpath'] = str(self.node_dpath)
         if not isinstance(self.out_paths, dict):
             out_paths = self.config & self.out_paths
         else:
             out_paths = self.out_paths
-        import os
-        output_dpath = templates['output_dpath']
-        out_paths = {k: os.path.join(output_dpath, v) for k, v in out_paths.items()}
+        out_paths = {k: str(self.node_dpath / v) for k, v in out_paths.items()}
         templates['out_paths'] = out_paths
         self.templates = templates
         return self.templates
@@ -391,7 +396,7 @@ class ProcessNode(Node):
     def resolve_templates(self):
         condensed = self.condensed
         resolved = {}
-        resolved['output_dpath'] = ub.Path(self.templates['output_dpath'].format(**condensed))
+        resolved['node_dpath'] = ub.Path(self.templates['node_dpath'].format(**condensed))
         resolved['out_paths'] = {
             k: ub.Path(v.format(**condensed))
             for k, v in self.templates['out_paths'].items()
@@ -401,11 +406,11 @@ class ProcessNode(Node):
 
     @property
     def dag_dname(self):
-        return self.pred_dname / self.output_dname
+        return self.depends_dname / self.node_dname
 
     @property
-    def output_dpath(self):
-        return self.root_dpath / self.dag_dname
+    def node_dpath(self):
+        return self.root_dpath / self.group_dname / self.dag_dname
 
     @property
     def algo_config(self):
@@ -421,11 +426,11 @@ class ProcessNode(Node):
         return algo_id
 
     @property
-    def pred_dname(self):
+    def depends_dname(self):
         """
         Predecessor part of the output path.
         """
-        pred_nodes = self.pred_process_nodes()
+        pred_nodes = self.predecessor_process_nodes()
         if not pred_nodes:
             return ub.Path('.')
         elif len(pred_nodes) == 1:
@@ -434,7 +439,7 @@ class ProcessNode(Node):
             return ub.Path('.')
             # return ub.Path('multi' + str(pred_nodes))
 
-    def pred_process_nodes(self):
+    def predecessor_process_nodes(self):
         """
         Predecessor process nodes
         """
@@ -455,7 +460,7 @@ class ProcessNode(Node):
             node_id = id(node)
             if node_id not in seen:
                 seen[node_id] = node
-                pred_nodes = node.pred_process_nodes()
+                pred_nodes = node.predecessor_process_nodes()
                 stack.extend(pred_nodes)
         seen.pop(id(self))
         ancestors = list(seen.values())
