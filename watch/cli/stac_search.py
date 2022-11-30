@@ -94,7 +94,7 @@ CommandLine:
     # Alternate invocation
     # Create a demo region file
 
-    DVC_DPATH=$(smartwatch_dvc)
+    DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware=auto)
     REGION_FPATH=$DVC_DPATH/annotations/region_models/BR_R005.geojson
 
     # Define SMART_STAC_API_KEY
@@ -112,6 +112,26 @@ CommandLine:
         --mode area \
         --verbose 2 \
         --outfile "./result.input"
+
+    ###
+    ### - Debug case
+
+    DVC_DPATH=$(smartwatch_dvc --tags="phase2_data" --hardware=auto)
+
+    # Load SMART_STAC_API_KEY
+    source "$HOME"/code/watch/secrets/secrets
+
+    python -m watch.cli.stac_search \
+        --region_file "$DVC_DPATH/annotations/region_models/US_R007.geojson" \
+        --search_json "auto" \
+        --cloud_cover "0" \
+        --sensors "TA1-S2-L8-WV-PD-ACC-1" \
+        --api_key "env:SMART_STAC_API_KEY" \
+        --max_products_per_region "None" \
+        --append_mode=False \
+        --mode area \
+        --verbose 100 \
+        --outfile "./test_result.input"
 """
 import json
 import tempfile
