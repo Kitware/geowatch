@@ -274,7 +274,8 @@ class LandcoverFeatureComputation(FeatureComputation):
 
 class BAS_HeatmapPrediction(HeatmapPrediction):
     name = 'bas_pxl'
-    output_dname = 'bas_pxl/{bas_model}/{bas_test_dset}/{bas_pxl_algo_id}/{bas_pxl_id}'
+    # output_dname = 'bas_pxl/{bas_model}/{bas_test_dset}/{bas_pxl_algo_id}/{bas_pxl_id}'
+    output_dname = 'bas_pxl//{bas_pxl_algo_id}/{bas_pxl_id}'
 
     @property
     def condensed(self):
@@ -286,7 +287,8 @@ class BAS_HeatmapPrediction(HeatmapPrediction):
 
 class SC_HeatmapPrediction(HeatmapPrediction):
     name = 'sc_pxl'
-    output_dname = 'sc_pxl/{sc_model}/{sc_test_dset}/{sc_pxl_algo_id}/{sc_pxl_id}'
+    # output_dname = 'sc_pxl/{sc_model}/{sc_test_dset}/{sc_pxl_algo_id}/{sc_pxl_id}'
+    output_dname = 'sc_pxl/{sc_pxl_algo_id}/{sc_pxl_id}'
 
     @property
     def condensed(self):
@@ -443,7 +445,7 @@ def bas_nodes():
         nodes['bas_poly_viz'],
     )
 
-    if 0:
+    if 1:
         nodes['bas_invariants'] = InvariantFeatureComputation()
         nodes['bas_land'] = LandcoverFeatureComputation()
         nodes['bas_materials'] = MaterialFeatureComputation()
