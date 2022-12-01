@@ -417,10 +417,14 @@ def check_processed_regions():
         'x-api-key': os.environ['SMART_STAC_API_KEY']
     }
     region_dpath = dvc_data_dpath / 'annotations/region_models'
+    # region_fpaths = list(region_dpath.glob('*.geojson'))
+    region_fpaths = list(region_dpath.glob('*_R*.geojson'))
+
+    region_dpath = dvc_data_dpath / 'golden_regions/region_models'
+    region_fpaths = list(region_dpath.glob('*_S*.geojson'))
 
     provider = "https://api.smart-stac.com"
     catalog = pystac_client.Client.open(provider, headers=headers)
-    region_fpaths = list(region_dpath.glob('*.geojson'))
 
     all_collections = list(catalog.get_collections())
 
@@ -430,18 +434,19 @@ def check_processed_regions():
     pat = util_pattern.Pattern.coerce('ta1-*-acc*').to_regex()
     collections_of_interest = [c.id for c in all_collections if pat.match(c.id)]
 
-    # collections_of_interest = [
-    #     # 'ta1-s2-acc',
-    #     # 'ta1-s2-acc-1',
-    #     # 'ta1-s2-acc-2',
+    collections_of_interest = [
+        'ta1-s2-acc',
+        'ta1-s2-acc-1',
+        'ta1-s2-acc-2',
 
-    #     # 'ta1-ls-acc',
-    #     # 'ta1-ls-acc-1',
-    #     # 'ta1-ls-acc-2',
+        'ta1-ls-acc',
+        'ta1-ls-acc-1',
+        'ta1-ls-acc-2',
 
-    #     'ta1-wv-acc',
-    #     'ta1-wv-acc-1',
-    #     'ta1-wv-acc-2',
+        # 'ta1-wv-acc',
+        # 'ta1-wv-acc-1',
+        # 'ta1-wv-acc-2',
+    ]
 
     #     'ta1-pd-acc',
     #     'ta1-pd-acc-1',
@@ -526,6 +531,7 @@ def check_processed_regions():
             row['sensor'] = 'PD'
 
     import pandas as pd
+    from rich import print
     df = pd.DataFrame(rows)
     print(df.to_string())
 
@@ -537,11 +543,11 @@ def check_processed_regions():
     # piv = piv.astype(bool)
     print(piv.to_string())
 
-    print(df.to_string())
+    # print(df.to_string())
     # print(f'region_id={region_id}')
     # print(f'results={results}')
-    print(f'collection={collection}')
-    print('region_to_results = {}'.format(ub.repr2(region_to_results, nl=1)))
+    # print(f'collection={collection}')
+    # print('region_to_results = {}'.format(ub.repr2(region_to_results, nl=1)))
 
 
 def _devcheck_providers_exist():
