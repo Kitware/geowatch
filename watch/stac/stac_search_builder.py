@@ -92,11 +92,33 @@ _ACCENTURE_PHASE2_TA1_PRODUCTS = {
     },
     'ta1-pd-acc-1': {
         'endpoint': "https://api.smart-stac.com",
-        'collections': ['ta1-pd-acc'],
+        'collections': ['ta1-pd-acc-1'],
     },
     'ta1-wv-acc-1': {
         'endpoint': "https://api.smart-stac.com",
         'collections': ['ta1-wv-acc-1'],
+        "query": {
+            "nitf:imd": {
+                "eq": "true"
+            },
+        }
+    },
+
+    'ta1-s2-acc-2': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['ta1-s2-acc-2'],
+    },
+    'ta1-ls-acc-2': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['ta1-ls-acc-2'],
+    },
+    'ta1-pd-acc-2': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['ta1-pd-acc-2'],
+    },
+    'ta1-wv-acc-2': {
+        'endpoint': "https://api.smart-stac.com",
+        'collections': ['ta1-wv-acc-2'],
         "query": {
             "nitf:imd": {
                 "eq": "true"
@@ -232,6 +254,302 @@ _PUBLIC_ARD_PRODUCTS = {
 }
 
 
+def print_provider_debug_information():
+    """
+    Helper to debug STAC endpoints and data availability.
+
+    Summarize information about our hard-coded registered endpoints and query
+    information about what other endpoints might exist.
+
+    CommandLine:
+        xdoctest -m watch.stac.stac_search_builder print_provider_debug_information
+    """
+    from rich import print
+    print('Printing debug information about known and discoverable providers')
+    rows = []
+    for stac_code, stac_info in SENSOR_TO_DEFAULTS.items():
+
+        endpoint = stac_info['endpoint']
+
+        for collection in stac_info['collections']:
+            rows.append({
+                'stac_code': stac_code,
+                'endpoint': endpoint,
+                'collection': collection,
+            })
+
+    import pandas as pd
+    df = pd.DataFrame(rows)
+    print('Registered endpoints / collections / codes')
+    print(df.to_string())
+    unique_endpoints = df['endpoint'].unique()
+
+    collection_to_endpoint = ub.udict(ub.group_items(df['endpoint'], df['collection']))
+    endpoint_to_collections = ub.udict(ub.group_items(df['collection'], df['endpoint']))
+    collection_to_num_endpoints = collection_to_endpoint.map_values(len)
+    num_endpoints_to_collections = collection_to_num_endpoints.invert(unique_vals=False)
+    multiendpoint_collections = num_endpoints_to_collections - {1}
+    single_endpoint_collections = num_endpoints_to_collections.get(1, set())
+    num_multi_collections = sum(map(len, multiendpoint_collections.values()))
+    print(f'There are {len(unique_endpoints)} unique endpoints')
+    print(f'There are {len(single_endpoint_collections)} collection that are unique to an endpoint')
+    print(f'There are {num_multi_collections} collections that exist in multiple endpoints')
+    print('single_endpoint_collections = {}'.format(ub.repr2(single_endpoint_collections, nl=1)))
+    print('multiendpoint_collections = {}'.format(ub.repr2(multiendpoint_collections, nl=1)))
+    print('unique_endpoints = {}'.format(ub.repr2(unique_endpoints, nl=1)))
+
+    smart_stac_header = {
+        'x-api-key': os.environ['SMART_STAC_API_KEY']
+    }
+
+    found_endpoint_to_catalog = {}
+    found_endpoint_to_collections = {}
+
+    import pystac_client
+    for endpoint in unique_endpoints:
+        print(f'Query {endpoint=}')
+
+        pystac_headers = {}
+        if endpoint == 'https://api.smart-stac.com':
+            pystac_headers.update(smart_stac_header)
+
+        try:
+            catalog = pystac_client.Client.open(endpoint, headers=pystac_headers)
+            collections = list(catalog.get_collections())
+        except Exception:
+            print(f'Failed to query {endpoint=}')
+        else:
+            print(f'Found {len(collections)} collections')
+            found_endpoint_to_catalog[endpoint] = catalog
+            found_endpoint_to_collections[endpoint] = collections
+
+    unregistered_rows = []
+    for endpoint, collections in found_endpoint_to_collections.items():
+        print(f'\nCollections in endpoint={endpoint}')
+        known_collection_names = set(endpoint_to_collections[endpoint])
+        found_collection_names = {c.id for c in collections}
+        registered_names = known_collection_names & found_collection_names
+        misregistered_names = known_collection_names - found_collection_names
+        unregistered_names = found_collection_names - known_collection_names
+        if registered_names:
+            print('Valid registered collections = {}'.format(ub.repr2(registered_names, nl=1)))
+        if misregistered_names:
+            print(f'!!! Collections are registered that dont exist {misregistered_names=}')
+        if unregistered_names:
+            print('There are unregistered collections = {}'.format(ub.repr2(unregistered_names, nl=1)))
+            for name in unregistered_names:
+                unregistered_rows.append({
+                    'stac_code': None,
+                    'endpoint': endpoint,
+                    'collection': name,
+                })
+    print('Unregistered Collections')
+    unregistered_df = pd.DataFrame(unregistered_rows)
+    print(unregistered_df.to_string())
+
+    full_df = pd.concat([df, unregistered_df])
+    new_rows = full_df.to_dict(orient='records')
+    for row in ub.ProgIter(new_rows, verbose=3):
+        collection_name = row['collection']
+        endpoint = row['endpoint']
+        if endpoint in found_endpoint_to_collections:
+            name_to_col = {c.id: c for c in found_endpoint_to_collections[endpoint]}
+            if collection_name in name_to_col:
+                catalog = found_endpoint_to_catalog[endpoint]
+                collection = name_to_col[collection_name]
+                row['title'] = collection.title
+
+                is_unregistered = (unregistered_df[['endpoint', 'collection']] == [endpoint, collection_name]).all(axis=1).sum()
+                is_registered = (df[['endpoint', 'collection']] == [endpoint, collection_name]).all(axis=1).sum()
+                if is_registered:
+                    assert not is_unregistered
+                is_bad = not is_unregistered and not is_registered
+                assert not is_bad
+                row['registered'] = bool(is_registered)
+
+                result = catalog.search(
+                    collections=[collection_name],
+                    max_items=1
+                )
+                found = list(result.items())
+                row['has_items'] = len(found)
+
+                print(row)
+                print(collection.summaries.lists)
+
+    for row in new_rows:
+        if 'smart-stac' in row['endpoint']:
+            collection_name = row['collection']
+            if collection_name.startswith('ta1-'):
+                parts = collection_name.split('-')
+                if parts[-1] in {'1', '2', '3'}:
+                    processing = '-'.join(parts[-2:])
+                else:
+                    processing = parts[-1]
+                row['processing'] = processing
+
+    new_df = pd.DataFrame(new_rows)
+    new_df = new_df.sort_values(['processing', 'endpoint', 'collection'])
+    # new_df['has_items'] = new_df['has_items'].fillna(False)
+    new_df.loc[new_df['has_items'] == 1, 'has_items'] = True
+    new_df.loc[new_df['has_items'] == 0, 'has_items'] = False
+    new_df.loc[new_df['registered'] == 1, 'registered'] = True
+    new_df.loc[new_df['registered'] == 0, 'registered'] = False
+    print(new_df.to_string())
+
+
+def check_processed_regions():
+    """
+    Print out a table of how many images / region / collection there are.
+
+    CommandLine:
+        xdoctest -m watch.stac.stac_search_builder check_processed_regions
+    """
+    import json
+    import pystac_client
+    from datetime import datetime as datetime_cls
+    import watch
+
+    dvc_data_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+
+    # MODIFY AS NEEDED
+    headers = {
+        'x-api-key': os.environ['SMART_STAC_API_KEY']
+    }
+    region_dpath = dvc_data_dpath / 'annotations/region_models'
+    # region_fpaths = list(region_dpath.glob('*.geojson'))
+    region_fpaths = list(region_dpath.glob('*_R*.geojson'))
+
+    region_dpath = dvc_data_dpath / 'golden_regions/region_models'
+    region_fpaths = list(region_dpath.glob('*_S*.geojson'))
+
+    provider = "https://api.smart-stac.com"
+    catalog = pystac_client.Client.open(provider, headers=headers)
+
+    all_collections = list(catalog.get_collections())
+
+    collections_of_interest = ['planet-dove', 'ta1-pd-acc', 'ta1-pd-ara', 'ta1-pd-str']
+
+    from watch.utils import util_pattern
+    pat = util_pattern.Pattern.coerce('ta1-*-acc*').to_regex()
+    collections_of_interest = [c.id for c in all_collections if pat.match(c.id)]
+
+    collections_of_interest = [
+        'ta1-s2-acc',
+        'ta1-s2-acc-1',
+        'ta1-s2-acc-2',
+
+        'ta1-ls-acc',
+        'ta1-ls-acc-1',
+        'ta1-ls-acc-2',
+
+        # 'ta1-wv-acc',
+        # 'ta1-wv-acc-1',
+        # 'ta1-wv-acc-2',
+    ]
+
+    #     'ta1-pd-acc',
+    #     'ta1-pd-acc-1',
+    #     'ta1-mixedgsd-acc-1',
+    #     'ta1-30m-acc-1'
+    # ]
+    rows = []
+
+    import rich
+    import rich.progress
+    progress = rich.progress.Progress(
+        "[progress.description]{task.description}",
+        rich.progress.BarColumn(),
+        rich.progress.MofNCompleteColumn(),
+        # "[progress.percentage]{task.percentage:>3.0f}%",
+        rich.progress.TimeRemainingColumn(),
+        rich.progress.TimeElapsedColumn(),
+    )
+    with progress:
+        collection_task = progress.add_task("[cyan] Query Collection...", total=len(collections_of_interest))
+        region_task = None
+
+        # Check that planet items exist
+        for collection in collections_of_interest:
+
+            if region_task is not None:
+                progress.remove_task(region_task)
+            progress.update(collection_task, advance=1)
+            region_task = progress.add_task("[green] Query Regions...", total=len(region_fpaths))
+
+            # Check that planet items exist in our regions
+            region_to_results = {}
+            for region_fpath in region_fpaths:
+
+                progress.update(region_task, advance=1)
+
+                with open(region_fpath) as file:
+                    region_data = json.load(file)
+                region_row = [f for f in region_data['features'] if f['properties']['type'] == 'region'][0]
+                region_id = region_row['properties']['region_id']
+                geom = region_row['geometry']
+                start = region_row['properties']['start_date']
+                end = region_row['properties']['end_date']
+                if end is None:
+                    # end = datetime_cls.utcnow().date()
+                    end = datetime_cls.now().date().isoformat()
+
+                item_search = catalog.search(
+                    collections=[collection],
+                    datetime=(start, end),
+                    intersects=geom,
+                    max_items=1000,
+                )
+                search_iter = item_search.items()
+                # result0 = next(search_iter)
+                results = list(search_iter)
+                region_to_results[region_id] = results
+
+                rows.append({
+                    'collection': collection,
+                    'region_id': region_id,
+                    'num_results': len(results),
+                    'start_date': start,
+                    'end_date': end,
+                })
+
+    for row in rows:
+        if row['collection'].endswith('acc-2'):
+            row['processing'] = 'acc-2'
+        elif row['collection'].endswith('acc-1'):
+            row['processing'] = 'acc-1'
+        elif row['collection'].endswith('acc'):
+            row['processing'] = 'acc'
+
+        if '-ls' in row['collection']:
+            row['sensor'] = 'L8'
+        elif '-s2' in row['collection']:
+            row['sensor'] = 'S2'
+        elif '-wv' in row['collection']:
+            row['sensor'] = 'WV'
+        elif '-pd' in row['collection']:
+            row['sensor'] = 'PD'
+
+    import pandas as pd
+    from rich import print
+    df = pd.DataFrame(rows)
+    print(df.to_string())
+
+    # df = df.sort_values(['processing', 'sensor', 'collection'])
+    # piv = df.pivot(['region_id'], ['processing', 'sensor', 'collection'], ['num_results'])
+
+    df = df.sort_values(['sensor', 'processing', 'collection'])
+    piv = df.pivot(['region_id'], ['sensor', 'processing', 'collection'], ['num_results'])
+    # piv = piv.astype(bool)
+    print(piv.to_string())
+
+    # print(df.to_string())
+    # print(f'region_id={region_id}')
+    # print(f'results={results}')
+    # print(f'collection={collection}')
+    # print('region_to_results = {}'.format(ub.repr2(region_to_results, nl=1)))
+
+
 def _devcheck_providers_exist():
     """
     develoepr logic to test to see if providers are working
@@ -273,54 +591,6 @@ def _devcheck_providers_exist():
     item_search = catalog.search(collections=["ta1-pd-ara"])
     item_search = catalog.search(collections=["ta1-pd-str"])
     print(f'item_search={item_search}')
-
-
-def _mwe_check_planet_processed():
-    import json
-    import pystac_client
-    import pathlib
-    from datetime import datetime as datetime_cls
-
-    # MODIFY AS NEEDED
-    headers = {
-        'x-api-key': os.environ['SMART_STAC_API_KEY']
-    }
-    region_dpath = pathlib.Path('~/data/dvc-repos/smart_watch_dvc/annotations/region_models').expanduser()
-
-    provider = "https://api.smart-stac.com"
-    catalog = pystac_client.Client.open(provider, headers=headers)
-    region_fpaths = list(region_dpath.glob('*.geojson'))
-
-    # Check that planet items exist
-    for collection in ['planet-dove', 'ta1-pd-acc', 'ta1-pd-ara', 'ta1-pd-str']:
-        # Check that planet items exist in our regions
-        region_to_results = {}
-        for region_fpath in region_fpaths:
-            with open(region_fpath) as file:
-                region_data = json.load(file)
-            region_row = [f for f in region_data['features'] if f['properties']['type'] == 'region'][0]
-            region_id = region_row['properties']['region_id']
-            geom = region_row['geometry']
-            start = region_row['properties']['start_date']
-            end = region_row['properties']['end_date']
-            if end is None:
-                # end = datetime_cls.utcnow().date()
-                end = datetime_cls.now().date().isoformat()
-
-            item_search = catalog.search(
-                collections=[collection],
-                datetime=(start, end),
-                intersects=geom,
-                max_items=1
-            )
-            search_iter = item_search.items()
-            # result0 = next(search_iter)
-            results = list(search_iter)
-            region_to_results[region_id] = results
-            # print(f'region_id={region_id}')
-            # print(f'results={results}')
-        print(f'collection={collection}')
-        print('region_to_results = {}'.format(ub.repr2(region_to_results, nl=1)))
 
 
 ### Available smartstac collections:
@@ -393,6 +663,12 @@ CONVINIENCE_SENSOR_GROUPS = {
     'TA1-S2-L8-ACC': [
         'ta1-s2-acc',
         'ta1-ls-acc',
+    ],
+    'TA1-S2-L8-WV-PD-ACC-2': [
+        'ta1-s2-acc-2',
+        'ta1-ls-acc-2',
+        'ta1-pd-acc-2',
+        'ta1-wv-acc-2',
     ],
     'TA1-S2-L8-WV-PD-ACC-1': [
         'ta1-s2-acc-1',

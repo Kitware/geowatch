@@ -543,6 +543,7 @@ def build_image_header_text(**kwargs):
 # These are specs
 # https://smartgitlab.com/TE/standards/-/wikis/Data-Output-Specifications#quality-band
 # TODO: this could be a specially handled frame like ASI.
+# QA Information Moved to ~/code/watch/watch/tasks/fusion/datamodules/qa_bands.py
 QUALITY_BITS = ub.udict({
     'TnE'           : 1 << 0,  # T&E binary mask
     'dilated_cloud' : 1 << 1,

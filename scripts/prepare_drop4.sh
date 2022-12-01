@@ -499,6 +499,9 @@ dvc_add(){
     7z a splits.zip data*.kwcoco.json
 
     # Cd into the bundle we want to add
+    du -sh -- */WV
+    du -sh -- */S2
+    du -sh -- */L8
     ls -- */L8
     ls -- */S2
     ls -- */*.json

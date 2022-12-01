@@ -7,7 +7,7 @@ TODO:
     for now, this will remain somewhat ad-hoc.
 """
 import logging.config
-
+import warnings
 from logging import CRITICAL, ERROR, WARNING, INFO, DEBUG
 
 
@@ -28,6 +28,10 @@ def setup_logging(verbose=1):
     log_large += "(%(module)-17s) %(message)s"
 
     log_config = {}
+
+    if verbose > 2:
+        warnings.warn(f'watch util_logging only accepts a maximum verbosity of 2. Reconfiguring {verbose} to 2.')
+        verbose = 2
 
     if verbose == 0:
         log_config = {
