@@ -63,8 +63,6 @@ class PipelineDAG:
                 for oi_node in onode.succ:
                     self.io_graph.add_edge(onode.key, oi_node.key)
 
-        self.print_graphs()
-
     def print_graphs(self):
 
         def labelize_graph(graph):
@@ -364,7 +362,6 @@ class ProcessNode(Node):
 
         self.config = ub.udict(self.config)
         self.templates = None
-        self.resolved_paths = None
         self.build_templates()
 
         self.template_outdir = None
@@ -375,6 +372,7 @@ class ProcessNode(Node):
 
     def build_templates(self):
         templates = {}
+        templates['root_dpath'] = str(self.root_dpath)
         templates['node_dpath'] = str(self.node_dpath)
         if not isinstance(self.out_paths, dict):
             out_paths = self.config & self.out_paths
@@ -387,20 +385,31 @@ class ProcessNode(Node):
 
     @property
     def condensed(self):
-        condensed = {
+        condensed = {}
+        for node in self.predecessor_process_nodes():
+            condensed.update(node.condensed)
+        condensed.update({
             self.name + '_algo_id': self.algo_id,
             self.name + '_id': self.process_id,
-        }
+        })
         return condensed
 
     def resolve_templates(self):
+        templates = self.templates
         condensed = self.condensed
         resolved = {}
-        resolved['node_dpath'] = ub.Path(self.templates['node_dpath'].format(**condensed))
-        resolved['out_paths'] = {
-            k: ub.Path(v.format(**condensed))
-            for k, v in self.templates['out_paths'].items()
-        }
+        try:
+            resolved['root_dpath'] = ub.Path(templates['root_dpath'].format(**condensed))
+            resolved['node_dpath'] = ub.Path(templates['node_dpath'].format(**condensed))
+            resolved['out_paths'] = {
+                k: ub.Path(v.format(**condensed))
+                for k, v in templates['out_paths'].items()
+            }
+        except KeyError as ex:
+            print('ERROR: {}'.format(ub.repr2(ex, nl=1)))
+            print('condensed = {}'.format(ub.repr2(condensed, nl=1, sort=0)))
+            print('templates = {}'.format(ub.repr2(templates, nl=1, sort=0)))
+            raise
         self.resolved = resolved
         return self.resolved
 

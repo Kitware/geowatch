@@ -38,22 +38,29 @@ Example:
     >>>     print(f'{node.resources=}')
     >>>     resolved = node.resolve_templates()
     >>>     print('resolved = {}'.format(ub.repr2(resolved, nl=1)))
+    >>> dag.print_graphs()
     >>> dag.configure(config)
     >>> dag_templates = {}
+    >>> dag_paths = {}
     >>> for node in dag.nodes.values():
-    >>>     dag_templates[node.name] = str(node.node_dpath)
+    >>>     dag_templates[node.name] = node.build_templates()['node_dpath']
+    >>>     dag_paths[node.name] = node.resolve_templates()['node_dpath']
     >>> import rich
-    >>> rich.print('dag_templates = {}'.format(ub.repr2(dag_templates, nl=1, sv=1, align=':')))
-    >>> #util_networkx.write_network_text(dag.proc_graph)
-    >>> #util_networkx.write_network_text(dag.io_graph)
+    >>> rich.print('dag_templates = {}'.format(
+    >>>     ub.repr2(dag_templates, nl=1, sv=1, align=':', sort=0)))
+    >>> rich.print('dag_paths = {}'.format(
+    >>>     ub.repr2(dag_paths, nl=1, sv=1, align=':', sort=0)))
 """
 import ubelt as ub
 from watch.mlops.pipeline_nodes import ProcessNode
 
+PREDICT_NAME  = 'pred'
+EVALUATE_NAME = 'eval'
+
 
 class FeatureComputation(ProcessNode):
     executable = 'python -m watch.cli.run_metrics_framework'
-    group_dname = 'prediction'
+    group_dname = PREDICT_NAME
 
     node_dname = 'feats/{src_dset}'
 
@@ -76,7 +83,7 @@ class FeatureComputation(ProcessNode):
 class FeatureUnion(ProcessNode):
     name = 'featunion'
     executable = 'smartwatch feature_union'
-    group_dname = 'prediction'
+    group_dname = PREDICT_NAME
     in_paths = {'src'}
     out_paths = {
         'dst': 'combo_{featunion_id}.kwcoco.json'
@@ -92,7 +99,7 @@ class FeatureUnion(ProcessNode):
 
 class HeatmapPrediction(ProcessNode):
     executable = 'python -m watch.tasks.fusion.predict'
-    group_dname = 'prediction'
+    group_dname = PREDICT_NAME
 
     resources = {
         'cpus': 2,
@@ -130,7 +137,7 @@ class HeatmapPrediction(ProcessNode):
 
 class PolygonPrediction(ProcessNode):
     executable = 'python -m watch.cli.run_tracker'
-    group_dname = 'prediction'
+    group_dname = PREDICT_NAME
     default_track_fn = NotImplemented
 
     in_paths = {
@@ -164,7 +171,7 @@ class PolygonPrediction(ProcessNode):
 
 class PolygonEvaluation(ProcessNode):
     executable = 'python -m watch.cli.run_metrics_framework'
-    group_dname = 'evaluation'
+    group_dname = EVALUATE_NAME
 
     in_paths = {
         'true_region_dpath',
@@ -196,7 +203,7 @@ class PolygonEvaluation(ProcessNode):
 
 class HeatmapEvaluation(ProcessNode):
     executable = 'python -m watch.tasks.fusion.evaluate'
-    group_dname = 'evaluation'
+    group_dname = EVALUATE_NAME
 
     in_paths = {
         'true_dataset',
@@ -233,7 +240,7 @@ class HeatmapEvaluation(ProcessNode):
 
 class KWCocoVisualization(ProcessNode):
     executable = 'python -m watch.cli.coco_visualize_videos'
-    group_dname = 'prediction'
+    group_dname = PREDICT_NAME
 
     resources = {
         'cpus': 2,
@@ -303,7 +310,7 @@ class LandcoverFeatureComputation(FeatureComputation):
 class BAS_HeatmapPrediction(HeatmapPrediction):
     name = 'bas_pxl'
     # node_dname = 'bas_pxl/{bas_model}/{bas_test_dset}/{bas_pxl_algo_id}/{bas_pxl_id}'
-    node_dname = 'bas_pxl//{bas_pxl_algo_id}/{bas_pxl_id}'
+    node_dname = 'bas_pxl/{bas_pxl_algo_id}/{bas_pxl_id}'
 
     @property
     def condensed(self):
@@ -382,7 +389,7 @@ class SC_Visualization(KWCocoVisualization):
 class SiteCropping(ProcessNode):
     name = 'crop'
     node_dname = 'crop/{src_dset}/{regions_id}/{crop_algo_id}/{crop_id}'
-    group_dname = 'prediction'
+    group_dname = PREDICT_NAME
 
     in_paths = {
         'crop_src_fpath'
@@ -474,7 +481,7 @@ def bas_nodes():
         nodes['bas_poly_viz'],
     )
 
-    if 1:
+    if 0:
         nodes['bas_invariants'] = InvariantFeatureComputation()
         nodes['bas_land'] = LandcoverFeatureComputation()
         nodes['bas_materials'] = MaterialFeatureComputation()
