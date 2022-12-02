@@ -604,34 +604,21 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 else:
                     raise KeyError(self.hparams.decoder)
 
-        if hasattr(torchmetrics, 'FBetaScore'):
-            FBetaScore = torchmetrics.FBetaScore
-        else:
-            FBetaScore = torchmetrics.FBeta
-
-        import inspect
-        sig = inspect.signature(FBetaScore)
-        mc_taskkw = {}
-        bin_taskkw = {}
-        if 'task' in sig.parameters:
-            # Fix for torchmetrics 0.11.x
-            bin_taskkw['task'] = 'binary'
-            mc_taskkw['task'] = 'multiclass'
-
+        FBetaScore = torchmetrics.FBetaScore
         self.head_metrics = nn.ModuleDict()
         self.head_metrics['class'] = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
-            'f1_micro': FBetaScore(beta=1.0, threshold=0.5, average='micro', num_classes=int(self.num_classes), **mc_taskkw),
-            'f1_macro': FBetaScore(beta=1.0, threshold=0.5, average='macro', num_classes=int(self.num_classes), **mc_taskkw),
+            'f1_micro': FBetaScore(beta=1.0, threshold=0.5, average='micro', num_classes=self.num_classes, task='multiclass'),
+            'f1_macro': FBetaScore(beta=1.0, threshold=0.5, average='macro', num_classes=self.num_classes, task='multiclass'),
         })
         self.head_metrics['change'] = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
-            'f1': FBetaScore(beta=1.0, **bin_taskkw),
+            'f1': FBetaScore(beta=1.0, task='binary'),
         })
         self.head_metrics['saliency'] = nn.ModuleDict({
-            'f1': FBetaScore(beta=1.0, **bin_taskkw),
+            'f1': FBetaScore(beta=1.0, task='binary'),
         })
 
         self.encode_h = utils.SinePositionalEncoding(3, 1, size=8)

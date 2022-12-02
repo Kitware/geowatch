@@ -461,16 +461,12 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                     padding="same",
                     bias=False)
 
-        if hasattr(torchmetrics, 'FBetaScore'):
-            FBetaScore = torchmetrics.FBetaScore
-        else:
-            FBetaScore = torchmetrics.FBeta
-
+        FBetaScore = torchmetrics.FBetaScore
         class_metrics = torchmetrics.MetricCollection({
-            "class_acc": torchmetrics.Accuracy(),
+            "class_acc": torchmetrics.Accuracy(num_classes=self.num_classes, task='multiclass'),
             # "class_iou": torchmetrics.IoU(2),
-            'class_f1_micro': FBetaScore(beta=1.0, threshold=0.5, average='micro'),
-            'class_f1_macro': FBetaScore(beta=1.0, threshold=0.5, average='macro', num_classes=self.num_classes),
+            'class_f1_micro': FBetaScore(beta=1.0, threshold=0.5, average='micro', num_classes=self.num_classes, task='multiclass'),
+            'class_f1_macro': FBetaScore(beta=1.0, threshold=0.5, average='macro', num_classes=self.num_classes, task='multiclass'),
         })
         change_metrics = torchmetrics.MetricCollection({
             "change_acc": torchmetrics.Accuracy(task="binary"),
