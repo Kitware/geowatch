@@ -9,6 +9,8 @@ TODO:
 
     - [ ] Handle nodata
 
+    - [ ] Rename to coco_spectra
+
 CommandLine:
     smartwatch intensity_histograms --src special:watch-msi --show=True --stat=density
     smartwatch intensity_histograms --src special:photos --show=True --fill=False
@@ -458,9 +460,9 @@ def ensure_intensity_sidecar(fpath, recompute=False):
         >>> pickle.loads(stats_fpath2.read_bytes())
     """
     import os
-    stats_fpath = ub.Path(os.fspath(fpath) + '.stats.pkl')
+    stats_fpath = ub.Path(os.fspath(fpath) + '.stats_v1.pkl')
     if recompute or not stats_fpath.exists():
-        imdata = kwimage.imread(fpath, backend='gdal')
+        imdata = kwimage.imread(fpath, backend='gdal', nodata_method='ma')
         imdata = kwarray.atleast_nd(imdata, 3)
         # TODO: even better float handling
         if imdata.dtype.kind == 'f':
@@ -468,7 +470,9 @@ def ensure_intensity_sidecar(fpath, recompute=False):
             imdata = imdata.round(3)
         stats_info = {'bands': []}
         for imband in imdata.transpose(2, 0, 1):
-            data = imband.ravel()
+            masked_data = imband.ravel()
+            # Remove masked data
+            data = masked_data.data[~masked_data.mask]
             intensity_hist = ub.dict_hist(data)
             intensity_hist = ub.sorted_keys(intensity_hist)
             stats_info['bands'].append({
