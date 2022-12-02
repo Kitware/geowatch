@@ -429,6 +429,8 @@ class ProcessNode(Node):
     def algo_id(self):
         """
         A unique id to represent the output of a deterministic process.
+
+        This does NOT have a dependency on the larger the DAG.
         """
         from watch.utils.reverse_hashid import condense_config
         algo_id = condense_config(self.algo_config, self.name + '_algo_id')
@@ -481,6 +483,8 @@ class ProcessNode(Node):
         A unique id to represent the output of a deterministic process in a
         pipeline. This id combines the hashes of all ancestors in the DAG with
         its own hashed id.
+
+        This DOES have a dependency on the larger DAG.
         """
         from watch.utils.reverse_hashid import condense_config
         ancestors = self.ancestor_process_nodes()
