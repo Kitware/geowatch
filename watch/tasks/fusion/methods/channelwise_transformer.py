@@ -604,25 +604,21 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 else:
                     raise KeyError(self.hparams.decoder)
 
-        if hasattr(torchmetrics, 'FBetaScore'):
-            FBetaScore = torchmetrics.FBetaScore
-        else:
-            FBetaScore = torchmetrics.FBeta
-
+        FBetaScore = torchmetrics.FBetaScore
         self.head_metrics = nn.ModuleDict()
         self.head_metrics['class'] = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
-            'f1_micro': FBetaScore(beta=1.0, threshold=0.5, average='micro'),
-            'f1_macro': FBetaScore(beta=1.0, threshold=0.5, average='macro', num_classes=self.num_classes),
+            'f1_micro': FBetaScore(beta=1.0, threshold=0.5, average='micro', num_classes=self.num_classes, task='multiclass'),
+            'f1_macro': FBetaScore(beta=1.0, threshold=0.5, average='macro', num_classes=self.num_classes, task='multiclass'),
         })
         self.head_metrics['change'] = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
-            'f1': FBetaScore(beta=1.0),
+            'f1': FBetaScore(beta=1.0, task='binary'),
         })
         self.head_metrics['saliency'] = nn.ModuleDict({
-            'f1': FBetaScore(beta=1.0),
+            'f1': FBetaScore(beta=1.0, task='binary'),
         })
 
         self.encode_h = utils.SinePositionalEncoding(3, 1, size=8)
