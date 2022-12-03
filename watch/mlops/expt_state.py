@@ -52,7 +52,7 @@ class ExperimentState(ub.NiceRepr):
         # from watch.utils import util_pattern
         # model_pattern = util_pattern.MultiPattern.coerce(model_pattern, hint='glob')
 
-        self.expt_dvc_dpath = ub.Path(expt_dvc_dpath)
+        self.expt_dvc_dpath = expt_dvc_dpath = ub.Path(expt_dvc_dpath)
 
         if data_dvc_dpath is None:
             import watch
