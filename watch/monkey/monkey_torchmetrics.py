@@ -1,9 +1,5 @@
 def fix_torchmetrics_compatability():
     import torchmetrics
-
-    if not hasattr(torchmetrics.classification.f_beta, 'F1'):
-        torchmetrics.classification.f_beta.F1 = torchmetrics.classification.f_beta.FBetaScore
-
     from watch.monkey._monkey_fbeta import FBetaScore_Patched
     f_beta = torchmetrics.classification.f_beta
 
@@ -32,3 +28,4 @@ def fix_torchmetrics_compatability():
     #             kwargs['task'] = 'multiclass'
     #     return f_beta.FBetaScoreOrig(**kwargs)
     f_beta.FBetaScore = FBetaScore_Patched
+    f_beta.F1 = FBetaScore_Patched
