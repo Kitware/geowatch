@@ -13,13 +13,16 @@ Example:
     >>> from cmd_queue.util import util_networkx
     >>> #
     >>> config = {
-    >>>     'bas_pxl.package_fpath': None,
-    >>>     'bas_pxl.workers': 2,
-    >>>     'bas_pxl.data.test_dataset': 'foobar.kwcoco.json',
+    >>>     'bas_pxl.package_fpath': '/global/models/bas_model2.pt',
+    >>>     'bas_pxl.num_workers': 3,
+    >>>     'bas_pxl.tta_time': 1,
+    >>>     'bas_pxl.test_dataset': '/global/datasets/foobar.kwcoco.json',
     >>> #
     >>>     'bas_poly.thresh': 0.1,
     >>>     'bas_poly.moving_window_size': 0.1,
     >>> #
+    >>>     'sc_pxl.package_fpath': '/global/models/sc_model2.pt',
+    >>>     'sc_pxl.tta_fliprot': 8,
     >>>     'sc_poly.use_viterbi': 0,
     >>> }
     >>> #
@@ -29,27 +32,58 @@ Example:
     >>> print('nodes = {}'.format(ub.repr2(nodes, nl=1, si=1)))
     >>> from watch.mlops.pipeline_nodes import PipelineDAG
     >>> dag = PipelineDAG(nodes, config)
+    >>> dag.configure(config, root_dpath='/dag-root/dag-id')
     >>> #
     >>> for node in dag.nodes.values():
+    >>>     print('---')
     >>>     print(f'node={type(node)}')
     >>>     print(f'{node.name=}')
+    >>>     print(f'{node.config=}')
     >>>     print(f'{node.in_paths=}')
     >>>     print(f'{node.out_paths=}')
     >>>     print(f'{node.resources=}')
-    >>>     resolved = node.resolve_templates()
-    >>>     print('resolved = {}'.format(ub.repr2(resolved, nl=1)))
+    >>>     print(f'{node.algo_params=}')
+    >>>     print('node.depends = {}'.format(ub.repr2(node.depends, nl=1, sort=0)))
+    >>>     #print('node.node_info = {}'.format(ub.repr2(node.node_info, nl=3, sort=0)))
+    >>>     resolved = node._resolve_templates()
+    >>>     print('resolved = {}'.format(ub.repr2(resolved, nl=2)))
+    >>>     print('---')
     >>> dag.print_graphs()
-    >>> dag.configure(config)
+    >>> print('dag.config = {}'.format(ub.repr2(dag.config, nl=1)))
     >>> dag_templates = {}
     >>> dag_paths = {}
     >>> for node in dag.nodes.values():
-    >>>     dag_templates[node.name] = node.build_templates()['node_dpath']
-    >>>     dag_paths[node.name] = node.resolve_templates()['node_dpath']
+    >>>     dag_templates[node.name] = node._build_templates()['node_dpath']
+    >>>     dag_paths[node.name] = node._resolve_templates()['node_dpath']
+    >>>     print(node.command())
     >>> import rich
     >>> rich.print('dag_templates = {}'.format(
     >>>     ub.repr2(dag_templates, nl=1, sv=1, align=':', sort=0)))
     >>> rich.print('dag_paths = {}'.format(
     >>>     ub.repr2(dag_paths, nl=1, sv=1, align=':', sort=0)))
+
+
+Ignore:
+    from watch.mlops.smart_pipeline_nodes import *  # NOQA
+    import watch
+    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+    data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+
+    config = {}
+    config['bas_pxl.test_dataset'] = data_dvc_dpath / 'Drop4-BAS/BR_R001.kwcoco.json'
+    config['bas_pxl.package_fpath'] = expt_dvc_dpath / 'models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt'
+    config['sc_pxl.package_fpath'] = expt_dvc_dpath / 'models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt'
+
+    root_dpath = data_dvc_dpath / '_testdag'
+
+    nodes = joint_bas_sc_nodes()
+    from watch.mlops.pipeline_nodes import PipelineDAG
+    dag = PipelineDAG(nodes)
+    dag.configure(config=config, root_dpath=root_dpath)
+    dag.print_graphs()
+    for node in dag.nodes.values():
+        print(node.resolved_command())
+
 """
 import ubelt as ub
 from watch.mlops.pipeline_nodes import ProcessNode
@@ -123,6 +157,9 @@ class HeatmapPrediction(ProcessNode):
     }
 
     def command(self):
+        fmtkw = self.resolved_config.copy()
+        fmtkw['params_argstr'] = self._make_argstr(fmtkw & self.algo_params)
+        fmtkw['perf_argstr'] = self._make_argstr(fmtkw & self.perf_params)
         command = ub.codeblock(
             r'''
             python -m watch.tasks.fusion.predict \
@@ -131,7 +168,7 @@ class HeatmapPrediction(ProcessNode):
                 --pred_dataset={pred_pxl_fpath} \
                 {params_argstr} \
                 {perf_argstr}
-            ''')
+            ''').format(**fmtkw).rstrip().rstrip('\\').rstrip()
         return command
 
 
@@ -141,7 +178,8 @@ class PolygonPrediction(ProcessNode):
     default_track_fn = NotImplemented
 
     in_paths = {
-        'pred_pxl_fpath'
+        'pred_pxl_fpath',
+        'site_summary',
     }
 
     out_paths = {
@@ -153,11 +191,22 @@ class PolygonPrediction(ProcessNode):
     }
 
     def command(self):
+        import shlex
+        import json
+        fmtkw = self.resolved_config.copy()
+        fmtkw['default_track_fn'] = self.default_track_fn
+        # actclf_cfg = {
+        #     'boundaries_as': 'polys',
+        # }
+        # actclf_cfg.update(act_poly_params)
+        fmtkw['kwargs_str'] = shlex.quote(json.dumps(self.algo_config))
+        # fmtkw['site_summary'] = 'todo'
+
         command = ub.codeblock(
             r'''
             python -m watch.cli.run_tracker \
                 "{pred_pxl_fpath}" \
-                --default_track_fn {self.default_track_fn} \
+                --default_track_fn {default_track_fn} \
                 --track_kwargs {kwargs_str} \
                 --site_summary '{site_summary}' \
                 --out_site_summaries_fpath "{site_summaries_fpath}" \
@@ -165,7 +214,7 @@ class PolygonPrediction(ProcessNode):
                 --out_sites_fpath "{sites_fpath}" \
                 --out_sites_dir "{sites_dpath}" \
                 --out_kwcoco "{poly_kwcoco_fpath}"
-            ''')
+            ''').format(**fmtkw)
         return command
 
 
@@ -185,7 +234,26 @@ class PolygonEvaluation(ProcessNode):
     }
 
     def command(self):
-        self.tmp_dpath = self.paths['eval_dpath'] / 'tmp'
+        # self.tmp_dpath = self.paths['eval_dpath'] / 'tmp'
+        # self.tmp_dpath = self.paths['eval_dpath'] / 'tmp'
+        fmtkw = self.resolved_config.copy()
+        fmtkw['params_argstr'] = self._make_argstr(fmtkw & self.algo_params)
+        fmtkw['perf_argstr'] = self._make_argstr(fmtkw & self.perf_params)
+        fmtkw['tmp_dpath'] = self.resolved_node_dpath / 'tmp'
+
+        # Hack:
+        if fmtkw['true_site_dpath'] is None:
+            import watch
+            dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            fmtkw['true_site_dpath'] = dvc_dpath / 'annotations/site_models'
+            fmtkw['true_region_dpath'] = dvc_dpath / 'annotations/region_models'
+
+        name_parts = {
+            k: v for k, v in sorted(self.condensed.items())
+            if 'eval' not in k and (('algo_id' in k) or ('id' not in v))
+        }
+        fmtkw['name_suffix'] = '-'.join(name_parts.values())
+
         command = ub.codeblock(
             r'''
             python -m watch.cli.run_metrics_framework \
@@ -194,10 +262,10 @@ class PolygonEvaluation(ProcessNode):
                 --true_site_dpath "{true_site_dpath}" \
                 --true_region_dpath "{true_region_dpath}" \
                 --pred_sites "{sites_fpath}" \
-                --tmp_dir "{self.tmp_dpath}" \
+                --tmp_dir "{tmp_dpath}" \
                 --out_dir "{eval_dpath}" \
                 --merge_fpath "{eval_fpath}"
-            ''')
+            ''').format(**fmtkw)
         return command
 
 
@@ -217,6 +285,7 @@ class HeatmapEvaluation(ProcessNode):
 
     def command(self):
         # TODO: better score space
+        fmtkw = self.resolved_config.copy()
         extra_opts = {
             'draw_curves': True,
             'draw_heatmaps': True,
@@ -224,7 +293,7 @@ class HeatmapEvaluation(ProcessNode):
             'workers': 2,
             'score_space': 'video',
         }
-        extra_argstr = self._make_argstr(extra_opts)  # NOQA
+        fmtkw['extra_argstr'] = self._make_argstr(extra_opts)  # NOQA
         command = ub.codeblock(
             r'''
             python -m watch.tasks.fusion.evaluate \
@@ -233,7 +302,7 @@ class HeatmapEvaluation(ProcessNode):
                 --eval_dpath={eval_pxl_dpath} \
                 --eval_fpath={eval_pxl_fpath} \
                 {extra_argstr}
-            ''')
+            ''').format(**fmtkw)
         # .format(**eval_act_pxl_kw).strip().rstrip('\\')
         return command
 
@@ -251,24 +320,32 @@ class KWCocoVisualization(ProcessNode):
     }
 
     out_paths = {
+        'viz_dpath': '.',
         'viz_stamp_fpath': '_viz.stamp'
     }
 
     def command(self):
+        fmtkw = self.resolved_config.copy()
+        name_parts = {
+            k: v for k, v in sorted(self.condensed.items())
+            if 'eval' not in k and (('algo_id' in k) or ('id' not in v))
+        }
+        fmtkw['name_suffix'] = '-'.join(name_parts.values())
         # paths = ub.udict(paths)
         # viz_pred_trk_poly_kw = paths.copy()
-        # viz_pred_trk_poly_kw['extra_header'] = f"\\n{condensed['trk_pxl_algo_id']}-{condensed['trk_poly_algo_id']}"
+        # fmtkw['extra_header'] = f"\\n{condensed['trk_pxl_algo_id']}-{condensed['trk_poly_algo_id']}"
         # viz_pred_trk_poly_kw['viz_channels'] = "red|green|blue,salient"
         command = ub.codeblock(
             r'''
             smartwatch visualize \
                 "{poly_kwcoco_fpath}" \
+                --viz_dpath={viz_dpath} \
                 --channels="auto" \
                 --stack=only \
                 --workers=2 \
-                --extra_header="{extra_header}" \
+                --extra_header="{name_suffix}" \
                 --animate=True && touch {viz_stamp_fpath}
-            ''')
+            ''').format(**fmtkw)
         return command
 
 
@@ -387,15 +464,15 @@ class SC_Visualization(KWCocoVisualization):
 
 
 class SiteCropping(ProcessNode):
-    name = 'crop'
-    node_dname = 'crop/{src_dset}/{regions_id}/{crop_algo_id}/{crop_id}'
+    name = 'sitecrop'
+    node_dname = 'sitecrop/{src_dset}/{regions_id}/{sitecrop_algo_id}/{sitecrop_id}'
     group_dname = PREDICT_NAME
 
     in_paths = {
         'crop_src_fpath'
     }
     out_paths = {
-        'crop_dst_fpath'
+        'crop_dst_fpath': 'sitecrop.kwcoco.json'
     }
 
     perf_params = {
@@ -438,6 +515,9 @@ class SiteCropping(ProcessNode):
         crop_kwargs['crop_params_argstr'] = self._make_argstr(crop_params)
         crop_kwargs['crop_perf_argstr'] = self._make_argstr(self.perf_params)
 
+        crop_kwargs.update(self.resolved_in_paths)
+        crop_kwargs.update(self.resolved_out_paths)
+
         command = ub.codeblock(
             r'''
             python -m watch.cli.coco_align \
@@ -455,7 +535,7 @@ class SiteCropping(ProcessNode):
         #         # command = f'source {secret_fpath} && ' + command
         command = 'AWS_DEFAULT_PROFILE=iarpa GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR ' + command
         return command
-        # name = 'crop'
+        # name = 'sitecrop'
         # step = Step(name, command,
         #             in_paths=paths & {'crop_regions', 'crop_src_fpath'},
         #             out_paths=paths & {'crop_dst_fpath', 'crop_dpath'},
@@ -471,6 +551,10 @@ def bas_nodes():
     nodes['bas_pxl_eval'] = BAS_HeatmapEvaluation()
     nodes['bas_poly_eval'] = BAS_PolygonEvaluation()
     nodes['bas_poly_viz'] = BAS_Visualization()
+
+    nodes['bas_pxl'].inputs['test_dataset'].connect(
+        nodes['bas_pxl_eval'].inputs['true_dataset']
+    )
 
     nodes['bas_pxl'].connect(
         nodes['bas_pxl_eval'],
@@ -523,6 +607,10 @@ def sc_nodes():
     nodes['sc_poly_eval'] = SC_PolygonEvaluation()
     nodes['sc_poly_viz'] = SC_Visualization()
 
+    nodes['sc_pxl'].inputs['test_dataset'].connect(
+        nodes['sc_pxl_eval'].inputs['true_dataset']
+    )
+
     nodes['sc_pxl'].connect(
         nodes['sc_pxl_eval'],
         nodes['sc_poly'].connect(
@@ -536,22 +624,26 @@ def sc_nodes():
 def joint_bas_sc_nodes():
     nodes = {}
     nodes.update(bas_nodes())
-    nodes['crop'] = SiteCropping()
+    nodes['sitecrop'] = SiteCropping()
     nodes.update(sc_nodes())
 
     # outputs['site_summaries_fpath'].connect(
     nodes['bas_poly'].connect(
-        nodes['crop'],
+        nodes['sitecrop'],
         param_mapping={
             'site_summaries_fpath': 'crop_src_fpath',
         }
     )
 
-    nodes['crop'].connect(
+    nodes['sitecrop'].connect(
         # outputs['crop_fpath'].connect(
         nodes['sc_pxl'],
         param_mapping={
             'crop_dst_fpath': 'test_dataset',
         }
+    )
+
+    nodes['bas_poly'].outputs['site_summaries_fpath'].connect(
+        nodes['sc_poly'].inputs['site_summary']
     )
     return nodes

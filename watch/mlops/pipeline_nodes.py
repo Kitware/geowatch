@@ -11,18 +11,21 @@ Configurable = Optional[Dict[str, Any]]
 
 
 class PipelineDAG:
-    def __init__(self, nodes=[], config=None):
+    def __init__(self, nodes=[], config=None, root_dpath=None):
         self.proc_graph = None
         self.io_graph = None
         self.nodes = nodes
         self.config = None
 
         if config:
-            self.configure(config)
+            self.configure(config, root_dpath=root_dpath)
 
-    def configure(self, config):
-        nested = util_param_grid.dotdict_to_nested(config)  # NOQA
-        ...
+    def configure(self, config, root_dpath=None):
+        self.config = config
+
+        if root_dpath is not None:
+            root_dpath = ub.Path(root_dpath)
+            self.root_dpath = root_dpath
 
         if isinstance(self.nodes, dict):
             node_dict = self.nodes
@@ -62,6 +65,15 @@ class PipelineDAG:
 
                 for oi_node in onode.succ:
                     self.io_graph.add_edge(onode.key, oi_node.key)
+
+        # Set the configuration for each node in this pipeline.
+        dotconfig = util_param_grid.DotDict(config)
+        for node_name in nx.topological_sort(self.proc_graph):
+            node = self.proc_graph.nodes[node_name]['node']
+            if root_dpath is not None:
+                node.root_dpath = root_dpath
+            node_config = dict(dotconfig.prefix_get(node.name, {}))
+            node.configure(node_config)
 
     def print_graphs(self):
 
@@ -128,7 +140,11 @@ class Node(ub.NiceRepr):
             inputs = other.inputs
         else:
             assert isinstance(other, IONode)
-            inputs = {other.name: other}
+            if not self_is_proc:
+                # In this case we can make the name map implicit
+                inputs = {self.name: other}
+            else:
+                inputs = {other.name: other}
 
         outmap = ub.udict({src_map.get(k, k): k for k in outputs.keys()})
         inmap = ub.udict({dst_map.get(k, k): k for k in inputs.keys()})
@@ -185,6 +201,22 @@ class IONode(Node):
     def __init__(self, name, parent):
         super().__init__(name)
         self.parent = parent
+        self._resolved_value = None
+        self._template_value = None
+
+    @property
+    def resolved_value(self):
+        value = self._resolved_value
+        if value is None:
+            preds = list(self.pred)
+            if preds:
+                assert len(preds) == 1
+                value = preds[0].resolved_value
+        return value
+
+    @resolved_value.setter
+    def resolved_value(self, value):
+        self._resolved_value = value
 
     @property
     def key(self):
@@ -196,7 +228,11 @@ class InputNode(IONode):
 
 
 class OutputNode(IONode):
-    ...
+    @property
+    def resolved_value(self):
+        if self._resolved_value is None:
+            return self.parent._resolve_templates()['out_paths'][self.name]
+        return self._resolved_value
 
 
 def _classvar_init(self, args, fallbacks):
@@ -269,23 +305,23 @@ class ProcessNode(Node):
         >>>     config={
         >>>         'foo': 'baz',
         >>>         'bar': 'biz',
-        >>>         'workers': 3,
+        >>>         'num_workers': 3,
         >>>         'src': src_fpath,
         >>>         'dst': dst_fpath
         >>>     },
         >>>     in_paths={'src'},
         >>>     out_paths={'dst': 'there.txt'},
-        >>>     perf_params={'workers'},
+        >>>     perf_params={'num_workers'},
         >>>     group_dname='predictions',
         >>>     node_dname='proc1/{proc1_algo_id}/{proc1_id}',
         >>>     executable=f'python -c "{chr(10)}{pycode}{chr(10)}"',
         >>>     root_dpath=dpath,
         >>> )
-        >>> self.resolve_templates()
+        >>> self._resolve_templates()
         >>> print('self.command = {}'.format(ub.repr2(self.command, nl=1, sv=1)))
         >>> print(f'self.algo_id={self.algo_id}')
         >>> print(f'self.root_dpath={self.root_dpath}')
-        >>> print(f'self.node_dpath={self.node_dpath}')
+        >>> print(f'self.template_node_dpath={self.template_node_dpath}')
         >>> print('self.templates = {}'.format(ub.repr2(self.templates, nl=2)))
         >>> print('self.resolved = {}'.format(ub.repr2(self.resolved, nl=2)))
         >>> print('self.condensed = {}'.format(ub.repr2(self.condensed, nl=2)))
@@ -302,7 +338,7 @@ class ProcessNode(Node):
 
     executable : Optional[str] = None
 
-    algo_params : Collection = None  # algorithm parameters - impacts output
+    # algo_params : Collection = None  # algorithm parameters - impacts output
 
     perf_params : Collection = None  # performance parameters - no output impact
 
@@ -318,7 +354,7 @@ class ProcessNode(Node):
     def __init__(self,
                  name=None,
                  executable=None,
-                 algo_params=None,
+                 # algo_params=None,
                  perf_params=None,
                  resources=None,
                  in_paths=None,
@@ -341,14 +377,6 @@ class ProcessNode(Node):
         _classvar_init(self, args, fallbacks)
         super().__init__(args['name'])
 
-        if self.algo_params is None:
-            non_algo_sets = [self.in_paths, self.out_paths, self.perf_params]
-            non_algo_keys = (
-                set.union(*[set(s) for s in non_algo_sets if s is not None])
-                if non_algo_sets else set()
-            )
-            self.algo_params = set(self.config) - non_algo_keys
-
         if self.node_dname is None:
             self.node_dname = '.'
         self.node_dname = ub.Path(self.node_dname)
@@ -360,9 +388,10 @@ class ProcessNode(Node):
             self.root_dpath = '.'
         self.root_dpath = ub.Path(self.root_dpath)
 
-        self.config = ub.udict(self.config)
+        # self._dirtype = 'tree'
+        self._dirtype = 'flat'
+
         self.templates = None
-        self.build_templates()
 
         self.template_outdir = None
         self.template_opaths = None
@@ -370,18 +399,27 @@ class ProcessNode(Node):
         self.resolved_outdir = None
         self.resolved_opaths = None
 
-    def build_templates(self):
-        templates = {}
-        templates['root_dpath'] = str(self.root_dpath)
-        templates['node_dpath'] = str(self.node_dpath)
-        if not isinstance(self.out_paths, dict):
-            out_paths = self.config & self.out_paths
-        else:
-            out_paths = self.out_paths
-        out_paths = {k: str(self.node_dpath / v) for k, v in out_paths.items()}
-        templates['out_paths'] = out_paths
-        self.templates = templates
-        return self.templates
+        self.configure(self.config)
+
+    def configure(self, config):
+        if config is None:
+            config = {}
+        self.config = ub.udict(config)
+        if True:  # self.algo_params is None:
+            # non_algo_sets = [self.in_paths, self.out_paths, self.perf_params]
+            non_algo_sets = [self.out_paths, self.perf_params]
+            non_algo_keys = (
+                set.union(*[set(s) for s in non_algo_sets if s is not None])
+                if non_algo_sets else set()
+            )
+            self.algo_params = set(self.config) - non_algo_keys
+
+        in_path_keys = self.config & set(self.in_paths)
+        for key in in_path_keys:
+            self.inputs[key].resolved_value = self.config[key]
+
+        self._build_templates()
+        self._resolve_templates()
 
     @property
     def condensed(self):
@@ -394,17 +432,23 @@ class ProcessNode(Node):
         })
         return condensed
 
-    def resolve_templates(self):
+    def _build_templates(self):
+        templates = {}
+        templates['root_dpath'] = str(self.template_root_dpath)
+        templates['node_dpath'] = str(self.template_node_dpath)
+        templates['out_paths'] = self.template_out_paths
+        self.templates = templates
+        return self.templates
+
+    def _resolve_templates(self):
         templates = self.templates
         condensed = self.condensed
         resolved = {}
         try:
-            resolved['root_dpath'] = ub.Path(templates['root_dpath'].format(**condensed))
-            resolved['node_dpath'] = ub.Path(templates['node_dpath'].format(**condensed))
-            resolved['out_paths'] = {
-                k: ub.Path(v.format(**condensed))
-                for k, v in templates['out_paths'].items()
-            }
+            resolved['root_dpath'] = self.resolved_root_dpath
+            resolved['node_dpath'] = self.resolved_node_dpath
+            resolved['out_paths'] = self.resolved_out_paths
+            resolved['in_paths'] = self.resolved_in_paths
         except KeyError as ex:
             print('ERROR: {}'.format(ub.repr2(ex, nl=1)))
             print('condensed = {}'.format(ub.repr2(condensed, nl=1, sort=0)))
@@ -414,16 +458,92 @@ class ProcessNode(Node):
         return self.resolved
 
     @property
-    def dag_dname(self):
-        return self.depends_dname / self.node_dname
+    def resolved_config(self):
+        resolved_config = self.config.copy()
+        resolved_config.update(self.resolved_in_paths)
+        resolved_config.update(self.resolved_out_paths)
+        return resolved_config
 
     @property
-    def node_dpath(self):
-        return self.root_dpath / self.group_dname / self.dag_dname
+    def resolved_in_paths(self):
+        resolved_in_paths = self.in_paths
+        if resolved_in_paths is None:
+            resolved_in_paths = {}
+        elif isinstance(resolved_in_paths, dict):
+            resolved_in_paths = resolved_in_paths.copy()
+        else:
+            resolved_in_paths = {k: None for k in resolved_in_paths}
+
+        for key, input_node in self.inputs.items():
+            resolved_in_paths[key] = input_node.resolved_value
+            # preds = list(input_node.pred)
+            # if preds:
+            #     assert len(preds) == 1
+            #     pred = preds[0]
+            #     value = pred.resolved_value
+            #     # parent._resolve_templates()['out_paths'][pred.name]
+            #     resolved_in_paths[key] = value
+            # else:
+            #     resolved_in_paths[key] = self.config.get(key, None)
+        return resolved_in_paths
+
+    @property
+    def template_out_paths(self):
+        if not isinstance(self.out_paths, dict):
+            out_paths = self.config & self.out_paths
+        else:
+            out_paths = self.out_paths
+        template_node_dpath = self.template_node_dpath
+        template_out_paths = {
+            k: str(template_node_dpath / v)
+            for k, v in out_paths.items()
+        }
+        return template_out_paths
+
+    @property
+    def resolved_out_paths(self):
+        condensed = self.condensed
+        template_out_paths = self.template_out_paths
+        resolved_out_paths = {
+            k: ub.Path(v.format(**condensed))
+            for k, v in template_out_paths.items()
+        }
+        return resolved_out_paths
+
+    @property
+    def template_dag_dname(self):
+        return self.template_depends_dname / self.node_dname
+
+    @property
+    def resolved_node_dpath(self):
+        return ub.Path(str(self.template_node_dpath).format(**self.condensed))
+
+    @property
+    def resolved_root_dpath(self):
+        return ub.Path(str(self.template_root_dpath).format(**self.condensed))
+
+    @property
+    def template_root_dpath(self):
+        return self.root_dpath
+
+    @property
+    def template_node_dpath(self):
+        if self._dirtype == 'flat':
+            return self.root_dpath / self.group_dname / 'flat' / self.name / ('{' + self.name + '_id}')
+        else:
+            return self.root_dpath / self.group_dname / self.template_dag_dname
 
     @property
     def algo_config(self):
         return self.config & self.algo_params
+
+    @property
+    def depends_config(self):
+        # Any manually specified inputs need to be inserted into this
+        # dictionary. Derived inputs can be ignored.
+        depends_config = self.algo_config.copy()
+        return depends_config
+        # return self.config & self.algo_params
 
     @property
     def algo_id(self):
@@ -437,7 +557,7 @@ class ProcessNode(Node):
         return algo_id
 
     @property
-    def depends_dname(self):
+    def template_depends_dname(self):
         """
         Predecessor part of the output path.
         """
@@ -445,7 +565,7 @@ class ProcessNode(Node):
         if not pred_nodes:
             return ub.Path('.')
         elif len(pred_nodes) == 1:
-            return pred_nodes[0].dag_dname
+            return pred_nodes[0].template_dag_dname
         else:
             return ub.Path('.')
             # return ub.Path('multi' + str(pred_nodes))
@@ -471,11 +591,50 @@ class ProcessNode(Node):
             node_id = id(node)
             if node_id not in seen:
                 seen[node_id] = node
-                pred_nodes = node.predecessor_process_nodes()
-                stack.extend(pred_nodes)
-        seen.pop(id(self))
+                nodes = node.predecessor_process_nodes()
+                stack.extend(nodes)
+        seen.pop(id(self))  # remove self
         ancestors = list(seen.values())
         return ancestors
+
+    @property
+    def depends(self):
+        ancestors = self.ancestor_process_nodes()
+        # TODO:
+        # We need to know what input paths have not been represented.  This
+        # involves finding input paths that are not connected to the output of
+        # a node involved in building this id.
+        depends = {}
+        for node in ancestors:
+            depends[node.name] = node.algo_id
+        depends[self.name] = self.algo_id
+        depends = ub.udict(sorted(depends.items()))
+        return depends
+
+    @property
+    def node_info(self):
+        ancestors = self.ancestor_process_nodes()
+        # TODO:
+        # We need to know what input paths have not been represented.  This
+        # involves finding input paths that are not connected to the output of
+        # a node involved in building this id.
+        info = {
+            'node': self.name,
+            'process_id': self.process_id,
+            'algo_id': self.algo_id,
+            'depends': self.depends,
+            'config': self.config,
+            'ancestors': []
+        }
+        for node in ancestors[::-1]:
+            info['ancestors'].append({
+                'node': node.name,
+                'process_id': node.process_id,
+                'algo_id': node.algo_id,
+                'config': node.config,
+                'depends': node.depends,
+            })
+        return info
 
     @property
     def process_id(self):
@@ -487,17 +646,7 @@ class ProcessNode(Node):
         This DOES have a dependency on the larger DAG.
         """
         from watch.utils.reverse_hashid import condense_config
-        ancestors = self.ancestor_process_nodes()
-
-        # TODO:
-        # We need to know what input paths have not been represented.  This
-        # involves finding input paths that are not connected to the output of
-        # a node involved in building this id.
-        depends = {}
-        for node in ancestors:
-            depends[node.name] = node.algo_id
-        depends[self.name] = self.algo_id
-        depends = ub.udict(sorted(depends.items()))
+        depends = self.depends
         proc_id = condense_config(depends, self.name + '_id')
         return proc_id
 
@@ -530,3 +679,7 @@ class ProcessNode(Node):
         argstr = self._make_argstr(self.config)
         command = self.executable + ' ' + argstr
         return command
+
+    def resolved_command(self):
+        command = self.command()
+        return command.rstrip().rstrip('\\').rstrip()
