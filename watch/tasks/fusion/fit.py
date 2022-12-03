@@ -300,8 +300,9 @@ def make_fit_config(cmdline=False, **kwargs):
 
 def coerce_initializer(init):
     import os
-    from watch.tasks.fusion import monkey
-    monkey.torchmetrics_compat_hack()
+    from watch.monkey import monkey_torchmetrics
+    from watch.monkey import monkey_torch
+    monkey_torchmetrics.fix_torchmetrics_compatability()
 
     initializer = None
 
@@ -314,7 +315,7 @@ def coerce_initializer(init):
         try:
             from watch.tasks.fusion import utils
             other_model = utils.load_model_from_package(init)
-            monkey.fix_gelu_issue(other_model)
+            monkey_torch.fix_gelu_issue(other_model)
         except Exception:
             print('Not a packaged model')
         else:

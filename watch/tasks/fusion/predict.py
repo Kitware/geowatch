@@ -24,7 +24,9 @@ from watch.utils import util_parallel
 from watch.utils import util_kwimage
 from watch.tasks.fusion.datamodules import data_utils
 # APPLY Monkey Patches
-from watch.tasks.fusion import monkey  # NOQA
+from watch.monkey import monkey_torch
+from watch.monkey import monkey_torchmetrics
+monkey_torchmetrics.fix_torchmetrics_compatability()
 
 try:
     from xdev import profile
@@ -501,7 +503,7 @@ def predict(cmdline=False, **kwargs):
         raise
 
     # Hack to fix GELU issue
-    monkey.fix_gelu_issue(method)
+    monkey_torch.fix_gelu_issue(method)
 
     method.eval()
     method.freeze()

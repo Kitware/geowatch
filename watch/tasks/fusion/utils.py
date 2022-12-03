@@ -40,6 +40,8 @@ def load_model_from_package(package_path):
         >>> package_path = dvc_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_rgb_v26/SC_smt_it_stm_p8_newanns_weighted_rgb_v26_epoch=101-step=4366925.pt'
         >>> model = load_model_from_package(package_path)
     """
+    from watch.monkey import monkey_torchmetrics
+    monkey_torchmetrics.fix_torchmetrics_compatability()
     from torch import package
     import json
     # imp = package.PackageImporter(package_path)

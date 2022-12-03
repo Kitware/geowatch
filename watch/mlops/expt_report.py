@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 import functools  # NOQA
 # APPLY Monkey Patches
-from watch.tasks.fusion import monkey  # NOQA
+# from watch import monkey
 from watch import heuristics
 from watch.mlops import smart_result_parser as smart
 

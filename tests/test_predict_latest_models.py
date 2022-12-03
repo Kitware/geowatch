@@ -207,3 +207,12 @@ def make_small_kwcoco_subset(dset, output_dpath):
 
     subset.dump(subset.fpath, newlines=True)
     return subset
+
+
+if __name__ == '__main__':
+    """
+    CommandLine:
+        python ~/code/watch/tests/test_predict_latest_models.py
+    """
+    # test_predict_latest_bas_model()
+    test_predict_latest_sc_model()
