@@ -11,41 +11,211 @@ import numpy as np
 from watch.utils import util_pattern
 
 
-class QA_BitSpecTable:
+def _dump_qa_debug_vid():
+    """
+    Make human interpretable sequences of QA bands and RGB data.
+    """
+    import kwcoco
+    import watch
+    import kwimage
+    data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    coco_fpath = data_dvc_dpath / 'Drop4-BAS/KR_R001.kwcoco.json'
+    dset = kwcoco.CocoDataset(coco_fpath)
+
+    videos = dset.videos()
+    images = videos.images[0]
+
+    dump_dpath = ub.Path('_dump_qa_debug_vid').ensuredir()
+
+    for idx, gid in enumerate(images):
+        coco_img = dset.coco_image(gid)
+        # Load some quality and rgb data
+        qa_delayed = coco_img.delay('cloudmask', interpolation='nearest', antialias=False)
+        rgb_delayed = coco_img.delay('red|green|blue')
+        quality_im = qa_delayed.finalize()
+        rgb_canvas = kwimage.normalize_intensity(rgb_delayed.finalize(nodata_method='float'))
+        sensor = coco_img.img.get('sensor_coarse')
+        print(f'sensor={sensor}')
+        # Use the spec to draw it
+        from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+        table = QA_SPECS.find_table('ACC-1', 'L8')
+        #table = QA_SPECS.find_table('FMASK', '*')
+        #table = QA_SPECS.find_table('Phase1_QA', '*')
+        drawings = table.draw_labels(quality_im)
+        qa_canvas = drawings['qa_canvas']
+        legend = drawings['legend']
+        canvas = kwimage.stack_images([rgb_canvas, qa_canvas, legend], axis=1)
+
+        spec_name = table.spec['qa_spec_name']
+        canvas = kwimage.draw_header_text(canvas, sensor + ' ' + spec_name)
+
+        _kw = ub.compatible({'on_value': 0.3}, kwimage.fill_nans_with_checkers)
+        canvas = kwimage.fill_nans_with_checkers(canvas, **_kw)
+
+        fname = f'frame_{idx:08d}.jpg'
+        fpath = dump_dpath / fname
+        kwimage.imwrite(fpath, kwimage.ensure_uint255(canvas))
+
+    #canvas = kwimage.stack_images([canvas, ], axis=0)
+    import kwplot
+    kwplot.autoplt()
+    kwplot.imshow(canvas)
+
+
+class QA_SpecMixin:
+
+    def draw_labels(table, quality_im, legend='separate'):
+        """
+
+        The doctest can be used to debug cloudmasks for the datasets
+
+        Ignore:
+            >>> import kwcoco
+            >>> import watch
+            >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+            >>> coco_fpath = dvc_dpath / 'Drop4-BAS/KR_R001.kwcoco.json'
+            >>> dset = kwcoco.CocoDataset(coco_fpath)
+            >>> gid = dset.images()[18]
+            >>> coco_img = dset.coco_image(gid)
+            >>> # Load some quality and rgb data
+            >>> qa_delayed = coco_img.delay('cloudmask', interpolation='nearest', antialias=False)
+            >>> rgb_delayed = coco_img.delay('red|green|blue')
+            >>> quality_im = qa_delayed.finalize()
+            >>> rgb_canvas = kwimage.normalize_intensity(rgb_delayed.finalize(nodata_method='float'))
+            >>> sensor = coco_img.img.get('sensor_coarse')
+            >>> print(f'sensor={sensor}')
+            >>> # Use the spec to draw it
+            >>> from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+            >>> table = QA_SPECS.find_table('ACC-1', 'L8')
+            >>> #table = QA_SPECS.find_table('FMASK', '*')
+            >>> #table = QA_SPECS.find_table('Phase1_QA', '*')
+            >>> drawings = table.draw_labels(quality_im)
+            >>> qa_canvas = drawings['qa_canvas']
+            >>> legend = drawings['legend']
+            >>> canvas = kwimage.stack_images([rgb_canvas, qa_canvas, legend], axis=1)
+            >>> canvas = kwimage.draw_header_text(canvas, sensor)
+            >>> #canvas = kwimage.stack_images([canvas, ], axis=0)
+            >>> import kwplot
+            >>> kwplot.autoplt()
+            >>> kwplot.imshow(canvas)
+        """
+        import kwimage
+        import numpy as np
+        qavals_to_count = ub.dict_hist(quality_im.ravel())
+
+        unique_qavals = list(qavals_to_count.keys())
+
+        # For the QA band lets assign a color to each category
+        colors = kwimage.Color.distinct(len(qavals_to_count))
+        qval_to_color = dict(zip(unique_qavals, colors))
+
+        qval_to_desc = table.describe_values(unique_qavals)
+
+        # Colorize the QA bands
+        colorized = np.empty(quality_im.shape[0:2] + (3,), dtype=np.float32)
+        for qabit, color in qval_to_color.items():
+            mask = quality_im[:, :, 0] == qabit
+            colorized[mask] = color
+
+        # Because the QA band is categorical, we should be able to make a short
+        qa_canvas = colorized
+        import kwplot
+
+        label_to_color = ub.udict(qval_to_color).map_keys(qval_to_desc.__getitem__)
+        legend = kwplot.make_legend_img(label_to_color)  # Make a legend
+
+        drawings = {
+            'qa_canvas': qa_canvas,
+            'legend': legend,
+        }
+        return drawings
+
+
+class QA_BitSpecTable(QA_SpecMixin):
     """
     Bit tables are more efficient because we can reduce over the query input
     """
     def __init__(table, spec):
         table.spec = spec
-        table.name_to_value = {
+        table.name_to_value = ub.udict({
             item['qa_name']: 1 << item['bit_number']
             for item in table.spec['bits']
             if item.get('qa_name', None) is not None
-        }
+        })
 
     def mask_any(table, quality_im, qa_names):
-        bit_values = list(ub.take(table.name_to_value, qa_names))
+        bit_values = list((table.name_to_value & qa_names).values())
         iffy_bits = functools.reduce(operator.or_, bit_values)
         is_iffy = (quality_im & iffy_bits) > 0
         return is_iffy
 
+    def describe_values(table, unique_qavals):
+        """
+        Get a human readable description of each value for a legend
+        """
+        bit_to_spec = {}
+        for item in table.spec['bits']:
+            bit_to_spec[item['bit_number']] = item
 
-class QA_ValueSpecTable:
+        val_to_desc = {}
+
+        for val in unique_qavals:
+            # For each value determine what bits are on
+            bit_positions = []
+            for position, flag in enumerate(bin(val)[2:][::-1]):
+                if int(flag):
+                    bit_positions.append(position)
+
+            descs = []
+            for bit_number in bit_positions:
+                bit_spec = bit_to_spec.get(bit_number, '?')
+                descs.append(bit_spec['qa_description'])
+
+            parts = {}
+            parts['value'] = val
+            parts['bits'] = '|'.join(list(map(str, bit_positions)))
+            parts['desc'] = ',\n'.join(descs)
+            val_to_desc[val] = ub.repr2(parts, compact=1, nobr=1, nl=True, si=1, sort=0)
+        return val_to_desc
+
+
+class QA_ValueSpecTable(QA_SpecMixin):
     """
     Value tables are less efficient
     """
     def __init__(table, spec):
         table.spec = spec
         table.name_to_value = {
-            item['qa_name']: 1 << item['value']
+            item['qa_name']: item['value']
             for item in table.spec['values']
             if item.get('qa_name', None) is not None
         }
 
     def mask_any(table, quality_im, qa_names):
-        iffy_values = list(ub.take(table.name_to_value, qa_names))
+        iffy_values = list((table.name_to_value & qa_names).values())
         is_iffy = np.logical_or.reduce([quality_im == value for value in iffy_values])
         return is_iffy
+
+    def describe_values(table, unique_qavals):
+        """
+        Get a human readable description of each value for a legend
+        """
+        val_to_spec = {}
+        for item in table.spec['values']:
+            val_to_spec[item['value']] = item
+        val_to_desc = {}
+        for val in unique_qavals:
+            # For each value determine what bits are on
+            spec = val_to_spec.get(val, None)
+            parts = {}
+            parts['value'] = val
+            if spec is None:
+                val_to_desc[val] = '?'
+            else:
+                parts['desc'] = spec['qa_description']
+            val_to_desc[val] = ub.repr2(parts, compact=1, nobr=1, nl=True, si=1, sort=0)
+        return val_to_desc
 
 
 class QA_SpecRegistry:
@@ -70,6 +240,12 @@ class QA_SpecRegistry:
             f2 = spec_pat.match(table.spec['qa_spec_name'])
             if f1 and f2:
                 yield table
+
+    def find_table(self, spec_name='*', sensor='*'):
+        results = list(self.query_table(spec_name=spec_name, sensor=sensor))
+        assert len(results) == 1
+        table = results[0]
+        return table
 
     def __iadd__(self, table):
         self.tables.append(table)

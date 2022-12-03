@@ -118,7 +118,13 @@ def main(cmdline=True, **kw):
 
         subparser.set_defaults(main=main_func)
 
-    ns = parser.parse_known_args()[0]
+    import os
+    WATCH_LOOSE_CLI = os.environ.get('WATCH_LOOSE_CLI', '')
+    if WATCH_LOOSE_CLI:
+        ns = parser.parse_known_args()[0]
+    else:
+        ns = parser.parse_args()
+
     # TODO: need to make a nicer pattern for new CLI integration, but this
     # works for now
     kw = ns.__dict__

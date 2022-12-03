@@ -115,6 +115,11 @@ class CocoVisualizeConfig(scfg.Config):
             If true, skip any image that does not have the requested channels. Otherwise a nan image will be shown
             ''')),
 
+        'skip_aggressive': scfg.Value(False, isflag=True, help=ub.paragraph(
+            '''
+            Aggresively skip frames based on heuristics of badness.
+            ''')),
+
         'only_boxes': scfg.Value(False, isflag=True, help='If false, draws full annotation - which can be time consuming if there are a lot'),
 
         # TODO: better support for this
@@ -212,7 +217,7 @@ def main(cmdline=True, **kwargs):
         }
     """
     from watch.utils.lightning_ext import util_globals
-    config = CocoVisualizeConfig(default=kwargs, cmdline=cmdline)
+    config = CocoVisualizeConfig(default=kwargs, cmdline=cmdline and {'strict': True})
     space = config['space']
     channels = config['channels']
     print('config = {}'.format(ub.repr2(dict(config), nl=2)))
@@ -481,10 +486,15 @@ def main(cmdline=True, **kwargs):
                             valid_vidspace_region=valid_vidspace_region,
                             skip_missing=config['skip_missing'],
                             draw_valid_region=config['draw_valid_region'],
-                            stack=config['stack'])
+                            stack=config['stack'],
+                            skip_aggressive=config['skip_aggressive']
+                            )
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
-            job.result()
+            try:
+                job.result()
+            except SkipFrame:
+                ...
 
         pool.jobs.clear()
 
@@ -537,6 +547,10 @@ def main(cmdline=True, **kwargs):
         import sys
         if sys.stdout.isatty():
             ub.cmd('stty sane', verbose=3)
+
+
+class SkipFrame(Exception):
+    pass
 
 
 def video_track_info(coco_dset, vidid):
@@ -822,7 +836,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                valid_vidspace_region=None,
                                stack=False,
                                draw_valid_region=True,
-                               verbose=0):
+                               verbose=0,
+                               skip_aggressive=False):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
     (with or without annotation overlays) for specific bands to disk.
@@ -972,6 +987,10 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         # as they should be given in the constructor.
         raw_canvas = canvas = chan.finalize(**finalize_opts)
 
+        if skip_aggressive:
+            if np.any(np.isnan(raw_canvas)):
+                raise SkipFrame
+
         # foo = kwimage.fill_nans_with_checkers(raw_canvas)
 
         if verbose > 1:
@@ -987,6 +1006,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                 warnings.warn('Error printing chan stats, probably need kwarray >= 0.6.1')
 
         if skip_missing and np.all(np.isnan(raw_canvas)):
+            if skip_aggressive:
+                raise SkipFrame
             continue
 
         if chan_to_normalizer is None:
