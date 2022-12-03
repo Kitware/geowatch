@@ -462,6 +462,10 @@ class ProcessNode(Node):
         resolved_config = self.config.copy()
         resolved_config.update(self.resolved_in_paths)
         resolved_config.update(self.resolved_out_paths)
+        if isinstance(self.perf_params, dict):
+            for k, v in self.perf_params.items():
+                if k not in resolved_config:
+                    resolved_config[k] = v
         return resolved_config
 
     @property

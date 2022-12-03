@@ -6,7 +6,8 @@ used to store results.
 
 
 CommandLine:
-    xdoctest -m watch.mlops.smart_pipeline_nodes __doc__
+    xdoctest -m watch.mlops.smart_pipeline_nodes __doc__:0
+    WATCH_DEVCHECK=1 xdoctest -m watch.mlops.smart_pipeline_nodes __doc__:1
 
 Example:
     >>> from watch.mlops.smart_pipeline_nodes import *  # NOQA
@@ -63,26 +64,31 @@ Example:
     >>>     ub.repr2(dag_paths, nl=1, sv=1, align=':', sort=0)))
 
 
-Ignore:
-    from watch.mlops.smart_pipeline_nodes import *  # NOQA
-    import watch
-    expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
-    data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-
-    config = {}
-    config['bas_pxl.test_dataset'] = data_dvc_dpath / 'Drop4-BAS/BR_R001.kwcoco.json'
-    config['bas_pxl.package_fpath'] = expt_dvc_dpath / 'models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt'
-    config['sc_pxl.package_fpath'] = expt_dvc_dpath / 'models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt'
-
-    root_dpath = data_dvc_dpath / '_testdag'
-
-    nodes = joint_bas_sc_nodes()
-    from watch.mlops.pipeline_nodes import PipelineDAG
-    dag = PipelineDAG(nodes)
-    dag.configure(config=config, root_dpath=root_dpath)
-    dag.print_graphs()
-    for node in dag.nodes.values():
-        print(node.resolved_command())
+Example:
+    >>> # xdoctest: +REQUIRES(env:WATCH_DEVCHECK)
+    >>> from watch.mlops.smart_pipeline_nodes import *  # NOQA
+    >>> import watch
+    >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+    >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    >>> #
+    >>> config = {}
+    >>> config['bas_pxl.test_dataset'] = data_dvc_dpath / 'Drop4-BAS/KR_R001.kwcoco.json'
+    >>> config['bas_pxl.package_fpath'] = expt_dvc_dpath / 'models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt'
+    >>> config['bas_pxl.num_workers'] = 6
+    >>> config['sc_pxl.package_fpath'] = expt_dvc_dpath / 'models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt'
+    >>> #
+    >>> root_dpath = data_dvc_dpath / '_testdag'
+    >>> #
+    >>> #nodes = joint_bas_sc_nodes()
+    >>> nodes = bas_nodes()
+    >>> from watch.mlops.pipeline_nodes import PipelineDAG
+    >>> dag = PipelineDAG(nodes)
+    >>> dag.configure(config=config, root_dpath=root_dpath)
+    >>> dag.print_graphs()
+    >>> for node in dag.nodes.values():
+    >>>     print('# --- ')
+    >>>     print('node.config = {}'.format(ub.repr2(node.config, nl=1)))
+    >>>     print(node.resolved_command())
 
 """
 import ubelt as ub
