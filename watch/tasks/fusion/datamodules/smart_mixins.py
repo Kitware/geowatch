@@ -132,6 +132,78 @@ class SMARTDataMixin:
             _freq = _freq / _freq.sum()
 
     def _interpret_quality_mask(self, sampler, coco_img, tr_frame):
+        """
+        Ignore:
+            >>> from watch.mlops.smart_pipeline_nodes import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> import kwcoco
+            >>> import ndsampler
+            >>> import watch
+            >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+            >>> coco_fpath = dvc_dpath / 'Drop4-BAS/KR_R001.kwcoco.json'
+            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> self = KWCocoVideoDataset(
+            >>>     sampler,
+            >>>     sample_shape=(5, 128, 128),
+            >>>     window_overlap=0,
+            >>>     channels="(S2,L8):blue|green|red|nir|swir16|swir22",
+            >>>     input_space_scale='15GSD',
+            >>>     window_space_scale='15GSD',
+            >>>     output_space_scale='15GSD',
+            >>>     dist_weights=1,
+            >>>     use_cloudmask=1,
+            >>>     resample_invalid_frames=1,
+            >>>     neg_to_pos_ratio=0, time_sampling='soft2+distribute',
+            >>> )
+            >>> self.requested_tasks['change'] = False
+            >>> target = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
+            >>> gid = target['gids'][1]
+            >>> tr_frame = target.copy()
+            >>> tr_frame['gids'] = [gid]
+            >>> coco_img = self.sampler.dset.coco_image(gid)
+
+            # >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
+            # >>> # xdoctest: +REQUIRES(--show)
+            # >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
+            # >>> import kwplot
+            # >>> kwplot.autompl()
+            # >>> kwplot.imshow(canvas)
+            # >>> kwplot.show_if_requested()
+
+            tr_frame = target_.copy()
+            tr_frame['gids'] = [gid]
+
+            tr_cloud = tr_frame.copy()
+            tr_cloud['channels'] = quality_chan_name
+            tr_cloud['antialias'] = False
+            tr_cloud['interpolation'] = 'nearest'
+            tr_cloud['nodata'] = None
+            qa_sample = sampler.load_sample(
+                tr_cloud, with_annots=None,
+
+                # padkw={'constant_values': 255},
+                # dtype=np.float32
+            )
+            quality_im = qa_data = qa_sample['im'][0]
+
+            tr_rgb = tr_frame.copy()
+            tr_rgb['channels'] = 'red|green|blue'
+            rgb_sample = sampler.load_sample(
+                tr_rgb, with_annots=None,
+                padkw={'constant_values': 255},
+                # dtype=np.float32
+            )
+            rgb_data = rgb_sample['im'][0]
+            kwplot.imshow(rgb_im)
+
+            sensor = coco_img.img.get('sensor_coarse')
+            spec_name = 'ACC-1'
+            from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+            table = qa_table = QA_SPECS.find_table(spec_name, sensor)
+
+        """
         # NOTES ON QUALITY / CLOUDMASK
         # https://github.com/GERSL/Fmask#46-version
         # The cloudmask band is a class-idx based raster with labels
@@ -161,25 +233,40 @@ class SMARTDataMixin:
             tr_cloud['antialias'] = False
             tr_cloud['interpolation'] = 'nearest'
             tr_cloud['nodata'] = None
-            cloud_sample = sampler.load_sample(
+            qa_sample = sampler.load_sample(
                 tr_cloud, with_annots=None,
+                # TODO: use a better constant value
                 padkw={'constant_values': 255},
                 # dtype=np.float32
             )
-            cloud_im = cloud_sample['im']
+            qa_data = qa_sample['im']
             # if tr_cloud.get('use_native_scale', None):
-            # cloud_im = cloud_im[0][0]
+            # qa_data = qa_data[0][0]
 
-            # TODO: Ensure we are using the correct QA spec from
-            # ~/code/watch/watch/tasks/fusion/datamodules/qa_bands.py
-            # from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
-            # TODO:
-            # QA_SPECS.query_table(spec_name, sensor)
+            if 0:
+                # OLD BROKEN METHOD
+                iffy_bits = functools.reduce(
+                    op.or_, ub.take(heuristics.QUALITY_BITS,
+                                    ['dilated_cloud', 'cirrus', 'cloud']))
+                is_cloud_iffy = (qa_data & iffy_bits) > 0
 
-            iffy_bits = functools.reduce(
-                op.or_, ub.take(heuristics.QUALITY_BITS,
-                                ['dilated_cloud', 'cirrus', 'cloud']))
-            is_cloud_iffy = (cloud_im & iffy_bits) > 0
+            if 1:
+                # NEW BROKEN METHOD
+                # TODO: Ensure we are using the correct QA spec from
+                # ~/code/watch/watch/tasks/fusion/datamodules/qa_bands.py
+                from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
+                # We don't have the exact right information here, so we can
+                # punt for now and assume "Drop4"
+                spec_name = 'ACC-1'
+                sensor = coco_img.img.get('sensor_coarse', '*')
+                table = QA_SPECS.find_table(spec_name, sensor)
+                iffy_qa_names = [
+                    'cloud',
+                    # 'dilated_cloud',
+                    'cirrus',
+                ]
+                is_cloud_iffy = table.mask_any(qa_data, iffy_qa_names)
+
         else:
             is_cloud_iffy = None
         return is_cloud_iffy
@@ -204,3 +291,35 @@ class SMARTDataMixin:
             freqs['sensor'][sensor_coarse] += 1
 
         print(ub.repr2(ub.dict_diff(freqs, {'gid'})))
+
+
+def draw_cloudmask_viz(qa_data, rgb_data):
+
+    import kwimage
+    import numpy as np
+
+    qabits_to_count = ub.dict_hist(qa_data.ravel())
+
+    # For the QA band lets assign a color to each category
+    colors = kwimage.Color.distinct(len(qabits_to_count))
+    qabits_to_color = dict(zip(qabits_to_count, colors))
+
+    # Colorize the QA bands
+    colorized = np.empty(qa_data.shape[0:2] + (3,), dtype=np.float32)
+    for qabit, color in qabits_to_color.items():
+        mask = qa_data[:, :, 0] == qabit
+        colorized[mask] = color
+
+    rgb_canvas = kwimage.normalize_intensity(rgb_data)
+
+    # Because the QA band is categorical, we should be able to make a short
+
+    qa_canvas = colorized
+    import kwplot
+    legend = kwplot.make_legend_img(qabits_to_color)  # Make a legend
+
+    # Stack things together into a nice single picture
+    qa_canvas = kwimage.stack_images([qa_canvas, legend], axis=1)
+    canvas = kwimage.stack_images([rgb_canvas, qa_canvas], axis=1)
+    import kwplot
+    kwplot.imshow(canvas)
