@@ -328,8 +328,12 @@ def main(cmdline=True, **kwargs):
         keep = []
         for coco_img in coco_images:
             code = coco_img.channels.fuse().as_set()
-            if requested_channels & code:
-                keep.append(coco_img.img['id'])
+            if config['skip_aggressive']:
+                if len(requested_channels & code) == len(requested_channels):
+                    keep.append(coco_img.img['id'])
+            else:
+                if requested_channels & code:
+                    keep.append(coco_img.img['id'])
         print(f'Filtered {len(coco_images) - len(keep)} images without requested channels. Keeping {len(keep)}')
         selected_gids = keep
 
@@ -987,10 +991,6 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         # as they should be given in the constructor.
         raw_canvas = canvas = chan.finalize(**finalize_opts)
 
-        if skip_aggressive:
-            if np.any(np.isnan(raw_canvas)):
-                raise SkipFrame
-
         # foo = kwimage.fill_nans_with_checkers(raw_canvas)
 
         if verbose > 1:
@@ -1009,6 +1009,12 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             if skip_aggressive:
                 raise SkipFrame
             continue
+
+        if skip_aggressive:
+            is_bad = np.isnan(raw_canvas).ravel()
+            percent_bad = is_bad.sum() / len(is_bad)
+            if percent_bad > 0.015:
+                raise SkipFrame
 
         if chan_to_normalizer is None:
             dmax = np.nanmax(raw_canvas)
