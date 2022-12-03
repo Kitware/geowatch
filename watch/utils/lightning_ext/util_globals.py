@@ -96,8 +96,8 @@ def request_nofile_limits(requested_limit='auto'):
         ulimit -S -n 8192
 
     Example:
-        >>> from watch.utils.lightning_ext.util_globals import *  # NOQA
-        >>> request_nofile_limits()
+        >>> from watch.utils.lightning_ext import util_globals
+        >>> util_globals.request_nofile_limits()
     """
     import ubelt as ub
     if ub.LINUX:
@@ -111,7 +111,10 @@ def request_nofile_limits(requested_limit='auto'):
         if requested_limit > soft:
             print('Requesting FileLimit = {!r}'.format(requested_limit))
             print(' * Before FileLimit: soft={}, hard={}'.format(soft, hard))
-            resource.setrlimit(resource.RLIMIT_NOFILE, (requested_limit, hard))
+            try:
+                resource.setrlimit(resource.RLIMIT_NOFILE, (requested_limit, hard))
+            except Exception as ex:
+                print(f'ERROR ex={ex}')
             soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
             print(' * After FileLimit: soft={}, hard={}'.format(soft, hard))
 

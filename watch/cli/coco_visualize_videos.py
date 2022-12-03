@@ -304,6 +304,8 @@ def main(cmdline=True, **kwargs):
         coco_dset.index.videos.items(), total=len(coco_dset.index.videos),
         desc='viz videos', verbose=3)
 
+    util_globals.request_nofile_limits()
+
     pool = ub.JobPool(mode='thread', max_workers=max_workers)
 
     from scriptconfig.smartcast import smartcast
@@ -1007,14 +1009,44 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
         if skip_missing and np.all(np.isnan(raw_canvas)):
             if skip_aggressive:
+                print('Skip because all is nan')
                 raise SkipFrame
             continue
 
         if skip_aggressive:
             is_bad = np.isnan(raw_canvas).ravel()
             percent_bad = is_bad.sum() / len(is_bad)
-            if percent_bad > 0.015:
+            if percent_bad > 0.15:
+                print('Skip because some is nan')
+                print('skip')
                 raise SkipFrame
+
+        if 0 and str(chan_group) == 'salient':
+            import kwarray
+            # blur1 = kwarray.atleast_nd(kwimage.gaussian_blur(raw_canvas, sigma=1.6), n=3)
+            # blur2 = kwarray.atleast_nd(kwimage.gaussian_blur(raw_canvas, sigma=3.2), n=3)
+            blur1 = kwarray.atleast_nd(kwimage.gaussian_blur(raw_canvas, sigma=0.8), n=3)
+            blur2 = kwarray.atleast_nd(kwimage.gaussian_blur(raw_canvas, sigma=1.6), n=3)
+            dog = blur1 - blur2
+            shift_dog = dog - min(0, np.nanmin(dog))
+            # import xdev
+            # mxdev.embed()
+            canvas = blur2
+            canvas = shift_dog
+            # orig_max = np.nanmax(raw_canvas)
+            # canvas = kwimage.normalize(shift_dog) * orig_max
+            # canvas = canvas * raw_canvas
+            canvas = raw_canvas
+            # median = np.nanmedian(canvas)
+            canvas = kwarray.atleast_nd(kwimage.gaussian_blur(canvas, sigma=3.6), n=3)
+            median, = np.quantile(canvas.ravel()[~np.isnan(canvas.ravel())], q=[0.8])
+            # median = np.nanmean(canvas) + np.nanstd(canvas)
+            canvas = (canvas - median).clip(0, None)
+            canvas = np.sqrt(canvas)
+
+            # raw_canvas = kwimage.normalize(dog)
+            # raw_canvas = kwarray.atleast_nd(raw_canvas, n=3)
+            # raw_canvas = raw_canvas[:, :, None]
 
         if chan_to_normalizer is None:
             dmax = np.nanmax(raw_canvas)

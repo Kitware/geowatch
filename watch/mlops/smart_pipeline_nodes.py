@@ -72,9 +72,16 @@ Example:
     >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     >>> #
     >>> config = {}
-    >>> config['bas_pxl.test_dataset'] = data_dvc_dpath / 'Drop4-BAS/KR_R001.kwcoco.json'
+    >>> config['bas_pxl.test_dataset'] = data_dvc_dpath / 'Drop4-BAS/KR_R002.kwcoco.json'
+    >>> #config['bas_pxl.test_dataset'] = data_dvc_dpath / 'Drop4-BAS/BR_R001.kwcoco.json'
     >>> config['bas_pxl.package_fpath'] = expt_dvc_dpath / 'models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt'
     >>> config['bas_pxl.num_workers'] = 6
+    >>> config['bas_pxl.chip_dims'] = "512,512"
+    >>> config['bas_pxl.time_span'] = "1m"
+    >>> config['bas_pxl.time_sampling'] = "hardish2"
+    >>> config['bas_pxl.use_cloudmask'] = 0
+    >>> config['bas_pxl.set_cover_algo'] = 'approx'
+    >>> config['bas_pxl.resample_invalid_frames'] = 0
     >>> config['sc_pxl.package_fpath'] = expt_dvc_dpath / 'models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt'
     >>> #
     >>> root_dpath = data_dvc_dpath / '_testdag'
