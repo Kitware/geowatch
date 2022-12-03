@@ -45,10 +45,6 @@ pyproj>=3.4.0     ;                             python_version >= '3.11'    # Py
 pyproj>=3.3.1     ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
 pyproj>=3.2.1     ;  python_version <  '3.10'    # Python 3.8-3.9
 
-# Waiting for 3.11 support
-pygeos>=0.13    ;  python_version < '3.11' and python_version >= '3.10'    # Python 3.10+ 
-pygeos>=0.10.2  ;  python_version <  '3.10'    # Python 3.8-3.9
-
 fiona>=1.8.22  ;                             python_version >= '3.11'    # Python 3.11+
 fiona>=1.8.21  ; python_version < '3.11' and python_version >= '3.10'    # Python 3.10
 fiona>=1.8.20  ;  python_version <  '3.10'    # Python 3.8-3.9
@@ -101,7 +97,14 @@ dask[array]>=2022.10.2
 # cytoolz>=0.11.2
 # xxhash>=3.0.0
 # cityhash>=0.4.1
-dask-geopandas>=0.2.0
+
+### Note: this relies on pygeos which is deprecated.
+## dask-geopandas>=0.2.0
+
+# Pygeos is deprecated and merged into shapley 2.0
+# # Waiting for 3.11 support
+# pygeos>=0.13    ;  python_version < '3.11' and python_version >= '3.10'    # Python 3.10+ 
+# pygeos>=0.10.2  ;  python_version <  '3.10'    # Python 3.8-3.9
 
 # Utilities
 rich>=12.3.0
@@ -168,7 +171,8 @@ torchvision>=0.12.0   ; python_version < '3.11'
 
 torchmetrics>=0.11.0
 torch_liberator>=0.1.0
-pytorch_lightning>=1.7.1,<1.8
+# pytorch_lightning>=1.7.1,<1.8
+pytorch_lightning>=1.7.1
 monai>=0.6.0
 torch_optimizer>=0.1.0
 netharn>=0.5.18 
@@ -179,7 +183,7 @@ kornia<=0.5
 segmentation-models-pytorch>=0.2.0  ; python_version < '3.11'
 
 ujson>=5.2.0 
-kwimage_ext >= 0.2.0  ; python_version < '3.11'
+kwimage_ext >= 0.2.0
 
 py-cpuinfo>=8.0.0
 jsonargparse[signatures]!=4.15.0!=4.15.1>=4.13.3 

@@ -501,7 +501,7 @@ class DotDict(dict):
         >>>     'proc4.part2.param2': 10,
         >>> })
         >>> self.get('proc1')
-        >>> self['proc4']
+        >>> self.prefix_get('proc4')
         >>> 'proc1' in self
     """
 

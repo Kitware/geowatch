@@ -50,8 +50,8 @@ def _import_troublesome_module(modname):
         import rasterio as module
     elif modname == 'fiona':
         import fiona as module
-    elif modname == 'pygeos':
-        import pygeos as module
+    # elif modname == 'pygeos':
+    #     import pygeos as module
     elif modname == 'torch':
         import torch as module
     elif modname == 'numpy':
