@@ -545,9 +545,9 @@ def gdal_single_warp(in_fpath,
 
     if force_spatial_res is not None:
         if isinstance(force_spatial_res, tuple):
-            builder['-tr'] = tuple(map(str, force_spatial_res))
+            builder['-tr'] = list(map(str, force_spatial_res))
         else:
-            builder['-tr'] = (str(force_spatial_res), str(force_spatial_res))
+            builder['-tr'] = [str(force_spatial_res), str(force_spatial_res)]
 
     # if 0:
     #     builder['-ts'] = f'{croped_image_size}'

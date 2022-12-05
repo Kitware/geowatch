@@ -298,6 +298,58 @@ def main(cmdline=True, **kw):
         >>> new_dset = main(cmdline, **kw)
 
     Example:
+        >>> # Confirm expected behavior of `force_min_gsd` keyword argument
+        >>> from watch.cli.coco_align_geotiffs import *  # NOQA
+        >>> from watch.demo.landsat_demodata import grab_landsat_product
+        >>> from watch.gis.geotiff import geotiff_metadata, geotiff_crs_info
+        >>> # Create a dead simple coco dataset with one image
+        >>> import kwcoco
+        >>> coco_dset = kwcoco.CocoDataset()
+        >>> ls_prod = grab_landsat_product()
+        >>> fpath = ls_prod['bands'][0]
+        >>> meta = geotiff_metadata(fpath)
+        >>> # We need a date captured ATM in a specific format
+        >>> dt = dateutil.parser.parse(
+        >>>     meta['filename_meta']['acquisition_date'])
+        >>> date_captured = dt.strftime('%Y/%m/%d')
+        >>> gid = coco_dset.add_image(file_name=fpath, date_captured=date_captured)
+        >>> dummy_poly = kwimage.Polygon(exterior=meta['wgs84_corners'])
+        >>> dummy_poly = dummy_poly.scale(0.3, about='center')
+        >>> sseg_geos = dummy_poly.swap_axes().to_geojson()
+        >>> # NOTE: script is not always robust to missing annotation
+        >>> # information like segmentation and bad bbox, but for this
+        >>> # test config it is
+        >>> coco_dset.add_annotation(
+        >>>     image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
+        >>> #
+        >>> # Create arguments to the script
+        >>> dpath = ub.Path.appdir('watch/test/coco_align_geotiff').ensuredir()
+        >>> dst = ub.ensuredir((dpath, 'align_bundle1_force_gsd'))
+        >>> ub.delete(dst)
+        >>> dst = ub.ensuredir(dst)
+        >>> kw = {
+        >>>     'src': coco_dset,
+        >>>     'dst': dst,
+        >>>     'regions': 'annots',
+        >>>     'workers': 2,
+        >>>     'aux_workers': 2,
+        >>>     'convexify_regions': True,
+        >>>     #'image_timeout': '1 microsecond',
+        >>>     #'asset_timeout': '1 microsecond',
+        >>>     'visualize': False,
+        >>>     'force_min_gsd': 60.0,
+        >>> }
+        >>> cmdline = False
+        >>> new_dset = main(cmdline, **kw)
+        >>> coco_img = new_dset.coco_image(2)
+        >>> # Check our output is in the CRS we think it is
+        >>> asset = coco_img.primary_asset()
+        >>> parent_fpath = asset['parent_file_name']
+        >>> crop_fpath = join(new_dset.bundle_dpath, asset['file_name'])
+        >>> info = geotiff_crs_info(crop_fpath)
+        >>> assert(all(info['meter_per_pxl'] == 60.0))
+
+    Example:
         >>> # xdoctest: +REQUIRES(--slow)
         >>> from watch.cli.coco_align_geotiffs import *  # NOQA
         >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
@@ -537,6 +589,7 @@ def main(cmdline=True, **kw):
             asset_timeout=config['asset_timeout'],
             verbose=config['verbose'],
             force_nodata=config['force_nodata'],
+            force_min_gsd=config['force_min_gsd'],
         )
 
     kwcoco_extensions.reorder_video_frames(new_dset)
@@ -896,7 +949,8 @@ class SimpleDataCube(object):
                          tries=2,
                          image_timeout=None,
                          asset_timeout=None,
-                         force_nodata=None, verbose=0):
+                         force_nodata=None, verbose=0,
+                         force_min_gsd=None):
         """
         Given a region of interest, extract an aligned temporal sequence
         of data to a specified directory.
@@ -937,6 +991,13 @@ class SimpleDataCube(object):
 
             verbose (int):
                 note, there is no silent mode, 0 is just the least verbose.
+
+            force_min_gsd (float):
+                Force output crops to be at least this minimum GSD
+                (e.g. if set to 10.0 an input image with a 30.0 GSD
+                will have an output GSD of 30.0, whereas in input
+                image with a 0.5 GSD will have it set to 10.0 during
+                cropping)
 
         Returns:
             kwcoco.CocoDataset: the given or new dataset that was modified
@@ -1272,7 +1333,8 @@ class SimpleDataCube(object):
                     tries=tries,
                     image_timeout=image_timeout,
                     asset_timeout=asset_timeout,
-                    verbose=verbose)
+                    verbose=verbose,
+                    force_min_gsd=force_min_gsd)
                 start_gid = start_gid + 1
                 start_aid = start_aid + len(anns)
                 frame_index = frame_index + 1
@@ -1417,7 +1479,8 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
                       tries=2,
                       asset_timeout=None,
                       image_timeout=None,
-                      verbose=0):
+                      verbose=0,
+                      force_min_gsd=None):
     """
     Threaded worker function for :func:`SimpleDataCube.extract_overlaps`.
 
@@ -1515,7 +1578,8 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
             force_nodata=force_nodata,
             tries=tries,
             asset_timeout=asset_timeout,
-            verbose=aux_verbose)
+            verbose=aux_verbose,
+            force_min_gsd=force_min_gsd)
         job_list.append(job)
 
     dst_list = []
