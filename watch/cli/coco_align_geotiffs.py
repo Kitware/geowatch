@@ -1938,6 +1938,12 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
         if 'geotiff_metadata' in first_obj:
             info = first_obj['geotiff_metadata']
         else:
+            warnings.warn(ub.paragraph(
+                '''
+                Popluating geotiff crs info, which probably should
+                have already been populated; to ensure pre-population
+                use the 'geo_preprop' argument.
+                '''))
             info = watch.gis.geotiff.geotiff_crs_info(input_gpaths[0])
 
         if 'approx_meter_gsd' in info and info['approx_meter_gsd'] < force_min_gsd:
