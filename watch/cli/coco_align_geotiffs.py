@@ -204,6 +204,7 @@ class CocoAlignGeotiffConfig(scfg.Config):
         'verbose': scfg.Value(0, help='Note: no silent mode, 0 is just least verbose.'),
         'force_nodata': scfg.Value(None, help=('if specified, forces nodata to this value (e.g. -9999) '
                                                'Ideally this is not needed and all source geotiffs properly specify nodata')),
+        'force_min_gsd': scfg.Value(None, help=ub.paragraph('Force output crops to be at least this minimum GSD (e.g. if set to 10.0 an input image with a 30.0 GSD will have an output GSD of 30.0, whereas in input image with a 0.5 GSD will have it set to 10.0 during cropping)'))
     }
 
     def normalize(config):
@@ -1744,7 +1745,7 @@ def _fix_geojson_poly(geo):
 def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
                space_box, align_method, is_multi_image, keep, local_epsg=None,
                include_channels=None, exclude_channels=None, tries=2,
-               asset_timeout=None, force_nodata=None, verbose=0):
+               asset_timeout=None, force_nodata=None, verbose=0, force_min_gsd=None):
     import watch
 
     # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
@@ -1868,6 +1869,19 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
 
     # Note: these methods take care of retries and checking that the
     # data is valid.
+    force_spatial_res = None
+    if force_min_gsd is not None:
+        if 'geotiff_metadata' in first_obj:
+            info = first_obj['geotiff_metadata']
+        else:
+            info = watch.gis.geotiff.geotiff_crs_info(input_gpaths[0])
+
+        if 'approx_meter_gsd' in info and info['approx_meter_gsd'] < force_min_gsd:
+            # Only setting if needed to avoid needless warping if the
+            # 'approximate_meter_gsd' value is slightly different from
+            # what GDAL computes at the time of warping
+            force_spatial_res = force_min_gsd
+
     if len(input_gpaths) > 1:
         in_fpaths = input_gpaths
         util_gdal.gdal_multi_warp(in_fpaths, out_fpath, space_box=space_box,
@@ -1882,7 +1896,8 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
                                    rpcs=rpcs, nodata=nodata,
                                    tries=tries,
                                    error_logfile=error_logfile,
-                                   verbose=0 if verbose < 2 else verbose)
+                                   verbose=0 if verbose < 2 else verbose,
+                                   force_spatial_res=force_spatial_res)
     if verbose > 2:
         print('finish gdal warp dst_gpath = {!r}'.format(dst_gpath))
     return dst

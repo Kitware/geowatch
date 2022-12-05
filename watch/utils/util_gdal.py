@@ -387,7 +387,8 @@ def gdal_single_warp(in_fpath,
                      dem_fpath=None,
                      error_logfile=None,
                      tries=1,
-                     verbose=0):
+                     verbose=0,
+                     force_spatial_res=None):
     r"""
     Wrapper around gdalwarp
 
@@ -426,6 +427,9 @@ def gdal_single_warp(in_fpath,
             If specified, errors will be logged to this filepath.
 
         tries (int): gdal can be flakey, set to force some number of retries
+
+        force_spatial_res (float | tuple(float, float)): Force spatial
+            resolution for output images.
 
     Notes:
         In gdalwarp:
@@ -539,6 +543,12 @@ def gdal_single_warp(in_fpath,
         builder['-te'] = [f'{xmin}', f'{ymin}', f'{xmax}', f'{ymax}']
         builder['-te_srs'] = crop_coordinate_srs
 
+    if force_spatial_res is not None:
+        if isinstance(force_spatial_res, tuple):
+            builder['-tr'] = tuple(map(str, force_spatial_res))
+        else:
+            builder['-tr'] = (str(force_spatial_res), str(force_spatial_res))
+
     # if 0:
     #     builder['-ts'] = f'{croped_image_size}'
     #     builder['-tr'] = f'{croped_pixel_resolution}'
@@ -600,7 +610,8 @@ def gdal_single_warp(in_fpath,
 def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
                     compress='DEFLATE', error_logfile=None,
                     _intermediate_vrt=False, verbose=0,
-                    return_intermediate=False, **kwargs):
+                    return_intermediate=False, force_spatial_res=None,
+                    **kwargs):
     """
     See gdal_single_warp() for args
 
@@ -722,6 +733,7 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
     single_warp_kwargs['nodata'] = nodata
     single_warp_kwargs['verbose'] = verbose
     single_warp_kwargs['error_logfile'] = error_logfile
+    single_warp_kwargs['force_spatial_res'] = force_spatial_res
     # Delay the actual execution of the partial warps until merge is called.
 
     if _intermediate_vrt:
