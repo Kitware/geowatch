@@ -36,7 +36,8 @@ class SegmentationEvalConfig(scfg.Config):
     default = {
          'true_dataset': scfg.Value(None, help='path to the groundtruth dataset'),
          'pred_dataset': scfg.Value(None, help='path to the predicted dataset'),
-         'eval_dpath': scfg.Value(None, help='path to dump results'),
+         'eval_dpath': scfg.Value(None, help='directory to dump results'),
+         'eval_fpath': scfg.Value(None, help='path to dump result summary'),
          'draw_curves': scfg.Value('auto', help='flag to draw curves or not'),
          'draw_heatmaps': scfg.Value('auto', help='flag to draw heatmaps or not'),
          'score_space': scfg.Value('video', help='can score in image or video space'),
@@ -115,12 +116,13 @@ def main(cmdline=True, **kwargs):
     score_space = config['score_space']
     draw_workers = config['workers']
     eval_dpath = config['eval_dpath']
+    eval_fpath = config['eval_fpath']
 
     from scriptconfig.smartcast import smartcast
     draw_heatmaps = smartcast(config['draw_heatmaps'])
     draw_curves = smartcast(config['draw_curves'])
     viz_thresh = smartcast(config['viz_thresh'])
-    evaluate_segmentations(true_coco, pred_coco, eval_dpath,
+    evaluate_segmentations(true_coco, pred_coco, eval_dpath, eval_fpath,
                            draw_curves=draw_curves,
                            draw_heatmaps=draw_heatmaps,
                            score_space=score_space, workers=workers,
@@ -755,6 +757,7 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
 
 @profile
 def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
+                           eval_fpath=None,
                            draw_curves='auto', draw_heatmaps='auto',
                            score_space='video', workers='auto',
                            draw_workers='auto', viz_thresh='auto'):
@@ -1189,9 +1192,11 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                 salient_combo_measures['meta'] = meta
 
             title = '\n'.join(meta.get('title_parts', [meta.get('title', '')]))
-            measures_fpath2 = curve_dpath / 'measures2.json'
-            print('Dump measures_fpath2={}'.format(measures_fpath2))
-            result.dump(os.fspath(measures_fpath2))
+
+            if eval_fpath is None:
+                eval_fpath = curve_dpath / 'measures2.json'
+            print('Dump eval_fpath={}'.format(eval_fpath))
+            result.dump(os.fspath(eval_fpath))
 
             if draw_curves:
                 import kwplot
@@ -1220,6 +1225,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     print('summary = {}'.format(ub.repr2(
         summary, nl=1, precision=4, align=':', sort=0)))
     print('eval_dpath = {!r}'.format(eval_dpath))
+    print(f'eval_fpath={eval_fpath}')
     return df
 
 
