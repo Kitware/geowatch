@@ -72,7 +72,8 @@ Example:
     >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     >>> #
     >>> config = {}
-    >>> config['bas_pxl.test_dataset'] = data_dvc_dpath / 'Drop4-BAS/KR_R002.kwcoco.json'
+    >>> config['bas_pxl.test_dataset'] = data_dvc_dpath / 'Drop4-BAS/KR_R001.kwcoco.json'
+    >>> #config['bas_pxl.test_dataset'] = data_dvc_dpath / 'Drop4-BAS/KR_R002.kwcoco.json'
     >>> #config['bas_pxl.test_dataset'] = data_dvc_dpath / 'Drop4-BAS/BR_R001.kwcoco.json'
     >>> config['bas_pxl.package_fpath'] = expt_dvc_dpath / 'models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt'
     >>> config['bas_pxl.num_workers'] = 6
@@ -82,20 +83,25 @@ Example:
     >>> config['bas_pxl.use_cloudmask'] = 0
     >>> config['bas_pxl.set_cover_algo'] = 'approx'
     >>> config['bas_pxl.resample_invalid_frames'] = 0
-    >>> config['sc_pxl.package_fpath'] = expt_dvc_dpath / 'models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt'
+    >>> config['sc_pxl.chip_dims'] = "256,256"
+    >>> config['sc_pxl.use_cloudmask'] = 0
+    >>> config['sc_pxl.set_cover_algo'] = 'approx'
+    >>> config['sc_pxl.resample_invalid_frames'] = 0
+    >>> config['sc_pxl.num_workers'] = 6
+    >>> config['sc_pxl.package_fpath'] = expt_dvc_dpath / 'models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt'
     >>> #
     >>> root_dpath = data_dvc_dpath / '_testdag'
     >>> #
-    >>> #nodes = joint_bas_sc_nodes()
-    >>> nodes = bas_nodes()
+    >>> nodes = joint_bas_sc_nodes()
+    >>> #nodes = bas_nodes()
     >>> from watch.mlops.pipeline_nodes import PipelineDAG
-    >>> dag = PipelineDAG(nodes)
+    >>> self = dag = PipelineDAG(nodes)
     >>> dag.configure(config=config, root_dpath=root_dpath)
     >>> dag.print_graphs()
-    >>> for node in dag.nodes.values():
-    >>>     print('# --- ')
-    >>>     print('node.config = {}'.format(ub.repr2(node.config, nl=1)))
-    >>>     print(node.resolved_command())
+    >>> cmd_queue = dag.make_cmd_queue()
+    >>> cmd_queue.write_network_text()
+    >>> cmd_queue.rprint()
+    >>> cmd_queue.run()
 
 """
 import ubelt as ub
@@ -482,7 +488,8 @@ class SiteCropping(ProcessNode):
     group_dname = PREDICT_NAME
 
     in_paths = {
-        'crop_src_fpath'
+        'crop_src_fpath',
+        'regions',
     }
     out_paths = {
         'crop_dst_fpath': 'sitecrop.kwcoco.json'
@@ -490,8 +497,10 @@ class SiteCropping(ProcessNode):
 
     perf_params = {
         'verbose': 1,
-        'workers': 8,
-        'aux_workers': 16,
+        # 'workers': 8,
+        # 'aux_workers': 16,
+        'workers': 32,
+        'aux_workers': 4,
         'debug_valid_regions': False,
         'visualize': False,
     }
@@ -517,6 +526,8 @@ class SiteCropping(ProcessNode):
             'target_gsd': 4,
             'site_summary': True,
         }
+        fmtkw = self.resolved_config.copy()
+        fmtkw.update(crop_params)
         # } | ub.udict(crop_params)
 
         # The best setting of this depends on if the data is remote or not.
@@ -524,21 +535,27 @@ class SiteCropping(ProcessNode):
         # bad idea for local images or if the images are too big.
         # Parametarizing would be best.
         # crop_kwargs = { **paths }
-        crop_kwargs = { }
-        crop_kwargs['crop_params_argstr'] = self._make_argstr(crop_params)
-        crop_kwargs['crop_perf_argstr'] = self._make_argstr(self.perf_params)
+        fmtkw['crop_params_argstr'] = self._make_argstr(crop_params)
+        fmtkw['crop_perf_argstr'] = self._make_argstr(self.perf_params)
 
-        crop_kwargs.update(self.resolved_in_paths)
-        crop_kwargs.update(self.resolved_out_paths)
+        # This is hacked:
+        fmtkw['include_channels'] = 'red|green|blue|cloudmask'
+        fmtkw['exclude_sensors'] = 'L8'
+
+        fmtkw.update(self.resolved_in_paths)
+        fmtkw.update(self.resolved_out_paths)
 
         command = ub.codeblock(
             r'''
             python -m watch.cli.coco_align \
                 --src "{crop_src_fpath}" \
                 --dst "{crop_dst_fpath}" \
+                --regions="{regions}" \
+                --exclude_sensors="{exclude_sensors}" \
+                --include_channels="{include_channels}" \
                 {crop_params_argstr} \
                 {crop_perf_argstr} \
-            ''').format(**crop_kwargs).strip().rstrip('\\')
+            ''').format(**fmtkw).strip().rstrip('\\')
 
         # FIXME: parametarize and only if we need secrets
         # secret_fpath = ub.Path('$HOME/code/watch/secrets/secrets').expand()
@@ -637,26 +654,40 @@ def sc_nodes():
 def joint_bas_sc_nodes():
     nodes = {}
     nodes.update(bas_nodes())
-    nodes['sitecrop'] = SiteCropping()
-    nodes.update(sc_nodes())
 
-    # outputs['site_summaries_fpath'].connect(
-    nodes['bas_poly'].connect(
-        nodes['sitecrop'],
-        param_mapping={
-            'site_summaries_fpath': 'crop_src_fpath',
-        }
-    )
+    REAL_CROPPING = 0
 
-    nodes['sitecrop'].connect(
-        # outputs['crop_fpath'].connect(
-        nodes['sc_pxl'],
-        param_mapping={
-            'crop_dst_fpath': 'test_dataset',
-        }
-    )
+    if REAL_CROPPING:
+        nodes['sitecrop'] = SiteCropping()
 
-    nodes['bas_poly'].outputs['site_summaries_fpath'].connect(
-        nodes['sc_poly'].inputs['site_summary']
-    )
+        # outputs['site_summaries_fpath'].connect(
+        nodes['bas_poly'].connect(
+            nodes['sitecrop'],
+            param_mapping={
+                'site_summaries_fpath': 'regions',
+            }
+        )
+
+        nodes['bas_pxl'].inputs['test_dataset'].connect(
+            nodes['sitecrop'].inputs['crop_src_fpath']
+        )
+
+    if 1:
+        nodes.update(sc_nodes())
+
+        if REAL_CROPPING:
+            nodes['sitecrop'].connect(
+                nodes['sc_pxl'],
+                param_mapping={
+                    'crop_dst_fpath': 'test_dataset',
+                }
+            )
+        else:
+            nodes['bas_pxl'].inputs['test_dataset'].connect(
+                nodes['sc_pxl'].inputs['test_dataset']
+            )
+
+        nodes['bas_poly'].outputs['site_summaries_fpath'].connect(
+            nodes['sc_poly'].inputs['site_summary']
+        )
     return nodes

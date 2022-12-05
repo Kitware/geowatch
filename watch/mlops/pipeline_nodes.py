@@ -109,6 +109,32 @@ class PipelineDAG:
         print('IO Graph')
         util_networkx.write_network_text(self.io_graph, path=rich.print, end='')
 
+    def make_cmd_queue(self):
+        import cmd_queue
+
+        config = {
+            # 'backend': 'tmux'
+            'backend': 'serial'
+        }
+        queue = cmd_queue.Queue.create(
+            backend=config['backend'], name='prep-ta2-dataset',
+            size=1, gres=None,
+            # environ=environ
+        )
+
+        import networkx as nx
+        for node_name in list(nx.topological_sort(self.proc_graph)):
+            pred_nodes = list(self.proc_graph.predecessors(node_name))
+            node = self.proc_graph.nodes[node_name]['node']
+            queue.submit(command=node.resolved_command(), depends=pred_nodes,
+                         name=node_name)
+
+        # for node in self.nodes.values():
+        #     print('# --- ')
+        #     print('node.config = {}'.format(ub.repr2(node.config, nl=1)))
+        #     print(node.resolved_command())
+        return queue
+
 
 class Node(ub.NiceRepr):
 
@@ -684,6 +710,24 @@ class ProcessNode(Node):
         command = self.executable + ' ' + argstr
         return command
 
+    def test_is_computed_command(step):
+        test_expr = ' -a '.join(
+            [f'-e "{p}"' for p in step.resolved_out_paths.values()])
+        test_cmd = 'test ' +  test_expr
+        return test_cmd
+
+    @ub.memoize_property
+    def does_exist(self):
+        # return all(self.out_paths.map_values(lambda p: p.exists()).values())
+        return all(ub.Path(p).expand().exists() for p in self.resolved_out_paths.values())
+
     def resolved_command(self):
         command = self.command()
-        return command.rstrip().rstrip('\\').rstrip()
+        self.otf_cache = True
+        self.enabled = True
+        base_command = command.rstrip().rstrip('\\').rstrip()
+
+        if self.otf_cache and self.enabled != 'redo':
+            return self.test_is_computed_command() + ' || ' + base_command
+        else:
+            return base_command
