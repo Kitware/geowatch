@@ -1324,6 +1324,7 @@ class SimpleDataCube(object):
                 # Construct a name for the subregion to extract.
                 name = 'crop_{}_{}_{}_{}'.format(iso_time, space_str, sensor_coarse, num)
 
+                img_verbose = ((verbose > 1) or (verbose > 0 and (img_workers == 0))) and verbose
                 job = image_jobs.submit(
                     extract_image_job,
                     img, anns, bundle_dpath, new_bundle_dpath, name, datetime_,
@@ -1337,7 +1338,7 @@ class SimpleDataCube(object):
                     tries=tries,
                     image_timeout=image_timeout,
                     asset_timeout=asset_timeout,
-                    verbose=verbose,
+                    verbose=img_verbose,
                     force_min_gsd=force_min_gsd)
                 start_gid = start_gid + 1
                 start_aid = start_aid + len(anns)
@@ -1571,7 +1572,7 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
     if asset_timeout is not None:
         asset_timeout = util_time.coerce_timedelta(asset_timeout).total_seconds()
 
-    aux_verbose = verbose > 3 or (verbose > 1 and (aux_workers == 0))
+    aux_verbose = (verbose > 3) or (verbose > 1 and (aux_workers == 0))
     for obj_group in ub.ProgIter(obj_groups, desc='submit warp assets', verbose=verbose):
         job = asset_jobs.submit(
             _aligncrop, obj_group, bundle_dpath, name, sensor_coarse,
@@ -1594,9 +1595,6 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
         dst_list.append(dst)
 
     new_gid = start_gid
-
-    for i in range(100000000):
-        i += 1
 
     if verbose > 2:
         print(f'Finish channel crop jobs: {new_gid}')
