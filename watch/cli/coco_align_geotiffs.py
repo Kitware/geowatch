@@ -212,6 +212,10 @@ class CocoAlignGeotiffConfig(scfg.Config):
             if config['target_gsd'].lower().endswith('gsd'):
                 config['target_gsd'] = int(config['target_gsd'][:-3].strip())
 
+        if isinstance(config['force_min_gsd'], str):
+            if config['force_min_gsd'].lower().endswith('gsd'):
+                config['force_min_gsd'] = float(config['force_min_gsd'][:-3].strip())
+
 
 @profile
 def main(cmdline=True, **kw):
