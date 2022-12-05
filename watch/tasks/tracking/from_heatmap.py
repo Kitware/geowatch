@@ -600,12 +600,12 @@ def _gids_polys(
         moving_window_size=None,  # 150
         bounds=False) -> Iterable[Union[int, Poly]]:
     if bounds:  # for SC
-        boundary_tracks = pop_tracks(sub_dset, [SITE_SUMMARY_CNAME])
-        assert len(boundary_tracks) > 0, 'need valid site boundaries!'
-        gids = boundary_tracks['gid'].unique()
+        raw_boundary_tracks = pop_tracks(sub_dset, [SITE_SUMMARY_CNAME])
+        assert len(raw_boundary_tracks) > 0, 'need valid site boundaries!'
+        gids = raw_boundary_tracks['gid'].unique()
         print('generating polys in bounds: number of bounds: ',
-              gpd_len(boundary_tracks))
-        boundary_tracks = boundary_tracks.groupby('track_idx')
+              gpd_len(raw_boundary_tracks))
+        boundary_tracks = list(raw_boundary_tracks.groupby('track_idx'))
 
     else:
         boundary_tracks = [(None, None)]
@@ -630,9 +630,9 @@ def _gids_polys(
             _heatmaps_in_track = _heatmaps
         else:
             track_bounds = track['poly'].unary_union
-            _heatmaps_in_track = np.compress(np.in1d(gids, track[1]['gid']),
-                                             _heatmaps,
-                                             axis=0)
+            track_gids = track['gid']
+            flags = np.in1d(gids, track_gids)
+            _heatmaps_in_track = np.compress(flags, _heatmaps, axis=0)
 
         # this is another hot spot, heatmaps_to_polys -> mask_to_polygons ->
         # rasterize. Figure out how to vectorize over bounds.
@@ -657,7 +657,10 @@ def _gids_polys(
     jobs = []
     for _, track in boundary_tracks:
         jobs.append(exc.submit(_process, track))
-    return itertools.chain.from_iterable(j.result() for j in jobs)
+
+    result_gen = itertools.chain.from_iterable(j.result() for j in jobs)
+    result_gen = list(result_gen)
+    return result_gen
 
 #
 # --- wrappers ---
