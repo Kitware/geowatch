@@ -70,9 +70,9 @@ import cmd_queue
 from watch.utils.util_param_grid import expand_param_grid
 from watch.mlops.old_pipeline_nodes import resolve_pipeline_row
 from watch.mlops.old_pipeline_nodes import resolve_package_paths  # NOQA
-from watch.mlops.old_pipeline_nodes import Pipeline
-from watch.mlops.old_pipeline_nodes import Step
-from watch.mlops.old_pipeline_nodes import submit_old_pipeline_jobs
+from watch.mlops.old_pipeline_nodes import Pipeline  # NOQA
+from watch.mlops.old_pipeline_nodes import Step  # NOQA
+from watch.mlops.old_pipeline_nodes import submit_old_pipeline_jobs  # NOQA
 
 
 class ScheduleEvaluationConfig(scfg.Config):
