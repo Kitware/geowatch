@@ -10,6 +10,7 @@ CommandLine:
     WATCH_DEVCHECK=1 xdoctest -m watch.mlops.smart_pipeline __doc__:1
 
 Example:
+    >>> # xdoctest: +SKIP
     >>> from watch.mlops.smart_pipeline import *  # NOQA
     >>> from cmd_queue.util import util_networkx
     >>> #
@@ -703,8 +704,8 @@ def make_smart_pipeline(name):
     from watch.mlops.pipeline_nodes import PipelineDAG
     node_makers = {
         'joint_bas_sc': joint_bas_sc_nodes,
-        'sc_nodes': sc_nodes,
-        'bas_nodes': bas_nodes,
+        'sc': sc_nodes,
+        'bas': bas_nodes,
     }
     make_nodes = node_makers[name]
     nodes = make_nodes()

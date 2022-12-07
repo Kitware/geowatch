@@ -72,13 +72,15 @@ Example:
         --params="
             matrix:
                 bas_pxl.package_fpath:
-                    - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+                    # - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+                    - $DVC_EXPT_DPATH/package_epoch10_step200000.pt
                 bas_pxl.test_dataset:
                     - $DVC_DATA_DPATH/Drop4-BAS/KR_R001.kwcoco.json
                     - $DVC_DATA_DPATH/Drop4-BAS/KR_R002.kwcoco.json
                 bas_pxl.window_space_scale:
-                    - "15GSD"
-                    - "30GSD"
+                    - auto
+                    # - "15GSD"
+                    # - "30GSD"
                 bas_pxl.chip_dims:
                     - "256,256"
                 bas_pxl.time_sampling:
@@ -86,12 +88,13 @@ Example:
                 bas_pxl.input_space_scale:
                     - "window"
                 bas_poly.moving_window_size:
-                    - 100
-                    - 200
+                    - null
+                    # - 100
+                    # - 200
                 bas_poly.thresh:
                     - 0.1
-                    - 0.13
-                    - 0.2
+                    # - 0.13
+                    # - 0.2
                 sc_pxl.window_space_scale:
                     - auto
                 sc_pxl.input_space_scale:
@@ -111,13 +114,14 @@ Example:
                 sc_pxl_eval.enabled: 0
                 sc_poly_viz.enabled: 1
         " \
-        --expt_dvc_dpath=./my_expt_dir \
-        --data_dvc_dpath=./my_data_dir \
+        --root_dpath=$DVC_EXPT_DPATH/_testpipe \
         --enable_links=1 \
         --devices="0,1" --queue_size=2 \
         --backend=tmux \
-        --cache=1 \
-        --run=1 --rprint=1
+        --pipeline=bas \
+        --cache=1 --rprint=1 --run=0
+
+        --pipeline=joint_bas_sc
 
 
     xdev tree --dirblocklist "_*" my_expt_dir/_testpipe/ --max_files=1
@@ -156,9 +160,12 @@ class ScheduleEvaluationConfig(scfg.Config):
 
         'shuffle_jobs': scfg.Value(True, help='if True, shuffles the jobs so they are submitted in a random order'),
         'annotations_dpath': scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval'),
+        'root_dpath': scfg.Value('auto', help='Where do dump all results'),
 
         'expt_dvc_dpath': None,
         'data_dvc_dpath': None,
+
+        'pipeline': scfg.Value('joint_bas_sc', help='the name of the pipeline to run'),
 
         'check_other_sessions': scfg.Value('auto', help='if True, will ask to kill other sessions that might exist'),
         'queue_size': scfg.Value('auto', help='if auto, defaults to number of GPUs'),
@@ -166,20 +173,20 @@ class ScheduleEvaluationConfig(scfg.Config):
         'out_dpath': scfg.Value('auto', help='The location where predictions / evals will be stored. If "auto", uses teh expt_dvc_dpath'),
 
         # These enabled flags should probably be pushed off to params
-        'enable_pred_bas_pxl': scfg.Value(True, isflag=True, help='BAS heatmap'),
-        'enable_pred_bas_poly': scfg.Value(True, isflag=True, help='BAS tracking'),
-        'enable_crop': scfg.Value(True, isflag=True, help='SC tracking'),
-        'enable_pred_sc_pxl': scfg.Value(True, isflag=True, help='SC heatmaps'),
-        'enable_pred_sc_poly': scfg.Value(True, isflag=True, help='SC tracking'),
-        'enable_viz_pred_sc_poly': scfg.Value(False, isflag=True, help='if true draw predicted tracks for SC'),
+        # 'enable_pred_bas_pxl': scfg.Value(True, isflag=True, help='BAS heatmap'),
+        # 'enable_pred_bas_poly': scfg.Value(True, isflag=True, help='BAS tracking'),
+        # 'enable_crop': scfg.Value(True, isflag=True, help='SC tracking'),
+        # 'enable_pred_sc_pxl': scfg.Value(True, isflag=True, help='SC heatmaps'),
+        # 'enable_pred_sc_poly': scfg.Value(True, isflag=True, help='SC tracking'),
+        # 'enable_viz_pred_sc_poly': scfg.Value(False, isflag=True, help='if true draw predicted tracks for SC'),
 
-        'enable_eval_bas_pxl': scfg.Value(True, isflag=True, help='BAS heatmap evaluation'),
-        'enable_eval_bas_poly': scfg.Value(True, isflag=True, help='BAS tracking evaluation'),
-        'enable_eval_sc_pxl': scfg.Value(True, isflag=True, help='SC heatmaps evaluation'),
-        'enable_eval_sc_poly': scfg.Value(True, isflag=True, help='SC tracking evaluation'),
-        'enable_viz_pred_bas_poly': scfg.Value(False, isflag=True, help='if true draw predicted tracks for BAS'),
+        # 'enable_eval_bas_pxl': scfg.Value(True, isflag=True, help='BAS heatmap evaluation'),
+        # 'enable_eval_bas_poly': scfg.Value(True, isflag=True, help='BAS tracking evaluation'),
+        # 'enable_eval_sc_pxl': scfg.Value(True, isflag=True, help='SC heatmaps evaluation'),
+        # 'enable_eval_sc_poly': scfg.Value(True, isflag=True, help='SC tracking evaluation'),
+        # 'enable_viz_pred_bas_poly': scfg.Value(False, isflag=True, help='if true draw predicted tracks for BAS'),
+
         'enable_links': scfg.Value(True, isflag=True, help='if true enable symlink jobs'),
-
         'cache': scfg.Value(True, isflag=True, help='if true, each a test is appened to each job to skip itself if its output exists'),
 
         'draw_heatmaps': scfg.Value(1, isflag=True, help='if true draw heatmaps on eval'),
@@ -199,56 +206,25 @@ def schedule_evaluation(cmdline=False, **kwargs):
     appropriate path. (as noted by model_dpath)
     """
     import watch
+    from watch.mlops import smart_pipeline
     config = ScheduleEvaluationConfig(cmdline=cmdline, data=kwargs)
     print('ScheduleEvaluationConfig config = {}'.format(ub.repr2(dict(config), nl=1, si=1)))
 
-    expt_dvc_dpath = config['expt_dvc_dpath']
-    data_dvc_dpath = config['data_dvc_dpath']
-    if expt_dvc_dpath is None:
-        expt_dvc_dpath = watch.find_smart_dvc_dpath(tags='phase2_expt')
-    if data_dvc_dpath is None:
-        data_dvc_dpath = watch.find_smart_dvc_dpath(tags='phase2_data')
-    data_dvc_dpath = ub.Path(data_dvc_dpath)
-    expt_dvc_dpath = ub.Path(expt_dvc_dpath)
+    if config['root_dpath'] is None:
+        expt_dvc_dpath = watch.find_smart_dvc_dpath(tags='phase2_expt', hardware='auto')
+        config['root_dpath'] = expt_dvc_dpath / 'dag_runs'
 
-    # from watch.mlops.expt_manager import ExperimentState
-    # start using the experiment state logic as the path and metadata
-    # organization logic
-    # out_dpath = config['out_dpath']
-    # state = ExperimentState(expt_dvc_dpath, '*', storage_dpath=out_dpath)
-
-    # Get truth annotations
-    annotations_dpath = config['annotations_dpath']
-    if annotations_dpath is None:
-        annotations_dpath = data_dvc_dpath / 'annotations'
-    annotations_dpath = ub.Path(annotations_dpath)
-    # region_model_dpath = annotations_dpath / 'region_models'
-
-    root_dpath = expt_dvc_dpath / '_testpipe'
+    root_dpath = ub.Path(config['root_dpath'])
 
     # Expand paramater search grid
-    # arg = config['params']
     all_param_grid = expand_param_grid(config['params'])
-    # grid_item_defaults = ub.udict({
-    #     'bas_pxl.package_fpath': None,
-    #     'bas_pxl.test_dataset': None,
-    #     'bas_poly.thresh': 0.1,
 
-    #     'crop.src': None,
-    #     'crop.context_factor': 1.5,
-    #     'crop.regions': 'truth',
-
-    #     'sc_pxl.package_fpath': None,
-    #     'sc_pxl.test_dataset': None,
-    #     'sc_poly.thresh': 0.1,
-    # })
-
-    from watch.mlops import smart_pipeline
-    dag = smart_pipeline.make_smart_pipeline('joint_bas_sc')
+    # Load the requested pipeline
+    dag = smart_pipeline.make_smart_pipeline(config['pipeline'])
     dag.print_graphs()
 
     # from rich import print
-    queue_dpath = expt_dvc_dpath / '_cmd_queue_schedule'
+    queue_dpath = root_dpath / '_cmd_queue_schedule'
     queue_dpath.ensuredir()
 
     devices = config['devices']

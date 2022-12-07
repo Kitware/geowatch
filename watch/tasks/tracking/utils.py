@@ -308,16 +308,21 @@ def gpd_compute_scores(gdf,
         # TODO handle keys as channelcodes
         # port over better handling from utils.build_heatmaps
         # gid = grp['gid'].iloc[0]
-        gid = grp.name
+        gid = getattr(grp, 'name', None)
         for k in set().union(itertools.chain.from_iterable(ks.values())):
             # TODO there is a regression here from not using
             # build_heatmaps(skipped='interpolate'). It will be changed with
             # nodata handling anyway, and that's easier to implement here.
-            heatmap = build_heatmap(sub_dset, gid, k, missing='fill')
-            scores = grp['poly'].map(
-                lambda p: score_poly(p, heatmap, threshold=thrs))
 
-            grp[[(k, thr) for thr in thrs]] = scores.to_list()
+            if gid is None:
+                scores = pd.Series(np.array([0] * len(thrs)))
+            else:
+                heatmap = build_heatmap(sub_dset, gid, k, missing='fill')
+                scores = grp['poly'].map(
+                    lambda p: score_poly(p, heatmap, threshold=thrs))
+
+            cols = [(k, thr) for thr in thrs]
+            grp[cols] = scores.to_list()
         return grp
 
     ks = {k: v for k, v in ks.items() if v}
@@ -349,13 +354,15 @@ def gpd_compute_scores(gdf,
         # gdf = gdf.reindex(columns=_col_order)
 
     else:  # 95% runtime
-        gdf = gdf.groupby('gid', group_keys=False).apply(compute_scores,
-                                                         thrs=thrs,
-                                                         ks=ks)
+        grouped = gdf.groupby('gid', group_keys=False)
+        gdf = grouped.apply(compute_scores, thrs=thrs, ks=ks)
 
     # fill nan scores from nodata pxls
     def _fillna(grp):
-        grp[score_cols] = grp[score_cols].fillna(method='ffill').fillna(0)
+        if len(grp) == 0:
+            grp = grp.reindex(list(ub.oset(grp.columns) | score_cols), axis=1)
+        else:
+            grp[score_cols] = grp[score_cols].fillna(method='ffill').fillna(0)
         return grp
 
     gdf = gdf.groupby('track_idx', group_keys=False).apply(_fillna)
@@ -365,7 +372,9 @@ def gpd_compute_scores(gdf,
         for k, kk in ks.items():
             if kk:
                 # https://github.com/pandas-dev/pandas/issues/20824#issuecomment-384432277
-                gdf[(k, thr)] = gdf[[(ki, thr) for ki in kk]].sum(axis=1)
+                sum_cols = [(ki, thr) for ki in kk]
+                sum_cols = gdf.columns & sum_cols
+                gdf[(k, thr)] = gdf[sum_cols].sum(axis=1)
 
     return gdf
 

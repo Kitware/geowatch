@@ -395,7 +395,12 @@ def time_aggregated_polys(
 
     # now we start needing scores, so bulk-compute them
 
-    gids, polys = zip(*gids_polys)
+    gids_polys_T = list(zip(*gids_polys))
+    if gids_polys_T:
+        gids, polys = gids_polys_T
+    else:
+        gids, polys = [], []
+
     polys = [p.to_shapely() for p in polys]
     _TRACKS = gpd.GeoDataFrame(dict(gid=gids, poly=polys), geometry='poly')
     # _TRACKS['track_idx'] = range(len(_TRACKS))
