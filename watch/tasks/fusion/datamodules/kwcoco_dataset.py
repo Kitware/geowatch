@@ -956,11 +956,14 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             # native scales will only work in late-fused modes
             target_['use_native_scale'] = True
             target_['realign_native'] = 'largest'
-            common_outspace_box = None
         else:
             if isinstance(common_output_scale, str) and common_output_scale == 'native':
                 raise Exception(
                     'output scale can only be native when input scale is native')
+
+        if isinstance(common_output_scale, str) and common_output_scale == 'native':
+            common_outspace_box = None
+        else:
             # Compute where this output chip should live in its output space canvas.
             common_output_scale = resolved_output_scale['scale']
             common_outspace_box = vidspace_box.scale(common_output_scale)
