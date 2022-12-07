@@ -147,13 +147,16 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
         else:
             # new lightning cli modules
             fit_config = (
-                ub.udict(raw_module.datamodule_hparams) |
+                ub.udict(getattr(raw_module, 'datamodule_hparams', {})) |
                 ub.udict(raw_module.hparams)
             )
 
-        train_dataset = ub.Path(fit_config['train_dataset'])
+        if 'train_dataset' in fit_config:
+            train_dataset = ub.Path(fit_config['train_dataset'])
+        else:
+            train_dataset = None
 
-        if dvc_dpath is not None:
+        if dvc_dpath is not None and train_dataset is not None:
             try:
                 if str(train_dataset).startswith(str(dvc_dpath)):
                     train_dataset = train_dataset.relative_to(dvc_dpath)
@@ -191,7 +194,7 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
         model_stats['num_params'] = num_params
         model_stats['num_states'] = len(state_keys)
         model_stats['heads'] = heads
-        model_stats['train_dataset'] = str(train_dataset)
+        model_stats['train_dataset'] = None if train_dataset is None else str(train_dataset)
         model_stats['spacetime_stats'] = spacetime_stats
         model_stats['classes'] = list(module.classes)
         model_stats['known_inputs'] = known_input_stats

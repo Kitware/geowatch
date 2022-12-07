@@ -129,7 +129,7 @@ class TimePolygonFilter:
 
         if len(gdf) > 0:
             group = gdf.groupby('track_idx', group_keys=False)
-            result = group.apply.apply(_edit)
+            result = group.apply(_edit)
         else:
             result = gdf
         return result

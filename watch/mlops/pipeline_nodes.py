@@ -228,13 +228,13 @@ class PipelineDAG:
                             f'ln -sfT "{target_path1}" "{link_path1}"',
                             f'ln -sfT "{target_path2}" "{link_path2}"',
                         ]
-                        command = ' && '.join(parts)
+                        command = '(' + ' && '.join(parts) + ')'
                         # TODO: nicer infastructure mechanisms (make the code
                         # prettier and easier to reason about)
                         link_node = ProcessNode(
                             name='__link', executable=command, in_paths={},
                             out_paths={'link_path1': str(link_path1), 'link_path2': str(link_path2)})
-                        link_node.configure(config={}, cache=0)
+                        link_node.configure(config={}, cache=1)
                         link_command = link_node.resolved_command()
                         link_procid = 'link_' + node_procid
                         if link_procid not in queue.named_jobs:
@@ -261,7 +261,7 @@ class PipelineDAG:
                     if invoke_procid not in queue.named_jobs:
                         queue.submit(command=invoke_command,
                                      depends=[node_procid],
-                                     name=invoke_procid)
+                                     name=invoke_procid, bookkeeper=1)
 
         return queue
 
@@ -918,7 +918,7 @@ class ProcessNode(Node):
 
     @staticmethod
     def _make_argstr(config):
-        parts = [f'    --{k}={v} \\' for k, v in config.items()]
+        parts = [f'    --{k}="{v}" \\' for k, v in config.items()]
         return chr(10).join(parts).lstrip().rstrip('\\')
 
     @cached_property

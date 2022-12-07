@@ -210,7 +210,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     config = ScheduleEvaluationConfig(cmdline=cmdline, data=kwargs)
     print('ScheduleEvaluationConfig config = {}'.format(ub.repr2(dict(config), nl=1, si=1)))
 
-    if config['root_dpath'] is None:
+    if config['root_dpath'] in {None, 'auto'}:
         expt_dvc_dpath = watch.find_smart_dvc_dpath(tags='phase2_expt', hardware='auto')
         config['root_dpath'] = expt_dvc_dpath / 'dag_runs'
 

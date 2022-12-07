@@ -488,6 +488,7 @@ def _sample_single_video_spacetime_targets(
         winspace_window_box = kwimage.Boxes([
             [0, 0, winspace_window_width, winspace_window_height]], 'xywh')
         # The window is scaled inversely to the data
+        # NOTE: This window size can be too big wrt what is actually requested.
         vidspace_window_box = winspace_window_box.scale(1 / window_scale).quantize()
         vidspace_window_height = vidspace_window_box.height.ravel()[0]
         vidspace_window_width = vidspace_window_box.width.ravel()[0]
