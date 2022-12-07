@@ -241,6 +241,28 @@ class PipelineDAG:
                             queue.submit(command=link_command,
                                          depends=[node_procid],
                                          name=link_procid)
+                write_invocations = True
+                if write_invocations:
+                    invoke_fpath = node.resolved_node_dpath / 'invoke.sh'
+                    command = '\n'.join([
+                        "echo '",
+                        '#!/bin/bash',
+                        node.command(),
+                        f"\' > {invoke_fpath}",
+                    ])
+                    # TODO: nicer infastructure mechanisms (make the code
+                    # prettier and easier to reason about)
+                    invoke_node = ProcessNode(
+                        name='__invoke', executable=command, in_paths={},
+                        out_paths={'invoke_fpath': str(invoke_fpath)})
+                    invoke_node.configure(config={}, cache=0)
+                    invoke_command = invoke_node.resolved_command()
+                    invoke_procid = 'invoke_' + node_procid
+                    if invoke_procid not in queue.named_jobs:
+                        queue.submit(command=invoke_command,
+                                     depends=[node_procid],
+                                     name=invoke_procid)
+
         return queue
 
 

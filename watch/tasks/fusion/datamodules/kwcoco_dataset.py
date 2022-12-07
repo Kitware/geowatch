@@ -237,11 +237,14 @@ class KWCocoVideoDatasetConfig(scfg.Config):
 
         self['chip_size'] = None
 
-        if self['input_space_scale'] is None:
+        if self['input_space_scale'] in {None, 'None', 'window'}:
             self['input_space_scale'] = self['window_space_scale']
 
-        if self['output_space_scale'] is None:
+        if self['output_space_scale'] is {None, 'None', 'input'}:
             self['output_space_scale'] = self['input_space_scale']
+
+        if self['output_space_scale'] == 'window':
+            self['output_space_scale'] = self['window_space_scale']
 
 
 class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):

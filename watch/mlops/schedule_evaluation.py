@@ -76,12 +76,16 @@ Example:
                     - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
                 bas_pxl.test_dataset:
                     - $DVC_DATA_DPATH/Drop4-BAS/KR_R001.kwcoco.json
-                bas_pxl.window_space_scale: 15GSD
+                bas_pxl.window_space_scale:
+                    - "15GSD"
+                    - "30GSD"
                 bas_pxl.time_sampling:
                     - "auto"
                 bas_pxl.input_space_scale:
-                    - "15GSD"
+                    - "window"
                 bas_poly.moving_window_size:
+                    - 100
+                    - 200
                 bas_poly.thresh:
                     - 0.1
                     - 0.13
