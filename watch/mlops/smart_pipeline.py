@@ -6,11 +6,11 @@ used to store results.
 
 
 CommandLine:
-    xdoctest -m watch.mlops.smart_pipeline_nodes __doc__:0
-    WATCH_DEVCHECK=1 xdoctest -m watch.mlops.smart_pipeline_nodes __doc__:1
+    xdoctest -m watch.mlops.smart_pipeline __doc__:0
+    WATCH_DEVCHECK=1 xdoctest -m watch.mlops.smart_pipeline __doc__:1
 
 Example:
-    >>> from watch.mlops.smart_pipeline_nodes import *  # NOQA
+    >>> from watch.mlops.smart_pipeline import *  # NOQA
     >>> from cmd_queue.util import util_networkx
     >>> #
     >>> config = {
@@ -27,12 +27,9 @@ Example:
     >>>     'sc_poly.use_viterbi': 0,
     >>> }
     >>> #
-    >>> nodes = joint_bas_sc_nodes()
-    >>> #nodes = bas_nodes()
-    >>> #nodes = sc_nodes()
-    >>> print('nodes = {}'.format(ub.repr2(nodes, nl=1, si=1)))
-    >>> from watch.mlops.pipeline_nodes import PipelineDAG
-    >>> dag = PipelineDAG(nodes, config)
+    >>> dag = make_smart_pipeline('joint_bas_sc')
+    >>> # dag = make_smart_pipeline('bas')
+    >>> # dag = make_smart_pipeline('sc')
     >>> dag.configure(config, root_dpath='/dag-root/dag-id')
     >>> #
     >>> for node in dag.nodes.values():
@@ -66,7 +63,7 @@ Example:
 
 Example:
     >>> # xdoctest: +REQUIRES(env:WATCH_DEVCHECK)
-    >>> from watch.mlops.smart_pipeline_nodes import *  # NOQA
+    >>> from watch.mlops.smart_pipeline import *  # NOQA
     >>> import watch
     >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
     >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
@@ -99,10 +96,10 @@ Example:
     >>> self = dag = PipelineDAG(nodes)
     >>> dag.configure(config=config, root_dpath=root_dpath)
     >>> dag.print_graphs()
-    >>> cmd_queue = dag.make_cmd_queue()
+    >>> cmd_queue = dag.submit_jobs()
     >>> cmd_queue.write_network_text()
     >>> cmd_queue.rprint()
-    >>> cmd_queue.run()
+    >>> #cmd_queue.run()
 
 """
 import ubelt as ub
@@ -705,3 +702,17 @@ def joint_bas_sc_nodes():
             nodes['sc_poly'].inputs['site_summary']
         )
     return nodes
+
+
+def make_smart_pipeline(name):
+    from watch.mlops.pipeline_nodes import PipelineDAG
+    node_makers = {
+        'joint_bas_sc': joint_bas_sc_nodes,
+        'sc_nodes': sc_nodes,
+        'bas_nodes': bas_nodes,
+    }
+    make_nodes = node_makers[name]
+    nodes = make_nodes()
+    dag = PipelineDAG(nodes)
+    dag.build_nx_graphs()
+    return dag

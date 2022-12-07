@@ -12,46 +12,82 @@ Example:
     python -m watch.mlops.schedule_evaluation \
         --params="
             matrix:
-                trk.pxl.package_fpath:
-                    - ./my_bas_model.pt
-                trk.pxl.data.test_dataset:
+                bas_pxl.package_fpath:
+                    - ./my_bas_model1.pt
+                    - ./my_bas_model2.pt
+                bas_pxl.test_dataset:
                     - ./my_test_dataset/bas_ready_data.kwcoco.json
-                trk.pxl.data.window_space_scale: 15GSD
-                trk.pxl.data.time_sampling:
+                bas_pxl.window_space_scale: 15GSD
+                bas_pxl.time_sampling:
                     - "auto"
-                trk.pxl.data.input_space_scale:
+                bas_pxl.input_space_scale:
                     - "15GSD"
-                trk.poly.moving_window_size:
-                    - null
-                crop.src:
-                    - ./my_test_dataset/sc_query_data.kwcoco.json
-                crop.regions:
-                    - trk.poly.output
-                act.pxl.data.test_dataset:
-                    - crop.dst
-                act.pxl.data.window_space_scale:
-                    - auto
-                act.poly.thresh:
+                bas_poly.moving_window_size:
+                bas_poly.thresh:
                     - 0.1
-                act.poly.use_viterbi:
+                    - 0.2
+                sc_pxl.test_dataset:
+                    - crop.dst
+                sc_pxl.window_space_scale:
+                    - auto
+                sc_poly.thresh:
+                    - 0.1
+                sc_poly.use_viterbi:
                     - 0
-                act.pxl.package_fpath:
-                    - my_sc_model.pt
+                sc_pxl.package_fpath:
+                    - my_sc_model1.pt
+                    - my_sc_model2.pt
         " \
         --expt_dvc_dpath=./my_expt_dir \
         --data_dvc_dpath=./my_data_dir \
         --dynamic_skips=0 \
-        --enable_pred_trk_pxl=1 \
-        --enable_pred_trk_poly=1 \
-        --enable_eval_trk_pxl=0 \
-        --enable_eval_trk_poly=0 \
+        --enable_pred_bas_pxl=1 \
+        --enable_pred_bas_poly=1 \
+        --enable_eval_bas_pxl=0 \
+        --enable_eval_bas_poly=0 \
         --enable_crop=1 \
-        --enable_pred_act_pxl=1 \
-        --enable_pred_act_poly=1 \
-        --enable_eval_act_pxl=0 \
-        --enable_eval_act_poly=0 \
-        --enable_viz_pred_trk_poly=0 \
-        --enable_viz_pred_act_poly=0 \
+        --enable_pred_sc_pxl=1 \
+        --enable_pred_sc_poly=1 \
+        --enable_eval_sc_pxl=0 \
+        --enable_eval_sc_poly=0 \
+        --enable_viz_pred_bas_poly=0 \
+        --enable_viz_pred_sc_poly=0 \
+        --enable_links=0 \
+        --devices="0,1" --queue_size=2 \
+        --backend=serial --skip_existing=0 \
+        --run=0
+
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+
+    python -m watch.mlops.schedule_evaluation \
+        --params="
+            matrix:
+                bas_pxl.package_fpath:
+                    - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+                bas_pxl.test_dataset:
+                    - $DVC_DATA_DPATH=Drop4-BAS/KR_R001.kwcoco.json
+                bas_pxl.window_space_scale: 15GSD
+                bas_pxl.time_sampling:
+                    - "auto"
+                bas_pxl.input_space_scale:
+                    - "15GSD"
+                bas_poly.moving_window_size:
+                bas_poly.thresh:
+                    - 0.1
+                    - 0.2
+                sc_pxl.window_space_scale:
+                    - auto
+                sc_poly.thresh:
+                    - 0.1
+                sc_poly.use_viterbi:
+                    - 0
+                sc_pxl.package_fpath:
+                    - $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
+        " \
+        --expt_dvc_dpath=./my_expt_dir \
+        --data_dvc_dpath=./my_data_dir \
+        --dynamic_skips=0 \
         --enable_links=0 \
         --devices="0,1" --queue_size=2 \
         --backend=serial --skip_existing=0 \
@@ -68,7 +104,7 @@ from watch.utils.lightning_ext import util_globals  # NOQA
 import kwarray  # NOQA
 import cmd_queue
 from watch.utils.util_param_grid import expand_param_grid
-from watch.mlops.old_pipeline_nodes import resolve_pipeline_row
+# from watch.mlops.old_pipeline_nodes import resolve_pipeline_row
 from watch.mlops.old_pipeline_nodes import resolve_package_paths  # NOQA
 from watch.mlops.old_pipeline_nodes import Pipeline  # NOQA
 from watch.mlops.old_pipeline_nodes import Step  # NOQA
@@ -101,18 +137,18 @@ class ScheduleEvaluationConfig(scfg.Config):
         'out_dpath': scfg.Value('auto', help='The location where predictions / evals will be stored. If "auto", uses teh expt_dvc_dpath'),
 
         # These enabled flags should probably be pushed off to params
-        'enable_pred_trk_pxl': scfg.Value(True, isflag=True, help='BAS heatmap'),
-        'enable_pred_trk_poly': scfg.Value(True, isflag=True, help='BAS tracking'),
+        'enable_pred_bas_pxl': scfg.Value(True, isflag=True, help='BAS heatmap'),
+        'enable_pred_bas_poly': scfg.Value(True, isflag=True, help='BAS tracking'),
         'enable_crop': scfg.Value(True, isflag=True, help='SC tracking'),
-        'enable_pred_act_pxl': scfg.Value(True, isflag=True, help='SC heatmaps'),
-        'enable_pred_act_poly': scfg.Value(True, isflag=True, help='SC tracking'),
-        'enable_viz_pred_act_poly': scfg.Value(False, isflag=True, help='if true draw predicted tracks for SC'),
+        'enable_pred_sc_pxl': scfg.Value(True, isflag=True, help='SC heatmaps'),
+        'enable_pred_sc_poly': scfg.Value(True, isflag=True, help='SC tracking'),
+        'enable_viz_pred_sc_poly': scfg.Value(False, isflag=True, help='if true draw predicted tracks for SC'),
 
-        'enable_eval_trk_pxl': scfg.Value(True, isflag=True, help='BAS heatmap evaluation'),
-        'enable_eval_trk_poly': scfg.Value(True, isflag=True, help='BAS tracking evaluation'),
-        'enable_eval_act_pxl': scfg.Value(True, isflag=True, help='SC heatmaps evaluation'),
-        'enable_eval_act_poly': scfg.Value(True, isflag=True, help='SC tracking evaluation'),
-        'enable_viz_pred_trk_poly': scfg.Value(False, isflag=True, help='if true draw predicted tracks for BAS'),
+        'enable_eval_bas_pxl': scfg.Value(True, isflag=True, help='BAS heatmap evaluation'),
+        'enable_eval_bas_poly': scfg.Value(True, isflag=True, help='BAS tracking evaluation'),
+        'enable_eval_sc_pxl': scfg.Value(True, isflag=True, help='SC heatmaps evaluation'),
+        'enable_eval_sc_poly': scfg.Value(True, isflag=True, help='SC tracking evaluation'),
+        'enable_viz_pred_bas_poly': scfg.Value(False, isflag=True, help='if true draw predicted tracks for BAS'),
         'enable_links': scfg.Value(True, isflag=True, help='if true enable symlink jobs'),
 
         'dynamic_skips': scfg.Value(True, isflag=True, help='if true, each a test is appened to each job to skip itself if its output exists'),
@@ -124,6 +160,7 @@ class ScheduleEvaluationConfig(scfg.Config):
         'mem': scfg.Value(None, help='specify slurm memory per task (slurm backend only)'),
 
         'params': scfg.Value(None, type=str, help='a yaml/json grid/matrix of prediction params'),
+        'rprint': scfg.Value(True, isflag=True, help='enable / disable rprint before exec')
     }
 
 
@@ -131,55 +168,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
     r"""
     First ensure that models have been copied to the DVC repo in the
     appropriate path. (as noted by model_dpath)
-
-    Ignore:
-        from watch.mlops.schedule_evaluation import *  # NOQA
-        kwargs = {'params': ub.codeblock(
-            '''
-            - matrix:
-                ###
-                ### BAS Pixel Prediction
-                ###
-                trk.pxl.package_fpath:
-                    - ~/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=31-step=16384.pt.pt
-                    - ~/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/packages/Drop4_BAS_Retrain_V002/Drop4_BAS_Retrain_V002_epoch=73-step=37888.pt.pt
-                trk.pxl.data.test_dataset:
-                    - ~/data/dvc-repos/smart_data_dvc/tmp/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco/cropped_kwcoco_for_bas.json
-                trk.pxl.data.tta_time: 0
-                trk.pxl.data.chip_overlap: 0.3
-                trk.pxl.data.window_space_scale: 10GSD
-                trk.pxl.data.input_space_scale: 15GSD
-                trk.pxl.data.output_space_scale: 15GSD
-                trk.pxl.data.time_span: auto
-                trk.pxl.data.time_sampling: auto
-                trk.pxl.data.time_steps: auto
-                trk.pxl.data.chip_dims: auto
-                trk.pxl.data.set_cover_algo: None
-                trk.pxl.data.resample_invalid_frames: 1
-                trk.pxl.data.use_cloudmask: 1
-                ###
-                ### BAS Polygon Prediction
-                ###
-                trk.poly.thresh: [0.10, 0.15]
-                trk.poly.morph_kernel: 3
-                trk.poly.norm_ord: 1
-                trk.poly.agg_fn: probs
-                trk.poly.thresh_hysteresis: None
-                trk.poly.moving_window_size: None
-                ###
-                ### SC Pixel Prediction
-                ###
-                crop.src: /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc/online_v1/kwcoco_for_sc.json
-                crop.regions:
-                    - trk.poly.output
-                    - truth
-                act.pxl.data.test_dataset:
-                    - crop.dst
-                    # - ~/data/dvc-repos/smart_data_dvc/tmp/KR_R001_0.1BASThresh_40cloudcover_debug10_kwcoco/cropped_kwcoco_for_sc.json
-                act.pxl.package_fpath:
-                    - ~/data/dvc-repos/smart_expt_dvc/models/fusion/Aligned-Drop4-2022-08-08-TA1-S2-WV-PD-ACC/packages/Drop4_SC_RGB_scratch_V002/Drop4_SC_RGB_scratch_V002_epoch=99-step=50300-v1.pt.pt
-            ''')}
-        cmdline = 0
     """
     import watch
     config = ScheduleEvaluationConfig(cmdline=cmdline, data=kwargs)
@@ -194,51 +182,41 @@ def schedule_evaluation(cmdline=False, **kwargs):
     data_dvc_dpath = ub.Path(data_dvc_dpath)
     expt_dvc_dpath = ub.Path(expt_dvc_dpath)
 
-    from watch.mlops.expt_manager import ExperimentState
+    # from watch.mlops.expt_manager import ExperimentState
     # start using the experiment state logic as the path and metadata
     # organization logic
-
-    out_dpath = config['out_dpath']
-    state = ExperimentState(expt_dvc_dpath, '*', storage_dpath=out_dpath)
+    # out_dpath = config['out_dpath']
+    # state = ExperimentState(expt_dvc_dpath, '*', storage_dpath=out_dpath)
 
     # Get truth annotations
     annotations_dpath = config['annotations_dpath']
     if annotations_dpath is None:
         annotations_dpath = data_dvc_dpath / 'annotations'
     annotations_dpath = ub.Path(annotations_dpath)
-    region_model_dpath = annotations_dpath / 'region_models'
+    # region_model_dpath = annotations_dpath / 'region_models'
+
+    root_dpath = expt_dvc_dpath / '_testpipe'
 
     # Expand paramater search grid
     # arg = config['params']
     all_param_grid = expand_param_grid(config['params'])
+    # grid_item_defaults = ub.udict({
+    #     'bas_pxl.package_fpath': None,
+    #     'bas_pxl.test_dataset': None,
+    #     'bas_poly.thresh': 0.1,
 
-    grid_item_defaults = ub.udict({
-        'trk.pxl.package_fpath': None,
-        'trk.pxl.data.test_dataset': None,
-        'trk.poly.thresh': 0.1,
+    #     'crop.src': None,
+    #     'crop.context_factor': 1.5,
+    #     'crop.regions': 'truth',
 
-        'crop.src': None,
-        'crop.context_factor': 1.5,
-        'crop.regions': 'truth',
+    #     'sc_pxl.package_fpath': None,
+    #     'sc_pxl.test_dataset': None,
+    #     'sc_poly.thresh': 0.1,
+    # })
 
-        'act.pxl.package_fpath': None,
-        'act.pxl.data.test_dataset': None,
-        'act.poly.thresh': 0.1,
-    })
-
-    MLOPS_VERSION = 2
-
-    resolved_rows = []
-    # Resolve parameters for each row
-    for item in ub.ProgIter(all_param_grid, desc='resolving row'):
-
-        if MLOPS_VERSION == 2:
-            print('item = {}'.format(ub.repr2(item, nl=1)))
-            row = resolve_pipeline_row(grid_item_defaults, state,
-                                       region_model_dpath, expt_dvc_dpath, item)
-            resolved_rows.append(row)
-        elif MLOPS_VERSION == 3:
-            ...
+    from watch.mlops import smart_pipeline
+    dag = smart_pipeline.make_smart_pipeline('joint_bas_sc')
+    dag.print_graphs()
 
     # from rich import print
     queue_dpath = expt_dvc_dpath / '_cmd_queue_schedule'
@@ -267,10 +245,11 @@ def schedule_evaluation(cmdline=False, **kwargs):
     if virtualenv_cmd:
         queue.add_header_command(virtualenv_cmd)
 
-    if MLOPS_VERSION == 2:
-        submit_old_pipeline_jobs(resolved_rows, queue, config, annotations_dpath)
-    elif MLOPS_VERSION == 3:
-        ...
+    # Configure a DAG for each row.
+    for row_config in ub.ProgIter(all_param_grid, desc='configure dags', verbose=3):
+        print('\nrow_config = {}'.format(ub.repr2(row_config, nl=1)))
+        dag.configure(config=row_config, root_dpath=root_dpath)
+        dag.submit_jobs(queue=queue)
 
     print('queue = {!r}'.format(queue))
     # print(f'{len(queue)=}')
@@ -341,8 +320,8 @@ Ignore:
 
     import jsonargparse
     parser = jsonargparse.ArgumentParser()
-    parser.add_class_arguments(TimeAggregatedBAS, nested_key='trk.poly')
-    parser.add_class_arguments(TimeAggregatedSC, nested_key='act.poly')
+    parser.add_class_arguments(TimeAggregatedBAS, nested_key='bas_poly')
+    parser.add_class_arguments(TimeAggregatedSC, nested_key='sc_poly')
     # parser.add_subclass_arguments(NewTrackFunction, nested_key='poly')
     parser.print_help()
 

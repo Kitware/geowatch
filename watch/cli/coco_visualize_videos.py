@@ -133,6 +133,10 @@ class CocoVisualizeConfig(scfg.Config):
 
         'extra_header': scfg.Value(None, help='extra text to include in the header'),
 
+        'draw_header': scfg.Value(True, help='If false disables drawing the header'),
+
+        'draw_chancode': scfg.Value(True, help='If false disables drawing the channel code'),
+
         'include_sensors': scfg.Value(None, help='if specified can be comma separated valid sensors'),
         'exclude_sensors': scfg.Value(None, help='if specified can be comma separated invalid sensors'),
 
@@ -224,7 +228,8 @@ def main(cmdline=True, **kwargs):
 
     if config['fast']:
         config['workers'] = 'avail'
-        config['animate'] = True
+        if not config['animate']:
+            config['animate'] = True
         config['stack'] = 'only'
         if config['channels'] is None:
             channels = config['channels'] = 'auto'
@@ -458,7 +463,11 @@ def main(cmdline=True, **kwargs):
                                 local_max_frame=local_max_frame,
                                 any3=config['any3'], dset_idstr=dset_idstr,
                                 draw_valid_region=config['draw_valid_region'],
-                                stack=config['stack'])
+                                stack=config['stack'],
+                                skip_aggressive=config['skip_aggressive'],
+                                draw_chancode=config['draw_chancode'],
+                                draw_header=config['draw_header'],
+                                )
 
         else:
             gid_subset = gids[start_frame:end_frame]
@@ -493,7 +502,9 @@ def main(cmdline=True, **kwargs):
                             skip_missing=config['skip_missing'],
                             draw_valid_region=config['draw_valid_region'],
                             stack=config['stack'],
-                            skip_aggressive=config['skip_aggressive']
+                            skip_aggressive=config['skip_aggressive'],
+                            draw_chancode=config['draw_chancode'],
+                            draw_header=config['draw_header'],
                             )
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
@@ -843,7 +854,10 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                stack=False,
                                draw_valid_region=True,
                                verbose=0,
-                               skip_aggressive=False):
+                               skip_aggressive=False,
+                               draw_header=True,
+                               draw_chancode=True,
+                               ):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
     (with or without annotation overlays) for specific bands to disk.
@@ -970,6 +984,10 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     if stack:
         ann_stack = []
         img_stack = []
+
+    # Add in custom crop / zoom?
+    # h, w = delayed.shape[0:2]
+    # delayed = delayed[0:h // 2, w // 4: w - w // 4]
 
     for stack_idx, chan_row in enumerate(chan_groups):
         chan_pname = chan_row['pname']
@@ -1199,13 +1217,14 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                     })
             if draw_anns_alone:
                 ann_canvas = kwimage.ensure_uint255(ann_canvas)
-                ann_header = kwimage.draw_header_text(image=ann_canvas,
-                                                      text=header_text,
-                                                      stack=False,
-                                                      fit='shrink')
-                ann_header = kwimage.imresize(
-                    ann_header, dsize=(ann_header.shape[1], 100), letterbox=True)
-                ann_canvas = kwimage.stack_images([ann_header, ann_canvas])
+                if draw_header:
+                    ann_header = kwimage.draw_header_text(image=ann_canvas,
+                                                          text=header_text,
+                                                          stack=False,
+                                                          fit='shrink')
+                    ann_header = kwimage.imresize(
+                        ann_header, dsize=(ann_header.shape[1], 100), letterbox=True)
+                    ann_canvas = kwimage.stack_images([ann_header, ann_canvas])
                 kwimage.imwrite(view_ann_fpath, ann_canvas)
 
     if stack:
@@ -1225,9 +1244,10 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                 chan = item['chan']
                 # canvas = kwimage.ensure_float01(canvas, copy=True)
                 canvas = kwimage.ensure_uint255(canvas)
-                canvas = kwimage.draw_text_on_image(
-                    canvas, chan, (1, 2),
-                    valign='top', color='lime', border=3)
+                if draw_chancode:
+                    canvas = kwimage.draw_text_on_image(
+                        canvas, chan, (1, 2),
+                        valign='top', color='lime', border=3)
                 tostack.append(canvas)
             canvas = kwimage.stack_images(tostack)
             canvas = kwimage.ensure_uint255(canvas)
@@ -1235,26 +1255,32 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
         if ann_stack:
             ann_stack_canvas = stack_infos(ann_stack)
-            ann_header = kwimage.draw_header_text(image=ann_stack_canvas,
-                                                  text=header_text,
-                                                  stack=False,
-                                                  fit='shrink')
-            ann_header = kwimage.imresize(
-                # ann_header, dsize=(None, 100), letterbox=True)
-                ann_header, dsize=(ann_header.shape[1], 100), letterbox=True)
-            ann_canvas = kwimage.stack_images([ann_header, ann_stack_canvas])
+            if draw_header:
+                ann_header = kwimage.draw_header_text(image=ann_stack_canvas,
+                                                      text=header_text,
+                                                      stack=False,
+                                                      fit='shrink')
+                ann_header = kwimage.imresize(
+                    # ann_header, dsize=(None, 100), letterbox=True)
+                    ann_header, dsize=(ann_header.shape[1], 100), letterbox=True)
+                ann_canvas = kwimage.stack_images([ann_header, ann_stack_canvas])
+            else:
+                ann_canvas = ann_stack_canvas
 
             view_ann_fpath.parent.ensuredir()
             kwimage.imwrite(view_ann_fpath, ann_canvas)
 
         if img_stack:
             img_stack_canvas = stack_infos(img_stack)
-            img_header = kwimage.draw_header_text(image=img_stack_canvas,
-                                                  text=header_text,
-                                                  fit='shrink', stack=False)
-            img_header = kwimage.imresize(
-                img_header, dsize=(img_header.shape[1], 100), letterbox=True)
-            img_canvas = kwimage.stack_images([img_header, img_stack_canvas])
+            if draw_header:
+                img_header = kwimage.draw_header_text(image=img_stack_canvas,
+                                                      text=header_text,
+                                                      fit='shrink', stack=False)
+                img_header = kwimage.imresize(
+                    img_header, dsize=(img_header.shape[1], 100), letterbox=True)
+                img_canvas = kwimage.stack_images([img_header, img_stack_canvas])
+            else:
+                img_canvas = img_stack_canvas
             view_img_fpath.parent.ensuredir()
             kwimage.imwrite(view_img_fpath, img_canvas)
 

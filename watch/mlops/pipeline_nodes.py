@@ -4,6 +4,7 @@ from typing import Union, Dict, Set, List, Any, Optional
 from watch.utils import util_param_grid  # NOQA
 import networkx as nx
 from functools import cached_property
+import functools
 from cmd_queue.util import util_networkx  # NOQA
 
 Collection = Optional[Union[Dict, Set, List]]
@@ -11,22 +12,55 @@ Configurable = Optional[Dict[str, Any]]
 
 
 class PipelineDAG:
+    """
+    A container for a group of nodes that have been connected, but need to be
+    configured.
+
+
+    Example:
+        >>> from watch.mlops.pipeline_nodes import *  # NOQA
+        >>> node_A1 = ProcessNode(name='node_A1', in_paths={'src'}, out_paths={'dst'}, executable='node_A1')
+        >>> node_A2 = ProcessNode(name='node_A2', in_paths={'src'}, out_paths={'dst'}, executable='node_A2')
+        >>> node_A3 = ProcessNode(name='node_A3', in_paths={'src'}, out_paths={'dst'}, executable='node_A3')
+        >>> node_B1 = ProcessNode(name='node_B1', in_paths={'path1'}, out_paths={'path2'}, executable='node_B1')
+        >>> node_B2 = ProcessNode(name='node_B2', in_paths={'path2'}, out_paths={'path3'}, executable='node_B2')
+        >>> node_B3 = ProcessNode(name='node_B3', in_paths={'path3'}, out_paths={'path4'}, executable='node_B3')
+        >>> node_C1 = ProcessNode(name='node_C1', in_paths={'src1', 'src2'}, out_paths={'dst1', 'dst2'}, executable='node_C1')
+        >>> node_C2 = ProcessNode(name='node_C2', in_paths={'src1', 'src2'}, out_paths={'dst1', 'dst2'}, executable='node_C2')
+        >>> # You can connect outputs -> inputs directly
+        >>> node_A1.outputs['dst'].connect(node_A2.inputs['src'])
+        >>> node_A2.outputs['dst'].connect(node_A3.inputs['src'])
+        >>> # You can connect nodes to nodes that share input/output names
+        >>> node_B1.connect(node_B2)
+        >>> node_B2.connect(node_B3)
+        >>> #
+        >>> # You can connect nodes to nodes that dont share input/output names
+        >>> # If you specify the mapping
+        >>> node_A3.connect(node_B1, src_map={'dst': 'path1'})
+        >>> #
+        >>> # You can connect inputs to other inputs, which effectively
+        >>> # forwards the input path to the destination
+        >>> node_A1.inputs['src'].connect(node_C1.inputs['src1'])
+        >>> # The pipeline is just a container for the nodes
+        >>> nodes = [node_A1, node_A2, node_A3, node_B1, node_B2, node_B3, node_C1, node_C2]
+        >>> self = PipelineDAG(nodes=nodes)
+        >>> self.print_graphs()
+
+    """
+
     def __init__(self, nodes=[], config=None, root_dpath=None):
         self.proc_graph = None
         self.io_graph = None
         self.nodes = nodes
         self.config = None
 
+        if self.nodes:
+            self.build_nx_graphs()
+
         if config:
             self.configure(config, root_dpath=root_dpath)
 
-    def configure(self, config, root_dpath=None):
-        self.config = config
-
-        if root_dpath is not None:
-            root_dpath = ub.Path(root_dpath)
-            self.root_dpath = root_dpath
-
+    def build_nx_graphs(self):
         if isinstance(self.nodes, dict):
             node_dict = self.nodes
         else:
@@ -43,10 +77,12 @@ class PipelineDAG:
         for name, node in node_dict.items():
             self.proc_graph.add_node(node.name, node=node)
 
-            for s in node.succ:
+            # for s in node.succ:
+            for s in node.successor_process_nodes():
                 self.proc_graph.add_edge(node.name, s.name)
 
-            for p in node.pred:
+            # for p in node.pred:
+            for p in node.predecessor_process_nodes():
                 self.proc_graph.add_edge(p.name, node.name)
 
         # util_networkx.write_network_text(self.proc_graph)
@@ -59,12 +95,24 @@ class PipelineDAG:
                 self.io_graph.add_node(inode.key, node=inode)
                 self.io_graph.add_edge(inode.key, node.key)
 
+                # Account for input/input connections
+                for succ in inode.succ:
+                    self.io_graph.add_edge(inode.key, succ.key)
+
             for oname, onode in node.outputs.items():
                 self.io_graph.add_node(onode.key, node=onode)
                 self.io_graph.add_edge(node.key, onode.key)
 
                 for oi_node in onode.succ:
                     self.io_graph.add_edge(onode.key, oi_node.key)
+
+    def configure(self, config, root_dpath=None):
+        self.config = config
+        print('CONFIGURE config = {}'.format(ub.repr2(config, nl=1)))
+
+        if root_dpath is not None:
+            root_dpath = ub.Path(root_dpath)
+            self.root_dpath = root_dpath
 
         # Set the configuration for each node in this pipeline.
         dotconfig = util_param_grid.DotDict(config)
@@ -109,37 +157,67 @@ class PipelineDAG:
         print('IO Graph')
         util_networkx.write_network_text(self.io_graph, path=rich.print, end='')
 
-    def make_cmd_queue(self):
+    def submit_jobs(self, queue=None, skip_existing=False):
         import cmd_queue
-
-        config = {
-            # 'backend': 'tmux'
-            'backend': 'serial'
-        }
-        queue = cmd_queue.Queue.create(
-            backend=config['backend'], name='prep-ta2-dataset',
-            size=1, gres=None,
-            # environ=environ
-        )
-
         import networkx as nx
-        for node_name in list(nx.topological_sort(self.proc_graph)):
-            pred_nodes = list(self.proc_graph.predecessors(node_name))
-            node = self.proc_graph.nodes[node_name]['node']
-            queue.submit(command=node.resolved_command(), depends=pred_nodes,
-                         name=node_name)
 
-        # for node in self.nodes.values():
-        #     print('# --- ')
-        #     print('node.config = {}'.format(ub.repr2(node.config, nl=1)))
-        #     print(node.resolved_command())
+        if queue is None:
+            config = {
+                # 'backend': 'tmux'
+                'backend': 'serial'
+            }
+            queue = cmd_queue.Queue.create(
+                backend=config['backend'], name='smart-pipeline-v3',
+                size=1, gres=None,
+                # environ=environ
+            )
+
+        for node_name in list(nx.topological_sort(self.proc_graph)):
+            node = self.proc_graph.nodes[node_name]['node']
+            node.will_exist = None
+            # node.enabled = True
+            # if node_name.startswith('bas_poly'):
+            #     node.enabled = False
+
+        for node_name in list(nx.topological_sort(self.proc_graph)):
+            node = self.proc_graph.nodes[node_name]['node']
+            pred_node_names = list(self.proc_graph.predecessors(node_name))
+            pred_nodes = [
+                self.proc_graph.nodes[n]['node']
+                for n in pred_node_names
+            ]
+
+            ancestors_will_exist = all(
+                n.will_exist
+                for n in pred_nodes
+            )
+            if skip_existing and node.enabled != 'redo' and node.does_exist:
+                node.enabled = False
+            node.will_exist = (
+                (node.enabled and ancestors_will_exist) or
+                node.does_exist
+            )
+
+            if node.will_exist and node.enabled:
+                pred_node_procids = [n.process_id for n in pred_nodes]
+                node_procid = node.process_id
+                print(f'node_procid={node_procid}')
+                if node_procid not in queue.named_jobs:
+                    queue.submit(command=node.resolved_command(),
+                                 depends=pred_node_procids, name=node_procid)
+
         return queue
 
 
 class Node(ub.NiceRepr):
+    """
+    Abstract base class for a Process or IO Node.
+    """
+
+    __node_type__ = 'abstract'  # used to workaround IPython isinstance issues
 
     def __nice__(self):
-        return f'{self.name!r}, p={[n.name for n in self.pred]}, s={[n.name for n in self.succ]}'
+        return f'{self.name!r}, pred={[n.name for n in self.pred]}, succ={[n.name for n in self.succ]}'
 
     def __init__(self, name: str):
         self.name = name
@@ -148,24 +226,25 @@ class Node(ub.NiceRepr):
 
     def _connect_single(self, other, src_map, dst_map):
         # TODO: CLEANUP
-        print(f'Connect {type(self).__name__} {self.name} to {type(other).__name__} {other.name}')
+        print(f'Connect {type(self).__name__} {self.name} to '
+              f'{type(other).__name__} {other.name}')
         if other not in self.succ:
             self.succ.append(other)
         if self not in other.pred:
             other.pred.append(self)
 
-        self_is_proc = isinstance(self, ProcessNode)
+        self_is_proc = (self.__node_type__ == 'process')
         if self_is_proc:
             outputs = self.outputs
         else:
-            assert isinstance(self, IONode)
+            assert self.__node_type__ == 'io'
             outputs = {self.name: self}
 
-        other_is_proc = isinstance(other, ProcessNode)
+        other_is_proc = (other.__node_type__ == 'process')
         if other_is_proc:
             inputs = other.inputs
         else:
-            assert isinstance(other, IONode)
+            assert other.__node_type__ == 'io'
             if not self_is_proc:
                 # In this case we can make the name map implicit
                 inputs = {self.name: other}
@@ -177,9 +256,9 @@ class Node(ub.NiceRepr):
 
         common = outmap.keys() & inmap.keys()
         if len(common) == 0:
-            print('inmap = {}'.format(ub.repr2(inmap, nl=1)))
-            print('outmap = {}'.format(ub.repr2(outmap, nl=1)))
-            raise Exception(f'Unknown io relationship {self.name} - {other.name}')
+            print('inmap = {}'.format(ub.urepr(inmap, nl=1)))
+            print('outmap = {}'.format(ub.urepr(outmap, nl=1)))
+            raise Exception(f'Unknown io relationship {self.name=}, {other.name=}')
 
         if self_is_proc or other_is_proc:
             print(f'Connect Process to Process {self.name=} to {other.name=}')
@@ -189,20 +268,13 @@ class Node(ub.NiceRepr):
             for out_key, in_key in zip(self_output_keys, other_input_keys):
                 out_node = outputs[out_key]
                 in_node = inputs[in_key]
-                out_node._connect_single(in_node, src_map, dst_map)
-
-        # elif self_is_proc and not other_is_proc:
-        #     print(f'Connect Process to Output {self.name=} to {other.name=}')
-        #     outputs
-        #     raise NotImplementedError
-        # elif not self_is_proc and other_is_proc:
-        #     print(f'Connect Input to Process {self.name=} to {other.name=}')
-        #     inputs
-        #     raise NotImplementedError
-        # else:
-        #     print(f'Connect IOProcess {self.name=} to {other.name=}')
+                # out_node._connect_single(in_node, src_map, dst_map)
+                out_node._connect_single(in_node, {}, {})
 
     def connect(self, *others, param_mapping=None, src_map=None, dst_map=None):
+        """
+        Connect the outputs of ``self`` to the inputs of ``others``.
+        """
         # Connect these two nodes and return the original.
         if param_mapping is None:
             param_mapping = {}
@@ -224,6 +296,8 @@ class Node(ub.NiceRepr):
 
 
 class IONode(Node):
+    __node_type__ = 'io'
+
     def __init__(self, name, parent):
         super().__init__(name)
         self.parent = parent
@@ -299,6 +373,69 @@ def _classvar_init(self, args, fallbacks):
         setattr(self, key, value)
 
 
+class memoize_configured_method(object):
+    """
+    ubelt memoize_method but uses a special cache name
+    """
+    def __init__(self, func):
+        self._func = func
+        self._cache_name = '_cache__' + func.__name__
+        # Mimic attributes of a bound method
+        self.__func__ = func
+        functools.update_wrapper(self, func)
+
+    def __get__(self, instance, cls=None):
+        """
+        Descriptor get method. Called when the decorated method is accessed
+        from an object instance.
+
+        Args:
+            instance (object): the instance of the class with the memoized method
+            cls (type | None): the type of the instance
+        """
+        self._instance = instance
+        return self
+
+    def __call__(self, *args, **kwargs):
+        """
+        The wrapped function call
+        """
+        from ubelt.util_memoize import _make_signature_key
+        func_cache = self._instance._configured_cache
+        # func_cache = self._instance.__dict__
+        cache = func_cache.setdefault(self._cache_name, {})
+        key = _make_signature_key(args, kwargs)
+        if key in cache:
+            return cache[key]
+        else:
+            value = cache[key] = self._func(self._instance, *args, **kwargs)
+            return value
+
+
+def memoize_configured_property(fget):
+    """
+    ubelt memoize_property but uses a special cache name
+    """
+    # Unwrap any existing property decorator
+    while hasattr(fget, 'fget'):
+        fget = fget.fget
+
+    attr_name = '_' + fget.__name__
+
+    @functools.wraps(fget)
+    def fget_memoized(self):
+        cache = self._configured_cache
+        if attr_name not in cache:
+            cache[attr_name] = fget(self)
+        return cache[attr_name]
+
+    return property(fget_memoized)
+
+
+# memoize_configured_method = ub.identity
+# memoize_configured_property = property
+
+
 # @dataclass(kw_only=True)  # makes things harder
 class ProcessNode(Node):
     """
@@ -306,7 +443,8 @@ class ProcessNode(Node):
 
     ProcessNodes are connected via their input / output nodes.
 
-    May want to rename to a "bash" node.
+    CommandLine:
+        xdoctest -m watch.mlops.pipeline_nodes ProcessNode
 
     Example:
         >>> from watch.mlops.pipeline_nodes import *  # NOQA
@@ -344,14 +482,16 @@ class ProcessNode(Node):
         >>>     root_dpath=dpath,
         >>> )
         >>> self._resolve_templates()
-        >>> print('self.command = {}'.format(ub.repr2(self.command, nl=1, sv=1)))
+        >>> print('self.command = {}'.format(ub.urepr(self.command, nl=1, sv=1)))
         >>> print(f'self.algo_id={self.algo_id}')
         >>> print(f'self.root_dpath={self.root_dpath}')
         >>> print(f'self.template_node_dpath={self.template_node_dpath}')
-        >>> print('self.templates = {}'.format(ub.repr2(self.templates, nl=2)))
-        >>> print('self.resolved = {}'.format(ub.repr2(self.resolved, nl=2)))
-        >>> print('self.condensed = {}'.format(ub.repr2(self.condensed, nl=2)))
+        >>> print('self.templates = {}'.format(ub.urepr(self.templates, nl=2)))
+        >>> print('self.resolved = {}'.format(ub.urepr(self.resolved, nl=2)))
+        >>> print('self.condensed = {}'.format(ub.urepr(self.condensed, nl=2)))
     """
+    __node_type__ = 'process'
+
     name : Optional[str] = None
 
     # A path that will specified directly after the DAG root dpath.
@@ -403,6 +543,8 @@ class ProcessNode(Node):
         _classvar_init(self, args, fallbacks)
         super().__init__(args['name'])
 
+        self._configured_cache = {}
+
         if self.node_dname is None:
             self.node_dname = '.'
         self.node_dname = ub.Path(self.node_dname)
@@ -424,12 +566,17 @@ class ProcessNode(Node):
 
         self.resolved_outdir = None
         self.resolved_opaths = None
+        self.enabled = True
 
         self.configure(self.config)
 
     def configure(self, config):
+        self._configured_cache.clear()
+
         if config is None:
             config = {}
+
+        self.enabled = config.pop('enabled', True)
         self.config = ub.udict(config)
         if True:  # self.algo_params is None:
             # non_algo_sets = [self.in_paths, self.out_paths, self.perf_params]
@@ -447,7 +594,7 @@ class ProcessNode(Node):
         self._build_templates()
         self._resolve_templates()
 
-    @property
+    @memoize_configured_property
     def condensed(self):
         condensed = {}
         for node in self.predecessor_process_nodes():
@@ -458,6 +605,7 @@ class ProcessNode(Node):
         })
         return condensed
 
+    @memoize_configured_method
     def _build_templates(self):
         templates = {}
         templates['root_dpath'] = str(self.template_root_dpath)
@@ -466,6 +614,7 @@ class ProcessNode(Node):
         self.templates = templates
         return self.templates
 
+    @memoize_configured_method
     def _resolve_templates(self):
         templates = self.templates
         condensed = self.condensed
@@ -476,14 +625,14 @@ class ProcessNode(Node):
             resolved['out_paths'] = self.resolved_out_paths
             resolved['in_paths'] = self.resolved_in_paths
         except KeyError as ex:
-            print('ERROR: {}'.format(ub.repr2(ex, nl=1)))
-            print('condensed = {}'.format(ub.repr2(condensed, nl=1, sort=0)))
-            print('templates = {}'.format(ub.repr2(templates, nl=1, sort=0)))
+            print('ERROR: {}'.format(ub.urepr(ex, nl=1)))
+            print('condensed = {}'.format(ub.urepr(condensed, nl=1, sort=0)))
+            print('templates = {}'.format(ub.urepr(templates, nl=1, sort=0)))
             raise
         self.resolved = resolved
         return self.resolved
 
-    @property
+    @memoize_configured_property
     def resolved_config(self):
         resolved_config = self.config.copy()
         resolved_config.update(self.resolved_in_paths)
@@ -494,7 +643,7 @@ class ProcessNode(Node):
                     resolved_config[k] = v
         return resolved_config
 
-    @property
+    @memoize_configured_property
     def resolved_in_paths(self):
         resolved_in_paths = self.in_paths
         if resolved_in_paths is None:
@@ -517,7 +666,7 @@ class ProcessNode(Node):
             #     resolved_in_paths[key] = self.config.get(key, None)
         return resolved_in_paths
 
-    @property
+    @memoize_configured_property
     def template_out_paths(self):
         if not isinstance(self.out_paths, dict):
             out_paths = self.config & self.out_paths
@@ -530,7 +679,7 @@ class ProcessNode(Node):
         }
         return template_out_paths
 
-    @property
+    @memoize_configured_property
     def resolved_out_paths(self):
         condensed = self.condensed
         template_out_paths = self.template_out_paths
@@ -540,34 +689,46 @@ class ProcessNode(Node):
         }
         return resolved_out_paths
 
-    @property
+    @memoize_configured_property
     def template_dag_dname(self):
         return self.template_depends_dname / self.node_dname
 
-    @property
+    @memoize_configured_property
     def resolved_node_dpath(self):
         return ub.Path(str(self.template_node_dpath).format(**self.condensed))
 
-    @property
+    @memoize_configured_property
     def resolved_root_dpath(self):
         return ub.Path(str(self.template_root_dpath).format(**self.condensed))
 
-    @property
+    @memoize_configured_property
     def template_root_dpath(self):
         return self.root_dpath
 
-    @property
+    @memoize_configured_property
     def template_node_dpath(self):
         if self._dirtype == 'flat':
             return self.root_dpath / self.group_dname / 'flat' / self.name / ('{' + self.name + '_id}')
         else:
             return self.root_dpath / self.group_dname / self.template_dag_dname
 
-    @property
+    @memoize_configured_property
     def algo_config(self):
-        return self.config & self.algo_params
+        # TODO: Any node that does not have its inputs connected have to
+        # include the configured input paths - or ideally the hash of their
+        # contents - in the algo config.
 
-    @property
+        # Find unconnected inputs
+        unconnected_inputs = []
+        for input_node in self.inputs.values():
+            if not input_node.pred:
+                unconnected_inputs.append(input_node.name)
+        algo_config = (self.config & self.algo_params) | (
+            ub.udict(self.resolved_in_paths) & unconnected_inputs)
+        print('algo_config = {}'.format(ub.repr2(algo_config, nl=1)))
+        return algo_config
+
+    @memoize_configured_property
     def depends_config(self):
         # Any manually specified inputs need to be inserted into this
         # dictionary. Derived inputs can be ignored.
@@ -575,7 +736,7 @@ class ProcessNode(Node):
         return depends_config
         # return self.config & self.algo_params
 
-    @property
+    @memoize_configured_property
     def algo_id(self):
         """
         A unique id to represent the output of a deterministic process.
@@ -586,7 +747,7 @@ class ProcessNode(Node):
         algo_id = condense_config(self.algo_config, self.name + '_algo_id')
         return algo_id
 
-    @property
+    @memoize_configured_property
     def template_depends_dname(self):
         """
         Predecessor part of the output path.
@@ -600,6 +761,7 @@ class ProcessNode(Node):
             return ub.Path('.')
             # return ub.Path('multi' + str(pred_nodes))
 
+    @memoize_configured_method
     def predecessor_process_nodes(self):
         """
         Predecessor process nodes
@@ -613,6 +775,21 @@ class ProcessNode(Node):
                 nodes.append(proc)
         return nodes
 
+    @memoize_configured_method
+    def successor_process_nodes(self):
+        """
+        Predecessor process nodes
+        """
+        nodes = []
+        for k, v in self.outputs.items():
+            for succ in v.succ:
+                # assert isinstance(pred, OutputNode)
+                proc = succ.parent
+                assert isinstance(proc, ProcessNode)
+                nodes.append(proc)
+        return nodes
+
+    @memoize_configured_method
     def ancestor_process_nodes(self):
         seen = {}
         stack = [self]
@@ -627,7 +804,7 @@ class ProcessNode(Node):
         ancestors = list(seen.values())
         return ancestors
 
-    @property
+    @memoize_configured_property
     def depends(self):
         ancestors = self.ancestor_process_nodes()
         # TODO:
@@ -641,7 +818,7 @@ class ProcessNode(Node):
         depends = ub.udict(sorted(depends.items()))
         return depends
 
-    @property
+    @memoize_configured_property
     def node_info(self):
         ancestors = self.ancestor_process_nodes()
         # TODO:
@@ -666,7 +843,7 @@ class ProcessNode(Node):
             })
         return info
 
-    @property
+    @memoize_configured_property
     def process_id(self):
         """
         A unique id to represent the output of a deterministic process in a
@@ -716,18 +893,16 @@ class ProcessNode(Node):
         test_cmd = 'test ' +  test_expr
         return test_cmd
 
-    @ub.memoize_property
+    @memoize_configured_property
     def does_exist(self):
         # return all(self.out_paths.map_values(lambda p: p.exists()).values())
         return all(ub.Path(p).expand().exists() for p in self.resolved_out_paths.values())
 
     def resolved_command(self):
         command = self.command()
-        self.otf_cache = True
-        self.enabled = True
         base_command = command.rstrip().rstrip('\\').rstrip()
 
-        if self.otf_cache and self.enabled != 'redo':
+        if self.enabled != 'redo':
             return self.test_is_computed_command() + ' || ' + base_command
         else:
             return base_command
