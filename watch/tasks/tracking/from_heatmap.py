@@ -127,7 +127,12 @@ class TimePolygonFilter:
             # print(grp.name, start_ix, end_ix+1)
             return grp.iloc[start_ix:end_ix + 1]
 
-        return gdf.groupby('track_idx', group_keys=False).apply(_edit)
+        if len(gdf) > 0:
+            group = gdf.groupby('track_idx', group_keys=False)
+            result = group.apply.apply(_edit)
+        else:
+            result = gdf
+        return result
 
 
 class ResponsePolygonFilter:
@@ -227,7 +232,7 @@ def add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
             new_ann = make_new_annotation(*o, track_id)
             all_new_anns.append(new_ann)
 
-    for tid, grp in tracks.groupby('track_idx'):
+    for tid, grp in tracks.groupby('track_idx', axis=1):
         score_chan = kwcoco.ChannelSpec('|'.join(key))
         this_score = grp[(score_chan.spec, None)]
         scores_dct = {k: grp[(k, None)] for k in score_chan.unique()}

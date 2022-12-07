@@ -365,7 +365,8 @@ def gpd_compute_scores(gdf,
             grp[score_cols] = grp[score_cols].fillna(method='ffill').fillna(0)
         return grp
 
-    gdf = gdf.groupby('track_idx', group_keys=False).apply(_fillna)
+    grouped = gdf.groupby('track_idx', group_keys=False)
+    scored_gdf = grouped.apply(_fillna)
 
     # copy over to summed fg/bg channels
     for thr in thrs:
@@ -373,10 +374,10 @@ def gpd_compute_scores(gdf,
             if kk:
                 # https://github.com/pandas-dev/pandas/issues/20824#issuecomment-384432277
                 sum_cols = [(ki, thr) for ki in kk]
-                sum_cols = gdf.columns & sum_cols
-                gdf[(k, thr)] = gdf[sum_cols].sum(axis=1)
+                sum_cols = list(ub.oset(scored_gdf.columns) & sum_cols)
+                scored_gdf[(k, thr)] = scored_gdf[sum_cols].sum(axis=1)
 
-    return gdf
+    return scored_gdf
 
 
 # -----------------------
