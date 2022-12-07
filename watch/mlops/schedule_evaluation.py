@@ -9,6 +9,8 @@ TODO:
 
 Example:
 
+    # Dummy inputs, just for demonstration
+
     python -m watch.mlops.schedule_evaluation \
         --params="
             matrix:
@@ -25,6 +27,7 @@ Example:
                 bas_poly.moving_window_size:
                 bas_poly.thresh:
                     - 0.1
+                    - 0.1
                     - 0.2
                 sc_pxl.test_dataset:
                     - crop.dst
@@ -37,10 +40,12 @@ Example:
                 sc_pxl.package_fpath:
                     - my_sc_model1.pt
                     - my_sc_model2.pt
+                sc_poly_viz.enabled:
+                    - false
         " \
         --expt_dvc_dpath=./my_expt_dir \
         --data_dvc_dpath=./my_data_dir \
-        --dynamic_skips=0 \
+        --cache=0 \
         --enable_pred_bas_pxl=1 \
         --enable_pred_bas_poly=1 \
         --enable_eval_bas_pxl=0 \
@@ -57,6 +62,10 @@ Example:
         --backend=serial --skip_existing=0 \
         --run=0
 
+Example:
+
+    # Real data
+
     DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 
@@ -66,7 +75,7 @@ Example:
                 bas_pxl.package_fpath:
                     - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
                 bas_pxl.test_dataset:
-                    - $DVC_DATA_DPATH=Drop4-BAS/KR_R001.kwcoco.json
+                    - $DVC_DATA_DPATH/Drop4-BAS/KR_R001.kwcoco.json
                 bas_pxl.window_space_scale: 15GSD
                 bas_pxl.time_sampling:
                     - "auto"
@@ -75,6 +84,7 @@ Example:
                 bas_poly.moving_window_size:
                 bas_poly.thresh:
                     - 0.1
+                    - 0.13
                     - 0.2
                 sc_pxl.window_space_scale:
                     - auto
@@ -84,14 +94,23 @@ Example:
                     - 0
                 sc_pxl.package_fpath:
                     - $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
+                bas_poly_eval.enabled: 0
+                bas_pxl_eval.enabled: 0
+                bas_poly_viz.enabled: 0
+                sc_poly_eval.enabled: 0
+                sc_pxl_eval.enabled: 0
+                sc_poly_viz.enabled: 1
         " \
         --expt_dvc_dpath=./my_expt_dir \
         --data_dvc_dpath=./my_data_dir \
-        --dynamic_skips=0 \
-        --enable_links=0 \
+        --enable_links=1 \
         --devices="0,1" --queue_size=2 \
-        --backend=serial --skip_existing=0 \
-        --run=0
+        --backend=tmux \
+        --cache=1 \
+        --run=1 --rprint=1
+
+
+    xdev tree --dirblocklist "_*" my_expt_dir/_testpipe/ --max_files=1
 """
 import ubelt as ub
 import shlex
@@ -151,7 +170,7 @@ class ScheduleEvaluationConfig(scfg.Config):
         'enable_viz_pred_bas_poly': scfg.Value(False, isflag=True, help='if true draw predicted tracks for BAS'),
         'enable_links': scfg.Value(True, isflag=True, help='if true enable symlink jobs'),
 
-        'dynamic_skips': scfg.Value(True, isflag=True, help='if true, each a test is appened to each job to skip itself if its output exists'),
+        'cache': scfg.Value(True, isflag=True, help='if true, each a test is appened to each job to skip itself if its output exists'),
 
         'draw_heatmaps': scfg.Value(1, isflag=True, help='if true draw heatmaps on eval'),
         'draw_curves': scfg.Value(1, isflag=True, help='if true draw curves on eval'),
@@ -248,15 +267,18 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # Configure a DAG for each row.
     for row_config in ub.ProgIter(all_param_grid, desc='configure dags', verbose=3):
         print('\nrow_config = {}'.format(ub.repr2(row_config, nl=1)))
-        dag.configure(config=row_config, root_dpath=root_dpath)
-        dag.submit_jobs(queue=queue)
+        dag.configure(
+            config=row_config, root_dpath=root_dpath, cache=config['cache'])
+        dag.submit_jobs(queue=queue, skip_existing=config['skip_existing'],
+                        enable_links=config['enable_links'])
 
     print('queue = {!r}'.format(queue))
     # print(f'{len(queue)=}')
     with_status = 0
     with_rich = 0
     queue.write_network_text()
-    queue.rprint(with_status=with_status, with_rich=with_rich)
+    if config['rprint']:
+        queue.rprint(with_status=with_status, with_rich=with_rich)
 
     for job in queue.jobs:
         # TODO: should be able to set this as a queue param.

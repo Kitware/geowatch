@@ -106,9 +106,12 @@ class PipelineDAG:
                 for oi_node in onode.succ:
                     self.io_graph.add_edge(onode.key, oi_node.key)
 
-    def configure(self, config, root_dpath=None):
+    def configure(self, config, root_dpath=None, cache=True):
+        """
+        Update the DAG configuration
+        """
         self.config = config
-        print('CONFIGURE config = {}'.format(ub.repr2(config, nl=1)))
+        # print('CONFIGURE config = {}'.format(ub.repr2(config, nl=1)))
 
         if root_dpath is not None:
             root_dpath = ub.Path(root_dpath)
@@ -121,7 +124,7 @@ class PipelineDAG:
             if root_dpath is not None:
                 node.root_dpath = root_dpath
             node_config = dict(dotconfig.prefix_get(node.name, {}))
-            node.configure(node_config)
+            node.configure(node_config, cache=cache)
 
     def print_graphs(self):
 
@@ -157,7 +160,7 @@ class PipelineDAG:
         print('IO Graph')
         util_networkx.write_network_text(self.io_graph, path=rich.print, end='')
 
-    def submit_jobs(self, queue=None, skip_existing=False):
+    def submit_jobs(self, queue=None, skip_existing=False, enable_links=True):
         import cmd_queue
         import networkx as nx
 
@@ -187,25 +190,57 @@ class PipelineDAG:
                 for n in pred_node_names
             ]
 
-            ancestors_will_exist = all(
-                n.will_exist
-                for n in pred_nodes
-            )
+            ancestors_will_exist = all(n.will_exist for n in pred_nodes)
             if skip_existing and node.enabled != 'redo' and node.does_exist:
                 node.enabled = False
-            node.will_exist = (
-                (node.enabled and ancestors_will_exist) or
-                node.does_exist
-            )
+
+            node.will_exist = ((node.enabled and ancestors_will_exist) or
+                               node.does_exist)
 
             if node.will_exist and node.enabled:
-                pred_node_procids = [n.process_id for n in pred_nodes]
+                pred_node_procids = [n.process_id for n in pred_nodes
+                                     if n.enabled]
                 node_procid = node.process_id
-                print(f'node_procid={node_procid}')
                 if node_procid not in queue.named_jobs:
                     queue.submit(command=node.resolved_command(),
                                  depends=pred_node_procids, name=node_procid)
 
+                # Add symlink jobs that make the graph structure traversable in
+                # the flat output directories.
+                if enable_links:
+                    # TODO: should we filter the nodes where they are only linked
+                    # via inputs?
+                    for pred in node.predecessor_process_nodes():
+                        link_path1 = pred.resolved_node_dpath / '.succ' / node.name / node.process_id
+                        target_path1 = node.resolved_node_dpath
+                        link_path2 = node.resolved_node_dpath / '.pred' / pred.name / pred.process_id
+                        target_path2 = pred.resolved_node_dpath
+
+                        import os
+                        target_path1 = os.path.relpath(target_path1.absolute(), link_path1.absolute().parent)
+                        target_path2 = os.path.relpath(target_path2.absolute(), link_path2.absolute().parent)
+                        # target_path1 = target_path1.absolute()
+                        # target_path2 = target_path2.absolute()
+
+                        parts = [
+                            f'mkdir -p {link_path1.parent}',
+                            f'mkdir -p {link_path2.parent}',
+                            f'ln -sfT "{target_path1}" "{link_path1}"',
+                            f'ln -sfT "{target_path2}" "{link_path2}"',
+                        ]
+                        command = ' && '.join(parts)
+                        # TODO: nicer infastructure mechanisms (make the code
+                        # prettier and easier to reason about)
+                        link_node = ProcessNode(
+                            name='__link', executable=command, in_paths={},
+                            out_paths={'link_path1': str(link_path1), 'link_path2': str(link_path2)})
+                        link_node.configure(config={}, cache=0)
+                        link_command = link_node.resolved_command()
+                        link_procid = 'link_' + node_procid
+                        if link_procid not in queue.named_jobs:
+                            queue.submit(command=link_command,
+                                         depends=[node_procid],
+                                         name=link_procid)
         return queue
 
 
@@ -567,25 +602,28 @@ class ProcessNode(Node):
         self.resolved_outdir = None
         self.resolved_opaths = None
         self.enabled = True
+        self.cache = True
 
         self.configure(self.config)
 
-    def configure(self, config):
+    def configure(self, config, cache=True, enabled=True):
+        """
+        Update the node configuration.
+        """
+        self.cache = cache
         self._configured_cache.clear()
-
         if config is None:
             config = {}
-
-        self.enabled = config.pop('enabled', True)
+        self.enabled = config.pop('enabled', enabled)
         self.config = ub.udict(config)
-        if True:  # self.algo_params is None:
-            # non_algo_sets = [self.in_paths, self.out_paths, self.perf_params]
-            non_algo_sets = [self.out_paths, self.perf_params]
-            non_algo_keys = (
-                set.union(*[set(s) for s in non_algo_sets if s is not None])
-                if non_algo_sets else set()
-            )
-            self.algo_params = set(self.config) - non_algo_keys
+
+        # non_algo_sets = [self.in_paths, self.out_paths, self.perf_params]
+        non_algo_sets = [self.out_paths, self.perf_params]
+        non_algo_keys = (
+            set.union(*[set(s) for s in non_algo_sets if s is not None])
+            if non_algo_sets else set()
+        )
+        self.algo_params = set(self.config) - non_algo_keys
 
         in_path_keys = self.config & set(self.in_paths)
         for key in in_path_keys:
@@ -725,7 +763,6 @@ class ProcessNode(Node):
                 unconnected_inputs.append(input_node.name)
         algo_config = (self.config & self.algo_params) | (
             ub.udict(self.resolved_in_paths) & unconnected_inputs)
-        print('algo_config = {}'.format(ub.repr2(algo_config, nl=1)))
         return algo_config
 
     @memoize_configured_property
@@ -899,10 +936,13 @@ class ProcessNode(Node):
         return all(ub.Path(p).expand().exists() for p in self.resolved_out_paths.values())
 
     def resolved_command(self):
-        command = self.command()
+        command = self.command
+        if not isinstance(command, str):
+            assert callable(command)
+            command = command()
         base_command = command.rstrip().rstrip('\\').rstrip()
 
-        if self.enabled != 'redo':
+        if self.cache or (not self.enabled and self.enabled != 'redo'):
             return self.test_is_computed_command() + ' || ' + base_command
         else:
             return base_command

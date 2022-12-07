@@ -103,6 +103,8 @@ Example:
 
 """
 import ubelt as ub
+import shlex
+import json
 from watch.mlops.pipeline_nodes import ProcessNode
 
 PREDICT_NAME  = 'pred'
@@ -208,17 +210,10 @@ class PolygonPrediction(ProcessNode):
     }
 
     def command(self):
-        import shlex
-        import json
         fmtkw = self.resolved_config.copy()
         fmtkw['default_track_fn'] = self.default_track_fn
-        # actclf_cfg = {
-        #     'boundaries_as': 'polys',
-        # }
-        # actclf_cfg.update(act_poly_params)
-        fmtkw['kwargs_str'] = shlex.quote(json.dumps(self.algo_config))
-        # fmtkw['site_summary'] = 'todo'
-
+        track_kwargs = self.algo_config.copy() - {'site_summary'}
+        fmtkw['kwargs_str'] = shlex.quote(json.dumps(track_kwargs))
         command = ub.codeblock(
             r'''
             python -m watch.cli.run_tracker \
@@ -481,13 +476,13 @@ class SC_PolygonEvaluation(PolygonEvaluation):
 
 
 class BAS_Visualization(KWCocoVisualization):
-    name = 'bas_viz'
-    node_dname = 'bas_viz'
+    name = 'bas_poly_viz'
+    node_dname = 'bas_poly_viz'
 
 
 class SC_Visualization(KWCocoVisualization):
-    name = 'sc_viz'
-    node_dname = 'sc_viz'
+    name = 'sc_poly_viz'
+    node_dname = 'sc_poly_viz'
 
 
 # ---
