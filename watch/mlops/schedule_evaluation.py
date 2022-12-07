@@ -65,7 +65,6 @@ Example:
 Example:
 
     # Real data
-
     DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 
@@ -76,9 +75,12 @@ Example:
                     - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
                 bas_pxl.test_dataset:
                     - $DVC_DATA_DPATH/Drop4-BAS/KR_R001.kwcoco.json
+                    - $DVC_DATA_DPATH/Drop4-BAS/KR_R002.kwcoco.json
                 bas_pxl.window_space_scale:
                     - "15GSD"
                     - "30GSD"
+                bas_pxl.chip_dims:
+                    - "256,256"
                 bas_pxl.time_sampling:
                     - "auto"
                 bas_pxl.input_space_scale:
@@ -92,6 +94,10 @@ Example:
                     - 0.2
                 sc_pxl.window_space_scale:
                     - auto
+                sc_pxl.input_space_scale:
+                    - "window"
+                sc_pxl.chip_dims:
+                    - "256,256"
                 sc_poly.thresh:
                     - 0.1
                 sc_poly.use_viterbi:
