@@ -60,3 +60,43 @@ class FBetaScore_Patched:
         raise ValueError(
             f"Expected argument `task` to either be `'binary'`, `'multiclass'` or `'multilabel'` but got {task}"
         )
+
+
+class Accuracy_Patched:
+    r"""Computes `Accuracy`_
+    """
+
+    def __new__(
+        cls,
+        task: Literal["binary", "multiclass", "multilabel"] = None,
+        threshold: float = 0.5,
+        num_classes: Optional[int] = None,
+        num_labels: Optional[int] = None,
+        average: Optional[Literal["micro", "macro", "weighted", "none"]] = "micro",
+        multidim_average: Literal["global", "samplewise"] = "global",
+        top_k: Optional[int] = 1,
+        ignore_index: Optional[int] = None,
+        validate_args: bool = True,
+        **kwargs: Any,
+    ) -> Metric:
+        accuracy = torchmetrics.classification.accuracy
+
+        if task is None or task == 'FBetaScore()':
+            if num_classes is None:
+                task = 'binary'
+            else:
+                task = 'multiclass'
+
+        kwargs.update(dict(multidim_average=multidim_average, ignore_index=ignore_index, validate_args=validate_args))
+        if task == "binary":
+            return accuracy.BinaryAccuracy(threshold, **kwargs)
+        if task == "multiclass":
+            assert isinstance(num_classes, int)
+            assert isinstance(top_k, int)
+            return accuracy.MulticlassAccuracy(num_classes, top_k, average, **kwargs)
+        if task == "multilabel":
+            assert isinstance(num_labels, int)
+            return accuracy.MultilabelAccuracy(num_labels, threshold, average, **kwargs)
+        raise ValueError(
+            f"Expected argument `task` to either be `'binary'`, `'multiclass'` or `'multilabel'` but got {task}"
+        )
