@@ -66,15 +66,18 @@ config.update(util_yaml.yaml_loads(ub.codeblock(
     sitecrop.aux_workers: 4
 
     # Hacked in
-    sitecrop.exclude_sensors: L8
     # sitecrop.include_channels: None
+    sitecrop.exclude_sensors: L8
     '''
 )))
 
+# Create a path where we will want to store everything
 run_uuid = uuid.uuid4()
-
 root_dpath = ub.Path('/dag') / ub.hash_data(str(run_uuid), base='abc')[0:8]
 
+# Configure is the only way that the pipeline should be modified.  Use it to
+# set the configuration and where the results will be stored After the pipeline
+# is configured it can used directly or indirectly.
 pipeline.configure(config=config, root_dpath=root_dpath, cache=False)
 
 
