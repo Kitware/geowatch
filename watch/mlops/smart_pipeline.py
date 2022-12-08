@@ -220,7 +220,7 @@ class PolygonPrediction(ProcessNode):
             python -m watch.cli.run_tracker \
                 "{pred_pxl_fpath}" \
                 --default_track_fn {default_track_fn} \
-                --track_kwargs {kwargs_str} \
+                --track_kwargs "{kwargs_str}" \
                 --clear_annots \
                 --site_summary '{site_summary}' \
                 --out_site_summaries_fpath "{site_summaries_fpath}" \

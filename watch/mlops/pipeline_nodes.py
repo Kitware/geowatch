@@ -1,11 +1,11 @@
 import ubelt as ub
-# from dataclasses import dataclass
-from typing import Union, Dict, Set, List, Any, Optional
-from watch.utils import util_param_grid  # NOQA
 import networkx as nx
-from functools import cached_property
+import os
 import functools
+from functools import cached_property
 from cmd_queue.util import util_networkx  # NOQA
+from watch.utils import util_param_grid  # NOQA
+from typing import Union, Dict, Set, List, Any, Optional
 
 Collection = Optional[Union[Dict, Set, List]]
 Configurable = Optional[Dict[str, Any]]
@@ -160,7 +160,10 @@ class PipelineDAG:
         print('IO Graph')
         util_networkx.write_network_text(self.io_graph, path=rich.print, end='')
 
-    def submit_jobs(self, queue=None, skip_existing=False, enable_links=True):
+    def submit_jobs(self, queue=None, skip_existing=False, enable_links=True, write_invocations=True):
+        """
+        Submits the jobs to an existing command queue or creates a new one.
+        """
         import cmd_queue
         import networkx as nx
 
@@ -215,12 +218,8 @@ class PipelineDAG:
                         target_path1 = node.resolved_node_dpath
                         link_path2 = node.resolved_node_dpath / '.pred' / pred.name / pred.process_id
                         target_path2 = pred.resolved_node_dpath
-
-                        import os
                         target_path1 = os.path.relpath(target_path1.absolute(), link_path1.absolute().parent)
                         target_path2 = os.path.relpath(target_path2.absolute(), link_path2.absolute().parent)
-                        # target_path1 = target_path1.absolute()
-                        # target_path2 = target_path2.absolute()
 
                         parts = [
                             f'mkdir -p {link_path1.parent}',
@@ -239,9 +238,11 @@ class PipelineDAG:
                         link_procid = 'link_' + node_procid
                         if link_procid not in queue.named_jobs:
                             queue.submit(command=link_command,
-                                         depends=[node_procid],
-                                         name=link_procid)
-                write_invocations = True
+                                         depends=pred_node_procids,
+                                         # depends=[node_procid],
+                                         name=link_procid,
+                                         bookkeeper=1)
+
                 if write_invocations:
                     invoke_fpath = node.resolved_node_dpath / 'invoke.sh'
                     command = '\n'.join([
@@ -259,9 +260,13 @@ class PipelineDAG:
                     invoke_command = invoke_node.resolved_command()
                     invoke_procid = 'invoke_' + node_procid
                     if invoke_procid not in queue.named_jobs:
-                        queue.submit(command=invoke_command,
-                                     depends=[node_procid],
-                                     name=invoke_procid, bookkeeper=1)
+                        queue.submit(
+                            command=invoke_command,
+                            depends=pred_node_procids,
+                            # depends=[node_procid],
+                            name=invoke_procid,
+                            bookkeeper=1
+                        )
 
         return queue
 

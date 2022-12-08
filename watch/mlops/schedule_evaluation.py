@@ -264,7 +264,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
     with_rich = 0
     queue.write_network_text()
     if config['rprint']:
-        queue.rprint(with_status=with_status, with_rich=with_rich)
+        queue.rprint(with_status=with_status, with_rich=with_rich,
+                     with_locks=0)
 
     for job in queue.jobs:
         # TODO: should be able to set this as a queue param.
