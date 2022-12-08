@@ -213,14 +213,14 @@ class PolygonPrediction(ProcessNode):
     def command(self):
         fmtkw = self.resolved_config.copy()
         fmtkw['default_track_fn'] = self.default_track_fn
-        track_kwargs = self.algo_config.copy() - {'site_summary'}
+        track_kwargs = self.resolved_algo_config.copy() - {'site_summary'}
         fmtkw['kwargs_str'] = shlex.quote(json.dumps(track_kwargs))
         command = ub.codeblock(
             r'''
             python -m watch.cli.run_tracker \
                 "{pred_pxl_fpath}" \
                 --default_track_fn {default_track_fn} \
-                --track_kwargs "{kwargs_str}" \
+                --track_kwargs {kwargs_str} \
                 --clear_annots \
                 --site_summary '{site_summary}' \
                 --out_site_summaries_fpath "{site_summaries_fpath}" \
@@ -251,8 +251,8 @@ class PolygonEvaluation(ProcessNode):
         # self.tmp_dpath = self.paths['eval_dpath'] / 'tmp'
         # self.tmp_dpath = self.paths['eval_dpath'] / 'tmp'
         fmtkw = self.resolved_config.copy()
-        fmtkw['params_argstr'] = self._make_argstr(fmtkw & self.algo_params)
-        fmtkw['perf_argstr'] = self._make_argstr(fmtkw & self.perf_params)
+        fmtkw['params_argstr'] = self._make_argstr(self.resolved_algo_config)
+        fmtkw['perf_argstr'] = self._make_argstr(self.resolved_perf_config)
         fmtkw['tmp_dpath'] = self.resolved_node_dpath / 'tmp'
 
         # Hack:
@@ -432,10 +432,10 @@ class BAS_PolygonPrediction(PolygonPrediction):
     default_track_fn = 'saliency_heatmaps'
 
     @property
-    def algo_config(self):
+    def resolved_algo_config(self):
         return ub.udict({
             # 'boundaries_as': 'polys'
-        }) | super().algo_config
+        }) | super().resolved_algo_config
 
 
 class SC_PolygonPrediction(PolygonPrediction):
@@ -444,10 +444,10 @@ class SC_PolygonPrediction(PolygonPrediction):
     default_track_fn = 'class_heatmaps'
 
     @property
-    def algo_config(self):
+    def resolved_algo_config(self):
         return ub.udict({
             'boundaries_as': 'polys'
-        }) | super().algo_config
+        }) | super().resolved_algo_config
 
 # ---
 
@@ -502,6 +502,17 @@ class SiteCropping(ProcessNode):
         'crop_dst_fpath': 'sitecrop.kwcoco.json'
     }
 
+    algo_params = {
+        'include_channels': 'red|green|blue|cloudmask',  # fixme: not a good default
+        'exclude_sensors': 'L8',  # fixme: not a good default
+        'target_gsd': 4,
+        'force_nodata': -9999,
+        'rpc_align_method': 'orthorectify',
+    }
+
+    # The best setting of this depends on if the data is remote or not.  When
+    # networking, around 20+ workers is a good idea, but that's a very bad idea
+    # for local images or if the images are too big.
     perf_params = {
         'verbose': 1,
         # 'workers': 8,
@@ -510,6 +521,8 @@ class SiteCropping(ProcessNode):
         'aux_workers': 4,
         'debug_valid_regions': False,
         'visualize': False,
+        'keep': 'img',
+        'geo_preprop': 'auto',
     }
 
     @property
@@ -520,35 +533,10 @@ class SiteCropping(ProcessNode):
         return condensed
 
     def command(self):
-        # paths = ub.udict(paths)
-        # from watch.cli import coco_align
-        # confobj = coco_align.__config__
-        # known_args = set(confobj.default.keys())
-        # assert not len(ub.udict(crop_params) - known_args), 'unknown args'
-        crop_params = {
-            'geo_preprop': 'auto',
-            'keep': 'img',
-            'force_nodata': -9999,
-            'rpc_align_method': 'orthorectify',
-            'target_gsd': 4,
-            'site_summary': True,
-        }
         fmtkw = self.resolved_config.copy()
-        fmtkw.update(crop_params)
-        # } | ub.udict(crop_params)
-
-        # The best setting of this depends on if the data is remote or not.
-        # When networking, around 20+ workers is a good idea, but that's a very
-        # bad idea for local images or if the images are too big.
-        # Parametarizing would be best.
-        # crop_kwargs = { **paths }
-        fmtkw['crop_params_argstr'] = self._make_argstr(crop_params)
-        fmtkw['crop_perf_argstr'] = self._make_argstr(self.perf_params)
-
-        # This is hacked:
-        fmtkw['include_channels'] = 'red|green|blue|cloudmask'
-        fmtkw['exclude_sensors'] = 'L8'
-
+        algo_config = self.resolved_algo_config - {'crop_src_fpath'}
+        fmtkw['crop_algo_argstr'] = self._make_argstr(algo_config)
+        fmtkw['crop_perf_argstr'] = self._make_argstr(self.resolved_perf_config)
         fmtkw.update(self.resolved_in_paths)
         fmtkw.update(self.resolved_out_paths)
 
@@ -558,11 +546,10 @@ class SiteCropping(ProcessNode):
                 --src "{crop_src_fpath}" \
                 --dst "{crop_dst_fpath}" \
                 --regions="{regions}" \
-                --exclude_sensors="{exclude_sensors}" \
-                --include_channels="{include_channels}" \
-                {crop_params_argstr} \
+                --site_summary=True \
                 {crop_perf_argstr} \
-            ''').format(**fmtkw).strip().rstrip('\\')
+                {crop_algo_argstr}
+            ''').format(**fmtkw)
 
         # FIXME: parametarize and only if we need secrets
         # secret_fpath = ub.Path('$HOME/code/watch/secrets/secrets').expand()
@@ -572,12 +559,6 @@ class SiteCropping(ProcessNode):
         #         # command = f'source {secret_fpath} && ' + command
         command = 'AWS_DEFAULT_PROFILE=iarpa GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR ' + command
         return command
-        # name = 'sitecrop'
-        # step = Step(name, command,
-        #             in_paths=paths & {'crop_regions', 'crop_src_fpath'},
-        #             out_paths=paths & {'crop_dst_fpath', 'crop_dpath'},
-        #             resources={'cpus': 2})
-        # return step
 
 
 def bas_nodes():
@@ -658,13 +639,11 @@ def sc_nodes():
     return nodes
 
 
-def joint_bas_sc_nodes():
+def joint_bas_sc_nodes(crops=True):
     nodes = {}
     nodes.update(bas_nodes())
 
-    REAL_CROPPING = 0
-
-    if REAL_CROPPING:
+    if crops:
         nodes['sitecrop'] = SiteCropping()
 
         # outputs['site_summaries_fpath'].connect(
@@ -682,7 +661,7 @@ def joint_bas_sc_nodes():
     if 1:
         nodes.update(sc_nodes())
 
-        if REAL_CROPPING:
+        if crops:
             nodes['sitecrop'].connect(
                 nodes['sc_pxl'],
                 param_mapping={
@@ -701,9 +680,14 @@ def joint_bas_sc_nodes():
 
 
 def make_smart_pipeline(name):
+    """
+    Get an unconfigured instance of the SMART pipeline
+    """
     from watch.mlops.pipeline_nodes import PipelineDAG
+    from functools import partial
     node_makers = {
-        'joint_bas_sc': joint_bas_sc_nodes,
+        'joint_bas_sc': partial(joint_bas_sc_nodes, crops=True),
+        'joint_bas_sc_nocrop': partial(joint_bas_sc_nodes, crops=False),
         'sc': sc_nodes,
         'bas': bas_nodes,
     }

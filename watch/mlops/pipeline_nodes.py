@@ -288,8 +288,8 @@ class Node(ub.NiceRepr):
 
     def _connect_single(self, other, src_map, dst_map):
         # TODO: CLEANUP
-        print(f'Connect {type(self).__name__} {self.name} to '
-              f'{type(other).__name__} {other.name}')
+        # print(f'Connect {type(self).__name__} {self.name} to '
+        #       f'{type(other).__name__} {other.name}')
         if other not in self.succ:
             self.succ.append(other)
         if self not in other.pred:
@@ -323,7 +323,7 @@ class Node(ub.NiceRepr):
             raise Exception(f'Unknown io relationship {self.name=}, {other.name=}')
 
         if self_is_proc or other_is_proc:
-            print(f'Connect Process to Process {self.name=} to {other.name=}')
+            # print(f'Connect Process to Process {self.name=} to {other.name=}')
             self_output_keys = (outmap & common).values()
             other_input_keys = (inmap & common).values()
 
@@ -498,6 +498,10 @@ def memoize_configured_property(fget):
 # memoize_configured_property = property
 
 
+def _resolve_config(config, default_set_or_dict):
+    pass
+
+
 # @dataclass(kw_only=True)  # makes things harder
 class ProcessNode(Node):
     """
@@ -566,7 +570,7 @@ class ProcessNode(Node):
 
     executable : Optional[str] = None
 
-    # algo_params : Collection = None  # algorithm parameters - impacts output
+    algo_params : Collection = None  # algorithm parameters - impacts output
 
     perf_params : Collection = None  # performance parameters - no output impact
 
@@ -582,7 +586,7 @@ class ProcessNode(Node):
     def __init__(self,
                  name=None,
                  executable=None,
-                 # algo_params=None,
+                 algo_params=None,
                  perf_params=None,
                  resources=None,
                  in_paths=None,
@@ -601,6 +605,7 @@ class ProcessNode(Node):
             'in_paths': {},
             'out_paths': {},
             'perf_params': {},
+            'algo_params': {},
         }
         _classvar_init(self, args, fallbacks)
         super().__init__(args['name'])
@@ -644,13 +649,7 @@ class ProcessNode(Node):
         self.enabled = config.pop('enabled', enabled)
         self.config = ub.udict(config)
 
-        # non_algo_sets = [self.in_paths, self.out_paths, self.perf_params]
-        non_algo_sets = [self.out_paths, self.perf_params]
-        non_algo_keys = (
-            set.union(*[set(s) for s in non_algo_sets if s is not None])
-            if non_algo_sets else set()
-        )
-        self.algo_params = set(self.config) - non_algo_keys
+        # self.algo_params = set(self.config) - non_algo_keys
 
         in_path_keys = self.config & set(self.in_paths)
         for key in in_path_keys:
@@ -702,11 +701,47 @@ class ProcessNode(Node):
         resolved_config = self.config.copy()
         resolved_config.update(self.resolved_in_paths)
         resolved_config.update(self.resolved_out_paths)
+        resolved_config.update(self.resolved_perf_config)
+        return resolved_config
+
+    @memoize_configured_property
+    def resolved_perf_config(self):
+        resolved_perf_config = self.config & set(self.perf_params)
         if isinstance(self.perf_params, dict):
             for k, v in self.perf_params.items():
-                if k not in resolved_config:
-                    resolved_config[k] = v
-        return resolved_config
+                if k not in resolved_perf_config:
+                    resolved_perf_config[k] = v
+        return resolved_perf_config
+
+    @memoize_configured_property
+    def resolved_algo_config(self):
+        # TODO: Any node that does not have its inputs connected have to
+        # include the configured input paths - or ideally the hash of their
+        # contents - in the algo config.
+
+        # Find keys that are not part of the algorithm config
+        non_algo_sets = [self.out_paths, self.perf_params]
+        non_algo_keys = (
+            set.union(*[set(s) for s in non_algo_sets if s is not None])
+            if non_algo_sets else set()
+        )
+        self.non_algo_keys = non_algo_keys
+
+        # Find unconnected inputs, which point to data that is part of the
+        # algorithm config
+        unconnected_inputs = []
+        for input_node in self.inputs.values():
+            if not input_node.pred:
+                unconnected_inputs.append(input_node.name)
+
+        unconnected_in_paths = ub.udict(self.resolved_in_paths) & unconnected_inputs
+        resolved_algo_config = (self.config - self.non_algo_keys) | unconnected_in_paths
+
+        if isinstance(self.algo_params, dict):
+            for k, v in self.algo_params.items():
+                if k not in resolved_algo_config:
+                    resolved_algo_config[k] = v
+        return resolved_algo_config
 
     @memoize_configured_property
     def resolved_in_paths(self):
@@ -778,25 +813,10 @@ class ProcessNode(Node):
             return self.root_dpath / self.group_dname / self.template_dag_dname
 
     @memoize_configured_property
-    def algo_config(self):
-        # TODO: Any node that does not have its inputs connected have to
-        # include the configured input paths - or ideally the hash of their
-        # contents - in the algo config.
-
-        # Find unconnected inputs
-        unconnected_inputs = []
-        for input_node in self.inputs.values():
-            if not input_node.pred:
-                unconnected_inputs.append(input_node.name)
-        algo_config = (self.config & self.algo_params) | (
-            ub.udict(self.resolved_in_paths) & unconnected_inputs)
-        return algo_config
-
-    @memoize_configured_property
     def depends_config(self):
         # Any manually specified inputs need to be inserted into this
         # dictionary. Derived inputs can be ignored.
-        depends_config = self.algo_config.copy()
+        depends_config = self.resolved_algo_config.copy()
         return depends_config
         # return self.config & self.algo_params
 
@@ -808,7 +828,7 @@ class ProcessNode(Node):
         This does NOT have a dependency on the larger the DAG.
         """
         from watch.utils.reverse_hashid import condense_config
-        algo_id = condense_config(self.algo_config, self.name + '_algo_id')
+        algo_id = condense_config(self.resolved_algo_config, self.name + '_algo_id')
         return algo_id
 
     @memoize_configured_property
@@ -835,7 +855,8 @@ class ProcessNode(Node):
             for pred in v.pred:
                 # assert isinstance(pred, OutputNode)
                 proc = pred.parent
-                assert isinstance(proc, ProcessNode)
+                assert proc.__node_type__ == 'process'
+                # assert isinstance(proc, ProcessNode)
                 nodes.append(proc)
         return nodes
 
@@ -849,7 +870,8 @@ class ProcessNode(Node):
             for succ in v.succ:
                 # assert isinstance(pred, OutputNode)
                 proc = succ.parent
-                assert isinstance(proc, ProcessNode)
+                assert proc.__node_type__ == 'process'
+                # assert isinstance(proc, ProcessNode)
                 nodes.append(proc)
         return nodes
 
@@ -967,7 +989,11 @@ class ProcessNode(Node):
         if not isinstance(command, str):
             assert callable(command)
             command = command()
+
+        # Cleanup the command
         base_command = command.rstrip().rstrip('\\').rstrip()
+        lines = base_command.split('\n')
+        base_command = '\n'.join([line for line in lines if line.strip() != '\\'])
 
         if self.cache or (not self.enabled and self.enabled != 'redo'):
             return self.test_is_computed_command() + ' || ' + base_command

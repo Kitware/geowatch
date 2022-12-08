@@ -149,42 +149,28 @@ class ScheduleEvaluationConfig(scfg.Config):
     Builds commands and optionally schedules them.
     """
     default = {
-        'devices': scfg.Value('auto', help='if using tmux or serial, indicate which gpus are available for use as a comma separated list: e.g. 0,1'),
+        'params': scfg.Value(None, type=str, help='a yaml/json grid/matrix of prediction params'),
+
         'run': scfg.Value(False, help='if False, only prints the commands, otherwise executes them'),
+
+        'devices': scfg.Value('auto', help='if using tmux or serial, indicate which gpus are available for use as a comma separated list: e.g. 0,1'),
+
         'virtualenv_cmd': scfg.Value(None, help='command to activate a virtualenv if needed. (might have issues with slurm backend)'),
         'skip_existing': scfg.Value(False, help='if True dont submit commands where the expected products already exist'),
         'backend': scfg.Value('tmux', help='can be tmux, slurm, or maybe serial in the future'),
+
         'queue_name': scfg.Value('schedule-eval', help='Name of the queue'),
 
         'pred_workers': scfg.Value(4, help='number of prediction workers in each process'),
 
         'shuffle_jobs': scfg.Value(True, help='if True, shuffles the jobs so they are submitted in a random order'),
         'annotations_dpath': scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval'),
-        'root_dpath': scfg.Value('auto', help='Where do dump all results'),
-
-        'expt_dvc_dpath': None,
-        'data_dvc_dpath': None,
+        'root_dpath': scfg.Value('auto', help='Where do dump all results. If "auto", uses <expt_dvc_dpath>/dag_runs'),
 
         'pipeline': scfg.Value('joint_bas_sc', help='the name of the pipeline to run'),
 
         'check_other_sessions': scfg.Value('auto', help='if True, will ask to kill other sessions that might exist'),
         'queue_size': scfg.Value('auto', help='if auto, defaults to number of GPUs'),
-
-        'out_dpath': scfg.Value('auto', help='The location where predictions / evals will be stored. If "auto", uses teh expt_dvc_dpath'),
-
-        # These enabled flags should probably be pushed off to params
-        # 'enable_pred_bas_pxl': scfg.Value(True, isflag=True, help='BAS heatmap'),
-        # 'enable_pred_bas_poly': scfg.Value(True, isflag=True, help='BAS tracking'),
-        # 'enable_crop': scfg.Value(True, isflag=True, help='SC tracking'),
-        # 'enable_pred_sc_pxl': scfg.Value(True, isflag=True, help='SC heatmaps'),
-        # 'enable_pred_sc_poly': scfg.Value(True, isflag=True, help='SC tracking'),
-        # 'enable_viz_pred_sc_poly': scfg.Value(False, isflag=True, help='if true draw predicted tracks for SC'),
-
-        # 'enable_eval_bas_pxl': scfg.Value(True, isflag=True, help='BAS heatmap evaluation'),
-        # 'enable_eval_bas_poly': scfg.Value(True, isflag=True, help='BAS tracking evaluation'),
-        # 'enable_eval_sc_pxl': scfg.Value(True, isflag=True, help='SC heatmaps evaluation'),
-        # 'enable_eval_sc_poly': scfg.Value(True, isflag=True, help='SC tracking evaluation'),
-        # 'enable_viz_pred_bas_poly': scfg.Value(False, isflag=True, help='if true draw predicted tracks for BAS'),
 
         'enable_links': scfg.Value(True, isflag=True, help='if true enable symlink jobs'),
         'cache': scfg.Value(True, isflag=True, help='if true, each a test is appened to each job to skip itself if its output exists'),
@@ -195,7 +181,6 @@ class ScheduleEvaluationConfig(scfg.Config):
         'partition': scfg.Value(None, help='specify slurm partition (slurm backend only)'),
         'mem': scfg.Value(None, help='specify slurm memory per task (slurm backend only)'),
 
-        'params': scfg.Value(None, type=str, help='a yaml/json grid/matrix of prediction params'),
         'rprint': scfg.Value(True, isflag=True, help='enable / disable rprint before exec')
     }
 
