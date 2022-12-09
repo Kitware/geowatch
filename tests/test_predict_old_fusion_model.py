@@ -26,7 +26,7 @@ def test_predict_old_fusion_model():
     import watch
     import kwcoco
     import pytest
-    from watch.utils import kwcoco_extensions
+    # from watch.utils import kwcoco_extensions
 
     try:
         dvc_dpath = watch.find_smart_dvc_dpath(tags='phase1_data')

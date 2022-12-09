@@ -133,6 +133,10 @@ class CocoVisualizeConfig(scfg.Config):
 
         'extra_header': scfg.Value(None, help='extra text to include in the header'),
 
+        'draw_header': scfg.Value(True, help='If false disables drawing the header'),
+
+        'draw_chancode': scfg.Value(True, help='If false disables drawing the channel code'),
+
         'include_sensors': scfg.Value(None, help='if specified can be comma separated valid sensors'),
         'exclude_sensors': scfg.Value(None, help='if specified can be comma separated invalid sensors'),
 
@@ -224,7 +228,8 @@ def main(cmdline=True, **kwargs):
 
     if config['fast']:
         config['workers'] = 'avail'
-        config['animate'] = True
+        if not config['animate']:
+            config['animate'] = True
         config['stack'] = 'only'
         if config['channels'] is None:
             channels = config['channels'] = 'auto'
@@ -304,6 +309,8 @@ def main(cmdline=True, **kwargs):
         coco_dset.index.videos.items(), total=len(coco_dset.index.videos),
         desc='viz videos', verbose=3)
 
+    util_globals.request_nofile_limits()
+
     pool = ub.JobPool(mode='thread', max_workers=max_workers)
 
     from scriptconfig.smartcast import smartcast
@@ -328,8 +335,12 @@ def main(cmdline=True, **kwargs):
         keep = []
         for coco_img in coco_images:
             code = coco_img.channels.fuse().as_set()
-            if requested_channels & code:
-                keep.append(coco_img.img['id'])
+            if config['skip_aggressive']:
+                if len(requested_channels & code) == len(requested_channels):
+                    keep.append(coco_img.img['id'])
+            else:
+                if requested_channels & code:
+                    keep.append(coco_img.img['id'])
         print(f'Filtered {len(coco_images) - len(keep)} images without requested channels. Keeping {len(keep)}')
         selected_gids = keep
 
@@ -452,7 +463,11 @@ def main(cmdline=True, **kwargs):
                                 local_max_frame=local_max_frame,
                                 any3=config['any3'], dset_idstr=dset_idstr,
                                 draw_valid_region=config['draw_valid_region'],
-                                stack=config['stack'])
+                                stack=config['stack'],
+                                skip_aggressive=config['skip_aggressive'],
+                                draw_chancode=config['draw_chancode'],
+                                draw_header=config['draw_header'],
+                                )
 
         else:
             gid_subset = gids[start_frame:end_frame]
@@ -487,7 +502,9 @@ def main(cmdline=True, **kwargs):
                             skip_missing=config['skip_missing'],
                             draw_valid_region=config['draw_valid_region'],
                             stack=config['stack'],
-                            skip_aggressive=config['skip_aggressive']
+                            skip_aggressive=config['skip_aggressive'],
+                            draw_chancode=config['draw_chancode'],
+                            draw_header=config['draw_header'],
                             )
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
@@ -837,7 +854,10 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                stack=False,
                                draw_valid_region=True,
                                verbose=0,
-                               skip_aggressive=False):
+                               skip_aggressive=False,
+                               draw_header=True,
+                               draw_chancode=True,
+                               ):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
     (with or without annotation overlays) for specific bands to disk.
@@ -965,6 +985,10 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         ann_stack = []
         img_stack = []
 
+    # Add in custom crop / zoom?
+    # h, w = delayed.shape[0:2]
+    # delayed = delayed[0:h // 2, w // 4: w - w // 4]
+
     for stack_idx, chan_row in enumerate(chan_groups):
         chan_pname = chan_row['pname']
         chan_group_obj = chan_row['chan']
@@ -987,10 +1011,6 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         # as they should be given in the constructor.
         raw_canvas = canvas = chan.finalize(**finalize_opts)
 
-        if skip_aggressive:
-            if np.any(np.isnan(raw_canvas)):
-                raise SkipFrame
-
         # foo = kwimage.fill_nans_with_checkers(raw_canvas)
 
         if verbose > 1:
@@ -1007,8 +1027,44 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
         if skip_missing and np.all(np.isnan(raw_canvas)):
             if skip_aggressive:
+                print('Skip because all is nan')
                 raise SkipFrame
             continue
+
+        if skip_aggressive:
+            is_bad = np.isnan(raw_canvas).ravel()
+            percent_bad = is_bad.sum() / len(is_bad)
+            if percent_bad > 0.15:
+                print('Skip because some is nan')
+                print('skip')
+                raise SkipFrame
+
+        if 0 and str(chan_group) == 'salient':
+            import kwarray
+            # blur1 = kwarray.atleast_nd(kwimage.gaussian_blur(raw_canvas, sigma=1.6), n=3)
+            # blur2 = kwarray.atleast_nd(kwimage.gaussian_blur(raw_canvas, sigma=3.2), n=3)
+            blur1 = kwarray.atleast_nd(kwimage.gaussian_blur(raw_canvas, sigma=0.8), n=3)
+            blur2 = kwarray.atleast_nd(kwimage.gaussian_blur(raw_canvas, sigma=1.6), n=3)
+            dog = blur1 - blur2
+            shift_dog = dog - min(0, np.nanmin(dog))
+            # import xdev
+            # mxdev.embed()
+            canvas = blur2
+            canvas = shift_dog
+            # orig_max = np.nanmax(raw_canvas)
+            # canvas = kwimage.normalize(shift_dog) * orig_max
+            # canvas = canvas * raw_canvas
+            canvas = raw_canvas
+            # median = np.nanmedian(canvas)
+            canvas = kwarray.atleast_nd(kwimage.gaussian_blur(canvas, sigma=3.6), n=3)
+            median, = np.quantile(canvas.ravel()[~np.isnan(canvas.ravel())], q=[0.8])
+            # median = np.nanmean(canvas) + np.nanstd(canvas)
+            canvas = (canvas - median).clip(0, None)
+            canvas = np.sqrt(canvas)
+
+            # raw_canvas = kwimage.normalize(dog)
+            # raw_canvas = kwarray.atleast_nd(raw_canvas, n=3)
+            # raw_canvas = raw_canvas[:, :, None]
 
         if chan_to_normalizer is None:
             dmax = np.nanmax(raw_canvas)
@@ -1161,13 +1217,14 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                     })
             if draw_anns_alone:
                 ann_canvas = kwimage.ensure_uint255(ann_canvas)
-                ann_header = kwimage.draw_header_text(image=ann_canvas,
-                                                      text=header_text,
-                                                      stack=False,
-                                                      fit='shrink')
-                ann_header = kwimage.imresize(
-                    ann_header, dsize=(ann_header.shape[1], 100), letterbox=True)
-                ann_canvas = kwimage.stack_images([ann_header, ann_canvas])
+                if draw_header:
+                    ann_header = kwimage.draw_header_text(image=ann_canvas,
+                                                          text=header_text,
+                                                          stack=False,
+                                                          fit='shrink')
+                    ann_header = kwimage.imresize(
+                        ann_header, dsize=(ann_header.shape[1], 100), letterbox=True)
+                    ann_canvas = kwimage.stack_images([ann_header, ann_canvas])
                 kwimage.imwrite(view_ann_fpath, ann_canvas)
 
     if stack:
@@ -1187,9 +1244,10 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                 chan = item['chan']
                 # canvas = kwimage.ensure_float01(canvas, copy=True)
                 canvas = kwimage.ensure_uint255(canvas)
-                canvas = kwimage.draw_text_on_image(
-                    canvas, chan, (1, 2),
-                    valign='top', color='lime', border=3)
+                if draw_chancode:
+                    canvas = kwimage.draw_text_on_image(
+                        canvas, chan, (1, 2),
+                        valign='top', color='lime', border=3)
                 tostack.append(canvas)
             canvas = kwimage.stack_images(tostack)
             canvas = kwimage.ensure_uint255(canvas)
@@ -1197,26 +1255,32 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
         if ann_stack:
             ann_stack_canvas = stack_infos(ann_stack)
-            ann_header = kwimage.draw_header_text(image=ann_stack_canvas,
-                                                  text=header_text,
-                                                  stack=False,
-                                                  fit='shrink')
-            ann_header = kwimage.imresize(
-                # ann_header, dsize=(None, 100), letterbox=True)
-                ann_header, dsize=(ann_header.shape[1], 100), letterbox=True)
-            ann_canvas = kwimage.stack_images([ann_header, ann_stack_canvas])
+            if draw_header:
+                ann_header = kwimage.draw_header_text(image=ann_stack_canvas,
+                                                      text=header_text,
+                                                      stack=False,
+                                                      fit='shrink')
+                ann_header = kwimage.imresize(
+                    # ann_header, dsize=(None, 100), letterbox=True)
+                    ann_header, dsize=(ann_header.shape[1], 100), letterbox=True)
+                ann_canvas = kwimage.stack_images([ann_header, ann_stack_canvas])
+            else:
+                ann_canvas = ann_stack_canvas
 
             view_ann_fpath.parent.ensuredir()
             kwimage.imwrite(view_ann_fpath, ann_canvas)
 
         if img_stack:
             img_stack_canvas = stack_infos(img_stack)
-            img_header = kwimage.draw_header_text(image=img_stack_canvas,
-                                                  text=header_text,
-                                                  fit='shrink', stack=False)
-            img_header = kwimage.imresize(
-                img_header, dsize=(img_header.shape[1], 100), letterbox=True)
-            img_canvas = kwimage.stack_images([img_header, img_stack_canvas])
+            if draw_header:
+                img_header = kwimage.draw_header_text(image=img_stack_canvas,
+                                                      text=header_text,
+                                                      fit='shrink', stack=False)
+                img_header = kwimage.imresize(
+                    img_header, dsize=(img_header.shape[1], 100), letterbox=True)
+                img_canvas = kwimage.stack_images([img_header, img_stack_canvas])
+            else:
+                img_canvas = img_stack_canvas
             view_img_fpath.parent.ensuredir()
             kwimage.imwrite(view_img_fpath, img_canvas)
 

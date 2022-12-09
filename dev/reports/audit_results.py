@@ -3,7 +3,7 @@ import numpy as np
 import json
 import kwcoco
 from watch.utils import kwcoco_extensions
-from watch.mlops import smart_pipeline
+from watch.mlops import smart_result_parser
 from watch.cli import coco_intensity_histograms
 import rich
 from watch.utils import util_time
@@ -515,7 +515,7 @@ def test_tracker(pro_tracked_dset):
     dev_ss_manifest_fpath = (dev_fpath.parent / 'site_summary_tracks_manifest.json')
     dev_manifest_data = json.loads(dev_ss_manifest_fpath.read_text())
 
-    dev_trk_params_info = smart_pipeline.parse_tracker_params(dev_manifest_data['info'])
+    dev_trk_params_info = smart_result_parser.parse_tracker_params(dev_manifest_data['info'])
 
     audit_fpath = (pro_tracked_dset.parent / 'audit' / 'tracker').ensuredir()
     repro_pro_trk_dpath = audit_fpath
@@ -628,12 +628,12 @@ def audit_dataset(coco_dset):
 
     try:
         info = coco_dset.dataset['info']
-        pred_pxl_parms = smart_pipeline.parse_pred_pxl_params(info)
+        pred_pxl_parms = smart_result_parser.parse_pred_pxl_params(info)
         audit_info.update({
             'pred_pxl_parms': pred_pxl_parms,
         })
     except Exception:
         pass
     return audit_info
-    # trk_items = list(smart_pipeline.find_info_items(info, 'process', 'watch.cli.kwcoco_to_geojson'))
-    # pxl_items = list(smart_pipeline.find_info_items(info, 'process', 'watch.tasks.fusion.predict'))
+    # trk_items = list(smart_result_parser.find_info_items(info, 'process', 'watch.cli.kwcoco_to_geojson'))
+    # pxl_items = list(smart_result_parser.find_info_items(info, 'process', 'watch.tasks.fusion.predict'))

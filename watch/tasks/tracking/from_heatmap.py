@@ -127,7 +127,12 @@ class TimePolygonFilter:
             # print(grp.name, start_ix, end_ix+1)
             return grp.iloc[start_ix:end_ix + 1]
 
-        return gdf.groupby('track_idx', group_keys=False).apply(_edit)
+        if len(gdf) > 0:
+            group = gdf.groupby('track_idx', group_keys=False)
+            result = group.apply(_edit)
+        else:
+            result = gdf
+        return result
 
 
 class ResponsePolygonFilter:
@@ -227,7 +232,7 @@ def add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
             new_ann = make_new_annotation(*o, track_id)
             all_new_anns.append(new_ann)
 
-    for tid, grp in tracks.groupby('track_idx'):
+    for tid, grp in tracks.groupby('track_idx', axis=1):
         score_chan = kwcoco.ChannelSpec('|'.join(key))
         this_score = grp[(score_chan.spec, None)]
         scores_dct = {k: grp[(k, None)] for k in score_chan.unique()}
@@ -395,7 +400,12 @@ def time_aggregated_polys(
 
     # now we start needing scores, so bulk-compute them
 
-    gids, polys = zip(*gids_polys)
+    gids_polys_T = list(zip(*gids_polys))
+    if gids_polys_T:
+        gids, polys = gids_polys_T
+    else:
+        gids, polys = [], []
+
     polys = [p.to_shapely() for p in polys]
     _TRACKS = gpd.GeoDataFrame(dict(gid=gids, poly=polys), geometry='poly')
     # _TRACKS['track_idx'] = range(len(_TRACKS))
@@ -600,12 +610,12 @@ def _gids_polys(
         moving_window_size=None,  # 150
         bounds=False) -> Iterable[Union[int, Poly]]:
     if bounds:  # for SC
-        boundary_tracks = pop_tracks(sub_dset, [SITE_SUMMARY_CNAME])
-        assert len(boundary_tracks) > 0, 'need valid site boundaries!'
-        gids = boundary_tracks['gid'].unique()
+        raw_boundary_tracks = pop_tracks(sub_dset, [SITE_SUMMARY_CNAME])
+        assert len(raw_boundary_tracks) > 0, 'need valid site boundaries!'
+        gids = raw_boundary_tracks['gid'].unique()
         print('generating polys in bounds: number of bounds: ',
-              gpd_len(boundary_tracks))
-        boundary_tracks = boundary_tracks.groupby('track_idx')
+              gpd_len(raw_boundary_tracks))
+        boundary_tracks = list(raw_boundary_tracks.groupby('track_idx'))
 
     else:
         boundary_tracks = [(None, None)]
@@ -630,9 +640,9 @@ def _gids_polys(
             _heatmaps_in_track = _heatmaps
         else:
             track_bounds = track['poly'].unary_union
-            _heatmaps_in_track = np.compress(np.in1d(gids, track[1]['gid']),
-                                             _heatmaps,
-                                             axis=0)
+            track_gids = track['gid']
+            flags = np.in1d(gids, track_gids)
+            _heatmaps_in_track = np.compress(flags, _heatmaps, axis=0)
 
         # this is another hot spot, heatmaps_to_polys -> mask_to_polygons ->
         # rasterize. Figure out how to vectorize over bounds.
@@ -657,7 +667,10 @@ def _gids_polys(
     jobs = []
     for _, track in boundary_tracks:
         jobs.append(exc.submit(_process, track))
-    return itertools.chain.from_iterable(j.result() for j in jobs)
+
+    result_gen = itertools.chain.from_iterable(j.result() for j in jobs)
+    result_gen = list(result_gen)
+    return result_gen
 
 #
 # --- wrappers ---

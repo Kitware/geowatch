@@ -3,8 +3,8 @@
 source "$HOME"/code/watch/secrets/secrets
 
 DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware="auto")
-SENSORS=TA1-S2-L8-WV-PD-ACC-1
-DATASET_SUFFIX=Drop5-2022-11-07-c30-$SENSORS
+SENSORS=TA1-S2-L8-WV-PD-ACC-2
+DATASET_SUFFIX=Drop6-2022-12-01-c30-$SENSORS
 REGION_GLOBSTR="$DATA_DVC_DPATH/annotations/region_models/*.geojson"
 SITE_GLOBSTR="$DATA_DVC_DPATH/annotations/site_models/*.geojson"
 
@@ -33,19 +33,16 @@ python -m watch.cli.prepare_ta2_dataset \
     --separate_align_jobs=1 \
     --visualize=0 \
     --target_gsd=10 \
-    --cache=0 \
-    --skip_existing=0 \
+    --cache=1 \
+    --skip_existing=1 \
     --warp_tries=2 \
     --asset_timeout="1hour" \
     --image_timeout="1hour" \
     --backend=tmux --run=1
 
+cd "$DATA_DVC_DPATH"
+ln -s "$DATASET_SUFFIX" Drop6
 
-#--include_channels="blue|green|red|nir|swir16|swir22" \
-
-
-#smartwatch stats "$DATA_DVC_DPATH"/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC/data.kwcoco.json "$DATA_DVC_DPATH"/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data.kwcoco.json
-#cd "$DATA_DVC_DPATH"/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC-1
 
 codeblock  "
 
@@ -68,12 +65,12 @@ print('total = {}'.format(xd.byte_str(total_size)))
 "
 
 add_dvc_data(){
+    # TODO: before doing this, remember to change the bundle name
     DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=hdd)
     cd "$DATA_DVC_DPATH"
-    ln -s "Aligned-Drop5-2022-11-07-c30-TA1-S2-L8-WV-PD-ACC-1" "Drop5"
-    git add Drop5
-    cd "$DATA_DVC_DPATH/Drop5"
+    git add Drop6
+    cd "$DATA_DVC_DPATH/Drop6"
     python -m watch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
     7z a splits.zip data*.kwcoco.json imganns-*.kwcoco.json
-    dvc add -- */L8 */S2 */WV *.zip && dvc push -r horologic -R . && git commit -am "Add Drop5 ACC-1" && git push 
+    dvc add -- */L8 */S2 */WV *.zip && dvc push -r horologic -R . && git commit -am "Add Drop6 ACC-2" && git push 
 }

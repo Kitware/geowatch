@@ -129,6 +129,9 @@ _ACCENTURE_PHASE2_TA1_PRODUCTS = {
 }
 
 
+# ta1-mixedgsd-acc
+
+
 _SMARTSTAC_PRODUCTS = {
     # Non public, but non-performer products
     'planet-dove': {

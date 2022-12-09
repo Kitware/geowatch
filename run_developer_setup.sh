@@ -138,3 +138,4 @@ EAGER_IMPORT=1 python -m watch --help
 #EAGER_IMPORT=1 python -m watch hello_world
 python -c "import torch; print(torch.cuda.is_available())"
 set +x
+

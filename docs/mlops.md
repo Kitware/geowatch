@@ -1,5 +1,7 @@
 # Using the MLOps tool to run WATCH
 
+NOTE: THE PATH FORMAT IS IN HIGH FLUX. DOCS MAY BE OUTDATED
+
 MLOps is a wrapper around the cmd_queue library that provides a single entrypoint for all steps of the WATCH TA-2 pipeline, starting with a model checkpoint and the program data:
 
 1. Predict BAS on low-res data (S2/L8)

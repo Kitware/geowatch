@@ -134,7 +134,7 @@ class SMARTDataMixin:
     def _interpret_quality_mask(self, sampler, coco_img, tr_frame):
         """
         Ignore:
-            >>> from watch.mlops.smart_pipeline_nodes import *  # NOQA
+            >>> from watch.mlops.smart_pipeline import *  # NOQA
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import kwcoco
             >>> import ndsampler

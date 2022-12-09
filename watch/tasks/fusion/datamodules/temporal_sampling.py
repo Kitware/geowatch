@@ -213,13 +213,13 @@ class TimeWindowSampler:
         >>> import kwcoco
         >>> import watch
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-        >>> coco_fpath = dvc_dpath / 'Drop4-SC/data_vali.kwcoco.json'
+        >>> coco_fpath = data_dvc_dpath / 'Drop4-SC/data_vali.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> vidid = dset.dataset['videos'][0]['id']
         >>> self = TimeWindowSampler.from_coco_video(
         >>>     dset, vidid,
         >>>     time_window=5,
-        >>>     affinity_type='soft2', time_span='1y',
+        >>>     affinity_type='hardish3', time_span='1y',
         >>>     update_rule='distribute')
         >>> self.determenistic = False
         >>> self.show_summary(samples_per_frame=1, fnum=1)

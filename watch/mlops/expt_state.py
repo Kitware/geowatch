@@ -40,7 +40,7 @@ class ExperimentState(ub.NiceRepr):
     """
 
     def __init__(self, expt_dvc_dpath, dataset_code='*', dvc_remote=None,
-                 data_dvc_dpath=None, model_pattern='*'):
+                 data_dvc_dpath=None, model_pattern='*', storage_dpath=None):
 
         if isinstance(model_pattern, str) and model_pattern.endswith('.txt') and ub.Path(model_pattern).exists():
             model_pattern = [
@@ -52,7 +52,7 @@ class ExperimentState(ub.NiceRepr):
         # from watch.utils import util_pattern
         # model_pattern = util_pattern.MultiPattern.coerce(model_pattern, hint='glob')
 
-        self.expt_dvc_dpath = ub.Path(expt_dvc_dpath)
+        self.expt_dvc_dpath = expt_dvc_dpath = ub.Path(expt_dvc_dpath)
 
         if data_dvc_dpath is None:
             import watch
@@ -94,9 +94,14 @@ class ExperimentState(ub.NiceRepr):
             'crop_id': ['regions_id', 'crop_cfg', 'crop_src_dset']
         }
 
+        if storage_dpath is None or storage_dpath == 'auto':
+            storage_dpath = expt_dvc_dpath / 'models/fusion'
+
         ### Experimental, add in SC dependencies
         self.staging_template_prefix = '{expt_dvc_dpath}/training/{host}/{user}/{dataset_code}/'
-        self.storage_template_prefix = '{expt_dvc_dpath}/models/fusion/{dataset_code}/'
+        self.storage_template_prefix = '{storage_dpath}/{dataset_code}/'
+
+        self.storage_dpath = storage_dpath
 
         self.patterns = {
             # General
@@ -104,6 +109,7 @@ class ExperimentState(ub.NiceRepr):
             'act_expt': '*',
             'expt_dvc_dpath': expt_dvc_dpath,
             'dataset_code': dataset_code,
+            'storage_dpath': storage_dpath,
             ### Versioned
             'test_trk_dset': '*',
             'test_act_dset': '*',
@@ -854,17 +860,8 @@ class ExperimentState(ub.NiceRepr):
         return test_dset_name
 
     def _condense_cfg(self, params, type):
-        human_opts = ub.dict_isect(params, {})
-        other_opts = ub.dict_diff(params, human_opts)
-        if len(human_opts):
-            human_part = ub.repr2(human_opts, compact=1) + '_'
-        else:
-            human_part = ''
-        cfgstr_suffix = human_part + ub.hash_data(other_opts)[0:8]
-        cfgstr = f'{type}_{cfgstr_suffix}'
-        from watch.utils.reverse_hashid import ReverseHashTable
-        rhash = ReverseHashTable(type=type)
-        rhash.register(cfgstr, params)
+        from watch.utils.reverse_hashid import condense_config
+        cfgstr = condense_config(params, type)
         return cfgstr
 
     def _condense_pred_cfg(self, pred_cfg):
@@ -902,6 +899,8 @@ class ExperimentState(ub.NiceRepr):
         return trk_cfg_dname
 
     def _condense_model(self, model):
+        if model is None:
+            return None
         return ub.Path(model).name
 
     def _condense_act_cfg(self, act_cfg):
