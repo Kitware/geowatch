@@ -213,7 +213,7 @@ class CocoAlignGeotiffConfig(scfg.Config):
             10.0 during cropping)'''
         )),
 
-        'hack_lazy': scfg.Value(False, help=ub.paragraph(
+        'hack_lazy': scfg.Value(False, isflag=True, help=ub.paragraph(
             '''
             Hack lazy is a proof of concept with the intent on speeding up the
             download / cropping of data by flattening the gdal processing into
@@ -626,6 +626,7 @@ def main(cmdline=True, **kw):
         # Execute the gdal jobs in a single super queue
         import cmd_queue
         # queue = cmd_queue.Queue.create('serial')
+        print(f'img_workers={img_workers}')
         queue = cmd_queue.Queue.create(
             'tmux', size=img_workers, name='hack_lazy_' + video_name,
             environ={
@@ -641,7 +642,11 @@ def main(cmdline=True, **kw):
                 prev = queue.submit(command, depends=prev)
                 prev.logs = False
 
-        queue.run()
+        print(f'{len(queue.jobs)=}')
+        queue.run(
+            # with_textual=False
+            with_textual='auto'
+        )
 
         raise Exception('hack_lazy always fails')
 

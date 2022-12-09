@@ -144,6 +144,17 @@ class PrepareTA2Config(scfg.Config):
                     transform in the geotiff metadata.
             '''
         )),
+
+        'hack_lazy': scfg.Value(False, isflag=True, help=ub.paragraph(
+            '''
+            Hack lazy is a proof of concept with the intent on speeding up the
+            download / cropping of data by flattening the gdal processing into
+            a single queue of parallel processes executed via a command queue.
+
+            By running once with this flag on, it will execute the command
+            queue, and then running again, it should see all of the data as
+            existing and construct the aligned kwcoco dataset as normal.
+            ''')),
     }
 
 __config__ = PrepareTA2Config
@@ -614,7 +625,8 @@ def main(cmdline=False, **kwargs):
                 --verbose={config['verbose']} \
                 --aux_workers={config['align_aux_workers']} \
                 --target_gsd={config['target_gsd']} \
-                --workers={config['align_workers']}
+                --workers={config['align_workers']} \
+                --hack_lazy={config['hack_lazy']}
             '''),
             depends=parent_job,
             name=f'align-geotiffs-{name}',
