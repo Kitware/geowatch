@@ -204,12 +204,17 @@ class CocoAlignGeotiffConfig(scfg.Config):
         'verbose': scfg.Value(0, help='Note: no silent mode, 0 is just least verbose.'),
         'force_nodata': scfg.Value(None, help=('if specified, forces nodata to this value (e.g. -9999) '
                                                'Ideally this is not needed and all source geotiffs properly specify nodata')),
+        'force_min_gsd': scfg.Value(None, help=ub.paragraph('Force output crops to be at least this minimum GSD (e.g. if set to 10.0 an input image with a 30.0 GSD will have an output GSD of 30.0, whereas in input image with a 0.5 GSD will have it set to 10.0 during cropping)'))
     }
 
     def normalize(config):
         if isinstance(config['target_gsd'], str):
             if config['target_gsd'].lower().endswith('gsd'):
                 config['target_gsd'] = int(config['target_gsd'][:-3].strip())
+
+        if isinstance(config['force_min_gsd'], str):
+            if config['force_min_gsd'].lower().endswith('gsd'):
+                config['force_min_gsd'] = float(config['force_min_gsd'][:-3].strip())
 
 
 @profile
@@ -295,6 +300,58 @@ def main(cmdline=True, **kw):
         >>> }
         >>> cmdline = False
         >>> new_dset = main(cmdline, **kw)
+
+    Example:
+        >>> # Confirm expected behavior of `force_min_gsd` keyword argument
+        >>> from watch.cli.coco_align_geotiffs import *  # NOQA
+        >>> from watch.demo.landsat_demodata import grab_landsat_product
+        >>> from watch.gis.geotiff import geotiff_metadata, geotiff_crs_info
+        >>> # Create a dead simple coco dataset with one image
+        >>> import kwcoco
+        >>> coco_dset = kwcoco.CocoDataset()
+        >>> ls_prod = grab_landsat_product()
+        >>> fpath = ls_prod['bands'][0]
+        >>> meta = geotiff_metadata(fpath)
+        >>> # We need a date captured ATM in a specific format
+        >>> dt = dateutil.parser.parse(
+        >>>     meta['filename_meta']['acquisition_date'])
+        >>> date_captured = dt.strftime('%Y/%m/%d')
+        >>> gid = coco_dset.add_image(file_name=fpath, date_captured=date_captured)
+        >>> dummy_poly = kwimage.Polygon(exterior=meta['wgs84_corners'])
+        >>> dummy_poly = dummy_poly.scale(0.3, about='center')
+        >>> sseg_geos = dummy_poly.swap_axes().to_geojson()
+        >>> # NOTE: script is not always robust to missing annotation
+        >>> # information like segmentation and bad bbox, but for this
+        >>> # test config it is
+        >>> coco_dset.add_annotation(
+        >>>     image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
+        >>> #
+        >>> # Create arguments to the script
+        >>> dpath = ub.Path.appdir('watch/test/coco_align_geotiff').ensuredir()
+        >>> dst = ub.ensuredir((dpath, 'align_bundle1_force_gsd'))
+        >>> ub.delete(dst)
+        >>> dst = ub.ensuredir(dst)
+        >>> kw = {
+        >>>     'src': coco_dset,
+        >>>     'dst': dst,
+        >>>     'regions': 'annots',
+        >>>     'workers': 2,
+        >>>     'aux_workers': 2,
+        >>>     'convexify_regions': True,
+        >>>     #'image_timeout': '1 microsecond',
+        >>>     #'asset_timeout': '1 microsecond',
+        >>>     'visualize': False,
+        >>>     'force_min_gsd': 60.0,
+        >>> }
+        >>> cmdline = False
+        >>> new_dset = main(cmdline, **kw)
+        >>> coco_img = new_dset.coco_image(2)
+        >>> # Check our output is in the CRS we think it is
+        >>> asset = coco_img.primary_asset()
+        >>> parent_fpath = asset['parent_file_name']
+        >>> crop_fpath = join(new_dset.bundle_dpath, asset['file_name'])
+        >>> info = geotiff_crs_info(crop_fpath)
+        >>> assert(all(info['meter_per_pxl'] == 60.0))
 
     Example:
         >>> # xdoctest: +REQUIRES(--slow)
@@ -536,6 +593,7 @@ def main(cmdline=True, **kw):
             asset_timeout=config['asset_timeout'],
             verbose=config['verbose'],
             force_nodata=config['force_nodata'],
+            force_min_gsd=config['force_min_gsd'],
         )
 
     kwcoco_extensions.reorder_video_frames(new_dset)
@@ -895,7 +953,8 @@ class SimpleDataCube(object):
                          tries=2,
                          image_timeout=None,
                          asset_timeout=None,
-                         force_nodata=None, verbose=0):
+                         force_nodata=None, verbose=0,
+                         force_min_gsd=None):
         """
         Given a region of interest, extract an aligned temporal sequence
         of data to a specified directory.
@@ -936,6 +995,13 @@ class SimpleDataCube(object):
 
             verbose (int):
                 note, there is no silent mode, 0 is just the least verbose.
+
+            force_min_gsd (float):
+                Force output crops to be at least this minimum GSD
+                (e.g. if set to 10.0 an input image with a 30.0 GSD
+                will have an output GSD of 30.0, whereas in input
+                image with a 0.5 GSD will have it set to 10.0 during
+                cropping)
 
         Returns:
             kwcoco.CocoDataset: the given or new dataset that was modified
@@ -1271,7 +1337,8 @@ class SimpleDataCube(object):
                     tries=tries,
                     image_timeout=image_timeout,
                     asset_timeout=asset_timeout,
-                    verbose=verbose)
+                    verbose=verbose,
+                    force_min_gsd=force_min_gsd)
                 start_gid = start_gid + 1
                 start_aid = start_aid + len(anns)
                 frame_index = frame_index + 1
@@ -1416,7 +1483,8 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
                       tries=2,
                       asset_timeout=None,
                       image_timeout=None,
-                      verbose=0):
+                      verbose=0,
+                      force_min_gsd=None):
     """
     Threaded worker function for :func:`SimpleDataCube.extract_overlaps`.
 
@@ -1514,7 +1582,8 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
             force_nodata=force_nodata,
             tries=tries,
             asset_timeout=asset_timeout,
-            verbose=aux_verbose)
+            verbose=aux_verbose,
+            force_min_gsd=force_min_gsd)
         job_list.append(job)
 
     dst_list = []
@@ -1744,7 +1813,7 @@ def _fix_geojson_poly(geo):
 def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
                space_box, align_method, is_multi_image, keep, local_epsg=None,
                include_channels=None, exclude_channels=None, tries=2,
-               asset_timeout=None, force_nodata=None, verbose=0):
+               asset_timeout=None, force_nodata=None, verbose=0, force_min_gsd=None):
     import watch
 
     # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
@@ -1868,6 +1937,25 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
 
     # Note: these methods take care of retries and checking that the
     # data is valid.
+    force_spatial_res = None
+    if force_min_gsd is not None:
+        if 'geotiff_metadata' in first_obj:
+            info = first_obj['geotiff_metadata']
+        else:
+            warnings.warn(ub.paragraph(
+                '''
+                Popluating geotiff crs info, which probably should
+                have already been populated; to ensure pre-population
+                use the 'geo_preprop' argument.
+                '''))
+            info = watch.gis.geotiff.geotiff_crs_info(input_gpaths[0])
+
+        if 'approx_meter_gsd' in info and info['approx_meter_gsd'] < force_min_gsd:
+            # Only setting if needed to avoid needless warping if the
+            # 'approximate_meter_gsd' value is slightly different from
+            # what GDAL computes at the time of warping
+            force_spatial_res = force_min_gsd
+
     if len(input_gpaths) > 1:
         in_fpaths = input_gpaths
         util_gdal.gdal_multi_warp(in_fpaths, out_fpath, space_box=space_box,
@@ -1882,7 +1970,8 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
                                    rpcs=rpcs, nodata=nodata,
                                    tries=tries,
                                    error_logfile=error_logfile,
-                                   verbose=0 if verbose < 2 else verbose)
+                                   verbose=0 if verbose < 2 else verbose,
+                                   force_spatial_res=force_spatial_res)
     if verbose > 2:
         print('finish gdal warp dst_gpath = {!r}'.format(dst_gpath))
     return dst
