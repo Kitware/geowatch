@@ -548,7 +548,7 @@ def _stac_item_to_kwcoco_image(stac_item,
         img['failed'] = stac_item
 
     img['auxiliary'] = auxiliary
-
+    img['stac_properties'] = stac_item_dict['properties']
     date = stac_item_dict['properties']['datetime']
     date = isoparse(date).isoformat()
     img['date_captured'] = date
@@ -600,6 +600,7 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
                 'constellation', stac_dict['properties'].get('platform', None))
             # proc_level = stac_dict['landsat:correction']
             asset_names = stac_dict['assets'].keys()
+
             eo_bands = []
             for asset_name, asset_item in stac_dict['assets'].items():
                 if 'roles' in asset_item and 'data' in asset_item['roles']:
@@ -620,6 +621,9 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
             sensorchan_hist[sensorchan.spec] += 1
             sensorasset = kwcoco.SensorChanSpec.coerce(f'{sensor}:' + '|'.join(sorted(asset_names)))
             sensorasset_hist[sensorasset.spec] += 1
+            # TODO: stac_item['geometry'] - we can prepopulate geo information
+            stac_dict['properties']
+
         print('sensorchan_hist = {}'.format(ub.repr2(sensorchan_hist, nl=1)))
         print('sensorasset_hist = {}'.format(ub.repr2(sensorasset_hist, nl=1)))
 

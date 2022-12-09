@@ -14,8 +14,10 @@ CommandLine:
 
     DATASET_SUFFIX=DemoKHQ-2022-06-10-V2
     DEMO_DPATH=$HOME/.cache/watch/demo/datasets
+
     REGION_FPATH="$HOME/.cache/watch/demo/annotations/KHQ_R001.geojson"
     SITE_GLOBSTR="$HOME/.cache/watch/demo/annotations/KHQ_R001_sites/*.geojson"
+
     START_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.start_date' "$REGION_FPATH")
     END_DATE=$(jq -r '.features[] | select(.properties.type=="region") | .properties.end_date' "$REGION_FPATH")
     REGION_ID=$(jq -r '.features[] | select(.properties.type=="region") | .properties.region_id' "$REGION_FPATH")
@@ -451,7 +453,7 @@ def area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config,
         # Assume it is a path
         try:
             search_params = json.loads(search_json)
-        except json.decoder.JSONDecodeError:
+        except (json.decoder.JSONDecodeError, TypeError):
             with open(search_json) as f:
                 search_params = json.load(f)
 

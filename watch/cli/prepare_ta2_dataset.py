@@ -248,8 +248,11 @@ def main(cmdline=False, **kwargs):
         # TODO: figure out how to pass the in-environment secret key
         # to the tmux sessions.
         api_key_name = api_key[4:]
-        api_key_val = os.environ[api_key_name]
-        environ[api_key_name] = api_key_val
+        api_key_val = os.environ.get(api_key_name, None)
+        if api_key_val is None:
+            warnings.warn('The requested API key was not available')
+        else:
+            environ[api_key_name] = api_key_val
 
     default_collated = config['collated'][0]
 
