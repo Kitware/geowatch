@@ -213,7 +213,16 @@ class CocoAlignGeotiffConfig(scfg.Config):
             10.0 during cropping)'''
         )),
 
-        'hack_lazy': scfg.Value(False),
+        'hack_lazy': scfg.Value(False, help=ub.paragraph(
+            '''
+            Hack lazy is a proof of concept with the intent on speeding up the
+            download / cropping of data by flattening the gdal processing into
+            a single queue of parallel processes executed via a command queue.
+
+            By running once with this flag on, it will execute the command
+            queue, and then running again, it should see all of the data as
+            existing and construct the aligned kwcoco dataset as normal.
+            ''')),
     }
 
     def normalize(config):
@@ -613,8 +622,26 @@ def main(cmdline=True, **kw):
             lazy_commands.extend(new_dset)
 
     if config['hack_lazy']:
-        import xdev
-        xdev.embed()
+
+        # Execute the gdal jobs in a single super queue
+        import cmd_queue
+        # queue = cmd_queue.Queue.create('serial')
+        queue = cmd_queue.Queue.create(
+            'tmux', size=img_workers, name='hack_lazy_' + video_name,
+            environ={
+                k: v for k, v in os.environ.items()
+                if k.startswith('GDAL_') or
+                k == 'AWS_DEFAULT_PROFILE' or
+                k == 'SMART_STAC_API_KEY'
+            }
+        )
+        for commands in lazy_commands:
+            prev = None
+            for command in commands:
+                prev = queue.submit(command, depends=prev)
+                prev.logs = False
+
+        queue.run()
 
         raise Exception('hack_lazy always fails')
 
