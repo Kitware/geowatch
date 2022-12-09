@@ -2,6 +2,9 @@
 __doc__="
 Tries to ensures development version of Jon's libs are installed.
 This makes the assumption the repos are already checked out.
+
+Usage:
+source ~/code/watch/dev/devsetup/dev_pkgs.sh
 "
 
 mylibs=(
@@ -27,7 +30,8 @@ do
     dpath=$HOME/code/$name
     if [[ -d "$dpath" ]]; then
         git fetch
-        (cd "$dpath" && gup)
+        #(cd "$dpath" && gup)
+        (cd "$dpath" && python ~/local/git_tools/git_devbranch.py update)
     else
         echo "does not exist dpath = $dpath"
     fi
