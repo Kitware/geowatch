@@ -241,7 +241,7 @@ class PipelineDAG:
                                          depends=pred_node_procids,
                                          # depends=[node_procid],
                                          name=link_procid,
-                                         bookkeeper=1)
+                                         bookkeeper=0)
 
                 if write_invocations:
                     invoke_fpath = node.resolved_node_dpath / 'invoke.sh'
@@ -265,7 +265,7 @@ class PipelineDAG:
                             depends=pred_node_procids,
                             # depends=[node_procid],
                             name=invoke_procid,
-                            bookkeeper=1
+                            bookkeeper=0
                         )
 
         return queue
