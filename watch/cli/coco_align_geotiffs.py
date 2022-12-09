@@ -306,6 +306,7 @@ def main(cmdline=True, **kw):
         >>>     #'image_timeout': '1 microsecond',
         >>>     #'asset_timeout': '1 microsecond',
         >>>     'visualize': True,
+        >>>     'hack_lazy': True,
         >>> }
         >>> cmdline = False
         >>> new_dset = main(cmdline, **kw)
@@ -609,7 +610,7 @@ def main(cmdline=True, **kw):
             hack_lazy=config['hack_lazy'],
         )
         if config['hack_lazy']:
-            lazy_commands.append(new_dset)
+            lazy_commands.extend(new_dset)
 
     if config['hack_lazy']:
         import xdev
@@ -1395,8 +1396,10 @@ class SimpleDataCube(object):
                 # Hacking to just grab the image commands, so we have to stop
                 # the job here.
                 for dst in new_img:
-                    for command in dst['commands']:
-                        lazy_commands.append(command)
+                    if dst is not None:
+                        commands = dst.get('commands', [])
+                        if commands:
+                            lazy_commands.append(commands)
                 continue
 
             # Hack, the next ids dont update when new images are added
@@ -2010,7 +2013,7 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
             nodata=nodata, tries=tries,
             error_logfile=error_logfile,
             verbose=0 if verbose < 2 else verbose,
-            eager=hack_lazy,
+            eager=not hack_lazy,
         )
     else:
         in_fpath = input_gpaths[0]
@@ -2022,7 +2025,7 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
             error_logfile=error_logfile,
             verbose=0 if verbose < 2 else verbose,
             force_spatial_res=force_spatial_res,
-            eager=hack_lazy,
+            eager=not hack_lazy,
         )
     if hack_lazy:
         # The lazy hack means we are just building the commands
