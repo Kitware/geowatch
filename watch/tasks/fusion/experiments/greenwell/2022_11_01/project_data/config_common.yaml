@@ -3,17 +3,19 @@ data:
   batch_size: 64
   chip_overlap: 0
   dist_weights: 0
-  exclude_sensors: null
+  exclude_sensors:
+    - PD
+    - WV
   min_spacetime_weight: 0.5
   neg_to_pos_ratio: 0.25
   normalize_inputs: true
   normalize_perframe: false
-  resample_invalid_frames: false
-  temporal_dropout: 0.5
+  resample_invalid_frames: true
+  temporal_dropout: 0.
   time_sampling: soft2+distribute
   time_span: 6m
   upweight_centers: true
-  use_centered_positives: true
+  use_centered_positives: false
   use_cloudmask: false
   use_grid_positives: true
   verbose: 1

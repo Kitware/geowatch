@@ -15,8 +15,27 @@ model:
     global_change_weight: 0.0
     global_class_weight: 1.0
     global_saliency_weight: 0.0
+    class_loss: dicefocal
+    decoder: simple_conv
 data:
   time_steps: 5
   chip_dims: 80
-  channels: red|green|blue|nir|swir16|swir22 
-  input_space_scale: 10GSD
+  channels: red|green|blue #|nir|swir16|swir22 
+  window_space_scale: 4GSD
+  input_space_scale: 4GSD
+  output_space_scale: 4GSD
+trainer:
+  callbacks:
+    # - class_path: watch.utils.lightning_ext.callbacks.AutoResumer
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        monitor: val_class_f1_macro
+        mode: max
+        save_top_k: 5
+        auto_insert_metric_name: true
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        monitor: val_loss
+        mode: min
+        save_top_k: 5
+        auto_insert_metric_name: true

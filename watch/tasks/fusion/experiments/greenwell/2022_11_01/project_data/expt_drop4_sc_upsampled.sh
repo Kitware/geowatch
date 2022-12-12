@@ -4,7 +4,7 @@ PHASE2_DATA_DPATH=/flash/smart_data_dvc
 PHASE2_EXPT_DPATH=$HOME/data/dvc-repos/smart_expt_dvc
 
 WORKDIR=$PHASE2_EXPT_DPATH/training/$HOSTNAME/$USER
-DATASET_CODE=Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+DATASET_CODE=Drop4-SC
 KWCOCO_BUNDLE_DPATH=$PHASE2_DATA_DPATH/$DATASET_CODE
 
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
@@ -24,5 +24,5 @@ python -m watch.tasks.fusion fit \
     --trainer.accelerator="gpu" \
     --trainer.devices=1 \
     --trainer.precision=16 \
-    --trainer.detect_anomaly=true \
     --trainer.max_steps=200000
+    # --trainer.detect_anomaly=true \
