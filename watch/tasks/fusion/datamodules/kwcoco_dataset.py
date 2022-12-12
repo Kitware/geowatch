@@ -796,6 +796,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         HACK_FIX_NATIVE_ANNOT_SIZE = 1
         if HACK_FIX_NATIVE_ANNOT_SIZE:
+            # When sampling in native resolution, the annotations will be
+            # sampled at that resolution. However, when there are multiple
+            # modes for a input frame, it becomes unclear which native scale is
+            # the right one to sample the annotations in. Thus we find the
+            # maximum dimension over all the modes, and then upscale the
+            # annotations to match that.
             annot_mode_dims = None
             all_mode_dims = []
             frame_dets = None
@@ -810,6 +816,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 if frame_dets is not None:
                     fixup_scale = (max_mode_dims / annot_mode_dims)[::-1]
                     frame_dets.scale(fixup_scale, inplace=True)
+                    # Save the input dimensions we scaled to.
+                    # We will need to transform this to the output dims later.
+                    frame_dets.meta['input_dims'] = max_mode_dims
 
     def __getitem__(self, index):
         """
@@ -852,7 +861,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> import ndsampler
             >>> import kwcoco
             >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
-            >>> coco_fpath = dvc_dpath / 'Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/data_vali.kwcoco.json'
+            >>> coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> self = KWCocoVideoDataset(
@@ -872,6 +881,48 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> index['allow_augment'] = False
             >>> item = self[index]
             >>> target = item['target']
+            >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
+
+        Example:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> # Native sampling project data doctest
+            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> import watch
+            >>> import ndsampler
+            >>> import kwcoco
+            >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+            >>> coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
+            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> self = KWCocoVideoDataset(
+            >>>     sampler,
+            >>>     sample_shape=(5, 320, 320),
+            >>>     window_overlap=0,
+            >>>     channels="(S2,L8):blue|green|red|nir",
+            >>>     input_space_scale='native',
+            >>>     window_space_scale='10GSD',
+            >>>     output_space_scale='native',
+            >>>     #output_space_scale='10GSD',
+            >>>     dist_weights=1,
+            >>>     use_cloudmask=0,
+            >>>     neg_to_pos_ratio=0, time_sampling='soft2',
+            >>> )
+            >>> self.requested_tasks['change'] = False
+            >>> # Find a sample with S2 and L8 images in it.
+            >>> for target in self.new_sample_grid['targets']:
+            ...     sensors = coco_dset.images(target['gids']).lookup('sensor_coarse')
+            ...     shist = ub.dict_hist(sensors)
+            ...     if len(shist) > 1 and all(v > 1 for v in shist.values()):
+            ...         break
+            >>> target['allow_augment'] = False
+            >>> index = target
+            >>> item = self[index]
             >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
             >>> # xdoctest: +REQUIRES(--show)
             >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
@@ -1403,18 +1454,35 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # annotation window (where ndsampler lets us assume the corners
         # of each window are in correspondence)
 
-        is_native = (isinstance(common_input_scale, str) and common_input_scale == 'native')
+        input_is_native = (isinstance(common_input_scale, str) and common_input_scale == 'native')
+        output_is_native = (isinstance(common_output_scale, str) and common_output_scale == 'native')
 
         frame_dets = gid_to_dets[gid]
         if frame_dets is None:
             raise AssertionError('frame_dets = {!r}'.format(frame_dets))
 
         # As of ndsampler >= 0.7.1 the dets are sampled in the input space
-        if not is_native:
-            dets_scale = common_output_scale / common_input_scale
-            dets = frame_dets.scale(dets_scale)
+        if input_is_native:
+            if output_is_native:
+                # Both scales are native, use detections as-is.
+                dets = frame_dets.copy()
+            else:
+                # Input scale is native, but output scale is given,
+                # Need to resize. We enriched the dets with metadata
+                # to do this earlier.
+                annot_input_dsize = frame_dets.meta['input_dims'][::-1]
+                dets_scale = output_dsize / annot_input_dsize
+                dets = frame_dets.scale(dets_scale)
         else:
-            dets = frame_dets.copy()
+            if output_is_native:
+                raise NotImplementedError(
+                    'input scale is constant and output scale is native. '
+                    'no logic for this case yet.'
+                )
+            else:
+                # Simple case where input/output scales are constant
+                dets_scale = common_output_scale / common_input_scale
+                dets = frame_dets.scale(dets_scale)
 
         # Create truth masks
         bg_idx = self.bg_idx
