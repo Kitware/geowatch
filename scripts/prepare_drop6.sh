@@ -38,9 +38,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --warp_tries=1 \
     --asset_timeout="1hour" \
     --image_timeout="1hour" \
-    --backend=tmux --run=1
-   
-#--hack_lazy=True
+    --backend=tmux --run=1 --hack_lazy=True
 
 cd "$DATA_DVC_DPATH"
 ln -s "$DATASET_SUFFIX" Drop6
