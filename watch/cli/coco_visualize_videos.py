@@ -200,13 +200,13 @@ def main(cmdline=True, **kwargs):
         >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral', num_frames=2)
         >>> img = dset.dataset['images'][0]
         >>> coco_img = dset.coco_image(img['id'])
-        >>> channel_chunks = list(ub.chunks(coco_img.channels.fuse().parsed, chunksize=3))
-        >>> channels = ','.join(['|'.join(p) for p in channel_chunks])
+        >>> #channel_chunks = list(ub.chunks(coco_img.channels.fuse().parsed, chunksize=3))
+        >>> #channels = ','.join(['|'.join(p) for p in channel_chunks])
         >>> kwargs = {
         >>>     'src': dset.fpath,
         >>>     'viz_dpath': dpath,
         >>>     'space': 'video',
-        >>>     'channels': channels,
+        >>>     'channels': None,
         >>>     'zoom_to_tracks': True,
         >>> }
         >>> from watch.cli.coco_visualize_videos import *  # NOQA
@@ -221,6 +221,7 @@ def main(cmdline=True, **kwargs):
         }
     """
     from watch.utils.lightning_ext import util_globals
+    from watch.utils import kwcoco_extensions
     config = CocoVisualizeConfig(default=kwargs, cmdline=cmdline and {'strict': True})
     space = config['space']
     channels = config['channels']
@@ -257,7 +258,6 @@ def main(cmdline=True, **kwargs):
             FusedChannelSpec.coerce('No Activity|Site Preparation|Active Construction|Post Construction'),
             FusedChannelSpec.coerce('salient'),
         ]
-        from watch.utils import kwcoco_extensions
         from collections import defaultdict, Counter
         channel_stats = kwcoco_extensions.coco_channel_stats(coco_dset)
         all_sensorchan = channel_stats['all_sensorchan']
@@ -276,6 +276,10 @@ def main(cmdline=True, **kwargs):
             chosen = ub.oset(['red|green|blue']) | (chosen - {'red|green|blue'})
         channels = ','.join(chosen)
         print(f'AUTO channels={channels}')
+    elif channels is None:
+        channel_stats = kwcoco_extensions.coco_channel_stats(coco_dset)
+        all_sensorchan = channel_stats['all_sensorchan']
+        channels = all_sensorchan
 
     # Expand certain channels
     requested_sensorchan = kwcoco.SensorChanSpec.coerce(channels)
@@ -318,7 +322,6 @@ def main(cmdline=True, **kwargs):
     start_frame = smartcast(config['start_frame'])
     end_frame = None if num_frames is None else start_frame + num_frames
 
-    from watch.utils import kwcoco_extensions
     selected_gids = None
     selected_gids = kwcoco_extensions.filter_image_ids(
         coco_dset,
