@@ -174,7 +174,7 @@ class ResponsePolygonFilter:
 
 
 @profile
-def add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
+def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
     key, bg_key = _validate_keys(key, bg_key)
 
     @ub.memoize
@@ -232,7 +232,7 @@ def add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
             new_ann = make_new_annotation(*o, track_id)
             all_new_anns.append(new_ann)
 
-    for tid, grp in tracks.groupby('track_idx', axis=1):
+    for tid, grp in tracks.groupby('track_idx', axis=0):
         score_chan = kwcoco.ChannelSpec('|'.join(key))
         this_score = grp[(score_chan.spec, None)]
         scores_dct = {k: grp[(k, None)] for k in score_chan.unique()}
@@ -364,7 +364,8 @@ def time_aggregated_polys(
                              norm_ord,
                              moving_window_size,
                              bounds=use_boundaries)
-    gids_polys = list(gids_polys)  # 26% of runtime
+    orig_gid_polys = list(gids_polys)  # 26% of runtime
+    gids_polys = orig_gid_polys
 
     print('time aggregation: number of polygons: ', len(gids_polys))
 
@@ -384,7 +385,7 @@ def time_aggregated_polys(
         if max_area_behavior == 'drop':
             gids_polys = [(t, p) for t, p in gids_polys
                           if p.to_shapely().area < max_area_px]
-            print('removed large: remaining polygons: '
+            print('filter large: remaining polygons: '
                   f'{len(gids_polys)} / {n_orig}')
         elif max_area_behavior == 'grid':
             # edits tracks instead of removing them
@@ -395,7 +396,7 @@ def time_aggregated_polys(
         n_orig = len(gids_polys)
         gids_polys = [(t, p) for t, p in gids_polys
                       if p.to_shapely().area > min_area_px]
-        print('removed small: remaining polygons: '
+        print('filter small: remaining polygons: '
               f'{len(gids_polys)} / {n_orig}')
 
     # now we start needing scores, so bulk-compute them
@@ -439,7 +440,7 @@ def time_aggregated_polys(
         n_orig = gpd_len(_TRACKS)
         rsp_filter = ResponsePolygonFilter(_TRACKS, key, response_thresh)
         _TRACKS = rsp_filter(_TRACKS)
-        print('after filtering based on per-polygon response: '
+        print('filter based on per-polygon response: remaining tracks '
               f'{gpd_len(_TRACKS)} / {n_orig}')
 
     # TimePolygonFilter edits tracks instead of removing them
@@ -447,7 +448,7 @@ def time_aggregated_polys(
         time_filter = TimePolygonFilter(time_thresh * thresh)
         n_orig = gpd_len(_TRACKS)
         _TRACKS = time_filter(_TRACKS)  # 7% of runtime? could be next line
-        print('after filtering based on time overlap: '
+        print('filter based on time overlap: remaining tracks '
               f'{gpd_len(_TRACKS)} / {n_orig}')
 
     # try to ignore this error
@@ -714,7 +715,7 @@ class TimeAggregatedBAS(NewTrackFunction):
         return tracks
 
     def add_tracks_to_dset(self, sub_dset, tracks):
-        sub_dset = add_tracks_to_dset(sub_dset, tracks, self.thresh, self.key)
+        sub_dset = _add_tracks_to_dset(sub_dset, tracks, self.thresh, self.key)
         return sub_dset
 
 
@@ -797,7 +798,7 @@ class TimeAggregatedSC(NewTrackFunction):
             # DataFrame. Related to invalid geometry column?
             # tracks = tracks.rename(columns=col_map)
             tracks.rename(columns=col_map, inplace=True)
-        sub_dset = add_tracks_to_dset(sub_dset, tracks, self.thresh, self.key,
-                                      self.bg_key, **kwargs)
+        sub_dset = _add_tracks_to_dset(sub_dset, tracks, self.thresh, self.key,
+                                       self.bg_key, **kwargs)
 
         return sub_dset
