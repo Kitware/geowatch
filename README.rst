@@ -52,7 +52,7 @@ Then run:
 .. code:: bash
 
    cd $HOME/code/watch
-   ./run_developer_setup.py
+   bash ./run_developer_setup.sh
  
 
 Test everything is working by running
