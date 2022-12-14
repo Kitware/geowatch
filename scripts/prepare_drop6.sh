@@ -26,19 +26,21 @@ python -m watch.cli.prepare_ta2_dataset \
     --requester_pays=False \
     --fields_workers=8 \
     --convert_workers=8 \
-    --align_workers=16 \
-    --max_queue_size=2 \
+    --align_workers=4 \
+    --align_aux_workers=0 \
+    --max_queue_size=1 \
     --ignore_duplicates=1 \
     --separate_region_queues=1 \
     --separate_align_jobs=1 \
     --visualize=0 \
     --target_gsd=10 \
     --cache=1 \
+    --verbose=100 \
     --skip_existing=1 \
-    --warp_tries=2 \
+    --warp_tries=1 \
     --asset_timeout="1hour" \
     --image_timeout="1hour" \
-    --backend=tmux --run=1
+    --backend=tmux --run=1 --hack_lazy=True
 
 cd "$DATA_DVC_DPATH"
 ln -s "$DATASET_SUFFIX" Drop6

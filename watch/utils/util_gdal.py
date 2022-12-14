@@ -282,7 +282,7 @@ class GDalCommandBuilder:
 
 
 def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
-                          compress='DEFLATE', tries=1, verbose=0):
+                          compress='DEFLATE', tries=1, verbose=0, eager=True):
     """
     Crops geotiffs using pixels
 
@@ -298,6 +298,11 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
         compress (str): gdal compression
 
         verbose (int): verbosity level
+
+        eager (bool):
+            if True, executes the command, if False returns a list of all the
+            bash commands that would be executed, suitable for use in a command
+            queue.
 
     CommandLine:
         xdoctest -m watch.utils.util_gdal gdal_single_translate
@@ -342,6 +347,14 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
         >>> kwplot.imshow(imdata2, pnum=(1, 4, 3), title='utm-crop')
         >>> kwplot.imshow(imdata3, pnum=(1, 4, 4), title='pxl-crop')
 
+    Example:
+        >>> from watch.utils.util_gdal import *  # NOQA
+        >>> import kwimage
+        >>> in_fpath = kwimage.grab_test_image_fpath('amazon')
+        >>> out_fpath = 'foo.tif'
+        >>> commands = gdal_single_translate(in_fpath, out_fpath, eager=False)
+        >>> assert len(commands) == 2
+
     Ignore:
         print(ub.cmd('gdalinfo ' + str(in_fpath))['out'])
         print(ub.cmd('gdalinfo ' + str(crs84_out_fpath))['out'])
@@ -368,9 +381,16 @@ def gdal_single_translate(in_fpath, out_fpath, pixel_box=None, blocksize=256,
     builder.append(f'{tmp_fpath}')
     gdal_translate_command = builder.finalize()
 
-    _execute_gdal_command_with_checks(
-        gdal_translate_command, tmp_fpath, tries=tries, verbose=verbose)
-    os.rename(tmp_fpath, out_fpath)
+    if eager:
+        _execute_gdal_command_with_checks(
+            gdal_translate_command, tmp_fpath, tries=tries, verbose=verbose)
+        os.rename(tmp_fpath, out_fpath)
+    else:
+        commands = [
+            gdal_translate_command,
+            f'mv "{tmp_fpath}" "{out_fpath}"',
+        ]
+        return commands
 
 
 def gdal_single_warp(in_fpath,
@@ -388,7 +408,8 @@ def gdal_single_warp(in_fpath,
                      error_logfile=None,
                      tries=1,
                      verbose=0,
-                     force_spatial_res=None):
+                     force_spatial_res=None,
+                     eager=True):
     r"""
     Wrapper around gdalwarp
 
@@ -426,10 +447,21 @@ def gdal_single_warp(in_fpath,
         error_logfile (None | PathLike):
             If specified, errors will be logged to this filepath.
 
-        tries (int): gdal can be flakey, set to force some number of retries
+        tries (int): gdal can be flakey, set to force some number of retries.
+            Ignored if eager is False.
 
         force_spatial_res (float | tuple(float, float)): Force spatial
             resolution for output images.
+
+        eager (bool):
+            if True, executes the command, if False returns a list of all the
+            bash commands that would be executed, suitable for use in a command
+            queue.
+
+    Returns:
+        None | List[str]:
+            Nothing if executing the command. If eager=False, returns the
+            commands that would have been executed.
 
     Notes:
         In gdalwarp:
@@ -438,12 +470,6 @@ def gdal_single_warp(in_fpath,
 
             -te_srs - Specifies the SRS in which to interpret the coordinates given with -te.
             -te - Set georeferenced extents of output file to be created
-
-    Ignore:
-        import xdev
-        import sys, ubelt
-        from watch.utils.util_gdal import *  # NOQA
-        globals().update(xdev.get_func_kwargs(gdal_single_warp))
 
     Example:
         >>> import kwimage
@@ -464,8 +490,28 @@ def gdal_single_warp(in_fpath,
         >>> canvas = kwimage.normalize_intensity(data)
         >>> kwplot.imshow(canvas)
 
+    Example:
+        >>> # Test non-eager version
+        >>> import kwimage
+        >>> from watch.utils.util_gdal import gdal_single_warp
+        >>> in_fpath = '/vsicurl/https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/23/K/PQ/2019/6/S2B_23KPQ_20190623_0_L2A/B03.tif'
+        >>> from osgeo import gdal
+        >>> info = gdal.Info(in_fpath, format='json')
+        >>> bound_poly = kwimage.Polygon.coerce(info['wgs84Extent'])
+        >>> crop_poly = bound_poly.scale(0.02, about='centroid')
+        >>> space_box = crop_poly.to_boxes()
+        >>> out_fpath = ub.Path.appdir('fds').ensuredir() / 'cropped.tif'
+        >>> commands = gdal_single_warp(in_fpath, out_fpath, space_box=space_box, verbose=3, eager=False)
+        >>> assert len(commands) == 2
+
     References:
         https://gdal.org/programs/gdalwarp.html
+
+    Ignore:
+        import xdev
+        import sys, ubelt
+        from watch.utils.util_gdal import *  # NOQA
+        globals().update(xdev.get_func_kwargs(gdal_single_warp))
 
     Ignore:
         from kwcoco.util import util_archive
@@ -602,16 +648,23 @@ def gdal_single_warp(in_fpath,
     gdal_warp_command = builder.finalize()
 
     # Execute the command with checks to ensure gdal doesnt fail
-    _execute_gdal_command_with_checks(
-        gdal_warp_command, tmp_out_fpath, tries=tries, verbose=verbose)
-    os.rename(tmp_out_fpath, out_fpath)
+    if eager:
+        _execute_gdal_command_with_checks(
+            gdal_warp_command, tmp_out_fpath, tries=tries, verbose=verbose)
+        os.rename(tmp_out_fpath, out_fpath)
+    else:
+        commands = [
+            gdal_warp_command,
+            f'mv "{tmp_out_fpath}" "{out_fpath}"',
+        ]
+        return commands
 
 
 def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
                     compress='DEFLATE', error_logfile=None,
                     _intermediate_vrt=False, verbose=0,
                     return_intermediate=False, force_spatial_res=None,
-                    **kwargs):
+                    eager=True, **kwargs):
     """
     See gdal_single_warp() for args
 
@@ -660,8 +713,26 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
         >>> canvas = kwimage.normalize_intensity(data)
         >>> kwplot.imshow(canvas)
 
-    Ignore:
+    Example:
+        >>> # xdoctest: +REQUIRES(--slow)
+        >>> # Uses data from the data cube with extra=1
+        >>> from watch.utils.util_gdal import *  # NOQA
+        >>> import ubelt as ub
+        >>> local_epsg = 32635
+        >>> space_box = kwimage.Polygon.random().bounding_box().to_ltrb()
+        >>> out_fpath = 'lazy_multi_warp.tif'
+        >>> in_fpaths = ['dummy1.tif', 'dummy2.tif']
+        >>> commands = gdal_multi_warp(
+        >>>     in_fpaths, out_fpath=out_fpath, space_box=space_box,
+        >>>     local_epsg=local_epsg, verbose=3, eager=False)
+        >>> print('commands = {}'.format(ub.repr2(commands, nl=1)))
 
+    Returns:
+        None | List[str]:
+            Nothing if executing the command. If eager=False, returns the
+            commands that would have been executed.
+
+    Ignore:
         import os
         import kwimage
         raw_in_fpaths = [
@@ -691,35 +762,10 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
 
         in_fpaths = [crop_in_fpath1, crop_in_fpath2]
         gdal_multi_warp(in_fpaths, out_fpath, space_box=space_box, verbose=3, nodata=-9999)
-
         gdal_multi_warp(in_fpaths, out_fpath, space_box=space_box, verbose=3, nodata=-9999)
-
-
         info = gdal.Info(os.fspath(out_fpath), format='json')
         [b['noDataValue'] for b in info['bands']]
-
         data = kwimage.imread(out_fpath, nodata_method='float')
-
-
-    Ignore:
-        # Debugging
-        datas = []
-        for p in warped_gpaths:
-            d = kwimage.imread(p)
-            d = kwimage.normalize_intensity(d, nodata=0)
-            datas.append(d)
-        import kwplot
-        kwplot.autompl()
-        combo = kwimage.imread(out_fpath)
-        combo = kwimage.normalize_intensity(combo, nodata=0)
-        datas.append(combo)
-        kwplot.imshow(kwimage.stack_images(datas, axis=1))
-        datas2 = []
-        for p in in_fpaths:
-            d = kwimage.imread(p)
-            d = kwimage.normalize_intensity(d, nodata=0)
-            datas2.append(d)
-        kwplot.imshow(kwimage.stack_images(datas2, axis=1), fnum=2)
     """
     # Warp then merge
     # Write to a temporary file and then rename the file to the final
@@ -734,7 +780,10 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
     single_warp_kwargs['verbose'] = verbose
     single_warp_kwargs['error_logfile'] = error_logfile
     single_warp_kwargs['force_spatial_res'] = force_spatial_res
+    single_warp_kwargs['eager'] = eager
     # Delay the actual execution of the partial warps until merge is called.
+
+    commands = []
 
     if _intermediate_vrt:
         # Not using the intermediate VRT is faster.
@@ -742,7 +791,7 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
         # pull down all of the data and cache it on disk
         single_warp_kwargs['as_vrt'] = True
 
-    USE_REAL_TEMPFILES = 1
+    USE_REAL_TEMPFILES = eager
     if USE_REAL_TEMPFILES:
         import tempfile
         tempfiles = []  # hold references
@@ -756,7 +805,9 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
         else:
             part_out_fpath = ub.augpath(
                 out_fpath, prefix=f'.tmpmerge.part{in_idx:02d}.')
-        gdal_single_warp(in_fpath, part_out_fpath, **single_warp_kwargs)
+        _cmds = gdal_single_warp(in_fpath, part_out_fpath, **single_warp_kwargs)
+        if not eager:
+            commands.extend(_cmds)
         warped_gpaths.append(part_out_fpath)
 
     if nodata is not None:
@@ -791,17 +842,29 @@ def gdal_multi_warp(in_fpaths, out_fpath, nodata=None, tries=1, blocksize=256,
     builder.extend(warped_gpaths)
 
     gdal_merge_cmd = builder.finalize()
-    _execute_gdal_command_with_checks(
-        gdal_merge_cmd, tmp_out_fpath, tries=tries, verbose=verbose)
+
+    if eager:
+        _execute_gdal_command_with_checks(
+            gdal_merge_cmd, tmp_out_fpath, tries=tries, verbose=verbose)
+    else:
+        commands.append(gdal_merge_cmd)
 
     # Merge does not output cogs, we need to do another call to make that
     # happen
     tmp_out_fpath2 = ub.augpath(out_fpath, prefix='.tmpcog.')
-    gdal_single_translate(tmp_out_fpath, tmp_out_fpath2, compress=compress,
-                          blocksize=blocksize, verbose=verbose)
-    ub.Path(tmp_out_fpath).delete()
+    _cmd = gdal_single_translate(tmp_out_fpath, tmp_out_fpath2,
+                                 compress=compress, blocksize=blocksize,
+                                 verbose=verbose, eager=eager)
+    if eager:
+        ub.Path(tmp_out_fpath).delete()
+        os.rename(tmp_out_fpath2, out_fpath)
+    else:
+        commands.extend(_cmd)
+        commands.append(f'rm "{tmp_out_fpath}"')
+        commands.append(f'mv "{tmp_out_fpath2}" "{out_fpath}"')
 
-    os.rename(tmp_out_fpath2, out_fpath)
+    if not eager:
+        return commands
 
 
 def _execute_gdal_command_with_checks(command, out_fpath, tries=1, shell=False,

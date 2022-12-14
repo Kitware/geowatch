@@ -14,6 +14,9 @@ that when computing classification stats for *binary* problems, the returned sco
 over the two classes stats when most of the time we only want one of them. This is especially
 necessary in imbalanced settings where the metric for the largest class completely obscures the
 impact of the smaller class.
+
+SeeAlso:
+    ../monkey/monkey_torchmetrics.py
 '''
 
 
