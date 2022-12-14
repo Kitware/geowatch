@@ -315,7 +315,7 @@ def main(cmdline=True, **kw):
         >>>     #'image_timeout': '1 microsecond',
         >>>     #'asset_timeout': '1 microsecond',
         >>>     'visualize': True,
-        >>>     'hack_lazy': True,
+        >>>     'hack_lazy': 0,
         >>> }
         >>> cmdline = False
         >>> new_dset = main(cmdline, **kw)
