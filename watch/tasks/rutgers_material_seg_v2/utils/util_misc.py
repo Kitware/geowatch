@@ -29,9 +29,9 @@ MATERIAL_TO_COLOR = {
     'concrete': [222, 222, 222]
 }
 
+
 def sigmoid(x):
     return 1 / (1 + np.exp(x))
-
 
 
 def load_cfg_file(path):
@@ -84,6 +84,7 @@ def softmax(vector, axis=None):
         sm = e / e.sum(axis=axis)[:, None]
     return sm
 
+
 class VideoSlice:
     def __init__(self, height, width, n_frames, scale, stride):
         self.height = height
@@ -104,7 +105,7 @@ def generate_video_slice_object(height, width=None, n_frames=None, scale=None, s
         height (int): Height of crop slice.
         width (int, optional): Width of crop slice. If None, then use equal to height. Defaults to None.
         n_frames (int, optional): Number of frames to sample from video data. Defaults to None.
-        scale (float, optional): Scale the height and width by this factor. Note: The scale is used to resize the 
+        scale (float, optional): Scale the height and width by this factor. Note: The scale is used to resize the
           height and width crop sizes. Defaults to None.
         stride (int, optional): Value to determine the amount to move a crop over an image vertically or
           horizontally. Defaults to None.
@@ -112,16 +113,13 @@ def generate_video_slice_object(height, width=None, n_frames=None, scale=None, s
     Returns:
         namedtuple: [description]
     """
-    # VideoSlice = collections.namedtuple('VideoSlice', ['height', 'width', 'n_frames', 'scale', 'stride'])
-    # VideoSlice.height = height
-
     if width is None:
         width = height
-
 
     video_slice = VideoSlice(height, width, n_frames, scale, stride)
 
     return video_slice
+
 
 def get_crop_slices(height, width, crop_height, crop_width, step=None, mode='exact'):
     """Given an image size and desried crop, return all possible crop slices over space.
@@ -129,9 +127,9 @@ def get_crop_slices(height, width, crop_height, crop_width, step=None, mode='exa
     Args:
         height (int): The height of the image to be cropped (y-axis).
         width (int): The width of the image to be cropped (x-axis).
-        crop_height (int): The size of the crop height. Note: For certain modes, 
+        crop_height (int): The size of the crop height. Note: For certain modes,
             e.g. mode = 'under', crop height must be less than original image height.
-        crop_width (int): The size of the crop width. Note: For certain modes, 
+        crop_width (int): The size of the crop width. Note: For certain modes,
             e.g. mode = 'under', crop width must be less than original image width.
         step (int): Distance in pixels to move crop window, defauls to size of the crop along that direction, i.e. no overlap.
         mode (str, optional): Method for how to handle edge cases. Defaults to 'exact'.

@@ -129,8 +129,8 @@ class BaseDataset(Dataset):
             buffer_mode (str, optional): Method mode for determining how to fill buffered regions. Defaults to 'constant'.
             constant_value (int, optional): For constant method, what value to assign to default canvas value. Defaults to 0.
         Raises:
-            NotImplementedError: No method to handle images with number of dimensions other than 2 or 3. 
-            NotImplementedError: No method to handle images with number of dimensions other than 2 or 3. 
+            NotImplementedError: No method to handle images with number of dimensions other than 2 or 3.
+            NotImplementedError: No method to handle images with number of dimensions other than 2 or 3.
         Returns:
             np.array: A numpy array of shape [desired_height, desired_width].
         """

@@ -1,5 +1,3 @@
-import torch
-import numpy as np
 import torchmetrics
 import torch.nn as nn
 import torch.optim as optim
@@ -23,9 +21,18 @@ class MaterialMLP(pl.LightningModule):
 
         # Get metrics.
         metrics = torchmetrics.MetricCollection([
-            torchmetrics.F1Score(task='multiclass', num_classes=self.n_classes,ignore_index=self.ignore_index,average='micro'),
-            torchmetrics.JaccardIndex(task='multiclass', num_classes=self.n_classes, ignore_index=self.ignore_index, average='micro'),
-            torchmetrics.Accuracy(task='multiclass', num_classes=self.n_classes, ignore_index=self.ignore_index, average='micro'),
+            torchmetrics.F1Score(task='multiclass',
+                                 num_classes=self.n_classes,
+                                 ignore_index=self.ignore_index,
+                                 average='micro'),
+            torchmetrics.JaccardIndex(task='multiclass',
+                                      num_classes=self.n_classes,
+                                      ignore_index=self.ignore_index,
+                                      average='micro'),
+            torchmetrics.Accuracy(task='multiclass',
+                                  num_classes=self.n_classes,
+                                  ignore_index=self.ignore_index,
+                                  average='micro'),
         ])
         self.train_metrics = metrics.clone(prefix='train_')
         self.valid_metrics = metrics.clone(prefix='val_')
@@ -58,7 +65,6 @@ class MaterialMLP(pl.LightningModule):
         output = self.forward(batch)
 
         loss = self._compute_loss(output, batch['target'])
-        # metrics = self._compute_metrics(output, batch['target'])
 
         # Track metrics.
         pred = output.argmax(dim=1)
@@ -133,17 +139,6 @@ class MaterialMLP(pl.LightningModule):
             self.acc = metric_output['test_Accuracy'].item()
             self.iou = metric_output['test_JaccardIndex'].item()
 
-    # def _compute_metrics(self, conf, target):
-    #     # conf: [batch_size, n_classes, height, width]
-    #     # target: [batch_size, height, width]
-
-    #     batch_metrics = {}
-    #     for metric_name, metric_func in self.tracked_metrics.items():
-    #         metric_value = metric_func(flat_pred, flat_target)
-    #         metric_value = torch.nan_to_num(metric_value)
-    #         batch_metrics[metric_name] = metric_value
-    #     return batch_metrics
-
     def _get_loss_funcs(self):
         losses = {}
         losses['focal'] = smp.losses.FocalLoss(mode='multiclass', ignore_index=self.ignore_index)
@@ -157,7 +152,3 @@ class MaterialMLP(pl.LightningModule):
         for loss_name, loss_func in self.loss_funcs.items():
             sum_loss += loss_func(output, target)
         return sum_loss
-
-
-if __name__ == '__main__':
-    pass

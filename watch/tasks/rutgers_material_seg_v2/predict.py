@@ -4,7 +4,6 @@ import argparse
 import torch
 from tqdm import tqdm
 from einops import rearrange
-from tifffile import tifffile
 from torch.utils.data import DataLoader
 
 from watch.tasks.rutgers_material_seg_v2.models import build_model
@@ -37,10 +36,7 @@ def generate_kwcoco_predictions(model, eval_loader, pred_save_path):
 
             image_data = {}
             image_data['pixel_data'] = rearrange(data['image'], 'b c h w -> (b h w) c')
-
-            # _, f, n = image_data['pixel_data'].shape
             image_data['pixel_data'] = image_data['pixel_data'].to(device)
-            # image_data['pixel_data'] = image_data['pixel_data'].view(b * n, f)
 
             prediction = model.forward(image_data)
 
@@ -102,7 +98,9 @@ def predict():
     parser.add_argument('config_path',
                         type=str,
                         help='Path to the configuration file to recreate the model and correct dataset parameters.')
-    parser.add_argument('target_dataset_path', type=str, help='Path of the input kwcoco dataset for model to make predictions on.')
+    parser.add_argument('target_dataset_path',
+                        type=str,
+                        help='Path of the input kwcoco dataset for model to make predictions on.')
     parser.add_argument('pred_save_path', type=str, help='Where the material predictions kwcoco file will be saved.')
     parser.add_argument('--include_labels',
                         default=False,
@@ -136,7 +134,7 @@ def predict():
                                        n_out_channels=n_material_classes)
 
     ## Generate kwcoco file with predictions.
-    kwcoco_pred_path = generate_kwcoco_predictions(model, eval_loader, args.pred_save_path)
+    _ = generate_kwcoco_predictions(model, eval_loader, args.pred_save_path)
 
 
 if __name__ == '__main__':
