@@ -52,7 +52,7 @@ def scale_image(image, scale_mode='direct'):
         scale_mode (str, optional): Parameter to determine how to scale image. Defaults to 'direct'.
 
     Returns:
-        TODO: 
+        TODO:
     """
     def __direct_scale(image):
         """Map image values from whatever range to [0,1].
@@ -175,11 +175,7 @@ class ImageStitcher:
             save_path = os.path.join(self.save_dir, image_name + self.save_ext)
 
             ## Call save image method.
-            try:
-                self._save_image(self.image_canvas[image_name], save_path)
-            except:
-                breakpoint()
-                pass
+            self._save_image(self.image_canvas[image_name], save_path)
 
             ## Record image sizes, save path, and image name.
             image_sizes.append(self.image_canvas[image_name].shape)
@@ -190,7 +186,6 @@ class ImageStitcher:
 
     def _save_image(self, image, save_path):
         if self.save_backend == 'gdal':
-            # kwimage.imwrite(save_path, image, backend='gdal')
             driver = gdal.GetDriverByName("GTiff")
             height, width = image.shape[-2], image.shape[-1]
             if len(image.shape) == 2:
@@ -219,7 +214,6 @@ class ImageStitcher:
 
 def save_geotiff(image, save_path, save_backend='gdal', dtype=gdal.GDT_Float32):
     if save_backend == 'gdal':
-        # kwimage.imwrite(save_path, image, backend='gdal')
         driver = gdal.GetDriverByName("GTiff")
         height, width = image.shape[-2], image.shape[-1]
         if len(image.shape) == 2:

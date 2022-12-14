@@ -197,8 +197,8 @@ class MaterialPixelDataset(BaseDataset):
             # Get pixel indices.
             x, y = center_loc
             radius = (self.square_size - 1) // 2
-            h0, hE = x - radius, x + radius + 1  # Add 1 because slice is not inclusive
-            w0, wE = y - radius, y + radius + 1  # Add 1 because slice is not inclusive
+            h0, _ = x - radius, x + radius + 1  # Add 1 because slice is not inclusive
+            w0, _ = y - radius, y + radius + 1  # Add 1 because slice is not inclusive
 
             # Clip box dimensions to not extend past image.
             h0, w0 = np.clip(h0, 0, a_max=None), np.clip(w0, 0, a_max=None)
@@ -228,59 +228,7 @@ class MaterialPixelDataset(BaseDataset):
         return kmeans.cluster_centers_.T
 
     def format_image_data(self, image_data, buffer_mask):
-
         batch_ssls = rearrange(image_data, 'b c h w -> b c (h w)')
-
-        if self.feature_type != 'pixel':
-            breakpoint()
-            pass
-
-        # # Get active pixels
-        # B = image_data.shape[0]
-        # batch_ssls = []
-        # for b in tqdm(range(B)):
-        #     image = image_data[b]
-        #     breakpoint()
-        #     pass
-
-        #     X, Y = np.where(buffer_mask[b] == 1)  # Get regions that are not buffered.
-
-        #     img_height, img_width = buffer_mask[b].shape
-
-        #     img_pixel_data = []
-        #     for (x, y) in zip(X, Y):
-        #         # Get pixel indices.
-        #         radius = (self.square_size - 1) // 2
-        #         h0, hE = x - radius, x + radius + 1  # Add 1 because slice is not inclusive
-        #         w0, wE = y - radius, y + radius + 1  # Add 1 because slice is not inclusive
-
-        #         # Clip values to not extend past image.
-        #         h0, w0 = np.clip(h0, 0, a_max=None), np.clip(w0, 0, a_max=None)
-
-        #         pixel_data = image_data[b, :, h0:hE, w0:wE]  # [n_features, height, width]
-
-        #         # Compute the SSL feature.
-        #         if self.feature_type == 'pixel':
-        #             pixel_data = pixel_data.reshape([pixel_data.shape[0], -1]).mean(axis=-1)
-        #         else:
-        #             pixel_data = compute_residual_feature(pixel_data,
-        #                                                   self.centroid_clusters,
-        #                                                   img_norm_mode=self.image_norm_mode,
-        #                                                   local_context_mode=f'precomputed|{self.region_shape}')
-        #         img_pixel_data.append(pixel_data)
-
-        #     # Combine the SSLs into SSL image.
-        #     img_pixel_data = np.stack(img_pixel_data, axis=1)
-        #     img_pixel_data = img_pixel_data.reshape([img_pixel_data.shape[0], X.max() + 1, Y.max() + 1])
-
-        #     # Add buffer to image.
-        #     buffered_image, _ = self._add_buffer_to_image(img_pixel_data, img_height, img_width)
-        #     buffered_pixels = buffered_image.reshape([buffered_image.shape[0], -1])
-
-        #     batch_ssls.append(torch.tensor(buffered_pixels))
-
-        # batch_ssls = torch.stack(batch_ssls, dim=0)
-
         return {'pixel_data': batch_ssls}
 
 

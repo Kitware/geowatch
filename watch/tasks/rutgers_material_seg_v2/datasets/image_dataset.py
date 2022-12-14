@@ -6,10 +6,8 @@ from datetime import datetime
 
 import kwcoco
 import numpy as np
-from tqdm import tqdm
 from einops import rearrange
 from omegaconf import OmegaConf
-
 
 from watch.tasks.rutgers_material_seg_v2.datasets.base_dataset import BaseDataset
 from watch.tasks.rutgers_material_seg_v2.utils.util_dataset import filter_image_ids_by_sensor
@@ -92,7 +90,7 @@ class ImageDataset(BaseDataset):
 
         # Check image slice.
         if image_slice_cfg is None:
-            raise ValueError(f'No Image Slice parameters given for ImageDataset.')
+            raise ValueError('No Image Slice parameters given for ImageDataset.')
         else:
             self.image_slice = generate_video_slice_object(height=image_slice_cfg.height,
                                                            width=image_slice_cfg.width,

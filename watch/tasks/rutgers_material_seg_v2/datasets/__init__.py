@@ -50,11 +50,7 @@ def custom_collate_fn(dset_outputs):
         if type(dset_outputs[0][key]) == datetime:
             pass
         else:
-            try:
-                out = torch.stack(out, 0)
-            except:
-                breakpoint()
-                pass
+            out = torch.stack(out, 0)
         out_data[key] = out
 
     return out_data
