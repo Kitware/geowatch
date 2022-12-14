@@ -1,0 +1,8 @@
+name: material_mlp
+
+n_epochs: 10
+
+kwargs:
+  lr: 1e-4
+  wd: 1e-5
+  opt_name: adam

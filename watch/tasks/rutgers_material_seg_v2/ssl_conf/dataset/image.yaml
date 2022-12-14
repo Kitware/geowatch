@@ -1,0 +1,17 @@
+name: image
+iarpa_dataset_name: iarpa_drop4_materials
+
+kwargs:
+  channels: ALL
+  sensor: S2
+
+  feature_type: pixel  # [pixel, residual]
+  n_clusters: 5  # int
+  image_scale_mode: direct # [direct, signmoid, unit]
+
+  image_slice_cfg:
+    height: 300
+    width: 300
+    n_frames: null
+    scale: 1
+    stride: null

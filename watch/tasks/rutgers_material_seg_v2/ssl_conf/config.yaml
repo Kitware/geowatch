@@ -1,0 +1,21 @@
+defaults:
+  - dataset: material_pixel
+  - model: material_mlp
+  - _self_
+
+# Where to save experiments
+hydra:
+  run:
+    dir: ./ssl_residual/outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+
+# Global experiment parameters.
+batch_size: 32
+n_workers: 4
+save_topk_models: 3
+limit_train_batches: 500
+limit_val_batches: 500
+limit_test_batches: 5000
+num_sanity_val_steps: 0
+precision: 16  # [32, 16]
+profiler: simple  # [null, simple, advanced]
+test_model: True
