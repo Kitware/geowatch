@@ -556,6 +556,14 @@ def coerce_kwcoco(data='watch-msi', **kwargs):
             modify how the demodata is created. For `watch-msi`, see
             :func:`demo_kwcoco_multisensor`, which has args like: `dates`,
             `geodata`, `heatmap`.
+
+    Example:
+        >>> import watch
+        >>> dates=True
+        >>> geodata=True
+        >>> heatmap=True
+        >>> kwargs = {}
+        >>> coco_dset = watch.coerce_kwcoco(data='watch-msi', dates=dates, geodata=geodata, heatmap=heatmap)
     """
     if isinstance(data, str) and 'watch' in data.split('-'):
         kwargs.pop('sqlview', None)

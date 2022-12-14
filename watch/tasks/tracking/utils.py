@@ -80,7 +80,7 @@ class TrackFunction(collections.abc.Callable):
             # In the case they were updated the existing track ids should
             # be disjoint. All new tracks should not overlap with
 
-            _debug = 0
+            _debug = 1
 
             from watch.utils import kwcoco_extensions
             new_trackids = kwcoco_extensions.TrackidGenerator(None)
@@ -137,8 +137,9 @@ class TrackFunction(collections.abc.Callable):
                 y = coco_dset.annots().get('track_id')
                 z = ub.group_items(x, y)
                 track_to_num_videos = ub.map_vals(set, z)
-                assert max(map(len, track_to_num_videos.values())) == 1, (
-                    'track belongs to multiple videos!')
+                if track_to_num_videos:
+                    assert max(map(len, track_to_num_videos.values())) == 1, (
+                        'track belongs to multiple videos!')
         return coco_dset
 
     @profile
@@ -256,8 +257,12 @@ class NewTrackFunction(TrackFunction):
     '''
 
     def __call__(self, sub_dset):
+        print('Create tracks')
         tracks = self.create_tracks(sub_dset)
+        print('Add tracks to dset')
         sub_dset = self.add_tracks_to_dset(sub_dset, tracks)
+        print('After tracking')
+        print(sub_dset.basic_stats())
         return sub_dset
 
     @abstractmethod
@@ -763,6 +768,27 @@ def build_heatmap(dset,
             'fill': return probs and chan_probs of zeros
             'skip': return probs of zeros, skip chan_probs
             'raise': raise exception
+
+    Example:
+        >>> from watch.tasks.tracking.utils import *  # NOQA
+        >>> import watch
+        >>> dset = watch.coerce_kwcoco(
+        >>>     data='watch-msi', heatmap=True)
+        >>> gid = dset.images()[0]
+        >>> key = 'salient'
+        >>> space = 'video'
+        >>> missing = 'fill'
+        >>> # With probs
+        >>> return_chan_probs = True
+        >>> fg_img_probs1, chan_probs = build_heatmap(dset, gid, key, return_chan_probs, space, missing)
+        >>> # FG only
+        >>> return_chan_probs = False
+        >>> fg_img_probs2 = build_heatmap(dset, gid, key, return_chan_probs, space, missing)
+        >>> #
+        >>> # Test with a non-existing key
+        >>> return_chan_probs = True
+        >>> key = 'eludium'
+        >>> fg_img_probs1, chan_probs = build_heatmap(dset, gid, key, return_chan_probs, space, missing)
     """
     key, _ = _validate_keys(key, None)
     coco_img = dset.coco_image(gid)

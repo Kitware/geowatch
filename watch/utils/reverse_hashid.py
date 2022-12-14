@@ -5,6 +5,11 @@ import ubelt as ub
 import shelve
 import os
 
+try:
+    from xdev import profile
+except Exception:
+    profile = ub.identity
+
 
 class ReverseHashTable:
     """
@@ -116,7 +121,8 @@ class ReverseHashTable:
         return candidates
 
 
-def condense_config(params, type, human_opts=None):
+@profile
+def condense_config(params, type, human_opts=None, register=True):
     """
     Given a dictionary of parameters and a type, makes a hash of the params
     prefixes it with a type and ensures it is registered in the global system
@@ -135,6 +141,7 @@ def condense_config(params, type, human_opts=None):
         human_part = ''
     cfgstr_suffix = human_part + ub.hash_data(other_opts)[0:8]
     cfgstr = f'{type}_{cfgstr_suffix}'
-    rhash = ReverseHashTable(type=type)
-    rhash.register(cfgstr, params)
+    if register:
+        rhash = ReverseHashTable(type=type)
+        rhash.register(cfgstr, params)
     return cfgstr
