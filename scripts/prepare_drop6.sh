@@ -27,6 +27,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --fields_workers=8 \
     --convert_workers=8 \
     --align_workers=4 \
+    --align_aux_workers=0 \
     --max_queue_size=1 \
     --ignore_duplicates=1 \
     --separate_region_queues=1 \
@@ -39,9 +40,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --warp_tries=1 \
     --asset_timeout="1hour" \
     --image_timeout="1hour" \
-    --backend=tmux --run=1 
-    
-#--hack_lazy=True
+    --backend=tmux --run=1 --hack_lazy=True
 
 cd "$DATA_DVC_DPATH"
 ln -s "$DATASET_SUFFIX" Drop6

@@ -38,7 +38,7 @@ python -m watch.mlops.schedule_evaluation \
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 
-XDEV_PROFILE=1 python -m watch.mlops.schedule_evaluation \
+python -m watch.mlops.schedule_evaluation \
     --params="
         matrix:
             bas_pxl.package_fpath:
@@ -88,7 +88,7 @@ XDEV_PROFILE=1 python -m watch.mlops.schedule_evaluation \
             bas_poly.enabled: 1
             sc_pxl.enabled: 0
             sc_poly.enabled: 0
-            bas_poly_eval.enabled: 0
+            bas_poly_eval.enabled: 1
             bas_pxl_eval.enabled: 0
             bas_poly_viz.enabled: 0
             sc_poly_eval.enabled: 0

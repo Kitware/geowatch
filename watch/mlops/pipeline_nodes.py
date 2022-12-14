@@ -117,6 +117,9 @@ class PipelineDAG:
         if root_dpath is not None:
             root_dpath = ub.Path(root_dpath)
             self.root_dpath = root_dpath
+            for node in self.nodes.values():
+                node.root_dpath = root_dpath
+                node._configured_cache.clear()  # hack, make more elegant
 
         if config is not None:
             self.config = config
@@ -126,8 +129,6 @@ class PipelineDAG:
             dotconfig = util_param_grid.DotDict(config)
             for node_name in nx.topological_sort(self.proc_graph):
                 node = self.proc_graph.nodes[node_name]['node']
-                if root_dpath is not None:
-                    node.root_dpath = root_dpath
                 node_config = dict(dotconfig.prefix_get(node.name, {}))
                 node.configure(node_config, cache=cache)
 
@@ -397,9 +398,12 @@ class InputNode(IONode):
 class OutputNode(IONode):
     @property
     def resolved_value(self):
-        if self._resolved_value is None:
-            return self.parent._resolve_templates()['out_paths'][self.name]
-        return self._resolved_value
+        # return self.parent._resolve_templates()['out_paths'][self.name]
+        return self.parent.resolved_out_paths[self.name]
+
+    @property
+    def template_value(self):
+        return self.parent.template_out_paths[self.name]
 
 
 def _classvar_init(self, args, fallbacks):
