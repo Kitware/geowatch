@@ -6,6 +6,26 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.3.8 - Target 2022-02-xx
 
+### Added
+* Initial scripts for new teamfeatures
+* New MLOPs-V3 DAG definitions
+* New QA band handling to support different QA encodings
+* New endpoints for ACC-2 data.
+* Merge in Nov21 Pseudolive branch
+
+### Fixed
+* Issue in visualize where frames might be ordered incorrectly.
+* Issue when input scale was native and output scale was a fixed GSD
+* Patch torchmetrics for old models
+* Fix corner-case crash in SC tracker.
+* Quality mask filtering was broken and is now using correct data.
+
+### Changed
+* Consolidate monkey patches into a single subpackage.
+* Refactor `util_globals`
+* New arguments to fusion.predict to filter inputs / outputs.
+* Cleaned old code that was ported to kwimage
+
 
 ## Version 0.3.7 - Target 2022-11-21
 

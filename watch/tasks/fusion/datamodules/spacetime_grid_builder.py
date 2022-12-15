@@ -3,6 +3,7 @@ import kwimage
 import numpy as np
 import ubelt as ub
 from watch.utils import util_kwimage
+from watch.utils import kwcoco_extensions
 from watch import heuristics
 
 
@@ -22,7 +23,10 @@ class SpacetimeGridBuilder:
         window_overlap=0.0,
         negative_classes=None,
         keepbound=False,
+        include_sensors=None,
         exclude_sensors=None,
+        select_images=None,
+        select_videos=None,
         time_sampling='hard+distribute',
         time_span='2y',
         use_annot_info=True,
@@ -34,63 +38,18 @@ class SpacetimeGridBuilder:
         workers=0,
         use_cache=1
     ):
-        builder.dset = dset
-        builder.window_dims = window_dims
-        builder.window_overlap = window_overlap
-        builder.negative_classes = negative_classes
-        builder.keepbound = keepbound
-        builder.exclude_sensors = exclude_sensors
-        builder.time_sampling = time_sampling
-        builder.time_span = time_span
-        builder.use_annot_info = use_annot_info
-        builder.use_grid_positives = use_grid_positives
-        builder.use_centered_positives = use_centered_positives
-        builder.window_space_scale = window_space_scale
-        builder.set_cover_algo = set_cover_algo
-        builder.workers = workers
-        builder.use_cache = use_cache
-        builder.respect_valid_regions = respect_valid_regions
+        builder.kw = ub.udict(locals()) - {'builder'}
 
     def build(builder):
-        dset = builder.dset
-        window_dims = builder.window_dims
-        window_overlap = builder.window_overlap
-        negative_classes = builder.negative_classes
-        keepbound = builder.keepbound
-        exclude_sensors = builder.exclude_sensors
-        time_sampling = builder.time_sampling
-        time_span = builder.time_span
-        use_annot_info = builder.use_annot_info
-        use_grid_positives = builder.use_grid_positives
-        use_centered_positives = builder.use_centered_positives
-        window_space_scale = builder.window_space_scale
-        set_cover_algo = builder.set_cover_algo
-        workers = builder.workers
-        use_cache = builder.use_cache
-        respect_valid_regions = builder.respect_valid_regions
-
-        return sample_video_spacetime_targets(
-            dset=dset,
-            window_dims=window_dims,
-            window_overlap=window_overlap,
-            negative_classes=negative_classes, keepbound=keepbound,
-            exclude_sensors=exclude_sensors,
-            time_sampling=time_sampling,
-            time_span=time_span,
-            use_annot_info=use_annot_info,
-            use_grid_positives=use_grid_positives,
-            use_centered_positives=use_centered_positives,
-            window_space_scale=window_space_scale,
-            set_cover_algo=set_cover_algo,
-            respect_valid_regions=respect_valid_regions,
-            workers=workers,
-            use_cache=use_cache,
-        )
+        return sample_video_spacetime_targets(**builder.kw)
 
 
 def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                                    negative_classes=None, keepbound=False,
+                                   include_sensors=None,
                                    exclude_sensors=None,
+                                   select_images=None,
+                                   select_videos=None,
                                    time_sampling='hard+distribute',
                                    time_span='2y',
                                    use_annot_info=True,
@@ -257,7 +216,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> keepbound = False
         >>> time_sampling = 'soft2+distribute'
         >>> sample_grid1 = sample_video_spacetime_targets(
-        >>>     dset, window_dims, window_overlap,
+        >>>     dset, window_dims, window_overlap, exclude_sensors='Foo',
         >>>     time_sampling='soft2+distribute')
         >>> sample_grid2 = sample_video_spacetime_targets(
         >>>     dset, window_dims, window_overlap,
@@ -303,9 +262,6 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
 
     dset_hashid = dset._cached_hashid()
 
-    # Given an video
-    all_vid_ids = list(dset.index.videos.keys())
-
     # Intersection over smaller area wrt to window vs valid regions.
     refine_iosa_thresh = 0.2  # parametarize?
 
@@ -321,7 +277,10 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         window_overlap,
         window_space_scale,
         negative_classes, keepbound,
+        include_sensors,
         exclude_sensors,
+        select_videos,
+        select_images,
         affinity_type, update_rule,
         time_span, use_annot_info,
         set_cover_algo,
@@ -329,7 +288,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         use_centered_positives,
         refine_iosa_thresh,
         respect_valid_regions,
-        'cache_v10',
+        'cache_v11',
     ]
     # Higher level cacher (not sure if adding this secondary level of caching
     # is faster or not).
@@ -340,6 +299,20 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                        verbose=4)
     sample_grid = cacher.tryload()
     if sample_grid is None:
+
+        # Only build a grid over the selected images / videos
+        selected_gids = kwcoco_extensions.filter_image_ids(
+            dset, include_sensors=include_sensors,
+            exclude_sensors=exclude_sensors,
+            select_videos=select_videos,
+            select_images=select_images,
+        )
+        selected_vidid_per_gid = dset.images(selected_gids).lookup('video_id')
+        selected_vidid_to_gids = ub.group_items(selected_gids, selected_vidid_per_gid)
+
+        # Given an video
+        all_vid_ids = sorted(set(selected_vidid_to_gids.keys()))
+
         from watch.utils.lightning_ext import util_globals
         workers = util_globals.coerce_num_workers(workers)
         workers = min(len(all_vid_ids), workers)
@@ -352,10 +325,15 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         # would help improve speed here. The dset itself is the biggest offender.
         verbose = 1 if workers == 0 else 0
         for video_id in ub.ProgIter(all_vid_ids, desc='Submit sample video regions'):
+            # Ensure the ordering of image ids is valid
+            video_gids = selected_vidid_to_gids[video_id]
+            sortx = ub.argsort(dset.images(video_gids).lookup('frame_index'))
+            video_gids = list(ub.take(video_gids, sortx))
+
             job = jobs.submit(
                 _sample_single_video_spacetime_targets, dset, dset_hashid,
-                video_id, winspace_time_dims, winspace_space_dims, window_dims,
-                window_overlap, negative_classes, keepbound, exclude_sensors,
+                video_id, video_gids, winspace_time_dims, winspace_space_dims, window_dims,
+                window_overlap, negative_classes, keepbound,
                 affinity_type, update_rule, time_span, use_annot_info,
                 use_grid_positives, use_centered_positives, window_space_scale,
                 set_cover_algo, use_cache, respect_valid_regions,
@@ -401,9 +379,9 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
 
 
 def _sample_single_video_spacetime_targets(
-        dset, dset_hashid, video_id, winspace_time_dims, winspace_space_dims,
+        dset, dset_hashid, video_id, video_gids, winspace_time_dims, winspace_space_dims,
         window_dims, window_overlap, negative_classes,
-        keepbound, exclude_sensors, affinity_type, update_rule, time_span,
+        keepbound, affinity_type, update_rule, time_span,
         use_annot_info, use_grid_positives, use_centered_positives,
         window_space_scale, set_cover_algo, use_cache, respect_valid_regions,
         refine_iosa_thresh, verbose):
@@ -452,19 +430,9 @@ def _sample_single_video_spacetime_targets(
     # Create a box to represent the "window-space" extent, and determine how we
     # are going to slide a window over it.
     vidspace_gsd = video_info.get('target_gsd', None)
-
     resolved_scale = data_utils.resolve_scale_request(
         request=window_space_scale, data_gsd=vidspace_gsd)
     window_scale = resolved_scale['scale']
-
-    all_video_gids = list(dset.index.vidid_to_gids[video_id])
-
-    if exclude_sensors is not None:
-        sensor_coarse = dset.images(all_video_gids).lookup('sensor_coarse', '')
-        flags = [s not in exclude_sensors for s in sensor_coarse]
-        video_gids = list(ub.compress(all_video_gids, flags))
-    else:
-        video_gids = all_video_gids
 
     vidspace_time_dims = winspace_time_dims
 
@@ -500,9 +468,9 @@ def _sample_single_video_spacetime_targets(
         affinity_type,
         update_rule,
         video_name,
+        np.array(video_gids),
         vidspace_window_dims, window_overlap,
         negative_classes, keepbound,
-        exclude_sensors,
         affinity_type, update_rule,
         time_span, use_annot_info,
         use_grid_positives,
@@ -510,7 +478,7 @@ def _sample_single_video_spacetime_targets(
         refine_iosa_thresh,
         respect_valid_regions,
         set_cover_algo,
-        'cache_v10',
+        'cache_v11',
     ]
     cache_dpath = ub.Path.appdir('watch', 'grid_cache').ensuredir()
     cacher = ub.Cacher('sliding-window-cache-' + video_name,

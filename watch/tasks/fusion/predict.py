@@ -74,6 +74,8 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument('--tta_time', type=smartcast, default=0, help='number of times to expand the temporal sample for a frame'),
 
     parser.add_argument('--clear_annots', type=smartcast, default=1, help='Clear existing annotations in output file. Otherwise keep them')
+    parser.add_argument('--drop_unused_frames', type=smartcast, default=0, help='if True, remove any images that were not predicted on')
+    parser.add_argument('--write_workers', type=smartcast, default='datamodule', help='workers to use for writing results. If unspecified uses the datamodule num_workers')
 
     # TODO:
     # parser.add_argument('--cache', type=smartcast, default=0, help='if True, dont rerun prediction on images where predictions exist'),
@@ -604,13 +606,16 @@ def predict(cmdline=False, **kwargs):
 
     # Start background procs before we make threads
     batch_iter = iter(test_dataloader)
-    prog = ub.ProgIter(batch_iter, desc='predicting', verbose=1)
+    prog = ub.ProgIter(batch_iter, desc='predicting', verbose=3, freq=1)
 
     # Make threads after starting background proces.
+    if args.write_workers == 'datamodule':
+        args.write_workers = datamodule.num_workers
     writer_queue = util_parallel.BlockingJobQueue(
         mode='thread',
         # mode='serial',
-        max_workers=datamodule.num_workers)
+        max_workers=args.write_workers
+    )
 
     result_fpath.parent.ensuredir()
     print('result_fpath = {!r}'.format(result_fpath))
@@ -632,8 +637,8 @@ def predict(cmdline=False, **kwargs):
         'change_probs': 'change',
     }
 
-    CHECK_GRID = 0
-    if CHECK_GRID:
+    DEBUG_GRID = 0
+    if DEBUG_GRID:
         # Check to see if the grid will cover all images
         image_id_to_target_space_slices = ub.ddict(list)
         seen_gids = set()
@@ -656,10 +661,11 @@ def predict(cmdline=False, **kwargs):
         # import kwimage
         coco_dset = test_dataloader.dataset.sampler.dset
         gid_to_iou = {}
+        print('image_id_to_target_space_slices = {}'.format(ub.repr2(image_id_to_target_space_slices, nl=2)))
         for gid, slices in image_id_to_target_space_slices.items():
             vidid = coco_dset.index.imgs[gid]['video_id']
             video = coco_dset.index.videos[vidid]
-            video_poly = util_kwimage.Box.from_dsize((video['width'], video['height'])).to_polygon()
+            video_poly = kwimage.Box.from_dsize((video['width'], video['height'])).to_polygon()
             boxes = kwimage.Boxes.concatenate([kwimage.Boxes.from_slice(sl) for sl in slices])
             polys = boxes.to_polygons()
             covered = polys.unary_union().simplify(0.01)
@@ -669,11 +675,11 @@ def predict(cmdline=False, **kwargs):
         iou_stats = kwarray.stats_dict(ious, n_extreme=True)
         print('iou_stats = {}'.format(ub.repr2(iou_stats, nl=1)))
 
-    CHECK_PRED_SPATIAL_COVERAGE = 0
-    if CHECK_PRED_SPATIAL_COVERAGE:
+    DEBUG_PRED_SPATIAL_COVERAGE = 0
+    if DEBUG_PRED_SPATIAL_COVERAGE:
         # Enable debugging to ensure the dataloader actually passed
         # us the targets that cover the entire image.
-        image_id_to_input_space_slices = ub.ddict(list)
+        image_id_to_video_space_slices = ub.ddict(list)
         image_id_to_output_space_slices = ub.ddict(list)
 
     # add hyperparam info to "info" section
@@ -860,10 +866,14 @@ def predict(cmdline=False, **kwargs):
                         # print(f'output_image_dsize={output_image_dsize}')
                         # print(f'output_space_slice={output_space_slice}')
 
-                        if CHECK_PRED_SPATIAL_COVERAGE:
-                            image_id_to_input_space_slices[gid].append(target['space_slice'])
+                        if DEBUG_PRED_SPATIAL_COVERAGE:
+                            image_id_to_video_space_slices[gid].append(target['space_slice'])
                             image_id_to_output_space_slices[gid].append(output_space_slice)
 
+                        # print(f'output_space_slice={output_space_slice}')
+                        # print(f'gid={gid}')
+                        # print(f'output_image_dsize={output_image_dsize}')
+                        # print(f'scale_outspace_from_vid={scale_outspace_from_vid}')
                         head_stitcher.accumulate_image(
                             gid, output_space_slice, probs,
                             dsize=output_image_dsize,
@@ -884,33 +894,71 @@ def predict(cmdline=False, **kwargs):
                 # writer_queue.submit(head_stitcher.finalize_image, gid)
         writer_queue.wait_until_finished()
 
-    if CHECK_PRED_SPATIAL_COVERAGE:
+    if DEBUG_PRED_SPATIAL_COVERAGE:
         coco_dset = test_dataloader.dataset.sampler.dset
-        gid_to_iou = {}
-        for gid, slices in image_id_to_input_space_slices.items():
+        gid_to_vidspace_iou = {}
+        gid_to_vidspace_iooa = {}
+        for gid, slices in image_id_to_video_space_slices.items():
             vidid = coco_dset.index.imgs[gid]['video_id']
             video = coco_dset.index.videos[vidid]
-            video_poly = util_kwimage.Box.from_dsize((video['width'], video['height'])).to_polygon()
+            vidspace_gsd = video['target_gsd']
+            video_poly = kwimage.Box.from_dsize((video['width'], video['height'])).to_polygon()
+            # output_poly = video_poly.scale(scale)
             boxes = kwimage.Boxes.concatenate([kwimage.Boxes.from_slice(sl) for sl in slices])
             polys = boxes.to_polygons()
             covered = polys.unary_union().simplify(0.01)
-            iou = covered.iou(video_poly)
-            gid_to_iou[gid] = iou
+            gid_to_vidspace_iooa[gid] = covered.iooa(video_poly)
+            gid_to_vidspace_iou[gid] = covered.iou(video_poly)
 
         outspace_areas = []
+        gid_to_outspace_iou = {}
+        gid_to_outspace_iooa = {}
         for gid, slices in image_id_to_output_space_slices.items():
             boxes = kwimage.Boxes.concatenate([kwimage.Boxes.from_slice(sl) for sl in slices])
             polys = boxes.to_polygons()
             covered = polys.unary_union().simplify(0.01)
             outspace_areas.append(covered.area)
 
+            output_space_scale = datamodule.config['output_space_scale']
+            if output_space_scale != 'native':
+                vidid = coco_dset.index.imgs[gid]['video_id']
+                video = coco_dset.index.videos[vidid]
+                vidspace_gsd = video['target_gsd']
+                resolved_scale = data_utils.resolve_scale_request(
+                    request=output_space_scale, data_gsd=vidspace_gsd)
+                scale = resolved_scale['scale']
+                video_poly = kwimage.Box.from_dsize((video['width'], video['height'])).to_polygon()
+                output_poly = video_poly.scale(scale)
+                boxes = kwimage.Boxes.concatenate([kwimage.Boxes.from_slice(sl) for sl in slices])
+                polys = boxes.to_polygons()
+                covered = polys.unary_union().simplify(0.01)
+                gid_to_outspace_iooa[gid] = covered.iooa(output_poly)
+                gid_to_outspace_iou[gid] = covered.iou(output_poly)
+
         print('outspace_rt_areas ' + repr(ub.dict_hist(np.sqrt(np.array(outspace_areas)))))
-        ious = list(gid_to_iou.values())
-        iou_stats = kwarray.stats_dict(ious, n_extreme=True)
-        print('input_space iou_stats = {}'.format(ub.repr2(iou_stats, nl=1)))
+        vidspace_iou_stats = kwarray.stats_dict(
+            list(gid_to_vidspace_iou.values()), n_extreme=True)
+        vidspace_iooa_stats = kwarray.stats_dict(
+            list(gid_to_vidspace_iooa.values()), n_extreme=True)
+
+        outspace_iou_stats = kwarray.stats_dict(
+            list(gid_to_outspace_iou.values()), n_extreme=True)
+        outspace_iooa_stats = kwarray.stats_dict(
+            list(gid_to_outspace_iooa.values()), n_extreme=True)
+        print('vidspace_iou_stats = {}'.format(ub.repr2(vidspace_iou_stats, nl=1)))
+        print('vidspace_iooa_stats = {}'.format(ub.repr2(vidspace_iooa_stats, nl=1)))
+        print('outspace_iou_stats = {}'.format(ub.repr2(outspace_iou_stats, nl=1)))
+        print('outspace_iooa_stats = {}'.format(ub.repr2(outspace_iooa_stats, nl=1)))
 
     proc_context.add_device_info(device)
     proc_context.stop()
+
+    if args.drop_unused_frames:
+        keep_gids = set()
+        for manager in stitch_managers.values():
+            keep_gids.update(manager.seen_image_ids)
+        drop_gids = set(result_dataset.images()) - keep_gids
+        result_dataset.remove_images(drop_gids)
 
     # validate and save results
     if 0:
@@ -1131,11 +1179,16 @@ class CocoStitchingManager(object):
         if stitcher.shape[0] < space_slice[0].stop or stitcher.shape[1] < space_slice[1].stop:
             # By embedding the space slice in the stitcher dimensions we can get a
             # slice corresponding to the valid region in the stitcher, and the extra
-            # padding encode the valid region of the data we are trying to stitch into.
+            # padding encodes the valid region of the data we are trying to stitch into.
             subslice, padding = kwarray.embed_slice(space_slice[0:2], stitcher.shape[0:2])
+
+            slice_h = (space_slice[0].stop - space_slice[0].start)
+            slice_w = (space_slice[1].stop - space_slice[1].start)
+            # data.shape[0]
+            # data.shape[1]
             output_slice = (
-                slice(padding[0][0], data.shape[0] - padding[0][1]),
-                slice(padding[1][0], data.shape[1] - padding[1][1]),
+                slice(padding[0][0], slice_h - padding[0][1]),
+                slice(padding[1][0], slice_w - padding[1][1]),
             )
             subdata = data[output_slice]
             subweights = weights[output_slice]
@@ -1167,7 +1220,7 @@ class CocoStitchingManager(object):
             # Something is causing an off by one error, not sure what it is
             # this hack just forces the slice to agree.
             dh, dw = stitch_data.shape[0:2]
-            box = util_kwimage.Box.from_slice(stitch_slice)
+            box = kwimage.Box.from_slice(stitch_slice)
             sw, sh = box.dsize
             if sw > dw:
                 box = box.resize(width=dw)
@@ -1215,6 +1268,10 @@ class CocoStitchingManager(object):
         """
         self.writer_queue.submit(self.finalize_image, gid)
 
+    @property
+    def seen_image_ids(self):
+        return self._seen_gids
+
     def finalize_image(self, gid):
         """
         Finalizes the stitcher for this image, deletes it, and adds
@@ -1229,7 +1286,8 @@ class CocoStitchingManager(object):
         self._ready_gids.difference_update({gid})
 
         try:
-            stitcher = self.image_stitchers.pop(gid)
+            stitcher = self.image_stitchers.get(gid)
+            # stitcher = self.image_stitchers.pop(gid)
         except KeyError:
             if gid in self._seen_gids:
                 raise KeyError((

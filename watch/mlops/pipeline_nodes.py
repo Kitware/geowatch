@@ -202,13 +202,19 @@ class PipelineDAG:
                 pred_node_procids = [n.process_id for n in pred_nodes
                                      if n.enabled]
                 node_procid = node.process_id
+                node_job = None
                 if node_procid not in queue.named_jobs:
-                    queue.submit(command=node.resolved_command(),
-                                 depends=pred_node_procids, name=node_procid)
+                    command = node.resolved_command()
+                    node_job = queue.submit(command=command,
+                                            depends=pred_node_procids,
+                                            name=node_procid)
 
                 # Add symlink jobs that make the graph structure traversable in
                 # the flat output directories.
                 if enable_links:
+                    # TODO: ability to bind jobs to be run in the same queue
+                    # together
+
                     # TODO: should we filter the nodes where they are only linked
                     # via inputs?
                     for pred in node.predecessor_process_nodes():
@@ -230,22 +236,26 @@ class PipelineDAG:
                         # prettier and easier to reason about)
                         link_node = ProcessNode(
                             name='__link', executable=command, in_paths={},
-                            out_paths={'link_path1': str(link_path1), 'link_path2': str(link_path2)})
+                            out_paths={'link_path1': str(link_path1),
+                                       'link_path2': str(link_path2)})
                         link_node.configure(config={}, cache=1)
                         link_command = link_node.resolved_command()
                         link_procid = 'link_' + node_procid
                         if link_procid not in queue.named_jobs:
-                            queue.submit(command=link_command,
-                                         depends=pred_node_procids,
-                                         # depends=[node_procid],
-                                         name=link_procid,
-                                         bookkeeper=0)
+                            link_job = queue.submit(command=link_command,
+                                                    depends=pred_node_procids,
+                                                    # depends=[node_procid],
+                                                    name=link_procid,
+                                                    tags=['links', 'boilerplate'])
+                            if link_job is not None:
+                                link_job.depends.append(link_job)
 
                 if write_invocations:
                     # Add a job that writes a file with the command used to
                     # execute this node.
                     invoke_fpath = node.resolved_node_dpath / 'invoke.sh'
                     command = '\n'.join([
+                        f'mkdir -p {invoke_fpath.parent} && \\',
                         "echo '",
                         '#!/bin/bash',
                         node.command(),
@@ -256,19 +266,19 @@ class PipelineDAG:
                     invoke_node = ProcessNode(
                         name='__invoke', executable=command, in_paths={},
                         out_paths={'invoke_fpath': str(invoke_fpath)})
-                    # TODO: add cmd_queue options so this isn't printed with
-                    # rprint
                     invoke_node.configure(config={}, cache=0)
                     invoke_command = invoke_node.resolved_command()
                     invoke_procid = 'invoke_' + node_procid
                     if invoke_procid not in queue.named_jobs:
-                        queue.submit(
+                        invoke_job = queue.submit(
                             command=invoke_command,
                             depends=pred_node_procids,
                             # depends=[node_procid],
                             name=invoke_procid,
-                            bookkeeper=0
+                            tags=['links', 'boilerplate']
                         )
+                        if node_job is not None:
+                            node_job.depends.append(invoke_job)
 
         return queue
 
@@ -1025,3 +1035,9 @@ class ProcessNode(Node):
             return self.test_is_computed_command() + ' || ' + base_command
         else:
             return base_command
+
+
+try:
+    profile.add_module()
+except Exception:
+    pass

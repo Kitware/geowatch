@@ -182,27 +182,39 @@ class ScheduleEvaluationConfig(scfg.DataConfig):
 
     run = scfg.Value(False, help='if False, only prints the commands, otherwise executes them')
 
-    devices = scfg.Value('auto', help='if using tmux or serial, indicate which gpus are available for use as a comma separated list: e.g. 0,1')
+    devices = scfg.Value('auto', help=(
+        'if using tmux or serial, indicate which gpus are available for use '
+        'as a comma separated list: e.g. 0,1'))
 
-    virtualenv_cmd = scfg.Value(None, help='command to activate a virtualenv if needed. (might have issues with slurm backend)')
-    skip_existing = scfg.Value(False, help='if True dont submit commands where the expected products already exist')
-    backend = scfg.Value('tmux', help='can be tmux, slurm, or maybe serial in the future')
+    virtualenv_cmd = scfg.Value(None, help=(
+        'command to activate a virtualenv if needed. '
+        '(might have issues with slurm backend)'))
+
+    skip_existing = scfg.Value(False, help=(
+        'if True dont submit commands where the expected '
+        'products already exist'))
+
+    backend = scfg.Value('tmux', help=(
+        'The cmd_queue backend. Can be tmux, slurm, or serial'))
 
     queue_name = scfg.Value('schedule-eval', help='Name of the queue')
 
     pred_workers = scfg.Value(4, help='number of prediction workers in each process')
 
-    shuffle_jobs = scfg.Value(True, help='if True, shuffles the jobs so they are submitted in a random order')
+    # shuffle_jobs = scfg.Value(True, help='if True, shuffles the jobs so they are submitted in a random order')
     annotations_dpath = scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval')
 
-    root_dpath = scfg.Value('auto', help='Where do dump all results. If "auto", uses <expt_dvc_dpath>/dag_runs')
+    root_dpath = scfg.Value('auto', help=(
+        'Where do dump all results. If "auto", uses <expt_dvc_dpath>/dag_runs'))
     pipeline = scfg.Value('joint_bas_sc', help='the name of the pipeline to run')
 
-    check_other_sessions = scfg.Value('auto', help='if True, will ask to kill other sessions that might exist')
+    check_other_sessions = scfg.Value('auto', help=(
+        'if True, will ask to kill other sessions that might exist'))
     queue_size = scfg.Value('auto', help='if auto, defaults to number of GPUs')
 
     enable_links = scfg.Value(True, isflag=True, help='if true enable symlink jobs')
-    cache = scfg.Value(True, isflag=True, help='if true, each a test is appened to each job to skip itself if its output exists')
+    cache = scfg.Value(True, isflag=True, help=(
+        'if true, each a test is appened to each job to skip itself if its output exists'))
 
     draw_heatmaps = scfg.Value(1, isflag=True, help='if true draw heatmaps on eval')
     draw_curves = scfg.Value(1, isflag=True, help='if true draw curves on eval')
@@ -237,7 +249,6 @@ def schedule_evaluation(cmdline=False, **kwargs):
     dag = smart_pipeline.make_smart_pipeline(config['pipeline'])
     dag.print_graphs()
 
-    # from rich import print
     queue_dpath = root_dpath / '_cmd_queue_schedule'
     queue_dpath.ensuredir()
 
@@ -279,7 +290,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     queue.write_network_text()
     if config['rprint']:
         queue.rprint(with_status=with_status, with_rich=with_rich,
-                     with_locks=0)
+                     with_locks=0, exclude_tags=['boilerplate'])
 
     for job in queue.jobs:
         # TODO: should be able to set this as a queue param.

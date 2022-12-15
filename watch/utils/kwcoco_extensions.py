@@ -39,7 +39,7 @@ def filter_image_ids(coco_dset, gids=None, include_sensors=None,
                 include = coerce_set(include)
             if exclude is not None:
                 exclude = coerce_set(exclude)
-            values = table.lookup(key)
+            values = table.lookup(key, default=None)
             if include is None:
                 flags = [v not in exclude for v in values]
             elif exclude is None:

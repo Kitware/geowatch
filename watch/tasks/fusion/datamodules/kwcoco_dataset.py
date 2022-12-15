@@ -132,10 +132,53 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             not
             ''')),
 
+        'include_sensors': scfg.Value(None, help='if specified can be comma separated valid sensors'),
+
         'exclude_sensors': scfg.Value(None, type=str, help=ub.paragraph(
             '''
             comma delimited list of sensors to avoid, such as S2 or L8
             ''')),
+
+        'select_images': scfg.Value(
+            None, type=str, help=ub.paragraph(
+                '''
+                A json query (via the jq spec) that specifies which images
+                belong in the subset. Note, this is a passed as the body of
+                the following jq query format string to filter valid ids
+                '.images[] | select({select_images}) | .id'.
+
+                Examples for this argument are as follows:
+                '.id < 3' will select all image ids less than 3.
+                '.file_name | test(".*png")' will select only images with
+                file names that end with png.
+                '.file_name | test(".*png") | not' will select only images
+                with file names that do not end with png.
+                '.myattr == "foo"' will select only image dictionaries
+                where the value of myattr is "foo".
+                '.id < 3 and (.file_name | test(".*png"))' will select only
+                images with id less than 3 that are also pngs.
+                .myattr | in({"val1": 1, "val4": 1}) will take images
+                where myattr is either val1 or val4.
+
+                Requries the "jq" python library is installed.
+                ''')),
+
+        'select_videos': scfg.Value(
+            None, help=ub.paragraph(
+                '''
+                A json query (via the jq spec) that specifies which videos
+                belong in the subset. Note, this is a passed as the body of
+                the following jq query format string to filter valid ids
+                '.videos[] | select({select_images}) | .id'.
+
+                Examples for this argument are as follows:
+                '.name | startswith("foo")' will select only videos
+                where the name starts with foo.
+
+                Only applicable for dataset that contain videos.
+
+                Requries the "jq" python library is installed.
+                ''')),
 
         'ignore_dilate': scfg.Value(0, help='Dilation applied to ignore masks.'),
 
@@ -245,6 +288,9 @@ class KWCocoVideoDatasetConfig(scfg.Config):
 
         if self['output_space_scale'] == 'window':
             self['output_space_scale'] = self['window_space_scale']
+
+        if self['time_sampling'] == 'auto':
+            self['time_sampling'] = 'hard+distribute'
 
 
 class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
@@ -396,44 +442,41 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             self.undistinguished_classes)
 
         channels = config['channels']
-        time_sampling = config['time_sampling']
-        exclude_sensors = config['exclude_sensors']
-        use_centered_positives = config['use_centered_positives']
-        use_grid_positives = config['use_grid_positives']
-        set_cover_algo = config['set_cover_algo']
-        time_span = config['time_span']
         neg_to_pos_ratio = config['neg_to_pos_ratio']
         max_epoch_length = config['max_epoch_length']
-        window_space_scale = self.config['window_space_scale']
-
-        if time_sampling == 'auto':
-            time_sampling = 'hard+distribute'
 
         import os
         grid_workers = int(os.environ.get('WATCH_GRID_WORKERS', 0))
+
+        common_grid_kw = dict(
+            window_dims=window_dims,
+            window_overlap=window_overlap,
+            exclude_sensors=config['exclude_sensors'],
+            include_sensors=config['include_sensors'],
+            select_images=config['select_images'],
+            select_videos=config['select_videos'],
+            time_sampling=config['time_sampling'],
+            time_span=config['time_span'],
+            window_space_scale=self.config['window_space_scale'],
+            set_cover_algo=config['set_cover_algo'],
+            workers=grid_workers,  # could configure this
+            use_cache=self.config['use_grid_cache'],
+            respect_valid_regions=self.config['use_grid_valid_regions'],
+
+        )
 
         if mode == 'custom':
             new_sample_grid = None
             self.length = 1
         elif mode == 'test':
-
             # FIXME: something is wrong with the cache when using an sqlview.
-
             # In test mode we have to sample everything for BAS
             # (TODO: for activity clf, we should only focus on candidate regions)
             builder = spacetime_grid_builder.SpacetimeGridBuilder(
-                dset=sampler.dset, window_dims=window_dims,
-                window_overlap=window_overlap,
+                dset=sampler.dset,
                 keepbound=True,
                 use_annot_info=False,
-                exclude_sensors=exclude_sensors,
-                time_sampling=time_sampling,
-                time_span=time_span,
-                window_space_scale=window_space_scale,
-                set_cover_algo=set_cover_algo,
-                workers=grid_workers,  # could configure this
-                use_cache=self.config['use_grid_cache'],
-                respect_valid_regions=self.config['use_grid_valid_regions'],
+                **common_grid_kw
             )
             new_sample_grid = builder.build()
             self.length = len(new_sample_grid['targets'])
@@ -441,21 +484,13 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             negative_classes = (
                 self.ignore_classes | self.background_classes | self.negative_classes)
             builder = spacetime_grid_builder.SpacetimeGridBuilder(
-                sampler.dset, window_dims=window_dims,
-                window_overlap=window_overlap,
+                sampler.dset,
                 negative_classes=negative_classes,
                 keepbound=False,
                 use_annot_info=True,
-                exclude_sensors=exclude_sensors,
-                time_sampling=time_sampling,
-                time_span=time_span,
-                use_centered_positives=use_centered_positives,
-                use_grid_positives=use_grid_positives,
-                window_space_scale=window_space_scale,
-                set_cover_algo=set_cover_algo,
-                workers=grid_workers,
-                use_cache=self.config['use_grid_cache'],
-                respect_valid_regions=self.config['use_grid_valid_regions'],
+                use_centered_positives=config['use_centered_positives'],
+                use_grid_positives=config['use_grid_positives'],
+                **common_grid_kw
             )
             new_sample_grid = builder.build()
 
@@ -710,6 +745,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # forces us to mark this image as bad.
         force_bad = False
 
+        force_loading_bad_images = target_.get('force_loading_bad_images', 0)
+        stop_on_bad_image = not force_loading_bad_images
+
         if self.use_cloudmask:
             # Skip if quality mask indicates more than 50% clouds.
             is_cloud_iffy = self._interpret_quality_mask(
@@ -724,7 +762,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             force_bad = 'Missing requested channels'
 
         for stream in sensor_channels.streams():
-            if force_bad:
+            if stop_on_bad_image and force_bad:
                 break
             tr_frame['channels'] = stream
             tr_frame['padkw' ] = {'constant_values': np.nan}
@@ -734,6 +772,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 dtype=np.float32
             )
 
+            REPLACE_SAMECOLOR_REGIONS_WITH_NAN = 1
             if REPLACE_SAMECOLOR_REGIONS_WITH_NAN:
                 # This should be a better heuristic than the others we were
                 # using
@@ -744,12 +783,16 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 band_slider = kwarray.SlidingWindow((hwc.shape[2],), window=(1,))
                 flag_stack = []
                 for b_sl in band_slider:
+                    # TODO: can do this as a simpler histogram approach
+                    # instead?
+
                     bands = hwc[:, :, b_sl[0]]
                     bands = np.ascontiguousarray(bands)
                     # Speed up the compuation by doing this at a coarser scale
                     is_samecolor = util_kwimage.find_samecolor_regions(
                         bands, scale=0.4, min_region_size=49)
                     flag_stack.append(is_samecolor)
+
                 is_samecolor = np.stack(flag_stack, axis=2)
                 samecolor_flags = is_samecolor[None, :] > 0
                 num_samecolor = samecolor_flags.sum()
@@ -772,12 +815,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             else:
                 sample['invalid_mask'] = None
 
-            if not all_invalid:
-                sample_streams[stream.spec] = sample
-                if 'annots' in sample:
-                    # dont ask for annotations multiple times
-                    first_with_annot = False
-            else:
+            if all_invalid:
                 # HACK: if the red channel is all bad, discard the frame
                 # This can be removed once nodata is correctly propogated
                 # in the team features. OR we can add a feature where we
@@ -785,7 +823,13 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 # instead of using red as a proxy for it.
                 if 'red' in set(stream):
                     force_bad = 'invalid red channel'
-                    break
+                    if stop_on_bad_image:
+                        break
+
+            sample_streams[stream.spec] = sample
+            if 'annots' in sample:
+                # dont ask for annotations multiple times
+                first_with_annot = False
 
         if not force_bad:
             if len(sample_streams) == 0:
@@ -1044,7 +1088,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         else:
             main_skip_reason = None
 
-        if self.resample_invalid_frames:
+        resample_invalid = target_.get('resample_invalid_frames', self.resample_invalid_frames)
+        if resample_invalid:
             self._resample_bad_images(
                 video_gids, gid_to_isbad, sampler, coco_dset, target, target_,
                 with_annots, gid_to_sample)
@@ -1054,6 +1099,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             raise FailedSample('Cannot force a good sample')
 
         final_gids = ub.oset(video_gids) & good_gids
+        force_loading_bad_images = target_.get('force_loading_bad_images', 0)
+        if force_loading_bad_images:
+            final_gids = ub.oset(video_gids) & set(gid_to_isbad.keys())
+            print('gid_to_isbad = {}'.format(ub.repr2(gid_to_isbad, nl=1)))
+
         num_frames = len(final_gids)
         if num_frames == 0:
             raise Exception('0 frames')

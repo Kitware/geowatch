@@ -172,14 +172,18 @@ class HeatmapPrediction(ProcessNode):
         'test_dataset',
     }
 
+    algo_params = {
+        'drop_unused_frames': True,
+    }
+
     out_paths = {
         'pred_pxl_fpath' : 'pred.kwcoco.json',
     }
 
     def command(self):
         fmtkw = self.resolved_config.copy()
-        fmtkw['params_argstr'] = self._make_argstr(fmtkw & self.algo_params)
-        fmtkw['perf_argstr'] = self._make_argstr(fmtkw & self.perf_params)
+        fmtkw['params_argstr'] = self._make_argstr(self.resolved_algo_config)
+        fmtkw['perf_argstr'] = self._make_argstr(self.resolved_perf_config)
         command = ub.codeblock(
             r'''
             python -m watch.tasks.fusion.predict \
@@ -399,6 +403,23 @@ class LandcoverFeatureComputation(FeatureComputation):
 # ---
 
 class BAS_HeatmapPrediction(HeatmapPrediction):
+    """
+
+    CommandLine:
+        xdoctest -m watch.mlops.smart_pipeline BAS_HeatmapPrediction
+
+    Example:
+        >>> from watch.mlops.smart_pipeline import *  # NOQA
+        >>> node = BAS_HeatmapPrediction()
+        >>> node.configure({
+        >>>     'tta_time': 2,
+        >>>     'package_fpath': 'foo.pt',
+        >>>     'test_dataset': 'bar.json',
+        >>> })
+        >>> command = node.command()
+        >>> assert 'tta_time="2"' in command
+        >>> print(command)
+    """
     name = 'bas_pxl'
     # node_dname = 'bas_pxl/{bas_model}/{bas_test_dset}/{bas_pxl_algo_id}/{bas_pxl_id}'
     node_dname = 'bas_pxl/{bas_pxl_algo_id}/{bas_pxl_id}'
