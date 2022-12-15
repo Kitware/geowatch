@@ -174,22 +174,14 @@ class PipelineDAG:
         import networkx as nx
 
         if queue is None:
-            config = {
-                # 'backend': 'tmux'
-                'backend': 'serial'
-            }
+            # Create a simple serial queue if an existing one isn't given.
             queue = cmd_queue.Queue.create(
-                backend=config['backend'], name='smart-pipeline-v3',
-                size=1, gres=None,
-                # environ=environ
-            )
+                backend='serial', name='smart-pipeline-v3',
+                size=1, gres=None)
 
         for node_name in list(nx.topological_sort(self.proc_graph)):
             node = self.proc_graph.nodes[node_name]['node']
             node.will_exist = None
-            # node.enabled = True
-            # if node_name.startswith('bas_poly'):
-            #     node.enabled = False
 
         for node_name in list(nx.topological_sort(self.proc_graph)):
             node = self.proc_graph.nodes[node_name]['node']
@@ -250,6 +242,8 @@ class PipelineDAG:
                                          bookkeeper=0)
 
                 if write_invocations:
+                    # Add a job that writes a file with the command used to
+                    # execute this node.
                     invoke_fpath = node.resolved_node_dpath / 'invoke.sh'
                     command = '\n'.join([
                         "echo '",
@@ -262,6 +256,8 @@ class PipelineDAG:
                     invoke_node = ProcessNode(
                         name='__invoke', executable=command, in_paths={},
                         out_paths={'invoke_fpath': str(invoke_fpath)})
+                    # TODO: add cmd_queue options so this isn't printed with
+                    # rprint
                     invoke_node.configure(config={}, cache=0)
                     invoke_command = invoke_node.resolved_command()
                     invoke_procid = 'invoke_' + node_procid

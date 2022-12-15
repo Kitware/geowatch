@@ -1,3 +1,37 @@
+
+# Real inputs, this actually will run something given the DVC repos
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+
+SC_MODEL=$DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
+BAS_MODEL=$DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+
+python -m watch.mlops.schedule_evaluation \
+    --pipeline=joint_bas_sc_nocrop \
+    --params="
+        matrix:
+            bas_pxl.package_fpath:
+                - $BAS_MODEL
+            bas_pxl.test_dataset:
+                - $DVC_DATA_DPATH/Drop4-BAS/KR_R001.kwcoco.json
+            bas_pxl.time_sampling: auto
+            bas_pxl.window_space_scale: 15GSD
+            bas_pxl.input_space_scale: window
+            bas_poly.moving_window_size: null
+            bas_poly.thresh: 0.1
+            sc_pxl.window_space_scale: 8GSD
+            sc_pxl.input_space_scale: window
+            sc_poly.thresh: 0.1
+            sc_poly.use_viterbi: 0
+            sc_pxl.package_fpath: $SC_MODEL
+            sc_poly_viz.enabled: 0
+            sc_pxl_eval.enabled: 0
+    " \
+    --root_dpath=./my_dag_runs \
+    --devices="0,1" --queue_size=2 --backend=serial \
+    --cache=1 --skip_existing=0 --run=1
+
+
 # Real data
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
@@ -22,13 +56,14 @@ python -m watch.mlops.schedule_evaluation \
             bas_poly.moving_window_size: null
             bas_poly.thresh:
                 - 0.1
+                - 0.2
             bas_poly_eval.enabled: 1
             bas_pxl_eval.enabled: 1
             bas_poly_viz.enabled: 1
     " \
     --root_dpath="$DVC_EXPT_DPATH/_testpipe" \
     --devices="0,1" --queue_size=2 \
-    --backend=serial \
+    --backend=tmux --queue_name "demo-queue" \
     --pipeline=bas \
     --run=1
 

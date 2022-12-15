@@ -43,23 +43,51 @@ Example:
                 sc_poly_viz.enabled:
                     - false
         " \
-        --expt_dvc_dpath=./my_expt_dir \
-        --data_dvc_dpath=./my_data_dir \
-        --cache=0 \
-        --enable_pred_bas_pxl=1 \
-        --enable_pred_bas_poly=1 \
-        --enable_eval_bas_pxl=0 \
-        --enable_eval_bas_poly=0 \
-        --enable_crop=1 \
-        --enable_pred_sc_pxl=1 \
-        --enable_pred_sc_poly=1 \
-        --enable_eval_sc_pxl=0 \
-        --enable_eval_sc_poly=0 \
-        --enable_viz_pred_bas_poly=0 \
-        --enable_viz_pred_sc_poly=0 \
-        --enable_links=0 \
+        --root_dpath=./my_dag_runs \
         --devices="0,1" --queue_size=2 \
         --backend=serial --skip_existing=0 \
+        --pipeline=joint_bas_sc \
+        --run=0
+
+    # Real inputs, this actually will run something given the DVC repos
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+
+    SC_MODEL=$DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
+    BAS_MODEL=$DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+
+    python -m watch.mlops.schedule_evaluation \
+        --params="
+            matrix:
+                bas_pxl.package_fpath:
+                    - $BAS_MODEL
+                bas_pxl.test_dataset:
+                    - $DVC_DATA_DPATH/Drop4-BAS/KR_R001.kwcoco.json
+                bas_pxl.window_space_scale: 15GSD
+                bas_pxl.time_sampling:
+                    - "auto"
+                bas_pxl.input_space_scale:
+                    - "15GSD"
+                bas_poly.moving_window_size:
+                bas_poly.thresh:
+                    - 0.1
+                sc_pxl.test_dataset:
+                    - crop.dst
+                sc_pxl.window_space_scale:
+                    - auto
+                sc_poly.thresh:
+                    - 0.1
+                sc_poly.use_viterbi:
+                    - 0
+                sc_pxl.package_fpath:
+                    - $SC_MODEL
+                sc_poly_viz.enabled:
+                    - false
+        " \
+        --root_dpath=./my_dag_runs \
+        --devices="0,1" --queue_size=2 \
+        --backend=serial --skip_existing=0 \
+        --pipeline=joint_bas_sc_nocrop \
         --run=0
 
 Example:
