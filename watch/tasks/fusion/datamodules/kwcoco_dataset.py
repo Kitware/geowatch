@@ -1403,8 +1403,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 if not len(new_gids):
                     # import warnings
                     # warnings.warn('exhausted resample possibilities')
-                    _bad_reasons = {k: v for k, v in gid_to_isbad if v}
-                    print(f'exhausted resample possibilities: {vidname} {vidspace_box:s} {_bad_reasons:r}')
+                    _bad_reasons = repr({k: v for k, v in gid_to_isbad.items() if v})
+                    vidspace_box_str = str(vidspace_box)
+                    print(f'exhausted resample possibilities: {vidname} {vidspace_box_str} {_bad_reasons}')
                     # Exhausted all possibilities
                     break
                 for gid in new_gids:

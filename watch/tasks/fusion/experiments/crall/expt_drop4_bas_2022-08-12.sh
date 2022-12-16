@@ -1168,19 +1168,19 @@ python -m watch.tasks.fusion.fit \
     --global_change_weight=0.00 \
     --global_class_weight=0.00 \
     --global_saliency_weight=1.00 \
-    --learning_rate=3e-4 \
-    --weight_decay=1e-5 \
+    --learning_rate=3e-3 \
+    --weight_decay=1e-7 \
     --chip_dims=224,224 \
     --window_space_scale="5GSD" \
     --input_space_scale="5GSD" \
     --output_space_scale="30GSD" \
-    --accumulate_grad_batches=4 \
-    --batch_size=2 \
+    --accumulate_grad_batches=8 \
+    --batch_size=4 \
     --max_epochs=160 \
     --patience=160 \
-    --num_workers=4 \
+    --num_workers=6 \
     --dist_weights=False \
-    --time_steps=17 \
+    --time_steps=7 \
     --channels="$CHANNELS" \
     --time_sampling=soft2-contiguous-hardish3\
     --time_span=3m-6m-1y \
@@ -1200,8 +1200,10 @@ python -m watch.tasks.fusion.fit \
     --resample_invalid_frames=1 \
     --use_cloudmask=1 \
     --num_sanity_val_steps=0 \
-    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/lightning_logs/version_2/package-interupt/package_epoch0_step301.pt
+    --max_epoch_length=4096 \
+    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/lightning_logs/version_4/package-interupt/package_epoch0_step20591.pt
     
+#/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/lightning_logs/version_2/package-interupt/package_epoch0_step301.pt
 #"$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 
 
@@ -1299,7 +1301,7 @@ python -m watch.tasks.fusion.fit \
     --batch_size=2 \
     --max_epochs=160 \
     --patience=160 \
-    --num_workers=2 \
+    --num_workers=1 \
     --dist_weights=False \
     --time_steps=11 \
     --channels="$CHANNELS" \
