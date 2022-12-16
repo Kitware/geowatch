@@ -81,6 +81,7 @@ except Exception:
 
 available_methods = [
     'MultimodalTransformer',
+    'HeterogeneousModel',
 ]
 
 available_datamodules = [

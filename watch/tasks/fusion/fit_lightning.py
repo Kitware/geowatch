@@ -1,15 +1,49 @@
 from watch.tasks.fusion.datamodules.kwcoco_datamodule import KWCocoVideoDataModule
 # Import models for the CLI registry
 from watch.tasks.fusion.methods import * # NOQA
+import pytorch_lightning as pl
 
 """
 The Wrapped class below are examples of why we should eventually factor out the current configuraiton system. LightningCLI interogates the __init__ methods belonging to LightningModule and LightningDataModule to decide which parameters can be configured.
 """
 
 
+# class PartialWeightInitializer(pl.callbacks.Callback):
+
+#     def __init__(self, init='noop'):
+#         ...
+
+#     def on_fit_start(self, trainer, pl_module):
+#         if 0:
+#             # TODO: make this work
+#             import ubelt as ub
+#             from watch.tasks.fusion.fit import coerce_initializer
+#             from watch.utils import util_pattern
+#             init_fpath = '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt'
+#             initializer = coerce_initializer(init_fpath)
+#             # other_model = getattr(initializer, 'other_model', None)
+
+#             # Hack to preserve specific values
+#             print('Initializing weights')
+#             old_state = pl_module.state_dict()
+#             ignore_pattern = util_pattern.MultiPattern.coerce(['*tokenizers*.0.mean', '*tokenizers*.0.std'])
+#             ignore_keys = [key for key in old_state.keys() if ignore_pattern.match(key)]
+#             print('Finding keys to not initializer')
+#             to_preserve = ub.udict(old_state).subdict(ignore_keys).map_values(lambda v: v.clone())
+
+#             initializer.association = 'embedding'
+#             info = initializer.forward(pl_module)  # NOQA
+#             if info:
+#                 mapping = info.get('mapping', None)
+#                 unset = info.get('self_unset', None)
+#                 unused = info.get('self_unused', None)
+#                 print('mapping = {}'.format(ub.repr2(mapping, nl=1)))
+#                 print(f'unused={unused}')
+#                 print(f'unset={unset}')
+
+
 def main():
     from watch.utils.lightning_ext.lightning_cli_ext import LightningCLI_Extension
-    import pytorch_lightning as pl
     from watch.utils import lightning_ext as pl_ext
     import ubelt as ub
 
