@@ -1090,9 +1090,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         resample_invalid = target_.get('resample_invalid_frames', self.resample_invalid_frames)
         if resample_invalid:
+            vidname = video['name']
             self._resample_bad_images(
                 video_gids, gid_to_isbad, sampler, coco_dset, target, target_,
-                with_annots, gid_to_sample)
+                with_annots, gid_to_sample, vidspace_box, vidname)
 
         good_gids = [gid for gid, flag in gid_to_isbad.items() if not flag]
         if len(good_gids) == 0:
@@ -1376,7 +1377,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
     def _resample_bad_images(self, video_gids, gid_to_isbad, sampler,
                              coco_dset, target, target_, with_annots,
-                             gid_to_sample):
+                             gid_to_sample, vidspace_box, vidname):
         max_tries = 3  # TODO parameterize
         # If any image is junk allow for a resample
         if any(gid_to_isbad.values()):
@@ -1402,7 +1403,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 if not len(new_gids):
                     # import warnings
                     # warnings.warn('exhausted resample possibilities')
-                    print('exhausted resample possibilities')
+                    _bad_reasons = {k: v for k, v in gid_to_isbad if v}
+                    print(f'exhausted resample possibilities: {vidname} {vidspace_box:s} {_bad_reasons:r}')
                     # Exhausted all possibilities
                     break
                 for gid in new_gids:

@@ -141,6 +141,7 @@ import pystac_client
 from shapely.geometry import shape as geom_shape
 from watch.utils import util_logging
 from watch.utils import util_s3
+import kwarray
 import ubelt as ub
 import scriptconfig as scfg
 
@@ -280,8 +281,6 @@ class StacSearcher:
             # Sample over time uniformly
             from watch.utils import util_time
             from watch.tasks.fusion.datamodules import temporal_sampling
-            import kwarray
-            import ubelt as ub
             datetimes = [util_time.coerce_datetime(item['properties']['datetime'])
                          for item in features]
             # TODO: Can we get a linear variant that doesn't need the N**2
