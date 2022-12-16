@@ -121,12 +121,12 @@ python -m watch.mlops.schedule_evaluation \
             sc_poly.use_viterbi:
                 - 0
             bas_pxl.enabled: 1
-            bas_poly.enabled: 0
+            bas_poly.enabled: 1
+            bas_poly_eval.enabled: 1
+            bas_pxl_eval.enabled: 1
+            bas_poly_viz.enabled: 1
             sc_pxl.enabled: 0
             sc_poly.enabled: 0
-            bas_poly_eval.enabled: 0
-            bas_pxl_eval.enabled: 0
-            bas_poly_viz.enabled: 0
             sc_poly_eval.enabled: 0
             sc_pxl_eval.enabled: 0
             sc_poly_viz.enabled: 0
@@ -138,6 +138,7 @@ python -m watch.mlops.schedule_evaluation \
     --cache=1 --skip_existing=0 \
     --rprint=1 --run=1
 
+#--max_configs=1 \
 
 # Real data
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)

@@ -171,6 +171,8 @@ class PipelineDAG:
         Submits the jobs to an existing command queue or creates a new one.
         """
         import cmd_queue
+        import shlex
+        import json
         import networkx as nx
 
         if queue is None:
@@ -204,10 +206,16 @@ class PipelineDAG:
                 node_procid = node.process_id
                 node_job = None
                 if node_procid not in queue.named_jobs:
-                    command = node.resolved_command()
-                    node_job = queue.submit(command=command,
+                    # Submit a primary queue process
+                    node_command = node.resolved_command()
+                    node_job = queue.submit(command=node_command,
                                             depends=pred_node_procids,
                                             name=node_procid)
+
+                # We might want to execute a few boilerplate instructions
+                # before running each node.
+                before_node_commands = []
+                write_configs = 1  # parameterize
 
                 # Add symlink jobs that make the graph structure traversable in
                 # the flat output directories.
@@ -231,56 +239,74 @@ class PipelineDAG:
                             f'ln -sfT "{target_path1}" "{link_path1}"',
                             f'ln -sfT "{target_path2}" "{link_path2}"',
                         ]
-                        command = '(' + ' && '.join(parts) + ')'
-                        # TODO: nicer infastructure mechanisms (make the code
-                        # prettier and easier to reason about)
-                        link_node = ProcessNode(
-                            name='__link', executable=command, in_paths={},
-                            out_paths={'link_path1': str(link_path1),
-                                       'link_path2': str(link_path2)})
-                        link_node.configure(config={}, cache=1)
-                        link_command = link_node.resolved_command()
-                        link_procid = 'link_' + node_procid
-                        if link_procid not in queue.named_jobs:
-                            link_job = queue.submit(command=link_command,
-                                                    depends=pred_node_procids,
-                                                    # depends=[node_procid],
-                                                    name=link_procid,
-                                                    tags=['links', 'boilerplate'])
-                            if link_job is not None:
-                                link_job.depends.append(link_job)
+                        # command = '(' + ' && '.join(parts) + ')'
+                        before_node_commands.extend(parts)
 
                 if write_invocations:
                     # Add a job that writes a file with the command used to
                     # execute this node.
                     invoke_fpath = node.resolved_node_dpath / 'invoke.sh'
+
+                    prefix_lines = []
+                    for depend_node in list(node.ancestor_process_nodes()):
+                        prefix_lines.append('# ' + depend_node.resolved_node_dpath)
+                    if prefix_lines:
+                        prefix_lines = ['# See Also: '] + prefix_lines
+                    else:
+                        prefix_lines = ['# Root node']
+
+                    invoke_lines = ['#!/bin/bash'] + prefix_lines + [node.command()]
+                    invoke_text = '\n'.join(invoke_lines)
                     command = '\n'.join([
                         f'mkdir -p {invoke_fpath.parent} && \\',
-                        "echo '",
-                        '#!/bin/bash',
-                        node.command(),
-                        f"\' > {invoke_fpath}",
+                        f'printf {shlex.quote(invoke_text)} \\',
+                        f"> {invoke_fpath}",
                     ])
+                    before_node_commands.append(command)
+
+                if write_configs:
+                    depends_config = {}
+                    for depend_node in list(node.ancestor_process_nodes()) + [node]:
+                        depends_config.update(_add_prefix(depend_node.name + '.', depend_node.config))
+                    # Add a job that writes a file with the command used to
+                    # execute this node.
+                    job_config_fpath = node.resolved_node_dpath / 'job_config.json'
+                    json_text = json.dumps(depends_config)
+                    if _has_jq():
+                        command = '\n'.join([
+                            f'mkdir -p {job_config_fpath.parent} && \\',
+                            f"printf '{json_text}' | jq > {job_config_fpath}",
+                        ])
+                    else:
+                        command = '\n'.join([
+                            f'mkdir -p {job_config_fpath.parent} && \\',
+                            f"printf '{json_text}' > {job_config_fpath}",
+                        ])
+                    before_node_commands.append(command)
+
+                if before_node_commands:
                     # TODO: nicer infastructure mechanisms (make the code
                     # prettier and easier to reason about)
-                    invoke_node = ProcessNode(
-                        name='__invoke', executable=command, in_paths={},
-                        out_paths={'invoke_fpath': str(invoke_fpath)})
-                    invoke_node.configure(config={}, cache=0)
-                    invoke_command = invoke_node.resolved_command()
-                    invoke_procid = 'invoke_' + node_procid
-                    if invoke_procid not in queue.named_jobs:
-                        invoke_job = queue.submit(
-                            command=invoke_command,
+                    before_command = ' && \\\n'.join(before_node_commands)
+                    _procid = 'before_' + node_procid
+                    if _procid not in queue.named_jobs:
+                        _job = queue.submit(
+                            command=before_command,
                             depends=pred_node_procids,
-                            # depends=[node_procid],
-                            name=invoke_procid,
-                            tags=['links', 'boilerplate']
+                            bookkeeper=1,
+                            name=_procid,
+                            tags=['boilerplate']
                         )
                         if node_job is not None:
-                            node_job.depends.append(invoke_job)
+                            node_job.depends.append(_job)
+                    pass
 
         return queue
+
+
+@ub.memoize
+def _has_jq():
+    return ub.find_exe('jq')
 
 
 class Node(ub.NiceRepr):
@@ -1035,6 +1061,10 @@ class ProcessNode(Node):
             return self.test_is_computed_command() + ' || ' + base_command
         else:
             return base_command
+
+
+def _add_prefix(prefix, dict_):
+    return {prefix + k: v for k, v in dict_.items()}
 
 
 try:

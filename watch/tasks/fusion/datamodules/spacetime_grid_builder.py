@@ -246,7 +246,8 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     parts = set(time_sampling.split('+'))
     affinity_type_parts = parts & {
         'hard', 'hardish', 'contiguous', 'soft2', 'soft', 'hardish2',
-        'hardish3'}
+        'hardish3', 'soft2-contiguous-hardish3',
+    }
     update_rule_parts = parts & {'distribute', 'pairwise'}
     unknown = (parts - affinity_type_parts) - update_rule_parts
     if unknown:
@@ -437,7 +438,7 @@ def _sample_single_video_spacetime_targets(
     vidspace_time_dims = winspace_time_dims
 
     # TODO: allow for multiple time samplers
-    time_sampler = tsm.TimeWindowSampler.from_coco_video(
+    time_sampler = tsm.MultiTimeWindowSampler.from_coco_video(
         dset, video_id, gids=video_gids, time_window=vidspace_time_dims,
         affinity_type=affinity_type, update_rule=update_rule,
         name=video_name, time_span=time_span)
@@ -1036,7 +1037,7 @@ def visualize_sample_grid(dset, sample_grid, max_vids=2, max_frames=6):
             datetimes = [None if date is None else parser.parse(date) for date in images.lookup('date_captured', None)]
             unixtimes = np.array([np.nan if dt is None else dt.timestamp() for dt in datetimes])
             sensors = images.lookup('sensor_coarse', None)
-            time_sampler = tsm.TimeWindowSampler(
+            time_sampler = tsm.MultiTimeWindowSampler(
                 unixtimes=unixtimes, sensors=sensors, time_window=max_frames,
                 time_span='1y', affinity_type='hardish3',
                 update_rule='distribute+pairwise')

@@ -224,6 +224,8 @@ class ScheduleEvaluationConfig(scfg.DataConfig):
 
     rprint = scfg.Value(True, isflag=True, help='enable / disable rprint before exec')
 
+    max_configs = scfg.Value(None, help='if specified only run at most this many of the grid search configs')
+
 
 @profile
 def schedule_evaluation(cmdline=False, **kwargs):
@@ -274,6 +276,10 @@ def schedule_evaluation(cmdline=False, **kwargs):
     virtualenv_cmd = config['virtualenv_cmd']
     if virtualenv_cmd:
         queue.add_header_command(virtualenv_cmd)
+
+    max_configs = config['max_configs']
+    if max_configs is not None:
+        all_param_grid = all_param_grid[0:max_configs]
 
     # Configure a DAG for each row.
     for row_config in ub.ProgIter(all_param_grid, desc='configure dags', verbose=3):

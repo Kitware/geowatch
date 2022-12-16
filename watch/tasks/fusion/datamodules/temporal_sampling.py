@@ -1,3 +1,55 @@
+"""
+This module defines our generalized time sampling strategy.
+
+This is used to define our dilated time sampling.
+
+This following doctest illustrates the method on project data.
+
+Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+        >>> import watch
+        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> coco_fpath = data_dvc_dpath / 'Drop4-BAS/KR_R001.kwcoco.json'
+        >>> dset = watch.coerce_kwcoco(coco_fpath)
+        >>> vidid = dset.dataset['videos'][0]['id']
+        >>> self = TimeWindowSampler.from_coco_video(
+        >>>     dset, vidid,
+        >>>     time_window=11,
+        >>>     affinity_type='uniform', time_span='8m', update_rule='',
+        >>> )
+        >>> import kwplot
+        >>> plt = kwplot.autoplt()
+        >>> self.update_affinity(affinity_type='contiguous')
+        >>> self.show_summary(samples_per_frame=3, fnum=1)
+        >>> plt.subplots_adjust(top=0.8)
+        >>> self.update_affinity(affinity_type='soft2')
+        >>> self.show_summary(samples_per_frame=3, fnum=2)
+        >>> plt.subplots_adjust(top=0.8)
+        >>> self.update_affinity(affinity_type='hardish3')
+        >>> self.show_summary(samples_per_frame=3, fnum=3)
+        >>> plt.subplots_adjust(top=0.8)
+
+
+Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+        >>> import watch
+        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> coco_fpath = data_dvc_dpath / 'Drop4-BAS/KR_R001.kwcoco.json'
+        >>> dset = watch.coerce_kwcoco(coco_fpath)
+        >>> self = MultiTimeWindowSampler.from_coco_video(
+        >>>     dset, vidid,
+        >>>     time_window=11,
+        >>>     affinity_type='uniform-soft2-hardish3', update_rule=[''], gamma=2,
+        >>>     time_span='6m-1y')
+        >>> self.sample()
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autosns()
+        >>> self.show_summary(3)
+"""
+
 import kwarray
 import kwimage
 import numpy as np
@@ -13,7 +65,37 @@ class TimeSampleError(IndexError):
     pass
 
 
-class MultiTimeWindowSampler:
+class CommonSamplerMixin:
+    @classmethod
+    def from_coco_video(cls, dset, vidid, gids=None, **kwargs):
+        if gids is None:
+            gids = dset.images(vidid=vidid).lookup('id')
+        images = dset.images(gids)
+        name = dset.index.videos[ub.peek(images.lookup('video_id'))].get('name', '<no-name?>')
+        datetimes = [None if date is None else parser.parse(date) for date in images.lookup('date_captured', None)]
+        unixtimes = np.array([np.nan if dt is None else dt.timestamp() for dt in datetimes])
+        sensors = images.lookup('sensor_coarse', None)
+        kwargs['unixtimes'] = unixtimes
+        kwargs['sensors'] = sensors
+        kwargs['name'] = name
+        self = cls(**kwargs)
+        return self
+
+    @classmethod
+    def from_datetimes(cls, datetimes, time_span='full', affinity_type='soft2',
+                       **kwargs):
+        unixtimes = np.array([dt.timestamp() for dt in datetimes])
+        if isinstance(time_span, str) and time_span == 'full':
+            time_span = max(datetimes) - min(datetimes)
+        kwargs['unixtimes'] = unixtimes
+        kwargs['sensors'] = None
+        kwargs['time_span'] = time_span
+        kwargs['affinity_type'] = affinity_type
+        self = cls(**kwargs)
+        return self
+
+
+class MultiTimeWindowSampler(CommonSamplerMixin):
     """
     A wrapper that contains multiple time window samplers with different
     affinity matrices to increase the diversity of temporal sampling.
@@ -28,8 +110,8 @@ class MultiTimeWindowSampler:
         >>> time_window = 5
         >>> self = MultiTimeWindowSampler(
         >>>     unixtimes=unixtimes, sensors=sensors, time_window=time_window, update_rule='pairwise+distribute',
-        >>>     #time_spans=['2y', '1y', '5m'])
-        >>>     time_spans='7d-1m', affinity_type='soft2')
+        >>>     #time_span=['2y', '1y', '5m'])
+        >>>     time_span='7d-1m', affinity_type='soft2')
         >>> self.sample()
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
@@ -39,10 +121,17 @@ class MultiTimeWindowSampler:
 
     def __init__(self, unixtimes, sensors, time_window, affinity_type='hard',
                  update_rule='distribute', determenistic=False, gamma=1,
-                 time_spans=['2y', '1y', '5m'], name='?'):
+                 time_span=['2y', '1y', '5m'], name='?'):
 
-        if isinstance(time_spans, str):
-            time_spans = time_spans.split('-')
+        if isinstance(time_span, str):
+            time_span = time_span.split('-')
+        if isinstance(affinity_type, str):
+            affinity_type = affinity_type.split('-')
+        if isinstance(update_rule, str):
+            update_rule = update_rule.split('-')
+
+        if len(update_rule) == 0:
+            update_rule = ['']
 
         self.sensors = sensors
         self.unixtimes = unixtimes
@@ -53,24 +142,28 @@ class MultiTimeWindowSampler:
         self.gamma = gamma
         self.name = name
         self.num_frames = len(unixtimes)
-        self.time_spans = time_spans
+        self.time_span = time_span
         self.sub_samplers = {}
         self._build()
 
     def _build(self):
-        for time_span in self.time_spans:
+        import itertools as it
+        for time_span, affinity_type, update_rule in it.product(self.time_span, self.affinity_type, self.update_rule):
             sub_sampler = TimeWindowSampler(
                 unixtimes=self.unixtimes,
                 sensors=self.sensors,
                 time_window=self.time_window,
-                update_rule=self.update_rule,
-                affinity_type=self.affinity_type,
+                update_rule=update_rule,
+                affinity_type=affinity_type,
                 determenistic=self.determenistic,
                 gamma=self.gamma,
                 name=self.name,
                 time_span=time_span,
             )
-            self.sub_samplers[time_span] = sub_sampler
+            key = ':'.join([time_span, affinity_type, update_rule])
+            self.sub_samplers[key] = sub_sampler
+            self.indexes = sub_sampler.indexes
+        # self.indexes = np.arange(self.affinity.shape[0])
 
     def sample(self, main_frame_idx=None, include=None, exclude=None,
                return_info=False, error_level=0, rng=None):
@@ -102,7 +195,7 @@ class MultiTimeWindowSampler:
         affinity = np.mean(np.stack([sampler.affinity for sampler in self.sub_samplers.values()]), axis=0)
         return affinity
 
-    def show_summary(self, samples_per_frame=1, fnum=1):
+    def show_summary(self, samples_per_frame=1, show_indexes=0, fnum=1):
         """
         Similar to :func:`TimeWindowSampler.show_summary`
         """
@@ -127,7 +220,7 @@ class MultiTimeWindowSampler:
             update_rule={self.update_rule} gamma={self.gamma}
             ''')
 
-        pnum_ = kwplot.PlotNums(nCols=3)
+        pnum_ = kwplot.PlotNums(nCols=2 + show_indexes)
 
         fig = kwplot.figure(fnum=fnum, doclf=True)
 
@@ -139,19 +232,20 @@ class MultiTimeWindowSampler:
         kwplot.imshow(affinity, ax=ax)
         ax.set_title('combined frame affinity')
 
-        fig = kwplot.figure(fnum=fnum, pnum=pnum_())
-        if samples_per_frame < 5:
-            ax = plot_dense_sample_indices(sample_idxs, self.unixtimes, linewidths=0.1)
-            ax.set_aspect('equal')
-        else:
-            ax = plot_dense_sample_indices(sample_idxs, self.unixtimes, linewidths=0.001)
+        if show_indexes:
+            fig = kwplot.figure(fnum=fnum, pnum=pnum_())
+            if samples_per_frame < 2:
+                ax = plot_dense_sample_indices(sample_idxs, self.unixtimes, linewidths=0.1)
+                ax.set_aspect('equal')
+            else:
+                ax = plot_dense_sample_indices(sample_idxs, self.unixtimes, linewidths=0.001)
 
         kwplot.figure(fnum=fnum, pnum=pnum_())
         plot_temporal_sample_indices(sample_idxs, self.unixtimes)
         fig.suptitle(title_info)
 
 
-class TimeWindowSampler:
+class TimeWindowSampler(CommonSamplerMixin):
     """
     Object oriented API to produce random temporal samples given a set of
     keyframes with metadata.
@@ -245,35 +339,7 @@ class TimeWindowSampler:
 
         self.compute_affinity()
 
-    @classmethod
-    def from_datetimes(cls, datetimes, time_span='full', affinity_type='soft2',
-                       **kwargs):
-        unixtimes = np.array([dt.timestamp() for dt in datetimes])
-        if isinstance(time_span, str) and time_span == 'full':
-            time_span = max(datetimes) - min(datetimes)
-        kwargs['unixtimes'] = unixtimes
-        kwargs['sensors'] = None
-        kwargs['time_span'] = time_span
-        kwargs['affinity_type'] = affinity_type
-        self = cls(**kwargs)
-        return self
-
-    @classmethod
-    def from_coco_video(cls, dset, vidid, gids=None, **kwargs):
-        if gids is None:
-            gids = dset.images(vidid=vidid).lookup('id')
-        images = dset.images(gids)
-        name = dset.index.videos[ub.peek(images.lookup('video_id'))].get('name', '<no-name?>')
-        datetimes = [None if date is None else parser.parse(date) for date in images.lookup('date_captured', None)]
-        unixtimes = np.array([np.nan if dt is None else dt.timestamp() for dt in datetimes])
-        sensors = images.lookup('sensor_coarse', None)
-        kwargs['unixtimes'] = unixtimes
-        kwargs['sensors'] = sensors
-        kwargs['name'] = name
-        self = cls(**kwargs)
-        return self
-
-    def compute_affinity(self):
+    def update_affinity(self, affinity_type=None, update_rule=None):
         """
         Construct the affinity matrix given the current ``affinity_type``.
 
@@ -297,7 +363,21 @@ class TimeWindowSampler:
         if self.affkw is None:
             self.affkw = {}
 
-        if self.affinity_type.startswith('soft'):
+        if affinity_type is not None:
+            self.affinity_type = affinity_type
+
+        if update_rule is not None:
+            self.update_rule = update_rule
+
+        # update_rules = set(update_rule.split('+'))
+        # config = ub.dict_subset({'pairwise': True, 'distribute': True}, update_rules)
+        # do_pairwise = config.get('pairwise', False)
+        # do_distribute = config.get('distribute', False)
+
+        if self.affinity_type.startswith('uniform'):
+            n = len(self.unixtimes)
+            self.affinity = np.full((n, n), fill_value=1 / n, dtype=np.float32)
+        elif self.affinity_type.startswith('soft'):
             if self.affinity_type == 'soft':
                 version = 1
             else:
@@ -382,6 +462,18 @@ class TimeWindowSampler:
 
         self.indexes = np.arange(self.affinity.shape[0])
 
+    compute_affinity = update_affinity
+
+    # TODO: deprecate wrapper for moving APIs
+    __todo__ = '''
+    def deprecate_alias(func):
+        def _wrapper(*args, **kwargs):
+            ub.schedule_deprecation(...)
+            return func(*args, **kwargs)
+        return _wrapper
+    compute_affinity = deprecate_alias(update_affinity)
+    '''
+
     @property
     def main_indexes(self):
         ub.schedule_deprecation(
@@ -450,7 +542,8 @@ class TimeWindowSampler:
         )
         return ret
 
-    def show_summary(self, samples_per_frame=1, fnum=1, with_temporal=True):
+    def show_summary(self, samples_per_frame=1, fnum=1, show_indexes=False,
+                     with_temporal=True, compare_determ=True, title_suffix=''):
         """
         Visualize the affinity matrix and two views of a selected sample.
 
@@ -494,10 +587,14 @@ class TimeWindowSampler:
             >>> for idx, kwargs in enumerate(grid):
             >>>     print('kwargs = {!r}'.format(kwargs))
             >>>     self = TimeWindowSampler.from_coco_video(dset, vidid, **kwargs)
-            >>>     self.show_summary(samples_per_frame=30, fnum=idx, with_temporal=False)
+            >>>     self.show_summary(samples_per_frame=30, fnum=idx, show_indexes=False, determenistic=True)
         """
         import kwplot
         kwplot.autompl()
+
+        if compare_determ:
+            _prev_determenistic = self.determenistic
+            self.determenistic = False
 
         sample_idxs = []
         for idx in range(self.affinity.shape[0]):
@@ -513,14 +610,16 @@ class TimeWindowSampler:
         title_info = ub.codeblock(
             f'''
             name={self.name}
-            affinity_type={self.affinity_type} determenistic={self.determenistic}
+            affinity_type={self.affinity_type}
             update_rule={self.update_rule} gamma={self.gamma}
-            ''')
+            ''') + title_suffix
+        # determenistic={self.determenistic}
 
-        with_dense = True
         with_mat = True
 
-        num_subplots = (with_mat + with_dense + with_temporal)
+        n_temp_plots = (compare_determ + 1) * with_temporal
+
+        num_subplots = (with_mat + show_indexes + n_temp_plots)
 
         pnum_ = kwplot.PlotNums(nCols=num_subplots)
 
@@ -531,17 +630,31 @@ class TimeWindowSampler:
         kwplot.imshow(self.affinity, ax=ax, cmap='viridis')
         ax.set_title('frame affinity')
 
-        fig = kwplot.figure(fnum=fnum, pnum=pnum_())
-        if samples_per_frame < 5:
-            ax = plot_dense_sample_indices(sample_idxs, self.unixtimes, linewidths=0.1)
-            ax.set_aspect('equal')
-        else:
-            ax = plot_dense_sample_indices(sample_idxs, self.unixtimes, linewidths=0.001)
+        if show_indexes:
+            fig = kwplot.figure(fnum=fnum, pnum=pnum_())
+            if samples_per_frame < 5:
+                ax = plot_dense_sample_indices(sample_idxs, self.unixtimes, linewidths=0.1)
+                ax.set_aspect('equal')
+            else:
+                ax = plot_dense_sample_indices(sample_idxs, self.unixtimes, linewidths=0.001)
 
         if with_temporal:
             kwplot.figure(fnum=fnum, pnum=pnum_())
-            plot_temporal_sample_indices(sample_idxs, self.unixtimes, sensors=self.sensors)
+            plot_temporal_sample_indices(sample_idxs, self.unixtimes, sensors=self.sensors, title_suffix=': non-determenistic')
+
+            if compare_determ:
+                self.determenistic = True
+                sample_idxs = []
+                for idx in range(self.affinity.shape[0]):
+                    idxs = self.sample(idx)
+                    sample_idxs.append(idxs)
+                kwplot.figure(fnum=fnum, pnum=pnum_())
+                plot_temporal_sample_indices(sample_idxs, self.unixtimes, sensors=self.sensors, title_suffix=': determenistic')
+
         fig.suptitle(title_info)
+
+        if compare_determ:
+            self.determenistic = _prev_determenistic
 
     def show_affinity(self, fnum=3):
         """
@@ -783,7 +896,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         avail_idx = rng.randint(0, len(avail))
         chosen = [avail_idx]
 
-    update_rules = set(update_rule.split('+'))
+    update_rules = {r for r in update_rule.split('+') if r}
     config = ub.dict_subset({'pairwise': True, 'distribute': True}, update_rules)
     do_pairwise = config.get('pairwise', False)
     do_distribute = config.get('distribute', False)
@@ -1546,11 +1659,15 @@ def plot_temporal_sample_indices(sample_idxs, unixtimes, sensors=None, title_suf
     else:
         colors = ['darkblue'] * len(datetimes)
 
+    # Mark available observation locations
     for t, color in zip(datetimes, colors):
         ax.plot([t, t], [0, len(sample_idxs) + 1], color=color, alpha=0.5)
 
+    # Mark specific sample location
+    sample_idxs = sorted(sample_idxs, key=lambda x: tuple([min(x), max(x)]))
+
     for sample_ypos, sample in enumerate(sample_idxs, start=1):
-        ax.plot(datetimes[sample], [sample_ypos] * len(sample), '-x')
+        ax.plot(datetimes[sample], [sample_ypos] * len(sample), '-', marker='.')
 
     ax.set_title('Sample Times' + title_suffix)
     ax.set_xlabel('Time')
