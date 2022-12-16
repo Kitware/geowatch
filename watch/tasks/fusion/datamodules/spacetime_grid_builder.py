@@ -569,6 +569,7 @@ def _sample_single_video_spacetime_targets(
     # Disable determenism in the returned sampler
     time_sampler.determenistic = False
     meta = {
+        'video_name': video_name,
         'resolved_scale': resolved_scale,
         'vidspace_window_space_dims': vidspace_window_dims,
         'winspace_window_space_dims': winspace_space_dims,

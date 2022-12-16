@@ -191,12 +191,6 @@ class KWCocoVideoDatasetConfig(scfg.Config):
 
         'normalize_perframe': scfg.Value(False, help='undocumented - ignored'),
 
-        'resample_invalid_frames': scfg.Value(True, help=ub.paragraph(
-            '''
-            if True, will attempt to resample any frame without valid
-            data
-            ''')),
-
         'set_cover_algo': scfg.Value(None, choices=[None, 'approx', 'exact'], help=ub.paragraph(
             '''
             Set cover algorithm to remove redundant gids when building space
@@ -236,9 +230,24 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             loss.
             ''')),
 
-        'use_cloudmask': scfg.Value(1, help=ub.paragraph(
+        'use_cloudmask': scfg.Value(None, help=ub.paragraph(
             '''
             Allow the dataloader to use the quality band to skip frames.
+            DEPRECATED: set quality_threshold=0 to disable the cloudmask.
+            Set to a positive value to use it, up to that threshold.
+            ''')),
+
+        'quality_threshold': scfg.Value(.2, help=ub.paragraph(
+            '''
+            The minimum fraction of usable pixels required in a frame sample.
+            If a frame has fewer than this fraction of usable pixels (i.e. not
+            clouds or other quality flags), it is marked as a "bad" frame.
+            ''')),
+
+        'resample_invalid_frames': scfg.Value(True, help=ub.paragraph(
+            '''
+            if True, will attempt to resample any frame marked as "bad" via
+            quality or nodata checks.
             ''')),
 
         'use_grid_positives': scfg.Value(True, help=ub.paragraph(
@@ -291,6 +300,10 @@ class KWCocoVideoDatasetConfig(scfg.Config):
 
         if self['time_sampling'] == 'auto':
             self['time_sampling'] = 'hard+distribute'
+
+        if self['use_cloudmask'] is not None:
+            if not self['use_cloudmask']:
+                self['quality_threshold'] = 0
 
 
 class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
@@ -462,7 +475,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             workers=grid_workers,  # could configure this
             use_cache=self.config['use_grid_cache'],
             respect_valid_regions=self.config['use_grid_valid_regions'],
-
         )
 
         if mode == 'custom':
@@ -494,6 +506,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             )
             new_sample_grid = builder.build()
 
+            # Train time data balancing
             n_pos = len(new_sample_grid['positives_indexes'])
             n_neg = len(new_sample_grid['negatives_indexes'])
 
@@ -745,15 +758,16 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # forces us to mark this image as bad.
         force_bad = False
 
-        force_loading_bad_images = target_.get('force_loading_bad_images', 0)
-        stop_on_bad_image = not force_loading_bad_images
+        FORCE_LOADING_BAD_IMAGES = target_.get('FORCE_LOADING_BAD_IMAGES', 0)
+        stop_on_bad_image = not FORCE_LOADING_BAD_IMAGES
 
-        if self.use_cloudmask:
+        quality_threshold = target_.get('quality_threshold', self.config['quality_threshold'])
+        if quality_threshold > 0:
             # Skip if quality mask indicates more than 50% clouds.
             is_cloud_iffy = self._interpret_quality_mask(
                 sampler, coco_img, tr_frame)
             if is_cloud_iffy is not None:
-                cloud_threshold = 0.8  # TODO: parametarize
+                cloud_threshold = (1 - quality_threshold)
                 cloud_frac = is_cloud_iffy.mean()
                 if cloud_frac > cloud_threshold:
                     force_bad = 'too cloudy'
@@ -917,7 +931,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>>     window_space_scale='10GSD',
             >>>     output_space_scale='10GSD',
             >>>     dist_weights=1,
-            >>>     use_cloudmask=0,
+            >>>     quality_threshold=0,
             >>>     neg_to_pos_ratio=0, time_sampling='soft2',
             >>> )
             >>> self.requested_tasks['change'] = False
@@ -954,7 +968,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>>     output_space_scale='native',
             >>>     #output_space_scale='10GSD',
             >>>     dist_weights=1,
-            >>>     use_cloudmask=0,
+            >>>     quality_threshold=0,
             >>>     neg_to_pos_ratio=0, time_sampling='soft2',
             >>> )
             >>> self.requested_tasks['change'] = False
@@ -1100,8 +1114,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             raise FailedSample('Cannot force a good sample')
 
         final_gids = ub.oset(video_gids) & good_gids
-        force_loading_bad_images = target_.get('force_loading_bad_images', 0)
-        if force_loading_bad_images:
+        FORCE_LOADING_BAD_IMAGES = target_.get('FORCE_LOADING_BAD_IMAGES', 0)
+        if FORCE_LOADING_BAD_IMAGES:
             final_gids = ub.oset(video_gids) & set(gid_to_isbad.keys())
             print('gid_to_isbad = {}'.format(ub.repr2(gid_to_isbad, nl=1)))
 
@@ -1378,6 +1392,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
     def _resample_bad_images(self, video_gids, gid_to_isbad, sampler,
                              coco_dset, target, target_, with_annots,
                              gid_to_sample, vidspace_box, vidname):
+        """
+        If the initial sample has marked any of the images as "bad", then we
+        attempt to find replacements by reusing the temporal sampler, but with
+        extra arguments to exclude the bad frames.
+        """
         max_tries = 3  # TODO parameterize
         # If any image is junk allow for a resample
         if any(gid_to_isbad.values()):

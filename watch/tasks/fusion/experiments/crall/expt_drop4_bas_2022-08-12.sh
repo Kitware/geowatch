@@ -1178,17 +1178,18 @@ python -m watch.tasks.fusion.fit \
     --batch_size=4 \
     --max_epochs=160 \
     --patience=160 \
-    --num_workers=6 \
+    --num_workers=5 \
     --dist_weights=False \
     --time_steps=7 \
     --channels="$CHANNELS" \
+    --neg_to_pos_ratio=0.2 \
     --time_sampling=soft2-contiguous-hardish3\
     --time_span=3m-6m-1y \
     --tokenizer=linconv \
     --optimizer=AdamW \
     --arch_name=smt_it_stm_p8 \
     --decoder=mlp \
-    --draw_interval=5min \
+    --draw_interval=1min \
     --num_draw=4 \
     --use_centered_positives=True \
     --normalize_inputs=128 \
@@ -1198,11 +1199,14 @@ python -m watch.tasks.fusion.fit \
     --devices "0," \
     --amp_backend=apex \
     --resample_invalid_frames=1 \
-    --use_cloudmask=1 \
+    --quality_threshold=0.6 \
     --num_sanity_val_steps=0 \
-    --max_epoch_length=4096 \
+    --max_epoch_length=16384 \
     --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/lightning_logs/version_4/package-interupt/package_epoch0_step20591.pt
     
+
+    
+    #--init="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 #/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/lightning_logs/version_2/package-interupt/package_epoch0_step301.pt
 #"$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 

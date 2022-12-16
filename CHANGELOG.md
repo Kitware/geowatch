@@ -12,6 +12,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * New QA band handling to support different QA encodings
 * New endpoints for ACC-2 data.
 * Merge in Nov21 Pseudolive branch
+* Add `quality_threshold` argument to the kwcoco video dataset, deprecate `use_cloudmask`.
 
 ### Fixed
 * Issue in visualize where frames might be ordered incorrectly.

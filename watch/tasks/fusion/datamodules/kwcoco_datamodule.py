@@ -227,7 +227,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.save_hyperparameters(cfgdict)
         # Backwards compatibility. Previous iterations had the
         # config saved directly as datamodule arguments
-        # print('cfgdict = {}'.format(ub.repr2(cfgdict, nl=1)))
         self.__dict__.update(cfgdict)
         self.train_kwcoco = self.config['train_dataset']
         self.vali_kwcoco = self.config['vali_dataset']
@@ -239,6 +238,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         # with small changes made for validation and test datasets.
         self.vali_dataset_config = self.train_dataset_config.copy()
         self.vali_dataset_config['chip_overlap'] = 0.0
+        # TODO: reconsider this hard-coded decision. It may bias our validation
+        # check towards too many false positives. That is what we want if we
+        # are having trouble there, but that setting should be configurable.
         self.vali_dataset_config['neg_to_pos_ratio'] = 0.0
         self.vali_dataset_config['use_grid_positives'] = True
         self.vali_dataset_config['use_centered_positives'] = False

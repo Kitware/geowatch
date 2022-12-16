@@ -495,25 +495,27 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
             pl.callbacks.ModelCheckpoint(every_n_epochs=10),
         ]
 
-        if datamodule.requested_tasks['change']:
-            callbacks += [
-                pl.callbacks.ModelCheckpoint(
-                    monitor='val_change_f1', mode='max', save_top_k=4),
-            ]
+        ENABLE_METRICS = 0
+        if ENABLE_METRICS:
+            if datamodule.requested_tasks['change']:
+                callbacks += [
+                    pl.callbacks.ModelCheckpoint(
+                        monitor='val_change_f1', mode='max', save_top_k=4),
+                ]
 
-        if datamodule.requested_tasks['saliency']:
-            callbacks += [
-                pl.callbacks.ModelCheckpoint(
-                    monitor='val_saliency_f1', mode='max', save_top_k=4),
-            ]
+            if datamodule.requested_tasks['saliency']:
+                callbacks += [
+                    pl.callbacks.ModelCheckpoint(
+                        monitor='val_saliency_f1', mode='max', save_top_k=4),
+                ]
 
-        if datamodule.requested_tasks['class'] and 0:
-            callbacks += [
-                pl.callbacks.ModelCheckpoint(
-                    monitor='val_class_f1_micro', mode='max', save_top_k=4),
-                pl.callbacks.ModelCheckpoint(
-                    monitor='val_class_f1_macro', mode='max', save_top_k=4),
-            ]
+            if datamodule.requested_tasks['class'] and 0:
+                callbacks += [
+                    pl.callbacks.ModelCheckpoint(
+                        monitor='val_class_f1_micro', mode='max', save_top_k=4),
+                    pl.callbacks.ModelCheckpoint(
+                        monitor='val_class_f1_macro', mode='max', save_top_k=4),
+                ]
 
     # TODO: explititly initialize the tensorboard logger?
     # logger = [
