@@ -1297,11 +1297,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             # The encoder does seem to be making use of the fact that we can
             # put space and modality on different dimensions
             num_time_modes = len(recon_info)
-            print(f'_tokens.shape={_tokens.shape}')
             input_feat_dim = _tokens.shape[-1]
-            print(f'input_feat_dim={input_feat_dim}')
             tokens = _tokens.view(1, 1, num_time_modes, 1, -1, input_feat_dim)
-            print(f'tokens.shape={tokens.shape}')
             encoded_tokens = self.encoder(tokens)
             enc_feat_dim = encoded_tokens.shape[-1]
             encoded_tokens = encoded_tokens.view(-1, enc_feat_dim)
