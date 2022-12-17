@@ -119,6 +119,7 @@ def make_predict_config(cmdline=False, **kwargs):
         'window_space_scale',
         'output_space_scale',
         'use_cloudmask',
+        'quality_threshold',
         'resample_invalid_frames',
         'set_cover_algo',
     ]

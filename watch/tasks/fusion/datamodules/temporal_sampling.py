@@ -195,6 +195,16 @@ class MultiTimeWindowSampler(CommonSamplerMixin):
         affinity = np.mean(np.stack([sampler.affinity for sampler in self.sub_samplers.values()]), axis=0)
         return affinity
 
+    @affinity.setter
+    def affinity(self, value):
+        # Define setter for backwards compatibility
+        if len(self.sub_samplers) > 1:
+            raise Exception(
+                'no way to hack affinity directly when there is '
+                'more than one subsampler')
+        sub_sampler = ub.peek(self.sub_samplers.values())
+        sub_sampler.affinity = value
+
     def show_summary(self, samples_per_frame=1, show_indexes=0, fnum=1):
         """
         Similar to :func:`TimeWindowSampler.show_summary`

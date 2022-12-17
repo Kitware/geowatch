@@ -97,7 +97,7 @@ def main(cmdline=True, **kwargs):
     sns = kwplot.autosns()
     plt = kwplot.autoplt()
 
-    metric_cols = [c for c in df.columns if 'metrics.' in c]
+    # metric_cols = [c for c in df.columns if 'metrics.' in c]
 
     metrics_of_interset = [
         'sc_poly_eval.metrics.macro_f1_siteprep',

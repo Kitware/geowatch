@@ -169,7 +169,7 @@ class SMARTDataMixin:
             if 1:
                 dset = self.sampler.dset
                 target['resample_invalid_frames'] = 1
-                target['force_loading_bad_images'] = 1
+                target['FORCE_LOADING_BAD_IMAGES'] = 1
                 item = self.getitem(target)
                 canvas = self.draw_item(item)
                 kwplot.imshow(canvas)
