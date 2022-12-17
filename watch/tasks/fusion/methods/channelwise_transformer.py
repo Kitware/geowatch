@@ -94,7 +94,7 @@ except Exception:
 
 
 # Model names define the transformer encoder used by the method
-available_encoders = list(transformer.encoder_configs.keys()) + ['deit', "perceiver"]
+available_encoders = list(transformer.encoder_configs.keys()) + ['deit', "perceiver", 'vit']
 
 
 @scfg.dataconf
@@ -453,7 +453,15 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             self.hparams.positive_change_weight
         ])
 
+        if isinstance(self.hparams.stream_channels, str):
+            RAW_CHANS = int(self.hparams.stream_channels.split(' ')[0])
+        else:
+            RAW_CHANS = None
+        print(f'RAW_CHANS={RAW_CHANS}')
         MODAL_AGREEMENT_CHANS = self.hparams.stream_channels
+        print(f'MODAL_AGREEMENT_CHANS={MODAL_AGREEMENT_CHANS}')
+        print(f'self.hparams.tokenizer={self.hparams.tokenizer}')
+
         self.tokenizer = self.hparams.tokenizer
         self.sensor_channel_tokenizers = RobustModuleDict()
 
@@ -472,25 +480,40 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 self.sensor_channel_tokenizers[s] = RobustModuleDict()
 
             if self.hparams.tokenizer == 'rearrange':
+                if RAW_CHANS is None:
+                    in_features_raw = MODAL_AGREEMENT_CHANS
+                else:
+                    in_features_raw = RAW_CHANS
                 tokenize = RearrangeTokenizer(
-                    in_channels=in_chan, agree=MODAL_AGREEMENT_CHANS,
+                    in_channels=in_chan, agree=in_features_raw,
                     window_size=self.hparams.window_size,
                 )
             elif self.hparams.tokenizer == 'conv7':
                 # Hack for old models
-                in_features_raw = MODAL_AGREEMENT_CHANS
+                if RAW_CHANS is None:
+                    in_features_raw = MODAL_AGREEMENT_CHANS
+                else:
+                    in_features_raw = RAW_CHANS
                 tokenize = ConvTokenizer(in_chan, in_features_raw, norm=None)
             elif self.hparams.tokenizer == 'linconv':
-                in_features_raw = MODAL_AGREEMENT_CHANS * 64
+                if RAW_CHANS is None:
+                    in_features_raw = MODAL_AGREEMENT_CHANS * 64
+                else:
+                    in_features_raw = RAW_CHANS
                 tokenize = LinearConvTokenizer(in_chan, in_features_raw)
             elif self.hparams.tokenizer == 'dwcnn':
-                in_features_raw = MODAL_AGREEMENT_CHANS * 64
+                if RAW_CHANS is None:
+                    in_features_raw = MODAL_AGREEMENT_CHANS * 64
+                else:
+                    in_features_raw = RAW_CHANS
                 tokenize = DWCNNTokenizer(in_chan, in_features_raw, norm=self.hparams.token_norm)
             else:
                 raise KeyError(self.hparams.tokenizer)
 
             self.sensor_channel_tokenizers[s][c] = tokenize
             in_features_raw = tokenize.out_channels
+
+        print(f'in_features_raw={in_features_raw}')
 
         # for (s, c), stats in input_stats.items():
         #     self.sensor_channel_tokenizers[s][c] = tokenize
@@ -501,6 +524,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         self.in_features_pos = in_features_pos
         self.in_features_raw = in_features_raw
 
+        print(f'self.in_features={self.in_features}')
         ### NEW:
         # Learned positional encodings
         self.token_learner1_time_delta = nh.layers.MultiLayerPerceptronNd(
@@ -528,6 +552,22 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             self.encoder = transformer.DeiTEncoder(
                 # **encoder_config,
                 in_features=in_features,
+                # attention_impl=attention_impl,
+                # dropout=dropout,
+            )
+        elif self.hparams.arch_name.startswith('vit'):
+            """
+            Ignore:
+                >>> # Note: it is important that the non-kwargs are saved as hyperparams
+                >>> from watch.tasks.fusion.methods.channelwise_transformer import MultimodalTransformer
+                >>> channels, classes, dataset_stats = MultimodalTransformer.demo_dataset_stats()
+                >>> self = model = MultimodalTransformer(arch_name="vit", stream_channels='720 !', input_sensorchan=channels, classes=classes, dataset_stats=dataset_stats, tokenizer='linconv')
+                >>> batch = self.demo_batch()
+                >>> out = self.forward_step(batch)
+            """
+            self.encoder = transformer.MM_VITEncoder(
+                # **encoder_config,
+                # in_features=in_features,
                 # attention_impl=attention_impl,
                 # dropout=dropout,
             )
@@ -1009,10 +1049,10 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         Example:
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-            >>> channels, clases, dataset_stats = MultimodalTransformer.demo_dataset_stats()
+            >>> channels, classes, dataset_stats = MultimodalTransformer.demo_dataset_stats()
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
-            >>>     decoder='segmenter', classes=clases, global_saliency_weight=1,
+            >>>     decoder='segmenter', classes=classes, global_saliency_weight=1,
             >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
             >>> batch = self.demo_batch()
             >>> outputs = self.forward_step(batch, with_loss=True)
@@ -1123,10 +1163,10 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         """
         Example:
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-            >>> channels, clases, dataset_stats = MultimodalTransformer.demo_dataset_stats()
+            >>> channels, classes, dataset_stats = MultimodalTransformer.demo_dataset_stats()
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
-            >>>     decoder='segmenter', classes=clases, global_saliency_weight=1,
+            >>>     decoder='segmenter', classes=classes, global_saliency_weight=1,
             >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
             >>> item = self.demo_batch(width=64, height=65)[0]
             >>> outputs = self.forward_item(item, with_loss=True)
@@ -1138,10 +1178,10 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         Example:
             >>> # Decoupled resolutions
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-            >>> channels, clases, dataset_stats = MultimodalTransformer.demo_dataset_stats()
+            >>> channels, classes, dataset_stats = MultimodalTransformer.demo_dataset_stats()
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
-            >>>     decoder='mlp', classes=clases, global_saliency_weight=1,
+            >>>     decoder='mlp', classes=classes, global_saliency_weight=1,
             >>>     dataset_stats=dataset_stats, input_sensorchan=channels, decouple_resolution=True)
             >>> batch = self.demo_batch(width=(11, 21), height=(16, 64), num_timesteps=3)
             >>> item = batch[0]
@@ -1257,8 +1297,11 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             # The encoder does seem to be making use of the fact that we can
             # put space and modality on different dimensions
             num_time_modes = len(recon_info)
+            print(f'_tokens.shape={_tokens.shape}')
             input_feat_dim = _tokens.shape[-1]
+            print(f'input_feat_dim={input_feat_dim}')
             tokens = _tokens.view(1, 1, num_time_modes, 1, -1, input_feat_dim)
+            print(f'tokens.shape={tokens.shape}')
             encoded_tokens = self.encoder(tokens)
             enc_feat_dim = encoded_tokens.shape[-1]
             encoded_tokens = encoded_tokens.view(-1, enc_feat_dim)

@@ -1164,9 +1164,9 @@ python -m watch.tasks.fusion.fit \
     --vali_dataset="$VALI_FPATH" \
     --test_dataset="$TEST_FPATH" \
     --class_loss='focal' \
-    --saliency_loss='dicefocal' \
+    --saliency_loss='focal' \
     --global_change_weight=0.00 \
-    --global_class_weight=0.00 \
+    --global_class_weight=1e-7 \
     --global_saliency_weight=1.00 \
     --learning_rate=3e-3 \
     --weight_decay=1e-7 \
@@ -1175,7 +1175,7 @@ python -m watch.tasks.fusion.fit \
     --input_space_scale="5GSD" \
     --output_space_scale="30GSD" \
     --accumulate_grad_batches=8 \
-    --batch_size=4 \
+    --batch_size=2 \
     --max_epochs=160 \
     --patience=160 \
     --num_workers=5 \
@@ -1202,7 +1202,10 @@ python -m watch.tasks.fusion.fit \
     --quality_threshold=0.6 \
     --num_sanity_val_steps=0 \
     --max_epoch_length=16384 \
-    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/lightning_logs/version_4/package-interupt/package_epoch0_step20591.pt
+    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/lightning_logs/version_11/package-interupt/package_epoch4_step2122.pt
+
+
+    #--init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/lightning_logs/version_4/package-interupt/package_epoch0_step20591.pt
     
 
     
@@ -1267,7 +1270,9 @@ python -m watch.tasks.fusion.fit \
     --amp_backend=apex \
     --use_cloudmask=1 \
     --num_sanity_val_steps=0 \
-    --init="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+    --init=/home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_0/package-interupt/package_epoch0_step38851.pt
+
+    #--init="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 
 
 ### Horologic
@@ -1352,16 +1357,16 @@ python -m watch.tasks.fusion fit \
     --model.init_args.global_class_weight=0.00 \
     --model.init_args.global_saliency_weight=1.00 \
     --model.init_args.class_loss='focal' \
-    --model.init_args.saliency_loss='dicefocal' \
+    --model.init_args.saliency_loss='focal' \
     --data.train_dataset="$TRAIN_FPATH" \
     --data.vali_dataset="$VALI_FPATH" \
     --data.test_dataset="$TEST_FPATH" \
     --data.channels="$CHANNELS" \
-    --data.chip_dims=224,224 \
-    --data.window_space_scale="15GSD" \
-    --data.input_space_scale="15GSD" \
+    --data.chip_dims=128,128 \
+    --data.window_space_scale="30GSD" \
+    --data.input_space_scale="30GSD" \
     --data.output_space_scale="30GSD" \
-    --data.time_steps=7 \
+    --data.time_steps=3 \
     --data.time_sampling=soft2-contiguous-hardish3\
     --data.time_span=3m-6m-1y \
     --data.temporal_dropout=0.5 \
@@ -1371,8 +1376,8 @@ python -m watch.tasks.fusion fit \
     --data.resample_invalid_frames=1 \
     --data.quality_threshold=0.6 \
     --data.normalize_inputs=128 \
-    --data.batch_size=4 \
-    --data.num_workers=5 \
+    --data.batch_size=16 \
+    --data.num_workers=6 \
     --trainer.accumulate_grad_batches=8 \
     --trainer.max_epochs=160 \
     --trainer.accelerator="gpu" \
@@ -1382,6 +1387,9 @@ python -m watch.tasks.fusion fit \
     --optimizer=torch.optim.AdamW \
     --optimizer.init_args.lr=3e-3 \
     --optimizer.init_args.weight_decay=1e-7 
+
+## Cant resume easilly
+# --ckpt_path=/home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_2022_12_H_15GSD_BGRN_BGR_V6/lightning_logs/version_1/package-interupt/package_epoch0_step5578.pt
 
     #--init="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
     #--trainer.max_epoch_length=16384  \

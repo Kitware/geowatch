@@ -1,4 +1,36 @@
 """
+Basline Example:
+
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+
+    # Your predict command must specify:
+    # 1. the path to the input kwcoco file
+    # 2. the path to the output kwcoco file which will contain your features
+    #    (Avoid requiring that other output paths are specified. Use default
+    #     paths that are relative to the directoy of the output kwcoco file)
+    # 3. the path to your model(s)
+    # 4. any other CLI parameters to configure details of feature prediction.
+    python -m watch.tasks.invariants.predict \
+        --input_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json \
+        --output_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_vali_invariants.kwcoco.json \
+        --pretext_package_path=$DVC_EXPT_DPATH/models/uky/uky_invariants_2022_12_05/TA1_pretext_model/pretext_package.pt \
+        --input_space_scale=30GSD \
+        --window_space_scale=30GSD \
+        --patch_size=256 \
+        --do_pca 0 \
+        --patch_overlap=0.0 \
+        --num_workers="2" \
+        --write_workers 2 \
+        --tasks before_after pretext
+
+    # After your model predicts the outputs, you should be able to use the
+    # smartwatch visualize tool to inspect your features.
+    python -m watch visualize $DVC_DATA_DPATH/Drop4-BAS/data_vali_invariants.kwcoco.json \
+        --channels "invariants.5:8,invariants.8:11,invariants.14:17" --stack=only --workers=avail --animate=True \
+        --draw_anns=False
+
+
 SeeAlso:
     ~/code/watch/watch/cli/prepare_teamfeats.py
 """

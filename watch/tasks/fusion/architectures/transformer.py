@@ -550,6 +550,88 @@ class TimmEncoder:
         nh.OutputShapeFor(self.timm_model.head)
 
 
+class MM_VITEncoder(nn.Module):
+    """
+    mmsegmentation variant of VIT
+
+    Needs 768 features.
+
+    Notes:
+        https://github.com/open-mmlab/mmsegmentation/tree/master/configs/vit
+
+    Results:
+        # 1
+        https://github.com/open-mmlab/mmsegmentation/tree/master/configs/vit#ade20k
+        https://github.com/open-mmlab/mmsegmentation/blob/master/configs/vit/upernet_vit-b16_mln_512x512_80k_ade20k.py
+        https://github.com/open-mmlab/mmsegmentation/blob/master/configs/_base_/models/upernet_vit-b16_ln_mln.py
+
+
+    Ignore:
+        >>> from mmseg.models.backbones import vit
+        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
+        >>> self = MM_VITEncoder()
+        >>> x = torch.rand(2, 3, 768)
+        >>> self.forward(x)
+    """
+
+    def __init__(self):
+        super().__init__()
+        from mmseg.models.backbones.vit import VisionTransformer
+        kwargs = dict(
+            img_size=(512, 512),
+            patch_size=16,
+            in_channels=3,
+            embed_dims=768,
+            num_layers=12,
+            num_heads=12,
+            mlp_ratio=4,
+            out_indices=(2, 5, 8, 11),
+            qkv_bias=True,
+            drop_rate=0.0,
+            attn_drop_rate=0.0,
+            drop_path_rate=0.0,
+            with_cls_token=True,
+            norm_cfg=dict(type='LN', eps=1e-6),
+            act_cfg=dict(type='GELU'),
+            norm_eval=False,
+            interpolate_mode='bicubic')
+        vit_model = VisionTransformer(**kwargs)
+        # We only need the encoder
+        self.layers = vit_model.layers
+        self.initialize_from_pretrained()
+        self.in_features = self.layers[0].ln1.weight.shape[0]
+        self.out_features = self.layers[-1].ffn.layers[1].out_features
+
+    def initialize_from_pretrained(self):
+        pretrained_fpath = ub.grabdata('https://download.openmmlab.com/mmsegmentation/v0.5/vit/upernet_vit-b16_mln_512x512_80k_ade20k/upernet_vit-b16_mln_512x512_80k_ade20k_20210624_130547-0403cee1.pth')
+        from watch.tasks.fusion.fit import coerce_initializer
+        initializer = coerce_initializer(pretrained_fpath)
+        info = initializer.forward(self, verbose=0)  # NOQA
+
+    def forward(self, x):
+        orig_shape = x.shape
+        x = x.view(x.shape[0], -1, x.shape[1])
+        for i, layer in enumerate(self.layers):
+            x = layer(x)
+            # if i == len(self.layers) - 1:
+            #     if self.final_norm:
+            #         x = self.norm1(x)
+            # if i in self.out_indices:
+            #     if self.with_cls_token:
+            #         # Remove class token and reshape token for decoder head
+            #         out = x[:, 1:]
+            #     else:
+            #         out = x
+            #     B, _, C = out.shape
+            #     out = out.reshape(B, hw_shape[0], hw_shape[1],
+            #                       C).permute(0, 3, 1, 2).contiguous()
+            #     if self.output_cls_token:
+            #         out = [out, x[:, 0]]
+            #     outs.append(out)
+        x = x.view(*orig_shape[0], x.shape[-1])
+        return x
+
+
 class DeiTEncoder(nn.Module):
     """
     https://github.com/rishikksh20/ViViT-pytorch
