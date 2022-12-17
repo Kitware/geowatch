@@ -199,6 +199,8 @@ class StacSearchConfig(scfg.Config):
             short_alias=['v']
         ),
 
+        'allow_failure': scfg.Value(False, isflag=True, help='if True keeps running if one region fails')
+
         'cloud_cover': scfg.Value(10, help='maximum cloud cover percentage (only used if search_json is "auto")'),
         'sensors': scfg.Value("L2", help='(only used if search_json is "auto")'),
         'api_key': scfg.Value('env:SMART_STAC_API_KEY', help='The API key or where to get it (only used if search_json is "auto")'),
@@ -404,10 +406,7 @@ def main(cmdline=True, **kwargs):
             try:
                 area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config, logger)
             except Exception:
-                allow_failure = ub.argflag('--allow_failure')
-                if allow_failure:
-                    ...
-                else:
+                if not args.allow_failure:
                     raise
     else:
         id_query(searcher, logger, dest_path, temp_dir, args)
