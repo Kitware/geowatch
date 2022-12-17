@@ -199,7 +199,7 @@ class StacSearchConfig(scfg.Config):
             short_alias=['v']
         ),
 
-        'allow_failure': scfg.Value(False, isflag=True, help='if True keeps running if one region fails')
+        'allow_failure': scfg.Value(False, isflag=True, help='if True keeps running if one region fails'),
 
         'cloud_cover': scfg.Value(10, help='maximum cloud cover percentage (only used if search_json is "auto")'),
         'sensors': scfg.Value("L2", help='(only used if search_json is "auto")'),
