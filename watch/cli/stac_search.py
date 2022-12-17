@@ -402,7 +402,14 @@ def main(cmdline=True, **kwargs):
         # Might be reasonable to parallize this, but will need locks around
         # writes to the same file, or write to separate files and then combine
         for region_fpath in region_file_fpaths:
-            area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config, logger)
+            try:
+                area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config, logger)
+            except Exception:
+                allow_failure = ub.argflag('--allow_failure')
+                if allow_failure:
+                    ...
+                else:
+                    raise
     else:
         id_query(searcher, logger, dest_path, temp_dir, args)
 
