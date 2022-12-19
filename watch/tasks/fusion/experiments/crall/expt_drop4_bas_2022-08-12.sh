@@ -1168,7 +1168,7 @@ python -m watch.tasks.fusion.fit \
     --global_change_weight=0.00 \
     --global_class_weight=1e-7 \
     --global_saliency_weight=1.00 \
-    --learning_rate=1e-3 \
+    --learning_rate=3e-4 \
     --weight_decay=1e-7 \
     --chip_dims=224,224 \
     --window_space_scale="10GSD" \
@@ -1202,8 +1202,13 @@ python -m watch.tasks.fusion.fit \
     --quality_threshold=0.8 \
     --num_sanity_val_steps=0 \
     --max_epoch_length=16384 \
-    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/lightning_logs/version_12/package-interupt/package_epoch15_step15697.pt
+    --init="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 
+
+    # /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/lightning_logs/version_13
+    # /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/lightning_logs/version_13/package-interupt/package_epoch44_step46014.pt
+
+    #--init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/lightning_logs/version_12/package-interupt/package_epoch15_step15697.pt
 
     #--init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/lightning_logs/version_11/package-interupt/package_epoch4_step2122.pt
 
@@ -1391,6 +1396,9 @@ python -m watch.tasks.fusion fit \
     --optimizer.init_args.lr=3e-3 \
     --optimizer.init_args.weight_decay=1e-7 
 
+
+rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-BAS/runs/./Drop4_BAS_2022_12_H_15GSD_BGRN_BGR_V6 .
+
 ## Cant resume easilly
 # --ckpt_path=/home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_2022_12_H_15GSD_BGRN_BGR_V6/lightning_logs/version_1/package-interupt/package_epoch0_step5578.pt
 
@@ -1401,3 +1409,21 @@ python -m watch.tasks.fusion fit \
     #--decoder=mlp \
     #--arch_name=smt_it_stm_p8 \
     #--trainer.patience=160 \
+
+
+# Hard coded invariants on yardrat
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+
+python -m watch.tasks.invariants.predict \
+    --input_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_train.kwcoco.json \
+    --output_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_train_invar13.kwcoco.json \
+    --pretext_package=$DVC_EXPT_DPATH/models/uky/uky_invariants_2022_12_17/TA1_pretext_model/pretext_package.pt \
+    --input_space_scale=10GSD  \
+    --window_space_scale=10GSD \
+    --patch_size=256 \
+    --do_pca 0 \
+    --patch_overlap=0.3 \
+    --num_workers="8" \
+    --write_workers 8 \
+    --tasks before_after pretext
