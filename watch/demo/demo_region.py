@@ -319,7 +319,163 @@ def demo_khq_annots():
     return region, sites
 
 
+def demo_smart_annots():
+    """
+    A small demo region in an area with a lot of data coverage
+    """
+    import mgrs
+    import kwimage
+    import geojson
+    import geopandas as gpd
+    import ubelt as ub
+    from watch.utils import util_gis
+    from watch.utils import util_time
+
+    crs84 = util_gis._get_crs84()
+
+    region_id = 'SDEMO_R001'
+    site_id = 'SDEMO_R001_0000'
+
+    # Boundary of the KHQ construction site
+    site_geos = {'type': 'Polygon',
+                 'coordinates': [[[-81.70861006, 30.3741017],
+                                  [-81.70745055, 30.28932539],
+                                  [-81.58419451, 30.29015089],
+                                  [-81.58346045, 30.37588478],
+                                  [-81.70861006, 30.3741017]]]}
+
+    sites = []
+    WITH_SITES = 0
+    if WITH_SITES:
+        # obs_property_defaults = {
+        #     'type': 'observation',
+        #     'observation_date': None,
+        #     'source': None,
+        #     'sensor_name': None,
+        #     'current_phase': None,
+        #     'is_occluded': None,
+        #     'is_site_boundary': None,
+        #     'score': 1.0,
+        # }
+
+        # No observations in this case
+        observations = []
+        obs_df = gpd.GeoDataFrame(observations, crs=crs84)
+        # site_boundary_poly = kwimage.Polygon.coerce(obs_df.geometry.unary_union)
+        # Use context manager to do all transforms in UTM space
+        with util_gis.UTM_TransformContext(obs_df) as context:
+            site_boundary_poly = context.geoms_utm.unary_union
+            context.finalize(site_boundary_poly)
+        site_boundary_geom = context.final_geoms_crs84.iloc[0]
+        site_boundary_poly = kwimage.Polygon.coerce(site_boundary_geom)
+        site_boundary_geos = site_boundary_poly.to_geojson()
+
+        obs_dates = [
+            util_time.coerce_datetime(obs['properties']['observation_date'])
+            for obs in observations
+        ]
+        start_date = min(obs_dates)
+        end_date = max(obs_dates)
+
+        lon, lat = kwimage.Polygon.from_geojson(site_geos).centroid
+        mgrs_code = mgrs.MGRS().toMGRS(lat, lon, MGRSPrecision=0)
+        sitesum = geojson.Feature(
+            properties={
+                "type": "site",
+                "region_id": region_id,
+                "site_id": site_id,
+                "version": "2.0.0",
+                "status": "positive_annotated",
+                "mgrs": mgrs_code,
+                "score": 1.0,
+                "start_date": start_date.date().isoformat(),
+                "end_date": end_date.date().isoformat(),
+                "model_content": "annotation",
+                "originator": "kit-demo",
+                "validated": "False",
+            },
+            geometry=site_boundary_geos
+        )
+        site = geojson.FeatureCollection(
+            [sitesum] + observations
+        )
+        sites.append(site)
+
+    # Build site summaries for each site (there is only one site)
+    site_summaries = []
+    for site in sites:
+        # The property type changes from site to site summary.
+        # Not sure why, but dems da specs
+        site_header = site['features'][0]
+        site_summary = geojson.Feature(
+            properties=ub.dict_union(
+                site_header['properties'], {'type': 'site_summary'}),
+            geometry=site_header['geometry'],
+        )
+        site_summaries.append(site_summary)
+
+    # Aggregate information across sites to build info for the region
+    site_geoms = []
+    site_start_dates = []
+    site_end_dates = []
+    for site in site_summaries:
+        site_geoms.append(
+            kwimage.Polygon.coerce(site['geometry']).to_shapely()
+        )
+        start_date = site['properties']['start_date']
+        if start_date is not None:
+            site_start_dates.append(util_time.coerce_datetime(start_date))
+        end_date = site['properties']['end_date']
+        if end_date is not None:
+            site_end_dates.append(util_time.coerce_datetime(end_date))
+
+    # Custom region geom beyond that provided by sites
+    region_geom = kwimage.Polygon.coerce(site_geos).scale(1.5, about='centroid').to_shapely()
+    site_geoms.append(region_geom)
+
+    # Use context manager to do all transforms in UTM space
+    with util_gis.UTM_TransformContext(site_geoms) as context:
+        tmp_geom_utm = context.geoms_utm.unary_union
+        tmp_poly_utm = kwimage.Polygon.coerce(tmp_geom_utm)
+        agg_geom_utm = tmp_poly_utm.scale(2.0, about='center').to_shapely()
+        context.finalize(agg_geom_utm)
+    region_poly = context.final_geoms_crs84.iloc[0]
+    region_geom = kwimage.Polygon.coerce(region_poly).to_geojson()
+
+    delta_pad = util_time.coerce_timedelta('128days')
+
+    site_start_dates.append(util_time.coerce_datetime('2017-01-01'))
+    site_end_dates.append(util_time.coerce_datetime('2017-01-01'))
+
+    region_start_time = min(site_start_dates) - delta_pad
+    region_end_time = max(site_end_dates) + delta_pad
+
+    lon, lat = kwimage.Polygon.coerce(region_geom).centroid
+    mgrs_code = mgrs.MGRS().toMGRS(lat, lon, MGRSPrecision=0)
+
+    # Enlarge the region
+    region_feature = geojson.Feature(
+        properties={
+            "type": "region",
+            "region_id": region_id,
+            "version": "2.4.3",
+            "mgrs": mgrs_code,
+            "start_date": region_start_time.date().isoformat(),
+            "end_date": region_end_time.date().isoformat(),
+            "originator": "kit-demo",
+            "model_content": "annotation",
+            "comments": 'watch-demo-data',
+        },
+        geometry=region_geom
+    )
+    region = geojson.FeatureCollection([region_feature] + site_summaries)
+    return region, sites
+
+
 def _configure_osm():
+    """
+    Configure open street map
+    """
     import osmnx as ox
     import ubelt as ub
     import os
@@ -391,6 +547,28 @@ def demo_khq_region_fpath():
     import json
     import ubelt as ub
     region, sites = demo_khq_annots()
+    annot_dpath = ub.Path.appdir('watch/demo/annotations').ensuredir()
+
+    # Dump region file
+    region_id = region['features'][0]['properties']['region_id']
+    region_fpath = annot_dpath / (region_id + '.geojson')
+    region_fpath.write_text(json.dumps(region))
+    print(f'wrote region_fpath={region_fpath}')
+
+    # Dump site file
+    site_dpath = (annot_dpath / (region_id + '_sites')).ensuredir()
+    for site in sites:
+        site_id = site['features'][0]['properties']['site_id']
+        site_fpath = site_dpath / (site_id + '.geojson')
+        site_fpath.write_text(json.dumps(site))
+        print(f'wrote site_fpath={site_fpath}')
+    return region_fpath
+
+
+def demo_smart_region_fpath():
+    import json
+    import ubelt as ub
+    region, sites = demo_smart_annots()
     annot_dpath = ub.Path.appdir('watch/demo/annotations').ensuredir()
 
     # Dump region file

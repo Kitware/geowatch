@@ -200,13 +200,13 @@ def main(cmdline=True, **kwargs):
         >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral', num_frames=2)
         >>> img = dset.dataset['images'][0]
         >>> coco_img = dset.coco_image(img['id'])
-        >>> channel_chunks = list(ub.chunks(coco_img.channels.fuse().parsed, chunksize=3))
-        >>> channels = ','.join(['|'.join(p) for p in channel_chunks])
+        >>> #channel_chunks = list(ub.chunks(coco_img.channels.fuse().parsed, chunksize=3))
+        >>> #channels = ','.join(['|'.join(p) for p in channel_chunks])
         >>> kwargs = {
         >>>     'src': dset.fpath,
         >>>     'viz_dpath': dpath,
         >>>     'space': 'video',
-        >>>     'channels': channels,
+        >>>     'channels': None,
         >>>     'zoom_to_tracks': True,
         >>> }
         >>> from watch.cli.coco_visualize_videos import *  # NOQA
@@ -221,6 +221,7 @@ def main(cmdline=True, **kwargs):
         }
     """
     from watch.utils.lightning_ext import util_globals
+    from watch.utils import kwcoco_extensions
     config = CocoVisualizeConfig(default=kwargs, cmdline=cmdline and {'strict': True})
     space = config['space']
     channels = config['channels']
@@ -257,7 +258,6 @@ def main(cmdline=True, **kwargs):
             FusedChannelSpec.coerce('No Activity|Site Preparation|Active Construction|Post Construction'),
             FusedChannelSpec.coerce('salient'),
         ]
-        from watch.utils import kwcoco_extensions
         from collections import defaultdict, Counter
         channel_stats = kwcoco_extensions.coco_channel_stats(coco_dset)
         all_sensorchan = channel_stats['all_sensorchan']
@@ -276,6 +276,10 @@ def main(cmdline=True, **kwargs):
             chosen = ub.oset(['red|green|blue']) | (chosen - {'red|green|blue'})
         channels = ','.join(chosen)
         print(f'AUTO channels={channels}')
+    elif channels is None:
+        channel_stats = kwcoco_extensions.coco_channel_stats(coco_dset)
+        all_sensorchan = channel_stats['all_sensorchan']
+        channels = all_sensorchan
 
     # Expand certain channels
     requested_sensorchan = kwcoco.SensorChanSpec.coerce(channels)
@@ -318,7 +322,6 @@ def main(cmdline=True, **kwargs):
     start_frame = smartcast(config['start_frame'])
     end_frame = None if num_frames is None else start_frame + num_frames
 
-    from watch.utils import kwcoco_extensions
     selected_gids = None
     selected_gids = kwcoco_extensions.filter_image_ids(
         coco_dset,
@@ -866,8 +869,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     from watch.utils import util_kwimage
 
     sensor_coarse = img.get('sensor_coarse', 'unknown')
-    align_method = img.get('align_method', 'unknown')
+    # align_method = img.get('align_method', 'unknown')
     name = img.get('name', 'unnamed')
+    name = name.replace('/', '_')
 
     # Ensure names are differentiated between frames.
     import math
@@ -1000,9 +1004,10 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
         # Prevent long names for docker (limit is 242 chars)
         chan_pname2 = kwcoco.FusedChannelSpec.coerce(chan_group).path_sanitize(maxlen=10)
-        suffix = '_'.join([frame_id, chan_pname2, sensor_coarse, align_method])
-        view_img_fpath = ub.augpath(name, dpath=img_chan_dpath) + '_' + suffix + '.view_img.jpg'
-        view_ann_fpath = ub.augpath(name, dpath=ann_chan_dpath) + '_' + suffix + '.view_ann.jpg'
+        prefix = '_'.join([frame_id, chan_pname2])
+
+        view_img_fpath = img_chan_dpath / prefix + '_' + name + '.view_img.jpg'
+        view_ann_fpath = ann_chan_dpath / prefix + '_' + name + '.view_ann.jpg'
 
         chan = delayed.take_channels(chan_group)
         chan = chan.prepare().optimize()
@@ -1231,8 +1236,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         img_stacked_dpath = (img_view_dpath / 'stack')
         ann_stacked_dpath = (ann_view_dpath / 'stack')
 
-        view_img_fpath = img_stacked_dpath / (name + '_stack' + '.view_img.jpg')
-        view_ann_fpath = ann_stacked_dpath / (name + '_stack' + '.view_ann.jpg')
+        view_img_fpath = img_stacked_dpath / (frame_id + '_' + name + '_stack' + '.view_img.jpg')
+        view_ann_fpath = ann_stacked_dpath / (frame_id + '_' + name + '_stack' + '.view_ann.jpg')
 
         stack_header_lines = header_lines.copy()
         header_text = '\n'.join(stack_header_lines)

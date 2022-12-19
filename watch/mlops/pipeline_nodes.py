@@ -11,6 +11,9 @@ Collection = Optional[Union[Dict, Set, List]]
 Configurable = Optional[Dict[str, Any]]
 
 
+from xdev import profile  # NOQA
+
+
 class PipelineDAG:
     """
     A container for a group of nodes that have been connected, but need to be
@@ -106,25 +109,28 @@ class PipelineDAG:
                 for oi_node in onode.succ:
                     self.io_graph.add_edge(onode.key, oi_node.key)
 
-    def configure(self, config, root_dpath=None, cache=True):
+    def configure(self, config=None, root_dpath=None, cache=True):
         """
         Update the DAG configuration
         """
-        self.config = config
-        # print('CONFIGURE config = {}'.format(ub.repr2(config, nl=1)))
 
         if root_dpath is not None:
             root_dpath = ub.Path(root_dpath)
             self.root_dpath = root_dpath
-
-        # Set the configuration for each node in this pipeline.
-        dotconfig = util_param_grid.DotDict(config)
-        for node_name in nx.topological_sort(self.proc_graph):
-            node = self.proc_graph.nodes[node_name]['node']
-            if root_dpath is not None:
+            for node in self.nodes.values():
                 node.root_dpath = root_dpath
-            node_config = dict(dotconfig.prefix_get(node.name, {}))
-            node.configure(node_config, cache=cache)
+                node._configured_cache.clear()  # hack, make more elegant
+
+        if config is not None:
+            self.config = config
+            # print('CONFIGURE config = {}'.format(ub.repr2(config, nl=1)))
+
+            # Set the configuration for each node in this pipeline.
+            dotconfig = util_param_grid.DotDict(config)
+            for node_name in nx.topological_sort(self.proc_graph):
+                node = self.proc_graph.nodes[node_name]['node']
+                node_config = dict(dotconfig.prefix_get(node.name, {}))
+                node.configure(node_config, cache=cache)
 
     def print_graphs(self):
 
@@ -392,9 +398,12 @@ class InputNode(IONode):
 class OutputNode(IONode):
     @property
     def resolved_value(self):
-        if self._resolved_value is None:
-            return self.parent._resolve_templates()['out_paths'][self.name]
-        return self._resolved_value
+        # return self.parent._resolve_templates()['out_paths'][self.name]
+        return self.parent.resolved_out_paths[self.name]
+
+    @property
+    def template_value(self):
+        return self.parent.template_out_paths[self.name]
 
 
 def _classvar_init(self, args, fallbacks):
@@ -638,7 +647,8 @@ class ProcessNode(Node):
 
         self.configure(self.config)
 
-    def configure(self, config, cache=True, enabled=True):
+    @profile
+    def configure(self, config=None, cache=True, enabled=True):
         """
         Update the node configuration.
         """
@@ -650,7 +660,6 @@ class ProcessNode(Node):
         self.config = ub.udict(config)
 
         # self.algo_params = set(self.config) - non_algo_keys
-
         in_path_keys = self.config & set(self.in_paths)
         for key in in_path_keys:
             self.inputs[key].resolved_value = self.config[key]
@@ -659,6 +668,7 @@ class ProcessNode(Node):
         self._resolve_templates()
 
     @memoize_configured_property
+    @profile
     def condensed(self):
         condensed = {}
         for node in self.predecessor_process_nodes():
@@ -670,6 +680,7 @@ class ProcessNode(Node):
         return condensed
 
     @memoize_configured_method
+    @profile
     def _build_templates(self):
         templates = {}
         templates['root_dpath'] = str(self.template_root_dpath)
@@ -679,6 +690,7 @@ class ProcessNode(Node):
         return self.templates
 
     @memoize_configured_method
+    @profile
     def _resolve_templates(self):
         templates = self.templates
         condensed = self.condensed
@@ -813,6 +825,7 @@ class ProcessNode(Node):
             return self.root_dpath / self.group_dname / self.template_dag_dname
 
     @memoize_configured_property
+    @profile
     def depends_config(self):
         # Any manually specified inputs need to be inserted into this
         # dictionary. Derived inputs can be ignored.
@@ -821,6 +834,7 @@ class ProcessNode(Node):
         # return self.config & self.algo_params
 
     @memoize_configured_property
+    @profile
     def algo_id(self):
         """
         A unique id to represent the output of a deterministic process.
@@ -828,10 +842,12 @@ class ProcessNode(Node):
         This does NOT have a dependency on the larger the DAG.
         """
         from watch.utils.reverse_hashid import condense_config
-        algo_id = condense_config(self.resolved_algo_config, self.name + '_algo_id')
+        algo_id = condense_config(
+            self.resolved_algo_config, self.name + '_algo_id', register=False)
         return algo_id
 
     @memoize_configured_property
+    @profile
     def template_depends_dname(self):
         """
         Predecessor part of the output path.
@@ -846,6 +862,7 @@ class ProcessNode(Node):
             # return ub.Path('multi' + str(pred_nodes))
 
     @memoize_configured_method
+    @profile
     def predecessor_process_nodes(self):
         """
         Predecessor process nodes
@@ -861,6 +878,7 @@ class ProcessNode(Node):
         return nodes
 
     @memoize_configured_method
+    @profile
     def successor_process_nodes(self):
         """
         Predecessor process nodes
@@ -876,6 +894,7 @@ class ProcessNode(Node):
         return nodes
 
     @memoize_configured_method
+    @profile
     def ancestor_process_nodes(self):
         seen = {}
         stack = [self]
@@ -891,6 +910,7 @@ class ProcessNode(Node):
         return ancestors
 
     @memoize_configured_property
+    @profile
     def depends(self):
         ancestors = self.ancestor_process_nodes()
         # TODO:
@@ -905,6 +925,7 @@ class ProcessNode(Node):
         return depends
 
     @memoize_configured_property
+    @profile
     def node_info(self):
         ancestors = self.ancestor_process_nodes()
         # TODO:
@@ -930,6 +951,7 @@ class ProcessNode(Node):
         return info
 
     @memoize_configured_property
+    @profile
     def process_id(self):
         """
         A unique id to represent the output of a deterministic process in a
@@ -940,15 +962,18 @@ class ProcessNode(Node):
         """
         from watch.utils.reverse_hashid import condense_config
         depends = self.depends
-        proc_id = condense_config(depends, self.name + '_id')
+        proc_id = condense_config(
+            depends, self.name + '_id', register=False)
         return proc_id
 
     @staticmethod
+    @profile
     def _make_argstr(config):
         parts = [f'    --{k}="{v}" \\' for k, v in config.items()]
         return chr(10).join(parts).lstrip().rstrip('\\')
 
     @cached_property
+    @profile
     def inputs(self):
         # inputs = {k: InputNode(name=self.name + '.' + k) for k in self.in_paths}
         inputs = {k: InputNode(name=k, parent=self) for k in self.in_paths}
@@ -957,6 +982,7 @@ class ProcessNode(Node):
         return inputs
 
     @cached_property
+    @profile
     def outputs(self):
         # outputs = {k: OutputNode(name=self.name + '.' + k) for k in self.out_paths}
         outputs = {k: OutputNode(name=k, parent=self) for k in self.out_paths}
@@ -965,6 +991,7 @@ class ProcessNode(Node):
         return outputs
 
     @property
+    @profile
     def command(self):
         """
         Basic version of command, can be overwritten
@@ -973,6 +1000,7 @@ class ProcessNode(Node):
         command = self.executable + ' ' + argstr
         return command
 
+    @profile
     def test_is_computed_command(step):
         test_expr = ' -a '.join(
             [f'-e "{p}"' for p in step.resolved_out_paths.values()])
@@ -980,10 +1008,12 @@ class ProcessNode(Node):
         return test_cmd
 
     @memoize_configured_property
+    @profile
     def does_exist(self):
         # return all(self.out_paths.map_values(lambda p: p.exists()).values())
         return all(ub.Path(p).expand().exists() for p in self.resolved_out_paths.values())
 
+    @profile
     def resolved_command(self):
         command = self.command
         if not isinstance(command, str):

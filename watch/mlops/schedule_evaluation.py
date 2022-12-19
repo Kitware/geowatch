@@ -143,48 +143,49 @@ from watch.mlops.old_pipeline_nodes import Pipeline  # NOQA
 from watch.mlops.old_pipeline_nodes import Step  # NOQA
 from watch.mlops.old_pipeline_nodes import submit_old_pipeline_jobs  # NOQA
 
+from xdev import profile  # NOQA
 
-class ScheduleEvaluationConfig(scfg.Config):
+
+class ScheduleEvaluationConfig(scfg.DataConfig):
     """
     Builds commands and optionally schedules them.
     """
-    default = {
-        'params': scfg.Value(None, type=str, help='a yaml/json grid/matrix of prediction params'),
+    params = scfg.Value(None, type=str, help='a yaml/json grid/matrix of prediction params')
 
-        'run': scfg.Value(False, help='if False, only prints the commands, otherwise executes them'),
+    run = scfg.Value(False, help='if False, only prints the commands, otherwise executes them')
 
-        'devices': scfg.Value('auto', help='if using tmux or serial, indicate which gpus are available for use as a comma separated list: e.g. 0,1'),
+    devices = scfg.Value('auto', help='if using tmux or serial, indicate which gpus are available for use as a comma separated list: e.g. 0,1')
 
-        'virtualenv_cmd': scfg.Value(None, help='command to activate a virtualenv if needed. (might have issues with slurm backend)'),
-        'skip_existing': scfg.Value(False, help='if True dont submit commands where the expected products already exist'),
-        'backend': scfg.Value('tmux', help='can be tmux, slurm, or maybe serial in the future'),
+    virtualenv_cmd = scfg.Value(None, help='command to activate a virtualenv if needed. (might have issues with slurm backend)')
+    skip_existing = scfg.Value(False, help='if True dont submit commands where the expected products already exist')
+    backend = scfg.Value('tmux', help='can be tmux, slurm, or maybe serial in the future')
 
-        'queue_name': scfg.Value('schedule-eval', help='Name of the queue'),
+    queue_name = scfg.Value('schedule-eval', help='Name of the queue')
 
-        'pred_workers': scfg.Value(4, help='number of prediction workers in each process'),
+    pred_workers = scfg.Value(4, help='number of prediction workers in each process')
 
-        'shuffle_jobs': scfg.Value(True, help='if True, shuffles the jobs so they are submitted in a random order'),
-        'annotations_dpath': scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval'),
-        'root_dpath': scfg.Value('auto', help='Where do dump all results. If "auto", uses <expt_dvc_dpath>/dag_runs'),
+    shuffle_jobs = scfg.Value(True, help='if True, shuffles the jobs so they are submitted in a random order')
+    annotations_dpath = scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval')
 
-        'pipeline': scfg.Value('joint_bas_sc', help='the name of the pipeline to run'),
+    root_dpath = scfg.Value('auto', help='Where do dump all results. If "auto", uses <expt_dvc_dpath>/dag_runs')
+    pipeline = scfg.Value('joint_bas_sc', help='the name of the pipeline to run')
 
-        'check_other_sessions': scfg.Value('auto', help='if True, will ask to kill other sessions that might exist'),
-        'queue_size': scfg.Value('auto', help='if auto, defaults to number of GPUs'),
+    check_other_sessions = scfg.Value('auto', help='if True, will ask to kill other sessions that might exist')
+    queue_size = scfg.Value('auto', help='if auto, defaults to number of GPUs')
 
-        'enable_links': scfg.Value(True, isflag=True, help='if true enable symlink jobs'),
-        'cache': scfg.Value(True, isflag=True, help='if true, each a test is appened to each job to skip itself if its output exists'),
+    enable_links = scfg.Value(True, isflag=True, help='if true enable symlink jobs')
+    cache = scfg.Value(True, isflag=True, help='if true, each a test is appened to each job to skip itself if its output exists')
 
-        'draw_heatmaps': scfg.Value(1, isflag=True, help='if true draw heatmaps on eval'),
-        'draw_curves': scfg.Value(1, isflag=True, help='if true draw curves on eval'),
+    draw_heatmaps = scfg.Value(1, isflag=True, help='if true draw heatmaps on eval')
+    draw_curves = scfg.Value(1, isflag=True, help='if true draw curves on eval')
 
-        'partition': scfg.Value(None, help='specify slurm partition (slurm backend only)'),
-        'mem': scfg.Value(None, help='specify slurm memory per task (slurm backend only)'),
+    partition = scfg.Value(None, help='specify slurm partition (slurm backend only)')
+    mem = scfg.Value(None, help='specify slurm memory per task (slurm backend only)')
 
-        'rprint': scfg.Value(True, isflag=True, help='enable / disable rprint before exec')
-    }
+    rprint = scfg.Value(True, isflag=True, help='enable / disable rprint before exec')
 
 
+@profile
 def schedule_evaluation(cmdline=False, **kwargs):
     r"""
     First ensure that models have been copied to the DVC repo in the
@@ -192,7 +193,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     """
     import watch
     from watch.mlops import smart_pipeline
-    config = ScheduleEvaluationConfig(cmdline=cmdline, data=kwargs)
+    config = ScheduleEvaluationConfig.legacy(cmdline=cmdline, data=kwargs)
     print('ScheduleEvaluationConfig config = {}'.format(ub.repr2(dict(config), nl=1, si=1)))
 
     if config['root_dpath'] in {None, 'auto'}:
@@ -329,6 +330,8 @@ Ignore:
     parser.save(args)
 
 """
+
+# profile.add_module()
 
 
 if __name__ == '__main__':

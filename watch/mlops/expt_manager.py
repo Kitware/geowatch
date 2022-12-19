@@ -90,7 +90,7 @@ from watch import heuristics
 from watch.mlops.expt_state import ExperimentState, summarize_tables
 
 
-class ExptManagerConfig(scfg.Config):
+class ExptManagerConfig(scfg.DataConfig):
     """
     Certain parts of these names have special nomenclature to make them easier
     to work with in Python and Bash.
@@ -140,37 +140,35 @@ class ExptManagerConfig(scfg.Config):
 
         $EXPT_DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/$EXPT_MODEL_GLOBNAME/*.pt
     """
-    default = {
-        'command': scfg.Value(None, nargs='*', help='if specified, will overload other options', position=1),
+    command = scfg.Value(None, nargs='*', help='if specified, will overload other options', position=1)
 
-        'dvc_remote': scfg.Value('aws', help='dvc remote to sync to/from'),
+    dvc_remote = scfg.Value('aws', help='dvc remote to sync to/from')
 
-        'expt_dvc_dpath': scfg.Value('auto', help='path to the experiment dvc dpath'),
-        'data_dvc_dpath': scfg.Value('auto', help='path to the data dvc dpath'),
+    expt_dvc_dpath = scfg.Value('auto', help='path to the experiment dvc dpath')
+    data_dvc_dpath = scfg.Value('auto', help='path to the data dvc dpath')
 
-        'model_pattern': scfg.Value('*', help='if specified restrict to models matching this name pattern'),
+    model_pattern = scfg.Value('*', help='if specified restrict to models matching this name pattern')
 
-        'dataset_codes': scfg.Value(None, nargs='+', help=ub.paragraph(
-            '''
-            if unset, will use the defaults, otherwise this should be a list of
-            the DVC dataset bundle names that we want to consider.  Note: we do
-            make assumptions that the about where these names go in paths.
-            We may make this more general in the future.
+    dataset_codes = scfg.Value(None, nargs='+', help=ub.paragraph(
+        '''
+        if unset, will use the defaults, otherwise this should be a list of
+        the DVC dataset bundle names that we want to consider.  Note: we do
+        make assumptions that the about where these names go in paths.
+        We may make this more general in the future.
 
-            Namely:
+        Namely:
 
-                # Training runs go here go here.
-                <expt_dvc_dpath>/training/*/*/<dataset_code>/runs/<expt_name>/lightning_logs
+            # Training runs go here go here.
+            <expt_dvc_dpath>/training/*/*/<dataset_code>/runs/<expt_name>/lightning_logs
 
-                # Packages go here.
-                <expt_dvc_dpath>/models/fusion/<dataset_code>/packages
+            # Packages go here.
+            <expt_dvc_dpath>/models/fusion/<dataset_code>/packages
 
-                # Evaluations go here.
-                <expt_dvc_dpath>/models/fusion/<dataset_code>/eval
+            # Evaluations go here.
+            <expt_dvc_dpath>/models/fusion/<dataset_code>/eval
 
-            NOTE: THIS SPECIFIC FORMAT IS IN HIGH FLUX. DOCS MAY BE OUTDATED
-            ''')),
-    }
+        NOTE: THIS SPECIFIC FORMAT IS IN HIGH FLUX. DOCS MAY BE OUTDATED
+        '''))
 
 
 def main(cmdline=True, **kwargs):

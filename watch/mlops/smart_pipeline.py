@@ -696,3 +696,7 @@ def make_smart_pipeline(name):
     dag = PipelineDAG(nodes)
     dag.build_nx_graphs()
     return dag
+
+
+# from xdev import profile  # NOQA
+# profile.add_module()

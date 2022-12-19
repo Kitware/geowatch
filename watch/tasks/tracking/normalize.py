@@ -671,11 +671,13 @@ def normalize(
     viz_out_dir = ub.Path('_assets/tracking_visualization')
 
     def _normalize_annots(coco_dset, overwrite):
+        print(f'coco_dset.n_anns={coco_dset.n_annots}')
         coco_dset = dedupe_annots(coco_dset)
         coco_dset = add_geos(coco_dset, overwrite)
         coco_dset = remove_small_annots(coco_dset,
                                         min_area_px=0,
                                         min_geo_precision=None)
+        print(f'coco_dset.n_anns={coco_dset.n_annots}')
         # coco_dset._build_index()
 
         return coco_dset
@@ -699,6 +701,8 @@ def normalize(
         debug_json_unserializable(coco_dset.dataset, 'Before apply_per_video: ')
 
     tracker: TrackFunction = track_fn(**track_kwargs)
+    print('track_kwargs = {}'.format(ub.repr2(track_kwargs, nl=1)))
+    print('{} {}'.format(tracker.__class__.__name__, ub.repr2(tracker.__dict__, nl=1)))
     out_dset = tracker.apply_per_video(coco_dset)
 
     if DEBUG_JSON_SERIALIZABLE:

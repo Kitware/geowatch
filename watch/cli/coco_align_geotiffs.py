@@ -204,7 +204,25 @@ class CocoAlignGeotiffConfig(scfg.Config):
         'verbose': scfg.Value(0, help='Note: no silent mode, 0 is just least verbose.'),
         'force_nodata': scfg.Value(None, help=('if specified, forces nodata to this value (e.g. -9999) '
                                                'Ideally this is not needed and all source geotiffs properly specify nodata')),
-        'force_min_gsd': scfg.Value(None, help=ub.paragraph('Force output crops to be at least this minimum GSD (e.g. if set to 10.0 an input image with a 30.0 GSD will have an output GSD of 30.0, whereas in input image with a 0.5 GSD will have it set to 10.0 during cropping)'))
+
+        'force_min_gsd': scfg.Value(None, help=ub.paragraph(
+            '''
+            Force output crops to be at least this minimum GSD (e.g. if set to
+            10.0 an input image with a 30.0 GSD will have an output GSD of
+            30.0, whereas in input image with a 0.5 GSD will have it set to
+            10.0 during cropping)'''
+        )),
+
+        'hack_lazy': scfg.Value(False, isflag=True, help=ub.paragraph(
+            '''
+            Hack lazy is a proof of concept with the intent on speeding up the
+            download / cropping of data by flattening the gdal processing into
+            a single queue of parallel processes executed via a command queue.
+
+            By running once with this flag on, it will execute the command
+            queue, and then running again, it should see all of the data as
+            existing and construct the aligned kwcoco dataset as normal.
+            ''')),
     }
 
     def normalize(config):
@@ -297,6 +315,7 @@ def main(cmdline=True, **kw):
         >>>     #'image_timeout': '1 microsecond',
         >>>     #'asset_timeout': '1 microsecond',
         >>>     'visualize': True,
+        >>>     'hack_lazy': 0,
         >>> }
         >>> cmdline = False
         >>> new_dset = main(cmdline, **kw)
@@ -459,8 +478,6 @@ def main(cmdline=True, **kw):
     rpc_align_method = config['rpc_align_method']
     visualize = config['visualize']
     write_subsets = config['write_subsets']
-    img_workers = config['max_workers']
-    aux_workers = config['aux_workers']
     keep = config['keep']
     target_gsd = config['target_gsd']
     max_frames = config['max_frames']
@@ -572,6 +589,9 @@ def main(cmdline=True, **kw):
     ]
     to_extract = cube.query_image_overlaps(region_df)
 
+    if config['hack_lazy']:
+        lazy_commands = []
+
     for image_overlaps in ub.ProgIter(to_extract, desc='extract ROI videos', verbose=3):
         video_name = image_overlaps['video_name']
         print('video_name = {!r}'.format(video_name))
@@ -594,7 +614,39 @@ def main(cmdline=True, **kw):
             verbose=config['verbose'],
             force_nodata=config['force_nodata'],
             force_min_gsd=config['force_min_gsd'],
+            hack_lazy=config['hack_lazy'],
         )
+        if config['hack_lazy']:
+            lazy_commands.extend(new_dset)
+
+    if config['hack_lazy']:
+
+        # Execute the gdal jobs in a single super queue
+        import cmd_queue
+        # queue = cmd_queue.Queue.create('serial')
+        print(f'img_workers={img_workers}')
+        queue = cmd_queue.Queue.create(
+            'tmux', size=img_workers, name='hack_lazy_' + video_name,
+            environ={
+                k: v for k, v in os.environ.items()
+                if k.startswith('GDAL_') or
+                k == 'AWS_DEFAULT_PROFILE' or
+                k == 'SMART_STAC_API_KEY'
+            }
+        )
+        for commands in lazy_commands:
+            prev = None
+            for command in commands:
+                prev = queue.submit(command, depends=prev)
+                prev.logs = False
+
+        print(f'{len(queue.jobs)=}')
+        queue.run(
+            # with_textual=False
+            with_textual='auto'
+        )
+
+        raise Exception('hack_lazy always fails')
 
     kwcoco_extensions.reorder_video_frames(new_dset)
     new_dset.fpath = dst_fpath
@@ -954,7 +1006,9 @@ class SimpleDataCube(object):
                          image_timeout=None,
                          asset_timeout=None,
                          force_nodata=None, verbose=0,
-                         force_min_gsd=None):
+                         force_min_gsd=None,
+                         hack_lazy=False,
+                         ):
         """
         Given a region of interest, extract an aligned temporal sequence
         of data to a specified directory.
@@ -1339,7 +1393,9 @@ class SimpleDataCube(object):
                     image_timeout=image_timeout,
                     asset_timeout=asset_timeout,
                     verbose=img_verbose,
-                    force_min_gsd=force_min_gsd)
+                    force_min_gsd=force_min_gsd,
+                    hack_lazy=hack_lazy,
+                )
                 start_gid = start_gid + 1
                 start_aid = start_aid + len(anns)
                 frame_index = frame_index + 1
@@ -1351,6 +1407,9 @@ class SimpleDataCube(object):
         if image_timeout is not None:
             image_timeout = util_time.coerce_timedelta(image_timeout).total_seconds()
 
+        if hack_lazy:
+            lazy_commands = []
+
         from concurrent.futures import TimeoutError
         for job in image_jobs.as_completed(desc='collect extract jobs',
                                            progkw=dict(freq=1)):
@@ -1361,6 +1420,16 @@ class SimpleDataCube(object):
                 continue
             except TimeoutError:
                 print('\n\nAn image job timed out!\n\n')
+                continue
+
+            if hack_lazy:
+                # Hacking to just grab the image commands, so we have to stop
+                # the job here.
+                for dst in new_img:
+                    if dst is not None:
+                        commands = dst.get('commands', [])
+                        if commands:
+                            lazy_commands.append(commands)
                 continue
 
             # Hack, the next ids dont update when new images are added
@@ -1377,6 +1446,10 @@ class SimpleDataCube(object):
                 ann['image_id'] = new_gid
                 new_aid = new_dset.add_annotation(**ann)
                 sub_new_aids.append(new_aid)
+
+        if hack_lazy:
+            # Skip the rest in this hack lazy mode
+            return lazy_commands
 
         if True:
             from kwcoco.util import util_json
@@ -1485,7 +1558,9 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
                       asset_timeout=None,
                       image_timeout=None,
                       verbose=0,
-                      force_min_gsd=None):
+                      force_min_gsd=None,
+                      hack_lazy=False,
+                      ):
     """
     Threaded worker function for :func:`SimpleDataCube.extract_overlaps`.
 
@@ -1584,7 +1659,9 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
             tries=tries,
             asset_timeout=asset_timeout,
             verbose=aux_verbose,
-            force_min_gsd=force_min_gsd)
+            force_min_gsd=force_min_gsd,
+            hack_lazy=hack_lazy,
+        )
         job_list.append(job)
 
     dst_list = []
@@ -1593,6 +1670,9 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
                                        progkw=dict(enabled=DEBUG, verbose=verbose)):
         dst = job.result(timeout=asset_timeout)
         dst_list.append(dst)
+
+    if hack_lazy:
+        return dst_list, None
 
     new_gid = start_gid
 
@@ -1811,7 +1891,8 @@ def _fix_geojson_poly(geo):
 def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
                space_box, align_method, is_multi_image, keep, local_epsg=None,
                include_channels=None, exclude_channels=None, tries=2,
-               asset_timeout=None, force_nodata=None, verbose=0, force_min_gsd=None):
+               asset_timeout=None, force_nodata=None, verbose=0,
+               force_min_gsd=None, hack_lazy=False):
     import watch
 
     # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
@@ -1956,20 +2037,29 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
 
     if len(input_gpaths) > 1:
         in_fpaths = input_gpaths
-        util_gdal.gdal_multi_warp(in_fpaths, out_fpath, space_box=space_box,
-                                  local_epsg=local_epsg, rpcs=rpcs,
-                                  nodata=nodata, tries=tries,
-                                  error_logfile=error_logfile,
-                                  verbose=0 if verbose < 2 else verbose)
+        commands = util_gdal.gdal_multi_warp(
+            in_fpaths, out_fpath, space_box=space_box,
+            local_epsg=local_epsg, rpcs=rpcs,
+            nodata=nodata, tries=tries,
+            error_logfile=error_logfile,
+            verbose=0 if verbose < 2 else verbose,
+            eager=not hack_lazy,
+        )
     else:
         in_fpath = input_gpaths[0]
-        util_gdal.gdal_single_warp(in_fpath, out_fpath,
-                                   space_box=space_box, local_epsg=local_epsg,
-                                   rpcs=rpcs, nodata=nodata,
-                                   tries=tries,
-                                   error_logfile=error_logfile,
-                                   verbose=0 if verbose < 2 else verbose,
-                                   force_spatial_res=force_spatial_res)
+        commands = util_gdal.gdal_single_warp(
+            in_fpath, out_fpath,
+            space_box=space_box, local_epsg=local_epsg,
+            rpcs=rpcs, nodata=nodata,
+            tries=tries,
+            error_logfile=error_logfile,
+            verbose=0 if verbose < 2 else verbose,
+            force_spatial_res=force_spatial_res,
+            eager=not hack_lazy,
+        )
+    if hack_lazy:
+        # The lazy hack means we are just building the commands
+        dst['commands'] = commands
     if verbose > 2:
         print('finish gdal warp dst_gpath = {!r}'.format(dst_gpath))
     return dst

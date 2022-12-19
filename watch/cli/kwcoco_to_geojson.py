@@ -1024,23 +1024,21 @@ def main(args):
     saliency_cats = ['salient']
     if args.default_track_fn is not None:
         from watch.tasks.tracking import from_heatmap, from_polygon
-        if args.default_track_fn == 'saliency_heatmaps':
-            track_fn = from_heatmap.TimeAggregatedBAS
-            if CLEAN_DSET:
-                coco_dset.remove_categories(class_cats)
-        elif args.default_track_fn == 'saliency_polys':
-            track_fn = from_polygon.OverlapTrack
-            if CLEAN_DSET:
-                coco_dset.remove_categories(class_cats)
-        elif args.default_track_fn == 'class_heatmaps':
-            track_fn = from_heatmap.TimeAggregatedSC
-            if CLEAN_DSET:
+        _known_funcs = {
+            'saliency_heatmaps': from_heatmap.TimeAggregatedBAS,
+            'saliency_polys': from_polygon.OverlapTrack,
+            'class_heatmaps': from_heatmap.TimeAggregatedSC,
+            'class_polys': from_polygon.OverlapTrack,
+        }
+        if CLEAN_DSET:
+            if 'class_' in args.default_track_fn:
                 coco_dset.remove_categories(saliency_cats)
-        elif args.default_track_fn == 'class_polys':
-            track_fn = from_polygon.OverlapTrack
-            if CLEAN_DSET:
-                coco_dset.remove_categories(saliency_cats)
-        else:
+            else:
+                coco_dset.remove_categories(class_cats)
+        track_fn = _known_funcs.get(args.default_track_fn, None)
+        if track_fn is None:
+            raise KeyError(
+                f'Unknown Default Track Function: {args.default_track_fn}')
             track_fn = from_heatmap.TimeAggregatedBAS
             track_kwargs['key'] = [args.default_track_fn]
             if CLEAN_DSET:
@@ -1048,6 +1046,10 @@ def main(args):
     elif args.track_fn is None:
         track_fn = watch.tasks.tracking.utils.NoOpTrackFunction
     else:
+        # TODO: use avoid eval in favor of restricted eval
+        # With an explicit allow surface.
+        # from watch.utils import util_eval
+        # util_eval.restricted_eval
         track_fn = eval(args.track_fn)
         if CLEAN_DSET:
             print('warning: could not check for invalid cats!')
@@ -1062,6 +1064,10 @@ def main(args):
               set(coco_dset.index.name_to_video))
         assert coco_dset.n_images > 0, 'no valid videos!'
 
+    print(f'track_fn={track_fn}')
+    """
+    ../tasks/tracking/normalize.py
+    """
     coco_dset = watch.tasks.tracking.normalize.normalize(coco_dset,
                                                          track_fn=track_fn,
                                                          overwrite=False,

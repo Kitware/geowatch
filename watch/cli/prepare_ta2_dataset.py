@@ -101,7 +101,7 @@ class PrepareTA2Config(scfg.Config):
 
         'convert_workers': scfg.Value('min(avail,8)', help='workers for stac-to-kwcoco script'),
         'fields_workers': scfg.Value('min(avail,max(all/2,8))', help='workers for add-watch-fields script'),
-        'align_workers': scfg.Value(0, help='workers for align script'),
+        'align_workers': scfg.Value(0, help='primary workers for align script'),
         'align_aux_workers': scfg.Value(0, help='threads per align process (typically set this to 0)'),
 
         'ignore_duplicates': scfg.Value(1, help='workers for align script'),
@@ -144,6 +144,17 @@ class PrepareTA2Config(scfg.Config):
                     transform in the geotiff metadata.
             '''
         )),
+
+        'hack_lazy': scfg.Value(False, isflag=True, help=ub.paragraph(
+            '''
+            Hack lazy is a proof of concept with the intent on speeding up the
+            download / cropping of data by flattening the gdal processing into
+            a single queue of parallel processes executed via a command queue.
+
+            By running once with this flag on, it will execute the command
+            queue, and then running again, it should see all of the data as
+            existing and construct the aligned kwcoco dataset as normal.
+            ''')),
     }
 
 __config__ = PrepareTA2Config
@@ -248,8 +259,11 @@ def main(cmdline=False, **kwargs):
         # TODO: figure out how to pass the in-environment secret key
         # to the tmux sessions.
         api_key_name = api_key[4:]
-        api_key_val = os.environ[api_key_name]
-        environ[api_key_name] = api_key_val
+        api_key_val = os.environ.get(api_key_name, None)
+        if api_key_val is None:
+            warnings.warn('The requested API key was not available')
+        else:
+            environ[api_key_name] = api_key_val
 
     default_collated = config['collated'][0]
 
@@ -611,7 +625,8 @@ def main(cmdline=False, **kwargs):
                 --verbose={config['verbose']} \
                 --aux_workers={config['align_aux_workers']} \
                 --target_gsd={config['target_gsd']} \
-                --workers={config['align_workers']}
+                --workers={config['align_workers']} \
+                --hack_lazy={config['hack_lazy']}
             '''),
             depends=parent_job,
             name=f'align-geotiffs-{name}',
