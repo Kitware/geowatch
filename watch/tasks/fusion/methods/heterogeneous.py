@@ -301,125 +301,6 @@ class ResNetShim(nn.Module):
 
     def forward(self, x):
         return self.submodule(x[None])["layer4"][0]
-    
-
-class MM_VITEncoder(nn.Module):
-    """
-    mmsegmentation variant of VIT
-
-    Needs 768 features.
-
-    Notes:
-        https://github.com/open-mmlab/mmsegmentation/tree/master/configs/vit
-
-    Results:
-        # 1
-        https://github.com/open-mmlab/mmsegmentation/tree/master/configs/vit#ade20k
-        https://github.com/open-mmlab/mmsegmentation/blob/master/configs/vit/upernet_vit-b16_mln_512x512_80k_ade20k.py
-        https://github.com/open-mmlab/mmsegmentation/blob/master/configs/_base_/models/upernet_vit-b16_ln_mln.py
-
-
-    Ignore:
-        >>> from mmseg.models.backbones import vit
-        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
-        >>> self = MM_VITEncoder()
-        >>> x = torch.rand(2, 3, 768)
-        >>> self.forward(x)
-    """
-    
-    pretrained_fpath_shortnames = {
-        "upernet_vit-b16_mln_512x512_80k_ade20k": 
-            'https://download.openmmlab.com/mmsegmentation/v0.5/vit/upernet_vit-b16_mln_512x512_80k_ade20k/upernet_vit-b16_mln_512x512_80k_ade20k_20210624_130547-0403cee1.pth',
-    }
-
-    def __init__(
-        self, 
-        dim,
-        queries_dim,
-        logits_dim,
-        pretrained=None,
-    ):
-        super().__init__()
-        from mmseg.models.backbones.vit import VisionTransformer
-        kwargs = dict(
-            img_size=(512, 512),
-            patch_size=16,
-            in_channels=3,
-            embed_dims=768,
-            num_layers=12,
-            num_heads=12,
-            mlp_ratio=4,
-            out_indices=(2, 5, 8, 11),
-            qkv_bias=True,
-            drop_rate=0.0,
-            attn_drop_rate=0.0,
-            drop_path_rate=0.0,
-            with_cls_token=True,
-            norm_cfg=dict(type='LN', eps=1e-6),
-            act_cfg=dict(type='GELU'),
-            norm_eval=False,
-            interpolate_mode='bicubic')
-        vit_model = VisionTransformer(**kwargs)
-        # We only need the encoder
-        self.layers = vit_model.layers
-        
-        # if a short name is used, replace it with the appropriate full path
-        if pretrained in MM_VITEncoder.pretrained_fpath_shortnames.keys():
-            pretrained = MM_VITEncoder.pretrained_fpath_shortnames[pretrained]
-        
-        # if a pretrained path is provided, try to use it
-        if isinstance(pretrained, str):
-            self.initialize_from_pretrained(pretrained)
-            
-        self.encoder_in_features = self.layers[0].ln1.weight.shape[0]
-        self.encoder_out_features = self.layers[-1].ffn.layers[1].out_features
-        
-        self.input_projector = nn.Linear(dim, self.encoder_in_features)
-        self.query_projector = nn.Linear(queries_dim, self.encoder_out_features)
-        self.output_projector = nn.Linear(self.encoder_out_features, logits_dim)
-            
-        self.decoder = nn.TransformerDecoder(
-            nn.TransformerDecoderLayer(d_model=self.encoder_out_features, nhead=8, dim_feedforward=512, batch_first=True),
-            num_layers=1,
-        )
-
-    def initialize_from_pretrained(self, fpath):
-        pretrained_fpath = ub.grabdata(fpath)
-        from watch.tasks.fusion.fit import coerce_initializer
-        initializer = coerce_initializer(pretrained_fpath)
-        info = initializer.forward(self, verbose=0)  # NOQA
-
-    def forward(self, x, mask=None, queries=None):
-        # orig_shape = x.shape
-        # x = x.view(x.shape[0], -1, x.shape[1])
-        x = self.input_projector(x)
-        for i, layer in enumerate(self.layers):
-            x = layer(x)
-            # if i == len(self.layers) - 1:
-            #     if self.final_norm:
-            #         x = self.norm1(x)
-            # if i in self.out_indices:
-            #     if self.with_cls_token:
-            #         # Remove class token and reshape token for decoder head
-            #         out = x[:, 1:]
-            #     else:
-            #         out = x
-            #     B, _, C = out.shape
-            #     out = out.reshape(B, hw_shape[0], hw_shape[1],
-            #                       C).permute(0, 3, 1, 2).contiguous()
-            #     if self.output_cls_token:
-            #         out = [out, x[:, 0]]
-            #     outs.append(out)
-        # x = x.view(*orig_shape[0], x.shape[-1])
-        
-        if queries is None:
-            return x
-        
-        queries = self.query_projector(queries)
-        x = self.decoder(queries, x)
-        x = self.output_projector(x)
-        
-        return x
 
 
 class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
@@ -1104,6 +985,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         
         Example:
             >>> from watch.tasks import fusion
+            >>> from watch.tasks.fusion.architectures.transformer import MM_VITEncoder
             >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
             >>> backbone = MM_VITEncoder(
             >>>     dim=position_encoder.output_dim + 16,
