@@ -1148,7 +1148,8 @@ class MM_VITEncoder(nn.Module):
         >>> x = torch.rand(2, 3, 16)
         >>> self.forward(x)
 
-    Example:
+    Ignore:
+        >>> # This tests downloading weights from the MM repo
         >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> self = MM_VITEncoder(16, 16, 16, pretrained="upernet_vit-b16_mln_512x512_80k_ade20k")
         >>> x = torch.rand(2, 3, 16)
