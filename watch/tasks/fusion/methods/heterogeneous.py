@@ -318,17 +318,11 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         input_sensorchan=None,
         name: str = "unnamed_model",
         position_encoder: ScaleAwarePositionalEncoder = None,
+        backbone: nn.Module = None,
         token_width: int = 10,
         token_dim: int = 16,
         spatial_scale_base: float = 1.,
         temporal_scale_base: float = 1.,
-        backbone_encoder_depth: int = 4,
-        backbone_decoder_depth: int = 1,
-        backbone_cross_heads: int = 1,
-        backbone_latent_heads: int = 8,
-        backbone_cross_dim_head: int = 64,
-        backbone_latent_dim_head: int = 64,
-        backbone_weight_tie_layers: bool = False,
         class_weights: str = "auto",
         saliency_weights: str = "auto",
         positive_change_weight: float = 1.0,
@@ -355,9 +349,23 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         Example:
             >>> # Note: it is important that the non-kwargs are saved as hyperparams
             >>> from watch.tasks.fusion.methods.heterogeneous import HeterogeneousModel, ScaleAgnostictPositionalEncoder
+            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> position_encoder = ScaleAgnostictPositionalEncoder(3, 8)
+            >>> backbone = TransformerEncoderDecoder(
+            >>>     encoder_depth=1,
+            >>>     decoder_depth=1,
+            >>>     dim=position_encoder.output_dim + 16,
+            >>>     queries_dim=position_encoder.output_dim,
+            >>>     logits_dim=16,
+            >>>     cross_heads=1,
+            >>>     latent_heads=1,
+            >>>     cross_dim_head=1,
+            >>>     latent_dim_head=1,
+            >>> )
             >>> model = HeterogeneousModel(
             >>>   input_sensorchan='r|g|b',
-            >>>   position_encoder=ScaleAgnostictPositionalEncoder(3),
+            >>>   position_encoder=position_encoder,
+            >>>   backbone=backbone,
             >>> )
         """
         assert position_encoder is not None
@@ -564,18 +572,19 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         # self.position_encoder = RandomFourierPositionalEncoder(3, 16)
         position_dim = self.position_encoder.output_dim
 
-        self.backbone = TransformerEncoderDecoder(
-            encoder_depth=backbone_encoder_depth,
-            decoder_depth=backbone_decoder_depth,
-            dim=token_dim + position_dim,
-            queries_dim=position_dim,
-            logits_dim=token_dim,
-            cross_heads=backbone_cross_heads,
-            latent_heads=backbone_latent_heads,
-            cross_dim_head=backbone_cross_dim_head,
-            latent_dim_head=backbone_latent_dim_head,
-            weight_tie_layers=backbone_weight_tie_layers,
-        )
+        self.backbone = backbone
+        # self.backbone = TransformerEncoderDecoder(
+        #     encoder_depth=backbone_encoder_depth,
+        #     decoder_depth=backbone_decoder_depth,
+        #     dim=token_dim + position_dim,
+        #     queries_dim=position_dim,
+        #     logits_dim=token_dim,
+        #     cross_heads=backbone_cross_heads,
+        #     latent_heads=backbone_latent_heads,
+        #     cross_dim_head=backbone_cross_dim_head,
+        #     latent_dim_head=backbone_latent_dim_head,
+        #     weight_tie_layers=backbone_weight_tie_layers,
+        # )
 
         self.criterions = torch.nn.ModuleDict()
         self.heads = torch.nn.ModuleDict()
@@ -698,11 +707,25 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         Example:
             >>> from watch.tasks import fusion
             >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
+            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
+            >>> backbone = TransformerEncoderDecoder(
+            >>>     encoder_depth=1,
+            >>>     decoder_depth=1,
+            >>>     dim=position_encoder.output_dim + 16,
+            >>>     queries_dim=position_encoder.output_dim,
+            >>>     logits_dim=16,
+            >>>     cross_heads=1,
+            >>>     latent_heads=1,
+            >>>     cross_dim_head=1,
+            >>>     latent_dim_head=1,
+            >>> )
             >>> model = fusion.methods.HeterogeneousModel(
             >>>     classes=classes,
             >>>     dataset_stats=dataset_stats,
             >>>     input_sensorchan=channels,
-            >>>     position_encoder=fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>>     position_encoder=position_encoder,
+            >>>     backbone=backbone,
             >>> )
             >>> example = model.demo_batch(width=64, height=65)[0]
             >>> input_tokens = model.process_input_tokens(example)
@@ -776,11 +799,25 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         Example:
             >>> from watch.tasks import fusion
             >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
+            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
+            >>> backbone = TransformerEncoderDecoder(
+            >>>     encoder_depth=1,
+            >>>     decoder_depth=1,
+            >>>     dim=position_encoder.output_dim + 16,
+            >>>     queries_dim=position_encoder.output_dim,
+            >>>     logits_dim=16,
+            >>>     cross_heads=1,
+            >>>     latent_heads=1,
+            >>>     cross_dim_head=1,
+            >>>     latent_dim_head=1,
+            >>> )
             >>> model = fusion.methods.HeterogeneousModel(
             >>>     classes=classes,
             >>>     dataset_stats=dataset_stats,
             >>>     input_sensorchan=channels,
-            >>>     position_encoder=fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>>     position_encoder=position_encoder,
+            >>>     backbone=backbone,
             >>> )
             >>> example = model.demo_batch(width=64, height=65)[0]
             >>> query_tokens = model.process_query_tokens(example)
@@ -844,12 +881,26 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         """
         Example:
             >>> from watch.tasks import fusion
+            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
+            >>> backbone = TransformerEncoderDecoder(
+            >>>     encoder_depth=1,
+            >>>     decoder_depth=1,
+            >>>     dim=position_encoder.output_dim + 16,
+            >>>     queries_dim=position_encoder.output_dim,
+            >>>     logits_dim=16,
+            >>>     cross_heads=1,
+            >>>     latent_heads=1,
+            >>>     cross_dim_head=1,
+            >>>     latent_dim_head=1,
+            >>> )
             >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
             >>> model = fusion.methods.HeterogeneousModel(
             >>>     classes=classes,
             >>>     dataset_stats=dataset_stats,
             >>>     input_sensorchan=channels,
-            >>>     position_encoder=fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>>     backbone=backbone,
+            >>>     position_encoder=position_encoder,
             >>> )
             >>> batch = model.demo_batch(width=64, height=65)
             >>> batch += model.demo_batch(width=55, height=75)
@@ -864,12 +915,26 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
         Example:
             >>> from watch.tasks import fusion
+            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
+            >>> backbone = TransformerEncoderDecoder(
+            >>>     encoder_depth=1,
+            >>>     decoder_depth=1,
+            >>>     dim=position_encoder.output_dim + 16,
+            >>>     queries_dim=position_encoder.output_dim,
+            >>>     logits_dim=16,
+            >>>     cross_heads=1,
+            >>>     latent_heads=1,
+            >>>     cross_dim_head=1,
+            >>>     latent_dim_head=1,
+            >>> )
             >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
             >>> model = fusion.methods.HeterogeneousModel(
             >>>     classes=classes,
             >>>     dataset_stats=dataset_stats,
             >>>     input_sensorchan=channels,
-            >>>     position_encoder=fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>>     position_encoder=position_encoder,
+            >>>     backbone=backbone,
             >>>     decoder="simple_conv",
             >>> )
             >>> batch = model.demo_batch(width=64, height=65)
@@ -885,12 +950,26 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
         Example:
             >>> from watch.tasks import fusion
+            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
+            >>> backbone = TransformerEncoderDecoder(
+            >>>     encoder_depth=1,
+            >>>     decoder_depth=1,
+            >>>     dim=position_encoder.output_dim + 16,
+            >>>     queries_dim=position_encoder.output_dim,
+            >>>     logits_dim=16,
+            >>>     cross_heads=1,
+            >>>     latent_heads=1,
+            >>>     cross_dim_head=1,
+            >>>     latent_dim_head=1,
+            >>> )
             >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
             >>> model = fusion.methods.HeterogeneousModel(
             >>>     classes=classes,
             >>>     dataset_stats=dataset_stats,
             >>>     input_sensorchan=channels,
-            >>>     position_encoder=fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>>     position_encoder=position_encoder,
+            >>>     backbone=backbone,
             >>>     decoder="trans_conv",
             >>> )
             >>> batch = model.demo_batch(width=64, height=65)
@@ -1003,13 +1082,27 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         Example:
             >>> from watch.tasks import fusion
             >>> import torch
+            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
+            >>> backbone = TransformerEncoderDecoder(
+            >>>     encoder_depth=1,
+            >>>     decoder_depth=1,
+            >>>     dim=position_encoder.output_dim + 16,
+            >>>     queries_dim=position_encoder.output_dim,
+            >>>     logits_dim=16,
+            >>>     cross_heads=1,
+            >>>     latent_heads=1,
+            >>>     cross_dim_head=1,
+            >>>     latent_dim_head=1,
+            >>> )
             >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
             >>> model = fusion.methods.HeterogeneousModel(
             >>>     classes=classes,
             >>>     dataset_stats=dataset_stats,
             >>>     input_sensorchan=channels,
-            >>>     position_encoder=fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>>     position_encoder=position_encoder,
             >>>     decoder="trans_conv",
+            >>>     backbone=backbone,
             >>> )
             >>> batch = model.demo_batch(batch_size=2, width=64, height=65, num_timesteps=3)
             >>> outputs = model.shared_step(batch)
@@ -1022,13 +1115,27 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         Example:
             >>> from watch.tasks import fusion
             >>> import torch
+            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
+            >>> backbone = TransformerEncoderDecoder(
+            >>>     encoder_depth=1,
+            >>>     decoder_depth=1,
+            >>>     dim=position_encoder.output_dim + 16,
+            >>>     queries_dim=position_encoder.output_dim,
+            >>>     logits_dim=16,
+            >>>     cross_heads=1,
+            >>>     latent_heads=1,
+            >>>     cross_dim_head=1,
+            >>>     latent_dim_head=1,
+            >>> )
             >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
             >>> model = fusion.methods.HeterogeneousModel(
             >>>     classes=classes,
             >>>     dataset_stats=dataset_stats,
             >>>     input_sensorchan=channels,
-            >>>     position_encoder=fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>>     position_encoder=position_encoder,
             >>>     decoder="trans_conv",
+            >>>     backbone=backbone,
             >>> )
             >>> batch = model.demo_batch(batch_size=2, width=64, height=65, num_timesteps=3)
             >>> batch += [None]
@@ -1042,13 +1149,27 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         Example:
             >>> from watch.tasks import fusion
             >>> import torch
+            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
+            >>> backbone = TransformerEncoderDecoder(
+            >>>     encoder_depth=1,
+            >>>     decoder_depth=1,
+            >>>     dim=position_encoder.output_dim + 16,
+            >>>     queries_dim=position_encoder.output_dim,
+            >>>     logits_dim=16,
+            >>>     cross_heads=1,
+            >>>     latent_heads=1,
+            >>>     cross_dim_head=1,
+            >>>     latent_dim_head=1,
+            >>> )
             >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
             >>> model = fusion.methods.HeterogeneousModel(
             >>>     classes=classes,
             >>>     dataset_stats=dataset_stats,
             >>>     input_sensorchan=channels,
-            >>>     position_encoder=fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>>     position_encoder=position_encoder,
             >>>     decoder="trans_conv",
+            >>>     backbone=backbone,
             >>> )
             >>> batch = model.demo_batch(width=64, height=65)
             >>> for cutoff in [-1, -2]:
@@ -1065,13 +1186,27 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         Example:
             >>> from watch.tasks import fusion
             >>> import torch
+            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> position_encoder = fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
+            >>> backbone = TransformerEncoderDecoder(
+            >>>     encoder_depth=1,
+            >>>     decoder_depth=1,
+            >>>     dim=position_encoder.output_dim + 16,
+            >>>     queries_dim=position_encoder.output_dim,
+            >>>     logits_dim=16,
+            >>>     cross_heads=1,
+            >>>     latent_heads=1,
+            >>>     cross_dim_head=1,
+            >>>     latent_dim_head=1,
+            >>> )
             >>> channels, classes, dataset_stats = fusion.methods.HeterogeneousModel.demo_dataset_stats()
             >>> model = fusion.methods.HeterogeneousModel(
             >>>     classes=classes,
             >>>     dataset_stats=dataset_stats,
             >>>     input_sensorchan=channels,
-            >>>     position_encoder=fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>>     position_encoder=position_encoder,
             >>>     decoder="trans_conv",
+            >>>     backbone=backbone,
             >>> )
             >>> batch = model.demo_batch(batch_size=1, width=64, height=65, num_timesteps=3, nans=0.1)
             >>> batch += model.demo_batch(batch_size=1, width=64, height=65, num_timesteps=3, nans=0.5)
@@ -1238,10 +1373,24 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>> # Use one of our fusion.architectures in a test
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
+            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> position_encoder = methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
+            >>> backbone = TransformerEncoderDecoder(
+            >>>     encoder_depth=1,
+            >>>     decoder_depth=1,
+            >>>     dim=position_encoder.output_dim + 16,
+            >>>     queries_dim=position_encoder.output_dim,
+            >>>     logits_dim=16,
+            >>>     cross_heads=1,
+            >>>     latent_heads=1,
+            >>>     cross_dim_head=1,
+            >>>     latent_dim_head=1,
+            >>> )
             >>> model = self = methods.HeterogeneousModel(
-            >>>     position_encoder=methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>>     position_encoder=position_encoder,
             >>>     input_sensorchan=5,
             >>>     decoder="upsample",
+            >>>     backbone=backbone,
             >>> )
 
             >>> # Save the model (TODO: need to save datamodule as well)
@@ -1271,10 +1420,24 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>> # Use one of our fusion.architectures in a test
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
+            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> position_encoder = methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
+            >>> backbone = TransformerEncoderDecoder(
+            >>>     encoder_depth=1,
+            >>>     decoder_depth=1,
+            >>>     dim=position_encoder.output_dim + 16,
+            >>>     queries_dim=position_encoder.output_dim,
+            >>>     logits_dim=16,
+            >>>     cross_heads=1,
+            >>>     latent_heads=1,
+            >>>     cross_dim_head=1,
+            >>>     latent_dim_head=1,
+            >>> )
             >>> model = self = methods.HeterogeneousModel(
-            >>>     position_encoder=methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>>     position_encoder=position_encoder,
             >>>     input_sensorchan=5,
             >>>     decoder="simple_conv",
+            >>>     backbone=backbone,
             >>> )
 
             >>> # Save the model (TODO: need to save datamodule as well)
@@ -1304,10 +1467,24 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>> # Use one of our fusion.architectures in a test
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
+            >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+            >>> position_encoder = methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
+            >>> backbone = TransformerEncoderDecoder(
+            >>>     encoder_depth=1,
+            >>>     decoder_depth=1,
+            >>>     dim=position_encoder.output_dim + 16,
+            >>>     queries_dim=position_encoder.output_dim,
+            >>>     logits_dim=16,
+            >>>     cross_heads=1,
+            >>>     latent_heads=1,
+            >>>     cross_dim_head=1,
+            >>>     latent_dim_head=1,
+            >>> )
             >>> model = self = methods.HeterogeneousModel(
-            >>>     position_encoder=methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+            >>>     position_encoder=position_encoder,
             >>>     input_sensorchan=5,
             >>>     decoder="trans_conv",
+            >>>     backbone=backbone,
             >>> )
 
             >>> # Save the model (TODO: need to save datamodule as well)
