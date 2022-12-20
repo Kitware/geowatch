@@ -850,7 +850,9 @@ python -m watch.tasks.fusion.fit \
     --decouple_resolution=0 \
     --draw_interval=1year \
     --num_draw=0 \
-    --init=/home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_BGR_10GSD_V015/lightning_logs/version_0/checkpoints/epoch=43-step=2772.ckpt 
+    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/lightning_logs/version_15/checkpoints/epoch=3-step=4096.ckpt
+    
+#/home/joncrall/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_BGR_10GSD_V015/lightning_logs/version_0/checkpoints/epoch=43-step=2772.ckpt 
 
 
 
@@ -1154,7 +1156,7 @@ KWCOCO_BUNDLE_DPATH=$DATA_DVC_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
-CHANNELS="blue|green|red|nir|swir16|swir22,blue|green|red"
+CHANNELS="blue|green|red|nir|swir16|swir22"
 EXPERIMENT_NAME=Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion.fit \
@@ -1163,13 +1165,14 @@ python -m watch.tasks.fusion.fit \
     --train_dataset="$TRAIN_FPATH" \
     --vali_dataset="$VALI_FPATH" \
     --test_dataset="$TEST_FPATH" \
+    --saliency_weights="1:200" \
     --class_loss='focal' \
     --saliency_loss='focal' \
     --global_change_weight=0.00 \
-    --global_class_weight=1e-7 \
+    --global_class_weight=1e-17 \
     --global_saliency_weight=1.00 \
-    --learning_rate=3e-4 \
-    --weight_decay=1e-7 \
+    --learning_rate=1e-4 \
+    --weight_decay=1e-3 \
     --chip_dims=224,224 \
     --window_space_scale="10GSD" \
     --input_space_scale="10GSD" \
@@ -1178,18 +1181,18 @@ python -m watch.tasks.fusion.fit \
     --batch_size=2 \
     --max_epochs=160 \
     --patience=160 \
-    --num_workers=5 \
+    --num_workers=4 \
     --dist_weights=False \
     --time_steps=7 \
     --channels="$CHANNELS" \
-    --neg_to_pos_ratio=0.2 \
+    --neg_to_pos_ratio=0.1 \
     --time_sampling=soft2-contiguous-hardish3\
     --time_span=3m-6m-1y \
     --tokenizer=linconv \
     --optimizer=AdamW \
     --arch_name=smt_it_stm_p8 \
     --decoder=mlp \
-    --draw_interval=1min \
+    --draw_interval=5min \
     --num_draw=4 \
     --use_centered_positives=True \
     --normalize_inputs=128 \
@@ -1204,6 +1207,9 @@ python -m watch.tasks.fusion.fit \
     --max_epoch_length=16384 \
     --init="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 
+    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/lightning_logs/version_15/package-interupt/package_epoch4_step5120.pt
+
+    #--init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/lightning_logs/version_14/package-interupt/package_epoch10_step10734.pt 
 
     # /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/lightning_logs/version_13
     # /home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/lightning_logs/version_13/package-interupt/package_epoch44_step46014.pt
@@ -1417,15 +1423,28 @@ DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 
 python -m watch.tasks.invariants.predict \
     --input_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_train.kwcoco.json \
-    --output_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_train_invar13.kwcoco.json \
+    --output_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_train_invar13_30GSD.kwcoco.json \
     --pretext_package=$DVC_EXPT_DPATH/models/uky/uky_invariants_2022_12_17/TA1_pretext_model/pretext_package.pt \
-    --input_space_scale=10GSD  \
-    --window_space_scale=10GSD \
+    --input_space_scale=60GSD  \
+    --window_space_scale=60GSD \
     --patch_size=256 \
     --do_pca 0 \
     --patch_overlap=0.3 \
     --num_workers="8" \
-    --write_workers 8 \
+    --write_workers 1 \
+    --tasks before_after pretext
+
+python -m watch.tasks.invariants.predict \
+    --input_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json \
+    --output_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_vali_invar13_30GSD.kwcoco.json \
+    --pretext_package=$DVC_EXPT_DPATH/models/uky/uky_invariants_2022_12_17/TA1_pretext_model/pretext_package.pt \
+    --input_space_scale=60GSD  \
+    --window_space_scale=60GSD \
+    --patch_size=256 \
+    --do_pca 0 \
+    --patch_overlap=0.3 \
+    --num_workers="8" \
+    --write_workers 1 \
     --tasks before_after pretext
 
 

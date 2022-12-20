@@ -364,28 +364,29 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         # hueristic_ignore_keys.update(hueristic_occluded_keys)
 
         self.saliency_num_classes = 2
-
+        _n = self.saliency_num_classes
         if isinstance(self.hparams.saliency_weights, str):
             if self.hparams.saliency_weights == 'auto':
                 if class_freq is not None:
+                    print(f'class_freq={class_freq}')
                     bg_freq = sum(class_freq.get(k, 0) for k in self.background_classes)
                     fg_freq = sum(class_freq.get(k, 0) for k in self.foreground_classes)
                     bg_weight = 1.
                     fg_weight = bg_freq / (fg_freq + 1)
-                    fg_bg_weights = [bg_weight, fg_weight]
-                    _w = fg_bg_weights + ([0.0] * (self.saliency_num_classes - len(fg_bg_weights)))
-                    saliency_weights = torch.Tensor(_w)
                 else:
-                    fg_bg_weights = [1.0, 1.0]
-                    _w = fg_bg_weights + ([0.0] * (self.saliency_num_classes - len(fg_bg_weights)))
-                    saliency_weights = torch.Tensor(_w)
-                # total_freq = np.array(list())
-                # print('total_freq = {!r}'.format(total_freq))
-                # cat_weights = _class_weights_from_freq(total_freq)
+                    bg_weight = 1.0
+                    fg_weight = 1.0
             else:
-                raise KeyError(saliency_weights)
+                bg_weight, fg_weight = self.hparams.saliency_weights.split(':')
+                fg_weight = float(fg_weight)
+                bg_weight = float(bg_weight)
         else:
-            raise NotImplementedError(saliency_weights)
+            raise NotImplementedError(self.hparams.saliency_weights)
+        print(f'bg_weight={bg_weight}')
+        print(f'fg_weight={fg_weight}')
+        fg_bg_weights = [bg_weight, fg_weight]
+        _w = fg_bg_weights + ([0.0] * (_n - len(fg_bg_weights)))
+        saliency_weights = torch.Tensor(_w)
 
         # criterion and metrics
         # TODO: parametarize loss criterions
