@@ -1458,7 +1458,7 @@ python -m watch.cli.split_videos \
 DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
 EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.cli.prepare_teamfeats \
-    --base_fpath="$DATA_DVC_DPATH/Drop4-BAS/data_train_*.kwcoco.json" \
+    --base_fpath="$DATA_DVC_DPATH/Drop4-BAS/data_vali_*.kwcoco.json" \
     --expt_dpath="$EXPT_DVC_DPATH" \
     --with_landcover=0 \
     --with_materials=0 \
@@ -1468,3 +1468,7 @@ python -m watch.cli.prepare_teamfeats \
     --do_splits=0 \
     --skip_existing=0 \
     --gres=0, --workers=1 --backend=tmux --run=0
+
+
+DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+rsync -avpPn --include="*invariants*.kwcoco.json" yardrat:data/dvc-repos/smart_data_dvc/Drop4-BAS/ "$DATA_DVC_DPATH/Drop4-BAS/"

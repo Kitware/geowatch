@@ -273,7 +273,8 @@ def prep_feats(cmdline=True, **kwargs):
     if config['run']:
         queue.run(
             block=True,
-            # with_textual=True,
+            # with_textual=False,
+            with_textual='auto',
         )
 
     """
