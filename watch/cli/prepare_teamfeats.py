@@ -150,6 +150,7 @@ class TeamFeaturePipelineConfig(scfg.Config):
         'with_landcover': scfg.Value(True, help='Include DZYNE landcover features'),
         'with_materials': scfg.Value(True, help='Include Rutgers material features'),
         'with_invariants': scfg.Value(True, help='Include UKY invariant features'),
+        'with_invariants2': scfg.Value(0, help='Include UKY invariant features'),
         'with_depth': scfg.Value(True, help='Include DZYNE WorldView depth features'),
 
         'invariant_segmentation': scfg.Value(False, help='Enable/Disable segmentation part of invariants'),
@@ -305,6 +306,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
 
         # 2022-03-21
         'uky_pretext': expt_dvc_dpath / 'models/uky/uky_invariants_2022_03_21/pretext_model/pretext_package.pt',
+        'uky_pretext2': expt_dvc_dpath / 'models/uky/uky_invariants_2022_12_17/TA1_pretext_model/pretext_package.pt',
         'uky_pca': expt_dvc_dpath / 'models/uky/uky_invariants_2022_03_21/pretext_model/pretext_pca_104.pt',
         # 'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_02_21/TA1_segmentation_model/segmentation_package.pt',  # uses old segmentation model
 
@@ -334,6 +336,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
         'with_depth': 'D',
         'with_materials': 'M',
         'with_invariants': 'I',
+        'with_invariants2': 'I2',
     }
 
     # tmux queue is still limited. The order of submission matters.
@@ -482,6 +485,44 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
         combo_code_parts.append(codes[key])
         job = pipeline.submit(
             name='invariants' + name_suffix,
+            command=task['command'],
+            in_paths=[base_fpath],
+            out_paths={
+                'output_fpath': task['output_fpath']
+            },
+        )
+        task_jobs.append(job)
+
+    key = 'with_invariants2'
+    if config[key]:
+        task = {}
+        if not model_fpaths['uky_pretext2'].exists():
+            print('Warning: UKY pretext model does not exist')
+        # all_tasks = 'before_after segmentation pretext'
+        task['output_fpath'] = outputs['uky_invariants']
+        task['gpus'] = 1
+        # --input_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_train.kwcoco.json \
+        # --output_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_train_invar13.kwcoco.json \
+        # --pretext_package=$DVC_EXPT_DPATH/models/uky/uky_invariants_2022_12_17/TA1_pretext_model/pretext_package.pt \
+        task['command'] = ub.codeblock(
+            fr'''
+            python -m watch.tasks.invariants.predict \
+                --input_kwcoco "{base_fpath}" \
+                --output_kwcoco "{task['output_fpath']}" \
+                --pretext_package_path "{model_fpaths['uky_pretext2']}" \
+                --pca_projection_path  "{model_fpaths['uky_pca']}" \
+                --input_space_scale=10GSD \
+                --window_space_scale=10GSD \
+                --patch_size=256 \
+                --do_pca {config['invariant_pca']} \
+                --patch_overlap=0.3 \
+                --num_workers="{data_workers}" \
+                --write_workers 0 \
+                --tasks before_after pretext
+            ''')
+        combo_code_parts.append(codes[key])
+        job = pipeline.submit(
+            name='invariants2' + name_suffix,
             command=task['command'],
             in_paths=[base_fpath],
             out_paths={

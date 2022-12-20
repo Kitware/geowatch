@@ -1427,3 +1427,24 @@ python -m watch.tasks.invariants.predict \
     --num_workers="8" \
     --write_workers 8 \
     --tasks before_after pretext
+
+
+DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+python -m watch.cli.split_videos \
+    --src "$DATA_DVC_DPATH/Drop4-BAS/data_train.kwcoco.json" \
+          "$DATA_DVC_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
+    --dst_dpath "$DATA_DVC_DPATH/Drop4-BAS/"
+
+
+EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.cli.prepare_teamfeats \
+    --base_fpath="$DATA_DVC_DPATH/Drop4-BAS/data_train_BR_R002.kwcoco.json" \
+    --expt_dpath="$EXPT_DVC_DPATH" \
+    --with_landcover=0 \
+    --with_materials=0 \
+    --with_invariants=0 \
+    --with_invariants2=1 \
+    --with_depth=0 \
+    --do_splits=0 \
+    --skip_existing=0 \
+    --gres=0,1 --workers=2 --backend=serial --run=0
