@@ -151,7 +151,8 @@ class HistAccum:
                 hist = ub.sorted_keys(hist)
                 # hist.pop(0)
                 df = pd.DataFrame({
-                    'intensity_bin': np.array(list(hist.keys()), dtype=int),
+                    # 'intensity_bin': np.array(list(hist.keys()), dtype=int),
+                    'intensity_bin': np.array(list(hist.keys())),
                     'value': np.array(list(hist.values())),
                     'channel': [channel] * len(hist),
                     'sensor': [sensor] * len(hist),
@@ -507,6 +508,8 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
         channels = kwcoco.FusedChannelSpec.coerce(channels)
         declared_channel_list = channels.as_list()
 
+        quantization = obj.get('quantization', None)
+
         requested_channels = channels
         if include_channels:
             requested_channels = requested_channels & include_channels
@@ -540,6 +543,13 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
                         print('channels = {!r}'.format(channels))
                     # raise
                     band_name = 'unknown'
+                if quantization is not None:
+                    # Handle dequantization
+                    from delayed_image.helpers import dequantize
+                    quant_values = np.array(list(band_stat['intensity_hist'].keys()))
+                    counts = list(band_stat['intensity_hist'].values())
+                    dequant_values = dequantize(quant_values, quantization)
+                    band_stat['intensity_hist'] = ub.odict(zip(dequant_values, counts))
                 if alwaysappend or band_name in requested_channels:
                     band_stat['band_name'] = band_name
                     intensity_stats['bands'].append(band_stat)

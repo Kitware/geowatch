@@ -1503,6 +1503,13 @@ rsync -avpP --include="*invariants*.kwcoco.json" --exclude="*" "$DATA_DVC_DPATH/
 rsync -avprPR "$DATA_DVC_DPATH/Drop4-BAS/"./_assets/pred_invariants horologic:data/dvc-repos/smart_data_dvc-ssd/Drop4-BAS/ 
 
 
+
+
+EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_0 "$EXPT_DVC_DPATH"
+
+
+
 ### Toothbrush Invariants
 export CUDA_VISIBLE_DEVICES=1
 DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
@@ -1570,8 +1577,6 @@ python -m watch.tasks.fusion.fit \
 export CUDA_VISIBLE_DEVICES=0
 DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
 EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
-smartwatch model_stats "$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
-echo "EXPT_DVC_DPATH = $EXPT_DVC_DPATH"
 WORKDIR=$EXPT_DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
 KWCOCO_BUNDLE_DPATH=$DATA_DVC_DPATH/$DATASET_CODE
