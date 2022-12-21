@@ -1152,7 +1152,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 max_tries = 3
             else:
                 max_tries = int(resample_invalid)
-            print(f'max_tries={max_tries}')
+            # print(f'max_tries={max_tries}')
             vidname = video['name']
             self._resample_bad_images(
                 video_gids, gid_to_isbad, sampler, coco_dset, target, target_,
@@ -1451,7 +1451,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             vidid = target_['video_id']
             time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
             for iter_idx in range(max_tries):
-                print(f'resample try iter_idx={iter_idx}')
+                # print(f'resample try iter_idx={iter_idx}')
                 good_gids = np.array([gid for gid, flag in gid_to_isbad.items() if not flag])
                 if len(good_gids) == len(target['gids']):
                     break
