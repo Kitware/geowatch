@@ -607,7 +607,7 @@ def predict(cmdline=False, **kwargs):
 
     # Start background procs before we make threads
     batch_iter = iter(test_dataloader)
-    prog = ub.ProgIter(batch_iter, desc='predicting', verbose=3, freq=1)
+    prog = ub.ProgIter(batch_iter, desc='predicting', verbose=1, freq=1)
 
     # Make threads after starting background proces.
     if args.write_workers == 'datamodule':

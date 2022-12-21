@@ -134,10 +134,9 @@ class TeamFeaturePipelineConfig(scfg.Config):
         The models and parameters to use are hard coded in this script.
     """
     default = {
-        'base_fpath': scfg.Value('auto', help=ub.paragraph(
+        'base_fpath': scfg.Value(None, nargs='+', help=ub.paragraph(
             '''
-            base coco file to compute team-features on, combine, and split. If
-            auto, uses a hard-coded value
+            One ore more base coco files to compute team-features on.
             ''')),
         'expt_dvc_dpath': scfg.Value('auto', help=ub.paragraph(
             '''
@@ -170,7 +169,7 @@ class TeamFeaturePipelineConfig(scfg.Config):
         'run': scfg.Value(0, help='if True execute the pipeline'),
         'skip_existing': scfg.Value(True, help='if True skip completed results'),
 
-        'do_splits': scfg.Value(False, help='if True also make splits'),
+        'do_splits': scfg.Value(False, help='if True also make splits. BROKEN'),
 
         'follow': scfg.Value(True),
 
@@ -222,14 +221,9 @@ def prep_feats(cmdline=True, **kwargs):
 
     if config['expt_dvc_dpath'] == 'auto':
         import watch
-        expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
+        expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
     else:
         expt_dvc_dpath = ub.Path(config['expt_dvc_dpath'])
-
-    if config['base_fpath'] == 'auto':
-        raise NotImplementedError(
-            'Auto id deprecated. '
-            'Specify the absolute path to the data to generate features on')
 
     if workers == 0:
         gres = None

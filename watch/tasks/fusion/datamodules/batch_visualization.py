@@ -148,6 +148,11 @@ class BatchVisualizationBuilder:
 
         combinable_channels = default_combinable_channels
         if combinable_extra is not None:
+            if isinstance(combinable_extra, str):
+                # coerce combinable extra from a channel spec
+                import kwcoco
+                combinable_extra = [
+                    s.to_oset() for s in kwcoco.ChannelSpec.coerce(combinable_extra).streams()]
             combinable_channels = combinable_channels.copy()
             combinable_channels += list(map(ub.oset, combinable_extra))
         builder.combinable_channels = combinable_channels

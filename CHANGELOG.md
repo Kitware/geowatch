@@ -13,6 +13,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * New endpoints for ACC-2 data.
 * Merge in Nov21 Pseudolive branch
 * Add `quality_threshold` argument to the kwcoco video dataset, deprecate `use_cloudmask`.
+* Add `observable_threshold` which is similar to but not exactly the same as quality threshold
+* Add uniform time sampling and better mutli-sampler support
 
 ### Fixed
 * Issue in visualize where frames might be ordered incorrectly.
@@ -26,6 +28,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Refactor `util_globals`
 * New arguments to fusion.predict to filter inputs / outputs.
 * Cleaned old code that was ported to kwimage
+* Faster samevalue region histogram approximation in data loader
 
 
 ## Version 0.3.7 - Target 2022-11-21

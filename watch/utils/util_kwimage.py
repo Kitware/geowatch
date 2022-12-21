@@ -534,6 +534,10 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
         >>> kwplot.imshow(image, pnum=(1, 2, 1), title='input image')
         >>> kwplot.imshow(canvas, pnum=(1, 2, 2), title='labeled regions')
 
+    Returns:
+        ndarray: a label array where 0 indicates background and a
+            non-zero label is a samecolor region.
+
     Ignore:
         import xdev
         xdev.profile_now(find_lowvariance_regions)(image)
@@ -655,6 +659,46 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
         final_labels = kwimage.imresize(
             final_labels, dsize=orig_dsize, interpolation='nearest')
     return final_labels
+
+
+def find_high_frequency_values(image):
+    """
+    Values that appear in the image very often, may be indicative of an
+    artifact that we should remove.
+    """
+
+    def ratios(data):
+        return data[:-1] / data[1:]
+    import kwarray
+    import numpy as np
+    raw_values, raw_counts = np.unique(image, return_counts=True)
+    valid_mask = ~np.isnan(raw_values)
+    values = raw_values[valid_mask]
+    counts = raw_counts[valid_mask]
+
+    ranked_idxs = counts.argsort()[::-1]
+    max_bad_values = 10
+    ranked_counts = counts[ranked_idxs[:max_bad_values]]
+    ranked_values = values[ranked_idxs[:max_bad_values]]
+
+    abs_score = ranked_counts / image.size
+    rel_score = ratios(ranked_counts)
+    abs_score = abs_score[:len(rel_score)]
+    ranked_values = ranked_values[:len(rel_score)]
+
+    abs_thresh = 0.2
+    rel_thresh = 20
+
+    flags = abs_score > abs_thresh
+    flags |= (rel_score > rel_thresh)
+
+    bad_values = ranked_values[flags]
+    image = kwarray.atleast_nd(image, 3)
+    image.shape
+    mask = kwarray.isect_flags(image, bad_values)
+    mask = mask.reshape(image.shape)
+    mask = mask.any(axis=2)
+    return mask
 
 
 def polygon_distance_transform(poly, shape, dtype=np.uint8):

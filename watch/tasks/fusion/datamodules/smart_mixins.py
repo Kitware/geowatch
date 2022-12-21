@@ -247,6 +247,7 @@ class SMARTDataMixin:
             tr_cloud['antialias'] = False
             tr_cloud['interpolation'] = 'nearest'
             tr_cloud['nodata'] = None
+            # import numpy as np
             qa_sample = sampler.load_sample(
                 tr_cloud, with_annots=None,
                 # TODO: use a better constant value

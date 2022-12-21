@@ -21,6 +21,7 @@ class SplitVideoConfig(scfg.DataConfig):
     src = scfg.Value(None, nargs='+', help='one or more datasets to split')
     dst_dpath = scfg.Value(None, help=(
         'path to write to. If None, uses the src dataset path'))
+    io_workers = scfg.Value(2, help='number of background IO workers')
 
 
 def main(cmdline=1, **kwargs):
@@ -51,7 +52,7 @@ def main(cmdline=1, **kwargs):
     coco_fpaths = list(util_pattern.MultiPattern.coerce(config.src).paths())
     print(f'coco_fpaths={coco_fpaths}')
 
-    io_workers = 2
+    io_workers = config.io_workers
     writer = util_parallel.BlockingJobQueue(max_workers=io_workers)
 
     for coco_fpath in coco_fpaths:

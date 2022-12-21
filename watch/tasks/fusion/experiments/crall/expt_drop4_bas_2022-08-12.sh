@@ -1425,8 +1425,8 @@ python -m watch.tasks.invariants.predict \
     --input_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_train.kwcoco.json \
     --output_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_train_invar13_30GSD.kwcoco.json \
     --pretext_package=$DVC_EXPT_DPATH/models/uky/uky_invariants_2022_12_17/TA1_pretext_model/pretext_package.pt \
-    --input_space_scale=60GSD  \
-    --window_space_scale=60GSD \
+    --input_space_scale=10GSD  \
+    --window_space_scale=10GSD \
     --patch_size=256 \
     --do_pca 0 \
     --patch_overlap=0.3 \
@@ -1457,8 +1457,13 @@ python -m watch.cli.split_videos \
 
 DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
 EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+#data_train_PE_C001.kwcoco.json
+
 python -m watch.cli.prepare_teamfeats \
-    --base_fpath="$DATA_DVC_DPATH/Drop4-BAS/data_vali_*.kwcoco.json" \
+    --base_fpath \
+        "$DATA_DVC_DPATH/Drop4-BAS/data_train_PE_C001.kwcoco.json" \
+        "$DATA_DVC_DPATH/Drop4-BAS/data_train_AE_R001.kwcoco.json" \
+        "$DATA_DVC_DPATH/Drop4-BAS/data_train_US_C001.kwcoco.json" \
     --expt_dpath="$EXPT_DVC_DPATH" \
     --with_landcover=0 \
     --with_materials=0 \
@@ -1471,4 +1476,91 @@ python -m watch.cli.prepare_teamfeats \
 
 
 DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-rsync -avpPn --include="*invariants*.kwcoco.json" yardrat:data/dvc-repos/smart_data_dvc/Drop4-BAS/ "$DATA_DVC_DPATH/Drop4-BAS/"
+EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+python -m watch.cli.prepare_teamfeats \
+    --base_fpath \
+       "$DATA_DVC_DPATH/Drop4-BAS/data_train_*.kwcoco.json" \
+       "$DATA_DVC_DPATH/Drop4-BAS/data_vali_*.kwcoco.json" \
+    --expt_dpath="$EXPT_DVC_DPATH" \
+    --with_landcover=0 \
+    --with_materials=0 \
+    --with_invariants=0 \
+    --with_invariants2=1 \
+    --with_depth=0 \
+    --do_splits=0 \
+    --skip_existing=0 \
+    --gres=0, --workers=1 --backend=tmux --run=0
+
+kwcoco union --src ./*_train_*_uky_invariants*.kwcoco.json --dst combo_train_I2.kwcoco.json
+kwcoco union --src ./*_vali_*_uky_invariants*.kwcoco.json --dst combo_vali_I2.kwcoco.json
+
+
+DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+rsync -avpP --include="*invariants*.kwcoco.json" --exclude="*" yardrat:data/dvc-repos/smart_data_dvc/Drop4-BAS/ "$DATA_DVC_DPATH/Drop4-BAS/"
+rsync -avprPR yardrat:data/dvc-repos/smart_data_dvc/Drop4-BAS/./_assets/pred_invariants "$DATA_DVC_DPATH/Drop4-BAS/"
+
+rsync -avpP --include="*invariants*.kwcoco.json" --exclude="*" "$DATA_DVC_DPATH/Drop4-BAS/" yardrat:data/dvc-repos/smart_data_dvc/Drop4-BAS/ 
+rsync -avprPR "$DATA_DVC_DPATH/Drop4-BAS/"./_assets/pred_invariants yardrat:data/dvc-repos/smart_data_dvc/Drop4-BAS/ 
+
+
+### Toothbrush Invariants
+export CUDA_VISIBLE_DEVICES=1
+DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "EXPT_DVC_DPATH = $EXPT_DVC_DPATH"
+WORKDIR=$EXPT_DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop4-BAS
+KWCOCO_BUNDLE_DPATH=$DATA_DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_train_I2.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_I2.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_I2.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22,invariants.0:17"
+EXPERIMENT_NAME=Drop4_BAS_15GSD_BGRNSH_invar_V7
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --saliency_weights="1:200" \
+    --class_loss='focal' \
+    --saliency_loss='focal' \
+    --global_change_weight=0.00 \
+    --global_class_weight=1e-17 \
+    --global_saliency_weight=1.00 \
+    --learning_rate=5e-5 \
+    --weight_decay=1e-3 \
+    --chip_dims=224,224 \
+    --window_space_scale="10GSD" \
+    --input_space_scale="10GSD" \
+    --output_space_scale="30GSD" \
+    --accumulate_grad_batches=8 \
+    --batch_size=2 \
+    --max_epochs=160 \
+    --patience=160 \
+    --num_workers=3 \
+    --dist_weights=False \
+    --time_steps=7 \
+    --channels="$CHANNELS" \
+    --neg_to_pos_ratio=0.1 \
+    --time_sampling=soft2-contiguous-hardish3\
+    --time_span=3m-6m-1y \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --num_draw=4 \
+    --use_centered_positives=True \
+    --normalize_inputs=128 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --accelerator="gpu" \
+    --devices "0," \
+    --amp_backend=apex \
+    --resample_invalid_frames=1 \
+    --quality_threshold=0.8 \
+    --num_sanity_val_steps=0 \
+    --max_epoch_length=16384 \
+    --init="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt

@@ -54,10 +54,9 @@ class KWCocoVideoDatasetConfig(scfg.Config):
         * output_space_scale
         * time_steps
         * time_sampling
-        * chip_dims
+        * chip_dims / window_space_dims
 
     Also:
-
         * set_cover_algo
 
     """
@@ -237,18 +236,27 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             Set to a positive value to use it, up to that threshold.
             ''')),
 
-        'quality_threshold': scfg.Value(.2, help=ub.paragraph(
+        'quality_threshold': scfg.Value(0.2, help=ub.paragraph(
             '''
             The minimum fraction of usable pixels required in a frame sample.
             If a frame has fewer than this fraction of usable pixels (i.e. not
-            clouds or other quality flags), it is marked as a "bad" frame.
+            clouds or other quality flags), it is marked for resampling as a
+            "bad" frame.
             ''')),
 
-        'resample_invalid_frames': scfg.Value(True, help=ub.paragraph(
+        'observable_threshold': scfg.Value(0.0, help=ub.paragraph(
             '''
-            if True, will attempt to resample any frame marked as "bad" via
-            quality or nodata checks.
+            The minimum fraction of non-nan pixels required in a frame sample.
+            If a frame has fewer than this fraction of usable pixels (i.e. not
+            clouds or other quality flags), it is marked for resampling as a
+            "bad" frame.
             ''')),
+
+        'resample_invalid_frames': scfg.Value(3, help=ub.paragraph(
+            '''
+            Number of attempts to resample any frame marked as invalid via
+            quality or nodata checks.
+            '''), alias=['resample_max_tries']),
 
         'use_grid_positives': scfg.Value(True, help=ub.paragraph(
             '''
@@ -400,6 +408,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
     def __init__(self, sampler, sample_shape=None, window_overlap=None,
                  mode='fit', **kwargs):
+
+        # todo: replace with ndsampler.CocoSampler.coerce
+        sampler = _coerce_ndsampler(sampler)
 
         config = KWCocoVideoDatasetConfig(cmdline=0, data=kwargs)
         BACKWARDS_COMPATIBILITY = True
@@ -743,8 +754,18 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         sensor_coarse = coco_img.img.get('sensor_coarse', '*')
         matching_sensorchan = self.sample_sensorchan.matching_sensor(sensor_coarse)
         sensor_channels = matching_sensorchan.chans
+
         # Require
-        REPLACE_SAMECOLOR_REGIONS_WITH_NAN = target_.get('REPLACE_SAMECOLOR_REGIONS_WITH_NAN', 1)
+        # SAMECOLOR_QUALITY_HEURISTIC = target_.get('SAMECOLOR_QUALITY_HEURISTIC', 'region')
+        SAMECOLOR_QUALITY_HEURISTIC = target_.get('SAMECOLOR_QUALITY_HEURISTIC', 'histogram')
+        # SAMECOLOR_QUALITY_HEURISTIC = target_.get('SAMECOLOR_QUALITY_HEURISTIC', None)
+        use_samecolor_region_method = SAMECOLOR_QUALITY_HEURISTIC == 'region'
+
+        FORCE_LOADING_BAD_IMAGES = target_.get('FORCE_LOADING_BAD_IMAGES', 0)
+        stop_on_bad_image = not FORCE_LOADING_BAD_IMAGES
+        quality_threshold = target_.get('quality_threshold', self.config['quality_threshold'])
+        observable_threshold = target_.get('observable_threshold', self.config['observable_threshold'])
+        mask_low_quality_pixels = target_.get('MASK_LOW_QUALITY_PIXELS', 0)
 
         # sensor_channels = (self.sample_channels & coco_img.channels).normalize()
         tr_frame = target_.copy()
@@ -758,19 +779,20 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # forces us to mark this image as bad.
         force_bad = False
 
-        FORCE_LOADING_BAD_IMAGES = target_.get('FORCE_LOADING_BAD_IMAGES', 0)
-        stop_on_bad_image = not FORCE_LOADING_BAD_IMAGES
-
-        quality_threshold = target_.get('quality_threshold', self.config['quality_threshold'])
-        if quality_threshold > 0:
+        if quality_threshold > 0 or mask_low_quality_pixels:
             # Skip if quality mask indicates more than 50% clouds.
-            is_cloud_iffy = self._interpret_quality_mask(
-                sampler, coco_img, tr_frame)
-            if is_cloud_iffy is not None:
+            is_low_quality = self._interpret_quality_mask(
+                sampler, coco_img, tr_frame)[0]
+            if is_low_quality is not None:
                 cloud_threshold = (1 - quality_threshold)
-                cloud_frac = is_cloud_iffy.mean()
+                # TODO: account for nodata values here.
+                # such that quality threshold is over the valid data
+                # observations.
+                cloud_frac = is_low_quality.mean()
                 if cloud_frac > cloud_threshold:
                     force_bad = 'too cloudy'
+        else:
+            is_low_quality = NotImplemented
 
         if sensor_channels.numel() == 0:
             force_bad = 'Missing requested channels'
@@ -786,8 +808,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 dtype=np.float32
             )
 
-            REPLACE_SAMECOLOR_REGIONS_WITH_NAN = 1
-            if REPLACE_SAMECOLOR_REGIONS_WITH_NAN:
+            if SAMECOLOR_QUALITY_HEURISTIC:
                 # This should be a better heuristic than the others we were
                 # using
 
@@ -799,12 +820,14 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 for b_sl in band_slider:
                     # TODO: can do this as a simpler histogram approach
                     # instead?
-
                     bands = hwc[:, :, b_sl[0]]
                     bands = np.ascontiguousarray(bands)
-                    # Speed up the compuation by doing this at a coarser scale
-                    is_samecolor = util_kwimage.find_samecolor_regions(
-                        bands, scale=0.4, min_region_size=49)
+                    if use_samecolor_region_method:
+                        is_samecolor = util_kwimage.find_high_frequency_values(bands)
+                    else:
+                        # Speed up the compuation by doing this at a coarser scale
+                        is_samecolor = util_kwimage.find_samecolor_regions(
+                            bands, scale=0.4, min_region_size=49)
                     flag_stack.append(is_samecolor)
 
                 is_samecolor = np.stack(flag_stack, axis=2)
@@ -814,6 +837,18 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     # print(f'stream={stream}')
                     # print(f'num_samecolor={num_samecolor}')
                     sample['im'][samecolor_flags] = np.nan
+
+            if mask_low_quality_pixels:
+                im_ = sample['im'][0]
+                dsize = im_.shape[0:2][::-1]
+                # When imresize is updated, the type and shape fixes can be
+                # removed.
+                is_low_quality_ = kwimage.imresize(
+                    is_low_quality.astype(np.uint8), dsize=dsize, interpolation='nearest')
+                is_low_quality_ = kwarray.atleast_nd(is_low_quality_, 3)
+                is_low_quality_ = is_low_quality_.astype(bool)
+                is_low_quality_ = np.broadcast_to(is_low_quality_, sample['im'].shape)
+                sample['im'][is_low_quality_] = np.nan
 
             invalid_mask = np.isnan(sample['im'])
 
@@ -837,6 +872,15 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 # instead of using red as a proxy for it.
                 if 'red' in set(stream):
                     force_bad = 'invalid red channel'
+                    if stop_on_bad_image:
+                        break
+
+            if observable_threshold:
+                # A pixel is invalid if all channels are invalid
+                invalid_mask2d = invalid_mask[0].all(axis=2)
+                invalid_frac = invalid_mask2d.mean()
+                if invalid_frac > observable_threshold:
+                    force_bad = 'exceeded nodata threshold'
                     if stop_on_bad_image:
                         break
 
@@ -1104,10 +1148,15 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         resample_invalid = target_.get('resample_invalid_frames', self.resample_invalid_frames)
         if resample_invalid:
+            if resample_invalid is True:
+                max_tries = 3
+            else:
+                max_tries = int(resample_invalid)
+            print(f'max_tries={max_tries}')
             vidname = video['name']
             self._resample_bad_images(
                 video_gids, gid_to_isbad, sampler, coco_dset, target, target_,
-                with_annots, gid_to_sample, vidspace_box, vidname)
+                with_annots, gid_to_sample, vidspace_box, vidname, max_tries)
 
         good_gids = [gid for gid, flag in gid_to_isbad.items() if not flag]
         if len(good_gids) == 0:
@@ -1391,18 +1440,18 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
     def _resample_bad_images(self, video_gids, gid_to_isbad, sampler,
                              coco_dset, target, target_, with_annots,
-                             gid_to_sample, vidspace_box, vidname):
+                             gid_to_sample, vidspace_box, vidname, max_tries):
         """
         If the initial sample has marked any of the images as "bad", then we
         attempt to find replacements by reusing the temporal sampler, but with
         extra arguments to exclude the bad frames.
         """
-        max_tries = 3  # TODO parameterize
         # If any image is junk allow for a resample
         if any(gid_to_isbad.values()):
             vidid = target_['video_id']
             time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
             for iter_idx in range(max_tries):
+                print(f'resample try iter_idx={iter_idx}')
                 good_gids = np.array([gid for gid, flag in gid_to_isbad.items() if not flag])
                 if len(good_gids) == len(target['gids']):
                     break
@@ -2117,6 +2166,20 @@ def worker_init_fn(worker_id):
         if hasattr(self.sampler.dset, 'connect'):
             # Reconnect to the backend if we are using SQL
             self.sampler.dset.connect(readonly=True)
+
+
+def _coerce_ndsampler(data):
+    """
+    Helper to ensure a sampler, kwcoco file, or path to a kwcoco file is
+    converted to a sampler
+    """
+    import ndsampler
+    if isinstance(data, ndsampler.CocoSampler):
+        self = data
+    else:
+        dset = kwcoco.CocoDataset.coerce(data)
+        self = ndsampler.CocoSampler(dset)
+    return self
 
 
 class FailedSample(Exception):

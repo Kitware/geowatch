@@ -273,11 +273,37 @@ class MultiPattern(PatternBase, ub.NiceRepr):
             >>> pat = MultiPattern.coerce('foo*', 'glob')
             >>> pat2 = MultiPattern.coerce(pat, 'regex')
             >>> pat3 = MultiPattern.coerce([pat, pat], 'regex')
+            >>> pat4 = MultiPattern.coerce([ub.Path('bar*'), pat], 'regex')
             >>> print('pat = {}'.format(ub.repr2(pat, nl=1)))
             >>> print('pat2 = {}'.format(ub.repr2(pat2, nl=1)))
             >>> print('pat3 = {!r}'.format(pat3))
+            >>> print('pat4 = {!r}'.format(pat4))
 
-            Pattern.coerce(['a', 'b', 'c'])
+        Example:
+            >>> # Test all acceptable input types
+            >>> import itertools as it
+            >>> str_pat = 'pattern*'
+            >>> scalar_inputs = {
+            >>>     'str': str_pat,
+            >>>     'path': ub.Path(str_pat),
+            >>>     'pat': Pattern.coerce(str_pat),
+            >>>     'mpat': MultiPattern.coerce(str_pat)
+            >>> }
+            >>> # Test scalar input types
+            >>> scalar_outputs = {}
+            >>> for k, v in scalar_inputs.items():
+            >>>     scalar_outputs[k] = MultiPattern.coerce(v)
+            >>> print('scalar_outputs = {}'.format(ub.repr2(scalar_outputs, nl=1)))
+            >>> #
+            >>> # Test iterable input types
+            >>> multi_outputs = []
+            >>> for v in it.combinations(scalar_inputs.values(), 2):
+            >>>     multi_outputs.append(MultiPattern.coerce(v))
+            >>> for v in it.combinations(scalar_inputs.values(), 3):
+            >>>     multi_outputs.append(MultiPattern.coerce(v))
+            >>> # Higher order nesting test
+            >>> higher_order_output = MultiPattern.coerce(multi_outputs)
+            >>> print('higher_order_output = {}'.format(ub.repr2(higher_order_output, nl=1)))
         """
         if isinstance(data, cls) or type(data).__name__ == cls.__name__:
             self = data
@@ -287,12 +313,13 @@ class MultiPattern(PatternBase, ub.NiceRepr):
                 predicate = any
             else:
                 raise NotImplementedError
-            if isinstance(data, str):
+            if isinstance(data, (str, os.PathLike, Pattern)):
                 backend = Pattern.coerce_backend(data, hint=hint)
                 pat = Pattern.coerce(data, backend)
                 patterns = [pat]
                 self = MultiPattern(patterns, predicate)
             else:
                 self = MultiPattern([
-                    MultiPattern.coerce(d, hint)._squeeze() for d in data], predicate)
+                    MultiPattern.coerce(d, hint)._squeeze()
+                    for d in data], predicate)
         return self
