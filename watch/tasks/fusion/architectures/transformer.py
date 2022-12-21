@@ -54,8 +54,6 @@ import math
 
 # from watch.tasks.fusion.fit import coerce_initializer
 
-from mmseg.models.backbones.vit import VisionTransformer
-
 try:
     import xdev
     profile = xdev.profile
@@ -1124,7 +1122,6 @@ class TransformerEncoderDecoder(nn.Module):
         # final linear out
         return self.to_logits(x)
 
-    
 
 class MM_VITEncoder(nn.Module):
     """
@@ -1157,7 +1154,7 @@ class MM_VITEncoder(nn.Module):
         >>> x = torch.rand(2, 3, 16)
         >>> self.forward(x)
     """
-    
+
     pretrained_fpath_shortnames = {
         "upernet_vit-b16_mln_512x512_80k_ade20k": 
             'https://download.openmmlab.com/mmsegmentation/v0.5/vit/upernet_vit-b16_mln_512x512_80k_ade20k/upernet_vit-b16_mln_512x512_80k_ade20k_20210624_130547-0403cee1.pth',
@@ -1170,13 +1167,14 @@ class MM_VITEncoder(nn.Module):
         logits_dim,
         pretrained=None,
     ):
+        from mmseg.models.backbones.vit import VisionTransformer
         super().__init__()
-        
+
         # if a short name is used, replace it with the appropriate full path
         if pretrained in MM_VITEncoder.pretrained_fpath_shortnames.keys():
             pretrained = MM_VITEncoder.pretrained_fpath_shortnames[pretrained]
             pretrained = ub.grabdata(pretrained)
-            
+
         kwargs = dict(
             pretrained=pretrained,
             img_size=(512, 512),
@@ -1199,18 +1197,18 @@ class MM_VITEncoder(nn.Module):
         vit_model = VisionTransformer(**kwargs)
         # We only need the encoder
         self.layers = vit_model.layers
-        
+
         # if a pretrained path is provided, try to use it
         # if isinstance(pretrained, str):
         #     self.initialize_from_pretrained(pretrained)
-            
+
         self.encoder_in_features = self.layers[0].ln1.weight.shape[0]
         self.encoder_out_features = self.layers[-1].ffn.layers[1].out_features
-        
+
         self.input_projector = nn.Linear(dim, self.encoder_in_features)
         self.query_projector = nn.Linear(queries_dim, self.encoder_out_features)
         self.output_projector = nn.Linear(self.encoder_out_features, logits_dim)
-            
+
         self.decoder = nn.TransformerDecoder(
             nn.TransformerDecoderLayer(d_model=self.encoder_out_features, nhead=8, dim_feedforward=512, batch_first=True),
             num_layers=1,
@@ -1242,12 +1240,12 @@ class MM_VITEncoder(nn.Module):
             #         out = [out, x[:, 0]]
             #     outs.append(out)
         # x = x.view(*orig_shape[0], x.shape[-1])
-        
+
         if queries is None:
             return x
-        
+
         queries = self.query_projector(queries)
         x = self.decoder(queries, x)
         x = self.output_projector(x)
-        
+
         return x
