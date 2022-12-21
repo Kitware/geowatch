@@ -244,6 +244,8 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             "bad" frame.
             ''')),
 
+        'mask_low_quality': scfg.Value(False, help='if True, mask low quality pixels with nans'),
+
         'observable_threshold': scfg.Value(0.0, help=ub.paragraph(
             '''
             The minimum fraction of non-nan pixels required in a frame sample.
@@ -765,7 +767,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         stop_on_bad_image = not FORCE_LOADING_BAD_IMAGES
         quality_threshold = target_.get('quality_threshold', self.config['quality_threshold'])
         observable_threshold = target_.get('observable_threshold', self.config['observable_threshold'])
-        mask_low_quality_pixels = target_.get('MASK_LOW_QUALITY_PIXELS', 0)
+        mask_low_quality_pixels = target_.get('MASK_LOW_QUALITY_PIXELS', self.config['mask_low_quality'])
 
         # sensor_channels = (self.sample_channels & coco_img.channels).normalize()
         tr_frame = target_.copy()

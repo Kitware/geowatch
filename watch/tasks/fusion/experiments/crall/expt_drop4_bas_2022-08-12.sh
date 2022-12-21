@@ -1629,7 +1629,7 @@ python -m watch.tasks.fusion.fit \
     --init="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 
 ### Horologic Invariants
-#export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=0,1
 DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
 EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
 echo "EXPT_DVC_DPATH = $EXPT_DVC_DPATH"
@@ -1667,6 +1667,7 @@ python -m watch.tasks.fusion fit \
     --data.neg_to_pos_ratio=0.2 \
     --data.use_centered_positives=True \
     --data.resample_invalid_frames=3 \
+    --data.mask_low_quality=True \
     --data.quality_threshold=0.6 \
     --data.observable_threshold=0.6 \
     --data.normalize_inputs=2048 \
