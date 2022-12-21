@@ -1017,21 +1017,24 @@ class Attention(nn.Module):
         return self.to_out(out)
 
 
-class TransformerEncoderDecoder(nn.Module):
+class BackboneEncoderDecoder:
+    pass
+
+
+class TransformerEncoderDecoder(nn.Module, BackboneEncoderDecoder):
     def __init__(
         self,
-        *,
-        encoder_depth,
-        decoder_depth,
-        dim,
-        queries_dim,
-        logits_dim=None,
-        decode_cross_every=1,
-        cross_heads=1,
-        latent_heads=8,
-        cross_dim_head=64,
-        latent_dim_head=64,
-        weight_tie_layers=False,
+        encoder_depth: int,
+        decoder_depth: int,
+        dim: int,
+        queries_dim: int,
+        logits_dim: int,
+        decode_cross_every: int = 1,
+        cross_heads: int = 1,
+        latent_heads: int = 8,
+        cross_dim_head: int = 64,
+        latent_dim_head: int = 64,
+        weight_tie_layers: bool = False,
     ):
         super().__init__()
 
@@ -1123,7 +1126,7 @@ class TransformerEncoderDecoder(nn.Module):
         return self.to_logits(x)
 
 
-class MM_VITEncoder(nn.Module):
+class MM_VITEncoder(nn.Module, BackboneEncoderDecoder):
     """
     mmsegmentation variant of VIT
 

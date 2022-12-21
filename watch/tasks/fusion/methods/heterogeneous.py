@@ -17,7 +17,7 @@ from watch.tasks.fusion.methods.network_modules import _class_weights_from_freq
 from watch.tasks.fusion.methods.network_modules import coerce_criterion
 from watch.tasks.fusion.methods.network_modules import RobustModuleDict
 from watch.tasks.fusion.methods.watch_module_mixins import WatchModuleMixins
-from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+from watch.tasks.fusion.architectures.transformer import BackboneEncoderDecoder
 
 import numpy as np
 
@@ -318,7 +318,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
         input_sensorchan=None,
         name: str = "unnamed_model",
         position_encoder: ScaleAwarePositionalEncoder = None,
-        backbone: nn.Module = None,
+        backbone: BackboneEncoderDecoder = None,
         token_width: int = 10,
         token_dim: int = 16,
         spatial_scale_base: float = 1.,
