@@ -182,11 +182,6 @@ timm>=0.4.12
 kornia<=0.5
 segmentation-models-pytorch>=0.2.0  ; python_version < '3.11'
 
-# OpenMM (should we pin these?)
-openmim>=0.3.3
-mmcv-full>=1.4.8
-mmsegmentation>=0.29.1
-
 ujson>=5.2.0 
 kwimage_ext >= 0.2.0
 
