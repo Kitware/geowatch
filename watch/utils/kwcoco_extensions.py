@@ -627,8 +627,8 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
         # TODO: determine nodata defaults based on sensor_coarse
 
         if enable_intensity_stats:
-            from watch.cli import coco_intensity_histogram
-            coco_intensity_histogram.ensure_intensity_sidecar(fpath)
+            from watch.cli import coco_spectra
+            coco_spectra.ensure_intensity_sidecar(fpath)
 
         return errors
 
