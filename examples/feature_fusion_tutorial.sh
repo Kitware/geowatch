@@ -15,6 +15,11 @@ This tutorial assumes you have:
 
     3. Have a script that predicts features you would like to test.
 
+    4. Have the IARPA metrics code installed:
+
+        # Clone this repo and pip install it to your watch environment
+        https://gitlab.kitware.com/smart/metrics-and-test-framework
+
 See these docs for details:
     ../docs/getting_started_dvc.rst
     ../docs/access_dvc_repos.rst
