@@ -784,8 +784,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         if quality_threshold > 0 or mask_low_quality:
             # Skip if quality mask indicates more than 50% clouds.
             is_low_quality = self._interpret_quality_mask(
-                sampler, coco_img, tr_frame)[0]
+                sampler, coco_img, tr_frame)
             if is_low_quality is not None:
+                is_low_quality = is_low_quality[0]  # just first frame
                 cloud_threshold = (1 - quality_threshold)
                 # TODO: account for nodata values here.
                 # such that quality threshold is over the valid data

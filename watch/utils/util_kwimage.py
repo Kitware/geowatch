@@ -294,17 +294,65 @@ def ensure_false_color(canvas, method='ortho'):
     return rgb_canvas
 
 
-def colorize_label_image(labels, with_legend=True):
+def colorize_label_image(labels, with_legend=True, label_mapping=None, label_to_color=None):
     """
     Replace an image with integer labels with colors
+
+    Args:
+        labels (ndarray): a label image
+        with_legend (bool):
+        legend_mapping (dict):
+            maps the label used in the label image to what should appear in the
+            legend.
+
+    Example:
+        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> labels = (np.random.rand(32, 32) * 10).astype(np.uint8) % 5
+        >>> label_to_color = {0: 'black'}
+        >>> label_mapping = {0: 'background'}
+        >>> with_legend = True
+        >>> canvas1 = colorize_label_image(labels, with_legend,
+        >>>     label_mapping=label_mapping, label_to_color=label_to_color)
+        >>> canvas2 = colorize_label_image(labels, with_legend,
+        >>>     label_mapping=label_mapping, label_to_color=None)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas1, pnum=(1, 2, 1), fnum=1)
+        >>> kwplot.imshow(canvas2, pnum=(1, 2, 2), fnum=1)
     """
     import kwimage
-    label_colors = kwimage.Color.distinct(labels.max())
-    index_to_color = np.array([kwimage.Color('black').as01()] + label_colors)
-    colored_label_img = index_to_color[labels]
+    unique_labels, inv = np.unique(labels, return_inverse=True)
+
+    if label_to_color is not None:
+        used_labels = set(label_to_color) & set(unique_labels)
+        label_to_color_ = {k: kwimage.Color(c).as01() for k, c in label_to_color.items()}
+        existing = list(label_to_color_.values())
+        uncolored_labels = np.array(list(set(unique_labels) - set(used_labels)))
+    else:
+        existing = None
+        uncolored_labels = unique_labels
+        used_labels = set()
+        label_to_color_ = {}
+
+    new_label_colors = kwimage.Color.distinct(len(uncolored_labels), existing=existing)
+    label_to_color_.update(ub.dzip(uncolored_labels, new_label_colors))
+
+    unique_label_colors = [label_to_color_[c] for c in unique_labels]
+    unique_label_colors = np.array(unique_label_colors)
+    colored_label_img = unique_label_colors[inv].reshape(labels.shape + (unique_label_colors.shape[-1],))
+
+    # index_to_color = np.array([kwimage.Color('black').as01()] + label_colors)
+    # colored_label_img = index_to_color[labels]
     if with_legend:
         import kwplot
-        legend = kwplot.make_legend_img(ub.dzip(range(len(index_to_color)), index_to_color))
+
+        label_to_color = ub.dzip(unique_labels, unique_label_colors)
+        if label_mapping:
+            label_to_color = {str(k) if k not in label_mapping else str(k) + ': ' + str(label_mapping[k]): v
+                              for k, v in label_to_color.items()}
+
+        legend = kwplot.make_legend_img(label_to_color)
         canvas = kwimage.stack_images([colored_label_img, legend], axis=1, resize='smaller')
     else:
         colored_label_img = canvas
@@ -454,7 +502,8 @@ def find_lowvariance_regions(image, kernel=7):
 
 
 def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
-                           connectivity=8, scale=1.0):
+                           connectivity=8, scale=1.0, grid_stride='auto',
+                           PRINT_STEPS=0):
     """
     Alternative approach to find_samecolor_regions, but the idea is we check a
     set of seed points and perform a flood fill.
@@ -534,6 +583,25 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
         >>> kwplot.imshow(image, pnum=(1, 2, 1), title='input image')
         >>> kwplot.imshow(canvas, pnum=(1, 2, 2), title='labeled regions')
 
+    Example:
+        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> w, h = 5, 4
+        >>> image = (np.arange(w * h).reshape(h, w)).astype(np.uint8)
+        >>> image[2, 2] = 0
+        >>> image[2, 3] = 0
+        >>> image[3, 4] = 0
+        >>> min_region_size = 2
+        >>> seed_method = 'grid'
+        >>> connectivity = 8
+        >>> scale = 1.0
+        >>> grid_stride = 1
+        >>> labels = find_samecolor_regions(
+        >>>     image, min_region_size, seed_method, connectivity, scale,
+        >>>     grid_stride, PRINT_STEPS=0)
+        >>> print(labels)
+        >>> print(image)
+        >>> assert (labels > 0).sum() == 3
+
     Returns:
         ndarray: a label array where 0 indicates background and a
             non-zero label is a samecolor region.
@@ -567,6 +635,7 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
         for timer in ti.reset('find_samecolor_regions + resize'):
             with timer:
                 labels = find_samecolor_regions(image, scale=0.25)
+
     """
     import cv2
     import kwimage
@@ -587,7 +656,10 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
         # Seed method, uniform grid
         # This method is a lot faster, but it will miss any component
         # that a sampling point doesn't land on.
-        stride = int(np.ceil(np.sqrt(min_region_size)))
+        if grid_stride == 'auto':
+            stride = int(np.ceil(np.sqrt(min_region_size)))
+        else:
+            stride = grid_stride
         x_grid = np.arange(0, w, stride)
         y_grid = np.arange(0, h, stride)
         x_locs, y_locs = np.meshgrid(x_grid, y_grid)
@@ -619,38 +691,77 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
     # Initialize floodfill flags
     ff_flags_base = 0
     ff_flags_base |= connectivity
-    ff_flags_base |= cv2.FLOODFILL_FIXED_RANGE
+    ff_flags_base |= cv2.FLOODFILL_FIXED_RANGE  # only consider difference between the seed and the point to be filled
     ff_flags_base |= cv2.FLOODFILL_MASK_ONLY
+
+    prev_mask = mask.copy()
+
+    if PRINT_STEPS:
+        import rich
 
     # Start at 2 because 1 is used as an internal value
     cluster_label = 2
     for check_x, check_y in check_xy:
         already_filled = accum_labels[check_y + 1, check_x + 1]
+
+        if PRINT_STEPS:
+            print('')
+            print('----')
+            check_position = np.full_like(image, dtype=str, fill_value='.')
+            check_position[check_y, check_x] = 'x'
+            if already_filled:
+                rich.print(f'seed xys = ({check_x}, {check_y})')
+                rich.print('[yellow] already filled')
+                rich.print(ub.hzcat(list(map(str, ['\n' + str(image), ' ', '\n' + str(check_position), ' ', mask, ' ', accum_labels]))))
+
         if not already_filled:
             seed_point = (check_x, check_y)
             # The value of the mask is specified in the flags Note: we can only
             # handle 254 different regions, which should be fine, but its a
             # limitaiton (we could work around it if needed)
             ff_flags = ff_flags_base | (cluster_label << 8)
+
+            prev_mask[:] = mask[:]
             num, im, mask, rect = cv2.floodFill(
                 image, mask=mask, seedPoint=seed_point, newVal=1, loDiff=0, upDiff=0,
                 # rect=None,
                 flags=ff_flags)
+
+            if PRINT_STEPS:
+                print('')
+                print('----')
+                rich.print(f'xy = ({check_x}, {check_y})')
+                rich.print(f'num = {num}')
+                if num > min_region_size:
+                    rich.print('[green] found a region')
+                else:
+                    rich.print('[red] not a region')
+                delta = mask - prev_mask
+                rich.print(ub.hzcat(list(map(str, ['\n' + str(image), ' ', '\n' + str(check_position), ' ', mask, ' ', accum_labels, ' ', delta]))))
+
             if num > min_region_size:
+                # use delta to work around an issue where the cluster label is
+                # not incremented on every iteration. i.e. if we find a
+                # cluster, we would otherwise inadvertently take data from
+                # previous non-clusters as they are given the same mask label.
+                delta = mask - prev_mask
                 # Accept this as a cluster of similar colors
                 if 1:
                     # Faster method where we only copy data in the filled region
                     fx, fy, fw, fh = rect
                     sl = kwimage.Boxes(np.array([
                         [fx, fy, fw + 1, fh + 1]]), 'xywh').to_slices()[0]
-                    mask_part = mask[sl]
+                    mask_part = delta[sl]
                     label_part = accum_labels[sl]
                     label_part[mask_part == cluster_label] = cluster_label
                 else:
-                    accum_labels[mask == cluster_label] = cluster_label
+                    accum_labels[delta == cluster_label] = cluster_label
                 cluster_label += 1
 
     final_labels = accum_labels[1:-1, 1:-1]
+    if PRINT_STEPS:
+        print('Final Labels')
+        rich.print(final_labels)
     # is_labeled = final_labels
     # Make labeles start at 1 instead of 2.
     # final_labels[is_labeled] = final_labels[is_labeled] - 1

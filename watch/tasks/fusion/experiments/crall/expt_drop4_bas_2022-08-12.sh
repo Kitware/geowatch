@@ -1633,6 +1633,10 @@ python -m watch.tasks.fusion.fit \
     --max_epoch_length=16384 \
     --init="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 
+
+#save package_fpath = /home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_0/package-interupt/package_epoch33_step17408.pt
+
+
 ### Horologic Invariants
 export CUDA_VISIBLE_DEVICES=0,1
 DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
