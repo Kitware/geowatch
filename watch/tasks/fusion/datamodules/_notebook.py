@@ -21,7 +21,7 @@ def visualize_invariant_batch():
 
     target['SAMECOLOR_QUALITY_HEURISTIC'] = None
     target['FORCE_LOADING_BAD_IMAGES'] = 1
-    target['mask_low_quality_pixels'] = 1
+    target['mask_low_quality'] = 1
     target['quality_threshold'] = 0.5
     target['observable_threshold'] = 0.5
     target['resample_invalid_frames'] = 3

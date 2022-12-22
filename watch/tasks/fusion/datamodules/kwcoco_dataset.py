@@ -767,7 +767,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         stop_on_bad_image = not FORCE_LOADING_BAD_IMAGES
         quality_threshold = target_.get('quality_threshold', self.config['quality_threshold'])
         observable_threshold = target_.get('observable_threshold', self.config['observable_threshold'])
-        mask_low_quality_pixels = target_.get('mask_low_quality_pixels', self.config['mask_low_quality'])
+        mask_low_quality = target_.get('mask_low_quality', self.config['mask_low_quality'])
 
         # sensor_channels = (self.sample_channels & coco_img.channels).normalize()
         tr_frame = target_.copy()
@@ -781,7 +781,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # forces us to mark this image as bad.
         force_bad = False
 
-        if quality_threshold > 0 or mask_low_quality_pixels:
+        if quality_threshold > 0 or mask_low_quality:
             # Skip if quality mask indicates more than 50% clouds.
             is_low_quality = self._interpret_quality_mask(
                 sampler, coco_img, tr_frame)[0]
@@ -840,7 +840,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     # print(f'num_samecolor={num_samecolor}')
                     sample['im'][samecolor_flags] = np.nan
 
-            if mask_low_quality_pixels and is_low_quality:
+            if mask_low_quality and is_low_quality is not None:
                 im_ = sample['im'][0]
                 dsize = im_.shape[0:2][::-1]
                 # When imresize is updated, the type and shape fixes can be
