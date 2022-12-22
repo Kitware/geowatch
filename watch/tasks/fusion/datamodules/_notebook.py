@@ -19,9 +19,9 @@ def visualize_invariant_batch():
     self.disable_augmenter = True
     target = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]].copy()
 
-    target['SAMECOLOR_QUALITY_HEURISTIC'] = 'histogram'
+    target['SAMECOLOR_QUALITY_HEURISTIC'] = None
     target['FORCE_LOADING_BAD_IMAGES'] = 1
-    target['MASK_LOW_QUALITY_PIXELS'] = 1
+    target['mask_low_quality_pixels'] = 1
     target['quality_threshold'] = 0.5
     target['observable_threshold'] = 0.5
     target['resample_invalid_frames'] = 3
@@ -31,7 +31,7 @@ def visualize_invariant_batch():
     canvas = self.draw_item(item, overlay_on_image=0, rescale=1,
                             max_channels=5,
                             # combinable_extra='invariants.0:3'
-                           )
+                            )
 
     # xdoctest: +REQUIRES(--show)
     import kwplot
