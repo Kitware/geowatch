@@ -72,7 +72,7 @@ stages:
     tags:
         - aws
         - docker
-        - linux-x86_64
+        - linux
         - build
         - smart
 
@@ -80,7 +80,7 @@ stages:
   &common_template_docker
   tags:
     - docker
-    - linux-x86_64
+    - linux
     - build
     - aws
     - smart
