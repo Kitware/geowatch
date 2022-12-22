@@ -207,3 +207,7 @@ To download all of the data in a directory run with the `-R` flag for recursive.
 
 
 After this downloads, any of the kwcoco files in the directory can be used.
+
+
+We recommend using ``smartwatch_dvc`` tool to register the path you cloned
+these repos to as illustrated in ../docs/getting_started_dvc.rst
