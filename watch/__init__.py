@@ -123,6 +123,9 @@ def _execute_ordered_preimports():
 _handle_hidden_commands()
 _execute_ordered_preimports()
 
+from watch.monkey import monkey_numpy  # NOQA
+monkey_numpy.patch_numpy_dtypes()
+
 
 __devnotes__ = """
 
