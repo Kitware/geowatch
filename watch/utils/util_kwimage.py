@@ -353,7 +353,34 @@ def colorize_label_image(labels, with_legend=True, label_mapping=None, label_to_
                               for k, v in label_to_color.items()}
 
         legend = kwplot.make_legend_img(label_to_color)
-        canvas = kwimage.stack_images([colored_label_img, legend], axis=1, resize='smaller')
+
+        h1, w1 = legend.shape[0:2]
+        h2, w2 = colored_label_img.shape[0:2]
+        box1 = kwimage.Box.from_dsize((w1, h1))
+        box2 = kwimage.Box.from_dsize((w2, h2))
+
+        if 1:
+            box3 = box1.copy()
+            box3 = box3.scale(box2.width / box1.width)
+            if box3.height > box2.height:
+                box3 = box3.scale(box2.height / box3.height)
+            print(f'box2={box2}')
+            print(f'box3={box3}')
+            print(f'box1={box1}')
+            sf = box3.width / box1.width
+            legend = kwimage.imresize(legend, scale=sf)
+            # if box3.width > box2.width:
+            #     box3 = box3.scale(box2.height / box3.height)
+            # if box1.
+            # if w1 > w2:
+            #     legend = kwimage.imresize(legend, dsize=(w2, None))
+            #     h1, w1 = legend.shape[0, 1]
+            # if h1 > h2:
+            #     legend = kwimage.imresize(legend, dsize=(None, h2))
+
+        canvas = kwimage.stack_images([colored_label_img, legend], axis=1,
+                                      bg_value='gray')
+        # resize='smaller')
     else:
         colored_label_img = canvas
     return canvas
@@ -657,6 +684,8 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
         # This method is a lot faster, but it will miss any component
         # that a sampling point doesn't land on.
         if grid_stride == 'auto':
+            # stride = int(np.ceil(min_region_size / 2))
+            # stride = int(np.ceil(min_region_size / 2))
             stride = int(np.ceil(np.sqrt(min_region_size)))
         else:
             stride = grid_stride
@@ -721,11 +750,15 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
             # limitaiton (we could work around it if needed)
             ff_flags = ff_flags_base | (cluster_label << 8)
 
-            prev_mask[:] = mask[:]
             num, im, mask, rect = cv2.floodFill(
                 image, mask=mask, seedPoint=seed_point, newVal=1, loDiff=0, upDiff=0,
                 # rect=None,
                 flags=ff_flags)
+
+            fx, fy, fw, fh = rect
+            sl = (slice(fy, fy + fh + 1), slice(fx, fx + fw + 1))
+            # sl = kwimage.Box.coerce(np.array([
+            #     [fx, fy, fw + 1, fh + 1]]), 'xywh').to_slice()
 
             if PRINT_STEPS:
                 print('')
@@ -744,19 +777,19 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
                 # not incremented on every iteration. i.e. if we find a
                 # cluster, we would otherwise inadvertently take data from
                 # previous non-clusters as they are given the same mask label.
-                delta = mask - prev_mask
                 # Accept this as a cluster of similar colors
                 if 1:
                     # Faster method where we only copy data in the filled region
-                    fx, fy, fw, fh = rect
-                    sl = kwimage.Boxes(np.array([
-                        [fx, fy, fw + 1, fh + 1]]), 'xywh').to_slices()[0]
-                    mask_part = delta[sl]
+                    mask_part = mask[sl] - prev_mask[sl]
                     label_part = accum_labels[sl]
                     label_part[mask_part == cluster_label] = cluster_label
                 else:
+                    delta = mask - prev_mask
                     accum_labels[delta == cluster_label] = cluster_label
                 cluster_label += 1
+
+            # Update the previous mask
+            prev_mask[sl] = mask[sl]
 
     final_labels = accum_labels[1:-1, 1:-1]
     if PRINT_STEPS:
