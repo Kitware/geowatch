@@ -46,15 +46,11 @@ def repackage(checkpoint_fpath, force=False, dry=False):
     TODO:
         generalize this beyond the fusion model, also refactor.
 
-    checkpoint_fpath
-
     Ignore:
         >>> import ubelt as ub
         >>> checkpoint_fpath = ub.expandpath(
         ...     '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/checkpoint_DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera_epoch=2-step=2147.ckpt')
     """
-    # For now there is only one model, but in the future we will need
-    # some sort of modal switch to package the correct metadata
     from watch.utils import util_path
     checkpoint_fpaths = util_path.coerce_patterned_paths(checkpoint_fpath)
     package_fpaths = []
@@ -64,36 +60,7 @@ def repackage(checkpoint_fpath, force=False, dry=False):
         checkpoint_fpath = os.fspath(checkpoint_fpath)
 
         package_name = suggest_package_name_for_checkpoint(checkpoint_fpath)
-
-        x = ub.Path(ub.augpath(checkpoint_fpath, ext='.pt'))
-        package_name = x.name
-
-        # Can we precompute the package name of this checkpoint?
-        train_dpath_hint = None
-        if checkpoint_fpath.endswith('.ckpt'):
-            path_ = ub.Path(checkpoint_fpath)
-            if path_.parent.stem == 'checkpoints':
-                train_dpath_hint = path_.parent.parent
-
-        meta_fpath = None
-        if train_dpath_hint is not None:
-            # Look at the training config file to get info about this
-            # experiment
-            candidates = list(train_dpath_hint.glob('fit_config.yaml'))
-            if len(candidates) == 1:
-                meta_fpath = candidates[0]
-                data = load_meta(meta_fpath)
-                if 'name' in data:
-                    # Use the metadata package name if it exists
-                    expt_name = data['name']
-                else:
-                    # otherwise, hack to put experiment name in package name
-                    # based on an assumed directory structure
-                    expt_name = ub.Path(data['default_root_dir']).name
-                if expt_name not in package_name:
-                    package_name = expt_name + '_' + package_name
-
-        package_fpath = x.parent / package_name
+        package_fpath = checkpoint_fpath.parent / package_name
 
         if force or not package_fpath.exists():
             if not dry:
@@ -195,42 +162,6 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
     checkpoint = xpu.load(checkpoint_fpath)
 
     hparams = checkpoint['hyper_parameters']
-
-    if 'input_sensorchan' not in hparams:
-        # HACK: we had old models that did not save their hparams
-        # correctly. Try to fix them up here. The best we can do
-        # is try to start a small training run with the exact same
-        # settings and capture fixed model state from that.
-        raise Exception('This is likely no longer needed')
-
-        # from watch.utils import util_yaml
-        # meta_fpath = None
-        # package_name = None
-        # if meta_fpath is None:
-        #     raise Exception('we cant do a fix without the meta fpath')
-        # hackfix_hparams_fpath = meta_fpath.augment(prefix='hackfix_')
-        # if not hackfix_hparams_fpath.exists():
-        #     # Do this once per experiment group to save time.
-        #     import tempfile
-        #     import shutil
-        #     tmp_dpath = ub.Path(tempfile.mkdtemp())
-        #     tmp_root = (tmp_dpath / package_name)
-        #     ub.cmd(f'python -m watch.tasks.fusion.fit '
-        #            f'--config "{meta_fpath}" --default_root_dir "{tmp_root}" '
-        #            f'--max_epochs=0 --max_epoch_length=1', system=1, verbose=3)
-        #     tmp_llogs_dpaths = sorted((tmp_root / 'lightning_logs').glob('*'))
-        #     assert tmp_llogs_dpaths, 'cannot fix this model'
-        #     tmp_hparams_fpath = tmp_llogs_dpaths[-1] / 'hparams.yaml'
-        #     shutil.copy(tmp_hparams_fpath, hackfix_hparams_fpath)
-
-        # hacked_hparams = util_yaml.yaml_load(hackfix_hparams_fpath)
-        # hacked_hparams = ub.udict(hacked_hparams)
-        # # Select the known problematic variables
-        # problem_hparams = hacked_hparams.subdict([
-        #     'classes', 'dataset_stats', 'input_sensorchan',
-        #     'input_channels'])
-        # hparams.update(problem_hparams)
-        # # hacked_hparams - hparams
 
     if 'input_channels' in hparams:
         import kwcoco
