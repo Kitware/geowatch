@@ -109,6 +109,80 @@ class PipelineDAG:
                 for oi_node in onode.succ:
                     self.io_graph.add_edge(onode.key, oi_node.key)
 
+    def inspect_configurables(self):
+        """
+        Show the user what config options should be specified.
+
+        TODO:
+            The idea is that we want to give the user a list of options that
+            they could configure for this pipeline, as well as mark the one
+            that are required / suggested / unnecessary. For now it gives a
+            little bit of that information, but more work could be done to make
+            it nicer.
+        """
+        # Nodes don't always have full knowledge of their entire parameter
+        # space, but they should at least have some knowledge of it.
+        # Find required inputs
+        # required_inputs = {
+        #     n for n in self.io_graph if self.io_graph.in_degree[n] == 0
+        # }
+
+        rows = []
+        for node in self.nodes.values():
+            # Build up information about each node option
+
+            # TODO: determine if a source input node is required or not
+            # by setting a required=False flags at the node leve.
+
+            # Determine which inputs are connected vs unconnected
+            for key, io_node in node.inputs.items():
+                is_connected = self.io_graph.in_degree[io_node.key] > 0
+                rows.append({
+                    'node': node.name,
+                    'key': key,
+                    'connected': is_connected,
+                    'type': 'in_path',
+                    'maybe_required': not is_connected,
+                })
+
+            for key, io_node in node.outputs.items():
+                is_connected = self.io_graph.out_degree[io_node.key] > 0
+                rows.append({
+                    'node': node.name,
+                    'key': key,
+                    'connected': is_connected,
+                    'type': 'out_path',
+                    'maybe_required': False,
+                })
+
+            for param in node.algo_params:
+                rows.append({
+                    'node': node.name,
+                    'key': param,
+                    'type': 'algo_param',
+                    'maybe_required': True,
+                })
+
+            for param in node.perf_params:
+                rows.append({
+                    'node': node.name,
+                    'key': param,
+                    'type': 'perf_param',
+                    'maybe_required': True,
+                })
+
+        import pandas as pd
+        import rich
+        df = pd.DataFrame(rows)
+        df = df.sort_values(['maybe_required', 'type', 'node', 'key'], ascending=[False, True, True, True])
+        rich.print(df.to_string())
+
+        default = {}
+        for _, row in df[df['maybe_required']].iterrows():
+            default[row['node'] + '.' + row['key']] = None
+        from watch.utils import util_yaml
+        print(util_yaml.yaml_dumps(default))
+
     def configure(self, config=None, root_dpath=None, cache=True):
         """
         Update the DAG configuration
@@ -166,7 +240,8 @@ class PipelineDAG:
         print('IO Graph')
         util_networkx.write_network_text(self.io_graph, path=rich.print, end='')
 
-    def submit_jobs(self, queue=None, skip_existing=False, enable_links=True, write_invocations=True):
+    def submit_jobs(self, queue=None, skip_existing=False, enable_links=True,
+                    write_invocations=True):
         """
         Submits the jobs to an existing command queue or creates a new one.
         """

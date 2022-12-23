@@ -250,6 +250,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # Load the requested pipeline
     dag = smart_pipeline.make_smart_pipeline(config['pipeline'])
     dag.print_graphs()
+    dag.inspect_configurables()
 
     queue_dpath = root_dpath / '_cmd_queue_schedule'
     queue_dpath.ensuredir()
