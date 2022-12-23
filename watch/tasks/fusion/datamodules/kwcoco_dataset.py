@@ -811,7 +811,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 dtype=np.float32
             )
 
-            if SAMECOLOR_QUALITY_HEURISTIC:
+            if SAMECOLOR_QUALITY_HEURISTIC and (set(stream) & {'red', 'green', 'blue', 'nir', 'swir16', 'swir22'}):
                 # This should be a better heuristic than the others we were
                 # using
 

@@ -1287,8 +1287,8 @@ class CocoStitchingManager(object):
         self._ready_gids.difference_update({gid})
 
         try:
-            stitcher = self.image_stitchers.get(gid)
-            # stitcher = self.image_stitchers.pop(gid)
+            # stitcher = self.image_stitchers.get(gid)
+            stitcher = self.image_stitchers.pop(gid)
         except KeyError:
             if gid in self._seen_gids:
                 raise KeyError((
