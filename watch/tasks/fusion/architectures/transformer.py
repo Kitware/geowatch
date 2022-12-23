@@ -603,10 +603,13 @@ class MM_VITEncoder(nn.Module):
         self.out_features = self.layers[-1].ffn.layers[1].out_features
 
     def initialize_from_pretrained(self):
-        pretrained_fpath = ub.grabdata('https://download.openmmlab.com/mmsegmentation/v0.5/vit/upernet_vit-b16_mln_512x512_80k_ade20k/upernet_vit-b16_mln_512x512_80k_ade20k_20210624_130547-0403cee1.pth')
-        from watch.tasks.fusion.fit import coerce_initializer
-        initializer = coerce_initializer(pretrained_fpath)
-        info = initializer.forward(self, verbose=0)  # NOQA
+        # pretrained_fpath = ub.grabdata('https://download.openmmlab.com/mmsegmentation/v0.5/vit/upernet_vit-b16_mln_512x512_80k_ade20k/upernet_vit-b16_mln_512x512_80k_ade20k_20210624_130547-0403cee1.pth')
+        # FIXME: Having this import here breaks torch.package
+        # not exactly sure why
+        # from watch.tasks.fusion.fit import coerce_initializer
+        # initializer = coerce_initializer(pretrained_fpath)
+        # info = initializer.forward(self, verbose=0)  # NOQA
+        ...
 
     def forward(self, x):
         orig_shape = x.shape
