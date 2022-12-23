@@ -781,8 +781,10 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
             ])
 
             if start_date is not None and observation_dates[0] != start_date:
+                print('observation_dates = {}'.format(ub.repr2(observation_dates, nl=1)))
                 raise AssertionError(f'start_date={start_date}, obs[0]={observation_dates[0]}')
             if end_date is not None and observation_dates[-1] != end_date:
+                print('observation_dates = {}'.format(ub.repr2(observation_dates, nl=1)))
                 raise AssertionError(f'end_date={end_date}, obs[-1]={observation_dates[-1]}')
 
             # Assuming observations are sorted by date
