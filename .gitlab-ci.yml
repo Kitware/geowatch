@@ -71,23 +71,23 @@ stages:
             "$CI_PROJECT_DIR/.cache/xdg_cache"
     tags:
         #- aws
+        - smart
         - docker
         - linux-x86_64
         #- linux
         #- linux-3.17
         - build
-        #- smart
 
 .common_template_docker:
   &common_template_docker
   tags:
+    #- aws
+    - smart
     - docker
     - linux-x86_64
     #- linux
     #- linux-3.17
     - build
-    #- aws
-    #- smart
   before_script:
     - docker info
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
