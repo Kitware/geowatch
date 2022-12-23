@@ -531,6 +531,7 @@ def expand_site_models_with_site_summaries(sites, regions):
                 site_rows = site_gdf.iloc[1:]
                 track_id = site_summary_row['site_id']
                 status = site_summary_row['status']
+                status = status.lower()
                 summary = {
                     'region_id': region_id,
                     'track_id': track_id,
@@ -752,6 +753,7 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
             site_rows = site_gdf.iloc[1:]
             track_id = site_summary_row['site_id']
             status = site_summary_row['status']
+            status = status.lower()
 
             if status == 'pending':
                 # hack for QFabric
