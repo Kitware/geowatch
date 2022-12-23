@@ -6,3 +6,14 @@ def fix_gelu_issue(method):
         if mod.__class__.__name__ == 'GELU':
             if not hasattr(mod, 'approximate'):
                 mod.approximate = 'none'
+
+
+def fix_package_modules():
+    # Monkey Patch torch.package
+    import sys
+    if sys.version_info[0:2] >= (3, 10):
+        try:
+            from torch.package import _stdlib
+            _stdlib._get_stdlib_modules = lambda: sys.stdlib_module_names
+        except Exception:
+            pass

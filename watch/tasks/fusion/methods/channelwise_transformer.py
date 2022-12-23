@@ -1744,8 +1744,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         import torch.package
 
         # Fix an issue on 3.10 with torch 1.12
-        from watch.utils.lightning_ext.callbacks.packager import _torch_package_monkeypatch
-        _torch_package_monkeypatch()
+        from watch.monkey import monkey_torch
+        monkey_torch.fix_package_modules()
 
         # shallow copy of self, to apply attribute hacks to
         # model = copy.copy(self)
@@ -1795,7 +1795,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             with torch.package.PackageExporter(package_path) as exp:
                 # TODO: this is not a problem yet, but some package types (mainly
                 # binaries) will need to be excluded and added as mocks
-                exp.extern('**', exclude=['watch.tasks.fusion.**'])
+                exp.extern('**', exclude=['watch.tasks.fusion.**', 'watch.tasks.fusion.methods.channelwise_transformer'])
                 exp.intern('watch.tasks.fusion.**', allow_empty=False)
 
                 # Attempt to standardize some form of package metadata that can
