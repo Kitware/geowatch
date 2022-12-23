@@ -73,6 +73,7 @@ stages:
         - aws
         - docker
         - linux
+        - linux-3.17
         - build
         - smart
 
@@ -81,6 +82,7 @@ stages:
   tags:
     - docker
     - linux
+    - linux-3.17
     - build
     - aws
     - smart
