@@ -261,6 +261,54 @@ def fix_geotiff(chan_summary):
     driver2 = None
 
 
+def mwe():
+    fpath = 'test.tif'
+    new_fpath = 'result.tif'
+
+    correct_nodata_value = -9999
+
+    from osgeo import gdal
+    src_dset = gdal.Open(fpath, gdal.GA_ReadOnly)
+    assert src_dset.RasterCount == 1
+    src_band = src_dset.GetRasterBand(1)
+    num_overviews = src_band.GetOverviewCount()
+
+    driver1 = gdal.GetDriverByName(str('MEM'))
+    copy1 = driver1.CreateCopy(str(''), src_dset)
+    src_dset.FlushCache()
+    src_dset = None
+
+    # Modify the pixel contents
+    band = copy1.GetRasterBand(1)
+    band_data = band.ReadAsArray()
+    band_data[band_data == 0] = correct_nodata_value
+    curr_nodat_value = band.GetNoDataValue()
+    band.WriteArray(band_data)
+    if curr_nodat_value != correct_nodata_value:
+        band.SetNoDataValue(correct_nodata_value)
+
+    overviewlist = (2 ** np.arange(1, num_overviews + 1)).tolist()
+    copy1.BuildOverviews('AVERAGE', overviewlist)
+
+    _options = [
+        'BIGTIFF=YES',
+        'TILED=YES',
+        'BLOCKXSIZE={}'.format(256),
+        'BLOCKYSIZE={}'.format(256),
+    ]
+    _options += ['COMPRESS={}'.format('DEFLATE')]
+    _options.append('COPY_SRC_OVERVIEWS=YES')
+
+    # Flush the in-memory dataset to an on-disk GeoTiff
+    driver1 = None
+    driver2 = gdal.GetDriverByName(str('GTiff'))
+    copy2 = driver2.CreateCopy(new_fpath, copy1, options=_options)
+    copy2.FlushCache()
+    copy1 = None
+    copy2 = None  # NOQA
+    driver2 = None
+
+
 def draw_channel_summary(coco_img, chan_summary):
     is_samecolor = chan_summary['is_samecolor']
     data = coco_img.delay(channels=chan_summary['channels'], space='asset',

@@ -1536,7 +1536,7 @@ python -m watch.tasks.fusion.fit \
     --global_change_weight=0.00 \
     --global_class_weight=1e-17 \
     --global_saliency_weight=1.00 \
-    --learning_rate=1e-4 \
+    --learning_rate=3e-4 \
     --weight_decay=1e-3 \
     --chip_dims=224,224 \
     --window_space_scale="10GSD" \
@@ -1546,7 +1546,7 @@ python -m watch.tasks.fusion.fit \
     --batch_size=4 \
     --max_epochs=160 \
     --patience=160 \
-    --num_workers=4 \
+    --num_workers=2 \
     --dist_weights=False \
     --time_steps=7 \
     --channels="$CHANNELS" \
@@ -1570,9 +1570,10 @@ python -m watch.tasks.fusion.fit \
     --quality_threshold=0.8 \
     --num_sanity_val_steps=0 \
     --max_epoch_length=16384 \
-    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V7/lightning_logs/version_1/checkpoints/epoch=29-step=30720.ckpt
+    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_10GSD_BGRNSH_invar_V7/lightning_logs/version_3/package-interupt/package_epoch1_step706.pt
 
-
+    #--init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_10GSD_BGRNSH_invar_V7/lightning_logs/version_2/package-interupt/package_epoch11_step5936.pt 
+#--init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V7/lightning_logs/version_1/checkpoints/epoch=29-step=30720.ckpt
 #--init="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 #/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V7/lightning_logs/version_1/package-interupt/package_epoch30_step31003.pt
 

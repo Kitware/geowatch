@@ -310,9 +310,6 @@ build_docker_and_upload_strict:
             ./run_tests.py --network watch tests scripts
 
 
-
-
-
             #docker run -v -it registry.smartgitlab.com/kitware/watch/miniconda3 bash
             #docker run -v ~/.ssh:/tmp/.ssh:ro -it registry.smartgitlab.com/kitware/watch/miniconda3 bash
             ##docker run -it gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3 bash
