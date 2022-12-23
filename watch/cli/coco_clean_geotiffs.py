@@ -315,21 +315,20 @@ def test_gdal_edit_data():
 
     proj = self.GetProjection()
     transform = self.GetGeoTransform()
-    crs = self.GetSpatialRef()
+    crs = self.GetSpatialRef()  # NOQA
 
     overviews = self.get_overview_info()[0]
 
     new_data = data.copy()
     new_data[new_data == 0] = nodata_value
 
-    r = util_gdal.GdalDataset.open(dst_fpath)
+    r = util_gdal.GdalDataset.open(dst_fpath)  # NOQA
 
     kwimage.imwrite(dst_fpath, data, transform=transform, crs=proj, nodata_value=nodata_value, overviews=overviews)
 
     import rasterio as rio
     src = rio.open(src_fpath, 'r')
     dst = rio.open(dst_fpath, 'w', **src.profile)
-
 
     with rio.open(src_fpath, 'r') as src:
         src.profile
@@ -340,8 +339,7 @@ def test_gdal_edit_data():
         with rio.open(dst_fpath, 'w', **src.profile) as dst:
             dst.write(new)
 
-    foo = kwimage.imread('result.tif')
-
+    # foo = kwimage.imread('result.tif')
     """
     gdal_calc.py -A test.tif --outfile=result.tif --calc="(-9999 * (A == 0)) + ((A != 0) * A)"
     echo "----"
@@ -358,8 +356,7 @@ def test_gdal_edit_data():
     gdalinfo /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop4-BAS/CN_C001/L8/affine_warp/crop_20200823T020000Z_N30.114986E119.908343_N30.593740E120.466058_L8_0/crop_20200823T020000Z_N30.114986E119.908343_N30.593740E120.466058_L8_0_swir22.tif
 
     """
-    foo = kwimage.imread('result.tif')
-
+    # foo = kwimage.imread('result.tif')
     # band = z.GetRasterBand(1)
     # from osgeo import gdal
     # info = gdal.Info(z, format='json')
