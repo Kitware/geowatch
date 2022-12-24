@@ -798,7 +798,7 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
             site_rows = site_gdf.iloc[1:]
             track_id = site_summary_row['site_id']
             status = site_summary_row['status']
-            status = status.lower()
+            status = status.lower().strip()
 
             if status == 'pending':
                 # hack for QFabric
