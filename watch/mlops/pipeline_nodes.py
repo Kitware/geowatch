@@ -181,7 +181,7 @@ class PipelineDAG:
         for _, row in df[df['maybe_required']].iterrows():
             default[row['node'] + '.' + row['key']] = None
         from watch.utils import util_yaml
-        print(util_yaml.yaml_dumps(default))
+        rich.print(util_yaml.yaml_dumps(default))
 
     def configure(self, config=None, root_dpath=None, cache=True):
         """
