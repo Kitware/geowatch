@@ -238,6 +238,27 @@ def expand_site_models_with_site_summaries(sites, regions):
         Dict[str, List[DataFrame]] : region_id_to_sites  :
             a mapping from region names to a list of site models both
             real and/or pseudo.
+
+    Ignore:
+        XDEV_EMBED=1 python -m watch project_annotations \
+                --src "$HOME/remote/namek/data/dvc-repos/smart_data_dvc/Aligned-Drop6-c10-L2-S2-L8/imgonly-PY_C001.kwcoco.json" \
+                --dst "$HOME/remote/namek/data/dvc-repos/smart_data_dvc/Aligned-Drop6-c10-L2-S2-L8/imganns-PY_C001.kwcoco.json" \
+                --site_models="$HOME/remote/namek/data/dvc-repos/smart_data_dvc/annotations/drop6/site_models/*.geojson" \
+                --region_models="$HOME/remote/namek/data/dvc-repos/smart_data_dvc/annotations/drop6/region_models/PY_C001.geojson"
+
+        XDEV_EMBED=1 python -m watch project_annotations \
+            --src "$HOME/remote/namek/data/dvc-repos/smart_data_dvc/Aligned-Drop6-c10-L2-S2-L8/imgonly-UY_C002.kwcoco.json" \
+            --dst "$HOME/remote/namek/data/dvc-repos/smart_data_dvc/Aligned-Drop6-c10-L2-S2-L8/imganns-UY_C002.kwcoco.json" \
+            --site_models="$HOME/remote/namek/data/dvc-repos/smart_data_dvc/annotations/drop6/site_models/*.geojson" \
+            --region_models="$HOME/remote/namek/data/dvc-repos/smart_data_dvc/annotations/drop6/region_models/UY_C002.geojson"
+        #
+        ### Command 3 / 3 - project-annots-CO_C001_2d4e05933f3f
+        XDEV_EMBED=1 python -m watch project_annotations \
+            --src "$HOME/remote/namek/data/dvc-repos/smart_data_dvc/Aligned-Drop6-c10-L2-S2-L8/imgonly-CO_C001.kwcoco.json" \
+            --dst "$HOME/remote/namek/data/dvc-repos/smart_data_dvc/Aligned-Drop6-c10-L2-S2-L8/imganns-CO_C001.kwcoco.json" \
+            --site_models="$HOME/remote/namek/data/dvc-repos/smart_data_dvc/annotations/drop6/site_models/*.geojson" \
+            --region_models="$HOME/remote/namek/data/dvc-repos/smart_data_dvc/annotations/drop6/region_models/CO_C001.geojson"
+
     """
     import pandas as pd
     import geojson
@@ -278,9 +299,13 @@ def expand_site_models_with_site_summaries(sites, regions):
         # Hack to set all region-ids
         region_df.loc[:, 'region_id'] = region_id
         sites_part = region_df[~is_region]
-        assert (sites_part['type'] == 'site_summary').all(), 'rest of data must be site summaries'
-        assert sites_part['region_id'].apply(lambda x: (x is None) or x == region_id).all(), (
-            'site-summaries do not have region ids (unless we make them)')
+        try:
+            assert (sites_part['type'] == 'site_summary').all(), 'rest of data must be site summaries'
+            assert sites_part['region_id'].apply(lambda x: (x is None) or x == region_id).all(), (
+                'site-summaries do not have region ids (unless we make them)')
+        except AssertionError:
+            embed_if_requested()
+            raise
         region_id_to_site_summaries[region_id] = sites_part
 
         # Check datetime errors
