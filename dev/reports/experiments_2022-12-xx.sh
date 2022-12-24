@@ -348,4 +348,4 @@ python -m watch.mlops.schedule_evaluation \
     --backend=tmux \
     --pipeline=sc \
     --cache=1 --skip_existing=1 \
-    --rprint=0 --run=0
+    --rprint=0 --run=1
