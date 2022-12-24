@@ -282,6 +282,8 @@ python -m watch.mlops.schedule_evaluation \
 
 #####################
 ## SC-Only Evaluation 
+## ------------------
+## Assumes the ground truth is the BAS input
 #####################
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
@@ -313,6 +315,8 @@ python -m watch.mlops.schedule_evaluation \
                 - $DVC_DATA_DPATH/Drop4-SC/data_vali_KR_R001_sites.kwcoco.json
                 #- $DVC_DATA_DPATH/Drop4-SC/data_vali_KR_R002_sites.kwcoco.json
                 #- $DVC_DATA_DPATH/Drop4-SC/data_vali_US_R007_sites.kwcoco.json
+            sc_poly.site_summary:
+                - $DVC_DATA_DPATH/annotations/region_models/*.geojson
             sc_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/region_models
             sc_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/site_models
             sc_pxl.chip_dims:
@@ -335,5 +339,5 @@ python -m watch.mlops.schedule_evaluation \
     --devices="0," --queue_size=1 \
     --backend=tmux \
     --pipeline=sc \
-    --cache=1 --skip_existing=0 \
-    --rprint=1 --run=0
+    --cache=1 --skip_existing=1 \
+    --rprint=1 --run=1
