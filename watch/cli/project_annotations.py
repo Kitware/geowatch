@@ -457,6 +457,12 @@ def expand_site_models_with_site_summaries(sites, regions):
 
                 assert start_datetime <= end_datetime
 
+                score = site_summary.get('score', None)
+                try:
+                    score = float(score)
+                except TypeError:
+                    ...
+
                 observation_prop_template = {
                     'type': 'observation',
                     'observation_date': None,
@@ -465,7 +471,7 @@ def expand_site_models_with_site_summaries(sites, regions):
                     # 'current_phase': None,
                     # 'is_occluded': None,
                     # 'is_site_boundary': None,
-                    'score': float(site_summary.get('score', None)),
+                    'score': score,
                     # 'misc_info': None,
                 }
 
