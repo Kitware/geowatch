@@ -72,6 +72,10 @@ def load_model_from_package(package_path):
 
     model = imp.load_pickle(module_name, arch_name)
 
+    if 0:
+        imp.file_structure()['package_header']
+
+    # Add extra metadata to the model
     try:
         fit_config_text = imp.load_text('package_header', 'fit_config.yaml')
     except Exception:
@@ -84,6 +88,7 @@ def load_model_from_package(package_path):
         fit_config = yaml.safe_load(file)
         model.fit_config = fit_config
 
+    model.package_path = package_path
     return model
 
 

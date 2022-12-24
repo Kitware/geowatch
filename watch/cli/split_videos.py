@@ -1,4 +1,4 @@
-"""
+r"""
 Split a coco dataset into one per video.
 
 Ignore:
@@ -11,24 +11,27 @@ Ignore:
     python -m watch.cli.split_videos \
         --dst_dpath "$DATA_DVC_DPATH/Drop4-BAS/"
 
-
-
 """
 import scriptconfig as scfg
 
 
 class SplitVideoConfig(scfg.DataConfig):
-    src = scfg.Value(None, nargs='+', help='one or more datasets to split')
+    """
+    Breaks one or more kwcoco file containing multiple videos into single
+    kwcoco files per video. The new kwcoco file names use the same name as the
+    input dataset, but prefix it with the video name.
+    """
+    src = scfg.Value(None, nargs='+', help='one or more datasets to split', position=1)
+
     dst_dpath = scfg.Value(None, help=(
         'path to write to. If None, uses the src dataset path'))
+
     io_workers = scfg.Value(2, help='number of background IO workers')
 
 
 def main(cmdline=1, **kwargs):
     """
     Ignore:
-        import sys, ubelt
-        sys.path.append(ubelt.expandpath('~/code/watch'))
         from watch.cli.split_videos import *  # NOQA
         import watch
         data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
@@ -43,16 +46,17 @@ def main(cmdline=1, **kwargs):
         kwargs = dict(src=src_fpath)
     """
     import kwcoco
-    from watch.utils import util_pattern
     import ubelt as ub
+    from watch.utils import util_pattern
     from watch.utils import util_parallel
+    from watch.utils import util_globals
     config = SplitVideoConfig.legacy(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.repr2(config, nl=1)))
 
     coco_fpaths = list(util_pattern.MultiPattern.coerce(config.src).paths())
     print(f'coco_fpaths={coco_fpaths}')
 
-    io_workers = config.io_workers
+    io_workers = util_globals.coerce_num_workers(config.io_workers)
     writer = util_parallel.BlockingJobQueue(max_workers=io_workers)
 
     for coco_fpath in coco_fpaths:

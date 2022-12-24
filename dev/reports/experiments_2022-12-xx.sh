@@ -285,14 +285,34 @@ python -m watch.mlops.schedule_evaluation \
 #####################
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+
+# Dataset munging
+# ---------------
+if [ ! -f "$DVC_DATA_DPATH"/Drop4-SC/data_vali_KR_R001_sites.kwcoco.json ]; then
+    # Split into a kwcoco file per site
+    python -m watch.cli.split_videos "$DVC_DATA_DPATH"/Drop4-SC/data_vali.kwcoco.json
+    # Combine sites per region
+    kwcoco union "$DVC_DATA_DPATH"/Drop4-SC/data_vali_KR_R001_*_box.kwcoco.json \
+        --dst "$DVC_DATA_DPATH"/Drop4-SC/data_vali_KR_R001_sites.kwcoco.json
+    kwcoco union "$DVC_DATA_DPATH"/Drop4-SC/data_vali_KR_R002_*_box.kwcoco.json \
+        --dst "$DVC_DATA_DPATH"/Drop4-SC/data_vali_KR_R002_sites.kwcoco.json
+    kwcoco union "$DVC_DATA_DPATH"/Drop4-SC/data_vali_US_R007_*_box.kwcoco.json \
+        --dst "$DVC_DATA_DPATH"/Drop4-SC/data_vali_US_R007_sites.kwcoco.json
+    # Remove the temporary split sites
+    rm "$DVC_DATA_DPATH"/Drop4-SC/data_vali_*_box.kwcoco.json
+fi
+
 python -m watch.mlops.schedule_evaluation \
     --params="
         matrix:
             sc_pxl.package_fpath:
                 - $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
-                #- $DVC_EXPT_DPATH/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=35-step=486072.ckpt
+                - $DVC_EXPT_DPATH/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/Drop4_tune_V30_V1_epoch=35-step=486072.pt
             sc_pxl.test_dataset:
-                - $DVC_DATA_DPATH/Drop4-SC/data_vali.kwcoco.json
+                #- $DVC_DATA_DPATH/Drop4-SC/data_vali.kwcoco.json
+                - $DVC_DATA_DPATH/Drop4-SC/data_vali_KR_R001_sites.kwcoco.json
+                #- $DVC_DATA_DPATH/Drop4-SC/data_vali_KR_R002_sites.kwcoco.json
+                #- $DVC_DATA_DPATH/Drop4-SC/data_vali_US_R007_sites.kwcoco.json
             sc_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/region_models
             sc_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/site_models
             sc_pxl.chip_dims:
@@ -306,12 +326,12 @@ python -m watch.mlops.schedule_evaluation \
             sc_poly.use_viterbi:
                 - 0
             sc_pxl.enabled: 1
-            sc_poly.enabled: 0
-            sc_poly_eval.enabled: 0
-            sc_pxl_eval.enabled: 0
-            sc_poly_viz.enabled: 0
+            sc_poly.enabled: 1
+            sc_poly_eval.enabled: 1
+            sc_pxl_eval.enabled: 1
+            sc_poly_viz.enabled: 1
     " \
-    --root_dpath="$DVC_EXPT_DPATH/_testpipe2" \
+    --root_dpath="$DVC_EXPT_DPATH/_testsc" \
     --devices="0," --queue_size=1 \
     --backend=tmux \
     --pipeline=sc \

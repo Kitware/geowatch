@@ -258,7 +258,8 @@ def resolve_datamodule(config, method, datamodule_defaults):
     datamodule_vars = datamodule_class.compatible(config)
 
     parsetime_vals = ub.udict(datamodule_vars) & datamodule_defaults
-    need_infer = ub.udict({k: v for k, v in parsetime_vals.items() if v == 'auto' or v == ['auto']})
+    need_infer = ub.udict({
+        k: v for k, v in parsetime_vals.items() if v == 'auto' or v == ['auto']})
     # Try and infer what data we were given at train time
     if hasattr(method, 'fit_config'):
         traintime_params = method.fit_config
@@ -267,6 +268,8 @@ def resolve_datamodule(config, method, datamodule_defaults):
     else:
         traintime_params = {}
         if datamodule_vars['channels'] in {None, 'auto'}:
+            # import xdev
+            # xdev.embed()
             print('Warning have to make assumptions. Might not always work')
             raise NotImplementedError('TODO: needs to be sensorchan if we do this')
             if hasattr(method, 'input_channels'):
@@ -483,27 +486,27 @@ def predict(cmdline=False, **kwargs):
 
     package_fpath = ub.Path(config['package_fpath']).expand()
 
-    try:
-        # Ideally we have a package, everything is defined there
-        method = utils.load_model_from_package(package_fpath)
-        # fix einops bug
-        for _name, mod in method.named_modules():
-            if 'Rearrange' in mod.__class__.__name__:
-                try:
-                    mod._recipe = mod.recipe()
-                except AttributeError:
-                    pass
-        # hack: dont load the metrics
-        method.class_metrics = None
-        method.saliency_metrics = None
-        method.change_metrics = None
-        method.head_metrics = None
-    except Exception as ex:
-        print('ex = {!r}'.format(ex))
-        print(f'Failed to read {package_fpath=!r} attempting workaround')
-        # If we have a checkpoint path we can load it if we make assumptions
-        # init method from checkpoint.
-        raise
+    # try:
+    # Ideally we have a package, everything is defined there
+    method = utils.load_model_from_package(package_fpath)
+    # fix einops bug
+    for _name, mod in method.named_modules():
+        if 'Rearrange' in mod.__class__.__name__:
+            try:
+                mod._recipe = mod.recipe()
+            except AttributeError:
+                pass
+    # hack: dont load the metrics
+    method.class_metrics = None
+    method.saliency_metrics = None
+    method.change_metrics = None
+    method.head_metrics = None
+    # except Exception as ex:
+    #     print('ex = {!r}'.format(ex))
+    #     print(f'Failed to read {package_fpath=!r} attempting workaround')
+    #     # If we have a checkpoint path we can load it if we make assumptions
+    #     # init method from checkpoint.
+    #     raise
 
     # Hack to fix GELU issue
     monkey_torch.fix_gelu_issue(method)

@@ -182,8 +182,11 @@ class HeatmapPrediction(ProcessNode):
 
     def command(self):
         fmtkw = self.resolved_config.copy()
-        fmtkw['params_argstr'] = self._make_argstr(self.resolved_algo_config)
-        fmtkw['perf_argstr'] = self._make_argstr(self.resolved_perf_config)
+        perf_config = self.resolved_perf_config
+        algo_config = self.resolved_algo_config - {
+            'package_fpath', 'test_dataset', 'pred_dataset'}
+        fmtkw['params_argstr'] = self._make_argstr(algo_config)
+        fmtkw['perf_argstr'] = self._make_argstr(perf_config)
         command = ub.codeblock(
             r'''
             python -m watch.tasks.fusion.predict \

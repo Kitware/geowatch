@@ -19,7 +19,7 @@ class RepackageConfig(scfg.DataConfig):
         context or via these configuration arguments.
 
     Ignore:
-        python -m watch.mlops.repackager \
+        python -m watch.mlops.repackager --force=True \
             $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=35-step=486072.ckpt
 
         python -m watch.mlops.repackager \
@@ -31,11 +31,14 @@ class RepackageConfig(scfg.DataConfig):
         or a glob pattern.
         '''))
 
+    force = scfg.Value(False, isflag=True, help='if True, rewrite the packages even if they exist')
+
 
 def main(**kwargs):
     config = RepackageConfig.cli(data=kwargs)
+    print('config = {}'.format(ub.repr2(config.to_dict(), nl=1)))
     checkpoint_fpath = config['checkpoint_fpath']
-    repackage(checkpoint_fpath)
+    repackage(checkpoint_fpath, force=config['force'])
 
 
 def repackage(checkpoint_fpath, force=False, dry=False):
@@ -53,26 +56,32 @@ def repackage(checkpoint_fpath, force=False, dry=False):
     """
     from watch.utils import util_path
     checkpoint_fpaths = util_path.coerce_patterned_paths(checkpoint_fpath)
+    print('Begin repackage')
+    print('checkpoint_fpaths = {}'.format(ub.repr2(checkpoint_fpaths, nl=1)))
     package_fpaths = []
     for checkpoint_fpath in checkpoint_fpaths:
         # If we have a checkpoint path we can load it if we make assumptions
         # init method from checkpoint.
-        checkpoint_fpath = os.fspath(checkpoint_fpath)
-
-        package_name = suggest_package_name_for_checkpoint(checkpoint_fpath)
+        checkpoint_fpath = ub.Path(checkpoint_fpath)
+        context = inspect_checkpoint_context(checkpoint_fpath)
+        package_name = suggest_package_name_for_checkpoint(context)
         package_fpath = checkpoint_fpath.parent / package_name
-
         if force or not package_fpath.exists():
             if not dry:
-                repackage_single_checkpoint(checkpoint_fpath, package_fpath)
+                train_dpath_hint = context['train_dpath_hint']
+                repackage_single_checkpoint(checkpoint_fpath, package_fpath,
+                                            train_dpath_hint)
         package_fpaths.append(os.fspath(package_fpath))
+    print('package_fpaths = {}'.format(ub.repr2(package_fpaths, nl=1)))
     return package_fpaths
 
 
-def suggest_package_name_for_checkpoint(checkpoint_fpath):
+def inspect_checkpoint_context(checkpoint_fpath):
     """
-    Suggest a more distinguishable name for the checkpoint based on heuristics
+    Use heuristics to attempt to find the context in which this checkpoint was
+    trained.
     """
+    context = {}
     checkpoint_fpath = ub.Path(checkpoint_fpath)
     package_name = checkpoint_fpath.augment(ext='.pt').name
 
@@ -82,23 +91,44 @@ def suggest_package_name_for_checkpoint(checkpoint_fpath):
         if checkpoint_fpath.parent.stem == 'checkpoints':
             train_dpath_hint = checkpoint_fpath.parent.parent
 
-    meta_fpath = None
+    fit_config_fpath = None
+    hparams_fpath = None
     if train_dpath_hint is not None:
         # Look at the training config file to get info about this
         # experiment
         candidates = list(train_dpath_hint.glob('fit_config.yaml'))
         if len(candidates) == 1:
-            meta_fpath = candidates[0]
-            data = load_meta(meta_fpath)
-            if 'name' in data:
-                # Use the metadata package name if it exists
-                expt_name = data['name']
-            else:
-                # otherwise, hack to put experiment name in package name
-                # based on an assumed directory structure
-                expt_name = ub.Path(data['default_root_dir']).name
-            if expt_name not in package_name:
-                package_name = expt_name + '_' + package_name
+            fit_config_fpath = candidates[0]
+        candidates = list(train_dpath_hint.glob('hparams.yaml'))
+        if len(candidates) == 1:
+            hparams_fpath = candidates[0]
+
+    context['package_name'] = package_name
+    context['train_dpath_hint'] = train_dpath_hint
+    context['checkpoint_fpath'] = checkpoint_fpath
+    context['fit_config_fpath'] = fit_config_fpath
+    context['hparams_fpath'] = hparams_fpath
+    return context
+
+
+def suggest_package_name_for_checkpoint(context):
+    """
+    Suggest a more distinguishable name for the checkpoint based on context
+    """
+    checkpoint_fpath = ub.Path(context['checkpoint_fpath'])
+    package_name = checkpoint_fpath.augment(ext='.pt').name
+    meta_fpath = context.get('fit_config_fpath', None)
+    if meta_fpath is not None:
+        data = load_meta(meta_fpath)
+        if 'name' in data:
+            # Use the metadata package name if it exists
+            expt_name = data['name']
+        else:
+            # otherwise, hack to put experiment name in package name
+            # based on an assumed directory structure
+            expt_name = ub.Path(data['default_root_dir']).name
+        if expt_name not in package_name:
+            package_name = expt_name + '_' + package_name
     return package_name
 
 
