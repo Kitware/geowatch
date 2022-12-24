@@ -1235,7 +1235,7 @@ def varied_values(longform, min_variations=0, default=ub.NoParam, dropna=False):
     Given a list of dictionaries, find the values that differ between them.
 
     Args:
-        longform (List[Dict[KT, VT]]):
+        longform (List[Dict[KT, VT]] | DataFrame):
             This is longform data, as described in [SeabornLongform]_. It is a
             list of dictionaries.
 
@@ -1267,6 +1267,10 @@ def varied_values(longform, min_variations=0, default=ub.NoParam, dropna=False):
     """
     # Enumerate all defined columns
     import numbers
+
+    if isinstance(longform, pd.DataFrame):
+        longform = longform.to_dict('records')
+
     columns = set()
     for row in longform:
         if default is ub.NoParam and len(row) != len(columns) and len(columns):
@@ -1290,6 +1294,6 @@ def varied_values(longform, min_variations=0, default=ub.NoParam, dropna=False):
     # Remove any column that does not have enough variation
     if min_variations > 0:
         for key, values in list(varied.items()):
-            if len(values) <= min_variations:
+            if len(values) < min_variations:
                 varied.pop(key)
     return varied

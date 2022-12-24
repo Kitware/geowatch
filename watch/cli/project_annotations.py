@@ -465,7 +465,7 @@ def expand_site_models_with_site_summaries(sites, regions):
                     # 'current_phase': None,
                     # 'is_occluded': None,
                     # 'is_site_boundary': None,
-                    'score': float(site_summary['score']),
+                    'score': float(site_summary.get('score', None)),
                     # 'misc_info': None,
                 }
 

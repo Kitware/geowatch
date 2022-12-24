@@ -321,12 +321,11 @@ python -m watch.mlops.schedule_evaluation \
             sc_poly_eval.true_site_dpath: $DVC_DATA_DPATH/annotations/site_models
             sc_pxl.chip_dims:
                 - auto
-            sc_pxl.window_space_scale:
-                - auto
-            sc_pxl.input_space_scale: auto
-            sc_pxl.output_space_scale: auto
+                - 256,256
             sc_poly.thresh:
+                - 0.07
                 - 0.1
+                - 0.13
             sc_poly.use_viterbi:
                 - 0
             sc_pxl.enabled: 1
@@ -334,10 +333,19 @@ python -m watch.mlops.schedule_evaluation \
             sc_poly_eval.enabled: 1
             sc_pxl_eval.enabled: 1
             sc_poly_viz.enabled: 1
+            include:
+                - sc_pxl.chip_dims: 256,256
+                  sc_pxl.window_space_scale: 8GSD
+                  sc_pxl.input_space_scale: 8GSD
+                  sc_pxl.output_space_scale: 8GSD
+                - sc_pxl.chip_dims: auto
+                  sc_pxl.window_space_scale: auto
+                  sc_pxl.input_space_scale: auto
+                  sc_pxl.output_space_scale: auto
     " \
     --root_dpath="$DVC_EXPT_DPATH/_testsc" \
     --devices="0," --queue_size=1 \
     --backend=tmux \
     --pipeline=sc \
     --cache=1 --skip_existing=1 \
-    --rprint=1 --run=1
+    --rprint=0 --run=0

@@ -155,6 +155,7 @@ Example:
     xdev tree --dirblocklist "_*" my_expt_dir/_testpipe/ --max_files=1
 """
 import ubelt as ub
+import rich
 import shlex
 import json
 import scriptconfig as scfg
@@ -226,6 +227,8 @@ class ScheduleEvaluationConfig(scfg.DataConfig):
 
     max_configs = scfg.Value(None, help='if specified only run at most this many of the grid search configs')
 
+    print_queue = 0
+
 
 @profile
 def schedule_evaluation(cmdline=False, **kwargs):
@@ -284,17 +287,35 @@ def schedule_evaluation(cmdline=False, **kwargs):
 
     # Configure a DAG for each row.
     for row_config in ub.ProgIter(all_param_grid, desc='configure dags', verbose=3):
-        print('\nrow_config = {}'.format(ub.repr2(row_config, nl=1)))
         dag.configure(
             config=row_config, root_dpath=root_dpath, cache=config['cache'])
         dag.submit_jobs(queue=queue, skip_existing=config['skip_existing'],
                         enable_links=config['enable_links'])
 
-    print('queue = {!r}'.format(queue))
+    import pandas as pd
+    if 1:
+        # Print config info
+        from watch.utils.result_analysis import varied_values
+        longparams = pd.DataFrame(all_param_grid)
+        varied = varied_values(longparams, min_variations=2, dropna=False)
+        relevant = longparams[longparams.columns.intersection(varied)]
+        from watch.utils import slugify_ext
+        def pandas_preformat(item):
+            if isinstance(item, str):
+                return slugify_ext.smart_truncate(item, max_length=16, trunc_loc=0)
+            else:
+                return item
+        displayable = relevant.applymap(pandas_preformat)
+        rich.print(displayable.to_string())
+
+    # print('queue = {!r}'.format(queue))
     # print(f'{len(queue)=}')
     with_status = 0
     with_rich = 0
-    queue.write_network_text()
+
+    if config['print_queue']:
+        queue.write_network_text()
+
     if config['rprint']:
         queue.rprint(with_status=with_status, with_rich=with_rich,
                      with_locks=0, exclude_tags=['boilerplate'])
