@@ -23,33 +23,69 @@ Also:
 References:
     https://smartgitlab.com/TE/annotations/-/issues/17
     https://smartgitlab.com/TE/standards/-/snippets/18
+
+
+Example:
+
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+
 """
 
 import ubelt as ub
 import jsonschema
 import json
+import scriptconfig as scfg
+
+
+class ValidateAnnotationConfig(scfg.DataConfig):
+
+    site_model_dpath = scfg.Value('auto', help='path to the site model directory')
+
+    region_model_dpath = scfg.Value('auto', help='path to the region model directory')
+
+    site_schema = scfg.Value('auto', help='path to the site model directory')
+
+    region_schema = scfg.Value('auto', help='path to the region model directory')
 
 
 def main():
     # Point to the cloned repos
     # docs_dpath = ub.Path('docs')
-    import watch
-    dvc_dpath = watch.find_smart_dvc_dpath()
-    annotations_dpath = ub.Path('annotations')
-    annotations_dpath =  dvc_dpath / 'annotations'
+    # annotations_dpath = dvc_dpath / 'annotations/drop6'
+    config = ValidateAnnotationConfig.cli()
+    # config['site_model_dpath']
 
     # Load schemas
     # site_model_schema_fpath = docs_dpath / ('pages/schemas/site-model.schema.json')
     # region_model_schema_fpath = docs_dpath / ('pages/schemas/region-model.schema.json')
     # site_model_schema = json.loads(site_model_schema_fpath.read_text())
     # region_model_schema = json.loads(region_model_schema_fpath.read_text())
-    site_schema = site_model_schema = watch.rc.registry.load_site_model_schema()
-    region_schema  = region_model_schema = watch.rc.registry.load_region_model_schema()
 
-    annotations_dpath = ub.Path('~/.cache/iarpa/smart/ta2/demodata/truth').expand()
+    if config['site_schema'] == 'auto':
+        import watch
+        site_schema = site_model_schema = watch.rc.registry.load_site_model_schema()
+    else:
+        raise NotImplementedError
 
-    site_model_dpath = annotations_dpath / 'site_models'
-    region_model_dpath = annotations_dpath / 'region_models'
+    if config['region_schema'] == 'auto':
+        import watch
+        region_schema = region_model_schema = watch.rc.registry.load_region_model_schema()
+    else:
+        raise NotImplementedError
+
+    if config['site_model_dpath'] == 'auto':
+        import watch
+        dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        site_model_dpath = dvc_dpath / 'annotations/drop6/site_models'
+    else:
+        site_model_dpath = ub.Path(config['site_model_dpath'])
+
+    if config['region_model_dpath'] == 'auto':
+        import watch
+        dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        region_model_dpath = dvc_dpath / 'annotations/drop6/region_models'
+    else:
+        region_model_dpath = ub.Path(config['region_model_dpath'])
 
     site_model_fpaths = list(site_model_dpath.glob('*.geojson'))
     region_model_fpaths = list(region_model_dpath.glob('*.geojson'))
