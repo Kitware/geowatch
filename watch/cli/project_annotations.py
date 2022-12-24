@@ -784,11 +784,13 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
                 print('ERROR')
                 print(site_gdf)
                 print('observation_dates = {}'.format(ub.repr2(observation_dates, nl=1)))
+                embed_if_requested()
                 raise AssertionError(f'start_date={start_date}, obs[0]={observation_dates[0]}')
             if end_date is not None and observation_dates[-1] != end_date:
                 print('ERROR')
                 print(site_gdf)
                 print('observation_dates = {}'.format(ub.repr2(observation_dates, nl=1)))
+                embed_if_requested()
                 raise AssertionError(f'end_date={end_date}, obs[-1]={observation_dates[-1]}')
 
             # Assuming observations are sorted by date
@@ -1095,6 +1097,23 @@ def draw_geospace(dvc_dpath, sites):
 
 
 _SubConfig = ProjectAnnotationsConfig
+
+
+def embed_if_requested(n=0):
+    """
+    Calls xdev.embed conditionally based on the environment.
+
+    Useful in cases where you want to leave the embed call around, but you dont
+    want it to trigger in normal circumstances.
+
+    Specifically, embed is only called if the environment variable XDEV_EMBED
+    exists or if --xdev-embed is in sys.argv.
+    """
+    import os
+    import ubelt as ub
+    import xdev
+    if os.environ.get('XDEV_EMBED', '') or ub.argflag('--xdev-embed'):
+        xdev.embed(n=n + 1)
 
 
 if __name__ == '__main__':
