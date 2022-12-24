@@ -465,7 +465,12 @@ def expand_site_models_with_site_summaries(sites, regions):
             for _, site_summary in sitesummaries.iterrows():
                 geom = site_summary['geometry']
 
-                poly_json = kwimage.Polygon.from_shapely(geom.convex_hull).to_geojson()
+                try:
+                    poly_json = kwimage.Polygon.from_shapely(geom.convex_hull).to_geojson()
+                except Exception as ex:
+                    print(f'ex={ex}')
+                    embed_if_requested()
+                    raise
                 mpoly_json = kwimage.MultiPolygon.from_shapely(geom).to_geojson()
 
                 has_keys = site_summary.index.intersection(site_properites)
