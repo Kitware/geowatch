@@ -464,6 +464,9 @@ def expand_site_models_with_site_summaries(sites, regions):
 
             for _, site_summary in sitesummaries.iterrows():
                 geom = site_summary['geometry']
+                if geom is None:
+                    print('warning got non geom')
+                    continue
 
                 try:
                     poly_json = kwimage.Polygon.from_shapely(geom.convex_hull).to_geojson()
