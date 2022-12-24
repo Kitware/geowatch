@@ -29,6 +29,10 @@ Example:
 
     DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
 
+    python -m watch.cli.validate_annotation_schemas \
+        --site_model_dpath="$DVC_DATA_DPATH"/annotations/drop6/site_models \
+        --region_model_dpath="$DVC_DATA_DPATH"/annotations/drop6/region_models
+
 """
 
 import ubelt as ub
@@ -38,6 +42,9 @@ import scriptconfig as scfg
 
 
 class ValidateAnnotationConfig(scfg.DataConfig):
+    """
+    Validate the site / region model schemas
+    """
 
     site_model_dpath = scfg.Value('auto', help='path to the site model directory')
 

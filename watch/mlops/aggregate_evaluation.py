@@ -32,8 +32,10 @@ def main(cmdline=True, **kwargs):
         expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
         cmdline = 0
         kwargs = {
-            'root_dpath': expt_dvc_dpath / '_testpipe',
-            'pipeline': 'joint_bas_sc_nocrop',
+            # 'root_dpath': expt_dvc_dpath / '_testpipe',
+            # 'pipeline': 'joint_bas_sc_nocrop',
+            'root_dpath': expt_dvc_dpath / '_testsc',
+            'pipeline': 'sc',
         }
     """
     config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
@@ -66,8 +68,10 @@ def main(cmdline=True, **kwargs):
     for node_eval_info in node_eval_infos:
         node_name = node_eval_info['name']
         out_key = node_eval_info['out_key']
-
         result_loader_fn = node_eval_info['result_loader']
+
+        if node_name not in dag.nodes:
+            continue
 
         node = dag.nodes[node_name]
         out_node = node.outputs[out_key]
