@@ -299,11 +299,17 @@ def expand_site_models_with_site_summaries(sites, regions):
         # Hack to set all region-ids
         region_df.loc[:, 'region_id'] = region_id
         sites_part = region_df[~is_region]
+
+        FIX_LEADING_SPACE = 1
+        if FIX_LEADING_SPACE:
+            sites_part.loc[sites_part['type'] == ' site_summary', 'type'] = 'site_summary'
+
         try:
             assert (sites_part['type'] == 'site_summary').all(), 'rest of data must be site summaries'
             assert sites_part['region_id'].apply(lambda x: (x is None) or x == region_id).all(), (
                 'site-summaries do not have region ids (unless we make them)')
         except AssertionError:
+            print(sites_part['type'].unique())
             embed_if_requested()
             raise
         region_id_to_site_summaries[region_id] = sites_part
