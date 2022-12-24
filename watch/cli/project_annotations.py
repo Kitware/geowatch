@@ -465,7 +465,7 @@ def expand_site_models_with_site_summaries(sites, regions):
             for _, site_summary in sitesummaries.iterrows():
                 geom = site_summary['geometry']
                 if geom is None:
-                    print('warning got non geom')
+                    print('warning got none geom')
                     continue
 
                 try:
@@ -576,7 +576,7 @@ def expand_site_models_with_site_summaries(sites, regions):
                 site_rows = site_gdf.iloc[1:]
                 track_id = site_summary_row['site_id']
                 status = site_summary_row['status']
-                status = status.lower()
+                status = status.lower().strip()
                 summary = {
                     'region_id': region_id,
                     'track_id': track_id,
