@@ -3,6 +3,67 @@ Defines a torch Dataset for kwcoco video data.
 
 The parameters to each are handled by scriptconfig objects, which prevents us
 from needing to specify what the available options are in multiple places.
+
+Example:
+    >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+    >>> import ndsampler
+    >>> import kwcoco
+    >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=10)
+    >>> sampler = ndsampler.CocoSampler(coco_dset)
+    >>> channels = 'B10|B8a|B1|B8'
+    >>> sample_shape = (3, 300, 300)
+    >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape,
+    >>>                           channels=channels,
+    >>>                           input_space_scale='native',
+    >>>                           output_space_scale=None,
+    >>>                           window_space_scale=1.2,
+    >>>                           time_sampling='soft2+distribute',
+    >>>                           temporal_dropout=0.5)
+    >>> self.disable_augmenter = True
+    >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
+    >>> item = self[index]
+    >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
+    >>> canvas = self.draw_item(item, overlay_on_image=1, rescale=0)
+    >>> # xdoctest: +REQUIRES(--show)
+    >>> import kwplot
+    >>> kwplot.autompl()
+    >>> kwplot.imshow(canvas)
+    >>> kwplot.show_if_requested()
+
+Example:
+    >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+    >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+    >>> import watch
+    >>> import ndsampler
+    >>> import kwcoco
+    >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+    >>> coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
+    >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+    >>> sampler = ndsampler.CocoSampler(coco_dset)
+    >>> self = KWCocoVideoDataset(
+    >>>     sampler,
+    >>>     sample_shape=(5, 320, 320),
+    >>>     window_overlap=0,
+    >>>     channels="(S2,L8):blue|green|red|nir",
+    >>>     input_space_scale='10GSD',
+    >>>     window_space_scale='10GSD',
+    >>>     output_space_scale='10GSD',
+    >>>     dist_weights=1,
+    >>>     quality_threshold=0,
+    >>>     neg_to_pos_ratio=0, time_sampling='soft2',
+    >>> )
+    >>> self.requested_tasks['change'] = False
+    >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
+    >>> index['allow_augment'] = False
+    >>> item = self[index]
+    >>> target = item['target']
+    >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
+    >>> # xdoctest: +REQUIRES(--show)
+    >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
+    >>> import kwplot
+    >>> kwplot.autompl()
+    >>> kwplot.imshow(canvas)
+    >>> kwplot.show_if_requested()
 """
 import einops
 import warnings
@@ -320,32 +381,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
     """
     Accepted keyword arguments are specified in
     :class:`KWCocoVideoDatasetConfig`
-
-    Example:
-        >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-        >>> import ndsampler
-        >>> import kwcoco
-        >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=10)
-        >>> sampler = ndsampler.CocoSampler(coco_dset)
-        >>> channels = 'B10|B8a|B1|B8'
-        >>> sample_shape = (3, 300, 300)
-        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape,
-        >>>                           channels=channels,
-        >>>                           input_space_scale='native',
-        >>>                           output_space_scale=None,
-        >>>                           window_space_scale=1.2,
-        >>>                           time_sampling='soft2+distribute',
-        >>>                           temporal_dropout=0.5)
-        >>> self.disable_augmenter = True
-        >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][3]]
-        >>> item = self[index]
-        >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
-        >>> canvas = self.draw_item(item, overlay_on_image=1, rescale=0)
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> kwplot.autompl()
-        >>> kwplot.imshow(canvas)
-        >>> kwplot.show_if_requested()
 
     Example:
         >>> # Native Data Sampling

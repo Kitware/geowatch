@@ -342,10 +342,10 @@ python -m watch.mlops.schedule_evaluation \
             sc_pxl.test_dataset:
                 #- $DVC_DATA_DPATH/Drop4-SC/data_vali.kwcoco.json
                 - $DVC_DATA_DPATH/Drop4-SC/data_vali_KR_R001_sites.kwcoco.json
-                #- $DVC_DATA_DPATH/Drop4-SC/data_vali_KR_R002_sites.kwcoco.json
-                #- $DVC_DATA_DPATH/Drop4-SC/data_vali_US_R007_sites.kwcoco.json
+                - $DVC_DATA_DPATH/Drop4-SC/data_vali_KR_R002_sites.kwcoco.json
+                - $DVC_DATA_DPATH/Drop4-SC/data_vali_US_R007_sites.kwcoco.json
                 - $DVC_DATA_DPATH/Drop4-SC/data_train_BR_R002_sites.kwcoco.json
-                #- $DVC_DATA_DPATH/Drop4-SC/data_train_AE_R001_sites.kwcoco.json
+                - $DVC_DATA_DPATH/Drop4-SC/data_train_AE_R001_sites.kwcoco.json
             sc_poly.site_summary:
                 - $DVC_DATA_DPATH/annotations/region_models/*.geojson
             sc_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/region_models
@@ -365,10 +365,10 @@ python -m watch.mlops.schedule_evaluation \
             sc_pxl_eval.enabled: 1
             sc_poly_viz.enabled: 1
             include:
-                #- sc_pxl.chip_dims: 256,256
-                #  sc_pxl.window_space_scale: 8GSD
-                #  sc_pxl.input_space_scale: 8GSD
-                #  sc_pxl.output_space_scale: 8GSD
+                - sc_pxl.chip_dims: 256,256
+                  sc_pxl.window_space_scale: 8GSD
+                  sc_pxl.input_space_scale: 8GSD
+                  sc_pxl.output_space_scale: 8GSD
                 #- sc_pxl.chip_dims: 256,256
                 #  sc_pxl.window_space_scale: 4GSD
                 #  sc_pxl.input_space_scale: 4GSD
