@@ -5,14 +5,13 @@ The parameters to each are handled by scriptconfig objects, which prevents us
 from needing to specify what the available options are in multiple places.
 
 Example:
+    >>> # Demo with toy data
     >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-    >>> import ndsampler
     >>> import kwcoco
     >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=10)
-    >>> sampler = ndsampler.CocoSampler(coco_dset)
     >>> channels = 'B10|B8a|B1|B8'
     >>> sample_shape = (3, 300, 300)
-    >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape,
+    >>> self = KWCocoVideoDataset(coco_dset, sample_shape=sample_shape,
     >>>                           channels=channels,
     >>>                           input_space_scale='native',
     >>>                           output_space_scale=None,
@@ -32,16 +31,15 @@ Example:
 
 Example:
     >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+    >>> # Demo with real data
     >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
     >>> import watch
-    >>> import ndsampler
     >>> import kwcoco
-    >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+    >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
     >>> coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
     >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
-    >>> sampler = ndsampler.CocoSampler(coco_dset)
     >>> self = KWCocoVideoDataset(
-    >>>     sampler,
+    >>>     coco_dset,
     >>>     sample_shape=(5, 320, 320),
     >>>     window_overlap=0,
     >>>     channels="(S2,L8):blue|green|red|nir",
@@ -52,7 +50,9 @@ Example:
     >>>     quality_threshold=0,
     >>>     neg_to_pos_ratio=0, time_sampling='soft2',
     >>> )
-    >>> self.requested_tasks['change'] = False
+    >>> self.requested_tasks['change'] = 1
+    >>> self.requested_tasks['saliency'] = 1
+    >>> self.requested_tasks['class'] = 0
     >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
     >>> index['allow_augment'] = False
     >>> item = self[index]
@@ -751,7 +751,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         # hidden option for now (todo: expose this)
         self.inference_only = False
-        self.with_change = True
         self.requested_tasks = {
             'change': True,
             'class': True,
@@ -995,12 +994,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         when it fails, which is handled by `__getitem__`.
 
         Example:
-            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> # xdoctest: +REQUIRES(env:DVC_DATA_DPATH)
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import watch
             >>> import ndsampler
             >>> import kwcoco
-            >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+            >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
             >>> coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
@@ -1030,13 +1029,13 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> kwplot.show_if_requested()
 
         Example:
-            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> # xdoctest: +REQUIRES(env:DVC_DATA_DPATH)
             >>> # Native sampling project data doctest
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import watch
             >>> import ndsampler
             >>> import kwcoco
-            >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
+            >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
             >>> coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
@@ -1098,12 +1097,14 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         if target is None:
             raise FailedSample('no target')
 
-        target_ = target.copy()
-
-        # get positive sample definition
-        # collect sample
         sampler = self.sampler
         coco_dset = self.sampler.dset
+
+        ###
+        # Handle details about the sampling target
+        ###
+        target_ = target.copy()
+
         target_['as_xarray'] = False
         target_['legacy_annots'] = False
         target_['legacy_targets'] = False
@@ -1115,50 +1116,17 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         vidid = target_['video_id']
         video = coco_dset.index.videos[vidid]
 
-        # Compute scale if we are doing that
-        # This should live somewhere else, but lets just get it hooked up
-        vidspace_gsd = video.get('target_gsd', None)
-
-        # The target is allowed to overload the scales
-        if target_.get('input_space_scale', None) is None:
-            target_['input_space_scale'] = self.config['input_space_scale']
-        if target_.get('output_space_scale', None) is None:
-            target_['output_space_scale'] = self.config['output_space_scale']
-        # Resolve spatial scale code
-        resolved_input_scale = data_utils.resolve_scale_request(
-            request=target_['input_space_scale'], data_gsd=vidspace_gsd)
-
-        resolved_output_scale = data_utils.resolve_scale_request(
-            request=target_['output_space_scale'], data_gsd=vidspace_gsd)
-
-        common_input_scale = resolved_input_scale['scale']
-        common_output_scale = resolved_output_scale['scale']
-        target_['scale'] = common_input_scale
-
-        # Put the target slice in video space.
-        vidspace_box = util_kwimage.Box.from_slice(target_['space_slice'])
-        vidspace_dsize = np.array([vidspace_box.width, vidspace_box.height])
-
-        # Size of the video the target is embedded in.
-        video_dsize = np.array([video['width'], video['height']])
-
-        if isinstance(common_input_scale, str) and common_input_scale == 'native':
-            target_.pop('scale')
-            # native scales will only work in late-fused modes
-            target_['use_native_scale'] = True
-            target_['realign_native'] = 'largest'
-        else:
-            if isinstance(common_output_scale, str) and common_output_scale == 'native':
-                raise Exception(
-                    'output scale can only be native when input scale is native')
-
-        if isinstance(common_output_scale, str) and common_output_scale == 'native':
-            common_outspace_box = None
-        else:
-            # Compute where this output chip should live in its output space canvas.
-            common_output_scale = resolved_output_scale['scale']
-            common_outspace_box = vidspace_box.scale(common_output_scale)
-            common_outspace_box = common_outspace_box.quantize()
+        _resolved = self._resolve_resolution(target_, video)
+        (
+            common_outspace_box,
+            vidspace_box,
+            video_dsize,
+            vidspace_dsize,
+            resolved_input_scale,
+            resolved_output_scale,
+            common_input_scale,
+            common_output_scale
+        ) = _resolved
 
         allow_augment = target_.get('allow_augment', True)
         if allow_augment:
@@ -1166,6 +1134,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         with_annots = [] if self.inference_only else ['boxes', 'segmentation']
 
+        ###
+        # Execute data sampling
+        ###
         # New true-multimodal data items
         gid_to_sample: Dict[str, Dict] = {}
         gid_to_isbad: Dict[str, bool] = {}
@@ -1212,6 +1183,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         # coco_dset.images(final_gids).lookup('date_captured')
         target_['gids'] = final_gids
+
+        ###
+        # Process sampled data
+        ###
 
         if not self.inference_only:
             _tup = self._prepare_truth_info(final_gids, gid_to_sample,
@@ -1307,6 +1282,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             }
 
             if not self.inference_only:
+                # Build single-frame truth
                 self._populate_frame_labels(
                     frame_item, gid, output_dsize,
                     task_tid_to_cnames, time_idx,
@@ -1337,6 +1313,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         # Add in change truth
         if not self.inference_only:
+            # Build multi-frame truth
             if self.requested_tasks['change']:
                 if frame_items:
                     frame1 = frame_items[0]
@@ -1464,7 +1441,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # dont allow augmenting on resample by default
         tr_subset['allow_augment'] = False
         item = {
-            # TODO: breakup modes into different items
             'index': index,
             'frames': frame_items,
             'positional_tensors': positional_tensors,
@@ -1475,6 +1451,65 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             'target': tr_subset
         }
         return item
+
+    def _resolve_resolution(self, target_, video):
+        # Compute scale if we are doing that
+        # This should live somewhere else, but lets just get it hooked up
+        vidspace_gsd = video.get('target_gsd', None)
+
+        # The target is allowed to overload the scales
+        if target_.get('input_space_scale', None) is None:
+            target_['input_space_scale'] = self.config['input_space_scale']
+        if target_.get('output_space_scale', None) is None:
+            target_['output_space_scale'] = self.config['output_space_scale']
+        # Resolve spatial scale code
+        resolved_input_scale = data_utils.resolve_scale_request(
+            request=target_['input_space_scale'], data_gsd=vidspace_gsd)
+
+        resolved_output_scale = data_utils.resolve_scale_request(
+            request=target_['output_space_scale'], data_gsd=vidspace_gsd)
+
+        common_input_scale = resolved_input_scale['scale']
+        common_output_scale = resolved_output_scale['scale']
+        target_['scale'] = common_input_scale
+
+        # Put the target slice in video space.
+        vidspace_box = util_kwimage.Box.from_slice(target_['space_slice'])
+        vidspace_dsize = np.array([vidspace_box.width, vidspace_box.height])
+
+        # Size of the video the target is embedded in.
+        video_dsize = np.array([video['width'], video['height']])
+
+        if isinstance(common_input_scale, str) and common_input_scale == 'native':
+            target_.pop('scale')
+            # native scales will only work in late-fused modes
+            target_['use_native_scale'] = True
+            target_['realign_native'] = 'largest'
+        else:
+            if isinstance(common_output_scale, str) and common_output_scale == 'native':
+                raise Exception(
+                    'output scale can only be native when input scale is native')
+
+        if isinstance(common_output_scale, str) and common_output_scale == 'native':
+            common_outspace_box = None
+        else:
+            # Compute where this output chip should live in its output space canvas.
+            common_output_scale = resolved_output_scale['scale']
+            common_outspace_box = vidspace_box.scale(common_output_scale)
+            common_outspace_box = common_outspace_box.quantize()
+
+        # fixme: giant tuple returns are error prone
+        _resolved = (
+            common_outspace_box,
+            vidspace_box,
+            video_dsize,
+            vidspace_dsize,
+            resolved_input_scale,
+            resolved_output_scale,
+            common_input_scale,
+            common_output_scale
+        )
+        return _resolved
 
     def _resample_bad_images(self, video_gids, gid_to_isbad, sampler,
                              coco_dset, target, target_, with_annots,
@@ -1601,6 +1636,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                                mode_to_invalid_mask, common_input_scale,
                                common_output_scale):
         """
+        Build single-frame truth-labels.
+
         Helper function to populate truth labels for a frame in a video
         sequence. This was factored out of the original getitem, and
         could use work to reduce the number of input params.
@@ -1693,7 +1730,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 if new_salient_catname in self.salient_ignore_classes:
                     poly.fill(saliency_ignore, value=1)
 
-            if self.requested_tasks['class']:
+            if self.requested_tasks['class'] or self.requested_tasks['change']:
                 new_class_catname = task_tid_to_cnames['class'][tid][time_idx]
                 new_class_cidx = self.classes.node_to_idx[new_class_catname]
                 orig_cidx = self.classes.id_to_idx[cid]
