@@ -310,19 +310,42 @@ if [ ! -f "$DVC_DATA_DPATH"/Drop4-SC/data_vali_KR_R001_sites.kwcoco.json ]; then
     rm "$DVC_DATA_DPATH"/Drop4-SC/data_vali_*_box.kwcoco.json
 fi
 
+
+
+python -m watch.mlops.repackager --force=True \
+    $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=35-step=486072.ckpt \
+    $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=12-step=175526-v1.ckpt \
+    $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=21-step=297044-v2.ckpt \
+    $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=32-step=445566.ckpt \
+    $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=36-step=499574.ckpt \
+    $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=37-step=513076.ckpt \
+    $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=37-step=513076.ckpt \
+    $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=89-step=1215180.ckpt
+
+
+
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.mlops.schedule_evaluation \
     --params="
         matrix:
             sc_pxl.package_fpath:
-                - $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
-                - $DVC_EXPT_DPATH/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/Drop4_tune_V30_V1_epoch=35-step=486072.pt
+                # - $DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
+                # - $DVC_EXPT_DPATH/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/Drop4_tune_V30_V1_epoch=35-step=486072.pt
+                - '/home/joncrall/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/Drop4_tune_V30_V1_epoch=12-step=175526-v1.pt'
+                - '/home/joncrall/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/Drop4_tune_V30_V1_epoch=21-step=297044-v2.pt'
+                - '/home/joncrall/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/Drop4_tune_V30_V1_epoch=32-step=445566.pt'
+                - '/home/joncrall/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/Drop4_tune_V30_V1_epoch=36-step=499574.pt'
+                - '/home/joncrall/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/Drop4_tune_V30_V1_epoch=37-step=513076.pt'
+                - '/home/joncrall/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/Drop4_tune_V30_V1_epoch=89-step=1215180.pt'
+                
             sc_pxl.test_dataset:
                 #- $DVC_DATA_DPATH/Drop4-SC/data_vali.kwcoco.json
                 - $DVC_DATA_DPATH/Drop4-SC/data_vali_KR_R001_sites.kwcoco.json
-                - $DVC_DATA_DPATH/Drop4-SC/data_vali_KR_R002_sites.kwcoco.json
-                - $DVC_DATA_DPATH/Drop4-SC/data_vali_US_R007_sites.kwcoco.json
-                - $DVC_DATA_DPATH/Drop4-SC/data_vali_BR_R002_sites.kwcoco.json
-                - $DVC_DATA_DPATH/Drop4-SC/data_vali_AE_R001_sites.kwcoco.json
+                #- $DVC_DATA_DPATH/Drop4-SC/data_vali_KR_R002_sites.kwcoco.json
+                #- $DVC_DATA_DPATH/Drop4-SC/data_vali_US_R007_sites.kwcoco.json
+                - $DVC_DATA_DPATH/Drop4-SC/data_train_BR_R002_sites.kwcoco.json
+                #- $DVC_DATA_DPATH/Drop4-SC/data_train_AE_R001_sites.kwcoco.json
             sc_poly.site_summary:
                 - $DVC_DATA_DPATH/annotations/region_models/*.geojson
             sc_poly_eval.true_region_dpath: $DVC_DATA_DPATH/annotations/region_models
@@ -342,14 +365,14 @@ python -m watch.mlops.schedule_evaluation \
             sc_pxl_eval.enabled: 1
             sc_poly_viz.enabled: 1
             include:
-                - sc_pxl.chip_dims: 256,256
-                  sc_pxl.window_space_scale: 8GSD
-                  sc_pxl.input_space_scale: 8GSD
-                  sc_pxl.output_space_scale: 8GSD
-                - sc_pxl.chip_dims: 256,256
-                  sc_pxl.window_space_scale: 4GSD
-                  sc_pxl.input_space_scale: 4GSD
-                  sc_pxl.output_space_scale: 4GSD
+                #- sc_pxl.chip_dims: 256,256
+                #  sc_pxl.window_space_scale: 8GSD
+                #  sc_pxl.input_space_scale: 8GSD
+                #  sc_pxl.output_space_scale: 8GSD
+                #- sc_pxl.chip_dims: 256,256
+                #  sc_pxl.window_space_scale: 4GSD
+                #  sc_pxl.input_space_scale: 4GSD
+                #  sc_pxl.output_space_scale: 4GSD
                 - sc_pxl.chip_dims: auto
                   sc_pxl.window_space_scale: auto
                   sc_pxl.input_space_scale: auto

@@ -98,6 +98,15 @@ Look into:
     https://scikit-optimize.github.io/stable/
     https://wandb.ai/site/articles/find-the-most-important-hyperparameters-in-seconds
 
+    https://docs.ray.io/en/latest/tune/index.html
+
+    ray.tune
+
+Requires:
+    pip install ray
+    pip install openskill
+
+
 """
 import itertools as it
 import math
@@ -108,6 +117,7 @@ import pandas as pd
 import scipy
 import scipy.stats  # NOQA
 import ubelt as ub
+import rich
 
 # a list of common objectives
 DEFAULT_METRIC_TO_OBJECTIVE = {
@@ -220,7 +230,8 @@ class ResultAnalysis(ub.NiceRepr):
     Runs statistical tests on sets of configuration-metrics pairs
 
     Attributes:
-        results (List[Result]): list of results
+        results (List[Result] | DataFrame): list of results,
+            or something coercable to one.
 
         ignore_metrics (Set[str]): metrics to ignore
 
@@ -327,6 +338,22 @@ class ResultAnalysis(ub.NiceRepr):
         default_objective="max",
         p_threshold=0.05,
     ):
+        if isinstance(results, dict):
+            orig_results = results
+            new_results = [
+                Result(name=f'expt_{idx:04d}', metrics=metrics, params=params)
+                for idx, (metrics, params) in
+                enumerate(zip(orig_results['metrics'].to_dict('records'),
+                              orig_results['params'].to_dict('records')))
+            ]
+            results = new_results
+        elif isinstance(results, pd.DataFrame):
+            # Probably could use the data frame as-is
+            results = [
+                Result(name, row)
+                for name, row in results.iterrows()]
+            raise NotImplementedError
+
         self.results = results
         if ignore_metrics is None:
             ignore_metrics = set()
@@ -457,6 +484,32 @@ class ResultAnalysis(ub.NiceRepr):
             objective = self.default_objective
         ascending = objective == "min"
         return ascending
+
+    def tune(self):
+        """
+        Example:
+            >>> self = ResultAnalysis.demo(100)
+
+        """
+
+        # 1. Define an objective function.
+        def objective(config):
+            score = config["a"] ** 2 + config["b"]
+            return {"score": score}
+
+
+        # 2. Define a search space.
+        search_space = {
+            "a": tune.grid_search([0.001, 0.01, 0.1, 1.0]),
+            "b": tune.choice([1, 2, 3]),
+        }
+
+        # 3. Start a Tune run and print the best result.
+        tuner = tune.Tuner(objective, param_space=search_space)
+        results = tuner.fit()
+        print(results.get_best_result(metric="score", mode="min").config)
+
+        pass
 
     def abalate(self, param_group, metrics=None, use_openskill='auto'):
         """
@@ -855,7 +908,8 @@ class ResultAnalysis(ub.NiceRepr):
             ...
             self._report_one(grid_item)
 
-        print(self.stats_table)
+        # print(self.stats_table)
+        rich.print(self.stats_table.to_string())
 
     def _report_one(self, grid_item):
         p_threshold = self.p_threshold
