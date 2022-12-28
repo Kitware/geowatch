@@ -17,7 +17,7 @@ class ExperimentState(ub.NiceRepr):
     """
 
     Ignore:
-        >>> # xdoctest: +REQUIRES(env:EXPT_DVC_DPATH)
+        >>> # xdoctest: +REQUIRES(env:DVC_EXPT_DPATH)
         >>> from watch.mlops.expt_state import *  # NOQA
         >>> import watch
         >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
@@ -57,7 +57,7 @@ class ExperimentState(ub.NiceRepr):
         if data_dvc_dpath is None:
             import watch
             try:
-                data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', envvar='DATA_DVC_DPATH')
+                data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', envvar='DVC_DATA_DPATH')
             except Exception:
                 pass
         self.data_dvc_dpath = data_dvc_dpath
@@ -691,7 +691,7 @@ class ExperimentState(ub.NiceRepr):
     def summarize(self):
         """
         Ignore:
-            >>> # xdoctest: +REQUIRES(env:EXPT_DVC_DPATH)
+            >>> # xdoctest: +REQUIRES(env:DVC_EXPT_DPATH)
             >>> from watch.mlops.expt_state import *  # NOQA
             >>> import watch
             >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
@@ -709,7 +709,7 @@ class ExperimentState(ub.NiceRepr):
         Repackages checkpoints as torch packages, copies them to the DVC repo,
         and then adds them to DVC.
 
-        >>> # xdoctest: +REQUIRES(env:EXPT_DVC_DPATH)
+        >>> # xdoctest: +REQUIRES(env:DVC_EXPT_DPATH)
         >>> from watch.mlops.expt_state import *  # NOQA
         >>> import watch
         >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')

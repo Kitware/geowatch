@@ -964,18 +964,18 @@ rsync -avp "$PHASE2_DATA_DPATH_HDD"/Drop4-SC/*.kwcoco.json "$PHASE2_DATA_DPATH_S
 ### Run on OOO
 
 export CUDA_VISIBLE_DEVICES=1
-DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='hdd')
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt')
-WORKDIR=$EXPT_DVC_DPATH/training/$HOSTNAME/$USER
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='hdd')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt')
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
-KWCOCO_BUNDLE_DPATH=$DATA_DVC_DPATH/$DATASET_CODE
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 CHANNELS="blue|green|red|nir|swir16|swir22"
 EXPERIMENT_NAME=Drop4_TuneV323_BAS_BGRNSH_V1
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-INITIAL_STATE_V323="$EXPT_DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+INITIAL_STATE_V323="$DVC_EXPT_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
 python -m watch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -1023,19 +1023,19 @@ python -m watch.tasks.fusion.fit \
 ### Run on Namek
 
 export CUDA_VISIBLE_DEVICES=0
-DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='hdd')
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='hdd')
-echo "EXPT_DVC_DPATH = $EXPT_DVC_DPATH"
-WORKDIR=$EXPT_DVC_DPATH/training/$HOSTNAME/$USER
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='hdd')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='hdd')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
-KWCOCO_BUNDLE_DPATH=$DATA_DVC_DPATH/$DATASET_CODE
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 CHANNELS="blue|green|red|nir|swir16|swir22"
 EXPERIMENT_NAME=Drop4_TuneV323_BAS_30GSD_BGRNSH_V2
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-INITIAL_STATE_V323="$EXPT_DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+INITIAL_STATE_V323="$DVC_EXPT_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
 python -m watch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -1083,19 +1083,19 @@ python -m watch.tasks.fusion.fit \
 
 
 export CUDA_VISIBLE_DEVICES=1
-DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
-echo "EXPT_DVC_DPATH = $EXPT_DVC_DPATH"
-WORKDIR=$EXPT_DVC_DPATH/training/$HOSTNAME/$USER
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
-KWCOCO_BUNDLE_DPATH=$DATA_DVC_DPATH/$DATASET_CODE
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 CHANNELS="blue|green|red|nir|swir16|swir22"
 EXPERIMENT_NAME=Drop4_TuneV323_BAS_10GSD_BGRNSH_V3
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-INITIAL_STATE_V323="$EXPT_DVC_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
+INITIAL_STATE_V323="$DVC_EXPT_DPATH"/models/fusion/eval3_candidates/packages/Drop3_SpotCheck_V323/Drop3_SpotCheck_V323_epoch=18-step=12976.pt
 python -m watch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --name=$EXPERIMENT_NAME \
@@ -1147,12 +1147,12 @@ python -m watch.tasks.fusion.fit \
 
 ### Toothbrush
 export CUDA_VISIBLE_DEVICES=1
-DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
-echo "EXPT_DVC_DPATH = $EXPT_DVC_DPATH"
-WORKDIR=$EXPT_DVC_DPATH/training/$HOSTNAME/$USER
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
-KWCOCO_BUNDLE_DPATH=$DATA_DVC_DPATH/$DATASET_CODE
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
@@ -1205,7 +1205,7 @@ python -m watch.tasks.fusion.fit \
     --quality_threshold=0.8 \
     --num_sanity_val_steps=0 \
     --max_epoch_length=16384 \
-    --init="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+    --init="$DVC_EXPT_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 
     --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/lightning_logs/version_15/package-interupt/package_epoch4_step5120.pt
 
@@ -1223,19 +1223,19 @@ python -m watch.tasks.fusion.fit \
     
 
     
-    #--init="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+    #--init="$DVC_EXPT_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 #/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRNSH_BGR_V4/lightning_logs/version_2/package-interupt/package_epoch0_step301.pt
-#"$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+#"$DVC_EXPT_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 
 
 ### Ooo
 export CUDA_VISIBLE_DEVICES=1
-DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
-echo "EXPT_DVC_DPATH = $EXPT_DVC_DPATH"
-WORKDIR=$EXPT_DVC_DPATH/training/$HOSTNAME/$USER
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
-KWCOCO_BUNDLE_DPATH=$DATA_DVC_DPATH/$DATASET_CODE
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
@@ -1286,17 +1286,17 @@ python -m watch.tasks.fusion.fit \
     --num_sanity_val_steps=0 \
     --init=/home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_0/package-interupt/package_epoch0_step38851.pt
 
-    #--init="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+    #--init="$DVC_EXPT_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 
 
 ### Horologic
 export CUDA_VISIBLE_DEVICES=0
-DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
-echo "EXPT_DVC_DPATH = $EXPT_DVC_DPATH"
-WORKDIR=$EXPT_DVC_DPATH/training/$HOSTNAME/$USER
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
-KWCOCO_BUNDLE_DPATH=$DATA_DVC_DPATH/$DATASET_CODE
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
@@ -1346,17 +1346,17 @@ python -m watch.tasks.fusion.fit \
     --resample_invalid_frames=1 \
     --use_cloudmask=1 \
     --num_sanity_val_steps=0 \
-    --init="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+    --init="$DVC_EXPT_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 
 
 ### Yardrat Heterogeneous Test
 export CUDA_VISIBLE_DEVICES=0
-DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
-echo "EXPT_DVC_DPATH = $EXPT_DVC_DPATH"
-WORKDIR=$EXPT_DVC_DPATH/training/$HOSTNAME/$USER
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
-KWCOCO_BUNDLE_DPATH=$DATA_DVC_DPATH/$DATASET_CODE
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
@@ -1408,7 +1408,7 @@ rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/D
 ## Cant resume easilly
 # --ckpt_path=/home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_2022_12_H_15GSD_BGRN_BGR_V6/lightning_logs/version_1/package-interupt/package_epoch0_step5578.pt
 
-    #--init="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+    #--init="$DVC_EXPT_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
     #--trainer.max_epoch_length=16384  \
     #--draw_interval=1min \
     #--num_draw=4 \
@@ -1448,23 +1448,23 @@ python -m watch.tasks.invariants.predict \
     --tasks before_after pretext
 
 
-DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
 python -m watch.cli.split_videos \
-    --src "$DATA_DVC_DPATH/Drop4-BAS/data_train.kwcoco.json" \
-          "$DATA_DVC_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
-    --dst_dpath "$DATA_DVC_DPATH/Drop4-BAS/"
+    --src "$DVC_DATA_DPATH/Drop4-BAS/data_train.kwcoco.json" \
+          "$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
+    --dst_dpath "$DVC_DATA_DPATH/Drop4-BAS/"
 
 
-DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 #data_train_PE_C001.kwcoco.json
 
 python -m watch.cli.prepare_teamfeats \
     --base_fpath \
-        "$DATA_DVC_DPATH/Drop4-BAS/data_train_PE_C001.kwcoco.json" \
-        "$DATA_DVC_DPATH/Drop4-BAS/data_train_AE_R001.kwcoco.json" \
-        "$DATA_DVC_DPATH/Drop4-BAS/data_train_US_C001.kwcoco.json" \
-    --expt_dpath="$EXPT_DVC_DPATH" \
+        "$DVC_DATA_DPATH/Drop4-BAS/data_train_PE_C001.kwcoco.json" \
+        "$DVC_DATA_DPATH/Drop4-BAS/data_train_AE_R001.kwcoco.json" \
+        "$DVC_DATA_DPATH/Drop4-BAS/data_train_US_C001.kwcoco.json" \
+    --expt_dpath="$DVC_EXPT_DPATH" \
     --with_landcover=0 \
     --with_materials=0 \
     --with_invariants=0 \
@@ -1475,13 +1475,13 @@ python -m watch.cli.prepare_teamfeats \
     --gres=0, --workers=1 --backend=tmux --run=0
 
 
-DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 python -m watch.cli.prepare_teamfeats \
     --base_fpath \
-       "$DATA_DVC_DPATH/Drop4-BAS/data_train_*.kwcoco.json" \
-       "$DATA_DVC_DPATH/Drop4-BAS/data_vali_*.kwcoco.json" \
-    --expt_dpath="$EXPT_DVC_DPATH" \
+       "$DVC_DATA_DPATH/Drop4-BAS/data_train_*.kwcoco.json" \
+       "$DVC_DATA_DPATH/Drop4-BAS/data_vali_*.kwcoco.json" \
+    --expt_dpath="$DVC_EXPT_DPATH" \
     --with_landcover=0 \
     --with_materials=0 \
     --with_invariants=0 \
@@ -1495,29 +1495,29 @@ kwcoco union --src ./*_train_*_uky_invariants*.kwcoco.json --dst combo_train_I2.
 kwcoco union --src ./*_vali_*_uky_invariants*.kwcoco.json --dst combo_vali_I2.kwcoco.json
 
 
-DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-rsync -avpP --include="*invariants*.kwcoco.json" --exclude="*" yardrat:data/dvc-repos/smart_data_dvc/Drop4-BAS/ "$DATA_DVC_DPATH/Drop4-BAS/"
-rsync -avprPR yardrat:data/dvc-repos/smart_data_dvc/Drop4-BAS/./_assets/pred_invariants "$DATA_DVC_DPATH/Drop4-BAS/"
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+rsync -avpP --include="*invariants*.kwcoco.json" --exclude="*" yardrat:data/dvc-repos/smart_data_dvc/Drop4-BAS/ "$DVC_DATA_DPATH/Drop4-BAS/"
+rsync -avprPR yardrat:data/dvc-repos/smart_data_dvc/Drop4-BAS/./_assets/pred_invariants "$DVC_DATA_DPATH/Drop4-BAS/"
 
-rsync -avpP --include="*invariants*.kwcoco.json" --exclude="*" "$DATA_DVC_DPATH/Drop4-BAS/" horologic:data/dvc-repos/smart_data_dvc-ssd/Drop4-BAS/ 
-rsync -avprPR "$DATA_DVC_DPATH/Drop4-BAS/"./_assets/pred_invariants horologic:data/dvc-repos/smart_data_dvc-ssd/Drop4-BAS/ 
-
-
+rsync -avpP --include="*invariants*.kwcoco.json" --exclude="*" "$DVC_DATA_DPATH/Drop4-BAS/" horologic:data/dvc-repos/smart_data_dvc-ssd/Drop4-BAS/ 
+rsync -avprPR "$DVC_DATA_DPATH/Drop4-BAS/"./_assets/pred_invariants horologic:data/dvc-repos/smart_data_dvc-ssd/Drop4-BAS/ 
 
 
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
-rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_0 "$EXPT_DVC_DPATH"
+
+
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_0 "$DVC_EXPT_DPATH"
 
 
 
 ### Toothbrush Invariants
 export CUDA_VISIBLE_DEVICES=1
-DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
-echo "EXPT_DVC_DPATH = $EXPT_DVC_DPATH"
-WORKDIR=$EXPT_DVC_DPATH/training/$HOSTNAME/$USER
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
-KWCOCO_BUNDLE_DPATH=$DATA_DVC_DPATH/$DATASET_CODE
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_train_I2.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_I2.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_I2.kwcoco.json
@@ -1577,17 +1577,17 @@ python -m watch.tasks.fusion.fit \
     #--init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_10GSD_BGRNSH_invar_V7/lightning_logs/version_3/package-interupt/package_epoch1_step706.pt
     #--init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_10GSD_BGRNSH_invar_V7/lightning_logs/version_2/package-interupt/package_epoch11_step5936.pt 
 #--init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V7/lightning_logs/version_1/checkpoints/epoch=29-step=30720.ckpt
-#--init="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+#--init="$DVC_EXPT_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 #/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V7/lightning_logs/version_1/package-interupt/package_epoch30_step31003.pt
 
 
 ### Yardrat Invariants
 export CUDA_VISIBLE_DEVICES=0
-DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
-WORKDIR=$EXPT_DVC_DPATH/training/$HOSTNAME/$USER
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
-KWCOCO_BUNDLE_DPATH=$DATA_DVC_DPATH/$DATASET_CODE
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_train_I2.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_I2.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_I2.kwcoco.json
@@ -1642,21 +1642,21 @@ python -m watch.tasks.fusion.fit \
     --init=/home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_0/checkpoints/epoch=30-step=15872.ckpt
 
 
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
-rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8 "$EXPT_DVC_DPATH"
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8 "$DVC_EXPT_DPATH"
 
-    #--init="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+    #--init="$DVC_EXPT_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 #save package_fpath = /home/local/KHQ/jon.crall/remote/yardrat/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_0/package-interupt/package_epoch33_step17408.pt
 
 
 ### Horologic Invariants
 export CUDA_VISIBLE_DEVICES=0,1
-DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
-EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
-echo "EXPT_DVC_DPATH = $EXPT_DVC_DPATH"
-WORKDIR=$EXPT_DVC_DPATH/training/$HOSTNAME/$USER
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop4-BAS
-KWCOCO_BUNDLE_DPATH=$DATA_DVC_DPATH/$DATASET_CODE
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_train_I2.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_I2.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_I2.kwcoco.json

@@ -45,9 +45,9 @@ Ignore:
 Ignore:
 
     # For Drop5
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
-    EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt')
-    # BUNDLE_DPATH=$DATA_DVC_DPATH/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
+    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt')
+    # BUNDLE_DPATH=$DVC_DATA_DPATH/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC
     # KWCOCO_FPATH=$BUNDLE_DPATH/data.kwcoco.json
 
     ln -s Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC Drop4-BAS
@@ -71,13 +71,13 @@ Ignore:
     "
 
     # Drop 4
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
-    BUNDLE_DPATH=$DATA_DVC_DPATH/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
+    BUNDLE_DPATH=$DVC_DATA_DPATH/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
     KWCOCO_FPATH_PAT=$BUNDLE_DPATH/[KLNPUBAC]*_[RC]*0[1234].kwcoco.json
     ls $KWCOCO_FPATH_PAT
     python -m watch.cli.prepare_teamfeats \
         --base_fpath="$KWCOCO_FPATH_PAT" \
-        --expt_dpath="$EXPT_DVC_DPATH" \
+        --expt_dpath="$DVC_EXPT_DPATH" \
         --with_landcover=0 \
         --with_materials=0 \
         --with_invariants=1 \
@@ -101,14 +101,14 @@ Ignore:
     # Drop 4 SC
 
 
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
-    BUNDLE_DPATH=$DATA_DVC_DPATH/Drop4-SC
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
+    BUNDLE_DPATH=$DVC_DATA_DPATH/Drop4-SC
     #KWCOCO_FPATH_PAT=$BUNDLE_DPATH/data_vali.kwcoco.json
     KWCOCO_FPATH_PAT=$BUNDLE_DPATH/data_train.kwcoco.json
     ls $KWCOCO_FPATH_PAT
     python -m watch.cli.prepare_teamfeats \
         --base_fpath="$KWCOCO_FPATH_PAT" \
-        --expt_dpath="$EXPT_DVC_DPATH" \
+        --expt_dpath="$DVC_EXPT_DPATH" \
         --with_landcover=0 \
         --with_materials=0 \
         --with_invariants=1 \

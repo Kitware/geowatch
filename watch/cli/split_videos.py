@@ -2,14 +2,14 @@ r"""
 Split a coco dataset into one per video.
 
 Ignore:
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
     python -m watch.cli.split_videos \
-        --src "$DATA_DVC_DPATH/Drop4-BAS/data_train.kwcoco.json" \
-              "$DATA_DVC_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
-        --dst_dpath "$DATA_DVC_DPATH/Drop4-BAS/"
+        --src "$DVC_DATA_DPATH/Drop4-BAS/data_train.kwcoco.json" \
+              "$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
+        --dst_dpath "$DVC_DATA_DPATH/Drop4-BAS/"
 
     python -m watch.cli.split_videos \
-        --dst_dpath "$DATA_DVC_DPATH/Drop4-BAS/"
+        --dst_dpath "$DVC_DATA_DPATH/Drop4-BAS/"
 
 """
 import scriptconfig as scfg
