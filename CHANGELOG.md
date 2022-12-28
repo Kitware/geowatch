@@ -23,6 +23,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Fix corner-case crash in SC tracker.
 * Quality mask filtering was broken and is now using correct data.
 * The spectra script now correctly dequantizes kwcoco images.
+* Issue in KWcocoVideoDataLoader where change labels were not computed correctly if the class task was not requested.
 
 ### Changed
 * Consolidate monkey patches into a single subpackage.
