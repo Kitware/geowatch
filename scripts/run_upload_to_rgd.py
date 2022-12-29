@@ -41,6 +41,10 @@ def main():
                         type=str,
                         default='KIT',
                         help='Performer shortcode (e.g. "KIT")')
+    parser.add_argument("--rgd_endpoint_override",
+                        type=str,
+                        help="Use this RGD URL instead of looking up "
+                             "via aws tools")
     parser.add_argument("-j", "--jobs",
                         type=int,
                         default=8,
@@ -56,7 +60,8 @@ def upload_to_rgd(input_site_models_s3,
                   title,
                   aws_profile=None,
                   performer_shortcode='KIT',
-                  jobs=8):
+                  jobs=8,
+                  rgd_endpoint_override=None):
     # Ensure performer_shortcode is uppercase
     performer_shortcode = performer_shortcode.upper()
 
@@ -71,23 +76,26 @@ def upload_to_rgd(input_site_models_s3,
                     input_site_models_s3, local_site_models_dir],
                    check=True)
 
-    try:
-        endpoint_result = subprocess.run(
-            ['aws',
-             *(('--profile', aws_profile)
-               if aws_profile is not None else ()),
-             '--region', rgd_aws_region,
-             'elbv2', 'describe-load-balancers',
-             '--region', rgd_aws_region,
-             '--names', "{}-internal-alb".format(rgd_deployment_name)],
-            check=True,
-            capture_output=True)
-    except subprocess.CalledProcessError as e:
-        print(e.stderr, file=sys.stderr)
-        raise e
+    if rgd_endpoint_override is None:
+        try:
+            endpoint_result = subprocess.run(
+                ['aws',
+                 *(('--profile', aws_profile)
+                   if aws_profile is not None else ()),
+                 '--region', rgd_aws_region,
+                 'elbv2', 'describe-load-balancers',
+                 '--region', rgd_aws_region,
+                 '--names', "{}-internal-alb".format(rgd_deployment_name)],
+                check=True,
+                capture_output=True)
+        except subprocess.CalledProcessError as e:
+            print(e.stderr, file=sys.stderr)
+            raise e
 
-    rgd_instance_details = json.loads(endpoint_result.stdout)
-    rgd_endpoint = rgd_instance_details['LoadBalancers'][0]['DNSName']
+        rgd_instance_details = json.loads(endpoint_result.stdout)
+        rgd_endpoint = rgd_instance_details['LoadBalancers'][0]['DNSName']
+    else:
+        rgd_endpoint = rgd_endpoint_override
 
     # Check that our run doesn't already exist
     model_run_results_url = f"https://{rgd_endpoint}/api/model-runs"
