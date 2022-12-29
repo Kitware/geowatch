@@ -309,12 +309,11 @@ def run_bas_fusion_for_baseline(
 
     bas_tracking_config = {
         "thresh": bas_thresh,
-        "polygon_fn": "heatmaps_to_polys",
-        "agg_fn": "probs"}
+        "moving_window_size": None}
 
     tracked_bas_kwcoco_path = '_tracked'.join(
         os.path.splitext(bas_fusion_kwcoco_path))
-    subprocess.run(['python', '-m', 'watch.cli.kwcoco_to_geojson',
+    subprocess.run(['python', '-m', 'watch.cli.run_tracker',
                     combined_bas_fusion_kwcoco_path,
                     '--out_site_summaries_dir', region_models_outdir,
                     '--out_kwcoco', tracked_bas_kwcoco_path,

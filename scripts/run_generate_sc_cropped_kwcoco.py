@@ -144,7 +144,8 @@ def run_generate_sc_cropped_kwcoco(input_path,
                     '--context_factor', '1.5',  # TODO: Expose as cli parameter
                     '--workers', '1' if force_one_job_for_cropping else str(jobs),  # noqa: 501
                     '--aux_workers', str(include_channels.count('|') + 1),
-                    '--rpc_align_method', 'affine_warp'  # Maybe needs to change to "orthorectified"  # noqa
+                    '--rpc_align_method', 'affine_warp',  # Maybe needs to change to "orthorectified"  # noqa
+                    '--force_min_gsd', '8',
                     ], check=True)
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
