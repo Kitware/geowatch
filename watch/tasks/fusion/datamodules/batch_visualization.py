@@ -170,14 +170,14 @@ class BatchVisualizationBuilder:
         change_prob_list = []
         rng = kwarray.ensure_rng(rng)
         fliprot_params = item['target'].get('fliprot_params', None)
-        for frame in item['frames'][1:]:
+        for frame in item['frames'][1:]:  # first frame does not have change
             change_prob = kwimage.Heatmap.random(
                 dims=frame['output_dims'], classes=1, rng=rng).data['class_probs'][0]
             if fliprot_params:
                 change_prob = data_utils.fliprot(change_prob, **fliprot_params)
             change_prob_list += [change_prob]
         change_probs = change_prob_list
-        item_output['change_probs'] = change_probs  # first frame does not have change
+        item_output['change_probs'] = change_probs
         #
         # Probability of each class for each frame
         class_prob_list = []
@@ -189,7 +189,7 @@ class BatchVisualizationBuilder:
                 class_prob = data_utils.fliprot(class_prob, **fliprot_params)
             class_prob_list += [class_prob]
         class_probs = class_prob_list
-        item_output['class_probs'] = class_probs  # first frame does not have change
+        item_output['class_probs'] = class_probs
         #
         # Probability of "saliency" (i.e. non-background) for each frame
         saliency_prob_list = []
@@ -202,6 +202,18 @@ class BatchVisualizationBuilder:
             saliency_prob_list += [saliency_prob]
         saliency_probs = saliency_prob_list
         item_output['saliency_probs'] = saliency_probs
+
+        #
+        # Predicted bounding boxes for each frame
+        pred_ltrb_list = []
+        for frame in item['frames']:
+            frame_output_dsize = frame['output_dims'][::-1]
+            num_pred_boxes = rng.randint(0, 8)
+            pred_boxes = kwimage.Boxes.random(num_pred_boxes).scale(frame_output_dsize)
+            # if fliprot_params:
+            #     ... = data_utils.fliprot_annot(saliency_prob, **fliprot_params)
+            pred_ltrb_list.append(pred_boxes.to_ltrb().data)
+        item_output['pred_ltrb'] = pred_ltrb_list
         return item_output
 
     def build(builder):

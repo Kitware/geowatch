@@ -2168,7 +2168,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
                 Known keys:
                     change_probs
+                    saliency_probs
                     class_probs
+                    pred_ltrb
 
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
