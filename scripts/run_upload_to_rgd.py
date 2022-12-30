@@ -98,31 +98,33 @@ def upload_to_rgd(input_site_models_s3,
         rgd_endpoint = rgd_endpoint_override
 
     # Check that our run doesn't already exist
-    model_run_results_url = f"https://{rgd_endpoint}/api/model-runs"
+    model_run_results_url = f"http://{rgd_endpoint}/api/model-runs"
     model_runs_result = requests.get(model_run_results_url,
-                                     params={'limit', '0'})
+                                     params={'limit': '0'})
 
     existing_model_run = None
-    for model_run in model_runs_result.json():
+    for model_run in model_runs_result.json().get('results', ()):
         if(model_run['title'] == title and
-           model_run['performer'] == performer_shortcode):
+           model_run['performer']['short_code'] == performer_shortcode):
             existing_model_run = model_run
             break
 
     if existing_model_run is not None:
         model_run_id = model_run['id']
     else:
-        post_model_url = f"https://{rgd_endpoint}/api/model-runs"
+        post_model_url = f"http://{rgd_endpoint}/api/model-runs"
         post_model_data = {"performer": performer_shortcode,
                            "title": title,
                            "parameters": {}}
         post_model_result = requests.post(post_model_url,
-                                          data=json.dumps(post_model_data))
+                                          json=post_model_data)
 
         model_run_id = post_model_result.json()['id']
 
     post_site_url =\
-        f"https://{rgd_endpoint}/api/model-runs/{model_run_id}/site-model"
+        f"http://{rgd_endpoint}/api/model-runs/{model_run_id}/site-model"
+
+    print(post_site_url)
 
     executor = ub.Executor(mode='process' if jobs > 1 else 'serial',
                            max_workers=jobs)
@@ -142,16 +144,16 @@ def upload_to_rgd(input_site_models_s3,
             traceback.print_exception(*sys.exc_info())
             continue
         else:
-            if result.status_code != 200:
+            if result.status_code != 201:
                 print(f"Error uploading site, status "
                       f"code: [{result.status_code}]")
 
 
 def post_site(post_site_url, site_filepath):
-    return requests.post(post_site_url,
-                         files={'file': (site_filepath,
-                                         open(site_filepath, 'rb'),
-                                         'application/json')})
+    with open(site_filepath, 'r') as f:
+        response = requests.post(post_site_url, json=json.load(f))
+
+    return response
 
 
 if __name__ == "__main__":
