@@ -195,13 +195,16 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
 
         keys = set(tb_data.keys()).intersection(set(plot_keys))
 
+        # no idea what hp metric is, but it doesn't seem important
+        keys = keys - {'hp_metric'}
+
         HACK_NO_SMOOTH = {'lr', 'momentum', 'epoch'}
 
         # import kwimage
         # color1 = kwimage.Color('kw_green').as01()
         # color2 = kwimage.Color('kw_green').as01()
 
-        prog = ub.ProgIter(keys, desc='dump plots', verbose=verbose)
+        prog = ub.ProgIter(keys, desc='dump plots', verbose=verbose * 3)
         for key in prog:
             prog.set_extra(key)
             snskw = {
@@ -237,9 +240,12 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
                         df_smooth[key] = smooth_curve(ydata, beta)
                         df_smooth['smoothing'] = _smoothing_value
                         variants.append(df_smooth)
+
             if len(variants) == 1:
                 df = variants[0]
             else:
+                if verbose:
+                    print('Combine smoothed variants')
                 df = pd.concat(variants).reset_index()
                 snskw['hue'] = 'smoothing'
 
@@ -251,8 +257,12 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
                 ydata = df[key]
                 kw['ymin'] = min(0.0, ydata.min())
                 if ignore_outliers:
+                    if verbose:
+                        print('Finding outliers')
                     low, kw['ymax'] = tensorboard_inlier_ylim(ydata)
 
+            if verbose:
+                print('Begin plot')
             # NOTE: this is actually pretty slow
             ax.cla()
             sns.lineplot(data=df, **snskw)
@@ -267,6 +277,8 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
 
             # png is smaller than jpg for this kind of plot
             fpath = out_dpath / (key + '.png')
+            if verbose:
+                print('Save plot: ' + str(fpath))
             ax.figure.savefig(fpath)
 
 
@@ -328,6 +340,9 @@ def redraw_cli(train_dpath):
         from watch.utils.lightning_ext.callbacks.tensorboard_plotter import *  # NOQA
         from watch.utils.lightning_ext.callbacks.tensorboard_plotter import _dump_measures
         train_dpath = '/home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/'
+
+        python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter \
+            /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/
 
         python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter \
             $HOME/remote/horologic/smart_expt_dvc/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_Continue_15GSD_BGR_V004/lightning_logs/version_0/
