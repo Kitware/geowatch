@@ -809,6 +809,11 @@ def find_high_frequency_values(image):
     """
     Values that appear in the image very often, may be indicative of an
     artifact that we should remove.
+
+    Ignore:
+        from watch.utils.util_kwimage import *  # NOQA
+        import kwimage
+        image = kwimage.grab_test_image()
     """
 
     def ratios(data):

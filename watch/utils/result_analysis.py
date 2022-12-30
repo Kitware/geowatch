@@ -487,16 +487,21 @@ class ResultAnalysis(ub.NiceRepr):
 
     def tune(self):
         """
+
+        Look into:
+            # Old bayes opt?
+            https://github.com/Erotemic/clab/blob/master/clab/live/urban_pred.py#L459
+
         Example:
             >>> self = ResultAnalysis.demo(100)
 
         """
+        from ray import tune
 
         # 1. Define an objective function.
         def objective(config):
             score = config["a"] ** 2 + config["b"]
             return {"score": score}
-
 
         # 2. Define a search space.
         search_space = {

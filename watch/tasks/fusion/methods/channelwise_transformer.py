@@ -77,6 +77,7 @@ from watch.tasks.fusion.architectures import transformer
 from watch.tasks.fusion.methods.network_modules import _torch_meshgrid
 from watch.tasks.fusion.methods.network_modules import _class_weights_from_freq
 from watch.tasks.fusion.methods.network_modules import coerce_criterion
+from watch.tasks.fusion.methods.network_modules import torch_safe_stack
 from watch.tasks.fusion.methods.network_modules import RobustModuleDict
 from watch.tasks.fusion.methods.network_modules import RearrangeTokenizer
 from watch.tasks.fusion.methods.network_modules import ConvTokenizer
@@ -1602,14 +1603,14 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             # Stack the weights for each item
             item_weights = {
                 # Because we are nt collating we need to add a batch dimension
-                key: torch.stack(_tensors)[None, ...]
+                key: torch_safe_stack(_tensors, item_shape=[0, 0])[None, ...]
                 for key, _tensors in item_pixel_weights_list.items()
             }
             if self.global_head_weights['change']:
                 # [B, T, H, W]
-                item_truths['change'] = torch.stack([
+                item_truths['change'] = torch_safe_stack([
                     frame['change'] for frame in item['frames'][1:]
-                ])[None, ...]
+                ], item_shape=[0, 0])[None, ...]
 
             if self.global_head_weights['class']:
                 # [B, T, H, W]

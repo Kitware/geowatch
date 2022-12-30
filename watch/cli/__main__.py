@@ -28,7 +28,7 @@ def main(cmdline=True, **kw):
         'kwcoco_to_geojson',
         'run_metrics_framework',
         'torch_model_stats',
-        'mlops_cli',
+        # 'mlops_cli',
         'gifify',
     ]
     module_lut = {}
@@ -62,7 +62,7 @@ def main(cmdline=True, **kw):
         'watch.cli.project_annotations': ['project'],
         'watch.cli.coco_add_watch_fields': ['add_fields'],
         'watch.cli.coco_spectra': ['spectra', 'intensity_histograms'],
-        'watch.cli.mlops_cli': ['mlops'],
+        # 'watch.cli.mlops_cli': ['mlops'],
         'watch.cli.run_metrics_framework': ['iarpa_eval'],
         'watch.cli.kwcoco_to_geojson': [],
         'watch.cli.find_dvc': ['dvcdir'],

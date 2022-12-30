@@ -363,7 +363,7 @@ python -m watch.mlops.schedule_evaluation \
             sc_poly.enabled: 1
             sc_poly_eval.enabled: 1
             sc_pxl_eval.enabled: 1
-            sc_poly_viz.enabled: 1
+            sc_poly_viz.enabled: 0
             include:
                 - sc_pxl.chip_dims: 256,256
                   sc_pxl.window_space_scale: 8GSD

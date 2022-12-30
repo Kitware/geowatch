@@ -77,6 +77,7 @@ import ubelt as ub
 from torch.utils import data
 from typing import Dict
 import scriptconfig as scfg
+import itertools as it
 
 
 from watch import heuristics
@@ -755,6 +756,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             'change': True,
             'class': True,
             'saliency': True,
+            'boxes': True,
         }
 
         # Hacks: combinable channels can be visualized as RGB images.
@@ -791,11 +793,19 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         matching_sensorchan = self.sample_sensorchan.matching_sensor(sensor_coarse)
         sensor_channels = matching_sensorchan.chans
 
-        # Require
+        # TODO: disable the samecolor quality heuristic by defaults.  We should
+        # use a preprocessing step to nan-out these regions more robustly.
+
         # SAMECOLOR_QUALITY_HEURISTIC = target_.get('SAMECOLOR_QUALITY_HEURISTIC', 'region')
         SAMECOLOR_QUALITY_HEURISTIC = target_.get('SAMECOLOR_QUALITY_HEURISTIC', 'histogram')
         # SAMECOLOR_QUALITY_HEURISTIC = target_.get('SAMECOLOR_QUALITY_HEURISTIC', None)
         use_samecolor_region_method = SAMECOLOR_QUALITY_HEURISTIC == 'region'
+        # There are only some values that we care about for the samecolor
+        # metric. It turns out in our data only zeros are confused for NODATA.
+        # so we can hack this metric in. Setting it to none would generalize it
+        # to allow any value in a large homogenous region to be considered as
+        # nodata.
+        samecolor_values = {0}
 
         FORCE_LOADING_BAD_IMAGES = target_.get('FORCE_LOADING_BAD_IMAGES', 0)
         stop_on_bad_image = not FORCE_LOADING_BAD_IMAGES
@@ -806,7 +816,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # sensor_channels = (self.sample_channels & coco_img.channels).normalize()
         tr_frame = target_.copy()
         tr_frame['gids'] = [gid]
-        sample_streams = {}
 
         # TODO: separate ndsampler annotation loading function
         first_with_annot = with_annots
@@ -815,6 +824,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # forces us to mark this image as bad.
         force_bad = False
 
+        # Handle a special quality band channel.
         if quality_threshold > 0 or mask_low_quality:
             # Skip if quality mask indicates more than 50% clouds.
             is_low_quality = self._interpret_quality_mask(
@@ -831,9 +841,16 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         else:
             is_low_quality = None
 
+        # We are only going to compute the same color quality heuristic on a
+        # single band.
+        valid_bands_for_samecolor_quality_heuristic = {
+            'red', 'green', 'blue', 'nir', 'swir16', 'swir22'}
+
         if sensor_channels.numel() == 0:
             force_bad = 'Missing requested channels'
 
+        # Sample information from each stream (each stream is a separate mode)
+        sample_streams = {}
         for stream in sensor_channels.streams():
             if stop_on_bad_image and force_bad:
                 break
@@ -845,7 +862,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 dtype=np.float32
             )
 
-            if SAMECOLOR_QUALITY_HEURISTIC and (set(stream) & {'red', 'green', 'blue', 'nir', 'swir16', 'swir22'}):
+            if SAMECOLOR_QUALITY_HEURISTIC and (set(stream) & valid_bands_for_samecolor_quality_heuristic):
                 # This should be a better heuristic than the others we were
                 # using
 
@@ -854,17 +871,17 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 # band_slider = kwarray.SlidingWindow((int(np.ceil(hwc.shape[2] / 3) * 3),), window=(3,))
                 band_slider = kwarray.SlidingWindow((hwc.shape[2],), window=(1,))
                 flag_stack = []
-                for b_sl in band_slider:
-                    # TODO: can do this as a simpler histogram approach
-                    # instead?
+                # Only perform this test on the first band
+                for b_sl in it.islice(band_slider, 0, 1):
                     bands = hwc[:, :, b_sl[0]]
                     bands = np.ascontiguousarray(bands)
                     if use_samecolor_region_method:
-                        is_samecolor = util_kwimage.find_high_frequency_values(bands)
-                    else:
                         # Speed up the compuation by doing this at a coarser scale
                         is_samecolor = util_kwimage.find_samecolor_regions(
                             bands, scale=0.4, min_region_size=49)
+                    else:
+                        # Faster histogram method
+                        is_samecolor = util_kwimage.find_high_frequency_values(bands)
                     flag_stack.append(is_samecolor)
 
                 is_samecolor = np.stack(flag_stack, axis=2)

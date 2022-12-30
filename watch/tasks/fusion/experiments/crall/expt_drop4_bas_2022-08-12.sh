@@ -1545,14 +1545,14 @@ python -m watch.tasks.fusion.fit \
     --global_change_weight=1.00 \
     --global_class_weight=0 \
     --global_saliency_weight=1.00 \
-    --learning_rate=1e-4 \
-    --weight_decay=1e-4 \
+    --learning_rate=1e-8 \
+    --weight_decay=1e-5 \
     --chip_dims=128,128 \
-    --window_space_scale="15GSD" \
-    --input_space_scale="15GSD" \
+    --window_space_scale="10GSD" \
+    --input_space_scale="10GSD" \
     --output_space_scale="30GSD" \
     --accumulate_grad_batches=4 \
-    --batch_size=4 \
+    --batch_size=8 \
     --max_epochs=160 \
     --patience=160 \
     --num_workers=2 \
@@ -1579,7 +1579,7 @@ python -m watch.tasks.fusion.fit \
     --quality_threshold=0.8 \
     --num_sanity_val_steps=0 \
     --max_epoch_length=16384 \
-    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_10GSD_BGRNSH_invar_V7/lightning_logs/version_5/package-interupt/package_epoch1_step1969.pt
+    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_BGRNSH_invar_V7_alt/lightning_logs/version_3/package-interupt/package_epoch0_step213.pt
 
 
     #--init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_10GSD_BGRNSH_invar_V7/lightning_logs/version_4/package-interupt/package_epoch56_step29184.pt
@@ -1713,7 +1713,67 @@ python -m watch.tasks.fusion fit \
     --optimizer.init_args.lr=3e-4 \
     --optimizer.init_args.weight_decay=1e-3
 
+### Toothbrush Invariants - V10
+export CUDA_VISIBLE_DEVICES=1
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop4-BAS
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_train_I2.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_I2.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_I2.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22,invariants.0:17"
+EXPERIMENT_NAME=Drop4_BAS_BGRNSH_invar_V10
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --max_epochs=160 \
+    --patience=160 \
+    --num_workers=2 \
+    --dist_weights=False \
+    --use_centered_positives=True \
+    --normalize_inputs=128 \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --accelerator="gpu" \
+    --devices "0," \
+    --amp_backend=apex \
+    --resample_invalid_frames=3 \
+    --quality_threshold=0.8 \
+    --num_sanity_val_steps=0 \
+    --max_epoch_length=16384 \
+    --time_sampling=soft2-contiguous-hardish3\
+    --time_span=3m-6m-1y \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --num_draw=4 \
+    --saliency_weights="auto" \
+    --class_loss='focal' \
+    --saliency_loss='dicefocal' \
+    --global_change_weight=1.00 \
+    --global_class_weight=0 \
+    --global_saliency_weight=1.00 \
+    --learning_rate=1e-8 \
+    --weight_decay=1e-5 \
+    --chip_dims=128,128 \
+    --window_space_scale="10GSD" \
+    --input_space_scale="10GSD" \
+    --output_space_scale="30GSD" \
+    --accumulate_grad_batches=4 \
+    --batch_size=8 \
+    --init="$DVC_EXPT_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 
+
+### Ooo run - V 10... again
 export CUDA_VISIBLE_DEVICES=1
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')

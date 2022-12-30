@@ -523,3 +523,69 @@ def coerce_criterion(loss_code, weights):
     #     'target_shape': target_shape,
     # }
     return criterion
+
+
+def torch_safe_stack(tensors, dim=0, *, out=None, item_shape=None, dtype=None, device=None):
+    """
+    Args:
+        item_shape (Tuple[int, ...]): what the shape of an item should be.
+            used to construct a default output.
+
+    Ignore:
+        >>> from watch.tasks.fusion.methods.network_modules import *  # NOQA
+        >>> grid = list(ub.named_product({
+        >>>     # 'num': [0, 1, 2, 3],
+        >>>     'num': [0, 7],
+        >>>     'item_shape': ['auto', None],
+        >>>     'shape': [[], [0], [2], [2, 3], [2, 0, 3]],
+        >>>     'dim': [0, 1],
+        >>> }))
+        >>> results = []
+        >>> for item in grid:
+        >>>     print(f'item={item}')
+        >>>     dim = item['dim']
+        >>>     shape = item['shape']
+        >>>     item['shape'] = tuple(item['shape'])
+        >>>     if item['item_shape'] == 'auto':
+        >>>         item['item_shape'] = item['shape']
+        >>>     num = item['num']
+        >>>     tensors = [torch.empty(shape)] * num
+        >>>     if dim >= len(shape):
+        >>>         continue
+        >>>     out = torch_safe_stack(tensors, dim=dim,
+        >>>         item_shape=item['item_shape'])
+        >>>     row = {
+        >>>         **item,
+        >>>         'out.shape': out.shape,
+        >>>     }
+        >>>     print(f'row={row}')
+        >>>     results.append(row)
+        >>> import pandas as pd
+        >>> import rich
+        >>> df = pd.DataFrame(results)
+        >>> for _, subdf in df.groupby('shape'):
+        >>>     subdf = subdf.sort_values(['shape', 'dim', 'item_shape', 'num'])
+        >>>     print('')
+        >>>     rich.print(subdf.to_string())
+        >>> #
+    Ignore:
+        torch.stack([torch.empty([])], dim=1)
+
+    """
+    if len(tensors) == 0:
+        if item_shape is None:
+            # TODO: WARN HERE, THE USER SHOULD PROVIDE A DEFAULT SHAPE
+            # OTHERWISE THE FUNCTION MAY NOT PRODUCE COMPATIBLE RESULTS WITH
+            # POPULATED VARIANTS
+            item_shape = [0]
+
+        out_shape = list(item_shape)
+        if dim > len(out_shape):
+            raise IndexError(
+                f'Dimension out of range (expected to be in range of '
+                f'[-1, {len(out_shape)}], but got {dim})'
+            )
+        out_shape.insert(dim, 0)
+        return torch.empty(out_shape, dtype=dtype, device=device)
+    else:
+        return torch.stack(tensors, dim=dim, out=out)
