@@ -4,6 +4,9 @@ Developer notebook
 
 
 def visualize_invariant_batch():
+    import os
+    os.environ['XDEV_PROFILE'] = '1'
+
     import watch
     from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
     dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
@@ -20,12 +23,16 @@ def visualize_invariant_batch():
     target = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]].copy()
 
     target['SAMECOLOR_QUALITY_HEURISTIC'] = None
+    target['SAMECOLOR_QUALITY_HEURISTIC'] = 'histogram'
     target['FORCE_LOADING_BAD_IMAGES'] = 1
-    target['mask_low_quality'] = 1
+    target['mask_low_quality'] = 0
     target['quality_threshold'] = 0.5
     target['observable_threshold'] = 0.5
     target['resample_invalid_frames'] = 3
     item = self[target]
+
+    import xdev
+    xdev.profile.print_report()
 
     #print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
     canvas = self.draw_item(item, overlay_on_image=0, rescale=1,

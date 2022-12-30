@@ -849,6 +849,25 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         if sensor_channels.numel() == 0:
             force_bad = 'Missing requested channels'
 
+        # Create a list of pixel positions we will force to nan
+        nan_masks = []
+        # We could add quality to the "nam_masks" idea, but that would mean we
+        # couldn't reject frames as early as we currently can. Probably a way
+        # to make this nicer.
+        # if mask_low_quality and is_low_quality is not None:
+        #     nan_masks.append(is_low_quality.astype(np.uint8))
+
+        def apply_nan_nan_mask(im, nan_mask):
+            im_ = im[0]
+            dsize = im_.shape[0:2][::-1]
+            # When imresize is updated, type and shape fixes can be removed.
+            nan_mask = kwimage.imresize(nan_mask.astype(np.uint8), dsize=dsize,
+                                        interpolation='nearest')
+            nan_mask = kwarray.atleast_nd(nan_mask, 3)
+            nan_mask = nan_mask.astype(bool)
+            nan_mask = np.broadcast_to(nan_mask, im.shape)
+            im[nan_mask] = np.nan
+
         # Sample information from each stream (each stream is a separate mode)
         sample_streams = {}
         for stream in sensor_channels.streams():
@@ -878,31 +897,25 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     if use_samecolor_region_method:
                         # Speed up the compuation by doing this at a coarser scale
                         is_samecolor = util_kwimage.find_samecolor_regions(
-                            bands, scale=0.4, min_region_size=49)
+                            bands, scale=0.4, min_region_size=49,
+                            values=samecolor_values)
                     else:
                         # Faster histogram method
-                        is_samecolor = util_kwimage.find_high_frequency_values(bands)
+                        is_samecolor = util_kwimage.find_high_frequency_values(
+                            bands, values=samecolor_values)
                     flag_stack.append(is_samecolor)
 
                 is_samecolor = np.stack(flag_stack, axis=2)
                 samecolor_flags = is_samecolor[None, :] > 0
                 num_samecolor = samecolor_flags.sum()
                 if num_samecolor > 0:
+                    nan_masks.append(samecolor_flags[0])
                     # print(f'stream={stream}')
                     # print(f'num_samecolor={num_samecolor}')
-                    sample['im'][samecolor_flags] = np.nan
+                    # sample['im'][samecolor_flags] = np.nan
 
             if mask_low_quality and is_low_quality is not None:
-                im_ = sample['im'][0]
-                dsize = im_.shape[0:2][::-1]
-                # When imresize is updated, the type and shape fixes can be
-                # removed.
-                is_low_quality_ = kwimage.imresize(
-                    is_low_quality.astype(np.uint8), dsize=dsize, interpolation='nearest')
-                is_low_quality_ = kwarray.atleast_nd(is_low_quality_, 3)
-                is_low_quality_ = is_low_quality_.astype(bool)
-                is_low_quality_ = np.broadcast_to(is_low_quality_, sample['im'].shape)
-                sample['im'][is_low_quality_] = np.nan
+                apply_nan_nan_mask(sample['im'], is_low_quality)
 
             invalid_mask = np.isnan(sample['im'])
 
@@ -946,6 +959,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         if not force_bad:
             if len(sample_streams) == 0:
                 force_bad = 'no-streams'
+
+        # Apply final nan masks
+        for stream in sample_streams.values():
+            for mask in nan_masks:
+                apply_nan_nan_mask(sample['im'], mask)
 
         gid_to_isbad[gid] = force_bad
         gid_to_sample[gid] = sample_streams

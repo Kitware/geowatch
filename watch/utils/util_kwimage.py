@@ -530,7 +530,7 @@ def find_lowvariance_regions(image, kernel=7):
 
 def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
                            connectivity=8, scale=1.0, grid_stride='auto',
-                           PRINT_STEPS=0):
+                           PRINT_STEPS=0, values=None):
     """
     Alternative approach to find_samecolor_regions, but the idea is we check a
     set of seed points and perform a flood fill.
@@ -552,6 +552,9 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
             less than 1 will resize the image, perform the computation, and
             then upsample the output. This can cause a significant speed
             increase at the cost of some accuracy.
+
+        values (None | List): the values of interest to find.
+            if unspecified, any highly frequent value is flagged.
 
     References:
         https://docs.opencv.org/3.4/d7/d1b/group__imgproc__misc.html#ga366aae45a6c1289b341d140839f18717
@@ -728,6 +731,19 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
     if PRINT_STEPS:
         import rich
 
+    values_of_interest = values
+    if values_of_interest is not None:
+        # Filter out any grid positions based on values of interest
+        grid_values = image[check_xy.T[1], check_xy.T[0]]
+        print(f'grid_values={grid_values}')
+        flags = None
+        for v in values_of_interest:
+            if flags is None:
+                flags = (grid_values == v).all(-1)
+            else:
+                flags |= (grid_values == v).all(-1)
+        check_xy = check_xy[flags]
+
     # Start at 2 because 1 is used as an internal value
     cluster_label = 2
     for check_x, check_y in check_xy:
@@ -805,48 +821,118 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
     return final_labels
 
 
-def find_high_frequency_values(image):
+def find_high_frequency_values(image, values=None, abs_thresh=0.2,
+                               rel_thresh=None):
     """
     Values that appear in the image very often, may be indicative of an
     artifact that we should remove.
 
-    Ignore:
-        from watch.utils.util_kwimage import *  # NOQA
-        import kwimage
-        image = kwimage.grab_test_image()
-    """
+    Args:
+        values (None | List): the values of interest to find.
+            if unspecified, any highly frequent value is flagged.
 
+    Ignore:
+        >>> # Without value restriction
+        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> import kwimage
+        >>> image1 = kwimage.grab_test_image(dsize=(256, 256))
+        >>> dsize = image1.shape[0:2][::-1]
+        >>> poly1 =kwimage.Polygon.random(rng=3).scale(dsize)
+        >>> poly2 =kwimage.Polygon.random(rng=2).scale(dsize)
+        >>> image2 = image1.copy()[..., 0]
+        >>> image2 = poly1.draw_on(image2, color=[0])
+        >>> image2 = poly2.draw_on(image2, color=[0])
+        >>> with ub.Timer() as t2:
+        >>>     mask2 = find_high_frequency_values(image2)
+        >>> with ub.Timer() as t3:
+        >>>     mask3 = find_samecolor_regions(image2)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(image2, doclf=1, pnum=(1, 3, 1))
+        >>> kwplot.imshow(colorize_label_image(mask2), pnum=(1, 3, 2), title=f'find_high_frequency_values: @ {t2.elapsed:0.4}s')
+        >>> kwplot.imshow(colorize_label_image(mask3), pnum=(1, 3, 3), title=f'find_samecolor_regions @ {t3.elapsed:0.4}s')
+        >>> kwplot.show_if_requested()
+
+    Ignore:
+        >>> # With value restriction
+        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> import kwimage
+        >>> image1 = kwimage.grab_test_image(dsize=(256, 256))
+        >>> dsize = image1.shape[0:2][::-1]
+        >>> poly1 =kwimage.Polygon.random(rng=3).scale(dsize)
+        >>> poly2 =kwimage.Polygon.random(rng=2).scale(dsize)
+        >>> image2 = image1.copy()[..., 0]
+        >>> image2 = poly1.draw_on(image2, color=[0])
+        >>> image2 = poly2.draw_on(image2, color=[0])
+        >>> with ub.Timer() as t2:
+        >>>     mask2 = find_high_frequency_values(image2, values={0})
+        >>> with ub.Timer() as t3:
+        >>>     mask3 = find_samecolor_regions(image2, values={0})
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(image2, doclf=1, pnum=(1, 3, 1))
+        >>> kwplot.imshow(colorize_label_image(mask2), pnum=(1, 3, 2), title=f'find_high_frequency_values: @ {t2.elapsed:0.4}s')
+        >>> kwplot.imshow(colorize_label_image(mask3), pnum=(1, 3, 3), title=f'find_samecolor_regions @ {t3.elapsed:0.4}s')
+        >>> kwplot.show_if_requested()
+    """
     def ratios(data):
         return data[:-1] / data[1:]
     import kwarray
     import numpy as np
-    raw_values, raw_counts = np.unique(image, return_counts=True)
-    valid_mask = ~np.isnan(raw_values)
-    values = raw_values[valid_mask]
-    counts = raw_counts[valid_mask]
 
-    ranked_idxs = counts.argsort()[::-1]
-    max_bad_values = 10
-    ranked_counts = counts[ranked_idxs[:max_bad_values]]
-    ranked_values = values[ranked_idxs[:max_bad_values]]
+    values_of_interest = values
+    if values_of_interest is not None and len(values_of_interest) == 1:
+        # Optimization for a single bad values we care about.
+        value_of_interest = ub.peek(values_of_interest)
+        flags = (image == value_of_interest)
+        if len(flags.shape) > 2:
+            axis = tuple(range(2, len(flags.shape)))
+            flags = flags.all(axis=axis)
+        abs_score = flags.sum() / flags.size
+        if abs_thresh is not None:
+            if abs_score > abs_thresh:
+                mask = flags
+            else:
+                mask = np.ones_like(flags)
 
-    abs_score = ranked_counts / image.size
-    rel_score = ratios(ranked_counts)
-    abs_score = abs_score[:len(rel_score)]
-    ranked_values = ranked_values[:len(rel_score)]
+        if rel_thresh is not None:
+            raise NotImplementedError
+    else:
+        raw_values, raw_counts = np.unique(image, return_counts=True)
+        valid_mask = ~np.isnan(raw_values)
+        values = raw_values[valid_mask]
+        counts = raw_counts[valid_mask]
 
-    abs_thresh = 0.2
-    rel_thresh = 20
+        if values_of_interest is None:
+            max_bad_values = 10
+        else:
+            max_bad_values = len(values_of_interest) + 1
 
-    flags = abs_score > abs_thresh
-    flags |= (rel_score > rel_thresh)
+        ranked_idxs = counts.argsort()[::-1]
+        ranked_counts = counts[ranked_idxs[:max_bad_values]]
+        ranked_values = values[ranked_idxs[:max_bad_values]]
 
-    bad_values = ranked_values[flags]
-    image = kwarray.atleast_nd(image, 3)
-    image.shape
-    mask = kwarray.isect_flags(image, bad_values)
-    mask = mask.reshape(image.shape)
-    mask = mask.any(axis=2)
+        abs_score = ranked_counts / image.size
+        rel_score = ratios(ranked_counts)
+        abs_score = abs_score[:len(rel_score)]
+        ranked_values = ranked_values[:len(rel_score)]
+
+        if abs_thresh is not None:
+            flags = abs_score > abs_thresh
+        else:
+            flags = np.zeros(len(abs_score), dtype=bool)
+
+        if rel_thresh is not None:
+            flags |= (rel_score > rel_thresh)
+
+        bad_values = ranked_values[flags]
+        image = kwarray.atleast_nd(image, 3)
+
+        mask = kwarray.isect_flags(image, bad_values)
+        mask = mask.reshape(image.shape)
+        mask = mask.any(axis=2)
     return mask
 
 
@@ -863,8 +949,6 @@ def polygon_distance_transform(poly, shape, dtype=np.uint8):
         >>> shape = (32, 32)
         >>> dist, poly_mask = polygon_distance_transform(poly, shape, dtype)
         >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> kwplot.autompl()
         >>> import kwplot
         >>> kwplot.autompl()
         >>> kwplot.imshow(dist, cmap='viridis', doclf=1)
