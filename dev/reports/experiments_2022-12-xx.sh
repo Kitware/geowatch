@@ -369,10 +369,10 @@ python -m watch.mlops.schedule_evaluation \
                   sc_pxl.window_space_scale: 8GSD
                   sc_pxl.input_space_scale: 8GSD
                   sc_pxl.output_space_scale: 8GSD
-                #- sc_pxl.chip_dims: 256,256
-                #  sc_pxl.window_space_scale: 4GSD
-                #  sc_pxl.input_space_scale: 4GSD
-                #  sc_pxl.output_space_scale: 4GSD
+                - sc_pxl.chip_dims: 256,256
+                  sc_pxl.window_space_scale: 4GSD
+                  sc_pxl.input_space_scale: 4GSD
+                  sc_pxl.output_space_scale: 4GSD
                 - sc_pxl.chip_dims: auto
                   sc_pxl.window_space_scale: auto
                   sc_pxl.input_space_scale: auto

@@ -162,6 +162,111 @@ def fliprot(img, rot_k=0, flip_axis=None, axes=(0, 1)):
     return img
 
 
+def fliprot_annot(annot, rot_k, flip_axis=None, axes=(0, 1), canvas_dsize=None):
+    """
+    Ignore:
+        >>> from watch.tasks.fusion.datamodules.data_utils import *  # NOQA
+        >>> import kwimage
+        >>> H, W = 121, 153
+        >>> canvas_dsize = (W, H)
+        >>> box1 = kwimage.Boxes.random(1).scale((W, H)).quantize()
+        >>> ltrb = box1.data
+        >>> rot_k = 4
+        >>> annot = box1
+        >>> annot = box1.to_polygons()[0]
+        >>> annot1 = annot.copy()
+        >>> unique_fliprots = [
+        >>>     {'rot_k': 0, 'flip_axis': None},
+        >>>     {'rot_k': 0, 'flip_axis': (0,)},
+        >>>     {'rot_k': 1, 'flip_axis': None},
+        >>>     {'rot_k': 1, 'flip_axis': (0,)},
+        >>>     {'rot_k': 2, 'flip_axis': None},
+        >>>     {'rot_k': 2, 'flip_axis': (0,)},
+        >>>     {'rot_k': 3, 'flip_axis': None},
+        >>>     {'rot_k': 3, 'flip_axis': (0,)},
+        >>> ]
+        >>> results = []
+        >>> for params in unique_fliprots:
+        >>>     annot2 = fliprot_annot(annot, canvas_dsize=canvas_dsize, **params)
+        >>>     annot3 = inv_fliprot_annot(annot2, canvas_dsize=canvas_dsize, **params)
+        >>>     results.append({
+        >>>         'annot2': annot2,
+        >>>         'annot3': annot3,
+        >>>         'params': params,
+        >>>     })
+
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> image1 = kwimage.grab_test_image('astro', dsize=(W, H))
+        >>> pnum_ = kwplot.PlotNums(nSubplots=len(results))
+        >>> for result in results:
+        >>>     image2 = fliprot(image1.copy(), **result['params'])
+        >>>     image3 = inv_fliprot(image2.copy(), **result['params'])
+        >>>     annot2 = result['annot2']
+        >>>     annot3 = result['annot3']
+        >>>     canvas1 = annot1.draw_on(image1.copy(), edgecolor='kitware_green', fill=False)
+        >>>     canvas2 = annot2.draw_on(image2.copy(), edgecolor='kitware_blue', fill=False)
+        >>>     canvas3 = annot3.draw_on(image3.copy(), edgecolor='kitware_red', fill=False)
+        >>>     canvas = kwimage.stack_images([canvas1, canvas2, canvas3], axis=1)
+        >>>     kwplot.imshow(canvas, pnum=pnum_(), title=ub.repr2(result['params'], nl=0, compact=1, nobr=1))
+    """
+    import kwimage
+    if rot_k != 0:
+        x0 = canvas_dsize[0] / 2
+        y0 = canvas_dsize[1] / 2
+        # generalized way
+        # Translate center of old canvas to the origin
+        T1 = kwimage.Affine.translate((-x0, -y0))
+        # Construct the rotation
+        tau = np.pi * 2
+        theta = -(rot_k * tau / 4)
+        R = kwimage.Affine.rotate(theta=theta)
+        # Find the center of the new rotated canvas
+        canvas_box = kwimage.Box.from_dsize(canvas_dsize)
+        new_canvas_box = canvas_box.warp(R)
+        x2 = new_canvas_box.width / 2
+        y2 = new_canvas_box.height / 2
+        # Translate to the center of the new canvas
+        T2 = kwimage.Affine.translate((x2, y2))
+        # print(f'T1=\n{ub.repr2(T1)}')
+        # print(f'R=\n{ub.repr2(R)}')
+        # print(f'T2=\n{ub.repr2(T2)}')
+        A = T2 @ R @ T1
+        annot = annot.warp(A)
+        # TODO: specialized faster way
+        # lt_x, lt_y, rb_x, rb_y = boxes.components
+    else:
+        x2 = y2 = None
+
+    # boxes = kwimage.Boxes(ltrb, 'ltrb')
+    if flip_axis is not None:
+        if x2 is None:
+            x2 = canvas_dsize[0] / 2
+            y2 = canvas_dsize[1] / 2
+        # Make the flip matrix
+        F = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+        for axis in flip_axis:
+            mdim = 1 - axis
+            F[mdim, mdim] *= -1
+        T1 = kwimage.Affine.translate((-x2, -y2))
+        T2 = kwimage.Affine.translate((x2, y2))
+        A = T2 @ F @ T1
+        annot = annot.warp(A)
+
+    return annot
+
+
+def inv_fliprot_annot(annot, rot_k, flip_axis=None, axes=(0, 1), canvas_dsize=None):
+    if rot_k % 2 == 1:
+        canvas_dsize = canvas_dsize[::-1]
+    annot = fliprot_annot(annot, -rot_k, flip_axis=None, axes=axes, canvas_dsize=canvas_dsize)
+    if rot_k % 2 == 1:
+        canvas_dsize = canvas_dsize[::-1]
+    annot = fliprot_annot(annot, 0, flip_axis=flip_axis, axes=axes, canvas_dsize=canvas_dsize)
+    return annot
+
+
 def inv_fliprot(img, rot_k=0, flip_axis=None, axes=(0, 1)):
     """
     Undo a fliprot

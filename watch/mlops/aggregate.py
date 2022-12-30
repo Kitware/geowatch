@@ -43,7 +43,45 @@ class AggregateEvluationConfig(scfg.DataConfig):
     pipeline = scfg.Value('joint_bas_sc', help='the name of the pipeline to run')
 
 
+def main(cmdline=True, **kwargs):
+    """
+    Ignore:
+        >>> from watch.mlops.aggregate import *  # NOQA
+        >>> import watch
+        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
+        >>> cmdline = 0
+        >>> kwargs = {
+        >>>     # 'root_dpath': expt_dvc_dpath / '_testpipe',
+        >>>     # 'pipeline': 'joint_bas_sc_nocrop',
+        >>>     'root_dpath': expt_dvc_dpath / '_testsc',
+        >>>     'pipeline': 'sc',
+        >>> }
+        >>> ## Execute
+        >>> main(cmdline=cmdline, **kwargs)
+    """
+    config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
+    cacher = ub.Cacher(
+        'table_cacher', appname='watch', depends=dict(config),
+        enabled=0,
+    )
+    tables = cacher.tryload()
+    if tables is None:
+        eval_type_to_results = build_tables(config)
+        cacher.save(eval_type_to_results)
+
+    eval_type_to_aggregator = analyze_tables(eval_type_to_results)
+
+    agg = eval_type_to_aggregator['sc_poly_eval']
+    agg.analyze()
+
+    plot_tables()
+
+    plot_examples()  # TODO
+
+
 def build_tables(config):
+    import pandas as pd
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
     dag = smart_pipeline.make_smart_pipeline(config['pipeline'])
     dag.print_graphs()
@@ -67,8 +105,7 @@ def build_tables(config):
          'result_loader': smart_result_parser.load_eval_act_poly},
     ]
 
-    tables = {}
-
+    eval_type_to_results = {}
     for node_eval_info in node_eval_infos:
         node_name = node_eval_info['name']
         out_key = node_eval_info['out_key']
@@ -84,50 +121,44 @@ def build_tables(config):
 
         # Pattern match
         # node.template_out_paths[out_node.name]
-
-        rows = []
-        for fpath in fpaths:
-            row = {}
+        param_rows = []
+        metric_rows = []
+        index_rows = []
+        for fpath in ub.ProgIter(fpaths, desc='loading'):
             result = result_loader_fn(fpath)
 
             # TODO: better way to get config
             job_config_fpath = fpath.parent / 'job_config.json'
             config_ = json.loads(job_config_fpath.read_text())
-
-            row['type'] = out_node.key
-            row['region_id'] = result['json_info']['region_ids']
+            index = {
+                'type': out_node.key,
+                'region_id': result['json_info']['region_ids'],
+            }
             metrics = smart_result_parser._add_prefix(node_name + '.metrics.', result['metrics'])
             params = smart_result_parser._add_prefix(node_name + '.params.', config_)
-            row.update(metrics)
-            row.update(params)
-            rows.append(row)
+            metric_rows.append(metrics)
+            param_rows.append(params)
+            index_rows.append(index)
 
-        df = pd.DataFrame(rows)
-        tables[node_name] = df
-
-    eval_type_to_results = {}
-
-    for key, df in tables.items():
-        ddf = DotDictDataFrame(df)
-        index = ddf[['type', 'region']]
-        params = ddf[key + '.params']
-        metrics = ddf[key + '.metrics']
-        trunc_params, mappings = truncate_dataframe(params)
+        params = pd.DataFrame(param_rows)
+        trunc_params, mappings = truncate_dataframe_items(params)
         results = {
-            'index': index,
+            'index': pd.DataFrame(index_rows),
+            'metrics': pd.DataFrame(metric_rows),
             'params': trunc_params,
-            'metrics': metrics,
-            'mappings': mappings,
         }
-        eval_type_to_results[key] = results
+        eval_type_to_results[node_name] = results
+
     return eval_type_to_results
 
 
-def truncate(x):
-    return slugify_ext.smart_truncate(x, max_length=16, trunc_loc=0, hash_len=4, head='', tail='')
-
-
-def truncate_dataframe(params):
+def truncate_dataframe_items(params):
+    """
+    Truncates long, typically path-like items in a data frame.
+    """
+    def truncate(x):
+        return slugify_ext.smart_truncate(x, max_length=16, trunc_loc=0,
+                                          hash_len=4, head='', tail='')
     mappings = {}
     if len(params):
         x = params.loc[0]
@@ -147,10 +178,13 @@ def truncate_dataframe(params):
 
 
 def analyze_tables(eval_type_to_results):
+    eval_type_to_aggregator = {}
     for key, results in eval_type_to_results.items():
         agg = Aggregator(results, type=key)
+        eval_type_to_aggregator[key] = agg
         # TODO : nicer replacement of long paths for params
         # metrics['sc_poly_eval.metrics.sc_macro_f1']
+    return eval_type_to_aggregator
 
 
 class Aggregator:
@@ -159,6 +193,7 @@ class Aggregator:
         agg.type = type
         agg.metrics = results['metrics']
         agg.params = results['params']
+        agg.index = results['index']
 
     def analyze(agg):
         from watch.utils import result_analysis
@@ -175,7 +210,7 @@ def plot_examples():
     pass
 
 
-def plot_tables():
+def plot_tables(agg):
     # from watch.mlops import smart_result_parser
     # for fpath in fpaths:
     #     ...
@@ -200,49 +235,18 @@ def plot_tables():
     ]
     kwplot.close_figures()
 
+    metric = 'sc_poly_eval.metrics.sc_macro_f1'
+
     # df['sc_poly_eval.metrics.macro_f1_active']
     for metric in metrics_of_interset:
         node_id = metric.split('.')[0]
         metric_name = metric.split('.')[-1]
-        df = tables[node_id]
+        DotDictDataFrame(agg.metrics)[node_id]
+        df = pd.concat([agg.metrics, agg.index, agg.params], axis=1)
         plt.figure()
         ax = sns.boxplot(data=df, x='region_id', y=metric)
         ax.set_ylabel(metric_name)
         ax.set_title(node_id + ' ' + metric_name)
-
-
-def main(cmdline=True, **kwargs):
-    """
-    Ignore:
-        >>> from watch.mlops.aggregate import *  # NOQA
-        >>> import watch
-        >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-        >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
-        >>> cmdline = 0
-        >>> kwargs = {
-        >>>     # 'root_dpath': expt_dvc_dpath / '_testpipe',
-        >>>     # 'pipeline': 'joint_bas_sc_nocrop',
-        >>>     'root_dpath': expt_dvc_dpath / '_testsc',
-        >>>     'pipeline': 'sc',
-        >>> }
-        >>> ## Execute
-        >>> main(cmdline=cmdline, **kwargs)
-    """
-    config = AggregateEvluationConfig.legacy(cmdline=cmdline, data=kwargs)
-    cacher = ub.Cacher(
-        'table_cacher', appname='watch', depends=dict(config),
-        enabled=1,
-    )
-    tables = cacher.tryload()
-    if tables is None:
-        eval_type_to_results = build_tables(config)
-        cacher.save(eval_type_to_results)
-
-    analyze_tables(eval_type_to_results)
-
-    plot_tables()
-
-    plot_examples()  # TODO
 
 
 # def node_matching_outputs(node):

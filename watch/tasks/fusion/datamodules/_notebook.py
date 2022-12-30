@@ -4,8 +4,8 @@ Developer notebook
 
 
 def visualize_invariant_batch():
-    import os
-    os.environ['XDEV_PROFILE'] = '1'
+    # import os
+    # os.environ['XDEV_PROFILE'] = '1'
 
     import watch
     from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset

@@ -53,6 +53,7 @@ Example:
     >>> self.requested_tasks['change'] = 1
     >>> self.requested_tasks['saliency'] = 1
     >>> self.requested_tasks['class'] = 0
+    >>> self.requested_tasks['boxes'] = 1
     >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
     >>> index['allow_augment'] = False
     >>> item = self[index]
@@ -1173,8 +1174,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # Execute data sampling
         ###
         # New true-multimodal data items
-        gid_to_sample: Dict[str, Dict] = {}
-        gid_to_isbad: Dict[str, bool] = {}
+        gid_to_sample: Dict[int, Dict] = {}
+        gid_to_isbad: Dict[int, bool] = {}
 
         for gid in target_['gids']:
             self._sample_one_frame(gid, sampler, coco_dset, target_, with_annots,
@@ -1371,11 +1372,18 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     frame2['change'] = frame_change
                     frame2['change_weights'] = change_weights.clip(0, 1)
 
-        truth_keys = [
+        pixelwise_truth_keys = [
             'change', 'class_idxs',
             'saliency', 'class_weights',
             'saliency_weights', 'change_weights'
         ]
+        annotwise_truth_keys = [
+            'box_ltrb', 'box_tids', 'box_cidx', 'box_weight',
+        ]
+        coord_truth_keys = [
+            'box_ltrb',
+        ]
+        truth_keys = pixelwise_truth_keys + annotwise_truth_keys
 
         # If we are augmenting
         fliprot_params = target_.get('fliprot_params', None)
@@ -1383,12 +1391,22 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             for frame_item in frame_items:
                 frame_modes = frame_item['modes']
                 for mode_key in list(frame_modes.keys()):
+                    # Augment the underlying data
                     mode_data = frame_modes[mode_key]
                     frame_modes[mode_key] = data_utils.fliprot(mode_data, **fliprot_params, axes=[1, 2])
-                for key in truth_keys:
+                for key in pixelwise_truth_keys:
+                    # Augment the truth rasters in the same way
                     data = frame_item.get(key, None)
                     if data is not None:
                         frame_item[key] = data_utils.fliprot(data, **fliprot_params, axes=[-2, -1])
+                for key in coord_truth_keys:
+                    # Augment the truth coordinates in the same way
+                    data = frame_item.get(key, None)
+                    if data is not None:
+                        output_dims = frame_item['output_dims']
+                        output_dsize = output_dims[::-1]
+                        frame_item[key] = data_utils.fliprot_annot(
+                            kwimage.Boxes(data, 'ltrb'), **fliprot_params, axes=[-2, -1], canvas_dsize=output_dims).data
 
         # Convert data to torch
         for frame_item in frame_items:
@@ -1741,40 +1759,71 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         task_target_ignore['saliency'] = saliency_ignore
         task_target_ignore['class'] = frame_class_ignore
 
-        # Rasterize frame targets
+        # Rasterize frame targets into semantic segmentation masks
         ann_polys = dets.data['segmentations'].to_polygon_list()
         ann_aids = dets.data['aids']
         ann_cids = dets.data['cids']
         ann_tids = dets.data['tids']
+        ann_ltrb = dets.data['boxes'].to_ltrb().data
+
         frame_item['ann_aids'] = ann_aids
 
         frame_poly_weights = np.ones(space_shape, dtype=np.float32)
 
+        wants_saliency = self.requested_tasks['saliency']
+        wants_class = self.requested_tasks['class']
+        wants_change = self.requested_tasks['change']
+        wants_boxes = self.requested_tasks['boxes']
+
+        wants_class_sseg = wants_class or wants_change
+        wants_saliency_sseg = wants_saliency
+
+        wants_class_info = wants_class_sseg
+        wants_salient_info = wants_saliency or wants_boxes
+
+        if wants_boxes:
+            box_ltrb = []
+            box_tids = []
+            box_cidxs = []
+            box_weights = []
+
         # Note: it is important to respect class indexes, ids, and
         # name mappings
         # TODO: layer ordering? Multiclass prediction?
-        for poly, aid, cid, tid in zip(ann_polys, ann_aids, ann_cids, ann_tids):  # NOQA
+        for poly, ltrb, aid, cid, tid in zip(ann_polys, ann_ltrb, ann_aids, ann_cids, ann_tids):
+            weight = 1.0
 
             flag_poly_filled = False
-            if self.requested_tasks['saliency']:
+            if wants_salient_info:
                 # orig_cname = self.classes.id_to_node[cid]
                 new_salient_catname = task_tid_to_cnames['saliency'][tid][time_idx]
                 if new_salient_catname in self.salient_classes:
-                    poly.fill(frame_saliency, value=1)
-                    flag_poly_filled = True
-                if new_salient_catname in self.salient_ignore_classes:
+                    if wants_saliency_sseg:
+                        poly.fill(frame_saliency, value=1)
+                        flag_poly_filled = True
+                if wants_saliency_sseg and new_salient_catname in self.salient_ignore_classes:
+                    weight = 0.0
                     poly.fill(saliency_ignore, value=1)
 
-            if self.requested_tasks['class'] or self.requested_tasks['change']:
+            if wants_class_info:
                 new_class_catname = task_tid_to_cnames['class'][tid][time_idx]
                 new_class_cidx = self.classes.node_to_idx[new_class_catname]
                 orig_cidx = self.classes.id_to_idx[cid]
                 if new_class_catname in self.ignore_classes:
-                    poly.fill(frame_class_ignore, value=1)
-                    poly.fill(frame_class_ohe[orig_cidx], value=1)
+                    weight = 0.0
+                    if wants_class_sseg:
+                        poly.fill(frame_class_ignore, value=1)
+                        poly.fill(frame_class_ohe[orig_cidx], value=1)
                 elif new_class_catname in self.class_foreground_classes:
-                    poly.fill(frame_class_ohe[new_class_cidx], value=1)
-                    flag_poly_filled = True
+                    if wants_class_sseg:
+                        poly.fill(frame_class_ohe[new_class_cidx], value=1)
+                        flag_poly_filled = True
+
+            if wants_boxes:
+                box_ltrb.append(ltrb)
+                box_tids.append(-1 if tid is None else tid)
+                box_cidxs.append(new_class_cidx)
+                box_weights.append(weight)
 
             if self.dist_weights and flag_poly_filled:
                 # New feature where we encode that we care much more about
@@ -1842,10 +1891,17 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         saliency_weights = saliency_weights.clip(0, 1)
         frame_weights = frame_weights.clip(0, 1)
 
-        if self.requested_tasks['class'] or self.requested_tasks['change']:
+        if wants_boxes:
+            frame_item['box_ltrb'] = np.array(box_ltrb).astype(np.float32)
+            # ann_boxes.to_ltrb().data
+            frame_item['box_tids'] = np.array(box_tids).astype(np.int64)
+            frame_item['box_cidxs'] = np.array(box_cidxs).astype(np.int64)
+            frame_item['box_weights'] = np.array(box_weights).astype(np.float32)
+
+        if wants_class_sseg:
             frame_item['class_idxs'] = frame_cidxs
             frame_item['class_weights'] = class_weights
-        if self.requested_tasks['saliency']:
+        if wants_saliency_sseg:
             frame_item['saliency'] = frame_saliency
             frame_item['saliency_weights'] = saliency_weights
 
@@ -2118,40 +2174,54 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import ndsampler
             >>> import kwcoco
+            >>> import kwarray
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
-            >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> channels = 'B10|B8a|B1|B8|B11'
             >>> combinable_extra = [['B10', 'B8', 'B8a']]  # special behavior
             >>> # combinable_extra = None  # uncomment for raw behavior
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 530, 610), channels=channels)
-            >>> index = len(self) // 4
+            >>> self = KWCocoVideoDataset(coco_dset, sample_shape=(5, 530, 610), channels=channels)
+            >>> #index = len(self) // 4
+            >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][5]]
+            >>> if 1:
+            >>>     # More controlled settings for debug
+            >>>     self.disable_augmenter = True
             >>> item = self[index]
+            >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
             >>> fliprot_params = item['target'].get('fliprot_params', None)
-            >>> # Calculate the probability of change for each frame
+            >>> rng = kwarray.ensure_rng(None)
+            >>> #
+            >>> # Generate random predicted change probabilities for each frame
             >>> item_output = {}
             >>> change_prob_list = []
-            >>> for frame in item['frames'][1:]:
+            >>> for frame in item['frames'][1:]:  # first frame does not have change
             >>>     change_prob = kwimage.Heatmap.random(
-            >>>         dims=frame['output_dims'], classes=1).data['class_probs'][0]
+            >>>         dims=frame['output_dims'], classes=1, rng=rng).data['class_probs'][0]
             >>>     if fliprot_params:
             >>>         change_prob = data_utils.fliprot(change_prob, **fliprot_params)
             >>>     change_prob_list += [change_prob]
             >>> change_probs = np.stack(change_prob_list)
-            >>> item_output['change_probs'] = change_probs  # first frame does not have change
+            >>> item_output['change_probs'] = change_probs
             >>> #
-            >>> # Probability of each class for each frame
+            >>> # Generate random predicted class probabilities for each frame
             >>> class_prob_list = []
+            >>> frame_pred_ltrb_list = []
             >>> for frame in item['frames']:
             >>>     class_prob = kwimage.Heatmap.random(
-            >>>         dims=frame['output_dims'], classes=list(sampler.classes)).data['class_probs']
+            >>>         dims=frame['output_dims'], classes=list(self.classes), rng=rng).data['class_probs']
             >>>     class_prob_ = einops.rearrange(class_prob, 'c h w -> h w c')
             >>>     if fliprot_params:
             >>>         class_prob_ = data_utils.fliprot(class_prob_, **fliprot_params)
             >>>     class_prob_list += [class_prob_]
+            >>>     # Also generate a predicted box for each frame
+            >>>     frame_output_dsize = frame['output_dims'][::-1]
+            >>>     num_pred_boxes = rng.randint(0, 8)
+            >>>     pred_boxes = kwimage.Boxes.random(num_pred_boxes).scale(frame_output_dsize)
+            >>>     frame_pred_ltrb_list.append(pred_boxes.to_ltrb().data)
             >>> class_probs = np.stack(class_prob_list)
-            >>> item_output['class_probs'] = class_probs  # first frame does not have change
+            >>> item_output['class_probs'] = class_probs
+            >>> item_output['pred_ltrb'] = frame_pred_ltrb_list
             >>> #binprobs[0][:] = 0  # first change prob should be all zeros
-            >>> print(ub.repr2(self.summarize_item(item), nl=-1))
+            >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
             >>> canvas = self.draw_item(item, item_output, combinable_extra=combinable_extra, overlay_on_image=1)
             >>> canvas2 = self.draw_item(item, item_output, combinable_extra=combinable_extra, max_channels=3, overlay_on_image=0)
             >>> # xdoctest: +REQUIRES(--show)
@@ -2208,6 +2278,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             label_keys = [
                 'class_idxs', 'saliency', 'change'
                 'class_weights', 'saliency_weights', 'change_weights'
+                'box_ltrb',
+                # 'box_weights', 'box_tids', 'box_cidxs',
             ]
             for key in label_keys:
                 if frame.get(key, None) is not None:

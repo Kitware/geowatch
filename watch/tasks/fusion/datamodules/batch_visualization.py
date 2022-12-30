@@ -107,7 +107,7 @@ class BatchVisualizationBuilder:
         >>> plt = kwplot.autoplt()
         >>> #kwplot.imshow(canvas, fnum=1, pnum=(1, 2, 1))
         >>> #kwplot.imshow(canvas2, fnum=1, pnum=(1, 2, 2))
-        >>> kwplot.imshow(native_canvas, fnum=1, doclf=True, figtitle='Naitive Sampling')
+        >>> kwplot.imshow(native_canvas, fnum=1, doclf=True, figtitle='Native Sampling')
         >>> plt.gcf().tight_layout()
         >>> ######
         >>> # Resample the same item, but without native sampling for comparison
@@ -295,6 +295,9 @@ class BatchVisualizationBuilder:
                 'frame_truth': frame_truth,
                 'frame_weight': frame_weight,
                 'sensor': frame_item.get('sensor', '*'),
+                ###
+                'true_box_ltrb': frame_item.get('box_ltrb', None),
+                'output_dims': frame_item.get('output_dims', None),
             }
             frame_metas.append(frame_meta)
 
@@ -395,11 +398,12 @@ class BatchVisualizationBuilder:
                     norm_signal = kwimage.fill_nans_with_checkers(norm_signal)
                     cell['norm_signal'] = norm_signal
         else:
+            import warnings
+            from watch.utils import util_kwimage
             # Normalize each timestep by itself
             for frame_meta in frame_metas:
                 for row in frame_meta['chan_rows']:
                     raw_signal = row['raw_signal']
-                    import warnings
                     with warnings.catch_warnings():
                         warnings.filterwarnings('ignore', message='All-NaN slice')
                         if raw_signal.dtype.kind == 'u' and raw_signal.dtype.itemsize == 1:
@@ -413,7 +417,6 @@ class BatchVisualizationBuilder:
                     else:
                         norm_signal = raw_signal.copy()
                     norm_signal = kwimage.fill_nans_with_checkers(norm_signal)
-                    from watch.utils import util_kwimage
                     norm_signal = util_kwimage.ensure_false_color(norm_signal)
                     norm_signal = kwimage.atleast_3channels(norm_signal)
                     row['norm_signal'] = norm_signal
@@ -539,42 +542,49 @@ class BatchVisualizationBuilder:
         header_stack = builder._build_frame_header(frame_meta)
         vertical_stack.extend(header_stack)
 
-        # Build truth / metadata overlays
-        if len(frame_truth):
-            overlay_shape = ub.peek(frame_truth.values()).shape[0:2]
-        else:
-            overlay_shape = None
+        overlay_shape = frame_meta['output_dims']
+        # # Build truth / metadata overlays
+        # if len(frame_truth):
+        #     overlay_shape = ub.peek(frame_truth.values()).shape[0:2]
+        # else:
+        #     overlay_shape = None
 
         # Create overlays for training objective targets
         overlay_items = []
 
-        # Create the the true class label overlay
+        true_box_ltrb = frame_meta.get('true_box_ltrb', None)
+        if true_box_ltrb is not None:
+            true_boxes = kwimage.Boxes(true_box_ltrb, 'ltrb').numpy()
+        else:
+            true_boxes = None
+
+        # Create the true class label overlay
         overlay_key = 'class_idxs'
         if overlay_key in truth_overlay_keys and builder.requested_tasks['class']:
             class_idxs = frame_truth.get(overlay_key, None)
             true_heatmap = kwimage.Heatmap(class_idx=class_idxs, classes=classes)
-            class_overlay = true_heatmap.colorize('class_idx')
-            class_overlay[..., 3] = 0.5
+            overlay = true_heatmap.colorize('class_idx')
+            overlay[..., 3] = 0.5
             overlay_items.append({
-                'overlay': class_overlay,
+                'overlay': overlay,
                 'label_text': 'true class',
             })
 
-        # Create the the true saliency label overlay
+        # Create the true saliency label overlay
         overlay_key = 'saliency'
         if overlay_key in truth_overlay_keys and builder.requested_tasks['saliency']:
             saliency = frame_truth.get(overlay_key, None)
             if saliency is not None:
                 if 1:
-                    saliency_overlay = kwimage.make_heatmask(saliency.astype(np.float32), cmap='plasma').clip(0, 1)
-                    saliency_overlay[..., 3] *= 0.5
+                    overlay = kwimage.make_heatmask(saliency.astype(np.float32), cmap='plasma').clip(0, 1)
+                    overlay[..., 3] *= 0.5
                 else:
-                    saliency_overlay = np.zeros(saliency.shape + (4,), dtype=np.float32)
-                    saliency_overlay = kwimage.Mask(saliency, format='c_mask').draw_on(saliency_overlay, color='dodgerblue')
-                    saliency_overlay = kwimage.ensure_alpha_channel(saliency_overlay)
-                    saliency_overlay[..., 3] = (saliency > 0).astype(np.float32) * 0.5
+                    overlay = np.zeros(saliency.shape + (4,), dtype=np.float32)
+                    overlay = kwimage.Mask(saliency, format='c_mask').draw_on(overlay, color='dodgerblue')
+                    overlay = kwimage.ensure_alpha_channel(overlay)
+                    overlay[..., 3] = (saliency > 0).astype(np.float32) * 0.5
                 overlay_items.append({
-                    'overlay': saliency_overlay,
+                    'overlay': overlay,
                     'label_text': 'true saliency',
                 })
 
@@ -583,19 +593,30 @@ class BatchVisualizationBuilder:
         if overlay_key in truth_overlay_keys and builder.requested_tasks['change']:
             if overlay_shape is None:
                 overlay_shape = (32, 32)
-            change_overlay = np.zeros(overlay_shape + (4,), dtype=np.float32)
+            overlay = np.zeros(overlay_shape + (4,), dtype=np.float32)
             changes = frame_truth.get(overlay_key, None)
             if changes is not None:
                 if 1:
-                    change_overlay = kwimage.make_heatmask(changes.astype(np.float32), cmap='viridis').clip(0, 1)
-                    change_overlay[..., 3] *= 0.5
+                    overlay = kwimage.make_heatmask(changes.astype(np.float32), cmap='viridis').clip(0, 1)
+                    overlay[..., 3] *= 0.5
                 else:
-                    change_overlay = kwimage.Mask(changes, format='c_mask').draw_on(change_overlay, color='lime')
-                    change_overlay = kwimage.ensure_alpha_channel(change_overlay)
-                    change_overlay[..., 3] = (changes > 0).astype(np.float32) * 0.5
+                    overlay = kwimage.Mask(changes, format='c_mask').draw_on(overlay, color='lime')
+                    overlay = kwimage.ensure_alpha_channel(overlay)
+                    overlay[..., 3] = (changes > 0).astype(np.float32) * 0.5
             overlay_items.append({
-                'overlay': change_overlay,
+                'overlay': overlay,
                 'label_text': 'true change',
+            })
+
+        overlay_key = 'true_box_ltrb'
+        # if overlay_key in truth_overlay_keys and builder.requested_tasks['boxes']:
+        if true_boxes is not None and builder.requested_tasks['boxes']:
+            overlay = np.zeros(saliency.shape + (4,), dtype=np.float32)
+            if true_boxes is not None:
+                overlay = true_boxes.draw_on(overlay, color='kitware_green', thickness=16)
+            overlay_items.append({
+                'overlay': overlay,
+                'label_text': 'true boxes',
             })
 
         weight_items = []
@@ -620,6 +641,7 @@ class BatchVisualizationBuilder:
         }
 
         # TODO: clean up logic
+
         key = 'class_probs'
         overlay_index = 0
         if item_output and key in item_output and builder.requested_tasks['class']:
@@ -647,12 +669,6 @@ class BatchVisualizationBuilder:
                 'im': pred_part,
                 'type': 'data',
             })
-
-        if 0:
-            # for m in frame_metas:
-            #     print(m['frame_idx'])
-            for k, v in item_output.items():
-                print([z.shape for z in v])
 
         key = 'saliency_probs'
         if item_output and key in item_output and builder.requested_tasks['saliency']:
@@ -727,87 +743,125 @@ class BatchVisualizationBuilder:
                 'type': 'data',
             })
 
+        key = 'pred_ltrb'
+        overlay_index = 0
+        if item_output and key in item_output and builder.requested_tasks['boxes']:
+            pred_ltrb = item_output[key][frame_idx]
+            pred_boxes = kwimage.Boxes(pred_ltrb, 'ltrb')
+            x_shape = overlay_shape
+            if builder.overlay_on_image:
+                norm_signal = chan_rows[overlay_index]['norm_signal']
+                norm_signal = kwimage.imresize(norm_signal, dsize=x_shape[::-1])
+            else:
+                norm_signal = np.zeros(x_shape + (3,), dtype=np.float32)
+            pred_part = pred_boxes.draw_on(norm_signal, alpha=0.7,
+                                           color='kitware_blue', thickness=16)
+            if builder.rescale:
+                pred_part = kwimage.imresize(pred_part, **resizekw).clip(0, 1)
+
+            pred_text = f'pred boxes t={frame_idx}'
+            pred_part = kwimage.draw_text_on_image(
+                pred_part, pred_text, (1, 1), valign='top',
+                color='kitware_blue', border=3)
+            vertical_stack.append({
+                'im': pred_part,
+                'type': 'data',
+            })
+
         if not builder.overlay_on_image:
             # FIXME: might be broken
             # Draw the overlays by themselves
             for overlay_info in overlay_items:
-                label_text = overlay_info['label_text']
-                row_canvas = overlay_info['overlay'][..., 0:3]
-
-                if builder.rescale:
-                    row_canvas = kwimage.imresize(row_canvas, **resizekw)
-
-                row_canvas = row_canvas.clip(0, 1)
-                signal_bottom_y = 1  # hack: hardcoded
-                row_canvas = kwimage.ensure_uint255(row_canvas)
-                row_canvas = kwimage.draw_text_on_image(
-                    row_canvas, label_text, (1, signal_bottom_y + 1),
-                    valign='top', color='lime', border=3)
-                vertical_stack.append({
-                    'im': row_canvas,
-                    'type': 'data',
-                })
+                _draw_overlay_item_by_itself(builder, overlay_info, resizekw)
+                stack_item = _draw_overlay_item_by_itself(
+                    builder, overlay_info, resizekw)
+                vertical_stack.append(stack_item)
 
         for overlay_info in weight_items:
-            label_text = overlay_info['label_text']
-            row_canvas = overlay_info['overlay'][..., 0:3]
-            row_canvas = row_canvas.copy()
+            stack_item = _draw_overlay_item_by_itself(
+                builder, overlay_info, resizekw)
+            vertical_stack.append(stack_item)
 
-            if builder.rescale:
-                row_canvas = kwimage.imresize(row_canvas, **resizekw)
-
-            row_canvas = row_canvas.clip(0, 1)
-            signal_bottom_y = 1  # hack: hardcoded
-            row_canvas = kwimage.ensure_uint255(row_canvas)
-            row_canvas = kwimage.draw_text_on_image(
-                row_canvas, label_text, (1, signal_bottom_y + 1),
-                valign='top', color='lime', border=3)
-            vertical_stack.append({
-                'im': row_canvas,
-                'type': 'data',
-            })
-
+        iterx = -1
         for iterx, row in enumerate(chan_rows):
-            layers = []
-            label_text = None
-            norm_signal = row['norm_signal']
+
+            overlay_info = None
             if builder.overlay_on_image:
-                # Draw truth on the image itself
+                # Request an overlay on top of this item
                 if iterx < len(overlay_items):
                     overlay_info = overlay_items[iterx]
-                    overlay = overlay_info['overlay']
-                    overlay = kwimage.imresize(
-                        overlay, dsize=norm_signal.shape[0:2][::-1])
-                    layers.append(overlay)
-                    label_text = overlay_info['label_text']
 
-            layers.append(norm_signal)
-            row_canvas = kwimage.overlay_alpha_layers(layers)[..., 0:3]
+            stack_item = _draw_row_item(
+                row, builder, overlay_info, resizekw)
+            vertical_stack.append(stack_item)
 
-            if builder.rescale:
-                row_canvas = kwimage.imresize(row_canvas, **resizekw)
-
-            row_canvas = row_canvas.clip(0, 1)
-            row_canvas = kwimage.ensure_uint255(row_canvas)
-            row_canvas = kwimage.draw_text_on_image(
-                row_canvas, row['signal_text'], (1, 1), valign='top',
-                color='white', border=3)
-
-            if label_text:
-                # TODO: make draw_text_on_image able to return the
-                # geometry of what it drew and use that.
-                signal_bottom_y = 31  # hack: hardcoded
-                row_canvas = kwimage.draw_text_on_image(
-                    row_canvas, label_text, (1, signal_bottom_y + 1),
-                    valign='top', color='lime', border=3)
-            vertical_stack.append({
-                'im': row_canvas,
-                'type': 'data',
-            })
+        # If there aren't enough data items to draw the overlay on, then
+        # add more...
+        if builder.overlay_on_image:
+            if iterx < len(overlay_items):
+                pass
 
         for row in vertical_stack:
             row['im'] = kwimage.ensure_uint255(row['im'])
         return vertical_stack
+
+
+def _draw_overlay_item_by_itself(builder, overlay_info, resizekw):
+    label_text = overlay_info['label_text']
+    row_canvas = overlay_info['overlay'][..., 0:3]
+
+    if builder.rescale:
+        row_canvas = kwimage.imresize(row_canvas, **resizekw)
+
+    row_canvas = row_canvas.clip(0, 1)
+    signal_bottom_y = 1  # hack: hardcoded
+    row_canvas = kwimage.ensure_uint255(row_canvas)
+    row_canvas = kwimage.draw_text_on_image(
+        row_canvas, label_text, (1, signal_bottom_y + 1),
+        valign='top', color='lime', border=3)
+    stack_item = {
+        'im': row_canvas,
+        'type': 'data',
+    }
+    return stack_item
+
+
+def _draw_row_item(row, builder, overlay_info, resizekw):
+    layers = []
+    label_text = None
+    norm_signal = row['norm_signal']
+    if overlay_info is not None:
+        # Draw truth on the image itself
+        overlay = overlay_info['overlay']
+        overlay = kwimage.imresize(
+            overlay, dsize=norm_signal.shape[0:2][::-1])
+        layers.append(overlay)
+        label_text = overlay_info['label_text']
+
+    layers.append(norm_signal)
+    row_canvas = kwimage.overlay_alpha_layers(layers)[..., 0:3]
+
+    if builder.rescale:
+        row_canvas = kwimage.imresize(row_canvas, **resizekw)
+
+    row_canvas = row_canvas.clip(0, 1)
+    row_canvas = kwimage.ensure_uint255(row_canvas)
+    row_canvas = kwimage.draw_text_on_image(
+        row_canvas, row['signal_text'], (1, 1), valign='top',
+        color='white', border=3)
+
+    if label_text:
+        # TODO: make draw_text_on_image able to return the
+        # geometry of what it drew and use that.
+        signal_bottom_y = 31  # hack: hardcoded
+        row_canvas = kwimage.draw_text_on_image(
+            row_canvas, label_text, (1, signal_bottom_y + 1),
+            valign='top', color='lime', border=3)
+    stack_item = {
+        'im': row_canvas,
+        'type': 'data',
+    }
+    return stack_item
 
 
 def _debug_sample_in_context(self, target):
