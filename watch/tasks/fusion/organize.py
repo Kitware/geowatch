@@ -51,7 +51,7 @@ def suggest_paths(test_dataset=None, package_fpath=None, workdir=None,
     suggestions = {}
 
     # New logic that will supercede this file
-    from watch.mlops.expt_manager import ExperimentState
+    from watch.mlops.old.expt_manager import ExperimentState
     state = ExperimentState('*', '*')
     test_dset_name = state._condense_test_dset(test_dataset)
 

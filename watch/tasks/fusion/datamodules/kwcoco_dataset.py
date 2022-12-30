@@ -783,7 +783,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
         print(f'dataset notified: requested_tasks={requested_tasks}')
         assert requested_tasks is not None
-        self.requested_tasks = requested_tasks
+        self.requested_tasks.update(requested_tasks)
 
     @profile
     def _sample_one_frame(self, gid, sampler, coco_dset, target_, with_annots,

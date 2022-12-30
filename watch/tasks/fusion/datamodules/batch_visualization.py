@@ -554,7 +554,7 @@ class BatchVisualizationBuilder:
         header_stack = builder._build_frame_header(frame_meta)
         vertical_stack.extend(header_stack)
 
-        overlay_shape = frame_meta['output_dims']
+        overlay_shape = tuple(frame_meta['output_dims'])
         # # Build truth / metadata overlays
         # if len(frame_truth):
         #     overlay_shape = ub.peek(frame_truth.values()).shape[0:2]

@@ -218,7 +218,6 @@ def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outlier
             variants = [df_orig]
             if key not in HACK_NO_SMOOTH and smoothing_values:
                 for _smoothing_value in smoothing_values:
-                    print(f'_smoothing_value={_smoothing_value}')
                     if 0:
                         # TODO: can we get a hueristic for how much smoothing
                         # we might want? Look at the entropy of the derivative

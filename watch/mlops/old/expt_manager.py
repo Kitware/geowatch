@@ -87,7 +87,7 @@ import platform
 import scriptconfig as scfg
 from watch.utils import simple_dvc
 from watch import heuristics
-from watch.mlops.expt_state import ExperimentState, summarize_tables
+from watch.mlops.old.expt_state import ExperimentState, summarize_tables
 
 
 class ExptManagerConfig(scfg.DataConfig):
@@ -173,7 +173,7 @@ class ExptManagerConfig(scfg.DataConfig):
 
 def main(cmdline=True, **kwargs):
     """
-    from watch.mlops.expt_manager import *  # NOQA
+    from watch.mlops.old.expt_manager import *  # NOQA
     """
     config = ExptManagerConfig(cmdline=cmdline, data=kwargs)
     print('ExptManagerConfig config = {}'.format(ub.repr2(dict(config), nl=1)))
@@ -275,7 +275,7 @@ class DVCExptManager(ub.NiceRepr):
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_EXPT_DPATH)
-        >>> from watch.mlops.expt_manager import *  # NOQA
+        >>> from watch.mlops.old.expt_manager import *  # NOQA
         >>> import watch
         >>> manager = DVCExptManager.coerce(watch.find_dvc_dpath(tags='phase2_expt'))
         >>> manager.summarize()
