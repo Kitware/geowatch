@@ -448,6 +448,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
     def __init__(self, sampler, sample_shape=None, window_overlap=None,
                  mode='fit', **kwargs):
 
+        # note: sampler can be a ndsampler.CocoSampler or a kwcoco.CocoDataset
+
         # todo: replace with ndsampler.CocoSampler.coerce
         sampler = _coerce_ndsampler(sampler)
 
@@ -678,7 +680,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             # hack
             sensorchan_hist = None
             sensorchans = channels
-
         self.sensorchan = kwcoco.SensorChanSpec.coerce(sensorchans).normalize()
 
         # handle generic * sensors, the idea is that we find matches
@@ -798,6 +799,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # use a preprocessing step to nan-out these regions more robustly.
 
         # SAMECOLOR_QUALITY_HEURISTIC = target_.get('SAMECOLOR_QUALITY_HEURISTIC', 'region')
+        SAMECOLOR_VALUES = {0}
         SAMECOLOR_QUALITY_HEURISTIC = target_.get('SAMECOLOR_QUALITY_HEURISTIC', 'histogram')
         # SAMECOLOR_QUALITY_HEURISTIC = target_.get('SAMECOLOR_QUALITY_HEURISTIC', None)
         use_samecolor_region_method = SAMECOLOR_QUALITY_HEURISTIC == 'region'
@@ -806,7 +808,6 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # so we can hack this metric in. Setting it to none would generalize it
         # to allow any value in a large homogenous region to be considered as
         # nodata.
-        samecolor_values = {0}
 
         FORCE_LOADING_BAD_IMAGES = target_.get('FORCE_LOADING_BAD_IMAGES', 0)
         stop_on_bad_image = not FORCE_LOADING_BAD_IMAGES
@@ -882,38 +883,38 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 dtype=np.float32
             )
 
-            if SAMECOLOR_QUALITY_HEURISTIC and (set(stream) & valid_bands_for_samecolor_quality_heuristic):
-                # This should be a better heuristic than the others we were
-                # using
+            if SAMECOLOR_QUALITY_HEURISTIC:
+                # Update our observable mask based on bands heuristically
+                # marked as valid or observable (i.e. rgb bands)
+                stream_oset = ub.oset(stream)
+                relevant_bands = stream_oset & valid_bands_for_samecolor_quality_heuristic
+                if relevant_bands:
+                    hwc = sample['im'][0]
+                    # Only perform this test on the first relevant band
+                    relevant_band_idxs = [stream_oset.index(b) for b in relevant_bands[0:1]]
+                    flag_stack = []
+                    for b_sl in relevant_band_idxs:
+                        bands = hwc[:, :, b_sl]
+                        bands = np.ascontiguousarray(bands)
+                        if use_samecolor_region_method:
+                            # Speed up the compuation by doing this at a coarser scale
+                            is_samecolor = util_kwimage.find_samecolor_regions(
+                                bands, scale=0.4, min_region_size=49,
+                                values=SAMECOLOR_VALUES)
+                        else:
+                            # Faster histogram method
+                            is_samecolor = util_kwimage.find_high_frequency_values(
+                                bands, values=SAMECOLOR_VALUES)
+                        flag_stack.append(is_samecolor)
 
-                # Process the bands in groups of 3
-                hwc = sample['im'][0]
-                # band_slider = kwarray.SlidingWindow((int(np.ceil(hwc.shape[2] / 3) * 3),), window=(3,))
-                band_slider = kwarray.SlidingWindow((hwc.shape[2],), window=(1,))
-                flag_stack = []
-                # Only perform this test on the first band
-                for b_sl in it.islice(band_slider, 0, 1):
-                    bands = hwc[:, :, b_sl[0]]
-                    bands = np.ascontiguousarray(bands)
-                    if use_samecolor_region_method:
-                        # Speed up the compuation by doing this at a coarser scale
-                        is_samecolor = util_kwimage.find_samecolor_regions(
-                            bands, scale=0.4, min_region_size=49,
-                            values=samecolor_values)
-                    else:
-                        # Faster histogram method
-                        is_samecolor = util_kwimage.find_high_frequency_values(
-                            bands, values=samecolor_values)
-                    flag_stack.append(is_samecolor)
-
-                is_samecolor = np.stack(flag_stack, axis=2)
-                samecolor_flags = is_samecolor[None, :] > 0
-                num_samecolor = samecolor_flags.sum()
-                if num_samecolor > 0:
-                    nan_masks.append(samecolor_flags[0])
-                    # print(f'stream={stream}')
-                    # print(f'num_samecolor={num_samecolor}')
-                    # sample['im'][samecolor_flags] = np.nan
+                    is_samecolor = np.stack(flag_stack, axis=2)
+                    samecolor_flags = is_samecolor[None, :] > 0
+                    num_samecolor = samecolor_flags.sum()
+                    if num_samecolor > 0:
+                        nan_masks.append(samecolor_flags[0])
+                        # print(f'stream={stream}')
+                        # print(f'num_samecolor={num_samecolor}')
+                        # sample['im'][samecolor_flags] = np.nan
 
             if mask_low_quality and is_low_quality is not None:
                 apply_nan_nan_mask(sample['im'], is_low_quality)
@@ -947,8 +948,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 # A pixel is invalid if all channels are invalid
                 invalid_mask2d = invalid_mask[0].all(axis=2)
                 invalid_frac = invalid_mask2d.mean()
-                if invalid_frac > observable_threshold:
-                    force_bad = 'exceeded nodata threshold'
+                observable_frac = 1 - invalid_frac
+                if observable_frac < observable_threshold:
+                    force_bad = 'failed observable threshold'
                     if stop_on_bad_image:
                         break
 
@@ -962,9 +964,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 force_bad = 'no-streams'
 
         # Apply final nan masks
-        for stream in sample_streams.values():
-            for mask in nan_masks:
-                apply_nan_nan_mask(sample['im'], mask)
+        if nan_masks:
+            for sample in sample_streams.values():
+                for mask in nan_masks:
+                    apply_nan_nan_mask(sample['im'], mask)
 
         gid_to_isbad[gid] = force_bad
         gid_to_sample[gid] = sample_streams
@@ -1599,7 +1602,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     # warnings.warn('exhausted resample possibilities')
                     _bad_reasons = repr({k: v for k, v in gid_to_isbad.items() if v})
                     vidspace_box_str = str(vidspace_box)
-                    print(f'exhausted resample possibilities: {vidname} {vidspace_box_str} {_bad_reasons}')
+                    if 0:
+                        print(f'exhausted resample possibilities: {vidname} {vidspace_box_str} {_bad_reasons}')
                     # Exhausted all possibilities
                     break
                 for gid in new_gids:
@@ -1942,22 +1946,18 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-            >>> import ndsampler
             >>> import kwcoco
             >>> dct_dset = coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=3)
-            >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (2, 256, 256)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels='auto')
+            >>> self = KWCocoVideoDataset(dct_dset, sample_shape=sample_shape, channels='auto')
             >>> self.compute_dataset_stats(num_workers=2)
 
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
-            >>> import ndsampler
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2')
-            >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (2, 256, 256)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels='auto')
+            >>> self = KWCocoVideoDataset(coco_dset, sample_shape=sample_shape, channels='auto')
             >>> stats = self.compute_dataset_stats()
             >>> assert stats['class_freq']['star'] > 0 or stats['class_freq']['superstar'] > 0 or stats['class_freq']['eff'] > 0
             >>> assert stats['class_freq']['background'] > 0
@@ -1980,10 +1980,23 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> batch_size = 6
             >>> s = (self.compute_dataset_stats(num=num))
             >>> print('s = {}'.format(ub.repr2(s, nl=3)))
-            >>> self.compute_dataset_stats(num=num, with_intensity=False)
-            >>> self.compute_dataset_stats(num=num, with_class=False)
-            >>> self.compute_dataset_stats(num=num, with_class=False, with_intensity=False)
+            >>> stats1 = self.compute_dataset_stats(num=num, with_intensity=False)
+            >>> stats2 = self.compute_dataset_stats(num=num, with_class=False)
+            >>> stats3 = self.compute_dataset_stats(num=num, with_class=False, with_intensity=False)
+
+        Ignore:
+            >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
+            >>> import kwcoco
+            >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2')
+            >>> for img in coco_dset.imgs.values():
+            ...     img['sensor_coarse'] = 'demo'  # hack in a sensor
+            >>> sample_shape = (1, 32, 32)
+            >>> self = KWCocoVideoDataset(coco_dset, sample_shape=sample_shape, channels='demo:(r|g,b,n)')
+            >>> self.input_sensorchan
+            >>> stats = self.compute_dataset_stats(batch_size=1)
+
         """
+        from watch.utils.slugify_ext import smart_truncate
         num = num if isinstance(num, int) and num is not True else 1000
         if not with_class and not with_intensity:
             num = 1  # efficiency hack
@@ -1997,10 +2010,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                                   shuffle=True, batch_size=batch_size)
 
         # Track moving average of each fused channel stream
-        channel_stats = ub.AutoDict()
-
-        timer = ub.Timer().tic()
-        timer.first = 1
+        channel_stats = ub.ddict(lambda: ub.ddict(kwarray.RunningStats))
 
         classes = self.classes
         num_classes = len(classes)
@@ -2029,69 +2039,160 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         is_native = self.config['input_space_scale'] == 'native'
 
         print('unique_sensor_modes = {}'.format(ub.repr2(unique_sensor_modes, nl=1)))
-        # TODO: we can compute the intensity histogram much more efficiently by
-        # only doing it for unique channels (which might be duplicated)
-        prog = ub.ProgIter(loader, desc='estimate dataset stats')
-        for batch_items in prog:
-            for item in batch_items:
-                if item is None:
-                    continue
-                if with_vidid:
-                    vidid = item['video_id']
-                    if vidid not in set(video_id_histogram.keys()):
-                        video_id_histogram[vidid] = 0
-                    video_id_histogram[vidid] += 1
-                for frame_item in item['frames']:
+
+        intensity_dtype = np.float64
+
+        WITH_PROG_POSTFIX_TEXT = 1
+        if WITH_PROG_POSTFIX_TEXT:
+            # Create timer to periodically summarize intermediate results while
+            # full dataset stats are accumulating
+            timer = ub.Timer().tic()
+            timer._first = True
+            postfix_update_threshold = 0  # seconds
+
+        USE_RICH_UPDATES = 1
+        if USE_RICH_UPDATES:
+            from rich.console import Group
+            from rich.panel import Panel
+            from rich.live import Live
+            import rich
+            import rich.progress
+            from rich.progress import (BarColumn, Progress, TextColumn)
+
+            overall_progress = Progress(
+                TextColumn("{task.description}"),
+                BarColumn(),
+                rich.progress.MofNCompleteColumn(),
+                # "[progress.percentage]{task.percentage:>3.0f}%",
+                rich.progress.TimeRemainingColumn(),
+                rich.progress.TimeElapsedColumn(),
+            )
+            overall_task_id = overall_progress.add_task(
+                "estimate dataset stats", total=len(loader))
+            stats_pannel = Panel('<stats>')
+            progress_group = Group(
+                stats_pannel,
+                overall_progress,
+            )
+            live_context = Live(progress_group)
+            live_context.__enter__()
+
+            iter_ = iter(loader)
+        else:
+            # TODO: we can compute the intensity histogram more efficiently by
+            # only doing it for unique channels (which might be duplicated)
+            prog = ub.ProgIter(loader, desc='estimate dataset stats', verbose=3)
+            iter_ = iter(prog)
+
+        try:
+            for batch_items in iter_:
+                for item in batch_items:
+                    if item is None:
+                        continue
+
+                    if with_vidid:
+                        # Update video-level histogram
+                        vidid = item['video_id']
+                        if vidid not in set(video_id_histogram.keys()):
+                            video_id_histogram[vidid] = 0
+                        video_id_histogram[vidid] += 1
+
+                    for frame_item in item['frames']:
+
+                        if with_class:
+                            # Update pixel-level class histogram
+                            class_idxs = frame_item['class_idxs']
+                            if class_idxs is not None:
+                                item_freq = np.histogram(class_idxs.ravel(), bins=bins)[0]
+                                total_freq += item_freq
+                        if with_intensity:
+                            # Update pixel-level intensity histogram
+                            sensor_code = frame_item['sensor']
+                            modes = frame_item['modes']
+
+                            for mode_code, mode_val in modes.items():
+                                sensor_mode_hist[(sensor_code, mode_code)] += 1
+                                running = channel_stats[sensor_code][mode_code]
+                                val = mode_val.numpy().astype(intensity_dtype)
+                                weights = np.isfinite(val).astype(intensity_dtype)
+                                # kwarray can handle nans now
+                                if is_native:
+                                    # Put channels last so we can update multiple at once
+                                    flat_vals = val.transpose(1, 2, 0).reshape(-1, val.shape[0])
+                                    flat_weights = weights.transpose(1, 2, 0).reshape(-1, weights.shape[0])
+                                    running.update_many(flat_vals, weights=flat_weights)
+                                else:
+                                    running.update(val, weights=weights)
+
+                if WITH_PROG_POSTFIX_TEXT and timer._first or timer.toc() > postfix_update_threshold:
                     if with_class:
-                        class_idxs = frame_item['class_idxs']
-                        if class_idxs is not None:
-                            # print(np.unique(class_idxs))
-                            item_freq = np.histogram(class_idxs.ravel(), bins=bins)[0]
-                            total_freq += item_freq
+                        intermediate = ub.sorted_vals(ub.dzip(classes, total_freq), reverse=True)
+                        intermediate_text = ub.repr2(intermediate, compact=1)
+                        intermediate_text_trunc = smart_truncate(intermediate_text, max_length=40, trunc_loc=0.8)
+                    else:
+                        intermediate_text = ''
+                        intermediate_text_trunc = ''
+
                     if with_intensity:
-                        sensor_code = frame_item['sensor']
-                        modes = frame_item['modes']
+                        try:
+                            curr = ub.udict(running.summarize(keepdims=False))
+                        except RuntimeError:
+                            curr = {}
+                        else:
+                            curr = curr & {'mean', 'std', 'max', 'min'}
+                            curr = curr.map_values(float)
+                        text = ub.repr2(curr, compact=1, precision=1, nl=0) + ' ' + intermediate_text_trunc
+                    else:
+                        text = intermediate_text_trunc
+                    if USE_RICH_UPDATES:
+                        if 1:
+                            input_stats = {}
+                            for sensor, submodes in channel_stats.items():
+                                for chan_key, running in submodes.items():
+                                    if is_native:
+                                        # ensure we have the expected shape
+                                        try:
+                                            perchan_stats = running.summarize(axis=ub.NoParam, keepdims=True)
+                                        except RuntimeError:
+                                            perchan_stats = {'mean': np.array([np.nan]), 'std': np.array([np.nan])}
+                                        chan_mean = perchan_stats['mean'][:, None, None]
+                                        chan_std = perchan_stats['std'][:, None, None]
+                                    else:
+                                        try:
+                                            perchan_stats = running.summarize(axis=(1, 2))
+                                        except RuntimeError:
+                                            perchan_stats = {'mean': np.array([[[np.nan]]]), 'std': np.array([[[np.nan]]])}
+                                        chan_mean = perchan_stats['mean']
+                                        chan_std = perchan_stats['std']
 
-                        for mode_code, mode_val in modes.items():
-                            sensor_mode_hist[(sensor_code, mode_code)] += 1
-                            running = channel_stats[sensor_code][mode_code]
-                            if not running:
-                                running = kwarray.RunningStats()
-                                channel_stats[sensor_code][mode_code] = running
-                            dtype = np.float64
-                            val = mode_val.numpy().astype(dtype)
-                            weights = np.isfinite(val).astype(dtype)
-                            # kwarray can handle nans now
-                            if is_native:
-                                # Put channels last so we can update multiple at once
-                                flat_vals = val.transpose(1, 2, 0).reshape(-1, val.shape[0])
-                                flat_weights = weights.transpose(1, 2, 0).reshape(-1, weights.shape[0])
-                                running.update_many(flat_vals, weights=flat_weights)
-                            else:
-                                running.update(val, weights=weights)
+                                    # For nans, set the mean to zero and set the std to a huge
+                                    # number if we dont have any data on it. That will prevent
+                                    # the network from doing much with it which is really the
+                                    # best we can do here.
+                                    chan_mean[np.isnan(chan_mean)] = 0
+                                    chan_std[np.isnan(chan_std)] = 1e8
 
-            if timer.first or timer.toc() > 5:
-                from watch.utils.slugify_ext import smart_truncate
-                if with_class:
-                    intermediate = ub.sorted_vals(ub.dzip(classes, total_freq), reverse=True)
-                    intermediate_text = ub.repr2(intermediate, compact=1)
-                    intermediate_text = smart_truncate(intermediate_text, max_length=40, trunc_loc=0.8)
-                else:
-                    intermediate_text = ''
+                                    chan_mean = chan_mean.round(6)
+                                    chan_std = chan_std.round(6)
+                                    # print('perchan_stats = {}'.format(ub.repr2(perchan_stats, nl=1)))
+                                    input_stats[(sensor, chan_key)] = {
+                                        'mean': chan_mean.ravel(),
+                                        'std': chan_std.ravel(),
+                                    }
+                        stats_pannel.renderable = ub.repr2(input_stats)
+                        overall_progress.update(overall_task_id, description=text)
+                    else:
+                        prog.set_postfix_str(text)
+                    timer._first = 0
+                    timer.tic()
 
-                if with_intensity:
-                    curr = ub.udict(running.summarize(keepdims=False))
-                    curr = curr & {'mean', 'std', 'max', 'min'}
-                    curr = curr.map_values(float)
-                    text = ub.repr2(curr, compact=1, precision=1, nl=0) + ' ' + intermediate_text
-                else:
-                    text = intermediate_text
-                prog.set_postfix_str(text)
-                timer.first = 0
-                timer.tic()
+                if USE_RICH_UPDATES:
+                    overall_progress.update(overall_task_id, advance=1)
+        finally:
+            if USE_RICH_UPDATES:
+                live_context.__exit__(None, None, None)
+
         self.disable_augmenter = False
-
-        channel_stats = channel_stats.to_dict()
 
         # Return the raw counts and let the model choose how to handle it
         if with_class:

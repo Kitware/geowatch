@@ -359,5 +359,4 @@ class NestedPool(list):
                     break
                 idx = nested.rng.randint(0, num)
                 chosen = chosen[idx]
-
         return chosen

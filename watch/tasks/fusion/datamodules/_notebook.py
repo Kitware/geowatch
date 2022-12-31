@@ -25,7 +25,7 @@ def visualize_invariant_batch():
     target['SAMECOLOR_QUALITY_HEURISTIC'] = None
     target['SAMECOLOR_QUALITY_HEURISTIC'] = 'histogram'
     target['FORCE_LOADING_BAD_IMAGES'] = 1
-    target['mask_low_quality'] = 0
+    target['mask_low_quality'] = 1
     target['quality_threshold'] = 0.5
     target['observable_threshold'] = 0.5
     target['resample_invalid_frames'] = 3
@@ -63,3 +63,41 @@ def visualize_invariant_batch():
 # for timer in ti.reset('time'):
 #     with timer:
 #         util_kwimage.find_high_frequency_values(bands)
+
+
+def _check_target(self):
+    target = self.new_sample_grid['targets'][0]
+    dset = self.sampler.dset
+    dset.images(target['gids']).lookup('sensor_coarse')
+
+    item = self.getitem(target)
+
+    gids = item['target']['gids']
+    gid = gids[0]
+    coco_img = dset.coco_image(gid)
+
+    import kwplot
+    kwplot.autompl()
+    kwplot.figure()
+
+    kwplot.imshow(self.draw_item(item))
+
+    data = coco_img.delay('invariants.0').finalize()
+    kwplot.imshow(data)
+
+    gid_to_isbad = {}
+    gid_to_sample = {}
+    target_ = item['target'].copy()
+    with_annots = 0
+    coco_dset = dset
+    sampler = self.sampler
+    gid = target_['gids'][0]
+
+    self._sample_one_frame(gid, sampler, coco_dset, target_, with_annots,
+                           gid_to_isbad, gid_to_sample)
+    sample = gid_to_sample[gid]
+
+    for mode_name, mode in sample.items():
+        pass
+
+    mode_name = 'invariants.0|invariants.1|invariants.2|invariants.3|invariants.4|invariants.5|invariants.6|invariants.7|invariants.8|invariants.9|invariants.10|invariants.11|invariants.12|invariants.13|invariants.14|invariants.15|invariants.16'

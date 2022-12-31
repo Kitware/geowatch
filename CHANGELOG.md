@@ -14,7 +14,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Merge in Nov21 Pseudolive branch
 * Add `quality_threshold` argument to the kwcoco video dataset, deprecate `use_cloudmask`.
 * Add `observable_threshold` which is similar to but not exactly the same as quality threshold
-* Add uniform time sampling and better mutli-sampler support
+* Add uniform time sampling and better multi-sampler support
 * KWcocoVideoDataLoader now has initial support for a bounding box task.
 
 ### Fixed

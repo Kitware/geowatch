@@ -33,7 +33,11 @@ python -m watch.mlops.schedule_evaluation \
     --cache=1 --skip_existing=0 --run=1
 
 
-# Real data
+#####################
+## BAS-Only Evaluation 
+## ------------------
+## Assumes the ground truth is the BAS input
+#####################
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 
@@ -41,33 +45,56 @@ python -m watch.mlops.schedule_evaluation \
     --params="
         matrix:
             bas_pxl.package_fpath:
-                - $DVC_EXPT_DPATH/bas_native_epoch44.pt
-            bas_pxl.channels:
-                - 'red|green|blue'
+                #- $DVC_EXPT_DPATH/bas_native_epoch44.pt
+                - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
             bas_pxl.test_dataset:
-                - $DVC_DATA_DPATH/Drop4-BAS/KR_R001.kwcoco.json
-                # - $DVC_DATA_DPATH/Drop4-BAS/KR_R002.kwcoco.json
-            bas_pxl.chip_dims: 196,196
+                - $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R001.kwcoco.json
+                - $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R002.kwcoco.json
+                - $DVC_DATA_DPATH/Drop4-BAS/data_vali_US_R007.kwcoco.json
+                - $DVC_DATA_DPATH/Drop4-BAS/data_train_BR_R002.kwcoco.json
+                - $DVC_DATA_DPATH/Drop4-BAS/data_train_AE_R001.kwcoco.json
             bas_pxl.chip_overlap: 0.3
-            bas_pxl.window_space_scale: 10GSD
-            bas_pxl.output_space_scale: 10GSD
-            bas_pxl.input_space_scale: native
-            bas_pxl.time_span: 6m
-            bas_pxl.time_sampling: soft2+distribute
-            bas_poly.moving_window_size: null
+            bas_pxl.chip_dims:
+                - auto
+                - 256,256
+            bas_pxl.time_span: auto
+            bas_pxl.time_sampling: auto
             bas_poly.thresh:
+                - 0.07
                 - 0.1
-                - 0.2
+                - 0.13
+            bas_poly.moving_window_size: null
+            bas_pxl.enabled: 1
+            bas_poly.enabled: 1
             bas_poly_eval.enabled: 1
             bas_pxl_eval.enabled: 1
-            bas_poly_viz.enabled: 1
+            bas_poly_viz.enabled: 0
+            include:
+                - bas_pxl.chip_dims: 256,256
+                  bas_pxl.window_space_basale: 10GSD
+                  bas_pxl.input_space_basale: 10GSD
+                  bas_pxl.output_space_basale: 10GSD
+                - bas_pxl.chip_dims: 256,256
+                  bas_pxl.window_space_basale: 15GSD
+                  bas_pxl.input_space_basale: 15GSD
+                  bas_pxl.output_space_basale: 15GSD
+                - bas_pxl.chip_dims: 256,256
+                  bas_pxl.window_space_basale: 30GSD
+                  bas_pxl.input_space_basale: 30GSD
+                  bas_pxl.output_space_basale: 30GSD
+                - bas_pxl.chip_dims: auto
+                  bas_pxl.window_space_scale: auto
+                  bas_pxl.input_space_scale: auto
+                  bas_pxl.output_space_scale: auto
     " \
     --root_dpath="$DVC_EXPT_DPATH/_testpipe" \
-    --devices="0,1" --queue_size=2 \
+    --devices="0," --queue_size=1 \
     --backend=tmux --queue_name "demo-queue" \
     --pipeline=bas \
     --run=1
 
+
+#######
 
 
 # Real data

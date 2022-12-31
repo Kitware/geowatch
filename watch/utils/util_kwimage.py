@@ -883,7 +883,12 @@ def find_high_frequency_values(image, values=None, abs_thresh=0.2,
         >>> image = np.random.rand(32, 32) + 1
         >>> values = {0}
         >>> abs_thresh = 0.2
-        >>> mask = find_high_frequency_values(image, values)
+        >>> mask1 = find_high_frequency_values(image, values)
+        >>> assert not np.any(mask1)
+        >>> image[0:16] = 0
+        >>> mask2 = find_high_frequency_values(image, values)
+        >>> assert np.all(mask2[:16])
+        >>> assert not np.any(mask2[16:])
     """
     def ratios(data):
         return data[:-1] / data[1:]
