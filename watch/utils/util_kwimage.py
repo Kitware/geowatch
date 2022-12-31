@@ -876,6 +876,14 @@ def find_high_frequency_values(image, values=None, abs_thresh=0.2,
         >>> kwplot.imshow(colorize_label_image(mask2), pnum=(1, 3, 2), title=f'find_high_frequency_values: @ {t2.elapsed:0.4}s')
         >>> kwplot.imshow(colorize_label_image(mask3), pnum=(1, 3, 3), title=f'find_samecolor_regions @ {t3.elapsed:0.4}s')
         >>> kwplot.show_if_requested()
+
+    Ignore:
+        >>> # With value restriction
+        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> image = np.random.rand(32, 32) + 1
+        >>> values = {0}
+        >>> abs_thresh = 0.2
+        >>> mask = find_high_frequency_values(image, values)
     """
     def ratios(data):
         return data[:-1] / data[1:]
@@ -891,11 +899,10 @@ def find_high_frequency_values(image, values=None, abs_thresh=0.2,
             axis = tuple(range(2, len(flags.shape)))
             flags = flags.all(axis=axis)
         abs_score = flags.sum() / flags.size
-        if abs_thresh is not None:
-            if abs_score > abs_thresh:
-                mask = flags
-            else:
-                mask = np.ones_like(flags)
+        if abs_thresh is not None and abs_score > abs_thresh:
+            mask = flags
+        else:
+            mask = np.zeros_like(flags)
 
         if rel_thresh is not None:
             raise NotImplementedError
