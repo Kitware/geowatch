@@ -1797,7 +1797,7 @@ python -m watch.tasks.fusion.fit \
     --vali_dataset="$VALI_FPATH" \
     --test_dataset="$TEST_FPATH" \
     --class_loss='focal' \
-    --saliency_loss='dicefocal' \
+    --saliency_loss='focal' \
     --global_change_weight=0.00 \
     --global_class_weight=0.00 \
     --global_saliency_weight=1.00 \
@@ -1831,6 +1831,10 @@ python -m watch.tasks.fusion.fit \
     --accelerator="gpu" \
     --devices "0," \
     --amp_backend=apex \
+    --mask_low_quality=True \
     --use_cloudmask=1 \
     --num_sanity_val_steps=0 \
-    --init=/home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/package-interupt/package_epoch6_step252174.pt
+    --max_epoch_length=16384 \
+    --init=/home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_0/package-interupt/package_epoch1_step8247.pt
+
+    #--init=/home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/package-interupt/package_epoch6_step252174.pt

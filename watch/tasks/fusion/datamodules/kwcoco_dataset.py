@@ -1782,7 +1782,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         wants_class_sseg = wants_class or wants_change
         wants_saliency_sseg = wants_saliency
 
-        wants_class_info = wants_class_sseg
+        wants_class_info = wants_class_sseg or wants_boxes
         wants_salient_info = wants_saliency or wants_boxes
 
         if wants_boxes:
