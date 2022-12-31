@@ -555,6 +555,8 @@ class BatchVisualizationBuilder:
         vertical_stack.extend(header_stack)
 
         overlay_shape = tuple(frame_meta['output_dims'])
+        if overlay_shape is None:
+            overlay_shape = (32, 32)
         # # Build truth / metadata overlays
         # if len(frame_truth):
         #     overlay_shape = ub.peek(frame_truth.values()).shape[0:2]
@@ -603,8 +605,6 @@ class BatchVisualizationBuilder:
         # Create the true change label overlay
         overlay_key = 'change'
         if overlay_key in truth_overlay_keys and builder.requested_tasks['change']:
-            if overlay_shape is None:
-                overlay_shape = (32, 32)
             overlay = np.zeros(overlay_shape + (4,), dtype=np.float32)
             changes = frame_truth.get(overlay_key, None)
             if changes is not None:
@@ -623,9 +623,11 @@ class BatchVisualizationBuilder:
         overlay_key = 'true_box_ltrb'
         # if overlay_key in truth_overlay_keys and builder.requested_tasks['boxes']:
         if true_boxes is not None and builder.requested_tasks['boxes']:
-            overlay = np.zeros(saliency.shape + (4,), dtype=np.float32)
+            overlay = np.zeros(overlay_shape + (4,), dtype=np.float32)
+            dim = max(*overlay_shape)
+            thickness = max(1, int(dim // 64))
             if true_boxes is not None:
-                overlay = true_boxes.draw_on(overlay, color='kitware_green', thickness=16)
+                overlay = true_boxes.draw_on(overlay, color='kitware_green', thickness=thickness)
             overlay_items.append({
                 'overlay': overlay,
                 'label_text': 'true boxes',

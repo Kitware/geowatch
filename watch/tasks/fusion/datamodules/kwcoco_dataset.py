@@ -815,6 +815,14 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         observable_threshold = target_.get('observable_threshold', self.config['observable_threshold'])
         mask_low_quality = target_.get('mask_low_quality', self.config['mask_low_quality'])
 
+        # These bands propogate their nans to other bands / streams
+        PROPOGATE_NAN_BANDS = target_.get('PROPOGATE_NAN_BANDS', {'red'})
+
+        # We are only going to compute the same color quality heuristic on a
+        # single band.
+        valid_bands_for_samecolor_quality_heuristic = {
+            'red', 'green', 'blue', 'nir', 'swir16', 'swir22'}
+
         # sensor_channels = (self.sample_channels & coco_img.channels).normalize()
         tr_frame = target_.copy()
         tr_frame['gids'] = [gid]
@@ -825,6 +833,9 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # Flag will be set to true if any heuristic on any channel stream
         # forces us to mark this image as bad.
         force_bad = False
+
+        # Track pixel positions we will force to nan
+        unobservable_mask = data_utils.MultiscaleMask()
 
         # Handle a special quality band channel.
         if quality_threshold > 0 or mask_low_quality:
@@ -840,35 +851,13 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 cloud_frac = is_low_quality.mean()
                 if cloud_frac > cloud_threshold:
                     force_bad = 'too cloudy'
+                if mask_low_quality:
+                    unobservable_mask.update(is_low_quality)
         else:
             is_low_quality = None
 
-        # We are only going to compute the same color quality heuristic on a
-        # single band.
-        valid_bands_for_samecolor_quality_heuristic = {
-            'red', 'green', 'blue', 'nir', 'swir16', 'swir22'}
-
         if sensor_channels.numel() == 0:
             force_bad = 'Missing requested channels'
-
-        # Create a list of pixel positions we will force to nan
-        nan_masks = []
-        # We could add quality to the "nam_masks" idea, but that would mean we
-        # couldn't reject frames as early as we currently can. Probably a way
-        # to make this nicer.
-        # if mask_low_quality and is_low_quality is not None:
-        #     nan_masks.append(is_low_quality.astype(np.uint8))
-
-        def apply_nan_nan_mask(im, nan_mask):
-            im_ = im[0]
-            dsize = im_.shape[0:2][::-1]
-            # When imresize is updated, type and shape fixes can be removed.
-            nan_mask = kwimage.imresize(nan_mask.astype(np.uint8), dsize=dsize,
-                                        interpolation='nearest')
-            nan_mask = kwarray.atleast_nd(nan_mask, 3)
-            nan_mask = nan_mask.astype(bool)
-            nan_mask = np.broadcast_to(nan_mask, im.shape)
-            im[nan_mask] = np.nan
 
         # Sample information from each stream (each stream is a separate mode)
         sample_streams = {}
@@ -883,71 +872,33 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 dtype=np.float32
             )
 
+            stream_oset = ub.oset(stream)
             if SAMECOLOR_QUALITY_HEURISTIC:
                 # Update our observable mask based on bands heuristically
                 # marked as valid or observable (i.e. rgb bands)
-                stream_oset = ub.oset(stream)
                 relevant_bands = stream_oset & valid_bands_for_samecolor_quality_heuristic
                 if relevant_bands:
-                    hwc = sample['im'][0]
-                    # Only perform this test on the first relevant band
-                    relevant_band_idxs = [stream_oset.index(b) for b in relevant_bands[0:1]]
-                    flag_stack = []
-                    for b_sl in relevant_band_idxs:
-                        bands = hwc[:, :, b_sl]
-                        bands = np.ascontiguousarray(bands)
-                        if use_samecolor_region_method:
-                            # Speed up the compuation by doing this at a coarser scale
-                            is_samecolor = util_kwimage.find_samecolor_regions(
-                                bands, scale=0.4, min_region_size=49,
-                                values=SAMECOLOR_VALUES)
-                        else:
-                            # Faster histogram method
-                            is_samecolor = util_kwimage.find_high_frequency_values(
-                                bands, values=SAMECOLOR_VALUES)
-                        flag_stack.append(is_samecolor)
+                    samecolor_mask = data_utils.samecolor_nodata_mask(
+                        stream, sample['im'][0], relevant_bands,
+                        use_regions=use_samecolor_region_method,
+                        samecolor_values=SAMECOLOR_VALUES)
+                    unobservable_mask.update(samecolor_mask)
 
-                    is_samecolor = np.stack(flag_stack, axis=2)
-                    samecolor_flags = is_samecolor[None, :] > 0
-                    num_samecolor = samecolor_flags.sum()
-                    if num_samecolor > 0:
-                        nan_masks.append(samecolor_flags[0])
-                        # print(f'stream={stream}')
-                        # print(f'num_samecolor={num_samecolor}')
-                        # sample['im'][samecolor_flags] = np.nan
+            relevant_bands = stream_oset & PROPOGATE_NAN_BANDS
+            for band in relevant_bands:
+                # Marke the nans in these bands as unobservable.
+                bx = stream_oset.index('red')
+                band = sample['im'][0][:, :, bx]
+                nodata_mask = np.isnan(band)
+                unobservable_mask.update(nodata_mask)
 
-            if mask_low_quality and is_low_quality is not None:
-                apply_nan_nan_mask(sample['im'], is_low_quality)
-
-            invalid_mask = np.isnan(sample['im'])
-
-            any_invalid = np.any(invalid_mask)
-            none_invalid = not any_invalid
-            if none_invalid:
-                all_invalid = False
-            else:
-                all_invalid = np.all(invalid_mask)
-
-            if any_invalid:
-                sample['invalid_mask'] = invalid_mask
-            else:
-                sample['invalid_mask'] = None
-
-            if all_invalid:
-                # HACK: if the red channel is all bad, discard the frame
-                # This can be removed once nodata is correctly propogated
-                # in the team features. OR we can add a feature where we
-                # keep track of an image wide observation mask and use that
-                # instead of using red as a proxy for it.
-                if 'red' in set(stream):
-                    force_bad = 'invalid red channel'
-                    if stop_on_bad_image:
-                        break
+            if unobservable_mask.masked_fraction == 1.0:
+                force_bad = 'unobservable sample'
+                if stop_on_bad_image:
+                    break
 
             if observable_threshold:
-                # A pixel is invalid if all channels are invalid
-                invalid_mask2d = invalid_mask[0].all(axis=2)
-                invalid_frac = invalid_mask2d.mean()
+                invalid_frac = unobservable_mask.masked_fraction
                 observable_frac = 1 - invalid_frac
                 if observable_frac < observable_threshold:
                     force_bad = 'failed observable threshold'
@@ -959,15 +910,19 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 # dont ask for annotations multiple times
                 first_with_annot = False
 
+        # After all channels are sampled, apply final invalid mask.
+        for stream, sample in sample_streams.items():
+            unobservable_mask.apply(sample['im'][0], np.nan)
+            invalid_mask = np.isnan(sample['im'])
+            any_invalid = np.any(invalid_mask)
+            if any_invalid:
+                sample['invalid_mask'] = invalid_mask
+            else:
+                sample['invalid_mask'] = None
+
         if not force_bad:
             if len(sample_streams) == 0:
                 force_bad = 'no-streams'
-
-        # Apply final nan masks
-        if nan_masks:
-            for sample in sample_streams.values():
-                for mask in nan_masks:
-                    apply_nan_nan_mask(sample['im'], mask)
 
         gid_to_isbad[gid] = force_bad
         gid_to_sample[gid] = sample_streams
