@@ -36,16 +36,19 @@ Example:
     >>> import watch
     >>> import kwcoco
     >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
-    >>> coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
+    >>> #coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
+    >>> coco_fpath = dvc_dpath / 'Drop4-BAS/data_train.kwcoco.json'
     >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+    >>> ##'red|green|blue',
     >>> self = KWCocoVideoDataset(
     >>>     coco_dset,
-    >>>     sample_shape=(5, 320, 320),
+    >>>     sample_shape=(11, 196, 196),
     >>>     window_overlap=0,
     >>>     channels="(S2,L8):blue|green|red|nir",
     >>>     input_space_scale='10GSD',
     >>>     window_space_scale='10GSD',
     >>>     output_space_scale='10GSD',
+    >>>     #normalize_peritem='nir',
     >>>     dist_weights=1,
     >>>     quality_threshold=0,
     >>>     neg_to_pos_ratio=0, time_sampling='soft2',
@@ -56,15 +59,30 @@ Example:
     >>> self.requested_tasks['boxes'] = 1
     >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
     >>> index['allow_augment'] = False
-    >>> item = self[index]
+
     >>> target = item['target']
     >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
     >>> # xdoctest: +REQUIRES(--show)
     >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0, rescale=0)
     >>> import kwplot
     >>> kwplot.autompl()
-    >>> kwplot.imshow(canvas)
+    >>> kwplot.imshow(canvas, fnum=1)
     >>> kwplot.show_if_requested()
+
+Ignore:
+    >>> self.disable_augmenter = True
+    >>> self.normalize_peritem = None
+    >>> self.config['mask_low_quality'] = True
+    >>> self.config['force_bad_frames'] = True
+    >>> self.config['resample_invalid_frames'] = 0
+    >>> index = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][int((2.5 * 17594) // 3)]]
+    >>> item1 = self[index]
+    >>> self.normalize_peritem = kwcoco.FusedChannelSpec.coerce('red|green|blue|nir')
+    >>> item2 = self[index]
+    >>> canvas1 = self.draw_item(item1, max_channels=10, overlay_on_image=0, rescale=0, draw_weights=0, draw_truth=0)
+    >>> canvas2 = self.draw_item(item2, max_channels=10, overlay_on_image=0, rescale=0, draw_weights=0, draw_truth=0)
+    >>> kwplot.imshow(canvas1, fnum=3, pnum=(2, 1, 1), title='no norm (per-frame normalized for viz purposes only)')
+    >>> kwplot.imshow(canvas2, fnum=3, pnum=(2, 1, 2), title='per-item normalization (across time)')
 """
 import einops
 import warnings
@@ -78,8 +96,6 @@ import ubelt as ub
 from torch.utils import data
 from typing import Dict
 import scriptconfig as scfg
-import itertools as it
-
 
 from watch import heuristics
 from watch.utils import kwcoco_extensions
@@ -253,6 +269,8 @@ class KWCocoVideoDatasetConfig(scfg.Config):
 
         'normalize_perframe': scfg.Value(False, help='undocumented - ignored'),
 
+        'normalize_peritem': scfg.Value(None, help='if specified normalize these bands/channels on a per-batch-item level across time. if True normalize all bands.'),
+
         'set_cover_algo': scfg.Value(None, choices=[None, 'approx', 'exact'], help=ub.paragraph(
             '''
             Set cover algorithm to remove redundant gids when building space
@@ -308,6 +326,7 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             ''')),
 
         'mask_low_quality': scfg.Value(False, help='if True, mask low quality pixels with nans'),
+        'force_bad_frames': scfg.Value(False, help='if True, force loading, even if data is nan / missing'),
 
         'observable_threshold': scfg.Value(0.0, help=ub.paragraph(
             '''
@@ -658,6 +677,11 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
         self.special_inputs = {}
 
+        if self.config['normalize_peritem']:
+            self.normalize_peritem = kwcoco.ChannelSpec.coerce(self.config['normalize_peritem']).fuse()
+        else:
+            self.normalize_peritem = None
+
         if channels is None or channels == 'auto':
             # Find reasonable channel defaults if channels is not specified.
             # Use dataset stats to determine something sensible.
@@ -809,8 +833,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         # to allow any value in a large homogenous region to be considered as
         # nodata.
 
-        FORCE_LOADING_BAD_IMAGES = target_.get('FORCE_LOADING_BAD_IMAGES', 0)
-        stop_on_bad_image = not FORCE_LOADING_BAD_IMAGES
+        force_bad_frames = target_.get('force_bad_frames', self.config['force_bad_frames'])
+        stop_on_bad_image = not force_bad_frames
         quality_threshold = target_.get('quality_threshold', self.config['quality_threshold'])
         observable_threshold = target_.get('observable_threshold', self.config['observable_threshold'])
         mask_low_quality = target_.get('mask_low_quality', self.config['mask_low_quality'])
@@ -1149,7 +1173,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         else:
             main_skip_reason = None
 
-        resample_invalid = target_.get('resample_invalid_frames', self.resample_invalid_frames)
+        resample_invalid = target_.get('resample_invalid_frames', self.config['resample_invalid_frames'])
         if resample_invalid:
             if resample_invalid is True:
                 max_tries = 3
@@ -1166,8 +1190,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             raise FailedSample('Cannot force a good sample')
 
         final_gids = ub.oset(video_gids) & good_gids
-        FORCE_LOADING_BAD_IMAGES = target_.get('FORCE_LOADING_BAD_IMAGES', 0)
-        if FORCE_LOADING_BAD_IMAGES:
+        force_bad_frames = target_.get('force_bad_frames', 0)
+        if force_bad_frames:
             final_gids = ub.oset(video_gids) & set(gid_to_isbad.keys())
             print('gid_to_isbad = {}'.format(ub.repr2(gid_to_isbad, nl=1)))
 
@@ -1304,6 +1328,55 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                         to_restack.append(norm_item)
                     mode_data_normed = np.stack(to_restack, axis=0)
                     frame_modes[mode_key] = mode_data_normed
+
+        if self.normalize_peritem is not None:
+            # Gather items that need normalization
+            needs_norm = ub.ddict(list)
+            for frame_item in frame_items:
+                sensor = frame_item['sensor']
+                frame_modes = frame_item['modes']
+                for mode_key in list(frame_modes.keys()):
+                    mode_chan = kwcoco.FusedChannelSpec.coerce(mode_key)
+                    common_key = mode_chan.intersection(self.normalize_peritem)
+                    if common_key:
+                        parent_data = frame_modes[mode_key]
+                        for chan_name, chan_sl in mode_chan.component_indices(axis=0).items():
+                            if chan_name in common_key:
+                                chan_data = parent_data[chan_sl]
+                                valid_mask = ~np.isnan(chan_data)
+                                needs_norm[(sensor, chan_name)].append((chan_data, valid_mask, parent_data, chan_sl))
+
+            peritem_normalizer_params = {
+                'high': 0.95,
+                # 'mid': 0.5,
+                'mid': 0.5,
+                'low': 0.00,
+                # 'mode': 'sigmoid',
+                'mode': 'linear',
+            }
+            # print('DO NORM')
+            for key, norm_items in needs_norm.items():
+                raw_datas = np.concatenate([t[0].ravel() for t in norm_items], axis=0)
+                valid_mask = np.concatenate([t[1].ravel() for t in norm_items], axis=0)
+                valid_raw_datas = raw_datas[valid_mask]
+                # Compute normalizers over the entire temporal range per-sensor
+                normalizer = kwimage.find_robust_normalizers(valid_raw_datas,
+                                                             params=peritem_normalizer_params)
+                # Postprocess / regularize the normalizer
+                prior_min = min(0, normalizer['min_val'])
+                alpha = 0.5
+                normalizer['min_val'] * alpha + (1 - alpha) * prior_min
+                # normalizer['min_val'] = 0  # keep min
+                # print(f'normalizer={normalizer}')
+                # Apply the normalize to the original data
+                for chan_data, valid_mask, parent_data, chan_sl in norm_items:
+                    valid_data = chan_data[valid_mask]
+                    # Apply normalizer (todo: use kwimage variant)
+                    imdata_normalized = apply_robust_normalizer(
+                        normalizer, chan_data, valid_data, valid_mask,
+                        dtype=np.float32, copy=True)
+                    # Overwrite original data with new normalized variants
+                    parent_data[chan_sl] = imdata_normalized
 
         # Add in change truth
         if not self.inference_only:
@@ -1878,11 +1951,13 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             ('num', num),
             ('hashid', self.sampler.dset._cached_hashid()),
             ('sensorchan', self.input_sensorchan.concise().spec),
-            ('normalize_perframe', self.normalize_perframe),
+            ('normalize_perframe', self.config['normalize_perframe']),
             ('with_intensity', with_intensity),
             ('with_class', with_class),
             ('depends_version', 16),  # bump if `compute_dataset_stats` changes
         ])
+        if self.config['normalize_peritem']:
+            depends['normalize_peritem'] = self.config['normalize_peritem']
         workdir = None
         cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
         dataset_stats = cacher.tryload()
@@ -2197,7 +2272,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
 
     def draw_item(self, item, item_output=None, combinable_extra=None,
                   max_channels=5, max_dim=224, norm_over_time=0,
-                  overlay_on_image=False, draw_weights=True, rescale='auto'):
+                  overlay_on_image=False, draw_weights=True, rescale='auto', **kw):
         """
         Visualize an item produced by this DataSet.
 
@@ -2312,7 +2387,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             max_channels=max_channels, overlay_on_image=overlay_on_image,
             draw_weights=draw_weights, combinable_extra=combinable_extra,
             classes=self.classes, requested_tasks=self.requested_tasks,
-            rescale=rescale)
+            rescale=rescale, **kw)
         canvas = builder.build()
         return canvas
 
@@ -2427,3 +2502,23 @@ class FailedSample(Exception):
 
 # Backwards compat
 sample_video_spacetime_targets = spacetime_grid_builder.sample_video_spacetime_targets
+
+
+def apply_robust_normalizer(normalizer, imdata, imdata_valid, mask, dtype, copy=True):
+    import kwarray
+    if normalizer['type'] is None:
+        imdata_normalized = imdata.astype(dtype, copy=copy)
+    elif normalizer['type'] == 'normalize':
+        # Note: we are using kwarray normalize, the one in kwimage is deprecated
+        imdata_valid_normalized = kwarray.normalize(
+            imdata_valid.astype(dtype, copy=copy), mode=normalizer['mode'],
+            beta=normalizer['beta'], alpha=normalizer['alpha'],
+        )
+        if mask is None:
+            imdata_normalized = imdata_valid_normalized
+        else:
+            imdata_normalized = imdata.copy() if copy else imdata
+            imdata_normalized[mask] = imdata_valid_normalized
+    else:
+        raise KeyError(normalizer['type'])
+    return imdata_normalized

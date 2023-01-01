@@ -130,9 +130,10 @@ class BatchVisualizationBuilder:
 
     def __init__(builder, item, item_output=None, combinable_extra=None,
                  max_channels=5, max_dim=224, norm_over_time=0,
-                 overlay_on_image=False, draw_weights=True, classes=None,
-                 default_combinable_channels=None,
-                 requested_tasks=None, rescale=1):
+                 overlay_on_image=False, draw_weights=True,
+                 draw_truth=True, classes=None,
+                 default_combinable_channels=None, requested_tasks=None,
+                 rescale=1):
         builder.max_channels = max_channels
         builder.max_dim = max_dim
         builder.norm_over_time = norm_over_time
@@ -141,6 +142,7 @@ class BatchVisualizationBuilder:
         builder.item = item
         builder.overlay_on_image = overlay_on_image
         builder.draw_weights = draw_weights
+        builder.draw_truth = draw_truth
         builder.requested_tasks = requested_tasks
 
         builder.classes = classes
@@ -588,66 +590,67 @@ class BatchVisualizationBuilder:
         else:
             true_boxes = None
 
-        # Create the true class label overlay
-        overlay_key = 'class_idxs'
-        if overlay_key in truth_overlay_keys and builder.requested_tasks['class']:
-            class_idxs = frame_truth.get(overlay_key, None)
-            true_heatmap = kwimage.Heatmap(class_idx=class_idxs, classes=classes)
-            overlay = true_heatmap.colorize('class_idx')
-            overlay[..., 3] = 0.5
-            overlay_items.append({
-                'overlay': overlay,
-                'label_text': 'true class',
-            })
-
-        # Create the true saliency label overlay
-        overlay_key = 'saliency'
-        if overlay_key in truth_overlay_keys and builder.requested_tasks['saliency']:
-            saliency = frame_truth.get(overlay_key, None)
-            if saliency is not None:
-                if 1:
-                    overlay = kwimage.make_heatmask(saliency.astype(np.float32), cmap='plasma').clip(0, 1)
-                    overlay[..., 3] *= 0.5
-                else:
-                    overlay = np.zeros(saliency.shape + (4,), dtype=np.float32)
-                    overlay = kwimage.Mask(saliency, format='c_mask').draw_on(overlay, color='dodgerblue')
-                    overlay = kwimage.ensure_alpha_channel(overlay)
-                    overlay[..., 3] = (saliency > 0).astype(np.float32) * 0.5
+        if builder.draw_truth:
+            # Create the true class label overlay
+            overlay_key = 'class_idxs'
+            if overlay_key in truth_overlay_keys and builder.requested_tasks['class']:
+                class_idxs = frame_truth.get(overlay_key, None)
+                true_heatmap = kwimage.Heatmap(class_idx=class_idxs, classes=classes)
+                overlay = true_heatmap.colorize('class_idx')
+                overlay[..., 3] = 0.5
                 overlay_items.append({
                     'overlay': overlay,
-                    'label_text': 'true saliency',
+                    'label_text': 'true class',
                 })
 
-        # Create the true change label overlay
-        overlay_key = 'change'
-        if overlay_key in truth_overlay_keys and builder.requested_tasks['change']:
-            overlay = np.zeros(overlay_shape + (4,), dtype=np.float32)
-            changes = frame_truth.get(overlay_key, None)
-            if changes is not None:
-                if 1:
-                    overlay = kwimage.make_heatmask(changes.astype(np.float32), cmap='viridis').clip(0, 1)
-                    overlay[..., 3] *= 0.5
-                else:
-                    overlay = kwimage.Mask(changes, format='c_mask').draw_on(overlay, color='lime')
-                    overlay = kwimage.ensure_alpha_channel(overlay)
-                    overlay[..., 3] = (changes > 0).astype(np.float32) * 0.5
-            overlay_items.append({
-                'overlay': overlay,
-                'label_text': 'true change',
-            })
+            # Create the true saliency label overlay
+            overlay_key = 'saliency'
+            if overlay_key in truth_overlay_keys and builder.requested_tasks['saliency']:
+                saliency = frame_truth.get(overlay_key, None)
+                if saliency is not None:
+                    if 1:
+                        overlay = kwimage.make_heatmask(saliency.astype(np.float32), cmap='plasma').clip(0, 1)
+                        overlay[..., 3] *= 0.5
+                    else:
+                        overlay = np.zeros(saliency.shape + (4,), dtype=np.float32)
+                        overlay = kwimage.Mask(saliency, format='c_mask').draw_on(overlay, color='dodgerblue')
+                        overlay = kwimage.ensure_alpha_channel(overlay)
+                        overlay[..., 3] = (saliency > 0).astype(np.float32) * 0.5
+                    overlay_items.append({
+                        'overlay': overlay,
+                        'label_text': 'true saliency',
+                    })
 
-        overlay_key = 'true_box_ltrb'
-        # if overlay_key in truth_overlay_keys and builder.requested_tasks['boxes']:
-        if true_boxes is not None and builder.requested_tasks['boxes']:
-            overlay = np.zeros(overlay_shape + (4,), dtype=np.float32)
-            dim = max(*overlay_shape)
-            thickness = max(1, int(dim // 64))
-            if true_boxes is not None:
-                overlay = true_boxes.draw_on(overlay, color='kitware_green', thickness=thickness)
-            overlay_items.append({
-                'overlay': overlay,
-                'label_text': 'true boxes',
-            })
+            # Create the true change label overlay
+            overlay_key = 'change'
+            if overlay_key in truth_overlay_keys and builder.requested_tasks['change']:
+                overlay = np.zeros(overlay_shape + (4,), dtype=np.float32)
+                changes = frame_truth.get(overlay_key, None)
+                if changes is not None:
+                    if 1:
+                        overlay = kwimage.make_heatmask(changes.astype(np.float32), cmap='viridis').clip(0, 1)
+                        overlay[..., 3] *= 0.5
+                    else:
+                        overlay = kwimage.Mask(changes, format='c_mask').draw_on(overlay, color='lime')
+                        overlay = kwimage.ensure_alpha_channel(overlay)
+                        overlay[..., 3] = (changes > 0).astype(np.float32) * 0.5
+                overlay_items.append({
+                    'overlay': overlay,
+                    'label_text': 'true change',
+                })
+
+            overlay_key = 'true_box_ltrb'
+            # if overlay_key in truth_overlay_keys and builder.requested_tasks['boxes']:
+            if true_boxes is not None and builder.requested_tasks['boxes']:
+                overlay = np.zeros(overlay_shape + (4,), dtype=np.float32)
+                dim = max(*overlay_shape)
+                thickness = max(1, int(dim // 64))
+                if true_boxes is not None:
+                    overlay = true_boxes.draw_on(overlay, color='kitware_green', thickness=thickness)
+                overlay_items.append({
+                    'overlay': overlay,
+                    'label_text': 'true boxes',
+                })
 
         weight_items = []
         if builder.draw_weights:
