@@ -1793,7 +1793,7 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 CHANNELS="blue|green|red|nir"
-EXPERIMENT_NAME=Drop4_BAS_2022_12_15GSD_BGRN_V10
+EXPERIMENT_NAME=Drop4_BAS_2022_12_10GSD_BGRN_V11
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
@@ -1802,17 +1802,17 @@ python -m watch.tasks.fusion.fit \
     --vali_dataset="$VALI_FPATH" \
     --test_dataset="$TEST_FPATH" \
     --class_loss='focal' \
-    --saliency_loss='focal' \
+    --saliency_loss='dicefocal' \
     --global_change_weight=0.00 \
     --global_class_weight=0.00 \
     --global_saliency_weight=1.00 \
     --learning_rate=1e-5 \
     --weight_decay=1e-8 \
-    --input_space_scale="15GSD" \
-    --window_space_scale="15GSD" \
-    --output_space_scale="15GSD" \
+    --input_space_scale="10GSD" \
+    --window_space_scale="10GSD" \
+    --output_space_scale="10GSD" \
     --chip_dims=224,224 \
-    --neg_to_pos_ratio=0.3 \
+    --neg_to_pos_ratio=0.4 \
     --accumulate_grad_batches=16 \
     --batch_size=2 \
     --max_epochs=160 \
@@ -1821,6 +1821,7 @@ python -m watch.tasks.fusion.fit \
     --dist_weights=False \
     --time_steps=7 \
     --channels="$CHANNELS" \
+    --normalize_peritem="blue|green|red|nir" \
     --time_sampling=soft2-contiguous-hardish3\
     --time_span=3m-6m-1y \
     --tokenizer=linconv \
@@ -1830,7 +1831,7 @@ python -m watch.tasks.fusion.fit \
     --draw_interval=5min \
     --num_draw=4 \
     --use_centered_positives=False \
-    --normalize_inputs=128 \
+    --normalize_inputs=2048 \
     --stream_channels=16 \
     --temporal_dropout=0.5 \
     --accelerator="gpu" \
@@ -1838,8 +1839,10 @@ python -m watch.tasks.fusion.fit \
     --amp_backend=apex \
     --mask_low_quality=True \
     --use_cloudmask=1 \
+    --observable_threshold=0.6 \
     --num_sanity_val_steps=0 \
     --max_epoch_length=16384 \
-    --init=/home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_0/package-interupt/package_epoch1_step8247.pt
+    --init=/home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_3/package-interupt/package_epoch7_step3908.pt
 
+    #--init=/home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_0/package-interupt/package_epoch1_step8247.pt
     #--init=/home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/package-interupt/package_epoch6_step252174.pt
