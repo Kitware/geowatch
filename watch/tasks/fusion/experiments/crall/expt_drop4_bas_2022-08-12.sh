@@ -1736,7 +1736,7 @@ python -m watch.tasks.fusion.fit \
     --saliency_weights="auto" \
     --class_loss='focal' \
     --saliency_loss='focal' \
-    --global_change_weight=1.00 \
+    --global_change_weight=1e-5 \
     --global_class_weight=0 \
     --global_saliency_weight=1e-5 \
     --learning_rate=1e-5 \
@@ -1771,9 +1771,12 @@ python -m watch.tasks.fusion.fit \
     --amp_backend=apex \
     --resample_invalid_frames=3 \
     --quality_threshold=0.8 \
+    --mask_low_quality=True \
     --num_sanity_val_steps=0 \
     --max_epoch_length=16384 \
-    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_BGRNSH_invar_V10/lightning_logs/version_0/package-interupt/package_epoch21_step10752.pt 
+    --init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_BGRNSH_invar_V10/lightning_logs/version_1/package-interupt/package_epoch4_step2560.pt
+    #--init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_BGRNSH_invar_V10/lightning_logs/version_0/package-interupt/package_epoch21_step10752.pt 
+    #--init=/home/joncrall/remote/toothbrush/data/dvc-repos/smart_expt_dvc/training/toothbrush/joncrall/Drop4-BAS/runs/Drop4_BAS_BGRNSH_invar_V10/lightning_logs/version_0/package-interupt/package_epoch21_step10752.pt 
 
 
 ### Ooo run - V 10... again

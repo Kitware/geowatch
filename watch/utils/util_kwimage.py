@@ -8,6 +8,7 @@ import ubelt as ub
 # Backwards compat definition. Code was ported to kwimage.
 from kwimage import connected_components  # NOQA
 from kwimage import draw_header_text  # NOQA
+from kwimage import Box  # NOQA
 
 
 def _auto_kernel_sigma(kernel=None, sigma=None, autokernel_mode='ours'):
@@ -320,9 +321,29 @@ def colorize_label_image(labels, with_legend=True, label_mapping=None, label_to_
         >>> kwplot.autompl()
         >>> kwplot.imshow(canvas1, pnum=(1, 2, 1), fnum=1)
         >>> kwplot.imshow(canvas2, pnum=(1, 2, 2), fnum=1)
+
+    Example:
+        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> labels = (np.random.rand(32, 32) * 10) % 5
+        >>> labels[0:2] = np.nan
+        >>> label_to_color = {0: 'black'}
+        >>> label_mapping = {0: 'background'}
+        >>> with_legend = True
+        >>> canvas1 = colorize_label_image(labels, with_legend,
+        >>>     label_mapping=label_mapping, label_to_color=label_to_color)
+        >>> canvas2 = colorize_label_image(labels, with_legend,
+        >>>     label_mapping=label_mapping, label_to_color=None)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas1, pnum=(1, 2, 1), fnum=1)
+        >>> kwplot.imshow(canvas2, pnum=(1, 2, 2), fnum=1)
     """
     import kwimage
     unique_labels, inv = np.unique(labels, return_inverse=True)
+    if np.isnan(unique_labels).any():
+        import math
+        unique_labels = ['nan' if math.isnan(f) else f for f in unique_labels]
 
     if label_to_color is not None:
         used_labels = set(label_to_color) & set(unique_labels)
@@ -364,9 +385,9 @@ def colorize_label_image(labels, with_legend=True, label_mapping=None, label_to_
             box3 = box3.scale(box2.width / box1.width)
             if box3.height > box2.height:
                 box3 = box3.scale(box2.height / box3.height)
-            print(f'box2={box2}')
-            print(f'box3={box3}')
-            print(f'box1={box1}')
+            # print(f'box2={box2}')
+            # print(f'box3={box3}')
+            # print(f'box1={box1}')
             sf = box3.width / box1.width
             legend = kwimage.imresize(legend, scale=sf)
             # if box3.width > box2.width:
@@ -382,7 +403,7 @@ def colorize_label_image(labels, with_legend=True, label_mapping=None, label_to_
                                       bg_value='gray')
         # resize='smaller')
     else:
-        colored_label_img = canvas
+        canvas = colored_label_img
     return canvas
 
 
@@ -1458,231 +1479,30 @@ def find_low_overlap_covering_boxes_optimize(polygons, scale, min_box_dim, max_b
     # prob = pulp.LpProblem("Set Cover", pulp.LpMinimize)
 
 
-class Box(ub.NiceRepr):
+def exactly_1channel(image, ndim=2):
     """
-    Represents a single Box.
+    Like atleast_3channels, exactly_1channel returns a 2D image as either
+    a 2D or 3D array, depending on if ndim is 2 or 3. For a 3D array the last
+    dimension is always 1.  An error is thrown if assumptions are not met.
 
-    For multiple boxes use kwimage.Boxes, which is more efficient.
-    This is a convinience class.
-
-    Currently implemented by storing a Boxes object with one item and indexing
-    into it. Could be done more efficiently
+    Args:
+        image (ndarray):
+        ndim (int): either 2 or 3
 
     Example:
-        >>> from watch.utils import util_kwimage
-        >>> box = util_kwimage.Box.random()
-        >>> print(f'box={box}')
-        >>> #
-        >>> box.scale(10).quantize().to_slice()
-        >>> #
-        >>> sl = (slice(0, 10), slice(0, 30))
-        >>> box = util_kwimage.Box.from_slice(sl)
-        >>> print(f'box={box}')
+        >>> assert exactly_1channel(np.empty((3, 3)), ndim=2).shape == (3, 3)
+        >>> assert exactly_1channel(np.empty((3, 3)), ndim=3).shape == (3, 3, 1)
+        >>> assert exactly_1channel(np.empty((3, 3, 1)), ndim=2).shape == (3, 3)
+        >>> assert exactly_1channel(np.empty((3, 3, 1)), ndim=3).shape == (3, 3, 1)
     """
-
-    def __init__(self, boxes, _check: bool = False):
-        if _check:
-            raise Exception(
-                'For now, only construct an instance of this using a class '
-                ' method, like coerce, from_slice, from_shapely, etc...')
-        self.boxes = boxes
-
-    @property
-    def format(self):
-        return self.boxes.format
-
-    @property
-    def data(self):
-        return self.boxes.data[0]
-
-    def __nice__(self):
-        data_repr = repr(self.data)
-        if '\n' in data_repr:
-            data_repr = ub.indent('\n' + data_repr.lstrip('\n'), '    ')
-        nice = '{}, {}'.format(self.format, data_repr)
-        return nice
-
-    @classmethod
-    def random(self, *args, **kwargs):
-        import kwimage
-        boxes = kwimage.Boxes.random(*args, **kwargs)
-        self = Box(boxes, _check=False)
-        return self
-
-    @classmethod
-    def from_slice(self, slice_):
-        import kwimage
-        boxes = kwimage.Boxes.from_slice(slice_)
-        self = Box(boxes, _check=False)
-        return self
-
-    @classmethod
-    def from_shapely(self, geom):
-        import kwimage
-        boxes = kwimage.Boxes.from_shapely(geom)
-        self = Box(boxes, _check=False)
-        return self
-
-    @classmethod
-    def from_dsize(self, dsize):
-        width, height = dsize
-        import kwimage
-        boxes = kwimage.Boxes([[0, 0, width, height]], 'ltrb')
-        self = Box(boxes, _check=False)
-        return self
-
-    @classmethod
-    def coerce(cls, data, **kwargs):
-        if isinstance(data, Box):
-            return data
+    if len(image.shape) == 3:
+        assert image.shape[2] == 1
+        if ndim == 2:
+            image = image[:, :, 0]
         else:
-            import numbers
-            # import kwimage
-            from kwarray.arrayapi import torch
-            if isinstance(data, list):
-                if data and isinstance(data[0], numbers.Number):
-                    data = np.array(data)[None, :]
-            if isinstance(data, np.ndarray) or torch and torch.is_tensor(data):
-                if len(data.shape) == 1:
-                    data = data[None, :]
-            # return cls(kwimage.Boxes.coerce(data, **kwargs))
-            # inline new coerce code until new version lands
-            from kwimage import Boxes
-            from shapely.geometry import Polygon
-            if isinstance(data, Boxes):
-                self = data
-            elif isinstance(data, Polygon):
-                self = Boxes.from_shapely(data)
-            else:
-                _arr_data = None
-                if isinstance(data, np.ndarray):
-                    _arr_data = np.array(data)
-                elif isinstance(data, list):
-                    _arr_data = np.array(data)
-
-                if _arr_data is not None:
-                    format = kwargs.get('format', None)
-                    if format is None:
-                        raise Exception('ambiguous, specify Box format')
-                    self = Boxes(_arr_data, format=format)
-                else:
-                    raise NotImplementedError
-            return cls(self)
-
-    @property
-    def dsize(self):
-        return (int(self.width), int(self.height))
-
-    def translate(self, *args, **kwargs):
-        new_boxes = self.boxes.translate(*args, **kwargs)
-        new = self.__class__(new_boxes)
-        return new
-
-    def warp(self, *args, **kwargs):
-        new_boxes = self.boxes.warp(*args, **kwargs)
-        new = self.__class__(new_boxes)
-        return new
-
-    def scale(self, *args, **kwargs):
-        new_boxes = self.boxes.scale(*args, **kwargs)
-        new = self.__class__(new_boxes)
-        return new
-
-    def clip(self, *args, **kwargs):
-        new_boxes = self.boxes.clip(*args, **kwargs)
-        new = self.__class__(new_boxes)
-        return new
-
-    def quantize(self, *args, **kwargs):
-        new_boxes = self.boxes.quantize(*args, **kwargs)
-        new = self.__class__(new_boxes)
-        return new
-
-    def copy(self, *args, **kwargs):
-        new_boxes = self.boxes.copy(*args, **kwargs)
-        new = self.__class__(new_boxes)
-        return new
-
-    def round(self, *args, **kwargs):
-        new_boxes = self.boxes.round(*args, **kwargs)
-        new = self.__class__(new_boxes)
-        return new
-
-    def pad(self, *args, **kwargs):
-        new_boxes = self.boxes.pad(*args, **kwargs)
-        new = self.__class__(new_boxes)
-        return new
-
-    def resize(self, *args, **kwargs):
-        new_boxes = self.boxes.resize(*args, **kwargs)
-        new = self.__class__(new_boxes)
-        return new
-
-    def to_ltbr(self, *args, **kwargs):
-        return self.__class__(self.boxes.to_ltbr(*args, **kwargs))
-
-    def to_xywh(self, *args, **kwargs):
-        return self.__class__(self.boxes.to_xywh(*args, **kwargs))
-
-    def to_cxywh(self, *args, **kwargs):
-        return self.__class__(self.boxes.to_cxywh(*args, **kwargs))
-
-    def toformat(self, *args, **kwargs):
-        return self.__class__(self.boxes.toformat(*args, **kwargs))
-
-    def astype(self, *args, **kwargs):
-        return self.__class__(self.boxes.astype(*args, **kwargs))
-
-    def corners(self, *args, **kwargs):
-        return self.boxes.corners(*args, **kwargs)[0]
-
-    def to_boxes(self):
-        return self.boxes
-
-    @property
-    def width(self):
-        return self.boxes.width.ravel()[0]
-
-    @property
-    def aspect_ratio(self):
-        return self.boxes.aspect_ratio.ravel()[0]
-
-    @property
-    def height(self):
-        return self.boxes.height.ravel()[0]
-
-    @property
-    def tl_x(self):
-        return self.boxes.tl_x[0]
-
-    @property
-    def tl_y(self):
-        return self.boxes.tl_y[0]
-
-    @property
-    def br_x(self):
-        return self.boxes.br_x[0]
-
-    @property
-    def br_y(self):
-        return self.boxes.br_y[0]
-
-    @property
-    def dtype(self):
-        return self.boxes.dtype
-
-    @property
-    def area(self):
-        return self.boxes.area.ravel()[0]
-
-    def to_slice(self, endpoint=True):
-        return self.boxes.to_slices(endpoint=endpoint)[0]
-
-    def to_shapely(self):
-        return self.boxes.to_shapely()[0]
-
-    def to_polygon(self):
-        return self.boxes.to_polygons()[0]
-
-    def to_coco(self):
-        return self.boxes.to_coco()[0]
+            assert ndim == 3
+    else:
+        assert len(image.shape) == 2
+        if ndim == 3:
+            image = image[:, :, None]
+    return image

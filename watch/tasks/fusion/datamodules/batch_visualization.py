@@ -416,18 +416,34 @@ class BatchVisualizationBuilder:
             for frame_meta in frame_metas:
                 for row in frame_meta['chan_rows']:
                     raw_signal = row['raw_signal']
-                    with warnings.catch_warnings():
-                        warnings.filterwarnings('ignore', message='All-NaN slice')
-                        if raw_signal.dtype.kind == 'u' and raw_signal.dtype.itemsize == 1:
-                            raw_signal = kwimage.ensure_float01(raw_signal)
-                            needs_norm = False
-                        else:
-                            needs_norm = np.nanmin(raw_signal) < 0 or np.nanmax(raw_signal) > 1
+
+                    # HACK:
+                    # There are certain bands that are integral label images When they are
+                    # drawn by themselves we can colorize them.  It would be nice to make the
+                    # labeling consistent, but this is probably better than pure grayscale.
+                    LABEL_CHANNELS = {'quality', 'cloudmask'}
+                    is_label_img = row['chan_code'] in LABEL_CHANNELS
+
+                    if is_label_img:
+                        needs_norm = False
+                    else:
+                        with warnings.catch_warnings():
+                            warnings.filterwarnings('ignore', message='All-NaN slice')
+                            if raw_signal.dtype.kind == 'u' and raw_signal.dtype.itemsize == 1:
+                                raw_signal = kwimage.ensure_float01(raw_signal)
+                                needs_norm = False
+                            else:
+                                needs_norm = np.nanmin(raw_signal) < 0 or np.nanmax(raw_signal) > 1
+
                     if needs_norm:
                         mask = (raw_signal != 0) & np.isfinite(raw_signal)
                         norm_signal = kwimage.normalize_intensity(raw_signal, mask=mask).copy()
+                    elif is_label_img:
+                        raw_signal = util_kwimage.exactly_1channel(raw_signal, ndim=2)
+                        norm_signal = util_kwimage.colorize_label_image(raw_signal, with_legend=False)
                     else:
                         norm_signal = raw_signal.copy()
+
                     norm_signal = kwimage.fill_nans_with_checkers(norm_signal)
                     norm_signal = util_kwimage.ensure_false_color(norm_signal)
                     norm_signal = kwimage.atleast_3channels(norm_signal)

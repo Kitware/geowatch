@@ -8,6 +8,7 @@ import ubelt as ub
 import functools
 import operator
 import numpy as np
+import math
 from watch.utils import util_pattern
 
 
@@ -101,7 +102,9 @@ class QA_SpecMixin:
             >>> kwplot.imshow(canvas)
         """
         import kwimage
+        import kwarray
         import numpy as np
+        import kwplot
         qavals_to_count = ub.dict_hist(quality_im.ravel())
 
         unique_qavals = list(qavals_to_count.keys())
@@ -111,6 +114,7 @@ class QA_SpecMixin:
         qval_to_color = dict(zip(unique_qavals, colors))
 
         qval_to_desc = table.describe_values(unique_qavals)
+        quality_im = kwarray.atleast_nd(quality_im, 3)
 
         # Colorize the QA bands
         colorized = np.empty(quality_im.shape[0:2] + (3,), dtype=np.float32)
@@ -120,7 +124,6 @@ class QA_SpecMixin:
 
         # Because the QA band is categorical, we should be able to make a short
         qa_canvas = colorized
-        import kwplot
 
         label_to_color = ub.udict(qval_to_color).map_keys(qval_to_desc.__getitem__)
         legend = kwplot.make_legend_img(label_to_color)  # Make a legend
@@ -162,22 +165,88 @@ class QA_BitSpecTable(QA_SpecMixin):
 
         for val in unique_qavals:
             # For each value determine what bits are on
-            bit_positions = []
-            for position, flag in enumerate(bin(val)[2:][::-1]):
-                if int(flag):
-                    bit_positions.append(position)
+            if val >= 0:
+                bit_positions = unpack_bit_positions(val)
 
-            descs = []
-            for bit_number in bit_positions:
-                bit_spec = bit_to_spec.get(bit_number, '?')
-                descs.append(bit_spec['qa_description'])
+                descs = []
+                for bit_number in bit_positions:
+                    bit_spec = bit_to_spec.get(bit_number, '?')
+                    descs.append(bit_spec['qa_description'])
 
-            parts = {}
-            parts['value'] = val
-            parts['bits'] = '|'.join(list(map(str, bit_positions)))
-            parts['desc'] = ',\n'.join(descs)
+                parts = {}
+                parts['value'] = val
+                parts['bits'] = '|'.join(list(map(str, bit_positions)))
+                parts['desc'] = ',\n'.join(descs)
+            else:
+                parts = {}
+                parts['value'] = val
+                parts['bits'] = '---'
+                parts['desc'] = 'nodata'
             val_to_desc[val] = ub.repr2(parts, compact=1, nobr=1, nl=True, si=1, sort=0)
         return val_to_desc
+
+
+def unpack_bit_positions(val, itemsize=None):
+    """
+    Given an integer value, return the positions of the on bits.
+
+    Args:
+        val (int): a signed or unsigned integer
+
+        itemsize (int | None):
+            Number of bytes used to represent the integer. E.g. 1 for a uint8 4
+            for an int32. If unspecified infer the smallest number of bytes
+            needed, but warning this may produce ambiguous results for negative
+            numbers.
+
+    Returns:
+        List[int]: the indexes of the 1 bits.
+
+    Note:
+        This turns out to be faster than a numpy or lookuptable strategy I
+        tried.  See github.com:Erotemic/misc/learn/bit_conversion.py
+
+    Example:
+        >>> unpack_bit_positions(0)
+        []
+        >>> unpack_bit_positions(1)
+        [0]
+        >>> unpack_bit_positions(-1)
+        [0, 1, 2, 3, 4, 5, 6, 7]
+        >>> unpack_bit_positions(-1, itemsize=2)
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+        >>> unpack_bit_positions(9)
+        [0, 3]
+        >>> unpack_bit_positions(2132)
+        [2, 4, 6, 11]
+        >>> unpack_bit_positions(-9999)
+        [0, 4, 5, 6, 7, 11, 12, 14, 15]
+        >>> unpack_bit_positions(np.int16(-9999))
+        [0, 4, 5, 6, 7, 11, 12, 14, 15]
+        >>> unpack_bit_positions(np.int16(-1))
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    """
+    is_negative = val < 0
+    if is_negative:
+        if itemsize is None:
+            try:
+                bit_length = val.bit_length() + 1
+                itemsize = math.ceil(bit_length / 8.0)  # bytelength
+            except AttributeError:
+                # Probably a numpy type
+                itemsize = val.dtype.itemsize
+        neg_position = (itemsize * 8) - 1
+        # special logic for negatives to get twos compliment repr
+        max_val = 1 << neg_position
+        val_ = max_val + val
+    else:
+        val_ = val
+    binary_string = '{:b}'.format(val_)[::-1]
+    bit_positions = [pos for pos, char in enumerate(binary_string)
+                     if char == '1']
+    if is_negative:
+        bit_positions.append(neg_position)
+    return bit_positions
 
 
 class QA_ValueSpecTable(QA_SpecMixin):
@@ -201,6 +270,7 @@ class QA_ValueSpecTable(QA_SpecMixin):
         """
         Get a human readable description of each value for a legend
         """
+
         val_to_spec = {}
         for item in table.spec['values']:
             val_to_spec[item['value']] = item
