@@ -1343,7 +1343,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                         for chan_name, chan_sl in mode_chan.component_indices(axis=0).items():
                             if chan_name in common_key:
                                 chan_data = parent_data[chan_sl]
-                                valid_mask = ~np.isnan(chan_data)
+                                valid_mask = np.isfinite(chan_data)
                                 needs_norm[(sensor, chan_name)].append((chan_data, valid_mask, parent_data, chan_sl))
 
             peritem_normalizer_params = {
@@ -2505,13 +2505,28 @@ sample_video_spacetime_targets = spacetime_grid_builder.sample_video_spacetime_t
 
 
 def apply_robust_normalizer(normalizer, imdata, imdata_valid, mask, dtype, copy=True):
+    """
+        data = [self.dataset[idx] for idx in possibly_batched_index]
+      File "/home/joncrall/code/watch/watch/tasks/fusion/datamodules/kwcoco_dataset.py", line 1004, in __getitem__
+        return self.getitem(index)
+      File "/home/joncrall/code/watch/watch/tasks/fusion/datamodules/kwcoco_dataset.py", line 1375, in getitem
+        imdata_normalized = apply_robust_normalizer(
+      File "/home/joncrall/code/watch/watch/tasks/fusion/datamodules/kwcoco_dataset.py", line 2513, in apply_robust_normalizer
+        imdata_valid_normalized = kwarray.normalize(
+      File "/home/joncrall/code/kwarray/kwarray/util_numpy.py", line 760, in normalize
+        old_min = np.nanmin(float_out)
+      File "<__array_function__ internals>", line 5, in nanmin
+      File "/home/joncrall/.pyenv/versions/3.10.5/envs/pyenv3.10.5/lib/python3.10/site-packages/numpy/lib/nanfunctions.py", line 319, in nanmin
+        res = np.fmin.reduce(a, axis=axis, out=out, **kwargs)
+    """
     import kwarray
     if normalizer['type'] is None:
         imdata_normalized = imdata.astype(dtype, copy=copy)
     elif normalizer['type'] == 'normalize':
         # Note: we are using kwarray normalize, the one in kwimage is deprecated
+        arr = imdata_valid.astype(dtype, copy=copy)
         imdata_valid_normalized = kwarray.normalize(
-            imdata_valid.astype(dtype, copy=copy), mode=normalizer['mode'],
+            arr, mode=normalizer['mode'],
             beta=normalizer['beta'], alpha=normalizer['alpha'],
         )
         if mask is None:
