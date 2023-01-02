@@ -499,5 +499,8 @@ class MultiscaleMask:
     @property
     def masked_fraction(self):
         if self._fraction is None:
-            self._fraction = self.mask.mean()
+            if self.mask is None:
+                self._fraction = 0
+            else:
+                self._fraction = self.mask.mean()
         return self._fraction

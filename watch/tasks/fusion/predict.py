@@ -109,16 +109,19 @@ def make_predict_config(cmdline=False, **kwargs):
     # Note: Adds '--test_dataset' to argparse (
     # may want to modify behavior to only expose non-training params)
     overloadable_datamodule_keys = [
+        'channels',
+        'normalize_peritem',
         'chip_size',
         'chip_dims',
         'time_steps',
-        'channels',
         'time_sampling',
         'time_span',
         'input_space_scale',
         'window_space_scale',
         'output_space_scale',
         'use_cloudmask',
+        'mask_low_quality',
+        'observable_threshold',
         'quality_threshold',
         'resample_invalid_frames',
         'set_cover_algo',

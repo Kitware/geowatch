@@ -102,6 +102,8 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
 
     unique_sensors = set()
     train_dataset = None
+    prenorm_stats = None
+    fit_config = {}
     if hasattr(module, 'dataset_stats') and module.dataset_stats is not None:
         module.dataset_stats.keys()
 
@@ -201,6 +203,11 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
         model_stats['known_inputs'] = known_input_stats
         model_stats['unknown_inputs'] = unknown_input_stats
 
+        # Normalization done in the dataloader
+        prenorm_stats = {
+            'normalize_peritem': fit_config.get('normalize_peritem'),
+        }
+
     row = {
         'name': package_fpath.stem,
         'task': 'TODO',
@@ -208,6 +215,7 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
         'sensors': sorted(unique_sensors),
         'train_dataset': str(train_dataset),
         'model_stats': model_stats,
+        'prenorm_stats': prenorm_stats,
     }
 
     if hasattr(module, 'input_sensorchan'):

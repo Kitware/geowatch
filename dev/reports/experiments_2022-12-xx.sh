@@ -38,58 +38,86 @@ python -m watch.mlops.schedule_evaluation \
 ## ------------------
 ## Assumes the ground truth is the BAS input
 #####################
+
+python -m watch.mlops.repackager \
+    "$HOME"/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_2/checkpoints/epoch=1-step=77702.ckpt \
+    "$HOME"/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/checkpoints/epoch=1-step=77702-v1.ckpt \
+    "$HOME"/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/checkpoints/epoch=5-step=233106.ckpt \
+    "$HOME"/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_0/checkpoints/epoch=0-step=4305.ckpt \
+    "$HOME"/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_3/checkpoints/epoch=0-step=512-v1.ckpt \
+    "$HOME"/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_3/checkpoints/epoch=4-step=2560.ckpt \
+    "$HOME"/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_3/checkpoints/epoch=6-step=3584.ckpt \
+    "$HOME/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_10GSD_BGRN_V11/lightning_logs/version_1/checkpoints/epoch=4-step=2560.ckpt" \
+    "$HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_10GSD_BGRNSH_invar_V12/lightning_logs/version_1/checkpoints/epoch=16-step=17408.ckpt" \
+    "$HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_0/checkpoints/epoch=16-step=8704.ckpt" \
+    "$HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_1/checkpoints/epoch=90-step=46592.ckpt" \
+    "$HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_1/checkpoints/epoch=159-step=81920.ckpt" 
+
+
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
-
 python -m watch.mlops.schedule_evaluation \
     --params="
         matrix:
             bas_pxl.package_fpath:
                 #- $DVC_EXPT_DPATH/bas_native_epoch44.pt
-                - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+                #- $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+                - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_2/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V5_epoch=1-step=77702.pt
+                - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V5_epoch=1-step=77702-v1.pt
+                - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V5_epoch=5-step=233106.pt
+                - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_0/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=4305.pt
+                - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_3/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=512-v1.pt
+                - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_3/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=4-step=2560.pt
+                - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_3/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=6-step=3584.pt
+                - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_10GSD_BGRN_V11/lightning_logs/version_1/checkpoints/Drop4_BAS_2022_12_10GSD_BGRN_V11_epoch=4-step=2560.pt
+                - $DVC_EXPT_DPATH/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_10GSD_BGRNSH_invar_V12/lightning_logs/version_1/checkpoints/Drop4_BAS_10GSD_BGRNSH_invar_V12_epoch=16-step=17408.pt
+                - $DVC_EXPT_DPATH/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_0/checkpoints/Drop4_BAS_15GSD_BGRNSH_invar_V8_epoch=16-step=8704.pt
+                - $DVC_EXPT_DPATH/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_1/checkpoints/Drop4_BAS_15GSD_BGRNSH_invar_V8_epoch=90-step=46592.pt
+                - $DVC_EXPT_DPATH/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_1/checkpoints/Drop4_BAS_15GSD_BGRNSH_invar_V8_epoch=159-step=81920.pt
             bas_pxl.test_dataset:
-                - $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R001.kwcoco.json
-                - $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R002.kwcoco.json
-                - $DVC_DATA_DPATH/Drop4-BAS/data_vali_US_R007.kwcoco.json
-                - $DVC_DATA_DPATH/Drop4-BAS/data_train_BR_R002.kwcoco.json
-                - $DVC_DATA_DPATH/Drop4-BAS/data_train_AE_R001.kwcoco.json
+                - $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R001_uky_invariants.kwcoco.json
+                #- $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R001.kwcoco.json
+                #- $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R002.kwcoco.json
+                #- $DVC_DATA_DPATH/Drop4-BAS/data_vali_US_R007.kwcoco.json
+                #- $DVC_DATA_DPATH/Drop4-BAS/data_train_BR_R002.kwcoco.json
+                #- $DVC_DATA_DPATH/Drop4-BAS/data_train_AE_R001.kwcoco.json
             bas_pxl.chip_overlap: 0.3
             bas_pxl.chip_dims:
                 - auto
-                - 256,256
+                #- 256,256
             bas_pxl.time_span: auto
             bas_pxl.time_sampling: auto
             bas_poly.thresh:
-                - 0.07
+                #- 0.07
                 - 0.1
-                - 0.13
+                #- 0.13
             bas_poly.moving_window_size: null
             bas_pxl.enabled: 1
             bas_poly.enabled: 1
             bas_poly_eval.enabled: 1
             bas_pxl_eval.enabled: 1
             bas_poly_viz.enabled: 0
-            include:
-                - bas_pxl.chip_dims: 256,256
-                  bas_pxl.window_space_basale: 10GSD
-                  bas_pxl.input_space_basale: 10GSD
-                  bas_pxl.output_space_basale: 10GSD
-                - bas_pxl.chip_dims: 256,256
-                  bas_pxl.window_space_basale: 15GSD
-                  bas_pxl.input_space_basale: 15GSD
-                  bas_pxl.output_space_basale: 15GSD
-                - bas_pxl.chip_dims: 256,256
-                  bas_pxl.window_space_basale: 30GSD
-                  bas_pxl.input_space_basale: 30GSD
-                  bas_pxl.output_space_basale: 30GSD
-                - bas_pxl.chip_dims: auto
-                  bas_pxl.window_space_scale: auto
-                  bas_pxl.input_space_scale: auto
-                  bas_pxl.output_space_scale: auto
+            #include:
+            #    - bas_pxl.chip_dims: 256,256
+            #      bas_pxl.window_space_basale: 10GSD
+            #      bas_pxl.input_space_basale: 10GSD
+            #      bas_pxl.output_space_basale: 10GSD
+            #    - bas_pxl.chip_dims: 256,256
+            #      bas_pxl.window_space_basale: 15GSD
+            #      bas_pxl.input_space_basale: 15GSD
+            #      bas_pxl.output_space_basale: 15GSD
+            #    - bas_pxl.chip_dims: 256,256
+            #      bas_pxl.window_space_basale: 30GSD
+            #      bas_pxl.input_space_basale: 30GSD
+            #      bas_pxl.output_space_basale: 30GSD
+            #    - bas_pxl.chip_dims: auto
+            #      bas_pxl.window_space_scale: auto
+            #      bas_pxl.input_space_scale: auto
+            #      bas_pxl.output_space_scale: auto
     " \
     --root_dpath="$DVC_EXPT_DPATH/_testpipe" \
-    --devices="0," --queue_size=1 \
-    --backend=tmux --queue_name "demo-queue" \
+    --devices="0,1" --queue_size=2 \
+    --backend=tmux --queue_name "demo-queue2" \
     --pipeline=bas \
     --run=1
 
@@ -340,14 +368,14 @@ fi
 
 
 python -m watch.mlops.repackager --force=True \
-    $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=35-step=486072.ckpt \
-    $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=12-step=175526-v1.ckpt \
-    $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=21-step=297044-v2.ckpt \
-    $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=32-step=445566.ckpt \
-    $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=36-step=499574.ckpt \
-    $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=37-step=513076.ckpt \
-    $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=37-step=513076.ckpt \
-    $HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=89-step=1215180.ckpt
+    "$HOME"/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=35-step=486072.ckpt \
+    "$HOME"/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=12-step=175526-v1.ckpt \
+    "$HOME"/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=21-step=297044-v2.ckpt \
+    "$HOME"/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=32-step=445566.ckpt \
+    "$HOME"/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=36-step=499574.ckpt \
+    "$HOME"/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=37-step=513076.ckpt \
+    "$HOME"/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=37-step=513076.ckpt \
+    "$HOME"/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-SC/runs/Drop4_tune_V30_V1/lightning_logs/version_6/checkpoints/epoch=89-step=1215180.ckpt
 
 
 

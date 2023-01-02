@@ -81,6 +81,9 @@ def repackage(checkpoint_fpath, force=False, dry=False):
                                             train_dpath_hint)
         package_fpaths.append(os.fspath(package_fpath))
     print('package_fpaths = {}'.format(ub.repr2(package_fpaths, nl=1)))
+    from watch.utils import util_yaml
+    package_fpaths_ = [ub.shrinkuser(p, home='$HOME') for p in package_fpaths]
+    print(util_yaml.yaml_dumps(package_fpaths_))
     return package_fpaths
 
 

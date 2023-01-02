@@ -1850,6 +1850,13 @@ python -m watch.tasks.fusion.fit \
     #--init=/home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/package-interupt/package_epoch6_step252174.pt
 
 
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+rsync -avprPR ooo:data/dvc-repos/smart_expt_dvc/./training/Ooo/joncrall/Drop4-BAS/runs "$DVC_EXPT_DPATH"
+rsync -avprPR ooo:data/dvc-repos/smart_expt_dvc/./training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10 "$DVC_EXPT_DPATH"
+
+Drop4_BAS_2022_12_10GSD_BGRN_V11  Drop4_BAS_2022_12_15GSD_BGRN_V10  Drop4_BAS_2022_12_15GSD_BGRN_V5  Drop4_TuneV323_BAS_BGRNSH_V1
+
+
 ### Yardrat Invariants Scratch
 export CUDA_VISIBLE_DEVICES=0
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
@@ -1916,3 +1923,6 @@ python -m watch.tasks.fusion.fit \
     --num_sanity_val_steps=0 \
     --multimodal_reduce=learned_linear \
     --max_epoch_length=16384 
+
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_10GSD_BGRNSH_invar_V12 "$DVC_EXPT_DPATH"
