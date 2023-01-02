@@ -182,14 +182,32 @@ class BatchPlotter(pl.callbacks.Callback):
 
     #  New
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
-        self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
+        try:
+            self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
+        except Exception as e:
+            print("========")
+            print("Exception raised during batch rendering callback.")
+            print("========")
+            print(e)
 
     #  Old sig
     # def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
     #     self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
 
     def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
-        self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
+        try:
+            self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
+        except Exception as e:
+            print("========")
+            print("Exception raised during batch rendering callback.")
+            print("========")
+            print(e)
 
     def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
-        self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
+        try:
+            self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
+        except Exception as e:
+            print("========")
+            print("Exception raised during batch rendering callback.")
+            print("========")
+            print(e)
