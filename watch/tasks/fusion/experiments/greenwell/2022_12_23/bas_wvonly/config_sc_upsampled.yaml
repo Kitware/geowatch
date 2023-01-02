@@ -4,36 +4,28 @@ model:
     token_width: 16
     token_dim: 32
     position_encoder:
-      class_path: watch.tasks.fusion.methods.heterogeneous.MipNerfPositionalEncoder
+      class_path: watch.tasks.fusion.methods.heterogeneous.ScaleAgnostictPositionalEncoder
       init_args:
         in_dims: 3
-        max_freq: 3
+        max_freq: 4
         num_freqs: 16
-    backbone:
-      class_path: watch.tasks.fusion.architectures.transformer.TransformerEncoderDecoder
-      init_args:
-        encoder_depth: 6
-        decoder_depth: 1
-        dim: 128
-        queries_dim: 96
-        logits_dim: 32
+    backbone_encoder_depth: 6
     spatial_scale_base: 1.0
     temporal_scale_base: 1.0
     global_change_weight: 0.0
-    global_class_weight: 0.0
+    global_class_weight: 1.0
     global_saliency_weight: 1.0
-    saliency_loss: focal
+    class_loss: cce
+    saliency_loss: cce
     decoder: simple_conv
 data:
-  time_steps: 3
-  chip_dims: 192 
-  input_space_scale: native # 30GSD
+  input_space_scale: 10GSD
 trainer:
   callbacks:
     # - class_path: watch.utils.lightning_ext.callbacks.AutoResumer
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
-        monitor: val_saliency_f1
+        monitor: val_class_f1_macro
         mode: max
         save_top_k: 5
         auto_insert_metric_name: true
