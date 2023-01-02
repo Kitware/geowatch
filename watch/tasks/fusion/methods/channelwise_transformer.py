@@ -868,13 +868,13 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> coco_dset = kwcoco.CocoDataset.coerce(coco_dset)
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset=coco_dset,
-            >>>     chip_size=128, batch_size=1, time_steps=3,
+            >>>     chip_size=128, batch_size=1, time_steps=5,
             >>>     channels=channels,
             >>>     normalize_peritem='blue|green|red|nir',
             >>>     normalize_inputs=32, neg_to_pos_ratio=0,
             >>>     num_workers='avail/2',
             >>>     mask_low_quality=True,
-            >>>     observable_threshold=.8,
+            >>>     observable_threshold=0.6,
             >>>     use_grid_positives=False, use_centered_positives=True,
             >>> )
             >>> datamodule.setup('fit')
@@ -905,15 +905,16 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>>     change_loss='dicefocal',
             >>>     #class_loss='cce',
             >>>     class_loss='dicefocal',
-            >>>     saliency_loss='dicefocal',
+            >>>     #saliency_loss='dicefocal',
+            >>>     saliency_loss='focal',
             >>>     # ===========
             >>>     # Change Loss
-            >>>     global_change_weight=1.00,
+            >>>     global_change_weight=1e-5,
             >>>     positive_change_weight=1.0,
             >>>     negative_change_weight=0.5,
             >>>     # ===========
             >>>     # Class Loss
-            >>>     global_class_weight=1.00,
+            >>>     global_class_weight=1e-5,
             >>>     class_weights='auto',
             >>>     # ===========
             >>>     # Saliency Loss
