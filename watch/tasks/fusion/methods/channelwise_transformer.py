@@ -814,12 +814,12 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         if self.hparams.lr_scheduler == 'CosineAnnealingLR':
             scheduler = lr_scheduler.CosineAnnealingLR(
                 optimizer, T_max=max_epochs)
-        if self.hparams.lr_scheduler == 'OneCycleLR':
+        elif self.hparams.lr_scheduler == 'OneCycleLR':
             scheduler = lr_scheduler.OneCycleLR(
                 optimizer, T_max=max_epochs,
                 max_lr=self.hparams.learning_rate * 10)
         else:
-            raise KeyError(self.hparams.scheduler)
+            raise KeyError(self.hparams.lr_scheduler)
 
         return [optimizer], [scheduler]
 
@@ -839,10 +839,11 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
             >>> from watch.utils.util_data import find_smart_dvc_dpath
+            >>> import watch
             >>> import kwcoco
             >>> from os.path import join
             >>> import os
-            >>> if 1:
+            >>> if 0:
             >>>     '''
             >>>     # Generate toy datasets
             >>>     DATA_DPATH=$HOME/data/work/toy_change
@@ -853,12 +854,13 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>>     coco_fpath = ub.expandpath('$HOME/data/work/toy_change/vidshapes_msi_train/data.kwcoco.json')
             >>>     coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
             >>>     channels="B11,r|g|b,B1|B8|B11"
-            >>> if 0:
-            >>>     dvc_dpath = find_smart_dvc_dpath()
-            >>>     coco_dset = join(dvc_dpath, 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json')
+            >>> if 1:
+            >>>     dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>>     coco_dset = (dvc_dpath / 'Drop4-BAS') / 'data_vali.kwcoco.json'
             >>>     channels='swir16|swir22|blue|green|red|nir'
+            >>>     coco_dset = (dvc_dpath / 'Drop4-BAS') / 'combo_vali_I2.kwcoco.json'
+            >>>     channels='blue|green|red|nir,invariants.0:17'
             >>> if 0:
-            >>>     import watch
             >>>     coco_dset = watch.demo.demo_kwcoco_multisensor(max_speed=0.5)
             >>>     # coco_dset = 'special:vidshapes8-frames9-speed0.5-multispectral'
             >>>     #channels='B1|B11|B8|r|g|b|gauss'
@@ -868,8 +870,11 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>>     train_dataset=coco_dset,
             >>>     chip_size=128, batch_size=1, time_steps=3,
             >>>     channels=channels,
-            >>>     normalize_inputs=1, neg_to_pos_ratio=0,
+            >>>     normalize_peritem='blue|green|red|nir',
+            >>>     normalize_inputs=32, neg_to_pos_ratio=0,
             >>>     num_workers='avail/2',
+            >>>     mask_low_quality=True,
+            >>>     observable_threshold=.8,
             >>>     use_grid_positives=False, use_centered_positives=True,
             >>> )
             >>> datamodule.setup('fit')
@@ -885,11 +890,13 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> self = methods.MultimodalTransformer(
             >>>     # ===========
             >>>     # Backbone
-            >>>     arch_name='smt_it_joint_p2',
-            >>>     #arch_name='smt_it_stm_p8',
+            >>>     #arch_name='smt_it_joint_p2',
+            >>>     arch_name='smt_it_stm_p8',
+            >>>     stream_channels = 16,
             >>>     #arch_name='deit',
             >>>     optimizer='AdamW',
             >>>     learning_rate=1e-5,
+            >>>     weight_decay=1e-3,
             >>>     #attention_impl='performer',
             >>>     attention_impl='exact',
             >>>     #decoder='segmenter',
@@ -918,6 +925,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>>     input_sensorchan=input_sensorchan,
             >>>     #tokenizer='dwcnn',
             >>>     tokenizer='linconv',
+            >>>     multimodal_reduce='learned_linear',
             >>>     #tokenizer='rearrange',
             >>>     # normalize_perframe=True,
             >>>     window_size=8,
@@ -928,6 +936,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> loader = datamodule.train_dataloader()
             >>> # Load one batch and show it before we do anything
             >>> batch = next(iter(loader))
+            >>> print(ub.urepr(dataset.summarize_item(batch[0]), nl=3))
             >>> import kwplot
             >>> plt = kwplot.autoplt(force='Qt5Agg')
             >>> plt.ion()
@@ -1391,7 +1400,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                     for m, s in zip(modes, shapes)
                 ]
             if len(to_stack) == 1:
-                frame_feat = to_stack[0][None, ...]
+                frame_feat = to_stack[0]
             else:
                 if self.hparams.multimodal_reduce == 'max':
                     stack = torch.stack(to_stack, dim=0)

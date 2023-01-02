@@ -269,7 +269,7 @@ class KWCocoVideoDatasetConfig(scfg.Config):
 
         'normalize_perframe': scfg.Value(False, help='undocumented - ignored'),
 
-        'normalize_peritem': scfg.Value(None, help='if specified normalize these bands/channels on a per-batch-item level across time. if True normalize all bands.'),
+        'normalize_peritem': scfg.Value(None, type=str, help='if specified normalize these bands/channels on a per-batch-item level across time. if True normalize all bands.'),
 
         'set_cover_algo': scfg.Value(None, choices=[None, 'approx', 'exact'], help=ub.paragraph(
             '''

@@ -1909,4 +1909,5 @@ python -m watch.tasks.fusion.fit \
     --lr_scheduler=OneCycleLR \
     --quality_threshold=0.8 \
     --num_sanity_val_steps=0 \
+    --multimodal_reduce=learned_linear \
     --max_epoch_length=16384 \
