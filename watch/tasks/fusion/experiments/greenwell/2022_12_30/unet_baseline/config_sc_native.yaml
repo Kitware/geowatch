@@ -1,0 +1,24 @@
+model:
+  class_path: watch.tasks.fusion.methods.UNetBaseline
+  init_args:
+    token_dim: 32
+    global_change_weight: 0.0
+    global_class_weight: 1.0
+    global_saliency_weight: 0.5
+    class_loss: dicefocal
+    saliency_loss: focal
+trainer:
+  callbacks:
+    # - class_path: watch.utils.lightning_ext.callbacks.AutoResumer
+    # - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+    #   init_args:
+    #     monitor: val_class_f1_macro
+    #     mode: max
+    #     save_top_k: 5
+    #     auto_insert_metric_name: true
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        monitor: val_loss
+        mode: min
+        save_top_k: 5
+        auto_insert_metric_name: true
