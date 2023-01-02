@@ -70,7 +70,7 @@ stages:
         XDG_CACHE_HOME:
             "$CI_PROJECT_DIR/.cache/xdg_cache"
     tags:
-        #- aws
+        - aws
         - smart
         - docker
         - linux-x86_64
