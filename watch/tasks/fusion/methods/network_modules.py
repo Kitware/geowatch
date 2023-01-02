@@ -74,6 +74,61 @@ class RobustModuleDict(torch.nn.ModuleDict):
         return v
 
 
+class RobustParameterDict(torch.nn.ParameterDict):
+    """
+    Regular torch.nn.ParameterDict doesnt allow empty str. Hack around this.
+
+    Example:
+        >>> from watch.tasks.fusion.methods.network_modules import *  # NOQA
+        >>> import string
+        >>> torch_dict = RobustParameterDict()
+        >>> # All printable characters should be usable as keys
+        >>> # If they are not, hack it.
+        >>> failed = []
+        >>> for c in list(string.printable) + ['']:
+        >>>     try:
+        >>>         torch_dict[c] = torch.nn.Parameter(torch.ones((1, 1)))
+        >>>     except KeyError:
+        >>>         failed.append(c)
+        >>> assert len(failed) == 0
+        >>> for v in torch_dict.values():
+        >>>     assert list(v.shape) == [1, 1]
+    """
+    repl_dot = '#D#'
+    repl_empty = '__EMPTY'
+
+    def _normalize_key(self, key):
+        key = self.repl_empty if key == '' else key.replace('.', self.repl_dot)
+        return key
+
+    @classmethod
+    def _unnormalize_key(self, key):
+        if key == self.repl_empty:
+            return ''
+        else:
+            return key.replace(self.repl_dot, '.')
+
+    def __getitem__(self, key: str) -> Module:
+        key = self._normalize_key(key)
+        return super().__getitem__(key)
+
+    def __setitem__(self, key: str, value) -> None:
+        key = self._normalize_key(key)
+        super().__setitem__(key, value)
+
+    def __delitem__(self, key: str) -> None:
+        key = self._normalize_key(key)
+        super().__delitem__(key, key)
+
+    def __contains__(self, key: str) -> bool:
+        key = self._normalize_key(key)
+        return super().__contains__(key, key)
+
+    def pop(self, key: str) -> Module:
+        key = self._normalize_key(key)
+        return super().pop(key)
+
+
 class OurDepthwiseSeparableConv(nn.Module):
     """ DepthwiseSeparable block
     Used for DS convs in MobileNet-V1 and in the place of IR blocks that have no expansion

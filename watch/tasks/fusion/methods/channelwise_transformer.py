@@ -79,6 +79,7 @@ from watch.tasks.fusion.methods.network_modules import _class_weights_from_freq
 from watch.tasks.fusion.methods.network_modules import coerce_criterion
 from watch.tasks.fusion.methods.network_modules import torch_safe_stack
 from watch.tasks.fusion.methods.network_modules import RobustModuleDict
+from watch.tasks.fusion.methods.network_modules import RobustParameterDict
 from watch.tasks.fusion.methods.network_modules import RearrangeTokenizer
 from watch.tasks.fusion.methods.network_modules import ConvTokenizer
 from watch.tasks.fusion.methods.network_modules import LinearConvTokenizer
@@ -124,6 +125,7 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         '''))
     learning_rate = scfg.Value(0.001, type=float)
     weight_decay = scfg.Value(0.0, type=float)
+    lr_scheduler = scfg.Value('CosineAnnealingLR', type=str)
     positive_change_weight = scfg.Value(1.0, type=float)
     negative_change_weight = scfg.Value(1.0, type=float)
     class_weights = scfg.Value('auto', type=str, help='class weighting strategy')
@@ -586,6 +588,22 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         else:
             raise NotImplementedError
 
+        if self.hparams.multimodal_reduce == 'learned_linear':
+            # Make special params for the reduction.
+            # The idea for the learned linear mode is to assign a
+            # weight to each mode, and these are used to combine tokens
+            # from different modes. Additionally, we include a special
+            # parameter for the __MAX, allowing us to mixin the max
+            # reduction method as something learnable by these
+            # parameters.
+
+            # Also add in a special weight for the max
+            sensor_chan_reduction_weights = RobustParameterDict()
+            unique_sensorchans = [sensor + ':' + chan for sensor, chan in self.unique_sensor_modes]
+            for sensor_chan in unique_sensorchans + ['__MAX']:
+                sensor_chan_reduction_weights[sensor_chan] = torch.nn.Parameter(torch.ones([1]))
+            self.sensor_chan_reduction_weights = sensor_chan_reduction_weights
+
         feat_dim = self.encoder.out_features
 
         self.change_head_hidden = self.hparams.change_head_hidden
@@ -793,8 +811,16 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         else:
             max_epochs = 20
 
-        scheduler = lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=max_epochs)
+        if self.hparams.lr_scheduler == 'CosineAnnealingLR':
+            scheduler = lr_scheduler.CosineAnnealingLR(
+                optimizer, T_max=max_epochs)
+        if self.hparams.lr_scheduler == 'OneCycleLR':
+            scheduler = lr_scheduler.OneCycleLR(
+                optimizer, T_max=max_epochs,
+                max_lr=self.hparams.learning_rate * 10)
+        else:
+            raise KeyError(self.hparams.scheduler)
+
         return [optimizer], [scheduler]
 
     def overfit(self, batch):
@@ -1060,6 +1086,20 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> outputs = self.forward_step(batch, with_loss=True)
             >>> print(nh.data.collate._debug_inbatch_shapes(batch))
             >>> print(nh.data.collate._debug_inbatch_shapes(outputs))
+
+        Example:
+            >>> # Test learned_linear multimodal reduce
+            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> channels, classes, dataset_stats = MultimodalTransformer.demo_dataset_stats()
+            >>> self = MultimodalTransformer(
+            >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
+            >>>     decoder='mlp', classes=classes, global_saliency_weight=1,
+            >>>     dataset_stats=dataset_stats, input_sensorchan=channels, multimodal_reduce='learned_linear')
+            >>> batch = self.demo_batch()
+            >>> outputs = self.forward_step(batch, with_loss=True)
+            >>> print(nh.data.collate._debug_inbatch_shapes(batch))
+            >>> print(nh.data.collate._debug_inbatch_shapes(outputs))
+            >>> # outputs['loss'].backward()
         """
         outputs = {}
 
@@ -1316,7 +1356,6 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         ENCODED_TOKENS -> (RESAMPLE PER-MODE IF NEEDED) -> POOL_OVER_MODES -> SPACE_TIME_FEATURES
 
         SPACE_TIME_FEATURES -> HEAD
-
         """
 
         token_split_points = np.cumsum([t.shape[0] for t in tokenized])
@@ -1333,7 +1372,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             info['mode'] = mode
         grouped = ub.group_items(recon_info, key=lambda x: x['frame_idx'])
         perframe_stackable_encodings = []
-        frame_shapes = []
+
         for frame_idx, frame_group in sorted(grouped.items()):
             shapes = [g['space_shape'] for g in frame_group]
             modes = [g['mode'] for g in frame_group]
@@ -1351,14 +1390,32 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                         m.view(1, -1, *s), frame_shape, mode='bilinear', align_corners=False).view(-1, m.shape[-1])
                     for m, s in zip(modes, shapes)
                 ]
-            frame_shapes.append(frame_shape)
-            stack = torch.stack(to_stack, dim=0)
-            if self.hparams.multimodal_reduce == 'max':
-                frame_feat = torch.max(stack, dim=0)[0]
-            elif self.hparams.multimodal_reduce == 'mean':
-                frame_feat = torch.mean(stack, dim=0)[0]
+            if len(to_stack) == 1:
+                frame_feat = to_stack[0][None, ...]
             else:
-                raise Exception(self.hparams.multimodal_reduce)
+                if self.hparams.multimodal_reduce == 'max':
+                    stack = torch.stack(to_stack, dim=0)
+                    frame_feat = torch.max(stack, dim=0)[0]
+                elif self.hparams.multimodal_reduce == 'mean':
+                    stack = torch.stack(to_stack, dim=0)
+                    frame_feat = torch.mean(stack, dim=0)[0]
+                elif self.hparams.multimodal_reduce == 'learned_linear':
+                    sensor_chans = [g['sensor'] + ':' + g['chan_code'] for g in frame_group]
+                    if 1:
+                        # Add in the special max mode
+                        to_stack.append(torch.max(torch.stack(to_stack, dim=0), dim=0)[0])
+                        sensor_chans.append('__MAX')
+                    linear_weights = [self.sensor_chan_reduction_weights[sc] for sc in sensor_chans]
+                    linear_weights = torch.stack(linear_weights, dim=0)
+
+                    # Normalize the weights
+                    norm_weights = torch.nn.functional.softmax(linear_weights, dim=0)
+                    # Take the linear combination of the modes
+                    stack = torch.stack(to_stack, dim=0)
+                    frame_feat = torch.einsum('m k, m k f -> k f', norm_weights, stack)
+                    # frame_feat2 = (norm_weights[:, :, None] * stack).sum(dim=0)
+                else:
+                    raise Exception(self.hparams.multimodal_reduce)
             hs, ws = frame_shape
             frame_grid = einops.rearrange(
                 frame_feat, '(hs ws) f -> hs ws f', hs=hs, ws=ws)
