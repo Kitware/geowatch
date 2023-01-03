@@ -33,6 +33,12 @@ class CleanGeotiffConfig(scfg.DataConfig):
         to be labeled as nodata.
         '''))
 
+    min_region_size = scfg.Value(256, help=ub.paragraph(
+        '''
+        Minimum size of a connected region to be considered as a nodata
+        candidate.
+        '''))
+
 
 def main(cmdline=1, **kwargs):
     """
