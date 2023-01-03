@@ -17,7 +17,7 @@ from watch.tasks.fusion.methods.network_modules import _class_weights_from_freq
 from watch.tasks.fusion.methods.network_modules import coerce_criterion
 from watch.tasks.fusion.methods.network_modules import RobustModuleDict
 from watch.tasks.fusion.methods.watch_module_mixins import WatchModuleMixins
-from watch.tasks.fusion.architectures.transformer import BackboneEncoderDecoder
+from watch.tasks.fusion.architectures.transformer import BackboneEncoderDecoder, TransformerEncoderDecoder
 
 import numpy as np
 
