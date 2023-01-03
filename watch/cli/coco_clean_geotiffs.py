@@ -14,10 +14,39 @@ class CleanGeotiffConfig(scfg.DataConfig):
     """
     src = scfg.Value(None, help='input coco dataset')
     nodata_value = scfg.Value(-9999, help='the real nodata value to use')
+    workers = scfg.Value(0, help='number of workers')
+
+    channels = scfg.Value('red|green|blue|nir|swir16|swir22', help=ub.paragraph(
+        '''
+        The channels to apply nodata fixes to.
+        '''))
+
+    prefilter_channels = scfg.Value('red', help=ub.paragraph(
+        '''
+        The channels to use when checking for bad nodata values.
+        If unspecified, uses channels.
+        '''))
+
+    possible_nodata_values = scfg.Value([0], help=ub.paragraph(
+        '''
+        List of integer values that might represent nodata, but may also failed
+        to be labeled as nodata.
+        '''))
 
 
 def main(cmdline=1, **kwargs):
     """
+    Ignore:
+        import watch
+        dset = watch.coerce_kwcoco('watch-msi', geodata=True)
+
+        coco_img = dset.images().coco_images[0]
+
+        kwargs = {
+            'src': dset,
+            'workers': 0,
+        }
+
     Ignore:
         import watch
         import sys, ubelt
@@ -33,17 +62,19 @@ def main(cmdline=1, **kwargs):
     config = CleanGeotiffConfig.legacy(cmdline=1, data=kwargs)
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
 
-    workers = util_globals.coerce_num_workers('avail')
-    # workers = 0
+    workers = util_globals.coerce_num_workers(config['workers'])
     jobs = ub.JobPool(mode='process', max_workers=workers)
 
     # channels = kwcoco.ChannelSpec.coerce('red')
-    prefilter_channels = kwcoco.ChannelSpec.coerce('red')
-    channels = kwcoco.ChannelSpec.coerce('red|green|blue|nir|swir16|swir22')
     # channels = kwcoco.ChannelSpec.coerce('red|blue|nir')
     # channels = kwcoco.ChannelSpec.coerce('nir')
+    channels = kwcoco.ChannelSpec.coerce(config['channels'])
+    if config['prefilter_channels'] is None:
+        prefilter_channels = kwcoco.ChannelSpec.coerce(config['prefilter_channels'])
+    else:
+        prefilter_channels = channels
 
-    possible_nodata_values = set([0])
+    possible_nodata_values = set(config['possible_nodata_values'])
     probe_kwargs = {
         'channels': channels,
         'scale': None,
@@ -160,7 +191,6 @@ def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=N
 
 
 def probe_channel(coco_img, obj, scale=None, possible_nodata_values=None):
-    min_region_size = 256
     chan_summary = {
         'channels': obj['channels'],
     }
@@ -170,25 +200,37 @@ def probe_channel(coco_img, obj, scale=None, possible_nodata_values=None):
         delayed.prepare()
         delayed = delayed.scale(scale)
         delayed = delayed.optimize()
-        min_region_size_ = int(min_region_size * scale)
-    else:
-        min_region_size_ = min_region_size
-    data = delayed.finalize(interpolation='nearest')
+    imdata = delayed.finalize(interpolation='nearest')
     bundle_dpath = ub.Path(coco_img.bundle_dpath)
     fpath = bundle_dpath / obj['file_name']
     # print(f'fpath={fpath}')
     # data = kwimage.imread(fpath, backend='gdal', nodata_method='float',
     #                       overview=overview)
+    chan_summary = probe_imdata(imdata, min_region_size=256, scale=scale,
+                                possible_nodata_values=possible_nodata_values)
+    chan_summary['fpath'] = fpath
+    return chan_summary
+
+
+def probe_imdata(imdata, min_region_size=256, scale=None,
+                 possible_nodata_values=None):
+    if scale is not None:
+        min_region_size_ = int(min_region_size * scale)
+    else:
+        min_region_size_ = min_region_size
 
     is_samecolor = util_kwimage.find_samecolor_regions(
-        data, min_region_size=min_region_size_)
+        imdata, min_region_size=min_region_size_)
 
+    chan_summary = {}
     if np.any(is_samecolor):
         # is_same = is_samecolor > 0
-        # same_values = data[is_same]
+        # same_values = imdata[is_same]
         # bad_values = np.unique(same_values)
         bad_labels, first_index = np.unique(is_samecolor, return_index=True)
-        bad_values = data.ravel()[first_index]
+        bad_values = imdata.ravel()[first_index]
+
+        imdata[is_samecolor > 0]
 
         if possible_nodata_values is not None:
             # Remove anything that's not in our possible set of
@@ -202,7 +244,6 @@ def probe_channel(coco_img, obj, scale=None, possible_nodata_values=None):
             bad_labels = bad_labels[flags]
 
         chan_summary['is_samecolor'] = is_samecolor
-        chan_summary['fpath'] = fpath
         chan_summary['bad_values'] = sorted(set(bad_values.tolist()))
         # chan_summary['bad_labels'] = bad_values.tolist()
     else:
@@ -211,25 +252,87 @@ def probe_channel(coco_img, obj, scale=None, possible_nodata_values=None):
 
 
 def fix_geotiff(chan_summary):
-    fpath = chan_summary['fpath']
+    """
+    Updates the nodata value based on a mask inplace on disk.
+    Attempts to preserve all other metadata, but this is not guarenteed or
+    always possible.
+
+    Assumptions:
+        * The input image only has 1 channel (could generalize)
+        * The input image uses AVERAGE overview resampling
+        * The input image is a tiled geotiff (ideally a COG)
+
+    Example:
+        >>> from watch.cli.coco_clean_geotiffs import *  # NOQA
+        >>> from watch.demo.metrics_demo.demo_rendering import write_demo_geotiff
+        >>> dpath = ub.Path.appdir('watch/tests/clean_geotiff').ensuredir()
+        >>> fpath1 = dpath / 'test_geotiff.tif'
+        >>> fpath2 = fpath1.augment(stemsuffix='_fixed')
+        >>> fpath1.delete()
+        >>> fpath2.delete()
+        >>> imdata = kwimage.grab_test_image('amazon', dsize=(512, 512))[..., 0].astype(np.int16)
+        >>> poly = kwimage.Polygon.random().scale(imdata.shape[0:2][::-1])
+        >>> imdata = poly.fill(imdata, value=0, pixels_are='areas')
+        >>> write_demo_geotiff(img_fpath=fpath1, imdata=imdata)
+        >>> fpath1.copy(fpath2)
+        >>> chan_summary = probe_imdata(imdata.astype(np.float32), possible_nodata_values={0})
+        >>> chan_summary['fpath'] = fpath2
+        >>> assert fpath1.stat().st_size == fpath2.stat().st_size
+        >>> fix_geotiff(chan_summary)
+        >>> assert fpath1.stat().st_size != fpath2.stat().st_size
+        >>> imdata1 = kwimage.imread(fpath1, nodata_method='ma')
+        >>> imdata2 = kwimage.imread(fpath2, nodata_method='ma')
+        >>> canvas1 = kwimage.normalize_intensity(imdata1)
+        >>> canvas2 = kwimage.normalize_intensity(imdata2)
+        >>> canvas1 = kwimage.nodata_checkerboard(canvas1)
+        >>> canvas2 = kwimage.nodata_checkerboard(canvas2)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> # xdoctest: +REQUIRES(module:kwplot)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas1.data, pnum=(3, 2, 1), title='norm imdata1 vals')
+        >>> kwplot.imshow(canvas2.data, pnum=(3, 2, 2), title='norm imdata2 vals')
+        >>> kwplot.imshow(imdata1.mask, pnum=(3, 2, 3), title='imdata1.mask')
+        >>> kwplot.imshow(imdata2.mask, pnum=(3, 2, 4), title='imdata2.mask')
+        >>> kwplot.imshow((chan_summary['is_samecolor'] > 0), pnum=(3, 2, 5), title='is samecolor mask')
+    """
+    import os
+    from watch.utils import util_gdal
+    from osgeo import gdal
+    import tempfile
+    fpath = ub.Path(chan_summary['fpath'])
     is_samecolor = chan_summary['is_samecolor']
 
-    new_fpath = ub.augpath(fpath, suffix='_fixed')
+    tmp_fpath = ub.Path(tempfile.mktemp(
+        dir=fpath.parent, prefix='.tmp.' + fpath.stem, suffix='.tiff'))
 
+    assert tmp_fpath.parent.exists()
+
+    # We will overwrite this data.
     correct_nodata_value = -9999
 
-    from watch.utils import util_gdal
-    src_dset = util_gdal.GdalDataset.open(fpath)
-    assert src_dset.RasterCount == 1
+    # Assume average overview resampling, there does not seem to be standard
+    # way that a geotiff encodes what algorithm was used.
+    overview_resample = 'AVERAGE'
+
+    ### Read in source data and introspect it
+    src_dset = util_gdal.GdalDataset.open(os.fspath(fpath))
+    # orig_driver_name = src_dset.GetDriver().ShortName
+    # assert orig_driver_name == 'GTiff'
+    assert src_dset.RasterCount == 1, 'only works on 1 band for now'
+
     src_band = src_dset.GetRasterBand(1)
+    # blocksize = src_band.GetBlockSize()
+    blocksize = (256, 256)
     num_overviews = src_band.GetOverviewCount()
 
-    from osgeo import gdal
+    ### Copy the source data to memory and modify it
     driver1 = gdal.GetDriverByName(str('MEM'))
     copy1 = driver1.CreateCopy(str(''), src_dset)
     src_dset.FlushCache()
     src_dset = None
 
+    ### Pixel Modification ###
     # Modify the pixel contents
     band = copy1.GetRasterBand(1)
     band_data = band.ReadAsArray()
@@ -239,26 +342,42 @@ def fix_geotiff(chan_summary):
     if curr_nodat_value != correct_nodata_value:
         band.SetNoDataValue(correct_nodata_value)
 
+    ### Rebuild overviews
     overviewlist = (2 ** np.arange(1, num_overviews + 1)).tolist()
-    copy1.BuildOverviews('AVERAGE', overviewlist)
+    copy1.BuildOverviews(overview_resample, overviewlist)
 
+    ### Flush the in-memory dataset to an on-disk GeoTiff
+    xsize, ysize = blocksize
     _options = [
         'BIGTIFF=YES',
         'TILED=YES',
-        'BLOCKXSIZE={}'.format(256),
-        'BLOCKYSIZE={}'.format(256),
+        'BLOCKXSIZE={}'.format(xsize),
+        'BLOCKYSIZE={}'.format(ysize),
     ]
     _options += ['COMPRESS={}'.format('DEFLATE')]
     _options.append('COPY_SRC_OVERVIEWS=YES')
-
-    # Flush the in-memory dataset to an on-disk GeoTiff
     driver1 = None
     driver2 = gdal.GetDriverByName(str('GTiff'))
-    copy2 = driver2.CreateCopy(new_fpath, copy1, options=_options)
+    # driver2 = gdal.GetDriverByName(str(orig_driver_name))
+    copy2 = driver2.CreateCopy(os.fspath(tmp_fpath), copy1, options=_options)
+
+    if copy2 is None:
+        last_gdal_error = gdal.GetLastErrorMsg()
+        if 'No such file or directory' in last_gdal_error:
+            ex_cls = IOError
+        else:
+            ex_cls = Exception
+        raise ex_cls(
+            'Unable to create gtiff driver for fpath={}, options={}, last_gdal_error={}'.format(
+                fpath, _options, last_gdal_error))
     copy2.FlushCache()
     copy1 = None
     copy2 = None  # NOQA
     driver2 = None
+
+    assert ub.Path(tmp_fpath).exists()
+    # ub.Path(tmp_fpath).move(fpath)
+    os.rename(tmp_fpath, fpath)
 
 
 def mwe():
