@@ -44,6 +44,7 @@ def generate_demo_metrics_framework_data(
     output_dpath = demo_dpath / "demo_output"
     cache_dpath = demo_dpath / "_cache"
 
+    output_dpath.ensuredir()
     true_region_dpath = (true_dpath / "region_models").ensuredir()
     true_site_dpath = (true_dpath / "site_models").ensuredir()
     pred_site_dpath = (pred_dpath / "pred_site_models").ensuredir()
