@@ -31,10 +31,24 @@ Example Usage:
     python -m watch.cli.find_dvc --hardware=hdd
 
 Example Usage:
-    # For Drop4
-    smartwatch_dvc add --name=smart_data_hdd --path=$HOME/data/dvc-repos/smart_data_dvc --hardware=hdd --priority=100 --tags=phase2_data
-    smartwatch_dvc list
-    smartwatch_dvc get smart_data_hdd
+
+    #### ON PROJECT DATA
+
+    # When you register your drop4 data / experiment paths, the DVC examples in
+    # this repo will generally work out of the box. The important part is that
+    # your path agrees with the tags used in the examples. Telling the registry
+    # if the path lives on an HDD or SSD is also useful.
+    smartwatch_dvc add my_drop4_data --path=$HOME/Projects/SMART/smart_data_dvc --hardware=hdd --priority=100 --tags=phase2_data
+    smartwatch_dvc add my_drop4_data --path=$HOME/Projects/SMART/smart_expt_dvc --hardware=hdd --priority=100 --tags=phase2_expt
+
+    # The examples in this repo will generally use this pattern to query for
+    # the machine-specific data location. Ensure that these commands work
+    # and output the correct paths
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+
+    echo "DVC_DATA_DPATH = $DVC_DATA_DPATH"
+    echo "DVC_EXPT_DPATH = $DVC_EXPT_DPATH"
 
 """
 import scriptconfig as scfg
@@ -43,6 +57,20 @@ import scriptconfig as scfg
 class FindDVCConfig(scfg.Config):
     """
     Command line helper to find the path to the watch DVC repo
+
+    Example Usage:
+        # List currently known directories
+        smartwatch_dvc list
+
+        # Add a new path (with optional hardware and tags)
+        mkdir -p $HOME/tmp/datadir
+        smartwatch_dvc add --name=testdir --path=$HOME/tmp/datadir --hardware=hdd --tags=mytag
+
+        # Lookup the newly registered path
+        smartwatch_dvc find --tags mytag
+
+        # Remove the test entry
+        smartwatch_dvc remove testdir
     """
     default = {
         'command': scfg.Value('find', help='can be find, set, add, list, or remove', position=1),

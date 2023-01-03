@@ -4,6 +4,36 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
+## Version 0.3.8 - Target 2022-02-xx
+
+### Added
+* Initial scripts for new teamfeatures
+* New MLOPs-V3 DAG definitions
+* New QA band handling to support different QA encodings
+* New endpoints for ACC-2 data.
+* Merge in Nov21 Pseudolive branch
+* Add `quality_threshold` argument to the kwcoco video dataset, deprecate `use_cloudmask`.
+* Add `observable_threshold` which is similar to but not exactly the same as quality threshold
+* Add uniform time sampling and better multi-sampler support
+* KWcocoVideoDataLoader now has initial support for a bounding box task.
+
+### Fixed
+* Issue in visualize where frames might be ordered incorrectly.
+* Issue when input scale was native and output scale was a fixed GSD
+* Patch torchmetrics for old models
+* Fix corner-case crash in SC tracker.
+* Quality mask filtering was broken and is now using correct data.
+* The spectra script now correctly dequantizes kwcoco images.
+* Issue in KWcocoVideoDataLoader where change labels were not computed correctly if the class task was not requested.
+
+### Changed
+* Consolidate monkey patches into a single subpackage.
+* Refactor `util_globals`
+* New arguments to fusion.predict to filter inputs / outputs.
+* Cleaned old code that was ported to kwimage
+* Faster samevalue region histogram approximation in data loader
+
+
 ## Version 0.3.7 - Target 2022-11-21
 
 ### Added

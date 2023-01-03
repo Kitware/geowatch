@@ -1118,7 +1118,7 @@ def main(cmdline=True, **kwargs):
     Example:
         >>> # xdoctest: +REQUIRES(module:iarpa_smart_metrics)
         >>> from watch.cli.run_metrics_framework import *  # NOQA
-        >>> from iarpa_smart_metrics.demo.generate_demodata import generate_demo_metrics_framework_data
+        >>> from watch.demo.metrics_demo.generate_demodata import generate_demo_metrics_framework_data
         >>> cmdline = 0
         >>> base_dpath = ub.Path.appdir('watch', 'tests', 'test-iarpa-metrics2')
         >>> data_dpath = base_dpath / 'inputs'

@@ -253,8 +253,6 @@ def expand_site_models_with_site_summaries(sites, regions):
         for site_df in ub.ProgIter(sites, desc='checking site assumptions'):
             first = site_df.iloc[0]
             rest = site_df.iloc[1:]
-            # import xdev
-            # with xdev.embed_on_exception_context:
             assert first['type'] == 'site', (
                 f'first row must have type of site, got {first["type"]}')
             assert first['region_id'] is not None, (
@@ -280,9 +278,19 @@ def expand_site_models_with_site_summaries(sites, regions):
         # Hack to set all region-ids
         region_df.loc[:, 'region_id'] = region_id
         sites_part = region_df[~is_region]
-        assert (sites_part['type'] == 'site_summary').all(), 'rest of data must be site summaries'
-        assert sites_part['region_id'].apply(lambda x: (x is None) or x == region_id).all(), (
-            'site-summaries do not have region ids (unless we make them)')
+
+        FIX_LEADING_SPACE = 1
+        if FIX_LEADING_SPACE:
+            sites_part.loc[sites_part['type'] == ' site_summary', 'type'] = 'site_summary'
+
+        try:
+            assert (sites_part['type'] == 'site_summary').all(), 'rest of data must be site summaries'
+            assert sites_part['region_id'].apply(lambda x: (x is None) or x == region_id).all(), (
+                'site-summaries do not have region ids (unless we make them)')
+        except AssertionError:
+            print(sites_part['type'].unique())
+            embed_if_requested()
+            raise
         region_id_to_site_summaries[region_id] = sites_part
 
         # Check datetime errors
@@ -324,12 +332,10 @@ def expand_site_models_with_site_summaries(sites, regions):
 
         if site_rows1:
             site_df1 = pd.concat(site_rows1).reset_index()
-            import xdev
-            with xdev.embed_on_exception_context:
-                assert len(set(site_df1['site_id'])) == len(site_df1), 'site ids must be unique'
-                site_df1 = site_df1.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
-                if 'misc_info' not in site_df1.columns:
-                    site_df1['misc_info'] = None
+            assert len(set(site_df1['site_id'])) == len(site_df1), 'site ids must be unique'
+            site_df1 = site_df1.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
+            if 'misc_info' not in site_df1.columns:
+                site_df1['misc_info'] = None
         else:
             site_df1 = pd.DataFrame([], columns=expected_keys)
 
@@ -437,8 +443,16 @@ def expand_site_models_with_site_summaries(sites, regions):
 
             for _, site_summary in sitesummaries.iterrows():
                 geom = site_summary['geometry']
+                if geom is None:
+                    print('warning got none geom')
+                    continue
 
-                poly_json = kwimage.Polygon.from_shapely(geom.convex_hull).to_geojson()
+                try:
+                    poly_json = kwimage.Polygon.from_shapely(geom.convex_hull).to_geojson()
+                except Exception as ex:
+                    print(f'ex={ex}')
+                    embed_if_requested()
+                    raise
                 mpoly_json = kwimage.MultiPolygon.from_shapely(geom).to_geojson()
 
                 has_keys = site_summary.index.intersection(site_properites)
@@ -461,6 +475,12 @@ def expand_site_models_with_site_summaries(sites, regions):
 
                 assert start_datetime <= end_datetime
 
+                score = site_summary.get('score', None)
+                try:
+                    score = float(score)
+                except TypeError:
+                    ...
+
                 observation_prop_template = {
                     'type': 'observation',
                     'observation_date': None,
@@ -469,7 +489,7 @@ def expand_site_models_with_site_summaries(sites, regions):
                     # 'current_phase': None,
                     # 'is_occluded': None,
                     # 'is_site_boundary': None,
-                    'score': float(site_summary['score']),
+                    'score': score,
                     # 'misc_info': None,
                 }
 
@@ -535,6 +555,7 @@ def expand_site_models_with_site_summaries(sites, regions):
                 site_rows = site_gdf.iloc[1:]
                 track_id = site_summary_row['site_id']
                 status = site_summary_row['status']
+                status = status.lower().strip()
                 summary = {
                     'region_id': region_id,
                     'track_id': track_id,
@@ -555,8 +576,6 @@ def expand_site_models_with_site_summaries(sites, regions):
     if __debug__:
         for region_id, region_sites in ub.ProgIter(region_id_to_sites.items(), desc='validate sites'):
             for site_df in region_sites:
-                # import xdev
-                # with xdev.embed_on_exception_context:
                 validate_site_dataframe(site_df)
 
     return region_id_to_sites
@@ -594,8 +613,6 @@ def validate_site_dataframe(site_df):
         if not all(valid_obs_dates):
             # null_obs_sites.append(first[['site_id', 'status']].to_dict())
             pass
-        # import xdev
-        # with xdev.embed_on_exception_context:
         valid_deltas = np.array([d.total_seconds() for d in np.diff(valid_obs_dates)])
         if not (valid_deltas >= 0).all():
             raise AssertionError('observations are not sorted temporally')
@@ -693,8 +710,6 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
                 video_id_to_region_ids[video_id].append(region_id)
 
             for video_id, region_ids in video_id_to_region_ids.items():
-                # import xdev
-                # with xdev.embed_on_exception_context:
                 if len(region_ids) != 1:
                     # FIXME: This should not be the case, but it seems it is
                     # due to super regions maybe? If it is super regions this
@@ -755,8 +770,6 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
             if __debug__ and 0:
                 # Sanity check, the sites should have spatial overlap with each image in the video
                 image_overlaps = util_gis.geopandas_pairwise_overlaps(site_gdf, subimg_df)
-                # import xdev
-                # with xdev.embed_on_exception_context:
                 num_unique_overlap_frames = set(ub.map_vals(len, image_overlaps).values())
                 assert len(num_unique_overlap_frames) == 1
 
@@ -764,6 +777,7 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
             site_rows = site_gdf.iloc[1:]
             track_id = site_summary_row['site_id']
             status = site_summary_row['status']
+            status = status.lower().strip()
 
             if status == 'pending':
                 # hack for QFabric
@@ -791,9 +805,21 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
             ])
 
             if start_date is not None and observation_dates[0] != start_date:
-                raise AssertionError(f'start_date={start_date}, obs[0]={observation_dates[0]}')
+                print('WARNING: inconsistent start')
+                print(site_gdf)
+                print(f'start_date = {start_date}')
+                print(f'end_date   = {end_date}')
+                print('observation_dates = {}'.format(ub.repr2(observation_dates.tolist(), nl=1)))
+                # embed_if_requested()
+                # raise AssertionError(f'start_date={start_date}, obs[0]={observation_dates[0]}')
             if end_date is not None and observation_dates[-1] != end_date:
-                raise AssertionError(f'end_date={end_date}, obs[-1]={observation_dates[-1]}')
+                print('WARNING: inconsistent end date')
+                print(site_gdf)
+                print(f'start_date = {start_date}')
+                print(f'end_date   = {end_date}')
+                print('observation_dates = {}'.format(ub.repr2(observation_dates.tolist(), nl=1)))
+                # embed_if_requested()
+                # raise AssertionError(f'end_date={end_date}, obs[-1]={observation_dates[-1]}')
 
             # Assuming observations are sorted by date
             assert all([d.total_seconds() >= 0 for d in np.diff(observation_dates)])
@@ -1099,6 +1125,23 @@ def draw_geospace(dvc_dpath, sites):
 
 
 _SubConfig = ProjectAnnotationsConfig
+
+
+def embed_if_requested(n=0):
+    """
+    Calls xdev.embed conditionally based on the environment.
+
+    Useful in cases where you want to leave the embed call around, but you dont
+    want it to trigger in normal circumstances.
+
+    Specifically, embed is only called if the environment variable XDEV_EMBED
+    exists or if --xdev-embed is in sys.argv.
+    """
+    import os
+    import ubelt as ub
+    import xdev
+    if os.environ.get('XDEV_EMBED', '') or ub.argflag('--xdev-embed'):
+        xdev.embed(n=n + 1)
 
 
 if __name__ == '__main__':

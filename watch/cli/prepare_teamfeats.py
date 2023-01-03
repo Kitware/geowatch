@@ -45,9 +45,9 @@ Ignore:
 Ignore:
 
     # For Drop5
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
-    EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt')
-    # BUNDLE_DPATH=$DATA_DVC_DPATH/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
+    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt')
+    # BUNDLE_DPATH=$DVC_DATA_DPATH/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC
     # KWCOCO_FPATH=$BUNDLE_DPATH/data.kwcoco.json
 
     ln -s Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC Drop4-BAS
@@ -71,13 +71,13 @@ Ignore:
     "
 
     # Drop 4
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
-    BUNDLE_DPATH=$DATA_DVC_DPATH/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
+    BUNDLE_DPATH=$DVC_DATA_DPATH/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
     KWCOCO_FPATH_PAT=$BUNDLE_DPATH/[KLNPUBAC]*_[RC]*0[1234].kwcoco.json
     ls $KWCOCO_FPATH_PAT
     python -m watch.cli.prepare_teamfeats \
         --base_fpath="$KWCOCO_FPATH_PAT" \
-        --expt_dpath="$EXPT_DVC_DPATH" \
+        --expt_dpath="$DVC_EXPT_DPATH" \
         --with_landcover=0 \
         --with_materials=0 \
         --with_invariants=1 \
@@ -101,14 +101,14 @@ Ignore:
     # Drop 4 SC
 
 
-    DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
-    BUNDLE_DPATH=$DATA_DVC_DPATH/Drop4-SC
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
+    BUNDLE_DPATH=$DVC_DATA_DPATH/Drop4-SC
     #KWCOCO_FPATH_PAT=$BUNDLE_DPATH/data_vali.kwcoco.json
     KWCOCO_FPATH_PAT=$BUNDLE_DPATH/data_train.kwcoco.json
     ls $KWCOCO_FPATH_PAT
     python -m watch.cli.prepare_teamfeats \
         --base_fpath="$KWCOCO_FPATH_PAT" \
-        --expt_dpath="$EXPT_DVC_DPATH" \
+        --expt_dpath="$DVC_EXPT_DPATH" \
         --with_landcover=0 \
         --with_materials=0 \
         --with_invariants=1 \
@@ -134,10 +134,9 @@ class TeamFeaturePipelineConfig(scfg.Config):
         The models and parameters to use are hard coded in this script.
     """
     default = {
-        'base_fpath': scfg.Value('auto', help=ub.paragraph(
+        'base_fpath': scfg.Value(None, nargs='+', help=ub.paragraph(
             '''
-            base coco file to compute team-features on, combine, and split. If
-            auto, uses a hard-coded value
+            One ore more base coco files to compute team-features on.
             ''')),
         'expt_dvc_dpath': scfg.Value('auto', help=ub.paragraph(
             '''
@@ -150,6 +149,7 @@ class TeamFeaturePipelineConfig(scfg.Config):
         'with_landcover': scfg.Value(True, help='Include DZYNE landcover features'),
         'with_materials': scfg.Value(True, help='Include Rutgers material features'),
         'with_invariants': scfg.Value(True, help='Include UKY invariant features'),
+        'with_invariants2': scfg.Value(0, help='Include UKY invariant features'),
         'with_depth': scfg.Value(True, help='Include DZYNE WorldView depth features'),
 
         'invariant_segmentation': scfg.Value(False, help='Enable/Disable segmentation part of invariants'),
@@ -169,7 +169,7 @@ class TeamFeaturePipelineConfig(scfg.Config):
         'run': scfg.Value(0, help='if True execute the pipeline'),
         'skip_existing': scfg.Value(True, help='if True skip completed results'),
 
-        'do_splits': scfg.Value(False, help='if True also make splits'),
+        'do_splits': scfg.Value(False, help='if True also make splits. BROKEN'),
 
         'follow': scfg.Value(True),
 
@@ -221,14 +221,9 @@ def prep_feats(cmdline=True, **kwargs):
 
     if config['expt_dvc_dpath'] == 'auto':
         import watch
-        expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
+        expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
     else:
         expt_dvc_dpath = ub.Path(config['expt_dvc_dpath'])
-
-    if config['base_fpath'] == 'auto':
-        raise NotImplementedError(
-            'Auto id deprecated. '
-            'Specify the absolute path to the data to generate features on')
 
     if workers == 0:
         gres = None
@@ -272,7 +267,8 @@ def prep_feats(cmdline=True, **kwargs):
     if config['run']:
         queue.run(
             block=True,
-            # with_textual=True,
+            # with_textual=False,
+            with_textual='auto',
         )
 
     """
@@ -305,6 +301,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
 
         # 2022-03-21
         'uky_pretext': expt_dvc_dpath / 'models/uky/uky_invariants_2022_03_21/pretext_model/pretext_package.pt',
+        'uky_pretext2': expt_dvc_dpath / 'models/uky/uky_invariants_2022_12_17/TA1_pretext_model/pretext_package.pt',
         'uky_pca': expt_dvc_dpath / 'models/uky/uky_invariants_2022_03_21/pretext_model/pretext_pca_104.pt',
         # 'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_02_21/TA1_segmentation_model/segmentation_package.pt',  # uses old segmentation model
 
@@ -334,6 +331,7 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
         'with_depth': 'D',
         'with_materials': 'M',
         'with_invariants': 'I',
+        'with_invariants2': 'I2',
     }
 
     # tmux queue is still limited. The order of submission matters.
@@ -482,6 +480,44 @@ def _populate_teamfeat_queue(pipeline, base_fpath, expt_dvc_dpath, aligned_bundl
         combo_code_parts.append(codes[key])
         job = pipeline.submit(
             name='invariants' + name_suffix,
+            command=task['command'],
+            in_paths=[base_fpath],
+            out_paths={
+                'output_fpath': task['output_fpath']
+            },
+        )
+        task_jobs.append(job)
+
+    key = 'with_invariants2'
+    if config[key]:
+        task = {}
+        if not model_fpaths['uky_pretext2'].exists():
+            print('Warning: UKY pretext model does not exist')
+        # all_tasks = 'before_after segmentation pretext'
+        task['output_fpath'] = outputs['uky_invariants']
+        task['gpus'] = 1
+        # --input_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_train.kwcoco.json \
+        # --output_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_train_invar13.kwcoco.json \
+        # --pretext_package=$DVC_EXPT_DPATH/models/uky/uky_invariants_2022_12_17/TA1_pretext_model/pretext_package.pt \
+        task['command'] = ub.codeblock(
+            fr'''
+            python -m watch.tasks.invariants.predict \
+                --input_kwcoco "{base_fpath}" \
+                --output_kwcoco "{task['output_fpath']}" \
+                --pretext_package_path "{model_fpaths['uky_pretext2']}" \
+                --pca_projection_path  "{model_fpaths['uky_pca']}" \
+                --input_space_scale=10GSD \
+                --window_space_scale=10GSD \
+                --patch_size=256 \
+                --do_pca {config['invariant_pca']} \
+                --patch_overlap=0.3 \
+                --num_workers="{data_workers}" \
+                --write_workers 0 \
+                --tasks before_after pretext
+            ''')
+        combo_code_parts.append(codes[key])
+        job = pipeline.submit(
+            name='invariants2' + name_suffix,
             command=task['command'],
             in_paths=[base_fpath],
             out_paths={

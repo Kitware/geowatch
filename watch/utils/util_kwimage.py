@@ -8,6 +8,7 @@ import ubelt as ub
 # Backwards compat definition. Code was ported to kwimage.
 from kwimage import connected_components  # NOQA
 from kwimage import draw_header_text  # NOQA
+from kwimage import Box  # NOQA
 
 
 def _auto_kernel_sigma(kernel=None, sigma=None, autokernel_mode='ours'):
@@ -294,20 +295,122 @@ def ensure_false_color(canvas, method='ortho'):
     return rgb_canvas
 
 
-def colorize_label_image(labels, with_legend=True):
+def colorize_label_image(labels, with_legend=True, label_mapping=None, label_to_color=None):
     """
     Replace an image with integer labels with colors
+
+    Args:
+        labels (ndarray): a label image
+        with_legend (bool):
+        legend_mapping (dict):
+            maps the label used in the label image to what should appear in the
+            legend.
+
+    CommandLine:
+        python -X importtime -m xdoctest watch.utils.util_kwimage colorize_label_image
+
+    Example:
+        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> labels = (np.random.rand(32, 32) * 10).astype(np.uint8) % 5
+        >>> label_to_color = {0: 'black'}
+        >>> label_mapping = {0: 'background'}
+        >>> with_legend = True
+        >>> canvas1 = colorize_label_image(labels, with_legend,
+        >>>     label_mapping=label_mapping, label_to_color=label_to_color)
+        >>> canvas2 = colorize_label_image(labels, with_legend,
+        >>>     label_mapping=label_mapping, label_to_color=None)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas1, pnum=(1, 2, 1), fnum=1)
+        >>> kwplot.imshow(canvas2, pnum=(1, 2, 2), fnum=1)
+
+    Example:
+        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> labels = (np.random.rand(4, 4) * 10) % 5
+        >>> labels[0:2] = np.nan
+        >>> label_to_color = {0: 'black'}
+        >>> label_mapping = {0: 'background'}
+        >>> with_legend = True
+        >>> canvas1 = colorize_label_image(labels, with_legend,
+        >>>     label_mapping=label_mapping, label_to_color=label_to_color)
+        >>> canvas2 = colorize_label_image(labels, with_legend,
+        >>>     label_mapping=label_mapping, label_to_color=None)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas1, pnum=(1, 2, 1), fnum=1)
+        >>> kwplot.imshow(canvas2, pnum=(1, 2, 2), fnum=1)
     """
     import kwimage
-    label_colors = kwimage.Color.distinct(labels.max())
-    index_to_color = np.array([kwimage.Color('black').as01()] + label_colors)
-    colored_label_img = index_to_color[labels]
+    unique_labels, inv = np.unique(labels, return_inverse=True)
+
+    if np.isnan(unique_labels).any():
+        # need specialized nan handling because we are going to use unique
+        # values as keys in a dictionary.
+        import math
+        unique_labels = ['nan' if math.isnan(f) else f for f in unique_labels]
+
+    if label_to_color is not None:
+        used_labels = set(label_to_color) & set(unique_labels)
+        label_to_color_ = {k: kwimage.Color(c).as01() for k, c in label_to_color.items()}
+        existing = list(label_to_color_.values())
+        uncolored_labels = list(set(unique_labels) - set(used_labels))
+    else:
+        existing = None
+        uncolored_labels = unique_labels
+        used_labels = set()
+        label_to_color_ = {}
+
+    # When there are a lot of unique colors this takes a very long time
+    new_label_colors = kwimage.Color.distinct(len(uncolored_labels), existing=existing)
+    label_to_color_.update(ub.dzip(uncolored_labels, new_label_colors))
+
+    unique_label_colors = [label_to_color_[c] for c in unique_labels]
+    unique_label_colors = np.array(unique_label_colors)
+    colored_label_img = unique_label_colors[inv].reshape(labels.shape + (unique_label_colors.shape[-1],))
+
+    # index_to_color = np.array([kwimage.Color('black').as01()] + label_colors)
+    # colored_label_img = index_to_color[labels]
     if with_legend:
         import kwplot
-        legend = kwplot.make_legend_img(ub.dzip(range(len(index_to_color)), index_to_color))
-        canvas = kwimage.stack_images([colored_label_img, legend], axis=1, resize='smaller')
+
+        label_to_color = ub.dzip(unique_labels, unique_label_colors)
+        if label_mapping:
+            label_to_color = {str(k) if k not in label_mapping else str(k) + ': ' + str(label_mapping[k]): v
+                              for k, v in label_to_color.items()}
+
+        legend = kwplot.make_legend_img(label_to_color)
+
+        h1, w1 = legend.shape[0:2]
+        h2, w2 = colored_label_img.shape[0:2]
+        box1 = kwimage.Box.from_dsize((w1, h1))
+        box2 = kwimage.Box.from_dsize((w2, h2))
+
+        if 1:
+            box3 = box1.copy()
+            box3 = box3.scale(box2.width / box1.width)
+            if box3.height > box2.height:
+                box3 = box3.scale(box2.height / box3.height)
+            # print(f'box2={box2}')
+            # print(f'box3={box3}')
+            # print(f'box1={box1}')
+            sf = box3.width / box1.width
+            legend = kwimage.imresize(legend, scale=sf)
+            # if box3.width > box2.width:
+            #     box3 = box3.scale(box2.height / box3.height)
+            # if box1.
+            # if w1 > w2:
+            #     legend = kwimage.imresize(legend, dsize=(w2, None))
+            #     h1, w1 = legend.shape[0, 1]
+            # if h1 > h2:
+            #     legend = kwimage.imresize(legend, dsize=(None, h2))
+
+        canvas = kwimage.stack_images([colored_label_img, legend], axis=1,
+                                      bg_value='gray')
+        # resize='smaller')
     else:
-        colored_label_img = canvas
+        canvas = colored_label_img
     return canvas
 
 
@@ -454,7 +557,8 @@ def find_lowvariance_regions(image, kernel=7):
 
 
 def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
-                           connectivity=8, scale=1.0):
+                           connectivity=8, scale=1.0, grid_stride='auto',
+                           PRINT_STEPS=0, values=None):
     """
     Alternative approach to find_samecolor_regions, but the idea is we check a
     set of seed points and perform a flood fill.
@@ -476,6 +580,9 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
             less than 1 will resize the image, perform the computation, and
             then upsample the output. This can cause a significant speed
             increase at the cost of some accuracy.
+
+        values (None | List): the values of interest to find.
+            if unspecified, any highly frequent value is flagged.
 
     References:
         https://docs.opencv.org/3.4/d7/d1b/group__imgproc__misc.html#ga366aae45a6c1289b341d140839f18717
@@ -534,6 +641,29 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
         >>> kwplot.imshow(image, pnum=(1, 2, 1), title='input image')
         >>> kwplot.imshow(canvas, pnum=(1, 2, 2), title='labeled regions')
 
+    Example:
+        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> w, h = 5, 4
+        >>> image = (np.arange(w * h).reshape(h, w)).astype(np.uint8)
+        >>> image[2, 2] = 0
+        >>> image[2, 3] = 0
+        >>> image[3, 4] = 0
+        >>> min_region_size = 2
+        >>> seed_method = 'grid'
+        >>> connectivity = 8
+        >>> scale = 1.0
+        >>> grid_stride = 1
+        >>> labels = find_samecolor_regions(
+        >>>     image, min_region_size, seed_method, connectivity, scale,
+        >>>     grid_stride, PRINT_STEPS=0)
+        >>> print(labels)
+        >>> print(image)
+        >>> assert (labels > 0).sum() == 3
+
+    Returns:
+        ndarray: a label array where 0 indicates background and a
+            non-zero label is a samecolor region.
+
     Ignore:
         import xdev
         xdev.profile_now(find_lowvariance_regions)(image)
@@ -563,6 +693,7 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
         for timer in ti.reset('find_samecolor_regions + resize'):
             with timer:
                 labels = find_samecolor_regions(image, scale=0.25)
+
     """
     import cv2
     import kwimage
@@ -583,7 +714,12 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
         # Seed method, uniform grid
         # This method is a lot faster, but it will miss any component
         # that a sampling point doesn't land on.
-        stride = int(np.ceil(np.sqrt(min_region_size)))
+        if grid_stride == 'auto':
+            # stride = int(np.ceil(min_region_size / 2))
+            # stride = int(np.ceil(min_region_size / 2))
+            stride = int(np.ceil(np.sqrt(min_region_size)))
+        else:
+            stride = grid_stride
         x_grid = np.arange(0, w, stride)
         y_grid = np.arange(0, h, stride)
         x_locs, y_locs = np.meshgrid(x_grid, y_grid)
@@ -615,38 +751,94 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
     # Initialize floodfill flags
     ff_flags_base = 0
     ff_flags_base |= connectivity
-    ff_flags_base |= cv2.FLOODFILL_FIXED_RANGE
+    ff_flags_base |= cv2.FLOODFILL_FIXED_RANGE  # only consider difference between the seed and the point to be filled
     ff_flags_base |= cv2.FLOODFILL_MASK_ONLY
+
+    prev_mask = mask.copy()
+
+    if PRINT_STEPS:
+        import rich
+
+    values_of_interest = values
+    if values_of_interest is not None:
+        # Filter out any grid positions based on values of interest
+        grid_values = image[check_xy.T[1], check_xy.T[0]]
+        print(f'grid_values={grid_values}')
+        flags = None
+        for v in values_of_interest:
+            if flags is None:
+                flags = (grid_values == v).all(-1)
+            else:
+                flags |= (grid_values == v).all(-1)
+        check_xy = check_xy[flags]
 
     # Start at 2 because 1 is used as an internal value
     cluster_label = 2
     for check_x, check_y in check_xy:
         already_filled = accum_labels[check_y + 1, check_x + 1]
+
+        if PRINT_STEPS:
+            print('')
+            print('----')
+            check_position = np.full_like(image, dtype=str, fill_value='.')
+            check_position[check_y, check_x] = 'x'
+            if already_filled:
+                rich.print(f'seed xys = ({check_x}, {check_y})')
+                rich.print('[yellow] already filled')
+                rich.print(ub.hzcat(list(map(str, ['\n' + str(image), ' ', '\n' + str(check_position), ' ', mask, ' ', accum_labels]))))
+
         if not already_filled:
             seed_point = (check_x, check_y)
             # The value of the mask is specified in the flags Note: we can only
             # handle 254 different regions, which should be fine, but its a
             # limitaiton (we could work around it if needed)
             ff_flags = ff_flags_base | (cluster_label << 8)
+
             num, im, mask, rect = cv2.floodFill(
                 image, mask=mask, seedPoint=seed_point, newVal=1, loDiff=0, upDiff=0,
                 # rect=None,
                 flags=ff_flags)
+
+            fx, fy, fw, fh = rect
+            sl = (slice(fy, fy + fh + 1), slice(fx, fx + fw + 1))
+            # sl = kwimage.Box.coerce(np.array([
+            #     [fx, fy, fw + 1, fh + 1]]), 'xywh').to_slice()
+
+            if PRINT_STEPS:
+                print('')
+                print('----')
+                rich.print(f'xy = ({check_x}, {check_y})')
+                rich.print(f'num = {num}')
+                if num > min_region_size:
+                    rich.print('[green] found a region')
+                else:
+                    rich.print('[red] not a region')
+                delta = mask - prev_mask
+                rich.print(ub.hzcat(list(map(str, ['\n' + str(image), ' ', '\n' + str(check_position), ' ', mask, ' ', accum_labels, ' ', delta]))))
+
             if num > min_region_size:
+                # use delta to work around an issue where the cluster label is
+                # not incremented on every iteration. i.e. if we find a
+                # cluster, we would otherwise inadvertently take data from
+                # previous non-clusters as they are given the same mask label.
                 # Accept this as a cluster of similar colors
                 if 1:
                     # Faster method where we only copy data in the filled region
-                    fx, fy, fw, fh = rect
-                    sl = kwimage.Boxes(np.array([
-                        [fx, fy, fw + 1, fh + 1]]), 'xywh').to_slices()[0]
-                    mask_part = mask[sl]
+                    mask_part = mask[sl] - prev_mask[sl]
                     label_part = accum_labels[sl]
                     label_part[mask_part == cluster_label] = cluster_label
                 else:
-                    accum_labels[mask == cluster_label] = cluster_label
+                    delta = mask - prev_mask
+                    accum_labels[delta == cluster_label] = cluster_label
                 cluster_label += 1
 
+            # Update the previous mask
+            prev_mask[sl] = mask[sl]
+
     final_labels = accum_labels[1:-1, 1:-1]
+    if PRINT_STEPS:
+        print('Final Labels')
+        rich.print(final_labels)
     # is_labeled = final_labels
     # Make labeles start at 1 instead of 2.
     # final_labels[is_labeled] = final_labels[is_labeled] - 1
@@ -655,6 +847,133 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
         final_labels = kwimage.imresize(
             final_labels, dsize=orig_dsize, interpolation='nearest')
     return final_labels
+
+
+def find_high_frequency_values(image, values=None, abs_thresh=0.2,
+                               rel_thresh=None):
+    """
+    Values that appear in the image very often, may be indicative of an
+    artifact that we should remove.
+
+    Args:
+        values (None | List): the values of interest to find.
+            if unspecified, any highly frequent value is flagged.
+
+    Ignore:
+        >>> # Without value restriction
+        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> import kwimage
+        >>> image1 = kwimage.grab_test_image(dsize=(256, 256))
+        >>> dsize = image1.shape[0:2][::-1]
+        >>> poly1 =kwimage.Polygon.random(rng=3).scale(dsize)
+        >>> poly2 =kwimage.Polygon.random(rng=2).scale(dsize)
+        >>> image2 = image1.copy()[..., 0]
+        >>> image2 = poly1.draw_on(image2, color=[0])
+        >>> image2 = poly2.draw_on(image2, color=[0])
+        >>> with ub.Timer() as t2:
+        >>>     mask2 = find_high_frequency_values(image2)
+        >>> with ub.Timer() as t3:
+        >>>     mask3 = find_samecolor_regions(image2)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(image2, doclf=1, pnum=(1, 3, 1))
+        >>> kwplot.imshow(colorize_label_image(mask2), pnum=(1, 3, 2), title=f'find_high_frequency_values: @ {t2.elapsed:0.4}s')
+        >>> kwplot.imshow(colorize_label_image(mask3), pnum=(1, 3, 3), title=f'find_samecolor_regions @ {t3.elapsed:0.4}s')
+        >>> kwplot.show_if_requested()
+
+    Ignore:
+        >>> # With value restriction
+        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> import kwimage
+        >>> image1 = kwimage.grab_test_image(dsize=(256, 256))
+        >>> dsize = image1.shape[0:2][::-1]
+        >>> poly1 =kwimage.Polygon.random(rng=3).scale(dsize)
+        >>> poly2 =kwimage.Polygon.random(rng=2).scale(dsize)
+        >>> image2 = image1.copy()[..., 0]
+        >>> image2 = poly1.draw_on(image2, color=[0])
+        >>> image2 = poly2.draw_on(image2, color=[0])
+        >>> with ub.Timer() as t2:
+        >>>     mask2 = find_high_frequency_values(image2, values={0})
+        >>> with ub.Timer() as t3:
+        >>>     mask3 = find_samecolor_regions(image2, values={0})
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(image2, doclf=1, pnum=(1, 3, 1))
+        >>> kwplot.imshow(colorize_label_image(mask2), pnum=(1, 3, 2), title=f'find_high_frequency_values: @ {t2.elapsed:0.4}s')
+        >>> kwplot.imshow(colorize_label_image(mask3), pnum=(1, 3, 3), title=f'find_samecolor_regions @ {t3.elapsed:0.4}s')
+        >>> kwplot.show_if_requested()
+
+    Ignore:
+        >>> # With value restriction
+        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> image = np.random.rand(32, 32) + 1
+        >>> values = {0}
+        >>> abs_thresh = 0.2
+        >>> mask1 = find_high_frequency_values(image, values)
+        >>> assert not np.any(mask1)
+        >>> image[0:16] = 0
+        >>> mask2 = find_high_frequency_values(image, values)
+        >>> assert np.all(mask2[:16])
+        >>> assert not np.any(mask2[16:])
+    """
+    def ratios(data):
+        return data[:-1] / data[1:]
+    import kwarray
+    import numpy as np
+
+    values_of_interest = values
+    if values_of_interest is not None and len(values_of_interest) == 1:
+        # Optimization for a single bad values we care about.
+        value_of_interest = ub.peek(values_of_interest)
+        flags = (image == value_of_interest)
+        if len(flags.shape) > 2:
+            axis = tuple(range(2, len(flags.shape)))
+            flags = flags.all(axis=axis)
+        abs_score = flags.sum() / flags.size
+        if abs_thresh is not None and abs_score > abs_thresh:
+            mask = flags
+        else:
+            mask = np.zeros_like(flags)
+
+        if rel_thresh is not None:
+            raise NotImplementedError
+    else:
+        raw_values, raw_counts = np.unique(image, return_counts=True)
+        valid_mask = ~np.isnan(raw_values)
+        values = raw_values[valid_mask]
+        counts = raw_counts[valid_mask]
+
+        if values_of_interest is None:
+            max_bad_values = 10
+        else:
+            max_bad_values = len(values_of_interest) + 1
+
+        ranked_idxs = counts.argsort()[::-1]
+        ranked_counts = counts[ranked_idxs[:max_bad_values]]
+        ranked_values = values[ranked_idxs[:max_bad_values]]
+
+        abs_score = ranked_counts / image.size
+        rel_score = ratios(ranked_counts)
+        abs_score = abs_score[:len(rel_score)]
+        ranked_values = ranked_values[:len(rel_score)]
+
+        if abs_thresh is not None:
+            flags = abs_score > abs_thresh
+        else:
+            flags = np.zeros(len(abs_score), dtype=bool)
+
+        if rel_thresh is not None:
+            flags |= (rel_score > rel_thresh)
+
+        bad_values = ranked_values[flags]
+        image = kwarray.atleast_nd(image, 3)
+
+        mask = kwarray.isect_flags(image, bad_values)
+        mask = mask.reshape(image.shape)
+        mask = mask.any(axis=2)
+    return mask
 
 
 def polygon_distance_transform(poly, shape, dtype=np.uint8):
@@ -670,8 +989,6 @@ def polygon_distance_transform(poly, shape, dtype=np.uint8):
         >>> shape = (32, 32)
         >>> dist, poly_mask = polygon_distance_transform(poly, shape, dtype)
         >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> kwplot.autompl()
         >>> import kwplot
         >>> kwplot.autompl()
         >>> kwplot.imshow(dist, cmap='viridis', doclf=1)
@@ -1169,231 +1486,30 @@ def find_low_overlap_covering_boxes_optimize(polygons, scale, min_box_dim, max_b
     # prob = pulp.LpProblem("Set Cover", pulp.LpMinimize)
 
 
-class Box(ub.NiceRepr):
+def exactly_1channel(image, ndim=2):
     """
-    Represents a single Box.
+    Like atleast_3channels, exactly_1channel returns a 2D image as either
+    a 2D or 3D array, depending on if ndim is 2 or 3. For a 3D array the last
+    dimension is always 1.  An error is thrown if assumptions are not met.
 
-    For multiple boxes use kwimage.Boxes, which is more efficient.
-    This is a convinience class.
-
-    Currently implemented by storing a Boxes object with one item and indexing
-    into it. Could be done more efficiently
+    Args:
+        image (ndarray):
+        ndim (int): either 2 or 3
 
     Example:
-        >>> from watch.utils import util_kwimage
-        >>> box = util_kwimage.Box.random()
-        >>> print(f'box={box}')
-        >>> #
-        >>> box.scale(10).quantize().to_slice()
-        >>> #
-        >>> sl = (slice(0, 10), slice(0, 30))
-        >>> box = util_kwimage.Box.from_slice(sl)
-        >>> print(f'box={box}')
+        >>> assert exactly_1channel(np.empty((3, 3)), ndim=2).shape == (3, 3)
+        >>> assert exactly_1channel(np.empty((3, 3)), ndim=3).shape == (3, 3, 1)
+        >>> assert exactly_1channel(np.empty((3, 3, 1)), ndim=2).shape == (3, 3)
+        >>> assert exactly_1channel(np.empty((3, 3, 1)), ndim=3).shape == (3, 3, 1)
     """
-
-    def __init__(self, boxes, _check: bool = False):
-        if _check:
-            raise Exception(
-                'For now, only construct an instance of this using a class '
-                ' method, like coerce, from_slice, from_shapely, etc...')
-        self.boxes = boxes
-
-    @property
-    def format(self):
-        return self.boxes.format
-
-    @property
-    def data(self):
-        return self.boxes.data[0]
-
-    def __nice__(self):
-        data_repr = repr(self.data)
-        if '\n' in data_repr:
-            data_repr = ub.indent('\n' + data_repr.lstrip('\n'), '    ')
-        nice = '{}, {}'.format(self.format, data_repr)
-        return nice
-
-    @classmethod
-    def random(self, *args, **kwargs):
-        import kwimage
-        boxes = kwimage.Boxes.random(*args, **kwargs)
-        self = Box(boxes, _check=False)
-        return self
-
-    @classmethod
-    def from_slice(self, slice_):
-        import kwimage
-        boxes = kwimage.Boxes.from_slice(slice_)
-        self = Box(boxes, _check=False)
-        return self
-
-    @classmethod
-    def from_shapely(self, geom):
-        import kwimage
-        boxes = kwimage.Boxes.from_shapely(geom)
-        self = Box(boxes, _check=False)
-        return self
-
-    @classmethod
-    def from_dsize(self, dsize):
-        width, height = dsize
-        import kwimage
-        boxes = kwimage.Boxes([[0, 0, width, height]], 'ltrb')
-        self = Box(boxes, _check=False)
-        return self
-
-    @classmethod
-    def coerce(cls, data, **kwargs):
-        if isinstance(data, Box):
-            return data
+    if len(image.shape) == 3:
+        assert image.shape[2] == 1
+        if ndim == 2:
+            image = image[:, :, 0]
         else:
-            import numbers
-            # import kwimage
-            from kwarray.arrayapi import torch
-            if isinstance(data, list):
-                if data and isinstance(data[0], numbers.Number):
-                    data = np.array(data)[None, :]
-            if isinstance(data, np.ndarray) or torch and torch.is_tensor(data):
-                if len(data.shape) == 1:
-                    data = data[None, :]
-            # return cls(kwimage.Boxes.coerce(data, **kwargs))
-            # inline new coerce code until new version lands
-            from kwimage import Boxes
-            from shapely.geometry import Polygon
-            if isinstance(data, Boxes):
-                self = data
-            elif isinstance(data, Polygon):
-                self = Boxes.from_shapely(data)
-            else:
-                _arr_data = None
-                if isinstance(data, np.ndarray):
-                    _arr_data = np.array(data)
-                elif isinstance(data, list):
-                    _arr_data = np.array(data)
-
-                if _arr_data is not None:
-                    format = kwargs.get('format', None)
-                    if format is None:
-                        raise Exception('ambiguous, specify Box format')
-                    self = Boxes(_arr_data, format=format)
-                else:
-                    raise NotImplementedError
-            return cls(self)
-
-    @property
-    def dsize(self):
-        return (int(self.width), int(self.height))
-
-    def translate(self, *args, **kwargs):
-        new_boxes = self.boxes.translate(*args, **kwargs)
-        new = self.__class__(new_boxes)
-        return new
-
-    def warp(self, *args, **kwargs):
-        new_boxes = self.boxes.warp(*args, **kwargs)
-        new = self.__class__(new_boxes)
-        return new
-
-    def scale(self, *args, **kwargs):
-        new_boxes = self.boxes.scale(*args, **kwargs)
-        new = self.__class__(new_boxes)
-        return new
-
-    def clip(self, *args, **kwargs):
-        new_boxes = self.boxes.clip(*args, **kwargs)
-        new = self.__class__(new_boxes)
-        return new
-
-    def quantize(self, *args, **kwargs):
-        new_boxes = self.boxes.quantize(*args, **kwargs)
-        new = self.__class__(new_boxes)
-        return new
-
-    def copy(self, *args, **kwargs):
-        new_boxes = self.boxes.copy(*args, **kwargs)
-        new = self.__class__(new_boxes)
-        return new
-
-    def round(self, *args, **kwargs):
-        new_boxes = self.boxes.round(*args, **kwargs)
-        new = self.__class__(new_boxes)
-        return new
-
-    def pad(self, *args, **kwargs):
-        new_boxes = self.boxes.pad(*args, **kwargs)
-        new = self.__class__(new_boxes)
-        return new
-
-    def resize(self, *args, **kwargs):
-        new_boxes = self.boxes.resize(*args, **kwargs)
-        new = self.__class__(new_boxes)
-        return new
-
-    def to_ltbr(self, *args, **kwargs):
-        return self.__class__(self.boxes.to_ltbr(*args, **kwargs))
-
-    def to_xywh(self, *args, **kwargs):
-        return self.__class__(self.boxes.to_xywh(*args, **kwargs))
-
-    def to_cxywh(self, *args, **kwargs):
-        return self.__class__(self.boxes.to_cxywh(*args, **kwargs))
-
-    def toformat(self, *args, **kwargs):
-        return self.__class__(self.boxes.toformat(*args, **kwargs))
-
-    def astype(self, *args, **kwargs):
-        return self.__class__(self.boxes.astype(*args, **kwargs))
-
-    def corners(self, *args, **kwargs):
-        return self.boxes.corners(*args, **kwargs)[0]
-
-    def to_boxes(self):
-        return self.boxes
-
-    @property
-    def width(self):
-        return self.boxes.width.ravel()[0]
-
-    @property
-    def aspect_ratio(self):
-        return self.boxes.aspect_ratio.ravel()[0]
-
-    @property
-    def height(self):
-        return self.boxes.height.ravel()[0]
-
-    @property
-    def tl_x(self):
-        return self.boxes.tl_x[0]
-
-    @property
-    def tl_y(self):
-        return self.boxes.tl_y[0]
-
-    @property
-    def br_x(self):
-        return self.boxes.br_x[0]
-
-    @property
-    def br_y(self):
-        return self.boxes.br_y[0]
-
-    @property
-    def dtype(self):
-        return self.boxes.dtype
-
-    @property
-    def area(self):
-        return self.boxes.area.ravel()[0]
-
-    def to_slice(self, endpoint=True):
-        return self.boxes.to_slices(endpoint=endpoint)[0]
-
-    def to_shapely(self):
-        return self.boxes.to_shapely()[0]
-
-    def to_polygon(self):
-        return self.boxes.to_polygons()[0]
-
-    def to_coco(self):
-        return self.boxes.to_coco()[0]
+            assert ndim == 3
+    else:
+        assert len(image.shape) == 2
+        if ndim == 3:
+            image = image[:, :, None]
+    return image

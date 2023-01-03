@@ -419,12 +419,16 @@ def check_processed_regions():
     headers = {
         'x-api-key': os.environ['SMART_STAC_API_KEY']
     }
-    region_dpath = dvc_data_dpath / 'annotations/region_models'
-    # region_fpaths = list(region_dpath.glob('*.geojson'))
-    region_fpaths = list(region_dpath.glob('*_R*.geojson'))
 
-    region_dpath = dvc_data_dpath / 'golden_regions/region_models'
-    region_fpaths = list(region_dpath.glob('*_S*.geojson'))
+    base = ((dvc_data_dpath / 'annotations') / 'drop6')
+    # base = dvc_data_dpath / 'annotations'
+
+    region_dpath = base / 'region_models'
+    # region_fpaths = list(region_dpath.glob('*.geojson'))
+    region_fpaths = list(region_dpath.glob('*_C*.geojson'))
+
+    # region_dpath = dvc_data_dpath / 'golden_regions/region_models'
+    # region_fpaths = list(region_dpath.glob('*_S*.geojson'))
 
     provider = "https://api.smart-stac.com"
     catalog = pystac_client.Client.open(provider, headers=headers)
@@ -438,12 +442,12 @@ def check_processed_regions():
     collections_of_interest = [c.id for c in all_collections if pat.match(c.id)]
 
     collections_of_interest = [
-        'ta1-s2-acc',
-        'ta1-s2-acc-1',
+        # 'ta1-s2-acc',
+        # 'ta1-s2-acc-1',
         'ta1-s2-acc-2',
 
-        'ta1-ls-acc',
-        'ta1-ls-acc-1',
+        # 'ta1-ls-acc',
+        # 'ta1-ls-acc-1',
         'ta1-ls-acc-2',
 
         # 'ta1-wv-acc',

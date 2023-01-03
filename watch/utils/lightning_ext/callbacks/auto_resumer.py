@@ -21,8 +21,8 @@ class AutoResumer(pl.callbacks.Callback):
         >>> from watch.utils.lightning_ext.callbacks import StateLogger
         >>> import pytorch_lightning as pl
         >>> import ubelt as ub
-        >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
-        >>> disable_lightning_hardware_warnings()
+        >>> from watch.monkey import monkey_lightning
+        >>> monkey_lightning.disable_lightning_hardware_warnings()
         >>> default_root_dir = ub.Path.appdir('lightning_ext/test/auto_resume')
         >>> default_root_dir.delete()
         >>> #

@@ -1234,3 +1234,43 @@ class GdalDataset(ub.NiceRepr):
         Exiting the context manager forces the gdal object closed.
         """
         self.close()
+
+    def info(self):
+        """
+        Information similar to gdalinfo
+        """
+        # https://gdal.org/api/python/osgeo.gdal.html#osgeo.gdal.AsyncReader
+        # osgeo.gdal.InfoOptions(options=None, format='text', deserialize=True,
+        #                computeMinMax=False, reportHistograms=False,
+        #                reportProj4=False, stats=False, approxStats=False,
+        #                computeChecksum=False, showGCPs=True, showMetadata=True,
+        #                showRAT=True, showColorTable=True, listMDD=False,
+        #                showFileList=True, allMetadata=False,
+        #                extraMDDomains=None, wktFormat=None)
+        from osgeo import gdal
+        info = gdal.Info(self, format='json', allMetadata=True, listMDD=True)
+        # info = gdal.Info(self)
+        # info = gdal.Info(self, allMetadata=True, listMDD=True)
+        return info
+
+    def get_overview_info(self):
+        """
+        get number of overviews for each band.
+        """
+        overview_counts = []
+        for band_id in range(1, self.RasterCount + 1):
+            band = self.GetRasterBand(band_id)
+            overview_counts.append(
+                band.GetOverviewCount()
+            )
+        return overview_counts
+
+    def get_all_metadata(self):
+        """
+        References:
+            https://gdal.org/user/raster_data_model.html
+        """
+
+        domain_to_metadata = {}
+        for domain in self.GetMetadataDomainList():
+            domain_to_metadata[domain] = self.GetMetadata(domain)

@@ -90,6 +90,7 @@ def load_iarpa_evaluation(fpath):
     """
     iarpa_info = _load_json(fpath)
     metrics = {}
+    unique_regions = set()
     if 'best_bas_rows' in iarpa_info:
         best_bas_rows = pd.read_json(
             io.StringIO(json.dumps(iarpa_info['best_bas_rows'])),
@@ -114,6 +115,10 @@ def load_iarpa_evaluation(fpath):
         })
         alpha = 1.0
         metrics['bas_faa_f1'] = metrics['bas_f1'] * (1 - metrics['bas_ffpa']) ** alpha
+
+        unique_regions.update(
+            best_bas_rows.index.levels[best_bas_rows.index.names.index('region_id')].difference({'__macro__', '__micro__'})
+        )
 
     if 'sc_df' in iarpa_info:
         sc_json_data = iarpa_info['sc_df']
@@ -146,11 +151,18 @@ def load_iarpa_evaluation(fpath):
         else:
             metrics['sc_micro_f1'] = np.nan
 
+        unique_regions.update(
+            sc_df.index.levels[sc_df.index.names.index('region_id')].difference({'__macro__', '__micro__'})
+        )
+
+    # quick and dirty way to get access to single-region results
+    region_ids = ','.join(sorted(unique_regions))
+    iarpa_info['region_ids'] = region_ids
+
     return metrics, iarpa_info
 
 
-def load_eval_trk_poly(fpath, expt_dvc_dpath):
-    arg_prefix = 'trk.'
+def load_eval_trk_poly(fpath, expt_dvc_dpath=None, arg_prefix='trk.'):
     metrics, iarpa_info = load_iarpa_evaluation(fpath)
     tracker_info = iarpa_info['parent_info']
     param_types = parse_tracker_params(tracker_info, expt_dvc_dpath, arg_prefix=arg_prefix)
@@ -167,8 +179,7 @@ def load_eval_trk_poly(fpath, expt_dvc_dpath):
     return info
 
 
-def load_eval_act_poly(fpath, expt_dvc_dpath):
-    arg_prefix = 'act.'
+def load_eval_act_poly(fpath, expt_dvc_dpath=None, arg_prefix='act.'):
     metrics, iarpa_info = load_iarpa_evaluation(fpath)
 
     tracker_info = iarpa_info.get('parent_info', None)
@@ -397,8 +408,13 @@ def load_pxl_eval(fpath, expt_dvc_dpath=None, arg_prefix=''):
             # 'sc_cm': sc_cm,
             # 'sc_df': sc_df,
         },
-        'json_info': measure_info,
+        'json_info': measure_info.copy(),
     }
+
+    # quick and dirty way to get access to single-region results
+    # This is not robust, done because it wasnt clear how to get
+    # the equivalent test dataset for polygon eval variants.
+    info['json_info']['region_ids'] = ub.Path(predict_args['pxl.test_dataset']).name.split('.')[0]
     return info
 
 

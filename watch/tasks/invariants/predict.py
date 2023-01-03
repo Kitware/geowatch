@@ -1,4 +1,29 @@
 """
+Basline Example:
+
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+
+    python -m watch.tasks.invariants.predict \
+        --input_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json \
+        --output_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/all_tests/model_thirteen_epoch/data_vali_invariants.kwcoco.json \
+        --pretext_package=$DVC_EXPT_DPATH/models/uky/uky_invariants_2022_12_17/TA1_pretext_model/pretext_package.pt \
+        --input_space_scale=10GSD  \
+        --window_space_scale=10GSD \
+        --patch_size=256 \
+        --do_pca 0 \
+        --patch_overlap=0.3 \
+        --num_workers="1" \
+        --write_workers 1 \
+        --tasks before_after pretext
+
+    # After your model predicts the outputs, you should be able to use the
+    # smartwatch visualize tool to inspect your features.
+    python -m watch visualize $DVC_DATA_DPATH/Drop4-BAS/all_tests/model_thirteen_epoch/data_vali_invariants.kwcoco.json \
+        --channels "invariants.5:8,invariants.8:11,invariants.14:17" --stack=only --workers=avail --animate=True \
+        --draw_anns=False
+
+
 SeeAlso:
     ~/code/watch/watch/cli/prepare_teamfeats.py
 """

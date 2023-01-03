@@ -74,6 +74,61 @@ class RobustModuleDict(torch.nn.ModuleDict):
         return v
 
 
+class RobustParameterDict(torch.nn.ParameterDict):
+    """
+    Regular torch.nn.ParameterDict doesnt allow empty str. Hack around this.
+
+    Example:
+        >>> from watch.tasks.fusion.methods.network_modules import *  # NOQA
+        >>> import string
+        >>> torch_dict = RobustParameterDict()
+        >>> # All printable characters should be usable as keys
+        >>> # If they are not, hack it.
+        >>> failed = []
+        >>> for c in list(string.printable) + ['']:
+        >>>     try:
+        >>>         torch_dict[c] = torch.nn.Parameter(torch.ones((1, 1)))
+        >>>     except KeyError:
+        >>>         failed.append(c)
+        >>> assert len(failed) == 0
+        >>> for v in torch_dict.values():
+        >>>     assert list(v.shape) == [1, 1]
+    """
+    repl_dot = '#D#'
+    repl_empty = '__EMPTY'
+
+    def _normalize_key(self, key):
+        key = self.repl_empty if key == '' else key.replace('.', self.repl_dot)
+        return key
+
+    @classmethod
+    def _unnormalize_key(self, key):
+        if key == self.repl_empty:
+            return ''
+        else:
+            return key.replace(self.repl_dot, '.')
+
+    def __getitem__(self, key: str) -> Module:
+        key = self._normalize_key(key)
+        return super().__getitem__(key)
+
+    def __setitem__(self, key: str, value) -> None:
+        key = self._normalize_key(key)
+        super().__setitem__(key, value)
+
+    def __delitem__(self, key: str) -> None:
+        key = self._normalize_key(key)
+        super().__delitem__(key, key)
+
+    def __contains__(self, key: str) -> bool:
+        key = self._normalize_key(key)
+        return super().__contains__(key, key)
+
+    def pop(self, key: str) -> Module:
+        key = self._normalize_key(key)
+        return super().pop(key)
+
+
 class OurDepthwiseSeparableConv(nn.Module):
     """ DepthwiseSeparable block
     Used for DS convs in MobileNet-V1 and in the place of IR blocks that have no expansion
@@ -523,3 +578,69 @@ def coerce_criterion(loss_code, weights):
     #     'target_shape': target_shape,
     # }
     return criterion
+
+
+def torch_safe_stack(tensors, dim=0, *, out=None, item_shape=None, dtype=None, device=None):
+    """
+    Args:
+        item_shape (Tuple[int, ...]): what the shape of an item should be.
+            used to construct a default output.
+
+    Ignore:
+        >>> from watch.tasks.fusion.methods.network_modules import *  # NOQA
+        >>> grid = list(ub.named_product({
+        >>>     # 'num': [0, 1, 2, 3],
+        >>>     'num': [0, 7],
+        >>>     'item_shape': ['auto', None],
+        >>>     'shape': [[], [0], [2], [2, 3], [2, 0, 3]],
+        >>>     'dim': [0, 1],
+        >>> }))
+        >>> results = []
+        >>> for item in grid:
+        >>>     print(f'item={item}')
+        >>>     dim = item['dim']
+        >>>     shape = item['shape']
+        >>>     item['shape'] = tuple(item['shape'])
+        >>>     if item['item_shape'] == 'auto':
+        >>>         item['item_shape'] = item['shape']
+        >>>     num = item['num']
+        >>>     tensors = [torch.empty(shape)] * num
+        >>>     if dim >= len(shape):
+        >>>         continue
+        >>>     out = torch_safe_stack(tensors, dim=dim,
+        >>>         item_shape=item['item_shape'])
+        >>>     row = {
+        >>>         **item,
+        >>>         'out.shape': out.shape,
+        >>>     }
+        >>>     print(f'row={row}')
+        >>>     results.append(row)
+        >>> import pandas as pd
+        >>> import rich
+        >>> df = pd.DataFrame(results)
+        >>> for _, subdf in df.groupby('shape'):
+        >>>     subdf = subdf.sort_values(['shape', 'dim', 'item_shape', 'num'])
+        >>>     print('')
+        >>>     rich.print(subdf.to_string())
+        >>> #
+    Ignore:
+        torch.stack([torch.empty([])], dim=1)
+
+    """
+    if len(tensors) == 0:
+        if item_shape is None:
+            # TODO: WARN HERE, THE USER SHOULD PROVIDE A DEFAULT SHAPE
+            # OTHERWISE THE FUNCTION MAY NOT PRODUCE COMPATIBLE RESULTS WITH
+            # POPULATED VARIANTS
+            item_shape = [0]
+
+        out_shape = list(item_shape)
+        if dim > len(out_shape):
+            raise IndexError(
+                f'Dimension out of range (expected to be in range of '
+                f'[-1, {len(out_shape)}], but got {dim})'
+            )
+        out_shape.insert(dim, 0)
+        return torch.empty(out_shape, dtype=dtype, device=device)
+    else:
+        return torch.stack(tensors, dim=dim, out=out)

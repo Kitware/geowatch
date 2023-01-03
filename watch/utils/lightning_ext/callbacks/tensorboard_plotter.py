@@ -25,8 +25,8 @@ class TensorboardPlotter(pl.callbacks.Callback):
     Example:
         >>> #
         >>> from watch.utils.lightning_ext import demo
-        >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
-        >>> disable_lightning_hardware_warnings()
+        >>> from watch.monkey import monkey_lightning
+        >>> monkey_lightning.disable_lightning_hardware_warnings()
         >>> self = demo.LightningToyNet2d(num_train=55)
         >>> default_root_dir = ub.Path.appdir('lightning_ext/tests/TensorboardPlotter').ensuredir()
         >>> #
@@ -159,7 +159,7 @@ def read_tensorboard_scalars(train_dpath, verbose=1, cache=1):
     return datas
 
 
-def _dump_measures(train_dpath, title='?name?', smoothing=0.6, ignore_outliers=True, verbose=0):
+def _dump_measures(train_dpath, title='?name?', smoothing='auto', ignore_outliers=True, verbose=0):
     """
     This is its own function in case we need to modify formatting
     """
@@ -168,6 +168,13 @@ def _dump_measures(train_dpath, title='?name?', smoothing=0.6, ignore_outliers=T
 
     out_dpath = ub.Path(train_dpath, 'monitor', 'tensorboard').ensuredir()
     tb_data = read_tensorboard_scalars(train_dpath, cache=0, verbose=0)
+
+    if isinstance(smoothing, str) and smoothing == 'auto':
+        smoothing_values = [0.6, 0.95]
+    elif isinstance(smoothing, list):
+        smoothing_values = [smoothing]
+    else:
+        smoothing_values = [smoothing]
 
     with BackendContext('agg'):
         import seaborn as sns
@@ -188,13 +195,18 @@ def _dump_measures(train_dpath, title='?name?', smoothing=0.6, ignore_outliers=T
 
         keys = set(tb_data.keys()).intersection(set(plot_keys))
 
+        # no idea what hp metric is, but it doesn't seem important
+        keys = keys - {'hp_metric'}
+
         HACK_NO_SMOOTH = {'lr', 'momentum', 'epoch'}
 
         # import kwimage
         # color1 = kwimage.Color('kw_green').as01()
         # color2 = kwimage.Color('kw_green').as01()
 
-        for key in ub.ProgIter(keys, desc='dump plots', verbose=verbose):
+        prog = ub.ProgIter(keys, desc='dump plots', verbose=verbose * 3)
+        for key in prog:
+            prog.set_extra(key)
             snskw = {
                 'y': key,
                 'x': 'step',
@@ -204,14 +216,35 @@ def _dump_measures(train_dpath, title='?name?', smoothing=0.6, ignore_outliers=T
             df_orig = pd.DataFrame({key: d['ydata'], 'step': d['xdata']})
             df_orig['smoothing'] = 0.0
             variants = [df_orig]
-            if key not in HACK_NO_SMOOTH and smoothing > 0:
-                df_smooth = df_orig.copy()
-                df_smooth[key] = smooth_curve(df_orig[key], smoothing)
-                df_smooth['smoothing'] = smoothing
-                variants.append(df_smooth)
+            if key not in HACK_NO_SMOOTH and smoothing_values:
+                for _smoothing_value in smoothing_values:
+                    if 0:
+                        # TODO: can we get a hueristic for how much smoothing
+                        # we might want? Look at the entropy of the derivative
+                        # curve?
+                        import scipy.stats
+                        deriv = np.diff(df_orig[key])
+                        counts1, bins1 = np.histogram(deriv[deriv < 0], bins=25)
+                        counts2, bins2 = np.histogram(deriv[deriv >= 0], bins=25)
+                        counts = np.hstack([counts1, counts2])
+                        # bins = np.hstack([bins1, bins2])
+                        # dict(zip(bins, counts))
+                        entropy = scipy.stats.entropy(counts)
+                        print(f'entropy={entropy}')
+
+                    if _smoothing_value > 0:
+                        df_smooth = df_orig.copy()
+                        beta = _smoothing_value
+                        ydata = df_orig[key]
+                        df_smooth[key] = smooth_curve(ydata, beta)
+                        df_smooth['smoothing'] = _smoothing_value
+                        variants.append(df_smooth)
+
             if len(variants) == 1:
                 df = variants[0]
             else:
+                if verbose:
+                    print('Combine smoothed variants')
                 df = pd.concat(variants).reset_index()
                 snskw['hue'] = 'smoothing'
 
@@ -220,18 +253,31 @@ def _dump_measures(train_dpath, title='?name?', smoothing=0.6, ignore_outliers=T
                 kw['ymin'] = 0.0
                 kw['ymax'] = 1.0
             elif any(m.lower() in key.lower() for m in y0_measures):
-                kw['ymin'] = min(0.0, df[key].min())
+                ydata = df[key]
+                kw['ymin'] = min(0.0, ydata.min())
                 if ignore_outliers:
-                    low, kw['ymax'] = tensorboard_inlier_ylim(df[key])
+                    if verbose:
+                        print('Finding outliers')
+                    low, kw['ymax'] = tensorboard_inlier_ylim(ydata)
 
+            if verbose:
+                print('Begin plot')
             # NOTE: this is actually pretty slow
             ax.cla()
             sns.lineplot(data=df, **snskw)
             title = nice + '\n' + key
             ax.set_title(title)
+            initial_ylim = ax.get_ylim()
+            if kw.get('ymax', None) is None:
+                kw['ymax'] = initial_ylim[1]
+            if kw.get('ymin', None) is None:
+                kw['ymin'] = initial_ylim[0]
+            ax.set_ylim(kw['ymin'], kw['ymax'])
 
             # png is smaller than jpg for this kind of plot
             fpath = out_dpath / (key + '.png')
+            if verbose:
+                print('Save plot: ' + str(fpath))
             ax.figure.savefig(fpath)
 
 
@@ -290,7 +336,12 @@ def tensorboard_inlier_ylim(ydata):
 
 def redraw_cli(train_dpath):
     """
-        train_dpath = '/home/joncrall/remote/horologic/smart_expt_dvc/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_Continue_15GSD_BGR_V004/lightning_logs/version_0/'
+        from watch.utils.lightning_ext.callbacks.tensorboard_plotter import *  # NOQA
+        from watch.utils.lightning_ext.callbacks.tensorboard_plotter import _dump_measures
+        train_dpath = '/home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/'
+
+        python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter \
+            /home/joncrall/remote/Ooo/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/
 
         python -m watch.utils.lightning_ext.callbacks.tensorboard_plotter \
             $HOME/remote/horologic/smart_expt_dvc/training/horologic/jon.crall/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC/runs/Drop4_BAS_Continue_15GSD_BGR_V004/lightning_logs/version_0/
@@ -316,7 +367,6 @@ def redraw_cli(train_dpath):
         title = train_dpath.parent.parent.name
 
     _dump_measures(train_dpath, title, verbose=1)
-    pass
 
 
 if __name__ == '__main__':

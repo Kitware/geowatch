@@ -4,6 +4,7 @@ the size of the datamodule down for now.
 """
 import numpy as np
 import ubelt as ub
+import kwimage
 import kwarray
 
 
@@ -162,6 +163,111 @@ def fliprot(img, rot_k=0, flip_axis=None, axes=(0, 1)):
     return img
 
 
+def fliprot_annot(annot, rot_k, flip_axis=None, axes=(0, 1), canvas_dsize=None):
+    """
+    Ignore:
+        >>> from watch.tasks.fusion.datamodules.data_utils import *  # NOQA
+        >>> import kwimage
+        >>> H, W = 121, 153
+        >>> canvas_dsize = (W, H)
+        >>> box1 = kwimage.Boxes.random(1).scale((W, H)).quantize()
+        >>> ltrb = box1.data
+        >>> rot_k = 4
+        >>> annot = box1
+        >>> annot = box1.to_polygons()[0]
+        >>> annot1 = annot.copy()
+        >>> unique_fliprots = [
+        >>>     {'rot_k': 0, 'flip_axis': None},
+        >>>     {'rot_k': 0, 'flip_axis': (0,)},
+        >>>     {'rot_k': 1, 'flip_axis': None},
+        >>>     {'rot_k': 1, 'flip_axis': (0,)},
+        >>>     {'rot_k': 2, 'flip_axis': None},
+        >>>     {'rot_k': 2, 'flip_axis': (0,)},
+        >>>     {'rot_k': 3, 'flip_axis': None},
+        >>>     {'rot_k': 3, 'flip_axis': (0,)},
+        >>> ]
+        >>> results = []
+        >>> for params in unique_fliprots:
+        >>>     annot2 = fliprot_annot(annot, canvas_dsize=canvas_dsize, **params)
+        >>>     annot3 = inv_fliprot_annot(annot2, canvas_dsize=canvas_dsize, **params)
+        >>>     results.append({
+        >>>         'annot2': annot2,
+        >>>         'annot3': annot3,
+        >>>         'params': params,
+        >>>     })
+
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> image1 = kwimage.grab_test_image('astro', dsize=(W, H))
+        >>> pnum_ = kwplot.PlotNums(nSubplots=len(results))
+        >>> for result in results:
+        >>>     image2 = fliprot(image1.copy(), **result['params'])
+        >>>     image3 = inv_fliprot(image2.copy(), **result['params'])
+        >>>     annot2 = result['annot2']
+        >>>     annot3 = result['annot3']
+        >>>     canvas1 = annot1.draw_on(image1.copy(), edgecolor='kitware_green', fill=False)
+        >>>     canvas2 = annot2.draw_on(image2.copy(), edgecolor='kitware_blue', fill=False)
+        >>>     canvas3 = annot3.draw_on(image3.copy(), edgecolor='kitware_red', fill=False)
+        >>>     canvas = kwimage.stack_images([canvas1, canvas2, canvas3], axis=1)
+        >>>     kwplot.imshow(canvas, pnum=pnum_(), title=ub.repr2(result['params'], nl=0, compact=1, nobr=1))
+    """
+    import kwimage
+    if rot_k != 0:
+        x0 = canvas_dsize[0] / 2
+        y0 = canvas_dsize[1] / 2
+        # generalized way
+        # Translate center of old canvas to the origin
+        T1 = kwimage.Affine.translate((-x0, -y0))
+        # Construct the rotation
+        tau = np.pi * 2
+        theta = -(rot_k * tau / 4)
+        R = kwimage.Affine.rotate(theta=theta)
+        # Find the center of the new rotated canvas
+        canvas_box = kwimage.Box.from_dsize(canvas_dsize)
+        new_canvas_box = canvas_box.warp(R)
+        x2 = new_canvas_box.width / 2
+        y2 = new_canvas_box.height / 2
+        # Translate to the center of the new canvas
+        T2 = kwimage.Affine.translate((x2, y2))
+        # print(f'T1=\n{ub.repr2(T1)}')
+        # print(f'R=\n{ub.repr2(R)}')
+        # print(f'T2=\n{ub.repr2(T2)}')
+        A = T2 @ R @ T1
+        annot = annot.warp(A)
+        # TODO: specialized faster way
+        # lt_x, lt_y, rb_x, rb_y = boxes.components
+    else:
+        x2 = y2 = None
+
+    # boxes = kwimage.Boxes(ltrb, 'ltrb')
+    if flip_axis is not None:
+        if x2 is None:
+            x2 = canvas_dsize[0] / 2
+            y2 = canvas_dsize[1] / 2
+        # Make the flip matrix
+        F = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+        for axis in flip_axis:
+            mdim = 1 - axis
+            F[mdim, mdim] *= -1
+        T1 = kwimage.Affine.translate((-x2, -y2))
+        T2 = kwimage.Affine.translate((x2, y2))
+        A = T2 @ F @ T1
+        annot = annot.warp(A)
+
+    return annot
+
+
+def inv_fliprot_annot(annot, rot_k, flip_axis=None, axes=(0, 1), canvas_dsize=None):
+    if rot_k % 2 == 1:
+        canvas_dsize = canvas_dsize[::-1]
+    annot = fliprot_annot(annot, -rot_k, flip_axis=None, axes=axes, canvas_dsize=canvas_dsize)
+    if rot_k % 2 == 1:
+        canvas_dsize = canvas_dsize[::-1]
+    annot = fliprot_annot(annot, 0, flip_axis=flip_axis, axes=axes, canvas_dsize=canvas_dsize)
+    return annot
+
+
 def inv_fliprot(img, rot_k=0, flip_axis=None, axes=(0, 1)):
     """
     Undo a fliprot
@@ -254,5 +360,147 @@ class NestedPool(list):
                     break
                 idx = nested.rng.randint(0, num)
                 chosen = chosen[idx]
-
         return chosen
+
+
+def samecolor_nodata_mask(stream, hwc, relevant_bands, use_regions=0,
+                          samecolor_values=None):
+    """
+    Find a 2D mask that indicates what values should be set to nan.
+    This is typically done by finding clusters of zeros in specific bands.
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.data_utils import *  # NOQA
+        >>> import kwcoco
+        >>> import kwarray
+        >>> stream = kwcoco.FusedChannelSpec.coerce('foo|red|green|bar')
+        >>> relevant_bands = ['red', 'green']
+        >>> rng = kwarray.ensure_rng(0)
+        >>> hwc = (rng.rand(32, 32, stream.numel()) * 3).astype(int)
+        >>> use_regions = 0
+        >>> samecolor_values = {0}
+        >>> samecolor_mask = samecolor_nodata_mask(
+        >>>     stream, hwc, relevant_bands, use_regions=use_regions,
+        >>>     samecolor_values=samecolor_values)
+        >>> assert samecolor_mask.sum() == (hwc[..., 1] == 0).sum()
+    """
+    from watch.utils import util_kwimage
+    stream_oset = ub.oset(stream)
+    # Only perform this test on the first relevant band
+    relevant_band_idxs = [stream_oset.index(b) for b in relevant_bands[0:1]]
+    relevant_masks = []
+    for b_sl in relevant_band_idxs:
+        bands = hwc[:, :, b_sl]
+        bands = np.ascontiguousarray(bands)
+        if use_regions:
+            # Speed up the compuation by doing this at a coarser scale
+            is_samecolor = util_kwimage.find_samecolor_regions(
+                bands, scale=0.4, min_region_size=49,
+                values=samecolor_values)
+        else:
+            # Faster histogram method
+            is_samecolor = util_kwimage.find_high_frequency_values(
+                bands, values=samecolor_values)
+        relevant_masks.append(is_samecolor)
+
+    if len(relevant_masks) == 1:
+        samecolor_mask = relevant_masks[0]
+    else:
+        samecolor_mask = (np.stack(relevant_masks, axis=2) > 0).any(axis=2)
+    return samecolor_mask
+
+
+class MultiscaleMask:
+    """
+    A helper class to build up a mask indicating what pixels are unobservable
+    based on data from different resolution.
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.data_utils import *  # NOQA
+        >>> image = kwimage.grab_test_image()
+        >>> image = kwimage.ensure_float01(image)
+        >>> rng = kwarray.ensure_rng(1)
+        >>> mask1 = kwimage.Mask.random(shape=(12, 12), rng=rng).data
+        >>> mask2 = kwimage.Mask.random(shape=(32, 32), rng=rng).data
+        >>> mask3 = kwimage.Mask.random(shape=(16, 16), rng=rng).data
+        >>> omask = MultiscaleMask()
+        >>> omask.update(mask1)
+        >>> omask.update(mask2)
+        >>> omask.update(mask3)
+        >>> masked_image = omask.apply(image, np.nan)
+        >>> masked_image = kwimage.fill_nans_with_checkers(masked_image, on_value=0.3)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> inputs = kwimage.stack_images(
+        >>>     [kwimage.atleast_3channels(m * 255) for m in [mask1, mask2, mask3]],
+        >>>     pad=2, bg_value='kw_green', axis=1)
+        >>> kwplot.imshow(inputs, pnum=(1, 3, 1), title='input masks')
+        >>> kwplot.imshow(omask.mask, pnum=(1, 3, 2), title='final mask')
+        >>> kwplot.imshow(masked_image, pnum=(1, 3, 3), title='masked image')
+        >>> #kwplot.set_figtitle
+
+    """
+    def __init__(self):
+        self.mask = None
+        self._fraction = None
+
+    def update(self, mask):
+        """
+        Expand the observable mask to the larger data and take the logical or
+        of the resized masks.
+        """
+        self._fraction = None
+        if len(mask.shape) > 2:
+            if len(mask.shape) != 3 or mask.shape[2] != 1:
+                raise ValueError(f'bad mask shape {mask.shape}')
+            mask = mask[..., 0]
+        if self.mask is None:
+            self.mask = mask
+        else:
+            mask1 = self.mask
+            mask2 = mask
+            dsize1 = mask1.shape[0:2][::-1]
+            dsize2 = mask2.shape[0:2][::-1]
+            if dsize1 != dsize2:
+                area1 = np.prod(dsize1)
+                area2 = np.prod(dsize2)
+                if area2 > area1:
+                    mask1, mask2 = mask2, mask1
+                    dsize1, dsize2 = dsize2, dsize1
+                # Enlarge the smaller mask
+                mask2 = mask2.astype(np.uint8)
+                mask2 = kwimage.imresize(mask2, dsize=dsize1,
+                                         interpolation='nearest')
+            self.mask = np.logical_or(mask1, mask2)
+
+    def apply(self, image, value):
+        """
+        Set the locations in ``image`` that correspond to this mask to
+        ``value``.
+        """
+        mask = self.mask
+        if mask is None:
+            return image
+        dsize1 = image.shape[0:2][::-1]
+        dsize2 = mask.shape[0:2][::-1]
+        if dsize1 != dsize2:
+            # Ensure the mask corresponds to the image size
+            mask = mask.astype(np.uint8)
+            mask = kwimage.imresize(mask, dsize=dsize1,
+                                    interpolation='nearest')
+        mask = kwarray.atleast_nd(mask, 3)
+        mask = mask.astype(bool)
+        assert mask.shape[2] == 1
+        mask = np.broadcast_to(mask, image.shape)
+        image[mask] = value
+        return image
+
+    @property
+    def masked_fraction(self):
+        if self._fraction is None:
+            if self.mask is None:
+                self._fraction = 0
+            else:
+                self._fraction = self.mask.mean()
+        return self._fraction

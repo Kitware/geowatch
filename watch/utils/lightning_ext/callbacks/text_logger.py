@@ -16,8 +16,8 @@ class TextLogger(pl.callbacks.Callback):
         >>> #
         >>> from watch.utils.lightning_ext.callbacks.text_logger import *  # NOQA
         >>> from watch.utils.lightning_ext import demo
-        >>> from watch.utils.lightning_ext.monkeypatches import disable_lightning_hardware_warnings
-        >>> disable_lightning_hardware_warnings()
+        >>> from watch.monkey import monkey_lightning
+        >>> monkey_lightning.disable_lightning_hardware_warnings()
         >>> self = demo.LightningToyNet2d(num_train=55)
         >>> default_root_dir = ub.Path.appdir('lightning_ext/tests/TextLogger').ensuredir()
         >>> #

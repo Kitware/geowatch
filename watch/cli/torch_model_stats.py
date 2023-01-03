@@ -65,9 +65,9 @@ def main(cmdline=False, **kwargs):
 
 
 def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
+    import kwcoco
     from watch.tasks.fusion import utils
-    import netharn as nh
-    import xdev
+    from watch.utils import util_netharn
     from watch.monkey import monkey_torchmetrics
     monkey_torchmetrics.fix_torchmetrics_compatability()
 
@@ -91,7 +91,7 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
     # TODO: get the category freq
 
     model_stats = {}
-    num_params = nh.util.number_of_parameters(module)
+    num_params = util_netharn.number_of_parameters(module)
 
     print(ub.repr2(utils.model_json(module, max_depth=3), nl=-1, sort=0))
     # print(ub.repr2(utils.model_json(module, max_depth=2), nl=-1, sort=0))
@@ -100,15 +100,17 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
     state_keys = list(state.keys())
     # print('state_keys = {}'.format(ub.repr2(state_keys, nl=1)))
 
-    import kwcoco
-    if hasattr(module, 'dataset_stats'):
+    unique_sensors = set()
+    train_dataset = None
+    prenorm_stats = None
+    fit_config = {}
+    if hasattr(module, 'dataset_stats') and module.dataset_stats is not None:
         module.dataset_stats.keys()
 
         known_input_stats = []
         unknown_input_stats = []
         sensor_modes_with_stats = set()
 
-        unique_sensors = set()
         for sens_chan_key, stats in module.dataset_stats['input_stats'].items():
             sensor, channel = sens_chan_key
             channel = kwcoco.ChannelSpec.coerce(channel).concise().spec
@@ -138,7 +140,8 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
                     }
                 )
 
-        size_str = xdev.byte_str(file_stat.st_size)
+        mb_size = file_stat.st_size / (2.0 ** 20)
+        size_str = ub.repr2(mb_size, precision=2) + ' MB'
 
         # Add in some params about how this model was trained
         if hasattr(raw_module, 'fit_config'):
@@ -200,6 +203,11 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
         model_stats['known_inputs'] = known_input_stats
         model_stats['unknown_inputs'] = unknown_input_stats
 
+        # Normalization done in the dataloader
+        prenorm_stats = {
+            'normalize_peritem': fit_config.get('normalize_peritem'),
+        }
+
     row = {
         'name': package_fpath.stem,
         'task': 'TODO',
@@ -207,6 +215,7 @@ def torch_model_stats(package_fpath, stem_stats=True, dvc_dpath=None):
         'sensors': sorted(unique_sensors),
         'train_dataset': str(train_dataset),
         'model_stats': model_stats,
+        'prenorm_stats': prenorm_stats,
     }
 
     if hasattr(module, 'input_sensorchan'):

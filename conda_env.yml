@@ -13,6 +13,7 @@ dependencies:
     # Brings in opencv-python, which conflicts with opencv-python-headless
     #- imgaug >= 0.4.0
     # Can conflict with opencv-python
+    - --prefer-binary
     - opencv_python_headless >= 4.5.2.52
     # These package specification strings don't play nicely in
     # requirements/runtime.txt when needed by setup.py

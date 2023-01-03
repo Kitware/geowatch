@@ -15,6 +15,11 @@ lib.add_dynamic(nh.initializers.KaimingNormal)
 print(lib.current_sourcecode())
 
 
+import liberator
+lib = liberator.Liberator()
+lib.add_dynamic(nh.util.number_of_parameters)
+print(lib.current_sourcecode())
+
 """
 import torch
 import ubelt as ub
@@ -352,3 +357,21 @@ def trainable_layers(model, names=False):
             #     yield item
             for child in item.children():
                 queue.append(child)
+
+
+def number_of_parameters(model, trainable=True):
+    """
+    Returns number of trainable parameters in a torch module
+
+    Example:
+        >>> from watch.utils.util_netharn import *  # NOQA
+        >>> model = torch.nn.Conv1d(2, 3, 5)
+        >>> number_of_parameters(model)
+        33
+    """
+    if trainable:
+        model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+    else:
+        model_parameters = model.parameters()
+    n_params = sum([np.prod(p.size()) for p in model_parameters])
+    return n_params

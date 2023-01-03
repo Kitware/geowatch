@@ -17,8 +17,8 @@ class ExperimentState(ub.NiceRepr):
     """
 
     Ignore:
-        >>> # xdoctest: +REQUIRES(env:EXPT_DVC_DPATH)
-        >>> from watch.mlops.expt_state import *  # NOQA
+        >>> # xdoctest: +REQUIRES(env:DVC_EXPT_DPATH)
+        >>> from watch.mlops.old.expt_state import *  # NOQA
         >>> import watch
         >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
@@ -31,7 +31,7 @@ class ExperimentState(ub.NiceRepr):
 
     Ignore:
         >>> # Just show patterns:
-        >>> from watch.mlops.expt_state import *  # NOQA
+        >>> from watch.mlops.old.expt_state import *  # NOQA
         >>> self = ExperimentState('<expt_dpath>', '<dset_code>')
         >>> print('self.templates = {}'.format(ub.repr2(self.templates, nl=1, sort=0)))
 
@@ -57,7 +57,7 @@ class ExperimentState(ub.NiceRepr):
         if data_dvc_dpath is None:
             import watch
             try:
-                data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', envvar='DATA_DVC_DPATH')
+                data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', envvar='DVC_DATA_DPATH')
             except Exception:
                 pass
         self.data_dvc_dpath = data_dvc_dpath
@@ -691,8 +691,8 @@ class ExperimentState(ub.NiceRepr):
     def summarize(self):
         """
         Ignore:
-            >>> # xdoctest: +REQUIRES(env:EXPT_DVC_DPATH)
-            >>> from watch.mlops.expt_state import *  # NOQA
+            >>> # xdoctest: +REQUIRES(env:DVC_EXPT_DPATH)
+            >>> from watch.mlops.old.expt_state import *  # NOQA
             >>> import watch
             >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
             >>> #expt_dvc_dpath = watch.find_smart_dvc_dpath(hardware='ssd')
@@ -709,8 +709,8 @@ class ExperimentState(ub.NiceRepr):
         Repackages checkpoints as torch packages, copies them to the DVC repo,
         and then adds them to DVC.
 
-        >>> # xdoctest: +REQUIRES(env:EXPT_DVC_DPATH)
-        >>> from watch.mlops.expt_state import *  # NOQA
+        >>> # xdoctest: +REQUIRES(env:DVC_EXPT_DPATH)
+        >>> from watch.mlops.old.expt_state import *  # NOQA
         >>> import watch
         >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt')
         >>> data_dvc_dpath = watch.find_dvc_dpath(tags='phase2_data')
@@ -800,9 +800,9 @@ class ExperimentState(ub.NiceRepr):
             git pull
             dvc pull -r aws --recursive models/fusion/{self.dataset_code}
 
-            python -m watch.mlops.expt_state "pull packages" --dvc_dpath=$DVC_EXPT_DPATH
-            python -m watch.mlops.expt_state "status packages" --dvc_dpath=$DVC_EXPT_DPATH
-            python -m watch.mlops.expt_state "evaluate" --dvc_dpath=$DVC_EXPT_DPATH
+            python -m watch.mlops.old.expt_state "pull packages" --dvc_dpath=$DVC_EXPT_DPATH
+            python -m watch.mlops.old.expt_state "status packages" --dvc_dpath=$DVC_EXPT_DPATH
+            python -m watch.mlops.old.expt_state "evaluate" --dvc_dpath=$DVC_EXPT_DPATH
 
             # setup right params
             # python -m tasks.fusion.schedule_inference schedule_evaluation --gpus=auto --run=True
@@ -996,7 +996,7 @@ def checkpoint_filepath_info(fname):
         parse.parse('{prefix}foo={bar}', 'afoao=3')
 
     Example:
-        >>> from watch.mlops.expt_state import *  # NOQA
+        >>> from watch.mlops.old.expt_state import *  # NOQA
         >>> fnames = [
         >>>     'epoch1_step10.foo',
         >>>     'epoch=1-step=10.foo',

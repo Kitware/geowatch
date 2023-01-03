@@ -71,21 +71,23 @@ stages:
             "$CI_PROJECT_DIR/.cache/xdg_cache"
     tags:
         - aws
-        - docker
-        - linux
-        - linux-3.17
-        - build
         - smart
+        - docker
+        - linux-x86_64
+        #- linux
+        #- linux-3.17
+        - build
 
 .common_template_docker:
   &common_template_docker
   tags:
-    - docker
-    - linux
-    - linux-3.17
-    - build
-    - aws
+    #- aws
     - smart
+    - docker
+    - linux-x86_64
+    #- linux
+    #- linux-3.17
+    - build
   before_script:
     - docker info
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
@@ -310,9 +312,6 @@ build_docker_and_upload_strict:
             conda activate ".cache/conda/envs/loose-watch-env"
             .cache/conda/envs/loose-watch-env/bin/python -m pip install -e .
             ./run_tests.py --network watch tests scripts
-
-
-
 
 
             #docker run -v -it registry.smartgitlab.com/kitware/watch/miniconda3 bash

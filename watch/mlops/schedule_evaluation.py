@@ -43,23 +43,51 @@ Example:
                 sc_poly_viz.enabled:
                     - false
         " \
-        --expt_dvc_dpath=./my_expt_dir \
-        --data_dvc_dpath=./my_data_dir \
-        --cache=0 \
-        --enable_pred_bas_pxl=1 \
-        --enable_pred_bas_poly=1 \
-        --enable_eval_bas_pxl=0 \
-        --enable_eval_bas_poly=0 \
-        --enable_crop=1 \
-        --enable_pred_sc_pxl=1 \
-        --enable_pred_sc_poly=1 \
-        --enable_eval_sc_pxl=0 \
-        --enable_eval_sc_poly=0 \
-        --enable_viz_pred_bas_poly=0 \
-        --enable_viz_pred_sc_poly=0 \
-        --enable_links=0 \
+        --root_dpath=./my_dag_runs \
         --devices="0,1" --queue_size=2 \
         --backend=serial --skip_existing=0 \
+        --pipeline=joint_bas_sc \
+        --run=0
+
+    # Real inputs, this actually will run something given the DVC repos
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+
+    SC_MODEL=$DVC_EXPT_DPATH/models/fusion/Drop4-SC/packages/Drop4_tune_V30_8GSD_V3/Drop4_tune_V30_8GSD_V3_epoch=2-step=17334.pt.pt
+    BAS_MODEL=$DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+
+    python -m watch.mlops.schedule_evaluation \
+        --params="
+            matrix:
+                bas_pxl.package_fpath:
+                    - $BAS_MODEL
+                bas_pxl.test_dataset:
+                    - $DVC_DATA_DPATH/Drop4-BAS/KR_R001.kwcoco.json
+                bas_pxl.window_space_scale: 15GSD
+                bas_pxl.time_sampling:
+                    - "auto"
+                bas_pxl.input_space_scale:
+                    - "15GSD"
+                bas_poly.moving_window_size:
+                bas_poly.thresh:
+                    - 0.1
+                sc_pxl.test_dataset:
+                    - crop.dst
+                sc_pxl.window_space_scale:
+                    - auto
+                sc_poly.thresh:
+                    - 0.1
+                sc_poly.use_viterbi:
+                    - 0
+                sc_pxl.package_fpath:
+                    - $SC_MODEL
+                sc_poly_viz.enabled:
+                    - false
+        " \
+        --root_dpath=./my_dag_runs \
+        --devices="0,1" --queue_size=2 \
+        --backend=serial --skip_existing=0 \
+        --pipeline=joint_bas_sc_nocrop \
         --run=0
 
 Example:
@@ -127,6 +155,7 @@ Example:
     xdev tree --dirblocklist "_*" my_expt_dir/_testpipe/ --max_files=1
 """
 import ubelt as ub
+import rich
 import shlex
 import json
 import scriptconfig as scfg
@@ -154,27 +183,39 @@ class ScheduleEvaluationConfig(scfg.DataConfig):
 
     run = scfg.Value(False, help='if False, only prints the commands, otherwise executes them')
 
-    devices = scfg.Value('auto', help='if using tmux or serial, indicate which gpus are available for use as a comma separated list: e.g. 0,1')
+    devices = scfg.Value('auto', help=(
+        'if using tmux or serial, indicate which gpus are available for use '
+        'as a comma separated list: e.g. 0,1'))
 
-    virtualenv_cmd = scfg.Value(None, help='command to activate a virtualenv if needed. (might have issues with slurm backend)')
-    skip_existing = scfg.Value(False, help='if True dont submit commands where the expected products already exist')
-    backend = scfg.Value('tmux', help='can be tmux, slurm, or maybe serial in the future')
+    virtualenv_cmd = scfg.Value(None, help=(
+        'command to activate a virtualenv if needed. '
+        '(might have issues with slurm backend)'))
+
+    skip_existing = scfg.Value(False, help=(
+        'if True dont submit commands where the expected '
+        'products already exist'))
+
+    backend = scfg.Value('tmux', help=(
+        'The cmd_queue backend. Can be tmux, slurm, or serial'))
 
     queue_name = scfg.Value('schedule-eval', help='Name of the queue')
 
     pred_workers = scfg.Value(4, help='number of prediction workers in each process')
 
-    shuffle_jobs = scfg.Value(True, help='if True, shuffles the jobs so they are submitted in a random order')
+    # shuffle_jobs = scfg.Value(True, help='if True, shuffles the jobs so they are submitted in a random order')
     annotations_dpath = scfg.Value(None, help='path to IARPA annotations dpath for IARPA eval')
 
-    root_dpath = scfg.Value('auto', help='Where do dump all results. If "auto", uses <expt_dvc_dpath>/dag_runs')
+    root_dpath = scfg.Value('auto', help=(
+        'Where do dump all results. If "auto", uses <expt_dvc_dpath>/dag_runs'))
     pipeline = scfg.Value('joint_bas_sc', help='the name of the pipeline to run')
 
-    check_other_sessions = scfg.Value('auto', help='if True, will ask to kill other sessions that might exist')
+    check_other_sessions = scfg.Value('auto', help=(
+        'if True, will ask to kill other sessions that might exist'))
     queue_size = scfg.Value('auto', help='if auto, defaults to number of GPUs')
 
     enable_links = scfg.Value(True, isflag=True, help='if true enable symlink jobs')
-    cache = scfg.Value(True, isflag=True, help='if true, each a test is appened to each job to skip itself if its output exists')
+    cache = scfg.Value(True, isflag=True, help=(
+        'if true, each a test is appened to each job to skip itself if its output exists'))
 
     draw_heatmaps = scfg.Value(1, isflag=True, help='if true draw heatmaps on eval')
     draw_curves = scfg.Value(1, isflag=True, help='if true draw curves on eval')
@@ -183,6 +224,10 @@ class ScheduleEvaluationConfig(scfg.DataConfig):
     mem = scfg.Value(None, help='specify slurm memory per task (slurm backend only)')
 
     rprint = scfg.Value(True, isflag=True, help='enable / disable rprint before exec')
+
+    max_configs = scfg.Value(None, help='if specified only run at most this many of the grid search configs')
+
+    print_queue = 0
 
 
 @profile
@@ -208,8 +253,8 @@ def schedule_evaluation(cmdline=False, **kwargs):
     # Load the requested pipeline
     dag = smart_pipeline.make_smart_pipeline(config['pipeline'])
     dag.print_graphs()
+    dag.inspect_configurables()
 
-    # from rich import print
     queue_dpath = root_dpath / '_cmd_queue_schedule'
     queue_dpath.ensuredir()
 
@@ -236,22 +281,44 @@ def schedule_evaluation(cmdline=False, **kwargs):
     if virtualenv_cmd:
         queue.add_header_command(virtualenv_cmd)
 
+    max_configs = config['max_configs']
+    if max_configs is not None:
+        all_param_grid = all_param_grid[0:max_configs]
+
     # Configure a DAG for each row.
     for row_config in ub.ProgIter(all_param_grid, desc='configure dags', verbose=3):
-        print('\nrow_config = {}'.format(ub.repr2(row_config, nl=1)))
         dag.configure(
             config=row_config, root_dpath=root_dpath, cache=config['cache'])
         dag.submit_jobs(queue=queue, skip_existing=config['skip_existing'],
                         enable_links=config['enable_links'])
 
-    print('queue = {!r}'.format(queue))
+    import pandas as pd
+    if 1:
+        # Print config info
+        from watch.utils.result_analysis import varied_values
+        longparams = pd.DataFrame(all_param_grid)
+        varied = varied_values(longparams, min_variations=2, dropna=False)
+        relevant = longparams[longparams.columns.intersection(varied)]
+        from watch.utils import slugify_ext
+        def pandas_preformat(item):
+            if isinstance(item, str):
+                return slugify_ext.smart_truncate(item, max_length=16, trunc_loc=0)
+            else:
+                return item
+        displayable = relevant.applymap(pandas_preformat)
+        rich.print(displayable.to_string())
+
+    # print('queue = {!r}'.format(queue))
     # print(f'{len(queue)=}')
     with_status = 0
     with_rich = 0
-    queue.write_network_text()
+
+    if config['print_queue']:
+        queue.write_network_text()
+
     if config['rprint']:
         queue.rprint(with_status=with_status, with_rich=with_rich,
-                     with_locks=0)
+                     with_locks=0, exclude_tags=['boilerplate'])
 
     for job in queue.jobs:
         # TODO: should be able to set this as a queue param.

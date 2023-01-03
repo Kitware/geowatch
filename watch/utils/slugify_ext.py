@@ -37,7 +37,7 @@ NUMBERS_PATTERN = re.compile(r'(?<=\d),(?=\d)')
 DEFAULT_SEPARATOR = '-'
 
 
-def _trunc_op(string, max_length, trunc_loc):
+def _trunc_op(string, max_length, trunc_loc, hash_len=None, head='~', tail='~'):
     """
     max_length
 
@@ -52,9 +52,11 @@ def _trunc_op(string, max_length, trunc_loc):
     num_remove = max(total_len - max_length, 1)
     import ubelt as ub
     import numpy as np
-    recommend = min(max(4, int(np.ceil(np.log(num_remove)))), 32)
-    hash_len = min(max_length, min(num_remove, recommend))
-    num_insert = hash_len + 2
+    if hash_len is None:
+        recommend = min(max(4, int(np.ceil(np.log(num_remove)))), 32)
+        hash_len = min(max_length, min(num_remove, recommend))
+
+    num_insert = hash_len + len(head) + len(tail)
 
     actual_remove = num_remove + num_insert
 
@@ -75,11 +77,11 @@ def _trunc_op(string, max_length, trunc_loc):
     end = string[high_pos:]
 
     mid = ub.hash_data(string)[0:hash_len]
-    trunc_text = ''.join([begin, '~', mid, '~', end])
+    trunc_text = ''.join([begin, head, mid, tail, end])
     return trunc_text
 
 
-def smart_truncate(string, max_length=0, word_boundary=False, separator=' ', save_order=False, trunc_loc=0.5):
+def smart_truncate(string, max_length=0, word_boundary=False, separator=' ', save_order=False, trunc_loc=0.5, hash_len=None, head='~', tail='~'):
     """
     Truncate a string.
     :param string (str): string for modification
@@ -100,10 +102,10 @@ def smart_truncate(string, max_length=0, word_boundary=False, separator=' ', sav
         return string
 
     if not word_boundary:
-        return _trunc_op(string, max_length, trunc_loc).strip(separator)
+        return _trunc_op(string, max_length, trunc_loc, hash_len=hash_len, head=head, tail=tail).strip(separator)
 
     if separator not in string:
-        return _trunc_op(string, max_length, trunc_loc)
+        return _trunc_op(string, max_length, trunc_loc, hash_len=hash_len, head=head, tail=tail)
 
     # hack
     truncated = ''
@@ -120,7 +122,7 @@ def smart_truncate(string, max_length=0, word_boundary=False, separator=' ', sav
     #                 break
 
     if not truncated:  # pragma: no cover
-        truncated = _trunc_op(string, max_length, trunc_loc)
+        truncated = _trunc_op(string, max_length, trunc_loc, hash_len=hash_len, head=head, tail=tail)
     return truncated.strip(separator)
 
 

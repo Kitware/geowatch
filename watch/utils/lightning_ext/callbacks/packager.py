@@ -201,18 +201,14 @@ class Packager(pl.callbacks.Callback):
 
 def _torch_package_monkeypatch():
     # Monkey Patch torch.package
-    import sys
-    if sys.version_info[0:2] >= (3, 10):
-        try:
-            from torch.package import _stdlib
-            _stdlib._get_stdlib_modules = lambda: sys.stdlib_module_names
-        except Exception:
-            pass
+    from watch.monkey import monkey_torch
+    monkey_torch.fix_package_modules()
 
 
 def default_save_package(model, package_path, verbose=1):
     import torch.package
-    _torch_package_monkeypatch()
+    from watch.monkey import monkey_torch
+    monkey_torch.fix_package_modules()
 
     # shallow copy of self, to apply attribute hacks to
     model = copy.copy(model)

@@ -141,6 +141,7 @@ import pystac_client
 from shapely.geometry import shape as geom_shape
 from watch.utils import util_logging
 from watch.utils import util_s3
+import kwarray
 import ubelt as ub
 import scriptconfig as scfg
 
@@ -197,6 +198,8 @@ class StacSearchConfig(scfg.Config):
             type=int,
             short_alias=['v']
         ),
+
+        'allow_failure': scfg.Value(False, isflag=True, help='if True keeps running if one region fails'),
 
         'cloud_cover': scfg.Value(10, help='maximum cloud cover percentage (only used if search_json is "auto")'),
         'sensors': scfg.Value("L2", help='(only used if search_json is "auto")'),
@@ -280,8 +283,6 @@ class StacSearcher:
             # Sample over time uniformly
             from watch.utils import util_time
             from watch.tasks.fusion.datamodules import temporal_sampling
-            import kwarray
-            import ubelt as ub
             datetimes = [util_time.coerce_datetime(item['properties']['datetime'])
                          for item in features]
             # TODO: Can we get a linear variant that doesn't need the N**2
@@ -402,7 +403,11 @@ def main(cmdline=True, **kwargs):
         # Might be reasonable to parallize this, but will need locks around
         # writes to the same file, or write to separate files and then combine
         for region_fpath in region_file_fpaths:
-            area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config, logger)
+            try:
+                area_query(region_fpath, search_json, searcher, temp_dir, dest_path, config, logger)
+            except Exception:
+                if not args.allow_failure:
+                    raise
     else:
         id_query(searcher, logger, dest_path, temp_dir, args)
 

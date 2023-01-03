@@ -59,7 +59,7 @@ class GriddedDataset(torch.utils.data.Dataset):
         >>> from watch.tasks.invariants.data.datasets import *  # NOQA
         >>> import watch
         >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='ssd')
-        >>> bundle_dpath = list(dvc_dpath.glob('*Drop4*-S2-L8-ACC*'))[0]
+        >>> bundle_dpath = dvc_dpath / 'Drop4-BAS'
         >>> coco_fpath = list(bundle_dpath.glob('KR_R001.kwcoco.json'))[0]
         >>> import kwcoco
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)

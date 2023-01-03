@@ -31,7 +31,7 @@ def evaluation_report():
     """
     MAIN FUNCTION
 
-    from watch.mlops.expt_report import *  # NOQA
+    from watch.mlops.old.expt_report import *  # NOQA
 
     row = reporter.orig_merged_df.loc[121]
     print(ub.repr2(row.to_dict(), nl=1))
@@ -853,7 +853,7 @@ def my_nonstandard_merge(smaller, larger, smaller_keys, move_cols, mode=0):
         move_cols (List[str]): the columns to move.
 
     Example:
-        >>> from watch.mlops.expt_report import *  # NOQA
+        >>> from watch.mlops.old.expt_report import *  # NOQA
         >>> smaller = pd.DataFrame([
         >>>     {'k1': 1, 'k2': 1, 'm1': 2, 'm2': 2, 's': 2, 'u1': 9},
         >>>     {'k1': 3, 'k2': 3, 'm1': 4, 'm2': 3, 's': 2, 'u2': 8},

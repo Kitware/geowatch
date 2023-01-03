@@ -566,9 +566,9 @@ DATASET_CODES = [
 
 
 DVC_FIND_EXPT_KWARGS = {
-    'tags': 'phase2_expt', 'envvar': 'EXPT_DVC_DPATH', 'hardware': 'auto'}
+    'tags': 'phase2_expt', 'envvar': 'DVC_EXPT_DPATH', 'hardware': 'auto'}
 DVC_FIND_DATA_KWARGS = {
-    'tags': 'phase2_data', 'envvar': 'DATA_DVC_DPATH', 'hardware': 'auto'}
+    'tags': 'phase2_data', 'envvar': 'DVC_DATA_DPATH', 'hardware': 'auto'}
 
 
 def auto_expt_dvc():

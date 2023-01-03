@@ -77,7 +77,9 @@ from watch.tasks.fusion.architectures import transformer
 from watch.tasks.fusion.methods.network_modules import _torch_meshgrid
 from watch.tasks.fusion.methods.network_modules import _class_weights_from_freq
 from watch.tasks.fusion.methods.network_modules import coerce_criterion
+from watch.tasks.fusion.methods.network_modules import torch_safe_stack
 from watch.tasks.fusion.methods.network_modules import RobustModuleDict
+from watch.tasks.fusion.methods.network_modules import RobustParameterDict
 from watch.tasks.fusion.methods.network_modules import RearrangeTokenizer
 from watch.tasks.fusion.methods.network_modules import ConvTokenizer
 from watch.tasks.fusion.methods.network_modules import LinearConvTokenizer
@@ -94,7 +96,7 @@ except Exception:
 
 
 # Model names define the transformer encoder used by the method
-available_encoders = list(transformer.encoder_configs.keys()) + ['deit', "perceiver"]
+available_encoders = list(transformer.encoder_configs.keys()) + ['deit', "perceiver", 'vit']
 
 
 @scfg.dataconf
@@ -123,6 +125,7 @@ class MultimodalTransformerConfig(scfg.DataConfig):
         '''))
     learning_rate = scfg.Value(0.001, type=float)
     weight_decay = scfg.Value(0.0, type=float)
+    lr_scheduler = scfg.Value('CosineAnnealingLR', type=str)
     positive_change_weight = scfg.Value(1.0, type=float)
     negative_change_weight = scfg.Value(1.0, type=float)
     class_weights = scfg.Value('auto', type=str, help='class weighting strategy')
@@ -364,28 +367,29 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         # hueristic_ignore_keys.update(hueristic_occluded_keys)
 
         self.saliency_num_classes = 2
-
+        _n = self.saliency_num_classes
         if isinstance(self.hparams.saliency_weights, str):
             if self.hparams.saliency_weights == 'auto':
                 if class_freq is not None:
+                    print(f'class_freq={class_freq}')
                     bg_freq = sum(class_freq.get(k, 0) for k in self.background_classes)
                     fg_freq = sum(class_freq.get(k, 0) for k in self.foreground_classes)
                     bg_weight = 1.
                     fg_weight = bg_freq / (fg_freq + 1)
-                    fg_bg_weights = [bg_weight, fg_weight]
-                    _w = fg_bg_weights + ([0.0] * (self.saliency_num_classes - len(fg_bg_weights)))
-                    saliency_weights = torch.Tensor(_w)
                 else:
-                    fg_bg_weights = [1.0, 1.0]
-                    _w = fg_bg_weights + ([0.0] * (self.saliency_num_classes - len(fg_bg_weights)))
-                    saliency_weights = torch.Tensor(_w)
-                # total_freq = np.array(list())
-                # print('total_freq = {!r}'.format(total_freq))
-                # cat_weights = _class_weights_from_freq(total_freq)
+                    bg_weight = 1.0
+                    fg_weight = 1.0
             else:
-                raise KeyError(saliency_weights)
+                bg_weight, fg_weight = self.hparams.saliency_weights.split(':')
+                fg_weight = float(fg_weight)
+                bg_weight = float(bg_weight)
         else:
-            raise NotImplementedError(saliency_weights)
+            raise NotImplementedError(self.hparams.saliency_weights)
+        print(f'bg_weight={bg_weight}')
+        print(f'fg_weight={fg_weight}')
+        fg_bg_weights = [bg_weight, fg_weight]
+        _w = fg_bg_weights + ([0.0] * (_n - len(fg_bg_weights)))
+        saliency_weights = torch.Tensor(_w)
 
         # criterion and metrics
         # TODO: parametarize loss criterions
@@ -453,7 +457,15 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             self.hparams.positive_change_weight
         ])
 
+        if isinstance(self.hparams.stream_channels, str):
+            RAW_CHANS = int(self.hparams.stream_channels.split(' ')[0])
+        else:
+            RAW_CHANS = None
+        print(f'RAW_CHANS={RAW_CHANS}')
         MODAL_AGREEMENT_CHANS = self.hparams.stream_channels
+        print(f'MODAL_AGREEMENT_CHANS={MODAL_AGREEMENT_CHANS}')
+        print(f'self.hparams.tokenizer={self.hparams.tokenizer}')
+
         self.tokenizer = self.hparams.tokenizer
         self.sensor_channel_tokenizers = RobustModuleDict()
 
@@ -472,25 +484,40 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 self.sensor_channel_tokenizers[s] = RobustModuleDict()
 
             if self.hparams.tokenizer == 'rearrange':
+                if RAW_CHANS is None:
+                    in_features_raw = MODAL_AGREEMENT_CHANS
+                else:
+                    in_features_raw = RAW_CHANS
                 tokenize = RearrangeTokenizer(
-                    in_channels=in_chan, agree=MODAL_AGREEMENT_CHANS,
+                    in_channels=in_chan, agree=in_features_raw,
                     window_size=self.hparams.window_size,
                 )
             elif self.hparams.tokenizer == 'conv7':
                 # Hack for old models
-                in_features_raw = MODAL_AGREEMENT_CHANS
+                if RAW_CHANS is None:
+                    in_features_raw = MODAL_AGREEMENT_CHANS
+                else:
+                    in_features_raw = RAW_CHANS
                 tokenize = ConvTokenizer(in_chan, in_features_raw, norm=None)
             elif self.hparams.tokenizer == 'linconv':
-                in_features_raw = MODAL_AGREEMENT_CHANS * 64
+                if RAW_CHANS is None:
+                    in_features_raw = MODAL_AGREEMENT_CHANS * 64
+                else:
+                    in_features_raw = RAW_CHANS
                 tokenize = LinearConvTokenizer(in_chan, in_features_raw)
             elif self.hparams.tokenizer == 'dwcnn':
-                in_features_raw = MODAL_AGREEMENT_CHANS * 64
+                if RAW_CHANS is None:
+                    in_features_raw = MODAL_AGREEMENT_CHANS * 64
+                else:
+                    in_features_raw = RAW_CHANS
                 tokenize = DWCNNTokenizer(in_chan, in_features_raw, norm=self.hparams.token_norm)
             else:
                 raise KeyError(self.hparams.tokenizer)
 
             self.sensor_channel_tokenizers[s][c] = tokenize
             in_features_raw = tokenize.out_channels
+
+        print(f'in_features_raw={in_features_raw}')
 
         # for (s, c), stats in input_stats.items():
         #     self.sensor_channel_tokenizers[s][c] = tokenize
@@ -501,6 +528,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         self.in_features_pos = in_features_pos
         self.in_features_raw = in_features_raw
 
+        print(f'self.in_features={self.in_features}')
         ### NEW:
         # Learned positional encodings
         self.token_learner1_time_delta = nh.layers.MultiLayerPerceptronNd(
@@ -531,6 +559,22 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                 # attention_impl=attention_impl,
                 # dropout=dropout,
             )
+        elif self.hparams.arch_name.startswith('vit'):
+            """
+            Ignore:
+                >>> # Note: it is important that the non-kwargs are saved as hyperparams
+                >>> from watch.tasks.fusion.methods.channelwise_transformer import MultimodalTransformer
+                >>> channels, classes, dataset_stats = MultimodalTransformer.demo_dataset_stats()
+                >>> self = model = MultimodalTransformer(arch_name="vit", stream_channels='720 !', input_sensorchan=channels, classes=classes, dataset_stats=dataset_stats, tokenizer='linconv')
+                >>> batch = self.demo_batch()
+                >>> out = self.forward_step(batch)
+            """
+            self.encoder = transformer.MM_VITEncoder(
+                # **encoder_config,
+                # in_features=in_features,
+                # attention_impl=attention_impl,
+                # dropout=dropout,
+            )
         elif self.hparams.arch_name.startswith('perceiver'):
             if self.hparams.backbone_depth is None:
                 backbone_depth = 4
@@ -543,6 +587,22 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             )
         else:
             raise NotImplementedError
+
+        if self.hparams.multimodal_reduce == 'learned_linear':
+            # Make special params for the reduction.
+            # The idea for the learned linear mode is to assign a
+            # weight to each mode, and these are used to combine tokens
+            # from different modes. Additionally, we include a special
+            # parameter for the __MAX, allowing us to mixin the max
+            # reduction method as something learnable by these
+            # parameters.
+
+            # Also add in a special weight for the max
+            sensor_chan_reduction_weights = RobustParameterDict()
+            unique_sensorchans = [sensor + ':' + chan for sensor, chan in self.unique_sensor_modes]
+            for sensor_chan in unique_sensorchans + ['__MAX']:
+                sensor_chan_reduction_weights[sensor_chan] = torch.nn.Parameter(torch.ones([1]))
+            self.sensor_chan_reduction_weights = sensor_chan_reduction_weights
 
         feat_dim = self.encoder.out_features
 
@@ -751,8 +811,16 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         else:
             max_epochs = 20
 
-        scheduler = lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=max_epochs)
+        if self.hparams.lr_scheduler == 'CosineAnnealingLR':
+            scheduler = lr_scheduler.CosineAnnealingLR(
+                optimizer, T_max=max_epochs)
+        elif self.hparams.lr_scheduler == 'OneCycleLR':
+            scheduler = lr_scheduler.OneCycleLR(
+                optimizer, T_max=max_epochs,
+                max_lr=self.hparams.learning_rate * 10)
+        else:
+            raise KeyError(self.hparams.lr_scheduler)
+
         return [optimizer], [scheduler]
 
     def overfit(self, batch):
@@ -771,10 +839,11 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
             >>> from watch.utils.util_data import find_smart_dvc_dpath
+            >>> import watch
             >>> import kwcoco
             >>> from os.path import join
             >>> import os
-            >>> if 1:
+            >>> if 0:
             >>>     '''
             >>>     # Generate toy datasets
             >>>     DATA_DPATH=$HOME/data/work/toy_change
@@ -785,12 +854,13 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>>     coco_fpath = ub.expandpath('$HOME/data/work/toy_change/vidshapes_msi_train/data.kwcoco.json')
             >>>     coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
             >>>     channels="B11,r|g|b,B1|B8|B11"
-            >>> if 0:
-            >>>     dvc_dpath = find_smart_dvc_dpath()
-            >>>     coco_dset = join(dvc_dpath, 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json')
+            >>> if 1:
+            >>>     dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+            >>>     coco_dset = (dvc_dpath / 'Drop4-BAS') / 'data_vali.kwcoco.json'
             >>>     channels='swir16|swir22|blue|green|red|nir'
+            >>>     coco_dset = (dvc_dpath / 'Drop4-BAS') / 'combo_vali_I2.kwcoco.json'
+            >>>     channels='blue|green|red|nir,invariants.0:17'
             >>> if 0:
-            >>>     import watch
             >>>     coco_dset = watch.demo.demo_kwcoco_multisensor(max_speed=0.5)
             >>>     # coco_dset = 'special:vidshapes8-frames9-speed0.5-multispectral'
             >>>     #channels='B1|B11|B8|r|g|b|gauss'
@@ -798,10 +868,13 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> coco_dset = kwcoco.CocoDataset.coerce(coco_dset)
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset=coco_dset,
-            >>>     chip_size=128, batch_size=1, time_steps=3,
+            >>>     chip_size=128, batch_size=1, time_steps=5,
             >>>     channels=channels,
-            >>>     normalize_inputs=1, neg_to_pos_ratio=0,
+            >>>     normalize_peritem='blue|green|red|nir',
+            >>>     normalize_inputs=32, neg_to_pos_ratio=0,
             >>>     num_workers='avail/2',
+            >>>     mask_low_quality=True,
+            >>>     observable_threshold=0.6,
             >>>     use_grid_positives=False, use_centered_positives=True,
             >>> )
             >>> datamodule.setup('fit')
@@ -817,11 +890,13 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> self = methods.MultimodalTransformer(
             >>>     # ===========
             >>>     # Backbone
-            >>>     arch_name='smt_it_joint_p2',
-            >>>     #arch_name='smt_it_stm_p8',
+            >>>     #arch_name='smt_it_joint_p2',
+            >>>     arch_name='smt_it_stm_p8',
+            >>>     stream_channels = 16,
             >>>     #arch_name='deit',
             >>>     optimizer='AdamW',
             >>>     learning_rate=1e-5,
+            >>>     weight_decay=1e-3,
             >>>     #attention_impl='performer',
             >>>     attention_impl='exact',
             >>>     #decoder='segmenter',
@@ -830,15 +905,16 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>>     change_loss='dicefocal',
             >>>     #class_loss='cce',
             >>>     class_loss='dicefocal',
-            >>>     saliency_loss='dicefocal',
+            >>>     #saliency_loss='dicefocal',
+            >>>     saliency_loss='focal',
             >>>     # ===========
             >>>     # Change Loss
-            >>>     global_change_weight=1.00,
+            >>>     global_change_weight=1e-5,
             >>>     positive_change_weight=1.0,
             >>>     negative_change_weight=0.5,
             >>>     # ===========
             >>>     # Class Loss
-            >>>     global_class_weight=1.00,
+            >>>     global_class_weight=1e-5,
             >>>     class_weights='auto',
             >>>     # ===========
             >>>     # Saliency Loss
@@ -850,6 +926,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>>     input_sensorchan=input_sensorchan,
             >>>     #tokenizer='dwcnn',
             >>>     tokenizer='linconv',
+            >>>     multimodal_reduce='learned_linear',
             >>>     #tokenizer='rearrange',
             >>>     # normalize_perframe=True,
             >>>     window_size=8,
@@ -860,6 +937,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             >>> loader = datamodule.train_dataloader()
             >>> # Load one batch and show it before we do anything
             >>> batch = next(iter(loader))
+            >>> print(ub.urepr(dataset.summarize_item(batch[0]), nl=3))
             >>> import kwplot
             >>> plt = kwplot.autoplt(force='Qt5Agg')
             >>> plt.ion()
@@ -1009,15 +1087,29 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
 
         Example:
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-            >>> channels, clases, dataset_stats = MultimodalTransformer.demo_dataset_stats()
+            >>> channels, classes, dataset_stats = MultimodalTransformer.demo_dataset_stats()
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
-            >>>     decoder='segmenter', classes=clases, global_saliency_weight=1,
+            >>>     decoder='segmenter', classes=classes, global_saliency_weight=1,
             >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
             >>> batch = self.demo_batch()
             >>> outputs = self.forward_step(batch, with_loss=True)
             >>> print(nh.data.collate._debug_inbatch_shapes(batch))
             >>> print(nh.data.collate._debug_inbatch_shapes(outputs))
+
+        Example:
+            >>> # Test learned_linear multimodal reduce
+            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> channels, classes, dataset_stats = MultimodalTransformer.demo_dataset_stats()
+            >>> self = MultimodalTransformer(
+            >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
+            >>>     decoder='mlp', classes=classes, global_saliency_weight=1,
+            >>>     dataset_stats=dataset_stats, input_sensorchan=channels, multimodal_reduce='learned_linear')
+            >>> batch = self.demo_batch()
+            >>> outputs = self.forward_step(batch, with_loss=True)
+            >>> print(nh.data.collate._debug_inbatch_shapes(batch))
+            >>> print(nh.data.collate._debug_inbatch_shapes(outputs))
+            >>> # outputs['loss'].backward()
         """
         outputs = {}
 
@@ -1123,10 +1215,10 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         """
         Example:
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-            >>> channels, clases, dataset_stats = MultimodalTransformer.demo_dataset_stats()
+            >>> channels, classes, dataset_stats = MultimodalTransformer.demo_dataset_stats()
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
-            >>>     decoder='segmenter', classes=clases, global_saliency_weight=1,
+            >>>     decoder='segmenter', classes=classes, global_saliency_weight=1,
             >>>     dataset_stats=dataset_stats, input_sensorchan=channels)
             >>> item = self.demo_batch(width=64, height=65)[0]
             >>> outputs = self.forward_item(item, with_loss=True)
@@ -1138,10 +1230,10 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         Example:
             >>> # Decoupled resolutions
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-            >>> channels, clases, dataset_stats = MultimodalTransformer.demo_dataset_stats()
+            >>> channels, classes, dataset_stats = MultimodalTransformer.demo_dataset_stats()
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
-            >>>     decoder='mlp', classes=clases, global_saliency_weight=1,
+            >>>     decoder='mlp', classes=classes, global_saliency_weight=1,
             >>>     dataset_stats=dataset_stats, input_sensorchan=channels, decouple_resolution=True)
             >>> batch = self.demo_batch(width=(11, 21), height=(16, 64), num_timesteps=3)
             >>> item = batch[0]
@@ -1274,7 +1366,6 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         ENCODED_TOKENS -> (RESAMPLE PER-MODE IF NEEDED) -> POOL_OVER_MODES -> SPACE_TIME_FEATURES
 
         SPACE_TIME_FEATURES -> HEAD
-
         """
 
         token_split_points = np.cumsum([t.shape[0] for t in tokenized])
@@ -1291,7 +1382,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             info['mode'] = mode
         grouped = ub.group_items(recon_info, key=lambda x: x['frame_idx'])
         perframe_stackable_encodings = []
-        frame_shapes = []
+
         for frame_idx, frame_group in sorted(grouped.items()):
             shapes = [g['space_shape'] for g in frame_group]
             modes = [g['mode'] for g in frame_group]
@@ -1309,14 +1400,32 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
                         m.view(1, -1, *s), frame_shape, mode='bilinear', align_corners=False).view(-1, m.shape[-1])
                     for m, s in zip(modes, shapes)
                 ]
-            frame_shapes.append(frame_shape)
-            stack = torch.stack(to_stack, dim=0)
-            if self.hparams.multimodal_reduce == 'max':
-                frame_feat = torch.max(stack, dim=0)[0]
-            elif self.hparams.multimodal_reduce == 'mean':
-                frame_feat = torch.mean(stack, dim=0)[0]
+            if len(to_stack) == 1:
+                frame_feat = to_stack[0]
             else:
-                raise Exception(self.hparams.multimodal_reduce)
+                if self.hparams.multimodal_reduce == 'max':
+                    stack = torch.stack(to_stack, dim=0)
+                    frame_feat = torch.max(stack, dim=0)[0]
+                elif self.hparams.multimodal_reduce == 'mean':
+                    stack = torch.stack(to_stack, dim=0)
+                    frame_feat = torch.mean(stack, dim=0)[0]
+                elif self.hparams.multimodal_reduce == 'learned_linear':
+                    sensor_chans = [g['sensor'] + ':' + g['chan_code'] for g in frame_group]
+                    if 1:
+                        # Add in the special max mode
+                        to_stack.append(torch.max(torch.stack(to_stack, dim=0), dim=0)[0])
+                        sensor_chans.append('__MAX')
+                    linear_weights = [self.sensor_chan_reduction_weights[sc] for sc in sensor_chans]
+                    linear_weights = torch.stack(linear_weights, dim=0)
+
+                    # Normalize the weights
+                    norm_weights = torch.nn.functional.softmax(linear_weights, dim=0)
+                    # Take the linear combination of the modes
+                    stack = torch.stack(to_stack, dim=0)
+                    frame_feat = torch.einsum('m k, m k f -> k f', norm_weights, stack)
+                    # frame_feat2 = (norm_weights[:, :, None] * stack).sum(dim=0)
+                else:
+                    raise Exception(self.hparams.multimodal_reduce)
             hs, ws = frame_shape
             frame_grid = einops.rearrange(
                 frame_feat, '(hs ws) f -> hs ws f', hs=hs, ws=ws)
@@ -1561,14 +1670,14 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             # Stack the weights for each item
             item_weights = {
                 # Because we are nt collating we need to add a batch dimension
-                key: torch.stack(_tensors)[None, ...]
+                key: torch_safe_stack(_tensors, item_shape=[0, 0])[None, ...]
                 for key, _tensors in item_pixel_weights_list.items()
             }
             if self.global_head_weights['change']:
                 # [B, T, H, W]
-                item_truths['change'] = torch.stack([
+                item_truths['change'] = torch_safe_stack([
                     frame['change'] for frame in item['frames'][1:]
-                ])[None, ...]
+                ], item_shape=[0, 0])[None, ...]
 
             if self.global_head_weights['class']:
                 # [B, T, H, W]
@@ -1703,8 +1812,8 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
         import torch.package
 
         # Fix an issue on 3.10 with torch 1.12
-        from watch.utils.lightning_ext.callbacks.packager import _torch_package_monkeypatch
-        _torch_package_monkeypatch()
+        from watch.monkey import monkey_torch
+        monkey_torch.fix_package_modules()
 
         # shallow copy of self, to apply attribute hacks to
         # model = copy.copy(self)
@@ -1754,7 +1863,7 @@ class MultimodalTransformer(pl.LightningModule, WatchModuleMixins):
             with torch.package.PackageExporter(package_path) as exp:
                 # TODO: this is not a problem yet, but some package types (mainly
                 # binaries) will need to be excluded and added as mocks
-                exp.extern('**', exclude=['watch.tasks.fusion.**'])
+                exp.extern('**', exclude=['watch.tasks.fusion.**', 'watch.tasks.fusion.methods.channelwise_transformer'])
                 exp.intern('watch.tasks.fusion.**', allow_empty=False)
 
                 # Attempt to standardize some form of package metadata that can

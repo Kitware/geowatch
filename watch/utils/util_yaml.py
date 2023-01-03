@@ -48,3 +48,14 @@ def yaml_loads(text):
     import ruamel.yaml
     data = ruamel.yaml.load(file, Loader=ruamel.yaml.RoundTripLoader, preserve_quotes=True)
     return data
+
+
+def yaml_load(file):
+    import os
+    if isinstance(file, (str, os.PathLike)):
+        with open(file, 'r') as fp:
+            return yaml_load(fp)
+    else:
+        import ruamel.yaml
+        data = ruamel.yaml.load(file, Loader=ruamel.yaml.RoundTripLoader, preserve_quotes=True)
+        return data

@@ -7,7 +7,7 @@ This is a new Phase2 Variant of this script.
 
 Example:
 
-    export DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
+    export DVC_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data")
     export DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
     cd $DVC_EXPT_DPATH
 
@@ -87,7 +87,7 @@ import platform
 import scriptconfig as scfg
 from watch.utils import simple_dvc
 from watch import heuristics
-from watch.mlops.expt_state import ExperimentState, summarize_tables
+from watch.mlops.old.expt_state import ExperimentState, summarize_tables
 
 
 class ExptManagerConfig(scfg.DataConfig):
@@ -99,12 +99,12 @@ class ExptManagerConfig(scfg.DataConfig):
     machine with the "watch" environment, the watch DVC repo is accessed as
     follows:
 
-        EXPT_DVC_DPATH=$(smartwatch_dvc --tags="phase2_expt")
-        DATA_DVC_DPATH=$(smartwatch_dvc --tags="phase2_data")
+        DVC_EXPT_DPATH=$(smartwatch_dvc --tags="phase2_expt")
+        DVC_DATA_DPATH=$(smartwatch_dvc --tags="phase2_data")
 
     The workdir is where a user on a machine puts all of their experiments.
 
-        WORKDIR=$EXPT_DVC_DPATH/training/$HOSTNAME/$USER
+        WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
 
     Before we start an experment, we must choose a dataset. Lets use an
     example:
@@ -116,7 +116,7 @@ class ExptManagerConfig(scfg.DataConfig):
     -- views can have different GSD or be bundle subsets). The directory
     of this bundle should be:
 
-        KWCOCO_BUNDLE_DPATH=$DATA_DVC_DPATH/$DATASET_CODE
+        KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
 
     and it should be the case that, there is a kwcoco manifest that describes
     the entire bundle called:
@@ -138,7 +138,7 @@ class ExptManagerConfig(scfg.DataConfig):
 
     The packaging part of this script works with
 
-        $EXPT_DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/$EXPT_MODEL_GLOBNAME/*.pt
+        $DVC_EXPT_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/$EXPT_MODEL_GLOBNAME/*.pt
     """
     command = scfg.Value(None, nargs='*', help='if specified, will overload other options', position=1)
 
@@ -173,7 +173,7 @@ class ExptManagerConfig(scfg.DataConfig):
 
 def main(cmdline=True, **kwargs):
     """
-    from watch.mlops.expt_manager import *  # NOQA
+    from watch.mlops.old.expt_manager import *  # NOQA
     """
     config = ExptManagerConfig(cmdline=cmdline, data=kwargs)
     print('ExptManagerConfig config = {}'.format(ub.repr2(dict(config), nl=1)))
@@ -274,8 +274,8 @@ class DVCExptManager(ub.NiceRepr):
         packages/<expt_name>/<model_name.pt>
 
     Example:
-        >>> # xdoctest: +REQUIRES(env:EXPT_DVC_DPATH)
-        >>> from watch.mlops.expt_manager import *  # NOQA
+        >>> # xdoctest: +REQUIRES(env:DVC_EXPT_DPATH)
+        >>> from watch.mlops.old.expt_manager import *  # NOQA
         >>> import watch
         >>> manager = DVCExptManager.coerce(watch.find_dvc_dpath(tags='phase2_expt'))
         >>> manager.summarize()

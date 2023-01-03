@@ -148,21 +148,31 @@ class SMARTDataMixin:
             >>>     sampler,
             >>>     sample_shape=(5, 128, 128),
             >>>     window_overlap=0,
-            >>>     channels="(S2,L8):blue|green|red|nir|swir16|swir22",
-            >>>     input_space_scale='15GSD',
-            >>>     window_space_scale='15GSD',
-            >>>     output_space_scale='15GSD',
+            >>>     channels="(S2,L8):blue|green|red|nir|cloudmask",
+            >>>     input_space_scale='30GSD',
+            >>>     window_space_scale='30GSD',
+            >>>     output_space_scale='30GSD',
             >>>     dist_weights=1,
             >>>     use_cloudmask=1,
-            >>>     resample_invalid_frames=1,
+            >>>     resample_invalid_frames=0,
             >>>     neg_to_pos_ratio=0, time_sampling='soft2+distribute',
             >>> )
             >>> self.requested_tasks['change'] = False
             >>> target = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]]
-            >>> gid = target['gids'][1]
+            >>> gid = target['gids'][2]
             >>> tr_frame = target.copy()
             >>> tr_frame['gids'] = [gid]
             >>> coco_img = self.sampler.dset.coco_image(gid)
+
+            import kwplot
+            kwplot.autoplt()
+            if 1:
+                dset = self.sampler.dset
+                target['resample_invalid_frames'] = 1
+                target['FORCE_LOADING_BAD_IMAGES'] = 1
+                item = self.getitem(target)
+                canvas = self.draw_item(item)
+                kwplot.imshow(canvas)
 
             # >>> print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
             # >>> # xdoctest: +REQUIRES(--show)
@@ -172,10 +182,11 @@ class SMARTDataMixin:
             # >>> kwplot.imshow(canvas)
             # >>> kwplot.show_if_requested()
 
-            tr_frame = target_.copy()
+            tr_frame = target.copy()
             tr_frame['gids'] = [gid]
 
             tr_cloud = tr_frame.copy()
+            quality_chan_name = 'cloudmask'
             tr_cloud['channels'] = quality_chan_name
             tr_cloud['antialias'] = False
             tr_cloud['interpolation'] = 'nearest'
@@ -196,12 +207,15 @@ class SMARTDataMixin:
                 # dtype=np.float32
             )
             rgb_data = rgb_sample['im'][0]
+            rgb_im = kwimage.normalize_intensity(rgb_data)
             kwplot.imshow(rgb_im)
 
             sensor = coco_img.img.get('sensor_coarse')
             spec_name = 'ACC-1'
             from watch.tasks.fusion.datamodules.qa_bands import QA_SPECS
             table = qa_table = QA_SPECS.find_table(spec_name, sensor)
+
+            draw_cloudmask_viz(qa_data, rgb_data)
 
         """
         # NOTES ON QUALITY / CLOUDMASK
@@ -233,6 +247,7 @@ class SMARTDataMixin:
             tr_cloud['antialias'] = False
             tr_cloud['interpolation'] = 'nearest'
             tr_cloud['nodata'] = None
+            # import numpy as np
             qa_sample = sampler.load_sample(
                 tr_cloud, with_annots=None,
                 # TODO: use a better constant value
