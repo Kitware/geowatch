@@ -499,7 +499,7 @@ def predict(cmdline=False, **kwargs):
 
         >>> datamodule = datamodules.kwcoco_video_data.KWCocoVideoDataModule(
         >>>     train_dataset='special:vidshapes8-multispectral-multisensor', 
-        >>>     test_dataset='special:vidshapes8-multispectral-multisensor', chip_size=32,
+        >>>     #test_dataset='special:vidshapes8-multispectral-multisensor', chip_size=32,
         >>>     channels="r|g|b",
         >>>     batch_size=1, time_steps=3, num_workers=2, normalize_inputs=10)
         >>> datamodule.setup('fit')
@@ -509,9 +509,23 @@ def predict(cmdline=False, **kwargs):
         >>> print("classes = ", classes)
         
         >>> from watch.tasks.fusion import methods
+        >>> from watch.tasks.fusion.architectures.transformer import TransformerEncoderDecoder
+        >>> position_encoder = methods.heterogeneous.ScaleAgnostictPositionalEncoder(3)
+        >>> backbone = TransformerEncoderDecoder(
+        >>>     encoder_depth=1,
+        >>>     decoder_depth=1,
+        >>>     dim=position_encoder.output_dim + 16,
+        >>>     queries_dim=position_encoder.output_dim,
+        >>>     logits_dim=16,
+        >>>     cross_heads=1,
+        >>>     latent_heads=1,
+        >>>     cross_dim_head=1,
+        >>>     latent_dim_head=1,
+        >>> )
         >>> model = methods.HeterogeneousModel(
         >>>     classes=classes,
-        >>>     position_encoder=methods.heterogeneous.ScaleAgnostictPositionalEncoder(3),
+        >>>     position_encoder=position_encoder,
+        >>>     backbone=backbone,
         >>>     decoder="trans_conv",
         >>>     global_change_weight=1, global_class_weight=1, global_saliency_weight=1,
         >>>     dataset_stats=dataset_stats, input_sensorchan=datamodule.input_sensorchan)
@@ -524,7 +538,7 @@ def predict(cmdline=False, **kwargs):
         >>> assert ub.Path(package_fpath).exists()
         
         >>> # Predict via that model
-        >>> test_dset = datamodule.test_dataset
+        >>> test_dset = datamodule.train_dataset
         >>> predict_kwargs = kwargs = {
         >>>     'package_fpath': package_fpath,
         >>>     'pred_dataset': ub.Path(results_path) / 'pred.kwcoco.json',
