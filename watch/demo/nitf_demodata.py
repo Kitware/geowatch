@@ -6,7 +6,10 @@ References:
 
 
 NOTE:
-    The data provided is no longer available, but a mirror exists on IPFS.
+    The data provided is no longer available, but a mirror exists on IPFS and
+    the wayback machine.
+
+    https://web.archive.org/web/20190501060607/http://www.gwg.nga.mil/ntb/baseline/software/testfile/Nitfv2_1/scen_2_1.html
 
     # IPFS folder containing all demo NITFs
     QmWApzbAX2W8cobWqKPjsM1kj82TvMGvyZ75PnbUeNHktW demo_nitf
