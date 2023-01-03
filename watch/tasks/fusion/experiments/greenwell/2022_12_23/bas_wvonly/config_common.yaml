@@ -9,10 +9,11 @@ data:
   # exclude_sensors:
   #   - S2
   #   - PD
-  window_space_scale: 5GSD
-  output_space_scale: 5GSD
+  window_space_scale: 3GSD
+  input_space_scale: 3GSD
+  output_space_scale: 3GSD
   batch_size: 8
-  chip_overlap: 0
+  chip_overlap: 0.25
   dist_weights: 0
   min_spacetime_weight: 0.5
   neg_to_pos_ratio: 0.25
@@ -36,6 +37,13 @@ optimizer:
       - 0.9
       - 0.98
     eps: 1e-12
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: 0.001
+    total_steps: 200000
+    anneal_strategy: "linear"
+    pct_start: 0.0
 profile: false
 seed_everything: 1234
 trainer:

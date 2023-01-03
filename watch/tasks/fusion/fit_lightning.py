@@ -6,6 +6,8 @@ from watch.utils import lightning_ext as pl_ext
 
 import pytorch_lightning as pl
 import ubelt as ub
+from torch import optim
+from typing import Optional, Any
 
 import yaml
 from jsonargparse import set_loader, set_dumper
@@ -58,6 +60,36 @@ set_dumper('yaml_unsafe_for_tuples', custom_yaml_dump)
 
 
 class SmartLightningCLI(LightningCLI_Extension):
+
+    @staticmethod
+    def configure_optimizers(
+        lightning_module: pl.LightningModule, optimizer: optim.Optimizer, lr_scheduler = None
+    ) -> Any:
+        """Override to customize the :meth:`~pytorch_lightning.core.module.LightningModule.configure_optimizers`
+        method.
+
+        Args:
+            lightning_module: A reference to the model.
+            optimizer: The optimizer.
+            lr_scheduler: The learning rate scheduler (if used).
+        """
+
+        if lr_scheduler is None:
+            return optimizer
+
+        if isinstance(lr_scheduler, pl.cli.ReduceLROnPlateau):
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": {"scheduler": lr_scheduler, "monitor": lr_scheduler.monitor},
+            }
+
+        if isinstance(lr_scheduler, optim.lr_scheduler.OneCycleLR):
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": {"scheduler": lr_scheduler, 'interval': 'step'},
+            }
+
+        return [optimizer], [lr_scheduler]
 
     # TODO: import initialization code from fit.py
     def add_arguments_to_parser(self, parser):
