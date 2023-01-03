@@ -42,19 +42,21 @@ class CleanGeotiffConfig(scfg.DataConfig):
 
 def main(cmdline=1, **kwargs):
     """
-    Ignore:
-        import watch
-        dset = watch.coerce_kwcoco('watch-msi', geodata=True)
-
-        coco_img = dset.images().coco_images[0]
-
-        kwargs = {
-            'src': dset,
-            'workers': 0,
-            'channels': 'B11',
-            'prefilter_channels': 'B11',
-            'min_region_size': 1,
-        }
+    Example:
+        >>> # Generate a dataset that has bad nodata values
+        >>> from watch.cli.coco_clean_geotiffs import *  # NOQA
+        >>> import watch
+        >>> dset = watch.coerce_kwcoco('watch-msi', geodata=True, bad_nodata=True)
+        >>> coco_img = dset.images().coco_images[0]
+        >>> kwargs = {
+        >>>     'src': dset,
+        >>>     'workers': 0,
+        >>>     'channels': 'B11',
+        >>>     'prefilter_channels': 'B11',
+        >>>     'min_region_size': 32,
+        >>> }
+        >>> cmdline = 0
+        >>> main(cmdline=cmdline, **kwargs)
 
     Ignore:
         import watch
@@ -68,7 +70,7 @@ def main(cmdline=1, **kwargs):
     """
     from watch.utils import util_globals
 
-    config = CleanGeotiffConfig.legacy(cmdline=1, data=kwargs)
+    config = CleanGeotiffConfig.legacy(cmdline=cmdline, data=kwargs)
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
 
     workers = util_globals.coerce_num_workers(config['workers'])
@@ -93,7 +95,7 @@ def main(cmdline=1, **kwargs):
         'min_region_size': config['min_region_size'],
     }
 
-    coco_imgs = coco_dset.images().coco_images[0:2]
+    coco_imgs = coco_dset.images().coco_images
 
     for coco_img in ub.ProgIter(coco_imgs):
         coco_img.detach()
