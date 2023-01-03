@@ -61,7 +61,7 @@ python -m watch.mlops.schedule_evaluation \
         matrix:
             bas_pxl.package_fpath:
                 #- $DVC_EXPT_DPATH/bas_native_epoch44.pt
-                #- $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+                - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
                 - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_2/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V5_epoch=1-step=77702.pt
                 - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V5_epoch=1-step=77702-v1.pt
                 - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V5_epoch=5-step=233106.pt
@@ -88,9 +88,10 @@ python -m watch.mlops.schedule_evaluation \
             bas_pxl.time_span: auto
             bas_pxl.time_sampling: auto
             bas_poly.thresh:
-                #- 0.07
+                - 0.07
                 - 0.1
-                #- 0.13
+                - 0.13
+                - 0.15
             bas_poly.moving_window_size: null
             bas_pxl.enabled: 1
             bas_poly.enabled: 1
@@ -118,7 +119,7 @@ python -m watch.mlops.schedule_evaluation \
     --root_dpath="$DVC_EXPT_DPATH/_testpipe" \
     --devices="0,1" --queue_size=2 \
     --backend=tmux --queue_name "demo-queue2" \
-    --pipeline=bas \
+    --pipeline=bas --skip_existing=1 \
     --run=1
 
 

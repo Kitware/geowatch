@@ -306,6 +306,9 @@ def colorize_label_image(labels, with_legend=True, label_mapping=None, label_to_
             maps the label used in the label image to what should appear in the
             legend.
 
+    CommandLine:
+        xdoctest -m watch.utils.util_kwimage colorize_label_image
+
     Example:
         >>> from watch.utils.util_kwimage import *  # NOQA
         >>> labels = (np.random.rand(32, 32) * 10).astype(np.uint8) % 5

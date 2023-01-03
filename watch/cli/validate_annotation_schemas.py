@@ -16,7 +16,7 @@ Prereq:
 
 Also:
 
-    python -m iarpa_smart_metrics.demo.generate_demodata --reset
+    python -m watch.demo.metrics_demo.generate_demodata --reset
     python ~/code/watch/dev/validate_annotation_schemas.py
 
 
