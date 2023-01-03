@@ -307,7 +307,7 @@ def colorize_label_image(labels, with_legend=True, label_mapping=None, label_to_
             legend.
 
     CommandLine:
-        xdoctest -m watch.utils.util_kwimage colorize_label_image
+        python -X importtime -m xdoctest watch.utils.util_kwimage colorize_label_image
 
     Example:
         >>> from watch.utils.util_kwimage import *  # NOQA
@@ -327,7 +327,7 @@ def colorize_label_image(labels, with_legend=True, label_mapping=None, label_to_
 
     Example:
         >>> from watch.utils.util_kwimage import *  # NOQA
-        >>> labels = (np.random.rand(32, 32) * 10) % 5
+        >>> labels = (np.random.rand(4, 4) * 10) % 5
         >>> labels[0:2] = np.nan
         >>> label_to_color = {0: 'black'}
         >>> label_mapping = {0: 'background'}
@@ -344,7 +344,10 @@ def colorize_label_image(labels, with_legend=True, label_mapping=None, label_to_
     """
     import kwimage
     unique_labels, inv = np.unique(labels, return_inverse=True)
+
     if np.isnan(unique_labels).any():
+        # need specialized nan handling because we are going to use unique
+        # values as keys in a dictionary.
         import math
         unique_labels = ['nan' if math.isnan(f) else f for f in unique_labels]
 
@@ -352,13 +355,14 @@ def colorize_label_image(labels, with_legend=True, label_mapping=None, label_to_
         used_labels = set(label_to_color) & set(unique_labels)
         label_to_color_ = {k: kwimage.Color(c).as01() for k, c in label_to_color.items()}
         existing = list(label_to_color_.values())
-        uncolored_labels = np.array(list(set(unique_labels) - set(used_labels)))
+        uncolored_labels = list(set(unique_labels) - set(used_labels))
     else:
         existing = None
         uncolored_labels = unique_labels
         used_labels = set()
         label_to_color_ = {}
 
+    # When there are a lot of unique colors this takes a very long time
     new_label_colors = kwimage.Color.distinct(len(uncolored_labels), existing=existing)
     label_to_color_.update(ub.dzip(uncolored_labels, new_label_colors))
 
