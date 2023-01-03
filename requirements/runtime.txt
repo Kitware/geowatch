@@ -170,7 +170,7 @@ torch>=1.11.0   # 1.10 does not run latest models
 torchvision>=0.12.0   ; python_version < '3.11'
 
 torchmetrics>=0.11.0
-torch_liberator>=0.1.0
+torch_liberator>=0.2.0
 # pytorch_lightning>=1.7.1,<1.8
 pytorch_lightning>=1.7.1
 monai>=0.6.0
