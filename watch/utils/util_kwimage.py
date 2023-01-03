@@ -660,6 +660,20 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
         >>> print(image)
         >>> assert (labels > 0).sum() == 3
 
+    Example:
+        >>> # Check dtypes
+        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> dtypes = [np.uint8, np.float32, np.float64, int, np.int16, np.uint16]
+        >>> failed = []
+        >>> for dtype in dtypes:
+        ...    image = (np.random.rand(32, 32) * 512).astype(dtype)
+        ...    try:
+        ...        find_samecolor_regions(image, min_region_size=10)
+        ...    except Exception:
+        ...        failed.append(dtype)
+        >>> print(f'failed={failed}')
+        >>> assert len(failed) == 0
+
     Returns:
         ndarray: a label array where 0 indicates background and a
             non-zero label is a samecolor region.
@@ -704,6 +718,15 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
         image = kwimage.imresize(image, scale=scale, interpolation='nearest')
 
     h, w = image.shape[0:2]
+
+    # floodFill only accepts uint8 and float32, we we need to cast to float
+    # here for other data types.
+    if image.dtype.kind == 'f':
+        if image.dtype.itemsize != 4:
+            image = image.astype(np.float32)
+    else:
+        if (image.dtype.kind != 'u') or (image.dtype.itemsize != 1):
+            image = image.astype(np.float32)
 
     if not image.flags['C_CONTIGUOUS'] or not image.flags['OWNDATA']:
         # Cv2 only likes certain types of numpy arrays
