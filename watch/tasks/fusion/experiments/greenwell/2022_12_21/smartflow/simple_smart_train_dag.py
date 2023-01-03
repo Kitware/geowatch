@@ -8,7 +8,7 @@ from datetime import datetime
 from textwrap import dedent
 
 with DAG(
-    dag_id=f"KIT_TRAIN_NATIVE_BAS",
+    dag_id="KIT_TRAIN_NATIVE_BAS",
     description="Kitware demo: creates toy data, fits a model to it, makes predictions, and evaluates them.",
     params={
         "smart_version_tag": Param(default="main", type="string"),
@@ -26,9 +26,9 @@ with DAG(
     WORKDIR = f"{DVC_EXPT_DPATH}/training/smartflow/airflow_root"
 
     # Generate toy datasets
-    TRAIN_FPATH=f"{DVC_DATA_DPATH}/data_train.kwcoco.json"
-    VALI_FPATH=f"{DVC_DATA_DPATH}/data_vali.kwcoco.json"
-    TEST_FPATH=f"{DVC_DATA_DPATH}/data_vali.kwcoco.json"
+    TRAIN_FPATH = f"{DVC_DATA_DPATH}/data_train.kwcoco.json"
+    VALI_FPATH = f"{DVC_DATA_DPATH}/data_vali.kwcoco.json"
+    TEST_FPATH = f"{DVC_DATA_DPATH}/data_vali.kwcoco.json"
 
     EXPERIMENT_NAME = "Drop4-BAS_Heterogeneous"
     DATASET_CODE = "Drop4-BAS"
@@ -152,7 +152,7 @@ with DAG(
     test set) we simply call the "watch.tasks.fusion.predict" script and pass it:
 
        * the kwcoco file of the dataset to predict on
-       * the path to the model we want to predict with 
+       * the path to the model we want to predict with
        * the name of the output kwcoco file that will contain the predictions
 
     All necessary metadata you would normally have to (redundantly) specify in
@@ -205,14 +205,14 @@ with DAG(
     )
 
     """
-    The last step in this basic tutorial is to measure how good our model is. 
+    The last step in this basic tutorial is to measure how good our model is.
     We can do this with pixelwise metrics.
 
     This is done by using "watch.tasks.fusion.evaluate" as the main module, and
     its arguments are:
 
         * The true kwcoco data with groundtruth annotations (i.e. the test dataset)
-        * The pred kwcoco data that we predicted earlier 
+        * The pred kwcoco data that we predicted earlier
         * An output path for results
     """
     eval_model = create_pod_task(

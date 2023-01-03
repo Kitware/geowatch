@@ -40,6 +40,8 @@ Notes:
     pip install performer-pytorch  <- this one
 """
 
+from watch.tasks.fusion.fit import coerce_initializer
+
 from functools import wraps
 
 import torch
@@ -1101,7 +1103,7 @@ class TransformerEncoderDecoder(nn.Module, BackboneEncoderDecoder):
 
         # layers
         for self_attn, self_ff in self.encoder_layers:
-            x = self_attn(x, mask = mask) + x
+            x = self_attn(x, mask=mask) + x
             x = self_ff(x) + x
 
         if not exists(queries):
@@ -1126,7 +1128,7 @@ class TransformerEncoderDecoder(nn.Module, BackboneEncoderDecoder):
         return self.to_logits(x)
 
 
-class MM_VITEncoder(nn.Module, BackboneEncoderDecoder):
+class MM_VITEncoderDecoder(nn.Module, BackboneEncoderDecoder):
     """
     mmsegmentation variant of VIT
 
@@ -1145,7 +1147,7 @@ class MM_VITEncoder(nn.Module, BackboneEncoderDecoder):
     Example:
         >>> # xdoctest: +REQUIRES(module:mmseg)
         >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
-        >>> self = MM_VITEncoder(16, 16, 16)
+        >>> self = MM_VITEncoderDecoder(16, 16, 16)
         >>> x = torch.rand(2, 3, 16)
         >>> self.forward(x)
 
@@ -1153,18 +1155,18 @@ class MM_VITEncoder(nn.Module, BackboneEncoderDecoder):
         >>> # xdoctest: +REQUIRES(module:mmseg)
         >>> # This tests downloading weights from the MM repo
         >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
-        >>> self = MM_VITEncoder(16, 16, 16, pretrained="upernet_vit-b16_mln_512x512_80k_ade20k")
+        >>> self = MM_VITEncoderDecoder(16, 16, 16, pretrained="upernet_vit-b16_mln_512x512_80k_ade20k")
         >>> x = torch.rand(2, 3, 16)
         >>> self.forward(x)
     """
 
     pretrained_fpath_shortnames = {
-        "upernet_vit-b16_mln_512x512_80k_ade20k": 
+        "upernet_vit-b16_mln_512x512_80k_ade20k":
             'https://download.openmmlab.com/mmsegmentation/v0.5/vit/upernet_vit-b16_mln_512x512_80k_ade20k/upernet_vit-b16_mln_512x512_80k_ade20k_20210624_130547-0403cee1.pth',
     }
 
     def __init__(
-        self, 
+        self,
         dim,
         queries_dim,
         logits_dim,
@@ -1174,8 +1176,8 @@ class MM_VITEncoder(nn.Module, BackboneEncoderDecoder):
         super().__init__()
 
         # if a short name is used, replace it with the appropriate full path
-        if pretrained in MM_VITEncoder.pretrained_fpath_shortnames.keys():
-            pretrained = MM_VITEncoder.pretrained_fpath_shortnames[pretrained]
+        if pretrained in MM_VITEncoderDecoder.pretrained_fpath_shortnames.keys():
+            pretrained = MM_VITEncoderDecoder.pretrained_fpath_shortnames[pretrained]
             pretrained = ub.grabdata(pretrained)
 
         kwargs = dict(
@@ -1218,7 +1220,7 @@ class MM_VITEncoder(nn.Module, BackboneEncoderDecoder):
         )
 
     def initialize_from_pretrained(self, fpath):
-        initializer = coerce_initializer(pretrained_fpath)
+        initializer = coerce_initializer(fpath)
         info = initializer.forward(self, verbose=0)  # NOQA
 
     def forward(self, x, mask=None, queries=None):

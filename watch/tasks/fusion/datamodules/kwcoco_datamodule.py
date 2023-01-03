@@ -631,8 +631,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             # - [ ] fine-grained probability of change
             # - [ ] per-frame semenatic segmentation
             # - [ ] detections with box results!
-            
-            if item is None: continue
+
+            if item is None:
+                continue
 
             if outputs is not None:
                 # Extract outputs only for this specific batch item.

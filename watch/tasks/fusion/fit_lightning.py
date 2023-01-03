@@ -7,7 +7,7 @@ from watch.utils import lightning_ext as pl_ext
 import pytorch_lightning as pl
 import ubelt as ub
 from torch import optim
-from typing import Optional, Any
+from typing import Any
 
 import yaml
 from jsonargparse import set_loader, set_dumper
@@ -19,6 +19,7 @@ from jsonargparse import set_loader, set_dumper
 def custom_yaml_load(stream):
     return yaml.load(stream, Loader=yaml.FullLoader)
 set_loader('yaml_unsafe_for_tuples', custom_yaml_load)
+
 
 def custom_yaml_dump(data):
     return yaml.dump(data, Dumper=yaml.Dumper)
@@ -63,7 +64,7 @@ class SmartLightningCLI(LightningCLI_Extension):
 
     @staticmethod
     def configure_optimizers(
-        lightning_module: pl.LightningModule, optimizer: optim.Optimizer, lr_scheduler = None
+        lightning_module: pl.LightningModule, optimizer: optim.Optimizer, lr_scheduler=None
     ) -> Any:
         """Override to customize the :meth:`~pytorch_lightning.core.module.LightningModule.configure_optimizers`
         method.
@@ -134,6 +135,7 @@ class SmartLightningCLI(LightningCLI_Extension):
             apply_on="instantiate")
 
         super().add_arguments_to_parser(parser)
+
 
 def main():
     SmartLightningCLI(

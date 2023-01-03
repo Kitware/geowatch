@@ -155,7 +155,7 @@ class WatchModuleMixins:
                     for v in modes.values():
                         flags = rng.rand(*v.shape[1:]) < nans
                         v[:, flags] = float('nan')
-                        
+
                         if time_index > 0:
                             frame['change_weights'][flags] = 0
                         frame['class_weights'][flags] = 0

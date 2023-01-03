@@ -133,27 +133,27 @@ class NanToNum(nn.Module):
 
 class ShapePreservingTransformerEncoder(nn.Module):
     def __init__(
-        self, 
-        token_dim, 
-        num_layers, 
-        # norm=None, 
-        # enable_nested_tensor=True, 
+        self,
+        token_dim,
+        num_layers,
+        # norm=None,
+        # enable_nested_tensor=True,
         batch_dim=0,
         chan_dim=1,
     ):
         super().__init__()
         # self.encoder = nn.TransformerEncoder(
         #     nn.TransformerEncoderLayer(
-        #         token_dim, 
-        #         8, 
-        #         dim_feedforward=512, 
-        #         dropout=0.1, 
-        #         activation="gelu", 
-        #         batch_first=True, 
+        #         token_dim,
+        #         8,
+        #         dim_feedforward=512,
+        #         dropout=0.1,
+        #         activation="gelu",
+        #         batch_first=True,
         #         norm_first=True,
-        #     ), 
-        #     num_layers, 
-        #     norm, 
+        #     ),
+        #     num_layers,
+        #     norm,
         #     enable_nested_tensor,
         # )
         self.encoder = TransformerEncoderDecoder(
@@ -182,7 +182,7 @@ class ShapePreservingTransformerEncoder(nn.Module):
 
         input_shape_code = " ".join(shape_codes)
         output_shape_code = " ".join([
-            "batch", 
+            "batch",
             f"({' '.join([code for code in shape_codes if code.startswith('shape_')])})",
             "chan",
         ])
@@ -196,7 +196,7 @@ class ShapePreservingTransformerEncoder(nn.Module):
         return src
 
 
-class ScaleAwarePositionalEncoder(metaclass = ABCMeta):
+class ScaleAwarePositionalEncoder(metaclass=ABCMeta):
     @abstractmethod
     def forward(self, mean, scale):
         pass
@@ -570,7 +570,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
         self.position_encoder = position_encoder
         # self.position_encoder = RandomFourierPositionalEncoder(3, 16)
-        position_dim = self.position_encoder.output_dim
+        # position_dim = self.position_encoder.output_dim
 
         self.backbone = backbone
         # self.backbone = TransformerEncoderDecoder(
@@ -657,19 +657,19 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                         #     num_layers=2,
                         # ),
                         ShapePreservingTransformerEncoder(
-                            token_dim, 
-                            num_layers=2, 
+                            token_dim,
+                            num_layers=2,
                             batch_dim=0,
                             chan_dim=1,
                         ),
-                        nn.Conv2d(token_dim, token_width*token_width*prop['channels'], 1, bias=False),
+                        nn.Conv2d(token_dim, token_width * token_width * prop['channels'], 1, bias=False),
                         Rearrange(
                             "batch (chan dh dw) height width -> batch chan (height dh) (width dw)",
                             dh=token_width, dw=token_width),
                     )
                 elif self.hparams.decoder == "simple_conv":
                     self.heads[head_name] = nn.Sequential(
-                        nn.Conv2d(token_dim, token_width*token_width*prop['channels'], 1, bias=False),
+                        nn.Conv2d(token_dim, token_width * token_width * prop['channels'], 1, bias=False),
                         Rearrange(
                             "batch (chan dh dw) height width -> batch chan (height dh) (width dw)",
                             dh=token_width, dw=token_width),
@@ -982,7 +982,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
             >>>         for frame_idx, (frame_pred, frame) in enumerate(zip(task_pred, example["frames"])):
             >>>             if (frame_idx == 0) and task_key.startswith("change"): continue
             >>>             assert frame_pred.shape[1:] == frame[task_key].shape, f"{frame_pred.shape} should equal {frame[task_key].shape} for task '{task_key}'"
-        
+
         Example:
             >>> from watch.tasks import fusion
             >>> from watch.tasks.fusion.architectures.transformer import MM_VITEncoder
@@ -1087,7 +1087,7 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
                         "(height width) chan -> chan height width",
                         height=height, width=width,
                     )
-                    tar_height, tar_width = target_size = frame["output_dims"]
+                    tar_height, tar_width = frame["output_dims"]
                     output = task_head(output[None])[0]
                     output = output[:, :tar_height, :tar_width]
 
@@ -1250,8 +1250,8 @@ class HeterogeneousModel(pl.LightningModule, WatchModuleMixins):
 
         # FIXME: why are we getting nones here?
         batch = [
-            ex 
-            for ex in batch 
+            ex
+            for ex in batch
             if (ex is not None)
             # and (len(ex["frames"]) > 0)
         ]

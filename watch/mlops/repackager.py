@@ -1,9 +1,12 @@
 import ubelt as ub
 import os
 import scriptconfig as scfg
+import yaml
+
+from watch.tasks.fusion import methods
 
 import importlib
-import yaml
+
 
 class RepackageConfig(scfg.DataConfig):
     r"""
@@ -175,7 +178,6 @@ def repackage(checkpoint_fpath, force=False, dry=False):
                         import shutil
                         shutil.copy(tmp_hparams_fpath, hackfix_hparams_fpath)
 
-                    import yaml
                     with open(hackfix_hparams_fpath, 'r') as file:
                         hacked_hparams = yaml.load(file, yaml.Loader)
                     hacked_hparams = ub.udict(hacked_hparams)
@@ -367,7 +369,6 @@ def repackage_single_checkpoint(checkpoint_fpath, package_fpath,
 
 @ub.memoize
 def load_meta(fpath):
-    import yaml
     with open(fpath, 'r') as file:
         data = yaml.safe_load(file)
     return data

@@ -11,7 +11,7 @@ DVC_DATA_DPATH = "/efs/work/greenwell/data/toy2_data_dvc"
 DVC_EXPT_DPATH = "/efs/work/greenwell/data/toy2_expt_dvc"
 
 with DAG(
-    dag_id=f"KIT_DEMO_TRAIN",
+    dag_id="KIT_DEMO_TRAIN",
     description="Kitware demo, starts a GPU node and then waits, allows user to login and examine the created node",
     params={
         # "dataset_name": Param(default="Drop4-BAS", type="string"),
@@ -37,7 +37,7 @@ with DAG(
     #         dedent(
     #             "{{ params.dataset_name }}",
     #             """
-    #             git clone 
+    #             git clone
     #             """
     #         )
     #     ],
