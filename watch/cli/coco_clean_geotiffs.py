@@ -45,6 +45,9 @@ def main(cmdline=1, **kwargs):
         kwargs = {
             'src': dset,
             'workers': 0,
+            'channels': 'B11',
+            'prefilter_channels': 'B11',
+            'min_region_size': 1,
         }
 
     Ignore:
@@ -81,9 +84,11 @@ def main(cmdline=1, **kwargs):
         'possible_nodata_values': possible_nodata_values,
         'prefilter_channels': prefilter_channels,
         'channels': channels,
+        'min_region_size': config['min_region_size'],
     }
 
-    coco_imgs = coco_dset.images().coco_images
+    coco_imgs = coco_dset.images().coco_images[0:2]
+
     for coco_img in ub.ProgIter(coco_imgs):
         coco_img.detach()
         job = jobs.submit(probe_image_issues, coco_img, **probe_kwargs)
@@ -141,7 +146,7 @@ def main(cmdline=1, **kwargs):
 
 
 def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=None,
-                       possible_nodata_values=None):
+                       possible_nodata_values=None, min_region_size=256):
     """
     Args:
         coco_img : the coco image to check
@@ -173,7 +178,8 @@ def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=N
     should_continue = len(prefilter_assets) == 0
     for obj in prefilter_assets:
         chan_summary = probe_channel(coco_img, obj, scale=scale,
-                                     possible_nodata_values=possible_nodata_values)
+                                     possible_nodata_values=possible_nodata_values,
+                                     min_region_size=min_region_size)
         if chan_summary['bad_values']:
             should_continue = True
         chan_summaries.append(chan_summary)
@@ -181,7 +187,8 @@ def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=N
     if should_continue:
         for obj in requested_assets:
             chan_summary = probe_channel(coco_img, obj, scale=scale,
-                                         possible_nodata_values=possible_nodata_values)
+                                         possible_nodata_values=possible_nodata_values,
+                                         min_region_size=min_region_size)
             chan_summaries.append(chan_summary)
 
     summary['chans'] = chan_summaries
@@ -190,7 +197,7 @@ def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=N
     return summary
 
 
-def probe_channel(coco_img, obj, scale=None, possible_nodata_values=None):
+def probe_channel(coco_img, obj, scale=None, possible_nodata_values=None, min_region_size=256):
     chan_summary = {
         'channels': obj['channels'],
     }
@@ -206,7 +213,8 @@ def probe_channel(coco_img, obj, scale=None, possible_nodata_values=None):
     # print(f'fpath={fpath}')
     # data = kwimage.imread(fpath, backend='gdal', nodata_method='float',
     #                       overview=overview)
-    chan_summary = probe_imdata(imdata, min_region_size=256, scale=scale,
+    chan_summary = probe_imdata(imdata, min_region_size=min_region_size,
+                                scale=scale,
                                 possible_nodata_values=possible_nodata_values)
     chan_summary['fpath'] = fpath
     return chan_summary
