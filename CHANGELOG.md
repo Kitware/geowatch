@@ -4,7 +4,10 @@ This changelog follows the specifications detailed in: [Keep a Changelog](https:
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html), although we have not yet reached a `1.0.0` release.
 
 
-## Version 0.3.8 - Target 2022-02-xx
+## Version 0.3.9 - Target 2023-01-xx
+
+
+## Version 0.3.8 - Target 2022-12-31
 
 ### Added
 * Initial scripts for new teamfeatures
@@ -12,10 +15,21 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * New QA band handling to support different QA encodings
 * New endpoints for ACC-2 data.
 * Merge in Nov21 Pseudolive branch
-* Add `quality_threshold` argument to the kwcoco video dataset, deprecate `use_cloudmask`.
-* Add `observable_threshold` which is similar to but not exactly the same as quality threshold
 * Add uniform time sampling and better multi-sampler support
 * KWcocoVideoDataLoader now has initial support for a bounding box task.
+* Port code for generating random region / site models into `metrics_demo`.
+* Add new CLI tool: `smartwatch split_videos` to break a kwcoco file into one file per video.
+* Add new **unfinished** CLI tool: `smartwatch coco_clean_geotiffs` to fix NODATA values directly in geotiffs
+* Add MultimodalTransformer option `multimodal_reduce=linear` for learned per-frame mode reductions.
+* Add KWcocoVideoDataLoader option `normalize_perframe` for robust per-batch-item normalization for specified channels.
+* Add KWcocoVideoDataLoader option `resample_invalid_frames` specifying the number of tries to resample bad frames.
+* Add KWcocoVideoDataLoader option `force_bad_frames` to help visualize bad frame resampling.
+* Add KWcocoVideoDataLoader option `mask_low_quality` to force cloud pixels to be nan.
+* Add KWcocoVideoDataLoader option `quality_threshold` to filter frames based on quality, deprecates `use_cloudmask`.
+* Add KWcocoVideoDataLoader option `observable_threshold` to filter frames based on nan content.
+* New `MultiscaleMask` class to make tracking accumulating unobservable regions easier in KWcocoVideoDataLoader
+* New `RobustParameterDict` class for sensor/channel specific parameters
+* Add predict option `drop_unused_frames` that removes frames with no predictions from the output kwcoco
 
 ### Fixed
 * Issue in visualize where frames might be ordered incorrectly.
@@ -23,8 +37,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Patch torchmetrics for old models
 * Fix corner-case crash in SC tracker.
 * Quality mask filtering was broken and is now using correct data.
-* The spectra script now correctly dequantizes kwcoco images.
+* The `smartwatch spectra` script now correctly dequantizes kwcoco images.
 * Issue in KWcocoVideoDataLoader where change labels were not computed correctly if the class task was not requested.
+* Fixed `smartwatch project_annotations` for new regions / sites from T&E
+* Fix bugs in `util_kwimage.colorize_label_image`
+* Fix bugs in `util_kwimage.find_samecolor_region`
 
 ### Changed
 * Consolidate monkey patches into a single subpackage.
@@ -32,6 +49,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * New arguments to fusion.predict to filter inputs / outputs.
 * Cleaned old code that was ported to kwimage
 * Faster samevalue region histogram approximation in data loader
+* Renamed `coco_intensity_histograms.py` to `coco_spectra.py`
+* Ported relevant code from `netharn` to reduce the dependency on it.
+* Moved MLOps-V2 code into an `old` submodule.
+* The KWcocoVideoDataLoader now defaults to transferring nan values from the
+  red channel to all other channels in a frame. Governed by experimental
+  `PROPOGATE_NAN_BANDS` hidden option.
+* Tensorboard visualization now adds a third smoothed line (at 0.95 smoothing) by default.
+
+
+### Documentation
+* More docs on `smartwatch find_dvc` in the docstring and `docs/using_smartwatch_dvc.rst`
+* Added `examples/feature_fusion_tutorial.sh` describing how to train/evaluate
+  a fusion model with team features.
+
 
 
 ## Version 0.3.7 - Target 2022-11-21
