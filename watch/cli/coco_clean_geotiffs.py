@@ -24,7 +24,7 @@ class CleanGeotiffConfig(scfg.DataConfig):
         COCO_FPATH="$DVC_DATA_DPATH/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/data.kwcoco.json"
 
         COCO_FPATH="$DVC_DATA_DPATH/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/imgonly-KR_R001.kwcoco.json"
-        python -m watch.cli.coco_clean_geotiffs \
+        smartwatch clean_geotiffs \
             --src "$COCO_FPATH" \
             --channels="red|green|blue|nir|swir16|swir22" \
             --prefilter_channels="red" \
@@ -163,6 +163,8 @@ def main(cmdline=1, **kwargs):
 
     mprog = MultiProgress()
     with mprog:
+        mprog.update_info('Looking for geotiff issues')
+
         for coco_img in mprog.new(coco_imgs, desc='Submit probe jobs'):
             coco_img.detach()
             jobs.submit(probe_image_issues, coco_img, **probe_kwargs)
@@ -177,6 +179,17 @@ def main(cmdline=1, **kwargs):
             num_asset_issues = 0
             num_images_issues = 0
             seen_bad_values = set()
+
+            mprog.update_info(ub.codeblock(
+                f'''
+                Discovered Issues
+                -----------------
+                Found num_images_issues={num_images_issues}
+                Found num_asset_issues={num_asset_issues}
+
+                seen_bad_values={seen_bad_values}
+                '''
+            ))
 
             for image_summary in summaries:
                 if len(image_summary['bad_values']):
