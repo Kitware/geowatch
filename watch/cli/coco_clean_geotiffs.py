@@ -14,7 +14,9 @@ class CleanGeotiffConfig(scfg.DataConfig):
     Replaces large contiguous regions of specific same-valued pixels as nodata.
     """
     src = scfg.Value(None, help='input coco dataset')
+
     nodata_value = scfg.Value(-9999, help='the real nodata value to use')
+
     workers = scfg.Value(0, help='number of workers')
 
     channels = scfg.Value('red|green|blue|nir|swir16|swir22', help=ub.paragraph(
@@ -63,7 +65,7 @@ def main(cmdline=1, **kwargs):
         >>>     'channels': 'B11',
         >>>     'prefilter_channels': 'B11',
         >>>     'min_region_size': 32,
-        >>>     'correct_nodata_value': 2,  # because toydata is uint16
+        >>>     'nodata_value': 2,  # because toydata is uint16
         >>> }
         >>> cmdline = 0
         >>> main(cmdline=cmdline, **kwargs)
@@ -93,7 +95,9 @@ def main(cmdline=1, **kwargs):
         from watch.cli.coco_clean_geotiffs import *  # NOQA
         dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
         coco_fpath = dvc_dpath / 'Drop4-BAS' / 'data_vali.kwcoco.json'
+        coco_fpath = dvc_dpath / 'Drop4-BAS' / 'data_train.kwcoco.json'
         # coco_fpath = dvc_dpath / 'Drop4-BAS' / 'combo_train_I2.kwcoco.json'
+        cmdline = 0
         kwargs = {'src': coco_fpath, 'workers': 'avail'}
     """
     from watch.utils import util_globals
@@ -125,10 +129,10 @@ def main(cmdline=1, **kwargs):
 
     coco_imgs = coco_dset.images().coco_images
 
-    for coco_img in ub.ProgIter(coco_imgs):
+    for coco_img in ub.ProgIter(coco_imgs, desc='Submit jobs'):
         coco_img.detach()
-        job = jobs.submit(probe_image_issues, coco_img, **probe_kwargs)
-        job.result()
+        jobs.submit(probe_image_issues, coco_img, **probe_kwargs)
+        # job.result()
 
     def collect_jobs(jobs):
         for job in jobs.as_completed(desc='Collect jobs'):
@@ -143,7 +147,7 @@ def main(cmdline=1, **kwargs):
                         asset_summary['coco_img'] = image_summary['coco_img']
                         yield asset_summary
 
-    EAGER = 1
+    EAGER = 0
 
     summaries = collect_jobs(jobs)
     if EAGER:
@@ -157,7 +161,7 @@ def main(cmdline=1, **kwargs):
         total = len(coco_imgs)
 
     if 1:
-        correct_nodata_value = config['correct_nodata_value']
+        correct_nodata_value = config['nodata_value']
         for asset_summary in ub.ProgIter(needs_fix, total=total, desc='fixing'):
             fix_geotiff_ondisk(asset_summary,
                                correct_nodata_value=correct_nodata_value)

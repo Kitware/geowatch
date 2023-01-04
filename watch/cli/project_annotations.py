@@ -113,24 +113,24 @@ def main(cmdline=False, **kwargs):
     Ignore:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.cli.project_annotations import *  # NOQA
+        >>> import watch
         >>> from watch.utils import util_data
         >>> import tempfile
         >>> dvc_dpath = util_data.find_smart_dvc_dpath()
-        >>> #kwcoco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
-        >>> #kwcoco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
-        >>> kwcoco_fpath = dvc_dpath / 'Aligned-Drop2-TA1-2022-03-07/data.kwcoco.json'
+        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
         >>> dpath = ub.Path.appdir('watch/tests/project_annots').ensuredir()
         >>> cmdline = False
         >>> output_fpath = dpath / 'data.kwcoco.json'
         >>> viz_dpath = (dpath / 'viz').ensuredir()
         >>> kwargs = {
-        >>>     'src': kwcoco_fpath,
+        >>>     'src': coco_fpath,
         >>>     'dst': output_fpath,
         >>>     'viz_dpath': viz_dpath,
         >>>     'site_models': dvc_dpath / 'annotations/site_models',
         >>>     'region_models': dvc_dpath / 'annotations/region_models',
         >>> }
-        >>> main(**kwargs)
+        >>> main(cmdline=cmdline, **kwargs)
     """
     import geopandas as gpd  # NOQA
     from watch.utils import util_gis

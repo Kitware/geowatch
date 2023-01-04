@@ -93,8 +93,13 @@ python -m watch.mlops.schedule_evaluation \
             bas_pxl.time_sampling: auto
             bas_poly.thresh:
                 - 0.07
+                - 0.08
+                - 0.09
                 - 0.1
+                - 0.11
+                - 0.12
                 - 0.13
+                - 0.14
                 - 0.15
             bas_poly.moving_window_size: null
             bas_pxl.enabled: 1
