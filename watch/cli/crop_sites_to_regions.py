@@ -136,7 +136,7 @@ def main(cmdline=False, **kwargs):
                 if config['force_multipolygon']:
                     cropped_site.loc[cropped_site['type'] == 'observation', 'geometry'] =\
                         cropped_site[cropped_site['type'] == 'observation']['geometry'].apply(
-                            lambda x: MultiPolygon((x,)))
+                            lambda x: MultiPolygon((x,)) if not isinstance(x, MultiPolygon) else x)
 
                 if 'predicted_phase_transition_date' in cropped_site:
                     cropped_site['predicted_phase_transition_date'] =\
