@@ -30,7 +30,7 @@ class CleanGeotiffConfig(scfg.DataConfig):
             --prefilter_channels="red" \
             --min_region_size=256 \
             --nodata_value=-9999 \
-            --workers="max(2,avail)" \
+            --workers="min(2,avail)" \
             --scale=0.25 \
             --dry=True
 
@@ -41,7 +41,7 @@ class CleanGeotiffConfig(scfg.DataConfig):
             --prefilter_channels="red" \
             --min_region_size=256 \
             --nodata_value=-9999 \
-            --workers="max(2, avail)" \
+            --workers="min(2,avail)" \
             --dry=True
     """
     src = scfg.Value(None, help='input coco dataset')
