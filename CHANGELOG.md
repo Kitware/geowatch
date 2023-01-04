@@ -8,6 +8,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 * Add new CLI tool: `smartwatch coco_clean_geotiffs` to fix NODATA values directly in geotiffs
+* New `util_prog.py` with experimental `MultiProgress` class to generalize ProgIter and rich.
 
 
 ## Version 0.3.8 - Target 2022-12-31
