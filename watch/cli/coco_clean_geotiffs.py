@@ -23,7 +23,6 @@ class CleanGeotiffConfig(scfg.DataConfig):
         # This can be done at a smaller scale for speed.
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         COCO_FPATH="$DVC_DATA_DPATH/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/data.kwcoco.json"
-        COCO_FPATH="$DVC_DATA_DPATH/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/imganns-AE_R001.kwcoco.json"
         smartwatch clean_geotiffs \
             --src "$COCO_FPATH" \
             --channels="red|green|blue|nir|swir16|swir22" \
@@ -35,14 +34,14 @@ class CleanGeotiffConfig(scfg.DataConfig):
             --dry=True
 
         # Then execute a real run at full scale
-        smartwatch clean_geotiffs \
+        python -m watch.cli.coco_clean_geotiffs \
             --src "$COCO_FPATH" \
             --channels="red|green|blue|nir|swir16|swir22" \
             --prefilter_channels="red" \
             --min_region_size=256 \
             --nodata_value=-9999 \
             --workers="min(2,avail)" \
-            --dry=True
+            --dry=False
     """
     src = scfg.Value(None, help='input coco dataset')
 
