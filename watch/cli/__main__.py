@@ -28,6 +28,7 @@ def main(cmdline=True, **kw):
         'kwcoco_to_geojson',
         'run_metrics_framework',
         'torch_model_stats',
+        'coco_clean_geotiffs',
         # 'mlops_cli',
         'gifify',
     ]
@@ -64,6 +65,7 @@ def main(cmdline=True, **kw):
         'watch.cli.coco_spectra': ['spectra', 'intensity_histograms'],
         # 'watch.cli.mlops_cli': ['mlops'],
         'watch.cli.run_metrics_framework': ['iarpa_eval'],
+        'watch.cli.coco_clean_geotiffs': ['clean_geotiffs'],
         'watch.cli.kwcoco_to_geojson': [],
         'watch.cli.find_dvc': ['dvcdir'],
         'watch.cli.gifify': ['animate'],

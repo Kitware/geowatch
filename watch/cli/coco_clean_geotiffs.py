@@ -22,6 +22,8 @@ class CleanGeotiffConfig(scfg.DataConfig):
         # It is a good idea to do a dry run first to check for issues
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         COCO_FPATH="$DVC_DATA_DPATH/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/data.kwcoco.json"
+
+        COCO_FPATH="$DVC_DATA_DPATH/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/imgonly-KR_R001.kwcoco.json"
         python -m watch.cli.coco_clean_geotiffs \
             --src "$COCO_FPATH" \
             --channels="red|green|blue|nir|swir16|swir22" \
@@ -60,6 +62,9 @@ class CleanGeotiffConfig(scfg.DataConfig):
     nodata_value = scfg.Value(-9999, help='the real nodata value to use')
 
     dry = scfg.Value(False, help='if True, only do a dry run. Report issues but do not fix them')
+
+
+__config__ = CleanGeotiffConfig
 
 
 def main(cmdline=1, **kwargs):
@@ -752,3 +757,10 @@ def draw_channel_summary(coco_img, asset_summary):
         import kwplot
         kwplot.imshow(canvas)
     return canvas
+
+if __name__ == '__main__':
+    """
+    CommandLine:
+        python ~/code/watch/watch/cli/coco_clean_geotiffs.py
+    """
+    main()
