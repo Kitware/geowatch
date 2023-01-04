@@ -32,7 +32,7 @@ class MultiProgress:
     Manage multiple progress bars, either with rich or ProgIter.
 
     Example:
-        >>> from watch.utils.util_prog import *  # NOQA
+        >>> from watch.utils.util_progress import *  # NOQA
         >>> multi_prog = MultiProgress(use_rich=0)
         >>> with multi_prog:
         >>>     for i in multi_prog.new(range(100), desc='outer loop'):
