@@ -8,7 +8,7 @@ from watch.utils import util_kwimage
 
 
 class CleanGeotiffConfig(scfg.DataConfig):
-    """
+    r"""
     A preprocessing step for geotiff datasets.
 
     Replaces large contiguous regions of specific same-valued pixels as nodata.
@@ -17,6 +17,18 @@ class CleanGeotiffConfig(scfg.DataConfig):
         This is a destructive operation and overwrites the geotiff image data
         inplace. Make a copy of your dataset if there is any chance you need to
         go back. The underlying kwcoco file is not modified.
+
+    Usage:
+        # It is a good idea to do a dry run first to check for issues
+        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        COCO_FPATH="$DVC_DATA_DPATH/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/data.kwcoco.json"
+        python -m watch.cli.coco_clean_geotiffs \
+            --src "$COCO_FPATH" \
+            --channels="red|green|blue|nir|swir16|swir22" \
+            --prefilter_channels="red" \
+            --min_region_size=256 \
+            --nodata_value=-9999 \
+            --dry=True
     """
     src = scfg.Value(None, help='input coco dataset')
 
@@ -114,9 +126,13 @@ def main(cmdline=1, **kwargs):
     from watch.utils import util_globals
 
     config = CleanGeotiffConfig.legacy(cmdline=cmdline, data=kwargs)
+    print('config = {}'.format(ub.urepr(dict(config), nl=1)))
+
+    print('Loading dataset')
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
 
     workers = util_globals.coerce_num_workers(config['workers'])
+    print('workers = {}'.format(ub.urepr(workers, nl=1)))
     jobs = ub.JobPool(mode='process', max_workers=workers)
 
     # channels = kwcoco.ChannelSpec.coerce('red')
