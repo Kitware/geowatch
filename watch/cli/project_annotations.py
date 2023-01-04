@@ -4,7 +4,7 @@ Assigns geospace annotation to image pixels and frames
 
 CommandLine:
     # Update a dataset with new annotations
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
 
     # You dont need to run this, but if you plan on running the project
     # annotations script multiple times, preloading this work will make it

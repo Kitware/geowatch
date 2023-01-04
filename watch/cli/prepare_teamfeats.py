@@ -45,7 +45,7 @@ Ignore:
 Ignore:
 
     # For Drop5
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
     DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt')
     # BUNDLE_DPATH=$DVC_DATA_DPATH/Aligned-Drop5-2022-10-11-c30-TA1-S2-L8-WV-PD-ACC
     # KWCOCO_FPATH=$BUNDLE_DPATH/data.kwcoco.json
@@ -71,7 +71,7 @@ Ignore:
     "
 
     # Drop 4
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
     BUNDLE_DPATH=$DVC_DATA_DPATH/Aligned-Drop4-2022-08-08-TA1-S2-L8-ACC
     KWCOCO_FPATH_PAT=$BUNDLE_DPATH/[KLNPUBAC]*_[RC]*0[1234].kwcoco.json
     ls $KWCOCO_FPATH_PAT
@@ -101,7 +101,7 @@ Ignore:
     # Drop 4 SC
 
 
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=ssd)
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
     BUNDLE_DPATH=$DVC_DATA_DPATH/Drop4-SC
     #KWCOCO_FPATH_PAT=$BUNDLE_DPATH/data_vali.kwcoco.json
     KWCOCO_FPATH_PAT=$BUNDLE_DPATH/data_train.kwcoco.json
