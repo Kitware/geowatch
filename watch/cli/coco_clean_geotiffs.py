@@ -9,13 +9,16 @@ from watch.utils import util_kwimage
 
 class CleanGeotiffConfig(scfg.DataConfig):
     """
-    A preprocessing step for a geotiff dataset that corrects several issues.
+    A preprocessing step for geotiff datasets.
 
     Replaces large contiguous regions of specific same-valued pixels as nodata.
+
+    Note:
+        This is a destructive operation and overwrites the geotiff image data
+        inplace. Make a copy of your dataset if there is any chance you need to
+        go back. The underlying kwcoco file is not modified.
     """
     src = scfg.Value(None, help='input coco dataset')
-
-    nodata_value = scfg.Value(-9999, help='the real nodata value to use')
 
     workers = scfg.Value(0, help='number of workers')
 
@@ -42,7 +45,9 @@ class CleanGeotiffConfig(scfg.DataConfig):
         candidate.
         '''))
 
-    correct_nodata_value = -9999
+    nodata_value = scfg.Value(-9999, help='the real nodata value to use')
+
+    dry = scfg.Value(False, help='if True, only do a dry run. Report issues but do not fix them')
 
 
 def main(cmdline=1, **kwargs):
@@ -71,6 +76,9 @@ def main(cmdline=1, **kwargs):
         >>>     'nodata_value': 2,  # because toydata is uint16
         >>> }
         >>> cmdline = 0
+        >>> # Do a dry run first
+        >>> main(cmdline=cmdline, **kwargs, dry=True)
+        >>> # Then a real run.
         >>> main(cmdline=cmdline, **kwargs)
         >>> coco_img1 = orig_dset.images().coco_images[0]
         >>> coco_img2 = dset.coco_image(coco_img1.img['id'])
@@ -132,42 +140,63 @@ def main(cmdline=1, **kwargs):
 
     coco_imgs = coco_dset.images().coco_images
 
-    for coco_img in ub.ProgIter(coco_imgs, desc='Submit jobs'):
-        coco_img.detach()
-        jobs.submit(probe_image_issues, coco_img, **probe_kwargs)
-        # job.result()
+    mprog = MultiProgress()
+    with mprog:
+        for coco_img in mprog.new(coco_imgs, desc='Submit probe jobs'):
+            coco_img.detach()
+            jobs.submit(probe_image_issues, coco_img, **probe_kwargs)
 
-    def collect_jobs(jobs):
-        for job in jobs.as_completed(desc='Collect jobs'):
-            image_summary = job.result()
-            yield image_summary
+        def collect_jobs(jobs):
+            for job in mprog.new(jobs.as_completed(), total=len(jobs), desc='Collect probe jobs'):
+                image_summary = job.result()
+                yield image_summary
 
-    def filter_fixable(summaries):
-        for image_summary in summaries:
-            if len(image_summary['bad_values']):
-                for asset_summary in image_summary['chans']:
-                    if asset_summary['bad_values']:
-                        asset_summary['coco_img'] = image_summary['coco_img']
-                        yield asset_summary
+        def filter_fixable(summaries):
 
-    EAGER = 0
+            num_asset_issues = 0
+            num_images_issues = 0
+            seen_bad_values = set()
 
-    summaries = collect_jobs(jobs)
-    if EAGER:
-        summaries = list(summaries)
+            for image_summary in summaries:
+                if len(image_summary['bad_values']):
+                    num_images_issues += 1
+                    for asset_summary in image_summary['chans']:
+                        if asset_summary['bad_values']:
+                            asset_summary['coco_img'] = image_summary['coco_img']
+                            seen_bad_values.update(asset_summary['bad_values'])
+                            num_asset_issues += 1
+                            mprog.update_info(ub.codeblock(
+                                f'''
+                                Discovered Issues
+                                -----------------
+                                Found num_images_issues={num_images_issues}
+                                Found num_asset_issues={num_asset_issues}
 
-    needs_fix = filter_fixable(summaries)
-    if EAGER:
-        needs_fix = list(needs_fix)
-        total = len(needs_fix)
-    else:
-        total = len(coco_imgs)
+                                seen_bad_values={seen_bad_values}
+                                '''
+                            ))
+                            yield asset_summary
 
-    if 1:
-        correct_nodata_value = config['nodata_value']
-        for asset_summary in ub.ProgIter(needs_fix, total=total, desc='fixing'):
-            fix_geotiff_ondisk(asset_summary,
-                               correct_nodata_value=correct_nodata_value)
+        EAGER = 0
+
+        summaries = collect_jobs(jobs)
+        if EAGER:
+            summaries = list(summaries)
+
+        needs_fix = filter_fixable(summaries)
+        if EAGER:
+            needs_fix = list(needs_fix)
+            total = len(needs_fix)
+        else:
+            total = len(coco_imgs)
+
+        if not config['dry']:
+            correct_nodata_value = config['nodata_value']
+            for asset_summary in mprog.new(needs_fix, total=total, desc='Cleaning identified issues'):
+                fix_geotiff_ondisk(asset_summary,
+                                   correct_nodata_value=correct_nodata_value)
+        else:
+            _ = list(needs_fix)
 
     # for k, g in bad_groups.items():
     #     if all([p[2] == [0] for p in g])
@@ -201,6 +230,100 @@ def main(cmdline=1, **kwargs):
     #         chan_canvas = draw_channel_summary(coco_img, asset_summary)
     #         kwplot.imshow(chan_canvas, doclf=1)
     #         xdev.InteractiveIter.draw()
+
+
+class RichProgIter:
+    """
+    Ducktypes ProgIter
+    """
+    def __init__(self, prog_manager, iterable, total=None, desc=None):
+        self.prog_manager = prog_manager
+        self.iterable = iterable
+        if total is None:
+            try:
+                total = len(iterable)
+            except Exception:
+                ...
+        self.task_id = self.prog_manager.add_task(desc, total=total)
+
+    def __iter__(self):
+        for item in self.iterable:
+            yield item
+            self.prog_manager.update(self.task_id, advance=1)
+        task = self.prog_manager._tasks[self.task_id]
+        if task.total is None:
+            self.prog_manager.update(self.task_id, total=task.completed)
+
+
+class MultiProgress:
+    """
+    Manage multiple progress bars, either with rich or ProgIter.
+
+    Example:
+        >>> from watch.cli.coco_clean_geotiffs import *  # NOQA
+        >>> multi_prog = MultiProgress(use_rich=0)
+        >>> with multi_prog:
+        >>>     for i in multi_prog.new(range(100), desc='outer loop'):
+        >>>         for i in multi_prog.new(range(100), desc='inner loop'):
+        >>>             pass
+        >>> #
+        >>> self = multi_prog = MultiProgress(use_rich=1)
+        >>> with multi_prog:
+        >>>     for i in multi_prog.new(range(10), desc='outer loop'):
+        >>>         for i in multi_prog.new(iter(range(1000)), desc='inner loop'):
+        >>>             pass
+    """
+
+    def __init__(self, use_rich=1):
+        self.use_rich = use_rich
+        self.sub_progs = []
+        if self.use_rich:
+            self.setup_rich()
+
+    def new(self, iterable, total=None, desc=None):
+        self.prog_iters = []
+        if self.use_rich:
+            prog = RichProgIter(
+                prog_manager=self.prog_manager, iterable=iterable, total=total,
+                desc=desc)
+        else:
+            prog = ub.ProgIter(iterable, total=total, desc=desc)
+        self.prog_iters.append(prog)
+        return prog
+
+    def setup_rich(self):
+        from rich.console import Group
+        from rich.panel import Panel
+        from rich.live import Live
+        import rich
+        import rich.progress
+        from rich.progress import (BarColumn, Progress, TextColumn)
+        self.prog_manager = Progress(
+            TextColumn("{task.description}"),
+            BarColumn(),
+            rich.progress.MofNCompleteColumn(),
+            # "[progress.percentage]{task.percentage:>3.0f}%",
+            rich.progress.TimeRemainingColumn(),
+            rich.progress.TimeElapsedColumn(),
+        )
+        self.info_panel = Panel('')
+        self.progress_group = Group(
+            self.info_panel,
+            self.prog_manager,
+        )
+        self.live_context = Live(self.progress_group)
+
+    def update_info(self, text):
+        if self.use_rich:
+            self.info_panel.renderable = text
+
+    def __enter__(self):
+        if self.use_rich:
+            return self.live_context.__enter__()
+
+    def __exit__(self, *args, **kw):
+        if self.use_rich:
+            return self.live_context.__exit__(*args, **kw)
 
 
 def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=None,
@@ -386,9 +509,18 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
     Attempts to preserve all other metadata, but this is not guarenteed or
     always possible.
 
+    Args:
+        asset_summary (Dict): an item from :func:`probe_asset`.
+
+        correct_nodata_value (int): the nodata value to use in the
+            modified geotiff.
+
     Assumptions:
         * The input image uses AVERAGE overview resampling
         * The input image is a tiled geotiff (ideally a COG)
+
+    TODO:
+        - [ ] Can restructure this as a more general context manager.
 
     Example:
         >>> from watch.cli.coco_clean_geotiffs import *  # NOQA
@@ -469,13 +601,11 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
     import tempfile
     fpath = ub.Path(asset_summary['fpath'])
 
+    # We will write a modified version to a temporay file and then overwrite
+    # the destination file to avoid race conditions.
     tmp_fpath = ub.Path(tempfile.mktemp(
         dir=fpath.parent, prefix='.tmp.' + fpath.stem, suffix='.tiff'))
-
     assert tmp_fpath.parent.exists()
-
-    # We will overwrite this data.
-    # correct_nodata_value = -9999
 
     # Assume average overview resampling, there does not seem to be standard
     # way that a geotiff encodes what algorithm was used.
@@ -485,7 +615,6 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
     src_dset = util_gdal.GdalDataset.open(os.fspath(fpath))
     orig_driver_name = src_dset.GetDriver().ShortName
     assert orig_driver_name == 'GTiff'
-    # assert src_dset.RasterCount == 1, 'only works on 1 band for now'
 
     ### Copy the source data to memory and modify it
     driver1 = gdal.GetDriverByName(str('MEM'))
@@ -519,19 +648,24 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
             band.GetOverviewCount(),
         ))
 
-    # FIXME: this seems to break
-    if 1:
-        blocksize = (256, 256)
-        num_overviews = 2
+    if bandmeta_candidates:
+        assert ub.allsame(bandmeta_candidates), (
+            'We expect input bands to have the same blocksize')
+        blocksize = bandmeta_candidates[0][0]
+        num_overviews = bandmeta_candidates[0][1]
     else:
-        if bandmeta_candidates:
-            assert ub.allsame(bandmeta_candidates)
-            blocksize = bandmeta_candidates[0][0]
-            num_overviews = bandmeta_candidates[0][1]
-        else:
-            src_band = src_dset.GetRasterBand(1)
-            blocksize = src_band.GetBlockSize()
-            num_overviews = src_band.GetOverviewCount()
+        src_band = src_dset.GetRasterBand(1)
+        blocksize = src_band.GetBlockSize()
+        num_overviews = src_band.GetOverviewCount()
+
+    # FIXME: the returned band size from the gdal calls doesnt seem correct.
+    # For multi-band images I get 256x1 blocksizes when gdalinfo reports
+    # 256,256. For now just always use a 256x256 blocksize and at least two
+    # overviews.
+    HACK_FIX_BAND_METADATA = True
+    if HACK_FIX_BAND_METADATA:
+        blocksize = (256, 256)
+        num_overviews = max(num_overviews, 2)
 
     ### Rebuild overviews
     overviewlist = (2 ** np.arange(1, num_overviews + 1)).tolist()
@@ -567,56 +701,7 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
     driver2 = None
 
     assert ub.Path(tmp_fpath).exists()
-    # ub.Path(tmp_fpath).move(fpath)
     os.rename(tmp_fpath, fpath)
-
-
-def mwe():
-    fpath = 'test.tif'
-    new_fpath = 'result.tif'
-
-    correct_nodata_value = -9999
-
-    from osgeo import gdal
-    src_dset = gdal.Open(fpath, gdal.GA_ReadOnly)
-    assert src_dset.RasterCount == 1
-    src_band = src_dset.GetRasterBand(1)
-    num_overviews = src_band.GetOverviewCount()
-
-    driver1 = gdal.GetDriverByName(str('MEM'))
-    copy1 = driver1.CreateCopy(str(''), src_dset)
-    src_dset.FlushCache()
-    src_dset = None
-
-    # Modify the pixel contents
-    band = copy1.GetRasterBand(1)
-    band_data = band.ReadAsArray()
-    band_data[band_data == 0] = correct_nodata_value
-    curr_nodat_value = band.GetNoDataValue()
-    band.WriteArray(band_data)
-    if curr_nodat_value != correct_nodata_value:
-        band.SetNoDataValue(correct_nodata_value)
-
-    overviewlist = (2 ** np.arange(1, num_overviews + 1)).tolist()
-    copy1.BuildOverviews('AVERAGE', overviewlist)
-
-    _options = [
-        'BIGTIFF=YES',
-        'TILED=YES',
-        'BLOCKXSIZE={}'.format(256),
-        'BLOCKYSIZE={}'.format(256),
-    ]
-    _options += ['COMPRESS={}'.format('DEFLATE')]
-    _options.append('COPY_SRC_OVERVIEWS=YES')
-
-    # Flush the in-memory dataset to an on-disk GeoTiff
-    driver1 = None
-    driver2 = gdal.GetDriverByName(str('GTiff'))
-    copy2 = driver2.CreateCopy(new_fpath, copy1, options=_options)
-    copy2.FlushCache()
-    copy1 = None
-    copy2 = None  # NOQA
-    driver2 = None
 
 
 def draw_channel_summary(coco_img, asset_summary):
@@ -651,70 +736,3 @@ def draw_channel_summary(coco_img, asset_summary):
         import kwplot
         kwplot.imshow(canvas)
     return canvas
-
-
-def test_gdal_edit_data():
-    import kwimage
-    import numpy as np
-    data = (np.random.rand(256, 256) * 100).astype(np.int16)
-    data[20:30, 20:80] = -9999
-    data[90:120, 30:50] = 0
-    src_fpath = 'test.tif'
-    dst_fpath = 'result.tif'
-    kwimage.imwrite(src_fpath, data, backend='gdal', nodata_value=-9999, overviews=4)
-
-    nodata_value = -9999
-    src_fpath =  '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop4-BAS/./US_R007/L8/affine_warp/crop_20151126T160000Z_N34.190052W083.941277_N34.327136W083.776956_L8_0/crop_20151126T160000Z_N34.190052W083.941277_N34.327136W083.776956_L8_0_nir.tif'
-    src_fpath = '/home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop4-BAS/CN_C001/L8/affine_warp/crop_20200823T020000Z_N30.114986E119.908343_N30.593740E120.466058_L8_0/crop_20200823T020000Z_N30.114986E119.908343_N30.593740E120.466058_L8_0_swir22.tif'
-    data = kwimage.imread(src_fpath)
-    from watch.utils import util_gdal
-    dset = util_gdal.GdalDataset.open(src_fpath)
-    self = dset
-
-    proj = self.GetProjection()
-    transform = self.GetGeoTransform()
-    crs = self.GetSpatialRef()  # NOQA
-
-    overviews = self.get_overview_info()[0]
-
-    new_data = data.copy()
-    new_data[new_data == 0] = nodata_value
-
-    r = util_gdal.GdalDataset.open(dst_fpath)  # NOQA
-
-    kwimage.imwrite(dst_fpath, data, transform=transform, crs=proj, nodata_value=nodata_value, overviews=overviews)
-
-    import rasterio as rio
-    src = rio.open(src_fpath, 'r')
-    dst = rio.open(dst_fpath, 'w', **src.profile)
-
-    with rio.open(src_fpath, 'r') as src:
-        src.profile
-        new = src.read()
-        mask = (new == 0)
-        nodata_value = -9999
-        new[mask] = nodata_value
-        with rio.open(dst_fpath, 'w', **src.profile) as dst:
-            dst.write(new)
-
-    # foo = kwimage.imread('result.tif')
-    """
-    gdal_calc.py -A test.tif --outfile=result.tif --calc="(-9999 * (A == 0)) + ((A != 0) * A)"
-    echo "----"
-    gdalinfo test.tif
-    echo "----"
-    gdalinfo result.tif
-
-    gdalinfo /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop4-BAS/./US_R007/L8/affine_warp/crop_20151126T160000Z_N34.190052W083.941277_N34.327136W083.776956_L8_0/crop_20151126T160000Z_N34.190052W083.941277_N34.327136W083.776956_L8_0_nir.tif
-
-
-    gdalinfo /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop4-SC/BR_R005_0036_box/WV/affine_warp/crop_20200220T130000Z_S23.434718W046.499921_S23.424402W046.492905_WV_0/crop_20200220T130000Z_S23.434718W046.499921_S23.424402W046.492905_WV_0_blue.tif
-
-
-    gdalinfo /home/joncrall/remote/toothbrush/data/dvc-repos/smart_data_dvc-ssd/Drop4-BAS/CN_C001/L8/affine_warp/crop_20200823T020000Z_N30.114986E119.908343_N30.593740E120.466058_L8_0/crop_20200823T020000Z_N30.114986E119.908343_N30.593740E120.466058_L8_0_swir22.tif
-
-    """
-    # foo = kwimage.imread('result.tif')
-    # band = z.GetRasterBand(1)
-    # from osgeo import gdal
-    # info = gdal.Info(z, format='json')
