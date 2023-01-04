@@ -23,7 +23,7 @@ class CleanGeotiffConfig(scfg.DataConfig):
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         COCO_FPATH="$DVC_DATA_DPATH/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/data.kwcoco.json"
 
-        COCO_FPATH="$DVC_DATA_DPATH/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/imgonly-KR_R001.kwcoco.json"
+        COCO_FPATH="$DVC_DATA_DPATH/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/imganns-AE_R001.kwcoco.json"
         smartwatch clean_geotiffs \
             --src "$COCO_FPATH" \
             --channels="red|green|blue|nir|swir16|swir22" \
