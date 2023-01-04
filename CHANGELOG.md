@@ -6,6 +6,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## Version 0.3.9 - Target 2023-01-xx
 
+### Added
+* Add new CLI tool: `smartwatch coco_clean_geotiffs` to fix NODATA values directly in geotiffs
+
 
 ## Version 0.3.8 - Target 2022-12-31
 
@@ -19,7 +22,6 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * KWcocoVideoDataLoader now has initial support for a bounding box task.
 * Port code for generating random region / site models into `metrics_demo`.
 * Add new CLI tool: `smartwatch split_videos` to break a kwcoco file into one file per video.
-* Add new **unfinished** CLI tool: `smartwatch coco_clean_geotiffs` to fix NODATA values directly in geotiffs
 * Add MultimodalTransformer option `multimodal_reduce=linear` for learned per-frame mode reductions.
 * Add KWcocoVideoDataLoader option `normalize_perframe` for robust per-batch-item normalization for specified channels.
 * Add KWcocoVideoDataLoader option `resample_invalid_frames` specifying the number of tries to resample bad frames.

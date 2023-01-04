@@ -52,10 +52,11 @@ def main(cmdline=True, **kwargs):
         >>> expt_dvc_dpath = watch.find_dvc_dpath(tags='phase2_expt', hardware='auto')
         >>> cmdline = 0
         >>> kwargs = {
-        >>>     # 'root_dpath': expt_dvc_dpath / '_testpipe',
+        >>>     'root_dpath': expt_dvc_dpath / '_testpipe',
+        >>>     'pipeline': 'bas',
         >>>     # 'pipeline': 'joint_bas_sc_nocrop',
-        >>>     'root_dpath': expt_dvc_dpath / '_testsc',
-        >>>     'pipeline': 'sc',
+        >>>     # 'root_dpath': expt_dvc_dpath / '_testsc',
+        >>>     #'pipeline': 'sc',
         >>> }
         >>> ## Execute
         >>> main(cmdline=cmdline, **kwargs)
@@ -70,10 +71,27 @@ def main(cmdline=True, **kwargs):
         eval_type_to_results = build_tables(config)
         cacher.save(eval_type_to_results)
 
-    eval_type_to_aggregator = analyze_tables(eval_type_to_results)
+    eval_type_to_aggregator = build_aggregators(eval_type_to_results)
 
-    agg = eval_type_to_aggregator['sc_poly_eval']
+    agg = eval_type_to_aggregator.get('sc_poly_eval', None)
     agg.analyze()
+
+    agg = eval_type_to_aggregator.get('bas_poly_eval', None)
+    if agg is not None:
+        model_col = 'bas_poly_eval.params.bas_pxl.package_fpath'
+        metric_col = 'bas_poly_eval.metrics.bas_faa_f1'
+        table = agg.table
+        # table = table[~table[model_col].isnull()]
+        for region_id, region_table in table.groupby('region_id'):
+            print(f' --- region_id={region_id} --- ')
+            region_table = region_table.sort_values(metric_col)
+            for _, row in region_table.iterrows():
+                score = row[metric_col]
+                try:
+                    model_name = ub.Path(row[model_col]).name
+                except Exception:
+                    model_name = '?'
+                print(score, model_name)
 
     plot_tables()
 
@@ -129,7 +147,10 @@ def build_tables(config):
 
             # TODO: better way to get config
             job_config_fpath = fpath.parent / 'job_config.json'
-            config_ = json.loads(job_config_fpath.read_text())
+            if job_config_fpath.exists():
+                config_ = json.loads(job_config_fpath.read_text())
+            else:
+                config_ = {}
             index = {
                 'type': out_node.key,
                 'region_id': result['json_info']['region_ids'],
@@ -157,6 +178,8 @@ def truncate_dataframe_items(params):
     Truncates long, typically path-like items in a data frame.
     """
     def truncate(x):
+        if not isinstance(x, str):
+            return x
         return slugify_ext.smart_truncate(x, max_length=16, trunc_loc=0,
                                           hash_len=4, head='', tail='')
     mappings = {}
@@ -177,7 +200,7 @@ def truncate_dataframe_items(params):
     return trunc_params, mappings
 
 
-def analyze_tables(eval_type_to_results):
+def build_aggregators(eval_type_to_results):
     eval_type_to_aggregator = {}
     for key, results in eval_type_to_results.items():
         agg = Aggregator(results, type=key)
@@ -194,6 +217,11 @@ class Aggregator:
         agg.metrics = results['metrics']
         agg.params = results['params']
         agg.index = results['index']
+
+    @property
+    def table(agg):
+        table = pd.concat([agg.metrics, agg.index, agg.params], axis=1)
+        return table
 
     def analyze(agg):
         from watch.utils import result_analysis

@@ -77,8 +77,8 @@ python -m watch.mlops.schedule_evaluation \
             bas_pxl.test_dataset:
                 - $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R001_uky_invariants.kwcoco.json
                 - $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R002_uky_invariants.kwcoco.json
-                #- $DVC_DATA_DPATH/Drop4-BAS/data_vali_US_R007_uky_invariants.kwcoco.json
-                #- $DVC_DATA_DPATH/Drop4-BAS/data_train_BR_R002_uky_invariants.kwcoco.json
+                - $DVC_DATA_DPATH/Drop4-BAS/data_vali_US_R007_uky_invariants.kwcoco.json
+                - $DVC_DATA_DPATH/Drop4-BAS/data_train_BR_R002_uky_invariants.kwcoco.json
                 #- $DVC_DATA_DPATH/Drop4-BAS/data_train_AE_R001_uky_invariants.kwcoco.json
                 #- $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R001.kwcoco.json
                 #- $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R002.kwcoco.json
