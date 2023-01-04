@@ -33,12 +33,12 @@ This tutorial will cover:
     4. Evaluating your fusion model against the baseline.
 '
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 
 echo "
-DVC_EXPT_DPATH=$DVC_EXPT_DPATH
-DVC_DATA_DPATH=$DVC_DATA_DPATH
+EXPT_DVC_DPATH=$EXPT_DVC_DPATH
+DATA_DVC_DPATH=$DATA_DVC_DPATH
 "
 
 
@@ -70,7 +70,7 @@ compute_features(){
     python -m watch.tasks.invariants.predict \
         --input_kwcoco="$SRC_KWCOCO_FPATH" \
         --output_kwcoco="$DST_KWCOCO_FPATH" \
-        --pretext_package_path="$DVC_EXPT_DPATH"/models/uky/uky_invariants_2022_12_05/TA1_pretext_model/pretext_package.pt \
+        --pretext_package_path="$EXPT_DVC_DPATH"/models/uky/uky_invariants_2022_12_05/TA1_pretext_model/pretext_package.pt \
         --input_space_scale=30GSD \
         --window_space_scale=30GSD \
         --patch_size=256 \
@@ -83,17 +83,17 @@ compute_features(){
 
 # Compute your features on the train and validation dataset
 compute_features \
-    "$DVC_DATA_DPATH"/Drop4-BAS/data_train.kwcoco.json
-    "$DVC_DATA_DPATH"/Drop4-BAS/data_train_invariants.kwcoco.json
+    "$DATA_DVC_DPATH"/Drop4-BAS/data_train.kwcoco.json
+    "$DATA_DVC_DPATH"/Drop4-BAS/data_train_invariants.kwcoco.json
 
 compute_features \
-    "$DVC_DATA_DPATH"/Drop4-BAS/data_vali.kwcoco.json
-    "$DVC_DATA_DPATH"/Drop4-BAS/data_vali_invariants.kwcoco.json
+    "$DATA_DVC_DPATH"/Drop4-BAS/data_vali.kwcoco.json
+    "$DATA_DVC_DPATH"/Drop4-BAS/data_vali_invariants.kwcoco.json
 
 # After your model predicts the outputs, you should be able to use the
 # smartwatch visualize tool to inspect your features. The specific channels you
 # select will depend on the output of your predict script.
-python -m watch visualize "$DVC_DATA_DPATH"/Drop4-BAS/data_vali_invariants.kwcoco.json \
+python -m watch visualize "$DATA_DVC_DPATH"/Drop4-BAS/data_vali_invariants.kwcoco.json \
     --channels "invariants.5:8,invariants.8:11,invariants.14:17" --stack=only --workers=avail --animate=True \
     --draw_anns=False
 
@@ -137,16 +137,16 @@ file for the subsequent steps.
 
 .. code:: bash
 
-    DVC_DATA_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware=auto)
-    DVC_EXPT_DPATH=$(smartwatch_dvc --tags=phase2_expt --hardware=auto)
+    DATA_DVC_DPATH=$(smartwatch_dvc --tags=phase2_data --hardware=auto)
+    EXPT_DVC_DPATH=$(smartwatch_dvc --tags=phase2_expt --hardware=auto)
 
     kwcoco union \
-        --src $DVC_DATA_DPATH/Drop4-BAS/*_train_*_uky_invariants*.kwcoco.json \
-        --dst $DVC_DATA_DPATH/Drop4-BAS/combo_train_I2.kwcoco.json
+        --src $DATA_DVC_DPATH/Drop4-BAS/*_train_*_uky_invariants*.kwcoco.json \
+        --dst $DATA_DVC_DPATH/Drop4-BAS/combo_train_I2.kwcoco.json
 
     kwcoco union \
-        --src $DVC_DATA_DPATH/Drop4-BAS/*_vali_*_uky_invariants*.kwcoco.json \
-        --dst $DVC_DATA_DPATH/Drop4-BAS/combo_vali_I2.kwcoco.json
+        --src $DATA_DVC_DPATH/Drop4-BAS/*_vali_*_uky_invariants*.kwcoco.json \
+        --dst $DATA_DVC_DPATH/Drop4-BAS/combo_vali_I2.kwcoco.json
 
 We recognize that this is currently a pain-point, but we hope that the existing
 tools make it somewhat easier to solve or work around problems, and we hope
@@ -306,10 +306,11 @@ at the least include your model and the baseline model to determine if your
 features are driving an improvement in the scores.
 '
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
+DATA_DVC_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 
 BASELINE_PACKAGE_FPATH="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
+smartwatch model_stats "$BASELINE_PACKAGE_FPATH"
 
 python -m watch.mlops.schedule_evaluation \
     --params="
@@ -320,7 +321,7 @@ python -m watch.mlops.schedule_evaluation \
             bas_pxl.channels:
                 - 'auto'
             bas_pxl.test_dataset:
-                - $DVC_DATA_DPATH/Drop4-BAS/data_vali_invariants.kwcoco.json
+                - $DATA_DVC_DPATH/Drop4-BAS/data_vali_invariants.kwcoco.json
             bas_pxl.chip_dims: auto
             bas_pxl.chip_overlap: 0.3
             bas_pxl.window_space_scale: auto
@@ -337,7 +338,7 @@ python -m watch.mlops.schedule_evaluation \
             bas_pxl_eval.enabled: 1
             bas_poly_viz.enabled: 1
     " \
-    --root_dpath="$DVC_EXPT_DPATH/_evaluations" \
+    --root_dpath="$EXPT_DVC_DPATH/_evaluations" \
     --devices="0," --queue_size=1 \
     --backend=tmux --queue_name "demo-queue" \
     --pipeline=bas \

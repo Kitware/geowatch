@@ -79,7 +79,7 @@ python -m watch.mlops.schedule_evaluation \
                 - $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R002_uky_invariants.kwcoco.json
                 - $DVC_DATA_DPATH/Drop4-BAS/data_vali_US_R007_uky_invariants.kwcoco.json
                 - $DVC_DATA_DPATH/Drop4-BAS/data_train_BR_R002_uky_invariants.kwcoco.json
-                - $DVC_DATA_DPATH/Drop4-BAS/data_train_AE_R001_uky_invariants.kwcoco.json
+                #- $DVC_DATA_DPATH/Drop4-BAS/data_train_AE_R001_uky_invariants.kwcoco.json
                 #- $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R001.kwcoco.json
                 #- $DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R002.kwcoco.json
                 #- $DVC_DATA_DPATH/Drop4-BAS/data_vali_US_R007.kwcoco.json
@@ -93,8 +93,13 @@ python -m watch.mlops.schedule_evaluation \
             bas_pxl.time_sampling: auto
             bas_poly.thresh:
                 - 0.07
+                - 0.08
+                - 0.09
                 - 0.1
+                - 0.11
+                - 0.12
                 - 0.13
+                - 0.14
                 - 0.15
             bas_poly.moving_window_size: null
             bas_pxl.enabled: 1

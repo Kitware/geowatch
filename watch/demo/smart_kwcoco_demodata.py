@@ -404,7 +404,8 @@ def _random_utm_box(rng=None):
 
 
 def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
-                            dates=False, geodata=False, **kwargs):
+                            dates=False, geodata=False, bad_nodata=False,
+                            **kwargs):
     """
     Ignore:
         import watch
@@ -416,13 +417,36 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
         globals().update(xdev.get_func_kwargs(demo_kwcoco_multisensor))
         kwargs = {}
 
+    Args:
+
+        num_videos (int): number of videos in the demo dataset
+
+        num_frames (int): number of frames per video in the demo dataset
+
+        heatmap (bool): if True adds dummy saliency heatmaps to the demodata.
+
+        geodata (bool): if True adds dummy geographic referencing to
+            the demodata.
+
+        bad_nodata (bool):
+            if True, zeros out some pixels which simulates bad nodata for
+            testing.
+
+        **kwargs : additional arguments passed to :func:`kwcoco.CocoDataset.demo`.
+
+    Returns:
+        kwcoco.CocoDataset
+
     Example:
         >>> from watch.demo.smart_kwcoco_demodata import *  # NOQA
+        >>> num_frames = 10
+        >>> num_videos = 4
         >>> dates=True
         >>> geodata=True
         >>> heatmap=True
+        >>> bad_nodata = True
         >>> kwargs = {}
-        >>> coco_dset = demo_kwcoco_multisensor(dates=dates, geodata=geodata, heatmap=heatmap)
+        >>> coco_dset = demo_kwcoco_multisensor(dates=dates, geodata=geodata, heatmap=heatmap, bad_nodata=True)
     """
     dpath = ub.Path.appdir('watch', 'demo_kwcoco_bundles').ensuredir()
 
@@ -445,6 +469,7 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
         'dates': dates,
         'geodata': geodata,
         'heatmap': heatmap,
+        'bad_nodata': bad_nodata,
     }
 
     bundle_name = 'watch_vidshapes_' + ub.hash_data(depends)[0:8]
@@ -487,6 +512,17 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
                         'segmentation': poly.to_coco('new'),
                     }
                     coco_dset.add_annotation(**new_ann)
+
+    if bad_nodata:
+        # We can naively zero the image before adding georeferencing to
+        for gid in coco_dset.images():
+            coco_img = coco_dset.coco_image(gid)
+            for obj in coco_img.iter_asset_objs():
+                fpath = ub.Path(coco_dset.bundle_dpath) / obj['file_name']
+                imdata = kwimage.imread(fpath)
+                poly = kwimage.Polygon.random(rng=rng).scale(imdata.shape[0:2][::-1])
+                imdata = poly.fill(imdata, value=0)
+                kwimage.imwrite(fpath, imdata)
 
     if heatmap:
         hack_in_heatmaps(coco_dset, rng=rng)

@@ -4,26 +4,25 @@ Assigns geospace annotation to image pixels and frames
 
 CommandLine:
     # Update a dataset with new annotations
-    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
 
     # You dont need to run this, but if you plan on running the project
     # annotations script multiple times, preloading this work will make it
     # faster
     python -m watch add_fields \
-        --src $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
-        --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
+        --src $DVC_DATA_DPATH/Drop4-BAS/data.kwcoco.json \
+        --dst $DVC_DATA_DPATH/Drop4-BAS/data.kwcoco.json \
         --overwrite=warp --workers 10
 
     # Update to whatever the state of the annotations submodule is
-    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
     python -m watch project_annotations \
-        --src $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
-        --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
-        --viz_dpath $DVC_DPATH/Drop2-Aligned-TA1-2022-02/_viz_propogate \
-        --site_models="$DVC_DPATH/annotations/site_models/*.geojson"
+        --src $DVC_DATA_DPATH/Drop4-BAS/data.kwcoco.json \
+        --dst $DVC_DATA_DPATH/Drop4-BAS/data.kwcoco.json \
+        --viz_dpath $DVC_DATA_DPATH/Drop4-BAS/_viz_propogate \
+        --site_models="$DVC_DATA_DPATH/annotations/site_models/*.geojson"
 
     python -m watch visualize \
-        --src $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
+        --src $DVC_DATA_DPATH/Drop4-BAS/data.kwcoco.json \
         --space="video" \
         --num_workers=avail \
         --any3="only" --draw_anns=True --draw_imgs=False --animate=True
@@ -51,7 +50,7 @@ from watch.utils import util_time
 class ProjectAnnotationsConfig(scfg.Config):
     """
     Projects annotations from geospace onto a kwcoco dataset and optionally
-    propogates them in
+    propogates them forward in time.
 
     References:
         https://smartgitlab.com/TE/annotations/-/wikis/Alternate-Site-Type
@@ -105,32 +104,25 @@ class ProjectAnnotationsConfig(scfg.Config):
 
 
 def main(cmdline=False, **kwargs):
-    """
-    CommandLine:
-        python -m watch.cli.project_annotations \
-            --src
-
-    Ignore:
+    r"""
+    Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.cli.project_annotations import *  # NOQA
-        >>> from watch.utils import util_data
-        >>> import tempfile
-        >>> dvc_dpath = util_data.find_smart_dvc_dpath()
-        >>> #kwcoco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
-        >>> #kwcoco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
-        >>> kwcoco_fpath = dvc_dpath / 'Aligned-Drop2-TA1-2022-03-07/data.kwcoco.json'
+        >>> import watch
+        >>> dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+        >>> coco_fpath = dvc_dpath / 'Drop4-BAS/data_vali.kwcoco.json'
         >>> dpath = ub.Path.appdir('watch/tests/project_annots').ensuredir()
         >>> cmdline = False
         >>> output_fpath = dpath / 'data.kwcoco.json'
         >>> viz_dpath = (dpath / 'viz').ensuredir()
         >>> kwargs = {
-        >>>     'src': kwcoco_fpath,
+        >>>     'src': coco_fpath,
         >>>     'dst': output_fpath,
         >>>     'viz_dpath': viz_dpath,
         >>>     'site_models': dvc_dpath / 'annotations/site_models',
         >>>     'region_models': dvc_dpath / 'annotations/region_models',
         >>> }
-        >>> main(**kwargs)
+        >>> main(cmdline=cmdline, **kwargs)
     """
     import geopandas as gpd  # NOQA
     from watch.utils import util_gis
@@ -827,7 +819,7 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
             # Determine the first image each site-observation will be
             # associated with and then propogate them forward as necessary.
 
-            # NOTE: github.com/Erotemic/misc/learn/viz_searchsorted.py if you
+            # NOTE: https://github.com/Erotemic/misc/blob/main/learn/viz_searchsorted.py if you
             # need to remember or explain how searchsorted works
 
             # To future-propogate:
@@ -1006,7 +998,7 @@ def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sit
 
     ax.cla()
 
-    from watch.tasks.fusion import heuristics
+    from watch import heuristics
     import matplotlib as mpl
     hueristic_status_data = heuristics.HUERISTIC_STATUS_DATA
 

@@ -59,9 +59,9 @@ def random_geo_points(num, rng=None):
     u0, u1 = rng.rand(2, num)
     rad_lat = np.arcsin(2 * u0 - 1.0)  # angle with Equator   - from +pi/2 to -pi/2
     rad_lon = (2 * u1 - 1) * np.pi     # longitude in radians - from -pi to +pi
-    rad_latlon = np.stack([rad_lon, rad_lat], axis=1)
-    latlon = np.rad2deg(rad_latlon)
-    return latlon
+    rad_lonlat = np.stack([rad_lon, rad_lat], axis=1)
+    lonlat = np.rad2deg(rad_lonlat)
+    return lonlat
 
 
 def random_geo_polygon(max_rt_area=10_000, rng=None):

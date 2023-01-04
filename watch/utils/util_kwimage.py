@@ -9,6 +9,7 @@ import ubelt as ub
 from kwimage import connected_components  # NOQA
 from kwimage import draw_header_text  # NOQA
 from kwimage import Box  # NOQA
+import kwarray
 
 
 def _auto_kernel_sigma(kernel=None, sigma=None, autokernel_mode='ours'):
@@ -297,6 +298,8 @@ def ensure_false_color(canvas, method='ortho'):
 
 def colorize_label_image(labels, with_legend=True, label_mapping=None, label_to_color=None):
     """
+    Rename to draw_label_image?
+
     Replace an image with integer labels with colors
 
     Args:
@@ -560,8 +563,20 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
                            connectivity=8, scale=1.0, grid_stride='auto',
                            PRINT_STEPS=0, values=None):
     """
-    Alternative approach to find_samecolor_regions, but the idea is we check a
-    set of seed points and perform a flood fill.
+    Find large spatially connected regions in an image where all pixels have
+    the same value.
+
+    Works by selecting a set of initial seed points. A flood fill is run at
+    each seed point to find potential large samedata regions.
+
+    More specifically, we find seed points using a regular grid, or finding
+    pixels in regions with low spatial variance.  Then for each candidate seed
+    point, we do a flood-fill to see if it in a large samecolor region. Each
+    connected region that satisfies the requested criteria is given an integer
+    label. The return value is a label-mask where each pixel that is part of a
+    region is given a value corresponding to that region's integer label. Any
+    pixel not part of a region is given a label of zero. For technical reasons,
+    returned labels will start at 1.
 
     Args:
         image (ndarray):
@@ -581,8 +596,9 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
             then upsample the output. This can cause a significant speed
             increase at the cost of some accuracy.
 
-        values (None | List): the values of interest to find.
-            if unspecified, any highly frequent value is flagged.
+        values (None | List):
+            if specified, only finds the samecolor regions with this intensity
+            value, otherwise any value will be considered.
 
     References:
         https://docs.opencv.org/3.4/d7/d1b/group__imgproc__misc.html#ga366aae45a6c1289b341d140839f18717
@@ -660,40 +676,112 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
         >>> print(image)
         >>> assert (labels > 0).sum() == 3
 
+    Example:
+        >>> # Check dtypes
+        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> dtypes = [np.uint8, np.float32, np.float64, int, np.int16, np.uint16]
+        >>> failed = []
+        >>> for dtype in dtypes:
+        ...    image = (np.random.rand(32, 32) * 512).astype(dtype)
+        ...    try:
+        ...        find_samecolor_regions(image, min_region_size=10)
+        ...    except Exception:
+        ...        failed.append(dtype)
+        >>> print(f'failed={failed}')
+        >>> assert len(failed) == 0
+
+    Example:
+        >>> # Check specifying valid values
+        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> w, h = 32, 32
+        >>> image = np.zeros((h, w), dtype=np.uint8)
+        >>> image[0:8, :] = 1
+        >>> image[8:16, :] = 2
+        >>> image[16:32, :] = 3
+        >>> image[:, 16:32] = 4
+        >>> image[24:32, :] = 1
+        >>> image[2, 3] = 5
+        >>> image[7, 11] = 13
+        >>> image[17, 19] = 23
+        >>> image[29, 31] = 37
+        >>> #image = kwimage.imresize(image, dsize=(256, 256), interpolation='lanczos')
+        >>> min_region_size = 2
+        >>> seed_method = 'grid'
+        >>> connectivity = 8
+        >>> scale = 1.0
+        >>> grid_stride = 1
+        >>> labels1 = find_samecolor_regions(
+        >>>     image, min_region_size, seed_method, connectivity, scale,
+        >>>     grid_stride, PRINT_STEPS=0)
+        >>> labels2 = find_samecolor_regions(
+        >>>     image, min_region_size, seed_method, connectivity, scale,
+        >>>     grid_stride, PRINT_STEPS=0, values={1})
+        >>> #labels = find_samecolor_regions(image, seed_method='variance')
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> import kwarray
+        >>> kwplot.imshow(image, pnum=(1, 3, 1), title='input image', cmap='viridis')
+        >>> kwplot.imshow(colorize_label_image(labels1), pnum=(1, 3, 2), title='values=None')
+        >>> kwplot.imshow(colorize_label_image(labels2), pnum=(1, 3, 3), title='values={1}')
+
     Returns:
         ndarray: a label array where 0 indicates background and a
             non-zero label is a samecolor region.
 
-    Ignore:
-        import xdev
-        xdev.profile_now(find_lowvariance_regions)(image)
-        xdev.profile_now(find_samecolor_regions)(image)
-        find_samecolor_regions(image)
+    TODO:
+        - [ ] Could generalize this to search for values within a tolerence, in
+        which case we would get a fuzzyfind sort of function.
 
-        import timerit
-        ti = timerit.Timerit(30, bestof=3, verbose=2)
-        for timer in ti.reset('find_lowvariance_regions'):
-            with timer:
-                find_lowvariance_regions(image)
+    Note:
+        this is a kwimage candidate
 
-        ti = timerit.Timerit(30, bestof=3, verbose=2)
-        for timer in ti.reset('find_samecolor_regions'):
-            with timer:
-                labels = find_samecolor_regions(image)
+    Optimizing:
+        >>> import xdev
+        >>> xdev.profile_now(find_lowvariance_regions)(image)
+        >>> xdev.profile_now(find_samecolor_regions)(image)
+        >>> find_samecolor_regions(image)
+        >>> #
+        >>> import timerit
+        >>> ti = timerit.Timerit(30, bestof=3, verbose=2)
+        >>> for timer in ti.reset('find_lowvariance_regions'):
+        >>>     with timer:
+        >>>         find_lowvariance_regions(image)
+        >>> #
+        >>> ti = timerit.Timerit(30, bestof=3, verbose=2)
+        >>> for timer in ti.reset('find_samecolor_regions'):
+        >>>     with timer:
+        >>>         labels = find_samecolor_regions(image)
+        >>> #
+        >>> # Test to see the overhead compared to different levels of downscale / upscale
+        >>> ti = timerit.Timerit(30, bestof=3, verbose=2)
+        >>> for timer in ti.reset('find_samecolor_regions + resize'):
+        >>>     with timer:
+        >>>         labels = find_samecolor_regions(image, scale=0.5)
+        >>> #
+        >>> # Test to see the overhead compared to different levels of downscale / upscale
+        >>> ti = timerit.Timerit(30, bestof=3, verbose=2)
+        >>> for timer in ti.reset('find_samecolor_regions + resize'):
+        >>>     with timer:
+        >>>         labels = find_samecolor_regions(image, scale=0.25)
 
-
-        # Test to see the overhead compared to different levels of downscale / upscale
-        ti = timerit.Timerit(30, bestof=3, verbose=2)
-        for timer in ti.reset('find_samecolor_regions + resize'):
-            with timer:
-                labels = find_samecolor_regions(image, scale=0.5)
-
-        # Test to see the overhead compared to different levels of downscale / upscale
-        ti = timerit.Timerit(30, bestof=3, verbose=2)
-        for timer in ti.reset('find_samecolor_regions + resize'):
-            with timer:
-                labels = find_samecolor_regions(image, scale=0.25)
-
+        >>> from watch.utils.util_kwimage import *  # NOQA
+        >>> import kwimage
+        >>> image = kwimage.grab_test_image('amazon', dsize=(512, 512))[..., 0:1]
+        >>> poly = kwimage.Polygon.random().scale(image.shape[0:2][::-1])
+        >>> image = poly.fill(image, value=0)
+        >>> mask = (np.random.rand(*image.shape[0:2]) > 0.999)
+        >>> rs, cs = np.where(mask)
+        >>> image[rs[0:5], cs[0:5]] = 0
+        >>> ti = timerit.Timerit(2, bestof=2, verbose=2)
+        >>> for timer in ti.reset('find_samecolor_regions, with values'):
+        >>>     labels = find_samecolor_regions(image, values={0})
+        >>> for timer in ti.reset('find_samecolor_regions, with values, seed_method=values'):
+        >>>     labels = find_samecolor_regions(image, values={0}, seed_method='values')
+        >>> for timer in ti.reset('find_samecolor_regions, with values, seed_method=variance'):
+        >>>     labels = find_samecolor_regions(image, values={0}, seed_method='variance')
+        >>> for timer in ti.reset('find_samecolor_regions, without values'):
+        >>>     labels = find_samecolor_regions(image, values=None)
     """
     import cv2
     import kwimage
@@ -703,11 +791,32 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
         orig_dsize = image.shape[0:2][::-1]
         image = kwimage.imresize(image, scale=scale, interpolation='nearest')
 
+    values_of_interest = values
     h, w = image.shape[0:2]
 
-    if not image.flags['C_CONTIGUOUS'] or not image.flags['OWNDATA']:
-        # Cv2 only likes certain types of numpy arrays
-        image = np.ascontiguousarray(image).copy()
+    # if len(image.shape) > 2:
+    #     num_channels = image.shape[2]
+    #     if num_channels not in {1, 3}:
+    #         raise Exception(f'Need 1 or 3 channels, got {num_channels}')
+
+    # floodFill only accepts uint8 and float32, we we need to cast to float
+    # here for other data types.
+
+    if 0:
+        from kwimage.im_cv2 import _cv2_input_fixer_v2
+        image, final_dtype = _cv2_input_fixer_v2(
+            image, allowed_types='uint8,float32', contiguous=True)
+    else:
+        if image.dtype.kind == 'f':
+            if image.dtype.itemsize != 4:
+                image = image.astype(np.float32)
+        else:
+            if (image.dtype.kind != 'u') or (image.dtype.itemsize != 1):
+                image = image.astype(np.float32)
+
+        if not image.flags['C_CONTIGUOUS'] or not image.flags['OWNDATA']:
+            # Cv2 only likes certain types of numpy arrays
+            image = np.ascontiguousarray(image).copy()
 
     # Enumerate a set of pixel positions that we will try to flood fill.
     if seed_method == 'grid':
@@ -737,6 +846,11 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
         seed_xy = np.stack([seed_x, seed_y], axis=1)
         check_xy = seed_xy[unique_labels > 0]
         # return seed_labels
+    elif seed_method == 'values':
+        # If specific value are given, just use them
+        check_mask = kwarray.isect_flags(image, values_of_interest)
+        check_mask = exactly_1channel(check_mask)
+        check_xy = np.stack(np.where(check_mask), axis=1)[:, ::-1]
     else:
         raise KeyError(seed_method)
 
@@ -758,23 +872,46 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
 
     if PRINT_STEPS:
         import rich
+        regions_found = 0
 
-    values_of_interest = values
-    if values_of_interest is not None:
+    if values_of_interest is not None and seed_method != 'values':
         # Filter out any grid positions based on values of interest
         grid_values = image[check_xy.T[1], check_xy.T[0]]
-        print(f'grid_values={grid_values}')
+        grid_values = kwarray.atleast_nd(grid_values, n=2)
         flags = None
         for v in values_of_interest:
             if flags is None:
-                flags = (grid_values == v).all(-1)
+                flags = (grid_values == v).all(axis=1)
             else:
-                flags |= (grid_values == v).all(-1)
+                flags |= (grid_values == v).all(axis=1)
         check_xy = check_xy[flags]
+
+    def special_grid_xy_iter(check_xy):
+        if seed_method == 'values':
+            check_xy_ = check_xy.copy()
+            check_xy_p1 = check_xy_ + 1
+            while len(check_xy_):
+                # Execute loop with the current top most position
+                yield check_xy_[0]
+                # Remove that position
+                check_xy_ = check_xy_[1:]
+                check_xy_p1 = check_xy_p1[1:]
+
+                # TODO: only do check if the caller sends a message saying we
+                # found a big region.
+
+                # Check if other remaining positions can be removed
+                keep_flags = accum_labels[check_xy_p1[:, 1], check_xy_p1[:, 0]] == 0
+                if not np.all(keep_flags):
+                    check_xy_ = check_xy_[keep_flags]
+                    check_xy_p1 = check_xy_p1[keep_flags]
+        else:
+            yield from iter(check_xy)
 
     # Start at 2 because 1 is used as an internal value
     cluster_label = 2
-    for check_x, check_y in check_xy:
+    # for check_x, check_y in check_xy:
+    for check_x, check_y in special_grid_xy_iter(check_xy):
         already_filled = accum_labels[check_y + 1, check_x + 1]
 
         if PRINT_STEPS:
@@ -834,6 +971,13 @@ def find_samecolor_regions(image, min_region_size=49, seed_method='grid',
 
             # Update the previous mask
             prev_mask[sl] = mask[sl]
+
+        if PRINT_STEPS and True:
+            regions_found += 1
+            print(f'regions_found={regions_found}')
+            mask = accum_labels[1:-1, 1:-1] > 0
+            current_unique_maked_values = np.unique(image[mask])
+            print(f'current_unique_maked_values={current_unique_maked_values}')
 
     final_labels = accum_labels[1:-1, 1:-1]
     if PRINT_STEPS:

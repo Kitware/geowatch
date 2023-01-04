@@ -582,12 +582,36 @@ def coerce_criterion(loss_code, weights):
 
 def torch_safe_stack(tensors, dim=0, *, out=None, item_shape=None, dtype=None, device=None):
     """
+    Behaves like torch.stack, but does not error when tensors is empty.
+
+    When tensors are not empty this is exactly :func:`torch.stack`.
+
+    When tensors are empty, it constructs an empty output tensor based on
+    explicit expected item shape if available, otherwise it assumes items would
+    have had a shape of ``[0]``. Likewise dtype and device should be specified
+    otherwise they use :func:`torch.empty` defaults.
+
     Args:
+        tensors (List[Tensor]): sequence of tensors to concatenate.
+            Passed to :func:`torch.stack`.
+
+        dim (int): dimension to insert. Has to be between 0 and the number of
+            dimensions of concatenated tensors (inclusive). Passed to
+            :func:`torch.stack`.
+
+        out (Tensor): passed to :func:`torch.stack`.
+
         item_shape (Tuple[int, ...]): what the shape of an item should be.
             used to construct a default output.
 
-    Ignore:
+        dtype (torch.dtype): the expected output datatype when tensors is empty.
+
+        device (torch.device | str | int | None) :
+            the expected output device when tensors is empty.
+
+    Example:
         >>> from watch.tasks.fusion.methods.network_modules import *  # NOQA
+        >>> import ubelt as ub
         >>> grid = list(ub.named_product({
         >>>     # 'num': [0, 1, 2, 3],
         >>>     'num': [0, 7],
@@ -622,10 +646,6 @@ def torch_safe_stack(tensors, dim=0, *, out=None, item_shape=None, dtype=None, d
         >>>     subdf = subdf.sort_values(['shape', 'dim', 'item_shape', 'num'])
         >>>     print('')
         >>>     rich.print(subdf.to_string())
-        >>> #
-    Ignore:
-        torch.stack([torch.empty([])], dim=1)
-
     """
     if len(tensors) == 0:
         if item_shape is None:
