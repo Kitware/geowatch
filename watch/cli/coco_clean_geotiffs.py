@@ -47,6 +47,9 @@ class CleanGeotiffConfig(scfg.DataConfig):
 
 def main(cmdline=1, **kwargs):
     """
+    CommandLine:
+        xdoctest -m watch.cli.coco_clean_geotiffs main
+
     Example:
         >>> # Generate a dataset that has bad nodata values
         >>> from watch.cli.coco_clean_geotiffs import *  # NOQA
