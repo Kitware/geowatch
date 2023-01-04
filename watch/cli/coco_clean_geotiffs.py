@@ -22,7 +22,6 @@ class CleanGeotiffConfig(scfg.DataConfig):
         # It is a good idea to do a dry run first to check for issues
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         COCO_FPATH="$DVC_DATA_DPATH/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/data.kwcoco.json"
-
         COCO_FPATH="$DVC_DATA_DPATH/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/imganns-AE_R001.kwcoco.json"
         smartwatch clean_geotiffs \
             --src "$COCO_FPATH" \
@@ -30,6 +29,17 @@ class CleanGeotiffConfig(scfg.DataConfig):
             --prefilter_channels="red" \
             --min_region_size=256 \
             --nodata_value=-9999 \
+            --workers="max(2, avail)" \
+            --dry=True
+
+        # Then execute a real run at full scale
+        smartwatch clean_geotiffs \
+            --src "$COCO_FPATH" \
+            --channels="red|green|blue|nir|swir16|swir22" \
+            --prefilter_channels="red" \
+            --min_region_size=256 \
+            --nodata_value=-9999 \
+            --workers="max(2, avail)" \
             --dry=True
     """
     src = scfg.Value(None, help='input coco dataset')
@@ -57,6 +67,14 @@ class CleanGeotiffConfig(scfg.DataConfig):
         '''
         Minimum size of a connected region to be considered as a nodata
         candidate.
+        '''))
+
+    scale = scfg.Value(None, help=ub.paragraph(
+        '''
+        Scale at which to perform the check. E.g. 0.5 for half resolution.
+        Speeds up checks, but should only be used in dry runs.
+        TODO: we could fix the real run to work with scale checks, and that
+        would speed it up and probably not generate many false negatives.
         '''))
 
     nodata_value = scfg.Value(-9999, help='the real nodata value to use')
@@ -150,9 +168,13 @@ def main(cmdline=1, **kwargs):
         prefilter_channels = channels
 
     possible_nodata_values = set(config['possible_nodata_values'])
+
+    if config['scale'] is not None:
+        assert config['dry'], 'only scale in dry runs'
+
     probe_kwargs = {
         'channels': channels,
-        'scale': None,
+        'scale': config['scale'],
         'possible_nodata_values': possible_nodata_values,
         'prefilter_channels': prefilter_channels,
         'channels': channels,
