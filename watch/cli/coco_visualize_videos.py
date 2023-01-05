@@ -87,6 +87,8 @@ class CocoVisualizeConfig(scfg.Config):
         'max_dim': scfg.Value(None, help='if specified, the visualization will resize if it has a dimension larger than this'),
         'min_dim': scfg.Value(384, help='if specified, the visualization will resize if it has a dimension smaller than this'),
 
+        'resolution': scfg.Value(None, help='the resolution to make the output at. If unspecified use the dataset default'),
+
         'channels': scfg.Value(None, type=str, help='only viz these channels'),
 
         'any3': scfg.Value(False, help=ub.paragraph(
@@ -424,6 +426,13 @@ def main(cmdline=True, **kwargs):
         else:
             valid_vidspace_region = None
 
+        common_kw = ub.udict(config) & {
+            'resolution', 'draw_header', 'draw_chancode', 'skip_aggressive',
+            'stack', 'min_dim', 'min_dim', 'verbose', 'only_boxes',
+            'fixed_normalization_scheme',
+            'any3', 'cmap',
+        }
+
         if config['zoom_to_tracks']:
             assert space == 'video'
             tid_to_info = video_track_info(coco_dset, vidid)
@@ -455,21 +464,10 @@ def main(cmdline=True, **kwargs):
                                 channels=channels, vid_crop_box=vid_crop_box,
                                 _header_extra=_header_extra,
                                 chan_to_normalizer=chan_to_normalizer,
-                                fixed_normalization_scheme=config.get(
-                                    'fixed_normalization_scheme'),
-                                cmap=config['cmap'],
-                                verbose=config['verbose'],
-                                only_boxes=config['only_boxes'],
-                                max_dim=config['max_dim'],
-                                min_dim=config['min_dim'],
                                 local_frame_index=local_frame_index,
                                 local_max_frame=local_max_frame,
-                                any3=config['any3'], dset_idstr=dset_idstr,
-                                draw_valid_region=config['draw_valid_region'],
-                                stack=config['stack'],
-                                skip_aggressive=config['skip_aggressive'],
-                                draw_chancode=config['draw_chancode'],
-                                draw_header=config['draw_header'],
+                                dset_idstr=dset_idstr,
+                                **common_kw
                                 )
 
         else:
@@ -491,23 +489,12 @@ def main(cmdline=True, **kwargs):
                             draw_anns=config['draw_anns'],
                             _header_extra=_header_extra,
                             chan_to_normalizer=chan_to_normalizer,
-                            verbose=config['verbose'],
-                            only_boxes=config['only_boxes'],
-                            fixed_normalization_scheme=config.get(
-                                'fixed_normalization_scheme'),
-                            any3=config['any3'], dset_idstr=dset_idstr,
-                            cmap=config['cmap'],
-                            max_dim=config['max_dim'],
-                            min_dim=config['min_dim'],
+                            dset_idstr=dset_idstr,
                             local_frame_index=local_frame_index,
                             local_max_frame=local_max_frame,
                             valid_vidspace_region=valid_vidspace_region,
                             skip_missing=config['skip_missing'],
-                            draw_valid_region=config['draw_valid_region'],
-                            stack=config['stack'],
-                            skip_aggressive=config['skip_aggressive'],
-                            draw_chancode=config['draw_chancode'],
-                            draw_header=config['draw_header'],
+                            **common_kw
                             )
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
@@ -860,6 +847,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                skip_aggressive=False,
                                draw_header=True,
                                draw_chancode=True,
+                               resolution=None,
                                ):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
@@ -896,10 +884,25 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         'interpolation': 'linear',
         'nodata_method': 'float',
     }
-    delayed = coco_img.delay(space=space, **finalize_opts)
 
+    if 1:
+        RESOLUTION_KEY = 'resolution'
+        if coco_img.video is not None:
+            if 'target_gsd' in coco_img.video:
+                RESOLUTION_KEY = 'target_gsd'
+        factor = coco_img._scalefactor_for_resolution(
+            space=space, resolution=resolution,
+            RESOLUTION_KEY=RESOLUTION_KEY)
+        warp_viz_from_space = kwimage.Affine.scale(factor)
+
+    delayed = coco_img.delay(space=space, resolution=resolution,
+                             RESOLUTION_KEY=RESOLUTION_KEY, **finalize_opts)
+
+    warp_vid_from_img = coco_img.warp_vid_from_img
     if space == 'video':
-        warp_vid_from_img = coco_img.warp_vid_from_img
+        warp_viz_from_img = warp_viz_from_space @ warp_vid_from_img
+    else:
+        warp_viz_from_img = warp_viz_from_space
 
     if fixed_normalization_scheme is not None:
         chan_to_normalizer = select_fixed_normalization(
@@ -922,27 +925,25 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     anns_ = [ub.dict_diff(ann, ['keypoints']) for ann in anns]  # Ignore keypoints
     dets = kwimage.Detections.from_coco_annots(anns_, dset=coco_dset)
 
-    if space == 'video':
-        dets = dets.warp(warp_vid_from_img)
+    dets = dets.warp(warp_viz_from_img)
 
     # TODO: asset space
 
     if vid_crop_box is not None:
         # Ensure the crop box is in the proper space
         if space == 'image':
-            img_crop_box = vid_crop_box.warp(warp_vid_from_img.inv()).quantize()
-            crop_box = img_crop_box
+            warp_viz_from_vid = warp_viz_from_space @ warp_vid_from_img.inv()
         elif space == 'video':
             crop_box = vid_crop_box
         else:
             raise KeyError(space)
+        crop_box = vid_crop_box.warp(warp_viz_from_vid).quantize()
         ann_shift = (-crop_box.tl_x.ravel()[0], -crop_box.tl_y.ravel()[0])
         dets = dets.translate(ann_shift)
         delayed = delayed.crop(crop_box.to_slices()[0])
 
     valid_image_poly = None
     valid_video_poly = None
-    vid_from_img = None
 
     if draw_valid_region:
         valid_region = img.get('valid_region', None)
@@ -951,19 +952,17 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
     if valid_region:
         valid_image_poly: kwimage.MultiPolygon = kwimage.MultiPolygon.coerce(valid_region)
-        if space == 'video':
-            vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
-            valid_image_poly = valid_image_poly.warp(vid_from_img)
+        valid_image_poly = valid_image_poly.warp(warp_viz_from_img)
 
     if valid_vidspace_region is not None:
         valid_vidspace_region = kwimage.MultiPolygon.coerce(valid_vidspace_region)
+
         if space == 'image':
-            if vid_from_img is None:
-                vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
-            img_from_vid = vid_from_img.inv()
-            valid_video_poly = valid_vidspace_region.warp(img_from_vid)
+            warp_img_from_vid = warp_vid_from_img.inv()
+            warp_viz_from_vid = warp_viz_from_space @ warp_img_from_vid
+            valid_video_poly = valid_vidspace_region.warp(warp_viz_from_vid)
         else:
-            valid_video_poly = valid_vidspace_region
+            valid_video_poly = valid_vidspace_region.warp(warp_viz_from_space)
 
     # Determine if we need to scale the image for visualization
     viz_scale_factor = 1.0
