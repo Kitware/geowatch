@@ -16,7 +16,6 @@ EXPERIMENT_NAME=Drop4_SC_UNet
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion fit \
     --config=config_common.yaml \
-    --config=config_sc_native.yaml \
     --model.init_args.name=$EXPERIMENT_NAME \
     --data.train_dataset="$TRAIN_FPATH" \
     --data.vali_dataset="$VALI_FPATH" \

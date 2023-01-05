@@ -1,6 +1,6 @@
 data:
-  time_steps: 3
-  chip_dims: 256
+  time_steps: 5
+  chip_dims: 128
   channels: "(WV):blue|green|red"
   # channels: "S2:(blue|green|red)"
   # channels: "S2:(blue|green|red),L8:(blue|green|red)"
@@ -28,20 +28,48 @@ data:
   use_cloudmask: false
   use_grid_positives: true
   verbose: 1
+model:
+  class_path: watch.tasks.fusion.methods.UNetBaseline
+  init_args:
+    token_dim: 32
+    global_change_weight: 0.0
+    global_class_weight: 1.0
+    global_saliency_weight: 0.5
+    class_loss: dicefocal
+    saliency_loss: focal
 optimizer:
   class_path: torch.optim.Adam
   init_args:
     lr: 1e-4
-    weight_decay: 0.01
+    weight_decay: 1e-4
     betas:
       - 0.9
-      - 0.98
-    eps: 1e-12
+      - 0.99
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.OneCycleLR
+  init_args:
+    max_lr: 0.001
+    total_steps: 200000
+    anneal_strategy: "linear"
+    pct_start: 0.0
 profile: false
 seed_everything: 1234
 trainer:
   accumulate_grad_batches: 32
-  callbacks: null
+  callbacks:
+    # - class_path: watch.utils.lightning_ext.callbacks.AutoResumer
+    # - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+    #   init_args:
+    #     monitor: val_class_f1_macro
+    #     mode: max
+    #     save_top_k: 5
+    #     auto_insert_metric_name: true
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        monitor: val_loss
+        mode: min
+        save_top_k: 5
+        auto_insert_metric_name: true
   check_val_every_n_epoch: 1
   enable_checkpointing: true
   enable_model_summary: true
