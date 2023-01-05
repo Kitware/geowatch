@@ -16,14 +16,15 @@ class RichProgIter:
                 total = len(iterable)
             except Exception:
                 ...
-        self.task_id = self.prog_manager.add_task(desc, total=total)
+        self.total = total
+        self.task_id = self.prog_manager.add_task(desc, total=self.total)
 
     def __iter__(self):
         for item in self.iterable:
             yield item
             self.prog_manager.update(self.task_id, advance=1)
-        task = self.prog_manager._tasks[self.task_id]
-        if task.total is None:
+        if self.total is None:
+            task = self.prog_manager._tasks[self.task_id]
             self.prog_manager.update(self.task_id, total=task.completed)
 
 

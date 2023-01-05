@@ -74,7 +74,8 @@ def main(cmdline=True, **kwargs):
     eval_type_to_aggregator = build_aggregators(eval_type_to_results)
 
     agg = eval_type_to_aggregator.get('sc_poly_eval', None)
-    agg.analyze()
+    if agg is None:
+        agg.analyze()
 
     agg = eval_type_to_aggregator.get('bas_poly_eval', None)
     if agg is not None:

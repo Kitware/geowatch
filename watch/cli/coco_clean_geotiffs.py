@@ -31,6 +31,7 @@ class CleanGeotiffConfig(scfg.DataConfig):
             --nodata_value=-9999 \
             --workers="min(2,avail)" \
             --scale=0.25 \
+            --probe_scale=0.1 \
             --dry=True
 
         # Then execute a real run at full scale
@@ -79,6 +80,16 @@ class CleanGeotiffConfig(scfg.DataConfig):
         '''))
 
     nodata_value = scfg.Value(-9999, help='the real nodata value to use')
+
+    probe_scale = scfg.Value(None, help=ub.paragraph(
+        '''
+        If specified, we probe the image at smaller scale for bad values and if
+        any are found we do a full scale computation. Speeds up computation if
+        there are not many images with bad values, but may result in false
+        negatives.
+
+        Should be given as a float less than 1.0
+        '''))
 
     dry = scfg.Value(False, help='if True, only do a dry run. Report issues but do not fix them')
 
@@ -136,6 +147,19 @@ def main(cmdline=1, **kwargs):
         >>> kwplot.imshow(canvas2, pnum=(1, 2, 2), title='after')
 
     Ignore:
+        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+        COCO_FPATH="$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json"
+        smartwatch clean_geotiffs \
+            --src "$COCO_FPATH" \
+            --channels="red|green|blue|nir|swir16|swir22" \
+            --prefilter_channels="red" \
+            --min_region_size=256 \
+            --nodata_value=-9999 \
+            --workers="min(2,avail)" \
+            --probe_scale=0.25 \
+            --dry=True
+
+    Ignore:
         import watch
         import sys, ubelt
         sys.path.append(ubelt.expandpath('~/code/watch'))
@@ -159,6 +183,10 @@ def main(cmdline=1, **kwargs):
     print('workers = {}'.format(ub.urepr(workers, nl=1)))
     jobs = ub.JobPool(mode='process', max_workers=workers)
 
+    have_transience = hasattr(jobs, 'transient')
+    if have_transience:
+        jobs.transient = True
+
     # channels = kwcoco.ChannelSpec.coerce('red')
     # channels = kwcoco.ChannelSpec.coerce('red|blue|nir')
     # channels = kwcoco.ChannelSpec.coerce('nir')
@@ -180,6 +208,7 @@ def main(cmdline=1, **kwargs):
         'prefilter_channels': prefilter_channels,
         'channels': channels,
         'min_region_size': config['min_region_size'],
+        'probe_scale': config['probe_scale'],
     }
 
     coco_imgs = coco_dset.images().coco_images
@@ -195,6 +224,9 @@ def main(cmdline=1, **kwargs):
 
         def collect_jobs(jobs):
             for job in mprog.new(jobs.as_completed(), total=len(jobs), desc='Collect probe jobs'):
+                if not have_transience:
+                    # hack in transience to conserve memory.
+                    jobs.jobs.remove(job)
                 image_summary = job.result()
                 yield image_summary
 
@@ -240,34 +272,28 @@ def main(cmdline=1, **kwargs):
         summaries = collect_jobs(jobs)
         if EAGER:
             summaries = list(summaries)
+        else:
+            summaries = iter(summaries)
 
         needs_fix = filter_fixable(summaries)
         if EAGER:
             needs_fix = list(needs_fix)
-            total = len(needs_fix)
         else:
-            total = len(coco_imgs)
+            needs_fix = iter(needs_fix)
+        #     total = len(needs_fix)
+        # else:
+        #     total = len(coco_imgs)
 
         if not config['dry']:
             correct_nodata_value = config['nodata_value']
-            for asset_summary in mprog.new(needs_fix, total=total, desc='Cleaning identified issues'):
+            for asset_summary in mprog.new(needs_fix, desc='Cleaning identified issues'):
                 fix_geotiff_ondisk(asset_summary,
                                    correct_nodata_value=correct_nodata_value)
         else:
-            _ = list(needs_fix)
+            for asset_summary in mprog.new(needs_fix, desc='Dry run: identifying issues'):
+                print(asset_summary['fpath'])
+                ...
 
-    # for k, g in bad_groups.items():
-    #     if all([p[2] == [0] for p in g])
-    # print(len(investigate_images))
-    # has_nonzeros = []
-    # all_zeros = []
-    # for image_summary in investigate_images:
-    #     if len(set(image_summary['bad_values']) - {0}):
-    #         has_nonzeros.append(image_summary)
-    #     else:
-    #         all_zeros.append(image_summary)
-    # print(len(all_zeros))
-    # print(len(has_nonzeros))
     # if 0:
     #     import xdev
     #     import kwplot
@@ -285,26 +311,36 @@ def main(cmdline=1, **kwargs):
     #     iter_ = xdev.InteractiveIter(nonzero_chans)
     #     for asset_summary in iter_:
     #         coco_img = asset_summary['coco_img']
-    #         chan_canvas = draw_channel_summary(coco_img, asset_summary)
+    #         chan_canvas = draw_asset_summary(coco_img, asset_summary)
     #         kwplot.imshow(chan_canvas, doclf=1)
     #         xdev.InteractiveIter.draw()
 
 
 def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=None,
-                       possible_nodata_values=None, min_region_size=256):
+                       possible_nodata_values=None, min_region_size=256,
+                       probe_scale=None):
     """
     Inspect a single image, possibily with multiple assets, each with possibily
     multiple bands for fixable nodata values.
 
     Args:
         coco_img : the coco image to check
+
         channels : the channels to check
+
         prefilter_channels : the channels to check first for efficiency
+
         possible_nodata_values (set[int]):
             the values that may be nodata if known
+
         scale :
             use a downscaled overview to speed up the computation via
-            approximation.
+            approximation. Returns results at this scale. DO NOT USE RIGHT NOW.
+
+        probe_scale :
+            use a downscaled overview to speed up the computation via
+            approximation. If the probe identifies an issue a full scale probe
+            is done.
 
     Ignore:
         globals().update((ub.udict(xdev.get_func_kwargs(probe_image_issues)) | probe_kwargs))
@@ -355,17 +391,34 @@ def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=N
                     'band_idxs': band_idxs,
                 })
 
-    should_continue = len(prefilter_assets) == 0
+    should_continue = True
     for item in prefilter_assets:
         obj = item['obj']
         band_idxs = item['band_idxs']
-        asset_summary = probe_asset(coco_img, obj, band_idxs=band_idxs,
-                                    scale=scale,
-                                    possible_nodata_values=possible_nodata_values,
-                                    min_region_size=min_region_size)
-        if asset_summary['bad_values']:
-            should_continue = True
-        asset_summaries.append(asset_summary)
+
+        if probe_scale is not None:
+            # Check if there is anything obvious at a smaller scale first if
+            # requested.
+            probe_asset_summary = probe_asset(
+                coco_img, obj, band_idxs=band_idxs, scale=probe_scale,
+                possible_nodata_values=possible_nodata_values,
+                min_region_size=min_region_size)
+            if not probe_asset_summary['bad_values']:
+                should_continue = False
+
+        if should_continue:
+            # Check if there is anything obvious in a specific channel first if
+            # requested.
+            asset_summary = probe_asset(coco_img, obj, band_idxs=band_idxs,
+                                        scale=scale,
+                                        possible_nodata_values=possible_nodata_values,
+                                        min_region_size=min_region_size)
+            if not asset_summary['bad_values']:
+                should_continue = False
+            asset_summaries.append(asset_summary)
+
+    if len(prefilter_assets) == 0:
+        should_continue = True
 
     if should_continue:
         for item in requested_assets:
@@ -668,7 +721,7 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
     os.rename(tmp_fpath, fpath)
 
 
-def draw_channel_summary(coco_img, asset_summary):
+def draw_asset_summary(coco_img, asset_summary):
     is_samecolor = asset_summary['is_samecolor']
     data = coco_img.delay(channels=asset_summary['channels'], space='asset',
                           nodata_method='float').finalize()

@@ -1924,5 +1924,72 @@ python -m watch.tasks.fusion.fit \
     --multimodal_reduce=learned_linear \
     --max_epoch_length=16384 
 
+export CUDA_VISIBLE_DEVICES=0
+DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware='auto')
+DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware='auto')
+WORKDIR=$DVC_EXPT_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop4-BAS
+KWCOCO_BUNDLE_DPATH=$DVC_DATA_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_train_I2.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_I2.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_I2.kwcoco.json
+CHANNELS="blue|green|red|nir,invariants.0:17"
+EXPERIMENT_NAME=Drop4_BAS_10GSD_BGRNSH_invar_V12_cont
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --saliency_weights="1:70" \
+    --class_loss='focal' \
+    --saliency_loss='dicefocal' \
+    --global_class_weight=1e-5 \
+    --global_change_weight=1e-5 \
+    --global_saliency_weight=1.00 \
+    --learning_rate=1e-4 \
+    --weight_decay=1e-2 \
+    --chip_dims=196,196 \
+    --window_space_scale="10GSD" \
+    --input_space_scale="10GSD" \
+    --output_space_scale="10GSD" \
+    --accumulate_grad_batches=4 \
+    --batch_size=4 \
+    --max_epochs=160 \
+    --patience=160 \
+    --num_workers=4 \
+    --dist_weights=False \
+    --time_steps=6 \
+    --channels="$CHANNELS" \
+    --normalize_peritem="blue|green|red|nir" \
+    --neg_to_pos_ratio=0.5 \
+    --time_sampling=uniform-soft2-contiguous-hardish3\
+    --time_span=3m-6m-1y \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --arch_name=smt_it_stm_p8 \
+    --decoder=mlp \
+    --draw_interval=5min \
+    --num_draw=4 \
+    --use_centered_positives=True \
+    --normalize_inputs=2048 \
+    --multimodal_reduce=learned \
+    --stream_channels=16 \
+    --temporal_dropout=0.5 \
+    --accelerator="gpu" \
+    --devices "0," \
+    --amp_backend=apex \
+    --resample_invalid_frames=3 \
+    --lr_scheduler=CosineAnnealingLR \
+    --mask_low_quality=True \
+    --use_cloudmask=1 \
+    --observable_threshold=0.5 \
+    --quality_threshold=0.6 \
+    --num_sanity_val_steps=0 \
+    --multimodal_reduce=learned_linear \
+    --max_epoch_length=16384  \
+    --init=/home/local/KHQ/jon.crall/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_10GSD_BGRNSH_invar_V12/lightning_logs/version_1/package-interupt/package_epoch74_step76224.pt
+
 DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
-rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_10GSD_BGRNSH_invar_V12 "$DVC_EXPT_DPATH"
+rsync -avprPR yardrat:data/dvc-repos/smart_expt_dvc/./training/yardrat/jon.crall/Drop4-BAS/runs "$DVC_EXPT_DPATH"

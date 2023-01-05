@@ -506,6 +506,7 @@ dvc_add(){
     ls -- */S2
     ls -- */*.json
 
+    dvc add -- */L8 */S2 *.zip && dvc push -r aws -R . && git commit -am "Add Drop4" && git push 
     dvc add -- */L8 */S2 *.zip viz512_anns && dvc push -r aws -R . && git commit -am "Add Drop4" && git push 
     dvc add -- */L8 */S2 && dvc push -r aws -R . && git commit -am "Add Drop4" && git push 
 
