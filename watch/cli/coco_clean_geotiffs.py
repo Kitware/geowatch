@@ -22,26 +22,26 @@ class CleanGeotiffConfig(scfg.DataConfig):
         # It is a good idea to do a dry run first to check for issues
         # This can be done at a smaller scale for speed.
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-        COCO_FPATH="$DVC_DATA_DPATH/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/data.kwcoco.json"
         smartwatch clean_geotiffs \
-            --src "$COCO_FPATH" \
+            --src "$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
             --channels="red|green|blue|nir|swir16|swir22" \
             --prefilter_channels="red" \
             --min_region_size=256 \
             --nodata_value=-9999 \
             --workers="min(2,avail)" \
+            --probe_scale=0.125 \
             --scale=0.25 \
-            --probe_scale=0.1 \
             --dry=True
 
-        # Then execute a real run at full scale
-        python -m watch.cli.coco_clean_geotiffs \
-            --src "$COCO_FPATH" \
+        # Then execute a real run at full scale - optionally with a probe scale
+        smartwatch clean_geotiffs \
+            --src "$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
             --channels="red|green|blue|nir|swir16|swir22" \
             --prefilter_channels="red" \
             --min_region_size=256 \
             --nodata_value=-9999 \
             --workers="min(2,avail)" \
+            --probe_scale=None \
             --dry=False
     """
     src = scfg.Value(None, help='input coco dataset')
@@ -147,17 +147,6 @@ def main(cmdline=1, **kwargs):
         >>> kwplot.imshow(canvas2, pnum=(1, 2, 2), title='after')
 
     Ignore:
-        DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-        COCO_FPATH="$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json"
-        smartwatch clean_geotiffs \
-            --src "$COCO_FPATH" \
-            --channels="red|green|blue|nir|swir16|swir22" \
-            --prefilter_channels="red" \
-            --min_region_size=256 \
-            --nodata_value=-9999 \
-            --workers="min(2,avail)" \
-            --probe_scale=0.25 \
-            --dry=True
 
     Ignore:
         import watch
