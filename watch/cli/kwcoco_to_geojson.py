@@ -16,6 +16,10 @@ References:
     .. [3] https://smartgitlab.com/TE/annotations
 
 
+SeeAlso:
+    * ../tasks/tracking/from_heatmap.py
+    * ../tasks/tracking/utils.py
+
 DESIGN TODO:
     - [ ] Separate out into two processes:
         1) given a kwcoco file, does tracking and produces another kwcoco file with predicted "tracked" annotations.

@@ -215,6 +215,8 @@ def main(cmdline=1, **kwargs):
     with mprog:
         mprog.update_info('Looking for geotiff issues')
 
+        # TODO: may need to use the blocking job queue to limit the maximum
+        # number of unhandled but populated results
         for coco_img in mprog.new(coco_imgs, desc='Submit probe jobs'):
             coco_img.detach()
             jobs.submit(probe_image_issues, coco_img, **probe_kwargs)
@@ -245,10 +247,10 @@ def main(cmdline=1, **kwargs):
             ))
 
             for image_summary in summaries:
-                if len(image_summary['bad_values']):
+                if len(image_summary.get('bad_values', None)):
                     num_images_issues += 1
                     for asset_summary in image_summary['chans']:
-                        if asset_summary['bad_values']:
+                        if asset_summary.get('bad_values', None):
                             asset_summary['coco_img'] = image_summary['coco_img']
                             seen_bad_values.update(asset_summary['bad_values'])
                             num_asset_issues += 1

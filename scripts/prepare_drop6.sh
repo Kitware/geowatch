@@ -83,6 +83,7 @@ add_dvc_data(){
 
 #### FIXUP
 
+#COCO_FPATH="$DVC_DATA_DPATH/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/imganns-AE_R001.kwcoco.json"
 DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
 COCO_FPATH="$DVC_DATA_DPATH/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/data.kwcoco.json"
 smartwatch clean_geotiffs \
@@ -91,7 +92,7 @@ smartwatch clean_geotiffs \
     --prefilter_channels="red" \
     --min_region_size=256 \
     --nodata_value=-9999 \
-    --workers="min(1,avail)" \
+    --workers="min(4,avail)" \
     --probe_scale=0.25
 
 
