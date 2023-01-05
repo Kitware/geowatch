@@ -666,12 +666,12 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
 
     # FIXME: the returned band size from the gdal calls doesnt seem correct.
     # For multi-band images I get 256x1 blocksizes when gdalinfo reports
-    # 256,256. For now just always use a 256x256 blocksize and at least two
+    # 256,256. For now just always use a 256x256 blocksize and at least 3
     # overviews.
     HACK_FIX_BAND_METADATA = True
     if HACK_FIX_BAND_METADATA:
         blocksize = (256, 256)
-        num_overviews = max(num_overviews, 2)
+        num_overviews = max(num_overviews, 3)
 
     ### Rebuild overviews
     overviewlist = (2 ** np.arange(1, num_overviews + 1)).tolist()
