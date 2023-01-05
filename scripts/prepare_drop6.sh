@@ -91,8 +91,8 @@ smartwatch clean_geotiffs \
     --prefilter_channels="red" \
     --min_region_size=256 \
     --nodata_value=-9999 \
-    --workers="min(4,avail)" \
-    --probe_scale=0.25 
+    --workers="min(1,avail)" \
+    --probe_scale=0.25
 
 
 

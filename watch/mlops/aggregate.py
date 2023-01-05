@@ -91,6 +91,7 @@ def main(cmdline=True, **kwargs):
                 try:
                     model_name = ub.Path(row[model_col]).name
                 except Exception:
+                    continue
                     model_name = '?'
                 print(score, model_name)
 
@@ -140,9 +141,15 @@ def build_tables(config):
 
         # Pattern match
         # node.template_out_paths[out_node.name]
-        param_rows = []
-        metric_rows = []
-        index_rows = []
+
+        cols = {
+            'metrics': [],
+            'index': [],
+            'params': [],
+            'param_types': [],
+            'fpaths': [],
+            # 'json_info': [],
+        }
         for fpath in ub.ProgIter(fpaths, desc='loading'):
             result = result_loader_fn(fpath)
 
@@ -158,16 +165,25 @@ def build_tables(config):
             }
             metrics = smart_result_parser._add_prefix(node_name + '.metrics.', result['metrics'])
             params = smart_result_parser._add_prefix(node_name + '.params.', config_)
-            metric_rows.append(metrics)
-            param_rows.append(params)
-            index_rows.append(index)
 
-        params = pd.DataFrame(param_rows)
+            if config_:
+                cols['metrics'].append(metrics)
+                cols['params'].append(params)
+                cols['index'].append(index)
+                cols['param_types'].append(result['param_types'])
+                cols['fpaths'].append(fpath)
+                # cols['json_info'].append(result['json_info'])
+
+        params = pd.DataFrame(cols['params'])
         trunc_params, mappings = truncate_dataframe_items(params)
         results = {
-            'index': pd.DataFrame(index_rows),
-            'metrics': pd.DataFrame(metric_rows),
-            'params': trunc_params,
+            'mappings': mappings,
+            'fpaths': cols['fpaths'],
+            'index': pd.DataFrame(cols['index']),
+            'metrics': pd.DataFrame(cols['metrics']),
+            'params': pd.DataFrame(cols['params']),
+            'trunc_params': trunc_params,
+            'param_types': cols['param_types'],
         }
         eval_type_to_results[node_name] = results
 
@@ -233,6 +249,165 @@ class Aggregator:
             agg.results, metrics=metrics_of_interest)
         analysis.results
         analysis.analysis()
+
+    def build_effective_params(agg):
+        """
+        Consolodate information
+        """
+        params = agg.params
+
+        effective_params = params.copy()
+
+        model_cols = [c for c in params.columns if c.endswith('package_fpath')]
+        test_dset_cols = [c for c in params.columns if c.endswith('test_dataset')]
+
+        from typing import Dict, Any
+        mappings : Dict[str, Dict[Any, str]] = {}
+        for colname in model_cols:
+            raw_paths = params[colname].tolist()
+            condensed = []
+            for p in raw_paths:
+                p = ub.Path(p).stem
+                p = '.'.join(p.split('.')[0:1])
+                condensed.append(p)
+            effective_params[colname] = condensed
+            col_mapping = ub.dzip(condensed, raw_paths)
+            mappings[colname] = col_mapping
+
+        for colname in test_dset_cols:
+            raw_paths = params[colname].tolist()
+            condensed = []
+            for p in raw_paths:
+                p = ub.Path(p).stem
+                p = '.'.join(p.split('.')[0:1])
+                condensed.append(p)
+            effective_params[colname] = condensed
+            col_mapping = ub.dzip(condensed, raw_paths)
+            mappings[colname] = col_mapping
+
+        agg.effective_params = effective_params
+
+    def build_macro_averaged_comparable_tables(agg):
+        import kwplot
+        sns = kwplot.autosns()
+        table = pd.concat([agg.index, agg.metrics, agg.effective_params], axis=1)
+        index_params = pd.concat([agg.index, agg.effective_params], axis=1)
+
+        # Macro aggregation over regions.
+        macro_compatible = ub.ddict(list)
+        test_dset_cols = [c for c in agg.effective_params.columns if c.endswith('test_dataset')]
+        param_cols = ub.oset(index_params.columns).difference(test_dset_cols)
+        param_cols = list(param_cols - {'region_id', 'type'})
+        for param_vals, group in table.groupby(param_cols, dropna=False):
+            # unique_params = ub.dzip(param_cols, param_vals)
+            test_regions = frozenset(group['region_id'].tolist())
+            macro_compatible[test_regions].append(group)
+
+        # all_common = frozenset.intersection(*macro_compatible.keys())
+
+        # Get all measurements that can be averaged over the chosen regions
+        import kwarray
+        regions_of_interest = {'BR_R002', 'KR_R001', 'KR_R002', 'US_R007'}
+        # regions_of_interest = {'KR_R001', 'KR_R002', 'BR_R002'}
+        # regions_of_interest = {'KR_R001', 'KR_R002', 'BR_R002'}
+        comparable = []
+        for key in macro_compatible.keys():
+            avail = (key & regions_of_interest)
+            if avail == regions_of_interest:
+                groups = macro_compatible[key]
+                for group in groups:
+                    flags = kwarray.isect_flags(group['region_id'], avail)
+                    comparable.append(group[flags])
+
+        def macro_aggregate(group):
+            # if len(group) == 1:
+            #     return group
+            sum_cols = [
+                'bas_poly_eval.metrics.bas_tp',
+                'bas_poly_eval.metrics.bas_fp',
+                'bas_poly_eval.metrics.bas_fn',
+                'bas_poly_eval.metrics.bas_ntrue',
+                'bas_poly_eval.metrics.bas_npred',
+            ]
+            mean_cols = [
+                'bas_poly_eval.metrics.bas_ppv',
+                'bas_poly_eval.metrics.bas_tpr',
+                'bas_poly_eval.metrics.bas_ffpa',
+                'bas_poly_eval.metrics.bas_f1',
+                'bas_poly_eval.metrics.bas_space_FAR',
+                'bas_poly_eval.metrics.bas_time_FAR',
+                'bas_poly_eval.metrics.bas_image_FAR',
+                'bas_poly_eval.metrics.bas_faa_f1',
+                'bas_poly_eval.metrics.sc_macro_f1',
+                'bas_poly_eval.metrics.macro_f1_siteprep',
+                'bas_poly_eval.metrics.macro_f1_active',
+                'bas_poly_eval.metrics.sc_micro_f1',
+            ]
+            agg_id_cols = [
+                'bas_poly_eval.params.bas_pxl.test_dataset',
+                'region_id',
+            ]
+            other_cols = group.columns.difference(mean_cols).difference(sum_cols).difference(agg_id_cols)
+            group[other_cols]
+
+            sum_df = group[sum_cols]
+            mean_df = group[mean_cols]
+            other_df = group[other_cols]
+            aggid_df = group[agg_id_cols]
+
+            if len(aggid_df) == 1:
+                aggid_row = aggid_df.iloc[0]
+            else:
+                aggid_row = pd.Series({k: 'macro_' + ub.hash_data(sorted(v.to_list()))[0:6] for k, v in aggid_df.T.iterrows()})
+            aggid_row['macro_size'] = len(aggid_df)
+
+            other_df.apply(ub.allsame, axis=1)
+            is_safe_cols = {k: ub.allsame(vs) for k, vs in other_df.T.iterrows()}
+            warn_cols = {k: v for k, v in is_safe_cols.items() if not v}
+            assert not warn_cols
+
+            sum_row = sum_df.sum(axis=0)
+            mean_row = mean_df.mean(axis=0)
+            other_row = other_df.iloc[0]
+
+            macro_row = pd.concat([aggid_row, mean_row, sum_row, other_row], axis=0)
+            return macro_row
+
+        # Macro average comparable groups
+        macro_rows = pd.DataFrame([macro_aggregate(group) for group in comparable])
+        macro_df = macro_rows
+        main_metric = 'bas_poly_eval.metrics.bas_faa_f1'
+        main_metric = 'bas_poly_eval.metrics.bas_tp'
+        macro_df = macro_df.sort_values(main_metric, ascending=False)
+        metrics_of_interest = [
+            main_metric,
+        ]
+        from watch.utils import result_analysis
+        results = []
+        for idx, row in enumerate(macro_df.to_dict('records')):
+            row = ub.udict(row)
+            metrics = row & set(agg.metrics.keys())
+            params = row & set(agg.params.keys())
+            result = result_analysis.Result(str(idx), params, metrics)
+            results.append(result)
+
+        analysis = result_analysis.ResultAnalysis(
+            results, metrics=metrics_of_interest,
+            metric_objectives={main_metric: 'max'}
+        )
+        analysis.analysis()
+        analysis.report()
+
+        model_cols = [c for c in agg.params.columns if c.endswith('package_fpath')]
+        test_dset_cols = [c for c in agg.params.columns if c.endswith('test_dataset')]
+
+        sns = kwplot.autosns()
+        plt = kwplot.autoplt()
+        kwplot.figure()
+        x = 'bas_poly_eval.params.bas_poly.thresh'
+        sns.lineplot(data=macro_df, x=x, y=main_metric, hue=model_cols[0], style=model_cols[0])
+        ax = plt.gca()
+        ax.set_title(f'BAS Macro Average over {regions_of_interest}')
 
 
 def plot_examples():

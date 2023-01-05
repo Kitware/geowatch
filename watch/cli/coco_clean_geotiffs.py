@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import scriptconfig as scfg
 import ubelt as ub
 import kwimage
@@ -89,6 +90,12 @@ class CleanGeotiffConfig(scfg.DataConfig):
         negatives.
 
         Should be given as a float less than 1.0
+        '''))
+
+    use_fix_stamps = scfg.Value(False, help=ub.paragraph(
+        '''
+        if True, write a file next to every file that was fixed so we dont need
+        to check it again.
         '''))
 
     dry = scfg.Value(False, help='if True, only do a dry run. Report issues but do not fix them')
@@ -198,12 +205,13 @@ def main(cmdline=1, **kwargs):
         'channels': channels,
         'min_region_size': config['min_region_size'],
         'probe_scale': config['probe_scale'],
+        'use_fix_stamps': config['use_fix_stamps'],
     }
 
     coco_imgs = coco_dset.images().coco_images
 
     from watch.utils import util_progress
-    mprog = util_progress.MultiProgress()
+    mprog = util_progress.MultiProgress(use_rich=0)
     with mprog:
         mprog.update_info('Looking for geotiff issues')
 
@@ -276,8 +284,20 @@ def main(cmdline=1, **kwargs):
         if not config['dry']:
             correct_nodata_value = config['nodata_value']
             for asset_summary in mprog.new(needs_fix, desc='Cleaning identified issues'):
+                fpath = ub.Path(asset_summary['fpath'])
                 fix_geotiff_ondisk(asset_summary,
                                    correct_nodata_value=correct_nodata_value)
+                if config['use_fix_stamps']:
+                    # Mark that fixes have been applied to this asset
+                    import json
+                    fix_fpath = fpath.augment(tail='.fixes.stamp')
+                    if fix_fpath.exists():
+                        fixes = json.loads(fix_fpath.read_text())
+                    else:
+                        fixes = []
+                    new_fixes = ub.udict(asset_summary) & {'band_idxs'}
+                    fixes.append(new_fixes)
+                    fix_fpath.write_text(json.dumps(fixes))
         else:
             for asset_summary in mprog.new(needs_fix, desc='Dry run: identifying issues'):
                 print(asset_summary['fpath'])
@@ -307,7 +327,7 @@ def main(cmdline=1, **kwargs):
 
 def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=None,
                        possible_nodata_values=None, min_region_size=256,
-                       probe_scale=None):
+                       probe_scale=None, use_fix_stamps=False):
     """
     Inspect a single image, possibily with multiple assets, each with possibily
     multiple bands for fixable nodata values.
@@ -391,7 +411,7 @@ def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=N
             probe_asset_summary = probe_asset(
                 coco_img, obj, band_idxs=band_idxs, scale=probe_scale,
                 possible_nodata_values=possible_nodata_values,
-                min_region_size=min_region_size)
+                min_region_size=min_region_size, use_fix_stamps=use_fix_stamps)
             if not probe_asset_summary['bad_values']:
                 should_continue = False
 
@@ -401,7 +421,8 @@ def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=N
             asset_summary = probe_asset(coco_img, obj, band_idxs=band_idxs,
                                         scale=scale,
                                         possible_nodata_values=possible_nodata_values,
-                                        min_region_size=min_region_size)
+                                        min_region_size=min_region_size,
+                                        use_fix_stamps=use_fix_stamps)
             if not asset_summary['bad_values']:
                 should_continue = False
             asset_summaries.append(asset_summary)
@@ -416,7 +437,8 @@ def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=N
             asset_summary = probe_asset(coco_img, obj, band_idxs=band_idxs,
                                         scale=scale,
                                         possible_nodata_values=possible_nodata_values,
-                                        min_region_size=min_region_size)
+                                        min_region_size=min_region_size,
+                                        use_fix_stamps=use_fix_stamps)
             asset_summaries.append(asset_summary)
 
     image_summary['chans'] = asset_summaries
@@ -426,7 +448,8 @@ def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=N
 
 
 def probe_asset(coco_img, obj, band_idxs=None, scale=None,
-                possible_nodata_values=None, min_region_size=256):
+                possible_nodata_values=None, min_region_size=256,
+                use_fix_stamps=False):
     """
     Inspect a specific single-file asset possibily with multiple bands for
     fixable nodata values.
@@ -435,11 +458,25 @@ def probe_asset(coco_img, obj, band_idxs=None, scale=None,
     if band_idxs is None:
         band_idxs = list(range(asset_channels.numel()))
 
-    check_channels = asset_channels[band_idxs]
+    bundle_dpath = ub.Path(coco_img.bundle_dpath)
+    fpath = bundle_dpath / obj['file_name']
 
     asset_summary = {
         'channels': asset_channels,
+        'fpath': fpath,
     }
+
+    if use_fix_stamps:
+        import json
+        fix_fpath = fpath.augment(tail='.fixes.stamp')
+        if fix_fpath.exists():
+            fixes = json.loads(fix_fpath.read_text())
+            assert fixes
+            return asset_summary
+            # TODO: actually check the requested fix was applied, but for now
+            # assume if the file exists we should skip the check.
+
+    check_channels = asset_channels[band_idxs]
     delayed = coco_img.delay(
         channels=check_channels, space='asset', nodata_method='float')
     if scale is not None:
@@ -449,9 +486,6 @@ def probe_asset(coco_img, obj, band_idxs=None, scale=None,
 
     imdata = delayed.finalize(interpolation='nearest')
 
-    bundle_dpath = ub.Path(coco_img.bundle_dpath)
-    fpath = bundle_dpath / obj['file_name']
-
     if scale is not None:
         min_region_size_ = int(min_region_size * scale)
     else:
@@ -460,7 +494,6 @@ def probe_asset(coco_img, obj, band_idxs=None, scale=None,
     asset_summary = probe_asset_imdata(
         imdata, band_idxs, min_region_size_=min_region_size_,
         possible_nodata_values=possible_nodata_values)
-
     asset_summary['fpath'] = fpath
     return asset_summary
 

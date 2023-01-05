@@ -614,26 +614,29 @@ prepare_qfabric_horologic(){
 
 
 #### FIXUP
+fixup_nodata(){
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    smartwatch clean_geotiffs \
+        --src "$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
+        --channels="red|green|blue|nir|swir16|swir22" \
+        --prefilter_channels="red" \
+        --min_region_size=256 \
+        --nodata_value=-9999 \
+        --workers="min(2,avail)" \
+        --probe_scale=0.125 \
+        --dry=True
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-smartwatch clean_geotiffs \
-    --src "$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
-    --channels="red|green|blue|nir|swir16|swir22" \
-    --prefilter_channels="red" \
-    --min_region_size=256 \
-    --nodata_value=-9999 \
-    --workers="min(2,avail)" \
-    --probe_scale=0.125 \
-    --dry=True
 
+    DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
+    smartwatch clean_geotiffs \
+        --src "$DVC_DATA_DPATH/Drop4-BAS/data_train.kwcoco.json" \
+        --channels="red|green|blue|nir|swir16|swir22" \
+        --prefilter_channels="red" \
+        --min_region_size=256 \
+        --nodata_value=-9999 \
+        --workers="min(4,avail)" \
+        --probe_scale=0.125 \
+        --dry=True
 
-DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-smartwatch clean_geotiffs \
-    --src "$DVC_DATA_DPATH/Drop4-BAS/data_train.kwcoco.json" \
-    --channels="red|green|blue|nir|swir16|swir22" \
-    --prefilter_channels="red" \
-    --min_region_size=256 \
-    --nodata_value=-9999 \
-    --workers="min(4,avail)" \
-    --probe_scale=0.125 \
-    --dry=True
+    dvc add -- */L8 */S2 && dvc push -r aws -R . && git commit -am "Fix Drop4 Nodata Issue" && git push 
+}
