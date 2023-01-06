@@ -1068,16 +1068,25 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         def stack_infos(_stack):
             tostack = []
             for item in _stack:
-                canvas = item['im']
-                chan = item['chan']
-                # canvas = kwimage.ensure_float01(canvas, copy=True)
-                canvas = kwimage.ensure_uint255(canvas)
-                if draw_chancode:
-                    canvas = kwimage.draw_text_on_image(
-                        canvas, chan, (1, 2),
-                        valign='top', color='lime', border=3)
-                tostack.append(canvas)
-            canvas = kwimage.stack_images(tostack)
+                if item is None:
+                    print('warning: None stack item')
+                else:
+                    canvas = item['im']
+                    chan = item['chan']
+                    # canvas = kwimage.ensure_float01(canvas, copy=True)
+                    canvas = kwimage.ensure_uint255(canvas)
+                    if draw_chancode:
+                        canvas = kwimage.draw_text_on_image(
+                            canvas, chan, (1, 2),
+                            valign='top', color='lime', border=3)
+                    tostack.append(canvas)
+
+            if len(tostack) > 0:
+                canvas = kwimage.stack_images(tostack)
+            else:
+                canvas = kwimage.draw_text_on_image(None, text='X')
+                canvas = kwimage.imresize(canvas, dsize=(512, 512))
+
             canvas = kwimage.ensure_uint255(canvas)
             return canvas
 
@@ -1334,6 +1343,7 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
             img_canvas is None or
             draw_anns_alone
         )
+        need_ann_canvas = True
 
         if need_ann_canvas:
             ann_canvas = kwimage.ensure_float01(canvas, copy=True)
@@ -1348,15 +1358,11 @@ def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
 
         if stack_anns:
             if ann_canvas is None:
-                ann_stack_item = {
-                    'im': img_canvas,
-                    'chan': chan_group,
-                }
-            else:
-                ann_stack_item = {
-                    'im': ann_canvas,
-                    'chan': chan_group,
-                }
+                ann_canvas = img_canvas.copy()
+            ann_stack_item = {
+                'im': ann_canvas,
+                'chan': chan_group,
+            }
         if draw_anns_alone:
             assert ann_canvas is not None
             ann_canvas = kwimage.ensure_uint255(ann_canvas)

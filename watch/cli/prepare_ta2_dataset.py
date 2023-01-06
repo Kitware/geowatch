@@ -91,8 +91,8 @@ class PrepareTA2Config(scfg.Config):
         'collated': scfg.Value([True], nargs='+', help='set to false if the input data is not collated'),
 
         'backend': scfg.Value('serial', help='can be serial, tmux, or slurm. Using tmux is recommended.'),
-
-        'serial': scfg.Value(False, isflag=True, help='if True, override other settings to disable parallelism'),
+        'serial': scfg.Value(False, isflag=True, help='if True, override other settings to disable parallelism. DEPRECATE. Set backend=serial isntead'),
+        'with_textual': scfg.Value('auto', help='setting for cmd-queue monitoring'),
 
         'max_queue_size': scfg.Value(10, help='the number of regions allowed to be processed in parallel with tmux backend'),
         'max_regions': None,
@@ -657,6 +657,7 @@ def main(cmdline=False, **kwargs):
                     --draw_imgs=True \
                     --channels="red|green|blue" \
                     --max_dim={viz_max_dim} \
+                    --stack=only \
                     --animate=True --workers=auto
                 '''), depends=[align_job], name=f'viz-imgs-{name}',
                 in_paths={
@@ -704,6 +705,7 @@ def main(cmdline=False, **kwargs):
                         --channels="red|green|blue" \
                         --max_dim={viz_max_dim} \
                         --animate=True --workers=auto \
+                        --stack=only \
                         --only_boxes={config["visualize_only_boxes"]}
                     '''), depends=[project_anns_job], name=f'viz-annots-{name}',
                     in_paths={
@@ -821,7 +823,7 @@ def main(cmdline=False, **kwargs):
     queue.print_graph()
     queue.rprint()
     if config['run']:
-        queue.run(block=True, system=True)
+        queue.run(block=True, system=True, with_textual=config['with_textual'])
 
     # TODO: team features
     """
