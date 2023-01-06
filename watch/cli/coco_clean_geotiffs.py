@@ -24,14 +24,13 @@ class CleanGeotiffConfig(scfg.DataConfig):
         # This can be done at a smaller scale for speed.
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
         smartwatch clean_geotiffs \
-            --src "$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
+            --src "$DVC_DATA_DPATH/Drop4-BAS/data.kwcoco.json" \
             --channels="red|green|blue|nir|swir16|swir22" \
             --prefilter_channels="red" \
             --min_region_size=256 \
             --nodata_value=-9999 \
             --workers="min(2,avail)" \
-            --probe_scale=0.125 \
-            --scale=0.25 \
+            --probe_scale=0.5 \
             --dry=True
 
         # Then execute a real run at full scale - optionally with a probe scale
@@ -211,7 +210,7 @@ def main(cmdline=1, **kwargs):
     coco_imgs = coco_dset.images().coco_images
 
     from watch.utils import util_progress
-    mprog = util_progress.MultiProgress(use_rich=0)
+    mprog = util_progress.MultiProgress(use_rich=1)
     with mprog:
         mprog.update_info('Looking for geotiff issues')
 
