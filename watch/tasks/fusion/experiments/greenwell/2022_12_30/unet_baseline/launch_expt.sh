@@ -19,10 +19,9 @@ python -m watch.tasks.fusion fit \
     --model.init_args.name=$EXPERIMENT_NAME \
     --data.train_dataset="$TRAIN_FPATH" \
     --data.vali_dataset="$VALI_FPATH" \
-    --data.num_workers=0 \
+    --data.num_workers=4 \
     --trainer.default_root_dir="$DEFAULT_ROOT_DIR" \
     --trainer.accelerator="gpu" \
     --trainer.devices=1 \
-    --trainer.precision=16 \
-    --trainer.max_steps=200000
+    --trainer.precision=16
     # --trainer.detect_anomaly=true \
