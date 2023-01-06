@@ -4,9 +4,6 @@ from torch import nn
 import torch.nn.functional as F
 import torchmetrics
 import einops
-from einops.layers.torch import Rearrange
-from torchvision import models as tv_models
-from torchvision.models import feature_extraction
 
 import kwcoco
 import kwarray
@@ -21,11 +18,7 @@ from watch.tasks.fusion.methods.watch_module_mixins import WatchModuleMixins
 from watch.tasks.fusion.architectures import unet_blur
 
 import numpy as np
-import itertools as it
-from typing import List, Dict, Any
-from collections import defaultdict as ddict
-
-from abc import ABCMeta, abstractmethod
+from typing import  Dict, Any
 
 try:
     import xdev
@@ -359,7 +352,7 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
             for stage in ["train", "val", "test"]
         })
 
-    def process_frame(self, frame) -> Dict[str, Dict[str,Any]]:
+    def process_frame(self, frame) -> Dict[str, Dict[str, Any]]:
 
         configs = {
             "change": {
@@ -448,10 +441,11 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
             F.pad(
                 ex,
                 # F.pad pairs padding values IN REVERSE ORDER, below is correct
-                (0,0, #W-ex.shape[3],
-                 0,0, #H-ex.shape[2],
-                 0,T-ex.shape[1],
-                 0,0, #C-ex.shape[0], 
+                (
+                    0, 0, #W-ex.shape[3],
+                    0, 0, #H-ex.shape[2],
+                    0, T - ex.shape[1],
+                    0, 0, #C-ex.shape[0],
                 ),
                 mode="constant", value=0,
             )
