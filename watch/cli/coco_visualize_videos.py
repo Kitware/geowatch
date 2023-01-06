@@ -28,6 +28,7 @@ CommandLine:
     python -m watch.cli.coco_visualize_videos --src=$KWCOCO_FPATH --viz_dpath=$VIZ_DPATH --zoom_to_tracks=True --start_frame=1 --num_frames=5 --animate=True
 """
 import kwcoco
+import kwarray
 import kwimage
 import scriptconfig as scfg
 import numpy as np
@@ -185,9 +186,18 @@ class CocoVisualizeConfig(scfg.Config):
 
         'verbose': scfg.Value(0, isflag=True, help='verbosity level'),
 
-        'stack': scfg.Value(False, isflag=True, help='if True stack late fused channels in the same image'),
+        'stack': scfg.Value('auto', isflag=True, help='if True stack late fused channels in the same image'),
 
-        'fast': scfg.Value(False, isflag=True, help='if True, override other params to go fast and use more resources'),
+        'role_order': scfg.Value(None, help=ub.paragraph(
+            '''
+            if specified, annotations are grouped by roles and drawn on different items in a channels stack in the given order
+            ''')),
+
+        'smart': scfg.Value(False, isflag=True, help=ub.paragraph(
+            '''
+            if True, override params based on "smart" settings. This defaults
+            to going fast and using more resources, and stacked data.
+            '''), alias=['fast']),
     }
 
 
@@ -229,13 +239,18 @@ def main(cmdline=True, **kwargs):
     channels = config['channels']
     print('config = {}'.format(ub.repr2(dict(config), nl=2)))
 
-    if config['fast']:
-        config['workers'] = 'avail'
+    if config['smart']:
+        if config['workers'] == 'auto':
+            config['workers'] = 'avail'
         if not config['animate']:
             config['animate'] = True
-        config['stack'] = 'only'
+        if config['stack'] == 'auto':
+            config['stack'] = 'only'
         if config['channels'] is None:
             channels = config['channels'] = 'auto'
+
+    if config['stack'] == 'auto':
+        config['stack'] = False
 
     if config['max_workers'] is not None:
         ub.schedule_deprecation(
@@ -401,7 +416,6 @@ def main(cmdline=True, **kwargs):
                 for c in common:
                     chan_to_ref_imgs[c].append(coco_img)
 
-            from watch.utils import util_kwarray
             chan_to_normalizer = {}
             for chan, coco_imgs in chan_to_ref_imgs.items():
                 s = max(1, len(coco_imgs) // 10)
@@ -411,7 +425,7 @@ def main(cmdline=True, **kwargs):
                     mask = rawdata != 0
                     obs.append(rawdata[mask].ravel())
                 allobs = np.hstack(obs)
-                normalizer = util_kwarray.find_robust_normalizers(allobs, params={
+                normalizer = kwarray.find_robust_normalizers(allobs, params={
                     'high': 0.90,
                     'mid': 0.5,
                     'low': 0.01,
@@ -430,7 +444,7 @@ def main(cmdline=True, **kwargs):
             'resolution', 'draw_header', 'draw_chancode', 'skip_aggressive',
             'stack', 'min_dim', 'min_dim', 'verbose', 'only_boxes',
             'fixed_normalization_scheme',
-            'any3', 'cmap',
+            'any3', 'cmap', 'role_order',
         }
 
         if config['zoom_to_tracks']:
@@ -557,6 +571,10 @@ def main(cmdline=True, **kwargs):
 
 
 class SkipFrame(Exception):
+    pass
+
+
+class SkipChanGroup(Exception):
     pass
 
 
@@ -848,13 +866,13 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                draw_header=True,
                                draw_chancode=True,
                                resolution=None,
+                               role_order=None,
                                ):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
     (with or without annotation overlays) for specific bands to disk.
     """
     # See if we can look at what we made
-    from watch.utils import util_kwimage
 
     sensor_coarse = img.get('sensor_coarse', 'unknown')
     # align_method = img.get('align_method', 'unknown')
@@ -890,9 +908,12 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         if coco_img.video is not None:
             if 'target_gsd' in coco_img.video:
                 RESOLUTION_KEY = 'target_gsd'
-        factor = coco_img._scalefactor_for_resolution(
-            space=space, resolution=resolution,
-            RESOLUTION_KEY=RESOLUTION_KEY)
+        if resolution is None:
+            factor = 1
+        else:
+            factor = coco_img._scalefactor_for_resolution(
+                space=space, resolution=resolution,
+                RESOLUTION_KEY=RESOLUTION_KEY)
         warp_viz_from_space = kwimage.Affine.scale(factor)
 
     delayed = coco_img.delay(space=space, resolution=resolution,
@@ -923,9 +944,15 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     ann_view_dpath = sub_dpath / '_anns'
 
     anns_ = [ub.dict_diff(ann, ['keypoints']) for ann in anns]  # Ignore keypoints
-    dets = kwimage.Detections.from_coco_annots(anns_, dset=coco_dset)
 
-    dets = dets.warp(warp_viz_from_img)
+    role_to_anns = ub.group_items(anns_, lambda ann: ann.get('role', None))
+    role_to_anns = {'none' if k is None else k.lower(): v for k, v in role_to_anns.items()}
+
+    role_to_dets = ub.udict()
+    for role, role_anns in role_to_anns.items():
+        role_dets = kwimage.Detections.from_coco_annots(role_anns, dset=coco_dset)
+        role_dets = role_dets.warp(warp_viz_from_img)
+        role_to_dets[role] = role_dets
 
     # TODO: asset space
 
@@ -934,12 +961,14 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         if space == 'image':
             warp_viz_from_vid = warp_viz_from_space @ warp_vid_from_img.inv()
         elif space == 'video':
+            warp_viz_from_vid = warp_viz_from_space
             crop_box = vid_crop_box
         else:
             raise KeyError(space)
         crop_box = vid_crop_box.warp(warp_viz_from_vid).quantize()
         ann_shift = (-crop_box.tl_x.ravel()[0], -crop_box.tl_y.ravel()[0])
-        dets = dets.translate(ann_shift)
+        for role_dets in role_to_dets.values():
+            role_dets.translate(ann_shift, inplace=True)
         delayed = delayed.crop(crop_box.to_slices()[0])
 
     valid_image_poly = None
@@ -979,11 +1008,13 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     if viz_scale_factor != 1:
         viz_warp = kwimage.Affine.scale(viz_scale_factor)
         delayed = delayed.warp(viz_warp)
-        dets = dets.warp(viz_warp)
+        for role_dets in role_to_dets.values():
+            role_dets.warp(viz_warp, inplace=True)
         if valid_image_poly is not None:
             valid_image_poly = valid_image_poly.warp(viz_warp)
         if valid_video_poly is not None:
             valid_video_poly = valid_video_poly.warp(viz_warp)
+
     if stack:
         ann_stack = []
         img_stack = []
@@ -992,244 +1023,37 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     # h, w = delayed.shape[0:2]
     # delayed = delayed[0:h // 2, w // 4: w - w // 4]
 
-    for stack_idx, chan_row in enumerate(chan_groups):
-        chan_pname = chan_row['pname']
-        chan_group_obj = chan_row['chan']
-        chan_list = chan_group_obj.parsed
-        chan_group = chan_group_obj.spec
-
-        img_chan_dpath = img_view_dpath / chan_pname
-        ann_chan_dpath = ann_view_dpath / chan_pname
-
-        # Prevent long names for docker (limit is 242 chars)
-        chan_pname2 = kwcoco.FusedChannelSpec.coerce(chan_group).path_sanitize(maxlen=10)
-        prefix = '_'.join([frame_id, chan_pname2])
-
-        view_img_fpath = img_chan_dpath / prefix + '_' + name + '.view_img.jpg'
-        view_ann_fpath = ann_chan_dpath / prefix + '_' + name + '.view_ann.jpg'
-
-        chan = delayed.take_channels(chan_group)
-        chan = chan.prepare().optimize()
-
-        # When util_delayed_poc is removed, remove **delayed_ops
-        # as they should be given in the constructor.
-        raw_canvas = canvas = chan.finalize(**finalize_opts)
-
-        # foo = kwimage.fill_nans_with_checkers(raw_canvas)
-
-        if verbose > 1:
-            import kwarray
-            print('raw_canvas.shape = {!r}'.format(raw_canvas.shape))
-            print('chan_list = {!r}'.format(chan_list))
+    # TODO: user should need to specify this.
+    max_stacks = len(chan_groups)
+    if role_order is not None:
+        role_order = ['truth', 'none']
+        requested_slots = {}
+        for role in role_to_anns.keys():
             try:
-                chan_stats = kwarray.stats_dict(raw_canvas, axis=2, nan=True)
-                print('chan_stats = {}'.format(ub.repr2(chan_stats, nl=1)))
-            except Exception as ex:
-                print(f'ex={ex}')
-                import warnings
-                warnings.warn('Error printing chan stats, probably need kwarray >= 0.6.1')
+                idx = role_order.index(role)
+            except ValueError:
+                idx = 0
+            requested_slots[role] = min(idx, max_stacks)
+        stack_idx_to_roles = ub.invert_dict(requested_slots, unique_vals=False)
+    else:
+        # If unspecified draw all roles on the first part
+        stack_idx_to_roles = {0: list(role_to_anns.keys())}
 
-        if skip_missing and np.all(np.isnan(raw_canvas)):
-            if skip_aggressive:
-                print('Skip because all is nan')
-                raise SkipFrame
-            continue
-
-        if skip_aggressive:
-            is_bad = np.isnan(raw_canvas).ravel()
-            percent_bad = is_bad.sum() / len(is_bad)
-            if percent_bad > 0.15:
-                print('Skip because some is nan')
-                print('skip')
-                raise SkipFrame
-
-        if 0 and str(chan_group) == 'salient':
-            import kwarray
-            # blur1 = kwarray.atleast_nd(kwimage.gaussian_blur(raw_canvas, sigma=1.6), n=3)
-            # blur2 = kwarray.atleast_nd(kwimage.gaussian_blur(raw_canvas, sigma=3.2), n=3)
-            blur1 = kwarray.atleast_nd(kwimage.gaussian_blur(raw_canvas, sigma=0.8), n=3)
-            blur2 = kwarray.atleast_nd(kwimage.gaussian_blur(raw_canvas, sigma=1.6), n=3)
-            dog = blur1 - blur2
-            shift_dog = dog - min(0, np.nanmin(dog))
-            # import xdev
-            # mxdev.embed()
-            canvas = blur2
-            canvas = shift_dog
-            # orig_max = np.nanmax(raw_canvas)
-            # canvas = kwimage.normalize(shift_dog) * orig_max
-            # canvas = canvas * raw_canvas
-            canvas = raw_canvas
-            # median = np.nanmedian(canvas)
-            canvas = kwarray.atleast_nd(kwimage.gaussian_blur(canvas, sigma=3.6), n=3)
-            median, = np.quantile(canvas.ravel()[~np.isnan(canvas.ravel())], q=[0.8])
-            # median = np.nanmean(canvas) + np.nanstd(canvas)
-            canvas = (canvas - median).clip(0, None)
-            canvas = np.sqrt(canvas)
-
-            # raw_canvas = kwimage.normalize(dog)
-            # raw_canvas = kwarray.atleast_nd(raw_canvas, n=3)
-            # raw_canvas = raw_canvas[:, :, None]
-
-        if chan_to_normalizer is None:
-            dmax = np.nanmax(raw_canvas)
-            # dmin = canvas.min()
-            needs_norm = dmax > 1.0
-            # if canvas.max() <= 0 or canvas.min() >= 255:
-            # Hack to only do noramlization on "non-standard" data ranges
-            if needs_norm:
-                mask = ~np.isnan(raw_canvas)
-                norm_canvas = kwimage.normalize_intensity(raw_canvas, mask=mask, params={
-                    'high': 0.90,
-                    'mid': 0.5,
-                    'low': 0.01,
-                    'mode': 'linear',
-                })
-                canvas = norm_canvas
-            canvas = np.clip(canvas, 0, None)
-        else:
-            new_parts = []
-            for cx, c in enumerate(chan_list):
-                normalizer = chan_to_normalizer.get(c, None)
-                data = canvas[..., cx]
-                mask = ~np.isnan(data)
-                if normalizer is None:
-                    p = kwimage.normalize_intensity(data, params={
-                        'high': 0.90,
-                        'mid': 0.5,
-                        'low': 0.01,
-                        'mode': 'linear',
-                    })
-                else:
-                    p = kwarray.apply_normalizer(data, normalizer, mask=mask,
-                                                 set_value_at_mask=0.)
-                new_parts.append(p)
-            canvas = np.stack(new_parts, axis=2)
-
-        _kw = ub.compatible({'on_value': 0.3}, kwimage.fill_nans_with_checkers)
-        canvas = kwimage.fill_nans_with_checkers(canvas, **_kw)
-
-        # Do the channels correspond to classes with known colors?
-        chan_names = chan_row['chan'].to_list()
-        channel_colors = []
-        for cname in chan_names:
-            if cname in coco_dset.index.name_to_cat:
-                cat = coco_dset.index.name_to_cat[cname]
-                if 'color' in cat:
-                    channel_colors.append(cat['color'])
-                else:
-                    channel_colors.append(None)
-            else:
-                channel_colors.append(None)
-
-        if any(c is not None for c in channel_colors):
-            # This flag makes it so 1 channel outputs always use cmap.
-            # not sure if I like that or not, probably needs to be configurable
-            _flag = kwimage.num_channels(canvas) != 1
-            if _flag:
-                canvas = util_kwimage.perchannel_colorize(canvas, channel_colors=channel_colors)
-                canvas = canvas[..., 0:3]
-
-        if cmap is not None:
-            if kwimage.num_channels(canvas) == 1:
-                import matplotlib as mpl
-                import matplotlib.cm  # NOQA
-                cmap_ = mpl.cm.get_cmap(cmap)
-                canvas = np.nan_to_num(canvas)
-                if len(canvas.shape) == 3:
-                    canvas = canvas[..., 0]
-                    canvas = cmap_(canvas)[..., 0:3].astype(np.float32)
-
-        canvas = util_kwimage.ensure_false_color(canvas)
-        canvas = kwimage.ensure_uint255(canvas)
-
-        if len(canvas.shape) > 2 and canvas.shape[2] > 4:
-            # hack for wv
-            canvas = canvas[..., 0]
-
-        chan_header_lines = header_lines.copy()
-        chan_header_lines.append(chan_group)
-        header_text = '\n'.join(chan_header_lines)
-
-        if valid_image_poly is not None:
-            # Draw the valid region specified at the image level
-            if any([p.data['exterior'].data.size for p in valid_image_poly.data]):
-                canvas = valid_image_poly.draw_on(canvas, color='kitware_green',
-                                                  fill=False, border=True)
-
-        if valid_video_poly is not None:
-            # Draw the valid region specified at the video level
-            if any([p.data['exterior'].data.size for p in valid_video_poly.data]):
-                canvas = valid_video_poly.draw_on(canvas, color='lawngreen',
-                                                  fill=False, border=True)
-
-        stack_imgs = draw_imgs and stack
-        stack_anns = draw_anns and stack
-        draw_anns_alone = draw_anns and stack != 'only'
-        draw_imgs_alone = draw_imgs and stack != 'only'
-
-        if draw_anns_alone:
-            ann_chan_dpath.ensuredir()
-
-        if draw_imgs_alone:
-            img_chan_dpath.ensuredir()
-
-        img_canvas = None
-        ann_canvas = None
-
-        if draw_imgs_alone or stack_imgs:
-            img_canvas = kwimage.ensure_uint255(canvas, copy=True)
-            if stack_imgs:
-                img_stack.append({
-                    'im': img_canvas,
-                    'chan': chan_group,
-                })
-            if draw_imgs_alone:
-                img_header = kwimage.draw_header_text(image=img_canvas,
-                                                      text=header_text,
-                                                      stack=False,
-                                                      fit='shrink')
-                img_header = kwimage.stack_images([img_header, img_canvas])
-                kwimage.imwrite(view_img_fpath, img_canvas)
-
-        if draw_anns_alone or stack_anns:
-            ann_canvas = kwimage.ensure_float01(canvas, copy=True)
-
-            ONLY_BOXES = only_boxes
-            if ONLY_BOXES:
-                ann_canvas = dets.draw_on(ann_canvas, sseg=False,
-                                          labels=False, color='classes')
-                # ann_canvas = dets.boxes.draw_on(ann_canvas, color='blue')
-            else:
-                # THERE IS A IN DRAW POLY WITH LARGE POLYS. THIS IS FINE FOR
-                # REAL DATA BUT A TEST FAILS HARD. HACKING THIS OFF FOR NOW
-                try:
-                    # kwimage 0.8.4 fixes this error
-                    ann_canvas = dets.draw_on(ann_canvas, color='classes')
-                except Exception:
-                    ann_canvas = dets.draw_on(ann_canvas)
-
-            if stack_anns:
-                if stack_idx > 0 and img_canvas is not None:
-                    ann_stack.append({
-                        'im': img_canvas,
-                        'chan': chan_group,
-                    })
-                else:
-                    ann_stack.append({
-                        'im': ann_canvas,
-                        'chan': chan_group,
-                    })
-            if draw_anns_alone:
-                ann_canvas = kwimage.ensure_uint255(ann_canvas)
-                if draw_header:
-                    ann_header = kwimage.draw_header_text(image=ann_canvas,
-                                                          text=header_text,
-                                                          stack=False,
-                                                          fit='shrink')
-                    ann_header = kwimage.imresize(
-                        ann_header, dsize=(ann_header.shape[1], 100), letterbox=True)
-                    ann_canvas = kwimage.stack_images([ann_header, ann_canvas])
-                kwimage.imwrite(view_ann_fpath, ann_canvas)
+    for stack_idx, chan_row in enumerate(chan_groups):
+        request_roles = stack_idx_to_roles.get(stack_idx, [])
+        try:
+            stack_img_item, stack_ann_item = draw_chan_group(
+                coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
+                delayed, chan_row, finalize_opts, verbose, skip_missing,
+                skip_aggressive, chan_to_normalizer, cmap, header_lines,
+                valid_image_poly, draw_imgs, draw_anns, only_boxes,
+                role_to_dets, valid_video_poly, stack, draw_header, stack_idx,
+                request_roles)
+            if stack:
+                img_stack.append(stack_img_item)
+                ann_stack.append(stack_ann_item)
+        except SkipChanGroup:
+            ...
 
     if stack:
         img_stacked_dpath = (img_view_dpath / 'stack')
@@ -1287,6 +1111,266 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                 img_canvas = img_stack_canvas
             view_img_fpath.parent.ensuredir()
             kwimage.imwrite(view_img_fpath, img_canvas)
+
+
+def draw_chan_group(coco_dset, frame_id, name, ann_view_dpath, img_view_dpath,
+                    delayed, chan_row, finalize_opts, verbose, skip_missing,
+                    skip_aggressive, chan_to_normalizer, cmap, header_lines,
+                    valid_image_poly, draw_imgs, draw_anns, only_boxes,
+                    role_to_dets, valid_video_poly, stack, draw_header,
+                    stack_idx, request_roles):
+    from watch.utils import util_kwimage
+    chan_pname = chan_row['pname']
+    chan_group_obj = chan_row['chan']
+    chan_list = chan_group_obj.parsed
+    chan_group = chan_group_obj.spec
+
+    img_chan_dpath = img_view_dpath / chan_pname
+    ann_chan_dpath = ann_view_dpath / chan_pname
+
+    # Prevent long names for docker (limit is 242 chars)
+    chan_pname2 = kwcoco.FusedChannelSpec.coerce(chan_group).path_sanitize(maxlen=10)
+    prefix = '_'.join([frame_id, chan_pname2])
+
+    view_img_fpath = img_chan_dpath / prefix + '_' + name + '.view_img.jpg'
+    view_ann_fpath = ann_chan_dpath / prefix + '_' + name + '.view_ann.jpg'
+
+    chan = delayed.take_channels(chan_group)
+    chan = chan.prepare().optimize()
+
+    # When util_delayed_poc is removed, remove **delayed_ops
+    # as they should be given in the constructor.
+    raw_canvas = canvas = chan.finalize(**finalize_opts)
+
+    # foo = kwimage.fill_nans_with_checkers(raw_canvas)
+
+    if verbose > 1:
+        print('raw_canvas.shape = {!r}'.format(raw_canvas.shape))
+        print('chan_list = {!r}'.format(chan_list))
+        try:
+            chan_stats = kwarray.stats_dict(raw_canvas, axis=2, nan=True)
+            print('chan_stats = {}'.format(ub.repr2(chan_stats, nl=1)))
+        except Exception as ex:
+            print(f'ex={ex}')
+            import warnings
+            warnings.warn('Error printing chan stats, probably need kwarray >= 0.6.1')
+
+    if skip_missing and np.all(np.isnan(raw_canvas)):
+        if skip_aggressive:
+            print('Skip because all is nan')
+            raise SkipFrame
+        raise SkipChanGroup
+
+    if skip_aggressive:
+        is_bad = np.isnan(raw_canvas).ravel()
+        percent_bad = is_bad.sum() / len(is_bad)
+        if percent_bad > 0.15:
+            print('Skip because some is nan')
+            print('skip')
+            raise SkipFrame
+
+    if 0 and str(chan_group) == 'salient':
+        # blur1 = kwarray.atleast_nd(kwimage.gaussian_blur(raw_canvas, sigma=1.6), n=3)
+        # blur2 = kwarray.atleast_nd(kwimage.gaussian_blur(raw_canvas, sigma=3.2), n=3)
+        blur1 = kwarray.atleast_nd(kwimage.gaussian_blur(raw_canvas, sigma=0.8), n=3)
+        blur2 = kwarray.atleast_nd(kwimage.gaussian_blur(raw_canvas, sigma=1.6), n=3)
+        dog = blur1 - blur2
+        shift_dog = dog - min(0, np.nanmin(dog))
+        # import xdev
+        # mxdev.embed()
+        canvas = blur2
+        canvas = shift_dog
+        # orig_max = np.nanmax(raw_canvas)
+        # canvas = kwimage.normalize(shift_dog) * orig_max
+        # canvas = canvas * raw_canvas
+        canvas = raw_canvas
+        # median = np.nanmedian(canvas)
+        canvas = kwarray.atleast_nd(kwimage.gaussian_blur(canvas, sigma=3.6), n=3)
+        median, = np.quantile(canvas.ravel()[~np.isnan(canvas.ravel())], q=[0.8])
+        # median = np.nanmean(canvas) + np.nanstd(canvas)
+        canvas = (canvas - median).clip(0, None)
+        canvas = np.sqrt(canvas)
+
+        # raw_canvas = kwimage.normalize(dog)
+        # raw_canvas = kwarray.atleast_nd(raw_canvas, n=3)
+        # raw_canvas = raw_canvas[:, :, None]
+
+    if chan_to_normalizer is None:
+        dmax = np.nanmax(raw_canvas)
+        # dmin = canvas.min()
+        needs_norm = dmax > 1.0
+        # if canvas.max() <= 0 or canvas.min() >= 255:
+        # Hack to only do noramlization on "non-standard" data ranges
+        if needs_norm:
+            mask = ~np.isnan(raw_canvas)
+            norm_canvas = kwimage.normalize_intensity(raw_canvas, mask=mask, params={
+                'high': 0.90,
+                'mid': 0.5,
+                'low': 0.01,
+                'mode': 'linear',
+            })
+            canvas = norm_canvas
+        canvas = np.clip(canvas, 0, None)
+    else:
+        new_parts = []
+        for cx, c in enumerate(chan_list):
+            normalizer = chan_to_normalizer.get(c, None)
+            data = canvas[..., cx]
+            mask = ~np.isnan(data)
+            if normalizer is None:
+                p = kwimage.normalize_intensity(data, params={
+                    'high': 0.90,
+                    'mid': 0.5,
+                    'low': 0.01,
+                    'mode': 'linear',
+                })
+            else:
+                p = kwarray.apply_normalizer(data, normalizer, mask=mask,
+                                             set_value_at_mask=0.)
+            new_parts.append(p)
+        canvas = np.stack(new_parts, axis=2)
+
+    _kw = ub.compatible({'on_value': 0.3}, kwimage.fill_nans_with_checkers)
+    canvas = kwimage.fill_nans_with_checkers(canvas, **_kw)
+
+    # Do the channels correspond to classes with known colors?
+    chan_names = chan_row['chan'].to_list()
+    channel_colors = []
+    for cname in chan_names:
+        if cname in coco_dset.index.name_to_cat:
+            cat = coco_dset.index.name_to_cat[cname]
+            if 'color' in cat:
+                channel_colors.append(cat['color'])
+            else:
+                channel_colors.append(None)
+        else:
+            channel_colors.append(None)
+
+    if any(c is not None for c in channel_colors):
+        # This flag makes it so 1 channel outputs always use cmap.
+        # not sure if I like that or not, probably needs to be configurable
+        _flag = kwimage.num_channels(canvas) != 1
+        if _flag:
+            canvas = util_kwimage.perchannel_colorize(canvas, channel_colors=channel_colors)
+            canvas = canvas[..., 0:3]
+
+    if cmap is not None:
+        if kwimage.num_channels(canvas) == 1:
+            import matplotlib as mpl
+            import matplotlib.cm  # NOQA
+            cmap_ = mpl.cm.get_cmap(cmap)
+            canvas = np.nan_to_num(canvas)
+            if len(canvas.shape) == 3:
+                canvas = canvas[..., 0]
+                canvas = cmap_(canvas)[..., 0:3].astype(np.float32)
+
+    canvas = util_kwimage.ensure_false_color(canvas)
+    canvas = kwimage.ensure_uint255(canvas)
+
+    if len(canvas.shape) > 2 and canvas.shape[2] > 4:
+        # hack for wv
+        canvas = canvas[..., 0]
+
+    chan_header_lines = header_lines.copy()
+    chan_header_lines.append(chan_group)
+    header_text = '\n'.join(chan_header_lines)
+
+    if valid_image_poly is not None:
+        # Draw the valid region specified at the image level
+        if any([p.data['exterior'].data.size for p in valid_image_poly.data]):
+            canvas = valid_image_poly.draw_on(canvas, color='kitware_green',
+                                              fill=False, border=True)
+
+    if valid_video_poly is not None:
+        # Draw the valid region specified at the video level
+        if any([p.data['exterior'].data.size for p in valid_video_poly.data]):
+            canvas = valid_video_poly.draw_on(canvas, color='lawngreen',
+                                              fill=False, border=True)
+
+    stack_imgs = draw_imgs and stack
+    stack_anns = draw_anns and stack
+    draw_anns_alone = draw_anns and stack != 'only'
+    draw_imgs_alone = draw_imgs and stack != 'only'
+
+    if draw_anns_alone:
+        ann_chan_dpath.ensuredir()
+
+    if draw_imgs_alone:
+        img_chan_dpath.ensuredir()
+
+    img_canvas = None
+    ann_canvas = None
+
+    img_stack_item = None
+    ann_stack_item = None
+
+    if draw_imgs_alone or stack_imgs:
+        img_canvas = kwimage.ensure_uint255(canvas, copy=True)
+        if stack_imgs:
+            img_stack_item = {
+                'im': img_canvas,
+                'chan': chan_group,
+            }
+        if draw_imgs_alone:
+            img_header = kwimage.draw_header_text(image=img_canvas,
+                                                  text=header_text,
+                                                  stack=False,
+                                                  fit='shrink')
+            img_header = kwimage.stack_images([img_header, img_canvas])
+            kwimage.imwrite(view_img_fpath, img_canvas)
+
+    if draw_anns_alone or stack_anns:
+
+        ONLY_BOXES = only_boxes
+        if ONLY_BOXES:
+            draw_on_kwargs = dict(sseg=False, labels=False)
+        else:
+            draw_on_kwargs = {}
+
+        requested_role_to_dets = role_to_dets.intersection(request_roles)
+
+        need_ann_canvas = (
+            bool(requested_role_to_dets) or
+            img_canvas is None or
+            draw_anns_alone
+        )
+
+        if need_ann_canvas:
+            ann_canvas = kwimage.ensure_float01(canvas, copy=True)
+
+            if draw_anns_alone and not requested_role_to_dets:
+                # fallback to drawing all anns in this weird case
+                requested_role_to_dets = role_to_dets
+
+            for role_dets in requested_role_to_dets.values():
+                ann_canvas = role_dets.draw_on(
+                    ann_canvas, color='classes', **draw_on_kwargs)
+
+        if stack_anns:
+            if ann_canvas is None:
+                ann_stack_item = {
+                    'im': img_canvas,
+                    'chan': chan_group,
+                }
+            else:
+                ann_stack_item = {
+                    'im': ann_canvas,
+                    'chan': chan_group,
+                }
+        if draw_anns_alone:
+            assert ann_canvas is not None
+            ann_canvas = kwimage.ensure_uint255(ann_canvas)
+            if draw_header:
+                ann_header = kwimage.draw_header_text(image=ann_canvas,
+                                                      text=header_text,
+                                                      stack=False,
+                                                      fit='shrink')
+                ann_header = kwimage.imresize(
+                    ann_header, dsize=(ann_header.shape[1], 100), letterbox=True)
+                ann_canvas = kwimage.stack_images([ann_header, ann_canvas])
+            kwimage.imwrite(view_ann_fpath, ann_canvas)
+
+    return img_stack_item, ann_stack_item
 
 
 if __name__ == '__main__':
