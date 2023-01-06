@@ -55,8 +55,6 @@ Example:
         --align_workers=26 \
         --cache=0 \
         --ignore_duplicates=1 \
-        --separate_region_queues=1 \
-        --separate_align_jobs=1 \
         --target_gsd=30 \
         --visualize=True \
         --max_products_per_region=10 \
@@ -82,11 +80,13 @@ class PrepareTA2Config(scfg.Config):
         'max_products_per_region': scfg.Value(None, help='does uniform affinity sampling over time to filter down to this many results per region'),
         'api_key': scfg.Value('env:SMART_STAC_API_KEY', help='The API key or where to get it (ignored if s3_fpath given)'),
 
-        'separate_region_queues': scfg.Value(True, help='if True, create jobs for each region separately'),
-        'separate_align_jobs': scfg.Value(True, help='if True, perform alignment for each region in its own job'),
+        'separate_region_queues': scfg.Value(True, help='if True, create jobs for each region separately. This option to disable this may be removed in the future.'),
+        'separate_align_jobs': scfg.Value(True, help='if True, perform alignment for each region in its own job. The option to disable this may be removed in the future.'),
 
         's3_fpath': scfg.Value(None, nargs='+', help='A list of .input files which were the results of an existing stac query. Mutex with stac_query_* args. Mutex with sensors.'),
-        'dvc_dpath': scfg.Value('auto', help=''),
+
+        'out_dpath': scfg.Value('auto', help='This is the path that all resulting files will be written to. Defaults the the phase2 DATA_DVC_DPATH', alias=['dvc_dpath']),
+
         'run': scfg.Value('0', isflag=1, help='if True execute the pipeline'),
         'collated': scfg.Value([True], nargs='+', help='set to false if the input data is not collated'),
 
@@ -187,23 +187,23 @@ def main(cmdline=False, **kwargs):
         config['align_workers'] = 0
         config['align_aux_workers'] = 0
 
-    dvc_dpath = config['dvc_dpath']
-    if dvc_dpath == 'auto':
+    out_dpath = config['out_dpath']
+    if out_dpath == 'auto':
         import watch
-        dvc_dpath = watch.find_smart_dvc_dpath()
-    dvc_dpath = ub.Path(dvc_dpath)
+        out_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    out_dpath = ub.Path(out_dpath)
 
     aws_profile = config['aws_profile']
 
     aligned_bundle_name = f'Aligned-{config["dataset_suffix"]}'
     uncropped_bundle_name = f'Uncropped-{config["dataset_suffix"]}'
 
-    uncropped_dpath = dvc_dpath / uncropped_bundle_name
+    uncropped_dpath = out_dpath / uncropped_bundle_name
     uncropped_query_dpath = uncropped_dpath / '_query/items'
 
     uncropped_ingress_dpath = uncropped_dpath / 'ingress'
 
-    aligned_kwcoco_bundle = dvc_dpath / aligned_bundle_name
+    aligned_kwcoco_bundle = out_dpath / aligned_bundle_name
 
     uncropped_dpath = uncropped_dpath.shrinkuser(home='$HOME')
     uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
@@ -236,7 +236,7 @@ def main(cmdline=False, **kwargs):
         if str(globstr).startswith('./'):
             final_globstr = globstr
         else:
-            final_globstr = dvc_dpath / globstr
+            final_globstr = out_dpath / globstr
         final_globstr = final_globstr.shrinkuser(home='$HOME')
         return final_globstr
 
