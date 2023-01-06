@@ -692,32 +692,32 @@ def main(cmdline=False, **kwargs):
                 },
                 stage='project_annots',
             )
+
+            if config['visualize']:
+                pipeline.submit(command=ub.codeblock(
+                    rf'''
+                    python -m watch visualize \
+                        --src "{aligned_imganns_fpath}" \
+                        --viz_dpath "{aligned_viz_dpath}" \
+                        --draw_anns=True \
+                        --draw_imgs=False \
+                        --channels="red|green|blue" \
+                        --max_dim={viz_max_dim} \
+                        --animate=True --workers=auto \
+                        --only_boxes={config["visualize_only_boxes"]}
+                    '''), depends=[project_anns_job], name=f'viz-annots-{name}',
+                    in_paths={
+                        'aligned_imganns_fpath': aligned_imganns_fpath,
+                    },
+                    out_paths={
+                        'aligned_viz_dpath': aligned_viz_dpath,
+                    },
+                    stage='viz_anns',
+                )
         else:
             aligned_imganns_fpath = aligned_imgonly_fpath
             info['aligned_imganns_fpath'] = aligned_imgonly_fpath
             project_anns_job = align_job
-
-        if config['visualize']:
-            pipeline.submit(command=ub.codeblock(
-                rf'''
-                python -m watch visualize \
-                    --src "{aligned_imganns_fpath}" \
-                    --viz_dpath "{aligned_viz_dpath}" \
-                    --draw_anns=True \
-                    --draw_imgs=False \
-                    --channels="red|green|blue" \
-                    --max_dim={viz_max_dim} \
-                    --animate=True --workers=auto \
-                    --only_boxes={config["visualize_only_boxes"]}
-                '''), depends=[project_anns_job], name=f'viz-annots-{name}',
-                in_paths={
-                    'aligned_imganns_fpath': aligned_imganns_fpath,
-                },
-                out_paths={
-                    'aligned_viz_dpath': aligned_viz_dpath,
-                },
-                stage='viz_anns',
-            )
 
         align_info = info.copy()
         align_info['job'] = project_anns_job
