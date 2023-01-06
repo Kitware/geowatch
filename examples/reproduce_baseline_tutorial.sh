@@ -108,7 +108,47 @@ Inside this folder is
     * invoke.sh - a script to reproduce the run of that specific node
     * job_config.json - the configuration of this node at the pipeline level
     * summary.csv - a high level summary of the T&E Results for this run.
+    * poly_eval.json - a summarized run of high level T&E scores as well as a compute history.
 
 There will also be a folder for each region (in this case just KR_R001)
 containing detailed T&E evaluation outputs and visualizations.
+
+
+In poly_eval.json running:
+
+    jq ".best_bas_rows.data[0]" poly_eval.json
+
+Should result in scores simlar to:
+
+    {
+      "region_id": "KR_R001",
+      "rho": 0.5,
+      "tau": 0.2,
+      "tp sites": 7,
+      "tp exact": 0,
+      "tp under": 7,
+      "tp under (IoU)": 0,
+      "tp under (IoT)": 7,
+      "tp over": 0,
+      "fp sites": 6,
+      "fp area": 2.168,
+      "ffpa": 0.0663,
+      "proposal area": 2.9851,
+      "fpa": 0.0913,
+      "fn sites": 2,
+      "truth annotations": 25,
+      "truth sites": 9,
+      "proposed annotations": 6,
+      "proposed sites": 13,
+      "total sites": 15,
+      "truth slices": 341,
+      "proposed slices": 2301,
+      "precision": 0.5385,
+      "recall (PD)": 0.7778,
+      "F1": 0.6364,
+      "spatial FAR": 0.1836,
+      "temporal FAR": 0.0021,
+      "images FAR": 0.0026
+    }
+
 '
