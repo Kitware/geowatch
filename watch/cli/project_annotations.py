@@ -45,6 +45,7 @@ import warnings
 from watch.utils import kwcoco_extensions
 from watch.utils import util_kwplot
 from watch.utils import util_time
+from watch.utils.util_environ import envflag
 
 
 class ProjectAnnotationsConfig(scfg.Config):
@@ -88,6 +89,12 @@ class ProjectAnnotationsConfig(scfg.Config):
             use this to print details
             ''')),
 
+        'role': scfg.Value(None, help=ub.paragraph(
+            '''
+            if specified, the value is assigned as the role of each new
+            annotation.
+            ''')),
+
         'clear_existing': scfg.Value(True, help=ub.paragraph(
             '''
             if True, clears existing annotations before projecting the new ones.
@@ -101,6 +108,10 @@ class ProjectAnnotationsConfig(scfg.Config):
 
         'workers': scfg.Value(0, help='number of workers for geo-preprop if done'),
     }
+
+
+DUMMY_START_DATE = '1970-01-01'
+DUMMY_END_DATE = '2101-01-01'
 
 
 def main(cmdline=False, **kwargs):
@@ -151,7 +162,9 @@ def main(cmdline=False, **kwargs):
         )
 
     # Read the external CRS84 annotations from the site models
-    HACK_HANDLE_DUPLICATE_SITE_ROWS = True
+
+    HACK_HANDLE_DUPLICATE_SITE_ROWS = envflag(
+        'HACK_HANDLE_DUPLICATE_SITE_ROWS', default=True)
 
     site_model_infos = list(util_gis.coerce_geojson_datas(
         config['site_models'], desc='load site models'))
@@ -191,6 +204,12 @@ def main(cmdline=False, **kwargs):
         coco_dset, region_id_to_sites, propogate,
         geospace_lookup=geospace_lookup, want_viz=want_viz)
 
+    if config['role'] is not None:
+        _role = config['role']
+        for ann in propogated_annotations:
+            ann['role'] = _role
+        del _role
+
     for ann in propogated_annotations:
         coco_dset.add_annotation(**ann)
     kwcoco_extensions.warp_annot_segmentations_from_geos(coco_dset)
@@ -221,39 +240,27 @@ def main(cmdline=False, **kwargs):
             fig.savefig(plot_fpath)
 
 
-def expand_site_models_with_site_summaries(sites, regions):
+def check_sitemodel_assumptions(sites):
     """
-    Takes all site summaries from region models that do not have a
-    corresponding site model and makes a "pseudo-site-model" for use in BAS.
-
-    Returns:
-        Dict[str, List[DataFrame]] : region_id_to_sites  :
-            a mapping from region names to a list of site models both
-            real and/or pseudo.
+    For debugging and checking assumptions about site models
     """
-    import pandas as pd
-    import geojson
-    # import watch
-    import json
-    from watch.utils import util_gis
+    for site_df in ub.ProgIter(sites, desc='checking site assumptions'):
+        first = site_df.iloc[0]
+        rest = site_df.iloc[1:]
+        assert first['type'] == 'site', (
+            f'first row must have type of site, got {first["type"]}')
+        assert first['region_id'] is not None, (
+            f'first row must have a region id. Got {first["region_id"]}')
+        assert rest['type'].apply(lambda x: x == 'observation').all(), (
+            f'rest of row must have type observation. Instead got: {rest["type"].unique()}')
+        assert rest['region_id'].apply(lambda x: x is None).all(), (
+            f'rest of row must have region_id=None. Instead got {rest["region_id"].unique()}')
 
-    dummy_start_date = '1970-01-01'
-    dummy_end_date = '2101-01-01'
 
-    if __debug__:
-        # Check assumptions about site models
-        for site_df in ub.ProgIter(sites, desc='checking site assumptions'):
-            first = site_df.iloc[0]
-            rest = site_df.iloc[1:]
-            assert first['type'] == 'site', (
-                f'first row must have type of site, got {first["type"]}')
-            assert first['region_id'] is not None, (
-                f'first row must have a region id. Got {first["region_id"]}')
-            assert rest['type'].apply(lambda x: x == 'observation').all(), (
-                f'rest of row must have type observation. Instead got: {rest["type"].unique()}')
-            assert rest['region_id'].apply(lambda x: x is None).all(), (
-                f'rest of row must have region_id=None. Instead got {rest["region_id"].unique()}')
-
+def separate_region_model_types(regions):
+    """
+    Split up each region model into its region info and site summary info
+    """
     region_id_to_site_summaries = {}
     region_id_region_row = {}
     for region_df in ub.ProgIter(regions, desc='checking region assumptions', verbose=3):
@@ -286,13 +293,37 @@ def expand_site_models_with_site_summaries(sites, regions):
         region_id_to_site_summaries[region_id] = sites_part
 
         # Check datetime errors
-        sitesum_start_dates = sites_part['start_date'].apply(lambda x: util_time.coerce_datetime(x or dummy_start_date))
-        sitesum_end_dates = sites_part['end_date'].apply(lambda x: util_time.coerce_datetime(x or dummy_end_date))
+        sitesum_start_dates = sites_part['start_date'].apply(lambda x: util_time.coerce_datetime(x or DUMMY_START_DATE))
+        sitesum_end_dates = sites_part['end_date'].apply(lambda x: util_time.coerce_datetime(x or DUMMY_END_DATE))
         has_bad_time_range = sitesum_start_dates > sitesum_end_dates
         bad_dates = sites_part[has_bad_time_range]
         if len(bad_dates):
             print('BAD DATES')
             print(bad_dates)
+    return region_id_to_site_summaries, region_id_region_row
+
+
+def expand_site_models_with_site_summaries(sites, regions):
+    """
+    Takes all site summaries from region models that do not have a
+    corresponding site model and makes a "pseudo-site-model" for use in BAS.
+
+    Args:
+        sites (List[GeoDataFrame]):
+        regions (List[GeoDataFrame]):
+
+    Returns:
+        Dict[str, List[DataFrame]] : region_id_to_sites  :
+            a mapping from region names to a list of site models both
+            real and/or pseudo.
+    """
+    import pandas as pd
+    # import watch
+
+    if __debug__:
+        check_sitemodel_assumptions(sites)
+
+    region_id_to_site_summaries, region_id_region_row = separate_region_model_types(regions)
 
     region_id_to_sites = ub.group_items(sites, lambda x: x.iloc[0]['region_id'])
 
@@ -304,222 +335,119 @@ def expand_site_models_with_site_summaries(sites, regions):
     if VERYVERBOSE:
         print('region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1, sort=0)))
 
-    if 1:
-        site_rows1 = []
-        for region_id, region_sites in region_id_to_sites.items():
-            for site in region_sites:
-                site_sum_rows = site[site['type'] == 'site']
-                assert len(site_sum_rows) == 1
-                site_rows1.append(site_sum_rows)
+    site_rows1 = []
+    for region_id, region_sites in region_id_to_sites.items():
+        for site in region_sites:
+            site_sum_rows = site[site['type'] == 'site']
+            assert len(site_sum_rows) == 1
+            site_rows1.append(site_sum_rows)
 
-        site_rows2 = []
-        for region_id, site_summaries in region_id_to_site_summaries.items():
-            site_rows2.append(site_summaries)
+    site_rows2 = []
+    for region_id, site_summaries in region_id_to_site_summaries.items():
+        site_rows2.append(site_summaries)
 
-        expected_keys = ['index', 'observation_date', 'source', 'sensor_name', 'type',
-                         'current_phase', 'is_occluded', 'is_site_boundary', 'region_id',
-                         'site_id', 'version', 'status', 'mgrs', 'score', 'start_date',
-                         'end_date', 'model_content', 'originator', 'validated', 'geometry',
-                         'misc_info' ]
+    expected_keys = ['index', 'observation_date', 'source', 'sensor_name', 'type',
+                     'current_phase', 'is_occluded', 'is_site_boundary', 'region_id',
+                     'site_id', 'version', 'status', 'mgrs', 'score', 'start_date',
+                     'end_date', 'model_content', 'originator', 'validated', 'geometry',
+                     'misc_info' ]
 
-        if site_rows1:
-            site_df1 = pd.concat(site_rows1).reset_index()
-            assert len(set(site_df1['site_id'])) == len(site_df1), 'site ids must be unique'
-            site_df1 = site_df1.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
-            if 'misc_info' not in site_df1.columns:
-                site_df1['misc_info'] = None
-        else:
-            site_df1 = pd.DataFrame([], columns=expected_keys)
+    if site_rows1:
+        site_df1 = pd.concat(site_rows1).reset_index()
+        assert len(set(site_df1['site_id'])) == len(site_df1), 'site ids must be unique'
+        site_df1 = site_df1.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
+        if 'misc_info' not in site_df1.columns:
+            site_df1['misc_info'] = None
+    else:
+        site_df1 = pd.DataFrame([], columns=expected_keys)
 
-        if site_rows2:
-            site_df2 = pd.concat(site_rows2).reset_index()
-            if len(set(site_df2['site_id'])) != len(site_df2):
-                counts = site_df2['site_id'].value_counts()
-                duplicates = counts[counts > 1]
-                warnings.warn('Site summaries contain duplicate site_ids:\n{}'.format(duplicates))
-                # Filter to unique sites
-                unique_idx = np.unique(site_df2['site_id'], return_index=True)[1]
-                site_df2 = site_df2.iloc[unique_idx]
+    if site_rows2:
+        site_df2 = pd.concat(site_rows2).reset_index()
+        if len(set(site_df2['site_id'])) != len(site_df2):
+            counts = site_df2['site_id'].value_counts()
+            duplicates = counts[counts > 1]
+            warnings.warn('Site summaries contain duplicate site_ids:\n{}'.format(duplicates))
+            # Filter to unique sites
+            unique_idx = np.unique(site_df2['site_id'], return_index=True)[1]
+            site_df2 = site_df2.iloc[unique_idx]
 
-            site_df2 = site_df2.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
+        site_df2 = site_df2.set_index('site_id', drop=False, verify_integrity=True).drop('index', axis=1)
 
-            if 'misc_info' not in site_df2.columns:
-                site_df2['misc_info'] = None
-        else:
-            site_df2 = pd.DataFrame([], columns=expected_keys)
+        if 'misc_info' not in site_df2.columns:
+            site_df2['misc_info'] = None
+    else:
+        site_df2 = pd.DataFrame([], columns=expected_keys)
 
-        common_site_ids = sorted(set(site_df1['site_id']) & set(site_df2['site_id']))
-        common1 = site_df1.loc[common_site_ids]
-        common2 = site_df2.loc[common_site_ids]
+    common_site_ids = sorted(set(site_df1['site_id']) & set(site_df2['site_id']))
+    common1 = site_df1.loc[common_site_ids]
+    common2 = site_df2.loc[common_site_ids]
 
-        common_columns = common1.columns.intersection(common2.columns)
-        common_columns = common_columns.drop(['type', 'region_id'])
+    common_columns = common1.columns.intersection(common2.columns)
+    common_columns = common_columns.drop(['type', 'region_id'])
 
-        col_to_flags = {}
-        for col in common_columns:
-            error_flags = ~(
-                (common1[col] == common2[col]) |
-                (common1[col].isnull() & common2[col].isnull()))
-            col_to_flags[col] = error_flags
+    col_to_flags = {}
+    for col in common_columns:
+        error_flags = ~(
+            (common1[col] == common2[col]) |
+            (common1[col].isnull() & common2[col].isnull()))
+        col_to_flags[col] = error_flags
 
-        print('col errors: ' + repr(ub.map_vals(sum, col_to_flags)))
-        any_error_flag = np.logical_or.reduce(list(col_to_flags.values()))
-        total_error_rows = any_error_flag.sum()
-        print('total_error_rows = {!r}'.format(total_error_rows))
-        if total_error_rows:
-            error1 = common1[any_error_flag]
-            error2 = common2[any_error_flag]
-            columns = ['site_id', 'version', 'mgrs', 'start_date', 'end_date', 'status', 'originator', 'score', 'model_content', 'validated']
+    print('col errors: ' + repr(ub.map_vals(sum, col_to_flags)))
+    any_error_flag = np.logical_or.reduce(list(col_to_flags.values()))
+    total_error_rows = any_error_flag.sum()
+    print('total_error_rows = {!r}'.format(total_error_rows))
+    if total_error_rows:
+        error1 = common1[any_error_flag]
+        error2 = common2[any_error_flag]
+        columns = ['site_id', 'version', 'mgrs', 'start_date', 'end_date', 'status', 'originator', 'score', 'model_content', 'validated']
 
-            def reorder_columns(df, columns):
-                remain = df.columns.difference(columns)
-                return df.reindex(columns=(columns + list(remain)))
-            error1 = reorder_columns(error1, columns)
-            error2 = reorder_columns(error2, columns)
-            print('Disagree rows for site models')
-            print(error1.drop(['type', 'region_id', 'misc_info'], axis=1))
-            print('Disagree rows for region models')
-            print(error2.drop(['type', 'region_id', 'validated'], axis=1))
+        error1 = reorder_columns(error1, columns)
+        error2 = reorder_columns(error2, columns)
+        print('Disagree rows for site models')
+        print(error1.drop(['type', 'region_id', 'misc_info'], axis=1))
+        print('Disagree rows for region models')
+        print(error2.drop(['type', 'region_id', 'validated'], axis=1))
 
-        # Find sites that only have a site-summary
-        summary_only_site_ids = sorted(set(site_df2['site_id']) - set(site_df1['site_id']))
-        region_id_to_only_site_summaries = dict(list(site_df2.loc[summary_only_site_ids].groupby('region_id')))
+    # Find sites that only have a site-summary
+    summary_only_site_ids = sorted(set(site_df2['site_id']) - set(site_df1['site_id']))
+    region_id_to_only_site_summaries = dict(list(site_df2.loc[summary_only_site_ids].groupby('region_id')))
 
-        if VERYVERBOSE:
-            region_id_to_num_only_sitesumms = ub.map_vals(len, region_id_to_only_site_summaries)
-            print('region_id_to_num_only_sitesumms = {}'.format(ub.repr2(region_id_to_num_only_sitesumms, nl=1, sort=0)))
+    if VERYVERBOSE:
+        region_id_to_num_only_sitesumms = ub.map_vals(len, region_id_to_only_site_summaries)
+        print('region_id_to_num_only_sitesumms = {}'.format(ub.repr2(region_id_to_num_only_sitesumms, nl=1, sort=0)))
 
-        # Transform site-summaries without corresponding sites into pseudo-site
-        # observations
-        # https://smartgitlab.com/TE/standards/-/wikis/Site-Model-Specification
+    # Transform site-summaries without corresponding sites into pseudo-site
+    # observations
+    # https://smartgitlab.com/TE/standards/-/wikis/Site-Model-Specification
 
-        # if 0:
-        #     # Use the json schema to ensure we are coding this correctly
-        #     import jsonref
-        #     from watch.rc.registry import load_site_model_schema
-        #     site_model_schema = load_site_model_schema()
-        #     # Expand the schema
-        #     site_model_schema = jsonref.loads(jsonref.dumps(site_model_schema))
-        #     site_model_schema['definitions']['_site_properties']['properties'].keys()
-        #     list(ub.flatten([list(p['properties'].keys()) for p in site_model_schema['definitions']['unassociated_site_properties']['allOf']]))
-        #     list(site_model_schema['definitions']['unassociated_site_properties']['properties'].keys())
-        #     list(ub.flatten([list(p['properties'].keys()) for p in site_model_schema['definitions']['associated_site_properties']['allOf']]))
-        #     list(site_model_schema['definitions']['associated_site_properties']['properties'].keys())
-        #     site_model_schema['definitions']['observation_properties']['properties']
+    # if 0:
+    #     # Use the json schema to ensure we are coding this correctly
+    #     import jsonref
+    #     from watch.rc.registry import load_site_model_schema
+    #     site_model_schema = load_site_model_schema()
+    #     # Expand the schema
+    #     site_model_schema = jsonref.loads(jsonref.dumps(site_model_schema))
+    #     site_model_schema['definitions']['_site_properties']['properties'].keys()
+    #     list(ub.flatten([list(p['properties'].keys()) for p in site_model_schema['definitions']['unassociated_site_properties']['allOf']]))
+    #     list(site_model_schema['definitions']['unassociated_site_properties']['properties'].keys())
+    #     list(ub.flatten([list(p['properties'].keys()) for p in site_model_schema['definitions']['associated_site_properties']['allOf']]))
+    #     list(site_model_schema['definitions']['associated_site_properties']['properties'].keys())
+    #     site_model_schema['definitions']['observation_properties']['properties']
 
-        # observation_properties = [
-        #     'type', 'observation_date', 'source', 'sensor_name',
-        #     'current_phase', 'is_occluded', 'is_site_boundary', 'score',
-        #     'misc_info'
-        # ]
-        site_properites = [
-            'type', 'version', 'mgrs', 'status', 'model_content', 'start_date',
-            'end_date', 'originator', 'score', 'validated', 'misc_info',
-            'region_id', 'site_id']
+    # resolver = jsonschema.RefResolver.from_schema(site_model_schema)
+    # site_model_schema[
 
-        # resolver = jsonschema.RefResolver.from_schema(site_model_schema)
-        # site_model_schema[
+    region_id_to_num_sites = ub.map_vals(len, region_id_to_sites)
+    # print('BEFORE region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1)))
 
-        region_id_to_num_sites = ub.map_vals(len, region_id_to_sites)
-        # print('BEFORE region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1)))
+    for region_id, sitesummaries in region_id_to_only_site_summaries.items():
+        region_row = region_id_region_row[region_id]
+        pseud_sites = make_pseudo_sitemodels(region_row, sitesummaries)
+        region_id_to_sites[region_id].extend(pseud_sites)
 
-        for region_id, sitesummaries in region_id_to_only_site_summaries.items():
-            region_row = region_id_region_row[region_id]
-
-            # Use region start/end date if the site does not have them
-            region_start_date = region_row['start_date'] or dummy_start_date
-            region_end_date = region_row['end_date'] or dummy_end_date
-
-            region_start_date, region_end_date = sorted(
-                [region_start_date, region_end_date], key=util_time.coerce_datetime)
-
-            for _, site_summary in sitesummaries.iterrows():
-                geom = site_summary['geometry']
-                if geom is None:
-                    print('warning got none geom')
-                    continue
-
-                try:
-                    poly_json = kwimage.Polygon.from_shapely(geom.convex_hull).to_geojson()
-                except Exception as ex:
-                    print(f'ex={ex}')
-                    embed_if_requested()
-                    raise
-                mpoly_json = kwimage.MultiPolygon.from_shapely(geom).to_geojson()
-
-                has_keys = site_summary.index.intersection(site_properites)
-                # missing_keys = pd.Index(site_properites).difference(site_summary.index)
-                psudo_site_prop = site_summary[has_keys].to_dict()
-                psudo_site_prop['type'] = 'site'
-                # TODO: how to handle missing start / end dates?
-                start_date = site_summary['start_date'] or region_start_date
-                end_date = site_summary['end_date'] or region_end_date
-
-                # hack
-                start_date, end_date = sorted(
-                    [start_date, end_date], key=util_time.coerce_datetime)
-
-                psudo_site_prop['start_date'] = start_date
-                psudo_site_prop['end_date'] = end_date
-
-                start_datetime = util_time.coerce_datetime(start_date)
-                end_datetime = util_time.coerce_datetime(end_date)
-
-                assert start_datetime <= end_datetime
-
-                score = site_summary.get('score', None)
-                try:
-                    score = float(score)
-                except TypeError:
-                    ...
-
-                observation_prop_template = {
-                    'type': 'observation',
-                    'observation_date': None,
-                    # 'source': None,
-                    # 'sensor_name': None,
-                    # 'current_phase': None,
-                    # 'is_occluded': None,
-                    # 'is_site_boundary': None,
-                    'score': score,
-                    # 'misc_info': None,
-                }
-
-                psudo_site_features = [
-                    geojson.Feature(
-                        properties=psudo_site_prop, geometry=poly_json,
-                    )
-                ]
-                psudo_site_features.append(
-                    geojson.Feature(
-                        properties=ub.dict_union(observation_prop_template, {
-                            'observation_date': start_date,
-                            'current_phase': None,
-                        }),
-                        geometry=mpoly_json)
-                )
-                psudo_site_features.append(
-                    geojson.Feature(
-                        properties=ub.dict_union(observation_prop_template, {
-                            'observation_date': end_date,
-                            'current_phase': None,
-                        }),
-                        geometry=mpoly_json)
-                )
-                psudo_site_model = geojson.FeatureCollection(psudo_site_features)
-                pseudo_gpd = util_gis.load_geojson(io.StringIO(json.dumps(psudo_site_model)))
-                region_id_to_sites[region_id].append(pseudo_gpd)
-                # if 1:
-                #     from watch.rc.registry import load_site_model_schema
-                #     site_model_schema = load_site_model_schema()
-                #     real_site_model = json.loads(ub.Path('/media/joncrall/flash1/smart_watch_dvc/annotations/site_models/BR_R002_0009.geojson').read_text())
-                #     ret = jsonschema.validate(real_site_model, schema=site_model_schema)
-                #     import jsonschema
-                #     ret = jsonschema.validate(psudo_site_model, schema=site_model_schema)
-
-        region_id_to_num_sites = ub.map_vals(len, region_id_to_sites)
-        if VERYVERBOSE:
-            print('AFTER (sitesummary) region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1)))
+    region_id_to_num_sites = ub.map_vals(len, region_id_to_sites)
+    if VERYVERBOSE:
+        print('AFTER (sitesummary) region_id_to_num_sites = {}'.format(ub.repr2(region_id_to_num_sites, nl=1)))
 
     # Fix out of order observations
     FIX_OBS_ORDER = True
@@ -573,6 +501,115 @@ def expand_site_models_with_site_summaries(sites, regions):
     return region_id_to_sites
 
 
+def make_pseudo_sitemodels(region_row, sitesummaries, site_properites):
+    import geojson
+    import json
+    from watch.utils import util_gis
+
+    # observation_properties = [
+    #     'type', 'observation_date', 'source', 'sensor_name',
+    #     'current_phase', 'is_occluded', 'is_site_boundary', 'score',
+    #     'misc_info'
+    # ]
+    site_properites = [
+        'type', 'version', 'mgrs', 'status', 'model_content', 'start_date',
+        'end_date', 'originator', 'score', 'validated', 'misc_info',
+        'region_id', 'site_id']
+    # Use region start/end date if the site does not have them
+    region_start_date = region_row['start_date'] or DUMMY_START_DATE
+    region_end_date = region_row['end_date'] or DUMMY_END_DATE
+
+    region_start_date, region_end_date = sorted(
+        [region_start_date, region_end_date], key=util_time.coerce_datetime)
+
+    pseudo_sites = []
+    for _, site_summary in sitesummaries.iterrows():
+        geom = site_summary['geometry']
+        if geom is None:
+            print('warning got none geom')
+            continue
+
+        try:
+            poly_json = kwimage.Polygon.from_shapely(geom.convex_hull).to_geojson()
+        except Exception as ex:
+            print(f'ex={ex}')
+            embed_if_requested()
+            raise
+        mpoly_json = kwimage.MultiPolygon.from_shapely(geom).to_geojson()
+
+        has_keys = site_summary.index.intersection(site_properites)
+        # missing_keys = pd.Index(site_properites).difference(site_summary.index)
+        psudo_site_prop = site_summary[has_keys].to_dict()
+        psudo_site_prop['type'] = 'site'
+        # TODO: how to handle missing start / end dates?
+        start_date = site_summary['start_date'] or region_start_date
+        end_date = site_summary['end_date'] or region_end_date
+
+        # hack
+        start_date, end_date = sorted(
+            [start_date, end_date], key=util_time.coerce_datetime)
+
+        psudo_site_prop['start_date'] = start_date
+        psudo_site_prop['end_date'] = end_date
+
+        start_datetime = util_time.coerce_datetime(start_date)
+        end_datetime = util_time.coerce_datetime(end_date)
+
+        assert start_datetime <= end_datetime
+
+        score = site_summary.get('score', None)
+        try:
+            score = float(score)
+        except TypeError:
+            ...
+
+        observation_prop_template = {
+            'type': 'observation',
+            'observation_date': None,
+            # 'source': None,
+            # 'sensor_name': None,
+            # 'current_phase': None,
+            # 'is_occluded': None,
+            # 'is_site_boundary': None,
+            'score': score,
+            # 'misc_info': None,
+        }
+
+        psudo_site_features = [
+            geojson.Feature(
+                properties=psudo_site_prop, geometry=poly_json,
+            )
+        ]
+        psudo_site_features.append(
+            geojson.Feature(
+                properties=ub.dict_union(observation_prop_template, {
+                    'observation_date': start_date,
+                    'current_phase': None,
+                }),
+                geometry=mpoly_json)
+        )
+        psudo_site_features.append(
+            geojson.Feature(
+                properties=ub.dict_union(observation_prop_template, {
+                    'observation_date': end_date,
+                    'current_phase': None,
+                }),
+                geometry=mpoly_json)
+        )
+        psudo_site_model = geojson.FeatureCollection(psudo_site_features)
+        pseudo_gpd = util_gis.load_geojson(io.StringIO(json.dumps(psudo_site_model)))
+        pseudo_sites.append(pseudo_gpd)
+    return pseudo_sites
+
+    # if 1:
+    #     from watch.rc.registry import load_site_model_schema
+    #     site_model_schema = load_site_model_schema()
+    #     real_site_model = json.loads(ub.Path('/media/joncrall/flash1/smart_watch_dvc/annotations/site_models/BR_R002_0009.geojson').read_text())
+    #     ret = jsonschema.validate(real_site_model, schema=site_model_schema)
+    #     import jsonschema
+    #     ret = jsonschema.validate(psudo_site_model, schema=site_model_schema)
+
+
 def validate_site_dataframe(site_df):
     from dateutil.parser import parse
     import numpy as np
@@ -621,6 +658,18 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
     """
     Given a coco dataset (with geo information) and a list of geojson sites,
     determines which images each site-annotations should go on.
+
+    Args:
+        coco_dset (kwcoco.CocoDataset):
+        region_id_to_sites (Dict[str, List[DataFrame]]):
+        propogate: (bool):
+        geospace_lookup: (str):
+        want_viz (bool):
+
+    Returns:
+        Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+            A tuple: propogated_annotations, all_drawable_infos
+
     """
     from shapely.ops import unary_union
     import pandas as pd
@@ -1134,6 +1183,11 @@ def embed_if_requested(n=0):
     import xdev
     if os.environ.get('XDEV_EMBED', '') or ub.argflag('--xdev-embed'):
         xdev.embed(n=n + 1)
+
+
+def reorder_columns(df, columns):
+    remain = df.columns.difference(columns)
+    return df.reindex(columns=(columns + list(remain)))
 
 
 if __name__ == '__main__':
