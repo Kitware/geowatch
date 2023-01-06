@@ -1136,6 +1136,28 @@ class SimpleDataCube(object):
 
         valid_region_geos = space_region.to_geojson()
 
+        # Handle an issue with pandas parsing. Should not need to do this if we
+        # can force pandas to be less smart.
+        if True:
+            from kwcoco.util.util_json import find_json_unserializable
+            from datetime import datetime as datetime_cls
+            issues = list(find_json_unserializable(video_props))
+            def normalize_timestamp(ts):
+                if isinstance(ts, datetime_cls):
+                    return ts.isoformat()
+                else:
+                    return ts
+            timestamp_keys = ['start_date', 'end_date']
+            for issue in issues:
+                found = False
+                for k in timestamp_keys:
+                    if issue['loc'] == [k]:
+                        ts = video_props[k]
+                        video_props[k] = normalize_timestamp(ts)
+                        found = True
+                if not found:
+                    raise Exception(f'Unhandled issues {issues}')
+
         new_video = {
             'name': video_name,
             'valid_region_geos': valid_region_geos,
@@ -1929,11 +1951,6 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     assert all(n is not None for n in input_gnames)
     input_gpaths = [join(bundle_dpath, n) for n in input_gnames]
 
-    # PHASE1_DEADLINE_HACK = 1
-    # if PHASE1_DEADLINE_HACK:
-    #     if len(input_gpaths) == 1 and input_gpaths[0].endswith('TCI.jp2'):
-    #         return None
-
     dst = {
         'file_name': dst_gpath,
     }
@@ -1963,9 +1980,6 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
                 ref = None
 
     if not needs_recompute:
-        # if 'crop_20191014T130000Z_S23.539915W046.611400_S23.283329W046.288255_S2_0' in dst_gpath:
-        #     import xdev
-        #     xdev.embed()
         if verbose:
             print('cache hit dst = {!r}'.format(dst))
         return dst

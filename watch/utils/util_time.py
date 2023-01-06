@@ -93,13 +93,20 @@ def _format_offset(off):
     return s
 
 
-def coerce_datetime(data, default_timezone='utc'):
+def coerce_datetime(data, default_timezone='utc', strict=False):
     """
-    Parses a timestamp and always returns a timestamp with a timezone
-
+    Parses a timestamp and always returns a timestamp with a timezone.
     If only a date is specified, the time is defaulted to 00:00:00
-
     If one is not discoverable a specified default is used.
+    A None input is returned as-is unless strict is True.
+
+    Args:
+        data (None | str | datetime.datetime | datetime.date)
+        default_timezone (str): defaults to utc.
+        strict (bool): if True we error if the input data is None.
+
+    Returns:
+        None | datetime.datetime
 
     Example:
         >>> from watch.utils.util_time import *  # NOQA
@@ -129,6 +136,10 @@ def coerce_datetime(data, default_timezone='utc'):
 def ensure_timezone(dt, default='utc'):
     """
     Gives a datetime_mod a timezone (utc by default) if it doesnt have one
+
+    Arguments:
+        dt (datetime.datetime): the datetime to fix
+        default (str): the timezone to use if it does not have one.
 
     Example:
         >>> from watch.utils.util_time import *  # NOQA
