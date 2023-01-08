@@ -2115,8 +2115,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     chan_std = chan_std.round(6)
                     # print('perchan_stats = {}'.format(ub.repr2(perchan_stats, nl=1)))
                     input_stats[(sensor, chan_key)] = {
-                        'mean': chan_mean.ravel(),
-                        'std': chan_std.ravel(),
+                        'mean': chan_mean,
+                        'std': chan_std,
                     }
             return input_stats
 
@@ -2235,7 +2235,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             'sensor_mode_hist': dict(sensor_mode_hist),
             'input_stats': input_stats,
             'class_freq': class_freq,
-            'video_id_histogram': dict(video_id_histogram),
+            # 'video_id_histogram': dict(video_id_histogram),
         }
         return dataset_stats
 

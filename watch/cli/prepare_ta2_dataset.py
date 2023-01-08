@@ -542,6 +542,9 @@ def main(cmdline=False, **kwargs):
 
     if config['separate_align_jobs']:
         alignment_input_jobs = []
+        # TODO: make use of region_id_to_site_fpaths
+        # to build a better site globstr (might need to write a tempoaray file
+        # to point to)
         final_site_globstr = _coerce_globstr(config['site_globstr'])
         for info in uncropped_fielded_jobs:
             toalign_info = info.copy()
