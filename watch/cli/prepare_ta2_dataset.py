@@ -95,6 +95,7 @@ class PrepareTA2Config(scfg.Config):
         'with_textual': scfg.Value('auto', help='setting for cmd-queue monitoring'),
         'other_session_handler': scfg.Value('ask', help='for tmux backend only. How to handle conflicting sessions. Can be ask, kill, or ignore, or auto'),
         'queue_name': scfg.Value('prep-ta2-dataset', help='name for the command queue'),
+        'rprint': scfg.Value(False, isflag=True, help='enable rich printing of the commands'),
 
         'max_queue_size': scfg.Value(10, help='the number of regions allowed to be processed in parallel with tmux backend'),
         'max_regions': None,
@@ -825,8 +826,10 @@ def main(cmdline=False, **kwargs):
     #         --run=1 --serial=True
     #     '''))
 
-    queue.print_graph()
-    queue.rprint()
+    if config['rprint']:
+        queue.print_graph()
+        queue.rprint()
+
     if config['run']:
 
         # This logic will exist in cmd-queue itself

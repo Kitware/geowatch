@@ -1059,6 +1059,9 @@ def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy,
                     'category_id': cid,
                     'track_id': track_id,
                 }
+                misc_info = site_row.get('misc_info', {})
+                if misc_info:
+                    ann['misc_info'] = misc_info
                 site_anns.append(ann)
 
         if want_viz:
