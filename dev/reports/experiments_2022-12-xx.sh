@@ -116,8 +116,9 @@ python -m watch.mlops.schedule_evaluation \
                 #- 0.45
                 #- 0.5
             bas_poly.moving_window_size: 
-                - null
-                - 100
+                #- null
+                #- 100
+                - 200
             bas_pxl.enabled: 1
             bas_poly.enabled: 1
             bas_poly_eval.enabled: 1
@@ -143,7 +144,7 @@ python -m watch.mlops.schedule_evaluation \
     " \
     --root_dpath="$DVC_EXPT_DPATH/_testpipe" \
     --devices="0,1" --queue_size=2 \
-    --backend=tmux --queue_name "demo-queue2" \
+    --backend=tmux --queue_name "demo-queue3" \
     --pipeline=bas --skip_existing=1 \
     --run=1
 

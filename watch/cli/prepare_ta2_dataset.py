@@ -91,8 +91,10 @@ class PrepareTA2Config(scfg.Config):
         'collated': scfg.Value([True], nargs='+', help='set to false if the input data is not collated'),
 
         'backend': scfg.Value('serial', help='can be serial, tmux, or slurm. Using tmux is recommended.'),
-        'serial': scfg.Value(False, isflag=True, help='if True, override other settings to disable parallelism. DEPRECATE. Set backend=serial isntead'),
+        'serial': scfg.Value(False, isflag=True, help='if True, override other settings to disable parallelism. DEPRECATE. Set backend=serial instead'),
         'with_textual': scfg.Value('auto', help='setting for cmd-queue monitoring'),
+        'other_session_handler': scfg.Value('ask', help='for tmux backend only. How to handle conflicting sessions. Can be ask, kill, or ignore, or auto'),
+        'queue_name': scfg.Value('prep-ta2-dataset', help='name for the command queue'),
 
         'max_queue_size': scfg.Value(10, help='the number of regions allowed to be processed in parallel with tmux backend'),
         'max_regions': None,
@@ -126,6 +128,8 @@ class PrepareTA2Config(scfg.Config):
 
         'region_globstr': scfg.Value('annotations/region_models', help='region model globstr (relative to the dvc path, unless absolute or prefixed by "./")'),
         'site_globstr': scfg.Value('annotations/site_models', help='site model globstr (relative to the dvc path, unless absolute or prefixed by "./")'),
+
+        'propogate_strategy': scfg.Value('SMART', help='changes propogation behavior'),
 
         'target_gsd': 10,
         'remove_broken': scfg.Value(True, isflag=1, help='if True, will remove any image that fails population (e.g. caused by a 404)'),
@@ -682,6 +686,7 @@ def main(cmdline=False, **kwargs):
                 python -m watch project_annotations \
                     --src "{aligned_imgonly_fpath}" \
                     --dst "{aligned_imganns_fpath}" \
+                    --propogate_strategy="{config['propogate_strategy']}" \
                     --site_models="{site_globstr}" \
                     --region_models="{region_globstr}" {viz_part}
                 '''), depends=[align_job], name=f'project-annots-{name}',
@@ -768,10 +773,10 @@ def main(cmdline=False, **kwargs):
     pipeline._update_stage_otf_cache(cache)
 
     queue = cmd_queue.Queue.create(
-        backend=config['backend'], name='prep-ta2-dataset', size=1, gres=None,
-        environ=environ)
+        backend=config['backend'], name=config['queue_name'], size=1,
+        gres=None, environ=environ)
 
-    # hack to dynamically resize tmux jobs
+    # hack to set number of parallel sessions based on job size
     queue.size = min(len(stac_jobs), config['max_queue_size'])
 
     # self._populate_explicit_dependency_queue(queue)
@@ -823,7 +828,29 @@ def main(cmdline=False, **kwargs):
     queue.print_graph()
     queue.rprint()
     if config['run']:
-        queue.run(block=True, system=True, with_textual=config['with_textual'])
+
+        # This logic will exist in cmd-queue itself
+        other_session_handler = config['other_session_handler']
+        def handle_other_sessions(other_session_handler):
+            if other_session_handler == 'auto':
+                from cmd_queue.tmux_queue import has_stdin
+                if has_stdin():
+                    other_session_handler = 'ask'
+                else:
+                    other_session_handler = 'kill'
+            if other_session_handler == 'ask':
+                queue.kill_other_queues(ask_first=True)
+            elif other_session_handler == 'kill':
+                queue.kill_other_queues(ask_first=False)
+            elif other_session_handler == 'ignore':
+                ...
+            else:
+                raise KeyError
+
+        if config['backend'] == 'tmux':
+            handle_other_sessions(other_session_handler)
+        queue.run(block=True, system=True, with_textual=config['with_textual'],
+                  check_other_sessions=False)
 
     # TODO: team features
     """

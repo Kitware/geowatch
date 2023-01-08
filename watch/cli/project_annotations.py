@@ -100,7 +100,7 @@ class ProjectAnnotationsConfig(scfg.Config):
             if True, clears existing annotations before projecting the new ones.
             ''')),
 
-        'propogate': scfg.Value(True, help='if True does forward propogation in time'),
+        'propogate_strategy': scfg.Value('SMART', help='strategy for how to interpolate annotations over time'),
 
         'geo_preprop': scfg.Value('auto', help='force if we check geo properties or not'),
 
@@ -195,13 +195,12 @@ def main(cmdline=False, **kwargs):
 
     region_id_to_sites = expand_site_models_with_site_summaries(sites, regions)
 
-    propogate = config['propogate']
-
+    propogate_strategy = config['propogate_strategy']
     viz_dpath = config['viz_dpath']
     want_viz = bool(viz_dpath)
 
     propogated_annotations, all_drawable_infos = assign_sites_to_images(
-        coco_dset, region_id_to_sites, propogate,
+        coco_dset, region_id_to_sites, propogate_strategy,
         geospace_lookup=geospace_lookup, want_viz=want_viz)
 
     if config['role'] is not None:
@@ -501,7 +500,7 @@ def expand_site_models_with_site_summaries(sites, regions):
     return region_id_to_sites
 
 
-def make_pseudo_sitemodels(region_row, sitesummaries, site_properites):
+def make_pseudo_sitemodels(region_row, sitesummaries):
     import geojson
     import json
     from watch.utils import util_gis
@@ -611,7 +610,7 @@ def make_pseudo_sitemodels(region_row, sitesummaries, site_properites):
 
 
 def validate_site_dataframe(site_df):
-    from dateutil.parser import parse
+    from watch.utils import util_time
     import numpy as np
     dummy_start_date = '1970-01-01'  # hack, could be more robust here
     dummy_end_date = '2101-01-01'
@@ -626,8 +625,8 @@ def validate_site_dataframe(site_df):
 
     site_start_date = first['start_date'] or dummy_start_date
     site_end_date = first['end_date'] or dummy_end_date
-    site_start_datetime = parse(site_start_date)
-    site_end_datetime = parse(site_end_date)
+    site_start_datetime = util_time.coerce_datetime(site_start_date)
+    site_end_datetime = util_time.coerce_datetime(site_end_date)
 
     if site_end_datetime < site_start_datetime:
         print('\n\nBAD SITE DATES:')
@@ -636,7 +635,7 @@ def validate_site_dataframe(site_df):
     status = {}
     # Check datetime errors in observations
     try:
-        obs_dates = [None if x is None else parse(x) for x in rest['observation_date']]
+        obs_dates = [None if x is None else util_time.coerce_datetime(x) for x in rest['observation_date']]
         obs_isvalid = [x is not None for x in obs_dates]
         valid_obs_dates = list(ub.compress(obs_dates, obs_isvalid))
         if not all(valid_obs_dates):
@@ -654,7 +653,8 @@ def validate_site_dataframe(site_df):
     return status
 
 
-def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lookup='auto', want_viz=1):
+def assign_sites_to_images(coco_dset, region_id_to_sites, propogate_strategy,
+                           geospace_lookup='auto', want_viz=1):
     """
     Given a coco dataset (with geo information) and a list of geojson sites,
     determines which images each site-annotations should go on.
@@ -662,14 +662,14 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
     Args:
         coco_dset (kwcoco.CocoDataset):
         region_id_to_sites (Dict[str, List[DataFrame]]):
-        propogate: (bool):
+        propogate_strategy: (str): a code that describes how we
+           are going to past/future propogate
         geospace_lookup: (str):
         want_viz (bool):
 
     Returns:
         Tuple[List[Dict[str, Any]], Dict[str, Any]]:
             A tuple: propogated_annotations, all_drawable_infos
-
     """
     from shapely.ops import unary_union
     import pandas as pd
@@ -695,20 +695,18 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
     else:
         videos_gdf = None
 
-    PROJECT_ENDSTATE = True
-
     # Ensure colors and categories
     from watch import heuristics
     status_to_color = {d['name']: kwimage.Color(d['color']).as01()
                        for d in heuristics.HUERISTIC_STATUS_DATA}
-    print('coco_dset categories = {}'.format(ub.repr2(coco_dset.dataset['categories'], nl=2)))
+    # print('coco_dset categories = {}'.format(ub.repr2(coco_dset.dataset['categories'], nl=2)))
     for cat in heuristics.CATEGORIES:
         coco_dset.ensure_category(**cat)
     # hack in heuristic colors
     heuristics.ensure_heuristic_coco_colors(coco_dset)
     # handle any other colors
     kwcoco_extensions.category_category_colors(coco_dset)
-    print('coco_dset categories = {}'.format(ub.repr2(coco_dset.dataset['categories'], nl=2)))
+    # print('coco_dset categories = {}'.format(ub.repr2(coco_dset.dataset['categories'], nl=2)))
 
     all_drawable_infos = []  # helper if we are going to draw
 
@@ -773,10 +771,6 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
             video_id = video['id']
             video_id_to_region_id[video_id] = region_id
 
-    def coerce_datetime2(data):
-        """ Is this a monad 🦋 ? """
-        return None if data is None else util_time.coerce_datetime(data)
-
     print('Found Association: video_id_to_region_id = {}'.format(ub.repr2(video_id_to_region_id, nl=1)))
     propogated_annotations = []
     for video_id, region_id in video_id_to_region_id.items():
@@ -808,210 +802,10 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
 
         # For each site in this region
         for site_gdf in region_sites:
-            if __debug__ and 0:
-                # Sanity check, the sites should have spatial overlap with each image in the video
-                image_overlaps = util_gis.geopandas_pairwise_overlaps(site_gdf, subimg_df)
-                num_unique_overlap_frames = set(ub.map_vals(len, image_overlaps).values())
-                assert len(num_unique_overlap_frames) == 1
-
-            site_summary_row = site_gdf.iloc[0]
-            site_rows = site_gdf.iloc[1:]
-            track_id = site_summary_row['site_id']
-            status = site_summary_row['status']
-            status = status.lower().strip()
-
-            if status == 'pending':
-                # hack for QFabric
-                status = 'positive_pending'
-
-            start_date = coerce_datetime2(site_summary_row['start_date'])
-            end_date = coerce_datetime2(site_summary_row['end_date'])
-
-            ALLOW_BACKWARDS_DATES = True
-            if ALLOW_BACKWARDS_DATES:
-                # Some sites have backwards dates. Unfortunately we don't
-                # have any control to fix them, so we have to handle them.
-                if start_date is not None and end_date is not None:
-                    if start_date > end_date:
-                        warnings.warn(
-                            'A site has flipped start/end dates. '
-                            'Fixing here, but it should be fixed in the site model itself.')
-                        start_date, end_date = end_date, start_date
-
-            flags = ~site_rows['observation_date'].isnull()
-            valid_site_rows = site_rows[flags]
-
-            observation_dates = np.array([
-                coerce_datetime2(x) for x in valid_site_rows['observation_date']
-            ])
-
-            if start_date is not None and observation_dates[0] != start_date:
-                print('WARNING: inconsistent start')
-                print(site_gdf)
-                print(f'start_date = {start_date}')
-                print(f'end_date   = {end_date}')
-                print('observation_dates = {}'.format(ub.repr2(observation_dates.tolist(), nl=1)))
-                # embed_if_requested()
-                # raise AssertionError(f'start_date={start_date}, obs[0]={observation_dates[0]}')
-            if end_date is not None and observation_dates[-1] != end_date:
-                print('WARNING: inconsistent end date')
-                print(site_gdf)
-                print(f'start_date = {start_date}')
-                print(f'end_date   = {end_date}')
-                print('observation_dates = {}'.format(ub.repr2(observation_dates.tolist(), nl=1)))
-                # embed_if_requested()
-                # raise AssertionError(f'end_date={end_date}, obs[-1]={observation_dates[-1]}')
-
-            # Assuming observations are sorted by date
-            assert all([d.total_seconds() >= 0 for d in np.diff(observation_dates)])
-
-            # Determine the first image each site-observation will be
-            # associated with and then propogate them forward as necessary.
-
-            # NOTE: https://github.com/Erotemic/misc/blob/main/learn/viz_searchsorted.py if you
-            # need to remember or explain how searchsorted works
-
-            # To future-propogate:
-            # (1) assign each observation to its nearest image (temporally)
-            # without "going over" (i.e. the assigned image must be at or after
-            # the observation)
-            # (2) Splitting the image observations and taking all but the first
-            # gives all current-and-future images for each observation that
-            # happen before the next observation.
-            try:
-                found_forward_idxs = np.searchsorted(region_image_dates, observation_dates, 'left')
-            except TypeError:
-                # handle  can't compare offset-naive and offset-aware datetimes
-                region_image_dates = [util_time.ensure_timezone(dt)
-                                      for dt in region_image_dates]
-                observation_dates = [util_time.ensure_timezone(dt)
-                                     for dt in observation_dates]
-                found_forward_idxs = np.searchsorted(region_image_dates, observation_dates, 'left')
-
-            image_index_bins = np.split(region_image_indexes, found_forward_idxs)
-            forward_image_idxs_per_observation = image_index_bins[1:]
-
-            # To past-propogate:
-            # (1) assign each observation to its nearest image (temporally)
-            # without "going under" (i.e. the assigned image must be at or
-            # before the observation)
-            # (2) Splitting the image observations and taking all but the last
-            # gives all current-and-past-only images for each observation that
-            # happen after the previous observation.
-            # NOTE: we only really need to backward propogate the first label
-            # (if we even want to do that at all)
-            found_backward_idxs = np.searchsorted(region_image_dates, observation_dates, 'right')
-            backward_image_idxs_per_observation = np.split(region_image_indexes, found_backward_idxs)[:-1]
-
-            # TODO: use heuristic module
-            HEURISTIC_END_STATES = {
-                'Post Construction'
-            }
-
-            BACKPROJECT_START_STATES = 0  # turn off back-projection
-            HEURISTIC_START_STATES = {
-                'No Activity',
-            }
-
-            # Create annotations on each frame we are associated with
-            site_anns = []
-            drawable_summary = []
-            _iter = zip(forward_image_idxs_per_observation,
-                        backward_image_idxs_per_observation,
-                        site_rows.to_dict(orient='records'))
-            for annot_idx, (forward_gxs, backward_gxs, site_row) in enumerate(_iter):
-
-                site_row_datetime = coerce_datetime2(site_row['observation_date'])
-                assert site_row_datetime is not None
-
-                catname = site_row['current_phase']
-                if catname is None:
-                    # Based on the status choose a kwcoco category name
-                    # using the watch heuristics
-                    catname = heuristics.PHASE_STATUS_TO_KWCOCO_CATNAME[status]
-
-                if catname is None:
-                    HACK_TO_PASS = 1
-                    if HACK_TO_PASS:
-                        # We should find out why this is happening
-                        warnings.warn(f'Positive annotation without a class label: status={status}, {annot_idx}, {site_row}')
-                        continue
-                    raise AssertionError(f'status={status}, {annot_idx}, {site_row}')
-
-                propogated_on = []
-                category_colors = []
-                categories = []
-
-                # Handle multi-category per-row logic
-                site_catnames = [c.strip() for c in catname.split(',')]
-                row_summary = {
-                    'track_id': track_id,
-                    'site_row_datetime': site_row_datetime,
-                    'propogated_on': propogated_on,
-                    'category_colors': category_colors,
-                    'categories': categories,
-                    'status': status,
-                    'color': status_to_color[status],
-                }
-
-                site_polygons = [
-                    p.to_geojson()
-                    for p in kwimage.MultiPolygon.from_shapely(site_row['geometry']).to_multi_polygon().data
-                ]
-                assert len(site_polygons) == len(site_catnames)
-
-                # A bit hacky, clean up logic later
-                current_and_forward_gids = region_gids[forward_gxs]
-                backward_gids = region_gids[backward_gxs]
-                forward_gids = []
-                current_gids = []
-                current_and_forward_gids = sorted(
-                    current_and_forward_gids,
-                    key=lambda gid: util_time.coerce_datetime(coco_dset.imgs[gid]['date_captured']))
-
-                # Always propogate at least to the nearest frame?
-                # TODO: could have better rules about what counts as a frame
-                # the annotation "belongs" to and what counts as a forward
-                # propogation frame.
-                current_gids = current_and_forward_gids[0:1]
-                forward_gids = current_and_forward_gids[1:None]
-
-                # Propogate each subsite
-                for subsite_catname, poly in zip(site_catnames, site_polygons):
-
-                    # Determine if this subsite propogates forward and/or backward
-                    propogate_gids = []
-                    propogate_gids.extend(current_gids)
-                    if PROJECT_ENDSTATE or catname not in HEURISTIC_END_STATES:
-                        propogate_gids.extend(forward_gids)
-
-                    if BACKPROJECT_START_STATES:
-                        # Only need to backpropogate the first label (and maybe even not that?)
-                        if annot_idx == 0 and catname in HEURISTIC_START_STATES:
-                            propogate_gids.extend(backward_gids)
-
-                    for gid in propogate_gids:
-                        img = coco_dset.imgs[gid]
-                        img_datetime = util_time.coerce_datetime(img['date_captured'])
-
-                        propogated_on.append(img_datetime)
-
-                        cid = coco_dset.ensure_category(subsite_catname)
-                        cat = coco_dset.index.cats[cid]
-                        category_colors.append(cat['color'])
-                        categories.append(subsite_catname)
-                        ann = {
-                            'image_id': gid,
-                            'segmentation_geos': poly,
-                            'status': status,
-                            'category_id': cid,
-                            'track_id': track_id,
-                        }
-                        site_anns.append(ann)
-
-                if want_viz:
-                    drawable_summary.append(row_summary)
-
+            site_anns, drawable_summary = propogate_site(
+                coco_dset, site_gdf, subimg_df, propogate_strategy,
+                region_image_dates, region_image_indexes, region_gids,
+                status_to_color, want_viz)
             propogated_annotations.extend(site_anns)
             if want_viz:
                 drawable_region_sites.append(drawable_summary)
@@ -1033,6 +827,463 @@ def assign_sites_to_images(coco_dset, region_id_to_sites, propogate, geospace_lo
         })
 
     return propogated_annotations, all_drawable_infos
+
+
+def propogate_site(coco_dset, site_gdf, subimg_df, propogate_strategy,
+                   region_image_dates, region_image_indexes, region_gids,
+                   status_to_color, want_viz):
+    """
+    Given a set of site observations determines how to propogate them onto
+    potential images in the assigned region.
+    """
+    from watch.utils import util_gis
+    from watch import heuristics
+
+    if __debug__ and 0:
+        # Sanity check, the sites should have spatial overlap with each image in the video
+        image_overlaps = util_gis.geopandas_pairwise_overlaps(site_gdf, subimg_df)
+        num_unique_overlap_frames = set(ub.map_vals(len, image_overlaps).values())
+        assert len(num_unique_overlap_frames) == 1
+
+    site_summary_row = site_gdf.iloc[0]
+    site_rows = site_gdf.iloc[1:]
+    track_id = site_summary_row['site_id']
+    status = site_summary_row['status']
+    status = status.lower().strip()
+
+    if status == 'pending':
+        # hack for QFabric
+        status = 'positive_pending'
+
+    start_date = coerce_datetime2(site_summary_row['start_date'])
+    end_date = coerce_datetime2(site_summary_row['end_date'])
+
+    FIX_BACKWARDS_DATES = True
+    if FIX_BACKWARDS_DATES:
+        # Some sites have backwards dates. Unfortunately we don't
+        # have any control to fix them, so we have to handle them.
+        if start_date is not None and end_date is not None:
+            if start_date > end_date:
+                warnings.warn(
+                    'A site has flipped start/end dates. '
+                    'Fixing here, but it should be fixed in the site model itself.')
+                start_date, end_date = end_date, start_date
+
+    flags = ~site_rows['observation_date'].isnull()
+    valid_site_rows = site_rows[flags]
+
+    observation_dates = np.array([
+        coerce_datetime2(x) for x in valid_site_rows['observation_date']
+    ])
+
+    # This check doesn't seem generally necessary.
+    if start_date is not None and observation_dates[0] != start_date:
+        print('WARNING: inconsistent start')
+        print(site_gdf)
+        print(f'start_date = {start_date}')
+        print(f'end_date   = {end_date}')
+        print('observation_dates = {}'.format(ub.repr2(observation_dates.tolist(), nl=1)))
+    if end_date is not None and observation_dates[-1] != end_date:
+        print('WARNING: inconsistent end date')
+        print(site_gdf)
+        print(f'start_date = {start_date}')
+        print(f'end_date   = {end_date}')
+        print('observation_dates = {}'.format(ub.repr2(observation_dates.tolist(), nl=1)))
+
+    # Assuming observations are sorted by date
+    assert all([d.total_seconds() >= 0 for d in np.diff(observation_dates)])
+
+    # Determine the first image each site-observation will be
+    # associated with and then propogate them forward as necessary.
+
+    # NOTE: https://github.com/Erotemic/misc/blob/main/learn/viz_searchsorted.py if you
+    # need to remember or explain how searchsorted works
+
+    site_rows_list = site_rows.to_dict(orient='records')
+
+    if propogate_strategy == 'SMART':
+        # The original, but inflexible, propogate strategy
+
+        # To future-propogate:
+        # (1) assign each observation to its nearest image (temporally)
+        # without "going over" (i.e. the assigned image must be at or after
+        # the observation)
+        # (2) Splitting the image observations and taking all but the first
+        # gives all current-and-future images for each observation that
+        # happen before the next observation.
+        try:
+            found_forward_idxs = np.searchsorted(region_image_dates, observation_dates, 'left')
+        except TypeError:
+            # handle  can't compare offset-naive and offset-aware datetimes
+            region_image_dates = [util_time.ensure_timezone(dt)
+                                  for dt in region_image_dates]
+            observation_dates = [util_time.ensure_timezone(dt)
+                                 for dt in observation_dates]
+            found_forward_idxs = np.searchsorted(region_image_dates, observation_dates, 'left')
+
+        image_index_bins = np.split(region_image_indexes, found_forward_idxs)
+        forward_image_idxs_per_observation = image_index_bins[1:]
+
+        # To past-propogate:
+        # (1) assign each observation to its nearest image (temporally)
+        # without "going under" (i.e. the assigned image must be at or
+        # before the observation)
+        # (2) Splitting the image observations and taking all but the last
+        # gives all current-and-past-only images for each observation that
+        # happen after the previous observation.
+        # NOTE: we only really need to backward propogate the first label
+        # (if we even want to do that at all)
+        found_backward_idxs = np.searchsorted(region_image_dates, observation_dates, 'right')
+        backward_image_idxs_per_observation = np.split(region_image_indexes, found_backward_idxs)[:-1]
+
+        # Convert this into the "new" simpler format where each site row is
+        # simply associated with the frames it will propogate to.
+        obs_associated_gxs = []
+        PROJECT_ENDSTATE = True
+        BACKPROJECT_START_STATES = 0  # turn off back-projection
+        # TODO: use heuristic module
+        HEURISTIC_START_STATES = {
+            'No Activity',
+        }
+        HEURISTIC_END_STATES = {
+            'Post Construction'
+        }
+        _iter = zip(forward_image_idxs_per_observation,
+                    backward_image_idxs_per_observation,
+                    site_rows_list)
+        for annot_idx, (forward_gxs, backward_gxs, site_row) in enumerate(_iter):
+            propogate_gxs = []
+            catname = site_row['current_phase']
+            if catname is None:
+                # Based on the status choose a kwcoco category name
+                # using the watch heuristics
+                catname = heuristics.PHASE_STATUS_TO_KWCOCO_CATNAME[status]
+            current_and_forward_gxs = sorted(
+                forward_gxs,
+                key=lambda gx: util_time.coerce_datetime(coco_dset.imgs[region_gids[gx]]['date_captured']))
+            # Always propogate at least to the nearest frame?
+            current_gxs = current_and_forward_gxs[0:1]
+            propogate_gxs.extend(current_gxs)
+            # Determine if this subsite propogates forward and/or backward
+            if PROJECT_ENDSTATE or catname not in HEURISTIC_END_STATES:
+                propogate_gxs.extend(forward_gxs)
+
+            if BACKPROJECT_START_STATES:
+                # Only need to backpropogate the first label (and maybe even not that?)
+                if annot_idx == 0 and catname in HEURISTIC_START_STATES:
+                    propogate_gxs.extend(backward_gxs)
+            obs_associated_gxs.append(propogate_gxs)
+
+    elif propogate_strategy == "NEW-PAST":
+        image_times = [t.timestamp() for t in region_image_dates]
+        key_infos = [{'time': t.timestamp(), 'applies': 'past'} for t in observation_dates]
+        obs_associated_gxs = keyframe_interpolate(image_times, key_infos)
+
+    elif propogate_strategy == "NEW-SMART":
+        raise NotImplementedError('TODO: use the new logic, but with smart heuristics for the behavior')
+    else:
+        raise KeyError(propogate_strategy)
+
+    ###
+    # Note:
+    # There is a current assumption that an observation implicitly
+    # propogates forward in time, but never backwards. This is a
+    # project-specific assumption and a more general system would have
+    # this be configurable. The current propogate_strategy gives a minor
+    # degree of control, but this should be specified at the observation
+    # level in the annotation file. This is really the annotation state
+    # interpolation problem.
+
+    # Create annotations on each frame we are associated with
+    site_anns = []
+    drawable_summary = []
+    _iter = zip(obs_associated_gxs, site_rows_list)
+    for annot_idx, (propogate_gxs, site_row) in enumerate(_iter):
+
+        site_row_datetime = coerce_datetime2(site_row['observation_date'])
+        assert site_row_datetime is not None
+
+        catname = site_row['current_phase']
+        if catname is None:
+            # Based on the status choose a kwcoco category name
+            # using the watch heuristics
+            catname = heuristics.PHASE_STATUS_TO_KWCOCO_CATNAME[status]
+
+        if catname is None:
+            HACK_TO_PASS = 1
+            if HACK_TO_PASS:
+                # We should find out why this is happening
+                warnings.warn(f'Positive annotation without a class label: status={status}, {annot_idx}, {site_row}')
+                continue
+            raise AssertionError(f'status={status}, {annot_idx}, {site_row}')
+
+        propogated_on = []
+        category_colors = []
+        categories = []
+
+        # Handle multi-category per-row logic
+        site_catnames = [c.strip() for c in catname.split(',')]
+        row_summary = {
+            'track_id': track_id,
+            'site_row_datetime': site_row_datetime,
+            'propogated_on': propogated_on,
+            'category_colors': category_colors,
+            'categories': categories,
+            'status': status,
+            'color': status_to_color[status],
+        }
+
+        site_polygons = [
+            p.to_geojson()
+            for p in kwimage.MultiPolygon.from_shapely(site_row['geometry']).to_multi_polygon().data
+        ]
+        assert len(site_polygons) == len(site_catnames)
+
+        # Propogate each subsite
+        for subsite_catname, poly in zip(site_catnames, site_polygons):
+            propogate_gids = region_gids[propogate_gxs]
+            for gid in propogate_gids:
+                img = coco_dset.imgs[gid]
+                img_datetime = util_time.coerce_datetime(img['date_captured'])
+
+                propogated_on.append(img_datetime)
+
+                cid = coco_dset.ensure_category(subsite_catname)
+                cat = coco_dset.index.cats[cid]
+                category_colors.append(cat.get('color', None))
+                categories.append(subsite_catname)
+                ann = {
+                    'image_id': gid,
+                    'segmentation_geos': poly,
+                    'status': status,
+                    'category_id': cid,
+                    'track_id': track_id,
+                }
+                site_anns.append(ann)
+
+        if want_viz:
+            drawable_summary.append(row_summary)
+
+    return site_anns, drawable_summary
+
+
+def keyframe_interpolate(image_times, key_infos):
+    """
+    New method for keyframe interapolation.
+
+    Given a set of image times and a set of key frames with information on how
+    they propogate, determine which images will be assigned which keyframes.
+
+    Not yet used for the SMART method, but could be in the future.
+    The keyframe propogation behavior is also currently very simple and may be
+    expanded in the future.
+
+    Args:
+        image_times (ndarray):
+            contains just the times of the underying images we will
+            associate with the keyframes.
+
+        key_infos (Dict):
+            contains each keyframe time and information about its behavior.
+
+    Returns:
+        List[List]:
+            a list of associated image indexes for each key frame.
+
+    Example:
+        >>> from watch.cli.project_annotations import *  # NOQA
+        >>> image_times = np.array([1, 2, 3, 4, 5, 6, 7])
+        >>> # TODO: likely also needs a range for a maximum amount of time you will
+        >>> # apply the observation for.
+        >>> key_infos = [
+        >>>     {'time': 1.2, 'applies': 'future'},
+        >>>     {'time': 3.4, 'applies': 'both'},
+        >>>     {'time': 6, 'applies': 'past'},
+        >>>     {'time': 9, 'applies': 'past'},
+        >>> ]
+        >>> key_assignment = keyframe_interpolate(image_times, key_infos)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> # xdoctest: +REQUIRES(module:kwplot)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.figure(fnum=1, doclf=1)
+        >>> key_times = [d['time'] for d in key_infos]
+        >>> key_times = np.array(key_times)
+        >>> plot_poc_keyframe_interpolate(image_times, key_times, key_assignment)
+    """
+    key_times = [d['time'] for d in key_infos]
+    key_times = np.array(key_times)
+
+    # For each image find the closest keypoint index at the current time or in
+    # the future.
+    forward_idxs = np.searchsorted(key_times, image_times, 'left')
+
+    # Add a padding which makes the array math easier.
+    padded_key_times = np.hstack([[-np.inf], key_times, [np.inf]])
+    padded_forward_idxs = forward_idxs + 1
+
+    # Determine if the image is exactly associated with a keyframe or not
+    associated_times = padded_key_times[padded_forward_idxs]
+    has_exact_keyframe = (associated_times == image_times)
+
+    # For the image that have an exact keyframe, denote that.
+    padded_curr_idxs = np.full_like(image_times, fill_value=0, dtype=int)
+    padded_curr_idxs[has_exact_keyframe] = padded_forward_idxs[has_exact_keyframe]
+
+    # For each image denote the index of the keyframe before it
+    padded_prev_idxs = padded_forward_idxs - 1
+
+    # For each image denote the index of the keyframe after it
+    # for locations where the times match exactly add one because
+    # it the forward idx represents the current and not the next.
+    padded_next_idxs = padded_forward_idxs
+    padded_next_idxs[has_exact_keyframe] += 1
+
+    # Set the locations of invalid indices to -1 (+1 for padding)
+    padded_next_idxs[padded_next_idxs > len(key_times)] = 0
+
+    # For each image, it will either have:
+    # * exactly one keyframe after it and maybe one directly on it.
+    # * a keyframe before and after it and maybe one directly on it.
+    # * exactly one keyframe before it and maybe one directly on it.
+    prev_idxs = padded_prev_idxs - 1
+    curr_idxs = padded_curr_idxs - 1
+    next_idxs = padded_next_idxs - 1
+
+    if 0:
+        import pandas as pd
+        print(pd.DataFrame({
+            'prev': prev_idxs,
+            'curr': curr_idxs,
+            'next': next_idxs,
+        }))
+
+    # Note that the config of prev, curr, next forms a grouping where each
+    # unique row has the same operation applied to it.
+    ### --- <opaque group logic>
+    import kwarray
+    pcn_rows = np.stack([prev_idxs, curr_idxs, next_idxs], axis=1)
+    arr = pcn_rows
+    dtype_view = np.dtype((np.void, arr.dtype.itemsize * arr.shape[1]))
+    arr_view = arr.view(dtype_view)
+    _, uidx, uinv = np.unique(arr_view, return_inverse=True, return_index=True)
+    row_groupids = uidx[uinv]
+    unique_rowxs, groupxs = kwarray.group_indices(row_groupids)
+    ### --- </opaque group logic>
+
+    keyidx_to_imageidxs = [[] for _ in range(len(key_infos))]
+    # Now we have groups of images corresponding to each unique keyframe case.
+    for rowx, image_groupx in zip(unique_rowxs, groupxs):
+        prev_idx, curr_idx, next_idx = pcn_rows[rowx]
+
+        prev_keyinfo = key_infos[prev_idx] if prev_idx >= 0 else None
+        curr_keyinfo = key_infos[curr_idx] if curr_idx >= 0 else None
+        next_keyinfo = key_infos[next_idx] if next_idx >= 0 else None
+
+        if curr_keyinfo is not None:
+            # The current key always takes priority
+            keyidx_to_imageidxs[curr_idx].extend(image_groupx)
+        else:
+            prev_is_relevant = prev_keyinfo is not None and (
+                prev_keyinfo['applies'] in {'future', 'both'})
+            next_is_relevant = next_keyinfo is not None and (
+                next_keyinfo['applies'] in {'past', 'both'})
+
+            if prev_is_relevant and next_is_relevant:
+                # This is a conflicting case, and we need to guess which one to
+                # use, use the nearest in time.
+                group_times = image_times[image_groupx]
+                d1 = np.abs(group_times - prev_keyinfo['time'])
+                d2 = np.abs(group_times - next_keyinfo['time'])
+                partitioner = d1 < d2
+                prev_groupx = image_groupx[partitioner]
+                next_groupx = image_groupx[~partitioner]
+                keyidx_to_imageidxs[prev_idx].extend(prev_groupx)
+                keyidx_to_imageidxs[next_idx].extend(next_groupx)
+            elif next_is_relevant:
+                # Simple case, only have a relevant next keyframe
+                keyidx_to_imageidxs[next_idx].extend(image_groupx)
+            elif prev_is_relevant:
+                # Simple case, only have a relevant prev keyframe
+                keyidx_to_imageidxs[prev_idx].extend(image_groupx)
+            else:
+                # It is ok if neither keyframe is relevant that is a hole in
+                # the track.
+                ...
+    return keyidx_to_imageidxs
+
+
+def plot_poc_keyframe_interpolate(image_times, key_times, key_assignment):
+    """
+    """
+    import kwplot
+    import matplotlib as mpl
+    plt = kwplot.autoplt()
+    ax = plt.gca()
+
+    ylocs = {
+        'image': 2,
+        'key': 1,
+    }
+    xlocs = {
+        'image': image_times,
+        'key': key_times,
+    }
+    segments = {
+        key: [(x, ylocs[key]) for x in xs]
+        for key, xs in xlocs.items()
+    }
+    key1 = 'image'
+    key2 = 'key'
+
+    colors = {
+        key1: 'darkblue',
+        key2: 'orange',
+        'association': 'purple',
+    }
+    xlocs1 = xlocs[key1]
+    # xlocs2 = xlocs[key2]
+    segment1 = segments[key1]
+    segment2 = segments[key2]
+
+    association_segments = []
+    for idx2, idx1s in enumerate(key_assignment):
+        pt2 = segment2[idx2]
+        for idx1 in idx1s:
+            if idx1 < 0:
+                pt1 = [xlocs1[0] - 1, ylocs[key1]]
+            elif idx1 == len(segments[key1]):
+                pt1 = [xlocs1[-1] + 1, ylocs[key1]]
+            else:
+                pt1 = segment1[idx1]
+            association_segments.append([pt1, pt2])
+
+    circles = [mpl.patches.Circle(xy, radius=0.1) for xy in segment1]
+    data_points = mpl.collections.PatchCollection(circles, color=colors[key1], alpha=0.7)
+    data_lines = mpl.collections.LineCollection([segment1], color=colors[key1], alpha=0.5)
+    ax.add_collection(data_lines)
+    ax.add_collection(data_points)
+
+    circles = [mpl.patches.Circle(xy, radius=0.1) for xy in segment2]
+    data_points = mpl.collections.PatchCollection(circles, color=colors[key2], alpha=0.7)
+    data_lines = mpl.collections.LineCollection([segment1], color=colors[key2], alpha=0.5)
+    ax.add_collection(data_lines)
+    ax.add_collection(data_points)
+
+    found_association_lines = mpl.collections.LineCollection(association_segments, color=colors['association'], alpha=0.5)
+    ax.add_collection(found_association_lines)
+
+    ax.autoscale_view()
+    ax.set_aspect('equal')
+
+    kwplot.phantom_legend(colors)
+
+    ax.set_ylim(min(ylocs.values()) - 1, max(ylocs.values()) + 1)
+
+
+def coerce_datetime2(data):
+    """ Is this a monad 🦋 ? """
+    return None if data is None else util_time.coerce_datetime(data)
 
 
 def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sites, region_id, ax=None):
