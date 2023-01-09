@@ -595,6 +595,22 @@ def _validate():
         jsonschema.validate(site, schema=SITE_SCHEMA)
 
 
+# debug mode is for comparing against a set of known GT site models
+DEBUG_MODE = 0
+if DEBUG_MODE:
+    SITE_SUMMARY_POS_STATUS = {
+        'positive_annotated',
+        'system_proposed', 'system_confirmed',
+        'positive_annotated_static',  # TODO confirm
+        'negative',
+    }
+else:
+    # TODO handle positive_partial
+    SITE_SUMMARY_POS_STATUS = {
+        'positive_annotated',
+        'system_proposed', 'system_confirmed',
+    }
+
 def _coerce_site_summaries(site_summary_or_region_model,
                            default_region_id=None, strict=True) -> List[Tuple[str, Dict]]:
     """
@@ -652,8 +668,7 @@ def _coerce_site_summaries(site_summary_or_region_model,
             _summaries = [
                 f for f in region_model['features']
                 if (f['properties']['type'] == 'site_summary'
-                    # TODO handle positive_partial
-                    and f['properties']['status'] in {'positive_annotated', 'system_proposed', 'system_confirmed'})
+                    and f['properties']['status'] in SITE_SUMMARY_POS_STATUS)
             ]
             region_feat = None
             for f in region_model['features']:
@@ -722,8 +737,18 @@ def add_site_summary_to_kwcoco(possible_summaries,
     site_idx_to_vidid = []
     unassigned_site_idxs = []
 
+    USE_NAME_ASSIGNMENT = DEBUG_MODE  # off by default, for known site models
     USE_GEO_ASSIGNMENT = 1
-    if USE_GEO_ASSIGNMENT:
+
+    if USE_NAME_ASSIGNMENT:
+        vids = coco_dset.videos().lookup(['name', 'id'])
+        for i, (_, s) in enumerate(site_summaries):
+            sid = s['properties']['site_id']
+            for vid, vn in zip(vids['id'], vids['name']):
+                if sid in vn:
+                    site_idx_to_vidid.append((i, vid))
+
+    elif USE_GEO_ASSIGNMENT:
         from watch.utils import kwcoco_extensions
         from watch.utils import util_gis
         import geopandas as gpd
