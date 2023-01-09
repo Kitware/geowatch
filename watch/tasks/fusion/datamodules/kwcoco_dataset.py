@@ -1996,7 +1996,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA
             >>> import watch
             >>> from watch.tasks.fusion import datamodules
-            >>> num = 10
+            >>> num = 1000
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='vidshapes-watch', chip_size=64, time_steps=3,
             >>>     num_workers=0, batch_size=3, channels='auto',
@@ -2048,8 +2048,8 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
         total_freq = np.zeros(num_classes, dtype=np.int64)
 
         sensor_mode_hist = ub.ddict(lambda: 0)
-
-        video_id_histogram = {}
+        video_id_histogram = ub.ddict(lambda: 0)
+        image_id_histogram = ub.ddict(lambda: 0)
 
         # TODO: we should ensure instance level frequency data as well
         # as pixel level frequency data.
@@ -2078,57 +2078,112 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             # full dataset stats are accumulating
             timer = ub.Timer().tic()
             timer._first = True
-            postfix_update_threshold = 0  # seconds
+            postfix_update_threshold = 5  # seconds
 
+        def current_input_stats():
+            """
+            Summarizes current stats estimates either for display or for the
+            final output.
+            """
+            input_stats = {}
+            for sensor, submodes in channel_stats.items():
+                for chan_key, running in submodes.items():
+                    if is_native:
+                        # ensure we have the expected shape
+                        try:
+                            perchan_stats = running.summarize(axis=ub.NoParam, keepdims=True)
+                        except RuntimeError:
+                            perchan_stats = {'mean': np.array([np.nan]), 'std': np.array([np.nan])}
+                        chan_mean = perchan_stats['mean'][:, None, None]
+                        chan_std = perchan_stats['std'][:, None, None]
+                    else:
+                        try:
+                            perchan_stats = running.summarize(axis=(1, 2))
+                        except RuntimeError:
+                            perchan_stats = {'mean': np.array([[[np.nan]]]), 'std': np.array([[[np.nan]]])}
+                        chan_mean = perchan_stats['mean']
+                        chan_std = perchan_stats['std']
+
+                    # For nans, set the mean to zero and set the std to a huge
+                    # number if we dont have any data on it. That will prevent
+                    # the network from doing much with it which is really the
+                    # best we can do here.
+                    chan_mean[np.isnan(chan_mean)] = 0
+                    chan_std[np.isnan(chan_std)] = 1e8
+
+                    chan_mean = chan_mean.round(6)
+                    chan_std = chan_std.round(6)
+                    # print('perchan_stats = {}'.format(ub.repr2(perchan_stats, nl=1)))
+                    input_stats[(sensor, chan_key)] = {
+                        'mean': chan_mean,
+                        'std': chan_std,
+                    }
+            return input_stats
+
+        def update_displayed_estimates():
+            """
+            Build an intermediate summary to display to the user while this is
+            running.
+            """
+            if mprog.use_rich:
+                stat_lines = ['Current Estimated Dataset Statistics: ']
+                if with_intensity:
+                    input_stats = current_input_stats()
+                    intensity_info_text = 'Spectra Stats: ' + ub.urepr(input_stats, with_dtype=False, precision=4)
+                    stat_lines.append(intensity_info_text)
+                if with_class:
+                    class_stats = ub.sorted_vals(ub.dzip(classes, total_freq), reverse=True)
+                    class_info_text = 'Class Stats: ' + ub.urepr(class_stats)
+                    stat_lines.append(class_info_text)
+                if 1:
+                    stat_lines.append('Unique Image Samples: {}'.format(len(image_id_histogram)))
+                    stat_lines.append('Unique Video Samples: {}'.format(len(video_id_histogram)))
+                info_text = '\n'.join(stat_lines).strip()
+                if info_text:
+                    mprog.update_info(info_text)
+            else:
+                if with_class:
+                    intermediate = ub.sorted_vals(ub.dzip(classes, total_freq), reverse=True)
+                    intermediate_text = ub.repr2(intermediate, compact=1)
+                    intermediate_text_trunc = smart_truncate(intermediate_text, max_length=40, trunc_loc=0.8)
+                else:
+                    intermediate_text = ''
+                    intermediate_text_trunc = ''
+
+                if with_intensity:
+                    try:
+                        curr = ub.udict(running.summarize(keepdims=False))
+                    except RuntimeError:
+                        curr = {}
+                    else:
+                        curr = curr & {'mean', 'std', 'max', 'min'}
+                        curr = curr.map_values(float)
+                    text = ub.repr2(curr, compact=1, precision=1, nl=0) + ' ' + intermediate_text_trunc
+                else:
+                    text = intermediate_text_trunc
+                prog.set_postfix_str(text)
+
+        from watch.utils import util_progress
         USE_RICH_UPDATES = 1
-        if USE_RICH_UPDATES:
-            from rich.console import Group
-            from rich.panel import Panel
-            from rich.live import Live
-            import rich
-            import rich.progress
-            from rich.progress import (BarColumn, Progress, TextColumn)
+        mprog = util_progress.MultiProgress(use_rich=USE_RICH_UPDATES)
+        # TODO: we can compute the intensity histogram more efficiently by
+        # only doing it for unique channels (which might be duplicated)
 
-            overall_progress = Progress(
-                TextColumn("{task.description}"),
-                BarColumn(),
-                rich.progress.MofNCompleteColumn(),
-                # "[progress.percentage]{task.percentage:>3.0f}%",
-                rich.progress.TimeRemainingColumn(),
-                rich.progress.TimeElapsedColumn(),
-            )
-            overall_task_id = overall_progress.add_task(
-                "estimate dataset stats", total=len(loader))
-            stats_pannel = Panel('<stats>')
-            progress_group = Group(
-                stats_pannel,
-                overall_progress,
-            )
-            live_context = Live(progress_group)
-            live_context.__enter__()
-
-            iter_ = iter(loader)
-        else:
-            # TODO: we can compute the intensity histogram more efficiently by
-            # only doing it for unique channels (which might be duplicated)
-            prog = ub.ProgIter(loader, desc='estimate dataset stats', verbose=3)
+        with mprog:
+            prog = mprog.progiter(loader, desc='estimate dataset stats', verbose=1)
             iter_ = iter(prog)
 
-        try:
             for batch_items in iter_:
                 for item in batch_items:
                     if item is None:
                         continue
 
                     if with_vidid:
-                        # Update video-level histogram
                         vidid = item['video_id']
-                        if vidid not in set(video_id_histogram.keys()):
-                            video_id_histogram[vidid] = 0
                         video_id_histogram[vidid] += 1
 
                     for frame_item in item['frames']:
-
+                        image_id_histogram[frame_item['gid']] += 1
                         if with_class:
                             # Update pixel-level class histogram
                             class_idxs = frame_item['class_idxs']
@@ -2155,72 +2210,12 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                                     running.update(val, weights=weights)
 
                 if WITH_PROG_POSTFIX_TEXT and timer._first or timer.toc() > postfix_update_threshold:
-                    if with_class:
-                        intermediate = ub.sorted_vals(ub.dzip(classes, total_freq), reverse=True)
-                        intermediate_text = ub.repr2(intermediate, compact=1)
-                        intermediate_text_trunc = smart_truncate(intermediate_text, max_length=40, trunc_loc=0.8)
-                    else:
-                        intermediate_text = ''
-                        intermediate_text_trunc = ''
-
-                    if with_intensity:
-                        try:
-                            curr = ub.udict(running.summarize(keepdims=False))
-                        except RuntimeError:
-                            curr = {}
-                        else:
-                            curr = curr & {'mean', 'std', 'max', 'min'}
-                            curr = curr.map_values(float)
-                        text = ub.repr2(curr, compact=1, precision=1, nl=0) + ' ' + intermediate_text_trunc
-                    else:
-                        text = intermediate_text_trunc
-                    if USE_RICH_UPDATES:
-                        if 1:
-                            input_stats = {}
-                            for sensor, submodes in channel_stats.items():
-                                for chan_key, running in submodes.items():
-                                    if is_native:
-                                        # ensure we have the expected shape
-                                        try:
-                                            perchan_stats = running.summarize(axis=ub.NoParam, keepdims=True)
-                                        except RuntimeError:
-                                            perchan_stats = {'mean': np.array([np.nan]), 'std': np.array([np.nan])}
-                                        chan_mean = perchan_stats['mean'][:, None, None]
-                                        chan_std = perchan_stats['std'][:, None, None]
-                                    else:
-                                        try:
-                                            perchan_stats = running.summarize(axis=(1, 2))
-                                        except RuntimeError:
-                                            perchan_stats = {'mean': np.array([[[np.nan]]]), 'std': np.array([[[np.nan]]])}
-                                        chan_mean = perchan_stats['mean']
-                                        chan_std = perchan_stats['std']
-
-                                    # For nans, set the mean to zero and set the std to a huge
-                                    # number if we dont have any data on it. That will prevent
-                                    # the network from doing much with it which is really the
-                                    # best we can do here.
-                                    chan_mean[np.isnan(chan_mean)] = 0
-                                    chan_std[np.isnan(chan_std)] = 1e8
-
-                                    chan_mean = chan_mean.round(6)
-                                    chan_std = chan_std.round(6)
-                                    # print('perchan_stats = {}'.format(ub.repr2(perchan_stats, nl=1)))
-                                    input_stats[(sensor, chan_key)] = {
-                                        'mean': chan_mean.ravel(),
-                                        'std': chan_std.ravel(),
-                                    }
-                        stats_pannel.renderable = ub.repr2(input_stats)
-                        overall_progress.update(overall_task_id, description=text)
-                    else:
-                        prog.set_postfix_str(text)
+                    update_displayed_estimates()
                     timer._first = 0
                     timer.tic()
 
-                if USE_RICH_UPDATES:
-                    overall_progress.update(overall_task_id, advance=1)
-        finally:
-            if USE_RICH_UPDATES:
-                live_context.__exit__(None, None, None)
+            if WITH_PROG_POSTFIX_TEXT:
+                update_displayed_estimates()
 
         self.disable_augmenter = False
 
@@ -2231,33 +2226,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             class_freq = None
 
         if with_intensity:
-            input_stats = {}
-            for sensor, submodes in channel_stats.items():
-                for chan_key, running in submodes.items():
-                    if is_native:
-                        # ensure we have the expected shape
-                        perchan_stats = running.summarize(axis=ub.NoParam, keepdims=True)
-                        chan_mean = perchan_stats['mean'][:, None, None]
-                        chan_std = perchan_stats['std'][:, None, None]
-                    else:
-                        perchan_stats = running.summarize(axis=(1, 2))
-                        chan_mean = perchan_stats['mean']
-                        chan_std = perchan_stats['std']
-
-                    # For nans, set the mean to zero and set the std to a huge
-                    # number if we dont have any data on it. That will prevent
-                    # the network from doing much with it which is really the
-                    # best we can do here.
-                    chan_mean[np.isnan(chan_mean)] = 0
-                    chan_std[np.isnan(chan_std)] = 1e8
-
-                    chan_mean = chan_mean.round(6)
-                    chan_std = chan_std.round(6)
-                    # print('perchan_stats = {}'.format(ub.repr2(perchan_stats, nl=1)))
-                    input_stats[(sensor, chan_key)] = {
-                        'mean': chan_mean,
-                        'std': chan_std,
-                    }
+            input_stats = current_input_stats()
         else:
             input_stats = None
 
@@ -2266,7 +2235,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
             'sensor_mode_hist': dict(sensor_mode_hist),
             'input_stats': input_stats,
             'class_freq': class_freq,
-            'video_id_histogram': video_id_histogram,
+            # 'video_id_histogram': dict(video_id_histogram),
         }
         return dataset_stats
 
@@ -2302,6 +2271,10 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                     saliency_probs
                     class_probs
                     pred_ltrb
+
+        Note:
+            The ``self.requested_tasks`` controls the task labels returned by
+            getitem, and hence what can be visualized here.
 
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_dataset import *  # NOQA

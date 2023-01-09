@@ -49,6 +49,7 @@ python -m watch.mlops.repackager \
     "$HOME"/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_3/checkpoints/epoch=6-step=3584.ckpt \
     "$HOME/data/dvc-repos/smart_expt_dvc/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_10GSD_BGRN_V11/lightning_logs/version_1/checkpoints/epoch=4-step=2560.ckpt" \
     "$HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_10GSD_BGRNSH_invar_V12/lightning_logs/version_1/checkpoints/epoch=16-step=17408.ckpt" \
+    "$HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_10GSD_BGRNSH_invar_V12/lightning_logs/version_1/checkpoints/epoch=71-step=73728.ckpt" \
     "$HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_0/checkpoints/epoch=16-step=8704.ckpt" \
     "$HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_1/checkpoints/epoch=90-step=46592.ckpt" \
     "$HOME/data/dvc-repos/smart_expt_dvc/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_1/checkpoints/epoch=159-step=81920.ckpt" 
@@ -62,15 +63,13 @@ python -m watch.mlops.schedule_evaluation \
             bas_pxl.package_fpath:
                 #- $DVC_EXPT_DPATH/bas_native_epoch44.pt
                 - $DVC_EXPT_DPATH/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
-                - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_2/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V5_epoch=1-step=77702.pt
                 - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V5_epoch=1-step=77702-v1.pt
-                - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V5/lightning_logs/version_3/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V5_epoch=5-step=233106.pt
                 - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_0/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=4305.pt
                 - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_3/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=0-step=512-v1.pt
                 - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_3/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=4-step=2560.pt
                 - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_15GSD_BGRN_V10/lightning_logs/version_3/checkpoints/Drop4_BAS_2022_12_15GSD_BGRN_V10_epoch=6-step=3584.pt
-                - $DVC_EXPT_DPATH/training/Ooo/joncrall/Drop4-BAS/runs/Drop4_BAS_2022_12_10GSD_BGRN_V11/lightning_logs/version_1/checkpoints/Drop4_BAS_2022_12_10GSD_BGRN_V11_epoch=4-step=2560.pt
                 - $DVC_EXPT_DPATH/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_10GSD_BGRNSH_invar_V12/lightning_logs/version_1/checkpoints/Drop4_BAS_10GSD_BGRNSH_invar_V12_epoch=16-step=17408.pt
+                - $DVC_EXPT_DPATH/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_10GSD_BGRNSH_invar_V12/lightning_logs/version_1/checkpoints/Drop4_BAS_10GSD_BGRNSH_invar_V12_epoch=71-step=73728.pt
                 - $DVC_EXPT_DPATH/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_0/checkpoints/Drop4_BAS_15GSD_BGRNSH_invar_V8_epoch=16-step=8704.pt
                 - $DVC_EXPT_DPATH/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_1/checkpoints/Drop4_BAS_15GSD_BGRNSH_invar_V8_epoch=90-step=46592.pt
                 - $DVC_EXPT_DPATH/training/yardrat/jon.crall/Drop4-BAS/runs/Drop4_BAS_15GSD_BGRNSH_invar_V8/lightning_logs/version_1/checkpoints/Drop4_BAS_15GSD_BGRNSH_invar_V8_epoch=159-step=81920.pt
@@ -88,7 +87,7 @@ python -m watch.mlops.schedule_evaluation \
             bas_pxl.chip_overlap: 0.3
             bas_pxl.chip_dims:
                 - auto
-                #- 256,256
+                - 256,256
             bas_pxl.time_span: auto
             bas_pxl.time_sampling: auto
             bas_poly.thresh:
@@ -101,21 +100,39 @@ python -m watch.mlops.schedule_evaluation \
                 - 0.13
                 - 0.14
                 - 0.15
-            bas_poly.moving_window_size: null
+                - 0.16
+                - 0.17
+                - 0.18
+                - 0.19
+                - 0.2
+                #- 0.21
+                #- 0.22
+                #- 0.23
+                #- 0.24
+                - 0.25
+                #- 0.3
+                #- 0.35
+                #- 0.4
+                #- 0.45
+                #- 0.5
+            bas_poly.moving_window_size: 
+                #- null
+                #- 100
+                - 200
             bas_pxl.enabled: 1
             bas_poly.enabled: 1
             bas_poly_eval.enabled: 1
             bas_pxl_eval.enabled: 1
             bas_poly_viz.enabled: 0
-            #include:
-            #    - bas_pxl.chip_dims: 256,256
-            #      bas_pxl.window_space_basale: 10GSD
-            #      bas_pxl.input_space_basale: 10GSD
-            #      bas_pxl.output_space_basale: 10GSD
-            #    - bas_pxl.chip_dims: 256,256
-            #      bas_pxl.window_space_basale: 15GSD
-            #      bas_pxl.input_space_basale: 15GSD
-            #      bas_pxl.output_space_basale: 15GSD
+            include:
+                #- bas_pxl.chip_dims: 256,256
+                #  bas_pxl.window_space_basale: 10GSD
+                #  bas_pxl.input_space_basale: 10GSD
+                #  bas_pxl.output_space_basale: 10GSD
+                - bas_pxl.chip_dims: 256,256
+                  bas_pxl.window_space_basale: 15GSD
+                  bas_pxl.input_space_basale: 15GSD
+                  bas_pxl.output_space_basale: 15GSD
             #    - bas_pxl.chip_dims: 256,256
             #      bas_pxl.window_space_basale: 30GSD
             #      bas_pxl.input_space_basale: 30GSD
@@ -127,7 +144,7 @@ python -m watch.mlops.schedule_evaluation \
     " \
     --root_dpath="$DVC_EXPT_DPATH/_testpipe" \
     --devices="0,1" --queue_size=2 \
-    --backend=tmux --queue_name "demo-queue2" \
+    --backend=tmux --queue_name "demo-queue3" \
     --pipeline=bas --skip_existing=1 \
     --run=1
 

@@ -406,6 +406,8 @@ def check_processed_regions():
     Print out a table of how many images / region / collection there are.
 
     CommandLine:
+        cd $HOME/code/watch
+        source secrets/secrets
         xdoctest -m watch.stac.stac_search_builder check_processed_regions
     """
     import json
@@ -462,34 +464,18 @@ def check_processed_regions():
     # ]
     rows = []
 
-    import rich
-    import rich.progress
-    progress = rich.progress.Progress(
-        "[progress.description]{task.description}",
-        rich.progress.BarColumn(),
-        rich.progress.MofNCompleteColumn(),
-        # "[progress.percentage]{task.percentage:>3.0f}%",
-        rich.progress.TimeRemainingColumn(),
-        rich.progress.TimeElapsedColumn(),
-    )
-    with progress:
-        collection_task = progress.add_task("[cyan] Query Collection...", total=len(collections_of_interest))
-        region_task = None
-
+    from watch.utils import util_progress
+    mprog = util_progress.MultiProgress()
+    with mprog:
+        region_iter = None
         # Check that planet items exist
-        for collection in collections_of_interest:
-
-            if region_task is not None:
-                progress.remove_task(region_task)
-            progress.update(collection_task, advance=1)
-            region_task = progress.add_task("[green] Query Regions...", total=len(region_fpaths))
-
+        for collection in mprog.progiter(collections_of_interest, desc='Query collections'):
             # Check that planet items exist in our regions
             region_to_results = {}
-            for region_fpath in region_fpaths:
-
-                progress.update(region_task, advance=1)
-
+            if region_iter is not None:
+                region_iter.remove()
+            region_iter = mprog.progiter(region_fpaths, desc=f'Query regions for {str(collection)}')
+            for region_fpath in region_iter:
                 with open(region_fpath) as file:
                     region_data = json.load(file)
                 region_row = [f for f in region_data['features'] if f['properties']['type'] == 'region'][0]

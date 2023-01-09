@@ -2,6 +2,42 @@
 Developer notebook
 """
 
+def dzyne_mwe():
+    import watch
+    import ubelt as ub
+    from watch.tasks.fusion.datamodules.kwcoco_dataset import KWCocoVideoDataset
+    dvc_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    coco_fpath = dvc_dpath / 'Drop4-SC/yourdata.kwcoco.json'
+    channels = 'red|green|blue,change'
+    self = KWCocoVideoDataset(coco_fpath,
+                              time_steps=5,
+                              chip_dims=(196, 196),
+                              time_sampling='uniform',
+                              input_space_scale='3GSD',
+                              window_space_scale='3GSD',
+                              output_space_scale='3GSD',
+                              channels=channels)
+    self.disable_augmenter = True
+
+    # Get a sample target around a positive example.
+    # Change properties as necessary to reproduce the error.
+    target = self.new_sample_grid['targets'][self.new_sample_grid['positives_indexes'][0]].copy()
+
+    # Execute sampling logic. Dive into the getitem function as necessary to
+    # debug.
+    item = self[target]
+    print('item summary: ' + ub.repr2(self.summarize_item(item), nl=3))
+
+    # Display the sample
+    canvas = self.draw_item(item, overlay_on_image=0, rescale=1,
+                            max_channels=5)
+
+    import kwplot
+    kwplot.autompl()
+    kwplot.imshow(canvas, fnum=1)
+    kwplot.show_if_requested()
+
+
 
 def visualize_invariant_batch():
     # import os

@@ -165,6 +165,9 @@ class HeatmapPrediction(ProcessNode):
         'devices': '0,',
         'accelerator': 'gpu',
         'batch_size': 1,
+        'with_saliency': 'auto',
+        'with_class': 'auto',
+        'with_change': 'auto',
     }
 
     in_paths = {
@@ -427,6 +430,12 @@ class BAS_HeatmapPrediction(HeatmapPrediction):
     # node_dname = 'bas_pxl/{bas_model}/{bas_test_dset}/{bas_pxl_algo_id}/{bas_pxl_id}'
     node_dname = 'bas_pxl/{bas_pxl_algo_id}/{bas_pxl_id}'
 
+    perf_params = ub.udict(HeatmapPrediction.perf_params) | {
+        'with_saliency': True,
+        'with_class': False,
+        'with_change': False,
+    }
+
     @property
     def condensed(self):
         condensed = super().condensed
@@ -439,6 +448,12 @@ class SC_HeatmapPrediction(HeatmapPrediction):
     name = 'sc_pxl'
     # node_dname = 'sc_pxl/{sc_model}/{sc_test_dset}/{sc_pxl_algo_id}/{sc_pxl_id}'
     node_dname = 'sc_pxl/{sc_pxl_algo_id}/{sc_pxl_id}'
+
+    perf_params = ub.udict(HeatmapPrediction.perf_params) | {
+        'with_saliency': False,
+        'with_class': True,
+        'with_change': False,
+    }
 
     @property
     def condensed(self):

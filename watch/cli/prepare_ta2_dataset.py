@@ -55,8 +55,6 @@ Example:
         --align_workers=26 \
         --cache=0 \
         --ignore_duplicates=1 \
-        --separate_region_queues=1 \
-        --separate_align_jobs=1 \
         --target_gsd=30 \
         --visualize=True \
         --max_products_per_region=10 \
@@ -82,17 +80,22 @@ class PrepareTA2Config(scfg.Config):
         'max_products_per_region': scfg.Value(None, help='does uniform affinity sampling over time to filter down to this many results per region'),
         'api_key': scfg.Value('env:SMART_STAC_API_KEY', help='The API key or where to get it (ignored if s3_fpath given)'),
 
-        'separate_region_queues': scfg.Value(True, help='if True, create jobs for each region separately'),
-        'separate_align_jobs': scfg.Value(True, help='if True, perform alignment for each region in its own job'),
+        'separate_region_queues': scfg.Value(True, help='if True, create jobs for each region separately. This option to disable this may be removed in the future.'),
+        'separate_align_jobs': scfg.Value(True, help='if True, perform alignment for each region in its own job. The option to disable this may be removed in the future.'),
 
         's3_fpath': scfg.Value(None, nargs='+', help='A list of .input files which were the results of an existing stac query. Mutex with stac_query_* args. Mutex with sensors.'),
-        'dvc_dpath': scfg.Value('auto', help=''),
+
+        'out_dpath': scfg.Value('auto', help='This is the path that all resulting files will be written to. Defaults the the phase2 DATA_DVC_DPATH', alias=['dvc_dpath']),
+
         'run': scfg.Value('0', isflag=1, help='if True execute the pipeline'),
         'collated': scfg.Value([True], nargs='+', help='set to false if the input data is not collated'),
 
         'backend': scfg.Value('serial', help='can be serial, tmux, or slurm. Using tmux is recommended.'),
-
-        'serial': scfg.Value(False, isflag=True, help='if True, override other settings to disable parallelism'),
+        'serial': scfg.Value(False, isflag=True, help='if True, override other settings to disable parallelism. DEPRECATE. Set backend=serial instead'),
+        'with_textual': scfg.Value('auto', help='setting for cmd-queue monitoring'),
+        'other_session_handler': scfg.Value('ask', help='for tmux backend only. How to handle conflicting sessions. Can be ask, kill, or ignore, or auto'),
+        'queue_name': scfg.Value('prep-ta2-dataset', help='name for the command queue'),
+        'rprint': scfg.Value(False, isflag=True, help='enable rich printing of the commands'),
 
         'max_queue_size': scfg.Value(10, help='the number of regions allowed to be processed in parallel with tmux backend'),
         'max_regions': None,
@@ -126,6 +129,8 @@ class PrepareTA2Config(scfg.Config):
 
         'region_globstr': scfg.Value('annotations/region_models', help='region model globstr (relative to the dvc path, unless absolute or prefixed by "./")'),
         'site_globstr': scfg.Value('annotations/site_models', help='site model globstr (relative to the dvc path, unless absolute or prefixed by "./")'),
+
+        'propogate_strategy': scfg.Value('SMART', help='changes propogation behavior'),
 
         'target_gsd': 10,
         'remove_broken': scfg.Value(True, isflag=1, help='if True, will remove any image that fails population (e.g. caused by a 404)'),
@@ -187,23 +192,23 @@ def main(cmdline=False, **kwargs):
         config['align_workers'] = 0
         config['align_aux_workers'] = 0
 
-    dvc_dpath = config['dvc_dpath']
-    if dvc_dpath == 'auto':
+    out_dpath = config['out_dpath']
+    if out_dpath == 'auto':
         import watch
-        dvc_dpath = watch.find_smart_dvc_dpath()
-    dvc_dpath = ub.Path(dvc_dpath)
+        out_dpath = watch.find_dvc_dpath(tags='phase2_data', hardware='auto')
+    out_dpath = ub.Path(out_dpath)
 
     aws_profile = config['aws_profile']
 
     aligned_bundle_name = f'Aligned-{config["dataset_suffix"]}'
     uncropped_bundle_name = f'Uncropped-{config["dataset_suffix"]}'
 
-    uncropped_dpath = dvc_dpath / uncropped_bundle_name
+    uncropped_dpath = out_dpath / uncropped_bundle_name
     uncropped_query_dpath = uncropped_dpath / '_query/items'
 
     uncropped_ingress_dpath = uncropped_dpath / 'ingress'
 
-    aligned_kwcoco_bundle = dvc_dpath / aligned_bundle_name
+    aligned_kwcoco_bundle = out_dpath / aligned_bundle_name
 
     uncropped_dpath = uncropped_dpath.shrinkuser(home='$HOME')
     uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
@@ -236,7 +241,7 @@ def main(cmdline=False, **kwargs):
         if str(globstr).startswith('./'):
             final_globstr = globstr
         else:
-            final_globstr = dvc_dpath / globstr
+            final_globstr = out_dpath / globstr
         final_globstr = final_globstr.shrinkuser(home='$HOME')
         return final_globstr
 
@@ -537,6 +542,9 @@ def main(cmdline=False, **kwargs):
 
     if config['separate_align_jobs']:
         alignment_input_jobs = []
+        # TODO: make use of region_id_to_site_fpaths
+        # to build a better site globstr (might need to write a tempoaray file
+        # to point to)
         final_site_globstr = _coerce_globstr(config['site_globstr'])
         for info in uncropped_fielded_jobs:
             toalign_info = info.copy()
@@ -657,6 +665,7 @@ def main(cmdline=False, **kwargs):
                     --draw_imgs=True \
                     --channels="red|green|blue" \
                     --max_dim={viz_max_dim} \
+                    --stack=only \
                     --animate=True --workers=auto
                 '''), depends=[align_job], name=f'viz-imgs-{name}',
                 in_paths={
@@ -681,6 +690,7 @@ def main(cmdline=False, **kwargs):
                 python -m watch project_annotations \
                     --src "{aligned_imgonly_fpath}" \
                     --dst "{aligned_imganns_fpath}" \
+                    --propogate_strategy="{config['propogate_strategy']}" \
                     --site_models="{site_globstr}" \
                     --region_models="{region_globstr}" {viz_part}
                 '''), depends=[align_job], name=f'project-annots-{name}',
@@ -692,32 +702,33 @@ def main(cmdline=False, **kwargs):
                 },
                 stage='project_annots',
             )
+
+            if config['visualize']:
+                pipeline.submit(command=ub.codeblock(
+                    rf'''
+                    python -m watch visualize \
+                        --src "{aligned_imganns_fpath}" \
+                        --viz_dpath "{aligned_viz_dpath}" \
+                        --draw_anns=True \
+                        --draw_imgs=False \
+                        --channels="red|green|blue" \
+                        --max_dim={viz_max_dim} \
+                        --animate=True --workers=auto \
+                        --stack=only \
+                        --only_boxes={config["visualize_only_boxes"]}
+                    '''), depends=[project_anns_job], name=f'viz-annots-{name}',
+                    in_paths={
+                        'aligned_imganns_fpath': aligned_imganns_fpath,
+                    },
+                    out_paths={
+                        'aligned_viz_dpath': aligned_viz_dpath,
+                    },
+                    stage='viz_anns',
+                )
         else:
             aligned_imganns_fpath = aligned_imgonly_fpath
             info['aligned_imganns_fpath'] = aligned_imgonly_fpath
             project_anns_job = align_job
-
-        if config['visualize']:
-            pipeline.submit(command=ub.codeblock(
-                rf'''
-                python -m watch visualize \
-                    --src "{aligned_imganns_fpath}" \
-                    --viz_dpath "{aligned_viz_dpath}" \
-                    --draw_anns=True \
-                    --draw_imgs=False \
-                    --channels="red|green|blue" \
-                    --max_dim={viz_max_dim} \
-                    --animate=True --workers=auto \
-                    --only_boxes={config["visualize_only_boxes"]}
-                '''), depends=[project_anns_job], name=f'viz-annots-{name}',
-                in_paths={
-                    'aligned_imganns_fpath': aligned_imganns_fpath,
-                },
-                out_paths={
-                    'aligned_viz_dpath': aligned_viz_dpath,
-                },
-                stage='viz_anns',
-            )
 
         align_info = info.copy()
         align_info['job'] = project_anns_job
@@ -766,10 +777,10 @@ def main(cmdline=False, **kwargs):
     pipeline._update_stage_otf_cache(cache)
 
     queue = cmd_queue.Queue.create(
-        backend=config['backend'], name='prep-ta2-dataset', size=1, gres=None,
-        environ=environ)
+        backend=config['backend'], name=config['queue_name'], size=1,
+        gres=None, environ=environ)
 
-    # hack to dynamically resize tmux jobs
+    # hack to set number of parallel sessions based on job size
     queue.size = min(len(stac_jobs), config['max_queue_size'])
 
     # self._populate_explicit_dependency_queue(queue)
@@ -818,10 +829,34 @@ def main(cmdline=False, **kwargs):
     #         --run=1 --serial=True
     #     '''))
 
-    queue.print_graph()
-    queue.rprint()
+    if config['rprint']:
+        queue.print_graph()
+        queue.rprint()
+
     if config['run']:
-        queue.run(block=True, system=True)
+
+        # This logic will exist in cmd-queue itself
+        other_session_handler = config['other_session_handler']
+        def handle_other_sessions(other_session_handler):
+            if other_session_handler == 'auto':
+                from cmd_queue.tmux_queue import has_stdin
+                if has_stdin():
+                    other_session_handler = 'ask'
+                else:
+                    other_session_handler = 'kill'
+            if other_session_handler == 'ask':
+                queue.kill_other_queues(ask_first=True)
+            elif other_session_handler == 'kill':
+                queue.kill_other_queues(ask_first=False)
+            elif other_session_handler == 'ignore':
+                ...
+            else:
+                raise KeyError
+
+        if config['backend'] == 'tmux':
+            handle_other_sessions(other_session_handler)
+        queue.run(block=True, system=True, with_textual=config['with_textual'],
+                  check_other_sessions=False)
 
     # TODO: team features
     """

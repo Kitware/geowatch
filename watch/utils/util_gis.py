@@ -7,6 +7,17 @@ import json
 import os
 
 
+def plot_geo_background():
+    import kwplot
+    import geopandas as gpd
+    kwplot.autompl()
+    wld_map_gdf = gpd.read_file(
+        gpd.datasets.get_path('naturalearth_lowres')
+    ).to_crs('crs84')
+    ax = wld_map_gdf.plot()
+    return ax
+
+
 def geopandas_pairwise_overlaps(gdf1, gdf2, predicate='intersects'):
     """
     Find pairwise relationships between each geometries

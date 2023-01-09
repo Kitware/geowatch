@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import scriptconfig as scfg
 import ubelt as ub
 import kwimage
@@ -22,25 +23,25 @@ class CleanGeotiffConfig(scfg.DataConfig):
         # It is a good idea to do a dry run first to check for issues
         # This can be done at a smaller scale for speed.
         DVC_DATA_DPATH=$(smartwatch_dvc --tags='phase2_data' --hardware=auto)
-        COCO_FPATH="$DVC_DATA_DPATH/Aligned-Drop6-2022-12-01-c30-TA1-S2-L8-WV-PD-ACC-2/data.kwcoco.json"
         smartwatch clean_geotiffs \
-            --src "$COCO_FPATH" \
+            --src "$DVC_DATA_DPATH/Drop4-BAS/data.kwcoco.json" \
             --channels="red|green|blue|nir|swir16|swir22" \
             --prefilter_channels="red" \
             --min_region_size=256 \
             --nodata_value=-9999 \
             --workers="min(2,avail)" \
-            --scale=0.25 \
+            --probe_scale=0.5 \
             --dry=True
 
-        # Then execute a real run at full scale
-        python -m watch.cli.coco_clean_geotiffs \
-            --src "$COCO_FPATH" \
+        # Then execute a real run at full scale - optionally with a probe scale
+        smartwatch clean_geotiffs \
+            --src "$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json" \
             --channels="red|green|blue|nir|swir16|swir22" \
             --prefilter_channels="red" \
             --min_region_size=256 \
             --nodata_value=-9999 \
             --workers="min(2,avail)" \
+            --probe_scale=None \
             --dry=False
     """
     src = scfg.Value(None, help='input coco dataset')
@@ -79,6 +80,22 @@ class CleanGeotiffConfig(scfg.DataConfig):
         '''))
 
     nodata_value = scfg.Value(-9999, help='the real nodata value to use')
+
+    probe_scale = scfg.Value(None, help=ub.paragraph(
+        '''
+        If specified, we probe the image at smaller scale for bad values and if
+        any are found we do a full scale computation. Speeds up computation if
+        there are not many images with bad values, but may result in false
+        negatives.
+
+        Should be given as a float less than 1.0
+        '''))
+
+    use_fix_stamps = scfg.Value(False, help=ub.paragraph(
+        '''
+        if True, write a file next to every file that was fixed so we dont need
+        to check it again.
+        '''))
 
     dry = scfg.Value(False, help='if True, only do a dry run. Report issues but do not fix them')
 
@@ -136,6 +153,8 @@ def main(cmdline=1, **kwargs):
         >>> kwplot.imshow(canvas2, pnum=(1, 2, 2), title='after')
 
     Ignore:
+
+    Ignore:
         import watch
         import sys, ubelt
         sys.path.append(ubelt.expandpath('~/code/watch'))
@@ -159,6 +178,10 @@ def main(cmdline=1, **kwargs):
     print('workers = {}'.format(ub.urepr(workers, nl=1)))
     jobs = ub.JobPool(mode='process', max_workers=workers)
 
+    have_transience = hasattr(jobs, 'transient')
+    if have_transience:
+        jobs.transient = True
+
     # channels = kwcoco.ChannelSpec.coerce('red')
     # channels = kwcoco.ChannelSpec.coerce('red|blue|nir')
     # channels = kwcoco.ChannelSpec.coerce('nir')
@@ -180,21 +203,28 @@ def main(cmdline=1, **kwargs):
         'prefilter_channels': prefilter_channels,
         'channels': channels,
         'min_region_size': config['min_region_size'],
+        'probe_scale': config['probe_scale'],
+        'use_fix_stamps': config['use_fix_stamps'],
     }
 
     coco_imgs = coco_dset.images().coco_images
 
     from watch.utils import util_progress
-    mprog = util_progress.MultiProgress()
+    mprog = util_progress.MultiProgress(use_rich=1)
     with mprog:
         mprog.update_info('Looking for geotiff issues')
 
+        # TODO: may need to use the blocking job queue to limit the maximum
+        # number of unhandled but populated results
         for coco_img in mprog.new(coco_imgs, desc='Submit probe jobs'):
             coco_img.detach()
             jobs.submit(probe_image_issues, coco_img, **probe_kwargs)
 
         def collect_jobs(jobs):
             for job in mprog.new(jobs.as_completed(), total=len(jobs), desc='Collect probe jobs'):
+                if not have_transience:
+                    # hack in transience to conserve memory.
+                    jobs.jobs.remove(job)
                 image_summary = job.result()
                 yield image_summary
 
@@ -216,10 +246,10 @@ def main(cmdline=1, **kwargs):
             ))
 
             for image_summary in summaries:
-                if len(image_summary['bad_values']):
+                if len(image_summary.get('bad_values', None)):
                     num_images_issues += 1
                     for asset_summary in image_summary['chans']:
-                        if asset_summary['bad_values']:
+                        if asset_summary.get('bad_values', None):
                             asset_summary['coco_img'] = image_summary['coco_img']
                             seen_bad_values.update(asset_summary['bad_values'])
                             num_asset_issues += 1
@@ -240,34 +270,40 @@ def main(cmdline=1, **kwargs):
         summaries = collect_jobs(jobs)
         if EAGER:
             summaries = list(summaries)
+        else:
+            summaries = iter(summaries)
 
         needs_fix = filter_fixable(summaries)
         if EAGER:
             needs_fix = list(needs_fix)
-            total = len(needs_fix)
         else:
-            total = len(coco_imgs)
+            needs_fix = iter(needs_fix)
+        #     total = len(needs_fix)
+        # else:
+        #     total = len(coco_imgs)
 
         if not config['dry']:
             correct_nodata_value = config['nodata_value']
-            for asset_summary in mprog.new(needs_fix, total=total, desc='Cleaning identified issues'):
+            for asset_summary in mprog.new(needs_fix, desc='Cleaning identified issues'):
+                fpath = ub.Path(asset_summary['fpath'])
                 fix_geotiff_ondisk(asset_summary,
                                    correct_nodata_value=correct_nodata_value)
+                if config['use_fix_stamps']:
+                    # Mark that fixes have been applied to this asset
+                    import json
+                    fix_fpath = fpath.augment(tail='.fixes.stamp')
+                    if fix_fpath.exists():
+                        fixes = json.loads(fix_fpath.read_text())
+                    else:
+                        fixes = []
+                    new_fixes = ub.udict(asset_summary) & {'band_idxs'}
+                    fixes.append(new_fixes)
+                    fix_fpath.write_text(json.dumps(fixes))
         else:
-            _ = list(needs_fix)
+            for asset_summary in mprog.new(needs_fix, desc='Dry run: identifying issues'):
+                print(asset_summary['fpath'])
+                ...
 
-    # for k, g in bad_groups.items():
-    #     if all([p[2] == [0] for p in g])
-    # print(len(investigate_images))
-    # has_nonzeros = []
-    # all_zeros = []
-    # for image_summary in investigate_images:
-    #     if len(set(image_summary['bad_values']) - {0}):
-    #         has_nonzeros.append(image_summary)
-    #     else:
-    #         all_zeros.append(image_summary)
-    # print(len(all_zeros))
-    # print(len(has_nonzeros))
     # if 0:
     #     import xdev
     #     import kwplot
@@ -285,26 +321,36 @@ def main(cmdline=1, **kwargs):
     #     iter_ = xdev.InteractiveIter(nonzero_chans)
     #     for asset_summary in iter_:
     #         coco_img = asset_summary['coco_img']
-    #         chan_canvas = draw_channel_summary(coco_img, asset_summary)
+    #         chan_canvas = draw_asset_summary(coco_img, asset_summary)
     #         kwplot.imshow(chan_canvas, doclf=1)
     #         xdev.InteractiveIter.draw()
 
 
 def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=None,
-                       possible_nodata_values=None, min_region_size=256):
+                       possible_nodata_values=None, min_region_size=256,
+                       probe_scale=None, use_fix_stamps=False):
     """
     Inspect a single image, possibily with multiple assets, each with possibily
     multiple bands for fixable nodata values.
 
     Args:
         coco_img : the coco image to check
+
         channels : the channels to check
+
         prefilter_channels : the channels to check first for efficiency
+
         possible_nodata_values (set[int]):
             the values that may be nodata if known
+
         scale :
             use a downscaled overview to speed up the computation via
-            approximation.
+            approximation. Returns results at this scale. DO NOT USE RIGHT NOW.
+
+        probe_scale :
+            use a downscaled overview to speed up the computation via
+            approximation. If the probe identifies an issue a full scale probe
+            is done.
 
     Ignore:
         globals().update((ub.udict(xdev.get_func_kwargs(probe_image_issues)) | probe_kwargs))
@@ -355,17 +401,35 @@ def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=N
                     'band_idxs': band_idxs,
                 })
 
-    should_continue = len(prefilter_assets) == 0
+    should_continue = True
     for item in prefilter_assets:
         obj = item['obj']
         band_idxs = item['band_idxs']
-        asset_summary = probe_asset(coco_img, obj, band_idxs=band_idxs,
-                                    scale=scale,
-                                    possible_nodata_values=possible_nodata_values,
-                                    min_region_size=min_region_size)
-        if asset_summary['bad_values']:
-            should_continue = True
-        asset_summaries.append(asset_summary)
+
+        if probe_scale is not None:
+            # Check if there is anything obvious at a smaller scale first if
+            # requested.
+            probe_asset_summary = probe_asset(
+                coco_img, obj, band_idxs=band_idxs, scale=probe_scale,
+                possible_nodata_values=possible_nodata_values,
+                min_region_size=min_region_size, use_fix_stamps=use_fix_stamps)
+            if not probe_asset_summary['bad_values']:
+                should_continue = False
+
+        if should_continue:
+            # Check if there is anything obvious in a specific channel first if
+            # requested.
+            asset_summary = probe_asset(coco_img, obj, band_idxs=band_idxs,
+                                        scale=scale,
+                                        possible_nodata_values=possible_nodata_values,
+                                        min_region_size=min_region_size,
+                                        use_fix_stamps=use_fix_stamps)
+            if not asset_summary['bad_values']:
+                should_continue = False
+            asset_summaries.append(asset_summary)
+
+    if len(prefilter_assets) == 0:
+        should_continue = True
 
     if should_continue:
         for item in requested_assets:
@@ -374,7 +438,8 @@ def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=N
             asset_summary = probe_asset(coco_img, obj, band_idxs=band_idxs,
                                         scale=scale,
                                         possible_nodata_values=possible_nodata_values,
-                                        min_region_size=min_region_size)
+                                        min_region_size=min_region_size,
+                                        use_fix_stamps=use_fix_stamps)
             asset_summaries.append(asset_summary)
 
     image_summary['chans'] = asset_summaries
@@ -384,7 +449,8 @@ def probe_image_issues(coco_img, channels=None, prefilter_channels=None, scale=N
 
 
 def probe_asset(coco_img, obj, band_idxs=None, scale=None,
-                possible_nodata_values=None, min_region_size=256):
+                possible_nodata_values=None, min_region_size=256,
+                use_fix_stamps=False):
     """
     Inspect a specific single-file asset possibily with multiple bands for
     fixable nodata values.
@@ -393,11 +459,25 @@ def probe_asset(coco_img, obj, band_idxs=None, scale=None,
     if band_idxs is None:
         band_idxs = list(range(asset_channels.numel()))
 
-    check_channels = asset_channels[band_idxs]
+    bundle_dpath = ub.Path(coco_img.bundle_dpath)
+    fpath = bundle_dpath / obj['file_name']
 
     asset_summary = {
         'channels': asset_channels,
+        'fpath': fpath,
     }
+
+    if use_fix_stamps:
+        import json
+        fix_fpath = fpath.augment(tail='.fixes.stamp')
+        if fix_fpath.exists():
+            fixes = json.loads(fix_fpath.read_text())
+            assert fixes
+            return asset_summary
+            # TODO: actually check the requested fix was applied, but for now
+            # assume if the file exists we should skip the check.
+
+    check_channels = asset_channels[band_idxs]
     delayed = coco_img.delay(
         channels=check_channels, space='asset', nodata_method='float')
     if scale is not None:
@@ -407,9 +487,6 @@ def probe_asset(coco_img, obj, band_idxs=None, scale=None,
 
     imdata = delayed.finalize(interpolation='nearest')
 
-    bundle_dpath = ub.Path(coco_img.bundle_dpath)
-    fpath = bundle_dpath / obj['file_name']
-
     if scale is not None:
         min_region_size_ = int(min_region_size * scale)
     else:
@@ -418,7 +495,6 @@ def probe_asset(coco_img, obj, band_idxs=None, scale=None,
     asset_summary = probe_asset_imdata(
         imdata, band_idxs, min_region_size_=min_region_size_,
         possible_nodata_values=possible_nodata_values)
-
     asset_summary['fpath'] = fpath
     return asset_summary
 
@@ -624,12 +700,12 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
 
     # FIXME: the returned band size from the gdal calls doesnt seem correct.
     # For multi-band images I get 256x1 blocksizes when gdalinfo reports
-    # 256,256. For now just always use a 256x256 blocksize and at least two
+    # 256,256. For now just always use a 256x256 blocksize and at least 3
     # overviews.
     HACK_FIX_BAND_METADATA = True
     if HACK_FIX_BAND_METADATA:
         blocksize = (256, 256)
-        num_overviews = max(num_overviews, 2)
+        num_overviews = max(num_overviews, 3)
 
     ### Rebuild overviews
     overviewlist = (2 ** np.arange(1, num_overviews + 1)).tolist()
@@ -668,7 +744,7 @@ def fix_geotiff_ondisk(asset_summary, correct_nodata_value=-9999):
     os.rename(tmp_fpath, fpath)
 
 
-def draw_channel_summary(coco_img, asset_summary):
+def draw_asset_summary(coco_img, asset_summary):
     is_samecolor = asset_summary['is_samecolor']
     data = coco_img.delay(channels=asset_summary['channels'], space='asset',
                           nodata_method='float').finalize()

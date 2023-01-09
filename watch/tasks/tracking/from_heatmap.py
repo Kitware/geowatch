@@ -1,3 +1,9 @@
+"""
+Main tracker logic
+
+SeeAlso:
+    * ../../cli/kwcoco_to_geojson.py
+"""
 from watch.utils import kwcoco_extensions
 from watch.heuristics import SITE_SUMMARY_CNAME, CNAMES_DCT
 import kwimage
