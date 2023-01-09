@@ -435,3 +435,37 @@ def viz_track_scores(coco_dset, track_cats, keys_to_score, out_pth):
 
     ub.Path(out_pth).parent.ensuredir()
     plt.savefig(out_pth)
+
+
+
+def viz_site_timeline(dset, track_id):
+    import json
+    import watch
+    import kwplot
+    plt = kwplot.autoplt()
+    sns = kwplot.autosns()
+
+    true_feats = json.load(open(f'gt_site_models/{track_id}.geojson'))['features'][1:]
+    true_labels = [f['properties']['current_phase'] for f in true_feats]
+    true_dates = [f['properties']['observation_date'] for f in true_feats]
+    true_dates = pd.to_datetime(true_dates).date
+
+    annots = dset.annots(trackid=track_id)
+    scores = annots.lookup('scores')
+    dates = pd.to_datetime(annots.images.lookup('date_captured')).date
+    sens = annots.images.lookup('sensor_coarse')
+    df = pd.DataFrame(dict(date=dates, sens=sens)).join(pd.DataFrame.from_records(scores))
+    df['No Activity'] = 1 - df[['Site Preparation', 'Active Construction', 'Post Construction']].sum(axis=1)
+    ordered_phases = ['No Activity', 'Site Preparation', 'Active Construction', 'Post Construction']
+    df['orig'] = df[ordered_phases].idxmax(axis=1)
+
+    palette = {c['name']: c['color'] for c in watch.heuristics.CATEGORIES}
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
+
+    ax2.stackplot(df['date'], df[ordered_phases].T, labels=ordered_phases, colors=[palette[p] for p in ordered_phases])
+    ax2.legend()
+    ax1.plot(true_dates, true_labels, label='true')
+    ax1.plot(df['date'], df['orig'], label='orig')
+
+    from phase import viterbi
