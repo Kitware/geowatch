@@ -23,6 +23,7 @@ data:
   verbose: 1
   max_epoch_length: 3200
   mask_low_quality: true
+  quality_threshold: 0
 model:
   class_path: watch.tasks.fusion.methods.HeterogeneousModel
   init_args:
