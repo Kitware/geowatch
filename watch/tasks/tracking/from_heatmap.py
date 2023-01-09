@@ -336,6 +336,7 @@ def _add_tracks_to_dset(sub_dset, tracks, thresh, key, bg_key=None):
                        bbox=bbox,
                        segmentation=segmentation,
                        score=this_score,
+                       scores=scores_dct,
                        track_id=track_id)
         return new_ann
 
