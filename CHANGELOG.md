@@ -10,6 +10,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 * Add new CLI tool: `smartwatch coco_clean_geotiffs` to fix NODATA values directly in geotiffs
 * New `util_prog.py` with experimental `MultiProgress` class to generalize ProgIter and rich.
 * Add `smartwatch visualize` option `--resolution` to specify the resolution to output the visualization at (e.g. "10GSD")
+* Add `smartwatch visualize` option `--role_order` for showing different annotation roles on different channel stacks.
+* Experimental new logic in `smartwatch project` for keyframe propagation / interpolation.
 
 
 ## Version 0.3.8 - Target 2022-12-31
