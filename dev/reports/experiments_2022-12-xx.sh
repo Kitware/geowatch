@@ -126,17 +126,17 @@ python -m watch.mlops.schedule_evaluation \
             bas_poly_viz.enabled: 0
             include:
                 #- bas_pxl.chip_dims: 256,256
-                #  bas_pxl.window_space_basale: 10GSD
-                #  bas_pxl.input_space_basale: 10GSD
-                #  bas_pxl.output_space_basale: 10GSD
+                #  bas_pxl.window_space_scale: 10GSD
+                #  bas_pxl.input_space_scale: 10GSD
+                #  bas_pxl.output_space_scale: 10GSD
                 - bas_pxl.chip_dims: 256,256
-                  bas_pxl.window_space_basale: 15GSD
-                  bas_pxl.input_space_basale: 15GSD
-                  bas_pxl.output_space_basale: 15GSD
+                  bas_pxl.window_space_scale: 15GSD
+                  bas_pxl.input_space_scale: 15GSD
+                  bas_pxl.output_space_scale: 15GSD
             #    - bas_pxl.chip_dims: 256,256
-            #      bas_pxl.window_space_basale: 30GSD
-            #      bas_pxl.input_space_basale: 30GSD
-            #      bas_pxl.output_space_basale: 30GSD
+            #      bas_pxl.window_space_scale: 30GSD
+            #      bas_pxl.input_space_scale: 30GSD
+            #      bas_pxl.output_space_scale: 30GSD
             #    - bas_pxl.chip_dims: auto
             #      bas_pxl.window_space_scale: auto
             #      bas_pxl.input_space_scale: auto

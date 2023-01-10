@@ -274,6 +274,7 @@ class PipelineDAG:
 
             node.will_exist = ((node.enabled and ancestors_will_exist) or
                                node.does_exist)
+            print(f'Checking {node_name}, will_exist={node.will_exist}')
 
             if node.will_exist and node.enabled:
                 pred_node_procids = [n.process_id for n in pred_nodes
@@ -376,6 +377,7 @@ class PipelineDAG:
                             node_job.depends.append(_job)
                     pass
 
+        print(f'queue={queue}')
         return queue
 
 

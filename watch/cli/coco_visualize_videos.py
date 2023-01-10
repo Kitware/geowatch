@@ -104,7 +104,7 @@ class CocoVisualizeConfig(scfg.Config):
         'draw_imgs': scfg.Value(True, isflag=True),
         'draw_anns': scfg.Value('auto', isflag=True, help='auto means only draw anns if they exist'),
 
-        'draw_valid_region': scfg.Value(True, help='if True, draw the valid region if it exists'),
+        'draw_valid_region': scfg.Value(False, help='if True, draw the valid region if it exists'),
 
         'cmap': scfg.Value('viridis', help='colormap for single channel data'),
 
@@ -248,6 +248,8 @@ def main(cmdline=True, **kwargs):
             config['stack'] = 'only'
         if config['channels'] is None:
             channels = config['channels'] = 'auto'
+        # if config['draw_valid_region'] is None:
+        #     config['draw_valid_region'] = False
 
     if config['stack'] == 'auto':
         config['stack'] = False
@@ -1038,6 +1040,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     else:
         # If unspecified draw all roles on the first part
         stack_idx_to_roles = {0: list(role_to_anns.keys())}
+    # print(f'role_to_anns={role_to_anns}')
+    # print(f'role_order={role_order}')
+    # print(f'stack_idx_to_roles={stack_idx_to_roles}')
 
     for stack_idx, chan_row in enumerate(chan_groups):
         request_roles = stack_idx_to_roles.get(stack_idx, [])

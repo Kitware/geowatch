@@ -512,15 +512,24 @@ def main(cmdline=True, **kw):
         parts = []
         for info in infos:
             df = info['data']
+            type_to_subdf = dict(list(df.groupby('type')))
             if config['site_summary']:
-                df = df[df['type'] == 'site_summary']
+                if 'site' in type_to_subdf:
+                    # This is a site model
+                    df = type_to_subdf['site']
+                elif 'site_summary' in type_to_subdf:
+                    # This is a region model
+                    df = type_to_subdf['site_summary']
             else:
-                if df.iloc[0]['type'] == 'site':
-                    df = df[df['type'] == 'site']
-                else:
-                    df = df[df['type'] == 'region']
+                if 'site' in type_to_subdf:
+                    # This is a site model
+                    df = type_to_subdf['site']
+                elif 'region' in type_to_subdf:
+                    # This is a region model
+                    df = type_to_subdf['region']
             parts.append(df)
         region_df = pd.concat(parts)
+        print(f'Loaded {len(region_df)} regions to crop')
 
     # Load the dataset and extract geotiff metadata from each image.
     coco_dset = kwcoco.CocoDataset.coerce(src_fpath)
