@@ -142,3 +142,32 @@ python -m watch.cli.prepare_ta2_dataset \
     --backend=tmux --run=1 
 
     #--hack_lazy=True
+
+dvc_add(){
+    python -m watch.cli.prepare_splits data.kwcoco.json --cache=0 --run=1
+
+    __hack__="
+    import shutil
+    d = ub.Path('viz512_anns')
+    paths = list(ub.Path('_viz512').glob('*/_anns/red_green_blue'))
+    for p in ub.ProgIter(paths):
+        dst_dpath = d / p.parent.parent.name
+        shutil.copytree(p, dst_dpath)
+    "
+    mkdir -p viz512_anns
+    cp _viz512/*/*ann*.gif ./viz512_anns
+    cp _viz512/*/*ann*.gif ./viz512_anns
+
+    7z a splits.zip data*.kwcoco.json
+
+    AE_R001  BR_R002
+
+    # Cd into the bundle we want to add
+    ls -- */L8
+    ls -- */S2
+    ls -- */*.json
+
+    dvc add -- */PD */WV */S2 viz512_anns && dvc push -r aws -R . && git commit -am "Add Drop4 SC Images" && git push  && \
+    dvc add -- *.zip && dvc push -r aws -R . && git commit -am "Add Drop4 SC Annots" && git push 
+    #dvc add -- */L8 */S2 && dvc push -r aws -R . && git commit -am "Add Drop4" && git push 
+}
