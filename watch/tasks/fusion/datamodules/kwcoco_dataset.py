@@ -2153,7 +2153,7 @@ class KWCocoVideoDataset(data.Dataset, SpacetimeAugmentMixin, SMARTDataMixin):
                 stat_lines = ['Current Estimated Dataset Statistics: ']
                 if with_intensity:
                     input_stats = current_input_stats()
-                    input_stats2 = {k: v.ravel() for k, v in input_stats.items()}
+                    input_stats2 = {sc: {k: v.ravel() for k, v in stats.items()} for sc, stats in input_stats.items()}
                     intensity_info_text = 'Spectra Stats: ' + ub.urepr(input_stats2, with_dtype=False, precision=4)
                     stat_lines.append(intensity_info_text)
                 if with_class:
