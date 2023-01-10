@@ -6,7 +6,7 @@ data:
   window_space_scale: 3GSD
   input_space_scale: 3GSD
   output_space_scale: 3GSD
-  batch_size: 8
+  batch_size: 16
   chip_overlap: 0
   dist_weights: 0
   min_spacetime_weight: 0.5
@@ -24,52 +24,32 @@ data:
   max_epoch_length: 3200
   mask_low_quality: true
 model:
-  class_path: watch.tasks.fusion.methods.HeterogeneousModel
+  class_path: watch.tasks.fusion.methods.UNetBaseline
   init_args:
-    token_width: 8
-    token_dim: 64
-    position_encoder:
-      class_path: watch.tasks.fusion.methods.heterogeneous.MipNerfPositionalEncoder
-      init_args:
-        in_dims: 3
-        max_freq: 3
-        num_freqs: 16
-    backbone:
-      class_path: watch.tasks.fusion.architectures.transformer.TransformerEncoderDecoder
-      init_args:
-        encoder_depth: 6
-        decoder_depth: 1
-        dim: 160
-        queries_dim: 96
-        logits_dim: 64
-        latent_dim_head: 256
-    spatial_scale_base: 1.0
-    temporal_scale_base: 1.0
+    token_dim: 32
     global_change_weight: 0.0
     global_class_weight: 0.0
     global_saliency_weight: 1.0
     saliency_loss: focal
-    decoder: simple_conv
 optimizer:
   class_path: torch.optim.Adam
   init_args:
     lr: 1e-4
-    weight_decay: 0.1
+    weight_decay: 1e-4
     betas:
       - 0.9
-      - 0.98
-    eps: 1e-12
+      - 0.99
 lr_scheduler:
   class_path: torch.optim.lr_scheduler.OneCycleLR
   init_args:
     max_lr: 0.001
-    total_steps: 50000
+    total_steps: 10000
     anneal_strategy: "linear"
     pct_start: 0.5
 profile: false
 seed_everything: 1234
 trainer:
-  accumulate_grad_batches: 32
+  accumulate_grad_batches: 8
   callbacks:
     # - class_path: watch.utils.lightning_ext.callbacks.AutoResumer
     # - class_path: pytorch_lightning.callbacks.ModelCheckpoint
