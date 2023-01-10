@@ -41,11 +41,14 @@ class SpacetimeAugmentMixin:
         """
         Increase the number of test-time targets via flips
         """
+
         sample_grid = self.new_sample_grid
         expanded_targets = []
         assert not sample_grid['positives_indexes'], 'unhandled'
         assert not sample_grid['negatives_indexes'], 'unhandled'
         targets = sample_grid['targets']
+        # See data_utils.fliprot_annot for a visualization of various
+        # flip/rotations
         unique_fliprots = [
             {'rot_k': 0, 'flip_axis': None},
             {'rot_k': 0, 'flip_axis': (0,)},
@@ -106,9 +109,11 @@ class SpacetimeAugmentMixin:
         """
 
         # TODO: make a nice "augmenter" pipeline
-        # TODO: parameteraize
-        temporal_augment_rate = 0.8
-        spatial_augment_rate = 0.9
+        augment_time_resample_rate = self.config['augment_time_resample_rate']
+        augment_space_shift_rate = self.config['augment_space_shift_rate']
+        augment_space_xflip = self.config['augment_space_xflip']
+        augment_space_yflip = self.config['augment_space_yflip']
+        augment_space_rot = self.config['augment_space_rot']
 
         do_shift = False
         if not self.disable_augmenter and self.mode == 'fit':
@@ -124,7 +129,7 @@ class SpacetimeAugmentMixin:
             vid_height = video['height']
 
             # Spatial augmentation:
-            if rng.rand() < spatial_augment_rate:
+            if rng.rand() < augment_space_shift_rate:
                 space_box = kwimage.Boxes.from_slice(
                     target_['space_slice'], clip=False,
                     endpoint=True)
@@ -147,7 +152,7 @@ class SpacetimeAugmentMixin:
                 target_['space_slice'] = space_box.astype(int).to_slices()[0]
 
             # Temporal augmentation
-            if rng.rand() < temporal_augment_rate:
+            if rng.rand() < augment_time_resample_rate:
                 self._augment_target_time(target_)
 
             temporal_dropout_rate = self.temporal_dropout
@@ -166,16 +171,34 @@ class SpacetimeAugmentMixin:
                 target_['gids'] = gids
 
         # force_flip = target_.get('flip_axis', None)
+        # See data_utils.fliprot_annot for a visualization of various
+        # flip/rotations
         unique_fliprots = [
-            {'rot_k': 0, 'flip_axis': None},
-            {'rot_k': 1, 'flip_axis': None},
-            {'rot_k': 2, 'flip_axis': None},
-            {'rot_k': 3, 'flip_axis': None},
-            {'rot_k': 0, 'flip_axis': (0,)},
-            {'rot_k': 1, 'flip_axis': (0,)},
-            {'rot_k': 2, 'flip_axis': (0,)},
-            {'rot_k': 3, 'flip_axis': (0,)},
+            {'rot_k': 0, 'flip_axis': None},  # nothing
         ]
+
+        if augment_space_rot:
+            unique_fliprots += [
+                {'rot_k': 1, 'flip_axis': None},  # ccw rotation
+                {'rot_k': 3, 'flip_axis': None},  # cw rotation
+            ]
+            if augment_space_xflip:
+                unique_fliprots += [
+                    {'rot_k': 1, 'flip_axis': (0,)},  # ccw rotation + xflip
+                    {'rot_k': 3, 'flip_axis': (0,)},  # cw rotation x-filp
+                ]
+        if augment_space_yflip:
+            unique_fliprots += [
+                {'rot_k': 0, 'flip_axis': (0,)},  # y-flip
+            ]
+            if augment_space_xflip:
+                unique_fliprots += [
+                    {'rot_k': 2, 'flip_axis': None},  # y-flip + x-flip
+                ]
+        if augment_space_xflip:
+            unique_fliprots += [
+                {'rot_k': 2, 'flip_axis': (0,)},  # x-flip
+            ]
 
         # Force an augmentation
         FLIP_AUGMENTATION = (not self.disable_augmenter and self.mode == 'fit')

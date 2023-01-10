@@ -280,11 +280,6 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             so it is generally not recommended).
             ''')),
 
-        'temporal_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
-            '''
-            Drops frames in a fraction of training batches
-            ''')),
-
         'time_sampling': scfg.Value('contiguous', type=str, help=ub.paragraph(
             '''
             Strategy for expanding the time window across non-contiguous
@@ -367,7 +362,36 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             '''
             If true, will cache the spacetime grid to make multiple
             runs quicker.
-            '''))
+            ''')),
+
+        ### Augmentation
+        ### TODO: these should likely become a nested jsonargparse
+        ### style config for a more general "augmentation scheme".
+
+        'augment_space_shift_rate': scfg.Value(0.9, help=ub.paragraph(
+            '''
+            In fit mode, perform translation augmentations this fraction of the
+            time.
+            ''')),
+
+        'augment_space_xflip': scfg.Value(True, help=ub.paragraph(
+            '''In fit mode, if true, perform random x-flips''')),
+
+        'augment_space_yflip': scfg.Value(True, help=ub.paragraph(
+            '''In fit mode, if true, perform random y-flips''')),
+
+        'augment_space_rot': scfg.Value(True, help=ub.paragraph(
+            '''In fit mode, if true, perform random 90 degree rotations''')),
+
+        'augment_time_resample_rate': scfg.Value(0.8, help=ub.paragraph(
+            '''
+            In fit mode, perform temporal jitter this fraction of the time.
+            ''')),
+
+        'temporal_dropout': scfg.Value(0.0, type=float, help=ub.paragraph(
+            '''
+            Drops frames in a fraction of training batches
+            ''')),
     }
 
     def normalize(self):
