@@ -261,10 +261,12 @@ def run_sc_fusion_for_baseline(
       "time_span": "6m",
       "time_sampling": "auto",
       "time_steps": "12",
-      "chip_dims": "256,256",
+      "chip_dims": "auto",
       "set_cover_algo": null,
-      "resample_invalid_frames": true,
-      "use_cloudmask": 1.0
+      "resample_invalid_frames": 3,
+      "observable_threshold": 0.2,
+      "mask_low_quality": true,
+      "drop_unused_frames": true
 }
         """)
 

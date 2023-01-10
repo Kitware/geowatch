@@ -228,22 +228,22 @@ def run_bas_fusion_for_baseline(
 
     predict_config = json.loads("""
 {
+      "channels": "auto",
       "tta_fliprot": 0,
       "tta_time": 0,
       "chip_overlap": 0.3,
-      "input_space_scale": "15GSD",
-      "window_space_scale": "15GSD",
-      "output_space_scale": "15GSD",
-      "time_span": "6m",
+      "input_space_scale": "auto",
+      "window_space_scale": "auto",
+      "output_space_scale": "auto",
+      "time_span": "auto",
       "time_sampling": "auto",
-      "time_steps": 5,
-      "chip_dims": [
-         128,
-         128
-      ],
+      "time_steps": "auto",
+      "chip_dims": "auto",
       "set_cover_algo": null,
-      "resample_invalid_frames": true,
-      "use_cloudmask": 1
+      "resample_invalid_frames": 3,
+      "observable_threshold": 0.2,
+      "mask_low_quality": true,
+      "drop_unused_frames": true
 }
     """)
 

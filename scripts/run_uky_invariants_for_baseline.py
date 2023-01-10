@@ -175,7 +175,7 @@ def run_uky_invariants_for_baseline(input_path,
                     '--do_pca', str(1 if do_pca else 0),
                     '--patch_overlap', '0.3',
                     '--num_workers', str(jobs),
-                    '--write_workers', '2',
+                    '--write_workers', '0',
                     '--tasks', 'before_after', 'pretext'],
                    check=True)
 
