@@ -95,6 +95,13 @@ python -m watch.mlops.schedule_evaluation \
     --run=1
 
 
+### NOTE:
+# The above script assumes that your bashrc activates the appropriate
+# virtualenv by default. If this is not the case you will need to specify an
+# additional argument to `watch.mlops.schedule_evaluation`. Namely:
+# ``--virtualenv_cmd``. For instance if you have a conda environment named
+# "watch", you would add ``--virtualenv_cmd="watch"`` to the command.
+
 __evaldoc__='
 To inspect the results nativate to ``$EXPT_DVC_DPATH/_evaluations`` In there
 there will be a folder "eval/flat/base_poly_eval". This corresponds to the "BAS

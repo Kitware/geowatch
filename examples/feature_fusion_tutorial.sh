@@ -312,6 +312,13 @@ EXPT_DVC_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 BASELINE_PACKAGE_FPATH="$EXPT_DVC_DPATH"/models/fusion/Drop4-BAS/packages/Drop4_TuneV323_BAS_30GSD_BGRNSH_V2/package_epoch0_step41.pt.pt
 smartwatch model_stats "$BASELINE_PACKAGE_FPATH"
 
+# NOTE:
+# The schedule evaluation script originally ran on a single coco file that
+# contains all of the validation regions. A more stable way to run the system
+# involves splitting the larger validation dataset into a single kwcoco file
+# per region, and then running it on all regions separately. 
+python -m watch.cli.split_videos "$DATA_DVC_DPATH"/Drop4-BAS/data_vali_invariants.kwcoco.json
+
 python -m watch.mlops.schedule_evaluation \
     --params="
         matrix:
@@ -321,7 +328,9 @@ python -m watch.mlops.schedule_evaluation \
             bas_pxl.channels:
                 - 'auto'
             bas_pxl.test_dataset:
-                - $DATA_DVC_DPATH/Drop4-BAS/data_vali_invariants.kwcoco.json
+                - $DATA_DVC_DPATH/Drop4-BAS/data_vali_KR_R001_uky_invariants.kwcoco.json
+                - $DATA_DVC_DPATH/Drop4-BAS/data_vali_KR_R002_uky_invariants.kwcoco.json
+                - $DATA_DVC_DPATH/Drop4-BAS/data_vali_US_R007_uky_invariants.kwcoco.json
             bas_pxl.chip_dims: auto
             bas_pxl.chip_overlap: 0.3
             bas_pxl.window_space_scale: auto
@@ -343,6 +352,14 @@ python -m watch.mlops.schedule_evaluation \
     --backend=tmux --queue_name "demo-queue" \
     --pipeline=bas \
     --run=1
+
+### NOTE:
+# The above script assumes that your bashrc activates the appropriate
+# virtualenv by default. If this is not the case you will need to specify an
+# additional argument to `watch.mlops.schedule_evaluation`. Namely:
+# ``--virtualenv_cmd``. For instance if you have a conda environment named
+# "watch", you would add ``--virtualenv_cmd="watch"`` to the command.
+
 
 __doc_mlops__='
 This script will run through the entire BAS pipeline and output results in the
