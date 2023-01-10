@@ -264,7 +264,9 @@ def resolve_datamodule(config, method, datamodule_defaults):
     need_infer = ub.udict({
         k: v for k, v in parsetime_vals.items() if v == 'auto' or v == ['auto']})
     # Try and infer what data we were given at train time
-    if hasattr(method, 'fit_config'):
+    if hasattr(method, 'config_cli_yaml'):
+        traintime_params = method.config_cli_yaml["data"]
+    elif hasattr(method, 'fit_config'):
         traintime_params = method.fit_config
     elif hasattr(method, 'datamodule_hparams'):
         traintime_params = method.datamodule_hparams
