@@ -848,6 +848,7 @@ class UNetBaseline(pl.LightningModule, WatchModuleMixins):
             train_dpath_hint = ub.Path(train_dpath_hint)
             metadata_fpaths += list(train_dpath_hint.glob('hparams.yaml'))
             metadata_fpaths += list(train_dpath_hint.glob('fit_config.yaml'))
+            metadata_fpaths += list(train_dpath_hint.glob('config.yaml'))
 
         try:
             for key in backup_attributes.keys():
