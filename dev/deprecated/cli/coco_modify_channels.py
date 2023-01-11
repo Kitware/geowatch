@@ -38,7 +38,7 @@ def main(cmdline=False, **kwargs):
 
 
     """
-    config = CocoModifyChannelConfig(default=kwargs, cmdline=cmdline)
+    config = CocoModifyChannelConfig(data=kwargs, cmdline=cmdline)
     fpath = config['src']
     dset = kwcoco.CocoDataset.coerce(fpath)
 

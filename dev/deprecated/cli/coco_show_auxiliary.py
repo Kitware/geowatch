@@ -32,7 +32,7 @@ def main(cmdline=True, **kwargs):
     import kwplot
     plt = kwplot.autoplt()
 
-    config = ShowAuxiliaryConfig(default=kwargs, cmdline=cmdline)
+    config = ShowAuxiliaryConfig(data=kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.repr2(config, nl=1)))
     src = config['src']
     print('Read src = {!r}'.format(src))

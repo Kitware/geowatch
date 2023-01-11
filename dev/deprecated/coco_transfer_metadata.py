@@ -52,7 +52,7 @@ def main(**kwargs):
             'dst': ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc/drop0/drop0-msi.kwcoco.json'),
         }
     """
-    config = CocoTransferMetadataConfig(default=kwargs, cmdline=True)
+    config = CocoTransferMetadataConfig(data=kwargs, cmdline=True)
     dset1 = kwcoco.CocoDataset(config['from_fpath'])
     dset2 = kwcoco.CocoDataset(config['onto_fpath'])
     dset1.reroot(absolute=True)

@@ -297,7 +297,7 @@ def main(**kwargs):
         >>> main(**kwargs)
     """
 
-    config = GrabTilesConfig(default=kwargs, cmdline=True)
+    config = GrabTilesConfig(data=kwargs, cmdline=True)
     regions = coerce_regions(config['regions'])
     out_dpath = config['out_dpath']
 

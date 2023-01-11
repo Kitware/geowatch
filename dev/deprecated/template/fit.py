@@ -173,7 +173,7 @@ def setup_datasets_and_training_harness(cmdline=False, **kwargs):
         >>> #harn.run()
 
     """
-    config = TemplateFitConfig(default=kwargs, cmdline=cmdline)
+    config = TemplateFitConfig(data=kwargs, cmdline=cmdline)
     coco_datasets = {}
     for key in {'train_dataset', 'vali_dataset', 'test_dataset'}:
         if config[key] is not None:

@@ -61,7 +61,7 @@ def main(cmdline=False, **kwargs):
     import geopandas as gpd
     import safer
 
-    config = CropSitesToRegionsConfig(default=kwargs, cmdline=cmdline)
+    config = CropSitesToRegionsConfig(data=kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
     new_site_dpath = config['new_site_dpath']

@@ -45,7 +45,7 @@ def predict_on_dataset(cmdline=False, **kwargs):
         >>> predict_on_dataset(**kwargs)
 
     """
-    config = TemplatePredictConfig(default=kwargs, cmdline=cmdline)
+    config = TemplatePredictConfig(data=kwargs, cmdline=cmdline)
 
     print('reading datasets')
     input_dset = kwcoco.CocoDataset.coerce(config['dataset'])

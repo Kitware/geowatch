@@ -96,7 +96,7 @@ class FindDVCConfig(scfg.Config):
         from rich import print
         import ubelt as ub
 
-        cli_config = FindDVCConfig(default=kwargs, cmdline=cmdline)
+        cli_config = FindDVCConfig(data=kwargs, cmdline=cmdline)
         config = dict(cli_config)
 
         command = config.pop('command')

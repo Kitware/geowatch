@@ -38,7 +38,7 @@ def main(**kwargs):
             'src': ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json'),
         }
     """
-    config = CocoExtractBoundsConfig(default=kwargs, cmdline=True)
+    config = CocoExtractBoundsConfig(data=kwargs, cmdline=True)
     src_fpath = config['src']
     dset = kwcoco.CocoDataset(src_fpath)
 

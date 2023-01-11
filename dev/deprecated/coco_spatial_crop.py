@@ -97,7 +97,7 @@ def main(cmdline=True, **kwargs):
     from os.path import join
     import pathlib
     import kwimage
-    config = CocoSpatialCropConfig(default=kwargs, cmdline=cmdline)
+    config = CocoSpatialCropConfig(data=kwargs, cmdline=cmdline)
     src_dset = kwcoco.CocoDataset.coerce(config['src'])
     suffix = config['suffix']
 

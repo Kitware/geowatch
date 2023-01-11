@@ -210,7 +210,7 @@ class KWCocoVideoDatasetConfig(scfg.Config):
             not
             ''')),
 
-        'include_sensors': scfg.Value(None, help='if specified can be comma separated valid sensors'),
+        'include_sensors': scfg.Value(None, help='if specified can be comma separated valid sensors. NOTE: this should be specified via a sensorchan speci in channels instead'),
 
         'exclude_sensors': scfg.Value(None, type=str, help=ub.paragraph(
             '''

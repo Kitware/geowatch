@@ -773,7 +773,7 @@ def bas_poly_eval_confusion_analysis(eval_fpath):
     kwargs = dict(
         src=dst_dset,
         smart=True,
-        role_order=['truth_confusion', 'pred_confusion']
+        role_order=['truth_confusion', 'pred_confusion'],
     )
     coco_visualize_videos.main(cmdline=cmdline, **kwargs)
 

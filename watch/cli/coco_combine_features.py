@@ -102,7 +102,7 @@ def main(cmdline=True, **kwargs):
         >>> }
         >>> main(cmdline, **kwargs)
     """
-    config = CocoCombineFeatures(default=kwargs, cmdline=cmdline)
+    config = CocoCombineFeatures(data=kwargs, cmdline=cmdline)
 
     fpaths = config['src']
 

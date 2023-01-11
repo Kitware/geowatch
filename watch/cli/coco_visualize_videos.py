@@ -234,7 +234,7 @@ def main(cmdline=True, **kwargs):
     """
     from watch.utils.lightning_ext import util_globals
     from watch.utils import kwcoco_extensions
-    config = CocoVisualizeConfig(default=kwargs, cmdline=cmdline and {'strict': True})
+    config = CocoVisualizeConfig(data=kwargs, cmdline=cmdline and {'strict': True})
     space = config['space']
     channels = config['channels']
     print('config = {}'.format(ub.repr2(dict(config), nl=2)))
@@ -1028,7 +1028,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     # TODO: user should need to specify this.
     max_stacks = len(chan_groups)
     if role_order is not None:
-        role_order = ['truth', 'none']
+        # role_order = ['truth', 'none']
         requested_slots = {}
         for role in role_to_anns.keys():
             try:

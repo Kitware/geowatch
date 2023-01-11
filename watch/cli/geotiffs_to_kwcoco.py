@@ -39,7 +39,7 @@ def main(**kwargs):
         dset1 = kwcoco.CocoDataset(ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json'))
         dset2 = kwcoco.CocoDataset(ub.expandpath('$HOME/data/grab_tiles_out/fels/data.kwcoco.json'))
     """
-    config = KWCocoFromGeotiffConfig(default=kwargs, cmdline=True)
+    config = KWCocoFromGeotiffConfig(data=kwargs, cmdline=True)
     geotiff_dpath = config['geotiff_dpath']
     dst = config['dst']
 

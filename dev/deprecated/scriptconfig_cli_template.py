@@ -37,7 +37,7 @@ def main(cmdline=False, **kwargs):
         ... }
         >>> main(**kwargs)
     """
-    config = YourConfigName(default=kwargs, cmdline=cmdline)
+    config = YourConfigName(data=kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
 
