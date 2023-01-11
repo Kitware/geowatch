@@ -5,16 +5,16 @@ Basline Example:
     DVC_EXPT_DPATH=$(smartwatch_dvc --tags='phase2_expt' --hardware=auto)
 
     python -m watch.tasks.invariants.predict \
-        --input_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_vali.kwcoco.json \
-        --output_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/all_tests/model_thirteen_epoch/data_vali_invariants.kwcoco.json \
+        --input_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/data_vali_KR_R001.kwcoco.json \
+        --output_kwcoco=$DVC_DATA_DPATH/Drop4-BAS/all_tests/model_thirteen_epoch/data_vali_KR_R001_invariants.kwcoco.json \
         --pretext_package=$DVC_EXPT_DPATH/models/uky/uky_invariants_2022_12_17/TA1_pretext_model/pretext_package.pt \
         --input_space_scale=10GSD  \
         --window_space_scale=10GSD \
         --patch_size=256 \
         --do_pca 0 \
         --patch_overlap=0.3 \
-        --num_workers="1" \
-        --write_workers 1 \
+        --num_workers="2" \
+        --write_workers 0 \
         --tasks before_after pretext
 
     # After your model predicts the outputs, you should be able to use the
@@ -34,7 +34,7 @@ import ubelt as ub
 # import os
 # local imports
 from .pretext_model import pretext
-from .data.datasets import gridded_dataset
+from .data.datasets import GriddedDataset
 from watch.utils.lightning_ext import util_globals
 from watch.utils.lightning_ext import util_device
 from .segmentation_model import segmentation_model as seg_model
@@ -232,10 +232,13 @@ class Predictor(object):
 
         ###
         print('build grid dataset')
-        self.dataset = gridded_dataset(self.coco_dset, args.bands,
-                                       patch_size=args.patch_size,
-                                       patch_overlap=args.patch_overlap,
-                                       mode='test')
+        self.dataset = GriddedDataset(self.coco_dset, args.bands,
+                                      patch_size=args.patch_size,
+                                      patch_overlap=args.patch_overlap,
+                                      window_space_scale=args.window_space_scale,
+                                      input_space_scale=args.input_space_scale,
+                                      output_space_scale=args.input_space_scale,
+                                      mode='test')
 
         print('copy dataset')
         self.output_dset = self.dataset.coco_dset.copy()
