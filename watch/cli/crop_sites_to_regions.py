@@ -2,6 +2,8 @@ import scriptconfig as scfg
 import warnings
 import ubelt as ub
 
+from shapely.geometry import MultiPolygon
+
 
 class CropSitesToRegionsConfig(scfg.Config):
     r"""
@@ -42,6 +44,11 @@ class CropSitesToRegionsConfig(scfg.Config):
             '''
             IO workers to load sites in the background while others are
             cropping.
+            ''')),
+        'force_multipolygon': scfg.Value(True, help=ub.paragraph(
+            '''
+            For output site observations the output geometry type will
+            be set to MultiPolygon.  As per the T&E specification
             ''')),
     }
 
@@ -125,6 +132,12 @@ def main(cmdline=False, **kwargs):
                 cropped_site['observation_date'] = cropped_site['observation_date'].astype('string')
                 cropped_site['start_date'] = cropped_site['start_date'].astype('string')
                 cropped_site['end_date'] = cropped_site['end_date'].astype('string')
+
+                if config['force_multipolygon']:
+                    cropped_site.loc[cropped_site['type'] == 'observation', 'geometry'] =\
+                        cropped_site[cropped_site['type'] == 'observation']['geometry'].apply(
+                            lambda x: MultiPolygon((x,)) if not isinstance(x, MultiPolygon) else x)
+
                 if 'predicted_phase_transition_date' in cropped_site:
                     cropped_site['predicted_phase_transition_date'] =\
                         cropped_site['predicted_phase_transition_date'].astype('string')

@@ -2,6 +2,7 @@
 Developer notebook
 """
 
+
 def dzyne_mwe():
     import watch
     import ubelt as ub
@@ -36,7 +37,6 @@ def dzyne_mwe():
     kwplot.autompl()
     kwplot.imshow(canvas, fnum=1)
     kwplot.show_if_requested()
-
 
 
 def visualize_invariant_batch():
